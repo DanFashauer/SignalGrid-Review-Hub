@@ -21,14 +21,15 @@ Write a structured specification before writing any code. The spec is the shared
 
 ## The Gated Workflow
 
-Spec-driven development has four phases, preceded by a scope check (Phase 0) that activates only when one request bundles several independently testable capabilities. Do not advance to the next phase until the current one is validated.
+Spec-driven development has four phases, preceded by a scope check (Phase 0) and separated from Implement by a read-only Analyze checkpoint (Phase 3.5). Phase 0 activates only when one request bundles several independently testable capabilities. Do not advance to the next phase until the current one is validated.
 
 ```
-SPECIFY ──→ PLAN ──→ TASKS ──→ IMPLEMENT
-   │          │        │          │
-   ▼          ▼        ▼          ▼
- Human      Human    Human      Human
- reviews    reviews  reviews    reviews
+SPECIFY ──→ PLAN ──→ TASKS ──→ ANALYZE ──→ IMPLEMENT
+   │          │        │          │            │
+   ▼          ▼        ▼          ▼            ▼
+ Human      Human    Human    coverage +     Human
+ reviews    reviews  reviews  golden-rule    reviews
+                              check (r/o)
 ```
 
 ### Phase 0: Scope Check
@@ -196,6 +197,28 @@ Break the plan into discrete, implementable tasks:
   - Verify: [How to confirm — test command, build, manual check]
   - Files: [Which files will be touched]
 ```
+
+### Phase 3.5: Analyze (read-only checkpoint)
+
+Before any code is written, do one read-only pass over the spec, plan, and task
+list together — no edits, no implementation. It is cheap insurance against
+building the wrong thing correctly. Check three things:
+
+1. **Coverage.** Every requirement in the spec maps to at least one task. A
+   requirement with no task is a gap that ships as a silent omission; a task
+   with no requirement is scope creep. List either if found.
+2. **Golden rules.** Nothing in the plan or tasks violates this repo's
+   `CLAUDE.md` — the existing single source of truth (fail-closed, deterministic,
+   no `Date.now()`/`Math.random()` on a decision path, no behavior edits to the
+   Swift twins, platform honesty). Check against `CLAUDE.md` itself, never a
+   second copy of the rules that can drift out of sync with it.
+3. **Ambiguities.** No unresolved placeholder, `TODO`, or "Open Question" from
+   the spec is still load-bearing for a task about to be implemented.
+
+Output is a short findings list, not a document. If it is clean, say so and
+proceed to Implement; if not, fix the spec/plan/tasks and re-run this pass. This
+absorbs the useful core of external "analyze/clarify/checklist" tooling without a
+separate skill, a scaffold, or a duplicate rulebook.
 
 ### Phase 4: Implement
 

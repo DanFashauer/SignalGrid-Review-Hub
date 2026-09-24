@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-exclusive-real-hardware-proof-sibling-si",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac-exclusive: real-hardware proof + sibling signalgrid-mcp PR #14",
+  "body": "Ran the live product on THIS Mac (macOS 27) — things no other lane can do. Real proofs: on-device trust verdict computed fail-safe from live signals (restrict; firewall_off critical + unknowns raised the bar, unknown never allowed); a clean core decision (allow/TRUST_ESTABLISHED/1ms); decision-core latency p50 0.125ms/p95 0.181ms; throughput 7,747/sec/core -> 33,701/sec aggregate, deterministic under concurrency. Readiness still 100%, evidence binds (manifest v82 6cc9a0ee), no re-mint needed. FOUND + FIXED a real bug only macOS 27 reproduces (sibling signalgrid-mcp, no gates there): collect_xprotect read the gone-on-macOS-11+ 'Version' key, so XProtect defs read UNKNOWN on EVERY modern Mac and the verdict over-raised the bar; collect_update_settings leaked the defaults error string for absent keys (AutomaticCheckEnabled/LastUpdatesAvailable). Both fixed keying on the exit code, verified on real hardware (xprotect now 5360), 4 regression tests, full suite 103 passed -> PR DanFashauer/signalgrid-mcp#14. OWNER items (not code): this build Mac's firewall is OFF, and it's not MDM-enrolled. DESIGN question for the brain: should the updates dimension trust the other readable keys (AutomaticDownload/ConfigDataInstall=1) instead of the removed AutomaticCheckEnabled? Left unchanged (fail-safe).",
+  "sentAt": "2026-09-23T17:47:46.932Z"
+}

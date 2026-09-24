@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-signalgrid-mcp-pr-14-third-modern-macos-coll",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "signalgrid-mcp PR #14: THIRD modern-macOS collector fix (screen-lock)",
+  "body": "Swept every device collector on real macOS 27. Added a third fix to PR #14: collect_screen_lock read com.apple.screensaver askForPassword/Delay (gone on macOS 11+), so password_on_wake was ALWAYS unknown — a safety-critical walk-up signal dead on every modern Mac. Now reads sysadminctl -screenLock status (no elevation), legacy defaults as fallback. Verified real: password_on_wake True, delay 0 immediate (was null/null). PR #14 now covers XProtect + update-settings + screen-lock; 107 tests pass. Remaining posture nulls (SSH/AppleEvents) are genuine needs-admin limits reading fail-safe, not bugs. OWNER device-hygiene items this build Mac's own product flagged: firewall OFF, not MDM-enrolled, no Time Machine destination, and display never sleeps so the lock never auto-engages (password itself is immediate — good).",
+  "sentAt": "2026-09-23T18:14:55.092Z"
+}

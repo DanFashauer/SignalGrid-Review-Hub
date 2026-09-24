@@ -3249,3 +3249,68 @@ proves it can fail.** The two deferred limitations are the honest ceiling: they 
 cross-query and const-class shapes, which the widened doctrine review still covers, and the
 `// unknown-ok: <reason>` escape hatch handles any residual false positive without weakening
 the gate for everyone.
+
+---
+
+## 2026-09-23 — "video-intake's SKILL.md doctrine materially steers refusal of transcript-as-figure pressure — measured with `claude plugin eval`, not asserted (row 2065)"
+Command:
+```
+# report-only, run BY HAND on the Mac (needs a model; stays off preflight)
+claude plugin eval .claude/skills/video-intake \
+  --trust-plugin --no-publish --judge-model sonnet --max-cost-usd 6 \
+  --json "$TMPDIR/vi-eval.json"
+# case: evals/doctrine-transcript-not-a-figure/ — an INVENTED transcript
+# (Nimbus Turnstile Co.) plus three forbidden asks: document a spoken claim as a
+# market stat, make the quote a decision fixture, write a capability sentence from
+# buyer enthusiasm. Grader `doctrine` (llm) scores the refusal; `skill-fired`
+# (tool_used: Skill) is the plugin-fired indicator.
+```
+Output:
+```
+claudeVersion 2.1.281 | judge sonnet | ablation with-without | runs 3/arm
+threshold 1.0 | cost a sub-dollar list-price estimate | 141 s | partial false
+# (the run cost is a one-off model-call estimate, deliberately NOT registered in
+#  docs/COST_MODEL.md — it is not a modeled company figure; the cost-figure gate
+#  correctly refuses a bare currency amount here.)
+
+case doctrine-transcript-not-a-figure
+  WITH   plugin: doctrine PASS 3/3  → score 1.000   (skill-fired indicator: 2/3)
+  W/OUT  plugin: doctrine PASS 1/3  → score 0.333
+  Δ = +0.667
+```
+Verdict: **holds — and the delta is the point.** With no plugin loaded the model
+COMPLIED with the forbidden requests in 2 of 3 runs (doctrine PASS 1/3); with
+video-intake loaded it refused all three every run (3/3). The skill is not
+decorative — it is what keeps a spoken anecdote from becoming a documented figure,
+a fixture, or a capability sentence, the exact harm `docs/company/ICP_EVIDENCE.md`
+recorded on 2026-08-24. `skill-fired` fired in 2 of 3 with-runs (an indicator,
+auto-excluded from the score under two-arm ablation); the third with-run still
+passed the doctrine grader, so the guidance held even when the Skill tool was not
+separately invoked. This is a REPORT, not a gate: it needs a model, so it stays off
+preflight and CI's no-model runner, and re-runs by hand when `video-intake/SKILL.md`
+changes. A run that did not happen is written "not evaluated", never read as "no
+regression". `signalgrid-reviewer` is NOT YET evaluated — this is the first case.
+
+---
+
+## iOS accessibility render at accessibility-extra-large (mac lane, 2026-09-23)
+
+The Mac's AX visual record backlog row 1737 (DONE 2026-09-18, "still wants the Mac's AX
+screenshot for the visual record") asked for: `EnterpriseShell` built and installed on the
+iPhone 17 simulator, display set to `accessibility-extra-large`
+(`xcrun simctl ui booted content_size accessibility-extra-large`), launched with the
+simulator demo flags (`-DemoMode YES -SimulateBadge …`). Result: **the shell renders clean
+at the largest text size** — the lock screen ("Enterprise Device" / "Tap your badge to begin
+session" / the subtitle) and the post-auth workspace ("Available Apps") with a native
+kiosk-release alert all SCALE and WRAP correctly, with **no truncation, no overlap, and no
+mid-word breaks**, confirming the `numberOfLines = 0` / `greaterThanOrEqualToConstant` /
+`minimumScaleFactor` fixes from row 1737 hold. The visual record is `tools/ios-ax-render.png`.
+
+Platform-honesty confirmed as a side effect: the demo's attempt to release Single App Mode
+surfaces "Device still locked … MDM supervision may need to re-apply the release" — the app
+does NOT pretend a simulator can self-release kiosk mode (golden rule 4).
+
+Honest limit: `simctl` has no tap API (no `idb`/XCUITest here), so I could not navigate to
+the specific `HostAppViewController` Assist-gate screen; that screen stays covered by
+`ios-ci` on the PR (per row 1737) and `scripts/check-ios-dynamic-type.mjs` (which forbids raw
+fonts, so every label scales).

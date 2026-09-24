@@ -155,6 +155,16 @@ session.json
 trajectory.json
 .blend-cli.json
 
+# `claude plugin eval` (row 2065, DR-none — report-only) writes its scored run into
+# `<plugin>/<eval-dir>/results/` — for a skills-dir target that is
+# `.claude/skills/<skill>/evals/results/` with report.html, the per-run JSON and any
+# mock-recordings/, all UNTRACKED. Same provenance rule as native/ios/build/ and
+# .obsidian/ above: one untracked directory stamps every LATER sim result as minted
+# from a dirty tree (run-requests.mjs derives provenance.workingTreeClean from
+# `git status --porcelain`, untracked included). The RESULT is a run record quoted
+# into docs/agent/EVIDENCE.md by hand; the tree keeps the case, never the output.
+/.claude/skills/*/evals/results/
+
 # Crucible (owner-directed 2026-09-12): its compass/adr/build/checkpoint skills write these into docs/ and the
 # root; the adversarial lenses are report-only here and none of this is ever committed.
 docs/compass.md

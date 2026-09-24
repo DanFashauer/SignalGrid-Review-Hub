@@ -140,6 +140,18 @@ if (contextSites === 0) {
   process.exit(1);
 }
 
+// Non-vacuity floor on the RIGHT stage (DR-054). `findings` are raised only from
+// durableReads, but the floor above guards contextSites. If the store-read matchers
+// (boundStoreRead/inlineStoreRead) drift so they stop matching, contextSites stays > 0
+// (floor satisfied) while durableReads falls to 0 — findings is empty and this security
+// gate reports clean over the authorization invariant it no longer checks. Floor the
+// population findings derive from. Current tree: 3.
+const DURABLE_READ_FLOOR = 2;
+if (durableReads < DURABLE_READ_FLOOR) {
+  console.error(`\n✗ only ${durableReads} durable store read(s) detected (floor ${DURABLE_READ_FLOOR}) among ${contextSites} context site(s) — the store-read matcher is stale, not the routes clean. This gate would otherwise pass vacuously.`);
+  process.exit(1);
+}
+
 if (findings.length > 0) {
   console.error(
     `\n✗ ${findings.length} durable read(s) taking a tenantId from core.context(), which only AUTHENTICATES:\n`,

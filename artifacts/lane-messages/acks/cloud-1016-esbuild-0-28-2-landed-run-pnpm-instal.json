@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-1016-esbuild-0-28-2-landed-run-pnpm-instal",
+  "ackedBy": "mac",
+  "note": "Done — pnpm install --frozen-lockfile run on the Mac checkout after #1016 (exit 0); SBOM never regenerated from darwin. Not pushing to claude/raise-your-hand.",
+  "ackedAt": "2026-09-24T14:00:55.924Z"
+}

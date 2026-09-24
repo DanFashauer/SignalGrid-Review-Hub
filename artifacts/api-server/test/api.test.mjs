@@ -1634,6 +1634,22 @@ async function run() {
       });
       const allowedHdrs = (preflight.headers.get("access-control-allow-headers") ?? "").toLowerCase();
       check("secret mode: CORS preflight permits x-enrollment-authorization for an allowed origin", preflight.headers.get("access-control-allow-origin") === "http://console.example" && allowedHdrs.includes("x-enrollment-authorization"));
+      // The same defect one header along, found in the same sweep. The server READS
+      // idempotency-key (middlewares/idempotency.ts) and lib/api-spec/v1-openapi.yaml
+      // documents it as the opt-in exactly-once mechanism for POST /v1 — but it was
+      // missing from allowedHeaders, so a browser had every retry-safe POST rejected at
+      // preflight, before the idempotency middleware could run. The documented safe way
+      // to retry was the one way a browser could not use it.
+      const preflightIdem = await fetch(`${BASE2}/v1/step-up/enroll/options`, {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://console.example",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "authorization,content-type,idempotency-key",
+        },
+      });
+      const idemHdrs = (preflightIdem.headers.get("access-control-allow-headers") ?? "").toLowerCase();
+      check("CORS preflight permits idempotency-key for an allowed origin (the documented retry-safe POST)", preflightIdem.headers.get("access-control-allow-origin") === "http://console.example" && idemHdrs.includes("idempotency-key"));
     } finally {
       server2.kill("SIGTERM");
     }

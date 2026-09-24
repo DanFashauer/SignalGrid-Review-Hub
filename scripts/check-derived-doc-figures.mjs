@@ -673,6 +673,30 @@ export const SWEEP_EXEMPT = [
       "and regenerates the sentence; this gate defers to the owner of the line.",
   },
   {
+    doc: "docs/CLAIM_INVENTORY.md",
+    near: /proofs check"\)\s*\|\s*\|\s*148/,
+    count: 0,
+    reason:
+      "a claim-inventory ROW ID (148-152), not a count of anything. The sweep matched it because the PRECEDING row's " +
+      "evidence cell happens to end in \"not the catalogue the proofs check\", putting the words within its " +
+      "window. It collided with the derived figure only while that figure was 148; the live count is now 153, and " +
+      "the sweep looks only for the current figure, so this row id produces no hit — count 0. The matcher must satisfy " +
+      "two readers: the sweep hands it a whitespace-NORMALISED snippet, while the stale-exemption self-test tests it " +
+      "against the RAW document, where a newline sits between the two table cells. Hence `\\s*` rather than literal " +
+      "spaces. Kept as a trip-wire should the derived figure ever return to 148.",
+  },
+  {
+    doc: "docs/agent/LOOP.md",
+    near: /proofs 148(?! proof)/,
+    count: 0,
+    reason:
+      "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
+      "that round (148 -> 154), not the number of proof:* scripts. It collided with the derived figure only " +
+      "while that figure was 148; the live count is now 153, and the sweep looks only for the current figure, so " +
+      "this historical 148 produces no hit — count 0. Rewriting it would falsify the history it records; kept as a " +
+      "trip-wire so that if the derived figure ever returns to 148 this coincidence re-appears and a reviewer looks.",
+  },
+  {
     doc: "docs/BUILD_BACKLOG.md",
     near: /\d+ `proof:\*/,
     count: 0,

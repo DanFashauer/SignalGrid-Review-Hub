@@ -52,7 +52,65 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-21 (cloud lane, latest) - THE CONSOLE FAIL-CLOSED GATE, THREE CODEX ROUNDS.
+LAST TOUCHED: 2026-09-24 (Mac lane, latest) - THE OWNER'S AGENTIC LOOP IS BUILT: PR #1031 (DR-056).
+              Owner shared the "Agentic AI system" diagram (Objective -> Orchestration -> Agents/Workflows ->
+              Evaluate -> Replan over ONE shared task state) and directed it as the brain's operating model.
+              Mapped box by box by 7 verified readers; 3 designs judged by 3 lenses; winner critiqued by 2
+              adversaries (every fix taken); then a 4-lens review of the diff (4 findings confirmed, all fixed).
+              Built: docs/agent/objective.json (DR-033 as four criteria; ids/scopes/attestation token live in
+              scripts/** so the json cannot reach goal_met alone), scripts/objective-loop.mjs (pure evaluate/
+              rank/finalize/readVerdict; content-addressed state; refuses to queue what the tick cannot run;
+              one mail per NEW escalation; three-state --check; 62/62 self-test incl. a clock-scan of its own
+              source), docs/agent/objective-state.json (first verdict ESCALATE: 3/4 met, owner-real-in-hand is
+              the owner's; tasks = plan rows 5/6/8; ten plan rows still need an executor), step c' in the Mac tick (lock,
+              SIGNALGRID_MCP_PATH from the sibling checkout, transactional rollback, verdict in the heartbeat),
+              forward-build-cycle made the consumer (trusts the state only while the tick heartbeat is fresh AND
+              names the verdict). Preflight PASSED, breadth 57/57. EXPECTED until #1031 merges: the live tick
+              heartbeats "objective: BROKEN" (it runs this branch's lane-tick.sh from the sibling worktree where
+              the script does not exist yet). Also this session: #905 content finished (cloud-directed, fefddc05,
+              hands off), mac-run.json re-minted (readiness 100%), 16 PRs triaged (cloud's PMO plan answered:
+              #686 stays, #929 revived, cloud lands the green batch), 9 tick branches + the superseded #753
+              rebuild deleted. INCIDENT: review-verifier agents staged fake ticks inside the shared checkout
+              (stray branches, a reverted file, a symlink) - stopped, cleaned, rule saved: any agent that may run
+              git or the tick gets worktree isolation. NEXT: cloud lands #1031 before #1019 (or rebases #1019);
+              then register `objective-loop --self-test --check` in preflight+CI in one PR; the owner's one open
+              decision is the attestation (a decision record carrying the token), never a priority question.
+              PREVIOUSLY 2026-09-23 (Mac lane) - DEFERRED QUEUE CLEARED + EVIDENCE RE-MINT + #753 RESOLVED.
+              Four deferred items shipped as PRs: #1016 (esbuild 0.27->0.28), #1017 (iOS accessibility
+              evidence), #1018 (brain-cycle stale-input guard, DR-032), #1021 (first report-only
+              `claude plugin eval` case for video-intake - doctrine WITH 1.000 / W-OUT 0.333, delta +0.667:
+              the skill measurably refuses transcript-as-figure pressure; adopted as a REPORT, off preflight).
+              Re-minted artifacts/live-evidence/mac-run.json (d0ed0362, both halves green) - readiness back to
+              100% on all three dimensions. The first attempt correctly REFUSED on a local esbuild node_modules
+              drift (0.28.2 leftover from #1016) vs mainline's 0.27.3 lockfile; `pnpm install --frozen-lockfile`
+              fixed it - not a mainline red. Acked all 7 cloud messages (9098a6e). #753: rebuilt the Alpha
+              merge (core-type conflicts resolved by author judgment, typecheck 0, proof 562/562, preflight
+              green, bbd64848) BEFORE the STOP arrived - it landed on Alpha after my last pull. Owner had
+              CLOSED #753; #1005 (claude/build-dr043-live-attach-rules) supersedes it. Acked; bbd64848 is
+              INERT (its PR is closed) and offered for deletion. Pruned 9 superseded tick branches (kept
+              mac/tick-20260921T140443Z). PREVIOUSLY 2026-09-23 (cloud lane) - "GET EVERYONE IN LINE": QUEUE CLEARED, TWO ROOT CAUSES FOUND.
+              Owner-directed sweep. Landed: #975 override-parity gate, #977 loop-state date warn, #989 iOS
+              allowlist fail-closed (owner authorized the lane to land these three), #996 (Mac tick heartbeat
+              passes --no-wake: it is a staleness record and never carries cloud mail, so it no longer wakes
+              the cloud session every quiet tick - verified: no tick wake since it merged), #999 (grid proof
+              phone-number safety pattern now needs a standalone number; the unbounded form matched digits
+              inside the hex determinism hash on about 18% of scenario sets, a random red CI - owner chose
+              "tighten, exempt nothing"; both directions self-tested and falsified), plus steward mail.
+              Closed: seven Dependabot majors, stale #354, #826 (spec-kit - superseded by #997's one-checkpoint
+              hybrid), #821 (owner decision: it was stacked on #820, which the owner closed on 2026-09-21).
+              Rebuilt against mainline: #905 (its DR-052 collided with mainline's; now DR-053).
+              ROOT CAUSE 1: the session-start hook clears dist/, and no cloud procedure rebuilt it, so every
+              local preflight stopped at the mcp-server proof AND a local status-summary --write stamped a
+              false "Verdict: RED" that broke a README claim anchor. `pnpm --filter @workspace/api-server run
+              build` first fixes both; with it, preflight and breadth passed locally end to end.
+              ROOT CAUSE 2: the steward's mail check read docs/agent/lane-mailbox.json (the wake-PR pointer),
+              not the messages; four Mac messages sat unread 15-26h while cycles reported none. Read mail with
+              `pnpm run lane:inbox` / scripts/check-lane-messages.mjs on an Alpha checkout. All acked (#1000).
+              FINDING: the DR-043 attach matrix (puckVerdict et al. in lib/signalgrid-core/src/attach.ts) is
+              called only by the decision-cascade proof - the live /v1 policy path cannot see attach, enrollment
+              or read method. #753's re-cut is being built to wire three rows in with mainline's vocabulary,
+              minus #753's two loosening defects (presence-gone -> allow; inverted enrollment domain).
+              PREVIOUSLY (2026-09-21, cloud lane): THE CONSOLE FAIL-CLOSED GATE, THREE CODEX ROUNDS.
               check-console-unknown-render (the G2 unknown-as-good-state gate the 2026-09-02 console
               batch left spec-only) landed as #953 (squash 59f04e4b) under DR-037 (SAFETY_MACHINERY;
               owner confirmed self-merge of a self-authored gate is the standing rule). It is an AST
@@ -1349,7 +1407,12 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0) PR #905 (DR-052) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
+NEXT ACTION: cloud: (00) 2026-09-23: land the DR-043 live-attach carve (branch claude/build-dr043-live-attach-rules)
+              as an OWNER-merged product PR, then close #753; follow-up: unknown enrollment or read method still
+              allows on both matrices (golden rule 2) - a new rule, not part of the carve. Owner merges owed:
+              #905 (DR-053), #997 (spec-kit hybrid), #929, #686. Before any local preflight in this box, build
+              the api-server; read mail with lane:inbox, never lane-mailbox.json.
+              (0) PR #905 (DR-052, renumbered DR-053 on 2026-09-23) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
               which DR-037's owner-gated clause keeps out of the lane's hands; the lane keeps it green
               and conflict-free, never presses merge. Once it is on mainline, apply DR-052's three
               stages to the two resources the owner named on

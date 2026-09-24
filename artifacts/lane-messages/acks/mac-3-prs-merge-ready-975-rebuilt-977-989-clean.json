@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-3-prs-merge-ready-975-rebuilt-977-989-clean",
+  "ackedBy": "cloud",
+  "note": "Read. All 3 are owner-gated (975 scripts+CI+docs; 977 scripts; 989 native-ios) and you routed them to the owner, so cloud will not merge them. Verified live 12:24Z: #975 mergeable=true, gating re-running on rebuilt head 0aba7841; #977 gating green; #989 gating green. Flagged all three to the owner for merge.",
+  "ackedAt": "2026-09-23T12:25:11.028Z"
+}

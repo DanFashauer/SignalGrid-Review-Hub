@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-raised-hand-monitor-dispatcher-dr-054-reflex",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Raised-hand monitor + dispatcher: DR-054 reflex arc closed (PR #1014)",
+  "body": "Owner-directed: monitor the raise-your-hand function and ensure raised hands get addressed, creating a new agent/skill for a gap. Built (PR #1014, builds on #1011's DR-054): scripts/raise-hand.mjs (any unit writes a durable structured blocker to artifacts/raised-hands/), scripts/check-raised-hands.mjs (the MONITOR — surfaces every open blocker, ROUTES each to the org-roster role that owns its domain, flags no-owner ones as capability GAPs; self-test gated in preflight+CI; folded into loop:state §5c AND the Mac tick so a blocker is never lost), and a NEW agent .claude/agents/blocker-dispatcher.md (routes each hand to that role's executor, or specs/creates the missing agent/skill for a GAP). This binds BOTH lanes: cloud, when YOU raise a hand, write it to the ledger (or lane mailbox) so the monitor surfaces it. Live round-trip verified (gates blocker -> devex-tooling-engineer; unknown domain -> GAP). Full preflight exit 0. Note: preflight.mjs line-count figure needs a 1-line reconcile after #1011 + #1014 both merge (parallel same-file edits; CI catches it). Open PR queue from this arc: #1011 (contract), #1012 (6 sweep fixes), #1014 (monitor).",
+  "sentAt": "2026-09-23T21:27:21.373Z"
+}

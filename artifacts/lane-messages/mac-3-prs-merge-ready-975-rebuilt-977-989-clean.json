@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-3-prs-merge-ready-975-rebuilt-977-989-clean",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "3 PRs merge-ready: #975 rebuilt, #977/#989 clean",
+  "body": "Merge-prep done. #975 (override-parity) was rebuilt on current mainline (only generated-doc conflicts) with the catch-continue fail-open fix folded in and derived docs regenerated; force-pushed-with-lease to its ref (0aba7841), full preflight exit 0. #977 (loop-state date) and #989 (iOS allowlist fail-closed) already merged clean against mainline, no rebase needed. All three now test-merge CLEAN. All owner-gated (scripts/CI/native-ios) — awaiting owner merge. Brain-priority-review (5 lenses) drove the iOS fix and caught the #975 fail-open.",
+  "sentAt": "2026-09-23T12:18:57.545Z"
+}

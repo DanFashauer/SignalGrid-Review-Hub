@@ -408,6 +408,111 @@ or property of SignalGrid, a puck, a receiver or a pilot:
 - Any cost figure as a fact. The document's bands are estimates and are not
   reproduced here.
 
+## Owner refinement (2026-09-23, DR-055)
+
+On 2026-09-23 the owner described a seven-part flow (C1–C7) for the puck, with docks, lockers
+and workstation tap points around it. DR-055 records it as a **refinement of this hypothesis,
+not a product**, and names, component by component, what each part becomes and whose job it
+is. This section holds the flow against this page. It stays at this page's level of
+abstraction: no latch, lock or locker-release mechanism is described, because the owner-gated
+*IP / disclosure posture* row in [`docs/BUILD_BACKLOG.md`](BUILD_BACKLOG.md) is still open.
+Nothing here moves a hardware gate or states a tally; the go/no-go section above says where the
+count lives. Everything below is a design target, not a shipped surface.
+
+### The seven components against this page
+
+| # | The owner's component (his words where quoted) | Against this page | Review verdict | What it becomes |
+| --- | --- | --- | --- | --- |
+| C1 | A *"MagSafe-style"* magnetic puck that locks onto the back of the device | **Reframe.** A magnetic seat is family A's "click or magnetic receiver". The lock conflicts with the ergonomics line (one-handed, works with gloves) and changes what `removed` means; a seated credential rules out magnetic wireless charging, because Apple warns against a badge or key fob between the phone and its charger ([Apple 105047](https://support.apple.com/en-us/105047)) | Feasible only if reframed; the credential lock itself is not recommended | A case or sled seat with a latch sensor that holds no identity; wired or pogo charging |
+| C2 | *"All the user's info and auth info — everything"*, and building access where a site has no face or fingerprint reader | **Conflicts** as written with *"The radio credential must not broadcast PHI"* and DR-043 item 2; the go/no-go row for *"must use our existing badge"* already prefers family B | Feasible only if reframed | Keys only; a PACS-issued door applet with legacy Prox off; the worn or Wallet badge first |
+| C3 | An AirTag-like tag that *"other systems"* can use, inside and outside the office | **Conflicts** with the privacy paragraph (*"can become an employee-tracking system very quickly"*) and the threat row on broadcast identifiers; it jumps to rungs D and E | **Not feasible as described** | No radio in the puck; device-bound, zone-level recovery location, per [Custody beacon](CUSTODY_BEACON.md) |
+| C4 | Docks and lockers running SignalGrid software *"that taps into all the systems"* | **Reframe.** The division of authority already makes any dock a source of evidence, never the policy engine | Feasible only if reframed | The locker vendor releases the bay; SignalGrid returns a per-device ready or hold; the dock holds no connector credentials |
+| C5 | Attaching the puck *"gives customer access to all systems"* | **Conflicts** with the do-not-claim line *"That a dock attach event identifies anyone"* and with `lib/signalgrid-core/src/attach.ts:22` | Feasible only if reframed | Attach may start a sign-in; the IdP grants it with user verification; SignalGrid decides per action |
+| C6 | A tap at a workstation or WOW for *"passthrough authentication"*, with the phone's session carried to the desktop | **Partly fits** the Windows platform note (FIDO2 sign-in; three separate integrations). The carry-over **conflicts** with platform facts and with `lib/work-context/src/types.ts:1` | Feasible only if reframed; the carry-over is not feasible | A fresh sign-in owned by that endpoint; VDI roaming for the desktop; only a description of the work travels |
+| C7 | Tap the puck on the dock to return; the device is *"cleared and sanitized for next user"* | **Reframe.** Clearing is the MDM's on a supervised device (golden rule 4); a cleaning claim meets the disinfectant do-not-claim line | Feasible only if reframed | Docking is the return; the MDM or IdP clears; SignalGrid gates readiness; cleaning is attested by a person |
+
+### New policy-matrix rows
+
+Candidate fixture rows for the backlog items named in the last column — a design target, not
+shipped behaviour — on the same verdict ladder as the matrix above.
+
+| Situation | Verdict | Why, in this tree's terms | Backlog |
+| --- | --- | --- | --- |
+| The holder's own credential returns the device at a dock | Custody closed, session ended — **not** `CUSTODY_REMOVED` | A planned return is not a walk-away. Under PR #1005's live attach rules a return read as `removed` restricts, and that code has no resolution descriptor, so every shift change would escalate | Puck 6 |
+| The latch opens without the holder's return | `deny` — treated as forced | An unlatch nobody accounted for is the torn-removal case | Puck 6 |
+| The device and the puck go missing together | `deny`, plus an approval-gated revoke request to the IdP and the PACS | When both are gone, possession is no evidence of anything | Puck 8 |
+| A presence-only assertion (no user verification) for a broad-scope session | Never `allow`; `step_up` | Presence is not verification; `identityConfirmed` is a plain yes/no today (`attach.ts:170`) | Puck 8 |
+| An attach reported only by a mechanical sensor, when deciding whether to keep a session open | Treated as `unknown` → `step_up` | A magnet or a dummy puck satisfies a microswitch, Hall or contact sensor | Puck 8 |
+| An active alarm or call assignment, and the puck is removed or its state is unknown | Escalate through break-glass — **never a silent suspend** | Fail closed means a human decides; it never means the alarm path goes quiet | Puck 8 |
+| A device returned with a different puck from the one that checked it out, or with a puck reported lost | Custody exception; the checkout stays open | A found or stolen puck must not be able to close a missing-device alert | Puck 9 |
+| A site that declares docks expected, and a device's dock feed is missing | Not ready — tightens, per device | Missing dock evidence is neutral today (`lib/signalgrid-core/src/evidence.ts:150`–`156`), which is right only where no dock exists | Puck 9 |
+| Any clearing step after a return is unobserved | Not ready | Readiness is positive evidence of each step, never the absence of a complaint | Puck 7 |
+
+### Open questions — recorded with their sources, not answered
+
+None of these is a claim in either direction. Each is a question for the design site, clinical
+engineering, infection prevention, a human compliance review or counsel, and each stays open
+until one of them answers it in writing.
+
+1. **Cleaning and infection control.** The *Cleaning* bullet above covers the puck's materials
+   only. A worker-carried puck attaches to every shared device it meets and is not cleaned at
+   the C7 return, so the next attach could carry one shift's contamination onto a device that
+   was just cleaned (the review's inference; not measured). CDC's *C. diff* guidance says
+   *"Perform daily cleaning of CDI patient rooms using a C. difficile sporicidal agent (EPA List
+   K agent)"* (<https://www.cdc.gov/c-diff/hcp/clinical-guidance/>). Apple says of its products
+   *"Don't use products containing bleach or hydrogen peroxide"* and names a 70 percent
+   isopropyl alcohol wipe, a 75 percent ethyl alcohol wipe or Clorox Disinfecting Wipes
+   (<https://support.apple.com/en-us/103258>). Open: which agents a design site uses in
+   contact-precaution and isolation rooms, whether any of them is both sporicidal and within the
+   device maker's list, whether the puck needs its own cleaning step at return, and who attests
+   it.
+2. **EPCS.** 21 CFR 1311.115(b): *"If one factor is a hard token, it must be separate from the
+   computer to which it is gaining access and must meet at least the criteria of FIPS 140-2
+   Security Level 1"* (<https://www.law.cornell.edu/cfr/text/21/1311.115>). Entra's
+   compatibility matrix: *"NFC with FIPS 140-3 certified security keys isn't supported on iOS by
+   Apple."* (<https://learn.microsoft.com/en-us/entra/identity/authentication/concept-fido2-compatibility>).
+   The review reads a puck seated on the phone it signs into as not separate from it, and a
+   FIPS-grade key as unusable over NFC on that iPhone; controlled-substance signing would then
+   keep its own separate factor, which is what incumbents sell
+   ([`docs/research/COMPETITIVE_IMPRIVATA.md:14`](research/COMPETITIVE_IMPRIVATA.md)). Open for a
+   human compliance review.
+3. **Medical-electrical safety on a WOW.** A powered receiver, reader or dock added to a
+   workstation-on-wheels in the patient environment may bring in IEC 60601-1's rules for medical
+   electrical systems and a clinical-engineering or EMC review. Not sourced: the standard was not
+   read. Open for clinical engineering.
+4. **MRI zones.** A magnetic puck with a steel latch carried into an MRI suite's controlled zones
+   could be a projectile risk. Not sourced: the ACR's MR-safety zone guidance would be the
+   reference and was not fetched. Open, and a discovery question.
+5. **Implanted devices.** Apple: *"Most medical device manufacturers recommend keeping a source
+   of potential interference a safe distance away from your medical device (at least 6 inches /
+   15 cm apart or at least 12 inches / 30 cm apart when using a wireless charger)"*
+   (<https://support.apple.com/en-us/109025>). A magnetic puck worn by the worker and held close
+   to patients adds a magnet near implants, the worker's own included. Not assessed. Open for
+   clinical engineering.
+6. **The alarm path.** Secondary alarm-notification systems that deliver monitor alarms to
+   phones are FDA Class II devices (product code MSX, 21 CFR 870.2300; for example K180566,
+   <https://api.fda.gov/device/classification.json?search=product_code:MSX>). A gate that
+   suspends such a phone sits across that path. Whether that changes SignalGrid's own regulatory
+   status is a question for regulatory counsel; the escalate-never-silently-suspend row above is
+   the design answer, not a regulatory one.
+7. **A battery in the puck.** Only if a powered puck ever survives, which the C3 verdict says it
+   should not: coin-cell ingestion risk in paediatric and behavioural units was not researched,
+   and whether consumer button-battery rules reach an enterprise product is for counsel.
+
+### Added to what this repository will not claim (DR-055)
+
+In addition to the list above, and recorded in DR-055, none of these may appear as a
+present-tense property of SignalGrid, a puck, a receiver, a dock, a locker or a tap point:
+
+- "Made for MagSafe", "MagSafe compatible", any Qi2 claim, or Apple's name, logo or trade dress
+  as a product attribute.
+- "Works with Apple Find My", "AirTag-style tracking other systems can use", "tracks staff".
+- "Sanitized", "disinfected by SignalGrid", "wiped by SignalGrid".
+- "Moves or restores app sessions between devices", "performs passthrough sign-in", "tap with
+  no PIN", "the puck unlocks the device", "attach grants access to all systems".
+- That the puck stores user data, or that any puck can serve as an EPCS factor.
+- Any login-time saving or "faster login".
+
 ## A note on disclosure
 
 This tree is public. The concept above is now disclosed by being written here; the
@@ -433,4 +538,5 @@ claims, and none should be added here without that decision.
   `badge_binding` dimension the removal-to-suspend rule already lives in.
 - [Custody beacon](CUSTODY_BEACON.md) — the recovery-not-surveillance stance the
   privacy constraint above continues.
-- [Decision records](DECISION_RECORDS.md) — DR-043.
+- [Decision records](DECISION_RECORDS.md) — DR-043, and DR-055 for the owner's 2026-09-23
+  refinement.

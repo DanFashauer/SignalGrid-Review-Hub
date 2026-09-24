@@ -3441,3 +3441,258 @@ This deferred detection does not duplicate the `rtls-custody` ledger evaluator: 
 Proven by ADDING assertions to the existing, already-registered `scripts/src/event-contract-proof.ts` (`proof:event-contract`): three positive shapes (prior grant never returned, prior `non_return`, prior `custody_expired`), a severity+evidence check, two negative controls (a properly returned prior does NOT fire it; a bare denial with no prior open checkout does NOT fire it), and two device-axis assertions that fail if the amendment above is reverted (another device returned while this one is still out must STILL fire; a grant+removal+return for one device must STAY silent). No new proof script, so no new preflight/CI/guard registration. The verdict enum, the Decision Envelope, and every launch-claim surface are untouched; no launch claim is made or implied.
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.
+
+## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves (owner-directed 2026-09-23)
+**Status: an owner-directed record of a hardware HYPOTHESIS refinement.** Every puck, dock, locker, custody and tap-point surface it names is a deferred design target; nothing here is shipped or claimed.
+
+**Question.** On 2026-09-23 the owner described *"the hardware flow I'm thinking for this
+product and company"* as seven components (C1–C7) and shared four reference images with it.
+DR-043 already records the session puck as a customer-testable hardware hypothesis, DR-039
+sets the absorption bar (overlap is recorded, never refused) and DR-020 says a new hardware
+surface gets a decision record before work begins. What does the tree take from the flow, what
+does each component become, whose job is each part, and what stays closed? DR-053 is held by
+open PR #905 (`docs/agent/LOOP.md:1390`–`1392`) and DR-054 by open PR #1019, so this record
+takes DR-055. It amends nothing in DR-043's text; it adds to it.
+
+**The input, in one paragraph.** The flow, in the owner's words as the review quotes them.
+**C1** a *"MagSafe-style"* magnetic puck that locks onto the back of the device, shaped like his
+reference photo (*"looks like the Apple logo picture"*). **C2** the puck holds *"all the
+user's info and auth info — everything"*, including building access as the fallback where a
+site has no face or fingerprint reader. **C3** an AirTag-like geo tag, so that *"other systems"*
+can *"use it for tracking services"* inside and outside the office *"if it's associated with a
+device"*. **C4** docks and smart lockers that run SignalGrid software *"that taps into all the
+systems"* and make grabbing a device easy. **C5** attaching the puck *"gives customer access to
+all systems"*. **C6** a tap of the puck or the phone at a workstation or workstation-on-wheels
+(WOW) for *"passthrough authentication"*, with the phone session intact and *"all workflows and
+apps still work and load on desktop plus give them all their sessions and other apps open"*.
+**C7** at end of day the worker taps the puck on the dock to return the device, which is then
+*"cleared and sanitized for next user"*. The four images: (a) an enterprise rack, VLAN plan and
+on-prem/Azure hybrid; (b) a photo of a puck; (c) Intune MDM vs MAM vs UEM; (d) SSO, OAuth,
+OIDC and SAML. None is committed. The flow was absorbed by a multi-agent review — six read-only
+topic maps of the tree, 21 verdicts (the seven components, each judged for platform honesty,
+for security and privacy, and for clinical workflow and market) and a critic pass that
+reconciled where the verdicts disagreed. The review is session material and is not committed;
+every platform fact below names its primary source, and the Return to Service, EPCS, Find My,
+Entra FIDO2-on-iOS, Apple cleaning, Apple implant-distance and FDA product-code facts were
+re-read from those sources on 2026-09-24 before being written here.
+
+**Call.**
+
+1. **Recorded as a refinement of DR-043, at DR-043's level of abstraction.** DR-043's three
+   functions, its division of authority, its gates and its do-not-claim list stand unchanged.
+   No latch, lock, phone-case or locker-release mechanism is described anywhere in the tree
+   until the owner decides the *IP / disclosure posture* row in `docs/BUILD_BACKLOG.md`, which
+   names *"phone-case/locker embodiments"* and says *"Do NOT commit a detailed provisional spec
+   into a public repo."* The whole flow's verdict is **record only; no hardware moves.**
+2. **Each component, what it becomes, and whose part is whose.** The per-component map, with
+   the page-level fit and the new policy rows, is in `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`
+   (*Owner refinement (2026-09-23, DR-055)*).
+   - **C1 — the magnetic puck locked to the device back.** *Verdict:* feasible only if
+     reframed; the credential lock itself is not recommended. A worker credential locked to a
+     shared device makes "stolen with the device" the normal case, so a thief gets both factors
+     in one grab; it throws away the walk-away property (the credential leaving with the
+     worker); a back-mounted lock sits where healthcare handsets take their hot-swap battery;
+     and 21 CFR 1311.115(b) wants a hard token *"separate from the computer to which it is
+     gaining access"* (<https://www.law.cornell.edu/cfr/text/21/1311.115>). *Becomes:* at most
+     a case or sled with a magnetic seat (Qi2 Magnetic Power Profile geometry, no Apple marks)
+     and a seat/latch sensor that holds no identity. Docks charge by wire or pogo pins, because
+     Apple says *"Don't place credit cards, security badges, passports, or key fobs between your
+     iPhone and MagSafe Charger, because this might damage magnetic strips or RFID chips"*
+     (<https://support.apple.com/en-us/105047>). *SignalGrid:* the seat/latch reading as custody
+     evidence only; a latch state beside attached/removed/unknown, where "unlatched without the
+     holder's return" is forced (`deny`) and "device and puck missing together" is `deny` plus
+     an approval-gated revoke request. *Partners:* the case or sled maker (latch, sensor, a fit
+     per device model), the FIDO token vendor, the MDM (lost-device lock and erase); Apple MFi
+     only if the MagSafe name or badge were ever used, WPC only if Qi2 were ever claimed.
+   - **C2 — the puck holds everything, including building access.** *Verdict:* feasible only if
+     reframed. *Becomes:* keys only — an IdP-registered, attested FIDO2 key in a certified
+     secure element (bought, not built), optionally a PACS-issued applet with legacy 125 kHz
+     Prox disabled. No profile, PHI, biometric template or session: W3C WebAuthn L2 §5.4.3 says
+     the user handle *"MUST NOT contain personally identifying information"*
+     (<https://www.w3.org/TR/webauthn-2/>), and DR-043 item 2 already says *"never a SignalGrid
+     key database"*. A lost keys-only puck is revoked; a lost puck holding data is a breach. The
+     worn badge or an Apple Wallet employee badge comes first — the hypothesis page's
+     pre-registered row (a design site says *"must use our existing badge"* repeatedly →
+     *"Prefer the reader-dock architecture (family B) over issuing a new puck."*) — and a converged FIDO2-plus-PACS token is the PACS vendor's product (the
+     review saw HID's pages only as search summaries; vendor-stated). *SignalGrid:* grade the
+     evidence — passkey assurance, read method (the `CREDENTIAL_DOWNGRADE` deny,
+     `lib/signalgrid-core/src/attach.ts:216`), attach state — and, on a lost puck, correlate the
+     revocation across the IdP, the PACS and SignalGrid's own session mappings through
+     approval-gated requests. It never issues, stores or verifies a credential. *Partners:* the
+     IdP (registration, attestation, AAGUID policy, user verification, revocation), the PACS
+     (the door credential and switching Prox off at the readers), the token vendor
+     (certification), the organization's CA for any PIV certificate.
+   - **C3 — the AirTag-like tag other systems can track.** *Verdict:* **not feasible as
+     described.** Apple's Find My network is end-to-end encrypted to the owner (*"The device
+     owner receives only the encrypted location information that's decrypted and displayed in
+     the Find My app"*, <https://support.apple.com/guide/security/find-my-security-sec6cbc80fd0/web>),
+     has no third-party API, is unavailable to Managed Apple Accounts (*"The app appears, but the
+     user can't use it"*,
+     <https://support.apple.com/guide/business/service-access-with-managed-apple-accounts-axm171b3ee95/web>),
+     and an employer-owned tag moving with a worker raises an unwanted-tracking alert on the
+     worker's own phone (<https://support.apple.com/en-us/119874>). A tag in a worker-carried
+     credential tracks the person, including off shift and at home, which is the case the
+     hypothesis page's privacy paragraph and `docs/CUSTODY_BEACON.md` already refuse.
+     *Becomes:* no radio in the puck. Location stays tied to the device and at zone level
+     (enterprise RTLS, MDM Lost Mode, a cellular or LoRaWAN tracker in the case), is collected
+     only while the device is checked out, attached and the worker is on shift, carries a
+     declared purpose, and leaves a site only as a verdict. *SignalGrid:* fuse location
+     fail-closed, where location can only tighten a decision; refuse and never store a reading
+     taken outside a checkout or a shift; send only a coarse zone and a pseudonym through the
+     gateway projector (`lib/facility-trust-graph/src/gateway.ts`); correct
+     `docs/CUSTODY_BEACON.md` (done in this change). *Partners:* RTLS and tracker vendors, the
+     MDM, and the customer's privacy officer (DPIA), unions (bargaining) and counsel — whether a
+     state tracking statute reaches an employer's device is counsel's reading, not settled here.
+   - **C4 — docks and lockers running SignalGrid software.** *Verdict:* feasible only if
+     reframed. *Becomes:* the locker or mobile-access-management vendor owns the firmware, the
+     badge read, the bay release and its own fallback when SignalGrid is unreachable; SignalGrid
+     reads their events (read-only first) and returns a ready or hold answer per device. It is
+     never the only key and never a kiosk screen (golden rule 3), and the dock holds no connector
+     credentials — `docs/SIGNALGRID_SMARTDOCK.md:30` already says the dock is *"not a decision
+     engine of its own"* and `docs/HARDWARE_PARTNER_MATRIX.md:16` treats lockers as *"physical
+     custody source systems, not systems SignalGrid controls directly."* *SignalGrid:* reconcile
+     the custody ledger (phantom custody, stale return, cap blocked); return a per-device
+     readiness verdict that fails closed per device and falls back to local-authority on a
+     SignalGrid outage; a *dock expected* site flag, so a missing dock feed tightens where
+     `lib/signalgrid-core/src/evidence.ts:150`–`156` today treats it as a deployment shape;
+     MDM remediation as approval-gated requests. *Partners:* the locker or hub vendor, the badge
+     reader and PACS, the MDM (and the supervision identity any USB-tethering host needs), and
+     the site's cleaning staff.
+   - **C5 — attaching the puck opens every system.** *Verdict:* feasible only if reframed.
+     *Becomes:* attach or check-out is custody evidence that **may start** a sign-in. The IdP
+     signs the worker in with user verification — *"Microsoft Entra ID requires user
+     verification with biometrics or PIN for all FIDO2 authentication attempts"*
+     (<https://learn.microsoft.com/en-us/entra/identity/authentication/concept-fido2-hardware-vendor>)
+     — Conditional Access scopes the grant to the worker's assignment (`docs/PURPOSE.md:45`–`47`),
+     and SignalGrid decides per action (`attach.ts:22`: *"`attached` grants NOTHING on its
+     own"*). No time-saving claim: incumbents already sell badge-tap check-out, and the page's
+     pre-registered row *"Customers primarily want faster login, not custody or session
+     correlation"* → *"Reconsider whether a custom puck adds enough over existing FIDO and badge
+     products"* applies. *SignalGrid:* `puckVerdict` exists; add a user-verified
+     axis (`identityConfirmed` is a plain boolean at `attach.ts:170`), an attach-proof strength
+     where a sensor-only attach counts as unknown, and the clinical-continuity row in item 3(v).
+     Suspend requests stay approval-gated. *Partners:* the OS (unlock, the NFC/FIDO transport,
+     user verification), the IdP (sign-in, shared device mode, Conditional Access, revocation),
+     the MDM (the Authenticator and SSO payloads, supervision), the token vendor.
+   - **C6 — tap at a workstation or WOW, phone session carried to the desktop.** *Verdict:*
+     feasible only if reframed; **the session carry-over is not feasible.** *Becomes:* the tap
+     starts a fresh sign-in owned by that endpoint (Windows/Entra FIDO2 or the incumbent agent,
+     a PIN every time). The desktop roams through the VDI broker, the only mechanism that
+     reopens *"the desktop and the applications ... in the same state"*, and Imprivata's own
+     page says that roaming *"is managed by your Omnissa virtual environment"*
+     (<https://docs.imprivata.com/onesign/content/topics/imprivataplatform/vda/vmwareview/vmwarevdiswa.html>).
+     Microsoft lists *"RDP, VDI, and Citrix, that use a security key other than webauthn
+     redirection"* as unsupported for Windows security-key sign-in
+     (<https://learn.microsoft.com/en-us/entra/identity/authentication/howto-authentication-passwordless-security-key-windows>).
+     The phone's session never moves — Entra's Primary Refresh Token is *"cryptographically bound
+     to that device"* on purpose
+     (<https://learn.microsoft.com/entra/identity/conditional-access/concept-token-protection>)
+     and `lib/work-context/src/types.ts:1` already says *"the WORK follows the person; the ACCESS
+     never does"* — so only a description of the work travels. *SignalGrid:* judge the resulting
+     session — the session's subject against the person who tapped (sso-session), attach,
+     readiness and the work-context ceiling; add the missing walk-away/tap-out and relay rows;
+     build one hardware-free WOW-tap-to-roam fixture. No credential provider and no session
+     broker without a new decision record (DR-020). *Partners:* Microsoft (Windows and Entra
+     sign-in, Intune, Cloud PC), Imprivata or an equivalent agent (badge tap, the shared-kiosk
+     agent), Citrix, Omnissa or Windows 365 (session persistence), Apple and the PACS vendor
+     (Wallet badges).
+   - **C7 — tap the puck on the dock to return, then clear and clean.** *Verdict:* feasible only
+     if reframed. *Becomes:* docking the device is the return and the puck adds nothing. The MDM
+     or IdP clears the device — shared device mode sign-out, or Apple Return to Service. Apple's
+     facts, re-read 2026-09-24: the `ReturnToService` erase key exists from iOS 17.0
+     (<https://github.com/apple/device-management/blob/release/mdm/commands/device.erase.yaml>);
+     app preservation needs iOS/iPadOS 26, Automated Device Enrollment, an escrowed bootstrap
+     token and an iPad that is not a Shared iPad; iOS/iPadOS 27 adds enrollment retry and,
+     inside the app-preservation reset only, a Control Center or inactivity-timeout start after
+     which the device checks in with the MDM
+     (<https://support.apple.com/guide/deployment/use-return-to-service-for-apple-devices-dep17cb455a0/web>);
+     Activation Lock must be off. SignalGrid keeps the device out of the pool until every step
+     is observed. Cleaning is an attestation, never a claim. *SignalGrid:* a `returned` event
+     distinct from `removed`; a readiness gate — sign-out observed, the Epic device assignment
+     removed so alerts stop, Return to Service acknowledged and re-enrolled, device prep done,
+     sso-session showing no session, cleaning attested — where anything unknown means not
+     ready; the fix to the ddm-connector's misreading of `mdm.is-return-to-service`
+     (`lib/ddm-connector/src/index.ts:52`–`78`); any erase request approval-gated and
+     rate-limited against the tenant's wipe cap (Intune: *"A tenant can submit up to 500 Wipe
+     actions per day"*, <https://learn.microsoft.com/intune/device-management/actions/wipe>).
+     *Partners:* the MDM (Fleet, Intune or Jamf, with Apple Business Manager, ADE and APNs), the
+     IdP (global sign-out), host apps (clearing their own data), Epic (removing the user-device
+     association), the dock or locker vendor, and infection-control or cleaning staff.
+3. **Rules adopted for every later puck, dock, locker or tap-point surface.** (i) The puck
+   carries keys only — an IdP-registered FIDO2 key, optionally a PACS-issued applet with legacy
+   Prox disabled — and never user data, PHI, biometrics, sessions or a location radio. (ii)
+   Attach or check-out is custody evidence that may start a sign-in; the IdP grants access, with
+   user verification; SignalGrid decides per action. (iii) Session continuity belongs to the OS,
+   the IdP and the VDI broker; only a description of the work travels. (iv) Return means
+   docking; clearing belongs to the MDM or the IdP; SignalGrid verifies readiness and never
+   erases. (v) **Clinical continuity:** removal or an unknown state never silently suspends a
+   device that has an active alarm or call assignment; it escalates through break-glass
+   (`lib/integrations/src/integrations/break-glass/`) and local-authority. A device that cannot
+   be verified stays NOT READY — fail closed per device — while a SignalGrid outage at a locker
+   falls back to the locker or MAM's own authentication plus local-authority: never a blanket
+   lockout, never an unauthenticated release. Secondary alarm-notification systems are FDA Class
+   II devices (product code MSX, 21 CFR 870.2300; for example K180566,
+   <https://api.fda.gov/device/classification.json?search=product_code:MSX>); whether a gate
+   across that path changes SignalGrid's own regulatory status is a question for regulatory
+   counsel, and this record claims nothing either way. (vi) Every hardware rung stays behind
+   DR-043 item 4; the Hardware (DR-043) line in `docs/agent/DISCOVERY_LOG.md` read
+   *Rh: 0 of 15 · Ch: 0 of 15 · Ph: 0 of 15* when this was written (2026-09-24).
+4. **Hardware-free work is filed, not built, in this change.** Rows *Puck 6*–*Puck 9* in the
+   DR-043 section of `docs/BUILD_BACKLOG.md`, a HIGH row for the ddm-connector misread, and the
+   Return to Service row reshaped into an approval-gated recommendation that keeps
+   `lib/fleet-connector` read-only. They are filed under this record's authority the way DR-043
+   item 3 filed Puck 1–5: fixture-first, deferred family, one PR each with its proof. A row that
+   changes a verdict the decision core returns (Puck 6, Puck 8) carries its own proposal record
+   in its PR, the DR-051 pattern, and the owner approves it by merging.
+5. **The standing-approval question is the owner's, and this record does not answer it.**
+   `docs/PURPOSE.md:72`–`74` says *"Nothing in the cascade may **execute** a change on a source
+   system without a recorded human approval"*. An erase on every return, approved one at a time,
+   does not scale at a shift change, and doctrine has no standing or pre-approved change. The
+   review named two shapes: (a) the MDM's own automation — including the iOS 27 start inside
+   app preservation — with SignalGrid observing and gating readiness; (b) a SignalGrid-planned
+   erase run as a pre-approved standard change with a standing recorded approval, rate-limited
+   against the tenant's wipe cap and any multi-admin approval rule. This record chooses
+   neither. Until the owner decides, every erase request stays one-at-a-time, approval-gated and
+   simulated.
+
+**What this does NOT claim.** None of the following may appear as a present-tense property of
+SignalGrid, a puck, a receiver, a dock, a locker, a tap point or a pilot, in addition to DR-043
+item 5:
+
+- That any puck, case, sled, latch, receiver, dock, locker or tap point is built, tested,
+  shipping, piloted, partnered or certified.
+- "Made for MagSafe", "MagSafe compatible", any Qi2 claim, or any use of Apple's name, logo or
+  trade dress as a product attribute.
+- "Works with Apple Find My", "AirTag-style tracking other systems can use", "tracks staff", or
+  that a puck is locatable off site.
+- "Sanitized", "disinfected by SignalGrid", "wiped by SignalGrid", or that SignalGrid erases,
+  locks or clears a device.
+- "Moves or restores app sessions between devices", "performs passthrough sign-in", "tap with no
+  PIN", "the puck unlocks the device" or "attach grants access to all systems".
+- That the puck stores user data, or that any puck can serve as an EPCS factor.
+- Any login-time saving or "faster login", and any incumbent's figure as fact.
+- "Relay-proof" or "clone-proof" (already in DR-043 item 5, restated because C6 and C7 add
+  tap points).
+
+**Boundary.** Docs only: this record, `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md`,
+`docs/CUSTODY_BEACON.md`, `native/ios/FLEET_MDM.md` (markdown), `docs/BUILD_BACKLOG.md`,
+`docs/agent/RESOURCE_INTAKE.md` and `docs/agent/DISCOVERY_LOG.md` (prompts only, no count).
+Nothing touches `lib/*`, `/v1`, a connector, a proof, the launch profile, the publication
+boundary, the claim inventory, the docs-sanity denylist or any Swift source. The review's
+proposed claim guards — denylist entries, claim-inventory pre-registration, and a *"not a session
+broker"* clause beside `docs/POSITIONING.md:73` — belong to a change that owns those surfaces
+and goes through the launch-claims gate; they are not made here. Golden rules 1–4 apply
+unchanged.
+
+**Evidence.** The review (six topic maps, 21 verdicts, a critic pass; session material, not
+committed) and the primary sources cited inline above, each re-read on 2026-09-24 where this
+record states it; the tree lines cited inline, read at `eb6ab8c5`; the doc gates run before the
+commit that carries this record.
+
+**Reversal.** The owner reverses any line of this by saying so. Mechanically: delete this record,
+the *Owner refinement (2026-09-23, DR-055)* section of the hypothesis page, backlog rows Puck 6–9
+and the ddm-connector row, the 2026-09-23 intake row and the discovery prompts it added. The
+corrections to `docs/CUSTODY_BEACON.md`, `native/ios/FLEET_MDM.md` and the Return to Service row
+are platform facts, not calls; they stay unless a primary source changes. Advancing any hardware
+rung still needs a met gate quoted from the tally and its own record (DR-043's reversal clause),
+and item 5's question closes only by the owner's own decision record.

@@ -45,6 +45,26 @@ lone repairs into unreachable code).
       no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
       check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
 
+- [ ] **The ddm-connector misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight (DDM connector, HIGH).**
+      *(Opened 2026-09-24 by the owner's puck-flow intake, DR-055.)* The row above made
+      `custodyPostureOf` in `lib/ddm-connector/src/index.ts` (lines 52–78) read `true` as "the
+      device is being wiped and handed on. Custody is in TRANSIT", which raises step-up.
+      Apple's own status YAML, vendored at
+      `third_party/apple-device-management/declarative/status/mdm.is-return-to-service.yaml`
+      (iOS 27.0), defines it differently: *"If `true`, the device is using the return to
+      service with app preservation mode."* That is a standing configuration, so a fleet set
+      up for Return to Service with app preservation reports `true` every day and this axis
+      never reaches allow. It fails closed, so it is not a security hole; it is a correctness
+      bug that blocks the return leg DR-055 records (C7). The change: model `true` as a
+      configuration fact that does not raise the verdict by itself; take "erase in flight"
+      from separate evidence — the MDM's command status or the `device_returned` event; keep
+      absent → `unknown` → tighten; update fixture `mac-noc-12` and its comment in
+      `lib/ddm-connector/src/fixture.ts`. One PR with its proof. The check that fails without
+      it: `proof:ddm-connector` (`scripts/src/ddm-connector-proof.ts`) gains an assertion that
+      a device reporting `true` with no erase-in-flight evidence does not raise on this axis
+      alone, and one that the same device WITH erase-in-flight evidence still does; both fail
+      on today's tree. Lane: endpoint-uem-domain.
+
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the
       two catalogs pin (`DDM_APPLE_STATUS_ITEMS` ∪ `APPLE_DDM_STATUS_ITEMS`) are vendored
@@ -843,6 +863,79 @@ item below is a design target until its proof is green and named.
       outreach figure independently of it (DR-036); neither number is typed. Nothing
       here builds hardware; the tally reads *0 of 15, 0 commitments* today. Design
       target for the hardware; deferred throughout. Cloud lane. Lane: icp-customer-research.
+
+**Added 2026-09-24 under DR-055** — the owner's 2026-09-23 flow (C1–C7), recorded as a
+refinement of this hypothesis, not a product (the component map and the new policy rows are in
+the hypothesis page's *Owner refinement (2026-09-23, DR-055)* section). Four more hardware-free
+rows, on the same terms as Puck 1–5: fixture-first, fail-closed, deterministic, a deferred
+family, one PR each with its proof, and no hardware. A row that changes a verdict the decision
+core returns (Puck 6, Puck 8) carries its own proposal record in its PR — the DR-051 pattern —
+and the owner approves it by merging.
+
+- [ ] **Puck 6 — a `returned` custody event distinct from `removed`, bound to the holder's credential.**
+      The change: a return at a dock, carried by the credential that checked the device out,
+      closes custody and ends the session without producing `CUSTODY_REMOVED`; a removal with
+      no return still restricts; a return with no device sensed in the bay is a custody
+      exception; a latch that opens without the holder's return is forced (`deny`); a torn
+      removal stays `deny`. Plus a resolution note for PR #1005: its live `CUSTODY_REMOVED`
+      rule has no resolution descriptor and escalates, so once it merges every planned
+      end-of-shift return would read as an incident until this row lands — the note says so on
+      the rule. **Fail-closed:** only a return the ledger can bind to the holder's own
+      credential closes anything; an unreadable return is `unknown`. **Deterministic:** the
+      instants are arguments. The check that fails without it: new rows in
+      `proof:decision-cascade` — a holder's return must not yield `CUSTODY_REMOVED`, and an
+      unlatch without a return must yield `deny` — both fail on today's `puckVerdict`
+      (`lib/signalgrid-core/src/attach.ts`), which knows only attached, removed and unknown.
+      Decision-core behaviour, so its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 7 — the return leg: a readiness scenario where every clearing step must be observed.**
+      The change: after `returned`, a device stays NOT READY until each step is positively
+      seen in the system that owns it — sign-out observed (Entra shared device mode or the
+      comms platform), the Epic user-to-device association removed so alerts stop reaching the
+      device, Return to Service acknowledged and the device re-enrolled (DDM status, after the
+      ddm-connector row above), device prep complete
+      (`lib/integrations/src/integrations/app-update/device-prep.ts`), `sso-session` showing no
+      live session, and cleaning attested by a named person. Anything unknown means not ready.
+      It reuses those dimensions rather than adding a family, and links to the Return to
+      Service row (*Bind `device_returned` to Apple's Return to Service*) rather than
+      duplicating it. **Fail-closed:** readiness is positive evidence of each step, never the
+      absence of a complaint; a cleaning step is an attestation, never inferred and never a
+      claim. **Deterministic:** fixture data only. The check that fails without it: assertions
+      added to a registered proof (as Puck 4's matrix was added to `proof:decision-cascade`,
+      because the simulator's engine is a byte-faithful twin and must not grow branches —
+      golden rule 1) where each step left unobserved in turn keeps the device out of the pool,
+      and only the all-observed case is ready. Lane: qa-engineer.
+
+- [ ] **Puck 8 — a user-verified axis, attach-proof strength and a clinical-continuity row in `puckVerdict`.**
+      The change: (a) `identityConfirmed` (`lib/signalgrid-core/src/attach.ts:170`) is a plain
+      yes/no today, so the `allow` row can be reached by a touch-only assertion; add whether the
+      user was VERIFIED (PIN or biometric) and never let a presence-only assertion reach
+      `allow` for a broad-scope session. (b) Record how the attach was proven — a cryptographic
+      challenge the puck's key answers, or only a microswitch, Hall or contact sensor — and treat
+      sensor-only as `unknown` when deciding whether to keep a session open. (c) "Device and
+      puck missing together" → `deny` plus an approval-gated revoke request to the IdP and the
+      PACS. (d) An active alarm or call assignment plus removal or an unknown state →
+      escalate through break-glass (`lib/integrations/src/integrations/break-glass/`) and
+      local-authority, never a silent suspend. **Fail-closed:** every new axis can only raise
+      the bar or route to a human. The check that fails without it: `proof:decision-cascade`
+      matrix rows — attached + compliant + touch-only identity must not be `allow`; sensor-only
+      attach must be `step_up` for a keep-open decision; removal with an alarm assignment must
+      not emit an unattended suspend — each failing on today's tree. Decision-core behaviour,
+      so its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 9 — puck-to-checkout binding, and a *dock expected* site flag.**
+      The change: (a) bind the puck to the device for the length of a checkout; a return with a
+      different puck, or with a puck reported lost, is a custody exception and does not close
+      the checkout, and checking out a device that still carries another worker's puck is
+      `deny`. The custody ledger
+      (`lib/integrations/src/integrations/rtls-custody/custody-ledger.ts`) tracks the requester
+      today, not the credential. (b) `lib/signalgrid-core/src/evidence.ts` (lines 150–156)
+      deliberately treats missing dock evidence as neutral because "no dock at all is a
+      deployment shape"; add a site flag that declares docks expected, so that at such a site a
+      missing dock feed tightens, per device. **Fail-closed:** both halves only tighten.
+      The check that fails without it: `proof:rtls-custody` rows for a mismatched-puck return
+      that must stay open, and a proof row where a dock-expected site with a missing feed is not
+      ready while a no-dock site is unchanged. Lane: physical-ot-domain.
 
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
@@ -2049,7 +2142,7 @@ integration or endorsement with any of the projects named.** Public-safe and fix
 - [ ] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer.
 - [ ] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist.
 - [ ] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer.
-- [ ] **Bind `device_returned` to Apple's Return to Service — the device-side re-provision the custody ground truth describes in prose and nothing models (connector fixture first, MEDIUM).** Apple's Platform Deployment guide (2026-09-17 edition; `native/ios/FLEET_MDM.md` item 7) makes "returned to the dock → erased → re-enrolled → Home Screen, supervision kept" one MDM erase command carrying a Wi-Fi profile and the enrollment to return to: iOS / iPadOS 26 and later, retry and timeout options from 27, app preservation only under Automated Device Enrollment, not Shared iPad. [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md) maps the re-provision step to the `app-update` family in prose only. Build it as a fixture-backed `fleet-connector` operation — `device_returned` → erase-with-Return-to-Service, refused BY NAME when the device is unsupervised, not enrolled, a Shared iPad, or the Wi-Fi profile is absent — with its own proof; the on-device half is the Mac lane's, on a real supervised iPhone. Lane: mobile-native-engineer.
+- [ ] **Bind `device_returned` to Apple's Return to Service as an approval-gated recommendation — the device-side re-provision the custody ground truth describes in prose and nothing models (connector fixture first, MEDIUM).** Apple's Platform Deployment guide (2026-09-17 edition) and its `device.erase.yaml` make "returned to the dock → erased → re-enrolled → Home Screen, supervision kept" one MDM erase command carrying a Wi-Fi profile and the enrollment to return to. **Facts corrected 2026-09-24 (DR-055; sources in `native/ios/FLEET_MDM.md` item 7):** the `ReturnToService` key exists from iOS 17.0; app preservation needs iOS / iPadOS 26, Automated Device Enrollment, an escrowed bootstrap token and an iPad not set up as Shared iPad — the Shared iPad limit belongs to app preservation only; iOS / iPadOS 27 adds enrollment retry and, inside the app-preservation reset only, a Control Center or inactivity-timeout start that checks in with the MDM; Activation Lock must be off. This row used to say "iOS / iPadOS 26 and later … not Shared iPad" and to build the erase as a `fleet-connector` operation, but that package is "READ-ONLY BY CONSTRUCTION" (`lib/fleet-connector/src/client.ts`). **Reshaped:** `device_returned` produces a planned, approval-gated "erase with Return to Service" RECOMMENDATION to the MDM — simulated, never executed from this tree, and counted against the tenant's wipe cap — refused BY NAME when the device is unsupervised or not enrolled, Activation Lock is on, app preservation is asked for on a Shared iPad or without a bootstrap token, or the Wi-Fi profile is absent. `lib/fleet-connector` stays read-only; no write path enters the public tree unless a decision record says so, and whether any erase may run under a standing approval is the owner's open question (DR-055 item 5). [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md) maps the re-provision step to the `app-update` family in prose only; Puck 7 consumes this row's answer. The check that fails without it: a fixture proof where each refusal names its reason, a clean supervised device yields a recommendation that requires approval and carries no executed status, and a grep of `lib/fleet-connector/src` for an erase call stays empty. The on-device half is the Mac lane's, on a real supervised iPhone. Lane: mobile-native-engineer.
 - [x] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer. **DONE 2026-09-18** — measured, then built: `lib/facility-trust-graph/src/graph.ts`'s `SpaceNode` carries no coordinate of any kind (no lat/lon, no floor-plan pixel, no vendor map position) — its only positional fact is `parentId`, so a tile renderer has nothing to project and the row's "resolve the tile source first" question dissolves: there is no tile source because the shipped data isn't geography, it's a tree. Built the tile-less view instead — `artifacts/signalgrid-app/src/lib/facilityGraphLayout.ts` (pure leaf-counting tree layout, no new dependency) feeding a plain inline `<svg>` in the new `/facility-graph` console page (`artifacts/signalgrid-app/src/pages/FacilityGraph.tsx`), reading the bundled `@workspace/facility-trust-graph` fixture — no network call, no maplibre, no live vendor style. Nav-registered (`GRID_NAV`, preview-wrapped per the launch-surface law) and reachable (`check-console-routes-reachable.mjs`, `check-dead-nav.mjs` both pass). Test: `artifacts/signalgrid-app/src/lib/facilityGraphLayout.test.ts`, 7/7 (`node --test`), covering depth ordering, parent vs. door edges, sibling column separation + parent centering, determinism, and an out-of-set `parentId` falling back to a root instead of being silently dropped.
 - [x] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist. **DONE 2026-09-18** — decided: a watcher is worth it, cheaper than the changedetection.io shape (no network fetch, no operator machine). `scripts/check-vendor-doc-drift.mjs` holds the 247 unique vendor URLs cited in `docs/inspiration/ENDPOINT_MANAGEMENT_API_CATALOG.md` (the catalog measured for this row's scope, not the full 996-host figure) against a committed dated ledger (`docs/agent/VENDOR_DOC_MANIFEST.json`, regenerated with `--write`) and reports URLs newly cited with no manifest entry, URLs stale past 90 days, and manifest URLs the catalog no longer cites. REPORT-ONLY: the check always exits 0; only `--self-test` (10/10) can fail a build. Registered in `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`; `node scripts/check-preflight-ci-parity.mjs` confirms it's wired.
 - [x] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer. **DONE 2026-09-18** — `docs/BACKUP_AND_RESTORE.md`, "What this does NOT give you": the bullet now names `rclone crypt` (client-side AES-256-CTR before the archive leaves the machine) and `rclone hashsum` (post-copy corruption/truncation check), states plainly that neither is a dependency of this repo, and says explicitly that `crypt` is not a compliance claim — a regulated operator still needs the human compliance review CLAUDE.md requires. Checked truthful against `docker-compose.prod.yml` (the `db:backup` dump is a plain unencrypted Postgres logical dump into an operator-chosen destination) and `docs/DEPLOYMENT.md` ("backups and restore testing" are explicitly out of scope, owned by whoever operates the stack) — nothing claims the code does anything it doesn't.

@@ -229,8 +229,10 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
   }
 
   // Track the unknown axes for evidence (they also foreclose the grant below).
-  if (report.policyState === "unknown") unknownSignals.push("policy_state");
-  if (report.complianceState === "unknown") unknownSignals.push("compliance_state");
+  // Anything not a recognized value is unknown — the posed `unknown` or an off-enum value
+  // from a directly-constructed / deserialized record (mirrors R9-3/R10-1 below).
+  if (report.policyState !== "applied" && report.policyState !== "not_applied") unknownSignals.push("policy_state");
+  if (report.complianceState !== "clean" && report.complianceState !== "flagged") unknownSignals.push("compliance_state");
   if (report.mamApplicability === "unknown") unknownSignals.push("mam_applicability");
   if (report.registrationFreshness === "unknown") unknownSignals.push("registration_freshness");
 
@@ -257,7 +259,8 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
     } else {
       candidates.push({ posture: "app_protection_missing", action: "step_up", reason: "MISSING_MAM_POLICY" });
     }
-  } else if (report.policyState === "unknown") {
+  } else if (report.policyState !== "applied") {
+    // The posed `unknown`, or off-enum — raise explicitly, never lean on GRANT_BACKSTOP.
     candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "POLICY_STATE_UNKNOWN" });
   }
 
@@ -273,7 +276,8 @@ function evaluateCoveredReport(report: NormalizedAppProtection): AppProtectionVe
     } else {
       candidates.push({ posture: "app_protection_flagged", action: "step_up", reason: "APP_PROTECTION_FLAGGED" });
     }
-  } else if (report.complianceState === "unknown") {
+  } else if (report.complianceState !== "clean") {
+    // The posed `unknown`, or off-enum — raise explicitly, never lean on GRANT_BACKSTOP.
     candidates.push({ posture: "app_protection_unverified", action: "step_up", reason: "COMPLIANCE_UNKNOWN" });
   }
 

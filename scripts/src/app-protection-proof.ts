@@ -136,9 +136,13 @@ check("a POSED-but-unreadable applicability → the missing policy still restric
 check("deriveApplicability maps its cases: applicable/not_applicable literal, absent → unassessed, unreadable → unknown",
   deriveApplicability("applicable") === "applicable" && deriveApplicability("not_applicable") === "not_applicable" &&
   deriveApplicability(undefined) === "unassessed" && deriveApplicability("maybe") === "unknown");
-check("deriveAppSensitivity: sensitive/standard literal, absent OR unreadable → unassessed (sensitivity may only escalate on an explicit 'sensitive', never on garbage)",
+check("deriveAppSensitivity: sensitive/standard literal, absent → unassessed, posed-but-unreadable → sensitive (an unknown input raises, never lowers)",
   deriveAppSensitivity("sensitive") === "sensitive" && deriveAppSensitivity("standard") === "standard" &&
-  deriveAppSensitivity(undefined) === "unassessed" && deriveAppSensitivity("critical") === "unassessed");
+  deriveAppSensitivity(undefined) === "unassessed" && deriveAppSensitivity("critical") === "sensitive" &&
+  deriveAppSensitivity(42 as unknown as string) === "sensitive");
+const garbageSensitivity = ev(clean({ policy_state: "not_applied", applied_policies: [] }), "high");
+check("a posed-but-unreadable sensitivity (\"high\") + a missing policy → restrict (MISSING_MAM_POLICY_SENSITIVE_APP), never lowered to step_up",
+  garbageSensitivity.recommendedAction === "restrict" && garbageSensitivity.reasonCode === "MISSING_MAM_POLICY_SENSITIVE_APP");
 
 // ── currency: is the registration evidence about NOW? ───────────────────────────
 const stale = ev(clean({ registration_observed_at: STALE }));
@@ -354,6 +358,15 @@ check("a NOT_APPLICABLE report with an OFF-ENUM registrationFreshness (\"bogus\"
 const coveredOffEnumFreshness = evaluateAppProtection({ ...cleanNormalized, registrationFreshness: "bogus" as NormalizedAppProtection["registrationFreshness"] });
 check("an applicable/covered report with OFF-ENUM freshness → step_up (APP_PROTECTION_TIME_UNKNOWN), raised explicitly so GRANT_BACKSTOP stays inert",
   coveredOffEnumFreshness.recommendedAction === "step_up" && coveredOffEnumFreshness.reasonCode === "APP_PROTECTION_TIME_UNKNOWN");
+// the same for the two plane-read axes: an off-enum policyState / complianceState must
+// raise its OWN unknown code, not GRANT_BACKSTOP (the mutation guard registers the
+// backstop as unable to fire, so a firing here would falsify that entry).
+const offEnumPolicy = evaluateAppProtection({ ...cleanNormalized, policyState: "bogus" as NormalizedAppProtection["policyState"] });
+check("an applicable/covered report with OFF-ENUM policyState (\"bogus\") → step_up (POLICY_STATE_UNKNOWN), raised explicitly so GRANT_BACKSTOP stays inert",
+  offEnumPolicy.recommendedAction === "step_up" && offEnumPolicy.reasonCode === "POLICY_STATE_UNKNOWN" && offEnumPolicy.unknownSignals.includes("policy_state"));
+const offEnumCompliance = evaluateAppProtection({ ...cleanNormalized, complianceState: "bogus" as NormalizedAppProtection["complianceState"] });
+check("an applicable/covered report with OFF-ENUM complianceState (\"bogus\") → step_up (COMPLIANCE_UNKNOWN), raised explicitly so GRANT_BACKSTOP stays inert",
+  offEnumCompliance.recommendedAction === "step_up" && offEnumCompliance.reasonCode === "COMPLIANCE_UNKNOWN" && offEnumCompliance.unknownSignals.includes("compliance_state"));
 
 // a LATER getter that EMPTIES the flagged array (Codex round-10): flagged_reasons is a
 // valid ["jailbroken"] when read, but a later recognized getter (platform) empties the

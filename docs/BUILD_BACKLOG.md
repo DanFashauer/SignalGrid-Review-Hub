@@ -446,8 +446,9 @@ lone repairs into unreachable code).
       positively clean, current compliance read (`not_applicable` + clean + fresh/unassessed →
       none; `not_applicable` + flagged/unknown/stale → raise, and a flagged registration outranks
       report malformity).
-      The proof enumerates all 864 normalized states (exactly 30 grant) and 96 raw wire records
-      (exactly 1 grants), and asserts by composition that the family can only raise. The
+      The proof enumerates every normalized state and every raw wire record and pins how many
+      of each grant (the counts are on its `figures=` line, not restated here), and asserts by
+      composition that the family can only raise. The
       SIGNAL_SOURCE_CATALOG row flipped out of "Documentation-only roadmap" in the same change;
       the emulator's scripted expectation is left stable and grounded by the proof rather than
       rewritten (its deterministic hash is untouched). How you'd check: `pnpm run proof:app-protection`
@@ -459,10 +460,18 @@ lone repairs into unreachable code).
       registration belonging to another user/device cannot be selected and granted. Deferred
       with the live transport (gated off today); the fixture path evaluates a single supplied
       record, so this is a live-query completeness requirement, not an exploitable path now.
-      CLOSED by PR #929 (refreshed onto SignalGrid_Alpha 2026-09-24). The owner's 2026-09-23
-      material separating Intune MDM, MAM and UEM (recorded as DR-055 in PR #1026, not yet on
-      mainline) is the requirement this row answers: MAM is its own read-only dimension, apart
-      from device-management-health's MDM channel.
+      The modelled dimension is closed by PR #929; the (user, device, app) binding FOLLOW-UP
+      above is still OPEN and is tracked as its own unchecked row directly below. The owner's
+      2026-09-23 material separating Intune MDM, MAM and UEM (recorded as DR-055, #1026) is the
+      requirement this row answers: MAM is its own read-only dimension, apart from
+      device-management-health's MDM channel.
+- [ ] **MAM live path: bind the registration to (user, device, app) before enabling it
+      (Codex P1 follow-up to the row above).** `AppProtectionRequest` is still only
+      `{appRef, token}`; thread a worker + device identifier through the request and
+      validate both against the returned registration, so a clean registration belonging
+      to another user or device cannot be selected and granted. BLOCKS enabling the live
+      app-protection transport (gated off today; the fixture path evaluates one supplied
+      record, so nothing is exploitable now). Lane: endpoint-uem-domain.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —

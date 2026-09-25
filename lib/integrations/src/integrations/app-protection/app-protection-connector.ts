@@ -17,9 +17,8 @@
 // SENSITIVITY and MAM APPLICABILITY are the CALLER's classifications of the app, not
 // the plane's, so they are posed via options: unposed is carried (`unassessed`,
 // which never escalates and never excuses), a posed-but-unreadable applicability is
-// `unknown` and raises, and a posed-but-unreadable sensitivity falls back to
-// `unassessed` because sensitivity may only ESCALATE on an explicit "sensitive" —
-// never on garbage.
+// `unknown` and raises, and a posed-but-unreadable sensitivity fails toward the
+// STRICTER tier (`sensitive`) — an unknown input raises, never lowers (golden rule 2).
 
 import { ageMs } from "../../utils/freshness";
 import {
@@ -197,16 +196,18 @@ export function deriveComplianceState(flaggedRaw: unknown): MamComplianceState {
 }
 
 /**
- * The caller's app-sensitivity classification. Unposed → `unassessed`; an unreadable
- * value ALSO → `unassessed`, because sensitivity may only ESCALATE a raise (step-up
- * → restrict) on an explicit "sensitive", never on garbage.
+ * The caller's app-sensitivity classification. Unposed → `unassessed`. A posed but
+ * unreadable value ("high", 42, …) → `sensitive`: the caller tried to classify the app
+ * and we cannot tell it is NOT sensitive, so it fails toward the stricter tier — an
+ * unknown input raises, never lowers. Sensitivity only ever escalates a raise; it can
+ * never grant.
  */
 export function deriveAppSensitivity(v: string | undefined): MamAppSensitivity {
   if (v === undefined) return "unassessed";
   const s = typeof v === "string" ? v.trim().toLowerCase() : "";
   if (s === "sensitive") return "sensitive";
   if (s === "standard") return "standard";
-  return "unassessed";
+  return "sensitive";
 }
 
 /**

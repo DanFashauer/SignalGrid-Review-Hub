@@ -61,7 +61,7 @@ LAST TOUCHED: 2026-09-25 (cloud lane, 23:00Z) - ONE BUILT, ONE TICK LEAK CLOSED,
               a stat-then-read in the walker on the first head (js/file-system-race, high) - fixed in c4c5981a before merge.
               Also under DR-037: #1069 (28379161) - run-requests.mjs treats a result already on an unlanded mac/tick-* branch
               as AWAITING LANDING and never re-runs it (the tick had re-run the evidence operation on four consecutive
-              ticks while the cloud landed the first; self-test 7/7, preflight row + CI step). Steward: #1067 (a07c9e96,
+              ticks while the cloud landed the first; `self-test passed (7/7)`, a preflight row and a CI step). Steward: #1067 (a07c9e96,
               re-derived shared state: readiness 100, queue empty), #1070 (e171c0a5, heartbeat + a send asking the Mac
               to pull before its next tick and to look at the 20:50Z failed evidence run), #1063/#1064 closed superseded.
               #1050 (Puck 6, DR-058 proposal) at 331c6558: gating 108244715123 green, local preflight + breadth exit 0,

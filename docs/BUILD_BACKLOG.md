@@ -944,7 +944,18 @@ family, one PR each with its proof, and no hardware. A row that changes a verdic
 core returns (Puck 6, Puck 8, Puck 9) carries its own proposal record in its PR — the DR-051
 pattern — and the owner approves it by merging.
 
-- [ ] **Puck 6 — bind the existing `device_returned` custody event to the holder's credential, distinct from `removed`.**
+- [x] **Puck 6 — bind the existing `device_returned` custody event to the holder's credential, distinct from `removed`.**
+      BUILT 2026-09-25 (cloud lane) as a PROPOSAL the owner approves by merging — DR-057, a
+      deferred design target (the custody family is not shipping; nothing here claims it):
+      `PuckSituation.release` + `.returned` (both default `not_applicable`, so every prior
+      row grades as before), `bindReturn(reading, holderCredentialRef)` (only the holder's
+      own credential with a device sensed in the bay binds as `holder`; every unreadable
+      input keeps custody open), seven new verdict rows — a holder's return is `restrict` /
+      `CUSTODY_RETURNED` (closed, nothing to escalate), an unauthorized release is
+      `CUSTODY_TORN`, unbound/absent/unreadable returns keep custody open by name — plus
+      `dock.returned` in the audit vocabulary (16 / 9) and the resolution note on the live
+      `attach-removed` rule. `proof:decision-cascade` 28 matrix rows, `proof:signalgrid-core`
+      census moved in the same change. The live `/v1` evidence field is a separate row.
       The change: the event contract already names `device_returned`
       (`lib/event-contract/src/types.ts:16`, read by `lib/event-contract/src/detect.ts`), so no
       new custody event is added. A return at a dock, carried by the credential that checked

@@ -61,7 +61,9 @@ LAST TOUCHED: 2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOO
               landings: Mac tick #1054 (335bb282; mainline objective-state now reads readiness `25` / escalate, which is
               TRUE - the manifest moved to 7c15496c with #1019 and #1051 and the two Linux-only steps wait on the
               DR-057 re-mint with --vm-native-build) and #1052 (5474868a; Alpha merged in, objective-state kept from
-              #1054, page re-derived) so objective-loop-evidence-fresh-2026-09-25 reaches the tick. Mail #1056 #1058.
+              #1054, page re-derived) so objective-loop-evidence-fresh-2026-09-25 reached the tick - and as of 2026-09-25 20:00Z
+              it RAN: result passed, mac-run.json re-minted 19:59Z against 7c15496c (#1061), readiness on that tree
+              reads 20/20 and HEADLINE 100% - the cloud lands #1061 with the coverage page re-derived. Mail #1056 #1058.
               Not this lane's failures, each commented once: the Copilot "AI findings" scanner crashed in its own
               loop on every head today; #1052's Mac-only job failed CI-liveness while the sweep was green (run 84)
               and passed on the single re-run. Main checkout repaired (was 171 behind with a no-TTY install abort).

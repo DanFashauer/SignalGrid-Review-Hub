@@ -102,6 +102,7 @@ export const CLASSIFY = {
   graph: { mapped: false, reason: "Microsoft Graph directory read; it IS the Entra ID identity infrastructure the Identity/SSO/IAM row maps." },
   "location-services": { mapped: false, reason: "RTLS/location-provider read; folded into the physical-access/RTLS/custody row." },
   "app-update": { mapped: false, reason: "app-version / update-eligibility reading; a control-plane input folded under UEM/MDM." },
+  "app-protection": { mapped: false, reason: "MAM app-protection policy state (Intune App Protection, Jamf, Workspace ONE); read from the same UEM/MDM management planes the UEM/MDM row maps, and no dedicated MAM MCP server was surveyed — folded under UEM/MDM." },
   "change-window": { mapped: false, reason: "change-management window reading; a change-record input folded under ITSM." },
   "shift-context": { mapped: false, reason: "workforce/shift schedule reading; workforce management, not a security-stack signal-source category." },
   "task-exception": { mapped: false, reason: "WMS/task-system exception reading (Oracle WMS Cloud / SAP EWM); warehouse execution, not a security-stack signal-source category." },

@@ -47,7 +47,7 @@ const coverageLabel: Record<AxisCoverage, string> = {
 // The wedge the positioning docs lead with — an IdP plus an MDM — and the default this
 // page opens on. Opening with every plane ticked would show the flattering estate
 // first; opening with none would open on an estate nobody runs. This one still leaves
-// six silent holes, which is the point of the conversation.
+// silent holes (proof:evidence-coverage pins how many), which is the point of the conversation.
 const DEFAULT_PLANES: readonly SourcePlane[] = ["identity", "device_management"];
 
 const planeLabel = (plane: SourcePlane): string =>

@@ -66,13 +66,32 @@ export function ratchetAction({ errCode, hasGitHistory }) {
   return { action: "refuse", why: `could not be read as JSON (${errCode}) — an unknown ceiling is not an absent ceiling` };
 }
 
+/** Is `cwd` a shallow clone? Fails CLOSED (true) when git cannot answer. */
+export function isShallowRepo(cwd = repoRoot) {
+  try {
+    return (
+      execFileSync("git", ["rev-parse", "--is-shallow-repository"], { cwd, encoding: "utf8" }).trim() !== "false"
+    );
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Has this path ever existed in git history? Fails CLOSED: if git cannot answer —
  * no git on PATH, not a repository, a pathspec it rejects — we cannot ESTABLISH
  * that the file is new, and "this is the first run" is not a thing to assume,
  * because assuming it authorises a fresh baseline. Report history as present.
+ *
+ * A SHALLOW clone cannot answer either (found on #686, 2026-09-25): CI's
+ * `actions/checkout` is depth 1, so `git log -- <deleted ceiling>` came back
+ * EMPTY and a PR that deleted the record AND weakened what it guards read as
+ * genesis — "baseline recorded", exit 0. Missing history is not proven absence.
+ * The cost: a brand-new ratchet cannot reach genesis in CI; run it once locally
+ * (a full clone) and commit the file it writes.
  */
 export function gitHasHistory(path, cwd = repoRoot) {
+  if (isShallowRepo(cwd)) return true;
   try {
     return (
       execFileSync("git", ["log", "--oneline", "-1", "--", path], {

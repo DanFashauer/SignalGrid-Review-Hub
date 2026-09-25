@@ -3571,3 +3571,13 @@ Output:   929: "Preflight PASSED — everything it runs is green." PREFLIGHT_EXI
           merges: #929 → 1d764be8 (gating run 107916038439), #686 → 77f4cf7e (gating run 107924894481), each with the full 40-char expectedHeadSha
           readiness after #686: "(b) launch surface, evidence 0% proofs current 0/20, launch items fully current 0/28 — evidence records no per-proof or per-step results" — expected until the single Mac re-mint (PR #1039)
 Verdict:  holds
+
+## 2026-09-25 — "Four PRs landed on green local gates after 'keep building': #1048, #1031, #1019 (owner-directed), and mail; #1050 opened as the DR-058 proposal"
+Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (each in its own worktree on the pushed head)
+Output:   #1048 @ c1c419fb: "Preflight PASSED — everything it runs is green." (361 steps) / "Breadth lane PASSED — 58 breadth proofs green"; proof:app-protection summary=pass (116/116); mutation-guard survivors=0 → merged 9602069a (gating 108133744412)
+          #1031 @ 5d33c668: Preflight PASSED (361) / Breadth PASSED (58); objective-loop self-test 62/62; --check passed → merged 832c9224 (gating 108141031151)
+          #1019 @ 70cbb90b: Preflight PASSED (366) / Breadth PASSED (58); raised-hands --check passed, self-test 47/47 → merged 19b4dfb7 (gating 108173601883)
+          #1050 @ 5d36b64d: Preflight PASSED (361, after build:room-console) / Breadth PASSED (58); proof:decision-cascade 119/119 (matrixRows=28); proof:signalgrid-core 597/597 → open, owner merges
+          readiness on mainline after the Mac re-mint f5d4ceaa: "(b) launch surface, evidence 95% proofs current 19/20, launch items fully current 27/28"; "HEADLINE 95% → OUTREACH OPEN"
+Verdict:  holds
+

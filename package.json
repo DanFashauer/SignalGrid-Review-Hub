@@ -89,6 +89,7 @@
     "proof:affected-audience": "pnpm --filter @workspace/scripts run proof:affected-audience",
     "proof:remediation-verification": "pnpm --filter @workspace/scripts run proof:remediation-verification",
     "proof:change-draft": "pnpm --filter @workspace/scripts run proof:change-draft",
+    "proof:app-protection": "pnpm --filter @workspace/scripts run proof:app-protection",
     "proof:change-window": "pnpm --filter @workspace/scripts run proof:change-window",
     "proof:config-scope": "pnpm --filter @workspace/scripts run proof:config-scope",
     "proof:connector-emulator": "pnpm --filter @workspace/scripts run proof:connector-emulator",

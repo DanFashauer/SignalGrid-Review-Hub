@@ -90,6 +90,7 @@ check("custody / peripheral route to Endpoint / Mobility", routeOf("custody") ==
 check("identity / data_protection route to Identity & Access", routeOf("identity") === "Identity & Access" && routeOf("data_protection") === "Identity & Access");
 check("sso_session (leftover-session risk) routes to Identity & Access", routeOf("sso_session") === "Identity & Access");
 check("oauth_consent (delegated-grant risk) routes to Identity & Access", routeOf("oauth_consent") === "Identity & Access");
+check("app_protection (MAM policy state) routes to the endpoint/compliance queue, never SecOps — an unrouted new kind would default to Security Operations", routeOf("app_protection") === "Identity & Access");
 // Iterates SIGNAL_KINDS itself rather than a hand-copied list. The hand-copy drifted
 // FIVE kinds behind the union — token_binding, pacs_access, agent_identity,
 // device_management_health and link_usability were all added to `categoryForKind` with

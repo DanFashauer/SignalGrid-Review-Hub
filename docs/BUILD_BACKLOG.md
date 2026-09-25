@@ -421,7 +421,7 @@ lone repairs into unreachable code).
       [inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md](inspiration/MOBILE_CONFIG_RECORDER_CONTRACT.md)
       — sequenced AFTER normalization-version stamping, and its recorder
       write-plane stays out of the public tree. Lane: endpoint-uem-domain.
-- [ ] **App Protection / MAM state as a decision dimension (intake row 33,
+- [x] **App Protection / MAM state as a decision dimension (intake row 33,
       verified candidate gap; SIGNAL_SOURCE_CATALOG's own
       "documentation-only roadmap" row).** No lib family models MAM
       (repo-wide grep: zero matches); device-management-health's header
@@ -434,6 +434,44 @@ lone repairs into unreachable code).
       raises; MAM non-applicability is an asserted positive; the emulator
       expectation and the SIGNAL_SOURCE_CATALOG row status reconcile in the
       same change; Intune App Protection first, other MAM vendors deferred. Lane: endpoint-uem-domain.
+      **DONE 2026-09-20** — the `app-protection` family (`@workspace/integrations/app-protection`:
+      types/evaluate/connector/mock-transport/index), read-only from birth (the read-only guard
+      refuses every non-GET; selective wipe is a documented non-feature), fused as the new
+      `app_protection` signal kind via `fromAppProtection`, proven by `proof:app-protection` in
+      the breadth lane (deferred family per `launch-profile.mjs`). The management plane anchors
+      the affirmative: a sensitive app with no applied policy → restrict (MISSING_MAM_POLICY_SENSITIVE_APP,
+      the exact reason the connector emulator scripts, now produced by the real dimension); a
+      flagged registration on a sensitive app → restrict; standard/unassessed → step_up; unknown
+      or stale → step_up; MAM non-applicability is an asserted positive that grants only on a
+      positively clean, current compliance read (`not_applicable` + clean + fresh/unassessed →
+      none; `not_applicable` + flagged/unknown/stale → raise, and a flagged registration outranks
+      report malformity).
+      The proof enumerates every normalized state and every raw wire record and pins how many
+      of each grant (the counts are on its `figures=` line, not restated here), and asserts by
+      composition that the family can only raise. The
+      SIGNAL_SOURCE_CATALOG row flipped out of "Documentation-only roadmap" in the same change;
+      the emulator's scripted expectation is left stable and grounded by the proof rather than
+      rewritten (its deterministic hash is untouched). How you'd check: `pnpm run proof:app-protection`
+      → `summary=pass`.
+      FOLLOW-UP before the live path is enabled (Codex P1, review of the fixture-backed
+      family): the connector keys a registration lookup by `appRef` only, but a MAM plane
+      keys managed-app state per (user, device, app). Thread a worker + device identifier
+      through the request and validate them against the returned evidence, so a clean
+      registration belonging to another user/device cannot be selected and granted. Deferred
+      with the live transport (gated off today); the fixture path evaluates a single supplied
+      record, so this is a live-query completeness requirement, not an exploitable path now.
+      The modelled dimension is closed by PR #929; the (user, device, app) binding FOLLOW-UP
+      above is still OPEN and is tracked as its own unchecked row directly below. The owner's
+      2026-09-23 material separating Intune MDM, MAM and UEM (recorded as DR-055, #1026) is the
+      requirement this row answers: MAM is its own read-only dimension, apart from
+      device-management-health's MDM channel.
+- [ ] **MAM live path: bind the registration to (user, device, app) before enabling it
+      (Codex P1 follow-up to the row above).** `AppProtectionRequest` is still only
+      `{appRef, token}`; thread a worker + device identifier through the request and
+      validate both against the returned registration, so a clean registration belonging
+      to another user or device cannot be selected and granted. BLOCKS enabling the live
+      app-protection transport (gated off today; the fixture path evaluates one supplied
+      record, so nothing is exploitable now). Lane: endpoint-uem-domain.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —

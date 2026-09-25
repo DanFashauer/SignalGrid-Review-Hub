@@ -4870,7 +4870,7 @@ Decision core (the verdict mechanism):
 6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
-9. lib/posture-composition/src/adapters.ts (624) — maps connector output into composition; a silent mis-map fails open.
+9. lib/posture-composition/src/adapters.ts (640) — maps connector output into composition; a silent mis-map fails open.
 
 Auth chain (bearer token to tenant principal):
 10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
@@ -4888,8 +4888,13 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
+<<<<<<< HEAD
 21. scripts/preflight.mjs (804) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (865) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
+=======
+21. scripts/preflight.mjs (799) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+22. scripts/launch-profile.mjs (797) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
+>>>>>>> origin/SignalGrid_Alpha
 23. scripts/check-guard-registries.mjs (188) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.
 25. lib/integrations/src/integrations/device-management-health/evaluate.ts (290) — launch family; grades whether a compliance answer is CURRENT — the anti-unearned-affirmative connector, which had better not contain one.

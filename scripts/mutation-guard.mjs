@@ -291,6 +291,14 @@ export const TARGETS = [
     ],
   },
   {
+    proof: "proof:app-protection",
+    files: [
+      "lib/integrations/src/integrations/app-protection/evaluate.ts",
+      "lib/integrations/src/integrations/app-protection/app-protection-connector.ts",
+      "lib/integrations/src/integrations/app-protection/index.ts",
+    ],
+  },
+  {
     proof: "proof:emitter-discipline",
     files: [
       // Ponytail cut 4 (2026-09-02) folded the six near-identical emitter bodies into
@@ -892,6 +900,30 @@ export const ALLOWED = [
     line: 'if (!positivelyAuthorizedChange && candidates.length === 0) {',
     reason:
       'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: the whole block was removed and all 1,656 shapes the proof enumerates (576 normalized states x covered/uncovered, plus 504 raw wire records) were diffed — ZERO outputs changed. Every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyAuthorizedChange is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the passkey-assurance, platform-sso and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/app-protection/evaluate.ts',
+    line: 'report.policyState === "applied" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: proof:app-protection enumerates every normalized state and pins the granting count (its figures= line prints both), and separately asserts that an OFF-ENUM ("bogus") policyState, complianceState, registrationFreshness and mamApplicability each raise their own reason code, never GRANT_BACKSTOP; every non-confirmed applicable state already pushes a raising candidate above it (a not_applied or unknown/off-enum policy, a flagged or unknown/off-enum compliance, a stale or unknown/off-enum read, an unknown/off-enum applicability, and a malformed report — a raising CANDIDATE here, not an early return, so malformity can never cap a confirmed restrict), and the not_applicable case short-circuits by severity to its own raise before reaching this branch, so the candidate list is never empty when positivelyProtected is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the change-window and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/app-protection/evaluate.ts',
+    line: 'report.complianceState === "clean" &&',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: proof:app-protection enumerates every normalized state and pins the granting count (its figures= line prints both), and separately asserts that an OFF-ENUM ("bogus") policyState, complianceState, registrationFreshness and mamApplicability each raise their own reason code, never GRANT_BACKSTOP; every non-confirmed applicable state already pushes a raising candidate above it (a not_applied or unknown/off-enum policy, a flagged or unknown/off-enum compliance, a stale or unknown/off-enum read, an unknown/off-enum applicability, and a malformed report — a raising CANDIDATE here, not an early return, so malformity can never cap a confirmed restrict), and the not_applicable case short-circuits by severity to its own raise before reaching this branch, so the candidate list is never empty when positivelyProtected is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the change-window and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/app-protection/evaluate.ts',
+    line: '(report.registrationFreshness === "fresh" || report.registrationFreshness === "unassessed");',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: proof:app-protection enumerates every normalized state and pins the granting count (its figures= line prints both), and separately asserts that an OFF-ENUM ("bogus") policyState, complianceState, registrationFreshness and mamApplicability each raise their own reason code, never GRANT_BACKSTOP; every non-confirmed applicable state already pushes a raising candidate above it (a not_applied or unknown/off-enum policy, a flagged or unknown/off-enum compliance, a stale or unknown/off-enum read, an unknown/off-enum applicability, and a malformed report — a raising CANDIDATE here, not an early return, so malformity can never cap a confirmed restrict), and the not_applicable case short-circuits by severity to its own raise before reaching this branch, so the candidate list is never empty when positivelyProtected is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the change-window and policy-binding backstops.',
+  },
+  {
+    file: 'lib/integrations/src/integrations/app-protection/evaluate.ts',
+    line: 'if (!positivelyProtected && candidates.length === 0) {',
+    reason:
+      'Defence-in-depth backstop that CANNOT fire today, verified rather than asserted: proof:app-protection enumerates every normalized state and pins the granting count (its figures= line prints both), and separately asserts that an OFF-ENUM ("bogus") policyState, complianceState, registrationFreshness and mamApplicability each raise their own reason code, never GRANT_BACKSTOP; every non-confirmed applicable state already pushes a raising candidate above it (a not_applied or unknown/off-enum policy, a flagged or unknown/off-enum compliance, a stale or unknown/off-enum read, an unknown/off-enum applicability, and a malformed report — a raising CANDIDATE here, not an early return, so malformity can never cap a confirmed restrict), and the not_applicable case short-circuits by severity to its own raise before reaching this branch, so the candidate list is never empty when positivelyProtected is false. Kept as the last thing standing between a weakened branch and a surviving seed grant; it pushes its own GRANT_BACKSTOP reason so a firing is visible in the record. Same shape as the change-window and policy-binding backstops.',
   },
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',

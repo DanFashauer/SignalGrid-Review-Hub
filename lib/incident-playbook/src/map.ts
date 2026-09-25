@@ -202,6 +202,14 @@ function categoryForKind(kind: string, reason?: string): IncidentCategory {
     // compliance queue — not a live incident and not the generic Service Desk.
     case "app_update":
       return "security_compliance";
+    // `app_protection` (MAM) is a managed-app protection-policy state — missing,
+    // flagged, stale or unverified app-protection on the device — owned by the same
+    // endpoint/compliance queue as `app_update` and the UEM/MDM dimensions, never
+    // SecOps: its findings are configuration/compliance states the endpoint team
+    // reconciles, not intrusions to investigate. (Owner: endpoint_operations_owner in
+    // scripts/it-layer-model.mjs.)
+    case "app_protection":
+      return "security_compliance";
     // `change_window` is the change plane's governance reading: an operation running
     // outside the window its own approval authorizes, under a record nobody approved,
     // by an implementer the record does not name, or on a record too old to be

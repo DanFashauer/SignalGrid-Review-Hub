@@ -1,0 +1,441 @@
+// Read-only normalization + transport for the APP-PROTECTION / MAM connector.
+//
+// The source is one managed-app registration at one instant: whether an
+// app-protection policy is applied, which policies, what the plane flagged, and when
+// the registration was read. Every operation is a read; there is no write path —
+// SignalGrid never assigns a policy, never wraps an app, and NEVER wipes one
+// (selective wipe is a deliberate non-feature; see types).
+//
+// Defensive normalization ported from the change-window / shift-context connectors:
+// MAM planes are external and may emit anything in any slot, so the normalizer — not
+// the compiler — makes values safe. Own-property reads only; malformed reports fail
+// closed.
+//
+// TRUSTED vs POSED. The management plane is the system of record for whether a
+// policy is applied (`policyState`) and for the flagged reasons (`complianceState`),
+// so those are read from the wire as allowlisted enums / a bounded string set. App
+// SENSITIVITY and MAM APPLICABILITY are the CALLER's classifications of the app, not
+// the plane's, so they are posed via options: unposed is carried (`unassessed`,
+// which never escalates and never excuses), a posed-but-unreadable applicability is
+// `unknown` and raises, and a posed-but-unreadable sensitivity fails toward the
+// STRICTER tier (`sensitive`) — an unknown input raises, never lowers (golden rule 2).
+
+import { ageMs } from "../../utils/freshness";
+import {
+  APP_PROTECTION_REPORT_KEYS,
+  AppProtectionConnectorError,
+  type AppProtectionReportRaw,
+  type MamApplicability,
+  type MamAppSensitivity,
+  type MamComplianceState,
+  type MamPolicyState,
+  type MamRecordFreshness,
+  type MamReportIntegrity,
+  type NormalizedAppProtection,
+} from "./types";
+import { createReadOnlyGuard } from "../../utils/guardReadOnly";
+
+/** GET-only guard, mirroring the other connectors. */
+export const guardReadOnly = createReadOnlyGuard(
+  (method) => new AppProtectionConnectorError("read_only_violation", `app-protection is read-only; refused ${method}`),
+);
+
+/** Map a string to one of `allowed`, case-insensitively; anything else → fallback.
+ *  An ALLOWLIST on purpose — an unrecognized value fails to the safe unknown. */
+function oneOf<T extends string>(v: unknown, allowed: readonly T[], fallback: T): T {
+  if (typeof v !== "string") return fallback;
+  const s = v.trim().toLowerCase();
+  return (allowed as readonly string[]).includes(s) ? (s as T) : fallback;
+}
+
+/** Did the report ASSERT a policy_state we could not read? `null` counts as absent. */
+function enumMalformed(v: unknown, allowed: readonly string[]): boolean {
+  if (v === undefined || v === null) return false;
+  if (typeof v !== "string") return true;
+  return !allowed.includes(v.trim().toLowerCase());
+}
+
+/** Read a field ONLY if the report asserts it as an OWN property. An inherited value
+ *  is the prototype's claim, not this report's. */
+function ownValue(report: object, key: string): unknown {
+  return Object.prototype.hasOwnProperty.call(report, key) ? (report as Record<string, unknown>)[key] : undefined;
+}
+
+function isPlainReport(report: unknown): report is object {
+  return typeof report === "object" && report !== null && !Array.isArray(report) && report !== Object.prototype;
+}
+
+const MAX_PROTOTYPE_DEPTH = 64;
+
+/** Does the report carry any key this connector does not understand? Walks the
+ *  PROTOTYPE CHAIN even though value reads are own-only: an inherited assertion in a
+ *  spelling we ignore is still an assertion. A symbol key counts; a class instance
+ *  fails closed. */
+function hasUnrecognizedKey(report: object, known: readonly string[]): boolean {
+  try {
+    let o: object | null = report;
+    for (let depth = 0; o !== null && o !== Object.prototype; depth += 1) {
+      if (depth >= MAX_PROTOTYPE_DEPTH) return true;
+      for (const k of Reflect.ownKeys(o)) {
+        if (depth > 0) return true;
+        if (typeof k === "symbol") return true;
+        if (!known.includes(k)) return true;
+      }
+      o = Object.getPrototypeOf(o) as object | null;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** A trimmed non-empty string, or null. Never a fabricated placeholder. */
+function textOf(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  return s.length > 0 ? s : null;
+}
+
+/** A strict ISO-8601 UTC (Zulu) instant → epoch ms, or null. Rejects an impossible
+ *  calendar date (2026-02-30) that `Date.parse` silently rolls over to a real one:
+ *  the parsed instant must reproduce the supplied UTC components, or an unreadable
+ *  date would masquerade as valid freshness evidence and could grant. */
+function instantOf(v: unknown): number | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  // Fractional seconds may be ANY precision — the contract is ISO-8601 UTC, and
+  // Date.parse reads arbitrary fractional digits; the calendar round-trip below only
+  // compares through whole seconds, so precision beyond ms is irrelevant. (Codex P2.)
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?Z$/.exec(s);
+  if (m === null) return null;
+  const ms = Date.parse(s);
+  if (!Number.isFinite(ms)) return null;
+  // The parsed instant must RE-SERIALIZE to the same second-precision UTC calendar it
+  // was given. An impossible date (2026-02-30) rolls over to a real one (Mar 2), whose
+  // ISO string differs from the input — one comparison, so one fixture can falsify it.
+  const canonical = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+  if (new Date(ms).toISOString().slice(0, 19) !== canonical) return null;
+  return ms;
+}
+
+/** The list of trimmed non-empty strings in an array, or [] for a non-array. The
+ *  caller separately checks `Array.isArray` to decide malformed vs absent. */
+function stringList(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  // Extract BY INDEX, not `for…of`, so a hostile array with an overridden
+  // `Symbol.iterator` (index 0 holds "jailbroken" but the iterator yields nothing)
+  // cannot make the extractor read a DIFFERENT set than `arrayMalformed` validated —
+  // which would let a flagged list normalize to `clean` and grant. (Codex P1.)
+  for (let i = 0; i < v.length; i++) {
+    const t = textOf(v[i]);
+    if (t !== null) out.push(t);
+  }
+  return out;
+}
+
+/** An array field is malformed when ASSERTED as a non-array, OR when it is an array
+ *  carrying any element that is not a non-empty string. `null`/absent = silence, not
+ *  malformed; an empty array is a valid "nothing" set. A junk element (a number, an
+ *  object, an empty string) is an unreadable assertion, not a silently-empty set —
+ *  dropping it to `clean` would let a malformed flagged/policy list grant.
+ *  Iterated by INDEX, not `Array.prototype.some`, which SKIPS sparse holes: a hole
+ *  (`new Array(1)`, `[,]`) reads as `undefined` and must count as a junk element, or a
+ *  sparse list would pass here and then `stringList` would reduce it to an empty
+ *  "nothing" set and grant. (Codex P1.) */
+function arrayMalformed(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (!Array.isArray(v)) return true;
+  for (let i = 0; i < v.length; i++) {
+    const el = v[i];
+    if (typeof el !== "string" || el.trim().length === 0) return true;
+  }
+  return false;
+}
+
+/** Read an array field's contents ONCE, by index, into a plain array — so validation
+ *  and extraction operate on the SAME snapshot. A hostile array can define a stateful
+ *  index accessor (index 0 yields "" on the first read, "jailbroken" on the second):
+ *  without a snapshot, `deriveComplianceState` would read "" (clean) while a later
+ *  `arrayMalformed` re-reads "jailbroken" (valid), and the flagged list grants. Reading
+ *  each index exactly once here removes the double-read. Non-arrays pass through; holes
+ *  materialize as undefined and are still caught by `arrayMalformed`. (Codex P1.) */
+function snapshotArray(v: unknown): unknown {
+  if (!Array.isArray(v)) return v;
+  const len = v.length;
+  const out = new Array<unknown>(len);
+  for (let i = 0; i < len; i++) out[i] = v[i];
+  // A `length` that UNDER-reports its own indexed entries (an exotic/proxied array whose
+  // length hides elements: length 0 while index 0 holds "jailbroken") cannot be trusted —
+  // the snapshot would drop the concealed entry and read clean. If any OWN integer index
+  // sits at or beyond the reported length, fail closed (thrown → snapshotThrew → malformed).
+  // A fully-trapping Proxy (ownKeys too) is out of the JSON-wire threat model — the live
+  // transport returns parsed JSON, and a hostile in-process transport has trivial simpler
+  // attacks than this — but the length/index mismatch is caught here. (Codex.)
+  for (const k of Object.keys(v)) {
+    const idx = Number(k);
+    if (Number.isInteger(idx) && idx >= len) {
+      throw new Error("app-protection: array length conceals indexed entries");
+    }
+  }
+  return out;
+}
+
+const POLICY_STATES = ["applied", "not_applied", "unknown"] as const;
+
+/**
+ * Derive compliance from the flagged-reasons list. An EMPTY asserted array is the
+ * plane positively saying "nothing flagged" → `clean`. A non-empty list → `flagged`.
+ * Absence (the field never posed) → `unknown`, which raises. A present-but-non-array
+ * is caught as malformed by the caller and also lands here as `unknown`.
+ */
+export function deriveComplianceState(flaggedRaw: unknown): MamComplianceState {
+  if (flaggedRaw === undefined || flaggedRaw === null) return "unknown";
+  if (!Array.isArray(flaggedRaw)) return "unknown";
+  return stringList(flaggedRaw).length > 0 ? "flagged" : "clean";
+}
+
+/**
+ * The caller's app-sensitivity classification. Unposed → `unassessed`. A posed but
+ * unreadable value ("high", 42, …) → `sensitive`: the caller tried to classify the app
+ * and we cannot tell it is NOT sensitive, so it fails toward the stricter tier — an
+ * unknown input raises, never lowers. Sensitivity only ever escalates a raise; it can
+ * never grant.
+ */
+export function deriveAppSensitivity(v: string | undefined): MamAppSensitivity {
+  if (v === undefined) return "unassessed";
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if (s === "sensitive") return "sensitive";
+  if (s === "standard") return "standard";
+  return "sensitive";
+}
+
+/**
+ * The caller's MAM-applicability classification. Unposed → `unassessed` (an
+ * unmanaged app is then treated as applicable, fail-closed). A posed-but-unreadable
+ * value → `unknown`, which raises — a caller who tried to answer and produced
+ * garbage has not affirmatively excused the app.
+ */
+export function deriveApplicability(v: string | undefined): MamApplicability {
+  if (v === undefined) return "unassessed";
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  if (s === "applicable") return "applicable";
+  if (s === "not_applicable") return "not_applicable";
+  return "unknown";
+}
+
+/**
+ * Derive how current the registration read is. The caller-posed recency shape,
+ * identical in construction to `deriveChangeRecordFreshness`: a source-reported
+ * instant, a caller-supplied maximum age, and a caller-supplied reference instant.
+ * No clock, and no maximum age posed means the question is `unassessed`.
+ */
+export function deriveRegistrationFreshness(
+  registrationObservedAt: string | null,
+  maxRegistrationAgeSeconds: number | undefined,
+  referenceTime: string | undefined,
+): MamRecordFreshness {
+  if (maxRegistrationAgeSeconds === undefined) return "unassessed";
+  if (!Number.isFinite(maxRegistrationAgeSeconds) || maxRegistrationAgeSeconds <= 0) return "unknown";
+  const observedMs = instantOf(registrationObservedAt);
+  const referenceMs = instantOf(referenceTime);
+  if (observedMs === null || referenceMs === null) return "unknown";
+  // Tolerance 0: the reference instant is posed by the caller, not a clock, so there
+  // is no second clock to skew against, and a future-dated read must stay `unknown`
+  // (which raises) rather than round up to `fresh`.
+  const age = ageMs(observedMs, referenceMs, 0);
+  if (age === null) return "unknown";
+  return age <= maxRegistrationAgeSeconds * 1000 ? "fresh" : "stale";
+}
+
+export interface AppProtectionNormalizeOptions {
+  /** The caller's sensitivity classification of the app: "sensitive" | "standard".
+   *  Absent = not posed (`unassessed`), which never escalates. */
+  appSensitivity?: string;
+  /** The caller's MAM-applicability classification: "applicable" | "not_applicable".
+   *  Absent = not posed (`unassessed`, treated as applicable). */
+  mamApplicability?: string;
+  /** The caller's "now", as a strict ISO-8601 UTC instant — the reference the recency
+   *  axis is derived against. Absent → freshness `unknown` when a max age is posed. */
+  referenceTime?: string;
+  /** How old a registration read the caller is willing to act on. Absent = the
+   *  recency question is not posed (`unassessed`). */
+  maxRegistrationAgeSeconds?: number;
+  source?: string;
+}
+
+/** Normalize one managed-app registration. Defensive throughout: a missing or
+ *  errored field yields the fail-safe unknown, never a fabricated positive. */
+export function normalizeAppProtectionReport(
+  appRef: string,
+  report: AppProtectionReportRaw,
+  opts: AppProtectionNormalizeOptions = {},
+): NormalizedAppProtection {
+  const source = opts.source ?? "app-protection-mam";
+  const plain = isPlainReport(report);
+  const raw: Record<string, unknown> = {};
+  // Read EACH field in its OWN guard, the array fields FIRST and SNAPSHOTTED at read time.
+  // Two fail-closed reasons, both proven:
+  //  - a throw in one field's getter must NOT erase the fields already read. A valid
+  //    flagged_reasons:["jailbroken"] survives a later THROWING getter (e.g. `platform`),
+  //    so the confirmed flag still reaches the evaluator — the throw raises malformed as
+  //    its own term below, and worst-concern-wins keeps the higher of flag-restrict vs
+  //    malformed-step_up. The single wrapping try this replaces wiped EVERY field on any
+  //    throw, downgrading a confirmed restrict to REPORT_MALFORMED/step_up. (Codex R10-4.)
+  //  - the array snapshot is taken the instant the field is read — BEFORE any later getter
+  //    (platform/source_system/registration_observed_at) can mutate the still-live array to
+  //    empty it and hide a flag; deriveComplianceState/arrayMalformed/stringList then all
+  //    read the SAME detached contents (also defeating a stateful index accessor). The
+  //    arrays are read FIRST so no sibling getter runs before them. An index/snapshot read
+  //    that throws fails CLOSED to malformed via readThrew, never escapes. (Codex R10-2/P1/P2.)
+  let readThrew = false;
+  const readField = (k: string): unknown => {
+    if (!plain) return undefined;
+    try { return ownValue(report, k); } catch { readThrew = true; return undefined; }
+  };
+  const readArrayField = (k: string): unknown => {
+    if (!plain) return undefined;
+    try { return snapshotArray(ownValue(report, k)); } catch { readThrew = true; return undefined; }
+  };
+  raw["flagged_reasons"] = readArrayField("flagged_reasons");
+  raw["applied_policies"] = readArrayField("applied_policies");
+  for (const k of APP_PROTECTION_REPORT_KEYS) {
+    if (k === "flagged_reasons" || k === "applied_policies") continue;
+    raw[k] = readField(k);
+  }
+
+  const policyState = oneOf<MamPolicyState>(raw["policy_state"], POLICY_STATES, "unknown");
+  const flaggedList = raw["flagged_reasons"];
+  const policiesList = raw["applied_policies"];
+  const complianceState = deriveComplianceState(flaggedList);
+
+  const observedRaw = raw["registration_observed_at"];
+  const observedMs = instantOf(observedRaw);
+  const instantShapeBad = observedRaw !== undefined && observedRaw !== null && observedMs === null;
+
+  // A report that echoes a DIFFERENT app than the one requested is a substitution, not
+  // evidence about this app — it must not be relabeled and evaluated as protected. A
+  // PRESENT-but-unreadable app_ref (a number, a blank string) is likewise not proof that
+  // the row is this app's, so an asserted app_ref must be a readable string naming THIS
+  // app; absent is fine (the fetch binding stands).
+  const appRefRaw = raw["app_ref"];
+  const appRefAsserted = appRefRaw !== undefined && appRefRaw !== null;
+  const reportedAppRef = textOf(appRefRaw);
+  const appRefMismatch = appRefAsserted && (reportedAppRef === null || reportedAppRef !== appRef.trim());
+  // The REQUESTED binding must itself name an app. A blank/whitespace `appRef` means
+  // the record is not bound to any identified app, so an otherwise applied+clean report
+  // must not grant `APP_PROTECTED` for an unidentified app — the appRefMismatch check
+  // above cannot catch it when the source omits its optional echo. Fail closed. (Codex P1.)
+  const requestAppRefBlank = appRef.trim().length === 0;
+  // "applied" with no corroborating policy references is a contradiction: an applied
+  // app-protection policy always names at least one policy. Fail closed on the ambiguity
+  // rather than trusting the bare `applied` claim.
+  const appliedWithoutPolicies = policyState === "applied" && stringList(policiesList).length === 0;
+  // A PRESENT-but-unreadable text field (a number, an object, a blank string) is a
+  // corrupt assertion, not silence — `MamReportIntegrity` defines present-but-unparseable
+  // as malformed. `textOf` quietly returns null for these, and platform/source_system did
+  // not otherwise reach the malformed check, so a report with `platform: 42` /
+  // `source_system: {}` read as a clean parse and granted. Fail closed. (Codex P1.)
+  const textFieldBad = (v: unknown): boolean => v !== undefined && v !== null && textOf(v) === null;
+  const platformBad = textFieldBad(raw["platform"]);
+  const sourceSystemBad = textFieldBad(raw["source_system"]);
+
+  const malformed =
+    readThrew ||
+    !plain ||
+    instantShapeBad ||
+    requestAppRefBlank ||
+    appRefMismatch ||
+    appliedWithoutPolicies ||
+    platformBad ||
+    sourceSystemBad ||
+    arrayMalformed(flaggedList) ||
+    arrayMalformed(policiesList) ||
+    hasUnrecognizedKey(report, APP_PROTECTION_REPORT_KEYS) ||
+    enumMalformed(raw["policy_state"], POLICY_STATES);
+  const reportIntegrity: MamReportIntegrity = malformed ? "malformed" : "clean";
+
+  const registrationObservedAt = observedMs !== null ? (observedRaw as string).trim() : null;
+
+  return {
+    sourceSystem: "app-protection",
+    appRef,
+    policyState,
+    complianceState,
+    appSensitivity: deriveAppSensitivity(opts.appSensitivity),
+    mamApplicability: deriveApplicability(opts.mamApplicability),
+    registrationFreshness: deriveRegistrationFreshness(
+      registrationObservedAt,
+      opts.maxRegistrationAgeSeconds,
+      opts.referenceTime,
+    ),
+    managedAppRef: textOf(raw["app_ref"]),
+    appliedPolicyRefs: stringList(policiesList),
+    flaggedReasons: stringList(flaggedList),
+    platform: textOf(raw["platform"]),
+    registrationObservedAt,
+    mamSource: textOf(raw["source_system"]),
+    reportIntegrity,
+    source,
+  };
+}
+
+export interface AppProtectionRequest {
+  appRef: string;
+  token: string;
+}
+
+export type AppProtectionTransport = (req: AppProtectionRequest) => Promise<AppProtectionReportRaw>;
+
+export interface AppProtectionConnectorConfig {
+  accessToken: string;
+  baseUrl: string;
+  source?: string;
+}
+
+/** Does `appRef` name exactly ONE app, safely, for a transport GET? A fail-closed
+ *  allowlist: a nonblank reverse-DNS-shaped id (starts alphanumeric; only letters,
+ *  digits, dot, dash, underscore after). It rejects "", ".", "..", and anything
+ *  carrying a path/scheme separator or query/fragment char — the shapes that widen an
+ *  authenticated GET beyond one app or redirect it. (Codex P1.) */
+function isDispatchableAppRef(appRef: string): boolean {
+  const s = typeof appRef === "string" ? appRef.trim() : "";
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(s);
+}
+
+/** Read-only connector: fetches one managed-app registration and normalizes it. */
+export class AppProtectionConnector {
+  constructor(
+    private readonly config: AppProtectionConnectorConfig,
+    private readonly transport: AppProtectionTransport,
+  ) {}
+
+  async fetchNormalized(
+    appRef: string,
+    opts: AppProtectionNormalizeOptions = {},
+  ): Promise<NormalizedAppProtection> {
+    guardReadOnly("GET");
+    // Validate the requested reference BEFORE dispatching. A blank, a bare dot-segment
+    // ("." / ".."), or one carrying a path separator does not name one app: sent to the
+    // transport it widens the authenticated GET to the collection URL or the base origin
+    // (`""`/"." → the collection, ".." → the parent). `normalizeAppProtectionReport`
+    // already fails such a reference CLOSED, but only after the call — the outbound
+    // request is the harm, so it must never leave. Refuse before transport. (Codex P1.)
+    // Canonicalize ONCE (trim) and use that value for validation, dispatch AND
+    // normalization — otherwise a ref that only validates after trimming (" com.x ")
+    // would be sent verbatim, requesting "%20com.x%20" and missing the intended row.
+    // (Codex P2.)
+    const canonicalRef = typeof appRef === "string" ? appRef.trim() : "";
+    if (!isDispatchableAppRef(canonicalRef)) {
+      throw new AppProtectionConnectorError(
+        "invalid_app_ref",
+        `app-protection: refusing to fetch — '${appRef}' does not name a single app`,
+      );
+    }
+    const raw = await this.transport({ appRef: canonicalRef, token: this.config.accessToken });
+    return normalizeAppProtectionReport(canonicalRef, raw, {
+      ...opts,
+      source: opts.source ?? this.config.source ?? "app-protection-mam",
+    });
+  }
+}

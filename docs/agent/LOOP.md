@@ -52,7 +52,19 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-24 (Mac lane, latest, evening) - TWO OWNER RESOURCES ABSORBED: PR #1037; #1031 REVIEWED.
+LAST TOUCHED: 2026-09-25 (cloud lane, 03:20Z) - OWNER BATCH LANDED on the owner's 2026-09-24 direction ("Just get it done").
+              In PMO order, each rebuilt on the previous landing, local preflight + verify:breadth quoted in the PR body,
+              gating run green on the exact head, merged with the full head sha: #1024 0fd151a2, #1026 8137f402,
+              #905 7c11ad86, #1005 a96ef30a, #929 1d764be8 (with the review round applied first: off-enum MAM states
+              raise POLICY_STATE_UNKNOWN/COMPLIANCE_UNKNOWN instead of leaning on the backstop; unreadable app
+              sensitivity fails toward sensitive), #686 77f4cf7e (five Codex threads verified, fixed, answered, resolved;
+              readiness (b) now the lower of proof-current and item-current ratios, step: bindings digest-bound,
+              98-binding ratchet). #686 was the last manifest mover: ONE Mac re-mint requested in PR #1039 against
+              fingerprint 7c15496c; (b) reads 0/20 proofs, 0/28 items until it lands, by design. NOT landed: #1019
+              (raise-your-hand) - the sandbox refused the local merge of mainline into its worktree (classifier:
+              "Merge Without Review"); it needs an owner or Mac hand, no workaround attempted. #1031 awaits the
+              Mac's B1/B2 fixes; #1037 awaits the Mac's CodeQL call. Previous entry (Mac, 2026-09-24 evening) follows.
+PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR #1037; #1031 REVIEWED.
               Owner shared Leonxlnx/unlazy and vercel-labs/skills ("incorporate these into the brain"). Each
               resource self-scanned the tree (worktree-isolated agents), four roster lenses confirmed/amended/
               rejected, the PM lens ranked; everything measured in the sandbox with no keys. unlazy @ 16671491:
@@ -1429,7 +1441,13 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (00) 2026-09-23: land the DR-043 live-attach carve (branch claude/build-dr043-live-attach-rules)
+NEXT ACTION: cloud: (000) 2026-09-25: #1019 last - merge SignalGrid_Alpha into claude/raise-your-hand, regenerate,
+              raised-hands --check, preflight + breadth, land on the owner's direction; the cloud sandbox refused the local
+              merge (see LAST TOUCHED), so the Mac lane or the owner does the merge step, then close #1011 and #1014.
+              Then #1031 (after the Mac's B1/B2), #1037 (after the Mac's CodeQL call), then merge mail PR #1039 once green
+              and confirm the re-mint against fingerprint 7c15496c brings (b) back. The items below are DONE except
+              where they name #1019/#1031/#1037: DR-043 carve landed as #1005; #753 closed; #905, #997, #929, #686 landed.
+              (00) 2026-09-23: land the DR-043 live-attach carve (branch claude/build-dr043-live-attach-rules)
               as an OWNER-merged product PR, then close #753; follow-up: unknown enrollment or read method still
               allows on both matrices (golden rule 2) - a new rule, not part of the carve. Owner merges owed:
               #905 (DR-053), #997 (spec-kit hybrid), #929, #686. Before any local preflight in this box, build

@@ -93,7 +93,7 @@
       "tier": 3,
       "provenance": "first-party",
       "writeScope": null,
-      "charter": "Reads the decision core that computes every verdict — first read completed 2026-08-23 and recorded in review-coverage.json; the role now re-reads what changed since each entry's date and whatever the ledger marks UNREAD or PARTIAL — and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
+      "charter": "Reads the decision core that computes every verdict — first read completed 2026-08-23 and recorded in review-coverage.json; the role now re-reads what changed since each entry's date and whatever the ledger marks UNREAD or PARTIAL — and reports: dead computed fields, unexercised branches, unfailable assertions, and any path where unknown evidence could loosen rather than tighten the answer. Reports only, never fixes. Its Bash tool exists for one purpose, set by the brain-cycle writer contract (docs/agent/BRAIN_CYCLE_DESIGN.md): write exactly one board file for the cycle it audited under artifacts/brain-cycle/, stamped with auditedSha. It never edits source, so it holds no Write or Edit tool and its writeScope stays null. Hired 2026-08-23 by the DR-016 loop to close build-plan row 42.",
       "carvedOutOf": null
     },
     {

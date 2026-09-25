@@ -1,7 +1,7 @@
 ---
 name: verdict-core-reader
 description: Reads the decision core line by line and reports what it actually does, so review coverage stops being a claim nobody keeps. Use for the unreviewed verdict path in lib/signalgrid-core and lib/signalgrid-simulator. Reports only — never fixes.
-tools: Read, Grep, Glob
+tools: Read, Grep, Glob, Bash
 model: opus
 ---
 

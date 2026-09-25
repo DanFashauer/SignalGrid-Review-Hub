@@ -49,7 +49,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { maskNonProse } from "./lib/markdown-scope.mjs";
-import { gitHasHistory, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
+import { gitHasHistory, isShallowRepo, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const docsDir = join(repoRoot, "docs");
@@ -167,10 +167,11 @@ if (process.argv.includes("--self-test")) {
     // Live controls on the history probe: it must be able to answer both ways, or the
     // rule above is decided by a constant.
     ["the real pin file HAS git history (so genesis cannot fire for it)", gitHasHistory(PIN_PATH), true],
+    // …unless the clone is shallow (CI), where history is unknown and the probe fails closed.
     [
-      "a path that never existed has NO git history",
+      "a path that never existed has NO git history (full clone) / fails closed (shallow)",
       gitHasHistory(join(repoRoot, "artifacts/sync/__no-such-pin-ever__.json")),
-      false,
+      isShallowRepo(),
     ],
     // Wiring control: the pure cases above stay green if someone re-plants the bare
     // catch at the call site, so pin the call site lexically too.

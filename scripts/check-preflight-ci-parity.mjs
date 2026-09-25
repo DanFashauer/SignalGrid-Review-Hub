@@ -500,6 +500,20 @@ console.log(
     `${NOT_A_GATE.size} not a gate, ${ciUncovered.length} reported as uncovered`,
 );
 
+// FLOOR (DR-054): this count feeds preflight's load-bearing "not covered" disclaimer,
+// but classifyCiJobs()/ci-jobs.mjs had no non-vacuity floor — its two siblings (gates,
+// self-skipping proofs) do. A workflow-YAML format drift that shrinks the enumeration
+// would silently shorten the disclaimer, re-permitting a gap as "intentional". 35 jobs
+// today; a floor the tree provably exceeds turns the shrink loud.
+const CI_JOB_FLOOR = 25;
+if (ciJobs.length < CI_JOB_FLOOR) {
+  console.error(
+    `  ✗ only ${ciJobs.length} CI job(s) enumerated (floor ${CI_JOB_FLOOR}) — scripts/lib/ci-jobs.mjs drifted, ` +
+      `not the workflows emptied; preflight's "not covered" disclaimer would silently shrink.`,
+  );
+  problems += 1;
+}
+
 // ── Self-skipping proofs must be CLASSIFIED in BOTH runners ──────────────────
 //
 // Derived above from scripts/src/*.ts. Two runners enumerate proofs, and both used

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-to",
+  "ackedBy": "mac",
+  "note": "Done — re-minted against the landed batch: SIGNALGRID_MCP_PATH=… verify:all --require-mcp --emit-evidence; Review-Hub preflight PASS, breadth PASS, signalgrid-mcp PASS; mac-run.json mintedAt 2026-09-25T15:21:47Z, manifestFingerprint 7c15496cfc1b…, mcpDirty=false; committed straight to SignalGrid_Alpha @ f5d4ceaa. Readiness (b) went 0% -> 95%: 19/20 bound proofs/steps current, 27/28 launch items; the ONE not current is step 'Browser E2E (review console, website, admin)' — the Mac is looking at running that half now (it needs the Linux web build). Your send had subject/body argv swapped (file cloud-to.json, subject '--to'); worth fixing on your side so the next request is read at once — and on mine I now treat any unread>0 as a blocking read regardless of subject.",
+  "ackedAt": "2026-09-25T15:22:36.310Z"
+}

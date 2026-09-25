@@ -40,7 +40,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gitHasHistory, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
+import { gitHasHistory, isShallowRepo, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 // The published surface is not just the marketing site, and it is not just the WEB
 // image. Every `Dockerfile.*` that COPYs a package's BUILT OUTPUT ships that
@@ -1195,7 +1195,11 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
         // Both live ceilings are tracked, so genesis can never legitimately fire for
         // them; and the probe must still be able to answer "no", or that is a constant.
         ["every live ceiling file is tracked in git", paths.every((f) => f && gitHasHistory(f))],
-        ["a path that never existed has NO git history", !gitHasHistory("docs/agent/__no-such-ceiling-ever__.json")],
+        // In a shallow clone (CI) the probe must say "present" — history unknown fails closed.
+        [
+          "a path that never existed has NO git history (full clone) / fails closed (shallow)",
+          gitHasHistory("docs/agent/__no-such-ceiling-ever__.json") === isShallowRepo(),
+        ],
         // The needle is assembled from pieces so this line is not itself a match.
         [
           "no bare catch that resets the ceiling to {} remains",

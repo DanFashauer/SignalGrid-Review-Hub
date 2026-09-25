@@ -43,6 +43,7 @@
     "proof:affected-audience": "tsx ./src/affected-audience-proof.ts",
     "proof:remediation-verification": "tsx ./src/remediation-verification-proof.ts",
     "proof:change-draft": "tsx ./src/change-draft-proof.ts",
+    "proof:app-protection": "tsx ./src/app-protection-proof.ts",
     "proof:change-window": "tsx ./src/change-window-proof.ts",
     "proof:config-scope": "tsx ./src/config-scope-proof.ts",
     "proof:connector-emulator": "tsx ./src/connector-emulator-proof.ts",
@@ -223,7 +224,7 @@
     "@types/node": "catalog:",
     "@types/pg": "^8.21.0",
     "@usebruno/cli": "^4.0.0",
-    "esbuild": "0.27.3",
+    "esbuild": "0.28.2",
     "fast-check": "^4.10.0",
     "oidc-provider": "9.11.3",
     "tsx": "catalog:"

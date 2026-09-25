@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T22:52:47.528Z",
-  "result": "keepalive + acted: merged #1013 (DR-054 ack) and #1015 (HOLD #1011/#1014 — owner chose one merged raise-your-hand system); opened #1019 (the merged system, owner-gated). No unread mail to cloud; no new/moved mac/* branches; manifest clean. Mac tick last firedAt 2026-09-23T22:43:53Z. Live evidence 2026-09-20T11:40:55-04:00 (>3d; refresh request to mac already unread). Owner not escalated by the lane."
+  "firedAt": "2026-09-25T14:26:03.319Z",
+  "result": "quiet (keepalive, last heartbeat 12:26Z): no Mac commits beyond tick heartbeats, no new/moved mac/* branches, no sim results, no mail to cloud, manifest no drift. mac-lane-tick firedAt 2026-09-25T14:08Z (fresh). live-evidence 2026-09-23 (1.8d); the one re-mint request (id cloud-to, PR #1039) unread on the Mac for ~11h — its interactive session has not run since 2026-09-24 evening. #1019 still needs the Mac or owner for the merge step; #1031 (52a600bd) and #1037 (dd8ad749) unmoved. Owner not escalated."
 }

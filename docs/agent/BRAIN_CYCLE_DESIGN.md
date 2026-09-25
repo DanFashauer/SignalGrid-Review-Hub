@@ -44,7 +44,7 @@ On a quiet day it opens nothing and heartbeats "quiet." That is a success, not a
 
 Parity is already **enforced on pull** for the git-half; the cycle's job is to refuse to run on a stale one.
 
-**What git carries byte-identically on pull** (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, canonical): `.claude/skills/` (117 tracked dirs), `.claude/agents/` (13), `.claude/commands/`, `.claude/settings.json`, `.claude/hooks/*.sh`, `.mcp.json` (`signalgrid-mcp` only, no creds), `.claude-plugin/plugin.json` (DR-030), and `docs/*`.
+**What git carries byte-identically on pull** (`docs/MCP_AND_SKILLS_LANE_PARITY.md`, canonical): `.claude/skills/` (118 tracked dirs), `.claude/agents/` (13), `.claude/commands/`, `.claude/settings.json`, `.claude/hooks/*.sh`, `.mcp.json` (`signalgrid-mcp` only, no creds), `.claude-plugin/plugin.json` (DR-030), and `docs/*`.
 
 **What already holds that half internally consistent** (both `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, self-tested both directions):
 - `scripts/check-plugin-manifest.mjs` — the manifest `agents[]` must **equal** `git ls-files .claude/agents/*.md`. Scope derived from git, fail-closed on empty derivation. This is the pattern every new parity gate copies.
@@ -99,7 +99,8 @@ Every executable resource is a lens over the **real** HEAD tree (audit what ship
 **One committed directory per cycle:** `artifacts/brain-cycle/<cycle-id>/` where `<cycle-id>` = the audited commit sha. It is autonomous-tier (not on the SAFETY_MACHINERY / OWNER_RESERVED lists in `check-owner-gated-surfaces.mjs`), so the ledger itself can ride inside an auto-mergeable PR.
 
 - **One file per lens per lane:** `<lens>.<lane>.json`. One writer per file → zero write contention (the collaborative-swarm invariant) and a clean cross-lane, cross-cycle diff.
-- **A derived `_manifest.json`** at the root listing which lenses were **expected** this cycle (membership derived the way `verify-breadth` membership is), so a lens that failed to post is visibly **MISSING**, not silently absent.
+- **A derived `_manifest.json`** at the root listing which lenses were **expected** this cycle (membership derived the way `verify-breadth` membership is), so a lens that failed to post is visibly **MISSING**, not silently absent. It ALSO carries **`cycle`** — the audited sha, non-empty or `readBoard` throws (a board that cannot say which surface its lenses reviewed is untrustworthy).
+- **Write contract + STALE-INPUT GUARD (enforced by `readBoard` in `scripts/brain-cycle.mjs`, with its `--self-test`):** each lens writes exactly ONE board file (via its Bash tool) stamping `auditedSha` with the sha it reviewed, `ran:true` ONLY for commands that actually executed, and every `UNVERIFIED` finding kept. `readBoard` treats a lens whose `auditedSha` ≠ the manifest's `cycle` (or is absent) as **`ran:false` / `UNVERIFIED`** — a board left over from a PREVIOUS cycle cannot count as having audited this one. This is the fail-closed law (a missing lens is a NO) extended to a STALE lens. The four true lens roles (`code-reviewer`, `security-reviewer`, `fail-closed-auditor`, `verdict-core-reader`) and `signalgrid-reviewer` are hereby granted board-write for `artifacts/brain-cycle/**` under this contract (an autonomous-tier reversible grant; the board dir is not on the owner-gated lists).
 - **`decision.json`** — the orchestrator's ranking, winner, chosen workflow, `classifyDiff` tier, and gauntlet result.
 
 Each lens file is self-describing and evidence-first:

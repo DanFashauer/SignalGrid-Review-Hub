@@ -246,7 +246,14 @@ export function stalePendingProse(docs, results) {
 
 function loadDir(dir) {
   return listJson(dir).map((f) => {
-    const parsed = JSON.parse(readFileSync(join(dir, f), "utf8"));
+    let parsed;
+    try {
+      parsed = JSON.parse(readFileSync(join(dir, f), "utf8"));
+    } catch (e) {
+      // DR-054: name the file, don't let a bare SyntaxError blame <anonymous> — a
+      // malformed request/result must point at itself so the operator can fix it.
+      throw new Error(`${join(dir, f)} does not parse: ${e.message}`);
+    }
     parsed.__fileId = f.replace(/\.json$/, "");
     return parsed;
   });

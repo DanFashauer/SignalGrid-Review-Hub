@@ -9468,9 +9468,9 @@
     {
       "type": "library",
       "name": "@esbuild/linux-x64",
-      "version": "0.27.3",
-      "bom-ref": "pkg:npm/%40esbuild/linux-x64@0.27.3",
-      "purl": "pkg:npm/%40esbuild/linux-x64@0.27.3",
+      "version": "0.28.2",
+      "bom-ref": "pkg:npm/%40esbuild/linux-x64@0.28.2",
+      "purl": "pkg:npm/%40esbuild/linux-x64@0.28.2",
       "licenses": [
         {
           "license": {
@@ -9481,16 +9481,16 @@
       "properties": [
         {
           "name": "signalgrid:licence-basis",
-          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary), recorded 2026-08-21 after the Mac lane reported darwin regeneration dropped it — the linux twin of the win32 handling above, so generation is platform-independent"
+          "value": "installed manifest read on linux-x64 (where the workspace overrides DO install this binary; `npm view @esbuild/linux-x64@0.28.2 license` → MIT), recorded 2026-09-24 for the #1016 lift from 0.27.3 — the linux twin of the win32 handling above, so generation is platform-independent"
         }
       ]
     },
     {
       "type": "library",
       "name": "@esbuild/win32-arm64",
-      "version": "0.27.3",
-      "bom-ref": "pkg:npm/%40esbuild/win32-arm64@0.27.3",
-      "purl": "pkg:npm/%40esbuild/win32-arm64@0.27.3",
+      "version": "0.28.2",
+      "bom-ref": "pkg:npm/%40esbuild/win32-arm64@0.28.2",
+      "purl": "pkg:npm/%40esbuild/win32-arm64@0.28.2",
       "licenses": [
         {
           "license": {
@@ -9501,16 +9501,16 @@
       "properties": [
         {
           "name": "signalgrid:licence-basis",
-          "value": "registry.npmjs.org manifest for @esbuild/win32-arm64@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+          "value": "registry.npmjs.org manifest for @esbuild/win32-arm64@0.28.2 (platform binary not installed under the workspace overrides; `npm view @esbuild/win32-arm64@0.28.2 license` → MIT), recorded 2026-09-24 for the #1016 lift from 0.27.3"
         }
       ]
     },
     {
       "type": "library",
       "name": "@esbuild/win32-ia32",
-      "version": "0.27.3",
-      "bom-ref": "pkg:npm/%40esbuild/win32-ia32@0.27.3",
-      "purl": "pkg:npm/%40esbuild/win32-ia32@0.27.3",
+      "version": "0.28.2",
+      "bom-ref": "pkg:npm/%40esbuild/win32-ia32@0.28.2",
+      "purl": "pkg:npm/%40esbuild/win32-ia32@0.28.2",
       "licenses": [
         {
           "license": {
@@ -9521,16 +9521,16 @@
       "properties": [
         {
           "name": "signalgrid:licence-basis",
-          "value": "registry.npmjs.org manifest for @esbuild/win32-ia32@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+          "value": "registry.npmjs.org manifest for @esbuild/win32-ia32@0.28.2 (platform binary not installed under the workspace overrides; `npm view @esbuild/win32-ia32@0.28.2 license` → MIT), recorded 2026-09-24 for the #1016 lift from 0.27.3"
         }
       ]
     },
     {
       "type": "library",
       "name": "@esbuild/win32-x64",
-      "version": "0.27.3",
-      "bom-ref": "pkg:npm/%40esbuild/win32-x64@0.27.3",
-      "purl": "pkg:npm/%40esbuild/win32-x64@0.27.3",
+      "version": "0.28.2",
+      "bom-ref": "pkg:npm/%40esbuild/win32-x64@0.28.2",
+      "purl": "pkg:npm/%40esbuild/win32-x64@0.28.2",
       "licenses": [
         {
           "license": {
@@ -9541,7 +9541,7 @@
       "properties": [
         {
           "name": "signalgrid:licence-basis",
-          "value": "registry.npmjs.org manifest for @esbuild/win32-x64@0.27.3 (platform binary not installed under the workspace overrides), recorded 2026-08-21"
+          "value": "registry.npmjs.org manifest for @esbuild/win32-x64@0.28.2 (platform binary not installed under the workspace overrides; `npm view @esbuild/win32-x64@0.28.2 license` → MIT), recorded 2026-09-24 for the #1016 lift from 0.27.3"
         }
       ]
     },
@@ -14108,9 +14108,9 @@
     {
       "type": "library",
       "name": "esbuild",
-      "version": "0.27.3",
-      "bom-ref": "pkg:npm/esbuild@0.27.3",
-      "purl": "pkg:npm/esbuild@0.27.3",
+      "version": "0.28.2",
+      "bom-ref": "pkg:npm/esbuild@0.28.2",
+      "purl": "pkg:npm/esbuild@0.28.2",
       "licenses": [
         {
           "license": {

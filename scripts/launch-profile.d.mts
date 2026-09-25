@@ -14,6 +14,10 @@ export type LaunchStatus = "launch" | "deferred" | "demo_only" | "internal";
 export interface ProfileEntry {
   id: string;
   reason: string;
+  /** The `proof:*` package.json scripts that certify this entry. REQUIRED on every
+   *  `launch` entry and forbidden elsewhere — `check-launch-proof-bindings.mjs`
+   *  enforces both, and `check-readiness-figure.mjs` derives dimension (b) from them. */
+  proofs?: string[];
   /** Work this entry needs that does not exist yet. Mirrored into `GAPS`. */
   gap?: string;
 }

@@ -532,6 +532,11 @@ const STEPS = [
   // Fails only when a stall is past 3x its limit with NO hand raised; overdue hands are reported.
   { name: "Raised hands (nothing stuck past its limit without a hand raised)", cmd: ["node", "scripts/raised-hands.mjs", "--check"] },
   { name: "Raised hands self-test (the gate can actually fail)", cmd: ["node", "scripts/raised-hands.mjs", "--self-test"] },
+  // Objective loop (DR-056 §5 pre-authorized; appended after #1019 landed, BUILD_BACKLOG row
+  // "Register objective-loop --check"). The committed shared task state must be well-formed,
+  // derived against the declared objective, and never stall silently (DR-054).
+  { name: "Objective loop state (well-formed, derived against the declared objective, every ranked task has a real executor, nothing stalls silently)", cmd: ["node", "scripts/objective-loop.mjs", "--check"] },
+  { name: "Objective loop self-test (every clause driven from the failing side)", cmd: ["node", "scripts/objective-loop.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },

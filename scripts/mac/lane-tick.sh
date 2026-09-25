@@ -377,10 +377,17 @@ if [ -n "$(git status --porcelain -- artifacts/sim-results artifacts/live-eviden
     # page is gated against it (check-surface-review-coverage): the first tick PR
     # (#844, 2026-09-18) went red on exactly that and needed a cloud commit to
     # land. Re-derive the page here so the result lands on its own.
-    node scripts/check-surface-review-coverage.mjs --write >/dev/null 2>&1 \
-      || say "WARN could not re-derive docs/agent/SURFACE_REVIEW_COVERAGE.md — the PR will fail the coverage gate until it is"
+    #
+    # ORDER MATTERS: the page counts TRACKED files (git ls-files). Deriving it before
+    # `git add` counted nothing new, so a tick that queued its first sim request (#1052,
+    # 2026-09-25) committed a page derived without the request file and went red on the
+    # very gate this block exists to satisfy. Stage the new files first, derive second,
+    # then stage the page.
     if git checkout -q -b "$TICK_BRANCH" \
-      && git add artifacts/sim-results artifacts/live-evidence docs/agent/SURFACE_REVIEW_COVERAGE.md docs/agent/objective-state.json artifacts/sim-requests 2>/dev/null \
+      && git add artifacts/sim-results artifacts/live-evidence docs/agent/objective-state.json artifacts/sim-requests 2>/dev/null \
+      && { node scripts/check-surface-review-coverage.mjs --write >/dev/null 2>&1 \
+           || say "WARN could not re-derive docs/agent/SURFACE_REVIEW_COVERAGE.md — the PR will fail the coverage gate until it is"; } \
+      && git add docs/agent/SURFACE_REVIEW_COVERAGE.md 2>/dev/null \
       && git commit -q -m "Mac tick $STAMP: sim results ($PENDING request(s)); objective loop: $LOOP_VERDICT" \
       && git push -q -u origin "$TICK_BRANCH"; then
       say "pushed $TICK_BRANCH (the cloud steward opens its PR within the hour)"

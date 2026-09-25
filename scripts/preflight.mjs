@@ -294,6 +294,8 @@ const STEPS = [
   { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
   { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },
   { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
+  { name: "Shell backend paths self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-shell-backend-paths.mjs", "--self-test"] },
+  { name: "Shell backend paths (every path EnterpriseShell's control-plane client builds is a declared /v1 path — no silent device 404)", cmd: ["node", "scripts/check-shell-backend-paths.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },

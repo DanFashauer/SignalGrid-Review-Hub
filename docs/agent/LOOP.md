@@ -52,7 +52,22 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 21:05Z) - READINESS 100% ON MAINLINE; THE LOOP CLOSED ITS OWN GAP.
+LAST TOUCHED: 2026-09-25 (cloud lane, 23:00Z) - ONE BUILT, ONE TICK LEAK CLOSED, ROW 5 RE-MEASURED; OWNER OWES ONE MERGE.
+              Built and landed under DR-037 (SAFETY_MACHINERY): #1071 (a3bd808b) - scripts/check-shell-backend-paths.mjs
+              GATES that every path EnterpriseShell's BackendService.swift builds (4) is declared in lib/api-spec/v1-openapi.yaml
+              (62); the legacy OIDC api/auth/* sites are REPORTED; self-test 9/9 with the real tree as positive control;
+              preflight + CI rows after "iOS restriction defaults". COMPANY_BUILD_PLAN row 5 had said the shell "calls five
+              endpoints that exist nowhere" since 2026-09-02's port - re-measured DONE (port) + PINNED (gate). CodeQL caught
+              a stat-then-read in the walker on the first head (js/file-system-race, high) - fixed in c4c5981a before merge.
+              Also under DR-037: #1069 (28379161) - run-requests.mjs treats a result already on an unlanded mac/tick-* branch
+              as AWAITING LANDING and never re-runs it (the tick had re-run the evidence operation on four consecutive
+              ticks while the cloud landed the first; `self-test passed (7/7)`, a preflight row and a CI step). Steward: #1067 (a07c9e96,
+              re-derived shared state: readiness 100, queue empty), #1070 (e171c0a5, heartbeat + a send asking the Mac
+              to pull before its next tick and to look at the 20:50Z failed evidence run), #1063/#1064 closed superseded.
+              #1050 (Puck 6, DR-058 proposal) at 331c6558: gating 108244715123 green, local preflight + breadth exit 0,
+              body updated - the OWNER's merge is the one thing owed on the product side. Next bounded build comes from
+              the loop's ranking (rows 6 public-site rewrite / 8 verdict-core read / 9 grant-safety enumeration), scoped first.
+PREVIOUSLY:   2026-09-25 (cloud lane, 21:05Z) - READINESS 100% ON MAINLINE; THE LOOP CLOSED ITS OWN GAP.
               The DR-056 loop queued the evidence request (#1052), the Mac tick ran it unattended (19:39Z tick), and
               the cloud landed the result as #1061 (f248aece): mac-run.json re-minted 19:59Z with --vm-native-build
               against manifest 7c15496c; `node scripts/check-readiness-figure.mjs` on mainline reads (b) 20/20,

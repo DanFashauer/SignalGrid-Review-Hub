@@ -365,6 +365,7 @@ const STEPS = [
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },
   { name: "Walker floors (every ROOTS/roots-array walk declares a non-vacuity floor)", cmd: ["node", "scripts/check-walker-floors.mjs"] },
   { name: "NaN fail-open (an unparseable expiry must read as EXPIRED; self-tested)", cmd: ["node", "scripts/check-nan-fail-open.mjs"] },
+  { name: "Native-build attestation self-test (a VM-run step is recorded only when bound to this exact tree)", cmd: ["node", "scripts/lib/native-build-attestation.mjs", "--self-test"] },
   // Sibling of NaN fail-open: guards the BOUND, not the timestamp.
   { name: "Posed-bound self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-posed-bounds.mjs", "--self-test"] },
   { name: "Posed bounds (a caller-posed numeric bound is never read with ??)", cmd: ["node", "scripts/check-posed-bounds.mjs"] },

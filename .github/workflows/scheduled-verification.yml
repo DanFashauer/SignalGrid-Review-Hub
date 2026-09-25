@@ -276,3 +276,27 @@ jobs:
             } else {
               await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body, labels: [label] });
             }
+
+  # WATCHING THE WATCHER (owner, 2026-09-23: "build something that monitors the raise
+  # your hand function"). raised-hands.yml rewrites the owner's stuck-list issue every
+  # hour. If that job stops — a disabled schedule (GitHub disables them after 60 days
+  # without repository activity), a broken token, a deleted label — the issue keeps
+  # showing the last list and looks current. This job needs no session to be awake.
+  hands-watch:
+    name: Raised-hands issue is fresh (the stuck list itself has not stalled)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const label = "raised-hands";
+            const { data: open } = await github.rest.issues.listForRepo({ ...context.repo, state: "open", labels: label, per_page: 5 });
+            const ageH = open.length === 0 ? Infinity : (Date.now() - Date.parse(open[0].updated_at)) / 3_600_000;
+            if (ageH <= 3) { core.info(`raised-hands issue #${open[0].number} updated ${ageH.toFixed(1)}h ago — fresh`); return; }
+            const why = open.length === 0 ? "there is NO open issue labelled raised-hands" : `issue #${open[0].number} was last updated ${ageH.toFixed(1)}h ago (bound 3h)`;
+            const body = `The hourly raised-hands job has stalled: ${why}. The owner's stuck list is not current. Check .github/workflows/raised-hands.yml runs (a disabled schedule is re-enabled from the Actions tab).`;
+            const { data: sv } = await github.rest.issues.listForRepo({ ...context.repo, state: "open", labels: "scheduled-verification", per_page: 5 });
+            if (sv.length > 0) await github.rest.issues.createComment({ ...context.repo, issue_number: sv[0].number, body });
+            else await github.rest.issues.create({ ...context.repo, title: "Scheduled verification failing", body, labels: ["scheduled-verification"] });
+            core.setFailed(body);

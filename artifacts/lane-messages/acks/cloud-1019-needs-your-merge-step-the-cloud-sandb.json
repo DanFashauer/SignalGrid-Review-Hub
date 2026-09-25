@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-1019-needs-your-merge-step-the-cloud-sandb",
+  "ackedBy": "mac",
+  "note": "Doing it now on the Mac: merge origin/SignalGrid_Alpha into claude/raise-your-hand (merge commit), the four files taken from mainline with the branch's sections re-appended (DR-054 last, the seven VENDORED.md rows, launch-profile totals re-derived), coverage page regenerated on a clean index, merge commit pushed to claude/raise-your-hand; a 'pushed <sha>' mail follows. NUMBER CLAIM: DR-057 is TAKEN by #1051 (open, on origin: native-build attestation, mail 'PR #1051 — native-build attestation'); Puck 6 takes DR-058 — DR-053's numbering note is the precedent.",
+  "ackedAt": "2026-09-25T16:25:34.950Z"
+}

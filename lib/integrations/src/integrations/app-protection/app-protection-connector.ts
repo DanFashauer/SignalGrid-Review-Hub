@@ -339,6 +339,8 @@ export function normalizeAppProtectionReport(
   const textFieldBad = (v: unknown): boolean => v !== undefined && v !== null && textOf(v) === null;
   const platformBad = textFieldBad(raw["platform"]);
   const sourceSystemBad = textFieldBad(raw["source_system"]);
+  const userRefBad = textFieldBad(raw["user_ref"]);
+  const deviceRefBad = textFieldBad(raw["device_ref"]);
 
   const malformed =
     readThrew ||
@@ -349,6 +351,8 @@ export function normalizeAppProtectionReport(
     appliedWithoutPolicies ||
     platformBad ||
     sourceSystemBad ||
+    userRefBad ||
+    deviceRefBad ||
     arrayMalformed(flaggedList) ||
     arrayMalformed(policiesList) ||
     hasUnrecognizedKey(report, APP_PROTECTION_REPORT_KEYS) ||
@@ -370,6 +374,8 @@ export function normalizeAppProtectionReport(
       opts.referenceTime,
     ),
     managedAppRef: textOf(raw["app_ref"]),
+    managedUserRef: textOf(raw["user_ref"]),
+    managedDeviceRef: textOf(raw["device_ref"]),
     appliedPolicyRefs: stringList(policiesList),
     flaggedReasons: stringList(flaggedList),
     platform: textOf(raw["platform"]),
@@ -380,7 +386,16 @@ export function normalizeAppProtectionReport(
   };
 }
 
-export interface AppProtectionRequest {
+/** The worker and device a registration read is FOR. Managed-app state is keyed per
+ *  (user, device, app) on the MAM plane; a request that names only the app can be
+ *  answered with a clean registration belonging to someone else, or to another device,
+ *  and that record must never be selected and granted. Both refs are required. */
+export interface AppProtectionBinding {
+  userRef: string;
+  deviceRef: string;
+}
+
+export interface AppProtectionRequest extends AppProtectionBinding {
   appRef: string;
   token: string;
 }
@@ -403,6 +418,27 @@ function isDispatchableAppRef(appRef: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(s);
 }
 
+/** Does `ref` name exactly ONE worker or device, safely, for a transport query? The
+ *  app-ref allowlist plus `@` (a UPN is a principal name). Rejects the same widening
+ *  shapes: blank, dot-segments, path/scheme separators, query/fragment chars. */
+function isDispatchablePrincipalRef(ref: string): boolean {
+  const s = typeof ref === "string" ? ref.trim() : "";
+  return /^[A-Za-z0-9][A-Za-z0-9._@-]*$/.test(s);
+}
+
+/** Read the registration's OWN `user_ref` / `device_ref` echo without trusting it: an
+ *  inherited value is the prototype's claim, a throwing getter is a refusal, and a
+ *  present-but-unreadable value (a number, a blank) is not a binding. Returns the
+ *  trimmed text or null. */
+function echoedRef(raw: unknown, key: "user_ref" | "device_ref"): string | null {
+  if (!isPlainReport(raw)) return null;
+  try {
+    return textOf(ownValue(raw, key));
+  } catch {
+    return null;
+  }
+}
+
 /** Read-only connector: fetches one managed-app registration and normalizes it. */
 export class AppProtectionConnector {
   constructor(
@@ -412,9 +448,22 @@ export class AppProtectionConnector {
 
   async fetchNormalized(
     appRef: string,
+    binding: AppProtectionBinding,
     opts: AppProtectionNormalizeOptions = {},
   ): Promise<NormalizedAppProtection> {
     guardReadOnly("GET");
+    // The registration is read FOR one worker on one device. A blank or unsafe binding
+    // ref would either widen the query or leave the returned record unattributable, so
+    // it is refused before anything leaves — same rule as the app ref below. A missing
+    // binding object is the same refusal, not a TypeError.
+    const userRef = typeof binding?.userRef === "string" ? binding.userRef.trim() : "";
+    const deviceRef = typeof binding?.deviceRef === "string" ? binding.deviceRef.trim() : "";
+    if (!isDispatchablePrincipalRef(userRef) || !isDispatchablePrincipalRef(deviceRef)) {
+      throw new AppProtectionConnectorError(
+        "invalid_binding",
+        "app-protection: refusing to fetch — the (user, device) binding does not name one worker on one device",
+      );
+    }
     // Validate the requested reference BEFORE dispatching. A blank, a bare dot-segment
     // ("." / ".."), or one carrying a path separator does not name one app: sent to the
     // transport it widens the authenticated GET to the collection URL or the base origin
@@ -432,7 +481,23 @@ export class AppProtectionConnector {
         `app-protection: refusing to fetch — '${appRef}' does not name a single app`,
       );
     }
-    const raw = await this.transport({ appRef: canonicalRef, token: this.config.accessToken });
+    const raw = await this.transport({ appRef: canonicalRef, userRef, deviceRef, token: this.config.accessToken });
+    // Validate the RETURNED registration against the binding before it is normalized:
+    // the plane must echo this worker AND this device. An absent echo is not proof the
+    // row is theirs (a registration keyed by app alone could be anyone's), and another
+    // worker's or device's clean registration is a substitution — neither may reach the
+    // evaluator, where "applied + clean + current" would grant. Refuse by name; the
+    // caller sees no verdict at all, never a borrowed one.
+    const echoedUser = echoedRef(raw, "user_ref");
+    const echoedDevice = echoedRef(raw, "device_ref");
+    if (echoedUser !== userRef || echoedDevice !== deviceRef) {
+      throw new AppProtectionConnectorError(
+        "binding_mismatch",
+        `app-protection: refusing the registration for '${canonicalRef}' — it is not bound to the requested worker and device` +
+          ` (user ${echoedUser === null ? "absent" : echoedUser === userRef ? "matches" : "differs"},` +
+          ` device ${echoedDevice === null ? "absent" : echoedDevice === deviceRef ? "matches" : "differs"})`,
+      );
+    }
     return normalizeAppProtectionReport(canonicalRef, raw, {
       ...opts,
       source: opts.source ?? this.config.source ?? "app-protection-mam",

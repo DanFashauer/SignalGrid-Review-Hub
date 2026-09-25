@@ -117,7 +117,7 @@ export default function IntegrationsSection() {
           className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4"
         >
           {[
-            { value: "17", label: "Core signal categories" },
+            { value: "20", label: "Core signal categories" },
             { value: "16", label: "Candidate source categories (taxonomy)" },
             { value: String(new Set(CATEGORY_GROUPS.map(g => g.owner)).size), label: "Owning teams shown" },
             { value: "12+", label: "Frameworks mapped" },

@@ -366,7 +366,16 @@ function swiftEnum(src, name) {
   return cases;
 }
 
-const CORE_ONLY_CATEGORIES = ["device_management_health", "local_authority"];
+// DR-043 (2026-09-23) added the three credential categories to the core's live
+// rules (attach removed/unknown, credential downgrade); the simulator and its Swift
+// port have no vocabulary for them, so they are declared here the same way.
+const CORE_ONLY_CATEGORIES = [
+  "device_management_health",
+  "local_authority",
+  "attach_state",
+  "enrollment_strength",
+  "credential_read_method",
+];
 
 // ── 3b support: record shapes ────────────────────────────────────────────────
 /** The record types both planners declare. TS `export interface X`, Swift `struct X`. */

@@ -1,3 +1,4 @@
+import type { AttachState, CredentialStrength } from "./attach";
 /**
  * SignalGrid product-shaped core — type model.
  *
@@ -287,6 +288,15 @@ export type DockState =
   | "offline"
   | "unknown";
 /**
+ * DR-043 credential fields on the LIVE evidence path. The vocabularies are
+ * attach.ts's own (`AttachState`, `CredentialStrength`) — one vocabulary shared
+ * with `puckVerdict`, never a second one — plus `not_applicable`: the category
+ * never appeared, so no credential of this kind is in play. That is distinct from
+ * `unknown` (a reading was present but unreadable), which raises.
+ */
+export type AttachEvidence = AttachState | "not_applicable";
+export type CredentialStrengthEvidence = CredentialStrength | "not_applicable";
+/**
  * Battery HEALTH, which is a different question from `ChargeState`.
  *
  * `chargeState` answers "how full is it right now" — a state charging changes.
@@ -345,6 +355,10 @@ export const SIGNAL_CATEGORIES = [
   "benchmark_selection",
   "shift_context",
   "badge_binding",
+  // DR-043: the credential's own custody and strength (see attach.ts).
+  "attach_state",
+  "enrollment_strength",
+  "credential_read_method",
   // The two launch families the core could not previously represent — found by the
   // 2026-08-10 full-repo scan (PRODUCT_COMPLETION_PLAN §9): device-management-health
   // and local-authority shipped as connectors, proofs and doctrine while the engine
@@ -414,6 +428,9 @@ export const EVIDENCE_FIELDS = [
   "badgeState",
   "managementHealthState",
   "localAuthorityState",
+  "attachState",
+  "enrollmentStrength",
+  "credentialReadMethod",
 ] as const;
 
 export type EvidenceField = (typeof EVIDENCE_FIELDS)[number];
@@ -438,7 +455,10 @@ export type RuleCondition =
   | { field: "shiftContextState"; in: ShiftContextState[] }
   | { field: "badgeState"; in: BadgeBindingState[] }
   | { field: "managementHealthState"; in: ManagementHealthState[] }
-  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] };
+  | { field: "localAuthorityState"; in: LocalAuthorityGrantState[] }
+  | { field: "attachState"; in: AttachEvidence[] }
+  | { field: "enrollmentStrength"; in: CredentialStrengthEvidence[] }
+  | { field: "credentialReadMethod"; in: CredentialStrengthEvidence[] };
 
 export interface PolicyRuleSpec {
   id: string;
@@ -496,7 +516,7 @@ export interface DecisionEvidence {
   tamperState: TamperState;
   /**
    * The WORST freshness across the dock-family signals that are actually
-   * present (custody, charge, battery health, tamper, dock, badge binding), or
+   * present (custody, charge, battery health, tamper, dock, badge binding, attach), or
    * "missing" when the device has no dock evidence at all.
    *
    * WHY THIS EXISTS. `runDockSync` already classified each record's age and
@@ -539,6 +559,14 @@ export interface DecisionEvidence {
   /** Local-authority grant rollup (default "unverified" — day-one-quiet until the
    *  connector emits it, like benchmarkSelection and shiftContext). */
   localAuthorityState: LocalAuthorityGrantState;
+  /** DR-043: is the credential seated in its receiver. Absent → "not_applicable";
+   *  present but unreadable → "unknown", which steps up and never grants. */
+  attachState: AttachEvidence;
+  /** DR-043: how the worker is ENROLLED. Strong enrollment is the accusing half of
+   *  the downgrade rule (see EVIDENCE_VALUE_DOMAINS.enrollment in evidence.ts). */
+  enrollmentStrength: CredentialStrengthEvidence;
+  /** DR-043: how THIS read arrived. legacy_125khz for a strong-enrolled worker → deny. */
+  credentialReadMethod: CredentialStrengthEvidence;
   /** True only when every critical input is present and not degraded. */
   criticalSignalsPresent: boolean;
 }

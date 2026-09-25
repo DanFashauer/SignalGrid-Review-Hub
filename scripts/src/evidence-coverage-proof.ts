@@ -104,6 +104,9 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     badgeBinding: "present",
     managementHealthState: "healthy",
     localAuthorityState: "verified",
+    attachState: "attached",
+    enrollmentStrength: "strong",
+    credentialReadMethod: "strong",
     criticalSignalsPresent: true,
   };
   check(
@@ -220,6 +223,12 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
     managementHealthState: "unknown",
     localAuthorityState: "unverified",
     dockEvidenceFreshness: "unknown",
+    // DR-043: an estate that cannot answer these emits NOTHING, which reads
+    // `not_applicable` — that is the ignorance a coverage report must count. (An
+    // emitted-but-unreadable `unknown` attach state steps up; silence does not.)
+    attachState: "not_applicable",
+    enrollmentStrength: "not_applicable",
+    credentialReadMethod: "not_applicable",
     criticalSignalsPresent: false,
   };
 
@@ -355,13 +364,20 @@ const ALL_PLANES: readonly SourcePlane[] = KNOWN_SOURCE_PLANES;
   // axis table was missing `managementHealthState` and `localAuthorityState`, both of
   // which an Entra + Intune estate CAN answer. The wedge did not get better; the
   // denominator stopped omitting two of its rows.
+  // MOVED 12/6 → 13/8 on 2026-09-23 (DR-043): three credential axes joined. The
+  // identity plane answers enrollmentStrength; attachState (dock) and
+  // credentialReadMethod (badge/physical access) are dark on the wedge, and both are
+  // quiet on silence (`not_applicable`), so both are silent holes.
+  // MOVED 8 → 7 silent on 2026-09-24 (owner call 4): credentialReadMethod is no longer
+  // quiet — a strong enrollment with no read method steps up — so it stays dark on the
+  // wedge but is GRADED there, not a silent hole. answerable and dark do not move.
   check(
-    `the Entra + Intune wedge answers EXACTLY 12 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
-    wedge.answerable === 12 && dark.length === 6,
+    `the Entra + Intune wedge answers EXACTLY 13 of ${wedge.totalAxes} axes and leaves ${dark.length} needing instrumentation`,
+    wedge.answerable === 13 && dark.length === 8,
   );
   check(
-    `…of which EXACTLY 6 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
-    wedge.silentHoles === 6 && wedge.silentHoles <= dark.length,
+    `…of which EXACTLY 7 are SILENT holes — dark AND ungraded, where a naive backtest would read health`,
+    wedge.silentHoles === 7 && wedge.silentHoles <= dark.length,
   );
   check(
     "every dark axis names the planes that would answer it, so the gap is actionable rather than a complaint",

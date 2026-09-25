@@ -198,12 +198,13 @@ if (process.argv.includes("--list")) {
 
 if (process.argv.includes("--self-test")) {
   const bad = '<div class="m">12 dimensions composed into <b>one posture</b>.</div>';
-  const good = '<div class="m">17 dimensions composed into <b>one posture</b>.</div>';
+  // DERIVED, not typed: a literal 17 here went stale the day SIGNAL_CATEGORIES grew.
+  const good = `<div class="m">${categories} dimensions composed into <b>one posture</b>.</div>`;
   const otherSense = "<p>the catalog taxonomy shows 16 categories of candidate source</p>";
   const badGaps = "<p>There are 3 declared gaps.</p>";
   // F3: the other-sense word as the SUBJECT of the sentence, not as the qualifier of
   // the count. The whole-line test called this exempt; it is a claim about
-  // SIGNAL_CATEGORIES and 17 is the derived value, so it must fail.
+  // SIGNAL_CATEGORIES and 12 is not the derived value, so it must fail.
   const subjectSense = "<p>Our taxonomy composes 12 dimensions into one posture.</p>";
   // F3, the other direction: a wrong figure sitting far from an unrelated occurrence
   // of the word, the shape a single-line HTML section actually makes.

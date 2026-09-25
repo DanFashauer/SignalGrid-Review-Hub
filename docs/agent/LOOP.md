@@ -52,7 +52,20 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 18:00Z) - "KEEP BUILDING": TWO BUILT, FOUR LANDED, THE BATCH IS CLOSED.
+LAST TOUCHED: 2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOOP'S OWN REQUEST IS ON MAINLINE.
+              Landed under DR-037 as SAFETY_MACHINERY: #1057 (55490bee) - objective-loop --check and --self-test are
+              preflight + CI gates (rows after the raised-hands self-test), docs/agent/objective.json is owner-gated
+              (objective-state.json deliberately not: the tick rewrites it), and lane-tick.sh now stages the new
+              files BEFORE deriving the coverage page - the page counts TRACKED files, so the first tick that queued a
+              sim request (#1052) committed a page derived without it and went red on the coverage gate. Steward
+              landings: Mac tick #1054 (335bb282; mainline objective-state now reads readiness `25` / escalate, which is
+              TRUE - the manifest moved to 7c15496c with #1019 and #1051 and the two Linux-only steps wait on the
+              DR-057 re-mint with --vm-native-build) and #1052 (5474868a; Alpha merged in, objective-state kept from
+              #1054, page re-derived) so objective-loop-evidence-fresh-2026-09-25 reaches the tick. Mail #1056 #1058.
+              Not this lane's failures, each commented once: the Copilot "AI findings" scanner crashed in its own
+              loop on every head today; #1052's Mac-only job failed CI-liveness while the sweep was green (run 84)
+              and passed on the single re-run. Main checkout repaired (was 171 behind with a no-TTY install abort).
+PREVIOUSLY:   2026-09-25 (cloud lane, 18:00Z) - "KEEP BUILDING": TWO BUILT, FOUR LANDED, THE BATCH IS CLOSED.
               Owner said "Keep building" (14:5xZ). Built: #1048 MAM (user, device, app) binding (LANDED 9602069a under
               DR-037 - the connector refuses an unbound or borrowed registration before it can grant; proof 116/116,
               mutation-guard survivors=0) and #1050 Puck 6 as the DR-058 PROPOSAL (owner merges: a holder-bound
@@ -1487,7 +1500,12 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (0000) 2026-09-25 18:00Z: land #1051 under DR-037 when its preflight + breadth are green (then
+NEXT ACTION: cloud: (00000) 2026-09-25 19:30Z: the Mac re-mints on mainline (the tick's queued evidence op, or by hand)
+              and (b) reads 20/20 again - nothing in the cloud clears that. Meanwhile keep building one bounded item:
+              next is the executor-gap auto hand (one aggregated stall in raised-hands.mjs for objective-state's
+              needsExecutor rows, routed to blocker-dispatcher via hand-routing.json) - a proposal-free SAFETY_MACHINERY
+              change; then #1037 stays the owner's CodeQL call and #1050 the owner's DR-058 merge. Merge #1058 when green.
+              PREVIOUSLY: cloud: (0000) 2026-09-25 18:00Z: land #1051 under DR-037 when its preflight + breadth are green (then
               the Mac re-mints on mainline with --vm-native-build: (b) 20/20). Then DR-056 cloud follow-up 2 on top of
               #1019: auto-raise a hand for needsExecutor[] / stalled-top-task (raise-hand.mjs) and fold the steward cycle
               onto the shared state. Owner merges: #1050 (DR-058). Owner call: #1037 CodeQL. Superseded lines below

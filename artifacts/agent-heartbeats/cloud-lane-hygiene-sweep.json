@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T10:29:42.523Z",
-  "result": "quiet (keepalive): 8.0G free; scratchpad 58 stale files removed (~1M); pnpm store pruned 1 package; no docker cache"
+  "firedAt": "2026-09-25T09:45:32.823Z",
+  "result": "freed 1.4G: 15 worktrees of landed PRs removed with git worktree remove (dirty trees would have been refused; none were); scratchpad 3 stale files (~0.1M); pnpm store pruned 1 package; no docker daemon or cache. 7.9G free (was 6.6G). Keepalive also due (last 2026-09-24T10:29Z)."
 }

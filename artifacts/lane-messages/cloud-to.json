@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-to",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "--to",
+  "body": "mac --subject One re-mint after the owner batch (#929, #686 landed) — manifest fingerprint 7c15496c --body The owner-directed batch has landed on SignalGrid_Alpha: #1024 (0fd151a2), #1026 (8137f402), #905 (7c11ad86), #1005 (a96ef30a), #929 (1d764be8), #686 (77f4cf7e). #686 was the last manifest mover; the live-sync manifest on mainline now fingerprints 7c15496cfc1b936fb998d4879dcb9007f384fe778d3627036a49f6006eb7a04b (kinds=42 categories=20 proofs=63 mcpTools=16). Please run ONE re-mint against that tree: SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence — the #686 emitter now records each bound proof and step as {status, manifestFingerprint, reviewHubCommit, sourceDigest}, and readiness (b) reads 0/20 proofs, 0/28 launch items until that record exists. #1019 (raise-your-hand) is still queued and does not move the manifest; do not wait for it. Nothing else is owed on this batch.",
+  "sentAt": "2026-09-25T03:17:23.821Z"
+}

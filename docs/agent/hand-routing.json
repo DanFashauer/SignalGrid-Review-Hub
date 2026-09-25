@@ -39,6 +39,12 @@
       "alternates": [{ "agent": "agent-platform-steward", "when": "the dispatcher's spec is ready — the steward creates and registers the agent or skill" }],
       "skills": ["writing-skills"],
       "action": "A hand no route above can answer, or one that keeps coming back, is a missing capability. Name the recurring pattern; then either write a skill (the pattern is a procedure a session can follow) or hire an agent under DR-016 (a registered tier, charter and disjoint write scope in docs/agent/agent-tiers.json), and add its route to this file in the same PR."
+    },
+    "executor-gap": {
+      "responder": { "agent": "blocker-dispatcher" },
+      "alternates": [{ "agent": "project-manager", "when": "the row should be re-owned by a role that has an executor, or re-ranked, rather than staffed" }],
+      "skills": ["raised-hands"],
+      "action": "The objective loop (DR-056) put these backlog rows in needsExecutor[] because every role they name resolves to \"lane\" (nothing dedicated) or dangles. For each row the dispatcher either specifies the agent or skill that would own it (then the agent-platform-steward creates and registers it, and the org-roster role gains an executor) or hands it to the project-manager to re-own the row under a role that already has one. Cleared when the loop's next state no longer lists the row, never by editing objective-state.json (the Mac tick is its sole writer)."
     }
   }
 }

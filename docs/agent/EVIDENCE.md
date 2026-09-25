@@ -2535,6 +2535,196 @@ Text-safety gate passed.
 (all thirteen: exit=0)
 ```
 Verdict:  **holds.** The cited-path count rose 2307 → 2433 (the new page and DR-043 cite the tree at path:line and every one resolves); the docs deferred-noun ceiling stayed at 416 with the page bannered as *nothing on this page is a claim of current capability* and every other touched block hedged in its own paragraph; the ceiling file was not rewritten (no drop, no rise); DR-043 is the 42nd record and carries a reversal clause. What this does NOT prove: that any of the five backlog items is buildable as specified — each is a design target until its proof is green and named — and nothing here measures the hardware, which is the point of DR-043 item 4. **Re-run after the same-day verification fixes** (four stale citations corrected, none of them affecting the gate outcome above): `node scripts/check-cited-paths.mjs` → `Cited-path check passed — 2435 citation(s) across 511 docs plus 26 gate-script reference(s) in lib/ source comments, in DanFashauer/SignalGrid-Review-Hub: all resolve to TRACKED files (a fresh clone resolves them too).` — the count rose by two because the ES256 claim now cites the verifier and its proof row instead of an unrelated line, and `check-cited-commands` went red on this entry's own spelling of the absence command with the silent flag between `run` and the script name (the gate reads the flag as a script name) and is green again with the flag noted in a comment.
+## 2026-09-12 — "Readiness dimension (b) is now a RATIO over the proofs the 23 launch items bind, fail-closed on a record that does not exist, and the binding itself is gated"
+
+DR-036 item 2 named it: "(b) is binary until launch items carry explicit proof bindings — a named follow-up." Executed on branch `lane/cloud-launch-proof-bindings-20260912-0940Z` (owner-merged; DR-037 bars the cloud lane from merging launch-profile changes).
+
+Command:
+```
+node scripts/check-readiness-figure.mjs            # BEFORE, on origin/SignalGrid_Alpha b9399fc8
+node scripts/check-launch-proof-bindings.mjs       # AFTER: the new gate, then its self-test
+node scripts/check-launch-proof-bindings.mjs --self-test
+node scripts/check-readiness-figure.mjs --self-test
+node scripts/check-readiness-figure.mjs            # AFTER, same evidence file
+node -e '…evidenceDimension(evidence, age, currentFingerprint, bound)…'   # the ratio, driven with planted records against the REAL bound set and the REAL tree fingerprint
+node scripts/generate-sync-manifest.mjs && git status --short artifacts/sync
+```
+Output:
+```
+BEFORE
+  (b) launch surface, evidence  100%   green on both halves, 0 day(s) old, manifest ee348c4a0afd (age via mintedAt); launch 23 · deferred 134 (deferred is the freeze, not a defect)
+  HEADLINE 94%  → OUTREACH OPEN — readiness 94% meets the 92–95% target (goal 100%)
+AFTER — the gate
+Launch-proof bindings (counted 2026-09-12) — 23 launch items bind 17 distinct proof(s); preflight registers 77 proofs of 144 in package.json
+Launch-proof bindings passed — every launch item names at least one proof, and every named proof exists in package.json, runs in preflight, and never self-skips.
+self-test passed (15/15)
+self-test passed (30/30)
+AFTER — the derivation, same committed evidence file (minted 08:42Z, before the emitter recorded per-proof results)
+  (b) launch surface, evidence    0%   proofs current 0/17 (bound by 23 launch items) — evidence records no per-proof results (proofs.passed absent — minted before the emitter recorded them); refresh on the Mac (age via mintedAt); launch 23 · deferred 134 (deferred is the freeze, not a defect)
+  HEADLINE 0%  → OUTREACH CLOSED — readiness 0% is below the 80% floor
+THE RATIO MOVES (real bound set of 17, real tree fingerprint ee348c4a0afd, real evidence age 0)
+as committed (no proofs.passed)                              0%  0/17  evidence records no per-proof results (proofs.passed absent — minted before the emitter recorded them); refresh on the Mac
+planted: 9 of 17 bound proofs recorded passed               52%  9/17  9/17 bound proofs recorded passed against manifest ee348c4a0afd; not current: proof:mdm-profile, proof:microso…
+planted: all 17 recorded passed                            100%  17/17  17/17 bound proofs recorded passed — green on both halves, 0 day(s) old, manifest ee348c4a0afd
+planted: all 17 recorded, file fingerprint STALE             0%  0/17  0/17 bound proofs current — evidence covers manifest 000000000000, tree is ee348c4a0afd; refresh on the Mac
+planted: one record missing (16 of 17)                      94%  16/17  16/17 bound proofs recorded passed against manifest ee348c4a0afd; not current: proof:api-client-react
+MANIFEST
+  kinds=41 categories=17 taskExceptionCodes=13 ceilings=3 refusals=9 proofs=60 mcpTools=16
+  (git status --short artifacts/sync: empty — the bindings do not move the manifest fingerprint)
+```
+Gates on the final tree (7cc35c98, after the claim inventory was re-anchored — my insertions had moved 29 evidence citations' line numbers in launch-profile.mjs and verify-all.mjs, and preflight's first run failed there):
+```
+node scripts/check-launch-profile.mjs          → Launch-profile gate passed — every declared item exists, and every real item is classified.
+node scripts/check-preflight-ci-parity.mjs     → Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+node scripts/check-gate-census.mjs             → OK Gate census - all 189 gates run somewhere (2 exempt by name with a reason).
+node scripts/check-launch-claims.mjs           → Launch-claims gate passed — nothing deferred is presented as current.
+node scripts/check-cited-paths.mjs             → Cited-path check passed — 2543 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments … all resolve to TRACKED files
+node scripts/check-derived-doc-figures.mjs     → Derived-doc-figure check passed — 34 figure(s) across 19 document(s) match the tree they describe
+node scripts/check-doc-line-counts.mjs         → Doc line-count gate passed — every `path (N)` figure matches the file it names.  (COMPANY_BUILD_PLAN.md: preflight.mjs 737→742, launch-profile.mjs 764→811)
+pnpm run typecheck                             → scripts typecheck: Done
+node scripts/preflight.mjs                     → Preflight PASSED — everything it runs is green.   (✓ Launch-proof bindings self-test · ✓ Launch-proof bindings · ✓ Readiness figure self-test · ✓ Readiness figure REPORT)
+pnpm run verify:breadth                        → Breadth lane PASSED — 56 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+Verdict: **holds, with one consequence stated rather than hidden.** (b) is a ratio over 17 distinct bound proofs and the self-test shows it moving (2/2 → 100, 1/2 → 50, missing record → 0, stale file fingerprint → 0 unless a per-proof record carries the current one, no `proofs.passed` → 0 of N). Against the committed evidence file it reads **0/17 — headline 0%, OUTREACH CLOSED** — because that file was minted before `verify-all.mjs` recorded per-proof results, and a missing field may never raise the ratio. One Mac re-mint against the merged tree (`SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence`) records `proofs.passed` for all 131 non-self-skipping lane proofs, which includes all 17 bound ones (dry-run of the emitter's roster logic on this tree: registered 133, passed 131, notRecorded proof:backup-restore + proof:db-role-split, bound 17 all in passed). (a) and (c) untouched; the manifest fingerprint did not move.
+
+
+## 2026-09-12 — "Five Codex findings on cd45ce08 (PR #686) are fixed in one commit: validateBindings closes the silent-drop hole in dimension (b), the CLAIM_INVENTORY.md:851 citation is re-anchored, signalgrid-app binds a real console-exercising step, proofs.passed carries a per-proof sourceDigest, and self-skip detection is derived locally instead of delegated to a narrower scanner"
+
+Branch `lane/cloud-launch-proof-bindings-20260912-0940Z` (owner-merged; DR-037 bars
+the cloud lane from merging launch-profile changes). A container restart hit
+mid-session; the worktree survived and this entry covers the tree as pushed.
+Per the coordinator's follow-up, `node scripts/preflight.mjs` and
+`pnpm run verify:breadth` were deliberately NOT run this session (concurrent
+preflights OOM-restarted the box); CI runs the full suite on the PR.
+
+Command:
+```
+node scripts/check-launch-proof-bindings.mjs --self-test
+node scripts/check-launch-proof-bindings.mjs
+node scripts/check-readiness-figure.mjs --self-test
+node scripts/check-readiness-figure.mjs
+node scripts/check-launch-profile.mjs
+node scripts/check-gate-census.mjs --self-test
+node scripts/check-gate-census.mjs
+node scripts/check-preflight-ci-parity.mjs --self-test
+node scripts/check-preflight-ci-parity.mjs
+node scripts/check-derived-doc-figures.mjs --self-test
+node scripts/check-cited-paths.mjs
+node scripts/check-doc-line-counts.mjs
+node scripts/check-launch-claims.mjs
+node scripts/gen-claim-inventory-md.mjs --check
+pnpm run typecheck
+node --check scripts/verify-all.mjs   # verify:all itself refuses off macOS; its NEW
+                                       # roster logic (proofScriptFiles, sourceDigest,
+                                       # registeredSteps) was exercised in isolation —
+                                       # see the standalone script output below.
+```
+Output (2026-09-12, this session):
+```
+check-launch-proof-bindings --self-test: self-test passed (45/45)
+check-launch-proof-bindings (live), 2026-09-12: Launch-proof bindings — 23 launch items bind 18 distinct proof/step(s); preflight registers 77 proofs of 144 (2026-09-12) in package.json and 318 STEPS entries … Launch-proof bindings passed — every launch item names at least one proof or step, and every named one exists, runs in preflight, and never self-skips.
+check-readiness-figure --self-test: self-test passed (37/37)
+check-readiness-figure (live):
+  (a) runbook ground truth       94%   16 modeled / 0 partial / 1 gap of 17 real-world elements
+  (b) launch surface, evidence    0%   proofs current 0/18 (bound by 23 launch items) — evidence records no per-proof or per-step results (proofs absent — minted before the emitter recorded them); refresh on the Mac
+  (c) end-to-end                100%   scenarios 11/11 · live operations proven 8/8
+  HEADLINE 0%  → OUTREACH CLOSED — readiness 0% is below the 80% floor
+check-launch-profile: Launch-profile gate passed — every declared item exists, and every real item is classified. (totals: launch=23 deferred=134 demo_only=8 internal=15, 180 items, 4 declared gaps)
+check-gate-census --self-test: PASS  self-test - covers() distinguishes invocation from mention, and coverage disappears when the lane text does
+check-gate-census (live): OK Gate census - all 189 gates run somewhere (2 exempt by name with a reason).
+check-preflight-ci-parity --self-test: self-test passed (18/18)
+check-preflight-ci-parity (live), 2026-09-12: preflight↔CI parity: 375 preflight gates, 16 (2026-09-12) workflow files, 0 declared local-only, 0 unwired — Preflight↔CI parity passed — every preflight gate is wired into a workflow.
+check-derived-doc-figures --self-test: self-test passed (82/82)
+check-cited-paths: Cited-path check passed — 2543 citation(s) across 935 docs plus 26 gate-script reference(s) in lib/ source comments … all resolve to TRACKED files
+check-doc-line-counts: doc line counts: 30 figure(s) across 2 document(s) … 0 drifted — Doc line-count gate passed — every `path (N)` figure matches the file it names. (fixed one drift this session: COMPANY_BUILD_PLAN.md's scripts/launch-profile.mjs count, 811→827, after finding #3's insertion)
+check-launch-claims: Launch-claims gate passed — nothing deferred is presented as current.
+gen-claim-inventory-md --check: Claim-inventory drift check passed — docs/CLAIM_INVENTORY.md matches a fresh render of docs/agent/CLAIM_INVENTORY.json (1202 rows across 88 files).
+`pnpm run typecheck` -> scripts typecheck: Done (all 8 typechecked workspace projects: Done, no errors)
+node --check scripts/verify-all.mjs: (no output — syntax OK)
+verify-all.mjs's new roster logic, exercised standalone (proofScriptFiles + workspacePackageDirs + proofSourceDigest + registeredSteps, the exact functions verify-all.mjs's proofs IIFE calls):
+  registered proofs: 133, self-skipping: 5, resolved to a file: 144
+  passed entries: 131, notRecorded: 2
+  sample passed entry (proof:api-client-react): {"status":"passed","manifestFingerprint":"TESTFP","reviewHubCommit":"TESTCOMMIT","sourceDigest":"6879c6bd52be3f1ca9399f01611ed6b9e25ff57e090f0e6a68601cca2998072e"}
+  preflight STEPS registered: 318, would-exclude (needsNativeBuild) under a simulated darwin run: 2 ['Build (all packages)', 'Browser E2E (review console, website, admin)']
+  steps recorded passed (non-excluded): 316
+  Browser E2E excluded under simulated darwin run: true
+```
+Verdict: **holds**, with the console-evidence tradeoff stated rather than hidden.
+Per finding:
+1. `validateBindings(SURFACES)` (check-launch-proof-bindings.mjs) is a pure export
+   checking every launch entry for a missing/empty `proofs` array; `checkBindings`
+   calls it (self-tested: an unbound entry among several bound ones is still
+   caught), and `check-readiness-figure.mjs`'s `derive()` calls a thin wrapper
+   (`assertBindingsComplete`) BEFORE trusting `boundProofs()`, throwing `Broken`
+   on any violation — self-tested directly: `assertBindingsComplete([{key:"s",
+   launch:[{id:"unbound",reason:"r"}]}])` throws `Broken`; a fully-bound profile
+   does not.
+2. The `docs/agent/CLAIM_INVENTORY.json` row (JSON is the source of truth;
+   `docs/CLAIM_INVENTORY.md` is the derived render) now cites
+   `scripts/launch-profile.mjs:589` for signalgrid-web, WITH the filename
+   repeated (the original text used a bare `:522-527` continuation the anchor
+   gate's regex cannot see at all — confirmed live: `check-claim-inventory-
+   anchors.mjs` reported "moved 0" both before and after the original fix,
+   because a citation missing its own `path:` prefix is invisible to it, not
+   because it was already correct). Re-anchored with the tool's own
+   `--write` path after the launch-profile.mjs edit (below) shifted 14 OTHER
+   citations by the same amount; regenerated `docs/CLAIM_INVENTORY.md` and
+   reran `check-cited-paths` (both green, quoted above).
+3. `signalgrid-app` now binds `step:Browser E2E (review console, website, admin)`
+   alongside `proof:api-client-react` — the console-static gates
+   (check-console-routes-reachable.mjs etc.) were investigated too but left
+   unbound, in scope discipline with the finding's own named pair
+   ("build / Browser E2E"). CHOICE STATED PLAINLY: this closes the false-
+   positive (a Mac mint could not previously certify the console without
+   running it) but the new binding will read UNRECORDED on every real Mac
+   evidence file today — `pnpm-workspace.yaml` strips the native web-build
+   binaries everywhere but linux-x64 (scripts/lib/platform-native-build.mjs),
+   and evidence may mint ONLY on macOS, so the one step that drives the built
+   console structurally cannot run on the one platform allowed to attest to
+   it. That is dimension (b) telling the truth about a real gap, not a defect
+   in the fix; verified live above (`stepsExcluded` correctly names both
+   `Build (all packages)` and `Browser E2E …` under a simulated darwin run).
+4. `verify-all.mjs`'s `proofs.passed` entries are now
+   `{status, manifestFingerprint, reviewHubCommit, sourceDigest}` — `sourceDigest`
+   is a sha256 (`sourceDigestOf`, check-launch-proof-bindings.mjs) over the
+   proof script's own git blob id plus the recursive blob listing of every
+   `lib/*`/`artifacts/*` package it imports via a bare `@workspace/*` specifier
+   (`workspaceImportsOf` — deliberately NOT relative imports, undecidable
+   without a real resolver; documented at the function). `reviewHubCommit` is
+   recorded for audit and never compared (self-tested: it can differ from the
+   evidence's while the record stays current). `check-readiness-figure.mjs`
+   recomputes the same digest against the CURRENT tree via the same shared
+   function and requires an exact match; self-test: a planted stale-digest
+   record reads NOT current (`missing.join() === "proof:alpha"`), and a LEGACY
+   string-form `"passed"` record (no digest field at all) NEVER counts as
+   current — closing exactly the drift window the finding named.
+5. Self-skip detection (`selfSkipEnv`/`liveSelfSkipping`, check-launch-proof-
+   bindings.mjs) no longer spawns `check-preflight-ci-parity.mjs
+   --list-self-skipping-proofs` (whose own detector — left unmodified, still
+   serves `validate-sim-macos.sh` — reads only top-level `scripts/src/*.ts` and
+   only a two-step `const id = process.env.ENV; if (!id)` shape). The new
+   version resolves every registered `proof:*` to its actual FILE by following
+   package.json's own command strings (`proofScriptPath` — handles a direct
+   root invocation like `proof:decision-palette` and a delegated
+   `pnpm --filter @workspace/scripts run proof:*` alike, at whatever depth
+   under `src/` the file lives, with no directory walk needed), then matches
+   BOTH the two-step form and an inline `if (!process.env.ENV)` form at ANY
+   indentation. Self-test: a nested (two levels of indentation, inside a
+   function and another `if`) inline `if (!process.env.VENDOR_LICENSE_KEY)
+   {…exit(0)}` proof is detected by `selfSkipEnv`, and a launch item bound to
+   it has its binding REJECTED by `checkBindings`
+   (`self-skips without VENDOR_LICENSE_KEY`) — the exact defect the old
+   detector's narrower scan would have produced (a silently-accepted binding
+   to a proof that never runs on most machines).
+
+Side effects fixed in the same commit: `docs/COMPANY_BUILD_PLAN.md`'s
+`scripts/launch-profile.mjs (811)` line-count citation, drifted to 827 by
+finding #3's insertion (`check-doc-line-counts.mjs` caught it; now 827,
+re-verified green). What does NOT hold: `node scripts/preflight.mjs` and
+`pnpm run verify:breadth` were not run this session (coordinator instruction,
+OOM risk) — CI runs both on the PR. `verify-all.mjs --emit-evidence` itself
+was not run (refuses off macOS by design); its new roster logic was exercised
+standalone instead (quoted above), not through the full command.
 
 ## 2026-09-12 — "Row 101 is a judgment call, not a mechanical re-port: the Swift is untouched, and check-decision-port-parity now sees the AppWorkflows field drift it was green over"
 Command:  both ported files and both TS originals read in full; the drift located at `lib/app-workflows/src/index.ts:85-90,144-158` vs `native/ios/EnterpriseShell/Services/AppWorkflows.swift:85-95,122`; section 3b added to the gate (five record shapes compared field for field, `DECLARED_WORKFLOW_DRIFT` checked both ways, nine self-tests); then a live plant — a copy of the gate with the declaration emptied — run against the same tree.

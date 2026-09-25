@@ -3505,10 +3505,86 @@ the specific `HostAppViewController` Assist-gate screen; that screen stays cover
 `ios-ci` on the PR (per row 1737) and `scripts/check-ios-dynamic-type.mjs` (which forbids raw
 fonts, so every label scales).
 
+## 2026-09-23 — Raise your hand (DR-054): the Mac's and the cloud's systems merged into one, on the owner's "Merge into one"
+
+The owner gave both lanes the directive "All agents will never raise their hand when they get stuck", and then gave both the directive to "build something that monitors the raise your hand function". The Mac lane built #1011 (the clause, a gate and DR-054) and #1014 (a per-file ledger, a roster router and blocker-dispatcher). The cloud lane built a register, automatic stall detection, a CI gate, an hourly owner issue and a dispatcher. Both Mac PRs were RED on "Typecheck, build, and proof scaffold":
+- #1011 edited the nine vendored agents, and `check-agent-roster.mjs` reported 9 problems.
+- #1014 left blocker-dispatcher unregistered and out of the plugin manifest.
+
+Asked how to combine them, the owner chose "Merge into one". The branch `claude/raise-your-hand` merges #1011 and #1014 as merge commits, which keeps the Mac lane's authorship. On top of that it:
+- restores the vendored agents byte-for-byte;
+- makes `check-agent-raise-hand.mjs` skip provenance=vendored, which fails closed on unknown provenance, while asserting that CLAUDE.md carries the rule;
+- registers blocker-dispatcher read-only (tier 3, no Write/Edit);
+- drops the cloud's duplicate hand-dispatcher and its JSON register in favour of the per-file ledger;
+- points the detector, gate, owner issue and watcher at that ledger.
+
+Measured on the branch:
+- `node scripts/raised-hands.mjs --self-test`: 41/41.
+- `check-agent-raise-hand.mjs` self-test: ok. Live run: 5 first-party agents carry the clause, 9 vendored agents inherit it.
+- `check-raised-hands.mjs --self-test`: ok.
+- `check-sim-requests.mjs` self-test: 25/25.
+- `check-scheduled-routines.mjs` self-test: 59/59.
+- Agent-roster and plugin-manifest gates: passed, with 14 agents.
+
+Falsified before landing:
+- The first-party "When stuck" requirement failed all 4 first-party agents before the section was added.
+- The routing gate failed on a route that named `write-a-skill`, a skill not in the tree.
+- The seeded mail stall past 3×24h with no hand fails `--check`; that case is self-tested.
+
+A fail-closed-auditor review found four problems, all fixed:
+- a partial sim result had no age, so the gate hard-failed it instantly;
+- a renamed gating check would leave every PR "pending" forever, with no signal;
+- `load()` resolved its paths from the current directory;
+- an unguarded PR head ref could crash the check.
+
+Command:
+```
+node scripts/raised-hands.mjs --self-test
+node scripts/check-agent-raise-hand.mjs --self-test && node scripts/check-agent-raise-hand.mjs
+node scripts/check-raised-hands.mjs --self-test
+node scripts/check-agent-roster.mjs
+node scripts/raised-hands.mjs --check
+node scripts/preflight.mjs && pnpm run verify:breadth
+```
+
+Output:
+```
+self-test passed (41/41)
+check-agent-raise-hand self-test: ok
+check-agent-raise-hand: ok — 5 first-party agent definition(s) carry the raise-your-hand contract; 9 vendored inherit it from CLAUDE.md (DR-054)
+check-raised-hands self-test: ok
+Agent-roster gate passed — every agent has a tier, a charter, and a boundary nobody else holds.
+Raised hands — 4 open … Hand-raising health: 4 raised by an agent, 0 found by the system with no hand raised.
+Raised hands check passed — nothing is stuck past its limit without a hand raised.
+Breadth lane PASSED — 57 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate).
+```
+
+Verdict: **one raise-your-hand system, not two.** It carries the Mac lane's law, ledger,
+router and dispatcher and the cloud lane's detector, gate, owner issue and watcher. The
+branch's full preflight verdict is quoted in the PR body. This PR changes CLAUDE.md,
+`.claude/`, the launch profile and the publication boundary, so it is the owner's to merge.
+
 ## 2026-09-25 — "#929 and #686 landed on the owner's direction with local preflight and breadth green on the merged heads"
 Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (in land/929 @ 35f54a54, then land/686 @ 1c751978)
 Output:   929: "Preflight PASSED — everything it runs is green." PREFLIGHT_EXIT 0 (359 steps); "Breadth lane PASSED — 58 breadth proofs green" BREADTH_EXIT 0
           686: "Preflight PASSED — everything it runs is green." PREFLIGHT_EXIT 0 (361 steps); "Breadth lane PASSED — 58 breadth proofs green" BREADTH_EXIT 0
           merges: #929 → 1d764be8 (gating run 107916038439), #686 → 77f4cf7e (gating run 107924894481), each with the full 40-char expectedHeadSha
           readiness after #686: "(b) launch surface, evidence 0% proofs current 0/20, launch items fully current 0/28 — evidence records no per-proof or per-step results" — expected until the single Mac re-mint (PR #1039)
+Verdict:  holds
+
+## 2026-09-25 — "Four PRs landed on green local gates after 'keep building': #1048, #1031, #1019 (owner-directed), and mail; #1050 opened as the DR-058 proposal"
+Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (each in its own worktree on the pushed head)
+Output:   #1048 @ c1c419fb: "Preflight PASSED — everything it runs is green." (361 steps) / "Breadth lane PASSED — 58 breadth proofs green"; proof:app-protection summary=pass (116/116); mutation-guard survivors=0 → merged 9602069a (gating 108133744412)
+          #1031 @ 5d33c668: Preflight PASSED (361) / Breadth PASSED (58); objective-loop self-test 62/62; --check passed → merged 832c9224 (gating 108141031151)
+          #1019 @ 70cbb90b: Preflight PASSED (366) / Breadth PASSED (58); raised-hands --check passed, self-test 47/47 → merged 19b4dfb7 (gating 108173601883)
+          #1050 @ 5d36b64d (branch figures, quoted: the branch adds ten matrix rows): Preflight PASSED (361, after build:room-console) / Breadth PASSED (58); decision-cascade `summary=pass (119/119)`, `matrixRows=28`; signalgrid-core `597/597` → open, owner merges
+          readiness on mainline after the Mac re-mint f5d4ceaa: "(b) launch surface, evidence 95% proofs current 19/20, launch items fully current 27/28"; "HEADLINE 95% → OUTREACH OPEN"
+Verdict:  holds
+
+## 2026-09-25 — "DR-056 follow-up and the two Mac tick PRs landed on green local gates; the tick's queued evidence request reached mainline"
+Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (land/1052 @ 4a987e82; claude/build-dr056-gate-registration @ 2570e62d)
+Output:   #1052 @ 4a987e82: PREFLIGHT_EXIT 0 / "Breadth lane PASSED — 58 breadth proofs green" → merged 5474868a (gating 108205777048); check-sim-requests: "every result binds to a request it was asked for", objective-loop-evidence-fresh-2026-09-25 reported still owed
+          #1057 @ 2570e62d: "▶ Objective loop state (…) … ok" / "▶ Objective loop self-test (…) … ok" / PREFLIGHT_EXIT 0 / Breadth PASSED (58) → merged 55490bee (gating 108213150392); first run failed "Doc line-count self-test" on preflight.mjs 812 → 817, fixed from output
+          check-preflight-ci-parity: `425 preflight gates, … workflow files (figure owned by the derived-figure guard, not restated here), 0 declared local-only, 1 declared warn-only in CI, 0 unwired`; check-owner-gated-surfaces --self-test "self-test passed (28/28)"
+          #1054 @ cd220e8c (Mac tick, one file): merged 335bb282 (gating 108185885060); readiness on mainline after it: "(b) launch surface, evidence 25% proofs current 18/20 … not current: step:API integration test, step:Browser E2E"; "HEADLINE 25% → OUTREACH CLOSED" — the DR-057 re-mint is what clears it
 Verdict:  holds

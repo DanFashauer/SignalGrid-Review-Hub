@@ -112,6 +112,8 @@ export interface AppProtectionReportRaw {
   platform?: unknown; // evidence: ios | android | windows…
   registration_observed_at?: unknown; // ISO-8601 UTC instant the registration was read
   source_system?: unknown; // evidence: which MAM plane produced this record
+  user_ref?: unknown; // evidence: the worker the registration belongs to (Graph userId / UPN)
+  device_ref?: unknown; // evidence: the device the registration was made from (Graph deviceTag / managedDeviceId)
   [k: string]: unknown;
 }
 
@@ -123,6 +125,8 @@ export const APP_PROTECTION_REPORT_KEYS = [
   "platform",
   "registration_observed_at",
   "source_system",
+  "user_ref",
+  "device_ref",
 ] as const;
 
 export interface NormalizedAppProtection {
@@ -136,6 +140,11 @@ export interface NormalizedAppProtection {
   /** The versioned-evidence record. Absent fields are null / empty, never a
    *  fabricated placeholder. */
   managedAppRef: string | null;
+  /** Who and what the plane says the registration is bound to. The connector refuses a
+   *  registration whose binding is absent or names another worker/device BEFORE it is
+   *  normalized (see `AppProtectionConnector.fetchNormalized`); these carry the echo. */
+  managedUserRef: string | null;
+  managedDeviceRef: string | null;
   appliedPolicyRefs: string[];
   flaggedReasons: string[];
   platform: string | null;
@@ -189,7 +198,14 @@ export interface AppProtectionVerdict {
 
 export class AppProtectionConnectorError extends Error {
   constructor(
-    public readonly code: "read_only_violation" | "auth_failed" | "upstream_error" | "bad_response" | "invalid_app_ref",
+    public readonly code:
+      | "read_only_violation"
+      | "auth_failed"
+      | "upstream_error"
+      | "bad_response"
+      | "invalid_app_ref"
+      | "invalid_binding"
+      | "binding_mismatch",
     message: string,
     public readonly status?: number,
   ) {

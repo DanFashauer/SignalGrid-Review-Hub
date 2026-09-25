@@ -63,7 +63,7 @@
       "title": "Product manager",
       "charter": "Grooms the build queue; names stale entries and backlog/ledger contradictions.",
       "trigger": "The queue has drifted, or a shift needs its next targets ranked.",
-      "executor": "lane",
+      "executor": "agent:project-manager",
       "surface": [
         "docs/COMPANY_BUILD_PLAN.md",
         "docs/BUILD_BACKLOG.md",
@@ -517,7 +517,7 @@
       "title": "Program manager",
       "charter": "Runs the shift cadence, the lane loops, and this org itself — including calling roles that have never run.",
       "trigger": "A shift is planned, or the roster reports stale/unactivated roles.",
-      "executor": "lane",
+      "executor": "agent:project-manager",
       "surface": [
         "docs/agent/org-roster.json",
         "docs/ORG_CHART.md",

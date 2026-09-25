@@ -3947,6 +3947,163 @@ section of the hypothesis page, rows Puck 10–15, the 2026-09-24 intake row and
 discovery prompts; the platform facts it cites stay true whatever the owner decides, and item
 6(v)'s question closes only by the owner's answer.
 
+## DR-056 — The company brain runs the owner's agentic loop: one declared objective, a deterministic evaluator and ranker, and the Mac tick that already exists (owner-directed 2026-09-24)
+
+**Context.** On 2026-09-24 the owner shared a diagram of an agentic AI system — Objective → Orchestration → *(coordinate work)* → AI Agents + Workflows → *(results & status)* → Evaluate progress → *(goal met)* → Outcome, with Evaluate looping back to Orchestration on Replan, Orchestration reading and updating a shared task state, and the agents calling tools, data and environment — and directed, in his own words: *"This is what I'm asking you to build in order to build my company and solutions for the product. This is how I want the brain 🧠 to flow for building the company and use the Mac lane where it makes the most logical sense. This is major step to achieve in order to build my company it self runs itself at first then we move to getting investors and or just promoting the company and product while I turn it into real company on paper and then that when the real outreach and other fun begins."* Box by box, what the tree already had: the Agents/Tools box and the Orchestration trigger run unattended (`scripts/mac/lane-tick.sh`, a launchd pulse every 300 s with no session attached, running queued requests through `scripts/mac/run-requests.mjs` and `scripts/lib/sim-operations.mjs`); the Evaluate script existed and was run by hand (`scripts/check-readiness-figure.mjs`, DR-036); the Objective box was never declared anywhere a machine could read; the Evaluate→Replan edge did not exist; and task state was spread across eight files with no single reader. The lane wrote this record from a seven-mapper, three-design, three-judge, two-critic review of the tree; the owner decided the doctrine.
+
+**The question this settles.** What the diagram means concretely in this repository — where the objective lives, what decides the next task and what may only propose it, which lane runs which edge, what escalates to the owner and what never does, and under what condition the loop's own gate may change how green is certified.
+
+### 1. The objective is declared, not inferred — and its shape lives in code
+
+`docs/agent/objective.json` holds ONE objective at a time — today DR-033's *"a working core product that does what it claims — something real in hand for partners/collaborators before GTM"* — as four criteria, each naming a probe that already exists: `readiness-floor` (DR-036's headline ≥ floor, read as the outreach permission it is, never as a progress score), `evidence-fresh` (the live-evidence dimension, named separately because it is the one input that decays on its own at FRESH_DAYS = 7 — a restatement of the dimension that falls first, not a value recovered from behind the aggregate), `plan-owned` (the ranked company queue parses to rows and every open row names a roster role), and `owner-real-in-hand`.
+
+The json carries VALUES only. The criterion id set, each criterion's scope and the owner-attestation token are declared in `scripts/objective-loop.mjs`; every `scripts/**` path is owner-gated by `scripts/check-owner-gated-surfaces.mjs` (its `SAFETY_MACHINERY` list) — so an objective file that drops a criterion, re-scopes the owner's to "machine", or empties the list reads `broken`, never `goal_met`. Weakening the data cannot reach the outcome; changing the shape is an owner-gated PR.
+
+One criterion is reserved to the owner. `owner-real-in-hand` has no honest machine probe and none is invented: it is met only when `attestedIn` names a decision record whose own section text carries the attestation token that `scripts/objective-loop.mjs` declares as `ATTESTATION_TOKEN` — deliberately NOT reproduced in this record, because a record that quotes the token would itself satisfy the check (the self-test asserts that no section of this file carries it unless `attestedIn` names that section). Not merely that the record exists — every record in this file does — and not merely that it names the objective, because DR-033's text already contains "DR-033". Requiring the token routes that authority through `docs/DECISION_RECORDS.md`, which the loop may never write, and a pointer at a record that does not carry the token reads `unknown` (someone typed an attestation the record does not make), never `met`.
+
+### 2. Saturation is not a finished objective
+
+The readiness figure derived 100% on the day this record was written — a = 100, b = 100, c = 100, headline 100, *"OUTREACH OPEN"* — in a tree where `docs/agent/LOOP.md` still says *"Nobody has used the product"* and `docs/PURPOSE.md` sets the bar at one real room. A loop wired to that number alone would have reported the owner's objective met that morning. The verdict is an enum — `broken` > `escalate` > `replan` > `goal_met` — with the tightening verdicts checked FIRST so a green can never be reached by falling through; an unmet owner criterion or any `unknown` probe is `escalate`; `goal_met` needs every criterion met. The first real derivation, committed as `docs/agent/objective-state.json`, reads `escalate` with 3 of 4 criteria met — the honest answer, and the loop keeps ranking and building through it, because the owner's decision gates the Outcome edge, never the work.
+
+### 3. The code decides; a model may propose, block or escalate, never authorize
+
+`evaluate()`, `rank()`, `finalize()` and `readVerdict()` are pure exported functions over declared inputs: the instant is an argument, the prior state is an argument, the environment is a set of names. The self-test does not merely run them twice — it reads this file and fails on any clock or randomness call in a code line outside the two marked sampling lines, and it proves every clause from the failing side (51 assertions at landing; the floor is 40). Golden rule 2 applies to the loop's own decision path exactly as to the product's: an unreadable source, an unparseable probe, a dangling executor pointer, a prose-only environment requirement and a stale state all tighten toward escalation, and none of them may loosen a verdict or produce a task.
+
+The queue is not re-invented. `docs/COMPANY_BUILD_PLAN.md`'s "## Global backlog (ranked across the whole company)" already carries the order a human committed to — "Blocking items first" — and `auditBacklogOwnership` (`scripts/check-backlog-ownership.mjs`, whose `parseRows` reads that section; its sibling `parseBacklogRows` reads `docs/BUILD_BACKLOG.md`'s checkbox rows, a different document) already validates that every open row names a roster role and that a section that parses to zero rows is a problem, not a met criterion. The ranker resolves each open row's roles through `docs/agent/org-roster.json` in document order; the first role whose executor is real wins; a row whose roles all resolve to `lane` ("nothing dedicated — the main lane adopts the role as a lens") is recorded under `needsExecutor` and is NEVER ranked as dispatchable — a task nobody can run is structurally unrepresentable. The top three ranked tasks are the state; the same top task for more than seven days is itself an escalation.
+
+The Replan→Agents edge closes in code for machine criteria: an unmet criterion maps, through a static table in the same file, to the ONE sim-operation that writes the artifact the criterion reads, and the loop queues that request in the existing `artifacts/sim-requests/` schema for the tick that is already running. It refuses to queue what the tick cannot run: `scripts/lib/sim-operations.mjs` now declares the environment an operation needs as a structured `needsEnv` list beside its prose `needs`, an operation with prose and no list escalates rather than queues (fail-closed on the unparseable case), and a missing variable escalates with the fix named. The request id carries the decision day, so a criterion that decays again queues a fresh request; and a request for that criterion that is still OUTSTANDING — present with no result in the working tree, on mainline or on any unmerged `mac/tick-*` head — is never queued twice. The tick derives `SIGNALGRID_MCP_PATH` from the sibling `signalgrid-mcp` checkout when it exists — launchd's plist carries PATH and HOME only — so the one operation that refreshes the number the objective hangs on can run unattended; absent stays absent.
+
+The project-manager role proposes by editing the prose the ranker reads and opening a PR; the next tick re-derives. It never writes the state file and never overrides the ranker. Asking the owner which priority matters most is not a question this system is permitted to ask — that was the defect the owner named on 2026-09-23, and `rank()` exists to answer it.
+
+### 4. Mac derives and opens; cloud reviews, merges and consumes; the owner sees only escalations
+
+The Mac is the sole writer, by technical necessity and not only by DR-050's doctrine: it is the only always-on unattended executor, the only lane that can mint the live evidence one criterion reads (`scripts/verify-all.mjs` refuses `--emit-evidence` on CI and on non-darwin), and every simulation result the state reads was written there. Step c' of `scripts/mac/lane-tick.sh` runs `node scripts/objective-loop.mjs --write --deliver` AFTER the sim-request step, because `run-requests.mjs` samples `provenance.workingTreeClean` from `git status --porcelain` at its launch and a state written earlier would stamp every result in that tick dirty. The state is content-addressed on the DECISION alone — verdict, criteria states, ranked tasks, unresolvable rows, escalation ids, queued request, and the bound the decision is good for — so a moved HEAD, a later instant or a dirty tree never rewrite it and never open a PR. Because the tick returns its worktree to mainline after every push, "unchanged" is judged against BOTH the tracked state and a delivery stamp this machine keeps outside the tree (`node_modules/.sg-objective-loop-last.json`, beside the tick's own heartbeat stamps); the state and any queued request ride the same `mac/tick-<stamp>` branch as the results, and a failed commit/push chain resets the index, puts the loop's own writes back and removes the stamp, so the next tick both runs and re-delivers (a latched-off executor is the silent stall DR-054 forbids). One `mkdir` lock keeps a hand-run tick from racing the launchd one; a lock whose holder is dead is cleared.
+
+The cloud reviews and merges the tick PRs under DR-037, and CONSUMES the ranked task: `forward-build-cycle`'s registry row now reads `tasks[0..2]` from the state instead of picking by a session's judgment. Freshness is witnessed by the tick's heartbeat, not by the state file (which is quiet by design): a reader trusts the recorded verdict only while `artifacts/agent-heartbeats/mac-lane-tick.json` is within the state's `staleAfterHours` (the tick's own three-hour tolerance) AND names that verdict; otherwise the state reads `unknown` and the consumer escalates instead of building on it. No new Mac routine is created (DR-050 §4; `docs/agent/BRAIN_CYCLE_DESIGN.md` §8); the loop is a step inside the pulse that already fires, and the registry edit DECLARES the new write path in the existing `mac-lane-tick` row. `brain-cycle` keeps its own job — it ranks review findings on one diff, this loop ranks the company queue — and nothing here is added to `scripts/brain-cycle-merge-decide.mjs`'s auto-merge allowlist; the decision path (`lib/*`, `/v1`, connectors, the byte-faithful native ports) stays refused outright.
+
+Escalation is routed, not accumulated: a NEW escalation id — new against both the tracked state and the delivery stamp — is mailed to the cloud once through `scripts/lane-deliver.mjs send` (which wakes it), stays in the state until cleared, and carries `since` from the prior state so an ongoing escalation does not rewrite the file daily. What escalates to the OWNER: the four classes already reserved — strategy and any new vertical, platform or hardware (DR-020's rule), money, irreversibles, brand and positioning — plus `owner-real-in-hand`. What escalates to a LANE: an `unknown` probe, a criterion no operation can clear, an operation the tick cannot run, and a top task that has not moved in a week. Everything reversible is the loop's call.
+
+### 5. What this record authorizes, and what it does not
+
+It authorizes the loop to decide and to queue. It does NOT authorize the loop to mint a capability sentence, to edit a document a generator owns, or to move the launch profile, the publication boundary or the launch-claims gate: building and claiming remain different acts under DR-021, and the loop writes ids, counts, dates and one enum.
+
+It authorizes one future change to how green is certified, so no second record is needed for it: `node scripts/objective-loop.mjs --self-test --check` may be registered as a fatal preflight gate together with its matching CI job in the SAME pull request, after PR #1019 (which edits `scripts/preflight.mjs`) has landed. `--check` is already three-state: a shallow clone reports provenance instead of failing on it, a moved roster reports stale executor claims instead of failing on them, and a stale state is REPORTED — a gate that fails on a low number, on age, or on a tick's own verdict is a separate decision. Two follow-ups are filed to `docs/BUILD_BACKLOG.md`: that registration, and adding `docs/agent/objective.json` to `SAFETY_MACHINERY` as a second belt.
+
+**Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Changing the objective is not a reversal of this record: it is a new `attestedIn`, or a new `docs/agent/objective.json` together with the matching id set in `scripts/objective-loop.mjs`, landed by its own record — which is the mechanism this record exists to create.
+
+## DR-054 — Raise your hand when stuck: every autonomous unit surfaces a blocker, none fails silently (owner-directed 2026-09-23)
+
+### 1. The decision
+
+The owner, 2026-09-23: *"All agents will never raise their hand when they get stuck."*
+This is a founding operating law, effective across the whole company and product,
+every lane: **an autonomous unit that cannot resolve its task MUST surface a structured
+BLOCKED signal — never fail silently, drop a step, or hand back an empty/partial/best-guess
+result as if it were complete, and never narrate past the blocker.**
+
+It is the fail-closed rule (golden rule 2) applied to an actor's OWN PROGRESS, not only
+to the data it reads: an unknown or blocked STATE must **tighten** (stop, surface) not
+**loosen** (guess, proceed). A raised hand is the job done right; a silent stall is the
+one failure this system will not tolerate.
+
+### 2. What "raise your hand" means, concretely
+
+When blocked — a tool or permission it lacks, a dependency it cannot reach, an input that
+is missing or self-contradictory, an ambiguous call that is the owner's to make, a usage
+limit, or a refusal — the unit reports four things: **what it was doing, what blocked it,
+exactly what it needs to continue, and who can unblock it** (the owner, the other lane, a
+named tool). The blocker goes where a human or the other lane will see it, not only into a
+return value the caller may discard.
+
+### 3. Where it binds, and how it is enforced
+
+- **Subagents** (`.claude/agents/*.md`): each carries the canonical clause verbatim,
+  enforced by `scripts/check-agent-raise-hand.mjs` (preflight + CI, with a self-test).
+  This is the direct fix for the owner's words — 8 of 13 defs had no escalation language.
+- **Coordinators / this session**: the START/END ritual and the stop hook already refuse
+  a silent "done"; this law adds that a *blocked* state is reported the same way, in plain
+  terms, to the owner or the other lane — not swallowed.
+- **Workflows**: a `null` from `agent()` (a skipped or dead sub-agent) must be SURFACED
+  (logged/reported as BLOCKED), never silently `.filter(Boolean)`'d into nothing. The
+  author owns this; the doctrine names it so a dropped agent is a defect, not a shrug.
+- **Lanes**: a stuck lane writes a blocker into the lane mailbox (an unacknowledged message
+  is already PENDING and surfaced by `lane:inbox` / `loop:state`), generalizing DR-047's
+  "a usage-limited spawn is logged pending and re-issued, never silently dropped" to every
+  kind of blocker.
+- **Gates / routines**: "could not run / could not determine" is reported distinctly from
+  pass/fail (the existing fail-closed contract) — a check that cannot answer raises its
+  hand, it does not quietly pass.
+
+### 4. Proof and scope
+
+Proven by `scripts/check-agent-raise-hand.mjs` (self-test: the canonical clause passes, a
+reworded/weaker section and an empty body fail, a file floor guards an empty walk) plus the
+clause landed in all 13 agent definitions. Cross-surface work (workflow surfacing helper,
+a lane blocked-signal row in `loop:state`, and the system-wide sweep for other silent-stall
+sites) is tracked from this record. No decision-core verdict, Decision Envelope, or launch
+claim is touched.
+
+**Reversal / amendment.** The owner vetoes DR-054 by not merging, or reverses a merged form
+by reverting the PR with the reversal date added here.
+
+### 5. The mechanism, merged (2026-09-23)
+
+The owner gave both lanes the same directive, and each built its own half. Asked how to
+combine them, he chose **"Merge into one."** One system now carries DR-054:
+
+- **The rule:** the canonical clause in every first-party agent
+  (`scripts/check-agent-raise-hand.mjs`). The nine vendored agents stay byte-identical to
+  upstream (agent-roster rule 5) and inherit the rule from CLAUDE.md, which the gate
+  asserts.
+- **The ledger:** `artifacts/raised-hands/<id>.json`, written by `scripts/raise-hand.mjs`
+  (`hand:raise`, `hand:take`, `hand:clear`, and `raise`/`take`/`clear` ops in
+  `lane:deliver`). A resolution must say what unblocked the hand.
+- **The router:** `scripts/check-raised-hands.mjs` sends each hand to its org-roster role,
+  the owner, a lane or a tool, or names it a GAP. It feeds `loop:state` and the Mac tick.
+- **The detector and gate:** `scripts/raised-hands.mjs` raises hands automatically for
+  stalls nobody reported: mail unread past 24h, sim requests pending past 48h, silent
+  routines, and PRs red or idle. It fails preflight when one sits past 3× its limit
+  with no hand covering it (CI only warns, since 2026-09-24; see below). It also counts, as a health line, how many stalls no agent
+  reported.
+- **The answer:** the `blocker-dispatcher` agent follows the `raised-hands` skill. It is
+  read-only and returns a dispatch plan. Auto stalls route by `docs/agent/hand-routing.json`.
+  Every route must name an agent or skill that exists, or the gate fails. GAPs are
+  specified by the dispatcher and created by the agent-platform-steward.
+- **The owner's page:** `.github/workflows/raised-hands.yml` keeps one issue labelled
+  `raised-hands` current every hour, and comments only when a hand is new. A daily
+  `hands-watch` job in `scheduled-verification.yml` fails if that issue goes stale.
+
+**CI warns, preflight fails (2026-09-24).** The owner said "just get it done" and
+delegated the call; the cloud lane's recommendation was applied. In CI the stall half of
+`node scripts/raised-hands.mjs --check` now runs with `--warn`. It prints each stall as
+`WARN (would fail locally):` and exits 0. Why: a stall is another lane's clock. When the
+Mac sent no heartbeat for 9 hours, mainline and every later PR went red. Heartbeat pushes
+are paths-ignored, so the red stayed until someone pushed again. The register's own
+integrity still fails CI under `--warn`: an unreadable hand, a route naming a missing
+agent or skill, or a sim gate that printed nothing. Local `scripts/preflight.mjs` stays
+fatal on stalls. `scripts/check-preflight-ci-parity.mjs` records the weakening in
+`CI_WARN_ONLY` and fails on an undeclared or stale `--warn`. **Reversal:** delete `--warn`
+from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
+
+## DR-057 — A preflight step this machine cannot build natively may be recorded in the live evidence from an amd64 Linux VM run on the SAME tree, bound fail-closed to the HEAD sha and a clean working tree; anything less attests nothing (Mac lane, 2026-09-25)
+
+**Status: ADOPTED — a change to what the evidence emitter may record, so it gets a record before it lands (intake rule 3: anything that changes how green is certified).**
+
+**Question.** The readiness figure (DR-036) is the lowest of three measured dimensions, and dimension (b) is the share of the launch profile's bound proofs/steps that `artifacts/live-evidence/mac-run.json` records as current. The only lane that can mint that file is this Mac. On arm64 macOS the workspace strips every native bundler binary except linux-x64-gnu, so `Build (all packages)` and `Browser E2E (review console, website, admin)` are structurally excluded here (`scripts/lib/platform-native-build.mjs`); the E2E step is a launch binding, so it is never recorded as passed and the figure's ceiling on this machine is 19/20 — the "5% gap" the owner asked about. Is there an honest way for the Mac to record those steps, or does the ceiling stand?
+
+**Grounding.** Measured on 2026-09-25 inside the amd64 `node:22` VM that `scripts/mac/linux-web-build.sh` already runs (Apple `container`, user-level install, read-only mount + copy): `pnpm install --frozen-lockfile` → `playwright install --with-deps chromium` → `pnpm run build` → `CI=1 pnpm --filter @workspace/scripts run test:e2e` printed `53 passed (1.9m)` and `e2e exit=0 in 121s` — the same two steps the Linux CI job runs, on the same bytes, under the same platform the binaries were kept for. What CI certifies on Linux this Mac can now certify in a Linux VM. What it must not do is let a VM run of SOME tree stand for THIS tree.
+
+**The call.**
+
+1. A native-build step may be recorded in `proofs.steps` only from a **native-build attestation** (`scripts/lib/native-build-attestation.mjs`, schema `signalgrid-native-build-attestation/v1`) that the VM script writes ONLY after a fully green `--e2e` run, OUTSIDE the tree. The emitter binds it fail-closed: schema and `status: "passed"` exact; `treeSha` equal to the Review-Hub HEAD at mint; `treeClean: true` sampled on the host BEFORE the VM launched (untracked included — the sim-result provenance rule) AND the tree clean again at mint; `steps` a subset of the registered `needsNativeBuild` names. Any binding that fails attests nothing, the step stays in `preflightCoverage.stepsNotRun`, and the reason is printed. An unknown never loosens the answer (golden rule 2).
+2. The attestation never carries a digest. The emitter computes the attested step's `sourceDigest` exactly as it does for a natively-run step, so a stale attestation cannot read as current when the step's sources move; the recorded step carries `attestedBy` so a reader can tell the two provenances apart, and `preflightCoverage.nativeBuildAttestation` names the sha, the run time and the runner.
+3. `node scripts/verify-all.mjs --require-mcp --emit-evidence --vm-native-build` runs the VM half itself on darwin when the steps are excluded and ignores the flag where they build natively; the `evidence` sim operation carries the flag, so the cloud's re-mint requests and the tick's objective loop (DR-056) get the full figure without anyone typing it. A VM failure never aborts the mint: the steps stay excluded and the note says why.
+4. Dimension (b) is unchanged: it still counts only steps recorded passed against the current manifest fingerprint. Nothing here changes what may be CLAIMED to ship; the launch-claims gate, the launch profile and the publication boundary govern that as before. This is the emitter recording a real run of the real steps, not a new certification.
+
+**Evidence.** The VM trial quoted above; `node scripts/lib/native-build-attestation.mjs --self-test` (15/15: absent, wrong schema, failed status, other sha, dirty at launch, dirty at mint, unregistered name and malformed steps each attest nothing); the self-test registered in `scripts/preflight.mjs` and mirrored in CI with `node scripts/check-preflight-ci-parity.mjs` green; the first `--vm-native-build` mint on this Mac and the readiness figure it produced, quoted in the PR that carries this record.
+
+**Reversal.** Delete this record, `scripts/lib/native-build-attestation.mjs` and its preflight/CI rows, the `--e2e`/`--attest` arms of `scripts/mac/linux-web-build.sh`, the `--vm-native-build` arm of `scripts/verify-all.mjs` and the flag in `scripts/lib/sim-operations.mjs`; re-mint the evidence on the Mac and the figure returns to its 19/20 ceiling here, which is the honest number without a Linux run. A weaker binding (skipping the sha, the clean check or the recomputed digest) is not a reversal but a fail-open, and needs its own record.
+
 ## DR-058 — Puck 6: a `device_returned` bound to the holder's own credential closes custody without `CUSTODY_REMOVED`; an unauthorized seat release is a torn removal; every unbound return keeps custody open — a deferred design target (cloud lane — proposal, 2026-09-25)
 
 **Status: PROPOSAL — decision-core behaviour, not claimed as current and not Limited GA until merged.** This record changes what `puckVerdict` (`lib/signalgrid-core/src/attach.ts`) returns for a removed credential once the release reading and the return binding are known, and it adds one lifecycle event type to the audit vocabulary. The custody family stays `deferred` in `scripts/launch-profile.mjs`; nothing here claims it ships. The owner approves by merging the one PR that carries this record, or vetoes by not merging (the DR-051 pattern that DR-055 item 4 names for rows Puck 6, 8 and 9).

@@ -99,6 +99,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
+import { attestedNativeSteps, readAttestation } from "./lib/native-build-attestation.mjs";
 // The proof/step roster a green run COVERS, and the per-proof source-fingerprint
 // derivation, read through the SAME functions the binding gate and the readiness
 // figure use — one reading, so the roster and digests the evidence records cannot
@@ -125,6 +126,24 @@ const emitEvidence = process.argv.includes("--emit-evidence");
 // preflight's stdout: a text scrape would silently start lying the day the wording
 // changes, and this file's whole job is to not do that.
 const preflightNative = nativeBuildExclusion(repoRoot);
+// --vm-native-build (Mac): when this machine cannot build natively, run the two native-build
+// steps inside the amd64 Linux VM first (scripts/mac/linux-web-build.sh --e2e --attest) and
+// let the emit step record them from the attestation — bound to THIS tree's HEAD and a clean
+// working tree, or not at all (scripts/lib/native-build-attestation.mjs). A VM failure never
+// aborts the run: the steps simply stay excluded, and the note says why.
+const vmNativeBuild = process.argv.includes("--vm-native-build");
+let attestationPath = process.env.SIGNALGRID_NATIVE_BUILD_ATTESTATION || null;
+let vmNativeBuildNote = null;
+if (vmNativeBuild && preflightNative.excluded) {
+  const tmp = resolve(process.env.TMPDIR || "/tmp", `signalgrid-native-build-attestation-${process.pid}.json`);
+  console.log(`\n=== Native build in the Linux VM (--vm-native-build): ${preflightNative.target} cannot build natively; running build + Browser E2E in Apple container ===`);
+  const r = spawnSync("bash", [resolve(repoRoot, "scripts/mac/linux-web-build.sh"), "--e2e", "--attest", tmp], { cwd: repoRoot, stdio: "inherit" });
+  if (r.status === 0) attestationPath = tmp;
+  else vmNativeBuildNote = `linux-web-build.sh --e2e exited ${r.status ?? r.signal} — the native-build steps stay EXCLUDED (nothing attested)`;
+  console.log(vmNativeBuildNote ?? `VM run passed; attestation at ${tmp}`);
+} else if (vmNativeBuild) {
+  vmNativeBuildNote = "--vm-native-build ignored: this platform builds natively, so the steps ran in preflight itself";
+}
 
 /** Are we on a hosted CI runner? Checked because the darwin test alone does NOT
  *  exclude a cloud sandbox — a GitHub macOS runner passes it. `CI` is set by every
@@ -404,6 +423,17 @@ if (emitEvidence) {
         return r.status === 0 ? r.stdout.trim() : null;
       };
       const reviewHubCommit = reviewHubGit(["rev-parse", "HEAD"]);
+      // Native-build attestation: the steps the VM ran on THIS tree, if any. Bound fail-closed
+      // (schema, status, sha, clean at launch, clean now); anything else attests nothing.
+      const reviewHubStatus = reviewHubGit(["status", "--porcelain"]);
+      const reviewHubClean = reviewHubStatus === null ? false : reviewHubStatus.trim() === "";
+      const nativeStepNames = [...registeredSteps(readFileSync(resolve(repoRoot, "scripts/preflight.mjs"), "utf8"))].filter(([, i]) => i.needsNativeBuild).map(([n]) => n);
+      const attRead = attestationPath ? readAttestation(attestationPath) : { attestation: null, error: null };
+      const nativeAttest = preflightNative.excluded
+        ? attestedNativeSteps(attRead.attestation, { reviewHubCommit, reviewHubClean, registered: nativeStepNames })
+        : { attested: [], excluded: [], reason: null };
+      const attestedSet = new Set(nativeAttest.attested);
+      if (preflightNative.excluded) console.log(`native-build attestation: ${nativeAttest.attested.length ? nativeAttest.attested.join(" + ") + " attested from the VM run" : "none"}${nativeAttest.reason ? ` (${nativeAttest.reason})` : ""}${attRead.error ? ` (${attRead.error})` : ""}`);
       // Split the checkout's dirtiness HONESTLY. The earlier form dropped every
       // untracked (`??`) entry, so an untracked test or module — which pytest can
       // still collect and run — left mcpDirty:false, attributing the pass to a
@@ -438,10 +468,14 @@ if (emitEvidence) {
         preflightCoverage: {
           nativeBuildExcluded: preflightNative.excluded,
           target: preflightNative.target,
-          stepsNotRun: preflightNative.excluded
-            ? ["Build (all packages)", "Browser E2E (review console, website, admin)"]
-            : [],
+          stepsNotRun: preflightNative.excluded ? nativeStepNames.filter((n) => !attestedSet.has(n)) : [],
           reason: preflightNative.reason,
+          // When the Mac ran the native-build steps inside the amd64 Linux VM on THIS tree, the
+          // attestation that stands for them — bound to the HEAD sha, clean at launch and at mint.
+          nativeBuildAttestation: attestedSet.size > 0
+            ? { steps: nativeAttest.attested, treeSha: attRead.attestation.treeSha, ranAt: attRead.attestation.ranAt ?? null, runner: attRead.attestation.runner ?? null }
+            : null,
+          vmNativeBuildNote,
         },
         reviewHubPass: true,
         mcpPass: true,
@@ -498,7 +532,11 @@ if (emitEvidence) {
           const steps = {};
           const stepsExcluded = [];
           for (const [name, info] of preflightStepsReg) {
-            if (info.needsNativeBuild && preflightNative.excluded) { stepsExcluded.push(name); continue; }
+            if (info.needsNativeBuild && preflightNative.excluded) {
+              if (!attestedSet.has(name)) { stepsExcluded.push(name); continue; }
+              steps[name] = { status: "passed", manifestFingerprint: manifest.fingerprint, sourceDigest: stepSourceDigest(repoRoot, name, pkgDirs), attestedBy: "native-build-attestation/v1 (Linux VM on this tree)" };
+              continue;
+            }
             if (info.selfSkipsWithout) { stepsExcluded.push(name); continue; } // green cannot say it ran
             steps[name] = { status: "passed", manifestFingerprint: manifest.fingerprint, sourceDigest: stepSourceDigest(repoRoot, name, pkgDirs) };
           }

@@ -26,7 +26,7 @@
 //        repo and only reached when IDENTITY_PROVIDER_TYPE selects OIDC explicitly (the
 //        default provider is the control-plane session). They are printed on every run
 //        so the residual is never silent; promoting them to GATED is one line.
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,10 +85,11 @@ export function audit({ client, spec, legacy = [] }) {
 
 function walkSwift(dir) {
   const out = [];
-  for (const e of readdirSync(dir)) {
-    const p = join(dir, e);
-    if (statSync(p).isDirectory()) out.push(...walkSwift(p));
-    else if (e.endsWith(".swift") && !p.endsWith("BackendService.swift")) out.push({ path: p.slice(repo.length + 1), text: readFileSync(p, "utf8") });
+  // Dirent carries the type: no stat-then-read on the same path (CodeQL js/file-system-race).
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) out.push(...walkSwift(p));
+    else if (e.name.endsWith(".swift") && !p.endsWith("BackendService.swift")) out.push({ path: p.slice(repo.length + 1), text: readFileSync(p, "utf8") });
   }
   return out;
 }

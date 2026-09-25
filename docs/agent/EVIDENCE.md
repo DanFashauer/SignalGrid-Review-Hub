@@ -3577,7 +3577,7 @@ Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (each in its own
 Output:   #1048 @ c1c419fb: "Preflight PASSED — everything it runs is green." (361 steps) / "Breadth lane PASSED — 58 breadth proofs green"; proof:app-protection summary=pass (116/116); mutation-guard survivors=0 → merged 9602069a (gating 108133744412)
           #1031 @ 5d33c668: Preflight PASSED (361) / Breadth PASSED (58); objective-loop self-test 62/62; --check passed → merged 832c9224 (gating 108141031151)
           #1019 @ 70cbb90b: Preflight PASSED (366) / Breadth PASSED (58); raised-hands --check passed, self-test 47/47 → merged 19b4dfb7 (gating 108173601883)
-          #1050 @ 5d36b64d: Preflight PASSED (361, after build:room-console) / Breadth PASSED (58); proof:decision-cascade 119/119 (matrixRows=28); proof:signalgrid-core 597/597 → open, owner merges
+          #1050 @ 5d36b64d (branch figures, quoted: the branch adds ten matrix rows): Preflight PASSED (361, after build:room-console) / Breadth PASSED (58); decision-cascade `summary=pass (119/119)`, `matrixRows=28`; signalgrid-core `597/597` → open, owner merges
           readiness on mainline after the Mac re-mint f5d4ceaa: "(b) launch surface, evidence 95% proofs current 19/20, launch items fully current 27/28"; "HEADLINE 95% → OUTREACH OPEN"
 Verdict:  holds
 

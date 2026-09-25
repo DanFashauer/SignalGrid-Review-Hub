@@ -57,7 +57,7 @@ LAST TOUCHED: 2026-09-25 (cloud lane, 18:00Z) - "KEEP BUILDING": TWO BUILT, FOUR
               DR-037 - the connector refuses an unbound or borrowed registration before it can grant; proof 116/116,
               mutation-guard survivors=0) and #1050 Puck 6 as the DR-058 PROPOSAL (owner merges: a holder-bound
               device_returned closes custody without CUSTODY_REMOVED, unauthorized release is torn, every unbound
-              return keeps custody open; cascade proof 28 rows 119/119; core census 16/9; CORE_NORMALIZATION 25).
+              return keeps custody open; cascade proof `matrixRows=28`, `119/119`; core census 16/9; CORE_NORMALIZATION 25).
               Landed for the Mac: #1031 DR-056 objective loop (832c9224; the forward-build trigger now READS
               objective-state.json tasks[0..2] under the heartbeat witness rule instead of choosing by judgment) and
               #1019 DR-054 raise-your-hand (19b4dfb7, the last of the owner batch - the Mac did the merge step the

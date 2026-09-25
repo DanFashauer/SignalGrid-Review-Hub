@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 115,
+        "open": 114,
         "partial": 5,
-        "closed": 73
+        "closed": 74
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -56,19 +56,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "5",
-      "title": "Point EnterpriseShell's badge/session lane at the real backend",
-      "role": "mobile-native-engineer",
-      "executor": "skill:signalgrid-native",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-09-24T14:47:57.548Z"
-    },
-    {
-      "rank": 2,
       "rowId": "6",
       "title": "Rewrite the public site to the launch scope, then gate it",
       "role": "web-engineer",
@@ -81,7 +68,7 @@
       "firstRankedAt": "2026-09-24T14:47:57.548Z"
     },
     {
-      "rank": 3,
+      "rank": 2,
       "rowId": "8",
       "title": "Read the verdict code",
       "role": "principal-engineer",
@@ -92,6 +79,19 @@
         "section": "Global backlog"
       },
       "firstRankedAt": "2026-09-24T14:47:57.548Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "9",
+      "title": "Extend the grant-safety enumeration and mutation guard to the 14 unguarded families",
+      "role": "security-engineer",
+      "executor": "agent:security-reviewer",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-25T23:01:51.566Z"
     }
   ],
   "needsExecutor": [
@@ -183,11 +183,11 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 9,
-    "openRows": 115
+    "openRows": 114
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-25T21:20:08.460Z",
-  "derivedAtCommit": "113f17e88cf14d973bceedaaa5528a98f4183060",
-  "workingTreeCleanAtEntry": false,
-  "decisionAddress": "42138ffba514e7aefa4c952652d8d84926b1bb8548bbf32f303f7b515a7f7694"
+  "derivedAt": "2026-09-25T23:01:51.566Z",
+  "derivedAtCommit": "a3bd808b8765cfcbbbb6dac909662928758e4e7d",
+  "workingTreeCleanAtEntry": true,
+  "decisionAddress": "9fab05e0c4adb62b984d0451fe216678cdb069ee1c67512e03cad79e0a957fac"
 }

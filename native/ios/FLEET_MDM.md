@@ -168,12 +168,40 @@ not a substitute for it.
    "returns to any dock where it checks itself back in, re-provisions": one MDM
    erase command carrying a Wi-Fi profile and the enrollment to return to; the
    device erases, re-enrolls, keeps its supervision, language and region, and
-   lands on the Home Screen with no Setup Assistant. iOS / iPadOS 26 and later
-   (app preservation, which needs Automated Device Enrollment and a bootstrap
-   token); iOS / iPadOS 27 adds retry and timeout options. Not available on
-   Shared iPad. Nothing in this repository binds `device_returned` to it yet —
-   that is a `docs/BUILD_BACKLOG.md` row, not a claim. Source: "Use Return to
-   Service for Apple devices" (2026-09-17 edition).
+   lands on the Home Screen with no Setup Assistant. Corrected 2026-09-24 (DR-055)
+   against Apple's own sources — this item used to say "iOS / iPadOS 26 and later"
+   and "Not available on Shared iPad", and neither is right:
+   - **Return to Service itself:** the `ReturnToService` key of the erase command
+     exists from **iOS 17.0** (Apple's `device.erase.yaml`); the device must be
+     enrolled through Device Enrollment or Automated Device Enrollment, and a Wi-Fi
+     profile is required unless the device has another way online.
+   - **App preservation** (keeps managed app binaries, erases user data): **iOS /
+     iPadOS 26** or later, Automated Device Enrollment, an escrowed **bootstrap
+     token**, and an iPad **not** configured as Shared iPad. The Shared iPad limit
+     applies here only; the erase command itself lists Shared iPad as allowed on the
+     device channel.
+   - **iOS / iPadOS 27** adds enrollment retry after the erase (with an increasing
+     delay, up to five minutes) and — **inside the app-preservation reset only** —
+     a user start from Control Center or an inactivity timeout, after which the
+     device checks in with the MDM to fetch its enrollment. It is not an iPhone
+     trigger outside app preservation.
+   - **Activation Lock must be off** — *"The user needs to deactivate all
+     activation locks for this feature to work correctly"*.
+   - **The erase's acknowledgement is not retried.** *"The device sends a response to
+     the server, but it doesn't retry if it isn't successful the first time."* It is
+     the device's response to the server that is not retried, not the erase, so the MDM
+     may never see the result of an erase that did run; readiness after a return should
+     key off observed re-enrollment or a DDM check-in, not this acknowledgement alone.
+
+   Nothing in this repository binds `device_returned` to it yet — that is a
+   `docs/BUILD_BACKLOG.md` row, not a claim, and the row asks for an approval-gated
+   recommendation, not an erase in `lib/fleet-connector`. Apple's guide publishes no
+   duration for a reset, so no speed may be stated before this step has run on a
+   real supervised iPhone. Sources: "Use Return to Service for Apple devices"
+   (https://support.apple.com/guide/deployment/use-return-to-service-for-apple-devices-dep17cb455a0/web,
+   2026-09-17 edition) and
+   https://github.com/apple/device-management/blob/release/mdm/commands/device.erase.yaml,
+   both re-read 2026-09-24.
 
 ## Partnership note
 Fleet manages + observes the device (open source, osquery, GitOps); SignalGrid

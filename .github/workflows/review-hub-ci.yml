@@ -425,6 +425,8 @@ jobs:
         run: node scripts/check-walker-floors.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
+      - name: Native-build attestation self-test (a VM-run step is recorded only when bound to this exact tree)
+        run: node scripts/lib/native-build-attestation.mjs --self-test
       - name: Posed-bound self-test (the gate must be able to fail)
         run: node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)

@@ -136,7 +136,7 @@ export const SIM_OPERATIONS = {
 
   // ── real-hardware evidence (the only lane that can refresh mac-run.json) ──
   evidence: {
-    argv: ["node", "scripts/verify-all.mjs", "--require-mcp", "--emit-evidence"],
+    argv: ["node", "scripts/verify-all.mjs", "--require-mcp", "--emit-evidence", "--vm-native-build"],
     platform: "macos",
     needs: "SIGNALGRID_MCP_PATH pointing at the signalgrid-mcp checkout",
     what: "both halves against the shared contract, minting artifacts/live-evidence/mac-run.json",

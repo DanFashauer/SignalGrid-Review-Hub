@@ -4103,3 +4103,50 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 **Evidence.** The VM trial quoted above; `node scripts/lib/native-build-attestation.mjs --self-test` (15/15: absent, wrong schema, failed status, other sha, dirty at launch, dirty at mint, unregistered name and malformed steps each attest nothing); the self-test registered in `scripts/preflight.mjs` and mirrored in CI with `node scripts/check-preflight-ci-parity.mjs` green; the first `--vm-native-build` mint on this Mac and the readiness figure it produced, quoted in the PR that carries this record.
 
 **Reversal.** Delete this record, `scripts/lib/native-build-attestation.mjs` and its preflight/CI rows, the `--e2e`/`--attest` arms of `scripts/mac/linux-web-build.sh`, the `--vm-native-build` arm of `scripts/verify-all.mjs` and the flag in `scripts/lib/sim-operations.mjs`; re-mint the evidence on the Mac and the figure returns to its 19/20 ceiling here, which is the honest number without a Linux run. A weaker binding (skipping the sha, the clean check or the recomputed digest) is not a reversal but a fail-open, and needs its own record.
+
+## DR-058 — Puck 6: a `device_returned` bound to the holder's own credential closes custody without `CUSTODY_REMOVED`; an unauthorized seat release is a torn removal; every unbound return keeps custody open — a deferred design target (cloud lane — proposal, 2026-09-25)
+
+**Status: PROPOSAL — decision-core behaviour, not claimed as current and not Limited GA until merged.** This record changes what `puckVerdict` (`lib/signalgrid-core/src/attach.ts`) returns for a removed credential once the release reading and the return binding are known, and it adds one lifecycle event type to the audit vocabulary. The custody family stays `deferred` in `scripts/launch-profile.mjs`; nothing here claims it ships. The owner approves by merging the one PR that carries this record, or vetoes by not merging (the DR-051 pattern that DR-055 item 4 names for rows Puck 6, 8 and 9).
+
+**Context.** DR-055 records the owner's 2026-09-23 flow: *return is docking*. `docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md` (the *Candidate fixture rows* table) and BUILD_BACKLOG row *Puck 6* name the gap (all of it a deferred design target): under PR #1005's live attach rules a planned end-of-shift return reads as `removed`, restricts with `CUSTODY_REMOVED`, and — because that live row has no resolution descriptor — escalates, so every shift change would read as an incident. The event contract already names `device_returned` (`lib/event-contract/src/types.ts`) and the timeline detector already reads its absence as "still out"; nothing bound the event to the credential that checked the device out, and `puckVerdict` knew only attached, removed and unknown.
+
+**The question this settles.** What a removal grades to once the receiver says HOW the seat released and the ledger says WHAT the return binds to — and which of those readings may close custody (a deferred design target until merged, and deferred in the launch profile after).
+
+### 1. The rows (deferred until merged)
+
+Deferred until merged. `PuckSituation` gains two inputs, both with a quiet `not_applicable` so every existing row grades exactly as before:
+
+- `release: authorized | unauthorized | unknown | not_applicable` — how the seat released, as the receiver reported it. A tamper or seat-break reading is `unauthorized`.
+- `returned: holder | other_credential | device_absent | unknown | not_applicable` — what a `device_returned` binds to, produced by the new pure `bindReturn(reading, holderCredentialRef)`: the holder's own credential **with a device sensed in the bay** is the only `holder`; no device in the bay is `device_absent` whatever credential carried it; an unreadable credential, unreadable bay sensing, or a holder the ledger cannot name is `unknown`; no return is `not_applicable`.
+
+Graded most-restrictive-first, below the torn-removal row and above the walk-away row (deferred design target — the custody family is not shipping):
+
+| Situation (credential `removed`; deferred design target) | Verdict | Reason code |
+| --- | --- | --- |
+| forced/torn removal (unchanged) | `deny` | `CUSTODY_TORN` |
+| seat released with no authorized release | `deny` | `CUSTODY_TORN` |
+| release reading present but unreadable | `deny` | `CUSTODY_RELEASE_UNKNOWN` |
+| return carried by another credential | `deny` | `CUSTODY_RETURN_UNBOUND` |
+| return claimed, no device sensed in the bay | `restrict` | `CUSTODY_EXCEPTION` |
+| return the ledger cannot read | `restrict` | `CUSTODY_RETURN_UNKNOWN` |
+| return bound to the holder's own credential | `restrict` | `CUSTODY_RETURNED` — custody closed, session ended, nothing to escalate |
+| authorized release, no return (an ordinary walk-away; also the default) | `restrict` | `CUSTODY_REMOVED` (unchanged) |
+
+And one row while the credential is still **seated** (deferred, like the rest): any return reported at all is two planes disagreeing and grades `step_up` / `CUSTODY_STATE_CONFLICT` — it never closes custody and never grants.
+
+### 2. Why it satisfies golden rule 2 (fail-closed, deterministic)
+
+- **Deterministic.** Pure functions of the situation; the instants are the caller's, as before.
+- **Fail-closed, both ways (deferred design target).** No return can soften a torn or unauthorized release (those rows sit above every return row). No release reading can turn a holder's return into a walk-away (the holder row sits above the walk-away row). Every *unreadable* input lands on a value that keeps custody open — an unreadable release raises to the torn rung ("nothing rules out a torn removal"), an unreadable return stays a removal ("read as still out"). The default `not_applicable` on both inputs reproduces today's matrix row for row, so a receiver or ledger with no such channel is neither loosened nor stepped up on day one — the DR-043 `not_applicable` convention.
+- **Truthful (and deferred).** `CUSTODY_RETURNED` is still `restrict`: the session it authorized is over. It is the *resolution* that differs — a planned return is not an incident — and the reason code says so, which is what the live row cannot yet say.
+
+### 3. The audit vocabulary and the live gate
+
+Deferred until merged: `AUDIT_EVENT_TYPES` gains `dock.returned` beside `dock.removed` (15 → 16; the puck-lifecycle subset 8 → 9), because recording a return as `dock.removed` is the conflation this row removes; the core proof's census moves in the same change, never loosened. The live `/v1` rule `attach-removed` (`lib/signalgrid-core/src/policy.ts`) is **unchanged** and carries a resolution note: it has no release/return evidence field to match on yet, so it stays the stricter reading and escalates every `removed` until such a field exists — a separate row, because it moves the evidence schema.
+
+### 4. Proof and scope
+
+Deferred design target, proven offline: `proof:decision-cascade` (already registered) gains ten matrix rows (18 → 28), eight `bindReturn` assertions — including that every non-holder binding keeps custody open and that a bound holder return grades `CUSTODY_RETURNED` end to end — and the `dock.returned` census check; `proof:signalgrid-core` pins the census at 16 / 9. `CORE_NORMALIZATION_VERSION` moves 24 → 25 by its generator. Nothing in `native/ios` moves (`puckVerdict` has no Swift twin; DR-043).
+
+**Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here; rows Puck 7–9 (deferred) build on these inputs and would revert with it.
+

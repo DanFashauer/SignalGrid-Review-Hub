@@ -4864,7 +4864,7 @@ TIERED READ-LIST — SignalGrid-Review-Hub (all listed files verified UNREAD aga
 Decision core (the verdict mechanism):
 1. lib/signalgrid-core/src/engine.ts (778) — SignalGridCore itself; every /v1 decision flows through it via api-server lib/core.ts.
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
-3. lib/signalgrid-core/src/policy.ts (850) — policy resolution feeding the verdict; the largest logic file in the core.
+3. lib/signalgrid-core/src/policy.ts (856) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
 5. lib/signalgrid-core/src/evidence.ts (831) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
 6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.

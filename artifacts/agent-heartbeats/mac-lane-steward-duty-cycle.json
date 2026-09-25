@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T23:25:53.475Z",
-  "result": "quiet (keepalive): mac-lane-tick firedAt 2026-09-24T23:24Z (fresh); no Mac mail to cloud; #1031 unmoved (52a600bd, B1/B2 open); live-evidence 2026-09-23; manifest clean. Owner not escalated; #1024/#1026 await his merge."
+  "firedAt": "2026-09-25T01:12:51.686Z",
+  "result": "acted: owner directed 'just get it done' — landed #1024, #1026, #905; closed #725; #1005 in preflight; #929/#686 rebuilt+pushed; #1019 prepared (CI warn). Acked mac-pr-1037; its review is queued. mac-lane-tick firedAt 2026-09-25T00:50Z (fresh). live-evidence 2026-09-23 (1.3d). New mac branch mac/intake-unlazy-skills has PR #1037. Owner not escalated."
 }

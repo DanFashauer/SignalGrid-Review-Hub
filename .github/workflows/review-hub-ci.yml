@@ -278,6 +278,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
         run: node scripts/check-sim-scripts-selfcheck.mjs
+      - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
+        run: node scripts/mac/run-requests.mjs --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that

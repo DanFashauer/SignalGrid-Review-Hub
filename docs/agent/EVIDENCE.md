@@ -3504,3 +3504,11 @@ Honest limit: `simctl` has no tap API (no `idb`/XCUITest here), so I could not n
 the specific `HostAppViewController` Assist-gate screen; that screen stays covered by
 `ios-ci` on the PR (per row 1737) and `scripts/check-ios-dynamic-type.mjs` (which forbids raw
 fonts, so every label scales).
+
+## 2026-09-25 — "#929 and #686 landed on the owner's direction with local preflight and breadth green on the merged heads"
+Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (in land/929 @ 35f54a54, then land/686 @ 1c751978)
+Output:   929: "Preflight PASSED — everything it runs is green." PREFLIGHT_EXIT 0 (359 steps); "Breadth lane PASSED — 58 breadth proofs green" BREADTH_EXIT 0
+          686: "Preflight PASSED — everything it runs is green." PREFLIGHT_EXIT 0 (361 steps); "Breadth lane PASSED — 58 breadth proofs green" BREADTH_EXIT 0
+          merges: #929 → 1d764be8 (gating run 107916038439), #686 → 77f4cf7e (gating run 107924894481), each with the full 40-char expectedHeadSha
+          readiness after #686: "(b) launch surface, evidence 0% proofs current 0/20, launch items fully current 0/28 — evidence records no per-proof or per-step results" — expected until the single Mac re-mint (PR #1039)
+Verdict:  holds

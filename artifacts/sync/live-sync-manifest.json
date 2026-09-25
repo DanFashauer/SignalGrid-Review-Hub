@@ -1,6 +1,6 @@
 {
   "manifestVersion": 83,
-  "fingerprint": "c092f53ac78e63bf9f308ca1c14360a32b056e25632e2ccb9bd7739ca5f403c6",
+  "fingerprint": "8659e9640b38ff2477ba8bc47be9e8fbc358be7146e76c9792f59449ec3f411c",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -30,7 +30,6 @@
       "agent_behavior",
       "custody_beacon",
       "app_update",
-      "app_protection",
       "platform_sso",
       "policy_binding",
       "benchmark_selection",
@@ -67,6 +66,9 @@
       "benchmark_selection",
       "shift_context",
       "badge_binding",
+      "attach_state",
+      "enrollment_strength",
+      "credential_read_method",
       "device_management_health",
       "local_authority"
     ],

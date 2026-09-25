@@ -227,6 +227,13 @@ export function puckVerdict(s: PuckSituation): PuckMatrixRow {
   if (s.attach === "unknown") {
     return { verdict: "step_up", reasonCode: "CUSTODY_UNKNOWN", reason: "the attach state is unknown, which raises the bar and never grants" };
   }
+  // Golden rule 2 on the downgrade row: when a strong→legacy downgrade cannot be RULED
+  // OUT it raises. That is an unreadable read method, or a legacy read with nothing
+  // saying the enrollment was legacy too. Below the restrict rows, so it never softens
+  // a removal. SHARED_DEVICE_RULES_V1 carries the same cells (plus not_applicable).
+  if (s.readStrength === "unknown" || (s.readStrength === "legacy_125khz" && s.enrolledStrength === "unknown")) {
+    return { verdict: "step_up", reasonCode: "CREDENTIAL_STRENGTH_UNKNOWN", reason: "nothing rules out a strong credential arriving over a cloneable 125 kHz read" };
+  }
   if (s.credentialStanding === "unknown") {
     return { verdict: "step_up", reasonCode: "CREDENTIAL_STANDING_UNKNOWN", reason: "nothing confirms the credential is in good standing" };
   }

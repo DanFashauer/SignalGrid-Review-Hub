@@ -130,19 +130,48 @@ function parseEvidenceFields(source) {
   return [...body.matchAll(/(\w+)\s*:\s*([^;]+);/g)].map((m) => ({ name: m[1], type: m[2].trim() }));
 }
 
-const stringUnions = parseStringUnions(typesSrc);
-const constArrays = parseConstArrays(typesSrc);
-const arrayAliases = parseArrayAliases(typesSrc);
+// types.ts imports the DR-043 vocabularies (`AttachState`, `CredentialStrength`) from
+// attach.ts rather than restating them, so that file is parsed too — the unions are
+// derived from where they are declared, not copied.
+const ATTACH_REL = "lib/signalgrid-core/src/attach.ts";
+const attachSrc = readFileSync(resolve(repo, ATTACH_REL), "utf8");
+const stringUnions = new Map([...parseStringUnions(attachSrc), ...parseStringUnions(typesSrc)]);
+const constArrays = new Map([...parseConstArrays(attachSrc), ...parseConstArrays(typesSrc)]);
+const arrayAliases = new Map([...parseArrayAliases(attachSrc), ...parseArrayAliases(typesSrc)]);
 const evidenceFields = parseEvidenceFields(typesSrc);
+
+/** Members of a named type this derivation understands, or undefined. */
+function membersOf(name) {
+  if (stringUnions.has(name)) return stringUnions.get(name);
+  const arrayName = arrayAliases.get(name);
+  if (arrayName && constArrays.has(arrayName)) return constArrays.get(arrayName);
+  return undefined;
+}
+
+// `export type N = Known | "literal";` — a union of resolvable names and quoted
+// literals. Anything with an unresolvable part is skipped, never half-understood.
+for (const m of typesSrc.matchAll(/export type (\w+)\s*=\s*([^;]*);/g)) {
+  if (stringUnions.has(m[1]) || arrayAliases.has(m[1])) continue;
+  const parts = m[2].split("|").map((p) => p.trim()).filter(Boolean);
+  const members = [];
+  let sound = parts.length > 1;
+  for (const part of parts) {
+    const literal = /^"([^"]*)"$/.exec(part);
+    const named = /^\w+$/.test(part) ? membersOf(part) : undefined;
+    if (literal) members.push(literal[1]);
+    else if (named) members.push(...named);
+    else sound = false;
+  }
+  if (sound) stringUnions.set(m[1], [...new Set(members)]);
+}
 
 /** Resolve one interface field's declared type into `{ typeKey, members }`. */
 function resolveFieldType(type) {
   if (type === "boolean") return { typeKey: "boolean", members: [] };
   if (/^boolean\s*\|\s*"unknown"$/.test(type)) return { typeKey: "boolean|unknown", members: ["unknown"] };
   if (/^\w+$/.test(type)) {
-    if (stringUnions.has(type)) return { typeKey: type, members: stringUnions.get(type) };
-    const arrayName = arrayAliases.get(type);
-    if (arrayName && constArrays.has(arrayName)) return { typeKey: type, members: constArrays.get(arrayName) };
+    const members = membersOf(type);
+    if (members) return { typeKey: type, members };
   }
   throw new Error(
     `${TYPES_REL}: cannot resolve DecisionEvidence field type "${type}" to a value set. ` +
@@ -178,6 +207,11 @@ const EXPECTED_CLASSES = {
   BadgeBindingState: { present: "ok", removed: "bad", forced: "bad", absent: "warn", unknown: "warn" },
   ManagementHealthState: { healthy: "ok", degraded: "warn", broken: "bad", unknown: "warn" },
   LocalAuthorityGrantState: { verified: "ok", withheld: "bad", unverified: "warn" },
+  // DR-043. `not_applicable` (no such credential in play) is amber like every other
+  // no-answer; `removed` is the affirmative failure. A legacy 125 kHz credential is
+  // weaker, not a fault on its own — the downgrade is the PAIR, which the verdict shows.
+  AttachEvidence: { attached: "ok", removed: "bad", unknown: "warn", not_applicable: "warn" },
+  CredentialStrengthEvidence: { strong: "ok", legacy_125khz: "warn", unknown: "warn", not_applicable: "warn" },
 };
 
 // Build the vector list: one entry per (field, member), plus the booleans and the

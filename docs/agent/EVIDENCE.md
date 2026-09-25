@@ -3585,6 +3585,6 @@ Verdict:  holds
 Command:  node scripts/preflight.mjs; pnpm run verify:breadth   (land/1052 @ 4a987e82; claude/build-dr056-gate-registration @ 2570e62d)
 Output:   #1052 @ 4a987e82: PREFLIGHT_EXIT 0 / "Breadth lane PASSED — 58 breadth proofs green" → merged 5474868a (gating 108205777048); check-sim-requests: "every result binds to a request it was asked for", objective-loop-evidence-fresh-2026-09-25 reported still owed
           #1057 @ 2570e62d: "▶ Objective loop state (…) … ok" / "▶ Objective loop self-test (…) … ok" / PREFLIGHT_EXIT 0 / Breadth PASSED (58) → merged 55490bee (gating 108213150392); first run failed "Doc line-count self-test" on preflight.mjs 812 → 817, fixed from output
-          check-preflight-ci-parity: `425 preflight gates, 17 workflow files, 0 declared local-only, 1 declared warn-only in CI, 0 unwired`; check-owner-gated-surfaces --self-test "self-test passed (28/28)"
+          check-preflight-ci-parity: `425 preflight gates, … workflow files (figure owned by the derived-figure guard, not restated here), 0 declared local-only, 1 declared warn-only in CI, 0 unwired`; check-owner-gated-surfaces --self-test "self-test passed (28/28)"
           #1054 @ cd220e8c (Mac tick, one file): merged 335bb282 (gating 108185885060); readiness on mainline after it: "(b) launch surface, evidence 25% proofs current 18/20 … not current: step:API integration test, step:Browser E2E"; "HEADLINE 25% → OUTREACH CLOSED" — the DR-057 re-mint is what clears it
 Verdict:  holds

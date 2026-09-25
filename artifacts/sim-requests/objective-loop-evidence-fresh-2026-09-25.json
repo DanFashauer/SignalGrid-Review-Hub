@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "objective-loop-evidence-fresh-2026-09-25",
-  "requestedAt": "2026-09-25T16:27:00.727Z",
+  "requestedAt": "2026-09-25T20:50:36.520Z",
   "requestedBy": "objective-loop (Mac tick, DR-056)",
   "reason": "Criterion evidence-fresh is unmet; sim-operation \"evidence\" writes artifacts/live-evidence/mac-run.json, which that criterion reads. Queued by scripts/objective-loop.mjs, not by a person.",
   "runs": [

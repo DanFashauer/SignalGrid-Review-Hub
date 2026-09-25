@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "requestId": "objective-loop-evidence-fresh-2026-09-25",
+  "completedAt": "2026-09-25T20:50:35.441Z",
+  "provenance": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "nodeVersion": "v24.18.0",
+    "macosVersion": "27.0",
+    "commit": "c2158ba57625d735bec54eb1c6f7fc22f7256156",
+    "branch": "SignalGrid_Alpha",
+    "workingTreeClean": true
+  },
+  "runs": [
+    {
+      "operation": "evidence",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 1198686,
+      "tail": [
+        " ELIFECYCLE  Command failed with exit code 1.",
+        "",
+        "  dist/index.mjs                       2.5mb ⚠️",
+        "  dist/pino-worker.mjs               158.7kb",
+        "  dist/pino-file.mjs                 147.4kb",
+        "  dist/pino-pretty.mjs               114.7kb",
+        "  dist/thread-stream-worker.mjs        7.4kb",
+        "  dist/index.mjs.map                   4.5mb",
+        "  dist/pino-worker.mjs.map           265.3kb",
+        "  dist/pino-file.mjs.map             237.5kb",
+        "  dist/pino-pretty.mjs.map           204.0kb",
+        "  dist/thread-stream-worker.mjs.map   12.0kb",
+        "",
+        "⚡ Done in 141ms",
+        "API integration test crashed: [TypeError: fetch failed] {",
+        "  [cause]: AggregateError [ECONNREFUSED]: ",
+        "      at internalConnectMultiple (node:net:1194:18)",
+        "      at afterConnectMultiple (node:net:1784:7) {",
+        "    code: 'ECONNREFUSED',",
+        "    [errors]: [ [Error], [Error] ]",
+        "  }",
+        "}",
+        "",
+        "",
+        "Preflight FAILED at: API integration test (boots the server). Fix before pushing."
+      ]
+    }
+  ]
+}

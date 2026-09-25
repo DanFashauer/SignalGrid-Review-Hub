@@ -96,6 +96,15 @@ if [ -f scripts/check-lane-messages.mjs ]; then
     echo "  lane mail   UNKNOWN — check-lane-messages.mjs failed; run pnpm run lane:inbox yourself"
   fi
 fi
+if [ -f scripts/raised-hands.mjs ]; then
+  # Raised hands first-class at session start (owner, 2026-09-23): what is stuck,
+  # and for whom, before any other work is picked up.
+  if HANDS_OUT="$(node scripts/raised-hands.mjs 2>/dev/null)"; then
+    echo "  hands       $(printf '%s\n' "$HANDS_OUT" | head -1 | sed 's/^Raised hands — //') — pnpm run hands"
+  else
+    echo "  hands       UNKNOWN — raised-hands.mjs failed; run pnpm run hands yourself"
+  fi
+fi
 if [ -f scripts/check-sim-requests.mjs ]; then
   # Every pending id is counted; the first three are shown and the rest are
   # said out loud. The old `grep -A 2 | head -3` capped the listing at two rows

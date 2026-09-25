@@ -367,6 +367,21 @@
         }
       ]
     },
+    "artifacts/raised-hands": {
+      "path": "artifacts/raised-hands",
+      "reads": [
+        {
+          "date": "2026-09-23",
+          "read": "Created this day by the merged raise-your-hand system (DR-054, Mac #1014 + cloud). All four seed records read in full: each carries doing/blockedBy/need/whoCanUnblock, the ids match the filenames, and every one names a real, current blocker (PR #1005 scanner false positive, signalgrid-mcp #14/#15 outside cloud reach, build-Mac posture, 3 cloud messages unread by the Mac). Gated by scripts/raised-hands.mjs --check (coherence, and an uncovered stall past 3x its limit fails).",
+          "reviewer": "cloud lane, firsthand; the merged system's code (raise-hand.mjs, check-raised-hands.mjs, raised-hands.mjs) read in full and adversarially reviewed by the fail-closed-auditor agent",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 4,
+          "scopeNote": "every record parsed and read; the four findings closed were the auditor's (sim partial-result age, gating-check rename going dark, cwd-relative loader, unguarded PR head ref)."
+        }
+      ]
+    },
     "artifacts/lane-messages": {
       "path": "artifacts/lane-messages",
       "reads": [

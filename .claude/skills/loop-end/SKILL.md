@@ -15,5 +15,8 @@ description: End-of-session SignalGrid ritual — both gates, adversarial review
    own work per DR-021).
 4. `git ls-remote origin <branch>` — the remote SHA must equal local HEAD.
    If not, push again; not done until it matches.
-5. Update the STATE block in `docs/agent/LOOP.md` LAST.
-6. Report in two lines: what changed, what's next.
+5. Anything you are leaving stuck gets a raised hand (`pnpm run hand:raise`),
+   and anything you unblocked gets cleared — the next session and the owner read
+   `pnpm run hands`, not your transcript.
+6. Update the STATE block in `docs/agent/LOOP.md` LAST.
+7. Report in two lines: what changed, what's next.

@@ -1436,7 +1436,7 @@ NEXT ACTION: cloud: (00) 2026-09-23: land the DR-043 live-attach carve (branch c
               the api-server; read mail with lane:inbox, never lane-mailbox.json.
               (0) PR #905 (DR-052, renumbered DR-053 on 2026-09-23) is the OWNER's merge - it touches scripts/publication-boundary.mjs,
               which DR-037's owner-gated clause keeps out of the lane's hands; the lane keeps it green
-              and conflict-free, never presses merge. Once it is on mainline, apply DR-052's three
+              and conflict-free, never presses merge. Once it is on mainline, apply DR-053's three
               stages to the two resources the owner named on
               2026-09-20 (upstash/context7, nidhinjs/prompt-master): the independent scan and evaluation
               FIRST, the confirmation second, the coordinator's choice third, each recorded in

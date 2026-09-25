@@ -99,8 +99,9 @@ scope, contents, and what was deliberately not taken.
   conorluddy/ios-simulator-skill               | Conor Luddy                          | MIT (c) 2025                               | 4207f82fc2
   HKUDS/CLI-Anything (plugin dir only)         | HKU Data Intelligence Lab & contributors | Apache-2.0                             | 810c18b0d1
   affaan-m/everything-claude-code              | Affaan Mustafa                       | MIT                                         | d8409a4b08
+  nidhinjs/prompt-master                       | Nidhin Joseph Nelson                 | MIT (c) 2026                                | 2bd92518e2
 
-13 upstreams above are vendored into `.claude/skills/` (100 upstream
+14 upstreams above are vendored into `.claude/skills/` (101 upstream
 skill directories, alongside 17 first-party skill directories — 16
 authored in this repository, plus `signalgrid-master/`, which is a MIRROR
 of the owner's separately-synced skill (per `.claude/skills/VENDORED.md`),

@@ -3442,6 +3442,28 @@ Proven by ADDING assertions to the existing, already-registered `scripts/src/eve
 
 **Reversal / amendment.** The owner vetoes by not merging, or reverses a merged form by reverting the one PR with the reversal date added here.
 
+## DR-053 — Every shared resource gets its own independent scan and evaluation first; cross-confirmation second; the coordinating lane decides last (owner-directed 2026-09-20)
+
+**Numbering note.** Written as DR-052 on the branch; renumbered to DR-053 when merging with mainline, which had independently taken DR-052 for the `CUSTODY_CAP_BLOCKED_BY_STALE_RETURN` detection (2026-09-14, above). No other DR number collided.
+
+**Status: ADOPTED — an operating rule for intake, not a product change.** It amends how `docs/agent/RESOURCE_INTAKE.md` rows are produced; it changes nothing about what may be claimed to ship.
+
+**Context.** The owner, 2026-09-20, on sharing `upstash/context7` and after a day in which eight green product PRs sat unmerged waiting for a merge he had already delegated under DR-037: *"any new resource that gets added even ones from past must run their own independent scan and evaluation to determine their tasks and what needs to be assigned then everything else confirms if that is what is needed or added and then you aka the 🧠 makes those choices based off all other resources and data you're able to see and collected from other sources and or skills learned."* Until now a resource was evaluated by the same lane that was mid-task, in the same context, with the same priors — the shape that produced the 2026-09-12 listicle row's refuted commands and the ICP_EVIDENCE absence claim.
+
+**The decision.** Intake is three stages, in this order, and the row records all three:
+
+1. **Independent scan.** A separate agent — its own context, the resource and the repo tree as inputs, no knowledge of what the coordinator is currently building — runs steps 2–5 of `.claude/skills/tool-evaluation-by-use/SKILL.md` (pin, licence, reads/writes/network/hooks from source, a sandboxed keyless run, recomputed headline claims; for a non-executable resource — an article, image, video or list — steps 4 and 5 do not apply and the row says so, exactly as the skill states) — never step 1, the intake row, and never step 6, the disposition, which are the coordinator's in stages 2–3 and returns: what the resource is, the one place it would land, the one gap it would close, and up to three candidate tasks phrased as "the change and the check that would fail without it", each with an owning role from the registry `check-backlog-ownership.mjs` reads. It decides nothing.
+2. **Cross-confirmation.** The coordinator checks each candidate task against everything else it can see — the tree, the backlog, the decision records, the other intake rows, the skills already learned, the Mac lane's evidence — and marks each one CONFIRMED (the gap is real and unfilled), DUPLICATE (names the existing row/surface), or REFUTED (names the fact that refutes it).
+3. **The choice.** The coordinator decides adoption, disposition and assignment from the confirmed set, under the DR-039 bar (rule 5 of the intake rules) and rules 3–4. The row names which stage produced each sentence.
+
+**Past resources.** The rule is retroactive on demand, not by sweep: a past row is re-run through stage 1 when it is re-shared, cited as a dependency, or found to be the source of a false claim (`docs/agent/FALSE_CLAIMS.json`). A wholesale re-scan of every prior row is not ordered by this record.
+
+**Model routing.** Stage 1 is a judgment stage and runs on the Opus tier per DR-047; it never inherits the coordinator's model or context.
+
+**What changes in the tree.** Rule 6 in `docs/agent/RESOURCE_INTAKE.md`; the "Procedure" note in `.claude/skills/tool-evaluation-by-use/SKILL.md` naming the three stages; the first row produced under it (`upstash/context7`, same day).
+
+**Reversal / amendment.** The owner reverses by saying so; the rule is then struck here with the date and the rows already produced under it stand as records.
+
 ## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves; the owner's 2026-09-24 note adds a one-to-one ASSIGNED-device mode, recorded as a declared input and an assignment check that only tightens (owner-directed 2026-09-23, amended 2026-09-24)
 **Status: an owner-directed record of a hardware HYPOTHESIS refinement.** Every puck, dock, locker, custody and tap-point surface it names is a deferred design target; nothing here is shipped or claimed.
 

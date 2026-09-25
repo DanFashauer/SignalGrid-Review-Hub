@@ -63,8 +63,11 @@ export function resolveAppProtectionConnector(
 /** Build a live MAM transport bound to a specific base URL (honors config). */
 export function makeDefaultAppProtectionTransport(baseUrl: string): AppProtectionTransport {
   const root = baseUrl.replace(/\/+$/, "");
-  return async ({ appRef, token }) => {
-    const res = await fetch(`${root}/${encodeURIComponent(appRef)}`, {
+  return async ({ appRef, userRef, deviceRef, token }) => {
+    // The query names the worker and device the registration is read FOR; the connector
+    // still validates the returned record's own echo against them before normalizing.
+    const query = `user=${encodeURIComponent(userRef)}&device=${encodeURIComponent(deviceRef)}`;
+    const res = await fetch(`${root}/${encodeURIComponent(appRef)}?${query}`, {
       method: "GET",
       headers: { authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(10000),

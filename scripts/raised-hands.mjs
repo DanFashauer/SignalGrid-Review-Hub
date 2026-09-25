@@ -29,8 +29,10 @@
 //      that route. One file per hand, so two lanes raising at once never conflict.
 //   2. The system raises hands FOR agents that do not: mail unread past 24h, a sim
 //      request pending past 48h, an active routine's heartbeat past its declared
-//      tolerance, and (with --github) a PR red or idle-and-green too long. These
-//      are AUTO hands, derived on every run, never stored.
+//      tolerance, backlog rows the objective loop cannot rank because no dedicated
+//      executor exists (needsExecutor[], past 48h, one aggregated hand), and (with
+//      --github) a PR red or idle-and-green too long. These are AUTO hands, derived
+//      on every run, never stored.
 //
 // THE GATE (--check) fails when an auto hand is past its HARD limit (3× its soft
 // limit) and no open raised hand `covers` it — silence past the limit is the
@@ -64,7 +66,7 @@ const H = 3_600_000;
 export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
-export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48 };
+export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48, "executor-gap": 48 };
 export const HARD_MULTIPLE = 3;
 /** Every auto-hand kind, plus the two routes every explicit hand falls into. Each needs a responder. */
 export const AUTO_KINDS = Object.keys(SOFT_LIMIT_H);
@@ -147,7 +149,7 @@ export function auditRouting(routing, exists) {
 
 // ── the auto hands: stalls nobody raised ─────────────────────────────────────
 /** Pure: every input injected, so the self-test drives this exact path. */
-export function autoHands({ messages = [], acks = [], simPending = [], routines = [], heartbeats = {}, prs = [] }, nowMs = Date.now()) {
+export function autoHands({ messages = [], acks = [], simPending = [], routines = [], heartbeats = {}, prs = [], objective = null }, nowMs = Date.now()) {
   const out = [];
   const acked = new Set(acks.map((a) => a.messageId));
   const withdrawn = new Set(messages.flatMap((m) => (m.supersedes === undefined || m.supersedes === null ? [] : [].concat(m.supersedes).map(String))));
@@ -174,6 +176,19 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
     else if (pr.state === "red" && h > SOFT_LIMIT_H["pr-red"]) out.push({ id: `pr-red:${pr.number}`, clears: pr.lane, ageH: h, softH: SOFT_LIMIT_H["pr-red"], what: `PR #${pr.number} red, untouched ${fmtAge(h)}: ${pr.title}`, needs: "a fix pushed, or the blocker stated on the PR", where: pr.url });
     else if (pr.state === "conflict" && h > SOFT_LIMIT_H["pr-red"]) out.push({ id: `pr-red:${pr.number}`, clears: pr.lane, ageH: h, softH: SOFT_LIMIT_H["pr-red"], what: `PR #${pr.number} conflicted, untouched ${fmtAge(h)}: ${pr.title}`, needs: "merge the base in and regenerate", where: pr.url });
     else if (pr.state === "green" && h > SOFT_LIMIT_H["pr-idle"]) out.push({ id: `pr-idle:${pr.number}`, clears: "owner", ageH: h, softH: SOFT_LIMIT_H["pr-idle"], what: `PR #${pr.number} green and idle ${fmtAge(h)}: ${pr.title}`, needs: "merge or close", where: pr.url });
+  }
+  // THE EXECUTOR GAP (DR-056 → DR-054). The objective loop ranks the backlog by role, and a
+  // row whose every role resolves to "lane" (nothing dedicated) or dangles goes to
+  // needsExecutor[] — work the brain has named and nobody is built to do. Those rows sat in
+  // docs/agent/objective-state.json with no hand raised. ONE aggregated hand, aged from the
+  // loop's own derivedAt (rewritten only when the decision changes, so it holds while the rows
+  // persist), routed to the blocker-dispatcher. Only a WITNESSED state counts (readVerdict:
+  // the tick heartbeat is fresh and names this verdict) — an unwitnessed state's rows are not
+  // known to be current, and a silent tick is already the heartbeat hand above.
+  if (objective?.witnessed && Array.isArray(objective.needsExecutor) && objective.needsExecutor.length > 0) {
+    const h = age(objective.derivedAt, nowMs);
+    const rows = objective.needsExecutor.map((n) => n.rowId).join(", ");
+    if (h > SOFT_LIMIT_H["executor-gap"]) out.push({ id: "executor-gap:objective-state", clears: "cloud", ageH: h, softH: SOFT_LIMIT_H["executor-gap"], what: `${objective.needsExecutor.length} backlog row(s) the objective loop cannot rank — every named role resolves to "lane" or dangles: rows ${rows}`, needs: "a dedicated executor (agent or skill) for the role, or the row re-owned by a role that has one — the blocker-dispatcher decides which (docs/agent/hand-routing.json executor-gap)" });
   }
   return out;
 }
@@ -255,7 +270,18 @@ async function loadInputs({ github = false } = {}) {
     simPending.push({ id: m[1], ageDays: d ? Number(d[1]) : NaN });
   }
   const prs = github ? await loadPrs() : [];
-  return { messages: loadMessages(), acks: loadAcks(), simPending, routines: registry.routines ?? [], heartbeats, prs };
+  // The objective state, witnessed by the tick heartbeat (DR-056 reader rule). Absent or
+  // malformed is NOT a stall here — `objective-loop.mjs --check` (preflight + CI) owns that.
+  let objective = null;
+  try {
+    const state = JSON.parse(readFileSync(join(repo, "docs/agent/objective-state.json"), "utf8"));
+    const { readVerdict } = await import(pathToFileURL(join(repo, "scripts/objective-loop.mjs")).href);
+    const hbRaw = heartbeats["artifacts/agent-heartbeats/mac-lane-tick.json"];
+    let heartbeat = null;
+    try { heartbeat = hbRaw === undefined ? null : JSON.parse(hbRaw); } catch { heartbeat = null; }
+    objective = { needsExecutor: state.needsExecutor ?? [], derivedAt: state.derivedAt, witnessed: readVerdict(state, { heartbeat, nowIso: new Date().toISOString() }).verdict !== "unknown" };
+  } catch { objective = null; }
+  return { messages: loadMessages(), acks: loadAcks(), simPending, routines: registry.routines ?? [], heartbeats, prs, objective };
 }
 
 const GATING_CHECK = "Typecheck, build, and proof scaffold";
@@ -382,6 +408,16 @@ function selfTest() {
   checks.push(["…and exits 1 under --warn too", checkOutcome(broken, [], { warn: true }).code === 1]);
   checks.push(["a sim gate that printed nothing exits 1 under --warn (our loader, not a clock)", noSim.length === 1 && checkOutcome([], noSim, { warn: true }).code === 1]);
   checks.push(["…and a route naming a missing agent exits 1 under --warn", checkOutcome(auditRouting({ routes: { ...full.routes, mail: { responder: { agent: "ghost" }, action: "a" } } }, (k, n) => n !== "ghost"), stall, { warn: true }).code === 1]);
+
+  // the executor gap (DR-056 → DR-054): one aggregated hand, only from a witnessed state
+  const gap = (over = {}) => ({ needsExecutor: [{ rowId: "19", title: "t", roles: ["sre"] }, { rowId: "22", title: "u", roles: ["finance-fundraising"] }], derivedAt: ago(60), witnessed: true, ...over });
+  a = autoHands({ objective: gap() }, T);
+  checks.push(["needsExecutor rows standing 60h in a WITNESSED state are ONE aggregated cloud hand naming the rows", a.length === 1 && a[0].id === "executor-gap:objective-state" && a[0].clears === "cloud" && a[0].what.includes("rows 19, 22")]);
+  checks.push(["…the same rows in an UNWITNESSED state are not (the rows are not known to be current; a silent tick is the heartbeat hand)", autoHands({ objective: gap({ witnessed: false }) }, T).length === 0]);
+  checks.push(["…rows standing 10h are not a hand yet", autoHands({ objective: gap({ derivedAt: ago(10) }) }, T).length === 0]);
+  checks.push(["…and no rows is no hand", autoHands({ objective: gap({ needsExecutor: [] }) }, T).length === 0]);
+  checks.push(["…a witnessed state with NO derivedAt ages as unknown (never fresh) — a hand", autoHands({ objective: gap({ derivedAt: undefined }) }, T).length === 1]);
+  checks.push(["executor-gap is a REQUIRED route — a routing table without it is fatal", REQUIRED_ROUTES.includes("executor-gap") && auditRouting({ routes: Object.fromEntries(REQUIRED_ROUTES.filter((k) => k !== "executor-gap").map((k) => [k, { responder: { owner: true }, action: "a" }])) }, allExist).some((p) => p.includes('"executor-gap"'))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

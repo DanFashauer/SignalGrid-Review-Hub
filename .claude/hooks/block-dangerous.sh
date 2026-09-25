@@ -66,7 +66,10 @@ judge() {
   # Whole-token matches: `git stash` must not fire on `git stash-list-helper`,
   # so each pattern is bounded by non-word characters (or the ends of the line).
   # Case-SENSITIVE: `git branch -d` (safe, merged-only) is not `git branch -D`.
-  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo"; do
+  # `skills add` (the vercel-labs/skills fetch-and-install of unpinned code, DR-026) and
+  # `install-hooks` (a third-party hook installer, intake rule 3) — added 2026-09-24 from the
+  # unlazy / skills intake, so the refusals are enforcement, not VENDORED.md rows.
+  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo" "skills add" "install-hooks"; do
     if printf '%s' "$stripped" | grep -qE -- "(^|[^A-Za-z0-9_-])${p}([^A-Za-z0-9_-]|$)"; then
       printf '%s' "$p"
       return 0
@@ -101,6 +104,10 @@ if [ "${1:-}" = "--self-test" ]; then
   expect_deny "git branch -D main"
   expect_allow "git branch -d merged-topic"
   expect_allow "echo 'sudo is not available here'"
+  expect_deny "npx skills add Leonxlnx/unlazy"
+  expect_deny "node x/install-hooks.mjs"
+  expect_allow "git commit -m 'never run npx skills add here'"
+  expect_allow "echo \"install-hooks is refused here\""
   # ReDoS regression (Mac lane, 2026-09-13): a long flag run with no closing quote
   # and no forbidden pattern must judge quickly and ALLOW. The old adjacent-ambiguous
   # unwrap quantifiers hung BSD sed here; the linear form returns instantly. On a

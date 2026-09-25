@@ -1,6 +1,6 @@
 {
   "note": "DEBT CEILING for docs/**/*.md, not a high-water mark: the COUNT OF unhedged deferred-capability mentions, not the count of files carrying them — a new claim in an already-listed document must fail, and counting files hid exactly that. A RISE is fatal; a drop is recorded automatically. Never hand-edit; the gate writes it.",
-  "unhedgedDeferredMentions": 408,
+  "unhedgedDeferredMentions": 407,
   "filesCarryingThem": 109,
   "worst": [
     {
@@ -60,7 +60,7 @@
       "blocks": 8
     },
     {
-      "file": "docs/CUSTODY_BEACON.md",
+      "file": "docs/ECOSYSTEM_POSITIONING.md",
       "blocks": 7
     }
   ]

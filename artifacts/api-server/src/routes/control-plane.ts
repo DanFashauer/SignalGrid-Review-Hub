@@ -408,7 +408,7 @@ router.get("/cp/v1/grid/evidence-coverage", (req, res) => {
   //
   // Unlike the two arms above, this one is PARAMETERISED by the estate the caller
   // declares, because that is the entire point: "your Intune + Entra can honestly
-  // answer N of the 21 evidence axes (one per DecisionEvidence field; the proof pins the count); here are the ones they cannot, and what you
+  // answer N of the 24 evidence axes (one per DecisionEvidence field; the proof pins the count); here are the ones they cannot, and what you
   // would have to instrument." It needs no customer data — no export, no CSV, no
   // PII — so it needs no NDA and no security review to produce.
   //

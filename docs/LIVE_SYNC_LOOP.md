@@ -157,8 +157,19 @@ signalgrid-mcp checkout was found, ran, and passed against this repo's contract
 file), this writes `artifacts/live-evidence/mac-run.json` recording the
 committed manifest's fingerprint, the mint time (`mintedAt`, so the artifact
 ages itself without relying on git history — a shallow clone's commit date is
-the clone boundary, not the mint), plus pass booleans and public-safe summary
-counts. The owner then commits `artifacts/live-evidence/` — that commit *is* the
+the clone boundary, not the mint), plus pass booleans, public-safe summary
+counts, and — since 2026-09-12 — `proofs.passed`: every `proof:*` name the green
+preflight and breadth lanes registered at mint time, each recorded as an object
+`{ status: "passed", manifestFingerprint, sourceDigest }` (the run was green, so
+each registered proof passed; the digest hashes the proof and the workspace code it
+imports), with the proofs that skip themselves without an env var listed under
+`proofs.notRecorded` and never counted. `proofs.steps` is the same record for
+non-proof preflight steps, with a digest over the paths `STEP_SOURCES` names in
+`scripts/check-launch-proof-bindings.mjs`. The readiness figure's dimension (b)
+(`scripts/check-readiness-figure.mjs`) is the lower of two shares, the bound
+proofs/steps and the launch items, counting a record only when its fingerprint AND
+digest match the tree now; a string `"passed"` record, or a file minted before
+these fields existed, scores 0 until the Mac re-mints. The owner then commits `artifacts/live-evidence/` — that commit *is* the
 evidence that real hardware validated the current contracts. Emission is refused
 when any half is not green or when the MCP side merely skipped, so a sandbox
 without the checkout can never fabricate a "real Mac run".
@@ -296,8 +307,8 @@ Everything this loop commits is public-repo safe by construction:
 - the manifest body contains only contract hashes, enum/tool **names**, and
   documented counts — no credentials, tenants, or environment details;
 - `artifacts/live-evidence/mac-run.json` contains fingerprints, booleans,
-  counts, and one timestamp — **no hostnames, usernames, serial numbers, or
-  local paths**. The one timestamp is `mintedAt`, the mint time, which
+  counts, `proof:*` script names, and one timestamp — **no hostnames,
+  usernames, serial numbers, or local paths**. The one timestamp is `mintedAt`, the mint time, which
   identifies nothing and exists so the artifact can age itself (git history
   dates the commit, but a shallow clone reports the clone boundary instead);
 - nothing here weakens the public/private split: the private core and the

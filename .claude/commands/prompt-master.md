@@ -38,3 +38,14 @@ Rules:
 - Do not add scope I did not ask for. If you think something is missing, put it in
   Open questions — never silently in Done looks like.
 - Preserve my words for anything that is a decision I have already made.
+
+Before you emit the spec, check it (adapted from the vendored `prompt-master` skill's
+verification lock, 2026-09-20):
+- Is every "Done looks like" condition binary — checkable by a stranger without me — or
+  carried verbatim as NOT CHECKABLE AS STATED? Never a threshold I did not give.
+- Are the hardest constraints in the first third of the spec, not buried under context?
+- Does every rule use the strongest word the OWNER meant — MUST or NEVER where the dump made it
+  mandatory, an advisory "should" kept where the dump was advisory? Never harden a word I chose.
+- Is every sentence load-bearing? Delete the ones that are not.
+- Would a competent stranger start the first concrete step without asking me anything
+  that is not already under Open questions?

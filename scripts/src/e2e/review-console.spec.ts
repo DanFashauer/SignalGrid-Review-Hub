@@ -214,15 +214,17 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   const c = coverage(page);
   await expect(c.getByText("Evidence Coverage — what can your systems actually tell us?")).toBeVisible();
 
-  // The default estate is the wedge. Its figures — 12 answerable, 6 silent holes (21 axes since 2026-09-06) — are
+  // The default estate is the wedge. Its figures — 13 answerable, 7 silent holes (24 axes since the DR-043
+  // attach/enrollment/read-method axes joined on 2026-09-23; 12/6 of 21 before; 8 silent until owner
+  // call 4 made a silent read method beside a strong enrollment step up) — are
   // pinned by equality in TWO other places (`proof:evidence-coverage` and
   // `api.test.mjs`), so this assertion is not the only thing standing between a table
   // edit and a changed sales number. (It used to cite the proof alone, which at the time
   // asserted only `> 0`: dropping a plane from one axis moved the wedge to 9/7 and left
   // the proof green. The citation is the claim; an uncheckable one is the defect this
   // whole section is about.)
-  expect(await stat(page, "stat-answerable")).toBe(12);
-  expect(await stat(page, "stat-silent-holes")).toBe(6);
+  expect(await stat(page, "stat-answerable")).toBe(13);
+  expect(await stat(page, "stat-silent-holes")).toBe(7);
 
   // A silent hole must SAY it is one on screen. The count alone would let a reader
   // conclude the product is 10-for-18 and move on.
@@ -231,7 +233,7 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   ).toContainText("the active rules grant when this is unknown");
 
   const holes = c.locator('tr[data-silent-hole="true"]');
-  await expect(holes).toHaveCount(6);
+  await expect(holes).toHaveCount(7);
 
   // Every silent-hole row must NAME what would answer it. Asserted, not asserted-in-a-
   // comment: blanking that column left the count assertion above perfectly green, and a
@@ -252,7 +254,7 @@ test("evidence coverage opens on the Entra + Intune wedge and names its silent h
   // The three buckets partition the axis table; the headline is a SUBSET of the dark
   // ones. Rendered as four peer figures they summed to 24 across 18 axes.
   await expect(c.getByTestId("coverage-denominator")).toContainText(
-    "12 + 6 + 3 = 21 evidence axes",
+    "13 + 8 + 3 = 24 evidence axes",
   );
 });
 
@@ -284,7 +286,7 @@ test("declaring a plane converts its dark axes, and undeclaring every plane expo
   );
   await expect(shift).toHaveAttribute("data-coverage", "answerable");
   await expect(shift).toHaveAttribute("data-silent-hole", "false");
-  expect(await stat(page, "stat-silent-holes")).toBe(5);
+  expect(await stat(page, "stat-silent-holes")).toBe(6);
 
   // Now strip the estate to nothing. The honest opening position: every axis dark
   // AND ungraded, with the count carried by the assertion below rather than by this
@@ -293,7 +295,7 @@ test("declaring a plane converts its dark axes, and undeclaring every plane expo
     await planeToggle(page, plane).click();
   }
   expect(await stat(page, "stat-answerable")).toBe(0);
-  expect(await stat(page, "stat-silent-holes")).toBe(13);
+  expect(await stat(page, "stat-silent-holes")).toBe(15);
 
   // `workflowRiskTier` is posed by the calling app. It must stay NOT SOURCED in the
   // empty estate rather than being counted as a gap — an inflated finding count is as

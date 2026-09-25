@@ -105,6 +105,7 @@ const STEPS = [
   { name: "Proof: passkey-assurance (credential worth — attestation, custody, user verification)", cmd: ["pnpm", "run", "proof:passkey-assurance"] },
   { name: "Proof: change-draft (a resolution plan opens a change record, and the record never approves itself)", cmd: ["pnpm", "run", "proof:change-draft"] },
   { name: "Proof: change-window (an approval is a claim about a specific time, actor and record)", cmd: ["pnpm", "run", "proof:change-window"] },
+  { name: "Proof: app-protection (is a MAM protection policy applied, clean and current for the app the worker is using)", cmd: ["pnpm", "run", "proof:app-protection"] },
   { name: "Proof: emitter-discipline (five outbound families gated, fixture never claims delivery)", cmd: ["pnpm", "run", "proof:emitter-discipline"] },
   { name: "Proof: emit-gate (one shared tier gate for every in-adapter emitter route)", cmd: ["pnpm", "run", "proof:emit-gate"] },
   { name: "Proof: benchmark-selection (which CIS benchmark graded this device, from what content, covering how much)", cmd: ["pnpm", "run", "proof:benchmark-selection"] },

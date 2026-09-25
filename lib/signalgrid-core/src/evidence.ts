@@ -88,6 +88,9 @@ export function buildEvidence(
     badgeBinding: readBadge(latestByCategory),
     managementHealthState: readManagementHealth(latestByCategory),
     localAuthorityState: readLocalAuthority(latestByCategory),
+    attachState: readPresentOrNotApplicable(latestByCategory, "attach_state", EVIDENCE_VALUE_DOMAINS.attach),
+    enrollmentStrength: readPresentOrNotApplicable(latestByCategory, "enrollment_strength", EVIDENCE_VALUE_DOMAINS.enrollment),
+    credentialReadMethod: readPresentOrNotApplicable(latestByCategory, "credential_read_method", EVIDENCE_VALUE_DOMAINS.readMethod),
   };
 
   return {
@@ -529,6 +532,13 @@ const MANAGEMENT_HEALTH_STATES = ["healthy", "degraded", "broken"] as const;
 // benchmark_selection and shift_context, so nothing fires until a connector
 // actually emits the signal.
 const LOCAL_AUTHORITY_STATES = ["verified", "withheld"] as const;
+// DR-043. Only the POSITIVE wire states are readable members — the same two
+// attach.ts's normalizer accepts. A wire "unknown" is deliberately NOT a member: it
+// parses to "no answer" (severity 1), so a same-instant `removed` + `unknown` pair
+// resolves to `removed` whatever order it arrived in. Were "unknown" a member it
+// would tie `removed` at severity 2 and array order would pick restrict vs step_up.
+const ATTACH_READABLE = ["attached", "removed"] as const;
+const CREDENTIAL_STRENGTHS = ["strong", "legacy_125khz"] as const;
 
 /** The dock-family categories whose age the dock connector stamps. */
 const DOCK_CATEGORIES = [
@@ -538,6 +548,10 @@ const DOCK_CATEGORIES = [
   "tamper_state",
   "dock_state",
   "badge_binding",
+  // DR-043: the dock stamps attach_state. enrollment_strength and
+  // credential_read_method are NOT dock-family — the identity/reader planes emit
+  // them — so their age is not dock evidence and is deliberately not folded here.
+  "attach_state",
 ] as const;
 
 /** Worst-wins, because one stale channel is enough to make the reading unreliable. */
@@ -596,6 +610,18 @@ export const EVIDENCE_VALUE_DOMAINS = {
   badge: { members: BADGE_STATES, good: ["present"] },
   managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"] },
   localAuthority: { members: LOCAL_AUTHORITY_STATES, good: ["verified"] },
+  attach: { members: ATTACH_READABLE, good: ["attached"] },
+  // ENROLLMENT IS INVERTED ON PURPOSE, and it is the DR-043 fix over PR #753. The
+  // only rule that reads this field is credential-downgrade, and there STRONG
+  // enrollment is the ACCUSING half: it is what turns a legacy read into a deny. So
+  // the member that vouches (no downgrade is possible) is `legacy_125khz`, and
+  // `strong` must be the one that survives `resolveWorst`. #753 declared
+  // `good: ["strong"]`, which (a) resolved a same-instant strong+legacy pair to
+  // legacy and ALLOWED the downgrade, and (b) floored a lone strong reading with an
+  // illegible stamp to "unknown" and ALLOWED it. Both are pinned in the core proof.
+  enrollment: { members: CREDENTIAL_STRENGTHS, good: ["legacy_125khz"] },
+  // The read method is the ordinary direction: a legacy read is the accusation.
+  readMethod: { members: CREDENTIAL_STRENGTHS, good: ["strong"] },
 } as const;
 
 /**
@@ -736,6 +762,21 @@ function readTamper(latestByCategory: LatestByCategory): TamperState {
 
 function readDock(latestByCategory: LatestByCategory): DockState {
   return readEnum(latestByCategory, "dock_state", EVIDENCE_VALUE_DOMAINS.dock) ?? "unknown";
+}
+
+/**
+ * DR-043 readers. `readEnum` answers `undefined` for BOTH "no reading" and "a reading
+ * is present but out-of-domain / only a floored good value", and the two must not
+ * collapse: silence is `not_applicable` (no such credential in play — day-one-quiet),
+ * while a present-but-unreadable reading is `unknown`, which raises. `latestByCategory`
+ * is a Map, so `.has()` tells them apart.
+ */
+function readPresentOrNotApplicable<T extends string>(
+  latestByCategory: LatestByCategory,
+  category: NormalizedSignal["category"],
+  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
+): T | "unknown" | "not_applicable" {
+  return readEnum(latestByCategory, category, domain) ?? (latestByCategory.has(category) ? "unknown" : "not_applicable");
 }
 
 function readEnum<T extends string>(

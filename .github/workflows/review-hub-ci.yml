@@ -564,6 +564,11 @@ jobs:
         run: node scripts/raised-hands.mjs --check --warn
       - name: Raised hands self-test (the gate can fail)
         run: node scripts/raised-hands.mjs --self-test
+      # DR-056 §5: the shared objective state is gated where the raised-hands register is.
+      - name: Objective loop state (well-formed, derived against the declared objective, nothing stalls silently)
+        run: node scripts/objective-loop.mjs --check
+      - name: Objective loop self-test (every clause driven from the failing side)
+        run: node scripts/objective-loop.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 

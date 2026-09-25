@@ -47,6 +47,11 @@ export const SAFETY_MACHINERY = [
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
   { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
+  // DR-056: the declared objective — its criteria and the owner attestation pointer
+  // (attestedIn). The token and criterion ids live in scripts/objective-loop.mjs, so the
+  // json alone cannot reach goal_met; this is the second belt — a moved pointer is reviewed
+  // as safety machinery, never as a doc.
+  { rule: "the declared objective (DR-056 attestation pointer)", re: /^docs\/agent\/objective\.json$/ },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -120,6 +125,8 @@ function selfTest() {
   t("the lockfile is SAFETY_MACHINERY", cls(["pnpm-lock.yaml"]).tier === "owner-gated");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
   t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
+  t("the declared objective (DR-056) is SAFETY_MACHINERY", cls(["docs/agent/objective.json"]).tier === "owner-gated");
+  t("…but the loop's derived STATE is not (the Mac tick rewrites it unattended)", cls(["docs/agent/objective-state.json"]).tier !== "owner-gated");
   t("LICENSE is OWNER_RESERVED", cls(["LICENSE"]).tier === "owner-gated");
   t("NOTICE is OWNER_RESERVED", cls(["NOTICE"]).tier === "owner-gated");
   t("the launch profile is OWNER_RESERVED", cls(["docs/LAUNCH_PROFILE.md"]).tier === "owner-gated");

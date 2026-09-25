@@ -3947,7 +3947,7 @@ section of the hypothesis page, rows Puck 10–15, the 2026-09-24 intake row and
 discovery prompts; the platform facts it cites stay true whatever the owner decides, and item
 6(v)'s question closes only by the owner's answer.
 
-## DR-057 — Puck 6: a `device_returned` bound to the holder's own credential closes custody without `CUSTODY_REMOVED`; an unauthorized seat release is a torn removal; every unbound return keeps custody open — a deferred design target (cloud lane — proposal, 2026-09-25)
+## DR-058 — Puck 6: a `device_returned` bound to the holder's own credential closes custody without `CUSTODY_REMOVED`; an unauthorized seat release is a torn removal; every unbound return keeps custody open — a deferred design target (cloud lane — proposal, 2026-09-25)
 
 **Status: PROPOSAL — decision-core behaviour, not claimed as current and not Limited GA until merged.** This record changes what `puckVerdict` (`lib/signalgrid-core/src/attach.ts`) returns for a removed credential once the release reading and the return binding are known, and it adds one lifecycle event type to the audit vocabulary. The custody family stays `deferred` in `scripts/launch-profile.mjs`; nothing here claims it ships. The owner approves by merging the one PR that carries this record, or vetoes by not merging (the DR-051 pattern that DR-055 item 4 names for rows Puck 6, 8 and 9).
 

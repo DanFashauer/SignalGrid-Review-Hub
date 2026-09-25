@@ -945,7 +945,7 @@ core returns (Puck 6, Puck 8, Puck 9) carries its own proposal record in its PR 
 pattern — and the owner approves it by merging.
 
 - [x] **Puck 6 — bind the existing `device_returned` custody event to the holder's credential, distinct from `removed`.**
-      BUILT 2026-09-25 (cloud lane) as a PROPOSAL the owner approves by merging — DR-057, a
+      BUILT 2026-09-25 (cloud lane) as a PROPOSAL the owner approves by merging — DR-058, a
       deferred design target (the custody family is not shipping; nothing here claims it):
       `PuckSituation.release` + `.returned` (both default `not_applicable`, so every prior
       row grades as before), `bindReturn(reading, holderCredentialRef)` (only the holder's

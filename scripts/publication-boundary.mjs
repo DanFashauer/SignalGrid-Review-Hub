@@ -121,6 +121,7 @@ export const AREAS = [
   // Apple's whole vocabulary was deliberately not taken: a vendored file no proof reads is
   // somebody else's work republished for nothing.
   { path: "third_party/apple-device-management", class: "third_party_intake", reason: "apple/device-management, 11 declarative/status/*.yaml files vendored unmodified under MIT © 2022-2026 Apple Inc. at 09f249a06e7e3289930bf6d05f38fb562f748ebf (tag Release-v27.0). Licence basis, upstream commit, what was deliberately not taken and how to re-vendor are stated in third_party/apple-device-management/VENDORED.md." },
+  { path: "third_party/unlazy", class: "third_party_intake", reason: "Leonxlnx/unlazy, 7 files vendored unmodified under MIT © 2026 Leonxlnx at 16671491f6679ad9378f52604d3bc2415b4120c7 — the non-executing gate LINTER (scripts/gate-lint.mjs + scripts/lib/gates.mjs), its two ledger templates, references/gates.md and SECURITY.md only. The CHECK: executor, the approval store, the Stop hook and its installer were measured and refused (an in-tree command runner the PreToolUse deny hook cannot see). Licence basis, upstream commit, what was not taken and how to re-vendor are stated in third_party/unlazy/VENDORED.md." },
   // Activated copies of nine agents from the vendor tree above — same licence, same
   // grant. Held byte-identical to their vendored source and checked by
   // scripts/check-agent-roster.mjs, so an edit here shows up as drift rather than as a

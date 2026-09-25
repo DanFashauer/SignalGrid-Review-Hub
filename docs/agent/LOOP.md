@@ -52,7 +52,21 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 03:20Z) - OWNER BATCH LANDED on the owner's 2026-09-24 direction ("Just get it done").
+LAST TOUCHED: 2026-09-25 (Mac lane, latest) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
+              Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
+              manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h
+              UNREAD here - its subject was mangled ('--to') and I dismissed the heartbeat's unread=1 as my own
+              mail (memory saved: unread>0 is a blocking read). Re-minted 15:21Z: preflight/breadth/mcp PASS,
+              committed f5d4ceaa, readiness 0% -> 95% (OUTREACH OPEN). (2) The last three PRs went CONFLICTING
+              behind the batch: #1031 and #1037 (mine) refreshed by merge-commit with union resolution, gates
+              green, MERGEABLE; #1019's four conflict files named to the cloud with the recipe. (3) This clone
+              fetched only SignalGrid_Alpha (stale remote refs all week) - refspec widened. THE 5% GAP is
+              structural: Browser E2E is excluded on a non-linux-x64 Mac (verify-all stepsNotRun) - filed as a
+              HIGH Mac backlog row (run it inside the Apple-container Linux VM); the objective loop's
+              evidence-fresh criterion stays strict, so it keeps queuing `evidence` until that lands - the honest
+              signal. Nothing waits on the owner: the DR-056 attestation gates no merge and no work. NEXT: cloud
+              lands #1019 -> #1031 -> #1037 (any order); Mac builds the E2E-in-VM step; then the intake DR.
+              PREVIOUSLY: 2026-09-25 (cloud lane, 03:20Z) - OWNER BATCH LANDED on the owner's 2026-09-24 direction ("Just get it done").
               In PMO order, each rebuilt on the previous landing, local preflight + verify:breadth quoted in the PR body,
               gating run green on the exact head, merged with the full head sha: #1024 0fd151a2, #1026 8137f402,
               #905 7c11ad86, #1005 a96ef30a, #929 1d764be8 (with the review round applied first: off-enum MAM states

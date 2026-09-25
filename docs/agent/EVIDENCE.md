@@ -3588,3 +3588,13 @@ Output:   #1052 @ 4a987e82: PREFLIGHT_EXIT 0 / "Breadth lane PASSED — 58 bread
           check-preflight-ci-parity: `425 preflight gates, … workflow files (figure owned by the derived-figure guard, not restated here), 0 declared local-only, 1 declared warn-only in CI, 0 unwired`; check-owner-gated-surfaces --self-test "self-test passed (28/28)"
           #1054 @ cd220e8c (Mac tick, one file): merged 335bb282 (gating 108185885060); readiness on mainline after it: "(b) launch surface, evidence 25% proofs current 18/20 … not current: step:API integration test, step:Browser E2E"; "HEADLINE 25% → OUTREACH CLOSED" — the DR-057 re-mint is what clears it
 Verdict:  holds
+
+## 2026-09-25 — "Readiness 100% on mainline: the DR-056 loop's own evidence request ran on the Mac tick and landed as #1061"
+Command:  node scripts/check-readiness-figure.mjs   (mainline f248aece, after merging #1061 with local preflight + breadth exit 0 on 3fcf7da5)
+Output:   "(b) launch surface, evidence  100%   proofs current 20/20, launch items fully current 28/28 — 20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 7c15496cfc1b"
+          "(c) end-to-end                100%   scenarios 15/15 · live operations proven 8/8"
+          "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
+          check-sim-requests: "Simulation request loop passed — every result binds to a request it was asked for" (objective-loop-evidence-fresh-2026-09-25 → result passed, provenance 5474868a clean)
+          #1062 @ 692b69b9: raised-hands "self-test passed (53/53)"; PREFLIGHT_EXIT 0; Breadth PASSED (58) → merged e3732b51 (gating 108231053336)
+          #1050 refreshed @ 331c6558: PREFLIGHT_EXIT 0; Breadth PASSED (58); CORE_NORMALIZATION_VERSION = 25 (unchanged) — owner's merge
+Verdict:  holds

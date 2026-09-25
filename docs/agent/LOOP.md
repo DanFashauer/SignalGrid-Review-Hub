@@ -52,7 +52,18 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOOP'S OWN REQUEST IS ON MAINLINE.
+LAST TOUCHED: 2026-09-25 (cloud lane, 21:05Z) - READINESS 100% ON MAINLINE; THE LOOP CLOSED ITS OWN GAP.
+              The DR-056 loop queued the evidence request (#1052), the Mac tick ran it unattended (19:39Z tick), and
+              the cloud landed the result as #1061 (f248aece): mac-run.json re-minted 19:59Z with --vm-native-build
+              against manifest 7c15496c; `node scripts/check-readiness-figure.mjs` on mainline reads (b) 20/20,
+              launch items 28/28, HEADLINE 100% -> OUTREACH OPEN (DR-036 goal). #1060 (same request, older mint)
+              closed superseded. Also landed under DR-037: #1062 (e3732b51) - the executor gap is an auto hand
+              (needsExecutor rows standing 48h in a witnessed objective state raise ONE aggregated hand routed to
+              the blocker-dispatcher; raised-hands self-test 53/53). #1050 (Puck 6, DR-058 proposal) refreshed on
+              mainline (331c6558, local gates green) - the OWNER's merge. Both tick PRs went red on the coverage
+              page because launchd ran the pre-#1057 lane-tick.sh from an unpulled checkout; the Mac is asked to
+              pull, nothing else is owed. Record PRs #1059 (dcc47044) and this one; mail #1058 #1056 and the 21:02Z batch.
+PREVIOUSLY:   2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOOP'S OWN REQUEST IS ON MAINLINE.
               Landed under DR-037 as SAFETY_MACHINERY: #1057 (55490bee) - objective-loop --check and --self-test are
               preflight + CI gates (rows after the raised-hands self-test), docs/agent/objective.json is owner-gated
               (objective-state.json deliberately not: the tick rewrites it), and lane-tick.sh now stages the new
@@ -1502,7 +1513,12 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (00000) 2026-09-25 19:30Z: the Mac re-mints on mainline (the tick's queued evidence op, or by hand)
+NEXT ACTION: cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
+              calls - merge #1050 (DR-058 proposal) or leave it, and the #1037 CodeQL call. The cloud keeps both green
+              and conflict-free and does not press merge. Next bounded build from objective-state tasks[0..2] under the
+              heartbeat-witness rule (row 5 EnterpriseShell badge/session lane -> real backend is #1, skill:signalgrid-native)
+              - a proposal PR if it touches the decision core, DR-037 otherwise. Merge the 21:02Z mail PR when green.
+              PREVIOUSLY: cloud: (00000) 2026-09-25 19:30Z: the Mac re-mints on mainline (the tick's queued evidence op, or by hand)
               and (b) reads 20/20 again - nothing in the cloud clears that. Meanwhile keep building one bounded item:
               next is the executor-gap auto hand (one aggregated stall in raised-hands.mjs for objective-state's
               needsExecutor rows, routed to blocker-dispatcher via hand-routing.json) - a proposal-free SAFETY_MACHINERY

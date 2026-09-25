@@ -465,13 +465,18 @@ lone repairs into unreachable code).
       2026-09-23 material separating Intune MDM, MAM and UEM (recorded as DR-055, #1026) is the
       requirement this row answers: MAM is its own read-only dimension, apart from
       device-management-health's MDM channel.
-- [ ] **MAM live path: bind the registration to (user, device, app) before enabling it
-      (Codex P1 follow-up to the row above).** `AppProtectionRequest` is still only
-      `{appRef, token}`; thread a worker + device identifier through the request and
-      validate both against the returned registration, so a clean registration belonging
-      to another user or device cannot be selected and granted. BLOCKS enabling the live
-      app-protection transport (gated off today; the fixture path evaluates one supplied
-      record, so nothing is exploitable now). Lane: endpoint-uem-domain.
+- [x] **MAM live path: bind the registration to (user, device, app) before enabling it
+      (Codex P1 follow-up to the row above).** DONE 2026-09-25 (cloud lane).
+      `AppProtectionRequest` now carries `userRef` + `deviceRef` beside `appRef`
+      (`AppProtectionBinding`), `fetchNormalized(appRef, binding, opts)` refuses an unsafe or
+      missing binding BEFORE dispatch (`invalid_binding`, transport never called) and refuses
+      the RETURNED registration BEFORE normalization unless its own `user_ref` and
+      `device_ref` echo the requested worker and device (`binding_mismatch` — absent,
+      inherited, throwing, unreadable or differing echoes all refuse; the record never
+      reaches the evaluator). The direct normalize path records an unreadable echo as
+      malformed. `proof:app-protection` pins each refusal by name (116 checks;
+      `mutation-guard --proof=proof:app-protection` survivors=0). The live transport stays
+      gated off; this row was what blocked enabling it.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —
@@ -609,7 +614,12 @@ unknown or unreachable downstream REFUSES and says so; it never pretends), each 
 deterministic (no wall clock in a decision path; every reference instant is
 caller-supplied), and each names the clause of his sentence it serves.
 
-- [ ] **Cascade join 1 — the ticket actually opens: a fail-closed ITSM dispatch seam.**
+- [x] **Cascade join 1 — the ticket actually opens: a fail-closed ITSM dispatch seam.**
+      CLOSED 2026-09-25 (cloud lane): PR #819 merged on 2026-09-23 (a4422472), so
+      `lib/incident-playbook/src/dispatch.ts` — `incidentToTicketRequest`, `dispatchIncident`,
+      `ITSM_DISPATCH_REFUSALS`, `proof:itsm-dispatch` — is on mainline and the row's own
+      closing condition below is met. `origin/claude/build-itsm-dispatch-seam` (the second,
+      never-opened seam) is superseded and stays on the prune list.
       Serves *"it will kick off tickets"*. Both halves exist and nothing joins them:
       `lib/incident-playbook` turns a composed posture or a detection into a properly
       prioritized `Incident` (priority = impact × urgency on the ServiceNow matrix, an

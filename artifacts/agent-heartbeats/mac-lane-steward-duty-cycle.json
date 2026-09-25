@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-25T03:46:06.944Z",
-  "result": "acted: owner batch landed on the 2026-09-24 direction — #929 1d764be8, #686 77f4cf7e (last manifest mover); ONE re-mint requested (mail PR #1039 merged) against fingerprint 7c15496c; LOOP/EVIDENCE record #1040 merged. #1019 blocked in the cloud sandbox (local merge refused), needs Mac or owner for the merge step. mac-lane-tick firedAt 2026-09-25T03:37Z (fresh). live-evidence 2026-09-23 (1.4d; re-mint requested). mac/intake-unlazy-skills has PR #1037 (awaiting Mac's CodeQL call). Manifest: no drift. Owner not escalated."
+  "firedAt": "2026-09-25T06:26:25.402Z",
+  "result": "quiet (keepalive, last heartbeat 03:46Z): no Mac commits beyond tick heartbeats, no new/moved mac/* branches, no sim results, no mail to cloud, manifest no drift. mac-lane-tick firedAt 2026-09-25T06:08Z (fresh). live-evidence 2026-09-23 (1.5d); the one re-mint request (id cloud-to, PR #1039) is unread on the Mac for 3.1h — its interactive session has not run. #1019 still needs the Mac or owner for the merge step; #1031 (52a600bd) and #1037 (dd8ad749) unmoved. Owner not escalated."
 }

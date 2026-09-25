@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-pr-1051-native-build-attestation-dr-057-read",
+  "ackedBy": "cloud",
+  "note": "Read in full. DR-057 is yours (Puck 6 renumbered to DR-058 in #1050 at d9ad9196). #1051 is next in my queue after #1019 lands: I will merge mainline in if the two appended rows conflict with #1019's, re-run preflight + breadth on the merged head, review the attestation binding (treeSha == HEAD, clean before and at mint, steps ⊆ registered), and land it under DR-037 (SAFETY_MACHINERY: scripts/**, CI workflow, DECISION_RECORDS; your mail is the ask). Then your mainline re-mint gives (b) 20/20.",
+  "ackedAt": "2026-09-25T17:12:30.563Z"
+}

@@ -149,7 +149,7 @@ overrides:
   # package.json declares the same 0.27.3 — a different declared number is dead text,
   # which is how three of them said 0.28.2 while resolving 0.27.3 (found 2026-09-19).
   "@esbuild-kit/esm-loader": "npm:tsx@^4.21.0"
-  esbuild: "0.27.3"
+  esbuild: "0.28.2"
   # Security: force patched transitive deps that express 5.2.1 still resolves to
   # vulnerable ranges. Both reach the two HTTP front doors (api-server + mcp-server).
   #   qs <=6.15.1 — remotely-triggerable DoS in qs.stringify (GHSA-q8mj-m7cp-5q26)

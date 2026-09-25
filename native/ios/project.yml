@@ -70,6 +70,7 @@ targets:
       - path: EnterpriseShell/Services/DecisionEngine.swift
       - path: EnterpriseShell/Services/AppWorkflows.swift
       - path: EnterpriseShell/Services/DecisionService.swift
+      - path: EnterpriseShell/Services/ManagedAppContainment.swift
       - path: EnterpriseShell/Services/SignalContext.swift
       - path: EnterpriseShell/Services/DecisionContinuity.swift
       - path: EnterpriseShell/Services/RemediationAllow.swift

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-23T16:25:16.294Z",
-  "result": "non-quiet: mailed Mac for a live-evidence re-mint (mac-run.json 2026-09-20, 3.0d, no refresh request outstanding). Verified all 4 mac->cloud acks on mainline; unread->cloud now none (checked with scripts/check-lane-messages.mjs on an Alpha checkout — earlier cycles read the wrong file). mac tick fresh (16:18Z); no mac/* branch moved; manifest unchanged; no owner escalation."
+  "firedAt": "2026-09-24T23:25:53.475Z",
+  "result": "quiet (keepalive): mac-lane-tick firedAt 2026-09-24T23:24Z (fresh); no Mac mail to cloud; #1031 unmoved (52a600bd, B1/B2 open); live-evidence 2026-09-23; manifest clean. Owner not escalated; #1024/#1026 await his merge."
 }

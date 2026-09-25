@@ -44,6 +44,60 @@ lone repairs into unreachable code).
       constants overlap PR #856, which is unmerged; #856 also rewrote both headers to say
       no proof reads Apple's YAML, and the row below makes that sentence false. How you'd
       check: `pnpm run proof:ddm-connector` → `summary=pass (131/131)`.
+      **CORRECTED 2026-09-24 — the return-to-service half above misread Apple.** Apple's
+      `mdm.is-return-to-service` says "If true, the device is using the return to service
+      with app preservation mode" — a standing shared-device configuration, not a device
+      being wiped and handed on — and it is reported on iOS and visionOS 27.0 only (macOS,
+      tvOS, watchOS: n/a). Reading `true` as custody in transit, and absence as unknown on
+      the Mac fixtures, stepped every Mac up forever for an item it can never send. Now
+      `returnToServiceStateOf` reads the platform (`device.operating-system.family`, vendored
+      beside the other pins): n/a platform → `not_applicable`, no raise; `false` →
+      `in_service`; `true` → `rts_app_preservation`, which does not raise on the RTS axis
+      but does on update currency, because Apple's Return to Service page says "If Return to
+      Service with app preservation is active, the device disables software updates—both
+      automatic and user-initiated" and updates apply only at a reset whose cadence the
+      connector cannot see — so declarative enforcement there reads `unknown`
+      ("reset-bound") and raises. Absent where it applies, a pre-27 iOS/visionOS, an OS major
+      that is not a whole number at or above 27, or an unknown platform → `unknown`, which
+      raises (pre-27 `not_applicable` is Apple-correct but not an approved loosening — the
+      open row below). The applicability table is frozen. Whether an erase is in flight is
+      not observable from this item — that is MDM command status or the `device_returned`
+      binding below. The Mac fixtures carry `platform: "macOS"` and no key; three iOS 27
+      fixtures carry the three arms; the proof also holds the connector's applicability
+      table against Apple's vendored `supportedOS`. How you'd check: `pnpm run
+      proof:ddm-connector` → `summary=pass (169/169)`.
+
+- [ ] **A real iPhone/iPad DDM report cannot read `standard` yet (DDM connector, MEDIUM; owner: endpoint-uem-domain).**
+      Three things are owed, each fail-closed today (it tightens, never loosens), each the
+      same "stepped up forever for something it can never send" shape the row above fixed
+      for the Mac. (1) `binaryControl` and `privacy` are macOS facts (Endpoint Security,
+      PPPC); the iOS fixtures carry `enforced`/`declared` as stand-ins and no ingest path
+      produces an iOS value, so a real iOS report reads unknown on both and raises —
+      define the iOS meaning or scope the two axes by platform. (2) Nobody has verified what
+      an iPad sends for `device.operating-system.family`: Apple publishes no rangelist, the
+      pinned example shows `"iOS"`, and a device sending `"iPadOS"` reads platform unknown
+      and raises. Verify against a real enrolled iPad (or KMFDDM on NanoMDM,
+      `docs/ZERO_COST_LIVE_TEST_MATRIX.md`) before mapping anything. (3) Owner sign-off on
+      reading an absent `mdm.is-return-to-service` on iOS/visionOS 15–26 as `not_applicable`
+      (Apple introduced the item in 27.0); if granted, bound it to a whole OS major at or
+      above Apple's `device.operating-system.version` floor, never just `< 27`. Source: the
+      2026-09-24 review of `claude/fix-ddm-return-to-service`.
+
+- [x] **The ddm-connector likely misreads `mdm.is-return-to-service` — model it as standing configuration, not an erase in flight, once a real device confirms the reading (DDM connector, HIGH).**
+      *(Opened 2026-09-24 by the owner's puck-flow intake, DR-055; the review read Apple's
+      status YAML — *"If `true`, the device is using the return to service with app
+      preservation mode"* — as a standing configuration, not custody in transit.)*
+      **DONE 2026-09-24 in PR #1024 (mainline 0fd151a2), which landed before this row:** the
+      reader is now `returnToServiceStateOf` in `lib/ddm-connector/src/index.ts`. Apple's item
+      is read only where Apple publishes it (iOS/visionOS 27+); `true` is
+      `rts_app_preservation`, a configured mode that does not raise on its own; an absent
+      value there stays `unknown` and raises; macOS/tvOS/watchOS read `not_applicable`; and a
+      device reporting `true` with declarative update enforcement reads update currency
+      `unknown`, because updates in that mode apply only at reset. `pnpm run
+      proof:ddm-connector` went 131/131 → `summary=pass (169/169)`, with every new arm
+      falsified in #1024's body. The real-device precondition this row asked for was NOT run:
+      #1024 is fail-closed on every unknown instead, and the open row above keeps what a
+      real device still has to settle (the `iPadOS` family value and the pre-27 sign-off).
 
 - [x] **Hold the DDM/macOS-posture schema pins against Apple's YAML (gate, MEDIUM).**
       *(Opened by the same intake, #858.)* **DONE 2026-09-18** — the ten status items the
@@ -843,6 +897,265 @@ item below is a design target until its proof is green and named.
       outreach figure independently of it (DR-036); neither number is typed. Nothing
       here builds hardware; the tally reads *0 of 15, 0 commitments* today. Design
       target for the hardware; deferred throughout. Cloud lane. Lane: icp-customer-research.
+
+**Added 2026-09-24 under DR-055** — the owner's 2026-09-23 flow (C1–C7), recorded as a
+refinement of this hypothesis, not a product (the component map and the new policy rows are in
+the hypothesis page's *Owner refinement (2026-09-23, DR-055)* section). Four more hardware-free
+rows, on the same terms as Puck 1–5: fixture-first, fail-closed, deterministic, a deferred
+family, one PR each with its proof, and no hardware. A row that changes a verdict the decision
+core returns (Puck 6, Puck 8, Puck 9) carries its own proposal record in its PR — the DR-051
+pattern — and the owner approves it by merging.
+
+- [ ] **Puck 6 — bind the existing `device_returned` custody event to the holder's credential, distinct from `removed`.**
+      The change: the event contract already names `device_returned`
+      (`lib/event-contract/src/types.ts:16`, read by `lib/event-contract/src/detect.ts`), so no
+      new custody event is added. A return at a dock, carried by the credential that checked
+      the device out, closes custody and ends the session without producing
+      `CUSTODY_REMOVED`; an authorized release with no return still restricts
+      (`CUSTODY_REMOVED`); a return with no device sensed in the bay is a custody exception; a
+      seat release with no authorized release, or a tamper or seat-break reading, is forced
+      (`deny`, `CUSTODY_TORN`); a torn removal stays `deny`. **The pins that move, named:**
+      `ATTACH_STATES` (`lib/signalgrid-core/src/attach.ts:37`–`38`, *"The three states, and
+      only three"*) stays at three — a returned credential is no longer seated, so the return
+      reaches `puckVerdict` as its own input bound from `device_returned`, not as a fourth
+      attach state; the puck-lifecycle audit census (Puck 3: `AUDIT_EVENT_TYPES`, 14 members,
+      and the audit proof that refuses a fifteenth) moves to 15 with a `dock.returned` event
+      beside `dock.removed`, because recording a return as `dock.removed` is the conflation
+      this row removes — the census assertion moves in the same PR, never loosened. Plus a
+      resolution note for PR #1005: its live `CUSTODY_REMOVED`
+      rule has no resolution descriptor and escalates, so once it merges every planned
+      end-of-shift return would read as an incident until this row lands — the note says so on
+      the rule. **Fail-closed:** only a return the ledger can bind to the holder's own
+      credential closes anything; an unreadable return is `unknown`. **Deterministic:** the
+      instants are arguments. The check that fails without it: new rows in
+      `proof:decision-cascade` — a holder's return must not yield `CUSTODY_REMOVED`, and a
+      seat release with no authorized release must yield `deny` — both fail on today's
+      `puckVerdict` (`lib/signalgrid-core/src/attach.ts`), which knows only attached, removed
+      and unknown and has no return or authorized-release input; plus a row that an authorized
+      release with no return stays `restrict` (`CUSTODY_REMOVED`), which passes today and
+      keeps the new rule from turning every walk-away into `deny`. Decision-core behaviour, so
+      its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 7 — the return leg: a readiness scenario where every clearing step must be observed.**
+      The change: after `device_returned` (Puck 6), a device stays NOT READY until each step is
+      positively seen in the system that owns it — sign-out observed (Entra shared device mode
+      or the comms platform), the Epic user-to-device association removed (assumed Epic
+      routing: that removing it stops alerts reaching the device is the review's inference, not
+      sourced), the device re-enrolled or checked in over DDM after Return to Service (DDM
+      status, after the ddm-connector row above) — not the erase acknowledgement alone, because
+      Apple's `device.erase.yaml` says the device's response *"doesn't retry if it isn't
+      successful the first time"* — device prep complete
+      (`lib/integrations/src/integrations/app-update/device-prep.ts`), `sso-session` showing no
+      live session, and cleaning attested by a named person, read as evidence from the system
+      that owns the attestation (the locker or mobile-access-management vendor, the
+      environmental-services or cleaning-tracking app, or the host app) and never captured on a
+      SignalGrid surface (golden rule 3). Anything unknown means not ready. **Scope, measured:**
+      three steps have a dimension today — device prep, `sso-session` and DDM status; three do
+      not — shared-device-mode or comms-platform sign-out, the Epic user-to-device association,
+      and cleaning attestation (`ls lib/integrations/src/integrations` has no such family, and
+      Epic appears in `lib` only as a break-glass audit plane). Those three enter as new
+      fixture inputs in this row's PR, deferred and classified in the launch profile
+      (`scripts/launch-profile.mjs`) in the same PR; no other family is added. It links to the
+      Return to Service row (*Bind `device_returned` to Apple's Return to Service*) rather than
+      duplicating it. **Fail-closed:** readiness is positive evidence of each step, never the
+      absence of a complaint; a cleaning step is an attestation, never inferred and never a
+      claim. **Deterministic:** fixture data only. The check that fails without it: assertions
+      added to a registered proof (as Puck 4's matrix was added to `proof:decision-cascade`,
+      because the simulator's engine is a byte-faithful twin and must not grow branches —
+      golden rule 1) where each step left unobserved in turn keeps the device out of the pool,
+      and only the all-observed case is ready. Lane: qa-engineer.
+
+- [ ] **Puck 8 — a user-verified axis, attach-proof strength and a clinical-continuity row in `puckVerdict`.**
+      The change: (a) `identityConfirmed` (`lib/signalgrid-core/src/attach.ts:170`) is a plain
+      yes/no today, so the `allow` row can be reached by a touch-only assertion; add whether the
+      user was VERIFIED (PIN or biometric) and never let a presence-only assertion reach
+      `allow` for a broad-scope session. (b) Record how the attach was proven — a cryptographic
+      challenge the puck's key answers, or only a microswitch, Hall or contact sensor — and treat
+      sensor-only as `unknown` when deciding whether to keep a session open. (c) "Device and
+      puck missing together" → `deny` plus an approval-gated revoke request to the IdP and the
+      PACS. (d) An active alarm or call assignment plus removal or an unknown state →
+      escalate through break-glass (`lib/integrations/src/integrations/break-glass/`) and
+      local-authority, never a silent suspend. **Fail-closed:** every new axis can only raise
+      the bar or route to a human. The check that fails without it: `proof:decision-cascade`
+      matrix rows — attached + compliant + touch-only identity must not be `allow`; sensor-only
+      attach must be `step_up` for a keep-open decision; removal with an alarm assignment must
+      not emit an unattended suspend — each failing on today's tree. Decision-core behaviour,
+      so its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 9 — puck-to-checkout binding, and a *dock expected* site flag.**
+      The change: (a) bind the puck to the device for the length of a checkout; a return with a
+      different puck, or with a puck reported lost, is a custody exception and does not close
+      the checkout, and checking out a device that still carries another worker's puck is
+      `deny`. The custody ledger
+      (`lib/integrations/src/integrations/rtls-custody/custody-ledger.ts`) tracks the requester
+      today, not the credential. (b) `lib/signalgrid-core/src/evidence.ts` (lines 150–156)
+      deliberately treats missing dock evidence as neutral because "no dock at all is a
+      deployment shape"; add a site flag that declares docks expected, so that at such a site a
+      missing dock feed tightens, per device. **Fail-closed:** both halves only tighten.
+      The check that fails without it: `proof:rtls-custody` rows for a mismatched-puck return
+      that must stay open, and a proof row where a dock-expected site with a missing feed is not
+      ready while a no-dock site is unchanged. Decision-core behaviour — (a) adds a `deny` and
+      (b) edits `lib/signalgrid-core/src/evidence.ts` — so its PR carries a proposal record.
+      Lane: physical-ot-domain.
+
+**Added 2026-09-24 under DR-055 item 6** — the owner's 2026-09-24 note (the shared-device puck is
+one example; a one-to-one assigned mode for a knowledge worker or an executive sits beside it),
+recorded as an in-place amendment to DR-055 (the mode table, the claim map and the
+assignment-coherence rows are in the hypothesis page's *Assigned-device mode (owner note
+2026-09-24, DR-055 amendment)* section). Six more hardware-free rows, on the same terms as
+Puck 1–9. Puck 10 and Puck 13 change verdicts the decision core returns and carry their own
+proposal records in their PRs — the DR-051 pattern — and the owner approves by merging. Every
+reason code named below is a proposal: a `git grep -w` of `lib`, `scripts` and `artifacts` for
+each one returned nothing on 2026-09-24, and the nearest existing names —
+`ASSIGNMENT_BROKEN` and `ASSIGNMENT_LOCATION_MISMATCH` (clinical,
+`lib/facility-trust-graph/src/clinical.ts:365`–`366`) — mean something else, so the PR that adds
+them checks for a clash again. Until the owner answers which device *"not assigned"* means (DR-055
+item 6(v)), every row reads the workstation.
+
+- [ ] **Puck 10 — the device-assignment MODE as a declared tenant input: `shared | assigned | unknown`, per device group.**
+      The change: the tenant declares each device group's mode, approval-gated, reusing the
+      read-only policy-binding dimension for the declaration
+      (`lib/integrations/src/integrations/policy-binding/types.ts:1`–`48`, with its
+      `PolicyEnforcement` axis at `:87`). Assigned → shared is graded as a *binding too WIDE*
+      change: approval-gated, audited, then a `step_up` cooldown (`ASSIGNMENT_MODE_CHANGED`);
+      shared → assigned tightens and needs no gate. An undeclared or `unknown` mode, on a workflow
+      the tenant has opted into assignment policy, is `step_up` (`ASSIGNMENT_MODE_UNKNOWN`) and
+      never resolves to `shared`; the opt-in is itself declared configuration, never inferred from
+      missing MDM data (the same rule `CLAUDE.md` applies to `managedBool` defaults). A device
+      declared shared that carries an admin-set primary user is a drift finding. The mode is not
+      a hosting model (`docs/DEPLOYMENT_MODELS.md` is untouched) and not a fifth `OwnerType`
+      (`lib/signalgrid-core/src/types.ts:94`). **Fail-closed:** unknown raises; only a declared,
+      approved change loosens. **Deterministic:** the declaration and its approval are fixture
+      inputs. The check that fails without it: a proof fixture where an undeclared mode yields
+      `step_up` with `ASSIGNMENT_MODE_UNKNOWN` and an unapproved flip to shared yields
+      `ASSIGNMENT_MODE_CHANGED` — it cannot pass today, because no mode exists. Deferred family,
+      classified in `scripts/launch-profile.mjs` in the same PR. Decision-core behaviour, so its
+      PR carries a proposal record. Lane: endpoint-uem-domain.
+
+- [ ] **Puck 11 — an assignment-coherence signal domain: a new read-only integration family (working name `device-assignment`) with fixtures and its own proof.**
+      The change: compare the CREDENTIAL SUBJECT — the user the credential is registered to, never
+      "the holder" — with the device's CONFIRMED assigned user, credential-agnostic (a phone
+      passkey, a Wallet badge, Windows Hello for Business or a FIDO2 key all read the same), and
+      only ever tighten. Reason codes: `ASSIGNMENT_MISMATCH` (`deny`, against a confirmed
+      assignment only), `ASSIGNMENT_UNCONFIRMED`, `ASSIGNMENT_MISSING`, `ASSIGNMENT_UNKNOWN`,
+      `ASSIGNMENT_STALE`, `ASSIGNMENT_SOURCES_DISAGREE`, `ASSIGNMENT_RECENTLY_CHANGED`,
+      `ASSIGNMENT_SELF_GRANTED` (`deny` plus an alert), `ASSIGNMENT_IN_TRANSITION`,
+      `LOANER_TEMPORARY_ASSIGNMENT` and `ASSIGNED_DEVICE_LOST`; the finding
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY` (Puck 15); and a configuration-time alert,
+      `POLICY_UNOBSERVABLE`, that refuses a "phone must be present" rule for a puck ceremony so it
+      never becomes active (after platform-sso's `POLICY_INCOMPATIBLE_WITH_METHOD`,
+      `lib/integrations/src/integrations/platform-sso/evaluate.ts:21`–`24`). It is modelled on
+      pacs-access's `identityMatched` → `IDENTITY_MISMATCH`
+      (`lib/integrations/src/integrations/pacs-access/evaluate.ts:153`–`156`) and on sso-session's
+      subject binding, whose `SESSION_SUBJECT_MISMATCH` escalates an active session and restricts
+      an expired one and never denies
+      (`lib/integrations/src/integrations/sso-session/evaluate.ts:64`–`72`). Break-glass accounts
+      are pinned in SignalGrid tenant config (approval-gated), not read from a Conditional Access
+      exclusion group; the administrator break-glass this follows is platform-sso's
+      (`lib/integrations/src/integrations/platform-sso/evaluate.ts:168`–`173`), not the clinician
+      break-glass family (`lib/integrations/src/integrations/break-glass/types.ts:7`–`11`); every
+      break-glass sign-in on an assigned workstation alerts. Contradicting presence (a door read at
+      another site, a concurrent session, `impossible_travel` at
+      `lib/integrations/src/integrations/identity-risk/types.ts:39`) is how a shared credential
+      shows. The full row list is the hypothesis page's *Assignment-coherence policy rows*.
+      **Fail-closed:** no unknown, stale, disagreeing, auto-set or absent input reaches `allow`.
+      **Deterministic:** instants are arguments; no `Date.now()`. The check that fails without it:
+      a registered `proof:device-assignment` (so `validate-sim-macos.sh` picks it up) asserting
+      that no unknown, stale, disagreeing, auto-set or absent fixture returns `allow`, that a
+      mismatch against a first-sign-in assignment returns `step_up` and not `deny`, and that a
+      device missing from the read returns `ASSIGNMENT_UNKNOWN` and not `not_applicable`;
+      `pnpm run review:invariants` stays green. `pnpm run check:absence "primary user"` is
+      CORROBORATED absent today (2026-09-24). Deferred family, classified in
+      `scripts/launch-profile.mjs` in the same PR. Lane: iam-domain.
+
+- [ ] **Puck 12 — an MDM assigned-user field per device, read-only: who the MDM says the device belongs to, and how that came to be.**
+      The change: per device, `{deviceId, assignedUser | null, source, provenance, readAt,
+      changedAt, changedBy, ticketRef}`, where `source` is `intune_primary_user`,
+      `entra_registered_owner`, `fleet_end_user_idp` or `jamf_user_and_location` and `provenance`
+      is `admin_set`, `enrolling_user`, `first_sign_in`, `dem`, `api_override` or `unknown`.
+      Intune: the primary user and its audit event; Intune sets it by first sign-in for hybrid join
+      with the automatic-enrollment GPO and for co-management, to the enrolling device enrollment
+      manager for DEM, and to none for bulk token, Autopilot self-deploying, Automated Device
+      Enrollment without User Affinity and Android Dedicated
+      (<https://learn.microsoft.com/intune/device-management/inventory-and-status/find-primary-user>).
+      Fleet: each host's `end_users[].idp_username` with `idp_info_updated_at`; more than one
+      entry is ambiguous (`ASSIGNMENT_UNKNOWN`), and a write through Fleet's device-mapping
+      endpoint is `api_override`
+      (<https://github.com/fleetdm/fleet/blob/main/docs/REST%20API/rest-api.md>). Jamf: the
+      *User and Location* inventory category — its field list is unsourced, so sourcing it is this
+      row's first step for Jamf. Freshness is the time since the last successful read, from an
+      injected clock. It must NOT route through `toEstateSubjects`
+      (`lib/integrations/src/integrations/graph/estate.ts:8`–`10`, `:17`–`29`), which skips
+      ownerless devices and only counts them in `skippedOwnerless`, and must not inherit that
+      mapping's hard-coded `assignedRole: "unassigned"` (`:42`) or `ownerType: "unknown"` (`:49`).
+      The adapter is read-only and refused at injection if it exposes a write method (the
+      `actuatorMethodsOn` check, `lib/integrations/src/integrations/deviceResolver.ts:25`).
+      **Fail-closed:** null, missing and ambiguous never read as a match. **Deterministic:**
+      fixture data only. The check that fails without it: fixtures where a declared-assigned
+      device the Graph read reports with no owner yields `ASSIGNMENT_MISSING` (today it is only
+      counted in `skippedOwnerless`), a Fleet host with two `end_users` yields
+      `ASSIGNMENT_UNKNOWN`, and a stale `readAt` yields `ASSIGNMENT_STALE` with the clock injected.
+      Lane: endpoint-uem-domain.
+
+- [ ] **Puck 13 — a declared per-device or per-workflow *credential required* flag, so silence at a device that needs a credential tightens instead of reading `not_applicable`.**
+      The change: PR #1005 (open, branch `claude/build-dr043-live-attach-rules`, read 2026-09-24)
+      reads an attach category that never appears in a decision's evidence as `not_applicable`
+      and a present-but-unreadable one as `unknown` (`readPresentOrNotApplicable` in its
+      `lib/signalgrid-core/src/evidence.ts`), and its seed row *"no attach reading at all → still
+      allow (not_applicable: a tenant with no pucks is not stepped up)"* keeps silence at `allow`.
+      That is right where a credential is optional, and this row does not change what
+      `not_applicable` means. But nothing lets a tenant say a workstation or a workflow REQUIRES a
+      credential, so at such a workstation the same silence also allows; and a device declared
+      assigned whose assignment is missing reads like `badgeBinding: "unknown"`, which allows
+      today (`lib/signalgrid-core/src/seed.ts:480`, *"badge absent/unknown → no fabricated block
+      (allow)"*). Add a declared flag: where it is set, a missing assertion or attach reading is
+      `step_up` (`REQUIRED_CREDENTIAL_UNOBSERVED`) and a missing assignment on a declared-assigned
+      device is `step_up`; where it is not set, PR #1005's behaviour stands. **Fail-closed:** the
+      flag only tightens. **Deterministic:** the flag is a fixture input. The check that fails
+      without it: a seed row in the core policy matrix — *declared required, no feed → `step_up`*
+      — which fails today because the same input resolves to `allow` (and to `not_applicable`
+      once PR #1005 merges); `pnpm --filter @workspace/api-server run test:api` all green if `/v1`
+      evidence changes. Core surface: `docs/LANE_COORDINATION.md` applies before it is touched.
+      Decision-core behaviour, so its PR carries a proposal record. Lane: principal-engineer.
+
+- [ ] **Puck 14 — assigned-mode simulator scenarios, as rows in an existing registered proof.**
+      The change: scenarios for assigned mode, added as rows to an existing proof the way Puck 4's
+      matrix joined `proof:decision-cascade` — the simulator's engine is a byte-faithful twin and
+      must not grow branches (golden rule 1): a match → `allow`; a confirmed mismatch → `deny`; a
+      mismatch against a first-sign-in or DEM assignment → `step_up`; a loaner corroborated by the
+      MDM → `step_up`, an ITSM ticket alone → the mismatch stands; a delegate with the executive's
+      puck plus a contradicting door read or `impossible_travel` → `step_up` or escalate; a stale
+      read; sources that disagree; a reassignment inside the cooldown; a self-grant; the phone
+      lost, lost not observable, a swap with a recorded reason, a retire with none; break-glass on
+      an assigned workstation → alert; an assigned → shared flip; SignalGrid unreachable → the
+      local rule stands. **Fail-closed:** every row asserts its outcome AND its reason code.
+      **Deterministic:** fixture data and injected instants only. The check that fails without
+      it: each row's assertion; `pnpm run proof:signalgrid-simulator` fails until Puck 11's domain
+      exists. Lane: qa-engineer.
+
+- [ ] **Puck 15 — a local-enforcement drift auditor: does the OS actually restrict who can sign in to a declared-assigned workstation?**
+      The change: compare a declared-assigned workstation's Windows `AllowLocalLogOn` and
+      `DenyLocalLogOn` — device-scoped lists of users or groups
+      (<https://learn.microsoft.com/windows/client-management/mdm/policy-csp-userrights#allowlocallogon>)
+      — and, on a Mac, its local accounts and Platform SSO's `EnableCreateUserAtLogin` (false by
+      default,
+      <https://developer.apple.com/documentation/devicemanagement/extensiblesinglesignon/platformsso-data.dictionary>),
+      with the confirmed assigned user, reusing policy-binding's `PolicyEnforcement` axis
+      (`lib/integrations/src/integrations/policy-binding/types.ts:87`). `EnableCreateUserAtLogin`
+      false stops new accounts being created at the login window; it does not remove an existing
+      local account, which is why the Mac half reads the accounts too. A list that is unset or
+      holds a broad group (Users, Authenticated Users, Guest) → the finding
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, `step_up` for high-risk workflows from that workstation
+      only — not every decision, which would lock most tenants out on day one — plus an
+      approval-gated MDM change REQUEST; a readable list that diverges from the confirmed assigned
+      user → a drift finding, the same high-risk-only `step_up` (a confirmed wrong named user never
+      grades weaker than an unset list) and the same request. SignalGrid never writes the list. First task:
+      source whether the EFFECTIVE user-rights list per device can be read back (unsourced today);
+      unreadable → `unknown` → the finding, and `step_up` for high-risk workflows only.
+      **Fail-closed:** unknown raises. **Deterministic:** fixture data only. The check that fails
+      without it: a fixture where a declared-assigned PC whose list holds `Users` yields
+      `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, and a grep of `lib/` for a user-rights write call stays
+      empty. Lane: endpoint-uem-domain.
 
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
@@ -2049,7 +2362,7 @@ integration or endorsement with any of the projects named.** Public-safe and fix
 - [ ] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer.
 - [ ] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist.
 - [ ] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer.
-- [ ] **Bind `device_returned` to Apple's Return to Service — the device-side re-provision the custody ground truth describes in prose and nothing models (connector fixture first, MEDIUM).** Apple's Platform Deployment guide (2026-09-17 edition; `native/ios/FLEET_MDM.md` item 7) makes "returned to the dock → erased → re-enrolled → Home Screen, supervision kept" one MDM erase command carrying a Wi-Fi profile and the enrollment to return to: iOS / iPadOS 26 and later, retry and timeout options from 27, app preservation only under Automated Device Enrollment, not Shared iPad. [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md) maps the re-provision step to the `app-update` family in prose only. Build it as a fixture-backed `fleet-connector` operation — `device_returned` → erase-with-Return-to-Service, refused BY NAME when the device is unsupervised, not enrolled, a Shared iPad, or the Wi-Fi profile is absent — with its own proof; the on-device half is the Mac lane's, on a real supervised iPhone. Lane: mobile-native-engineer.
+- [ ] **Bind `device_returned` to Apple's Return to Service as an approval-gated recommendation — the device-side re-provision the custody ground truth describes in prose and nothing models (connector fixture first, MEDIUM).** Apple's Platform Deployment guide (2026-09-17 edition) and its `device.erase.yaml` make "returned to the dock → erased → re-enrolled → Home Screen, supervision kept" one MDM erase command carrying a Wi-Fi profile and the enrollment to return to. **Facts corrected 2026-09-24 (DR-055; sources in `native/ios/FLEET_MDM.md` item 7):** the `ReturnToService` key exists from iOS 17.0; app preservation needs iOS / iPadOS 26, Automated Device Enrollment, an escrowed bootstrap token and an iPad not set up as Shared iPad — the Shared iPad limit belongs to app preservation only; iOS / iPadOS 27 adds enrollment retry and, inside the app-preservation reset only, a Control Center or inactivity-timeout start that checks in with the MDM; Activation Lock must be off. This row used to say "iOS / iPadOS 26 and later … not Shared iPad" and to build the erase as a `fleet-connector` operation, but that package is "READ-ONLY BY CONSTRUCTION" (`lib/fleet-connector/src/client.ts`). **Reshaped:** `device_returned` produces a planned, approval-gated "erase with Return to Service" RECOMMENDATION to the MDM — simulated, never executed from this tree, and counted against the tenant's wipe cap — refused BY NAME when the device is unsupervised or not enrolled, Activation Lock is on, app preservation is asked for on a Shared iPad or without a bootstrap token, or the Wi-Fi profile is absent. `lib/fleet-connector` stays read-only; no write path enters the public tree unless a decision record says so, and whether any erase may run under a standing approval is the owner's open question (DR-055 item 5). [`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`](research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md) maps the re-provision step to the `app-update` family in prose only; Puck 7 consumes this row's answer. The check that fails without it: a fixture proof where each refusal names its reason, a clean supervised device yields a recommendation that requires approval and carries no executed status, and a grep of `lib/fleet-connector/src` for an erase call stays empty. The on-device half is the Mac lane's, on a real supervised iPhone. Lane: mobile-native-engineer.
 - [x] **A maplibre-gl-js operator map over the shipped facility trust graph (console view, MEDIUM; blocked on tiles).** [`docs/inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md`](inspiration/SPATIAL_TRUST_RESEARCH_REPORT.md) already names `maplibre/maplibre-gl-js` (BSD-3-Clause) as the operator-map renderer beside the shipped `lib/facility-trust-graph`, which today has no spatial view at all. The blocker is not the renderer: it is **where vector tiles come from in a repository with no network calls and no tenant data** — a fixture tile set, a floor-plan raster, or nothing. Resolve the tile source FIRST, in one paragraph, then a console view with a deterministic fixture and no live vendor call. Do not add a map that silently fetches a hosted style. web-engineer. **DONE 2026-09-18** — measured, then built: `lib/facility-trust-graph/src/graph.ts`'s `SpaceNode` carries no coordinate of any kind (no lat/lon, no floor-plan pixel, no vendor map position) — its only positional fact is `parentId`, so a tile renderer has nothing to project and the row's "resolve the tile source first" question dissolves: there is no tile source because the shipped data isn't geography, it's a tree. Built the tile-less view instead — `artifacts/signalgrid-app/src/lib/facilityGraphLayout.ts` (pure leaf-counting tree layout, no new dependency) feeding a plain inline `<svg>` in the new `/facility-graph` console page (`artifacts/signalgrid-app/src/pages/FacilityGraph.tsx`), reading the bundled `@workspace/facility-trust-graph` fixture — no network call, no maplibre, no live vendor style. Nav-registered (`GRID_NAV`, preview-wrapped per the launch-surface law) and reachable (`check-console-routes-reachable.mjs`, `check-dead-nav.mjs` both pass). Test: `artifacts/signalgrid-app/src/lib/facilityGraphLayout.test.ts`, 7/7 (`node --test`), covering depth ordering, parent vs. door edges, sibling column separation + parent centering, determinism, and an out-of-set `parentId` falling back to a root instead of being silently dropped.
 - [x] **Vendor-doc drift is unwatched — decide whether a report-only watcher is worth its operator machine (research infrastructure, MEDIUM).** `docs/` cites 2,209 unique external URLs across 996 hosts (measured 2026-09-12) and every link gate in this repo is OFFLINE by design, so a vendor renaming or retiring a page is found only by hand — twice so far, both recorded in the catalogs (CyberArk → Idira; the `privx-ot` product URL now 404). `dgtlmoon/changedetection.io` (Apache-2.0, with a hosting-triggered commercial licence that matters only if we ever hosted it) is the shape that would watch them. Scope if taken: report-only, on the operator's own machine, never a gate, never in CI, no page content committed — only "this URL changed, look at it". The real question this row answers is whether the watch list is maintainable at 996 hosts or should be a curated 30. records-archivist. **DONE 2026-09-18** — decided: a watcher is worth it, cheaper than the changedetection.io shape (no network fetch, no operator machine). `scripts/check-vendor-doc-drift.mjs` holds the 247 unique vendor URLs cited in `docs/inspiration/ENDPOINT_MANAGEMENT_API_CATALOG.md` (the catalog measured for this row's scope, not the full 996-host figure) against a committed dated ledger (`docs/agent/VENDOR_DOC_MANIFEST.json`, regenerated with `--write`) and reports URLs newly cited with no manifest entry, URLs stale past 90 days, and manifest URLs the catalog no longer cites. REPORT-ONLY: the check always exits 0; only `--self-test` (10/10) can fail a build. Registered in `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`; `node scripts/check-preflight-ci-parity.mjs` confirms it's wired.
 - [x] **`docs/BACKUP_AND_RESTORE.md` states "No encryption at rest, and no opinion about where archives live" — give it one, as a runbook sentence (docs, LOW).** The gap is named in the document itself and has no filling. rclone's `crypt` (client-side encryption over any remote) and `hashsum` (verify an archive after transfer) are the two backends that close it in operator terms; the deliverable is a paragraph in that runbook naming the commands and what they do and do not promise — NOT a dependency, NOT a script in this tree, and NOT a compliance claim. docs-writer. **DONE 2026-09-18** — `docs/BACKUP_AND_RESTORE.md`, "What this does NOT give you": the bullet now names `rclone crypt` (client-side AES-256-CTR before the archive leaves the machine) and `rclone hashsum` (post-copy corruption/truncation check), states plainly that neither is a dependency of this repo, and says explicitly that `crypt` is not a compliance claim — a regulated operator still needs the human compliance review CLAUDE.md requires. Checked truthful against `docker-compose.prod.yml` (the `db:backup` dump is a plain unencrypted Postgres logical dump into an operator-chosen destination) and `docs/DEPLOYMENT.md` ("backups and restore testing" are explicitly out of scope, owned by whoever operates the stack) — nothing claims the code does anything it doesn't.
@@ -2057,9 +2370,18 @@ integration or endorsement with any of the projects named.** Public-safe and fix
 ### Agent tooling — detector gaps in the lane's own seams (2026-09-20, measured on this lane's branches; not part of the Trending snapshot above)
 
 - [x] **`pnpm run loop:state` and the stop hook read a squash-landed branch as "not on the hub" when mainline ALSO moved a file the branch touched (2026-09-20, cloud lane; devex-tooling-engineer).** `scripts/loop-state.mjs` `hasLandedByContent` clears a squash-merged branch only when every file it changed is byte-identical to SOME blob in mainline's history of that path. A squash merge lands the pull request's MERGE tree, not the branch tip's tree, so a shared file that mainline changed between the branch's last mainline merge and the squash lands as a three-way merge result that never equals the branch's blob. Measured 2026-09-20 on the two branches the stop hook has named every turn since their PRs merged: `claude/build-native-ios` (#860, c7dc6610) and `claude/video-intake-beat-timeline` (#900, f7148343) each fail on exactly one file, `docs/BUILD_BACKLOG.md`, NEVER-MATCHED at history depth 111; every other file matches. Change — LOCAL, no network (AGENTS.md: no live API calls; the stop hook and `loop:state` run on every turn and must never depend on GitHub): compute the patch-id of the branch's whole diff against its merge-base with whitespace PRESERVED (`git diff <base> <tip> | git patch-id --verbatim` — `--stable` strips whitespace, so two different whitespace-only edits collide and a never-landed tip would read LANDED) and compare it with the same verbatim patch-id of each squash commit's own diff in the bounded mainline history the byte check already walks; on a match, confirm with an exact follow-up comparison (the branch's hunks re-applied to the squash's parent must reproduce the squash tree for every touched file) before clearing; a squash of a clean merge carries exactly the branch's hunks even when mainline moved the same file, so a confirmed match is content that landed and anything else stays reported. Bind it to the CURRENT tip: a branch reused or extended after its merge has a different whole-diff patch-id and must stay reported. Keep the byte check as the first path and say which of the two cleared the branch. A by-hand `gh api …/pulls?state=closed&head=<owner>:<branch>` confirmation stays an operator step outside the automatic path, never in the hook. The checks that fail without it, all offline against fixture commits: (a) a fixture branch whose one changed file was also moved on mainline after the merge-base, squash-landed at exactly its tip, must be reported LANDED; (b) the same branch with one more local commit must stay reported as unpushed; (c) a branch whose only difference from a squash-landed twin is a whitespace-only edit must stay reported (the `--stable` collision fixture). A THIRD shape, measured the same day on this very branch: `noRemote` at `scripts/loop-state.mjs:242` drops any branch whose NAME exists on the hub, so a local tip AHEAD of its same-named remote is never examined by either the unpushed seam or the "carrying commits" warning (that one covers only worktree branches with no hub name) — `claude/landing-record-2026-09-20` sat at d29bf79f, one commit ahead of `origin/claude/landing-record-2026-09-20`, and the seam named nothing. Check (c): a fixture branch whose same-named remote exists and whose tip is one commit ahead of it must be reported, with the count. Lane: devex-tooling-engineer. **DONE 2026-09-20 (cloud lane, PR on `claude/loop-state-squash-seam`):** `scripts/loop-state.mjs` gained `landedByPatchId` (whole-branch `git patch-id --verbatim` against every single-parent commit in the bounded mainline walk, then the exact follow-up: the branch's hunks applied to the squash's parent in a throwaway index must write the squash's own tree) and `aheadOfHub` (a same-named branch is compared by sha against the ls-remote tip; ahead is a gated fail with the count, an unfetched tip is reported UNKNOWN and never counted clean). Evidence: `node scripts/loop-state.mjs --self-test` → `self-test passed (8/8)` — the byte check still cannot clear the fixture (the gap, kept as the positive control), the hunk check clears it (a), one more commit stays reported (b), the whitespace twin stays reported (c), same-name ahead reads `+1` (d), an unknown Hub sha reads unknown; registered in preflight and CI ("Loop-state seam self-test"). Live: `pnpm run loop:state` now reads "Local branches all present on the Review Hub" with `claude/build-native-ios` and `claude/video-intake-beat-timeline` listed under "squash-landed, exact hunks found in a mainline squash", and "Same-named branches at or behind their Hub tip". No network added: the hook still makes only the ls-remote it always made.
-- [ ] **Lift the workspace `esbuild` override 0.27.3 → 0.28.2, or record why not (supply chain, LOW; owner: release-engineer).** `pnpm audit` on 2026-09-19 reports one LOW advisory on `esbuild >=0.27.3 <0.28.1`, and the `pnpm-workspace.yaml` override pins the whole workspace at 0.27.3 (it began as a drizzle-kit transitive fix; the three package.json declarations that said 0.28.2 were dead text and now say 0.27.3). Lifting it changes the bundler under `artifacts/api-server`, `artifacts/mcp-server` and every proof, so it is its own change: read esbuild's 0.28.0 CHANGELOG entry (Context7 could not answer it), `pnpm install --lockfile-only`, commit the lockfile, `pnpm --filter @workspace/api-server run test:api` N/N, then `./validate-sim-macos.sh` and preflight. Source: the Context7 self-scan row in `docs/agent/RESOURCE_INTAKE.md` (2026-09-19).
+- [x] **Lift the workspace `esbuild` override 0.27.3 → 0.28.2, or record why not (supply chain, LOW; owner: release-engineer).** `pnpm audit` on 2026-09-19 reports one LOW advisory on `esbuild >=0.27.3 <0.28.1`, and the `pnpm-workspace.yaml` override pins the whole workspace at 0.27.3 (it began as a drizzle-kit transitive fix; the three package.json declarations that said 0.28.2 were dead text and now say 0.27.3). Lifting it changes the bundler under `artifacts/api-server`, `artifacts/mcp-server` and every proof, so it is its own change. Source: the Context7 self-scan row in `docs/agent/RESOURCE_INTAKE.md` (2026-09-19). **DONE 2026-09-23 (mac lane):** override + the three package.json declarations lifted to 0.28.2; `pnpm install --lockfile-only` regenerated the lockfile (diff is esbuild-scoped, 54/54, `@esbuild/linux-x64: 0.28.2` present for CI), `pnpm install --frozen-lockfile` exit 0 (consistent, no re-divergence). `build.mjs` uses only stable esbuild API (`build({platform:"node",bundle:true,format:"esm"})` + the pino plugin, whose lockfile peer updated cleanly), so 0.28 is compatible; the Mac cannot run the darwin esbuild build (override strips the darwin binary), so preflight's `test:api` skips via `platform-native-build.mjs` and CI/linux does the authoritative build. Reversible: revert the four version bumps + regenerate.
 - [x] **Gate: a `pnpm-workspace.yaml` override must match every package's own declaration (gates, LOW; owner: devex-tooling-engineer).** Three package.json files declared `esbuild` 0.28.2 while the override resolved 0.27.3, and nothing noticed. Derive the set from the overrides table intersected with each workspace package.json's dependency blocks; a declared version that differs from the override fails, offline, in preflight AND CI (parity gate). Proposed by the gate-and-proof-engineer and fail-closed-auditor perspectives on the Context7 self-scan, 2026-09-19; filed rather than landed in the same change. **DONE 2026-09-22 (mac lane, PR #975):** `scripts/check-override-parity.mjs` parses the flat `overrides:` block dependency-free, keeps only bare-name keys pinned to a concrete semver (`esbuild: "0.27.3"`), and fails a package.json only when its own declaration is itself a concrete pin that differs — a range or `workspace:`/`npm:` protocol the override satisfies is honest and skipped. Fail-closed on zero pins (guards the esbuild-override-lift backlog row) AND on an unparseable package.json (never a silent skip). `--self-test` + falsifications green; registered in `preflight.mjs` and `review-hub-ci.yml` ("Override parity"), parity gate green.
-- [ ] **Brain-cycle dispatch stage: a lens-file writer contract and a stale-input guard, so a board can exist (agent plane, MEDIUM; owner: principal-engineer).** `git ls-files artifacts/brain-cycle | wc -l` → 0 on every ref, against `docs/agent/BRAIN_CYCLE_DESIGN.md:99` "one committed directory per cycle"; 0 of 13 `.claude/agents/*.md` on mainline name a board file, and the four true lens agents (`code-reviewer`, `security-reviewer`, `fail-closed-auditor`, `verdict-core-reader`) have no write scope for `artifacts/brain-cycle/**` — that write-power decision is the precondition. Then: (a) `_manifest.json` gains `cycle` (the audited sha, non-empty or throw) and `readBoard()` treats a lens whose `auditedSha` differs, or is absent, as `ran:false`, with a planted stale lens in the existing `--self-test` (fixture-only until a real writer exists — say so); `scripts/brain-cycle.mjs` is owner-gated safety machinery (`scripts/check-owner-gated-surfaces.mjs`), so this lands by owner-reviewed PR. (b) one shared audit paragraph in the four lens agents and `signalgrid-reviewer`: one board file, `ran:true` only for commands that executed, `UNVERIFIED` never omitted (the lens dispatch prompt PR #901 adds under docs/agent — cite its path once that PR is on mainline). From the ICM clip's self-scan, 2026-09-19 (`docs/agent/resource-scans/2026-09-19-two-videos.json`, ICM-1).
+- [x] **Brain-cycle dispatch stage: a lens-file writer contract and a stale-input guard, so a board can exist (agent plane, MEDIUM; owner: principal-engineer).** `git ls-files artifacts/brain-cycle | wc -l` → 0 on every ref, against `docs/agent/BRAIN_CYCLE_DESIGN.md:99` "one committed directory per cycle"; the four true lens agents (`code-reviewer`, `security-reviewer`, `fail-closed-auditor`, `verdict-core-reader`) have no write scope for `artifacts/brain-cycle/**` — that write-power decision is the precondition. From the ICM clip's self-scan, 2026-09-19. **DONE 2026-09-23 (mac lane, PR):** (a) `readBoard` in `scripts/brain-cycle.mjs` (owner-gated safety machinery — owner-reviewed PR) now requires `_manifest.cycle` (the audited sha, non-empty or throw) and treats a lens whose `auditedSha` ≠ `cycle` (or is absent) as `ran:false`/`UNVERIFIED` — the stale-input guard, the fail-closed "a missing lens is a NO" law extended to a leftover from a previous cycle. The `--self-test` gained fixtures with `cycle`/`auditedSha`, a planted STALE lens (`auditedSha` mismatch → `ran:false` → no winner) and a no-`auditedSha` case → green. (b) the write contract + the write-power grant live in `docs/agent/BRAIN_CYCLE_DESIGN.md` §5 (each lens writes ONE board file via Bash, `auditedSha` = the reviewed sha, `ran:true` only for executed commands, `UNVERIFIED` never omitted; the four lens roles + `signalgrid-reviewer` granted board-write) — placed there, not appended to each lens agent's body, to avoid a merge conflict with the DR-054 raise-hand clause PR that edits those same agent files; `verdict-core-reader` gained the `Bash` tool so it can write. Fixture-only until a real cycle writer runs — the guard is proven, the writer is contracted.
 - [ ] **Gate: an intake row that cites a `docs/agent/resource-scans/` file must be backed by it (gates, LOW; owner: devex-tooling-engineer).** Copy `scripts/check-sim-requests.mjs`'s binding shape: for every `RESOURCE_INTAKE.md` row that cites a scan file, the file must exist and hold `proposals[].tasks`, ≥1 `confirms[]` and a `decision` whose task ids ⊆ the proposal's; a decision `landed` names a path that exists. Trigger on the citation, not on the word "Self-scan" (a row can describe the process without a file, and that must read as "no scan file", never as a match). Report the count walked; 0 rows is reported, never silently green. Preflight + CI, parity-gated. Fails without it: a row claiming N confirmed tasks with no confirm record. ICM-3, 2026-09-19.
 - [x] **loop:state: warn when the LOOP.md STATE date trails mainline's newest commit by more than a week (loop, LOW; owner: docs-writer).** `grep -rn "LAST TOUCHED" scripts/*.mjs .claude/hooks/*.sh` → only a comment; nothing reads the STATE block's date, and `docs/agent/LOOP.md:1268-1270` records a prior two-day STATE↔body contradiction. One `add()` in `scripts/loop-state.mjs`: parse LAST TOUCHED, compare with `git log -1 --format=%cI origin/SignalGrid_Alpha` (two git dates, no wall clock), warn — `gated: false`, like the Discovery rows — past 7 days. An unparseable date or an unfetched remote produces the warn row itself, never a silent skip. Self-test with a fixture block older than a fixture commit. ICM-5, 2026-09-19. **DONE 2026-09-22 (mac lane):** section 5b in `scripts/loop-state.mjs` reads LAST TOUCHED and compares it with `git log -1 --format=%cI origin/SignalGrid_Alpha`; the verdict is a pure clock-free helper (`stateFreshness`) so the fixtures are deterministic — `>7d` → stale warn, within a week → ok, unparseable → `no-date` warn, unfetched remote → `no-remote` warn, all `gated:false`. Four checks added to the existing `loop-state --self-test` (registered in preflight + CI); `--self-test` → 12/12, live row "STATE (2026-09-21) within 1 day(s) of mainline's newest commit", full preflight exit 0.
-- [ ] **Decide whether a report-only `claude plugin eval` run belongs beside the shape gates for first-party skills (agent plane, MEDIUM; owner: qa-engineer).** `pnpm run check:absence "prompt regression"` → CORROBORATED: nothing tests a first-party skill's BEHAVIOUR when its `SKILL.md` changes; `scripts/check-skill-plane-conformance.mjs` gates name, description and (since 2026-09-19) model only. The CLI ships `claude plugin eval` (verified with `--help`: `case.yaml` or `prompt.md` + `graders/*.md`, a no-plugin baseline arm). The row: one eval case per high-stakes first-party behaviour (start with `video-intake` — "a transcript is model output, never a fixture" — and `signalgrid-reviewer`), run BY HAND on the Mac when that skill changes, results REPORTED into `docs/agent/EVIDENCE.md`; a run that did not happen is written "not evaluated" and never reads as "no regression". It needs a model, so intake rule 3 and CI's no-model runner keep it off preflight; graders are model output, so a flaky grader is a flaky gate and stays a report. Where `evals/` directories sit under `.claude/skills/<skill>/` they need a publication-boundary class. From the "five weekend projects" clip's self-scan (V-2), 2026-09-19.
+- [x] **Decide whether a report-only `claude plugin eval` run belongs beside the shape gates for first-party skills (agent plane, MEDIUM; owner: qa-engineer).** `pnpm run check:absence "prompt regression"` → CORROBORATED: nothing tests a first-party skill's BEHAVIOUR when its `SKILL.md` changes; `scripts/check-skill-plane-conformance.mjs` gates name, description and (since 2026-09-19) model only. The CLI ships `claude plugin eval` (verified with `--help`: `case.yaml` or `prompt.md` + `graders/*.md`, a no-plugin baseline arm). The row: one eval case per high-stakes first-party behaviour (start with `video-intake` — "a transcript is model output, never a fixture" — and `signalgrid-reviewer`), run BY HAND on the Mac when that skill changes, results REPORTED into `docs/agent/EVIDENCE.md`; a run that did not happen is written "not evaluated" and never reads as "no regression". It needs a model, so intake rule 3 and CI's no-model runner keep it off preflight; graders are model output, so a flaky grader is a flaky gate and stays a report. Where `evals/` directories sit under `.claude/skills/<skill>/` they need a publication-boundary class. From the "five weekend projects" clip's self-scan (V-2), 2026-09-19. **DONE 2026-09-23 (Mac lane):** decision is YES, adopt as a REPORT (not a gate). First case landed — `.claude/skills/video-intake/evals/doctrine-transcript-not-a-figure/` — measuring the "transcript is model output, never a figure/fixture/capability sentence" doctrine: `claude plugin eval` (CLI 2.1.281, `--judge-model sonnet --no-publish`) scored WITH-plugin 1.000, W/OUT 0.333, **Δ +0.667** — the skill refused all three forbidden asks every run; without it the model complied 2 of 3. Recorded in `docs/agent/EVIDENCE.md` 2026-09-23. `results/` is gitignored (`/.claude/skills/*/evals/results/`); the case falls under the existing `.claude/skills/video-intake` tooling carve-out (longest-prefix, no `AREAS` edit); no DR — a report does not change how green is certified. `signalgrid-reviewer` case is the next increment, NOT YET evaluated.
+
+### DR-054 silent-stall sweep — remaining LOW-severity follow-ups (2026-09-23, mac lane)
+
+The `silent-stall-sweep` workflow (DR-054) surfaced 9 confirmed sites; the medium ones landed in the sweep PR. These LOW-severity ones are tracked here, not dropped (the law applies to the sweep's own output too):
+
+- [ ] **`catch { continue }` conflates ENOENT with unreadable in 5 gate scan loops (gates, LOW; owner: devex-tooling-engineer).** `check-launch-claims.mjs:1350`, `check-documented-branches.mjs:385`, `check-live-sync.mjs:214`, `check-connector-discipline.mjs:325`, `check-emitter-wire-discipline.mjs:67` each do `try { body = readFileSync(f) } catch { continue }` — a legitimately-absent file (ENOENT, skip correct) and a present-but-unreadable file (a real blocker) are treated the same, so the gate concludes clean over content it never examined. Convert to the `check-override-parity.mjs:117` template: `catch (e) { if (e.code === "ENOENT") continue; unreadable.push(\`${f}: ${e.message}\`); }` and fail if `unreadable.length`. (For `deriveEmitterFamilies` the ENOENT skip is legitimate; only the non-ENOENT branch surfaces.) From the DR-054 sweep, finding #7.
+- [ ] **`scripts/lib/ci-jobs.mjs:100` drops a workflow whose `jobs:` is on line 1, with no log (gates, LOW; owner: devex-tooling-engineer).** `const at = text.indexOf("\njobs:"); if (at < 0) continue;` requires a preceding newline, so a workflow starting with `jobs:` contributes zero jobs silently and shrinks preflight's "not covered" disclaimer. Anchor to `/^jobs:/m`, and add a `--self-test` to the parity gate asserting a known job id enumerates and that workflow-files-parsed equals the readdir count. The `check-preflight-ci-parity.mjs` CI-job **floor** already landed (DR-054 sweep PR); this is its paired root-cause + self-test. Finding #5.
+- [ ] **`.github/workflows/supply-chain.yml:177` — grype `|| true` hides a scanner crash (CI, LOW; owner: release-engineer).** With no `--fail-on` threshold, grype exits non-zero only on a genuine error (findings do not raise the code), so `|| true` serves no purpose except swallowing a scanner failure — the SBOM step reports success over a scan that never ran. Drop `|| true`, or capture status: `grype … --file grype-report.json; gs=$?; [ $gs -eq 0 ] || { echo "::error::grype failed ($gs)"; exit 1; }`. Finding #9.
+- [ ] **`scripts/mac/lane-tick.sh:336` dead monitoring line (loop, LOW; owner: devex-tooling-engineer).** `node scripts/lane-message.mjs inbox | grep -c "→ mac"` anchors on an arrow the inbox CLI never prints (it lives only in `auditLaneMessages`'s returned array, not the CLI output), so the block at 336-341 can never fire. Not a hidden blocker — `append_unread_state` already folds unread state into RESULT — so this is dead code: delete 336-341, or repoint it at `check-lane-messages.mjs` output which does emit the arrow-tagged count. Finding #8.

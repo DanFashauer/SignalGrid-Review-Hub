@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-22T15:25:59.072Z",
-  "result": "acted: landed backlog PR #832 (squash cea57e9a) — check-workspace-cycles gate + self-test, refuses the workspace dependency cycle that caused #819's Mac ENAMETOOLONG disk-loop; wired into preflight and CI. Also landed #976 (#314 mutation survivor fixed+closed) this window. Merged Alpha in, regenerated coverage (2930 in-scope), preflight+breadth green, gating check green on 737aeb30."
+  "firedAt": "2026-09-24T15:11:48.443Z",
+  "result": "acted (landing, no new item): today's build slot landed 7 backlog PRs under DR-037 (#1016, #1012, #1017, #1021, #997, #1006, #1018) and readied #1024, #1026 and #1005 for the owner. No new item was opened: the owner's 2026-09-24 company-loop directive (DR-056, Mac-led) will replace this trigger, and a new product PR now would collide with that redesign."
 }

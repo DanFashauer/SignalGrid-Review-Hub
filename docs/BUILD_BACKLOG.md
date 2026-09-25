@@ -443,6 +443,10 @@ lone repairs into unreachable code).
       registration belonging to another user/device cannot be selected and granted. Deferred
       with the live transport (gated off today); the fixture path evaluates a single supplied
       record, so this is a live-query completeness requirement, not an exploitable path now.
+      CLOSED by PR #929 (refreshed onto SignalGrid_Alpha 2026-09-24). The owner's 2026-09-23
+      material separating Intune MDM, MAM and UEM (recorded as DR-055 in PR #1026, not yet on
+      mainline) is the requirement this row answers: MAM is its own read-only dimension, apart
+      from device-management-health's MDM channel.
 
 _Derived from repo data, not memory: `check-connector-discipline` reports 51/51 (2026-09-06; it said 36/36 here from 2026-08-21, flagged by the role-lens review the same day and left standing)
 families with KNOWN_GAPS empty. The live-evidence status is NOT restated here —

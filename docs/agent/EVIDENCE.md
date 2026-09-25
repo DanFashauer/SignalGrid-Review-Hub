@@ -3598,3 +3598,15 @@ Output:   "(b) launch surface, evidence  100%   proofs current 20/20, launch ite
           #1062 @ 692b69b9: raised-hands "self-test passed (53/53)"; PREFLIGHT_EXIT 0; Breadth PASSED (58) → merged e3732b51 (gating 108231053336)
           #1050 refreshed @ 331c6558: PREFLIGHT_EXIT 0; Breadth PASSED (58); CORE_NORMALIZATION_VERSION = 25 (unchanged) — owner's merge
 Verdict:  holds
+
+## 2026-09-25 — "The shell backend-path gate landed with plan row 5 re-measured; the tick's re-run leak closed; steward mail and shared state landed"
+Command:  node scripts/check-shell-backend-paths.mjs --self-test && node scripts/check-shell-backend-paths.mjs   (#1071 @ c4c5981a, after the CodeQL fix)
+Output:   "self-test passed (9/9)"
+          "Shell backend paths — 4 path(s) built by native/ios/EnterpriseShell/Services/BackendService.swift against 62 declared in lib/api-spec/v1-openapi.yaml" — four ✓ rows, four "· REPORTED —" OIDC rows
+          "Shell backend-path gate passed — every path the shell's control-plane client builds is a declared /v1 path."
+          preflight on c4c5981a: both new rows "… ok"; "Preflight PASSED — everything it runs is green."; PREFLIGHT_EXIT 0; "Breadth lane PASSED — 58 breadth proofs green"; BREADTH_EXIT 0
+          CodeQL on the first head 3f1dc28b: "1 new alert including 1 high severity security vulnerability" (alert 188, js/file-system-race, statSync then readFileSync) → fixed; CodeQL green on c4c5981a → merged a3bd808b (gating 108277710948)
+          #1069 @ ac411ba3: run-requests "self-test passed (7/7)"; PREFLIGHT_EXIT 0; Breadth PASSED (58) → merged 28379161 (gating 108261554891)
+          #1070 (lane files) → merged e171c0a5 (gating 108273925403); #1067 → a07c9e96
+          #1050 @ 331c6558 (owner's merge): gating 108244715123 success; local PREFLIGHT_EXIT 0 and BREADTH_EXIT 0 after the console rebuild
+Verdict:  holds

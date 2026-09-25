@@ -34,10 +34,14 @@
 //       code it imports changes, so a legacy string-form "passed" record (no digest at
 //       all) NEVER counts as current, closing the loophole where such a record could
 //       read current for up to FRESH_DAYS regardless of what the code did meanwhile. A
-//       `step:*` binding is counted the same way minus the digest requirement (a
-//       preflight step is not one file with an import list). A file with no per-proof
-//       results at all (minted before the emitter recorded them) → 0/N. A missing field
-//       never raises the ratio.
+//       `step:*` binding is counted the same way, digest included (its digest covers
+//       the paths STEP_SOURCES names for it). A file with no per-proof results at all
+//       (minted before the emitter recorded them) → 0/N. A missing field never raises
+//       the ratio.
+//       PER ITEM, TOO (#686 review, 2026-09-25): the proof ratio alone let one stale
+//       proof that 20 of 28 items share cost 1/19 — 94%, inside the target band, with
+//       only 8 items fully current. So (b) is the LOWER of the proof ratio and the
+//       item ratio, where an item is current only when EVERY name it binds is.
 //       Until DR-036 this was binary (100 while green+fresh+current, else 0) because only
 //       3 of 23 launch ids matched a proof name and a per-item ratio would have been invented.
 //   (c) END-TO-END — the simulator scenarios (declared by the engine, run here) and the live
@@ -59,7 +63,7 @@ import { computeBody, fingerprintOf } from "./generate-sync-manifest.mjs";
 // trusted, and the per-proof source-fingerprint derivation — all read through the
 // binding gate's own functions so the ratio divides by, and verifies against,
 // exactly what that gate certifies.
-import { boundProofs, validateBindings, proofScriptFiles, workspacePackageDirs, proofSourceDigest } from "./check-launch-proof-bindings.mjs";
+import { boundProofs, bindingRecord, validateBindings, proofScriptFiles, workspacePackageDirs, proofSourceDigest, stepSourceDigest } from "./check-launch-proof-bindings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const FLOOR = 80, TARGET_LOW = 92, TARGET_HIGH = 95, GOAL = 100, FRESH_DAYS = 7;
@@ -105,9 +109,11 @@ const shortFp = (fp) => (typeof fp === "string" && fp.length > 0 ? fp.slice(0, 1
  *
  * Then PER NAME, fail-closed:
  *   `step:<name>` → looked up in `evidence.proofs.steps[name]` (bare name, no prefix).
- *   Current when `status === "passed"` and its fingerprint (own, or the file's) equals
- *   `currentFingerprint`. No sourceDigest requirement — a preflight step is not one file
- *   with an import list.
+ *   Current when `status === "passed"`, its fingerprint (own, or the file's) equals
+ *   `currentFingerprint`, AND its sourceDigest equals `currentDigests.get("step:<name>")`
+ *   (stepSourceDigest over the step's STEP_SOURCES paths — #686 review, 2026-09-25).
+ * `items` (item -> names, bindingRecord's shape) makes the result the LOWER of the
+ * proof ratio and the item ratio; an item is current only when every name it binds is.
  *   `proof:<name>` → looked up in `evidence.proofs.passed[name]`: the LEGACY string
  *   "passed" (bound only to the file's `manifestFingerprint`, and carrying no
  *   sourceDigest at all) or an object `{ status, manifestFingerprint, sourceDigest }`.
@@ -127,10 +133,13 @@ const shortFp = (fp) => (typeof fp === "string" && fp.length > 0 ? fp.slice(0, 1
  * 0, never 100: nothing bound means nothing certified, and the binding gate is red in
  * that state anyway.
  */
-export function evidenceDimension(evidence, ageDays, currentFingerprint, bound, currentDigests = new Map()) {
+export function evidenceDimension(evidence, ageDays, currentFingerprint, bound, currentDigests = new Map(), items) {
   const names = Array.isArray(bound) ? bound.filter((b) => typeof b === "string") : [];
   const n = names.length;
-  const closed = (reason) => ({ pct: 0, bound: n, current: 0, missing: [...names], reason });
+  // item -> the names it binds. Absent (a caller that has no profile) → each name is its own item.
+  const itemMap = items && typeof items === "object" ? items : Object.fromEntries(names.map((x) => [x, [x]]));
+  const itemCount = Object.keys(itemMap).length;
+  const closed = (reason) => ({ pct: 0, bound: n, current: 0, missing: [...names], items: itemCount, itemsCurrent: 0, reason });
   if (n === 0) return closed("the launch items bind no proofs — check-launch-proof-bindings.mjs must be red");
   if (!evidence) return closed(`${EVIDENCE} absent`);
   const green = evidence.reviewHubPass === true && evidence.mcpPass === true;
@@ -156,9 +165,12 @@ export function evidenceDimension(evidence, ageDays, currentFingerprint, bound, 
     if (name.startsWith("step:")) {
       const stepName = name.slice("step:".length);
       const r = hasSteps && Object.prototype.hasOwnProperty.call(stepRecords, stepName) ? stepRecords[stepName] : undefined;
-      const status = r !== null && typeof r === "object" ? r.status : undefined;
-      const fp = r !== null && typeof r === "object" && "manifestFingerprint" in r ? r.manifestFingerprint : fileFp;
-      (status === "passed" && typeof fp === "string" && fp === currentFingerprint ? current : missing).push(name);
+      const isStepObj = r !== null && typeof r === "object";
+      const status = isStepObj ? r.status : undefined;
+      const fp = isStepObj && "manifestFingerprint" in r ? r.manifestFingerprint : fileFp;
+      const want = currentDigests?.get ? currentDigests.get(name) : undefined;
+      const stepDigestOk = isStepObj && typeof r.sourceDigest === "string" && typeof want === "string" && r.sourceDigest === want;
+      (status === "passed" && typeof fp === "string" && fp === currentFingerprint && stepDigestOk ? current : missing).push(name);
       continue;
     }
     const r = hasPassed && Object.prototype.hasOwnProperty.call(records, name) ? records[name] : undefined;
@@ -170,13 +182,17 @@ export function evidenceDimension(evidence, ageDays, currentFingerprint, bound, 
     const digestOk = typeof digest === "string" && typeof expectedDigest === "string" && digest === expectedDigest;
     (status === "passed" && typeof fp === "string" && fp === currentFingerprint && digestOk ? current : missing).push(name);
   }
-  const reason =
+  const cur = new Set(current);
+  const itemsCurrent = Object.values(itemMap).filter((ps) => Array.isArray(ps) && ps.length > 0 && ps.every((x) => cur.has(x))).length;
+  const itemPct = pct(itemsCurrent, itemCount);
+  const reason0 =
     current.length === n
       ? `${n}/${n} bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, ${ageDays} day(s) old, manifest ${shortFp(fileFp)}`
       : current.length === 0 && (typeof fileFp !== "string" || fileFp !== currentFingerprint)
         ? `0/${n} bound proofs/steps current — evidence covers manifest ${shortFp(fileFp)}, tree is ${shortFp(currentFingerprint)}; refresh on the Mac`
         : `${current.length}/${n} bound proofs/steps current against manifest ${shortFp(currentFingerprint)}; not current (stale fingerprint, stale/absent source digest, or unrecorded): ${missing.join(", ")}`;
-  return { pct: pct(current.length, n), bound: n, current: current.length, missing, reason };
+  const reason = `${reason0}; launch items fully current ${itemsCurrent}/${itemCount}`;
+  return { pct: Math.min(pct(current.length, n), itemPct), bound: n, current: current.length, missing, items: itemCount, itemsCurrent, reason };
 }
 
 /**
@@ -261,18 +277,22 @@ async function derive() {
   if (bound.length === 0) throw new Broken("the launch items bind no proofs — the (b) denominator is empty");
   // The CURRENT sourceDigest for every bound `proof:*` — recomputed the same way
   // verify-all.mjs recorded it, so a stale evidence digest is caught rather than
-  // trusted (2026-09-12 review finding). `step:*` bindings carry no digest.
+  // trusted (2026-09-12 review finding). A `step:*` digest covers its STEP_SOURCES paths.
   const rootScripts = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts ?? {};
   const subScripts = JSON.parse(readFileSync(join(repo, "scripts/package.json"), "utf8")).scripts ?? {};
   const proofFiles = proofScriptFiles(repo, rootScripts, subScripts);
   const pkgDirs = workspacePackageDirs(repo);
   const currentDigests = new Map();
   for (const name of bound) {
-    if (!name.startsWith("proof:")) continue;
+    if (name.startsWith("step:")) {
+      const d = stepSourceDigest(repo, name.slice("step:".length), pkgDirs);
+      if (d) currentDigests.set(name, d);
+      continue;
+    }
     const relPath = proofFiles.get(name);
     if (relPath) currentDigests.set(name, proofSourceDigest(repo, relPath, pkgDirs));
   }
-  const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint, bound, currentDigests), boundProofs: bound, ageSource, surfaces: counts };
+  const b = { ...evidenceDimension(evidence, ageDays, currentFingerprint, bound, currentDigests, bindingRecord(lp.SURFACES)), boundProofs: bound, ageSource, surfaces: counts };
   // (c) scenarios — run the engine's own list through the engine (seconds)
   // Spawned from scripts/: tsx and @workspace/signalgrid-simulator resolve in that package, not at the root.
   // `node --import tsx`, not `pnpm exec tsx`: the tsx CLI opens an IPC socket under /tmp that a
@@ -351,12 +371,25 @@ function selfTest() {
   // step: bindings — counted "like proofs" (status passed + current fingerprint),
   // keyed under proofs.steps by the BARE step name; no sourceDigest requirement.
   const STEP_BOUND = ["proof:alpha", "step:Browser E2E (review console, website, admin)"];
+  const STEP_DIGEST = "5555000000000000000000000000000000000000000000000000000000005";
+  const SD = new Map([...DIGESTS, ["step:Browser E2E (review console, website, admin)", STEP_DIGEST]]);
   const evWithStep = (passed, steps, fp = FP) => ({ reviewHubPass: true, mcpPass: true, manifestFingerprint: fp, proofs: { passed, steps } });
-  const stepFull = evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: FP } }), 3, FP, STEP_BOUND, DIGESTS);
+  const stepFull = evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: FP, sourceDigest: STEP_DIGEST } }), 3, FP, STEP_BOUND, SD);
   checks.push(["evidence: a step: binding recorded passed under proofs.steps (keyed by the bare name) counts toward the ratio", stepFull.pct === 100 && stepFull.current === 2]);
-  const stepUnrecorded = evidenceDimension(evWithStep(both, {}), 3, FP, STEP_BOUND, DIGESTS);
+  const stepUnrecorded = evidenceDimension(evWithStep(both, {}), 3, FP, STEP_BOUND, SD);
   checks.push(["evidence: an UNRECORDED step (e.g. Browser E2E structurally excluded on a non-linux-x64 Mac) is 0 for that entry, fail-closed, never inferred from the proof half passing", stepUnrecorded.pct === 50 && stepUnrecorded.missing.join() === "step:Browser E2E (review console, website, admin)"]);
-  checks.push(["evidence: a step record against a STALE manifest fingerprint is not current", evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: OTHER } }), 3, FP, STEP_BOUND, DIGESTS).pct === 50]);
+  checks.push(["evidence: a step record against a STALE manifest fingerprint is not current", evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: OTHER, sourceDigest: STEP_DIGEST } }), 3, FP, STEP_BOUND, SD).pct === 50]);
+  checks.push(["evidence: a step record with a STALE or ABSENT sourceDigest is not current (fingerprint alone never certifies a step)", evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: FP, sourceDigest: STALE_DIGEST } }), 3, FP, STEP_BOUND, SD).pct === 50 && evidenceDimension(evWithStep(both, { "Browser E2E (review console, website, admin)": { status: "passed", manifestFingerprint: FP } }), 3, FP, STEP_BOUND, SD).pct === 50]);
+  // PER ITEM (#686 review): one stale proof shared by most items must pull (b) below the
+  // floor, not cost 1/19. 19 proofs, 28 items, proof:core bound by 20 of them and stale.
+  {
+    const names = ["proof:core", ...Array.from({ length: 18 }, (_, i) => `proof:p${i}`)];
+    const dg = new Map(names.map((x) => [x, DIGEST_A]));
+    const recs = Object.fromEntries(names.map((x) => [x, rec(x === "proof:core" ? STALE_DIGEST : DIGEST_A)]));
+    const items = Object.fromEntries(Array.from({ length: 28 }, (_, i) => [`s[i${i}]`, i < 20 ? ["proof:core", names[1 + (i % 18)]] : [names[1 + (i % 18)]]]));
+    const shared = evidenceDimension(ev(recs), 3, FP, names, dg, items);
+    checks.push(["evidence: ONE stale proof shared by 20 of 28 items → the item ratio (8/28 → 28) governs, below the floor — never the proof ratio's 94", shared.current === 18 && shared.itemsCurrent === 8 && shared.pct === 28 && shared.pct < FLOOR]);
+  }
   // Evidence AGE reads the artifact's own mintedAt; git is the LEGACY fallback for an
   // artifact with no stamp at all; a present-but-invalid stamp is Infinity, never git.
   const NOW = 1_800_000_000; // a fixed "now" so the cases are deterministic
@@ -400,7 +433,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const d = r.details;
     console.log(`Readiness figure — DR-036: derived, never typed; headline = the lowest dimension\n`);
     console.log(`  (a) runbook ground truth      ${String(r.a).padStart(3)}%   ${d.groundTruth.modeled} modeled / ${d.groundTruth.partial} partial / ${d.groundTruth.gap} gap of ${d.groundTruth.total} real-world elements (${GT})`);
-    console.log(`  (b) launch surface, evidence  ${String(r.b).padStart(3)}%   proofs current ${d.evidence.current}/${d.evidence.bound} (bound by ${d.evidence.surfaces.launch} launch items) — ${d.evidence.reason} (age via ${d.evidence.ageSource}); launch ${d.evidence.surfaces.launch} · deferred ${d.evidence.surfaces.deferred} (deferred is the freeze, not a defect)`);
+    console.log(`  (b) launch surface, evidence  ${String(r.b).padStart(3)}%   proofs current ${d.evidence.current}/${d.evidence.bound}, launch items fully current ${d.evidence.itemsCurrent}/${d.evidence.items} — ${d.evidence.reason} (age via ${d.evidence.ageSource}); launch ${d.evidence.surfaces.launch} · deferred ${d.evidence.surfaces.deferred} (deferred is the freeze, not a defect)`);
     console.log(`  (c) end-to-end                ${String(r.c).padStart(3)}%   scenarios ${d.endToEnd.scenarios.ran}/${d.endToEnd.scenarios.declared} · live operations proven ${d.endToEnd.live.proven}/${d.endToEnd.live.declared}${d.endToEnd.live.missing.length ? ` (unproven: ${d.endToEnd.live.missing.join(", ")})` : ""}`);
     console.log(`\n  HEADLINE ${r.headline}%  → ${r.verdict}`);
     console.log(`  floor ${FLOOR} · target ${TARGET_LOW}–${TARGET_HIGH} · goal ${GOAL}. A broken derivation exits 1; a low number exits 0 (REPORT).`);

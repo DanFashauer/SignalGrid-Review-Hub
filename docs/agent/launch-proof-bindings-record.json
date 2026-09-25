@@ -1,13 +1,14 @@
 {
   "note": "RATCHET for launch-proof bindings (scripts/check-launch-proof-bindings.mjs). Every (launch item, proof) pair the profile binds. A binding removed from scripts/launch-profile.mjs without this file changing in the same diff is FATAL. Never hand-edit; `node scripts/check-launch-proof-bindings.mjs --write` writes it.",
-  "bindings": 78,
+  "bindings": 98,
   "items": {
     "app-surfaces[api-server]": [
       "proof:api-contract",
       "proof:isolation-scope",
       "proof:launch-seam",
       "proof:observability",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "app-surfaces[ios:EnterpriseShell]": [
       "proof:mdm-profile",
@@ -36,91 +37,110 @@
     ],
     "published-api-paths[/v1/audit]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/authorize]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/connectors]": [
       "proof:api-contract",
       "proof:launch-seam",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/connectors/{id}/sync-runs]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/connectors/{id}/sync]": [
       "proof:api-contract",
       "proof:launch-seam",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/context]": [
       "proof:api-contract",
       "proof:isolation-scope",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions/{id}]": [
       "proof:api-contract",
       "proof:observability",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions/{id}/evidence]": [
       "proof:api-contract",
       "proof:launch-seam",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions/{id}/step-up]": [
       "proof:api-contract",
       "proof:signalgrid-core",
-      "proof:webauthn-verify"
+      "proof:webauthn-verify",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions/{id}/step-up/challenge]": [
       "proof:api-contract",
       "proof:signalgrid-core",
-      "proof:webauthn-verify"
+      "proof:webauthn-verify",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/decisions/evaluate]": [
       "proof:api-contract",
       "proof:launch-seam",
       "proof:observability",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/launch-status]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/metrics]": [
       "proof:api-contract",
       "proof:observability",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/policies]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/policies/{id}/tests]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/policies/{id}/versions]": [
       "proof:api-contract",
-      "proof:signalgrid-core"
+      "proof:signalgrid-core",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/step-up/enroll/options]": [
       "proof:api-contract",
       "proof:signalgrid-core",
-      "proof:webauthn-verify"
+      "proof:webauthn-verify",
+      "step:API integration test (boots the server)"
     ],
     "published-api-paths[/v1/step-up/enroll/verify]": [
       "proof:api-contract",
       "proof:signalgrid-core",
-      "proof:webauthn-verify"
+      "proof:webauthn-verify",
+      "step:API integration test (boots the server)"
     ],
     "signal-kinds[device_management_health]": [
       "proof:device-management-health",

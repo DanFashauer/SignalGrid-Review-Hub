@@ -248,6 +248,17 @@ and an evidence file with no per-proof results at all (minted before the emitter
 recorded them) is 0 of N — a missing field never raises the ratio. The numbers are
 derived, never typed here; run the command.
 
+A binding may also name a non-proof preflight step as `step:<name>`, but only a step
+listed in `STEP_SOURCES` in `scripts/check-launch-proof-bindings.mjs`, and never one
+preflight marks `selfSkipsWithout`. Each evidence record is an object
+`{ status, manifestFingerprint, sourceDigest }`, under `proofs.passed` for proofs and
+`proofs.steps` for steps. It counts only when its digest matches what the tree hashes to
+now, so a legacy string `"passed"` scores 0. (b) is the LOWER of the proof ratio and the
+launch-item ratio, and an item counts only when every name it binds is current. The
+per-item binding set is a ratchet, `docs/agent/launch-proof-bindings-record.json`:
+dropping a binding fails unless that file changes in the same diff, and a deleted record
+refuses rather than re-baselining, in CI's shallow clone too.
+
 `proof:launch-profile` publishes the figures quoted under **What the profile says**,
 and the docs↔proof figure guard fails the build if that section and the profile ever
 disagree. Read the scope of that guard exactly: it judges a number only inside a

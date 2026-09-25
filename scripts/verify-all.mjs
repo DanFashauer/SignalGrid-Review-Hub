@@ -67,7 +67,8 @@
 //                            that actually ran (excluding one flagged
 //                            `needsNativeBuild` when this machine's build was
 //                            structurally excluded — see nativeBuildExclusion
-//                            below) mapped to `{ status, manifestFingerprint }`,
+//                            below, and one preflight marks `selfSkipsWithout`)
+//                            mapped to `{ status, manifestFingerprint, sourceDigest }`,
 //                            keyed by the STEP'S OWN NAME (no `step:` prefix —
 //                            that prefix lives only in the launch-profile binding
 //                            string). `stepsExcluded` names the ones this run could
@@ -75,10 +76,12 @@
 //                            when no `proof:*` exercises its surface (the Browser
 //                            E2E lane drives a BUILT bundle a tsx-run proof
 //                            cannot); the readiness figure counts a recorded step
-//                            "like a proof" (status passed + current fingerprint,
-//                            no sourceDigest — a preflight step is not one file
-//                            with an import list, so this fix does not attempt to
-//                            define what a step's "source" would mean).
+//                            exactly like a proof: status passed + current
+//                            fingerprint + current sourceDigest. A step's digest
+//                            covers the paths STEP_SOURCES names for it (in
+//                            check-launch-proof-bindings.mjs) and their workspace
+//                            deps; a step with no entry records null and can never
+//                            read current (#686 review, 2026-09-25).
 //                            The readiness figure's dimension (b) is the share of
 //                            the launch profile's bound proofs/steps that read
 //                            current in `passed`/`steps` against the current
@@ -107,6 +110,7 @@ import {
   proofScriptFiles,
   workspacePackageDirs,
   proofSourceDigest,
+  stepSourceDigest,
 } from "./check-launch-proof-bindings.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -495,7 +499,8 @@ if (emitEvidence) {
           const stepsExcluded = [];
           for (const [name, info] of preflightStepsReg) {
             if (info.needsNativeBuild && preflightNative.excluded) { stepsExcluded.push(name); continue; }
-            steps[name] = { status: "passed", manifestFingerprint: manifest.fingerprint };
+            if (info.selfSkipsWithout) { stepsExcluded.push(name); continue; } // green cannot say it ran
+            steps[name] = { status: "passed", manifestFingerprint: manifest.fingerprint, sourceDigest: stepSourceDigest(repoRoot, name, pkgDirs) };
           }
           return {
             recordedFrom: "scripts/preflight.mjs + scripts/verify-breadth.mjs STEPS at mint time; both lanes green",

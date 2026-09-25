@@ -88,12 +88,13 @@
 // fingerprint the evidence records and the ones this gate (and the readiness
 // figure) require cannot come from two separate readings.
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
+import { gitHasHistory, isShallowRepo, readRatchetFile, refusalLines } from "./lib/ratchet-read.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -188,21 +189,60 @@ export function validateBindings(surfaces) {
  * reads that half honestly as unrecorded rather than silently inventing a
  * pass. That is dimension (b)'s question, not this gate's.
  *
- * Read the SAME STEPS-array shape registeredProofs() reads above, one entry
- * per source line — verified against the live file: every STEPS object in
- * scripts/preflight.mjs is single-line, so a per-line match is exact and needs
- * no brace-nesting logic (a naive "read to the first `}`" would stop at a
- * nested `env: { ... }` object some steps carry).
+ * Two STEPS shapes exist in scripts/preflight.mjs, and both are read: the
+ * single-line `{ name: "…", cmd: […], … },` most entries use, and the MULTI-LINE
+ * form — a line holding only `{`, then `name: "…",` on the next, fields on their
+ * own lines, closed by a line holding only `},` (backup-restore and db-role-split,
+ * which carry `selfSkipsWithout`). Until 2026-09-25 this comment claimed every
+ * entry was single-line, and the multi-line ones were silently absent from the
+ * registry (#686 review). A multi-line body is read to its closing `},` line, not
+ * to the first `}`, which would stop inside a nested `env: { … }`.
+ *
+ * `selfSkipsWithout` is read too: preflight's own classification of a step that
+ * exits 0 WITHOUT running when an env var is unset. A green run cannot tell that
+ * from a pass, so a step carrying it is never bindable and never recorded passed.
  */
 export function registeredSteps(laneSource) {
   const out = new Map();
-  for (const rawLine of stripCommentedLines(laneSource).split("\n")) {
-    const m = /^\s*\{\s*name:\s*"((?:[^"\\]|\\.)*)"/.exec(rawLine);
+  const lines = stripCommentedLines(laneSource).split("\n");
+  const NAME = /name:\s*"((?:[^"\\]|\\.)*)"/;
+  for (let i = 0; i < lines.length; i += 1) {
+    let m = /^\s*\{\s*name:\s*"((?:[^"\\]|\\.)*)"/.exec(lines[i]);
+    let body = lines[i];
+    if (!m && /^\s*\{\s*$/.test(lines[i]) && (m = new RegExp(`^\\s*${NAME.source}`).exec(lines[i + 1] ?? ""))) {
+      const end = lines.findIndex((l, j) => j > i && /^\s*\},?\s*$/.test(l));
+      body = lines.slice(i + 1, end === -1 ? lines.length : end).join("\n");
+    }
     if (!m) continue;
-    out.set(m[1].replace(/\\"/g, '"'), { needsNativeBuild: /needsNativeBuild:\s*true/.test(rawLine) });
+    out.set(m[1].replace(/\\"/g, '"'), {
+      needsNativeBuild: /needsNativeBuild:\s*true/.test(body),
+      selfSkipsWithout: /selfSkipsWithout:\s*"([A-Z][A-Z0-9_]*)"/.exec(body)?.[1] ?? null,
+    });
   }
   return out;
 }
+
+/**
+ * Every preflight step a launch item may bind, with the paths its record's
+ * `sourceDigest` covers (plus, derived, every `@workspace/*` package those paths'
+ * package.json files depend on, transitively). A step NOT listed here cannot be
+ * bound (#686 review): without a digest its record would read current on the
+ * manifest fingerprint alone — a CONTRACT hash that does not move when the code
+ * the step exercises changes — for up to FRESH_DAYS.
+ */
+export const STEP_SOURCES = {
+  "Browser E2E (review console, website, admin)": [
+    "scripts/playwright.config.ts",
+    "scripts/src/e2e",
+    "artifacts/api-server",
+    "artifacts/signalgrid-app",
+    "artifacts/signalgrid-review",
+    "artifacts/signalgrid-web",
+    "artifacts/signalgrid-desktop",
+    "artifacts/signalgrid-mobile-pwa",
+  ],
+  "API integration test (boots the server)": ["artifacts/api-server"],
+};
 
 /**
  * Pure: the problems with a profile's bindings, given the proof scripts package.json
@@ -211,7 +251,7 @@ export function registeredSteps(laneSource) {
  * Returns [] when every launch item is bound to real, registered, always-running
  * proofs and/or registered preflight steps.
  */
-export function checkBindings({ surfaces, statuses, proofScripts, preflightProofs, selfSkipping, preflightSteps = new Map() }) {
+export function checkBindings({ surfaces, statuses, proofScripts, preflightProofs, selfSkipping, preflightSteps = new Map(), stepSources = STEP_SOURCES }) {
   const problems = [...validateBindings(surfaces)];
   let launchItems = 0;
   for (const s of surfaces) {
@@ -240,7 +280,9 @@ export function checkBindings({ surfaces, statuses, proofScripts, preflightProof
             if (selfSkipping.has(p)) problems.push(`${s.key}[${id}] binds ${p}, which self-skips without ${selfSkipping.get(p)} — a green run cannot record it as run`);
           } else {
             const stepName = p.slice("step:".length);
-            if (!preflightSteps.has(stepName)) problems.push(`${s.key}[${id}] binds ${p}, which is not a STEPS entry in scripts/preflight.mjs (phantom step)`);
+            if (!preflightSteps.has(stepName)) { problems.push(`${s.key}[${id}] binds ${p}, which is not a STEPS entry in scripts/preflight.mjs (phantom step)`); continue; }
+            if (preflightSteps.get(stepName)?.selfSkipsWithout) problems.push(`${s.key}[${id}] binds ${p}, which self-skips without ${preflightSteps.get(stepName).selfSkipsWithout} — a green run cannot record it as run`);
+            if (!Object.prototype.hasOwnProperty.call(stepSources, stepName)) problems.push(`${s.key}[${id}] binds ${p}, which has no STEP_SOURCES entry — its record would be current on the manifest fingerprint alone, with no source digest`);
           }
         }
       }
@@ -448,6 +490,34 @@ export function proofSourceDigest(repoRoot, relPath, pkgDirs) {
   return sourceDigestOf(ownBlob, dirListings);
 }
 
+/** LIVE: `paths` plus every `@workspace/*` package their package.json files depend
+ *  on, transitively (dependencies + devDependencies), as repo-relative paths. */
+export function withWorkspaceDeps(repoRoot, paths, pkgDirs) {
+  const out = new Set(paths);
+  const queue = [...paths];
+  while (queue.length) {
+    let pkg;
+    try { pkg = JSON.parse(readFileSync(join(repoRoot, queue.shift(), "package.json"), "utf8")); } catch { continue; }
+    for (const dep of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })) {
+      const d = pkgDirs.get(dep);
+      if (d && !out.has(d)) { out.add(d); queue.push(d); }
+    }
+  }
+  return out;
+}
+
+/**
+ * LIVE: one bindable step's sourceDigest — sourceDigestOf over the recursive blob
+ * listing of its STEP_SOURCES paths and their workspace dependencies. null for a
+ * step with no STEP_SOURCES entry (the readiness figure reads null as not current).
+ * SHARED by verify-all.mjs (records it) and check-readiness-figure.mjs (recomputes it).
+ */
+export function stepSourceDigest(repoRoot, stepName, pkgDirs, stepSources = STEP_SOURCES) {
+  if (!Object.prototype.hasOwnProperty.call(stepSources, stepName)) return null;
+  const paths = withWorkspaceDeps(repoRoot, stepSources[stepName], pkgDirs);
+  return sourceDigestOf(`step:${stepName}`, new Map([...paths].map((d) => [d, gitDirListing(repoRoot, d)])));
+}
+
 const RECORD_REL = "docs/agent/launch-proof-bindings-record.json";
 
 /** Pure: surface[id] -> sorted proof/step names, for every launch item that binds any. */
@@ -552,13 +622,30 @@ function selfTest() {
   checks.push(["registeredSteps: a plain step is registered and not flagged needsNativeBuild", steps.has("Typecheck (all packages)") && steps.get("Typecheck (all packages)").needsNativeBuild === false]);
   checks.push(["registeredSteps: needsNativeBuild is read even when the same line carries a NESTED object (env: {...}) after it", steps.get("Build (all packages)")?.needsNativeBuild === true]);
   checks.push(["registeredSteps: a COMMENTED-OUT step is not registered", !steps.has("Commented step")]);
+  const multi = registeredSteps([
+    "  {",
+    '    name: "Proof: pg-thing (self-skips)",',
+    '    cmd: ["pnpm", "run", "proof:pg-thing"],',
+    '    env: { A: "1" },',
+    '    selfSkipsWithout: "DATABASE_URL",',
+    "  },",
+    '  { name: "After", cmd: ["node", "x.mjs"] },',
+  ].join("\n"));
+  checks.push(["registeredSteps: a MULTI-LINE entry is registered with its selfSkipsWithout, read past a nested env: {…}", multi.get("Proof: pg-thing (self-skips)")?.selfSkipsWithout === "DATABASE_URL" && multi.get("After")?.selfSkipsWithout === null && multi.size === 2]);
 
   // ── checkBindings with step: bindings (finding #3). ──
-  const stepsBase = { ...base, preflightSteps: new Map([["Browser E2E (review console, website, admin)", { needsNativeBuild: true }]]) };
+  const stepsBase = { ...base, preflightSteps: new Map([["Browser E2E (review console, website, admin)", { needsNativeBuild: true }], ["No digest", {}], ["DB step", { selfSkipsWithout: "DATABASE_URL" }]]), stepSources: { "Browser E2E (review console, website, admin)": ["x"], "DB step": ["x"] } };
   const stepOk = checkBindings({ ...stepsBase, surfaces: [{ key: "s", launch: [{ id: "i", reason: "r", proofs: ["step:Browser E2E (review console, website, admin)"] }], deferred: [] }] });
   checks.push(["a launch item bound to a real, registered STEP has no problems", stepOk.length === 0]);
   const stepPhantom = checkBindings({ ...stepsBase, surfaces: [{ key: "s", launch: [{ id: "i", reason: "r", proofs: ["step:Nonexistent Step"] }], deferred: [] }] });
   checks.push(["planted: a step: binding to an unregistered STEPS name is reported as a phantom step", stepPhantom.some((p) => /phantom step/.test(p))]);
+  const stepNoDigest = checkBindings({ ...stepsBase, surfaces: [{ key: "s", launch: [{ id: "i", reason: "r", proofs: ["step:No digest"] }], deferred: [] }] });
+  checks.push(["planted: a registered step with NO STEP_SOURCES entry is refused (it would be current on the fingerprint alone)", stepNoDigest.some((p) => /no STEP_SOURCES entry/.test(p))]);
+  const stepSkips = checkBindings({ ...stepsBase, surfaces: [{ key: "s", launch: [{ id: "i", reason: "r", proofs: ["step:DB step"] }], deferred: [] }] });
+  checks.push(["planted: a step carrying selfSkipsWithout is refused, naming its env var", stepSkips.some((p) => /self-skips without DATABASE_URL/.test(p))]);
+  checks.push(["LIVE: every STEP_SOURCES name is a registered preflight STEPS entry", Object.keys(STEP_SOURCES).every((n) => registeredSteps(readFileSync(join(repo, "scripts/preflight.mjs"), "utf8")).has(n))]);
+  const apiDigest = stepSourceDigest(repo, "API integration test (boots the server)", workspacePackageDirs(repo));
+  checks.push(["stepSourceDigest: LIVE — a listed step has a digest, an unlisted one is null", typeof apiDigest === "string" && apiDigest.length === 64 && stepSourceDigest(repo, "Typecheck (all packages)", new Map()) === null]);
   const notProofOrStep = checkBindings({ ...base, surfaces: [{ key: "s", launch: [{ id: "i", reason: "r", proofs: ["check:x"] }], deferred: [] }] });
   checks.push(["planted: a name that is neither proof: nor step: is reported", notProofOrStep.some((p) => /not a `proof:\*` or `step:\*` name/.test(p))]);
 
@@ -640,6 +727,29 @@ function selfTest() {
   checks.push(["planted: a binding the record lacks is reported as UNRECORDED (the record cannot lag)", added.length === 1 && /UNRECORDED binding: api\[\/v1\/x\] binds proof:c/.test(added[0])]);
   const rerecorded = bindingRecord([{ key: "api", launch: [{ id: "/v1/x", proofs: ["proof:a"] }, { id: "/v1/y", proofs: ["proof:a"] }] }]);
   checks.push(["ratchet: the same removal WITH the record changed in the same diff passes", ratchetProblems(rerecorded, rerecorded).length === 0]);
+
+  // ── ratchet-read in a SHALLOW clone (#686 review): CI checks out depth 1, where
+  // `git log -- <deleted record>` is empty. The probe must fail closed there, or a PR
+  // deleting the record AND dropping a binding reads as genesis and exits 0. ──
+  {
+    const tmp = mkdtempSync(join(tmpdir(), "ratchet-shallow-"));
+    const g = (cwd, ...a) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...a], { cwd, encoding: "utf8" });
+    const full = join(tmp, "full");
+    mkdirSync(full);
+    g(full, "init", "-q");
+    writeFileSync(join(full, "record.json"), "{}\n");
+    g(full, "add", "record.json");
+    g(full, "commit", "-qm", "one");
+    writeFileSync(join(full, "other.txt"), "x\n");
+    g(full, "rm", "-q", "record.json");
+    g(full, "add", "other.txt");
+    g(full, "commit", "-qm", "two");
+    g(tmp, "clone", "-q", "--depth", "1", `file://${full}`, "shallow");
+    const shallow = join(tmp, "shallow");
+    checks.push(["ratchet-read: full clone — a deleted-but-committed record HAS history; a never-existed path has none", gitHasHistory("record.json", full) && !gitHasHistory("never.json", full) && !isShallowRepo(full)]);
+    checks.push(["ratchet-read: SHALLOW clone (injected) — the probe fails closed, so a deleted record REFUSES instead of re-baselining", isShallowRepo(shallow) && gitHasHistory("record.json", shallow) && readRatchetFile(join(shallow, "record.json"), "bindings", (p) => gitHasHistory(p, shallow)).action === "refuse"]);
+    rmSync(tmp, { recursive: true, force: true });
+  }
 
   // ── LIVE smoke checks against the real repo — cheap, and the whole point
   // is that this derivation is read from the tree, not hand-maintained. ──

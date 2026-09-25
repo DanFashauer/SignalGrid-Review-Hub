@@ -2206,6 +2206,17 @@ unchanged. Consequence stated plainly: the evidence file committed at the time o
 change predates the field, so (b) reads 0 of N until the Mac re-mints once against the
 merged tree; that is the fail-closed reading, not a regression to work around.
 
+**Amended in the same PR (#686, 2026-09-12 to 2026-09-25).** A binding may also name a non-proof preflight step as `step:<name>`, but only a step
+listed in `STEP_SOURCES` in `scripts/check-launch-proof-bindings.mjs`, and never one
+preflight marks `selfSkipsWithout`. Each evidence record is an object
+`{ status, manifestFingerprint, sourceDigest }`, under `proofs.passed` for proofs and
+`proofs.steps` for steps. It counts only when its digest matches what the tree hashes to
+now, so a legacy string `"passed"` scores 0. (b) is the LOWER of the proof ratio and the
+launch-item ratio, and an item counts only when every name it binds is current. The
+per-item binding set is a ratchet, `docs/agent/launch-proof-bindings-record.json`:
+dropping a binding fails unless that file changes in the same diff, and a deleted record
+refuses rather than re-baselining, in CI's shallow clone too.
+
 ## DR-037 — The cloud lane merges its own green product PRs; the owner is no longer the merge button (owner-directed 2026-09-12)
 
 **Decision.** From 2026-09-12 the cloud lane **merges product pull requests itself** once

@@ -110,7 +110,7 @@ export default function HeroSection() {
                   // beside a four-row array (three signals and the verdict) after
                   // the array was rewritten to the Limited-GA signals.
                   { label: "SIGNALS FUSED", value: String(LIVE_SIGNALS.filter((s) => s.label !== "VERDICT").length) },
-                  { label: "CORE SIGNAL CATEGORIES", value: "17" },
+                  { label: "CORE SIGNAL CATEGORIES", value: "20" },
                   { label: "EVALUATION", value: "FIXTURE" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card px-4 py-3 text-center">

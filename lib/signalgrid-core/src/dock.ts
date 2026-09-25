@@ -1,6 +1,7 @@
 import type { MemoryStore } from "./store";
 import { classifyFreshness, deterministicId } from "./util";
 import type { Clock } from "./util";
+import type { AttachState } from "./attach";
 import {
   CoreError,
   type BadgeBindingState,
@@ -49,6 +50,12 @@ export interface DockCustodyRecord {
    * which normalizes to "unknown".
    */
   badgeBinding?: BadgeBindingState;
+  /**
+   * DR-043: whether the credential is seated in its receiver. Optional, and absence
+   * stays absent: a dock that cannot sense the credential emits nothing, which reads
+   * `not_applicable`. Inferring `attached` from silence would fabricate custody.
+   */
+  attachState?: AttachState;
   observedAt: string;
   sourceReference: string;
 }
@@ -107,6 +114,9 @@ export function runDockSync(
     // The reader case reports a badge-binding read when present.
     if (record.badgeBinding !== undefined) {
       pairs.push({ category: "badge_binding", value: record.badgeBinding });
+    }
+    if (record.attachState !== undefined) {
+      pairs.push({ category: "attach_state", value: record.attachState });
     }
     for (const pair of pairs) {
       store.putSignal({

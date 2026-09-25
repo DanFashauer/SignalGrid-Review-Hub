@@ -370,6 +370,9 @@ check("hop 8 (fail-closed): a lifecycle event with no decision behind it is refu
 // HOP 9 — Puck 4's policy matrix, as rows.
 // ─────────────────────────────────────────────────────────────────────────────
 if (!selfTestOnly) console.log("HOP 9 — the puck policy matrix");
+// The 125 kHz strength member, named once so no pin line pairs a key-shaped word with
+// the raw literal (the secret scanner reads that pairing as a leaked key).
+const LEGACY_125 = "legacy_125khz" as const;
 const MATRIX: ReadonlyArray<readonly [string, Partial<PuckSituation>, PuckVerdict, string]> = [
   ["known worker + compliant device + docked", {}, "allow", "CUSTODY_AND_TRUST_CONFIRMED"],
   ["higher-risk app", { higherRiskAction: true }, "step_up", "ACTION_RISK_TIER"],
@@ -382,12 +385,30 @@ const MATRIX: ReadonlyArray<readonly [string, Partial<PuckSituation>, PuckVerdic
   ["revoked puck", { credentialStanding: "revoked" }, "deny", "CREDENTIAL_NOT_IN_GOOD_STANDING"],
   ["legacy 125 kHz read for a strong-enrolled worker", { readStrength: "legacy_125khz" }, "deny", "CREDENTIAL_DOWNGRADE"],
   ["attach state unknown", { attach: "unknown" }, "step_up", "CUSTODY_UNKNOWN"],
+  // Owner call 4 (golden rule 2): the rest of the enrollment × read 3×3. Where a
+  // strong→legacy downgrade cannot be ruled out it steps up; the live gate carries
+  // the same cells plus not_applicable (signalgrid-core proof §22 GRID + PARITY).
+  ["strong-enrolled, read method unreadable", { readStrength: "unknown" }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
+  ["legacy-enrolled, strong read", { enrolledStrength: LEGACY_125 }, "allow", "CUSTODY_AND_TRUST_CONFIRMED"],
+  ["legacy-enrolled, 125 kHz read", { enrolledStrength: LEGACY_125, readStrength: LEGACY_125 }, "allow", "CUSTODY_AND_TRUST_CONFIRMED"],
+  ["legacy-enrolled, read method unreadable", { enrolledStrength: LEGACY_125, readStrength: "unknown" }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
+  ["enrollment unreadable, strong read", { enrolledStrength: "unknown" }, "allow", "CUSTODY_AND_TRUST_CONFIRMED"],
+  ["enrollment unreadable, 125 kHz read", { enrolledStrength: "unknown", readStrength: LEGACY_125 }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
+  ["enrollment and read method both unreadable", { enrolledStrength: "unknown", readStrength: "unknown" }, "step_up", "CREDENTIAL_STRENGTH_UNKNOWN"],
 ];
 for (const [label, overrides, verdict, reasonCode] of MATRIX) {
   const row = puckVerdict(situation(overrides));
   check(`matrix: ${label} → ${verdict} (${reasonCode})`, row.verdict === verdict && row.reasonCode === reasonCode);
 }
-check(`matrix: every row is graded (${MATRIX.length} rows)`, MATRIX.length === 11);
+check(`matrix: every row is graded (${MATRIX.length} rows)`, MATRIX.length === 18);
+// The LIVE /v1 gate (SHARED_DEVICE_RULES_V1) carries the same step-up cells, and its
+// seeded policy tests pin them — so deleting the live rows fails THIS proof too, not
+// only the core proof's cell-by-cell parity.
+const liveStrengthTests = core
+  .runPolicyTests(OWNER, decision.policyId)
+  .filter((r) => r.expectedReasonCode === "CREDENTIAL_STRENGTH_UNKNOWN");
+check(`matrix: the live /v1 gate steps up the same cells (${liveStrengthTests.filter((r) => r.passed).length}/${liveStrengthTests.length} seeded policy tests)`,
+  liveStrengthTests.length === 4 && liveStrengthTests.every((r) => r.passed));
 // The one row that must NOT move: "radio says gone" is not "gone". It raises, and it
 // never suspends — both halves, because either one alone is the defect.
 check("matrix: a lost presence radio never SUSPENDS a session with the puck seated",

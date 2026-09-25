@@ -9,6 +9,24 @@ A shared resource is answered with a measurement or a named blocker, never with 
 memo of reasons (`docs/agent/RESOURCE_INTAKE.md`, "Rules for a new row"; DR-021).
 The row is logged the day it arrives; the verdict lands after the tool has run.
 
+## 0 — Who runs this (DR-053, 2026-09-20)
+
+Steps 2–5 are run by a SEPARATE agent in its own context (Opus tier, DR-047): the
+resource and the tree are its inputs, the coordinator's current task is not. It
+returns facts, measurements, the one landing place, the one gap, and up to three
+candidate tasks with owning roles — and decides nothing. The coordinator then
+cross-confirms each candidate against the tree, the backlog, the decision records,
+prior intake rows and the Mac lane's evidence (CONFIRMED / DUPLICATE / REFUTED),
+and only then writes the disposition in step 6. The row names which stage each
+sentence came from.
+
+A resource that cannot be run — an article, a video, an image, a list — takes the
+same three stages with a different stage 1: the separate agent READS or WATCHES it
+(the article check in step 2; the `video-intake` skill for footage) and returns what
+was read — passages, timestamps, counts, the claims it makes and which of them the
+tree already answers. Steps 4 and 5 do not apply and the row says so; nothing is
+measured that was not there to measure.
+
 ## 1 — Log the row first, evaluate second
 
 Append to the intake log in `docs/agent/RESOURCE_INTAKE.md`: Date | Resource |
@@ -46,14 +64,20 @@ stamps every later result as minted from a dirty tree.
 ## 4 — Run it in a sandbox, with no keys, against a COPY
 
 ```bash
-git worktree add -b eval/<tool>-<stamp> <scratchpad>/eval-<tool> origin/SignalGrid_Alpha
+git worktree add --detach <scratchpad>/eval-<tool> origin/SignalGrid_Alpha   # no branch: nothing persists in the repository
 pnpm install --frozen-lockfile          # in the new worktree, its own install
+# … the trial …
+git worktree remove --force <scratchpad>/eval-<tool>                             # always, as the last step; `git worktree list` must not show it afterwards
 ```
 
 Then copy only the surface under test (for the 2026-09-12 Graphify run: `lib/` +
 `scripts/`, 956 files) into a scratch directory and point the tool at the copy.
 No API keys. No tenant data. No install into any session config. Nothing that
-edits `CLAUDE.md`, `.claude/settings.json` or `.claude/skills/`.
+edits `CLAUDE.md`, `.claude/settings.json` or `.claude/skills/`. **Every socket denied
+from the FIRST run** (a shim that refuses every connection): a tool that cannot run
+without the network is a NAMED BLOCKER, recorded as such, never a connected trial —
+this repository's workflow makes no live vendor or API call (AGENTS.md), and a
+connected run happens only in an explicitly authorized private context, elsewhere.
 
 ## 5 — Measure. Do not quote the README
 
@@ -61,9 +85,9 @@ Record, from output:
 
 - the real command, its exit code and its wall time;
 - what it emitted, in counts;
-- **offline behaviour** — re-run with every socket denied by a shim. Identical
-  output means the tool needs no network; a different or failed run means it does,
-  and the row says so;
+- **offline behaviour** — the run above WAS socket-denied. A clean run means the tool
+  needs no network; a failed or degraded one means it does, and the row names that as
+  the blocker and who may authorize a connected trial outside this repository;
 - **determinism** — repeat over an UNCHANGED tree. Output that oscillates between
   runs is not a pure function of the source (five forced rebuilds alternating
   11,489 / 11,464 nodes is a fail, not noise);

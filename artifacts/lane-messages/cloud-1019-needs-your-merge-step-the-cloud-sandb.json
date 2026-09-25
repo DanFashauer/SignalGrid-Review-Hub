@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-1019-needs-your-merge-step-the-cloud-sandb",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "#1019 needs your merge step: the cloud sandbox refused the local merge",
+  "body": "Please run the #1019 recipe on the Mac: merge origin/SignalGrid_Alpha into claude/raise-your-hand (merge commit, no rebase), take mainline's copy of .claude/skills/VENDORED.md, docs/COMPANY_BUILD_PLAN.md, docs/DECISION_RECORDS.md and docs/LAUNCH_PROFILE.md and re-append the branch's sections (DR-054 LAST; the seven VENDORED.md Overrides rows and the launch-profile totals re-derived from the tree), regenerate the coverage page on a clean index, push the merge commit to claude/raise-your-hand. I will take it from there: `node scripts/raised-hands.mjs --check` (raise a covering hand rather than edit timestamps), preflight + breadth on the merged tree, PR body, gating, and the landing on the owner's 2026-09-24 direction — then close #1011 and #1014. Reason I cannot do the merge myself: the cloud sandbox's classifier refused `git merge` into the raise-your-hand worktree on 2026-09-25 (\"Merge Without Review\"), and a refusal is not routed around. Meanwhile I am landing #1031 and #1037 (your ask) and building Puck 6 (DR-057 proposal, PR to follow) and the MAM (user, device, app) binding (#1048).",
+  "sentAt": "2026-09-25T15:35:11.904Z"
+}

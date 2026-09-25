@@ -3990,3 +3990,98 @@ It authorizes the loop to decide and to queue. It does NOT authorize the loop to
 It authorizes one future change to how green is certified, so no second record is needed for it: `node scripts/objective-loop.mjs --self-test --check` may be registered as a fatal preflight gate together with its matching CI job in the SAME pull request, after PR #1019 (which edits `scripts/preflight.mjs`) has landed. `--check` is already three-state: a shallow clone reports provenance instead of failing on it, a moved roster reports stale executor claims instead of failing on them, and a stale state is REPORTED — a gate that fails on a low number, on age, or on a tick's own verdict is a separate decision. Two follow-ups are filed to `docs/BUILD_BACKLOG.md`: that registration, and adding `docs/agent/objective.json` to `SAFETY_MACHINERY` as a second belt.
 
 **Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Changing the objective is not a reversal of this record: it is a new `attestedIn`, or a new `docs/agent/objective.json` together with the matching id set in `scripts/objective-loop.mjs`, landed by its own record — which is the mechanism this record exists to create.
+
+## DR-054 — Raise your hand when stuck: every autonomous unit surfaces a blocker, none fails silently (owner-directed 2026-09-23)
+
+### 1. The decision
+
+The owner, 2026-09-23: *"All agents will never raise their hand when they get stuck."*
+This is a founding operating law, effective across the whole company and product,
+every lane: **an autonomous unit that cannot resolve its task MUST surface a structured
+BLOCKED signal — never fail silently, drop a step, or hand back an empty/partial/best-guess
+result as if it were complete, and never narrate past the blocker.**
+
+It is the fail-closed rule (golden rule 2) applied to an actor's OWN PROGRESS, not only
+to the data it reads: an unknown or blocked STATE must **tighten** (stop, surface) not
+**loosen** (guess, proceed). A raised hand is the job done right; a silent stall is the
+one failure this system will not tolerate.
+
+### 2. What "raise your hand" means, concretely
+
+When blocked — a tool or permission it lacks, a dependency it cannot reach, an input that
+is missing or self-contradictory, an ambiguous call that is the owner's to make, a usage
+limit, or a refusal — the unit reports four things: **what it was doing, what blocked it,
+exactly what it needs to continue, and who can unblock it** (the owner, the other lane, a
+named tool). The blocker goes where a human or the other lane will see it, not only into a
+return value the caller may discard.
+
+### 3. Where it binds, and how it is enforced
+
+- **Subagents** (`.claude/agents/*.md`): each carries the canonical clause verbatim,
+  enforced by `scripts/check-agent-raise-hand.mjs` (preflight + CI, with a self-test).
+  This is the direct fix for the owner's words — 8 of 13 defs had no escalation language.
+- **Coordinators / this session**: the START/END ritual and the stop hook already refuse
+  a silent "done"; this law adds that a *blocked* state is reported the same way, in plain
+  terms, to the owner or the other lane — not swallowed.
+- **Workflows**: a `null` from `agent()` (a skipped or dead sub-agent) must be SURFACED
+  (logged/reported as BLOCKED), never silently `.filter(Boolean)`'d into nothing. The
+  author owns this; the doctrine names it so a dropped agent is a defect, not a shrug.
+- **Lanes**: a stuck lane writes a blocker into the lane mailbox (an unacknowledged message
+  is already PENDING and surfaced by `lane:inbox` / `loop:state`), generalizing DR-047's
+  "a usage-limited spawn is logged pending and re-issued, never silently dropped" to every
+  kind of blocker.
+- **Gates / routines**: "could not run / could not determine" is reported distinctly from
+  pass/fail (the existing fail-closed contract) — a check that cannot answer raises its
+  hand, it does not quietly pass.
+
+### 4. Proof and scope
+
+Proven by `scripts/check-agent-raise-hand.mjs` (self-test: the canonical clause passes, a
+reworded/weaker section and an empty body fail, a file floor guards an empty walk) plus the
+clause landed in all 13 agent definitions. Cross-surface work (workflow surfacing helper,
+a lane blocked-signal row in `loop:state`, and the system-wide sweep for other silent-stall
+sites) is tracked from this record. No decision-core verdict, Decision Envelope, or launch
+claim is touched.
+
+**Reversal / amendment.** The owner vetoes DR-054 by not merging, or reverses a merged form
+by reverting the PR with the reversal date added here.
+
+### 5. The mechanism, merged (2026-09-23)
+
+The owner gave both lanes the same directive, and each built its own half. Asked how to
+combine them, he chose **"Merge into one."** One system now carries DR-054:
+
+- **The rule:** the canonical clause in every first-party agent
+  (`scripts/check-agent-raise-hand.mjs`). The nine vendored agents stay byte-identical to
+  upstream (agent-roster rule 5) and inherit the rule from CLAUDE.md, which the gate
+  asserts.
+- **The ledger:** `artifacts/raised-hands/<id>.json`, written by `scripts/raise-hand.mjs`
+  (`hand:raise`, `hand:take`, `hand:clear`, and `raise`/`take`/`clear` ops in
+  `lane:deliver`). A resolution must say what unblocked the hand.
+- **The router:** `scripts/check-raised-hands.mjs` sends each hand to its org-roster role,
+  the owner, a lane or a tool, or names it a GAP. It feeds `loop:state` and the Mac tick.
+- **The detector and gate:** `scripts/raised-hands.mjs` raises hands automatically for
+  stalls nobody reported: mail unread past 24h, sim requests pending past 48h, silent
+  routines, and PRs red or idle. It fails preflight when one sits past 3× its limit
+  with no hand covering it (CI only warns, since 2026-09-24; see below). It also counts, as a health line, how many stalls no agent
+  reported.
+- **The answer:** the `blocker-dispatcher` agent follows the `raised-hands` skill. It is
+  read-only and returns a dispatch plan. Auto stalls route by `docs/agent/hand-routing.json`.
+  Every route must name an agent or skill that exists, or the gate fails. GAPs are
+  specified by the dispatcher and created by the agent-platform-steward.
+- **The owner's page:** `.github/workflows/raised-hands.yml` keeps one issue labelled
+  `raised-hands` current every hour, and comments only when a hand is new. A daily
+  `hands-watch` job in `scheduled-verification.yml` fails if that issue goes stale.
+
+**CI warns, preflight fails (2026-09-24).** The owner said "just get it done" and
+delegated the call; the cloud lane's recommendation was applied. In CI the stall half of
+`node scripts/raised-hands.mjs --check` now runs with `--warn`. It prints each stall as
+`WARN (would fail locally):` and exits 0. Why: a stall is another lane's clock. When the
+Mac sent no heartbeat for 9 hours, mainline and every later PR went red. Heartbeat pushes
+are paths-ignored, so the red stayed until someone pushed again. The register's own
+integrity still fails CI under `--warn`: an unreadable hand, a route naming a missing
+agent or skill, or a sim gate that printed nothing. Local `scripts/preflight.mjs` stays
+fatal on stalls. `scripts/check-preflight-ci-parity.mjs` records the weakening in
+`CI_WARN_ONLY` and fails on an undeclared or stale `--warn`. **Reversal:** delete `--warn`
+from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
+

@@ -142,6 +142,7 @@ export const NON_SURFACE_TREES = new Map([
 export const MAILBOX_TREES = new Map([
   ["artifacts/lane-messages", "lane mail — every send, ack and batch appends a message file"],
   ["artifacts/agent-heartbeats", "routine heartbeats — a new routine appends a file; a firing rewrites one"],
+  ["artifacts/raised-hands", "raised hands (DR-054) — every raise appends a file; a take or resolve rewrites one"],
 ]);
 
 /**
@@ -843,6 +844,7 @@ function makeTempRepo() {
   // per-key mailbox check (a key naming no surface, or holding no record, is fatal).
   w("artifacts/lane-messages/one.json", "{}\n");
   w("artifacts/agent-heartbeats/one.json", "{}\n");
+  w("artifacts/raised-hands/one.json", "{}\n");
   w("scripts/package.json", '{"name":"scripts"}\n');
   w("scripts/a.mjs", "// a\n");
   w("docs/TOP.md", "# top\n");

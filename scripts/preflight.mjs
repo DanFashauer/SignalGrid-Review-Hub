@@ -358,6 +358,8 @@ const STEPS = [
   { name: "Agent roster (DR-016 — tier, charter, disjoint write boundary, vendor drift; self-tested)", cmd: ["node", "scripts/check-agent-roster.mjs"] },
   { name: "Skill-plane conformance self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs", "--self-test"] },
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
+  { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
+  { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },
@@ -499,6 +501,7 @@ const STEPS = [
   { name: "Backlog ownership (a row with work left in it names the role that owns it)", cmd: ["node", "scripts/check-backlog-ownership.mjs"] },
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
+  { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },
@@ -524,6 +527,10 @@ const STEPS = [
   { name: "Proof: lane-messages (the cloud↔Mac channel — identity is derived, and no lane acknowledges its own mail)", cmd: ["pnpm", "run", "proof:lane-messages"] },
   { name: "Lane messages (unread mail is named on every run; only the addressee can close one)", cmd: ["node", "scripts/check-lane-messages.mjs"] },
   { name: "Lane message self-test (the gate can actually fail)", cmd: ["node", "scripts/check-lane-messages.mjs", "--self-test"] },
+  // Raised hands (owner, 2026-09-23: "agents never raise their hand when they get stuck").
+  // Fails only when a stall is past 3x its limit with NO hand raised; overdue hands are reported.
+  { name: "Raised hands (nothing stuck past its limit without a hand raised)", cmd: ["node", "scripts/raised-hands.mjs", "--check"] },
+  { name: "Raised hands self-test (the gate can actually fail)", cmd: ["node", "scripts/raised-hands.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },

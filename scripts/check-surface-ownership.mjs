@@ -72,6 +72,7 @@ export const EXCLUSIONS = [
   ["artifacts/live-evidence/**", "generated evidence minted by the Mac lane, not authored source", "mac-lane-steward"],
   ["artifacts/lane-messages/**", "generated cross-lane mail; the protocol is owned, the messages are data", "mac-lane-steward"],
   ["artifacts/agent-heartbeats/**", "generated liveness records written by scheduled routines", "agent-platform-engineer"],
+  ["artifacts/raised-hands/**", "DR-054 raised-hand records written by scripts/raise-hand.mjs and routed by check-raised-hands.mjs", "agent-platform-engineer"],
   ["artifacts/build-loop/**", "generated run history appended by the build loop", "devex-tooling-engineer"],
   ["artifacts/connector-emulator/**", "generated emulator results, not authored source", "devex-tooling-engineer"],
   ["artifacts/live-captures/**", "generated vendor-shape captures minted by a live lane", "devex-tooling-engineer"],

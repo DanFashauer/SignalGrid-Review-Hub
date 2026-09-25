@@ -9920,7 +9920,7 @@
    "claim": "\"The one wire-conformance case set every client must agree on.\"",
    "kind": "count",
    "classification": "launch",
-   "evidence": "Grounded: scripts/launch-profile.mjs:750-751 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:750 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
+   "evidence": "Grounded: scripts/launch-profile.mjs:750-751 (native:shared internal — \"the assist-wire conformance fixture every native port … must parse identically\"). Measured: native/shared holds THREE json files — assist-wire-conformance.json (cases: 44), posture-allow-vectors.json (cases: 52), remediation-allow-vectors.json (cases: 40). README's \"one … case set\" matches the single assist-wire file; the drift is in the ground truth's own prose — scripts/launch-profile.mjs:761 now says \"Three JSON files (it said one until 2026-09-06)\" and :333-335 says the count lives in the fixture (it read 42 while the file carried 44) — both corrected in Batch P.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -9930,7 +9930,7 @@
    "claim": "\"SmartDock firmware core (Rust, `no_std`): sensor readings to a custody event. A deferred surface.\"",
    "kind": "surface",
    "classification": "deferred",
-   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:774 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
+   "evidence": "Honest deferred framing: scripts/launch-profile.mjs:785 (firmware:dock deferred) and :636-640 (\"no real dock has run it\"); firmware/dock/core/src/lib.rs:17 `#![cfg_attr(not(test), no_std)]`; .github/workflows/firmware.yml exists. custody / custody_beacon are deferred signal kinds (:286-287).",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },
@@ -10113,7 +10113,7 @@
    "claim": "\"`scripts/check-review-coverage.mjs` prints review\" — \"coverage beside every green preflight\"; \"nothing skips silently.\"",
    "kind": "availability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:507 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
+   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:519 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

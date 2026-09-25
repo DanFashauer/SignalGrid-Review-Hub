@@ -1,0 +1,88 @@
+name: Raised hands
+
+# The owner's one page of everything stuck (owner, 2026-09-23: "All agents will
+# never raise their hand when they get stuck"). Hourly, this renders
+# scripts/raised-hands.mjs — every hand an agent raised in
+# docs/agent/RAISED_HANDS.json, plus every stall nobody raised a hand for (mail
+# unread past 24h, sim requests pending past 48h, routine heartbeats past their
+# tolerance, PRs red or green-and-idle too long) — into ONE open issue labelled
+# `raised-hands`.
+#
+# The issue BODY is rewritten every hour (an edit sends no notification). A
+# COMMENT is posted only when a hand appears that was not on the last body, so the
+# owner's phone buzzes for something new and never for the same thing twice.
+#
+# Report-only: no code is changed, no PR is touched. GitHub runs `schedule` only
+# on the default branch.
+
+on:
+  schedule:
+    - cron: "23 * * * *" # hourly
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: raised-hands
+  cancel-in-progress: true
+
+jobs:
+  hands:
+    name: Raised hands (the owner's stuck list)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # a v1 lane message ages by its commit date
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Render the stuck list (PRs included)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/raised-hands.mjs --markdown --github > "$RUNNER_TEMP/hands.md"
+
+      - name: Refresh the issue; comment only on a NEW hand
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require("fs");
+            const body = fs.readFileSync(`${process.env.RUNNER_TEMP}/hands.md`, "utf8");
+            const label = "raised-hands";
+            const idsOf = (text) => new Set(((/<!-- hand-ids: ([^>]*) -->/.exec(text ?? "") ?? [])[1] ?? "").split(",").filter(Boolean));
+            const now = idsOf(body);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const full = `${body}\n\n_Updated by [this run](${runUrl})._`;
+            const { data: open } = await github.rest.issues.listForRepo({ ...context.repo, state: "open", labels: label, per_page: 5 });
+            if (open.length === 0) {
+              await github.rest.issues.create({ ...context.repo, title: "Raised hands — what is stuck", body: full, labels: [label] });
+              return;
+            }
+            const issue = open[0];
+            const before = idsOf(issue.body);
+            const added = [...now].filter((id) => !before.has(id));
+            await github.rest.issues.update({ ...context.repo, issue_number: issue.number, body: full });
+            if (added.length > 0) {
+              const lines = body.split("\n").filter((l) => added.some((id) => l.includes("`" + id + "`")));
+              await github.rest.issues.createComment({ ...context.repo, issue_number: issue.number, body: [`New since last hour (${added.length}):`, "", ...lines].join("\n") });
+            }
+
+      - name: Say so on the issue when this job itself fails
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // A stuck-list job that died silently would leave last hour's list looking current.
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: open } = await github.rest.issues.listForRepo({ ...context.repo, state: "open", labels: "raised-hands", per_page: 5 });
+            const body = `The raised-hands job FAILED, so the list above may be stale. Run: ${runUrl}`;
+            if (open.length > 0) await github.rest.issues.createComment({ ...context.repo, issue_number: open[0].number, body });
+            else await github.rest.issues.create({ ...context.repo, title: "Raised hands — what is stuck", body, labels: ["raised-hands"] });

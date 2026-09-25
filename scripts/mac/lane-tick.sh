@@ -152,8 +152,19 @@ append_unread_state() {
   esac
 }
 
+# Fold any OPEN raised hands (DR-054) into the heartbeat, so the unattended lane surfaces
+# a blocker the same way it surfaces unread mail — never lost between sessions.
+append_raised_hands_state() {
+  _rh="$(node scripts/check-raised-hands.mjs --tick-summary 2>/dev/null || true)"
+  case "$_rh" in
+    "") : ;;                                   # none open, or monitor silent; loop:state catches a run failure
+    raised-hands=*) RESULT="$RESULT; $_rh" ;;  # e.g. "quiet; raised-hands=2 gaps=1"
+  esac
+}
+
 heartbeat() {
   append_unread_state
+  append_raised_hands_state
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $RESULT"; return 0; fi
   # Throttle a result IDENTICAL to the last delivered one ("quiet" again, the same
   # "skipped: …" again, the same failure again) inside the window; anything that

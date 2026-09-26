@@ -44,7 +44,11 @@ client suites on the current head: "Assist core (pure Kotlin, no SDK)",
 "(windows-latest)", "Desktop shell (ubuntu-latest)" and "(windows-latest)",
 "Shared Assist vectors bind every client", the iOS simulator job and "macOS
 native (SwiftPM, no simulator)" — whichever the PR's paths trigger; making
-them required checks is an owner setting.
+them required checks is an owner setting. `ios-ci.yml`'s `pull_request`
+trigger runs only for PRs targeting `SignalGrid_Alpha` (line 37), so a
+native PR stacked on another feature branch never runs the iOS simulator or
+macOS-native jobs at all — target `SignalGrid_Alpha` directly, or there is
+nothing to wait for.
 
 ## The merge call
 

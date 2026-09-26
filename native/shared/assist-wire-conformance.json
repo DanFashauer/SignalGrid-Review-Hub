@@ -505,7 +505,7 @@
     },
     {
       "id": "duplicate-assist-deny-then-allow",
-      "why": "a repeated top-level key is ambiguous JSON, and all three clients resolved it last-wins: this read as allow. Any duplicate top-level key is malformed: deny, and nothing is read from the body",
+      "why": "a repeated top-level key is ambiguous JSON. kotlinx.serialization and serde_json were measured last-wins (this read as allow before the duplicate check); Foundation's order is unspecified (measured last-wins on swift-corelibs-foundation, Darwin not measured). Any duplicate top-level key is malformed regardless: deny, and nothing is read from the body",
       "status": 200,
       "body": "{\"assist\":\"deny\",\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny",

@@ -392,6 +392,9 @@ mod tests {
         for body in [
             r#"{"assist":"deny","assist":"allow","decisionId":"dec_1"}"#,
             r#"{"assist":"allow","assist":"allow","decisionId":"dec_1"}"#,
+            // The escaped spelling: "assist" decodes to "assist", so this is a
+            // duplicate a raw byte-text comparison would miss. A raw string keeps the
+            // backslash literal here; the JSON parser is what decodes it at runtime.
             r#"{"assist":"allow","assist":"allow","decisionId":"dec_1"}"#,
             r#"{"assist":"allow","decisionId":"dec_1","decisionId":"dec_2"}"#,
         ] {

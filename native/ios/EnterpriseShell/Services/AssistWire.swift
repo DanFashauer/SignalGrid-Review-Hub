@@ -123,9 +123,11 @@ enum AssistWire {
         }
 
         // A repeated top-level key is ambiguous JSON, and which copy Foundation keeps is an
-        // implementation detail this client must not depend on (it read last-wins where
-        // measured: {"assist":"deny","assist":"allow"} was an allow). Nothing is read
-        // from such a body.
+        // implementation detail this client must not depend on. Measured on
+        // swift-corelibs-foundation (Linux): {"assist":"deny","assist":"allow"} read as
+        // allow — last-wins. Darwin's NSJSONSerialization, the one this app ships on, is
+        // NOT measured; treat its order as unspecified either way. Nothing is read from
+        // such a body regardless.
         if let repeated = repeatedTopLevelKey(body) {
             return AssistDecision(assist: .deny,
                                   reasons: ["the Assist gate's response carried a duplicate \"\(repeated)\" key"])

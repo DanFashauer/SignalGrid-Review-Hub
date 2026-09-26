@@ -55,8 +55,13 @@ the shared `<repo>` checkout, which can sit on an older commit whose copy of
 `land-branch-gate.mjs` predates `--verify` and silently no-ops on it — and
 gated on the module's own literal `PASS` line via `grep`, not merely on exit
 code (an older module that doesn't recognize `--verify` also exits 0 with no
-output):
-`node <worktree>/scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> | tee <tmpfile>; grep -q "^land-branch-gate --verify PASS: head <headSha> " <tmpfile> && git push -u origin HEAD:refs/heads/<branch>`.
+output). Every step is chained with `&&`, never `;` — a failed `cd`, or the
+verify command failing outright, stops the line before the push ever runs,
+where a `;` after the `tee` once let a stale leftover file from an earlier
+run under the same tag be mistaken for a fresh PASS (Codex #1130 P1) — and
+the previous run's output file is removed FIRST, under `<scratch>`, never
+under `/tmp`, so it can never be that stale leftover itself:
+`cd <worktree> && rm -f <scratch>/<tag>-verify.out && node <worktree>/scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> | tee <scratch>/<tag>-verify.out && grep -q "^land-branch-gate --verify PASS: head <headSha> " <scratch>/<tag>-verify.out && git push -u origin HEAD:refs/heads/<branch>`.
 `--verify` reads `<scratch>/<tag>-pf.log` and `<scratch>/<tag>-br.log` itself,
 resolves `git -C <worktree> rev-parse HEAD` and
 `git -C <worktree> rev-parse refs/heads/<branch>` itself, requires both to

@@ -14,8 +14,8 @@
 //       prose) evaluates the sentinel via scripts/lib/land-branch-gate.mjs's canPush()
 //       before it ever dispatches a push agent: it requires preflightExit===0,
 //       breadthExit===0, the run's own headSha===the merge head, AND both sentinel
-//       LINES to literally contain "PREFLIGHT_EXIT 0"/"BREADTH_EXIT 0" plus the
-//       expected head sha. That function's self-test (`node
+//       LINES to EQUAL exactly "PREFLIGHT_EXIT 0 <expected-head>"/"BREADTH_EXIT 0
+//       <expected-head>". That function's self-test (`node
 //       scripts/lib/land-branch-gate.mjs --self-test`) plants a missing sentinel, a
 //       non-zero sentinel, and a stale (previous-run) sentinel at the wrong sha, and
 //       asserts refusal in each case. The Chain-run worker below is read-only with
@@ -91,17 +91,17 @@ function canPush(run, expectedHead) {
   if (run.headSha !== expectedHead) reasons.push(`headSha ${run.headSha} !== expected ${expectedHead}`);
   if (run.preflightExit !== 0) reasons.push(`preflightExit ${run.preflightExit} !== 0`);
   if (run.breadthExit !== 0) reasons.push(`breadthExit ${run.breadthExit} !== 0`);
-  if (!/(?:^|\s)PREFLIGHT_EXIT 0(?:\s|$)/.test(run.preflightLastLine || ""))
-    reasons.push(`preflightLastLine does not literally contain "PREFLIGHT_EXIT 0": ${JSON.stringify(run.preflightLastLine)}`);
-  if (!/(?:^|\s)BREADTH_EXIT 0(?:\s|$)/.test(run.breadthLastLine || ""))
-    reasons.push(`breadthLastLine does not literally contain "BREADTH_EXIT 0": ${JSON.stringify(run.breadthLastLine)}`);
-  // The sentinel line itself must carry the expected head — a tag-scoped log can
-  // otherwise still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel
-  // is bound to the tag, not the sha); requiring the sha inside the line closes that.
-  if (!(run.preflightLastLine || "").includes(expectedHead))
-    reasons.push(`preflightLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.preflightLastLine)}`);
-  if (!(run.breadthLastLine || "").includes(expectedHead))
-    reasons.push(`breadthLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.breadthLastLine)}`);
+  // Exact equality of the WHOLE line, not "contains" — a tag-scoped log can otherwise
+  // still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel is bound to the
+  // tag, not the sha), and a substring/"contains" check ALSO passed a line that merely
+  // had the expected head somewhere in trailing text (e.g. "PREFLIGHT_EXIT 0 <stale>
+  // unrelated=<expected>"). The chain writes the sentinel as exactly `echo
+  // "PREFLIGHT_EXIT $? $(git rev-parse HEAD)"`, so no trailing text on that line, and
+  // no other head sha earlier on it, is ever legitimate.
+  if (run.preflightLastLine !== `PREFLIGHT_EXIT 0 ${expectedHead}`)
+    reasons.push(`preflightLastLine is not exactly "PREFLIGHT_EXIT 0 ${expectedHead}": ${JSON.stringify(run.preflightLastLine)}`);
+  if (run.breadthLastLine !== `BREADTH_EXIT 0 ${expectedHead}`)
+    reasons.push(`breadthLastLine is not exactly "BREADTH_EXIT 0 ${expectedHead}": ${JSON.stringify(run.breadthLastLine)}`);
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -231,9 +231,11 @@ while (!bothSentinels(chainRun) && sentinelReads < 8) {
 
 // The push decision is the SCRIPT's, not a worker's prose (lesson L2): canPush() requires
 // preflightExit===0 && breadthExit===0 && the run's own headSha===the merge head, AND both
-// log lines to literally contain "PREFLIGHT_EXIT 0"/"BREADTH_EXIT 0" plus the expected head
-// sha (closing the tag-scoped-sentinel gap: a stale line from an earlier run at a different
-// sha under the same tag is refused, not just an exit code taken on faith). Self-tested at
+// log lines to EQUAL exactly "PREFLIGHT_EXIT 0 <expected-head>"/"BREADTH_EXIT 0
+// <expected-head>" (closing the tag-scoped-sentinel gap: a stale line from an earlier run
+// at a different sha under the same tag is refused, not just an exit code taken on faith —
+// and closing the Codex #1130 P2 gap where a "contains" check let a line with the expected
+// head concatenated after other text pass). Self-tested at
 // scripts/lib/land-branch-gate.mjs --self-test.
 const gate = canPush(chainRun, merge.headSha)
 if (!gate.ok) {
@@ -242,9 +244,9 @@ if (!gate.ok) {
 }
 
 const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it, and you do not re-derive it either: the ONLY git command you run is the one shell line below, which re-verifies the sentinel logs and the worktree's own HEAD/branch ref DETERMINISTICALLY (never from your own report of what a file says) before the push runs at all. Worktree ${worktree}, branch ${branch}.
-1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output):
-   \`cd ${worktree} && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} | tee /tmp/land-branch-verify-${tag}.out; grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} " /tmp/land-branch-verify-${tag}.out && git push -u origin HEAD:refs/heads/${branch}\`
-   If the verify half prints "REFUSED", or prints nothing, or its PASS line does not literally match (wrong head, wrong tag), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. Never run this with any other git command chained on, never pass --force.
+1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output). Every step is chained with \`&&\`, never \`;\`, and the previous run's output file is removed FIRST, so a failed \`cd\`, a verifier that never runs, or a stale leftover file from an earlier run under the same tag can never be mistaken for a fresh PASS:
+   \`cd ${worktree} && rm -f ${S}/${tag}-verify.out && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} | tee ${S}/${tag}-verify.out && grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} " ${S}/${tag}-verify.out && git push -u origin HEAD:refs/heads/${branch}\`
+   If the verify half prints "REFUSED", or prints nothing, or its PASS line does not literally match (wrong head, wrong tag), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. A failed \`cd\` into the worktree, or the \`rm -f\`/verifier/\`tee\` step failing outright, stops the line at that \`&&\` before anything downstream (including the push) ever runs — there is no \`;\` anywhere in this line for a failure to fall through. Never run this with any other git command chained on, never pass --force.
 2. Only if the command above succeeded: \`git ls-remote origin refs/heads/${branch}\` → remoteSha.
 Never run any other git command; never fetch; never edit files.
 ${RULES}`, { label: `push:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: PUSH_SCHEMA })

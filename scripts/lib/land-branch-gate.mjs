@@ -15,26 +15,26 @@ import { join } from "node:path";
 //
 // canPush() takes the Chain-run result (never worker prose) and the expected
 // head, and refuses unless: the run's headSha still matches, both exits are
-// literally 0, AND both last-line strings literally contain "PREFLIGHT_EXIT 0"
-// / "BREADTH_EXIT 0" — belt AND suspenders against a worker that reports
-// exit:0 while pasting a different log line.
+// literally 0, AND both last-line strings EQUAL exactly "PREFLIGHT_EXIT 0
+// <expected-head>" / "BREADTH_EXIT 0 <expected-head>" — belt AND suspenders
+// against a worker that reports exit:0 while pasting a different log line.
 export function canPush(run, expectedHead) {
   const reasons = [];
   if (!run || typeof run !== "object") return { ok: false, reasons: ["no chain-run result"] };
   if (run.headSha !== expectedHead) reasons.push(`headSha ${run.headSha} !== expected ${expectedHead}`);
   if (run.preflightExit !== 0) reasons.push(`preflightExit ${run.preflightExit} !== 0`);
   if (run.breadthExit !== 0) reasons.push(`breadthExit ${run.breadthExit} !== 0`);
-  if (!/(?:^|\s)PREFLIGHT_EXIT 0(?:\s|$)/.test(run.preflightLastLine || ""))
-    reasons.push(`preflightLastLine does not literally contain "PREFLIGHT_EXIT 0": ${JSON.stringify(run.preflightLastLine)}`);
-  if (!/(?:^|\s)BREADTH_EXIT 0(?:\s|$)/.test(run.breadthLastLine || ""))
-    reasons.push(`breadthLastLine does not literally contain "BREADTH_EXIT 0": ${JSON.stringify(run.breadthLastLine)}`);
-  // The sentinel line itself must carry the expected head — a tag-scoped log can
-  // otherwise still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel
-  // is bound to the tag, not the sha); requiring the sha inside the line closes that.
-  if (!(run.preflightLastLine || "").includes(expectedHead))
-    reasons.push(`preflightLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.preflightLastLine)}`);
-  if (!(run.breadthLastLine || "").includes(expectedHead))
-    reasons.push(`breadthLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.breadthLastLine)}`);
+  // Exact equality of the WHOLE line, not "contains" — a tag-scoped log can otherwise
+  // still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel is bound to the
+  // tag, not the sha), and a substring/"contains" check ALSO passed a line that merely
+  // had the expected head somewhere in trailing text (e.g. "PREFLIGHT_EXIT 0 <stale>
+  // unrelated=<expected>"). The chain writes the sentinel as exactly `echo
+  // "PREFLIGHT_EXIT $? $(git rev-parse HEAD)"`, so no trailing text on that line, and
+  // no other head sha earlier on it, is ever legitimate.
+  if (run.preflightLastLine !== `PREFLIGHT_EXIT 0 ${expectedHead}`)
+    reasons.push(`preflightLastLine is not exactly "PREFLIGHT_EXIT 0 ${expectedHead}": ${JSON.stringify(run.preflightLastLine)}`);
+  if (run.breadthLastLine !== `BREADTH_EXIT 0 ${expectedHead}`)
+    reasons.push(`breadthLastLine is not exactly "BREADTH_EXIT 0 ${expectedHead}": ${JSON.stringify(run.breadthLastLine)}`);
   return { ok: reasons.length === 0, reasons };
 }
 
@@ -44,8 +44,12 @@ export function canPush(run, expectedHead) {
 // report of what the log files say; it reads them itself, resolves the worktree's
 // own HEAD and the branch ref with `git`, and applies the SAME canPush() the script
 // already used. Refuses (reasons.length > 0) on: a missing/empty log file, a last
-// line that does not parse as a "<LABEL>_EXIT <n> <sha>" sentinel, or either ref not
-// resolving to the expected head.
+// line that does not match the ANCHORED full-line sentinel shape
+// "^<LABEL>_EXIT (-?\d+) ([0-9a-f]{40})$" (Codex #1130 P2 — the previous unanchored
+// `${label}_EXIT (-?\d+)` parser matched a "<LABEL>_EXIT 0" prefix anywhere on the
+// line and ignored everything after it), a sentinel that parses cleanly but names a
+// DIFFERENT head than the one expected, or either ref not resolving to the expected
+// head.
 function lastNonEmptyLine(path) {
   let text;
   try {
@@ -57,10 +61,10 @@ function lastNonEmptyLine(path) {
   return lines.length ? lines[lines.length - 1] : null;
 }
 
-function parseExit(line, label) {
+function parseSentinelLine(line, label) {
   if (line == null) return null;
-  const m = new RegExp(`${label}_EXIT (-?\\d+)`).exec(line);
-  return m ? Number(m[1]) : null;
+  const m = new RegExp(`^${label}_EXIT (-?\\d+) ([0-9a-f]{40})$`).exec(line);
+  return m ? { exit: Number(m[1]), sha: m[2] } : null;
 }
 
 function revParse(worktree, ref) {
@@ -86,12 +90,19 @@ export function verify({ scratch, tag, worktree, branch, head }) {
   if (preflightLastLine === null) reasons.push(`missing or empty ${pfPath}`);
   if (breadthLastLine === null) reasons.push(`missing or empty ${brPath}`);
 
-  const preflightExit = parseExit(preflightLastLine, "PREFLIGHT");
-  const breadthExit = parseExit(breadthLastLine, "BREADTH");
-  if (preflightLastLine !== null && preflightExit === null)
+  const preflightParsed = preflightLastLine === null ? null : parseSentinelLine(preflightLastLine, "PREFLIGHT");
+  const breadthParsed = breadthLastLine === null ? null : parseSentinelLine(breadthLastLine, "BREADTH");
+  if (preflightLastLine !== null && preflightParsed === null)
     reasons.push(`${pfPath}: last line does not parse as a PREFLIGHT_EXIT sentinel: ${JSON.stringify(preflightLastLine)}`);
-  if (breadthLastLine !== null && breadthExit === null)
+  if (breadthLastLine !== null && breadthParsed === null)
     reasons.push(`${brPath}: last line does not parse as a BREADTH_EXIT sentinel: ${JSON.stringify(breadthLastLine)}`);
+  // The line can parse cleanly and still name the WRONG head — the anchored regex only
+  // proves the SHAPE is right, not the sha; a tag-scoped log can hold a previous run's
+  // well-formed sentinel for another commit.
+  if (preflightParsed && preflightParsed.sha !== head)
+    reasons.push(`${pfPath}: sentinel names head ${preflightParsed.sha} !== expected ${head}`);
+  if (breadthParsed && breadthParsed.sha !== head)
+    reasons.push(`${brPath}: sentinel names head ${breadthParsed.sha} !== expected ${head}`);
 
   const worktreeHead = revParse(worktree, "HEAD");
   if (typeof worktreeHead !== "string") reasons.push(`git -C ${worktree} rev-parse HEAD failed: ${worktreeHead.error}`);
@@ -107,7 +118,7 @@ export function verify({ scratch, tag, worktree, branch, head }) {
   if (reasons.length) return { ok: false, reasons };
 
   const gate = canPush(
-    { headSha: typeof worktreeHead === "string" ? worktreeHead : null, preflightExit, preflightLastLine, breadthExit, breadthLastLine },
+    { headSha: typeof worktreeHead === "string" ? worktreeHead : null, preflightExit: preflightParsed.exit, preflightLastLine, breadthExit: breadthParsed.exit, breadthLastLine },
     head,
   );
   return gate;
@@ -167,6 +178,11 @@ function selfTest() {
     { name: "exit 0 with stale/lying last-line text refused", run: { ...good, breadthLastLine: "some other line" }, expect: false },
     { name: "stale sentinel from a previous run at a different sha refused", run: { ...good, preflightLastLine: "PREFLIGHT_EXIT 0 someOldSha", breadthLastLine: "BREADTH_EXIT 0 someOldSha" }, expect: false },
     { name: "null run refused", run: null, expect: false },
+    // Codex #1130 P2: the old "literally contain" + .includes(expectedHead) checks
+    // both passed a line with a stale sha CONCATENATED with the expected one in
+    // trailing text — exact-equality of the whole line closes that.
+    { name: "concatenated stale-then-expected head refused", run: { ...good, preflightLastLine: `PREFLIGHT_EXIT 0 deadbeef00deadbeef00deadbeef00deadbeef00 unrelated=${HEAD}` }, expect: false },
+    { name: "trailing space after expected head refused", run: { ...good, breadthLastLine: `BREADTH_EXIT 0 ${HEAD} ` }, expect: false },
   ];
   let pass = 0;
   for (const c of cases) {
@@ -213,11 +229,26 @@ function selfTest() {
       if (!r.ok) { pass++; console.log("PASS: --verify PREFLIGHT_EXIT 1 → refused"); }
       else console.error("FAIL: --verify PREFLIGHT_EXIT 1 did not refuse");
 
-      writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 0 someOtherSha\n`);
-      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 someOtherSha\n`);
+      // A well-formed, valid-hex sentinel naming a DIFFERENT commit than expected — this
+      // exercises the new "sentinel names head X !== expected" reason specifically
+      // (the old fixture used a non-hex "someOtherSha" that would only ever hit the
+      // separate "does not parse" refusal, never the sha-mismatch one added here).
+      const STALE_SHA = "0".repeat(40);
+      writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 0 ${STALE_SHA}\n`);
+      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${STALE_SHA}\n`);
       r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
-      if (!r.ok) { pass++; console.log("PASS: --verify sentinel at another sha → refused"); }
-      else console.error("FAIL: --verify sentinel at another sha did not refuse");
+      if (!r.ok && r.reasons.some((x) => x.includes("sentinel names head"))) { pass++; console.log("PASS: --verify sentinel at another (valid-hex) sha → refused (sentinel-head reason)"); }
+      else console.error(`FAIL: --verify sentinel at another sha — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+
+      // Codex #1130 P2's concatenated form at the --verify layer: a stale sha followed
+      // by trailing text that happens to include the EXPECTED head does not parse under
+      // the anchored full-line regex, so it is refused by the parse check rather than
+      // ever reaching a sha comparison.
+      writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 0 ${STALE_SHA} unrelated=${head}\n`);
+      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${head}\n`);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify concatenated stale+expected sentinel line → refused"); }
+      else console.error("FAIL: --verify concatenated stale+expected sentinel line did not refuse");
 
       // This case must exercise the BRANCH-REF check specifically, not the HEAD check:
       // worktree HEAD stays AT the expected head (detached), while refs/heads/<branch>
@@ -245,7 +276,7 @@ function selfTest() {
     }
   });
 
-  const total = cases.length + 1 + 6;
+  const total = cases.length + 1 + 7;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

@@ -100,6 +100,9 @@ jobs:
       - name: Remediation-allow conformance self-test (the gate can fail)
         run: node scripts/check-remediation-allow-conformance.mjs --self-test
 
+      - name: "Proof: decision-engine-parity (the Swift port replays the TS engine's own decisions)"
+        run: pnpm run proof:decision-engine-parity
+
       - name: Posture-allow proof (an unknown or illegible posture must not buy the allow the engine offers on its presence)
         run: pnpm run proof:posture-allow
       - name: Proof — device registry (injective keys, fail-closed allowlist, freshness)

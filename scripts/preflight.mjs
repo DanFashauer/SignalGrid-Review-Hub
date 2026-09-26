@@ -484,6 +484,10 @@ const STEPS = [
   { name: "Proof: remediation-verification (an unobserved fix is not a cleared fix)", cmd: ["pnpm", "run", "proof:remediation-verification"] },
   { name: "Proof: remediation-allow (a recorded-but-unverified remediation never buys an allow)", cmd: ["pnpm", "run", "proof:remediation-allow"] },
   { name: "Remediation-allow conformance (the shared vectors bind the TS side; the native port is REPORTED)", cmd: ["node", "scripts/check-remediation-allow-conformance.mjs"] },
+  // Behavioural port parity (plan row 18): the TS engine's own decisions over a deterministic
+  // table are emitted to native/shared and replayed by the Swift twin in ios-ci; vocabulary
+  // parity (check-decision-port-parity) cannot see a rule whose words match and logic does not.
+  { name: "Proof: decision-engine-parity (the Swift port replays the TS engine's own decisions; vocabulary parity is not behaviour)", cmd: ["pnpm", "run", "proof:decision-engine-parity"] },
   // The second guard around the engine (eighth verdict-core round): an UNKNOWN posture
   // attribute matches none of the engine's bad literals, so the engine allows on it.
   // Same lane order as remediation-allow — TS wrapper + vectors first, Swift twin second.

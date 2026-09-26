@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 105,
+        "open": 101,
         "partial": 5,
-        "closed": 83
+        "closed": 87
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -127,99 +127,25 @@
         "design-partner-outreach"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: design-partner-outreach→lane"
-    }
-  ],
-  "unmeasured": [
-    {
-      "rowId": "40b",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "48",
-      "title": "Native parity is textual, not behavioral",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "54",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "55",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "57",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "58",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "59",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "61",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "73",
-      "title": "What the first audit of the instruction layer found, and who owns each.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
     },
     {
       "rowId": "76",
       "title": "What the first accessibility execution found that is still open.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "accessibility-specialist"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
     },
     {
       "rowId": "77",
       "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "78",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "80",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "81",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "84",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
+      "roles": [
+        "accessibility-specialist"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
+    }
+  ],
+  "unmeasured": [
     {
       "rowId": "85",
       "title": "",
@@ -675,7 +601,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "90 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 40b, 48, 54, 55, 57, 58, 59, 61, 73, 76, 77, 78, 80, 81, 84, 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
+      "asks": "75 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
       "since": "2026-09-26T02:26:39.036Z"
     },
     {
@@ -690,13 +616,13 @@
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 4,
-    "unmeasuredCount": 90,
-    "openRows": 105
+    "needsExecutorCount": 6,
+    "unmeasuredCount": 75,
+    "openRows": 101
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-26T03:28:19.253Z",
-  "derivedAtCommit": "b514d2f631e1b974567a24301f777be6061af30c",
+  "derivedAt": "2026-09-26T04:35:21.558Z",
+  "derivedAtCommit": "da6d6fc3d143f74257904a710ed13c8053bccfeb",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "bbb942d2c2d1c104cfcb5d12a08378eb9d4b0653cb932253bb900a44eb47df34"
+  "decisionAddress": "45898a226022c41002b542c664dc375cfe86edb1df62fef8effa497a90451216"
 }

@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Pure push-gate for the land-branch saved workflow (docs/agent/LESSONS.md L2,
 // docs/BUILD_BACKLOG.md row "The plan-row measurement tranche is a scripted
@@ -35,6 +38,122 @@ export function canPush(run, expectedHead) {
   return { ok: reasons.length === 0, reasons };
 }
 
+// --verify: the DETERMINISTIC push gate the push command itself runs (Codex #1126 P1
+// / #1127 summary finding 1 — "have the push command invoke a local validator that
+// reads the sentinel files and current HEAD itself"). It never trusts a worker's
+// report of what the log files say; it reads them itself, resolves the worktree's
+// own HEAD and the branch ref with `git`, and applies the SAME canPush() the script
+// already used. Refuses (reasons.length > 0) on: a missing/empty log file, a last
+// line that does not parse as a "<LABEL>_EXIT <n> <sha>" sentinel, or either ref not
+// resolving to the expected head.
+function lastNonEmptyLine(path) {
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+  const lines = text.split("\n").filter((l) => l.length > 0);
+  return lines.length ? lines[lines.length - 1] : null;
+}
+
+function parseExit(line, label) {
+  if (line == null) return null;
+  const m = new RegExp(`${label}_EXIT (-?\\d+)`).exec(line);
+  return m ? Number(m[1]) : null;
+}
+
+function revParse(worktree, ref) {
+  try {
+    return execFileSync("git", ["-C", worktree, "rev-parse", ref], { encoding: "utf8" }).trim();
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+/**
+ * Reads <scratch>/<tag>-pf.log and <scratch>/<tag>-br.log itself, resolves
+ * `git -C <worktree> rev-parse HEAD` and `git -C <worktree> rev-parse
+ * refs/heads/<branch>`, and applies canPush() against <head>. Returns
+ * { ok, reasons } — never throws.
+ */
+export function verify({ scratch, tag, worktree, branch, head }) {
+  const reasons = [];
+  const pfPath = join(scratch, `${tag}-pf.log`);
+  const brPath = join(scratch, `${tag}-br.log`);
+  const preflightLastLine = lastNonEmptyLine(pfPath);
+  const breadthLastLine = lastNonEmptyLine(brPath);
+  if (preflightLastLine === null) reasons.push(`missing or empty ${pfPath}`);
+  if (breadthLastLine === null) reasons.push(`missing or empty ${brPath}`);
+
+  const preflightExit = parseExit(preflightLastLine, "PREFLIGHT");
+  const breadthExit = parseExit(breadthLastLine, "BREADTH");
+  if (preflightLastLine !== null && preflightExit === null)
+    reasons.push(`${pfPath}: last line does not parse as a PREFLIGHT_EXIT sentinel: ${JSON.stringify(preflightLastLine)}`);
+  if (breadthLastLine !== null && breadthExit === null)
+    reasons.push(`${brPath}: last line does not parse as a BREADTH_EXIT sentinel: ${JSON.stringify(breadthLastLine)}`);
+
+  const worktreeHead = revParse(worktree, "HEAD");
+  if (typeof worktreeHead !== "string") reasons.push(`git -C ${worktree} rev-parse HEAD failed: ${worktreeHead.error}`);
+  else if (worktreeHead !== head) reasons.push(`worktree HEAD ${worktreeHead} !== expected ${head}`);
+
+  const branchHead = revParse(worktree, `refs/heads/${branch}`);
+  if (typeof branchHead !== "string") reasons.push(`git -C ${worktree} rev-parse refs/heads/${branch} failed: ${branchHead.error}`);
+  else if (branchHead !== head) reasons.push(`refs/heads/${branch} is at ${branchHead}, !== expected ${head}`);
+
+  // Only ask canPush() once every input it needs parsed cleanly; a parse failure or a
+  // ref mismatch above is already a refusal and canPush() would just re-report it
+  // confusingly (headSha undefined, etc).
+  if (reasons.length) return { ok: false, reasons };
+
+  const gate = canPush(
+    { headSha: typeof worktreeHead === "string" ? worktreeHead : null, preflightExit, preflightLastLine, breadthExit, breadthLastLine },
+    head,
+  );
+  return gate;
+}
+
+function runVerifyCli(argv) {
+  const args = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--") && a !== "--verify") {
+      args[a.slice(2)] = argv[i + 1];
+      i++;
+    }
+  }
+  const { scratch, tag, worktree, branch, head } = args;
+  if (!scratch || !tag || !worktree || !branch || !head) {
+    console.error("land-branch-gate --verify requires --scratch --tag --worktree --branch --head");
+    process.exit(1);
+  }
+  const { ok, reasons } = verify({ scratch, tag, worktree, branch, head });
+  if (!ok) {
+    console.error(`land-branch-gate --verify REFUSED (head ${head}):`);
+    for (const r of reasons) console.error(`  ${r}`);
+    process.exit(1);
+  }
+  console.log(`land-branch-gate --verify PASS: head ${head} verified from ${scratch}/${tag}-{pf,br}.log and refs/heads/${branch}`);
+  process.exit(0);
+}
+
+function withTempGitRepo(fn) {
+  const dir = mkdtempSync(join(tmpdir(), "land-branch-gate-verify-"));
+  try {
+    execFileSync("git", ["init", "-q", dir]);
+    execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
+    writeFileSync(join(dir, "f.txt"), "x\n");
+    execFileSync("git", ["-C", dir, "add", "f.txt"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    execFileSync("git", ["-C", dir, "branch", "feature-branch", head]);
+    fn(dir, head);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function selfTest() {
   const HEAD = "abc1234deadbeef";
   const good = { headSha: HEAD, preflightExit: 0, preflightLastLine: `PREFLIGHT_EXIT 0 ${HEAD}`, breadthExit: 0, breadthLastLine: `BREADTH_EXIT 0 ${HEAD}` };
@@ -62,11 +181,69 @@ function selfTest() {
   try { mirrored = norm(readFileSync(new URL("../../.claude/workflows/land-branch.js", import.meta.url), "utf8")).includes(norm(canPush.toString())); } catch { mirrored = false; }
   if (mirrored) { pass++; console.log("PASS: .claude/workflows/land-branch.js carries a byte-for-byte mirror of canPush"); }
   else console.error("FAIL: .claude/workflows/land-branch.js does not carry this exact canPush — re-mirror it");
-  const total = cases.length + 1;
+
+  // --verify: a temp git repo under os.tmpdir() (never inside this tree), never
+  // reused between cases (fresh scratch dir each time avoids one case's log files
+  // leaking into the next).
+  withTempGitRepo((dir, head) => {
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-verify-scratch-"));
+    try {
+      const tag = "vt";
+      const pf = join(scratch, `${tag}-pf.log`);
+      const br = join(scratch, `${tag}-br.log`);
+      const writeGood = () => {
+        writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 0 ${head}\n`);
+        writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${head}\n`);
+      };
+
+      writeGood();
+      let r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (r.ok) { pass++; console.log("PASS: --verify good logs + matching head → exit 0"); }
+      else console.error(`FAIL: --verify good logs + matching head — refused: ${JSON.stringify(r.reasons)}`);
+
+      writeGood();
+      rmSync(br);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify missing br.log → refused"); }
+      else console.error("FAIL: --verify missing br.log did not refuse");
+
+      writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 1 ${head}\n`);
+      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${head}\n`);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify PREFLIGHT_EXIT 1 → refused"); }
+      else console.error("FAIL: --verify PREFLIGHT_EXIT 1 did not refuse");
+
+      writeFileSync(pf, `preflight output\nPREFLIGHT_EXIT 0 someOtherSha\n`);
+      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 someOtherSha\n`);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify sentinel at another sha → refused"); }
+      else console.error("FAIL: --verify sentinel at another sha did not refuse");
+
+      writeGood();
+      execFileSync("git", ["-C", dir, "commit", "--allow-empty", "-q", "-m", "advance HEAD past the branch ref"]);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify refs/heads/<branch> not at HEAD → refused"); }
+      else console.error("FAIL: --verify refs/heads/<branch> not at HEAD did not refuse");
+      execFileSync("git", ["-C", dir, "reset", "-q", "--soft", head]);
+
+      writeFileSync(pf, `preflight output\nsomething that is not a sentinel line at all\n`);
+      writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${head}\n`);
+      r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
+      if (!r.ok) { pass++; console.log("PASS: --verify unparsable last line → refused"); }
+      else console.error("FAIL: --verify unparsable last line did not refuse");
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  const total = cases.length + 1 + 6;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }
 
-if (process.argv[1] && process.argv[1].endsWith("land-branch-gate.mjs") && process.argv.includes("--self-test")) {
+const invokedDirectly = process.argv[1] && process.argv[1].endsWith("land-branch-gate.mjs");
+if (invokedDirectly && process.argv.includes("--verify")) {
+  runVerifyCli(process.argv.slice(2));
+} else if (invokedDirectly && process.argv.includes("--self-test")) {
   selfTest();
 }

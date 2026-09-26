@@ -6,29 +6,39 @@
 //   node scripts/check-mcp-roster.mjs --self-test  # prove it can fail
 //
 // WHAT THIS CHECKS (a document, never a call):
-//   - `docs/agent/mcp-roster.json` parses and has `servers`/`grants`.
+//   - `docs/agent/mcp-roster.json` parses and has `servers`/`grants`, and
+//     `grants.lanes` is an object carrying `cloud`/`mac` arrays and `grants.skills`
+//     is an object — a missing or non-object required map is a FAIL, never a
+//     silent `?? {}` fallback that would count a lost document as "0 grants, PASS".
 //   - `signalgrid-mcp`'s `tools`/`toolNames` in the roster are DERIVED from
 //     `artifacts/mcp-server/src/index.ts`'s own `server.registerTool("name", ...)`
 //     calls, in source order — never hand-typed and left to drift. The
 //     derivation itself is cross-checked against a plain `registerTool(` count,
 //     so a registration written in a shape the derivation doesn't recognize
 //     (single line, single-quoted name, ...) fails the gate instead of just
-//     vanishing from the count.
+//     vanishing from the count. `toolNames` is compared to the derived list as
+//     an ORDERED ARRAY (same length, same element at each position), so a
+//     duplicate entry fails even though it changes neither the missing nor the
+//     extra set.
 //   - Every server id named in `grants.lanes.*` or `grants.skills.*` exists in
-//     `servers[]` or `external[]`.
+//     `servers[]` or `external[]`, and every lane/skill grant and every
+//     `grants.mentions` entry carries a non-empty `for`/`why`; every lane grant
+//     also carries a non-empty `source`.
 //   - Every `grants.skills` key is a real FIRST-PARTY skill directory (the same
 //     `.claude/skills/VENDORED.md` carve-out `scripts/lib/skill-plane.mjs` uses
 //     elsewhere; a vendored skill is out of scope, same exemption every other
 //     doc gate gives it).
-//   - Every first-party skill doc that names an `mcp__<server>__` tool call holds
-//     a grant for that server — an ungranted call is a FAIL naming the file, the
-//     server and the missing grant.
-//   - No grant names a server whose roster disposition is `evaluated-not-adopted`
-//     or `deferred` (a resource explicitly not cleared for use).
-//
-// Server ids are matched CASE-INSENSITIVELY, read as the text between `mcp__`
-// and the next `__` in a tool name (`mcp__Context7__resolve-library-id` names
-// `context7`).
+//   - A grant is allowed only when its target is an `external[]` entry, or a
+//     `servers[]` entry whose `disposition` is exactly `"adopted"` or
+//     `"adopted-by-reference"` — any other disposition (a misspelling, an
+//     unknown value, `evaluated-not-adopted`, `deferred`) FAILS, naming the
+//     value.
+//   - Every first-party skill doc naming a server — either an `mcp__<server>__`
+//     tool call, or the roster's own id (or one of its optional `aliases`) as a
+//     whole word, case-insensitively — must have EITHER a `grants.skills` entry
+//     for that server, or a `grants.mentions[skill]` entry naming it as
+//     precedent/context rather than a call. An unaccounted-for name is a FAIL
+//     naming the file, the server and the missing grant/mention.
 //
 // Fail-closed: an unparseable roster, or one missing `servers`/`grants`, is
 // itself a finding — a broken roster is silence dressed as a green gate.
@@ -58,6 +68,20 @@ export function mcpServerNamesIn(text) {
   return out;
 }
 
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Pure: which of `candidates` (a server id plus its aliases) appear in `text` as a
+ * whole word, case-insensitively. A multi-word alias ("Neural Memory") is matched
+ * literally with `\b` at each end, so internal spaces are not treated as
+ * additional boundaries.
+ */
+function anyWholeWordIn(text, candidates) {
+  return candidates.some((c) => new RegExp(`\\b${escapeRegExp(c)}\\b`, "i").test(text));
+}
+
 /**
  * Pure verdict. `roster` is a parsed object OR a raw string (unparseable input is
  * itself a finding, never thrown). `indexSource` is the mcp-server source text.
@@ -80,12 +104,30 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
     return [`${ROSTER_PATH} is missing servers[] or grants{} — fail-closed`];
   }
 
+  // D1 — grants.lanes must be an object carrying cloud[] and mac[] arrays, and
+  // grants.skills must be an object. No `?? {}` fallback on either: a document
+  // that lost these nested maps is a FAIL, not "0 grants, PASS".
+  const lanesRaw = r.grants.lanes;
+  if (!lanesRaw || typeof lanesRaw !== "object" || Array.isArray(lanesRaw)) {
+    problems.push(`${ROSTER_PATH}: grants.lanes is missing or not an object — fail-closed`);
+  } else {
+    for (const laneName of ["cloud", "mac"]) {
+      if (!Array.isArray(lanesRaw[laneName])) problems.push(`${ROSTER_PATH}: grants.lanes.${laneName} is missing or not an array — fail-closed`);
+    }
+  }
+  const skillsRaw = r.grants.skills;
+  if (!skillsRaw || typeof skillsRaw !== "object" || Array.isArray(skillsRaw)) {
+    problems.push(`${ROSTER_PATH}: grants.skills is missing or not an object — fail-closed`);
+  }
+  // Once either required map is unusable, the rest of this function has nothing
+  // honest to check it against — report just the shape failures above.
+  if (problems.length) return problems;
+
   const external = Array.isArray(r.external) ? r.external : [];
   const knownIds = new Set([...r.servers.map((s) => s.id), ...external.map((e) => e.id)]);
-  const dispositionById = new Map([
-    ...r.servers.map((s) => [s.id, s.disposition]),
-    ...external.map((e) => [e.id, e.decision]),
-  ]);
+  const externalIds = new Set(external.map((e) => e.id));
+  const dispositionById = new Map(r.servers.map((s) => [s.id, s.disposition]));
+  const aliasesById = new Map(r.servers.map((s) => [s.id, Array.isArray(s.aliases) ? s.aliases : []]).concat(external.map((e) => [e.id, Array.isArray(e.aliases) ? e.aliases : []])));
 
   // r2 — signalgrid-mcp's tool count/names are DERIVED, never typed.
   const derived = deriveToolNames(indexSource);
@@ -109,12 +151,20 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
     if (sg.tools !== derived.length) {
       problems.push(`${ROSTER_PATH}: signalgrid-mcp.tools is ${sg.tools}, but ${INDEX_PATH} derives ${derived.length} registerTool(...) calls`);
     }
-    const rosterSet = new Set(sg.toolNames ?? []);
-    const derivedSet = new Set(derived);
-    const missingFromRoster = derived.filter((n) => !rosterSet.has(n));
-    const extraInRoster = (sg.toolNames ?? []).filter((n) => !derivedSet.has(n));
-    if (missingFromRoster.length) problems.push(`${ROSTER_PATH}: signalgrid-mcp.toolNames is missing ${missingFromRoster.join(", ")} (present in ${INDEX_PATH})`);
-    if (extraInRoster.length) problems.push(`${ROSTER_PATH}: signalgrid-mcp.toolNames names ${extraInRoster.join(", ")}, not present in ${INDEX_PATH}`);
+    // ORDERED array comparison (Codex #1127 finding 4): same length, same element
+    // at each position — a Set-based compare hides both a duplicate and a
+    // reordering, and the roster's own prose says toolNames is source-ordered.
+    const roster_ = sg.toolNames ?? [];
+    if (roster_.length !== derived.length) {
+      problems.push(`${ROSTER_PATH}: signalgrid-mcp.toolNames has ${roster_.length} entries, but ${INDEX_PATH} derives ${derived.length}`);
+    }
+    const mismatchAt = [];
+    for (let i = 0; i < Math.max(roster_.length, derived.length); i++) {
+      if (roster_[i] !== derived[i]) mismatchAt.push(`[${i}] roster=${JSON.stringify(roster_[i])} derived=${JSON.stringify(derived[i])}`);
+    }
+    if (mismatchAt.length) {
+      problems.push(`${ROSTER_PATH}: signalgrid-mcp.toolNames is out of order or mismatched against ${INDEX_PATH}'s derived order: ${mismatchAt.join("; ")}`);
+    }
   }
 
   // r3 — every granted server id must exist; every skill-grant key must be first-party.
@@ -122,40 +172,82 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   if (fpDirs.size === 0) {
     problems.push(`${VENDORED_DOC}: zero first-party skill directories resolved — refusing to check skill grants against nothing`);
   }
-  const lanes = r.grants.lanes ?? {};
+
+  // D4 — a grant is allowed only onto an external[] entry, or a servers[] entry
+  // whose disposition is exactly "adopted" or "adopted-by-reference".
+  const ALLOWED_DISPOSITIONS = new Set(["adopted", "adopted-by-reference"]);
+  const grantable = (server) => {
+    if (externalIds.has(server)) return null; // external[] entries carry no disposition gate here
+    const disp = dispositionById.get(server);
+    if (!ALLOWED_DISPOSITIONS.has(disp)) return disp;
+    return null;
+  };
+
+  const lanes = lanesRaw;
   for (const [lane, entries] of Object.entries(lanes)) {
     for (const g of entries ?? []) {
-      if (!knownIds.has(g.server)) problems.push(`${ROSTER_PATH}: grants.lanes.${lane} names unknown server "${g.server}"`);
-      else if (["evaluated-not-adopted", "deferred"].includes(dispositionById.get(g.server))) {
-        problems.push(`${ROSTER_PATH}: grants.lanes.${lane} grants "${g.server}", whose disposition is "${dispositionById.get(g.server)}"`);
+      if (!knownIds.has(g.server)) {
+        problems.push(`${ROSTER_PATH}: grants.lanes.${lane} names unknown server "${g.server}"`);
+        continue;
       }
+      const badDisp = grantable(g.server);
+      if (badDisp !== null) problems.push(`${ROSTER_PATH}: grants.lanes.${lane} grants "${g.server}", whose disposition is "${badDisp}"`);
+      // D3 — every lane grant needs a purpose and a source.
+      if (typeof g.for !== "string" || g.for.trim() === "") problems.push(`${ROSTER_PATH}: grants.lanes.${lane} grants "${g.server}" with no non-empty "for"`);
+      if (typeof g.source !== "string" || g.source.trim() === "") problems.push(`${ROSTER_PATH}: grants.lanes.${lane} grants "${g.server}" with no non-empty "source"`);
     }
   }
-  const skillGrants = r.grants.skills ?? {};
+  const skillGrants = skillsRaw;
   for (const [skillDir, entries] of Object.entries(skillGrants)) {
     if (fpDirs.size > 0 && !fpDirs.has(skillDir)) {
       problems.push(`${ROSTER_PATH}: grants.skills has a key "${skillDir}" that is not a first-party skill directory`);
     }
     for (const g of entries ?? []) {
-      if (!knownIds.has(g.server)) problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} names unknown server "${g.server}"`);
-      else if (["evaluated-not-adopted", "deferred"].includes(dispositionById.get(g.server))) {
-        problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} grants "${g.server}", whose disposition is "${dispositionById.get(g.server)}"`);
+      if (!knownIds.has(g.server)) {
+        problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} names unknown server "${g.server}"`);
+        continue;
       }
+      const badDisp = grantable(g.server);
+      if (badDisp !== null) problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} grants "${g.server}", whose disposition is "${badDisp}"`);
+      // D3 — every skill grant needs a purpose.
+      if (typeof g.for !== "string" || g.for.trim() === "") problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} grants "${g.server}" with no non-empty "for"`);
     }
   }
 
-  // r4 — an mcp__<server>__ call in a first-party skill doc must have a grant.
+  // D3 (mentions half) — every grants.mentions entry needs a non-empty why. "$…" keys
+  // (e.g. "$comment") are documentation, not a skill directory, and are skipped —
+  // same convention the roster already uses at its top level.
+  const mentionsRaw = r.grants.mentions && typeof r.grants.mentions === "object" ? r.grants.mentions : {};
+  const mentions = Object.fromEntries(Object.entries(mentionsRaw).filter(([k]) => !k.startsWith("$")));
+  for (const [skillDir, entries] of Object.entries(mentions)) {
+    for (const m of entries ?? []) {
+      if (!knownIds.has(m.server)) problems.push(`${ROSTER_PATH}: grants.mentions.${skillDir} names unknown server "${m.server}"`);
+      if (typeof m.why !== "string" || m.why.trim() === "") problems.push(`${ROSTER_PATH}: grants.mentions.${skillDir} names "${m.server}" with no non-empty "why"`);
+    }
+  }
+
+  // r4/D5 — a first-party skill doc naming a server (mcp__<server>__ token, or the
+  // server's own id/aliases as a whole word) must have a grant OR a mentions entry.
   const grantedByskill = new Map();
   for (const [skillDir, entries] of Object.entries(skillGrants)) {
     grantedByskill.set(skillDir, new Set((entries ?? []).map((g) => String(g.server).toLowerCase())));
   }
+  const mentionedByskill = new Map();
+  for (const [skillDir, entries] of Object.entries(mentions)) {
+    mentionedByskill.set(skillDir, new Set((entries ?? []).map((m) => String(m.server).toLowerCase())));
+  }
   for (const { dir, path, text } of skillDocs ?? []) {
-    const named = mcpServerNamesIn(text);
+    const named = new Set(mcpServerNamesIn(text));
+    for (const id of knownIds) {
+      const candidates = [id, ...(aliasesById.get(id) ?? [])];
+      if (anyWholeWordIn(text, candidates)) named.add(id.toLowerCase());
+    }
     if (named.size === 0) continue;
     const granted = grantedByskill.get(dir) ?? new Set();
+    const mentioned = mentionedByskill.get(dir) ?? new Set();
     for (const server of named) {
-      if (!granted.has(server)) {
-        problems.push(`${path}: names mcp__${server}__ but grants.skills.${dir} has no grant for "${server}"`);
+      if (!granted.has(server) && !mentioned.has(server)) {
+        problems.push(`${path}: names "${server}" but grants.skills.${dir} has no grant and grants.mentions.${dir} has no mention for it`);
       }
     }
   }
@@ -201,7 +293,7 @@ server.registerTool(
     ],
     external: [{ id: "firecrawl", decision: "adopted" }],
     grants: {
-      lanes: { cloud: [{ server: "signalgrid-mcp", for: "x", source: "y" }] },
+      lanes: { cloud: [{ server: "signalgrid-mcp", for: "x", source: "y" }], mac: [] },
       skills: { "loop-start": [{ server: "signalgrid-mcp", for: "x" }] },
     },
   };
@@ -232,22 +324,22 @@ server.registerTool(
   expectFail(
     "a missing toolName FAILS",
     { roster: { ...goodRoster, servers: [{ ...goodRoster.servers[0], toolNames: ["alpha"] }, goodRoster.servers[1]] } },
-    "missing beta", // missingFromRoster names "beta"
+    "toolNames has 1 entries, but",
   );
   expectFail(
     "an extra toolName FAILS",
     { roster: { ...goodRoster, servers: [{ ...goodRoster.servers[0], toolNames: ["alpha", "beta", "ghost"] }, goodRoster.servers[1]] } },
-    "ghost",
+    "toolNames has 3 entries, but",
   );
   expectFail(
     "a grant to an unknown server FAILS",
-    { roster: { ...goodRoster, grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "nope", for: "x", source: "y" }] } } } },
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "nope", for: "x", source: "y" }], mac: [] } } } },
     'unknown server "nope"',
   );
   expectFail(
     "a skill doc naming an ungranted mcp__ghost__x call FAILS",
     { skillDocs: [{ dir: "loop-start", path: ".claude/skills/loop-start/SKILL.md", text: "call mcp__ghost__x here" }] },
-    "no grant for \"ghost\"",
+    'has no grant and grants.mentions.loop-start has no mention',
   );
   expectFail(
     "a grant to an evaluated-not-adopted server FAILS",
@@ -255,7 +347,7 @@ server.registerTool(
       roster: {
         ...goodRoster,
         servers: [...goodRoster.servers, { id: "keycloak-admin", tools: 1, disposition: "evaluated-not-adopted" }],
-        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "keycloak-admin", for: "x", source: "y" }] } },
+        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "keycloak-admin", for: "x", source: "y" }], mac: [] } },
       },
     },
     'whose disposition is "evaluated-not-adopted"',
@@ -266,7 +358,7 @@ server.registerTool(
       roster: {
         ...goodRoster,
         servers: [...goodRoster.servers, { id: "postgres-hardened", tools: null, disposition: "deferred" }],
-        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "postgres-hardened", for: "x", source: "y" }] } },
+        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "postgres-hardened", for: "x", source: "y" }], mac: [] } },
       },
     },
     'whose disposition is "deferred"',
@@ -306,6 +398,75 @@ server.registerTool(
     checks.push(["an unparseable roster FAILS", problems.length > 0 && problems[0].includes("does not parse")]);
   }
 
+  // D1
+  expectFail(
+    "missing grants.lanes FAILS",
+    { roster: { ...goodRoster, grants: { skills: goodRoster.grants.skills } } },
+    "grants.lanes is missing or not an object",
+  );
+  expectFail(
+    "missing grants.skills FAILS",
+    { roster: { ...goodRoster, grants: { lanes: goodRoster.grants.lanes } } },
+    "grants.skills is missing or not an object",
+  );
+  expectFail(
+    "grants.lanes without 'mac' FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, lanes: { cloud: [] } } } },
+    "grants.lanes.mac is missing or not an array",
+  );
+
+  // D2
+  expectFail(
+    "toolNames out of order FAILS",
+    { roster: { ...goodRoster, servers: [{ ...goodRoster.servers[0], toolNames: ["beta", "alpha"] }, goodRoster.servers[1]] } },
+    "toolNames is out of order or mismatched",
+  );
+  expectFail(
+    "a duplicate toolName FAILS",
+    { roster: { ...goodRoster, servers: [{ ...goodRoster.servers[0], tools: 2, toolNames: ["alpha", "alpha"] }, goodRoster.servers[1]] } },
+    "toolNames is out of order or mismatched",
+  );
+
+  // D3
+  expectFail(
+    "a lane grant with no 'for' FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "signalgrid-mcp", source: "y" }], mac: [] } } } },
+    'grants "signalgrid-mcp" with no non-empty "for"',
+  );
+  expectFail(
+    "a lane grant with no 'source' FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "signalgrid-mcp", for: "x" }], mac: [] } } } },
+    'grants "signalgrid-mcp" with no non-empty "source"',
+  );
+
+  // D4
+  expectFail(
+    "a disposition of 'totally-unknown' FAILS",
+    {
+      roster: {
+        ...goodRoster,
+        servers: [...goodRoster.servers, { id: "weird-server", tools: 1, disposition: "totally-unknown" }],
+        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "weird-server", for: "x", source: "y" }], mac: [] } },
+      },
+    },
+    'whose disposition is "totally-unknown"',
+  );
+
+  // D5
+  expectFail(
+    "a skill doc naming 'wazuh' with neither grant nor mention FAILS",
+    {
+      roster: { ...goodRoster, servers: [...goodRoster.servers, { id: "wazuh", tools: 1, disposition: "adopted-by-reference" }] },
+      skillDocs: [{ dir: "loop-start", path: ".claude/skills/loop-start/SKILL.md", text: "this skill reads the live Wazuh dashboard for context" }],
+    },
+    'names "wazuh" but grants.skills.loop-start has no grant',
+  );
+  expectFail(
+    "a mention with empty why FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, mentions: { "loop-start": [{ server: "firecrawl", why: "" }] } } } },
+    'names "firecrawl" with no non-empty "why"',
+  );
+
   const bad = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`);
   if (bad.length) {
@@ -343,11 +504,13 @@ function main() {
   const laneGrants = Object.values(roster.grants?.lanes ?? {}).reduce((n, a) => n + (a?.length ?? 0), 0);
   const skillGrantEntries = Object.values(roster.grants?.skills ?? {});
   const skillGrants = skillGrantEntries.reduce((n, a) => n + (a?.length ?? 0), 0);
+  const mentionEntries = Object.entries(roster.grants?.mentions ?? {}).filter(([k]) => !k.startsWith("$"));
+  const mentionCount = mentionEntries.reduce((n, [, a]) => n + (Array.isArray(a) ? a.length : 0), 0);
   const sg = roster.servers.find((s) => s.id === "signalgrid-mcp");
   const derived = deriveToolNames(indexSource);
   console.log(
     `mcp-roster: ${nServers} servers (+${nExternal} external), signalgrid-mcp ${sg?.tools ?? 0}/${derived.length} tools derived, ` +
-      `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, 0 problems`,
+      `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, ${mentionCount} mentions, 0 problems`,
   );
   console.log("PASS");
 }

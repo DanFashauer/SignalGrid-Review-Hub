@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 109,
+        "open": 105,
         "partial": 5,
-        "closed": 79
+        "closed": 83
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -66,118 +66,70 @@
         "section": "Global backlog"
       },
       "firstRankedAt": "2026-09-25T23:48:15.242Z"
-    }
-  ],
-  "needsExecutor": [],
-  "unmeasured": [
+    },
     {
+      "rank": 2,
       "rowId": "17",
       "title": "Run the three wire-truth shifts and bind the records to the code",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "role": "itsm-ops-domain",
+      "executor": "skill:signalgrid-core",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T03:28:19.253Z"
     },
     {
+      "rank": 3,
       "rowId": "18",
       "title": "Make iOS port parity behavioral, not textual",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "19",
-      "title": "Finish Dynamic Type and pin it with a lint rule",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
+      "role": "mobile-native-engineer",
+      "executor": "skill:signalgrid-native",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T03:28:19.253Z"
+    }
+  ],
+  "needsExecutor": [
     {
       "rowId": "22",
       "title": "Stand up the cost model and shift economics",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "23",
-      "title": "Decide the Fleet Premium question before 2026-09-16",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "24",
-      "title": "Stage the ledger-truncation article for your review",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "finance-fundraising",
+        "agent-ops-economics"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: finance-fundraising→lane, agent-ops-economics→lane"
     },
     {
       "rowId": "25",
       "title": "Bound the CI jobs and wire the Mac lane's alarm",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "26",
-      "title": "Role-split follow-ups from PR #222's round-9 review (post-cutoff)",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "27",
-      "title": "Wire WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN or retire it",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "28",
-      "title": "Positive-path OIDC in the gateway smoke",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "29",
-      "title": "Assurance-pass advisories, batch one (2026-08-21)",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "30",
-      "title": "Graph launch-subset Bruno collection + transport abstraction check",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "31",
-      "title": "Adversarial-trust Bruno folder",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "32",
-      "title": "Release-evidence lane: Syft + Grype + Cosign",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "sre"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     },
     {
       "rowId": "33",
       "title": "Lab telemetry: OTel Collector + Prometheus profile",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "35",
-      "title": "OpenBao secret boundary",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "36",
-      "title": "Second-IdP source independence: authentik",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "sre"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     },
     {
       "rowId": "38",
       "title": "Free-tier proprietary validation targets",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
+      "roles": [
+        "design-partner-outreach"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: design-partner-outreach→lane"
+    }
+  ],
+  "unmeasured": [
     {
       "rowId": "40b",
       "title": "",
@@ -723,7 +675,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "108 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 36, 38, 40b, 48, 54, 55, 57, 58, 59, 61, 73, 76, 77, 78, 80, 81, 84, 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
+      "asks": "90 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 40b, 48, 54, 55, 57, 58, 59, 61, 73, 76, 77, 78, 80, 81, 84, 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
       "since": "2026-09-26T02:26:39.036Z"
     },
     {
@@ -738,13 +690,13 @@
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 0,
-    "unmeasuredCount": 108,
-    "openRows": 109
+    "needsExecutorCount": 4,
+    "unmeasuredCount": 90,
+    "openRows": 105
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-26T02:26:39.036Z",
-  "derivedAtCommit": "ebf302b922b56e6651277f6136ebc720e99d7a8e",
+  "derivedAt": "2026-09-26T03:28:19.253Z",
+  "derivedAtCommit": "b514d2f631e1b974567a24301f777be6061af30c",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "58affafb1b3aa1644c0b25b0eccc697e700b9061f8e483633d12a208ab74d024"
+  "decisionAddress": "bbb942d2c2d1c104cfcb5d12a08378eb9d4b0653cb932253bb900a44eb47df34"
 }

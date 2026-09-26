@@ -595,10 +595,11 @@ async function run() {
   const authzBad = await req("POST", "/v1/authorize", { token: KEYS.operator, body: { identityRef: "x" } });
   check("authorize with a malformed body → 400 (same validation as evaluate)", authzBad.status === 400);
 
-  // Every client now DENIES a 2xx whose decisionId is not a non-blank string, or whose
-  // `reasons` is not a list of strings (native/shared/assist-wire-conformance.json). So the
-  // server must emit both on EVERY outcome, not only allow — a regression here would have
-  // every host app refuse its workers. Inputs measured on a fresh demo core (tenant_northwind).
+  // Once the strict client parse lands (claude/assist-wire-strict-decision: every client
+  // denies a 2xx without a non-blank string decisionId or with non-string reasons), a
+  // regression here would have every host app refuse its workers. The server already
+  // emits both on every outcome, and this pins it. Inputs measured on a fresh demo core
+  // (tenant_northwind).
   for (const [deviceRef, want] of [
     ["ipad-ward-01", "allow"], ["ipad-ward-03", "step_up"], ["ipad-ward-02", "restrict"], ["ipad-badge-02", "deny"],
   ]) {

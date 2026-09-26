@@ -56,23 +56,31 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 19:52Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
-              Refreshed through Codex rounds 1-10 on #1128; the stamp is the last refresh.
+              Refreshed through Codex rounds 1-11 on #1128; the stamp is the last refresh.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
-              #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
+              #1083 (DR-059), #1133 (OWNER_RESERVED by its own widened classifier: the OWNER merges it), the row-8
+              doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
               COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and, in a BROWSER (the GitHub app has no Pages
               settings), Settings -> Pages -> Source -> GitHub Actions at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages.
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
+              (Actions -> "Deploy site to Pages" -> Run workflow,
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml) - pages.yml is
+              workflow_dispatch-only, docs/OWNER_ACTIONS.md:28-30.
               Next: #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
               and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
               Swift<->vector binding check; those are the headline items only - the authoritative pre-merge
               checklists are the two acks,
               artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json and
               artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json; a granted
-              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands.
+              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands. Also review
+              + merge #1136 on the Mac's mail ask (reviewed refute-first 20:0xZ: two lane fixes - row 48 restamped
+              PARTIAL, ios-ci triggers on native/shared/** - landing on claude/land-mac-1136, which carries the Mac's
+              head 44eed7a9; the two P1s are cross-client follow-ups, see the PR threads); and the .claude/workflows
+              read attribution the Mac asks for in docs/agent/SURFACE_REVIEW_COVERAGE.md.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -81,8 +89,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 19:52Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               GH_TOKEN gets 401 from the Actions API, SKIPPED with no token), self-test 32/32.
               #1126 (8216cf6b, check 108391088659) is the L2 landing: .claude/workflows/land-branch.js is a tracked
               saved Workflow script; scripts/lib/land-branch-gate.mjs canPush() is the single source of truth for "may
-              the chain push" (preflightExit 0, breadthExit 0, run head === merge head, both sentinel lines literally
-              carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha - self-test confirmed 10/10 here); chain
+              the chain push" (as landed by #1126 at 11:08Z: preflightExit 0, breadthExit 0, run head === merge head,
+              sentinel lines carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha, self-test 10/10 then;
+              hardened by #1130 at 15:07Z to EXACT whole-line sentinel equality after a concatenated-stale-data proof,
+              self-test 19/19); chain
               lock is a file <scratch>/chain.lock (noclobber, 40-min stale; the trap is installed as the detached
               job's first statement and releases the lock when the job exits). #1126 WAS PREPARED, VALIDATED, PUSHED
               AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);

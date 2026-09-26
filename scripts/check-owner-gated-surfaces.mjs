@@ -6,6 +6,20 @@
 //
 //   node scripts/check-owner-gated-surfaces.mjs            # validate the manifest
 //   node scripts/check-owner-gated-surfaces.mjs --self-test # prove classify() works
+//   node scripts/check-owner-gated-surfaces.mjs --classify-branch <base-ref>
+//     # print `KLASS <klass> files=<n> matched=<m>` for this branch's diff against
+//     # the merge-base of <base-ref> and HEAD — the single line
+//     # scripts/lib/land-branch-gate.mjs's resolveKlass() parses so the saved
+//     # land-branch workflow derives its owner-decision class from the DIFF instead
+//     # of trusting a caller-supplied klass string (Codex summary finding 7 on
+//     # #1126/#1127, docs/BUILD_BACKLOG.md). Exit 0 with the KLASS line on a clean
+//     # classification; exit 2 with `KLASS ERROR <reason>` on a git failure or an
+//     # empty diff — an empty diff is not "other", it is unknown, and unknown fails
+//     # closed. mostRestrictive() picks the single most restrictive category present,
+//     # in order OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other. `matched`
+//     # counts RULE HITS, not files — one path can match more than one rule (e.g.
+//     # scripts/mutation-guard.mjs matches both the blanket scripts/** rule and the
+//     # gate/guard-registries rule), so matched can exceed files.
 //
 // WHY MECHANICAL, NOT REVIEWER JUDGMENT. An adversarial verification of the
 // autonomous-merge design found two ways owner-gated work slips through if the
@@ -31,20 +45,40 @@
 //   OWNER_RESERVED — legal, pricing, launch scope, decision records, buyer-facing
 //     copy. Correct code is not the question; these are the owner's to commit.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { tmpdir } from "node:os";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // A changed path matching ANY of these is SAFETY_MACHINERY. Green never suffices.
 export const SAFETY_MACHINERY = [
   { rule: "scripts/**", re: /^scripts\// },
-  { rule: ".github/workflows/**", re: /^\.github\/workflows\// },
+  { rule: ".github/(workflows|codeql|actions)/**", re: /^\.github\/(workflows|codeql|actions)\// },
+  { rule: "secret-scan config", re: /^\.gitleaks(\.toml|ignore)$/ },
   { rule: "any proof harness", re: /(^|\/)[\w.-]*proof[\w.-]*\.(ts|mjs|js)$/i },
   { rule: "any fixtures dir", re: /(^|\/)fixtures?\// },
   { rule: "the gate/guard registries", re: /^scripts\/(mutation-guard|check-guard-registries|check-mutation-sharding)\.mjs$/ },
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
+  // Review sweep on #1133 (2026-09-26), finding 1 (blocking): the root-only rule below
+  // used to be exact-path (`^package\.json$`), leaving every OTHER package.json in the
+  // tree classifying "other" even though its scripts ARE the commands the gates run —
+  // scripts/preflight.mjs:604 runs `pnpm --filter @workspace/mcp-server run test`
+  // (resolved from that package's own "test" script), and :474's `pnpm run typecheck`
+  // is `pnpm -r --filter "./artifacts/**" ... --if-present run typecheck` — `--if-present`
+  // means deleting the `typecheck` script from artifacts/signalgrid-app,
+  // signalgrid-desktop or signalgrid-mobile-pwa's package.json silently drops that
+  // package from the gate rather than failing it. A dependency change already escalates
+  // through pnpm-lock.yaml above, so widening this to every manifest costs little.
+  { rule: "any package manifest (its scripts are the gate commands preflight/typecheck run)", re: /(^|\/)package\.json$/ },
+  // TypeScript config defines the typecheck gate's own project set and strictness:
+  // tsconfig.json lists the project references `tsc --build` checks (e.g.
+  // ./lib/signalgrid-core), and tsconfig.base.json sets strictNullChecks and the other
+  // strict flags — removing a reference or loosening a flag weakens
+  // "Typecheck (all packages)" in preflight and CI without touching any gate script.
+  { rule: "TypeScript config (the typecheck gate's project set and strictness)", re: /(^|\/)tsconfig[\w.-]*\.json$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
   { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
   // DR-056: the declared objective — its criteria and the owner attestation pointer
@@ -52,6 +86,66 @@ export const SAFETY_MACHINERY = [
   // json alone cannot reach goal_met; this is the second belt — a moved pointer is reviewed
   // as safety machinery, never as a doc.
   { rule: "the declared objective (DR-056 attestation pointer)", re: /^docs\/agent\/objective\.json$/ },
+  // Finding 4 (Codex #1133 P1, 2026-09-26): a change touching ONLY .claude/workflows/
+  // used to classify 'other' — the landing workflow itself (this file's own mirror of
+  // canPush/resolveKlass/ownerDecisionText, the Chain/PR stages, the push worker's
+  // one-liner) is exactly the kind of safety net a model-judged auto-merge must never
+  // wave through on green alone. `.claude/hooks/` and `.claude/settings.json` are the
+  // Bash deny-list hook and the deny list itself (CLAUDE.md "Never bypass a check"):
+  // both are the same class of self-net as scripts/** already is.
+  { rule: "the landing workflow (.claude/workflows/**)", re: /^\.claude\/workflows\// },
+  { rule: "the Bash deny-list hook (.claude/hooks/**)", re: /^\.claude\/hooks\// },
+  { rule: "the deny list itself (.claude/settings.json)", re: /^\.claude\/settings\.json$/ },
+  // Review nit on #1133 (2026-09-26): these three surfaces govern HOW the lane lands
+  // and what the pre-push hook enforces — the same class of self-net as
+  // .claude/workflows/** and .claude/hooks/** above, not ordinary skill/tooling
+  // content. landing-under-dr-037 is the skill that decides whether the cloud lane
+  // may merge its own green PR; orchestrator-over-workers is the skill that governs
+  // how the coordinator delegates to and trusts worker output (including this very
+  // land-branch chain); .githooks/ is where pre-push (CLAUDE.md's lockfile-drift
+  // enforcement, "a pre-push hook now enforces this") lives — a change to any of the
+  // three can quietly loosen what the lane is allowed to do to itself, so none of
+  // them may land on green alone. Other skill directories stay autonomous by design
+  // (see the negative self-test below) — this is not "all of .claude/skills/".
+  { rule: "the landing-under-dr-037 skill (.claude/skills/landing-under-dr-037/**)", re: /^\.claude\/skills\/landing-under-dr-037\// },
+  { rule: "the orchestrator-over-workers skill (.claude/skills/orchestrator-over-workers/**)", re: /^\.claude\/skills\/orchestrator-over-workers\// },
+  { rule: "the git hooks (.githooks/**)", re: /^\.githooks\// },
+  // Review sweep on #1133, finding 4 (blocking): gate ratchets and pins are the same
+  // class as the launch-claims ceilings above — raising the stored number weakens the
+  // gate that reads it without touching any gate code. docs/agent/*-ratchet.json
+  // (backlog-evidence, cited-symbols, claim-inventory-anchors, role-coverage,
+  // surface-ownership) and artifacts/sync/*-pin.json (doc-orphan, package-reachability)
+  // all classified "other"; scripts/lib/ratchet-read.mjs itself says it "deliberately
+  // says NOTHING about whether a ceiling's VALUE is correct", so nothing else catches a
+  // raised value. Downward re-records still land under DR-037 (ownerDecisionText keeps
+  // the DR-037 self-merge text for SAFETY_MACHINERY).
+  { rule: "gate ratchets and pins (raising one weakens its gate)", re: /^(docs\/agent\/[\w-]*-ratchet\.json|artifacts\/sync\/[\w-]*-pin\.json)$/ },
+  // Review sweep on #1133, finding 5 (blocking): other files CI/preflight gates read as
+  // inputs that classified "other" despite backing a gate. validate-sim-macos.sh is run
+  // by mac-lane.yml; native/ios/.swiftlint.yml is read by ios-ci.yml and
+  // check-swiftlint-rules.mjs; native/shared/*.json vectors carry the TS-to-Swift
+  // parity floor (`requires.minCases`) alongside the cases they gate, so dropping cases
+  // and lowering minCases in the same edit shrinks decision-core parity coverage;
+  // docs/agent/KNOWN_CONDITIONS.json's `blocks_pr` flag controls whether scan-gaps.mjs
+  // fails; docs/agent/scheduled-routines.json's `cadenceToleranceHours` controls whether
+  // raised-hands --check (fatal in preflight) fires; docs/agent/hand-routing.json routes
+  // (or silently drops) a stall to a responder; .npmrc's `ignore-scripts` would skip the
+  // `prepare` script that installs the pre-push lockfile hook.
+  { rule: "gate inputs outside scripts/ (harness, lint config, parity vectors, diagnosis/tolerance registries, npm config)", re: /^(validate-sim-macos\.sh|native\/ios\/\.swiftlint\.yml|native\/shared\/[\w-]+\.json|docs\/agent\/(KNOWN_CONDITIONS|scheduled-routines|hand-routing)\.json|\.npmrc)$/ },
+  // Review sweep on #1133, finding 9 (should-fix): the Mac evidence records that feed
+  // the readiness figure (DR-036 outreach gate) classified "other" — check-readiness-
+  // figure.mjs, launch-profile.mjs and check-launch-proof-bindings.mjs all read
+  // artifacts/live-evidence/mac-run.json, and its binding is a digest/fingerprint
+  // stored in the file itself with no signature, so hand-forging it moves readiness
+  // without touching any gate code. Mac tick PRs still land under DR-037; only the
+  // escalation label changes.
+  { rule: "minted evidence records (feed the readiness figure)", re: /^artifacts\/(live-evidence|sim-results)\// },
+  // Review sweep on #1133, finding 10 (nit): the instruction-file rule's reasoning
+  // (AGENTS.md/CLAUDE.md steer agents) applies equally to the review/landing-ritual
+  // agent definitions and skills that steer the SAME autonomous-merge loop.
+  { rule: "review/landing agent definitions (.claude/agents/**)", re: /^\.claude\/agents\// },
+  { rule: "the loop-end skill (.claude/skills/loop-end/**)", re: /^\.claude\/skills\/loop-end\// },
+  { rule: "the signalgrid-reviewer skill (.claude/skills/signalgrid-reviewer/**)", re: /^\.claude\/skills\/signalgrid-reviewer\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -62,6 +156,60 @@ export const OWNER_RESERVED = [
   { rule: "the cost model (owner billing)", re: /^docs\/COST_MODEL\.md$/ },
   { rule: "pricing & positioning", re: /(Pricing\.tsx$|^docs\/POSITIONING\.md$)/ },
   { rule: "buyer-facing site & outreach", re: /^(artifacts\/signalgrid-(web|review)\/|README\.md$|docs\/outreach\/)/ },
+  // DR-037 names these three surfaces explicitly as ones the lane never merges
+  // (land-branch-gate.mjs's OWNER_RESERVED text and README.md both name them) — without
+  // a manifest rule, mostRestrictive() cannot resolve to OWNER_RESERVED for them, and
+  // since the derived class now always overrides a caller's guess (Codex finding 7), a
+  // caller that correctly said OWNER_RESERVED would be downgraded to whatever weaker
+  // class the diff otherwise matched (usually SAFETY_MACHINERY, since these all live
+  // under scripts/ or docs/).
+  { rule: "the launch-claims gate", re: /^scripts\/check-launch-claims\.mjs$/ },
+  { rule: "the publication boundary", re: /^(scripts\/(check-)?publication-boundary\.mjs|docs\/PUBLICATION_BOUNDARY\.md)$/ },
+  { rule: "the launch-profile machinery", re: /^scripts\/(check-)?launch-profile\.(mjs|d\.mts)$/ },
+  // Finding 3 (Codex #1133 P1, 2026-09-26): scripts/check-launch-claims.mjs's own
+  // ceiling/baseline files (RETIRED_CEILING_FILE, DOCS_CEILING_FILE — the only two
+  // constants it reads through readRatchetFile()) live under docs/agent/, not
+  // scripts/, so raising either was an 'other' change: an autonomous merge could widen
+  // what the launch-claims gate tolerates without ever touching the gate's own code.
+  { rule: "the launch-claims ceilings (scripts/check-launch-claims.mjs's own RETIRED_CEILING_FILE / DOCS_CEILING_FILE — raising either weakens the gate through an 'other' change)", re: /^docs\/agent\/launch-claims-(retired-labels|docs)-ceiling\.json$/ },
+  // Codex round 2 on #1133 (2026-09-26) P1: the repo's own instruction files — every
+  // rule in this manifest, DR-020/DR-021/DR-033/DR-037/DR-054/DR-060, the golden rules,
+  // the "ask before" list — are prose the owner wrote and the whole autonomous-merge
+  // design defers to; a diff that edits either file was previously 'other' and could
+  // rewrite what an agent is told to do (including weakening the very escalation rule
+  // enforced here) without ever routing to the owner. Exact-path: only the ROOT copies
+  // (there are no nested AGENTS.md/CLAUDE.md in this tree today; if one is ever added,
+  // it is deliberately out of scope for this rule until named here).
+  { rule: "the repository instructions (root AGENTS.md)", re: /^AGENTS\.md$/ },
+  { rule: "the repository instructions (root CLAUDE.md)", re: /^CLAUDE\.md$/ },
+  // Codex round 2 on #1133 (2026-09-26) P1: the LOCAL helper modules the owner-reserved
+  // gate scripts above import. scripts/check-launch-claims.mjs delegates its ratchet-file
+  // reading to scripts/lib/ratchet-read.mjs — without a dedicated rule, editing that
+  // helper (e.g. to make readRatchetFile()/refusalLines() always report clean) only
+  // classified SAFETY_MACHINERY (the blanket scripts/** rule), one tier below what a
+  // change to check-launch-claims.mjs itself gets, understating exactly the surface a
+  // model-judged auto-merge must never touch. The launch-profile machinery rule above
+  // already covers scripts/launch-profile.mjs (check-launch-profile.mjs's own import),
+  // and the publication-boundary rule above already covers scripts/publication-boundary.mjs
+  // (check-publication-boundary.mjs's own import) — neither has a further relative
+  // import of its own (verified by grep, and re-verified live by the self-test below,
+  // which re-derives every gate script's relative imports at test time so a future one
+  // cannot escape silently).
+  { rule: "the launch-claims gate's ratchet-read helper (scripts/lib/ratchet-read.mjs, imported by scripts/check-launch-claims.mjs)", re: /^scripts\/lib\/ratchet-read\.mjs$/ },
+  // Review sweep on #1133, finding 6 (should-fix): this classifier manifest and the
+  // landing gate it feeds were only SAFETY_MACHINERY, which the lane merges itself
+  // under DR-037 (ownerDecisionText('SAFETY_MACHINERY')). That is a two-step bypass of
+  // every OTHER owner-reserved rule above: PR 1 deletes a rule (classifies
+  // SAFETY_MACHINERY via scripts/**, lane self-merges on green); PR 2 then edits the
+  // now-unprotected gate script the same way. Making these three files themselves
+  // OWNER_RESERVED closes that: a change to the classifier, the landing gate that reads
+  // its verdict, or the saved workflow now always escalates, regardless of what rule
+  // it also matches.
+  { rule: "the owner-gated-surfaces classifier and the landing gate/workflow that read it", re: /^(scripts\/check-owner-gated-surfaces\.mjs|scripts\/lib\/land-branch-gate\.mjs|\.claude\/workflows\/land-branch\.js)$/ },
+  // Review sweep on #1133, finding 10 (nit): the compliance rule above only matches
+  // docs/*THREAT_MODEL*.md and docs/COMPLIANCE*.md — the root threat_model.md and
+  // SECURITY.md escaped it entirely and classified "other".
+  { rule: "root compliance docs (threat_model.md, SECURITY.md)", re: /^(threat_model|SECURITY)\.md$/ },
 ];
 
 // A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
@@ -112,6 +260,98 @@ export function classifyDiff(files) {
   return { tier: matched.length ? "owner-gated" : "autonomous", matched };
 }
 
+// The single most restrictive category present in a classifyDiff() result, in order
+// OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other ("other" = tier
+// "autonomous", i.e. no rule matched). Pure, so both the CLI and its self-test can
+// exercise the ordering directly.
+export function mostRestrictive({ matched } = {}) {
+  const present = new Set((matched || []).map((m) => m.category));
+  for (const cat of ["OWNER_RESERVED", "DECISION_PATH", "SAFETY_MACHINERY"]) {
+    if (present.has(cat)) return cat;
+  }
+  return "other";
+}
+
+function firstLine(s) {
+  return String(s ?? "").split("\n")[0].trim();
+}
+
+// stdio explicitly piped (never inherited) so a git failure's own stderr never reaches
+// the terminal alongside ours — the CLI's contract is EXACTLY one printed line, and the
+// caller (the Merge stage worker) is told to return that line verbatim.
+const GIT_OPTS = { cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+
+function classifyBranch(baseRef) {
+  let mergeBase;
+  try {
+    mergeBase = execFileSync("git", ["merge-base", baseRef, "HEAD"], GIT_OPTS).trim();
+  } catch (err) {
+    console.log(`KLASS ERROR git merge-base ${baseRef} HEAD failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(2);
+  }
+  let files;
+  try {
+    // Codex finding 1 (2026-09-26): git's default rename detection collapses a
+    // rename/move diff down to just the NEW path, so `--no-renames` is required or an
+    // owner-gated file moved OUT of its gated location (or a decision-path file moved
+    // out of lib/) is invisible to the manifest — fail-open. `-c core.quotePath=false`
+    // stops git C-quoting a non-ASCII path (`lib/décision.ts` -> `"lib/d\303\251cision.ts"`,
+    // which matches no manifest rule — also fail-open). `-z` + split on NUL keeps a path
+    // containing a literal newline from being read as two paths.
+    files = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "diff", "--no-renames", "--name-only", "-z", `${mergeBase}..HEAD`],
+      GIT_OPTS,
+    )
+      .split("\0")
+      .filter((l) => l.length > 0);
+  } catch (err) {
+    console.log(`KLASS ERROR git diff --name-only ${mergeBase}..HEAD failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(2);
+  }
+  if (files.length === 0) {
+    // Fail-closed (CLAUDE.md golden rule 2): an empty diff against the base is an
+    // unknown, not evidence of "nothing owner-gated" — never classify it "other".
+    console.log(`KLASS ERROR empty diff against merge-base ${mergeBase} of ${baseRef} and HEAD`);
+    process.exit(2);
+  }
+  const classification = classifyDiff(files);
+  const klass = mostRestrictive(classification);
+  console.log(`KLASS ${klass} files=${files.length} matched=${classification.matched.length}`);
+  process.exit(0);
+}
+
+// Finding 1 (blocking, 2026-09-26): the CLI's own git-diff path had NO self-test —
+// only classifyDiff()/mostRestrictive() were exercised, both of which take a plain
+// array of path strings and never see git's rename-collapsing or path-quoting. These
+// build a throwaway repo under os.tmpdir() (never inside this tree) and shell out to
+// a FRESH node process running this same file, so the fix under test is the real CLI
+// path (parsing, exit code, and all), not classifyDiff() called directly.
+function withTempRepo(fn) {
+  const dir = mkdtempSync(join(tmpdir(), "check-owner-gated-surfaces-selftest-"));
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main", dir]);
+    execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function runClassifyBranchCli(cwd, baseRef) {
+  try {
+    const stdout = execFileSync(
+      process.execPath,
+      [fileURLToPath(import.meta.url), "--classify-branch", baseRef],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    return { code: 0, stdout: stdout.trim() };
+  } catch (err) {
+    return { code: typeof err.status === "number" ? err.status : 1, stdout: String(err.stdout || "").trim() };
+  }
+}
+
 function selfTest() {
   const checks = [];
   const t = (name, ok) => checks.push([name, ok]);
@@ -133,6 +373,83 @@ function selfTest() {
   t("pricing is OWNER_RESERVED", cls(["artifacts/signalgrid-web/src/pages/Pricing.tsx"]).tier === "owner-gated");
   t("buyer-facing site is OWNER_RESERVED", cls(["artifacts/signalgrid-web/src/pages/About.tsx"]).tier === "owner-gated");
   t("the cost model is OWNER_RESERVED", cls(["docs/COST_MODEL.md"]).tier === "owner-gated");
+  // Finding 2 (blocking, 2026-09-26): DR-037 names these three surfaces as ones the
+  // lane never merges; without a manifest rule mostRestrictive() cannot resolve to
+  // OWNER_RESERVED for them, so a caller who correctly says OWNER_RESERVED was
+  // downgraded once the derived class started always winning (Codex finding 7).
+  t("the launch-claims gate is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-launch-claims.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary checker is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-publication-boundary.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary module is OWNER_RESERVED", mostRestrictive(cls(["scripts/publication-boundary.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary doc is OWNER_RESERVED", mostRestrictive(cls(["docs/PUBLICATION_BOUNDARY.md"])) === "OWNER_RESERVED");
+  t("launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.mjs"])) === "OWNER_RESERVED");
+  t("check-launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-launch-profile.mjs"])) === "OWNER_RESERVED");
+  t("launch-profile.d.mts is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.d.mts"])) === "OWNER_RESERVED");
+  // Finding 3 (Codex #1133 P1): the launch-claims gate's own ceiling/baseline files
+  // (scripts/check-launch-claims.mjs's RETIRED_CEILING_FILE / DOCS_CEILING_FILE) live
+  // under docs/agent/, not scripts/ — without a manifest rule, raising either ceiling
+  // was an 'other' change that weakened the gate without ever touching its code.
+  t("the launch-claims retired-labels ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-retired-labels-ceiling.json"])) === "OWNER_RESERVED");
+  t("the launch-claims docs ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-docs-ceiling.json"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 1: the repository instruction files.
+  t("root AGENTS.md is OWNER_RESERVED", mostRestrictive(cls(["AGENTS.md"])) === "OWNER_RESERVED");
+  t("root CLAUDE.md is OWNER_RESERVED", mostRestrictive(cls(["CLAUDE.md"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 4: the launch-claims gate's own
+  // ratchet-read helper — a change here used to classify only SAFETY_MACHINERY (the
+  // blanket scripts/** rule), one tier below the gate script that imports it.
+  t("the launch-claims gate's ratchet-read helper is OWNER_RESERVED", mostRestrictive(cls(["scripts/lib/ratchet-read.mjs"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 5: the root package manifests.
+  t("the root package.json is SAFETY_MACHINERY", mostRestrictive(cls(["package.json"])) === "SAFETY_MACHINERY");
+  t("pnpm-workspace.yaml is SAFETY_MACHINERY", mostRestrictive(cls(["pnpm-workspace.yaml"])) === "SAFETY_MACHINERY");
+  // Review sweep on #1133, finding 1 (blocking): flipped from a negative to a
+  // positive test. The package.json rule is now ANY manifest, not just the root —
+  // scripts/preflight.mjs:604 runs `pnpm --filter @workspace/mcp-server run test`,
+  // which resolves to THIS file's own "test" script, so a per-package manifest outside
+  // lib/** and scripts/** is exactly as gate-bearing as the root one and must classify
+  // SAFETY_MACHINERY, not "stay autonomous".
+  t("a per-package package.json outside lib/** and scripts/** (artifacts/mcp-server/package.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/mcp-server/package.json"])) === "SAFETY_MACHINERY");
+  t("a TypeScript config (tsconfig.json) is SAFETY_MACHINERY", mostRestrictive(cls(["tsconfig.json"])) === "SAFETY_MACHINERY");
+  t("tsconfig.base.json is SAFETY_MACHINERY", mostRestrictive(cls(["tsconfig.base.json"])) === "SAFETY_MACHINERY");
+  t("a nested tsconfig (artifacts/mcp-server/tsconfig.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/mcp-server/tsconfig.json"])) === "SAFETY_MACHINERY");
+  // Finding 3 (blocking): CI security-scanner config outside .github/workflows/.
+  t("the CodeQL workflow config (.github/codeql/codeql-config.yml) is SAFETY_MACHINERY", mostRestrictive(cls([".github/codeql/codeql-config.yml"])) === "SAFETY_MACHINERY");
+  t(".gitleaks.toml is SAFETY_MACHINERY", mostRestrictive(cls([".gitleaks.toml"])) === "SAFETY_MACHINERY");
+  t(".gitleaksignore is SAFETY_MACHINERY", mostRestrictive(cls([".gitleaksignore"])) === "SAFETY_MACHINERY");
+  // Finding 4 (blocking): gate ratchets and pins.
+  t("a docs/agent ratchet file is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/backlog-evidence-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("cited-symbols-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/cited-symbols-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("claim-inventory-anchors-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/claim-inventory-anchors-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("role-coverage-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/role-coverage-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("surface-ownership-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/surface-ownership-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("a artifacts/sync pin file is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sync/doc-orphan-pin.json"])) === "SAFETY_MACHINERY");
+  t("package-reachability-pin.json is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sync/package-reachability-pin.json"])) === "SAFETY_MACHINERY");
+  // Finding 5 (blocking): other gate inputs outside scripts/.
+  t("validate-sim-macos.sh is SAFETY_MACHINERY", mostRestrictive(cls(["validate-sim-macos.sh"])) === "SAFETY_MACHINERY");
+  t("native/ios/.swiftlint.yml is SAFETY_MACHINERY", mostRestrictive(cls(["native/ios/.swiftlint.yml"])) === "SAFETY_MACHINERY");
+  t("a native/shared parity vector (posture-allow-vectors.json) is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/posture-allow-vectors.json"])) === "SAFETY_MACHINERY");
+  t("remediation-allow-vectors.json is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/remediation-allow-vectors.json"])) === "SAFETY_MACHINERY");
+  t("assist-wire-conformance.json is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/assist-wire-conformance.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/KNOWN_CONDITIONS.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/KNOWN_CONDITIONS.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/scheduled-routines.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/scheduled-routines.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/hand-routing.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/hand-routing.json"])) === "SAFETY_MACHINERY");
+  t(".npmrc is SAFETY_MACHINERY", mostRestrictive(cls([".npmrc"])) === "SAFETY_MACHINERY");
+  // Finding 9 (should-fix): minted evidence records.
+  t("a live-evidence record (mac-run.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/live-evidence/mac-run.json"])) === "SAFETY_MACHINERY");
+  t("a sim-results record is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sim-results/evidence-20260926.json"])) === "SAFETY_MACHINERY");
+  // Finding 10 (nit): review/landing agent definitions, the loop-end and
+  // signalgrid-reviewer skills, and the root compliance docs that escaped the
+  // existing THREAT_MODEL regex.
+  t(".claude/agents/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/agents/fail-closed-auditor.md"])) === "SAFETY_MACHINERY");
+  t(".claude/skills/loop-end/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/skills/loop-end/SKILL.md"])) === "SAFETY_MACHINERY");
+  t(".claude/skills/signalgrid-reviewer/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/skills/signalgrid-reviewer/SKILL.md"])) === "SAFETY_MACHINERY");
+  t("root threat_model.md is OWNER_RESERVED", mostRestrictive(cls(["threat_model.md"])) === "OWNER_RESERVED");
+  t("root SECURITY.md is OWNER_RESERVED", mostRestrictive(cls(["SECURITY.md"])) === "OWNER_RESERVED");
+  // Finding 6 (should-fix): the classifier manifest and the landing gate/workflow that
+  // read its verdict are themselves OWNER_RESERVED now, closing the two-step bypass
+  // (delete a rule via scripts/**-classified SAFETY_MACHINERY, then edit the
+  // now-unprotected gate the same way).
+  t("this classifier file (scripts/check-owner-gated-surfaces.mjs) is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-owner-gated-surfaces.mjs"])) === "OWNER_RESERVED");
+  t("the landing gate (scripts/lib/land-branch-gate.mjs) is OWNER_RESERVED", mostRestrictive(cls(["scripts/lib/land-branch-gate.mjs"])) === "OWNER_RESERVED");
+  t("the saved landing workflow (.claude/workflows/land-branch.js) is OWNER_RESERVED", mostRestrictive(cls([".claude/workflows/land-branch.js"])) === "OWNER_RESERVED");
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
@@ -151,12 +468,127 @@ function selfTest() {
   t("a normalized lib/ path is DECISION_PATH", cls(["b/lib/signalgrid-core/src/decision.ts"]).tier === "owner-gated");
   t("a roster-scoped doc is autonomous", cls(["docs/GLOSSARY.md"]).tier === "autonomous");
 
+  // Finding 4 (Codex #1133 P1): .claude/workflows|hooks|settings.json are the landing
+  // workflow, the Bash deny-list hook, and the deny list itself — a change touching
+  // ONLY one of these used to classify 'other' and slip an autonomous merge past
+  // exactly the surfaces meant to stop it.
+  t(".claude/workflows/ change is SAFETY_MACHINERY", cls([".claude/workflows/land-branch.js"]).tier === "owner-gated");
+  t(".claude/hooks/ change is SAFETY_MACHINERY", cls([".claude/hooks/deny-bash.mjs"]).tier === "owner-gated");
+  t(".claude/settings.json change is SAFETY_MACHINERY", cls([".claude/settings.json"]).tier === "owner-gated");
+  t(".claude/settings.local.json (not the deny list itself) is autonomous", cls([".claude/settings.local.json"]).tier === "autonomous");
+
+  // Review nit on #1133: the two landing skills and .githooks/ govern how the lane
+  // lands and what the pre-push hook enforces — same self-net class as
+  // .claude/workflows/**, .claude/hooks/** and .claude/settings.json above.
+  t(".claude/skills/landing-under-dr-037/ change is SAFETY_MACHINERY", cls([".claude/skills/landing-under-dr-037/SKILL.md"]).tier === "owner-gated");
+  t(".claude/skills/orchestrator-over-workers/ change is SAFETY_MACHINERY", cls([".claude/skills/orchestrator-over-workers/SKILL.md"]).tier === "owner-gated");
+  t(".githooks/ change is SAFETY_MACHINERY", cls([".githooks/pre-push"]).tier === "owner-gated");
+  // Negative: an ordinary skill dir with no bearing on landing/lane-safety stays
+  // autonomous — this rule is scoped to those three surfaces, not all of
+  // .claude/skills/.
+  t("an unrelated skill dir (.claude/skills/video-intake/) stays autonomous", cls([".claude/skills/video-intake/SKILL.md"]).tier === "autonomous");
+
   // A mixed diff with even one owner-gated file is owner-gated (the unsafe half wins).
   t("one owner-gated file taints an otherwise-autonomous diff",
     cls(["lib/signalgrid-core/src/decision.ts", "scripts/mutation-guard.mjs"]).tier === "owner-gated");
 
   // Non-vacuity: both lists carry rules, so the gate has a subject.
   t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
+
+  // mostRestrictive() ordering (Codex finding 7 follow-up, docs/BUILD_BACKLOG.md
+  // "land-branch.js's Owner decision needed text should be derived from the changed
+  // paths"): the CLI's --classify-branch prints exactly this function's verdict.
+  t("scripts/ + lib/signalgrid-core → DECISION_PATH beats SAFETY_MACHINERY",
+    mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts"])) === "DECISION_PATH");
+  t("…plus the launch profile → OWNER_RESERVED beats both",
+    mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts", "docs/LAUNCH_PROFILE.md"])) === "OWNER_RESERVED");
+  t("docs-only diff → other", mostRestrictive(cls(["docs/GLOSSARY.md"])) === "other");
+  t("scripts/-only diff → SAFETY_MACHINERY beats other", mostRestrictive(cls(["scripts/mutation-guard.mjs"])) === "SAFETY_MACHINERY");
+
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 4 (second half): re-derive the
+  // owner-reserved gate scripts' own LOCAL imports AT TEST TIME, from their real source
+  // on disk — not from the hardcoded list above. A future import added to any of these
+  // four gate scripts (or one level further, off whatever they import) must classify
+  // OWNER_RESERVED itself, or this self-test fails; it does not just prove today's four
+  // files are correct, it re-proves the property every time preflight/CI run it.
+  {
+    const RELATIVE_IMPORT_RE = /from\s+["'](\.\.?\/[^"']+)["']/g;
+    const localImportsOf = (relFile) => {
+      const abs = resolve(repo, relFile);
+      let src;
+      try { src = readFileSync(abs, "utf8"); } catch { return []; }
+      const dir = dirname(abs);
+      return [...src.matchAll(RELATIVE_IMPORT_RE)]
+        .map((m) => resolve(dir, m[1]))
+        .map((p) => p.slice(repo.length + 1).replace(/\\/g, "/"));
+    };
+    const GATE_SCRIPTS = [
+      "scripts/check-launch-claims.mjs",
+      "scripts/check-publication-boundary.mjs",
+      "scripts/publication-boundary.mjs",
+      "scripts/check-launch-profile.mjs",
+    ];
+    // Review sweep on #1133, finding 8 (should-fix): localImportsOf() swallows a read
+    // error and returns [] — a gate script renamed or deleted out from under this list
+    // would silently drop its (and its own imports') local helpers from the derived
+    // set instead of failing the self-test. Prove each one still exists and is
+    // readable BEFORE deriving imports from it, so that failure mode is loud, not
+    // silent.
+    for (const g of GATE_SCRIPTS) t(`gate script ${g} exists and is readable`, existsSync(resolve(repo, g)));
+    // One level of transitivity (finding 4's instruction): the gate scripts' direct
+    // imports, then those files' OWN direct imports — never further than that.
+    const level1 = new Set(GATE_SCRIPTS.flatMap(localImportsOf));
+    const level2 = new Set([...level1].flatMap(localImportsOf));
+    const derived = new Set([...level1, ...level2]);
+    t("re-derived import scan found at least one local helper (the scan itself is not vacuous)", derived.size > 0);
+    for (const imp of [...derived].sort()) {
+      t(`re-derived import ${imp} (of an owner-reserved gate script, within one level) classifies OWNER_RESERVED`, mostRestrictive(cls([imp])) === "OWNER_RESERVED");
+    }
+  }
+
+  // --classify-branch itself, over a real git diff (finding 1): renaming an
+  // owner-gated file out of its gated location, a non-ASCII lib/ path, an up-to-date
+  // branch, and a bad ref.
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, "docs"), { recursive: true });
+    writeFileSync(join(dir, "docs", "LAUNCH_PROFILE.md"), "profile\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+    execFileSync("git", ["-C", dir, "mv", "docs/LAUNCH_PROFILE.md", "docs/OLD_PROFILE.md"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "rename the launch profile away"]);
+    const res = runClassifyBranchCli(dir, "main");
+    t("--classify-branch: renaming an owner-reserved file away is not laundered to other by git's default rename detection", res.code === 0 && res.stdout.startsWith("KLASS OWNER_RESERVED"));
+  });
+
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, "lib"), { recursive: true });
+    writeFileSync(join(dir, "lib", "placeholder.ts"), "export {};\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+    writeFileSync(join(dir, "lib", "décision.ts"), "export const x = 1;\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "add a non-ascii decision-path file"]);
+    const res = runClassifyBranchCli(dir, "main");
+    t("--classify-branch: a non-ASCII lib/ path is not C-quoted past the manifest", res.code === 0 && res.stdout.startsWith("KLASS DECISION_PATH"));
+  });
+
+  withTempRepo((dir) => {
+    writeFileSync(join(dir, "f.txt"), "x\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    const res = runClassifyBranchCli(dir, "main"); // HEAD already at main: empty diff
+    t("--classify-branch: an up-to-date branch (empty diff) is KLASS ERROR at exit 2", res.code === 2 && res.stdout.startsWith("KLASS ERROR"));
+  });
+
+  withTempRepo((dir) => {
+    writeFileSync(join(dir, "f.txt"), "x\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    const res = runClassifyBranchCli(dir, "does-not-exist-ref");
+    t("--classify-branch: a bad base ref is KLASS ERROR at exit 2", res.code === 2 && res.stdout.startsWith("KLASS ERROR"));
+  });
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
@@ -185,6 +617,14 @@ function validate() {
 // Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)
 // without running its CLI as a side effect. Direct invocation is unchanged.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv.includes("--self-test")) selfTest();
+  const classifyIdx = process.argv.indexOf("--classify-branch");
+  if (classifyIdx !== -1) {
+    const baseRef = process.argv[classifyIdx + 1];
+    if (!baseRef) {
+      console.log("KLASS ERROR --classify-branch requires a <base-ref> argument");
+      process.exit(2);
+    }
+    classifyBranch(baseRef);
+  } else if (process.argv.includes("--self-test")) selfTest();
   else validate();
 }

@@ -31,7 +31,13 @@ the short form.
 
 A SAFETY_MACHINERY PR (`scripts/**`, `.github/workflows/**`, fixtures) may be
 merged under the same five conditions, and the PR body must say so under "Owner
-decision needed" as "merged under DR-037" with the check-run id.
+decision needed" as "merged under DR-037" with the check-run id. The saved
+`land-branch` workflow (`.claude/workflows/land-branch.js`) derives this class
+from the diff itself (`scripts/check-owner-gated-surfaces.mjs
+--classify-branch`, `scripts/lib/land-branch-gate.mjs`'s `resolveKlass()`)
+rather than trusting the caller's claim, and a diff that resolves to
+OWNER_RESERVED is never merged by the lane under DR-037, whatever the checks
+say.
 
 ## The merge call
 

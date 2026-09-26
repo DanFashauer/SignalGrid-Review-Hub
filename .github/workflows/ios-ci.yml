@@ -30,12 +30,14 @@ on:
     branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - 'native/shared/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
   pull_request:
     branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - 'native/shared/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
   workflow_dispatch:

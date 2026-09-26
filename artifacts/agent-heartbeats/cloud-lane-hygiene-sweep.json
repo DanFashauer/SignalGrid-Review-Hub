@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-25T09:45:32.823Z",
-  "result": "freed 1.4G: 15 worktrees of landed PRs removed with git worktree remove (dirty trees would have been refused; none were); scratchpad 3 stale files (~0.1M); pnpm store pruned 1 package; no docker daemon or cache. 7.9G free (was 6.6G). Keepalive also due (last 2026-09-24T10:29Z)."
+  "firedAt": "2026-09-26T09:42:51.637Z",
+  "result": "freed ~57 MB (302 scratchpad files older than 24h) + pnpm store prune (18 packages, 196 files) | 5.3G free of 252G after the sweep (5.1G before); no /var/lib/docker on this host; scratchpad worktrees hold 5.7G (wt-1019 693M, wt-t2 179M) and are left in place - they are git worktrees, outside this routine's remit; owner not escalated (free space well above 1GB); keepalive delivery: the previous heartbeat was 24.0h old"
 }

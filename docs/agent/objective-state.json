@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 114,
+        "open": 112,
         "partial": 5,
-        "closed": 74
+        "closed": 76
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -56,19 +56,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "6",
-      "title": "Rewrite the public site to the launch scope, then gate it",
-      "role": "web-engineer",
-      "executor": "skill:signalgrid-core",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-09-24T14:47:57.548Z"
-    },
-    {
-      "rank": 2,
       "rowId": "8",
       "title": "Read the verdict code",
       "role": "principal-engineer",
@@ -81,17 +68,30 @@
       "firstRankedAt": "2026-09-24T14:47:57.548Z"
     },
     {
-      "rank": 3,
-      "rowId": "9",
-      "title": "Extend the grant-safety enumeration and mutation guard to the 14 unguarded families",
-      "role": "security-engineer",
-      "executor": "agent:security-reviewer",
+      "rank": 2,
+      "rowId": "11",
+      "title": "Widen the determinism gate and disposition lib/location",
+      "role": "devex-tooling-engineer",
+      "executor": "agent:gate-and-proof-engineer",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-25T23:01:51.566Z"
+      "firstRankedAt": "2026-09-25T23:48:15.242Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "12",
+      "title": "Commit the tiered read-list and run Tier-1 shifts 3–5",
+      "role": "program-manager",
+      "executor": "agent:project-manager",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-25T23:48:15.242Z"
     }
   ],
   "needsExecutor": [
@@ -183,11 +183,11 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 9,
-    "openRows": 114
+    "openRows": 112
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-25T23:01:51.566Z",
-  "derivedAtCommit": "a3bd808b8765cfcbbbb6dac909662928758e4e7d",
+  "derivedAt": "2026-09-25T23:48:15.242Z",
+  "derivedAtCommit": "91d9556e37d15b8b6ff3bb0f76bd30428cd297d5",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "9fab05e0c4adb62b984d0451fe216678cdb069ee1c67512e03cad79e0a957fac"
+  "decisionAddress": "ba9760a0d3ab4210b5e562a0467081f5e7e5c632c7978c32cd645244515374a2"
 }

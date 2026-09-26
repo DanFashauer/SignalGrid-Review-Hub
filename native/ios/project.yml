@@ -77,6 +77,7 @@ targets:
       - path: EnterpriseShell/Services/PostureAllow.swift
       - path: EnterpriseShell/Services/ScreenCapturePolicy.swift
       - path: EnterpriseShell/Services/DeviceBindingCrypto.swift
+      - path: EnterpriseShell/Services/AssistWire.swift
       - path: EnterpriseShell/Models/SessionState.swift
       - path: EnterpriseShell/Models/SessionData.swift
     settings:

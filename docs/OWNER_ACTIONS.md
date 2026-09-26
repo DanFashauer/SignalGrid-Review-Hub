@@ -20,7 +20,14 @@ the agent is authorized to use for it.
   **Website**.
 - Remove the old `replit.com` link and set it to the published GitHub Pages URL:
   `https://danfashauer.github.io/SignalGrid-Review-Hub/`
-- (Pages itself is already enabled and deploying — nothing to do there.)
+- Pages is enabled with source "Deploy from a branch", and that branch build
+  FAILED on every push from 2026-08-23 (PR #263) to 2026-09-26: Jekyll dies on
+  Liquid braces inside vendored skill files. The root URL served a 2026-08-23
+  render of the README the whole time. A root `.nojekyll` (this change) stops
+  the failing build; the root URL then returns 404 until a site is deployed.
+- To publish the real site: Settings → Pages → Source → "GitHub Actions", then
+  run the `.github/workflows/pages.yml` workflow once (it builds and deploys
+  the marketing site and the on-device demos). Owner-only: repository settings.
 
 ## 2. Retire the two legacy repos (5 min)
 

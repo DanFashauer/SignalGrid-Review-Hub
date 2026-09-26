@@ -3700,9 +3700,11 @@ Command:  node scripts/check-publication-boundary.mjs
 Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
 Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
 Output:   "false"
-Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-br.log   — L2 landing's own chain, head 08949c61
+          # L2 landing's own chain, head 08949c61
+Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-br.log
 Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650"
-Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-br.log   — MCP roster's repair chain after the criss-cross-merge fix, head e189552b
+          # MCP roster's repair chain after the criss-cross-merge fix, head e189552b
+Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-br.log
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
 Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
 Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065ebc at 11:08:13Z)

@@ -108,9 +108,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               8216cf6b) per `TZ=UTC git reflog` - it had been 34 commits behind (18 first-parent, `git rev-list
               --count 221eabee..8bd63bae`), not 33. `df -h /` now reads 7.6G available; no worktree-removal count or
               a disk figure from before that sweep was recorded, so neither is stated here.
-              Next: DR-060 rule 3's next slice per the roster PR's own remaining-risks section; the Mac still owes
-              Apple CI on #1121; the saved workflow's failure path has been validated only by its self-test's
-              synthetic cases, not yet by a live red run (#1126's own remaining-risks section).
+              Next: #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
+              and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
+              Swift<->vector binding check; a granted golden-rule-1 exception does not make either merge-ready until
+              those land.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
@@ -125,6 +126,9 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
               chain mechanics were delegated. (The record commit's Fable trailer is the harness's fixed attribution
               for this session, not a claim that the creative tier wrote it - see LESSONS L5.)
+              The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
+              coordinator's own bulk edits) get ledger row L16 with the skill's stage-table correction on branch
+              claude/harden-land-branch-and-mcp-roster, opening as a PR today - not in this record PR.
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows

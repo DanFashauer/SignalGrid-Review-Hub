@@ -62,6 +62,7 @@ let package = Package(
                 "Services/PostureAllow.swift",
                 "Services/ScreenCapturePolicy.swift",
                 "Services/DeviceBindingCrypto.swift",
+                "Services/AssistWire.swift",
                 "Services/ManagedAppContainment.swift",
                 "Models/SessionState.swift",
                 "Models/SessionData.swift"

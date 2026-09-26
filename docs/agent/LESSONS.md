@@ -18,15 +18,20 @@ lesson with no landing is a story; the landing is what stops the next cycle repe
 - **status:** landed | pending
 ```
 
-**The gate.** `node scripts/check-lessons.mjs` fails on a missing field, an unknown
-status, a duplicate id, a future or malformed date, a `landed` row whose landing is
-empty or pending, and a landing that names a file git does not track. It REPORTS, not
-fails, every row still pending more than 14 days after its date. `--self-test` plants
-each failing shape and asserts it fails.
+**The gate.** `node scripts/check-lessons.mjs` fails on a missing or repeated field, an
+unknown status or lane, ids that do not run L1..Ln in order (a duplicate, a gap, a
+deleted row), a heading that looks like a row but is not `### L<n>`, a future or
+impossible date, a `landed` row whose landing says "pending" anywhere or names nothing
+checkable (a tracked path, `#<PR>`, `DR-0NN`, a sha, or `recorded only — <reason>`), and
+a landing that names a file git does not track. It REPORTS, not fails, every row still
+pending more than 14 days after its date. `--self-test` plants each failing shape and
+asserts it fails.
 
-**What no gate can see.** Which model tier ran a stage inside a session is invisible to
-any check in this tree. The record of it is the `TIERS THIS SESSION` line in the
-[LOOP](LOOP.md) STATE block; a coordinator doing a bulk stage itself is a lesson here.
+**What no gate can see.** The gate checks shape only. It cannot see an incident that
+never got a row, or whether a row's evidence supports it; the ledger is as complete as
+the LOOP END ritual makes it. Which model tier ran a stage inside a session is invisible
+too. The record of that is the `TIERS THIS SESSION` line in the [LOOP](LOOP.md) STATE
+block; a stage run on the wrong tier is a lesson here.
 
 ---
 
@@ -35,7 +40,7 @@ any check in this tree. The record of it is the `TIERS THIS SESSION` line in the
 - **lane:** cloud
 - **incident:** A read-only measurement subagent booted the api-server to reproduce plan rows 97–99 and left five `dist/index.mjs` processes running (ppid 1, cwd in a scratch worktree) on 127.0.0.1:5395–5399. Two local preflight runs on two tranche branches then failed at the OIDC middleware test, whose JWKS fixture port is 5399. Reaping the five processes fixed it; the third run passed.
 - **evidence:** both preflight logs: `Error: listen EADDRINUSE: address already in use 127.0.0.1:5399` at `OIDC middleware test (the PRODUCTION auth branch actually executes)`; the process inventory showed PORT=5395..5399 in the environment.
-- **landing:** `scripts/preflight.mjs` now runs `scripts/mac/free-test-port.sh` as its first step on every platform, reaping api-servers whose binary is under the current tree (CI's Mac job already did this; local runs never did); `.claude/skills/orchestrator-over-workers/SKILL.md` "Sequential chains and waiters" forbids a read-only brief from booting a server.
+- **landing:** the cause that landed is `.claude/skills/orchestrator-over-workers/SKILL.md` "Sequential chains and waiters": a read-only brief boots no server. `scripts/preflight.mjs` also runs `scripts/mac/free-test-port.sh` first, but it reaps only orphans (ppid 1) under its OWN tree, so it would not have caught these, which sat in a scratch worktree. The root cause, the fixed ports 5397–5399 in `artifacts/api-server/test/oidc.test.mjs`, is an open `docs/BUILD_BACKLOG.md` row (DR-060 section), the same move #1106 made for `api.test.mjs`.
 - **status:** landed
 
 ### L2 — a hand-picked gate subset stood in for preflight and CI caught what it missed
@@ -65,15 +70,23 @@ any check in this tree. The record of it is the `TIERS THIS SESSION` line in the
 ### L5 — the coordinator did bulk stages itself
 - **date:** 2026-09-26
 - **lane:** cloud
-- **incident:** The coordinating session, on the creative tier DR-047 says never runs an engineering stage, wrote patch scripts, PR bodies and commit messages and parsed a 93 KB CI job listing itself instead of dispatching them to cheaper workers. The owner restated the routing directive in his own words the same day.
-- **evidence:** the owner's 2026-09-26 message, quoted verbatim in DR-060.
-- **landing:** `docs/DECISION_RECORDS.md` DR-060; the stage table in `.claude/skills/orchestrator-over-workers/SKILL.md` "Which model runs a stage — the coordinator runs none of the bulk"; the `TIERS THIS SESSION` line in `docs/agent/LOOP.md`.
+- **incident:** The coordinating session, on the creative tier DR-047 says never runs an engineering stage, wrote patch scripts, PR bodies and commit messages and parsed a CI job listing itself instead of dispatching them to cheaper workers. The owner restated the routing directive in his own words the same day.
+- **evidence:** `git log origin/SignalGrid_Alpha --since=2026-09-26T00:00Z --grep="Co-Authored-By: Claude Fable 5.1"` lists cloud-lane commits carrying the creative tier's trailer, among them b0b3c038 (a one-line stamp fix) and 5750b04e (a lane-mail heartbeat). The job-listing parse left no saved output, so only the commits are evidenced here.
+- **landing:** `docs/DECISION_RECORDS.md` DR-060; the stage table in `.claude/skills/orchestrator-over-workers/SKILL.md` "Stage table — the coordinator runs none of the bulk"; the `TIERS THIS SESSION` line in `docs/agent/LOOP.md`.
 - **status:** landed
 
 ### L6 — the Mac tick and the self-hosted runner booted the api-server on the same port
-- **date:** 2026-09-26
+- **date:** 2026-09-25
 - **lane:** mac
 - **incident:** The tick's 20:30Z evidence run failed test:api with ECONNREFUSED because the self-hosted runner ran a job on the same Mac from 20:25Z to 20:31Z and both harnesses boot the api-server on the same fixed port. Same class as L1, on the other host.
 - **evidence:** `artifacts/lane-messages/mac-correction-to-my-ack-on-the-20-30z-evidence-.json`
 - **landing:** the Mac lane's PR #1106, merged to mainline as 9222c677: `artifacts/api-server/test/api.test.mjs` and `scripts/run-bruno-collection.mjs` bind ephemeral ports, so the tick's evidence run and the self-hosted runner no longer race for :5310.
+- **status:** landed
+
+### L7 — DR-060's own PR broke its stage table on day one
+- **date:** 2026-09-26
+- **lane:** cloud
+- **incident:** The coordinator, on the creative tier, wrote the DR-060 spec, a stage DR-047 rule 2 puts on Opus; one Opus worker then built the PR, a stage the table puts on Sonnet; and DR-060's first draft said "the coordinator writes specs and reviews", giving a creative-tier coordinator the review stage DR-047 forbids it. Review caught all three. The fix round also ran on Opus.
+- **evidence:** the `TIERS THIS SESSION` line in `docs/agent/LOOP.md` ("one Opus worker built this PR"; "the coordinator (creative tier) wrote the spec"); review findings on DR-060 rule 1 and the SKILL stage table.
+- **landing:** `docs/DECISION_RECORDS.md` DR-060 rule 1 now puts spec, review and gate design on Opus and has a creative-tier coordinator dispatch them; the `TIERS THIS SESSION` line in `docs/agent/LOOP.md` records the break instead of presenting it as compliant.
 - **status:** landed

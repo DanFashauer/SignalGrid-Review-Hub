@@ -23,7 +23,7 @@ Invoke with the Workflow tool, `name: "land-branch"`, and this `args` object:
 | `worktree` | yes | Absolute path to the worker's own worktree — the only one touched. |
 | `branch` | yes | The branch being landed. |
 | `tag` | yes | Short tag for this run's lock/log filenames. |
-| `klass` | yes | `SAFETY_MACHINERY` \| `DECISION_PATH` \| anything else, for the PR's "Owner decision needed" section. |
+| `klass` | yes | The caller's initial GUESS at `SAFETY_MACHINERY` \| `DECISION_PATH` \| `OWNER_RESERVED` \| anything else. The Merge stage checks it against the diff and the DERIVED class wins for the PR's "Owner decision needed" section — see below. |
 | `title` | yes | The PR title. |
 | `trailers` | yes | The exact commit-trailer lines the caller wants on every commit this run makes. The script has no session baked in, so this and `sessionUrl` are how the caller supplies its own attribution. |
 | `sessionUrl` | yes | The caller's session URL, appended under the PR body's "Generated with Claude Code" line. |
@@ -84,6 +84,27 @@ rather than `git push origin <branch>`, so the ref that gets pushed is always
 the validated worktree HEAD, never whatever `<branch>` happens to resolve to
 locally if it does not match the checked-out ref. If a stage would need one
 of those to proceed, it returns a blocker instead.
+
+## The owner-decision class is derived, not trusted
+
+`klass` is only the caller's guess. After the Alpha merge, the Merge stage runs
+`node scripts/check-owner-gated-surfaces.mjs --classify-branch origin/SignalGrid_Alpha`
+in the worktree and returns its single printed line (`KLASS <klass> files=<n>
+matched=<m>`, or `KLASS ERROR <reason>` on a git failure or an empty diff) as
+`klassLine`. `scripts/lib/land-branch-gate.mjs`'s `resolveKlass()` parses that
+line and lets the DERIVED class win over whatever `klass` the caller passed,
+even when the caller's guess was already the safer one — an unparsable line
+or an empty diff is a blocker, never a silent fall-back to the caller's claim.
+`ownerDecisionText()` renders the "Owner decision needed" paragraph for the
+resolved class. When the diff resolves to `OWNER_RESERVED` (the launch
+profile, launch-claims gate, publication boundary, pricing, `LICENSE`/`NOTICE`,
+or another owner-reserved surface), the workflow still pushes and opens the PR
+so the owner can see it, but the run logs that the lane must not merge it, and
+the returned object carries `klass` (the resolved verdict) so the coordinator
+never merges an `OWNER_RESERVED` PR under DR-037. Both functions are MIRRORED
+byte-for-byte into `.claude/workflows/land-branch.js` next to `canPush`'s
+mirror, for the reason `canPush` is: the Workflow sandbox cannot import this
+module.
 
 ## Re-running on a branch whose PR is already open
 

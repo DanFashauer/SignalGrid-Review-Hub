@@ -5,6 +5,12 @@
 // required; preBrief and bodyNotes are optional). trailers and sessionUrl are the
 // caller's own attribution (this file has no session baked in, so it is reusable
 // across sessions without silently mis-attributing someone else's commits/PRs).
+// `klass` is now only the CALLER'S CLAIM, not the truth (Codex summary finding 7 on
+// #1126/#1127, docs/BUILD_BACKLOG.md): the Merge stage runs
+// `scripts/check-owner-gated-surfaces.mjs --classify-branch` over the actual diff, and
+// resolveKlass() (mirrored below, next to canPush) lets that DERIVED class win
+// whatever the caller passed — including escalating a caller's 'other' up to
+// OWNER_RESERVED, never the other way.
 //
 // Lessons this codifies, so a future rewrite does not relearn them:
 //   L1  one sequential chain per host for port-bound gates (preflight/breadth/test:api
@@ -105,6 +111,38 @@ function canPush(run, expectedHead) {
   return { ok: reasons.length === 0, reasons };
 }
 
+// resolveKlass / ownerDecisionText are MIRRORED from scripts/lib/land-branch-gate.mjs,
+// byte-for-byte after whitespace normalisation, for the same reason canPush is above:
+// the Workflow sandbox has no import.meta / filesystem. That module's self-test READS
+// THIS FILE and fails when either copy differs — change the module first, then paste
+// it here. KLASS_LINE_RE is the regex both this file and the module need in scope for
+// resolveKlass to run; it is not itself mirror-checked, only used.
+const KLASS_LINE_RE = /^KLASS (OWNER_RESERVED|DECISION_PATH|SAFETY_MACHINERY|other) files=(\d+) matched=(\d+)$/;
+function resolveKlass(callerKlass, derivedLine) {
+  const m = KLASS_LINE_RE.exec(String(derivedLine ?? ""));
+  if (!m) return { ok: false, reasons: [`derived line does not match the KLASS sentinel shape: ${JSON.stringify(derivedLine)}`] };
+  const derivedKlass = m[1];
+  const files = Number(m[2]);
+  if (files === 0) return { ok: false, reasons: [`derived line reports files=0 (an empty diff is unknown, not "other"): ${JSON.stringify(derivedLine)}`] };
+  return { ok: true, klass: derivedKlass, callerKlass, overridden: callerKlass !== derivedKlass };
+}
+function ownerDecisionText(klass) {
+  switch (klass) {
+    case "SAFETY_MACHINERY":
+      return 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it';
+    case "DECISION_PATH":
+      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone';
+    case "OWNER_RESERVED":
+      return 'write: "OWNER_RESERVED (<paths>): the launch profile, launch-claims gate, publication boundary, pricing, LICENSE/NOTICE or another owner-reserved surface changed — the OWNER merges this PR; the cloud lane will not merge it under DR-037 whatever the checks say." and name the paths';
+    case "other":
+      return 'write what the owner must decide, or "None - docs/record only, landed under DR-037 with check run <id recorded before merge>"';
+    default:
+      // Fail closed: an unrecognised klass must never fall through to a default
+      // paragraph that understates what changed.
+      throw new Error(`ownerDecisionText: unknown klass ${JSON.stringify(klass)}`);
+  }
+}
+
 const RULES = `
 HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\` on the two GENERATED paths named in the Merge stage's step 2 (docs/agent/SURFACE_REVIEW_COVERAGE.md, artifacts/sync/live-sync-manifest.json), and only while a merge conflict is actually in progress there — docs/agent/CLAIM_INVENTORY.json is a SOURCE input and is never resolved with \`--theirs\`, only by merging both sides' records by hand; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.
 Commit trailers (exact, last lines of every commit body):
@@ -119,8 +157,11 @@ const STAGE_SCHEMA = {
     gateResults: { type: 'array', items: { type: 'object', properties: { command: { type: 'string' }, exit: { type: 'number' }, lastLine: { type: 'string' } }, required: ['command', 'exit', 'lastLine'] } },
     notes: { type: 'string' },
     blockers: { type: 'array', items: { type: 'string' } },
+    // The single line `check-owner-gated-surfaces.mjs --classify-branch` prints, EXACTLY
+    // as printed (Codex finding 7). Only the Merge stage computes this — Pre returns ''.
+    klassLine: { type: 'string' },
   },
-  required: ['headSha', 'filesChanged', 'gateResults', 'notes', 'blockers'],
+  required: ['headSha', 'filesChanged', 'gateResults', 'notes', 'blockers', 'klassLine'],
 }
 
 // What the Chain-run worker reports — NEVER includes a push decision or a remoteSha.
@@ -156,7 +197,7 @@ if (preBrief) {
   phase('Pre')
   pre = await agent(`You are the Sonnet edit worker (DR-060 rule 1: mechanical edits run on the mid tier). Worktree ${worktree}, branch ${branch}. \`git status --short\` must be empty before you start; if not, return the blocker.
 ${preBrief}
-After the edits: \`git add -A\`, run the gates the brief names (each exit 0, quote the last line), commit ONE commit with the subject the brief gives and the trailers. Do NOT push. Return the schema.
+After the edits: \`git add -A\`, run the gates the brief names (each exit 0, quote the last line), commit ONE commit with the subject the brief gives and the trailers. Do NOT push. Return the schema with klassLine = '' (this stage never computes it; the Merge stage does).
 ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium', schema: STAGE_SCHEMA })
   if (!pre || pre.blockers?.length) { log(`pre blocked: ${JSON.stringify(pre?.blockers)}`); return { pre } }
   log(`pre: ${pre.headSha}`)
@@ -168,10 +209,20 @@ const merge = await agent(`You are the Sonnet merge worker (DR-060 rule 1: mid t
 2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
 3. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.
 4. Quick gates after \`git add -A\` (nothing should be pending): node scripts/check-publication-boundary.mjs; node scripts/check-surface-review-coverage.mjs; node scripts/check-surface-ownership.mjs (if it exists); node scripts/check-lessons.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-cited-paths.mjs; node scripts/check-doc-line-counts.mjs. Each exit 0, quote the last line; a failure is returned as a blocker with the output, NOT patched around.
-Return headSha = \`git rev-parse HEAD\`.
+5. Derive the owner-decision class from the diff (Codex summary finding 7 on #1126/#1127, docs/BUILD_BACKLOG.md): \`cd ${worktree} && node scripts/check-owner-gated-surfaces.mjs --classify-branch origin/SignalGrid_Alpha\`. It prints exactly one line, either \`KLASS <klass> files=<n> matched=<m>\` or \`KLASS ERROR <reason>\`. Return that line EXACTLY as printed, verbatim, as klassLine — do not paraphrase it, do not compute or guess the class yourself; a later stage parses it.
+Return headSha = \`git rev-parse HEAD\` and klassLine from step 5.
 ${RULES}`, { label: `merge:${tag}`, phase: 'Merge', model: 'sonnet', effort: 'medium', schema: STAGE_SCHEMA })
 if (!merge || merge.blockers?.length) { log(`merge blocked: ${JSON.stringify(merge?.blockers)}`); return { pre, merge } }
 log(`merged: ${merge.headSha}`)
+
+// The push-decision precedent (canPush, L2) applies here too: the DERIVED class from
+// the diff wins over whatever klass the caller passed, never the other way (Codex
+// finding 7). A klassLine that fails to resolve (unparsable, a KLASS ERROR from a git
+// failure, or files=0) is a blocker, not a fallback to the caller's guess.
+const kl = resolveKlass(klass, merge.klassLine)
+if (!kl.ok) { log(`klass could not be derived from the diff: ${JSON.stringify(kl.reasons)}`); return { pre, merge, klass: kl } }
+if (kl.overridden) log(`klass overridden: caller said ${klass}, the diff says ${kl.klass}`)
+if (kl.klass === 'OWNER_RESERVED') log('OWNER_RESERVED: the lane must not merge this PR')
 
 phase('Chain')
 
@@ -261,7 +312,7 @@ Write the PR body in this repository's house template, every figure from output 
 ## Validation (quote: the preflight PASSED line + "PREFLIGHT_EXIT ${chainRun.preflightExit}", the breadth PASSED line + "BREADTH_EXIT ${chainRun.breadthExit}", both on head ${push.remoteSha}; then each gate the branch adds or changes, run it and quote its last line with EXIT code; if a self-test exists run it and quote N/N)
 ## Public-safety note (public-safe content only; no secrets, tenant IDs, customer data, PHI/PII, live API calls; no production-readiness, compliance, partnership or replacement claims; nothing in lib/ or /v1 changes - verify the last with the diff stat and say so only if true)
 ## Remaining risks (honest, 2-4 bullets)
-## Owner decision needed (${klass === 'SAFETY_MACHINERY' ? 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it' : klass === 'DECISION_PATH' ? 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone' : 'write what the owner must decide, or "None - docs/record only, landed under DR-037 with check run <id recorded before merge>"'})
+## Owner decision needed (${ownerDecisionText(kl.klass)})
 Notes from the build: ${bodyNotes || '(none)'}
 End the body with exactly:
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -286,4 +337,4 @@ BODY-START
 ${cleanBody}
 BODY-END`, { label: `open:${tag}`, phase: 'PR', model: 'haiku', effort: 'low', schema: PR_SCHEMA })
 
-return { pre, merge, chainRun, push, pr, body: cleanBody }
+return { pre, merge, chainRun, push, pr, body: cleanBody, klass: kl }

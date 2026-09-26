@@ -5,11 +5,13 @@ import { join } from "node:path";
 
 // Pure push-gate for the land-branch saved workflow (docs/agent/LESSONS.md L2,
 // docs/BUILD_BACKLOG.md row "The plan-row measurement tranche is a scripted
-// workflow"). This is the single source of truth for "may the chain push?" —
-// .claude/workflows/land-branch.js inlines a byte-for-byte MIRROR of canPush (the
-// Workflow tool runs that file in a sandbox with no import.meta and no filesystem, so
-// it cannot import this module). The self-test below reads that file and FAILS when
-// the mirror drifts from this function — change here first, then paste there.
+// workflow"). This is the single source of truth for "may the chain push?", and
+// (below) for "what owner-decision class does this PR carry?" —
+// .claude/workflows/land-branch.js inlines a byte-for-byte MIRROR of canPush,
+// resolveKlass and ownerDecisionText (the Workflow tool runs that file in a sandbox
+// with no import.meta and no filesystem, so it cannot import this module). The
+// self-test below reads that file and FAILS when any mirror drifts from its
+// function here — change here first, then paste there.
 //
 //   node scripts/lib/land-branch-gate.mjs --self-test
 //
@@ -36,6 +38,49 @@ export function canPush(run, expectedHead) {
   if (run.breadthLastLine !== `BREADTH_EXIT 0 ${expectedHead}`)
     reasons.push(`breadthLastLine is not exactly "BREADTH_EXIT 0 ${expectedHead}": ${JSON.stringify(run.breadthLastLine)}`);
   return { ok: reasons.length === 0, reasons };
+}
+
+// resolveKlass / ownerDecisionText — Codex summary finding 7 on #1126/#1127
+// (docs/BUILD_BACKLOG.md: "land-branch.js's 'Owner decision needed' text should be
+// derived from the changed paths, not a three-way klass ternary"). The PR-body stage
+// used to trust a caller-supplied klass string with no check against the diff, so a
+// mis-classified or stacked-and-shifted branch printed an owner-decision paragraph
+// that didn't match what the PR actually touched. resolveKlass parses the single
+// `KLASS <klass> files=<n> matched=<m>` line
+// `scripts/check-owner-gated-surfaces.mjs --classify-branch` prints and lets that
+// DERIVED class win over whatever the caller claimed — always, even when the caller
+// guessed wrong in the safe direction. ownerDecisionText renders the PR-body
+// paragraph for a resolved class (the three branches lifted verbatim from the old
+// ternary, plus a new OWNER_RESERVED branch this finding required). Both are
+// MIRRORED byte-for-byte into .claude/workflows/land-branch.js next to canPush's
+// mirror, for the same reason canPush is: the Workflow sandbox cannot import this
+// module. The self-test below proves both mirrors match.
+const KLASS_LINE_RE = /^KLASS (OWNER_RESERVED|DECISION_PATH|SAFETY_MACHINERY|other) files=(\d+) matched=(\d+)$/;
+
+export function resolveKlass(callerKlass, derivedLine) {
+  const m = KLASS_LINE_RE.exec(String(derivedLine ?? ""));
+  if (!m) return { ok: false, reasons: [`derived line does not match the KLASS sentinel shape: ${JSON.stringify(derivedLine)}`] };
+  const derivedKlass = m[1];
+  const files = Number(m[2]);
+  if (files === 0) return { ok: false, reasons: [`derived line reports files=0 (an empty diff is unknown, not "other"): ${JSON.stringify(derivedLine)}`] };
+  return { ok: true, klass: derivedKlass, callerKlass, overridden: callerKlass !== derivedKlass };
+}
+
+export function ownerDecisionText(klass) {
+  switch (klass) {
+    case "SAFETY_MACHINERY":
+      return 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it';
+    case "DECISION_PATH":
+      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone';
+    case "OWNER_RESERVED":
+      return 'write: "OWNER_RESERVED (<paths>): the launch profile, launch-claims gate, publication boundary, pricing, LICENSE/NOTICE or another owner-reserved surface changed — the OWNER merges this PR; the cloud lane will not merge it under DR-037 whatever the checks say." and name the paths';
+    case "other":
+      return 'write what the owner must decide, or "None - docs/record only, landed under DR-037 with check run <id recorded before merge>"';
+    default:
+      // Fail closed: an unrecognised klass must never fall through to a default
+      // paragraph that understates what changed.
+      throw new Error(`ownerDecisionText: unknown klass ${JSON.stringify(klass)}`);
+  }
 }
 
 // --verify: the DETERMINISTIC push gate the push command itself runs (Codex #1126 P1
@@ -193,10 +238,49 @@ function selfTest() {
   // The workflow's inlined copy must equal this function (whitespace-normalised); a
   // drifted mirror would let the workflow push on a rule this file no longer holds.
   const norm = (s) => s.replace(/\s+/g, " ").trim();
-  let mirrored = false;
-  try { mirrored = norm(readFileSync(new URL("../../.claude/workflows/land-branch.js", import.meta.url), "utf8")).includes(norm(canPush.toString())); } catch { mirrored = false; }
-  if (mirrored) { pass++; console.log("PASS: .claude/workflows/land-branch.js carries a byte-for-byte mirror of canPush"); }
-  else console.error("FAIL: .claude/workflows/land-branch.js does not carry this exact canPush — re-mirror it");
+  let workflowSrc = "";
+  try { workflowSrc = readFileSync(new URL("../../.claude/workflows/land-branch.js", import.meta.url), "utf8"); } catch { workflowSrc = ""; }
+  const normWorkflow = norm(workflowSrc);
+  const mirrorChecks = [
+    ["canPush", canPush],
+    ["resolveKlass", resolveKlass],
+    ["ownerDecisionText", ownerDecisionText],
+  ];
+  for (const [name, fn] of mirrorChecks) {
+    const mirrored = workflowSrc && normWorkflow.includes(norm(fn.toString()));
+    if (mirrored) { pass++; console.log(`PASS: .claude/workflows/land-branch.js carries a byte-for-byte mirror of ${name}`); }
+    else console.error(`FAIL: .claude/workflows/land-branch.js does not carry this exact ${name} — re-mirror it`);
+  }
+
+  // resolveKlass / ownerDecisionText (Codex finding 7 follow-up, docs/BUILD_BACKLOG.md
+  // "land-branch.js's 'Owner decision needed' text should be derived from the changed
+  // paths"): the derived class always wins, an unparsable or empty-diff line refuses,
+  // and an unknown klass fails ownerDecisionText closed rather than guessing a text.
+  const klassCases = [];
+  const kt = (name, ok) => klassCases.push([name, ok]);
+  kt("the backlog row's own check: caller DECISION_PATH + derived other → resolved other, ownerDecisionText starts with the None instruction", (() => {
+    const r = resolveKlass("DECISION_PATH", "KLASS other files=2 matched=0");
+    return r.ok && r.klass === "other" && r.callerKlass === "DECISION_PATH" && r.overridden === true
+      && ownerDecisionText(r.klass).startsWith('write what the owner must decide, or "None');
+  })());
+  kt("OWNER_RESERVED derived beats caller other", (() => {
+    const r = resolveKlass("other", "KLASS OWNER_RESERVED files=3 matched=1");
+    return r.ok && r.klass === "OWNER_RESERVED" && r.overridden === true;
+  })());
+  kt("a caller klass that matches the derived one is not reported overridden", (() => {
+    const r = resolveKlass("SAFETY_MACHINERY", "KLASS SAFETY_MACHINERY files=4 matched=2");
+    return r.ok && r.overridden === false;
+  })());
+  kt("unparsable derived line refused", !resolveKlass("other", "not a klass line").ok);
+  kt("files=0 refused (empty diff is unknown, not other)", !resolveKlass("other", "KLASS other files=0 matched=0").ok);
+  kt("a KLASS ERROR line (git failure) refused", !resolveKlass("other", "KLASS ERROR empty diff").ok);
+  kt("ownerDecisionText throws on an unknown klass (fail closed)", (() => {
+    try { ownerDecisionText("BOGUS"); return false; } catch { return true; }
+  })());
+  for (const [name, ok] of klassCases) {
+    if (ok) { pass++; console.log(`PASS: ${name}`); }
+    else console.error(`FAIL: ${name}`);
+  }
 
   // --verify: a temp git repo under os.tmpdir() (never inside this tree), never
   // reused between cases (fresh scratch dir each time avoids one case's log files
@@ -276,7 +360,7 @@ function selfTest() {
     }
   });
 
-  const total = cases.length + 1 + 7;
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

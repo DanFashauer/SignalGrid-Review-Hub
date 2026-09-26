@@ -6,6 +6,17 @@
 //
 //   node scripts/check-owner-gated-surfaces.mjs            # validate the manifest
 //   node scripts/check-owner-gated-surfaces.mjs --self-test # prove classify() works
+//   node scripts/check-owner-gated-surfaces.mjs --classify-branch <base-ref>
+//     # print `KLASS <klass> files=<n> matched=<m>` for this branch's diff against
+//     # the merge-base of <base-ref> and HEAD — the single line
+//     # scripts/lib/land-branch-gate.mjs's resolveKlass() parses so the saved
+//     # land-branch workflow derives its owner-decision class from the DIFF instead
+//     # of trusting a caller-supplied klass string (Codex summary finding 7 on
+//     # #1126/#1127, docs/BUILD_BACKLOG.md). Exit 0 with the KLASS line on a clean
+//     # classification; exit 2 with `KLASS ERROR <reason>` on a git failure or an
+//     # empty diff — an empty diff is not "other", it is unknown, and unknown fails
+//     # closed. mostRestrictive() picks the single most restrictive category present,
+//     # in order OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other.
 //
 // WHY MECHANICAL, NOT REVIEWER JUDGMENT. An adversarial verification of the
 // autonomous-merge design found two ways owner-gated work slips through if the
@@ -32,6 +43,7 @@
 //     copy. Correct code is not the question; these are the owner's to commit.
 
 import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -112,6 +124,56 @@ export function classifyDiff(files) {
   return { tier: matched.length ? "owner-gated" : "autonomous", matched };
 }
 
+// The single most restrictive category present in a classifyDiff() result, in order
+// OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other ("other" = tier
+// "autonomous", i.e. no rule matched). Pure, so both the CLI and its self-test can
+// exercise the ordering directly.
+export function mostRestrictive({ matched } = {}) {
+  const present = new Set((matched || []).map((m) => m.category));
+  for (const cat of ["OWNER_RESERVED", "DECISION_PATH", "SAFETY_MACHINERY"]) {
+    if (present.has(cat)) return cat;
+  }
+  return "other";
+}
+
+function firstLine(s) {
+  return String(s ?? "").split("\n")[0].trim();
+}
+
+// stdio explicitly piped (never inherited) so a git failure's own stderr never reaches
+// the terminal alongside ours — the CLI's contract is EXACTLY one printed line, and the
+// caller (the Merge stage worker) is told to return that line verbatim.
+const GIT_OPTS = { cwd: process.cwd(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+
+function classifyBranch(baseRef) {
+  let mergeBase;
+  try {
+    mergeBase = execFileSync("git", ["merge-base", baseRef, "HEAD"], GIT_OPTS).trim();
+  } catch (err) {
+    console.log(`KLASS ERROR git merge-base ${baseRef} HEAD failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(2);
+  }
+  let files;
+  try {
+    files = execFileSync("git", ["diff", "--name-only", `${mergeBase}..HEAD`], GIT_OPTS)
+      .split("\n")
+      .filter((l) => l.length > 0);
+  } catch (err) {
+    console.log(`KLASS ERROR git diff --name-only ${mergeBase}..HEAD failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(2);
+  }
+  if (files.length === 0) {
+    // Fail-closed (CLAUDE.md golden rule 2): an empty diff against the base is an
+    // unknown, not evidence of "nothing owner-gated" — never classify it "other".
+    console.log(`KLASS ERROR empty diff against merge-base ${mergeBase} of ${baseRef} and HEAD`);
+    process.exit(2);
+  }
+  const classification = classifyDiff(files);
+  const klass = mostRestrictive(classification);
+  console.log(`KLASS ${klass} files=${files.length} matched=${classification.matched.length}`);
+  process.exit(0);
+}
+
 function selfTest() {
   const checks = [];
   const t = (name, ok) => checks.push([name, ok]);
@@ -158,6 +220,15 @@ function selfTest() {
   // Non-vacuity: both lists carry rules, so the gate has a subject.
   t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
 
+  // mostRestrictive() ordering (Codex finding 7 follow-up, docs/BUILD_BACKLOG.md
+  // "land-branch.js's Owner decision needed text should be derived from the changed
+  // paths"): the CLI's --classify-branch prints exactly this function's verdict.
+  t("scripts/ + lib/signalgrid-core → DECISION_PATH beats SAFETY_MACHINERY",
+    mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts"])) === "DECISION_PATH");
+  t("…plus the launch profile → OWNER_RESERVED beats both",
+    mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts", "docs/LAUNCH_PROFILE.md"])) === "OWNER_RESERVED");
+  t("docs-only diff → other", mostRestrictive(cls(["docs/GLOSSARY.md"])) === "other");
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -185,6 +256,14 @@ function validate() {
 // Guarded so this module can be IMPORTED for classifyDiff (e.g. by the brain cycle)
 // without running its CLI as a side effect. Direct invocation is unchanged.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv.includes("--self-test")) selfTest();
+  const classifyIdx = process.argv.indexOf("--classify-branch");
+  if (classifyIdx !== -1) {
+    const baseRef = process.argv[classifyIdx + 1];
+    if (!baseRef) {
+      console.log("KLASS ERROR --classify-branch requires a <base-ref> argument");
+      process.exit(2);
+    }
+    classifyBranch(baseRef);
+  } else if (process.argv.includes("--self-test")) selfTest();
   else validate();
 }

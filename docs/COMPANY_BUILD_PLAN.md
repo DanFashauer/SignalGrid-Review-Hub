@@ -3524,7 +3524,7 @@ earlier — that is the loop working, not a reason to soften the record.
     exactly one place. `pnpm run typecheck` clean.
 
 140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
-    guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on
+    guards the same shape.** — OPEN, secops-domain. RE-MEASURED 2026-09-26 (still open, citation one line off): `lib/integrations/src/integrations/vuln-scan/vuln-connector.ts` still admits a CVSS score with a bare typeof check, so NaN and Infinity travel into the normalized finding as readings; the severity ladder in `lib/integrations/src/integrations/vuln-scan/evaluate.ts` still lands NaN on unknown (raised) and Infinity on critical, so the decision path is not loosened; no commit has touched the line since it was introduced, and `lib/integrations/src/integrations/rtls-custody/rtls-connector.ts` still guards the identical shape with Number.isFinite. NOTE, and NOT a fail-open on
     the decision path — that was checked rather than assumed. `vuln-connector.ts:131`
     uses a bare `typeof === "number"`, so NaN and Infinity pass; but
     `normalizeSeverity`'s CVSS fallback tests `>=9`, `>=7`, `>=4`, `>0`, all false
@@ -3535,7 +3535,7 @@ earlier — that is the loop working, not a reason to soften the record.
     and `rtls-connector.ts:139-146` guards the identical shape one directory away.
 
 141. **CHECKED AND CLEAN, recorded so it is not re-litigated: every m-z family
-    raises on total ignorance.** — CLOSED, secops-domain. A maximally-unknown
+    raises on total ignorance.** — CLOSED, secops-domain. DONE (measured 2026-09-26): a recorded clean read, not a fix — PR #309 (4f46b875, 2026-08-25) logged the twenty-one m-z evaluators as raising on total ignorance; on today's tree all twenty-one still exist under lib/integrations, the two default-free switches in `lib/integrations/src/integrations/response-accountability/evaluate.ts` and `lib/integrations/src/integrations/service-lifecycle/evaluate.ts` remain exhaustive over closed unions, and every family still carries a tier plus live-integrations gate; the zero-grant execution itself was not re-run in this read-only pass. A maximally-unknown
     normalized input was built for all 21 evaluators in the m-z range and called
     with NO options. Every one raised — `step_up` or `monitor`, never a grant:
     macos-posture, ot-posture, peripheral-control, vuln-scan, rtls-custody,
@@ -3611,7 +3611,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 143. **`phase:summary-check` always reads the static template, so a CI gate verifies
     that a committed file contains its own bullet list.** — OPEN,
-    devex-tooling-engineer. `phase-summary-check.ts:8-11` resolves
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations exact, unfixed): `scripts/src/phase-summary-check.ts` still resolves the summary path from an environment variable that is set in neither `.github/workflows/phase-pr-evidence.yml`, `package.json` nor `scripts/package.json`, falling back to the archived `docs/AUTOMATION_PHASE_TEMPLATE.md` (an archived process note since 2026-08-15, which is the row's whole point), and no commit since the row was filed added the refuse-on-template guard, so the gate still passes on the template's own bullets whatever the PR says. `phase-summary-check.ts:8-11` resolves
     `process.env.PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`, and that
     variable is set NOWHERE in the repo — verified across workflows and both
     package manifests. The template's own bullets are exactly the sections the gate
@@ -3623,7 +3623,7 @@ earlier — that is the loop working, not a reason to soften the record.
     read as a pass.
 
 144. **The PR risk report computes `block_merge` and exits 0; nothing reads it.** —
-    OPEN, devex-tooling-engineer. `phase-pr-report.ts` contains no `process.exit` and
+    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, partly mitigated): `scripts/src/phase-pr-report.ts` still sets no failing exit outside its self-test and nothing in the repo reads its risk lane or merge recommendation, but it no longer hand-copies the claim pattern — it and `scripts/src/phase-gate.ts` both import the one list in `scripts/src/unsafe-claim-classifier.ts` (PR #492, 049e3f8e), which still omits the four regulated-framework phrases that `scripts/docs-sanity.mjs` carries, so the gap now reaches the real gate too; no proof compares the consumers' list lengths, and the git-failure-swallowing helper is unchanged. `phase-pr-report.ts` contains no `process.exit` and
     no `exitCode` assignment anywhere — it is the only gate-shaped script on the
     surface with no exit path. The workflow generates the report and uploads it as an
     artifact; no step reads `risk_lane` or `merge_recommendation`.
@@ -3644,7 +3644,7 @@ earlier — that is the loop working, not a reason to soften the record.
     distinguish git exit 1 from any other exit.
 
 145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
-    OPEN, devex-tooling-engineer. `signalgrid-grid-proof.ts:946-951` matches
+    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the secret-like-strings pattern in `scripts/src/signalgrid-grid-proof.ts` (now near line 1063 as the file grew) still cannot match a quoted JSON key-value pair — re-executed in this pass against a stringified object holding three fake credentials, no match — and no negative control exists to catch the regression; only the phone-number pattern has a self-test. `signalgrid-grid-proof.ts:946-951` matches
     `(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}` against
     `JSON.stringify(...)`. In JSON a key is followed by `"` before the colon and a
     value begins with `"` — neither is `\s`, `[:=]`, nor a member of the value class.
@@ -3659,7 +3659,7 @@ earlier — that is the loop working, not a reason to soften the record.
     check FAIL — since without one this is invisible again the moment it recurs.
 
 146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
-    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer.
+    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the maven collector in `scripts/src/generate-sbom.ts` (now near line 282) still matches only implementation, api and runtimeOnly calls, missing every plugin declaration and non-quoted dependency form; no maven completeness guard exists (git log -S finds the proposed name only in the commit that filed this row) and the ecosystems-covered property carries no caveat; `artifacts/sbom/cyclonedx.json` still lists seven maven components against hundreds of npm and cargo, with the five Gradle plugins across `native/android/app/build.gradle.kts` and `native/android/core/build.gradle.kts` unrepresented; the npm figure has drifted from 875 to 826.
     `generate-sbom.ts:256-258`. Executed against real Gradle forms: it COLLECTS a
     quoted `implementation("group:artifact:version")` and MISSES version-catalog
     references, `compileOnly`, `ksp`, `androidTestImplementation`, `classpath`, and
@@ -3682,7 +3682,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 147. **Three e2e specs abort external requests without asserting none were
     attempted; the fourth documents exactly why that is wrong.** — OPEN,
-    devex-tooling-engineer. NOTE. `admin-console`, `review-console` and `website`
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, no drift): `scripts/src/e2e/admin-console.spec.ts`, `scripts/src/e2e/review-console.spec.ts` and `scripts/src/e2e/website.spec.ts` still abort every off-page request without asserting the aborted list is empty, `scripts/src/e2e/evidence-coverage-page.spec.ts` is still the only spec carrying that assertion, and no shared allowlist helper exists under scripts/src/e2e. NOTE. `admin-console`, `review-console` and `website`
     call `route.abort()` and stop there. `evidence-coverage-page.spec.ts:56-61`
     records the lesson in its own words — "a page that grew a webfont, a logo or an
     analytics beacon would be silently neutered by the test and ship green to a
@@ -3693,7 +3693,7 @@ earlier — that is the loop working, not a reason to soften the record.
     use font hosts), in a shared helper so the next spec inherits it.
 
 148. **The e2e README states a test count 18 behind, in the section whose own lesson
-    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer.
+    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citation drifted): 079c5a3e (2026-09-06) already replaced the quoted "grown to 35" in `scripts/src/e2e/README.md` with a hand-counted forty-one declarations dated that day, which still undercounts — `scripts/src/e2e/decision-matrix.spec.ts` and `scripts/src/e2e/route-sweep.spec.ts` each generate tests in a loop, so the executed total is fifty-three across the same ten files, a twelve-test gap no gate reads; the row's own fix (drop the number or point at the list command) was not taken.
     NOTE. It says the suite "has since grown to 35"; `playwright test --list` reports
     53 tests in 10 files. Two lines below, the same section says "a README describing
     a test's live state is a hand-maintained claim, and the test itself is the only
@@ -3702,14 +3702,14 @@ earlier — that is the loop working, not a reason to soften the record.
     gate reads has two stable states: absent, or wrong.
 
 149. **1,700 lines and 239 assertions of the decision core's own proof are
-    unreviewed.** — OPEN, devex-tooling-engineer. The reader executed
+    unreviewed.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, larger than cited): `scripts/src/signalgrid-core-proof.ts` has grown past four thousand lines with more than three hundred static assertion call sites after the DR-043 rounds of 2026-09-23 and 2026-09-24, well beyond the cited size, and no tracked document records a full line-by-line read of it at this size — `docs/PROOF_COVERAGE_AUDIT.md` rates the gate at a per-gate summary level and disclaims anything added after 2026-08-03. The reader executed
     `signalgrid-core-proof.ts` and read only the reporting tail and the check helper.
     This is the largest unexamined block left on the scripts surface and it guards the
     decision path. Recorded as a coverage gap rather than a defect: nobody has looked,
     and the ledger now says so.
 
 150. **`ladderRungs=5` in the agent-behavior proof matches nothing in its source of
-    truth.** — OPEN, devex-tooling-engineer. NOTE. The family's action type has 6
+    truth.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since 2026-07-31): `scripts/src/agent-behavior-proof.ts` still prints a ladderRungs literal of five, which matches none of the real figures — the six-member action union and nine-member posture union in `lib/integrations/src/integrations/agent-behavior/types.ts`, the eight-member unified ladder in `lib/posture-composition/src/types.ts`, or the four actions the proof itself exercises — and `scripts/check-proof-figures.mjs` still registers this proof as the figure guard's source for it; the sibling context has drifted (eleven proofs at six today, see row 124). NOTE. The family's action type has 6
     members, the unified ladder has 8, its postures have 9, and the proof exercises 4
     distinct actions. Five is none of them. The proof IS registered in the figure
     guard, so this literal is what documentation about agent-behavior gets validated
@@ -3772,7 +3772,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 152. **`artifacts/signalgrid-desktop` dresses a web app as a native window, and
     the repo has a REAL desktop shell somewhere else entirely.** — OPEN,
-    desktop-engineer.
+    desktop-engineer. RE-MEASURED 2026-09-26 (still open, partly addressed): 94968f98 (batch R, 2026-09-06) removed the false Linux claim from the status bar in `artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx`, but the name collision stands — the web tree is still artifacts/signalgrid-desktop beside the real Tauri shell under native/desktop, `artifacts/signalgrid-desktop/src/index.css` still carries the inert drag rule, and the layout still renders simulated traffic-light controls; the Downloads page's "not shipped" line remains accurate because `.github/workflows/desktop.yml` still builds only the core crate.
     CORRECTED BEFORE IT SHIPPED, and the correction is the more useful half. The
     reading that produced this row concluded from a keyword sweep that the
     repository contained no native desktop shell of any kind. That is FALSE, and
@@ -3806,14 +3806,14 @@ earlier — that is the loop working, not a reason to soften the record.
     equally worth correcting.
 
 153. **Four `.bg-status-*` utilities are declared in the desktop stylesheet and used
-    nowhere in that tree.** — OPEN, desktop-engineer. NOTE. Zero references, verified
+    nowhere in that tree.** — OPEN, desktop-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #228): grep and git log -S both confirm the four bg-status classes declared in `artifacts/signalgrid-desktop/src/index.css` are never referenced as literal class names anywhere under that tree, while the app, review and PWA trees consume them; the one later reference, an opacity-suffixed form in `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` (PR #309), is a different token that activates nothing. NOTE. Zero references, verified
     two search shapes; they are live in three sibling trees, so this one copied the
     stylesheet without the components that consume it. It matters mainly because the
     comment above them documents measured contrast ratios for chips this tree never
     renders — inviting a reader to trust a verification with no rendered subject.
 
 154. **Two demo trees declare a large social card and ship an image nothing
-    references.** — OPEN, desktop-engineer and web-engineer. NOTE.
+    references.** — OPEN, desktop-engineer and web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filed): `artifacts/signalgrid-desktop/index.html` and `artifacts/signalgrid-review/index.html` still declare the large-image card with no og:image or twitter:image while each still ships an unreferenced opengraph image under public/; git log -S on both files shows no commit ever added the image tag; `artifacts/signalgrid-web/index.html` remains the correct control. NOTE.
     `signalgrid-review` and `signalgrid-desktop` both set
     `twitter:card="summary_large_image"` with no `og:image` and no `twitter:image`,
     while each ships an unreferenced `public/opengraph.jpg`. `signalgrid-web` is the
@@ -3822,7 +3822,7 @@ earlier — that is the loop working, not a reason to soften the record.
     use it does not.
 
 155. **An unguarded status lookup in desktop Integrations emits a literal
-    `undefined` class.** — OPEN, desktop-engineer. NOTE. `Integrations.tsx:65` has no
+    `undefined` class.** — OPEN, desktop-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05, sixth audit round) rewrote the status lookup in `artifacts/signalgrid-desktop/src/pages/Integrations.tsx` to fall back to the restrictive disconnected tone instead of emitting a literal undefined class; the enum-narrowed map type and an explicit UNKNOWN label this row also suggested were not done, so an unmapped status is still a silent runtime case rather than a typecheck failure. NOTE. `Integrations.tsx:65` has no
     fallback, so an unrecognised status yields `className="... undefined"`, which
     Tailwind does not match — the cell inherits ordinary foreground and reads as a
     normal, healthy row. The map is typed `Record<string, string>` so TypeScript will
@@ -3832,7 +3832,7 @@ earlier — that is the loop working, not a reason to soften the record.
     — an unknown state must be stated, not styled away.
 
 156. **`Partial<Record<DecisionOutcome, …>>` disables the exhaustiveness check that
-    would catch a new verdict.** — OPEN, web-engineer. NOTE, and a REFUTED hypothesis
+    would catch a new verdict.** — OPEN, web-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05) replaced the simulator section's partial tone map with a total record over all ten outcomes in `artifacts/signalgrid-review/src/lib/outcome-tone.ts`, whose fallback is the restrictive tone rather than the neutral audit chip; `node scripts/check-verdict-tone-source.mjs` passes today and would fail on the old shape anywhere in the tree. NOTE, and a REFUTED hypothesis
     recorded honestly: the reader expected an unmapped outcome and there is not one —
     all ten members are present, so the fallback is currently unreachable. What
     remains is that `Partial` is the annotation making an unmapped verdict LEGAL, and
@@ -3843,7 +3843,7 @@ earlier — that is the loop working, not a reason to soften the record.
     fallback to the restrictive tone.
 
 157. **Six rendered assertions of a passing CI gate that does not exist.** — CLOSED 2026-09-06 (row 160 records the removal; `rc:smoke` has zero occurrences in artifacts/signalgrid-review/src — the two rows disagreed for days),
-    web-engineer. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
+    web-engineer. DONE (measured 2026-09-26): the string has zero occurrences under artifacts/signalgrid-review/src, in `package.json`, under .github/workflows and under scripts, confirmed by full-tree grep; the removal landed in PR #309 (4f46b875, 2026-08-25), an ancestor of today's tree, and only the claim-inventory and evidence records still name it; row 160 records the same removal. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
     times, and those citations are load-bearing for two of the eight published scores.
     Absence established three ways: `check:absence` returns INCONCLUSIVE with four
     word-mentions, all of which are the claim itself or the record of the claim — no
@@ -3858,7 +3858,7 @@ earlier — that is the loop working, not a reason to soften the record.
     two scores that leaned on it — the substitution changes what they claim.
 
 158. **52 claims marked for removal are still in the tree, and no gate reads the
-    register.** — OPEN, docs-writer. `docs/agent/CLAIM_INVENTORY.json` prescribes an
+    register.** — OPEN, docs-writer. DONE (measured 2026-09-26): `scripts/check-claim-inventory-anchors.mjs` (93462fd7, batch P, 2026-09-06), registered in `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, now tests every quotable remove-actioned row in `docs/agent/CLAIM_INVENTORY.json` against its cited file and makes a rise fatal; a check-mode run today reports zero remove-actioned rows still present, matching `docs/agent/claim-inventory-anchors-ratchet.json`; unquotable rows stay outside its scope by design, as this row's own caveat anticipated. `docs/agent/CLAIM_INVENTORY.json` prescribes an
     action for each of 1,023 rendered claims. Three scripts name the file: one
     GENERATES markdown from it, and two name it only to EXCLUDE it from their own
     scans. None asks whether a prescribed action was taken.
@@ -3940,7 +3940,7 @@ earlier — that is the loop working, not a reason to soften the record.
     separate task.
 
 161. **Biometric and location privacy law is absent from the repo entirely.** —
-    OPEN, security-engineer. The founder's own architecture research names three
+    OPEN, security-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): docs still carry no substantive treatment of the Illinois biometric statute or of precise geolocation as sensitive personal information under California law; the one GDPR special-category mention remains a passing line in `docs/company/ROLE_CATALOG.md` for an unfilled future role, `docs/DATA_RETENTION_AND_PERSONAL_DATA.md` covers general retention and erasure but none of the three regimes, and a design-time comment in `lib/integrations/src/integrations/location-services/types.ts` flags the need for this legal review without performing it; still a prompt for human legal review, not a substitute. The founder's own architecture research names three
     regimes that bear directly on a badge-plus-biometric custody product, and
     `docs/` has zero hits for the operative ones: Illinois **BIPA** written notice
     and release (0), **CCPA precise geolocation as sensitive personal information**
@@ -3955,7 +3955,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 162. **The buyer's own program document describes the ICP in vocabulary the repo
     does not contain — and asks for the one thing the core refuses to do.** — OPEN,
-    positioning-messaging (primary), product/principal-engineer (the guardrail half).
+    positioning-messaging (primary), product/principal-engineer (the guardrail half). RE-MEASURED 2026-09-26 (still open, guardrail never landed): docs still hold no real hit for the buyer-deck vocabulary beyond this row's own text, `docs/PUBLIC_MESSAGING_GUARDRAILS.md` still carries no negative-requirement language for AI triage, predictive routing or auto-remediation, and the two customer figures have not migrated as SignalGrid's own claims (the one estate figure in `docs/PURPOSE.md` is attributed to the source estate); the owner's background-reading-only handling stands.
     `Enterprise_Mobility_Modernization` is a 200K+ device health-system mobility
     transformation deck. `docs/` returns ZERO hits for: "mobility modernization",
     "Access Central", "eSAF", "rogue tenant", "app consolidation", "Managed Apple
@@ -4008,7 +4008,7 @@ earlier — that is the loop working, not a reason to soften the record.
     public surface, and do not re-add a copy.
 
 164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
-    competitive-analyst. `docs/research/IGA_ADJACENCY.md` names four vendors. The
+    competitive-analyst. RE-MEASURED 2026-09-26 (still open, nothing landed): `docs/research/IGA_ADJACENCY.md` still names only its original six vendors, none of the five this row lists, and still has no sentence stating that SignalGrid does not do entitlement fulfilment; every match for the five names outside the connector catalog in `artifacts/api-server/src/routes/integrations.ts` is this row's own text. `docs/research/IGA_ADJACENCY.md` names four vendors. The
     Gartner category listing shows 115 products, and these have ZERO mentions
     anywhere in `docs/`: Radiant Logic, Oracle Identity Governance, Symantec IGA
     (Broadcom), OpenText NetIQ, IBM Security Verify Governance. Thinly covered:
@@ -4019,7 +4019,7 @@ earlier — that is the loop working, not a reason to soften the record.
     should state explicitly that SignalGrid does not do entitlement fulfilment.
 
 165. **`tamperState` is an enum where the source material describes a graph.** —
-    OPEN, product/principal-engineer. `docs/EVENT_CONTRACT.md` carries
+    OPEN, product/principal-engineer. RE-MEASURED 2026-09-26 (still open, no derivation added): `docs/EVENT_CONTRACT.md` still defines the tamper state as the bare three-value enum with no derivation notion, `lib/event-contract/src/validate.ts` and `lib/event-contract/src/detect.ts` still only validate and consume that enum, and no commit in the repository's history has introduced a tamper-graph concept (corroborated by the absence check across four probes); the row's file count for the word has grown with the tree, which changes nothing. `docs/EVENT_CONTRACT.md` carries
     `tamperState ∈ {none, suspected, confirmed}` with no notion of HOW "suspected"
     is reached. The architecture research names the constituent signals: latch
     forced, unexpected bay open, device absent while charge negotiation is unstable,
@@ -4031,7 +4031,7 @@ earlier — that is the loop working, not a reason to soften the record.
     signals is auditable in a way a bare enum is not.
 
 166. **Two iOS CI workflows are documented that do not exist.** — OPEN,
-    mobile-native-engineer. NOTE. The Drive copy of `CODE_REVIEW.md` cites
+    mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #309): `.github/workflows/ios-ci.yml` remains the only iOS workflow and the two documented names exist nowhere in the tree or its history; `native/ios/EnterpriseShell/Services/BackendService.swift` still gates pinning behind an environment variable, off by default; no iOS-specific PR checklist exists (`docs/REVIEW_CHECKLIST.md` and `native/ios/SignalGridMobile/docs/COMPARISON_CHECKLIST.md` are unrelated), and `native/ios/.swiftlint.yml` now carries eight custom rules rather than seven. NOTE. The Drive copy of `CODE_REVIEW.md` cites
     `ios-code-quality.yml` and `swift-code-review.yml`; the repo has `ios-ci.yml`
     with a `lint-and-security` job. Every path it gives is `ios/…` rather than
     `native/ios/…`, against CLAUDE.md's rule. Importing it as-is would assert two CI
@@ -4044,7 +4044,7 @@ earlier — that is the loop working, not a reason to soften the record.
     opt-in (`CERT_PINNING_ENABLED`), off unless set.
 
 167. **The Fleet tradeoff is decided but never written down.** — OPEN,
-    product/principal-engineer. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
+    product/principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #309): CLAUDE.md still names Fleet the chosen MDM with no tradeoff beside it; `native/ios/FLEET_MDM.md`, `docs/FLEET_LIVE_INTEGRATION.md` and `fleet/README.md` contain no comparison against Jamf or Intune; DR-012 in `docs/DECISION_RECORDS.md` explains Fleet-first proof-stack sequencing, not the openness-versus-managed-depth product tradeoff this row asks to be written down. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
     founder's own architecture research rates Fleet as better suited to
     organisations valuing openness and infrastructure-as-code over the deepest
     traditional mobile-workflow features, and names Jamf or Intune as the
@@ -4055,7 +4055,7 @@ earlier — that is the loop working, not a reason to soften the record.
     so it reads as a decision rather than an assumption.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
-    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. Row 151
+    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open — mitigated, not fixed): `scripts/check-verdict-tone-source.mjs` and `scripts/check-decision-palette.mjs` both pass today exactly as described, centralising every verdict-to-colour choice without validating it; `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still routes through the shared tone helper; options (b) distinct rendered values and (c) a single colour registry remain unimplemented, so a wrong mapping in the total record would still pass; the falsification by restoring the ternary was not re-run in this pass. Row 151
     was three real defects — fail-closed shown in the danger tone, `restrict`
     wearing the step-up tone, and two verdicts sharing one legend swatch — and
     `check-decision-palette.mjs` exited 0 before the fix and exits 0 after it. It
@@ -4192,7 +4192,7 @@ earlier — that is the loop working, not a reason to soften the record.
     needs its own decision — a hook that fires on every edit is a tax on every edit.
 
 182. **The claims gate read zero of 281 public documents.** — MITIGATED 2026-08-25,
-    positioning-messaging. `scripts/check-launch-claims.mjs` reads the website, the
+    positioning-messaging. RE-MEASURED 2026-09-26 (still open, figures drifted): `scripts/check-launch-claims.mjs` now scans one hundred forty-six buyer-facing files (not ninety-five) and the ceiling in `docs/agent/launch-claims-docs-ceiling.json` stands at four hundred seven mentions across one hundred nine files (not the original baseline), after an owner-approved rebaseline (7027db39) and the engineering-docs carve-out of PR #410; the item this row left undone — deriving buyer-facing scope from `scripts/publication-boundary.mjs` rather than a hand list — is still undone, since docs remain one undifferentiated public-review class there. `scripts/check-launch-claims.mjs` reads the website, the
     Pages-derived HTML, the outreach surface and anything carrying the public
     contact address — 95 files. It read NO markdown under `docs/`, in a repository
     whose own `NOTICE` calls it a public reference surface. The first docs-writer
@@ -4285,7 +4285,7 @@ earlier — that is the loop working, not a reason to soften the record.
     either way.
 
 180. **The permission gate credits a call inside `if (false)`.** — MITIGATED
-    2026-08-25, security-engineer. `check-permission-enforcement.mjs` matches
+    2026-08-25, security-engineer. RE-MEASURED 2026-09-26 (still open, mitigated only): `scripts/check-permission-enforcement.mjs` is unchanged since PR #318 (d0a9f7f4, 2026-08-25) — its self-test still drives the pure verdict function over a synthetic corpus asserting all four arms, and the gate passes today — but it is still a text-only match with no call graph or reachability analysis, so an unreachable authorize call would still satisfy it; that half remains declined, not fixed. `check-permission-enforcement.mjs` matches
     `authorize(principal, "scope")` with a regex over file text. It has no call
     graph and no reachability analysis, so a syntactically-present call in an
     unreachable branch of an unimported function satisfies it — proven by planting
@@ -4354,7 +4354,7 @@ earlier — that is the loop working, not a reason to soften the record.
     configuration-driven registry rather than the thing itself.
 
 176. **"Adding a signal to the grid" is already the architecture, and I recommended
-    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. The
+    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. RE-MEASURED 2026-09-26 (still open, one figure drifted): the source-agnostic adapter architecture, both proofs' printed verdicts and the three family mappings still hold; the Fleet converter in `lib/integration-bridge/src/evidence.ts` is still twenty-six lines while the Headwind one grew to thirty-two in an unrelated unknown-as-permissive fix (8b8e9599, 2026-09-05); that directory still holds only the converter file and its index, so the converter-catalog gap this row names is unaddressed and was never committed to. The
     owner, asked whether to build live lanes for Velociraptor, Zeek and OpenVAS,
     rejected the question: "it's a signal and it can be added to the grid for easier
     overall smart automation orchestrator that just makes things work without having
@@ -4506,7 +4506,7 @@ earlier — that is the loop working, not a reason to soften the record.
     registry every mutation target depends on and deserves its own falsification.
 
 172. **An evidence artifact asserts six safety properties that nothing measures.** —
-    OPEN, qa-engineer. `.github/workflows/connector-emulator-smoke.yml` generates an
+    OPEN, qa-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filed): the evidence step in `.github/workflows/connector-emulator-smoke.yml` still emits its six public-safety properties as hardcoded string literals with no static check behind any of them; the most recent commit on that file changed only the trigger's ignored paths, and `scripts/check-ungated-fetch.mjs` gates connector adapters generally without deriving or backing this manifest. `.github/workflows/connector-emulator-smoke.yml` generates an
     evidence manifest — uploaded as a build artifact, never committed, so it is not
     a path in this tree — carrying a `publicSafety` array that states, as literal
     data: synthetic fixtures only, no live vendor calls, no secrets, no tenant IDs,
@@ -4529,7 +4529,7 @@ earlier — that is the loop working, not a reason to soften the record.
     was intended.
 
 171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
-    own header called that the full suite.** — OPEN, sre. Found by reading
+    own header called that the full suite.** — OPEN, sre. RE-MEASURED 2026-09-26 (still open, header corrected again, selection still hand-picked): `.github/workflows/scheduled-verification.yml` now names this row and points at `scripts/check-gate-census.mjs`, but its job steps are still a fixed list that never invokes `scripts/preflight.mjs`, no mechanism derives the selection from which gates can rot without a commit, and the row's own cited gate counts have drifted well below what `scripts/check-preflight-ci-parity.mjs` reports today. Found by reading
     `.github/` rather than by a gate. `scripts/preflight.mjs` registers the gates `node scripts/check-preflight-ci-parity.mjs` counts (327 on 2026-09-06)
     and `review-hub-ci.yml` runs every one per PR, kept in step by
     `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
@@ -4559,7 +4559,7 @@ earlier — that is the loop working, not a reason to soften the record.
     is, which is the actual work here and is why this is filed rather than done.
 
 170. **A row's status can be WRONG in either direction, and no gate can tell.** —
-    OPEN, program-manager. This session produced both failures. Four rows (83, 89,
+    OPEN, program-manager. RE-MEASURED 2026-09-26 (still open, the harder half untouched): `scripts/check-backlog-evidence.mjs` and `scripts/check-backlog-ownership.mjs` remain wired into preflight and CI with their self-test passing today, and the debt ceiling in `docs/agent/backlog-evidence-ratchet.json` has ratcheted down since this row was written so its cited count is stale; the objective loop's 14-day stamp refusal (#1087) is now the one standing re-read of an open row's status, and nothing yet re-checks a closed row's status against the code. This session produced both failures. Four rows (83, 89,
     134, 135) read `open` for fixes that had already merged in PRs #309-#312; row 107
     earlier read `closed` for work that had not. A ledger wrong in both directions is
     not a ledger. (Status words are written in lower-case backticks throughout this

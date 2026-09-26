@@ -705,14 +705,18 @@ const STEPS = [
   { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
   { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
   // Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
-  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak; fatal on
-  // its own errors (unclassified workflow file, HTTP error, unresolved workflow). It needs
-  // the Actions API, so without GITHUB_TOKEN it prints SKIPPED and preflight classifies that
+  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak. An
+  // unclassified workflow file is a tree defect and stays fatal everywhere; every other own
+  // error (an HTTP error, an unresolved workflow, a malformed payload) is FATAL in CI and
+  // REPORTED, exit 0, here — a container or dev-shell token is frequently a git-proxy
+  // credential with no `actions: read` scope, and this step must not fail a preflight for
+  // that (check-ci-liveness.mjs's header: "FATAL IN CI, REPORTED LOCALLY"). It needs the
+  // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
   // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
   // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
   { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
   {
-    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row)",
+    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
     cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
     selfSkipsWithout: "GITHUB_TOKEN",
     env: { GH_TOKEN: "" },

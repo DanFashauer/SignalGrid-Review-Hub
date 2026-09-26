@@ -10,11 +10,18 @@
 //
 // NEVER FATAL ON A STREAK, BY DESIGN, ON DAY ONE: a red streak is printed with its length,
 // when it started inside the window, and the run URL, and the exit is 0. Its own errors ARE
-// fatal (exit 1): a workflow file in neither WATCHED nor NOT_WATCHED, a watched workflow the
-// API does not list, an HTTP error, a payload of the wrong shape. An API it could not read
-// is not "no red streak". Without a token outside CI it prints SKIPPED and exits 0
-// (preflight classifies that with `selfSkipsWithout`); in CI a missing token is a broken
-// step and exits 1, because a check that skips in CI is lesson L8 again.
+// fatal IN CI, and REPORTED (not fatal) outside it — same rule as check-ci-liveness.mjs's
+// header: "FATAL IN CI, REPORTED LOCALLY". A workflow file in neither WATCHED nor NOT_WATCHED
+// stays fatal EVERYWHERE (a tree defect, not an environment one), but an HTTP error (a 401/403
+// from a proxy token that lacks `actions: read`, a rate limit), a payload of the wrong shape,
+// or an unresolved dynamic Pages workflow are the check's own inability to reach the API from
+// THIS environment: fatal in CI (the workflow step hands over a real GITHUB_TOKEN, so an
+// unreachable API means the check could not run where it must), reported and exit-0 locally
+// (a container or developer machine's GH_TOKEN is often a git-proxy credential with no API
+// scope at all, and failing a developer's preflight over it is how a gate gets switched off).
+// Without a token outside CI it prints SKIPPED and exits 0 (preflight classifies that with
+// `selfSkipsWithout`); in CI a missing token is a broken step and exits 1, because a check
+// that skips in CI is lesson L8 again.
 //
 //   node scripts/check-mainline-workflow-streaks.mjs                 # GITHUB_TOKEN or GH_TOKEN
 //   node scripts/check-mainline-workflow-streaks.mjs --self-test
@@ -132,6 +139,25 @@ export function rowFor(label, runs) {
 export function tokenVerdict({ token, inCi }) {
   if (token) return "run";
   return inCi ? "fail" : "skip";
+}
+
+/** Pure. Whether this check's OWN error (an unreadable Actions API, a malformed payload, an
+ * unresolved dynamic Pages workflow, no derivable owner/repo slug) is fatal or merely reported
+ * — same rule as check-ci-liveness.mjs's header, "FATAL IN CI, REPORTED LOCALLY": CI's workflow
+ * step hands over a real token, so an unreachable API there means the check could not run where
+ * it must; a local or container GH_TOKEN is often a git-proxy credential with no `actions: read`
+ * scope at all, and failing a developer's preflight over that is how a gate gets switched off.
+ * Classification problems (a workflow file in neither WATCHED nor NOT_WATCHED) do NOT go through
+ * this — that is a tree defect, not an environment one, and stays fatal everywhere; main() never
+ * routes it here. */
+export function ownErrorVerdict({ inCi }) {
+  return inCi ? "fatal" : "reported";
+}
+
+/** Pure. The process exit code once this check has hit its own error (or not). */
+export function exitCodeFor({ inCi, ownError }) {
+  if (!ownError) return 0;
+  return ownErrorVerdict({ inCi }) === "fatal" ? 1 : 0;
 }
 
 /** Pure. owner/repo from any remote URL form (https, ssh, a proxy path ending in owner/repo). */
@@ -262,6 +288,12 @@ async function selfTest() {
   t("tokenVerdict: empty token outside CI → skip", tokenVerdict({ token: "", inCi: false }) === "skip");
   t("tokenVerdict: a real token → run, in or out of CI", tokenVerdict({ token: "x", inCi: true }) === "run" && tokenVerdict({ token: "x", inCi: false }) === "run");
 
+  t("ownErrorVerdict: fatal in CI", ownErrorVerdict({ inCi: true }) === "fatal");
+  t("ownErrorVerdict: reported outside CI", ownErrorVerdict({ inCi: false }) === "reported");
+  t("exitCodeFor: no error → 0 regardless of CI", exitCodeFor({ inCi: true, ownError: false }) === 0 && exitCodeFor({ inCi: false, ownError: false }) === 0);
+  t("exitCodeFor: an own error is fatal (1) in CI", exitCodeFor({ inCi: true, ownError: true }) === 1);
+  t("exitCodeFor: the same own error is reported (0) outside CI", exitCodeFor({ inCi: false, ownError: true }) === 0);
+
   t("slug from https", slugFromRemote("https://github.com/o/r.git") === "o/r");
   t("slug from ssh", slugFromRemote("git@github.com:o/r.git") === "o/r");
   t("slug from a proxy path", slugFromRemote("http://proxy@127.0.0.1:1/git/o/r") === "o/r");
@@ -298,8 +330,76 @@ async function selfTest() {
   );
   t("scan: an HTTP error fails, naming the path", await threw(() => scan(fake({ runsStatus: 404 }), "o/r", opts), "/runs?branch=SignalGrid_Alpha"));
 
+  // End-to-end: runLive()'s own-error path (a 401 the container's proxy token draws from the
+  // real Actions API) actually goes through ownErrorVerdict/exitCodeFor — REPORTED, exit 0
+  // off CI; FATAL, exit 1 in CI. Drives runLive() itself (main() minus argv dispatch), not
+  // just the pure functions above — calling main() here would re-enter this same --self-test
+  // branch, since process.argv still carries that flag.
+  {
+    const realFetch = globalThis.fetch;
+    const savedEnv = { GITHUB_TOKEN: process.env.GITHUB_TOKEN, GH_TOKEN: process.env.GH_TOKEN };
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      headers: new Map(),
+      json: async () => ({}),
+      text: async () => "",
+    });
+    process.env.GITHUB_TOKEN = "container-proxy-token";
+    delete process.env.GH_TOKEN;
+    try {
+      t("runLive: a 401 from the API is REPORTED, exit 0 off CI", (await runLive({ inCi: false })) === 0);
+      t("runLive: the same 401 is FATAL, exit 1 in CI", (await runLive({ inCi: true })) === 1);
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const [k, v] of Object.entries(savedEnv)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
   console.log(`mainline-workflow-streaks self-test: ${pass}/${pass + fail} passed`);
   return fail === 0 ? 0 : 1;
+}
+
+/** Everything past argv dispatch: real classification + a real (or self-test-faked) API read.
+ * Split out of main() so the self-test can drive this exact path — including its own-error
+ * handling — with a fake global fetch, without re-entering the `--self-test` branch above it. */
+async function runLive({ inCi }) {
+  const files = workflowFilesIn(join(repo, ".github/workflows"));
+  const problems = classificationProblems(files);
+  if (problems.length) {
+    for (const p of problems) console.error(`  ✗ ${p}`);
+    return 1;
+  }
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
+  const verdict = tokenVerdict({ token, inCi });
+  if (verdict === "fail") {
+    console.error("  ✗ no GITHUB_TOKEN/GH_TOKEN in CI — the workflow step lost its env block; a check that skips in CI is lesson L8 again.");
+    return 1;
+  }
+  if (verdict === "skip") {
+    console.log("SKIPPED — no GITHUB_TOKEN/GH_TOKEN (this check runs in CI)");
+    return 0;
+  }
+  try {
+    const slug = slugFromRemote(execFileSync("git", ["remote", "get-url", "origin"], { cwd: repo, encoding: "utf8" }));
+    console.log("Mainline workflow red streaks — REPORT-ONLY (exit 0 on a streak by design; its own errors are FATAL in CI, REPORTED locally)");
+    console.log(`window: last ${N} completed runs per workflow on ${BRANCH}, streak = ${K}+ red in a row, read ${new Date().toISOString()}\n`);
+    print(await scan(fetch, slug));
+    return 0;
+  } catch (err) {
+    if (ownErrorVerdict({ inCi }) === "fatal") {
+      console.error(`  ✗ ${err.message}\nMainline workflow streak check FAILED on its own error — an API it could not read is not "no red streak".`);
+    } else {
+      console.log(
+        `REPORTED — could not read the Actions API locally (${err.message}); this check is FATAL in CI, where GITHUB_TOKEN has actions:read`,
+      );
+    }
+    return exitCodeFor({ inCi, ownError: true });
+  }
 }
 
 async function main() {
@@ -312,28 +412,8 @@ async function main() {
     print(fixtureRows(path));
     return 0;
   }
-  const files = workflowFilesIn(join(repo, ".github/workflows"));
-  const problems = classificationProblems(files);
-  if (problems.length) {
-    for (const p of problems) console.error(`  ✗ ${p}`);
-    return 1;
-  }
-  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
   const inCi = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
-  const verdict = tokenVerdict({ token, inCi });
-  if (verdict === "fail") {
-    console.error("  ✗ no GITHUB_TOKEN/GH_TOKEN in CI — the workflow step lost its env block; a check that skips in CI is lesson L8 again.");
-    return 1;
-  }
-  if (verdict === "skip") {
-    console.log("SKIPPED — no GITHUB_TOKEN/GH_TOKEN (this check runs in CI)");
-    return 0;
-  }
-  const slug = slugFromRemote(execFileSync("git", ["remote", "get-url", "origin"], { cwd: repo, encoding: "utf8" }));
-  console.log("Mainline workflow red streaks — REPORT-ONLY (exit 0 on a streak by design; exit 1 on this check's own errors)");
-  console.log(`window: last ${N} completed runs per workflow on ${BRANCH}, streak = ${K}+ red in a row, read ${new Date().toISOString()}\n`);
-  print(await scan(fetch, slug));
-  return 0;
+  return runLive({ inCi });
 }
 
 // Importing this file (e.g. for WATCHED/streakVerdict/tokenVerdict) must not run main() or

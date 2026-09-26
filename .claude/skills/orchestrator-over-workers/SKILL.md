@@ -195,3 +195,11 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   without the new file and passes for the wrong reason (L9). Stage or commit first, then
   run the gates, and have the worker's report quote `git status --short` right before the
   gate run so the reviewer can see the tree the gates actually saw.
+- **A worker never runs a depth-limited or shallow fetch in the shared repository or any
+  of its worktrees.** `git fetch --depth=1 origin <ref>` inside a worktree of this repo
+  wrote `.git/shallow` with the current mainline head as a boundary commit, and every
+  history-based check (loop:state, `git branch -vv`, ahead/behind) then read a clean tree
+  as diverged (L10). A fresh, disposable clone of some OTHER repository may still use
+  `git clone --depth`; the rule is about re-fetching a checkout everyone shares, not
+  about shallow clones in general. If a chain step's history seam looks broken after a
+  subagent ran, check `ls .git/shallow` first — `git fetch --unshallow origin` is the fix.

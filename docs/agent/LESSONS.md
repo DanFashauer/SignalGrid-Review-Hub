@@ -106,3 +106,11 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** PR #1111 gating job 108345723055 "Publication-boundary gate FAILED: 1 problem area(s)"; the worker's report quoting `?? .nojekyll` at gate time and "Publication-boundary gate passed" before the commit.
 - **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` — a rule under "Sequential chains and waiters" (or the nearest section about worker briefs): gates run AFTER `git add -A` (or after the commit), never on a tree with untracked new files; a worker's report quotes `git status --short` immediately before the gate run.
 - **status:** landed
+
+### L10 — a worker's `git fetch --depth=1` made the shared repository shallow
+- **date:** 2026-09-26
+- **lane:** cloud
+- **incident:** At 05:59Z a read-only diagnostic subagent ran `git fetch --depth=1 origin SignalGrid_Alpha` (and `git fetch --depth=1 origin <sha>`) inside a worktree of the shared repository. That wrote `.git/shallow` with five boundary commits including the current mainline head, so every history-based check broke at once. `git fetch --unshallow origin` at 06:03Z re-fetched every object (3.5s, all already local) and the seam went green again.
+- **evidence:** `node scripts/loop-state.mjs` reported "Local tip ahead of its same-named Hub branch SignalGrid_Alpha (+1958)" and listed seven already-squash-landed branches as "Local work not on the Review Hub"; `git branch -vv` showed cloud-work "ahead 3075, behind 1"; `.git/shallow` was written at 05:59Z and removed by the 06:03Z unshallow.
+- **landing:** `.claude/hooks/block-dangerous.sh` denies `git fetch --depth`, `git fetch --deepen`, `git fetch --shallow-since`, `git fetch --shallow-exclude` and `git pull --depth` (`git clone --depth` stays allowed — it only shallows a brand-new directory); `.claude/skills/orchestrator-over-workers/SKILL.md` gets a rule under "Sequential chains and waiters" that a worker never runs a depth-limited or shallow fetch against the shared repository or any of its worktrees, and that a broken history seam after a subagent ran is checked with `ls .git/shallow` first.
+- **status:** landed

@@ -30,6 +30,16 @@
 # And the pattern list now matches .claude/settings.json's Bash deny list
 # exactly (`sudo` and `git branch -D` were in settings and not here) —
 # `scripts/check-hook-denylist.mjs` holds the two lists to each other.
+# ONE MORE CLOSED 2026-09-26 (lesson L10, docs/agent/LESSONS.md): a worker's
+# `git fetch --depth=1 origin <ref>` inside a worktree of THIS shared repo
+# wrote `.git/shallow` with the current mainline head as a boundary commit,
+# so every history-based check (loop:state, `git branch -vv`, ahead/behind)
+# read the tree as diverged that was not. `git fetch --unshallow origin` fixed
+# it, but the fetch that caused it should never have run. `fetch --depth`,
+# `fetch --deepen`, `fetch --shallow-since`, `fetch --shallow-exclude` and
+# `pull --depth` are now denied. `git clone --depth` is deliberately left
+# ALLOWED: a shallow clone into a brand-new directory (e.g. the ponytail
+# installer) never shallows a repo anyone else shares.
 # Still NOT caught, said plainly: a pattern assembled from a variable
 # (`F=--force; git push $F`) or split across a here-doc. This is a nudge
 # layer, not a security boundary; the permission classifier is the boundary.
@@ -66,7 +76,7 @@ judge() {
   # Whole-token matches: `git stash` must not fire on `git stash-list-helper`,
   # so each pattern is bounded by non-word characters (or the ends of the line).
   # Case-SENSITIVE: `git branch -d` (safe, merged-only) is not `git branch -D`.
-  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo"; do
+  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo" "git fetch --depth" "git fetch --deepen" "git fetch --shallow-since" "git fetch --shallow-exclude" "git pull --depth"; do
     if printf '%s' "$stripped" | grep -qE -- "(^|[^A-Za-z0-9_-])${p}([^A-Za-z0-9_-]|$)"; then
       printf '%s' "$p"
       return 0
@@ -101,6 +111,19 @@ if [ "${1:-}" = "--self-test" ]; then
   expect_deny "git branch -D main"
   expect_allow "git branch -d merged-topic"
   expect_allow "echo 'sudo is not available here'"
+  # L10 (2026-09-26): a shallow fetch/pull against the shared repo wrote
+  # .git/shallow and broke every history seam. Deny the flags; clone stays
+  # allowed since it only shallows a brand-new directory.
+  expect_deny "git fetch --depth=1 origin SignalGrid_Alpha"
+  expect_deny "git fetch --depth 1 origin abc1234"
+  expect_deny "git pull --depth 1"
+  expect_deny "git fetch --deepen=5"
+  expect_deny "git fetch --shallow-since=2026-09-01"
+  expect_deny "git fetch --shallow-exclude=main"
+  expect_allow "git commit -m 'never run git fetch --depth here'"
+  expect_allow "echo \"git pull --depth is banned\""
+  expect_allow "git clone --depth 1 https://example.invalid/x.git"
+  expect_allow "git fetch origin"
   # ReDoS regression (Mac lane, 2026-09-13): a long flag run with no closing quote
   # and no forbidden pattern must judge quickly and ALLOW. The old adjacent-ambiguous
   # unwrap quantifiers hung BSD sed here; the linear form returns instantly. On a

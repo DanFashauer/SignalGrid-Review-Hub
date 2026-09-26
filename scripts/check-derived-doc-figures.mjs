@@ -705,22 +705,26 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/agent/LOOP.md",
     near: /proofs 148(?! proof)/,
-    count: 1,
+    count: 0,
     reason:
       "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
       "that round (148 -> 154), not the number of proof:* scripts. It collided with the derived figure while " +
       "that figure was 148, and collides again now the live count is 154 (PR #929 added proof:app-protection, " +
       "2026-09-25): the '154' is the assertion total after the round — count 1. Rewriting it would falsify the " +
-      "history it records; when the derived figure moves off 154 this drops back to 0 and the count must follow.",
+      "history it records; when the derived figure moves off 154 this drops back to 0 and the count must follow " +
+      "— and since 2026-09-26 (proof:decision-engine-parity took the live count to 155) that '154' is no longer the " +
+      "current figure either, so the sweep produces no hit here — count 0, kept as a trip-wire.",
   },
   {
     doc: "docs/agent/ORG_SELF_EVALUATION_2026-09-12.md",
     near: /154 `-- self-skipping proofs/,
-    count: 1,
+    count: 0,
     reason:
       "a LINE NUMBER in a dated evaluation (validate-sim-macos.sh:154, the line that prints the self-skipping " +
       "proofs), not a count of proof:* scripts. It collides with the derived figure only while that figure is 154 " +
-      "(PR #929, 2026-09-25); rewriting a cited line number would break the citation. Drops to 0 when the figure moves.",
+      "(PR #929, 2026-09-25); rewriting a cited line number would break the citation. Drops to 0 when the figure moves. " +
+      "Since 2026-09-26 the live count is 155 (proof:decision-engine-parity), so this dated '154' is not the " +
+      "current figure and the sweep produces no hit — count 0, kept as a trip-wire.",
   },
   {
     doc: "docs/BUILD_BACKLOG.md",

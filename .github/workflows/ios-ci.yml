@@ -32,12 +32,28 @@ on:
       - 'native/ios/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
+      # The TS engine and its emitted parity vectors: a rule that changes on the TS side must
+      # re-run the Swift replay (plan row 18, 2026-09-26) — the port is proven here, not assumed.
+      # lib/signalgrid-core is breadth (the simulator's neighbour), not a dependency of the vectors.
+      - 'lib/signalgrid-simulator/**'
+      - 'lib/signalgrid-core/**'
+      - 'lib/app-workflows/**'
+      - 'native/shared/**'
+      - 'scripts/src/decision-engine-parity-proof.ts'
   pull_request:
     branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
+      # The TS engine and its emitted parity vectors: a rule that changes on the TS side must
+      # re-run the Swift replay (plan row 18, 2026-09-26) — the port is proven here, not assumed.
+      # lib/signalgrid-core is breadth (the simulator's neighbour), not a dependency of the vectors.
+      - 'lib/signalgrid-simulator/**'
+      - 'lib/signalgrid-core/**'
+      - 'lib/app-workflows/**'
+      - 'native/shared/**'
+      - 'scripts/src/decision-engine-parity-proof.ts'
   workflow_dispatch:
 
 concurrency:

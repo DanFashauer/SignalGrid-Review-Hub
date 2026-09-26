@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 112,
+        "open": 111,
         "partial": 5,
-        "closed": 76
+        "closed": 77
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -56,19 +56,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "8",
-      "title": "Read the verdict code",
-      "role": "principal-engineer",
-      "executor": "agent:architect",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-09-24T14:47:57.548Z"
-    },
-    {
-      "rank": 2,
       "rowId": "11",
       "title": "Widen the determinism gate and disposition lib/location",
       "role": "devex-tooling-engineer",
@@ -81,7 +68,7 @@
       "firstRankedAt": "2026-09-25T23:48:15.242Z"
     },
     {
-      "rank": 3,
+      "rank": 2,
       "rowId": "12",
       "title": "Commit the tiered read-list and run Tier-1 shifts 3–5",
       "role": "program-manager",
@@ -92,6 +79,19 @@
         "section": "Global backlog"
       },
       "firstRankedAt": "2026-09-25T23:48:15.242Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "14",
+      "title": "Build the status-code arm of the contract gate",
+      "role": "qa-engineer",
+      "executor": "skill:signalgrid-reviewer",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T00:18:54.405Z"
     }
   ],
   "needsExecutor": [
@@ -183,11 +183,11 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 9,
-    "openRows": 112
+    "openRows": 111
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-25T23:48:15.242Z",
-  "derivedAtCommit": "91d9556e37d15b8b6ff3bb0f76bd30428cd297d5",
+  "derivedAt": "2026-09-26T00:18:54.405Z",
+  "derivedAtCommit": "9cadddaa4a27271268726ccce502b05409ab1739",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "ba9760a0d3ab4210b5e562a0467081f5e7e5c632c7978c32cd645244515374a2"
+  "decisionAddress": "af928efa159b75dba6a746c6b7c80d2ac19f15da3a448867682e2262ec8aaf45"
 }

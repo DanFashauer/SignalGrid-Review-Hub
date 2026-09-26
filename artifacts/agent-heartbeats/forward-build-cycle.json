@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T15:11:48.443Z",
-  "result": "acted (landing, no new item): today's build slot landed 7 backlog PRs under DR-037 (#1016, #1012, #1017, #1021, #997, #1006, #1018) and readied #1024, #1026 and #1005 for the owner. No new item was opened: the owner's 2026-09-24 company-loop directive (DR-056, Mac-led) will replace this trigger, and a new product PR now would collide with that redesign."
+  "firedAt": "2026-09-26T22:10:21.042Z",
+  "result": "acted (build in progress): the 2026-09-26 15:09Z fire was read at 20:30Z and picked tasks[0] = plan row 12 (Tier-1 shifts 3-5). A workflow read 16 files completely against the fail-closed question; verification so far confirms 15 findings, 3 blocking (evidence.ts: a future-stamped reading outranks a fresh accusation; store.ts: putSignal is last-write-wins by arrival; profile.ts: a present-but-blank product profile), with 2 verify groups still running. The ledger rows, backlog rows and the row 12 restamp land as one PR under DR-037 when the writer finishes; fixes that change what the core returns go to the owner as DR-051 proposals."
 }

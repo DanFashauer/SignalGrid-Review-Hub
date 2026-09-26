@@ -2,7 +2,182 @@
   "$comment": "Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None runs from this repository's .mcp.json (it carries only signalgrid-mcp) and none may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac.",
   "measuredAt": "2026-09-18",
   "landing": "Documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line.",
+  "external": [
+    {
+      "id": "github",
+      "registeredBy": "the harness, on the cloud lane",
+      "decision": "documented, not auto-registered — the correct command depends on the transport (hosted HTTP vs a local server image), and guessing wrong is worse than documenting",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 47 ('GitHub | Documented, not auto-registered ... | GITHUB_PERSONAL_ACCESS_TOKEN (secret)'); never probed under this roster's by-use protocol"
+    },
+    {
+      "id": "firecrawl",
+      "registeredBy": "scripts/install-firecrawl.mjs (pnpm run mcp:setup), when FIRECRAWL_API_KEY is set; skips cleanly otherwise",
+      "decision": "DR-022; adopted for research and source verification only, never a decision-path input",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 46; docs/agent/RESOURCE_INTAKE.md (Firecrawl, DR-022); never probed under this roster's by-use protocol"
+    },
+    {
+      "id": "neural-memory",
+      "registeredBy": "scripts/install-neural-memory.mjs (pnpm run mcp:setup), when uv and claude are present; skips cleanly otherwise",
+      "decision": "DR-026; adopted as the memory substrate under the DR-024 stack",
+      "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 45; docs/agent/RESOURCE_INTAKE.md (Neural Memory, DR-026); never probed under this roster's by-use protocol"
+    }
+  ],
+  "grants": {
+    "$comment": "A grant means a lane or a first-party skill MAY call that server, for the stated purpose. This gate (scripts/check-mcp-roster.mjs) checks DOCUMENTS — that a skill naming an mcp__<server>__ tool holds a matching grant here — it does not intercept or authorize any live call.",
+    "lanes": {
+      "cloud": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "context7",
+          "for": "dependency work — current library docs before a version or API change; reached through a hosted claude.ai connector on this lane",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only; external web content, never a decision-path input",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate — a session remembers what an earlier one learned about working this repo",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "github",
+          "for": "harness-provided GitHub access on the cloud lane",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "playwright",
+          "for": "walking the operator/admin console screen inventory for the design gap; local pages only, never a tenant's console",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        }
+      ],
+      "mac": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "context7",
+          "for": "dependency work — current library docs before a version or API change; registered via scripts/install-context7.mjs on this lane",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only; external web content, never a decision-path input",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate — a session remembers what an earlier one learned about working this repo",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "playwright",
+          "for": "walking the operator/admin console screen inventory for the design gap; local pages only, never a tenant's console",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        },
+        {
+          "server": "wazuh",
+          "for": "reading the live Wazuh the Mac lane already runs during a live-edr rehearsal",
+          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+        }
+      ]
+    },
+    "skills": {
+      "signalgrid-master": [
+        {
+          "server": "context7",
+          "for": "pulling current docs through Context7 (resolve-library-id, then query-docs) for dependency work"
+        },
+        {
+          "server": "firecrawl",
+          "for": "research and source verification only, adopted on top of ECC by owner direction (DR-022)"
+        }
+      ],
+      "signalgrid-evidence-toolchain": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the first-party Mac-native grid_collected evidence path"
+        },
+        {
+          "server": "firecrawl",
+          "for": "web research / source-verification lane, report-only, never an authoritative verdict"
+        },
+        {
+          "server": "neural-memory",
+          "for": "the memory substrate under the DR-024 stack"
+        }
+      ],
+      "signalgrid-native": [
+        {
+          "server": "signalgrid-mcp",
+          "for": "the first-party Mac-native grid_collected path"
+        }
+      ],
+      "research-ops": [
+        {
+          "server": "firecrawl",
+          "for": "the owner-gated research act named beside the Firecrawl decision record"
+        }
+      ]
+    }
+  },
+  "ungranted": {
+    "cloud": {
+      "observedAt": "2026-09-26",
+      "count": 12,
+      "rule": "12 distinct mcp__<server>__ prefixes visible in the cloud session's tool list on 2026-09-26 beyond the granted set and the harness's own session tools; names deliberately not recorded (they are the owner's claude.ai account connections, not repository surface); none granted; a use goes through RESOURCE_INTAKE + tool-evaluation-by-use first (DR-060 rule 3)"
+    }
+  },
   "servers": [
+    {
+      "id": "signalgrid-mcp",
+      "firstParty": true,
+      "upstream": "artifacts/mcp-server/src/index.ts (this repository; the tree is the pin)",
+      "sha": null,
+      "license": "MIT (repository LICENSE; artifacts/mcp-server/package.json declares no license field of its own — a private workspace package)",
+      "language": "typescript",
+      "packageName": "@workspace/mcp-server",
+      "packageVersion": "0.0.0",
+      "matches": "both lanes — the repo's own decision fabric over stdio, registered from the tracked .mcp.json",
+      "reads": "repo-relative paths under REPO_ROOT only: the generated live-sync manifest and named repository documents (fabric_status), docs/inspiration (signal_catalog's asset list), artifacts/api-collection/**/*.bru (bruno_collection_list, bruno_request_get, refused outside that root), and its own source; nothing outside this checkout",
+      "writes": "nothing on disk, except bruno_collection_run, which delegates to scripts/run-bruno-collection.mjs (that script writes dist/ and a gitignored results file under artifacts/bruno/)",
+      "network": "none from any tool except bruno_collection_run, which boots and tears down its own fixture api-server on localhost only (intentionally-public sgk_demo_* tokens) — no external peer, no product, tenant or vendor state change",
+      "hooks": "none",
+      "tools": 16,
+      "toolNames": [
+        "list_room_scenarios",
+        "evaluate_room_entry",
+        "signal_catalog",
+        "scan_signals",
+        "evaluate_decision",
+        "facility_graph",
+        "evaluate_location_certainty",
+        "fabric_status",
+        "explain_decision",
+        "evidence_freshness",
+        "list_connectors",
+        "list_policies",
+        "query_audit",
+        "bruno_collection_list",
+        "bruno_request_get",
+        "bruno_collection_run"
+      ],
+      "readOnlyTools": 7,
+      "mutatingTools": 1,
+      "unannotatedTools": 8,
+      "offline": "the probe: fabric_status called from the cloud session on 2026-09-26 (main checkout at 8bd63bae) returned manifestVersion 84, fingerprint 7c15496cfc1b936fb998d4879dcb9007f384fe778d3627036a49f6006eb7a04b, 42 signal kinds, 20 categories, and an mcpTools list identical as a set to the 16 registerTool names in artifacts/mcp-server/src/index.ts",
+      "disposition": "adopted",
+      "reason": "first-party; DR-060 rule 3: where a tool call exists the coordinator prefers it over a hand read",
+      "config": ".mcp.json (tracked; both lanes on pull)"
+    },
     {
       "id": "context7",
       "upstream": "https://github.com/upstash/context7",

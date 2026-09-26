@@ -81,6 +81,20 @@ there) are recorded with the reason, so the next person does not re-run the tria
   as an early, skippable, non-fatal step so a cold Mac reaches full parity in one
   command, but the evidence lane does not depend on the dev servers.
 
+## Who may call what
+
+`docs/agent/mcp-roster.json`'s `grants.lanes` and `grants.skills` name which lane
+and which first-party skill may call which server, and for what; its `ungranted`
+block reports what a session sees beyond that set, uncounted by name. Its
+`servers[]`/`external[]` entries carry the dispositions above — `keycloak-admin`
+and `postgres-hardened` may never be granted.
+
+`scripts/check-mcp-roster.mjs` (in `scripts/preflight.mjs` and CI) checks the
+DOCUMENT, not a call: every granted server id must exist, every `grants.skills`
+key must be a real first-party skill, and a first-party skill doc that names an
+`mcp__<server>__` tool must hold a matching grant. It cannot see, and does not
+intercept, what a session actually calls.
+
 ## The one command per lane
 
 ```bash

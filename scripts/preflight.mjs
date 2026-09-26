@@ -45,7 +45,19 @@ const quick = process.argv.includes("--quick");
 // footer says what that leaves out, recomputed from `.github/workflows/` on
 // every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
-  // FIRST, because it is the first thing CI does and the cheapest way to be told
+  // FIRST OF ALL: reap ORPHANED api-servers under THIS tree (DR-060, lesson L1 in
+  // docs/agent/LESSONS.md). A killed run leaves a server holding a fixed test port, and
+  // the next preflight fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399.
+  // FREE_TEST_PORT_ORPHANS_ONLY limits the kill to servers whose parent is gone (ppid 1),
+  // so a live test:api, verify:breadth or tick evidence run in this checkout is reported
+  // and left alone. CEILING: it matches only an argv carrying the absolute path
+  // <tree>/artifacts/api-server/dist/index.mjs, so another worktree's orphan — L1's own
+  // case, orphans in a scratch worktree — is never touched, and neither is a relative
+  // `node ./dist/index.mjs`. The cross-tree case is covered by the orchestrator skill's
+  // rule (a read-only brief boots no server) and, at the root, by oidc.test.mjs moving off
+  // its fixed ports (docs/BUILD_BACKLOG.md, DR-060 section). Never fails.
+  { name: "Reap orphaned api-servers under this tree (ppid 1 only; live runs are left)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo, FREE_TEST_PORT_ORPHANS_ONLY: "1" } },
+  // The first GATE, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
   // print "Safe to push" over a lockfile that did not match its manifests — CI then
   // failed on `Install dependencies` before running a single gate.
@@ -85,6 +97,10 @@ const STEPS = [
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
+  // DR-060 rule 2: every incident a cycle hits is a row in docs/agent/LESSONS.md with a
+  // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
+  { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
+  { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a

@@ -18,6 +18,10 @@ END    ->  update the four lines below (3 min)
           push, and confirm it landed
 ```
 
+START also reads the [lessons ledger](LESSONS.md); END adds a row there for every
+incident the session hit: a failed gate, a stuck waiter, a lost chain, a wrong
+figure (DR-060).
+
 Ten minutes a week keeps this alive. Skipping the END step is how a week
 disappears - that is exactly how Phase 0 sat unpushed while every tool
 individually reported success.
@@ -52,7 +56,19 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 02:35Z) - THE LOOP NOW REFUSES STALE ROWS AND MAILED THE CLOUD ITS QUEUE; A CI GATE HAD RUN UNAUTHENTICATED SINCE IT WAS WIRED.
+LAST TOUCHED: 2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE LEARNS; THE LESSONS LEDGER OPENS WITH SEVEN ROWS.
+              The owner restated the routing directive in his own words: spec, review and gate design run on Opus and
+              every other stage is dispatched to a cheaper tier; a creative-tier coordinator runs no stage itself. DR-060 (ADOPTED, landed by the cloud lane under DR-037: safety machinery only)
+              records it; docs/agent/LESSONS.md is the new ledger - every incident a cycle hits gets a row with evidence and
+              a landing, gated by scripts/check-lessons.mjs in preflight and CI (pending past 14 days is REPORTED). L1-L7
+              are this cycle's: the orphaned api-server on :5399 (landed as a skill rule; preflight's first step reaps only
+              orphans under its own tree, which would not have caught it; oidc.test.mjs's fixed ports are a backlog row), the hand-picked gate subset (pending - backlog row), the pgrep waiters and the
+              restart-killed chains (landed - orchestrator skill "Sequential chains and waiters"), the coordinator doing bulk
+              work (landed - DR-060 and the skill's stage table), the Mac port collision of 2026-09-25 (landed - PR #1106, 9222c677), this PR breaking its own stage table (L7).
+TIERS THIS SESSION: Sonnet readers mapped the mechanics; the coordinator (creative tier) wrote the spec, which breaks
+              DR-047 rule 2 (spec runs on Opus); one Opus worker built this PR and ran its gates, where the table says Sonnet;
+              review findings were fixed by an Opus worker, where the table also says Sonnet. All three are lesson L7.
+PREVIOUSLY:   2026-09-26 (cloud lane, 02:35Z) - THE LOOP NOW REFUSES STALE ROWS AND MAILED THE CLOUD ITS QUEUE; A CI GATE HAD RUN UNAUTHENTICATED SINCE IT WAS WIRED.
               #1087 (ebf302b9, DR-037): an open plan row is ranked only while it carries a `re-measured YYYY-MM-DD` stamp
               at most `14` days old (`rowMeasuredAt` in scripts/objective-loop.mjs, quoted/code spans stripped); a refused
               row lands in the state's `unmeasured[]` with its reason and ONE `plan-rows-unmeasured` escalation names every

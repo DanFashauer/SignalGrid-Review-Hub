@@ -6,9 +6,10 @@ description: Use when a build task splits into independent pieces and the cloud 
 # Orchestrator over workers
 
 The cloud lane's build pattern since 2026-09-12
-(`docs/LANE_COORDINATION.md`, "How the cloud lane runs build work"): the session
-model writes the spec and reviews; execution fans out to Opus sub-agents, each in
-its own worktree; the loop closes on a check that fails without the fix, never on
+(`docs/LANE_COORDINATION.md`, "How the cloud lane runs build work"): the
+orchestrator owns the spec and the review, run on Opus (by the session itself only
+when its model is Opus); execution fans out to tiered sub-agents per the stage table
+below, each in its own worktree; the loop closes on a check that fails without the fix, never on
 a description of one. The mechanics of dispatch are already written down in the
 vendored `dispatching-parallel-agents` and `subagent-driven-development` skills —
 this is what the orchestrator owns on top of them.
@@ -99,7 +100,8 @@ gates, then land the next. The landing conditions are DR-037's
 
 The owner's words: "You need to be passing off tasks to other models and or use best
 ultracode model that uses the least amount but best results." So a stage runs on the
-cheapest model that can do it, and the choice is stated in the brief:
+cheapest model that can do it, and the choice is stated in the brief. The per-stage
+table is the "Stage table" subsection below (DR-060); these are its tiers:
 
 - **Reading, mapping, checking, mechanical edits, adversarial verification** run on the
   smaller tier (Sonnet). These stages are bounded by what is in the tree, not by
@@ -147,3 +149,49 @@ failing with 429 — a one-tier limit became a lane-wide stall. So:
   Only the CLI's primary-model auto-fallback setting can, and the owner sets that to Opus so
   the session continues at full capability instead of waiting for a human to notice silence.
   Name that limit honestly in any run report rather than claiming the coordinator self-healed.
+
+### Stage table — the coordinator runs none of the bulk (owner directive, 2026-09-26; DR-060)
+
+The owner's words: "when I’m asking you to be the 🧠 you have the ability to expand to
+other 🧠 to do other tasks the can be done at lower token cost and model". Spec, review
+and gate design run on Opus. A coordinator on Opus may run them itself; a coordinator on
+the creative tier (Fable / Mythos) dispatches them to an Opus spawn too, keeps the
+conclusion, and runs no stage at all. Every other stage is dispatched:
+
+| Stage | Tier |
+| --- | --- |
+| Spec, review of a worker's report, judgment calls, decision records, doctrine, gate design | Opus |
+| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree | Sonnet |
+| PR bodies, commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
+
+- **The coordinator's own tier never runs a bulk stage.** Parsing a CI job listing,
+  writing a commit message or re-running a gate by hand in the coordinating session is a
+  defect, and it gets a row in `docs/agent/LESSONS.md` (L5 is the first).
+- **No gate can see which tier ran a stage inside a session.** The record is the
+  `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
+  stages the coordinator did itself.
+
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9)
+
+- **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
+  test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
+  chain.
+- **A read-only brief forbids booting a server.** A measurement worker that starts the
+  api-server leaves it holding a test port when the worker ends (L1). The first preflight
+  step now reaps api-servers under its own tree, but a brief that says "read" means no
+  listening process.
+- **Wait on a sentinel file, never on a process pattern.** Each step of a chain writes
+  `<NAME>_EXIT=<code>` to its log; a waiter checks that line exists in the log. A waiter
+  that matches processes by pattern can match its own command line or the other
+  waiter's, and two such waiters wait on each other forever (L3).
+- **Chain state lives in files under the scratchpad, never only in a process.** The run
+  head, each exit sentinel and the worker notes are files; a container restart kills the
+  processes and keeps the files, and the chain is rebuilt from them (L4).
+- **A self-scheduled check-in is the recovery signal after a restart.** Before a long
+  chain, schedule a message back into the session; when it fires, read the sentinels and
+  resume what has no exit line.
+- **Gates run after `git add`, never before.** A gate that scans the tracked tree cannot
+  see a file still sitting as `?? path`; run it before staging and it measures the tree
+  without the new file and passes for the wrong reason (L9). Stage or commit first, then
+  run the gates, and have the worker's report quote `git status --short` right before the
+  gate run so the reviewer can see the tree the gates actually saw.

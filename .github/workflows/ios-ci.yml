@@ -37,6 +37,7 @@ on:
       # lib/signalgrid-core is breadth (the simulator's neighbour), not a dependency of the vectors.
       - 'lib/signalgrid-simulator/**'
       - 'lib/signalgrid-core/**'
+      - 'lib/app-workflows/**'
       - 'native/shared/**'
       - 'scripts/src/decision-engine-parity-proof.ts'
   pull_request:
@@ -50,6 +51,7 @@ on:
       # lib/signalgrid-core is breadth (the simulator's neighbour), not a dependency of the vectors.
       - 'lib/signalgrid-simulator/**'
       - 'lib/signalgrid-core/**'
+      - 'lib/app-workflows/**'
       - 'native/shared/**'
       - 'scripts/src/decision-engine-parity-proof.ts'
   workflow_dispatch:

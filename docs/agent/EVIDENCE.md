@@ -3716,9 +3716,8 @@ Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H
 Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
           land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
           check run 108391088659)"
-Command:  for n in 1117 1118 1121 1050 1083; do curl -s
-          https://api.github.com/repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n | python3 -c "import
-          json,sys; d=json.load(sys.stdin); print($n, d['state'], d['merged_at'])"; done
+Command:  for n in 1117 1118 1121 1050 1083; do curl -s \
+          https://api.github.com/repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n | python3 -c "import json,sys; d=json.load(sys.stdin); print($n, d['state'], d['merged_at'])"; done
 Output:   "1117 open None"
           "1118 open None"
           "1121 open None"
@@ -3727,5 +3726,6 @@ Output:   "1117 open None"
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
           the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
           PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still
-          owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows; no ruling yet
-          from Dan on any of them — all five open per the REST query above at 17:07Z.
+          owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows, all five open
+          per the REST query above at 17:07Z (state/merged_at; a ruling is not something that query measures — the
+          golden-rule-1 ruling stands as a request in LOOP's Owner still owes list).

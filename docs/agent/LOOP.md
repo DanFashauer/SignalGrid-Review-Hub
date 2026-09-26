@@ -179,6 +179,12 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               tick); the #1019 MERGE STEP the cloud's sandbox refused is done here - nine conflict files,
               not four, resolved and pushed as merge 820521f1 on claude/raise-your-hand, doc/registry gates
               green, cloud mailed; DR-057 claimed for #1051 (Puck 6 takes DR-058).
+              2026-09-26 05:1xZ: #1019/#1051 LANDED; the loop re-minted through the tick unasked and MAINLINE
+              READS 100% (OUTREACH OPEN). The one failed tick evidence run (20:30Z) root-caused from its own
+              result tail: test:api ECONNREFUSED because a self-hosted runner job ran test:api on this Mac at
+              the same time on the same fixed ports - PR #1106 makes every harness port ephemeral (486/486,
+              Bruno green, preflight PASSED 368). Waiting on the owner: three raised hands (gitleaks allowlist
+              for #1005, signalgrid-mcp #14/#15, one policy.ts call). Cloud: merge #1037, #1106.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

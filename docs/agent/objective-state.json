@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "headline": 25,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 25,
-        "reason": "18/20 bound proofs/steps current against manifest 7c15496cfc1b; not current (stale fingerprint, stale/absent source digest, or unrecorded): step:API integration test (boots the server), step:Browser E2E (review console, website, admin); launch items fully current 7/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 7c15496cfc1b; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 82,
+        "open": 77,
         "partial": 5,
-        "closed": 106
+        "closed": 111
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -50,8 +50,6 @@
     }
   ],
   "unmet": [
-    "readiness-floor",
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -145,203 +143,26 @@
         "accessibility-specialist"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
-    }
-  ],
-  "unmeasured": [
-    {
-      "rowId": "140",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "141",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "143",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "144",
-      "title": "The PR risk report computes `block_merge` and exits 0; nothing reads it.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "145",
-      "title": "The grid proof's secret-scan regex cannot fire on the JSON it is given.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "146",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "147",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "148",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "149",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "150",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "152",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "153",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "154",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "155",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "156",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "157",
-      "title": "Six rendered assertions of a passing CI gate that does not exist.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "158",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "161",
-      "title": "Biometric and location privacy law is absent from the repo entirely.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "162",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
     },
     {
       "rowId": "164",
       "title": "Five IGA vendors the competitive surface has never mentioned.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "165",
-      "title": "`tamperState` is an enum where the source material describes a graph.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "166",
-      "title": "Two iOS CI workflows are documented that do not exist.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "167",
-      "title": "The Fleet tradeoff is decided but never written down.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "168",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "182",
-      "title": "The claims gate read zero of 281 public documents.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "180",
-      "title": "The permission gate credits a call inside `if (false)`.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "176",
-      "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "172",
-      "title": "An evidence artifact asserts six safety properties that nothing measures.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "competitive-analyst"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: competitive-analyst→lane"
     },
     {
       "rowId": "171",
       "title": "",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "170",
-      "title": "A row's status can be WRONG in either direction, and no gate can tell.",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
+      "roles": [
+        "sre"
+      ],
+      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     }
   ],
+  "unmeasured": [],
   "escalations": [
-    {
-      "id": "plan-rows-unmeasured",
-      "clears": "cloud",
-      "asks": "30 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
-      "since": "2026-09-26T02:26:39.036Z"
-    },
-    {
-      "id": "readiness-floor-no-clearing-op",
-      "clears": "mac",
-      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
-      "since": "2026-09-26T05:17:51.967Z"
-    },
     {
       "id": "owner-real-in-hand",
       "clears": "owner",
@@ -349,26 +170,18 @@
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-09-26",
-      "queuedAs": "this tick"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 6,
-    "unmeasuredCount": 30,
-    "openRows": 82
+    "needsExecutorCount": 8,
+    "unmeasuredCount": 0,
+    "openRows": 77
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-26T05:17:51.967Z",
-  "derivedAtCommit": "9222c677c6010dc6bb1c6a5afc7402f72b98ff4e",
-  "workingTreeCleanAtEntry": true,
-  "decisionAddress": "993bd9dc5e82d3b5730eb99c8940e830967c9f4f2f6185ee1691e1d993d67671"
+  "derivedAt": "2026-09-26T06:14:18.056Z",
+  "derivedAtCommit": "bb05aac7108b2c423bb539b1105e1622b1f9573f",
+  "workingTreeCleanAtEntry": false,
+  "decisionAddress": "00dbaff23e79dd8756cdb5e0183e10571963b5529d6a3073723d4c633df2e4b9"
 }

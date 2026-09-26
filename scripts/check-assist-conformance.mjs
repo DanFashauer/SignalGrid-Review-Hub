@@ -42,7 +42,20 @@ const FLOOR_SLACK = 4;
  * opt-in by key presence. Add a key here only when a harness starts reading it.
  */
 const KNOWN_CASE_KEYS = ["id", "why", "status", "body", "expect", "expectExplanationContains", "expectObligations", "expectDecisionId"];
-/** Outcomes a host app acts on beyond refusing; each needs the decision it acts under. */
+/**
+ * Two rules pinned on the same fact — the id check runs on every outcome, not only on
+ * a non-deny one:
+ *   CONSISTENCY (per case, checked in the loop below via this list): an outcome a host
+ *   app acts on beyond refusing needs the decision it acts under, so a case that
+ *   EXPECTS one of these outcomes must carry a usable id. A non-deny case without one
+ *   contradicts every client at once and may never appear in this file.
+ *   COVERAGE (per outcome, checked once below over all four VALID_OUTCOMES): the
+ *   consistency rule only ever fires on allow/step_up/restrict, so nothing here pins
+ *   the check on an explicit DENY unless a case proves it — an id-less body whose
+ *   `assist` already says deny, still denied, with an explanation naming decisionId.
+ *   Without that case, a client that relays the server's own denial without ever
+ *   running the id check passes every vector.
+ */
 const NEEDS_DECISION_ID = ["allow", "step_up", "restrict"];
 
 /** The body's decisionId when it is a non-blank string, else null (JSON.parse is last-wins; duplicate cases expect deny). */
@@ -157,6 +170,36 @@ function validateVectors(doc) {
     problems.push("no case carries expectDecisionId: null — nothing pins that an unusable id is read as absent");
   }
 
+  // COVERAGE: every outcome needs a case that PROVES the id check runs for it, not
+  // only the three CONSISTENCY forbids skipping it on (see NEEDS_DECISION_ID above).
+  // An outcome with no such case is one a client could special-case around the check
+  // — most concretely deny: a client that relays the server's own "deny" without ever
+  // reading decisionId agrees with every other case in this file.
+  for (const outcome of VALID_OUTCOMES) {
+    const pinned = cases.some((c) => {
+      let parsed;
+      try {
+        parsed = typeof c.body === "string" ? JSON.parse(c.body) : null;
+      } catch {
+        return false;
+      }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+      if (typeof parsed.assist !== "string" || parsed.assist !== outcome) return false;
+      if (bodyDecisionId(c.body) !== null) return false;
+      if (c.expect !== "deny") return false;
+      return (
+        Array.isArray(c.expectExplanationContains) &&
+        c.expectExplanationContains.some((s) => typeof s === "string" && s.includes("decisionId"))
+      );
+    });
+    if (!pinned) {
+      problems.push(
+        `no case pins the decisionId check on an explicit "${outcome}" — a client that skips the check ` +
+          `for "${outcome}" (e.g. relaying the server's own denial as-is) would pass every case`,
+      );
+    }
+  }
+
   for (const c of cases) {
     for (const key of Object.keys(c)) {
       if (!KNOWN_CASE_KEYS.includes(key)) {
@@ -195,12 +238,19 @@ function validateVectors(doc) {
 
 function selfTest() {
   const good = {
-    requires: { minCases: 2, outcomesPresent: VALID_OUTCOMES },
+    requires: { minCases: 6, outcomesPresent: VALID_OUTCOMES },
     cases: [
       { id: "a", why: "w", status: 200, body: '{"assist":"allow","decisionId":"d1"}', expect: "allow", expectObligations: [], expectDecisionId: "d1" },
       { id: "b", why: "w", status: 200, body: null, expect: "deny", expectDecisionId: null },
       { id: "c", why: "w", status: 200, body: '{"assist":"step_up","decisionId":"d2"}', expect: "step_up" },
       { id: "d", why: "w", status: 200, body: '{"assist":"restrict","decisionId":"d3"}', expect: "restrict" },
+      // One id-less case per outcome so the COVERAGE rule (below NEEDS_DECISION_ID)
+      // has something to find: each proves the id check runs even when `assist`
+      // already says what it says.
+      { id: "a-noid", why: "w", status: 200, body: '{"assist":"allow"}', expect: "deny", expectExplanationContains: ["decisionId"] },
+      { id: "c-noid", why: "w", status: 200, body: '{"assist":"step_up"}', expect: "deny", expectExplanationContains: ["decisionId"] },
+      { id: "d-noid", why: "w", status: 200, body: '{"assist":"restrict"}', expect: "deny", expectExplanationContains: ["decisionId"] },
+      { id: "e-noid", why: "w", status: 200, body: '{"assist":"deny"}', expect: "deny", expectExplanationContains: ["decisionId"] },
     ],
   };
   const cases = [
@@ -245,7 +295,7 @@ function selfTest() {
     ],
     [
       "a floor within FLOOR_SLACK of the case count is fine (not equality)",
-      { ...good, requires: { ...good.requires, minCases: 2 } },
+      { ...good, requires: { ...good.requires, minCases: 6 } },
       true,
     ],
     [
@@ -289,6 +339,19 @@ function selfTest() {
     [
       "a file where no case pins an absent id is caught",
       { ...good, cases: good.cases.map((c) => (c.id === "b" ? { ...c, expectDecisionId: undefined } : c)) },
+      false,
+    ],
+    [
+      "removing the id-less explicit-deny case is caught (a client that skips the id check only on deny would pass every other case)",
+      { ...good, cases: good.cases.filter((c) => c.id !== "e-noid") },
+      false,
+    ],
+    [
+      "an id-less explicit-deny case with no decisionId explanation does not count as coverage",
+      {
+        ...good,
+        cases: good.cases.map((c) => (c.id === "e-noid" ? { id: c.id, why: c.why, status: c.status, body: c.body, expect: c.expect } : c)),
+      },
       false,
     ],
     [

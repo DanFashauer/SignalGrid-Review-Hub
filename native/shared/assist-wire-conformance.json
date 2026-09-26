@@ -5,7 +5,7 @@
   "routeComment": "The wire these vectors bind, as DATA \u2014 the gate (scripts/check-assist-wire-served.mjs) reads THIS field, not prose; DR-007 recorded the route as a declared gap until the spec served it; DR-023 closed that gap and the spec now serves it.",
   "requires": {
     "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing. KEPT CURRENT: check-assist-conformance.mjs fails when the file holds more than minCases + 4 cases, so a floor cannot lag far enough behind for a deleted vector to fail nothing.",
-    "minCases": 64,
+    "minCases": 65,
     "outcomesPresent": [
       "allow",
       "step_up",
@@ -429,6 +429,17 @@
       "why": "restrict still proceeds, under a ceiling; a proceed with no recorded decision behind it is an unauditable grant",
       "status": 200,
       "body": "{\"assist\":\"restrict\",\"reasons\":[\"shared account\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "deny-decision-id-missing",
+      "why": "the id check runs on every outcome, so an explicit deny without a usable id is reported as an unrecorded body (the explanation names decisionId) rather than relayed as a recorded decision; without this case a client that skips the check for deny passes every vector",
+      "status": 200,
+      "body": "{\"assist\":\"deny\",\"reasons\":[\"device is jailbroken\"]}",
       "expect": "deny",
       "expectExplanationContains": [
         "decisionId"

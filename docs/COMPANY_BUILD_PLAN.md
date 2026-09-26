@@ -248,7 +248,7 @@ earlier — that is the loop working, not a reason to soften the record.
     not done here, because a gate over 18 archival documents would be a large
     rewrite in service of a regex rather than of a reader.
 40b. **Module-scope temporal-dead-zone reads — gated for the COLUMN-0 shape,
-    open for the rest.** — devex-tooling-engineer. This defect shipped twice in one day, silently both
+    open for the rest.** — devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): `scripts/check-module-init-order.mjs` still catches the column-0 shape only and says so in its own header; `scripts/src/signalgrid-grid-proof.ts`'s top-level-loop shape is still ungated; no TypeScript-compiler-API scope analysis has been started (the gate has two commits, neither adds a parser). This defect shipped twice in one day, silently both
     times: `context.ts` broke enterprise OIDC entirely (a hoisted function
     called at module load read a `const` declared 21 lines below), and
     `signalgrid-grid-proof.ts` never ran its enum guard (same mechanism, ~650
@@ -784,7 +784,7 @@ earlier — that is the loop working, not a reason to soften the record.
     the operator's real secret now goes through the same constantTimeEquals
     the core already used for its PUBLIC demo keys. The weaker guard had been
     sitting on the stronger secret.
-48. **Native parity is textual, not behavioral** — mobile-native-engineer, days. The
+48. **Native parity is textual, not behavioral** — mobile-native-engineer, days. RE-MEASURED 2026-09-26 (still open, one of four claims closed): BackendService now calls only served /v1 routes (sessions start/refresh/end, context — each present in `artifacts/api-server/src/routes/v1.ts`) and refuses badge enrollment rather than faking a route (PR #387, 7554e088, 2026-09-02); the other three claims hold — the port-parity gate is vocabulary-only, iOS is carved out of the shared assist-wire conformance vectors, and `.github/workflows/ios-ci.yml` still does not trigger on lib/signalgrid-simulator or lib/app-workflows — the same gap row 18 asks to close. The
     port-parity gate compares extracted vocabulary and says so itself; iOS is
     carved out of the shared assist-wire conformance vectors; ios-ci does not
     trigger on simulator/workflow library changes; BackendService still calls
@@ -845,7 +845,7 @@ earlier — that is the loop working, not a reason to soften the record.
     — is the same decision wearing a different hat.
 54. **Seven merges carried zero reviews — and the first diagnosis blamed the
     wrong thing.** — qa-engineer (the review that was never run) +
-    program-manager (the loop that never called it). 2026-08-24.
+    program-manager (the loop that never called it). DONE (measured 2026-09-26): every claim checks against the tree — PRs #280–#286 are the seven zero-review merges, the deleted liveness gate is absent from the tree (named only as history in the fail-closed-auditor agent), `docs/BRANCH_HYGIENE.md` records the Codex lane as retired, `docs/agent/ORG.md` ratifies the Reviewer lane and the reviewer skill's own description says before any push or PR, the Codex attributions in `scripts/review-invariants.mjs` stay; the correction (reviewer invoked before push) is policy, and this pass verified the policy and roster exist, not compliance on every PR since. 2026-08-24.
     THE FINDING WAS REAL: #280-#286 all merged with ZERO reviews of any kind,
     measured one at a time through the API, including #283 which cleared a live
     CRITICAL on the shipping image. The session saw seven "You have reached your
@@ -1015,7 +1015,7 @@ earlier — that is the loop working, not a reason to soften the record.
     deletion becomes correct. Recoverable from history at `4a170db` regardless.
 
 55. **The org chart had no edge to the agents that run it, and running a role
-    once emptied its queue.** — program-manager. 2026-08-24, from the owner's
+    once emptied its queue.** — program-manager. DONE (measured 2026-09-26): PR #287 (a7a9ae72 … ad334f0b, 2026-08-24) gave every role an executor and added `scripts/check-org-roster.mjs` and `scripts/check-backlog-ownership.mjs` as FATAL gates, both green on the live tree today (self-tests `36/36` and `37/37`; `42` roles, `0` missing executor); rows 40b, 43, 44, 48, 49, 50 and 54 carry owners; the web-skill gap this row deferred to row 56 was decided the same day (signalgrid-core's SKILL.md claims the four web trees). Check: `node scripts/check-org-roster.mjs` and `node scripts/check-backlog-ownership.mjs`. 2026-08-24, from the owner's
     question: are all roles assigned to skills, and does everything have a task
     and a backlog. Both halves were no.
     NO ROLE NAMED ITS EXECUTOR. `docs/ORG_CHART.md` opened with "Each is an
@@ -1201,7 +1201,7 @@ earlier — that is the loop working, not a reason to soften the record.
     absence is what this row refused.
 
 57. **The third absence claim shipped, and the fix is not a gate — measured, not
-    assumed.** — competitive-analyst (the refresh) + docs-writer (the rule).
+    assumed.** — competitive-analyst (the refresh) + docs-writer (the rule). DONE (measured 2026-09-26): the false absence sentence was corrected in place in `docs/company/ICP_EVIDENCE.md` (CORRECTION block, PR #287, ad334f0b) and the gate was considered and rejected on measured evidence, recorded there and in CLAUDE.md; the refresh of `docs/research/COMPETITIVE_*` (last compiled 2026-07-14) is named as the next step in ICP_EVIDENCE.md itself; one drift: this row's "tally now reads three" was superseded in the same commit by CLAUDE.md's own correction to two sourced instances. Check: `pnpm run check:absence competitive` returns REFUTED.
     2026-08-24.
     `docs/company/ICP_EVIDENCE.md` shipped the sentence *"no competitive surface
     anywhere in this repository names them"* about OLOID and Imprivata. False.
@@ -1236,7 +1236,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 58. **The NaN fail-open family HAS a Swift analogue — same semantics, different
     mechanism — and it reaches the Assist gate's own staleness input.** —
-    mobile-native-engineer. REPORTED 2026-08-24 by the cloud lane, NOT FIXED:
+    mobile-native-engineer. DONE (measured 2026-09-26): 5e3b5c32 (2026-08-31) replaced the optional expiresAt with a non-optional ExpiryPolicy enum in `native/ios/EnterpriseShell/Models/SessionData.swift` so an unknown expiry is unrepresentable, the HostApp stale default flipped to fail-closed, and a9116532 (2026-09-02) added `native/ios/EnterpriseShellTests/SessionExpiryTests.swift` (`6` cases, falsified against the old defect, run by ios-ci's swift test; Mac xcodebuild `63/0`); the MDM provider path this row named was retired in #436; no Swift static analogue of check-nan-fail-open exists — the type-level invariant plus the pinned test fill that role. REPORTED 2026-08-24 by the cloud lane, NOT FIXED:
     this lane has no Swift toolchain (`xcodebuild`, `swiftc` both absent), and
     editing auth-expiry behaviour that cannot be compiled or run is the exact
     confident-but-unverified move the rest of this week was spent undoing.
@@ -1283,7 +1283,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 59. **The image build makes two un-retried network fetches, and one of them
     flaked.** — release-engineer (the retry) + security-engineer (if the fix
-    touches the corepack cache). 2026-08-24, first observed instance.
+    touches the corepack cache). RE-MEASURED 2026-09-26 (still open, unchanged): `Dockerfile.api` still runs corepack enable pnpm un-retried in both stages (the second occurrence has moved down the file as comment blocks were added above it); no retry wrapper exists in either Dockerfile or the build job; the deliberate corepack-cache strip that closes a CVE is still what any fix must not undo. 2026-08-24, first observed instance.
     `Dockerfile.api` runs `corepack enable pnpm` in BOTH stages (lines 19 and
     71). Corepack downloads pnpm lazily, so each stage fetches
     `registry.npmjs.org/pnpm/-/pnpm-10.28.1.tgz` at install time. On PR #287
@@ -1345,7 +1345,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 61. **Swept every gate for the exclusion shape that broke `check:absence`. Nine
     of ninety-seven carry one; one was hiding forty-three documents.** —
-    devex-tooling-engineer. 2026-08-24, the generalisation of row 60.
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, defect fixed): `node scripts/check-accuracy-doctrine.mjs` scans docs/research again (`314` first-party documents today) and its self-test FATALs if that directory is ever excluded again (c01c81e4, PR #292 for the same-day corrections); still open — the row's own decision on widening the EXTERNAL_STAT / same-block citation rule for docs/research's foot-citation convention has no record, and the sweep was a one-time hand audit of `97` scripts where `196` exist today, so the scripts added since are unaudited for the same exclusion shape. 2026-08-24, the generalisation of row 60.
     Row 60's defect was not really about absence checking. It was: a checker that
     cannot see part of its subject does not report uncertainty about that part,
     it reports confidence about the rest. So every gate carrying an exclusion is
@@ -1951,7 +1951,7 @@ earlier — that is the loop working, not a reason to soften the record.
     classified — and never the truth of the `reason` text. No gate reads English.
 
 73. **What the first audit of the instruction layer found, and who owns each.**
-    — OPEN. `.claude/`, `CLAUDE.md` and `AGENTS.md` had never been reviewed by
+    — OPEN. RE-MEASURED 2026-09-26 (still open, five of nine closed): closed and reproducible today — the CI-job-list fossil and the CLAUDE.md gate-count fossil now point at `node scripts/check-preflight-ci-parity.mjs` (PR #492), `scripts/check-cited-paths.mjs` derives its vendored exemption from VENDORED.md, the dead lib/api-auth glob in `docs/agent/org-roster.json` reads lib/enterprise-auth, and `scripts/check-role-coverage.mjs` no longer writes the ratchet on a plain run (PR #399, never annotated here); still open — the orphaned `.agents/agent_assets_metadata.toml` (its deletion refused by the cloud lane's classifier), the "~1,800 files" fossil in the signalgrid skill (the tree tracks `3446`), the FALSE_CLAIMS.json two-writer collision with no chosen direction, and the qa-engineer surface its read-only executor cannot write (queued in the roster, ungated). `.claude/`, `CLAUDE.md` and `AGENTS.md` had never been reviewed by
     anyone because no role owned them. Each item names its role.
     · agent-platform-engineer: `.agents/agent_assets_metadata.toml` is 100% of
       that surface and both its entries point at images that do not exist
@@ -2090,7 +2090,7 @@ earlier — that is the loop working, not a reason to soften the record.
     with a gate that reads stricter than it is.
 
 76. **What the first accessibility execution found that is still open.** — OPEN,
-    accessibility-specialist. Every item below was measured, not asserted; the
+    accessibility-specialist. RE-MEASURED 2026-09-26 (still open, one of five closed): the raw-hex dashboard defect closed with PR #306 (c832425d, be3fa28b; `node scripts/check-decision-palette.mjs` passes across every tree); still live as described — the mobile PWA's restrict/deny bars share one colour with no legend (`artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx`; the two tokens are identical), zero aria-live regions across the five web trees while six views poll, the unlabelled icon-only delete button in `artifacts/signalgrid-app/src/pages/policies/PolicyCreate.tsx`, and prefers-reduced-motion honoured in one tree; the row's ARIA count is stale (`9` files, `21` attributes today) without changing the gap; the focus-ring, status-dot and axis-text ratios were not re-measured in this pass. Every item below was measured, not asserted; the
     ratios were computed with the ratified gate's own arithmetic.
     · **`restrict` and `deny` are the identical pixel** in
       `signalgrid-mobile-pwa/src/pages/Overview.tsx:45-48` — 1.000:1 — in a chart
@@ -2119,7 +2119,7 @@ earlier — that is the loop working, not a reason to soften the record.
       desktop chart axis text at 1.74:1.
 
 77. **There is no web accessibility standard in this repository, proven eight
-    ways.** — OPEN, accessibility-specialist. This is why row 76 is advisory
+    ways.** — OPEN, accessibility-specialist. RE-MEASURED 2026-09-26 (still open, unchanged since its own 2026-08-25 correction): no eslint config, no axe/pa11y/jest-axe in any package.json, `scripts/check-decision-palette.mjs` remains the only accessibility gate, DR-005/DR-006 ratify WCAG AA for decision colours only, and the two aria assertions in the tree are e2e specs against signalgrid-review, not the admin console or the mobile PWA; the check:absence figure has grown with the corpus (skills content now indexed) and reads the same non-corroborated shape. This is why row 76 is advisory
     rather than enforceable, and it is the role's real first deliverable.
     `check:absence "web accessibility standard"` returns CORROBORATED across four
     probes. No a11y tooling in any `package.json` (axe, pa11y, lighthouse,
@@ -2159,7 +2159,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 78. **What the first iOS execution found — including that CLAUDE.md's own way of
     checking one of its rules returns a false clean.** — OPEN,
-    mobile-native-engineer. That role had read 0 of 129 files.
+    mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, two of five closed): the namesake finding (CLAUDE.md's rule wording hiding `18` raw-font sites) and the nil-expiry fail-open were fixed and gated together in 5e3b5c32 (2026-08-31, PR #394; `node scripts/check-ios-dynamic-type.mjs` reads `0` across `81` files); still live — `AppWorkflows.swift` releases step-up as one boolean with no ported stepUpSatisfiedActionKeys (pinned as a declared drift by `scripts/check-decision-port-parity.mjs`, owner-vetoed re-port), `DecisionEngine.swift`'s three string-vs-boolean predicates, and the KioskController UserDefaults fallback with no simulator guard, which `scripts/check-ios-policy-defaults.mjs` does not cover. That role had read 0 of 129 files.
     · **THE VERIFICATION METHOD IS BROKEN, and this is the finding that matters
       most, because it hid the others.** CLAUDE.md says "Never call
       `UIFont.systemFont` / `monospacedSystemFont` directly". Grepping that exact
@@ -2257,7 +2257,7 @@ earlier — that is the loop working, not a reason to soften the record.
     deserves its own ratified tone. The dash is a correct stopgap, not an answer.
 
 80. **The Rust Assist client is the strongest of the three, and it is worth
-    recording that a clean read happened.** — CLOSED 2026-08-25, no defect.
+    recording that a clean read happened.** — CLOSED 2026-08-25, no defect. RE-MEASURED 2026-09-26 (still open for one item): the clean read still holds — in `native/desktop/core` cargo test passes `39` unit and `2` conformance tests today (three tests added in PR #386 since the `36` written here), fmt and clippy clean, cargo 1.94.1 — and the one action this row names is still undone: `native/shared/assist-wire-conformance.json` carries `44` cases, all ASCII, so nothing pins the Rust ASCII fold against Kotlin's Unicode fold; the non-ASCII vectors (NBSP-, U+3000- and ZWSP-padded allow, a Cyrillic homoglyph) are the remaining work.
     The roster's standing open question — what an UNKNOWN resolves to in the
     Kotlin **and Rust** Assist clients — was answered for Kotlin on 2026-08-24 and
     left open for Rust. It is now answered, by execution rather than reading:
@@ -2290,7 +2290,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 81. **The product's sharpest unbuilt idea was already latent in its own DDM
     schema: the difference between what is DECLARED and what is OBSERVED.** —
-    PROPOSED 2026-08-25, not built. Owner-directed: mine the Drive source
+    PROPOSED 2026-08-25, not built. RE-MEASURED 2026-09-26 (still a proposal, not built): no decision record or backlog row has taken it up (DR-055 and the DR-058 proposal are the session-puck hardware line, unrelated); the schema notes in `lib/ddm-connector/src/apple-schema.ts` and the simulator's declaredState branch read as described, no observedState exists in core or simulator, and the TCC absence check now returns INCONCLUSIVE only because this row's own prose is one of its two mentions (`docs/IDEAS_FROM_THE_SOURCE_MATERIAL.md` records that scope change). Owner-directed: mine the Drive source
     material for product ideas.
     THE SEAM. `lib/ddm-connector/src/apple-schema.ts` records, per property, how
     Apple's Declarative Device Management reports it. Three notes carry the
@@ -2450,7 +2450,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 84. **The simulator never compares `zone` against `expectedZone`; 12 of 21
     attribute branches are unreachable from any fixture.** — OPEN,
-    principal-engineer. `decisionEngine.ts:125-132` tests
+    principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): `lib/signalgrid-simulator/src/decisionEngine.ts` still matches the literal "wrong" and never reads expectedZone; the `12` uncovered attribute keys re-enumerated today (all three of the workflow-routing keys among them); the proof reads `102/102` now, not `51/51` — the simulator grew, the gap did not close; the fix is a decision-record item because the Swift port must move with it (golden rule 1). `decisionEngine.ts:125-132` tests
     `attributes["zone"] === "wrong"` — a literal string match — and otherwise fires
     only on pre-classified event types. The `expectedZone` every location fixture
     carries is never read.

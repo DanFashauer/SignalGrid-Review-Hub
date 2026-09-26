@@ -1,0 +1,34 @@
+{
+  "$comment": "The tiered read-list from docs/COMPANY_BUILD_PLAN.md (TIER 1, 25 files) as data, so scripts/check-review-coverage.mjs can print `Tier 1: N/25` every run and ratchet on it. N counts files whose best live ledger row is at or above targetDepth. `mark` is the last accepted N: the gate FAILS when N falls below it (a read cannot be un-read except by retirement) and is raised by hand when N rises. Staleness (commits to the file since the row's `sha`, or since its `date` when no sha is recorded) is REPORTED, never fatal — it is the queue for the next re-read, not a lie about the last one.",
+  "tier1": {
+    "targetDepth": "audited",
+    "mark": 19,
+    "files": [
+      "lib/signalgrid-core/src/engine.ts",
+      "lib/signalgrid-core/src/decision.ts",
+      "lib/signalgrid-core/src/policy.ts",
+      "lib/signalgrid-core/src/resolution.ts",
+      "lib/signalgrid-core/src/evidence.ts",
+      "lib/signalgrid-core/src/store.ts",
+      "lib/signalgrid-simulator/src/decisionEngine.ts",
+      "lib/posture-composition/src/compose.ts",
+      "lib/posture-composition/src/adapters.ts",
+      "artifacts/api-server/src/middlewares/context.ts",
+      "lib/enterprise-auth/src/jwt.ts",
+      "lib/enterprise-auth/src/claims.ts",
+      "lib/enterprise-auth/src/jwks.ts",
+      "artifacts/api-server/src/lib/profile.ts",
+      "artifacts/api-server/src/lib/core.ts",
+      "artifacts/api-server/src/middlewares/idempotency.ts",
+      "artifacts/api-server/src/routes/v1.ts",
+      "lib/audit/src/backend.ts",
+      "lib/persistence/src/decision-store.ts",
+      "lib/persistence/src/session-store.ts",
+      "scripts/preflight.mjs",
+      "scripts/launch-profile.mjs",
+      "scripts/check-guard-registries.mjs",
+      "lib/integrations/src/integrations/local-authority/evaluate.ts",
+      "lib/integrations/src/integrations/device-management-health/evaluate.ts"
+    ]
+  }
+}

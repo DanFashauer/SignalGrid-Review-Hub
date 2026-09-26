@@ -608,6 +608,11 @@ jobs:
         run: node scripts/check-doc-orphans.mjs
       - name: "Doc-orphan self-test (a prose mention is not a route)"
         run: node scripts/check-doc-orphans.mjs --self-test
+      # DR-060 rule 2: the lessons ledger — every incident a cycle hits has evidence and a landing.
+      - name: "Lessons ledger self-test (each malformed row shape must fail)"
+        run: node scripts/check-lessons.mjs --self-test
+      - name: "Lessons ledger (every incident has evidence and a landing)"
+        run: node scripts/check-lessons.mjs
       # One level up from doc-orphans: that one asks whether a reader can REACH a
       # document, this one whether the index tells the truth about it. Six entries
       # described SUPERSEDED / ARCHIVED / RETIRED documents in the present tense --

@@ -99,7 +99,8 @@ gates, then land the next. The landing conditions are DR-037's
 
 The owner's words: "You need to be passing off tasks to other models and or use best
 ultracode model that uses the least amount but best results." So a stage runs on the
-cheapest model that can do it, and the choice is stated in the brief:
+cheapest model that can do it, and the choice is stated in the brief. The per-stage
+table is the "coordinator runs none of the bulk" section below (DR-060); these are its tiers:
 
 - **Reading, mapping, checking, mechanical edits, adversarial verification** run on the
   smaller tier (Sonnet). These stages are bounded by what is in the tree, not by
@@ -147,3 +148,42 @@ failing with 429 — a one-tier limit became a lane-wide stall. So:
   Only the CLI's primary-model auto-fallback setting can, and the owner sets that to Opus so
   the session continues at full capability instead of waiting for a human to notice silence.
   Name that limit honestly in any run report rather than claiming the coordinator self-healed.
+
+## Which model runs a stage — the coordinator runs none of the bulk (owner directive, 2026-09-26; DR-060)
+
+The owner's words: "when I’m asking you to be the 🧠 you have the ability to expand to
+other 🧠 to do other tasks the can be done at lower token cost and model". The
+coordinator writes specs and reviews. Every other stage is dispatched:
+
+| Stage | Tier |
+| --- | --- |
+| Spec, review of a worker's report, judgment calls, decision records, doctrine, gate design | Opus |
+| Reads that feed a decision, measurement, adversarial verification, building in a worktree | Sonnet |
+| Patch scripts, PR bodies, commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
+
+- **The coordinator's own tier never runs a bulk stage.** Parsing a 93 KB job listing,
+  writing a commit message or re-running a gate by hand in the coordinating session is a
+  defect, and it gets a row in `docs/agent/LESSONS.md` (L5 is the first).
+- **No gate can see which tier ran a stage inside a session.** The record is the
+  `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
+  stages the coordinator did itself.
+
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4)
+
+- **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
+  test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
+  chain.
+- **A read-only brief forbids booting a server.** A measurement worker that starts the
+  api-server leaves it holding a test port when the worker ends (L1). The first preflight
+  step now reaps api-servers under its own tree, but a brief that says "read" means no
+  listening process.
+- **Wait on a sentinel file, never on a process pattern.** Each step of a chain writes
+  `<NAME>_EXIT=<code>` to its log; a waiter checks that line exists in the log. A waiter
+  that matches processes by pattern can match its own command line or the other
+  waiter's, and two such waiters wait on each other forever (L3).
+- **Chain state lives in files under the scratchpad, never only in a process.** The run
+  head, each exit sentinel and the worker notes are files; a container restart kills the
+  processes and keeps the files, and the chain is rebuilt from them (L4).
+- **A self-scheduled check-in is the recovery signal after a restart.** Before a long
+  chain, schedule a message back into the session; when it fires, read the sentinels and
+  resume what has no exit line.

@@ -45,7 +45,17 @@ const quick = process.argv.includes("--quick");
 // footer says what that leaves out, recomputed from `.github/workflows/` on
 // every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
-  // FIRST, because it is the first thing CI does and the cheapest way to be told
+  // FIRST OF ALL: reap api-server orphans whose binary is under THIS tree, on every
+  // platform (DR-060, lesson L1 in docs/agent/LESSONS.md). A killed run or a subagent
+  // that booted the server leaves it holding a fixed test port, and the next preflight
+  // then fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399 — it did,
+  // twice, on 2026-09-26. CI's Mac job already ran this script before and after
+  // preflight; a local run never did. The script matches the exact canonical path
+  // <tree>/artifacts/api-server/dist/index.mjs (another checkout is never touched),
+  // runs unchanged under Linux procps, and never fails. GITHUB_WORKSPACE is pinned to
+  // this tree so the match is by the path node resolved, not the caller's shell.
+  { name: "Free test ports (reap api-server orphans under this tree)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo } },
+  // The first GATE, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
   // print "Safe to push" over a lockfile that did not match its manifests — CI then
   // failed on `Install dependencies` before running a single gate.
@@ -85,6 +95,10 @@ const STEPS = [
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
+  // DR-060 rule 2: every incident a cycle hits is a row in docs/agent/LESSONS.md with a
+  // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
+  { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
+  { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a

@@ -201,6 +201,13 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               the same time on the same fixed ports - PR #1106 makes every harness port ephemeral (486/486,
               Bruno green, preflight PASSED 368). Waiting on the owner: three raised hands (gitleaks allowlist
               for #1005, signalgrid-mcp #14/#15, one policy.ts call). Cloud: merge #1037, #1106.
+              06:0xZ: #1106 landed. PLAN ROW 18 BUILT (PR #1118): iOS port parity is BEHAVIOURAL - the TS
+              engine's own decisions over 145 deterministic cases emitted to native/shared and replayed
+              through DecisionEngine.evaluate in Swift on both build systems; the first replay went red on
+              6 cases and caught the declared DR-043 unauthorized-removal drift (TS-only since #748),
+              ported and the declaration closed. proof 14/14, swift test 111/111, xcodebuild TEST SUCCEEDED,
+              preflight PASSED 430, breadth PASSED 58. NEXT for the Mac: the loop's next Mac-only row;
+              cloud: merge #1037, #1118.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

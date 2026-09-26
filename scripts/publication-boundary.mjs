@@ -167,6 +167,7 @@ export const AREAS = [
   { path: "tsconfig.json", class: "tooling", reason: "TypeScript project root." },
   { path: "tsconfig.base.json", class: "tooling", reason: "Shared compiler options." },
   { path: ".gitignore", class: "tooling", reason: "Ignore rules." },
+  { path: ".nojekyll", class: "tooling", reason: "Empty marker: GitHub Pages serves the branch statically instead of running the Jekyll build that failed on vendored Liquid braces from 2026-08-23." },
   { path: ".npmrc", class: "tooling", reason: "Package manager settings." },
   { path: ".gitleaks.toml", class: "tooling", reason: "Secret-scanner configuration." },
   { path: ".gitleaksignore", class: "tooling", reason: "Reviewed-and-accepted scanner fingerprints, each with its recorded reason — the file itself contains no secrets, only pointers to findings judged not to be ones." },

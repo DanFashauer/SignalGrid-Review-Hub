@@ -232,6 +232,7 @@
         ".githooks/**",
         ".npmrc",
         ".gitignore",
+        ".nojekyll",
         "pnpm-workspace.yaml",
         "pnpm-lock.yaml",
         "tsconfig.json",

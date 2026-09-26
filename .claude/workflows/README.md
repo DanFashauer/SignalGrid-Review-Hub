@@ -95,7 +95,12 @@ diff at push time. Now, once the sentinel/head/ref checks above already pass,
 `node scripts/check-owner-gated-surfaces.mjs --classify-branch origin/SignalGrid_Alpha`
 itself, in `<worktree>`, and refuses — `derived class <X> !== resolved class
 <Y>`, or `classifier did not print a KLASS line: <raw>` — unless the
-classifier's own verdict equals the `klass` the push worker was given. The
+classifier's own verdict equals the `klass` the push worker was given.
+`--verify` classifies with the BASE ref's own copy of the classifier module
+(read via `git show`, never the worktree's working copy), so a branch can
+never classify itself with rules it rewrote, and it refuses on a non-zero
+classifier exit (never treating its stdout as a candidate line) or on a bare
+`--klass` given with no value. The
 PASS line then carries the class: `land-branch-gate --verify PASS: head
 <headSha> klass <klass> derived from origin/SignalGrid_Alpha in <worktree>`.
 Omitting `--klass` keeps the exact pre-existing PASS line

@@ -78,6 +78,20 @@ export const SAFETY_MACHINERY = [
   { rule: "the landing workflow (.claude/workflows/**)", re: /^\.claude\/workflows\// },
   { rule: "the Bash deny-list hook (.claude/hooks/**)", re: /^\.claude\/hooks\// },
   { rule: "the deny list itself (.claude/settings.json)", re: /^\.claude\/settings\.json$/ },
+  // Review nit on #1133 (2026-09-26): these three surfaces govern HOW the lane lands
+  // and what the pre-push hook enforces — the same class of self-net as
+  // .claude/workflows/** and .claude/hooks/** above, not ordinary skill/tooling
+  // content. landing-under-dr-037 is the skill that decides whether the cloud lane
+  // may merge its own green PR; orchestrator-over-workers is the skill that governs
+  // how the coordinator delegates to and trusts worker output (including this very
+  // land-branch chain); .githooks/ is where pre-push (CLAUDE.md's lockfile-drift
+  // enforcement, "a pre-push hook now enforces this") lives — a change to any of the
+  // three can quietly loosen what the lane is allowed to do to itself, so none of
+  // them may land on green alone. Other skill directories stay autonomous by design
+  // (see the negative self-test below) — this is not "all of .claude/skills/".
+  { rule: "the landing-under-dr-037 skill (.claude/skills/landing-under-dr-037/**)", re: /^\.claude\/skills\/landing-under-dr-037\// },
+  { rule: "the orchestrator-over-workers skill (.claude/skills/orchestrator-over-workers/**)", re: /^\.claude\/skills\/orchestrator-over-workers\// },
+  { rule: "the git hooks (.githooks/**)", re: /^\.githooks\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -310,6 +324,17 @@ function selfTest() {
   t(".claude/hooks/ change is SAFETY_MACHINERY", cls([".claude/hooks/deny-bash.mjs"]).tier === "owner-gated");
   t(".claude/settings.json change is SAFETY_MACHINERY", cls([".claude/settings.json"]).tier === "owner-gated");
   t(".claude/settings.local.json (not the deny list itself) is autonomous", cls([".claude/settings.local.json"]).tier === "autonomous");
+
+  // Review nit on #1133: the two landing skills and .githooks/ govern how the lane
+  // lands and what the pre-push hook enforces — same self-net class as
+  // .claude/workflows/**, .claude/hooks/** and .claude/settings.json above.
+  t(".claude/skills/landing-under-dr-037/ change is SAFETY_MACHINERY", cls([".claude/skills/landing-under-dr-037/SKILL.md"]).tier === "owner-gated");
+  t(".claude/skills/orchestrator-over-workers/ change is SAFETY_MACHINERY", cls([".claude/skills/orchestrator-over-workers/SKILL.md"]).tier === "owner-gated");
+  t(".githooks/ change is SAFETY_MACHINERY", cls([".githooks/pre-push"]).tier === "owner-gated");
+  // Negative: an ordinary skill dir with no bearing on landing/lane-safety stays
+  // autonomous — this rule is scoped to those three surfaces, not all of
+  // .claude/skills/.
+  t("an unrelated skill dir (.claude/skills/video-intake/) stays autonomous", cls([".claude/skills/video-intake/SKILL.md"]).tier === "autonomous");
 
   // A mixed diff with even one owner-gated file is owner-gated (the unsafe half wins).
   t("one owner-gated file taints an otherwise-autonomous diff",

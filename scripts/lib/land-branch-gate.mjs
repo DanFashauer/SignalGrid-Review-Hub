@@ -131,29 +131,59 @@ function revParse(worktree, ref) {
   }
 }
 
-// Finding 1 (Codex #1133 P1): the CLASSIFIER's own answer, run against THIS worktree's
-// own diff — never a worker's report of what it printed. Resolved via import.meta.url
-// (not `${worktree}/scripts/…` string-joined) so that in production, where this module
-// runs AS the worktree's own copy (the push worker invokes `node
-// ${worktree}/scripts/lib/land-branch-gate.mjs --verify …`), the sibling classifier
-// resolved is that SAME worktree's copy — and in --self-test, run from this repo
-// directly, it resolves to this repo's own scripts/check-owner-gated-surfaces.mjs,
-// which is exactly "the real classifier module" a self-test needs, pointed at a
-// throwaway repo via `cwd`. stdio is piped, never inherited, matching classifyBranch()'s
-// own contract of exactly one printed line.
+// Review nit on #1133: the CLASSIFIER's own answer, run against THIS worktree's own
+// diff — never a worker's report of what it printed, and never the worktree's OWN
+// working copy of the classifier module either. A branch that rewrites
+// scripts/check-owner-gated-surfaces.mjs (e.g. emptying every manifest rule) must
+// never be able to grade its own diff with the rules it just rewrote, so the module
+// source is read from the BASE ref via `git show <baseRef>:scripts/check-owner-gated-
+// surfaces.mjs` (never from disk in <worktree>), written to a throwaway file under
+// os.tmpdir() (removed afterwards), and run from there with cwd=<worktree> so its own
+// `git diff`/`git merge-base` calls still see the worktree's real repo and history.
+// This only works because the classifier imports nothing but node builtins (node:fs,
+// node:child_process, node:path, node:url, node:os — verified by grepping its imports)
+// and never a sibling module, so a copy at an arbitrary temp path runs correctly with
+// no relative import to resolve; if a future edit gives it a sibling import, this must
+// stop and be reworked, not silently break. stdio is piped, never inherited, matching
+// classifyBranch()'s own contract of exactly one printed line.
 function classifyBranchOutput(worktree, baseRef) {
-  const classifierPath = fileURLToPath(new URL("../check-owner-gated-surfaces.mjs", import.meta.url));
+  const relPath = "scripts/check-owner-gated-surfaces.mjs";
+  let source;
   try {
+    source = execFileSync(
+      "git",
+      ["-C", worktree, "show", `${baseRef}:${relPath}`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  } catch (err) {
+    // Refuse (reason text) when the base ref's copy cannot be read at all — a missing
+    // ref, a missing file at that ref, or any other `git show` failure. This is
+    // deliberately NOT a `KLASS ...` shaped string, so it can never accidentally match
+    // KLASS_LINE_RE below; it always falls through to the "did not print a KLASS line"
+    // refusal in verify().
+    const firstLine = String(err.stderr || err.message || "").split("\n")[0].trim();
+    return `base ref's classifier unreadable: git -C ${worktree} show ${baseRef}:${relPath} failed: ${firstLine}`;
+  }
+  const tmpDir = mkdtempSync(join(tmpdir(), "land-branch-gate-classifier-"));
+  const tmpFile = join(tmpDir, "check-owner-gated-surfaces.mjs");
+  try {
+    writeFileSync(tmpFile, source);
     return execFileSync(
       process.execPath,
-      [classifierPath, "--classify-branch", baseRef],
+      [tmpFile, "--classify-branch", baseRef],
       { cwd: worktree, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     ).trim();
   } catch (err) {
-    // A `KLASS ERROR …` classification still exits non-zero but PRINTS to stdout first;
-    // a crash with nothing on stdout at all falls through to "", which KLASS_LINE_RE
-    // (only ever matches a clean KLASS line, never a KLASS ERROR line) refuses all the same.
-    return String(err.stdout || "").trim();
+    // A non-zero classifier exit is ALWAYS a refusal — never return its stdout as a
+    // candidate KLASS line (a `KLASS ERROR ...` line on stdout, or a crash with
+    // nothing on stdout, used to be handed straight to KLASS_LINE_RE as if it might
+    // still parse). Name the exit code and the first line of whatever it printed
+    // instead, so the refusal reason says what actually happened.
+    const code = typeof err.status === "number" ? err.status : "?";
+    const firstLine = String(err.stdout || err.stderr || err.message || "").split("\n")[0].trim();
+    return `classifier exited ${code}: ${firstLine}`;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -166,12 +196,15 @@ function classifyBranchOutput(worktree, baseRef) {
  * `klass`, when given, is the class the caller has ALREADY resolved (via
  * resolveKlass() over the Merge stage's own klassLine — worker-reported prose that a
  * fabricated valid-shaped line could steer, Codex #1133 P1). verify() then re-derives
- * the class itself, deterministically, by running
- * `node scripts/check-owner-gated-surfaces.mjs --classify-branch <baseRef>` in
- * <worktree> and refuses unless the two agree — the push is bound to the classifier's
- * OWN answer on the exact verified head, never to anything a worker said. `baseRef`
- * defaults to `origin/SignalGrid_Alpha` (the real landing base); it is a parameter,
- * not a hardcoded literal, so --self-test can point it at a local ref in a throwaway
+ * the class itself, deterministically, by running the BASE ref's OWN copy of
+ * `scripts/check-owner-gated-surfaces.mjs --classify-branch <baseRef>` (read via `git
+ * show`, never the worktree's working copy — a branch can never classify itself with
+ * rules it rewrote) in <worktree> and refuses unless the two agree, unless `git show`
+ * itself fails, or unless the classifier exits non-zero for any reason — the push is
+ * bound to the classifier's OWN answer on the exact verified head, never to anything a
+ * worker said. `baseRef` defaults to `origin/SignalGrid_Alpha` (the real landing base);
+ * it is a parameter, not a hardcoded literal, so --self-test can point it at a local
+ * ref in a throwaway
  * repo with no remote at all.
  */
 export function verify({ scratch, tag, worktree, branch, head, klass, baseRef = "origin/SignalGrid_Alpha" }) {
@@ -229,10 +262,18 @@ export function verify({ scratch, tag, worktree, branch, head, klass, baseRef = 
 
 function runVerifyCli(argv) {
   const args = {};
+  // `klassGiven` tracks whether the LITERAL `--klass` token was present on the command
+  // line, separately from `args.klass`'s value — a bare `--klass` (no following value)
+  // sets `args.klass = undefined` too, which used to be indistinguishable from "--klass
+  // was never passed at all" and silently fell through to the old no-klass PASS line
+  // (review nit on #1133).
+  let klassGiven = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--") && a !== "--verify") {
-      args[a.slice(2)] = argv[i + 1];
+      const key = a.slice(2);
+      if (key === "klass") klassGiven = true;
+      args[key] = argv[i + 1];
       i++;
     }
   }
@@ -241,8 +282,12 @@ function runVerifyCli(argv) {
     console.error("land-branch-gate --verify requires --scratch --tag --worktree --branch --head");
     process.exit(1);
   }
-  if (klass !== undefined && !VALID_KLASSES.has(klass)) {
-    console.error(`land-branch-gate --verify: --klass must be one of ${[...VALID_KLASSES].join("|")} (got ${JSON.stringify(klass)})`);
+  // A bare `--klass` (no value, so `klass` is undefined here despite `klassGiven`) or a
+  // value outside VALID_KLASSES is ALWAYS a refusal — never fall back to the old PASS
+  // line, which is what happened when `klass === undefined` from a bare flag looked
+  // identical to "--klass was never given".
+  if (klassGiven && (klass === undefined || !VALID_KLASSES.has(klass))) {
+    console.error(`land-branch-gate --verify REFUSED: --klass requires a value, one of ${[...VALID_KLASSES].join("|")} (got ${JSON.stringify(klass)})`);
     process.exit(1);
   }
   const { ok, reasons } = verify({ scratch, tag, worktree, branch, head, klass });
@@ -460,6 +505,15 @@ function selfTest() {
   // real via classifyBranchOutput() — `baseRef` is passed explicitly as the temp
   // repo's own local branch name, since the default `origin/SignalGrid_Alpha` means
   // nothing in a repo with no remote.
+  //
+  // Review nit on #1133: classifyBranchOutput() now reads the classifier via
+  // `git show <baseRef>:scripts/check-owner-gated-surfaces.mjs` instead of the
+  // worktree's working copy, so `<baseRef>:scripts/check-owner-gated-surfaces.mjs`
+  // must actually exist in these temp repos — the initial commit on `base` carries a
+  // real copy of THIS repo's own classifier module (read straight off disk), not a
+  // stub, so the classifier that runs is the genuine article, exercising its real
+  // manifest against the temp repo's diff.
+  const realClassifierSource = readFileSync(new URL("../check-owner-gated-surfaces.mjs", import.meta.url), "utf8");
   function withKlassTempRepo(fn) {
     const dir = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-"));
     try {
@@ -467,6 +521,8 @@ function selfTest() {
       execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
       execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
       writeFileSync(join(dir, "f.txt"), "x\n");
+      mkdirSync(join(dir, "scripts"), { recursive: true });
+      writeFileSync(join(dir, "scripts", "check-owner-gated-surfaces.mjs"), realClassifierSource);
       execFileSync("git", ["-C", dir, "add", "-A"]);
       execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
       execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
@@ -530,13 +586,112 @@ function selfTest() {
     }
   });
 
+  // Review nit on #1133, part 1: a branch that REWRITES its own copy of
+  // scripts/check-owner-gated-surfaces.mjs to an emptied manifest (every rule array
+  // emptied) must not be able to grade its own diff with the rules it just rewrote.
+  // classifyBranchOutput() reads the classifier from `base` via `git show`, so the
+  // manifest it actually runs is the BASE branch's real, full one — which still sees
+  // the change to scripts/check-owner-gated-surfaces.mjs itself (a scripts/ path) and
+  // classifies it SAFETY_MACHINERY, never "other".
+  withKlassTempRepo((dir) => {
+    const emptied = "export const SAFETY_MACHINERY = [];\nexport const OWNER_RESERVED = [];\nexport const DECISION_PATH = [];\n";
+    writeFileSync(join(dir, "scripts", "check-owner-gated-surfaces.mjs"), emptied);
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "branch empties its own classifier manifest"]);
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+    try {
+      const tag = "kt-selfrewrite";
+      stampSentinels(scratch, tag, head);
+
+      let r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "SAFETY_MACHINERY", baseRef: "base" });
+      if (r.ok) { pass++; console.log("PASS: --verify --klass SAFETY_MACHINERY passes when the branch rewrote its own classifier to an emptied manifest (base's copy still classifies the scripts/ change)"); }
+      else console.error(`FAIL: --verify --klass SAFETY_MACHINERY on a self-rewritten classifier — refused: ${JSON.stringify(r.reasons)}`);
+
+      r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+      if (!r.ok && r.reasons.some((x) => x.includes("derived class SAFETY_MACHINERY !== resolved class other"))) { pass++; console.log("PASS: --verify --klass other refused when the branch rewrote its own classifier (base's copy still says SAFETY_MACHINERY)"); }
+      else console.error(`FAIL: --verify --klass other on a self-rewritten classifier — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // Review nit on #1133, part 2: `git show <baseRef>:...` failing (a base ref that does
+  // not exist) is a refusal with a reason naming the git-show failure — never a crash,
+  // never a candidate KLASS line.
+  withKlassTempRepo((dir) => {
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+    try {
+      const tag = "kt-nobase";
+      stampSentinels(scratch, tag, head);
+      const r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "does-not-exist-ref" });
+      if (!r.ok && r.reasons.some((x) => x.includes("git") && x.includes("show") && x.includes("does-not-exist-ref"))) { pass++; console.log("PASS: --verify refuses with a reason naming the git-show failure when baseRef does not exist"); }
+      else console.error(`FAIL: --verify with a non-existent baseRef — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // Review nit on #1133, part 2 (continued): once `git show` succeeds, a non-zero exit
+  // from running the classifier itself is STILL always a refusal, and the refusal
+  // reason names the exit code and what the classifier printed — never its stdout
+  // treated as a candidate KLASS line. An up-to-date feature branch (no commits past
+  // `base`) makes the classifier's own "empty diff" case fire for real.
+  withKlassTempRepo((dir) => {
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+    try {
+      const tag = "kt-emptydiff";
+      stampSentinels(scratch, tag, head);
+      const r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+      if (!r.ok && r.reasons.some((x) => x.includes("classifier exited 2") && x.includes("empty diff"))) { pass++; console.log("PASS: --verify refuses on a non-zero classifier exit (empty diff) with the exit-code reason, not stdout treated as a candidate line"); }
+      else console.error(`FAIL: --verify non-zero classifier exit — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // Review nit on #1133, part 3: a bare `--klass` (no value) at the CLI layer refuses,
+  // exit 1, with a REFUSED reason — never the old no-klass PASS line. Exercised as a
+  // real subprocess so the fix under test is runVerifyCli's own argv parsing, not
+  // verify() called directly.
+  {
+    const selfPath = fileURLToPath(import.meta.url);
+    const bareKlassArgv = ["--verify", "--scratch", "/tmp/does-not-matter", "--tag", "t", "--worktree", "/tmp/does-not-matter", "--branch", "b", "--head", "deadbeef", "--klass"];
+    try {
+      execFileSync(process.execPath, [selfPath, ...bareKlassArgv], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      console.error("FAIL: CLI --verify with a bare --klass (no value) did not exit non-zero");
+    } catch (err) {
+      const code = typeof err.status === "number" ? err.status : null;
+      const stderr = String(err.stderr || "");
+      if (code === 1 && /REFUSED/.test(stderr)) { pass++; console.log("PASS: CLI --verify with a bare --klass refuses (exit 1, REFUSED reason)"); }
+      else console.error(`FAIL: CLI --verify with a bare --klass — exit ${code}, stderr ${JSON.stringify(stderr)}`);
+    }
+
+    const badKlassArgv = ["--verify", "--scratch", "/tmp/does-not-matter", "--tag", "t", "--worktree", "/tmp/does-not-matter", "--branch", "b", "--head", "deadbeef", "--klass", "BOGUS"];
+    try {
+      execFileSync(process.execPath, [selfPath, ...badKlassArgv], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+      console.error("FAIL: CLI --verify with an invalid --klass value did not exit non-zero");
+    } catch (err) {
+      const code = typeof err.status === "number" ? err.status : null;
+      const stderr = String(err.stderr || "");
+      if (code === 1 && /REFUSED/.test(stderr)) { pass++; console.log("PASS: CLI --verify with an invalid --klass value refuses (exit 1, REFUSED reason)"); }
+      else console.error(`FAIL: CLI --verify with an invalid --klass value — exit ${code}, stderr ${JSON.stringify(stderr)}`);
+    }
+  }
+
   // +7: the inline --verify checks above this point (not collected into an array); +1:
   // the standalone KLASS_LINE_RE mirror check above (finding 3), which isn't part of
   // mirrorChecks since it compares a regex's source text, not a function's; +5: the
   // inline --verify --klass checks just above (finding 1, Codex #1133 P1) binding the
-  // push to the real classifier over two throwaway repos — also not collected into an
-  // array.
-  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5;
+  // push to the real classifier over two throwaway repos; +2: the self-rewritten-
+  // classifier case (review nit part 1, base's copy still wins); +1: a non-existent
+  // baseRef refuses on the git-show failure (review nit part 2); +1: a non-zero
+  // classifier exit (empty diff) refuses on the exit-code reason, never stdout-as-a-
+  // candidate-line (review nit part 2); +2: the CLI-level bare/invalid --klass refusals
+  // (review nit part 3) — none of these five are collected into an array either.
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5 + 2 + 1 + 1 + 2;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

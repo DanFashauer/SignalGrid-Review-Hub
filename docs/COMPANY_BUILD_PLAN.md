@@ -3524,7 +3524,7 @@ earlier — that is the loop working, not a reason to soften the record.
     exactly one place. `pnpm run typecheck` clean.
 
 140. **`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling
-    guards the same shape.** — OPEN, secops-domain. NOTE, and NOT a fail-open on
+    guards the same shape.** — OPEN, secops-domain. RE-MEASURED 2026-09-26 (still open, citation one line off): `lib/integrations/src/integrations/vuln-scan/vuln-connector.ts` still admits a CVSS score with a bare typeof check, so NaN and Infinity travel into the normalized finding as readings; the severity ladder in `lib/integrations/src/integrations/vuln-scan/evaluate.ts` still lands NaN on unknown (raised) and Infinity on critical, so the decision path is not loosened; no commit has touched the line since it was introduced, and `lib/integrations/src/integrations/rtls-custody/rtls-connector.ts` still guards the identical shape with Number.isFinite. NOTE, and NOT a fail-open on
     the decision path — that was checked rather than assumed. `vuln-connector.ts:131`
     uses a bare `typeof === "number"`, so NaN and Infinity pass; but
     `normalizeSeverity`'s CVSS fallback tests `>=9`, `>=7`, `>=4`, `>0`, all false
@@ -3535,7 +3535,7 @@ earlier — that is the loop working, not a reason to soften the record.
     and `rtls-connector.ts:139-146` guards the identical shape one directory away.
 
 141. **CHECKED AND CLEAN, recorded so it is not re-litigated: every m-z family
-    raises on total ignorance.** — CLOSED, secops-domain. A maximally-unknown
+    raises on total ignorance.** — CLOSED, secops-domain. DONE (measured 2026-09-26): a recorded clean read, not a fix — PR #309 (4f46b875, 2026-08-25) logged the twenty-one m-z evaluators as raising on total ignorance; on today's tree all twenty-one still exist under lib/integrations, the two default-free switches in `lib/integrations/src/integrations/response-accountability/evaluate.ts` and `lib/integrations/src/integrations/service-lifecycle/evaluate.ts` remain exhaustive over closed unions, and every family still carries a tier plus live-integrations gate; the zero-grant execution itself was not re-run in this read-only pass. A maximally-unknown
     normalized input was built for all 21 evaluators in the m-z range and called
     with NO options. Every one raised — `step_up` or `monitor`, never a grant:
     macos-posture, ot-posture, peripheral-control, vuln-scan, rtls-custody,
@@ -3611,7 +3611,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 143. **`phase:summary-check` always reads the static template, so a CI gate verifies
     that a committed file contains its own bullet list.** — OPEN,
-    devex-tooling-engineer. `phase-summary-check.ts:8-11` resolves
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations exact, unfixed): `scripts/src/phase-summary-check.ts` still resolves the summary path from an environment variable that is set in neither `.github/workflows/phase-pr-evidence.yml`, `package.json` nor `scripts/package.json`, falling back to the archived `docs/AUTOMATION_PHASE_TEMPLATE.md` (an archived process note since 2026-08-15, which is the row's whole point), and no commit since the row was filed added the refuse-on-template guard, so the gate still passes on the template's own bullets whatever the PR says. `phase-summary-check.ts:8-11` resolves
     `process.env.PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`, and that
     variable is set NOWHERE in the repo — verified across workflows and both
     package manifests. The template's own bullets are exactly the sections the gate
@@ -3623,7 +3623,7 @@ earlier — that is the loop working, not a reason to soften the record.
     read as a pass.
 
 144. **The PR risk report computes `block_merge` and exits 0; nothing reads it.** —
-    OPEN, devex-tooling-engineer. `phase-pr-report.ts` contains no `process.exit` and
+    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, partly mitigated): `scripts/src/phase-pr-report.ts` still sets no failing exit outside its self-test and nothing in the repo reads its risk lane or merge recommendation, but it no longer hand-copies the claim pattern — it and `scripts/src/phase-gate.ts` both import the one list in `scripts/src/unsafe-claim-classifier.ts` (PR #492, 049e3f8e), which still omits the four regulated-framework phrases that `scripts/docs-sanity.mjs` carries, so the gap now reaches the real gate too; no proof compares the consumers' list lengths, and the git-failure-swallowing helper is unchanged. `phase-pr-report.ts` contains no `process.exit` and
     no `exitCode` assignment anywhere — it is the only gate-shaped script on the
     surface with no exit path. The workflow generates the report and uploads it as an
     artifact; no step reads `risk_lane` or `merge_recommendation`.
@@ -3644,7 +3644,7 @@ earlier — that is the loop working, not a reason to soften the record.
     distinguish git exit 1 from any other exit.
 
 145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
-    OPEN, devex-tooling-engineer. `signalgrid-grid-proof.ts:946-951` matches
+    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the secret-like-strings pattern in `scripts/src/signalgrid-grid-proof.ts` (now near line 1063 as the file grew) still cannot match a quoted JSON key-value pair — re-executed in this pass against a stringified object holding three fake credentials, no match — and no negative control exists to catch the regression; only the phone-number pattern has a self-test. `signalgrid-grid-proof.ts:946-951` matches
     `(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}` against
     `JSON.stringify(...)`. In JSON a key is followed by `"` before the colon and a
     value begins with `"` — neither is `\s`, `[:=]`, nor a member of the value class.
@@ -3659,7 +3659,7 @@ earlier — that is the loop working, not a reason to soften the record.
     check FAIL — since without one this is invisible again the moment it recurs.
 
 146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
-    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer.
+    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the maven collector in `scripts/src/generate-sbom.ts` (now near line 282) still matches only implementation, api and runtimeOnly calls, missing every plugin declaration and non-quoted dependency form; no maven completeness guard exists (git log -S finds the proposed name only in the commit that filed this row) and the ecosystems-covered property carries no caveat; `artifacts/sbom/cyclonedx.json` still lists seven maven components against hundreds of npm and cargo, with the five Gradle plugins across `native/android/app/build.gradle.kts` and `native/android/core/build.gradle.kts` unrepresented; the npm figure has drifted from 875 to 826.
     `generate-sbom.ts:256-258`. Executed against real Gradle forms: it COLLECTS a
     quoted `implementation("group:artifact:version")` and MISSES version-catalog
     references, `compileOnly`, `ksp`, `androidTestImplementation`, `classpath`, and
@@ -3682,7 +3682,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 147. **Three e2e specs abort external requests without asserting none were
     attempted; the fourth documents exactly why that is wrong.** — OPEN,
-    devex-tooling-engineer. NOTE. `admin-console`, `review-console` and `website`
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, no drift): `scripts/src/e2e/admin-console.spec.ts`, `scripts/src/e2e/review-console.spec.ts` and `scripts/src/e2e/website.spec.ts` still abort every off-page request without asserting the aborted list is empty, `scripts/src/e2e/evidence-coverage-page.spec.ts` is still the only spec carrying that assertion, and no shared allowlist helper exists under scripts/src/e2e. NOTE. `admin-console`, `review-console` and `website`
     call `route.abort()` and stop there. `evidence-coverage-page.spec.ts:56-61`
     records the lesson in its own words — "a page that grew a webfont, a logo or an
     analytics beacon would be silently neutered by the test and ship green to a
@@ -3693,7 +3693,7 @@ earlier — that is the loop working, not a reason to soften the record.
     use font hosts), in a shared helper so the next spec inherits it.
 
 148. **The e2e README states a test count 18 behind, in the section whose own lesson
-    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer.
+    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citation drifted): 079c5a3e (2026-09-06) already replaced the quoted "grown to 35" in `scripts/src/e2e/README.md` with a hand-counted forty-one declarations dated that day, which still undercounts — `scripts/src/e2e/decision-matrix.spec.ts` and `scripts/src/e2e/route-sweep.spec.ts` each generate tests in a loop, so the executed total is fifty-three across the same ten files, a twelve-test gap no gate reads; the row's own fix (drop the number or point at the list command) was not taken.
     NOTE. It says the suite "has since grown to 35"; `playwright test --list` reports
     53 tests in 10 files. Two lines below, the same section says "a README describing
     a test's live state is a hand-maintained claim, and the test itself is the only
@@ -3702,14 +3702,14 @@ earlier — that is the loop working, not a reason to soften the record.
     gate reads has two stable states: absent, or wrong.
 
 149. **1,700 lines and 239 assertions of the decision core's own proof are
-    unreviewed.** — OPEN, devex-tooling-engineer. The reader executed
+    unreviewed.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, larger than cited): `scripts/src/signalgrid-core-proof.ts` has grown past four thousand lines with more than three hundred static assertion call sites after the DR-043 rounds of 2026-09-23 and 2026-09-24, well beyond the cited size, and no tracked document records a full line-by-line read of it at this size — `docs/PROOF_COVERAGE_AUDIT.md` rates the gate at a per-gate summary level and disclaims anything added after 2026-08-03. The reader executed
     `signalgrid-core-proof.ts` and read only the reporting tail and the check helper.
     This is the largest unexamined block left on the scripts surface and it guards the
     decision path. Recorded as a coverage gap rather than a defect: nobody has looked,
     and the ledger now says so.
 
 150. **`ladderRungs=5` in the agent-behavior proof matches nothing in its source of
-    truth.** — OPEN, devex-tooling-engineer. NOTE. The family's action type has 6
+    truth.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since 2026-07-31): `scripts/src/agent-behavior-proof.ts` still prints a ladderRungs literal of five, which matches none of the real figures — the six-member action union and nine-member posture union in `lib/integrations/src/integrations/agent-behavior/types.ts`, the eight-member unified ladder in `lib/posture-composition/src/types.ts`, or the four actions the proof itself exercises — and `scripts/check-proof-figures.mjs` still registers this proof as the figure guard's source for it; the sibling context has drifted (eleven proofs at six today, see row 124). NOTE. The family's action type has 6
     members, the unified ladder has 8, its postures have 9, and the proof exercises 4
     distinct actions. Five is none of them. The proof IS registered in the figure
     guard, so this literal is what documentation about agent-behavior gets validated
@@ -3772,7 +3772,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 152. **`artifacts/signalgrid-desktop` dresses a web app as a native window, and
     the repo has a REAL desktop shell somewhere else entirely.** — OPEN,
-    desktop-engineer.
+    desktop-engineer. RE-MEASURED 2026-09-26 (still open, partly addressed): 94968f98 (batch R, 2026-09-06) removed the false Linux claim from the status bar in `artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx`, but the name collision stands — the web tree is still artifacts/signalgrid-desktop beside the real Tauri shell under native/desktop, `artifacts/signalgrid-desktop/src/index.css` still carries the inert drag rule, and the layout still renders simulated traffic-light controls; the Downloads page's "not shipped" line remains accurate because `.github/workflows/desktop.yml` still builds only the core crate.
     CORRECTED BEFORE IT SHIPPED, and the correction is the more useful half. The
     reading that produced this row concluded from a keyword sweep that the
     repository contained no native desktop shell of any kind. That is FALSE, and
@@ -3806,14 +3806,14 @@ earlier — that is the loop working, not a reason to soften the record.
     equally worth correcting.
 
 153. **Four `.bg-status-*` utilities are declared in the desktop stylesheet and used
-    nowhere in that tree.** — OPEN, desktop-engineer. NOTE. Zero references, verified
+    nowhere in that tree.** — OPEN, desktop-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #228): grep and git log -S both confirm the four bg-status classes declared in `artifacts/signalgrid-desktop/src/index.css` are never referenced as literal class names anywhere under that tree, while the app, review and PWA trees consume them; the one later reference, an opacity-suffixed form in `artifacts/signalgrid-desktop/src/lib/outcome-tone.ts` (PR #309), is a different token that activates nothing. NOTE. Zero references, verified
     two search shapes; they are live in three sibling trees, so this one copied the
     stylesheet without the components that consume it. It matters mainly because the
     comment above them documents measured contrast ratios for chips this tree never
     renders — inviting a reader to trust a verification with no rendered subject.
 
 154. **Two demo trees declare a large social card and ship an image nothing
-    references.** — OPEN, desktop-engineer and web-engineer. NOTE.
+    references.** — OPEN, desktop-engineer and web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filed): `artifacts/signalgrid-desktop/index.html` and `artifacts/signalgrid-review/index.html` still declare the large-image card with no og:image or twitter:image while each still ships an unreferenced opengraph image under public/; git log -S on both files shows no commit ever added the image tag; `artifacts/signalgrid-web/index.html` remains the correct control. NOTE.
     `signalgrid-review` and `signalgrid-desktop` both set
     `twitter:card="summary_large_image"` with no `og:image` and no `twitter:image`,
     while each ships an unreferenced `public/opengraph.jpg`. `signalgrid-web` is the
@@ -3822,7 +3822,7 @@ earlier — that is the loop working, not a reason to soften the record.
     use it does not.
 
 155. **An unguarded status lookup in desktop Integrations emits a literal
-    `undefined` class.** — OPEN, desktop-engineer. NOTE. `Integrations.tsx:65` has no
+    `undefined` class.** — OPEN, desktop-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05, sixth audit round) rewrote the status lookup in `artifacts/signalgrid-desktop/src/pages/Integrations.tsx` to fall back to the restrictive disconnected tone instead of emitting a literal undefined class; the enum-narrowed map type and an explicit UNKNOWN label this row also suggested were not done, so an unmapped status is still a silent runtime case rather than a typecheck failure. NOTE. `Integrations.tsx:65` has no
     fallback, so an unrecognised status yields `className="... undefined"`, which
     Tailwind does not match — the cell inherits ordinary foreground and reads as a
     normal, healthy row. The map is typed `Record<string, string>` so TypeScript will
@@ -3832,7 +3832,7 @@ earlier — that is the loop working, not a reason to soften the record.
     — an unknown state must be stated, not styled away.
 
 156. **`Partial<Record<DecisionOutcome, …>>` disables the exhaustiveness check that
-    would catch a new verdict.** — OPEN, web-engineer. NOTE, and a REFUTED hypothesis
+    would catch a new verdict.** — OPEN, web-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05) replaced the simulator section's partial tone map with a total record over all ten outcomes in `artifacts/signalgrid-review/src/lib/outcome-tone.ts`, whose fallback is the restrictive tone rather than the neutral audit chip; `node scripts/check-verdict-tone-source.mjs` passes today and would fail on the old shape anywhere in the tree. NOTE, and a REFUTED hypothesis
     recorded honestly: the reader expected an unmapped outcome and there is not one —
     all ten members are present, so the fallback is currently unreachable. What
     remains is that `Partial` is the annotation making an unmapped verdict LEGAL, and

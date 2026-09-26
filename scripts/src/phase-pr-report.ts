@@ -47,7 +47,9 @@ process.chdir(repoRoot);
 function prDiffFiles(): string[] {
   const baseRef = process.env.PHASE_BASE_REF ?? process.env.GITHUB_BASE_REF;
   if (!baseRef) return [];
-  gitOrEmpty(["fetch", "origin", baseRef, "--depth=1"]);
+  // CI-only, as in phase-gate.ts: a `--depth=1` fetch in the shared local checkout
+  // makes the whole repository shallow (lesson L10, docs/agent/LESSONS.md).
+  if (process.env.GITHUB_BASE_REF) gitOrEmpty(["fetch", "origin", baseRef, "--depth=1"]);
   const base = baseRef.startsWith("origin/") ? baseRef : `origin/${baseRef}`;
   return lines(gitOrEmpty(["diff", "--name-only", `${base}...HEAD`]));
 }

@@ -59,6 +59,17 @@ is rebuilt on top of the last:
    the merge.
 4. Re-run `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the merged
    tree, push, and wait for the check run on the NEW head before merging.
+5. This applies to a Mac tick PR too (lesson L12). Tick PR #1114's coverage page
+   was generated before #1111 added the root `.nojekyll` to mainline; the merge
+   ref's own gating run was green, but mainline's own run failed the
+   surface-read-coverage gate right after the merge landed, because a counted
+   surface (`docs/`, `scripts/`, `artifacts/sim-requests/`, `artifacts/sim-results/`
+   — the mailbox trees `artifacts/lane-messages`, `artifacts/agent-heartbeats`,
+   `artifacts/raised-hands` are not counted) had moved on mainline between the
+   run and the merge. A green merge-ref run is not proof of this: check whether
+   mainline has moved a counted surface since the tick's page was generated, and
+   if so merge `SignalGrid_Alpha` into the tick branch and regenerate (step 2)
+   before merging, exactly as for any other landing.
 
 ## After the last one
 

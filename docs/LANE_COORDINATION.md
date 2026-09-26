@@ -52,7 +52,12 @@ or non-Alpha checkout, run every pending sim request, push results on a
 written by the first tick) on every path — quiet, acted, skipped and why. The cloud steward opens the PR for
 each `mac/tick-*` branch within the hour and, when that heartbeat is older than
 three hours, escalates to the owner once with the one install command: a Mac
-that has gone silent is a signal, not a mystery.
+that has gone silent is a signal, not a mystery. Before merging a tick PR that
+carries the surface-review-coverage page, the steward checks whether mainline
+has moved a counted surface since the tick generated it — a green merge-ref
+run is not proof, because a counted file can land between that run and the
+merge (lesson L12 in `docs/agent/LESSONS.md`; `.claude/skills/landing-under-dr-037/SKILL.md`,
+"Order, when several land in a row").
 
 **Rule 3 — mail asks a person for judgment, never for a build.** A cloud→Mac
 message now carries only what a person must decide or physically do (enrol a

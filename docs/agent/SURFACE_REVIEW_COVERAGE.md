@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **104 of 105 surfaces have been read. 0 are partially read. 1 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2979 of 2979 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
+Coverage of the tree is asserted, not assumed: **2981 of 2981 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -113,8 +113,8 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/android` | native | 24 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
 | `native/desktop` | native | 21 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 2 | 0 |
 | `native/ios/*` | loose files | 12 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `native/ios/EnterpriseShell` | native | 53 | read | 1 | 2026-09-02 | cloud lane (independent review, notes folded) | #387 | 4 | 0 |
-| `native/ios/EnterpriseShellTests` | native | 12 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
+| `native/ios/EnterpriseShell` | native | 54 | read | 1 | 2026-09-02 | cloud lane (independent review, notes folded) | #387 | 4 | 0 |
+| `native/ios/EnterpriseShellTests` | native | 13 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `native/ios/mdm` | native | 2 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |

@@ -42,13 +42,29 @@ const FLOOR_SLACK = 4;
  */
 const KNOWN_CASE_KEYS = ["id", "why", "status", "body", "expect", "expectExplanationContains", "expectObligations"];
 
-/** Every `native/<platform>/core` directory. Derived, not listed. */
+/**
+ * The one client whose core is not a `core` directory. iOS's Assist-wire client is
+ * `native/ios/EnterpriseShell/Services/AssistWire.swift` (a transcription of the Kotlin
+ * one, 2026-09-26) inside the EnterpriseShell app tree, and its conformance test lives
+ * in the port's test target; ios-ci.yml's `swift test` and xcodebuild lanes execute it.
+ * DECLARED, not derived, because the app tree cannot be scanned as an SDK core — and a
+ * declared client that vanishes must FAIL this gate, never drop out of the derived list.
+ */
+const DECLARED_CLIENTS = ["native/ios/EnterpriseShellTests"];
+
+/** Every `native/<platform>/core` directory (derived), plus the declared ones. */
 function discoverClients() {
   const root = join(REPO, CLIENT_ROOT);
-  return readdirSync(root)
+  const derived = readdirSync(root)
     .map((p) => join(CLIENT_ROOT, p, "core"))
-    .filter((p) => existsSync(join(REPO, p)) && statSync(join(REPO, p)).isDirectory())
-    .sort();
+    .filter((p) => existsSync(join(REPO, p)) && statSync(join(REPO, p)).isDirectory());
+  for (const declared of DECLARED_CLIENTS) {
+    if (!existsSync(join(REPO, declared)) || !statSync(join(REPO, declared)).isDirectory()) {
+      console.error(`FAIL: declared Assist client root ${declared} is not a directory — the iOS client is no longer where this gate binds it.`);
+      process.exit(1);
+    }
+  }
+  return [...derived, ...DECLARED_CLIENTS].sort();
 }
 
 /** Every file under `dir`, skipping build output that would make this slow and noisy. */
@@ -310,17 +326,16 @@ function main() {
     · that the clients' tests actually RAN. This checks each client has a test that
       reads the vectors; the language-specific lanes (\`gradle test\`, \`cargo test\`)
       are what execute them.
-    · iOS. \`native/ios\` has no \`core\` directory and is not scanned. The old reason
-      here ("EnterpriseShell ports the decision engine rather than consuming /v1")
-      went stale when RemoteDecisionService landed: the shell now DOES consume /v1
-      (POST /v1/app-workflows/evaluate — a DEFERRED route, fenced under the
-      gateway profile, so that wire is served only on the review-demo surface;
-      DR-007 records both unserved wires honestly). The engine port is still
-      covered by \`scripts/check-decision-port-parity.mjs\`; bringing the iOS wire
-      envelope under shared vectors is follow-on work, stated rather than implied
-      done. And note what a green run here proves: the Kotlin and Rust SDKs agree
-      about the Assist wire (/v1/authorize — declared a gap by DR-007, served since DR-023) — served-ness is
-      \`scripts/check-assist-wire-served.mjs\`'s question, not this gate's.
+    · that the iOS client is CALLED. \`native/ios/EnterpriseShellTests\` is bound above
+      through \`AssistWire.swift\` (2026-09-26, a transcription of the Kotlin client);
+      the shell's live wire is still POST /v1/app-workflows/evaluate
+      (\`DecisionService.swift\`, a DEFERRED route fenced under the gateway profile),
+      not /v1/authorize. A conformant decoder with no caller yet: wiring the shell to
+      the Assist wire is a product change (DR-007 / DR-023 terms), stated rather
+      than implied done. What a green run proves: the Kotlin, Rust and Swift clients
+      agree about the Assist wire (/v1/authorize — declared a gap by DR-007, served
+      since DR-023) — served-ness is \`scripts/check-assist-wire-served.mjs\`'s
+      question, not this gate's.
     · the TypeScript source of truth in \`lib/\`, which is what the vectors were
       written FROM. A case that misreads the product would be wrong in every client
       at once, and consistently.`);

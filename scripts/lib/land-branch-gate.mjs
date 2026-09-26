@@ -1,7 +1,8 @@
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Pure push-gate for the land-branch saved workflow (docs/agent/LESSONS.md L2,
 // docs/BUILD_BACKLOG.md row "The plan-row measurement tranche is a scripted
@@ -56,6 +57,7 @@ export function canPush(run, expectedHead) {
 // mirror, for the same reason canPush is: the Workflow sandbox cannot import this
 // module. The self-test below proves both mirrors match.
 const KLASS_LINE_RE = /^KLASS (OWNER_RESERVED|DECISION_PATH|SAFETY_MACHINERY|other) files=(\d+) matched=(\d+)$/;
+const VALID_KLASSES = new Set(["OWNER_RESERVED", "DECISION_PATH", "SAFETY_MACHINERY", "other"]);
 
 export function resolveKlass(callerKlass, derivedLine) {
   const m = KLASS_LINE_RE.exec(String(derivedLine ?? ""));
@@ -129,13 +131,50 @@ function revParse(worktree, ref) {
   }
 }
 
+// Finding 1 (Codex #1133 P1): the CLASSIFIER's own answer, run against THIS worktree's
+// own diff — never a worker's report of what it printed. Resolved via import.meta.url
+// (not `${worktree}/scripts/…` string-joined) so that in production, where this module
+// runs AS the worktree's own copy (the push worker invokes `node
+// ${worktree}/scripts/lib/land-branch-gate.mjs --verify …`), the sibling classifier
+// resolved is that SAME worktree's copy — and in --self-test, run from this repo
+// directly, it resolves to this repo's own scripts/check-owner-gated-surfaces.mjs,
+// which is exactly "the real classifier module" a self-test needs, pointed at a
+// throwaway repo via `cwd`. stdio is piped, never inherited, matching classifyBranch()'s
+// own contract of exactly one printed line.
+function classifyBranchOutput(worktree, baseRef) {
+  const classifierPath = fileURLToPath(new URL("../check-owner-gated-surfaces.mjs", import.meta.url));
+  try {
+    return execFileSync(
+      process.execPath,
+      [classifierPath, "--classify-branch", baseRef],
+      { cwd: worktree, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    ).trim();
+  } catch (err) {
+    // A `KLASS ERROR …` classification still exits non-zero but PRINTS to stdout first;
+    // a crash with nothing on stdout at all falls through to "", which KLASS_LINE_RE
+    // (only ever matches a clean KLASS line, never a KLASS ERROR line) refuses all the same.
+    return String(err.stdout || "").trim();
+  }
+}
+
 /**
  * Reads <scratch>/<tag>-pf.log and <scratch>/<tag>-br.log itself, resolves
  * `git -C <worktree> rev-parse HEAD` and `git -C <worktree> rev-parse
  * refs/heads/<branch>`, and applies canPush() against <head>. Returns
  * { ok, reasons } — never throws.
+ *
+ * `klass`, when given, is the class the caller has ALREADY resolved (via
+ * resolveKlass() over the Merge stage's own klassLine — worker-reported prose that a
+ * fabricated valid-shaped line could steer, Codex #1133 P1). verify() then re-derives
+ * the class itself, deterministically, by running
+ * `node scripts/check-owner-gated-surfaces.mjs --classify-branch <baseRef>` in
+ * <worktree> and refuses unless the two agree — the push is bound to the classifier's
+ * OWN answer on the exact verified head, never to anything a worker said. `baseRef`
+ * defaults to `origin/SignalGrid_Alpha` (the real landing base); it is a parameter,
+ * not a hardcoded literal, so --self-test can point it at a local ref in a throwaway
+ * repo with no remote at all.
  */
-export function verify({ scratch, tag, worktree, branch, head }) {
+export function verify({ scratch, tag, worktree, branch, head, klass, baseRef = "origin/SignalGrid_Alpha" }) {
   const reasons = [];
   const pfPath = join(scratch, `${tag}-pf.log`);
   const brPath = join(scratch, `${tag}-br.log`);
@@ -175,7 +214,17 @@ export function verify({ scratch, tag, worktree, branch, head }) {
     { headSha: typeof worktreeHead === "string" ? worktreeHead : null, preflightExit: preflightParsed.exit, preflightLastLine, breadthExit: breadthParsed.exit, breadthLastLine },
     head,
   );
-  return gate;
+  if (!gate.ok || klass === undefined) return gate;
+
+  // Finding 1 (Codex #1133 P1): bind the push to the classifier's own answer. Only
+  // reached once the sentinel/head/ref checks above already cleared — a missing log or
+  // a wrong head is reported as that, never masked by a klass mismatch reason instead.
+  if (!VALID_KLASSES.has(klass)) return { ok: false, reasons: [`unknown klass ${JSON.stringify(klass)}`] };
+  const derivedLine = classifyBranchOutput(worktree, baseRef);
+  const m = KLASS_LINE_RE.exec(derivedLine);
+  if (!m) return { ok: false, reasons: [`classifier did not print a KLASS line: ${JSON.stringify(derivedLine)}`] };
+  if (m[1] !== klass) return { ok: false, reasons: [`derived class ${m[1]} !== resolved class ${klass}`] };
+  return { ok: true, reasons: [] };
 }
 
 function runVerifyCli(argv) {
@@ -187,18 +236,33 @@ function runVerifyCli(argv) {
       i++;
     }
   }
-  const { scratch, tag, worktree, branch, head } = args;
+  const { scratch, tag, worktree, branch, head, klass } = args;
   if (!scratch || !tag || !worktree || !branch || !head) {
     console.error("land-branch-gate --verify requires --scratch --tag --worktree --branch --head");
     process.exit(1);
   }
-  const { ok, reasons } = verify({ scratch, tag, worktree, branch, head });
+  if (klass !== undefined && !VALID_KLASSES.has(klass)) {
+    console.error(`land-branch-gate --verify: --klass must be one of ${[...VALID_KLASSES].join("|")} (got ${JSON.stringify(klass)})`);
+    process.exit(1);
+  }
+  const { ok, reasons } = verify({ scratch, tag, worktree, branch, head, klass });
   if (!ok) {
     console.error(`land-branch-gate --verify REFUSED (head ${head}):`);
     for (const r of reasons) console.error(`  ${r}`);
     process.exit(1);
   }
-  console.log(`land-branch-gate --verify PASS: head ${head} verified from ${scratch}/${tag}-{pf,br}.log and refs/heads/${branch}`);
+  // Finding 1 (Codex #1133 P1): when --klass is given, the PASS line carries the class
+  // the classifier itself confirmed, so the push worker's grep can bind on it — kept as
+  // "<label> <more text>" (never ending right after the klass value) so the SAME
+  // trailing-space grep style the old line already required
+  // ("^land-branch-gate --verify PASS: head <sha> ") still has something to match after
+  // "klass <klass> ". The shape without --klass is UNCHANGED, so an old caller that
+  // never learned about --klass keeps working exactly as before.
+  console.log(
+    klass !== undefined
+      ? `land-branch-gate --verify PASS: head ${head} klass ${klass} derived from origin/SignalGrid_Alpha in ${worktree}`
+      : `land-branch-gate --verify PASS: head ${head} verified from ${scratch}/${tag}-{pf,br}.log and refs/heads/${branch}`,
+  );
   process.exit(0);
 }
 
@@ -389,10 +453,90 @@ function selfTest() {
     }
   });
 
-  // +7: the inline --verify checks below (not collected into an array); +1: the
-  // standalone KLASS_LINE_RE mirror check above (finding 3), which isn't part of
-  // mirrorChecks since it compares a regex's source text, not a function's.
-  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1;
+  // Finding 1 (Codex #1133 P1): --verify's `klass` param must bind to the REAL
+  // classifier, not to a mock. Two throwaway repos (never inside this tree), each with
+  // a base branch and a feature branch one commit ahead, run
+  // `node scripts/check-owner-gated-surfaces.mjs --classify-branch <local-ref>` for
+  // real via classifyBranchOutput() — `baseRef` is passed explicitly as the temp
+  // repo's own local branch name, since the default `origin/SignalGrid_Alpha` means
+  // nothing in a repo with no remote.
+  function withKlassTempRepo(fn) {
+    const dir = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-"));
+    try {
+      execFileSync("git", ["init", "-q", "-b", "base", dir]);
+      execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
+      execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
+      writeFileSync(join(dir, "f.txt"), "x\n");
+      execFileSync("git", ["-C", dir, "add", "-A"]);
+      execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+      execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+      fn(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const stampSentinels = (scratch, tag, head) => {
+    writeFileSync(join(scratch, `${tag}-pf.log`), `preflight output\nPREFLIGHT_EXIT 0 ${head}\n`);
+    writeFileSync(join(scratch, `${tag}-br.log`), `breadth output\nBREADTH_EXIT 0 ${head}\n`);
+  };
+
+  withKlassTempRepo((dir) => {
+    mkdirSync(join(dir, "docs"), { recursive: true });
+    writeFileSync(join(dir, "docs", "NOTES.md"), "notes\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "docs-only change"]);
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+    try {
+      const tag = "kt-docs";
+      stampSentinels(scratch, tag, head);
+
+      let r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+      if (r.ok) { pass++; console.log("PASS: --verify --klass other matches a docs-only diff against the real classifier"); }
+      else console.error(`FAIL: --verify --klass other on a docs-only diff — refused: ${JSON.stringify(r.reasons)}`);
+
+      r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "SAFETY_MACHINERY", baseRef: "base" });
+      if (!r.ok && r.reasons.some((x) => x.includes("derived class other !== resolved class SAFETY_MACHINERY"))) { pass++; console.log("PASS: --verify --klass SAFETY_MACHINERY refused on a docs-only diff (derived class mismatch)"); }
+      else console.error(`FAIL: --verify --klass SAFETY_MACHINERY on a docs-only diff — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+
+      r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "BOGUS", baseRef: "base" });
+      if (!r.ok && r.reasons.some((x) => x.includes("unknown klass"))) { pass++; console.log("PASS: --verify --klass BOGUS refused (unrecognised klass value)"); }
+      else console.error(`FAIL: --verify --klass BOGUS — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  withKlassTempRepo((dir) => {
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    writeFileSync(join(dir, "scripts", "foo.mjs"), "export {};\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "scripts change"]);
+    const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+    try {
+      const tag = "kt-scripts";
+      stampSentinels(scratch, tag, head);
+
+      let r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "SAFETY_MACHINERY", baseRef: "base" });
+      if (r.ok) { pass++; console.log("PASS: --verify --klass SAFETY_MACHINERY matches a scripts/ diff against the real classifier"); }
+      else console.error(`FAIL: --verify --klass SAFETY_MACHINERY on a scripts/ diff — refused: ${JSON.stringify(r.reasons)}`);
+
+      r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+      if (!r.ok && r.reasons.some((x) => x.includes("derived class SAFETY_MACHINERY !== resolved class other"))) { pass++; console.log("PASS: --verify --klass other refused on a scripts/ diff (derived class mismatch)"); }
+      else console.error(`FAIL: --verify --klass other on a scripts/ diff — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  });
+
+  // +7: the inline --verify checks above this point (not collected into an array); +1:
+  // the standalone KLASS_LINE_RE mirror check above (finding 3), which isn't part of
+  // mirrorChecks since it compares a regex's source text, not a function's; +5: the
+  // inline --verify --klass checks just above (finding 1, Codex #1133 P1) binding the
+  // push to the real classifier over two throwaway repos — also not collected into an
+  // array.
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

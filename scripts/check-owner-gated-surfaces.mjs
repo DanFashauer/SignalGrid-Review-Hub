@@ -68,6 +68,16 @@ export const SAFETY_MACHINERY = [
   // json alone cannot reach goal_met; this is the second belt — a moved pointer is reviewed
   // as safety machinery, never as a doc.
   { rule: "the declared objective (DR-056 attestation pointer)", re: /^docs\/agent\/objective\.json$/ },
+  // Finding 4 (Codex #1133 P1, 2026-09-26): a change touching ONLY .claude/workflows/
+  // used to classify 'other' — the landing workflow itself (this file's own mirror of
+  // canPush/resolveKlass/ownerDecisionText, the Chain/PR stages, the push worker's
+  // one-liner) is exactly the kind of safety net a model-judged auto-merge must never
+  // wave through on green alone. `.claude/hooks/` and `.claude/settings.json` are the
+  // Bash deny-list hook and the deny list itself (CLAUDE.md "Never bypass a check"):
+  // both are the same class of self-net as scripts/** already is.
+  { rule: "the landing workflow (.claude/workflows/**)", re: /^\.claude\/workflows\// },
+  { rule: "the Bash deny-list hook (.claude/hooks/**)", re: /^\.claude\/hooks\// },
+  { rule: "the deny list itself (.claude/settings.json)", re: /^\.claude\/settings\.json$/ },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -88,6 +98,12 @@ export const OWNER_RESERVED = [
   { rule: "the launch-claims gate", re: /^scripts\/check-launch-claims\.mjs$/ },
   { rule: "the publication boundary", re: /^(scripts\/(check-)?publication-boundary\.mjs|docs\/PUBLICATION_BOUNDARY\.md)$/ },
   { rule: "the launch-profile machinery", re: /^scripts\/(check-)?launch-profile\.(mjs|d\.mts)$/ },
+  // Finding 3 (Codex #1133 P1, 2026-09-26): scripts/check-launch-claims.mjs's own
+  // ceiling/baseline files (RETIRED_CEILING_FILE, DOCS_CEILING_FILE — the only two
+  // constants it reads through readRatchetFile()) live under docs/agent/, not
+  // scripts/, so raising either was an 'other' change: an autonomous merge could widen
+  // what the launch-claims gate tolerates without ever touching the gate's own code.
+  { rule: "the launch-claims ceilings (scripts/check-launch-claims.mjs's own RETIRED_CEILING_FILE / DOCS_CEILING_FILE — raising either weakens the gate through an 'other' change)", re: /^docs\/agent\/launch-claims-(retired-labels|docs)-ceiling\.json$/ },
 ];
 
 // A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
@@ -262,6 +278,12 @@ function selfTest() {
   t("launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.mjs"])) === "OWNER_RESERVED");
   t("check-launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-launch-profile.mjs"])) === "OWNER_RESERVED");
   t("launch-profile.d.mts is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.d.mts"])) === "OWNER_RESERVED");
+  // Finding 3 (Codex #1133 P1): the launch-claims gate's own ceiling/baseline files
+  // (scripts/check-launch-claims.mjs's RETIRED_CEILING_FILE / DOCS_CEILING_FILE) live
+  // under docs/agent/, not scripts/ — without a manifest rule, raising either ceiling
+  // was an 'other' change that weakened the gate without ever touching its code.
+  t("the launch-claims retired-labels ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-retired-labels-ceiling.json"])) === "OWNER_RESERVED");
+  t("the launch-claims docs ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-docs-ceiling.json"])) === "OWNER_RESERVED");
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
@@ -279,6 +301,15 @@ function selfTest() {
   t("a backslash separator does not launder scripts/ to autonomous", cls(["scripts\\mutation-guard.mjs"]).tier === "owner-gated");
   t("a normalized lib/ path is DECISION_PATH", cls(["b/lib/signalgrid-core/src/decision.ts"]).tier === "owner-gated");
   t("a roster-scoped doc is autonomous", cls(["docs/GLOSSARY.md"]).tier === "autonomous");
+
+  // Finding 4 (Codex #1133 P1): .claude/workflows|hooks|settings.json are the landing
+  // workflow, the Bash deny-list hook, and the deny list itself — a change touching
+  // ONLY one of these used to classify 'other' and slip an autonomous merge past
+  // exactly the surfaces meant to stop it.
+  t(".claude/workflows/ change is SAFETY_MACHINERY", cls([".claude/workflows/land-branch.js"]).tier === "owner-gated");
+  t(".claude/hooks/ change is SAFETY_MACHINERY", cls([".claude/hooks/deny-bash.mjs"]).tier === "owner-gated");
+  t(".claude/settings.json change is SAFETY_MACHINERY", cls([".claude/settings.json"]).tier === "owner-gated");
+  t(".claude/settings.local.json (not the deny list itself) is autonomous", cls([".claude/settings.local.json"]).tier === "autonomous");
 
   // A mixed diff with even one owner-gated file is owner-gated (the unsafe half wins).
   t("one owner-gated file taints an otherwise-autonomous diff",

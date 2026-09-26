@@ -20,10 +20,10 @@ Invoke with the Workflow tool, `name: "land-branch"`, and this `args` object:
 | --- | --- | --- |
 | `repo` | yes | Absolute path to the shared repository root. |
 | `scratch` | yes | Absolute path to the scratchpad base holding the chain lock and logs. |
-| `worktree` | yes | Absolute path to the worker's own worktree — the only one touched. Must be a real `pnpm install --frozen-lockfile` checkout (the Merge stage installs it offline when `scripts/node_modules/.bin/tsx` is missing — L17); a root `node_modules` symlink is not an install. |
+| `worktree` | yes | Absolute path to the worker's own worktree — the only one touched. Must be a real `pnpm install --frozen-lockfile` checkout (the Merge stage, and the Pre stage too when `preBrief` is given, installs it offline when `scripts/node_modules/.bin/tsx` is missing — L17); a root `node_modules` symlink is not an install. |
 | `branch` | yes | The branch being landed. |
 | `tag` | yes | Short tag for this run's lock/log filenames. |
-| `klass` | yes | The caller's initial GUESS at `SAFETY_MACHINERY` \| `DECISION_PATH` \| `OWNER_RESERVED` \| anything else. The Merge stage checks it against the diff and the DERIVED class wins for the PR's "Owner decision needed" section — see below. |
+| `klass` | yes | The caller's initial GUESS at `SAFETY_MACHINERY` \| `DECISION_PATH` \| `OWNER_RESERVED` \| anything else. The Merge stage checks it against the diff and the DERIVED class wins for the PR's "Owner decision needed" section — see below — AND for whether the push runs at all: `--verify` re-derives the class itself at push time and refuses on a mismatch (Codex #1133 P1, see "The owner-decision class is derived, not trusted"). |
 | `title` | yes | The PR title. |
 | `trailers` | yes | The exact commit-trailer lines the caller wants on every commit this run makes. The script has no session baked in, so this and `sessionUrl` are how the caller supplies its own attribution. |
 | `sessionUrl` | yes | The caller's session URL, appended under the PR body's "Generated with Claude Code" line. |
@@ -61,7 +61,7 @@ where a `;` after the `tee` once let a stale leftover file from an earlier
 run under the same tag be mistaken for a fresh PASS (Codex #1130 P1) — and
 the previous run's output file is removed FIRST, under `<scratch>`, never
 under `/tmp`, so it can never be that stale leftover itself:
-`cd <worktree> && rm -f <scratch>/<tag>-verify.out && node <worktree>/scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> | tee <scratch>/<tag>-verify.out && grep -q "^land-branch-gate --verify PASS: head <headSha> " <scratch>/<tag>-verify.out && git push -u origin HEAD:refs/heads/<branch>`.
+`cd <worktree> && rm -f <scratch>/<tag>-verify.out && node <worktree>/scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> --klass <klass> | tee <scratch>/<tag>-verify.out && grep -q "^land-branch-gate --verify PASS: head <headSha> klass <klass> " <scratch>/<tag>-verify.out && git push -u origin HEAD:refs/heads/<branch>`.
 `--verify` reads `<scratch>/<tag>-pf.log` and `<scratch>/<tag>-br.log` itself,
 resolves `git -C <worktree> rev-parse HEAD` and
 `git -C <worktree> rev-parse refs/heads/<branch>` itself, requires both to
@@ -84,6 +84,24 @@ rather than `git push origin <branch>`, so the ref that gets pushed is always
 the validated worktree HEAD, never whatever `<branch>` happens to resolve to
 locally if it does not match the checked-out ref. If a stage would need one
 of those to proceed, it returns a blocker instead.
+
+**`--klass` binds the push to the classifier's own answer, not to a worker's
+report of it (Codex #1133 P1).** Before `--klass` existed, the Merge stage's
+`klassLine` was worker-reported prose: a fabricated but validly-shaped line
+(`KLASS other files=3 matched=0`) would resolve cleanly and steer both the PR
+body and the returned `klass`, with nothing re-checking it against the real
+diff at push time. Now, once the sentinel/head/ref checks above already pass,
+`--verify --klass <klass>` runs
+`node scripts/check-owner-gated-surfaces.mjs --classify-branch origin/SignalGrid_Alpha`
+itself, in `<worktree>`, and refuses — `derived class <X> !== resolved class
+<Y>`, or `classifier did not print a KLASS line: <raw>` — unless the
+classifier's own verdict equals the `klass` the push worker was given. The
+PASS line then carries the class: `land-branch-gate --verify PASS: head
+<headSha> klass <klass> derived from origin/SignalGrid_Alpha in <worktree>`.
+Omitting `--klass` keeps the exact pre-existing PASS line
+(`… PASS: head <headSha> verified from <scratch>/<tag>-{pf,br}.log and
+refs/heads/<branch>`) unchanged, so an older caller that never learned about
+`--klass` keeps working.
 
 ## The owner-decision class is derived, not trusted
 

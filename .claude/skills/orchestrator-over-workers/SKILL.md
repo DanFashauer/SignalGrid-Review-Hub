@@ -161,8 +161,8 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
 | Stage | Tier |
 | --- | --- |
 | Spec, review of a worker's report, judgment calls, decision records, doctrine, gate design | Opus |
-| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree | Sonnet |
-| PR bodies, commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
+| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree; PR bodies (Sonnet since L16 — Haiku fabricated a check-run id and file attributions twice on 2026-09-26) | Sonnet |
+| Commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
 
 - **The coordinator's own tier never runs a bulk stage.** Parsing a CI job listing,
   writing a commit message or re-running a gate by hand in the coordinating session is a
@@ -171,7 +171,7 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
   stages the coordinator did itself.
 
-## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9, L11)
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9, L11, L13, L14, L15)
 
 - **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
   test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
@@ -219,7 +219,15 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   shared with the base is resolved on the Alpha merge after the base lands, not before.
 - **Land a worker branch through the saved `land-branch` workflow, never a hand-run
   chain that pushes.** Workflow tool, `name: "land-branch"`, `args: { repo, scratch,
-  worktree, branch, tag, klass, title, preBrief?, bodyNotes? }` — it merges Alpha,
-  regenerates on a clean index, runs preflight+breadth behind a file lock (L13), starts
-  the chain as one detached job so a worker's own turn ending cannot kill it (L14), and
-  pushes only on a 0/0 sentinel read on the unchanged expected head (L2).
+  worktree, branch, tag, klass, title, trailers, sessionUrl, preBrief?, bodyNotes? }` —
+  `repo`, `scratch`, `worktree`, `branch`, `tag`, `klass`, `title`, `trailers` and
+  `sessionUrl` are ALL required (the script throws on a missing one, and validates
+  `tag`/`repo`/`scratch`/`worktree`/`branch` for shape before using them); `trailers`
+  and `sessionUrl` are the caller's own attribution — the workflow has no session
+  baked in, so a call that omits them is not a shorter invocation, it is one that
+  throws before Pre even starts. It merges Alpha, regenerates on a clean index, runs
+  preflight+breadth behind a file lock (L13), starts the chain as one detached job so
+  a worker's own turn ending cannot kill it (L14), pushes only on a 0/0 sentinel
+  verified DETERMINISTICALLY by `scripts/lib/land-branch-gate.mjs --verify` on the
+  unchanged expected head (L2), and — once its base has landed — merges
+  `origin/SignalGrid_Alpha`, never the base branch's own tip (L15).

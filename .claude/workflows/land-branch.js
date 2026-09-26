@@ -14,8 +14,8 @@
 //       prose) evaluates the sentinel via scripts/lib/land-branch-gate.mjs's canPush()
 //       before it ever dispatches a push agent: it requires preflightExit===0,
 //       breadthExit===0, the run's own headSha===the merge head, AND both sentinel
-//       LINES to literally contain "PREFLIGHT_EXIT 0"/"BREADTH_EXIT 0" plus the
-//       expected head sha. That function's self-test (`node
+//       LINES to EQUAL exactly "PREFLIGHT_EXIT 0 <expected-head>"/"BREADTH_EXIT 0
+//       <expected-head>". That function's self-test (`node
 //       scripts/lib/land-branch-gate.mjs --self-test`) plants a missing sentinel, a
 //       non-zero sentinel, and a stale (previous-run) sentinel at the wrong sha, and
 //       asserts refusal in each case. The Chain-run worker below is read-only with
@@ -38,6 +38,7 @@
 //       released by a `trap ... EXIT` as the FIRST statement inside that job, so any
 //       exit path (success, failure, or the job's own `cd` failing) releases it —
 //       never a trailing `&& (...; rm)` that only runs if everything before it did.
+//   L15 a stacked branch merges Alpha after its base lands, never the base tip.
 export const meta = {
   name: 'land-branch',
   description: 'Optional pre-edit, merge Alpha + regenerate on a clean index, one sequential preflight+breadth chain, push only on 0/0 verified by the script, open the PR',
@@ -54,6 +55,29 @@ const REQUIRED = { repo, scratch, worktree, branch, tag, title, klass, trailers,
 for (const [name, value] of Object.entries(REQUIRED)) {
   if (!value) throw new Error(`land-branch: args.${name} is required`)
 }
+// Argument validation BEFORE any of these values are interpolated into shell text
+// handed to a worker (Codex #1126 P1, land-branch.js:165): a tag or path containing
+// shell metacharacters reaches the worker's Bash tool verbatim, since every command
+// below is a template string, not an argv array. title/klass/sessionUrl are only ever
+// interpolated into prose/prompt text and the PR body Markdown, never into a shell
+// command — but `trailers` IS pasted into a literal double-quoted shell argument (the
+// merge stage's `git merge --no-ff -m "..." -m "${trailers}"`, land-branch.js line
+// ~160), so it is validated below the same as tag/path, not merely required non-empty.
+const TAG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
+const ABS_PATH_RE = /^\/[A-Za-z0-9._/-]+$/
+const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+// One or more "Key: value" lines; no double quote, backtick, `$` or backslash in the
+// value half — those are exactly the characters that can run a command or break out
+// of the double-quoted `-m "${trailers}"` argument the merge stage builds.
+const TRAILER_LINE_RE = /^[A-Za-z-]+: [^"`$\\]+$/
+if (!TAG_RE.test(tag)) throw new Error(`land-branch: args.tag ${JSON.stringify(tag)} must match ${TAG_RE}`)
+for (const [name, value] of [['repo', repo], ['scratch', scratch], ['worktree', worktree]]) {
+  if (!ABS_PATH_RE.test(value)) throw new Error(`land-branch: args.${name} ${JSON.stringify(value)} must be an absolute path (${ABS_PATH_RE}) — no spaces or shell metacharacters`)
+}
+if (!BRANCH_RE.test(branch) || branch.includes('..')) throw new Error(`land-branch: args.branch ${JSON.stringify(branch)} must match ${BRANCH_RE} and contain no ".."`)
+const trailerLines = String(trailers).split('\n').filter((l) => l.length > 0)
+if (!trailerLines.length || !trailerLines.every((l) => TRAILER_LINE_RE.test(l)))
+  throw new Error(`land-branch: args.trailers ${JSON.stringify(trailers)} must be one or more "Key: value" lines matching ${TRAILER_LINE_RE}, with no '"', backtick, '$' or '\\' in any line`)
 const S = scratch
 const REPO = repo
 // canPush is MIRRORED from scripts/lib/land-branch-gate.mjs, byte-for-byte after whitespace
@@ -67,22 +91,22 @@ function canPush(run, expectedHead) {
   if (run.headSha !== expectedHead) reasons.push(`headSha ${run.headSha} !== expected ${expectedHead}`);
   if (run.preflightExit !== 0) reasons.push(`preflightExit ${run.preflightExit} !== 0`);
   if (run.breadthExit !== 0) reasons.push(`breadthExit ${run.breadthExit} !== 0`);
-  if (!/(?:^|\s)PREFLIGHT_EXIT 0(?:\s|$)/.test(run.preflightLastLine || ""))
-    reasons.push(`preflightLastLine does not literally contain "PREFLIGHT_EXIT 0": ${JSON.stringify(run.preflightLastLine)}`);
-  if (!/(?:^|\s)BREADTH_EXIT 0(?:\s|$)/.test(run.breadthLastLine || ""))
-    reasons.push(`breadthLastLine does not literally contain "BREADTH_EXIT 0": ${JSON.stringify(run.breadthLastLine)}`);
-  // The sentinel line itself must carry the expected head — a tag-scoped log can
-  // otherwise still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel
-  // is bound to the tag, not the sha); requiring the sha inside the line closes that.
-  if (!(run.preflightLastLine || "").includes(expectedHead))
-    reasons.push(`preflightLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.preflightLastLine)}`);
-  if (!(run.breadthLastLine || "").includes(expectedHead))
-    reasons.push(`breadthLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.breadthLastLine)}`);
+  // Exact equality of the WHOLE line, not "contains" — a tag-scoped log can otherwise
+  // still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel is bound to the
+  // tag, not the sha), and a substring/"contains" check ALSO passed a line that merely
+  // had the expected head somewhere in trailing text (e.g. "PREFLIGHT_EXIT 0 <stale>
+  // unrelated=<expected>"). The chain writes the sentinel as exactly `echo
+  // "PREFLIGHT_EXIT $? $(git rev-parse HEAD)"`, so no trailing text on that line, and
+  // no other head sha earlier on it, is ever legitimate.
+  if (run.preflightLastLine !== `PREFLIGHT_EXIT 0 ${expectedHead}`)
+    reasons.push(`preflightLastLine is not exactly "PREFLIGHT_EXIT 0 ${expectedHead}": ${JSON.stringify(run.preflightLastLine)}`);
+  if (run.breadthLastLine !== `BREADTH_EXIT 0 ${expectedHead}`)
+    reasons.push(`breadthLastLine is not exactly "BREADTH_EXIT 0 ${expectedHead}": ${JSON.stringify(run.breadthLastLine)}`);
   return { ok: reasons.length === 0, reasons };
 }
 
 const RULES = `
-HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\`/\`--ours\` on the four generated paths named in the Merge stage's step 2, and only while a merge conflict is actually in progress there; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.
+HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\` on the two GENERATED paths named in the Merge stage's step 2 (docs/agent/SURFACE_REVIEW_COVERAGE.md, artifacts/sync/live-sync-manifest.json), and only while a merge conflict is actually in progress there — docs/agent/CLAIM_INVENTORY.json is a SOURCE input and is never resolved with \`--theirs\`, only by merging both sides' records by hand; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.
 Commit trailers (exact, last lines of every commit body):
 ${trailers}
 `
@@ -141,7 +165,7 @@ ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium
 phase('Merge')
 const merge = await agent(`You are the Sonnet merge worker (DR-060 rule 1: mid tier). Worktree ${worktree}, branch ${branch}.
 1. \`cd ${REPO} && git fetch origin SignalGrid_Alpha\` (plain fetch). \`cd ${worktree} && git status --short\` must be empty.
-2. \`git merge --no-edit origin/SignalGrid_Alpha\`. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); generated files (docs/agent/SURFACE_REVIEW_COVERAGE.md, artifacts/sync/live-sync-manifest.json, docs/agent/CLAIM_INVENTORY.json, docs/CLAIM_INVENTORY.md) are resolved by taking THEIRS (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these four paths during this merge) and regenerated in step 3 - never by hand; any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. Commit the merge (\`git commit --no-edit\` with the trailers appended via -m if needed).
+2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
 3. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.
 4. Quick gates after \`git add -A\` (nothing should be pending): node scripts/check-publication-boundary.mjs; node scripts/check-surface-review-coverage.mjs; node scripts/check-surface-ownership.mjs (if it exists); node scripts/check-lessons.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-cited-paths.mjs; node scripts/check-doc-line-counts.mjs. Each exit 0, quote the last line; a failure is returned as a blocker with the output, NOT patched around.
 Return headSha = \`git rev-parse HEAD\`.
@@ -186,7 +210,7 @@ if (!chainRun || !chainRun.jobStarted) {
   // (chainRun is null, or it reported jobStarted=false), nothing has released it, and the
   // 40-minute stale-clear is the only other path — dispatch a narrow one-command release
   // instead of leaving every later landing on this host to wait that out.
-  await agent(`Run EXACTLY this one command and report its output; do nothing else: \`LOCK=${S}/chain.lock; if [ -f "$LOCK" ] && [ "$(cut -d\\ -f1 "$LOCK")" = "${tag}" ]; then rm -f "$LOCK"; echo RELEASED; else echo NOT_MINE_OR_ABSENT; fi\`. released=true only if the output is RELEASED.`, { label: `release:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: RELEASE_SCHEMA })
+  await agent(`Run EXACTLY this one command and report its output; do nothing else: \`LOCK=${S}/chain.lock; if [ -f "$LOCK" ] && [ "$(awk '{print $1}' "$LOCK")" = "${tag}" ]; then rm -f "$LOCK"; echo RELEASED; else echo NOT_MINE_OR_ABSENT; fi\`. released=true only if the output is RELEASED.`, { label: `release:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: RELEASE_SCHEMA })
   return { pre, merge, chainRun }
 }
 log(`chain ran: head ${chainRun.headSha}, preflight ${chainRun.preflightExit}, breadth ${chainRun.breadthExit}`)
@@ -207,9 +231,11 @@ while (!bothSentinels(chainRun) && sentinelReads < 8) {
 
 // The push decision is the SCRIPT's, not a worker's prose (lesson L2): canPush() requires
 // preflightExit===0 && breadthExit===0 && the run's own headSha===the merge head, AND both
-// log lines to literally contain "PREFLIGHT_EXIT 0"/"BREADTH_EXIT 0" plus the expected head
-// sha (closing the tag-scoped-sentinel gap: a stale line from an earlier run at a different
-// sha under the same tag is refused, not just an exit code taken on faith). Self-tested at
+// log lines to EQUAL exactly "PREFLIGHT_EXIT 0 <expected-head>"/"BREADTH_EXIT 0
+// <expected-head>" (closing the tag-scoped-sentinel gap: a stale line from an earlier run
+// at a different sha under the same tag is refused, not just an exit code taken on faith —
+// and closing the Codex #1130 P2 gap where a "contains" check let a line with the expected
+// head concatenated after other text pass). Self-tested at
 // scripts/lib/land-branch-gate.mjs --self-test.
 const gate = canPush(chainRun, merge.headSha)
 if (!gate.ok) {
@@ -217,17 +243,18 @@ if (!gate.ok) {
   return { pre, merge, chainRun, gate }
 }
 
-const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it. Worktree ${worktree}, branch ${branch}.
-1. \`cd ${worktree} && git status --short\` must be empty and \`git rev-parse HEAD\` must equal ${merge.headSha}; if not, do NOT push, return the mismatch as a failure.
-2. \`git push -u origin ${branch}\` (retry on a network error only, with 2s/4s/8s/16s backoff; never --force).
-3. \`git ls-remote origin refs/heads/${branch}\` → remoteSha.
+const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it, and you do not re-derive it either: the ONLY git command you run is the one shell line below, which re-verifies the sentinel logs and the worktree's own HEAD/branch ref DETERMINISTICALLY (never from your own report of what a file says) before the push runs at all. Worktree ${worktree}, branch ${branch}.
+1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output). Every step is chained with \`&&\`, never \`;\`, and the previous run's output file is removed FIRST, so a failed \`cd\`, a verifier that never runs, or a stale leftover file from an earlier run under the same tag can never be mistaken for a fresh PASS:
+   \`cd ${worktree} && rm -f ${S}/${tag}-verify.out && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} | tee ${S}/${tag}-verify.out && grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} " ${S}/${tag}-verify.out && git push -u origin HEAD:refs/heads/${branch}\`
+   If the verify half prints "REFUSED", or prints nothing, or its PASS line does not literally match (wrong head, wrong tag), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. A failed \`cd\` into the worktree, or the \`rm -f\`/verifier/\`tee\` step failing outright, stops the line at that \`&&\` before anything downstream (including the push) ever runs — there is no \`;\` anywhere in this line for a failure to fall through. Never run this with any other git command chained on, never pass --force.
+2. Only if the command above succeeded: \`git ls-remote origin refs/heads/${branch}\` → remoteSha.
 Never run any other git command; never fetch; never edit files.
 ${RULES}`, { label: `push:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: PUSH_SCHEMA })
 if (!push || !push.pushed) { log(`push failed: ${JSON.stringify(push?.failures)}`); return { pre, merge, chainRun, push } }
 log(`pushed ${push.remoteSha}`)
 
 phase('PR')
-const body = await agent(`You are the Sonnet PR-body writer (DR-060 rule 1 puts PR bodies on the cheapest tier that can read a diff; you are it here). Worktree ${worktree}, branch ${branch}, head ${push.remoteSha}. Read-only: git and node commands only, no edits, no pushes.
+const body = await agent(`You are the Sonnet PR-body writer (DR-060 rule 1 puts PR bodies on the cheapest tier that can read a diff; you are it here (L16)). Worktree ${worktree}, branch ${branch}, head ${push.remoteSha}. Read-only: git and node commands only, no edits, no pushes.
 Write the PR body in this repository's house template, every figure from output you ran or from the log files ${S}/${tag}-pf.log and ${S}/${tag}-br.log:
 ## Summary (what and why, 1-3 paragraphs, plain)
 ## What changed (one bullet per file, from \`git diff --stat $(git merge-base origin/SignalGrid_Alpha HEAD)..HEAD\`)
@@ -243,9 +270,20 @@ ${sessionUrl}
 Return the body as your final text (raw markdown, nothing else).
 ${RULES}`, { label: `body:${tag}`, phase: 'PR', model: 'sonnet', effort: 'medium' })
 
+// Sanitize in the SCRIPT, not a prompt: an agent's "final text" can carry a harness
+// preamble line above the first heading (seen twice this week) even when told to
+// return "raw markdown, nothing else". Cut everything before the first "## " so the
+// opener never has to trust the worker's own compliance with that instruction.
+const bodyText = String(body || '')
+// Cut at the first LINE that starts with "## ", not the first occurrence of the
+// substring anywhere — a preamble line containing "### not a heading" has "## " as a
+// substring one character in, so indexOf() alone turns it into a bogus leading H2.
+const headingMatch = /^## /m.exec(bodyText)
+const cleanBody = headingMatch ? bodyText.slice(headingMatch.index) : bodyText
+
 const pr = await agent(`You are the Haiku PR opener. Load the GitHub tool with ToolSearch "select:mcp__github__create_pull_request" and open a PR in DanFashauer/SignalGrid-Review-Hub: head ${branch}, base SignalGrid_Alpha, title exactly: ${JSON.stringify(title)}, body exactly the markdown between the BODY markers below (do not alter it). Return number, url, and headSha = ${push.remoteSha}. If the call fails, return the error as a blocker; do not retry more than twice.
 BODY-START
-${body}
+${cleanBody}
 BODY-END`, { label: `open:${tag}`, phase: 'PR', model: 'haiku', effort: 'low', schema: PR_SCHEMA })
 
-return { pre, merge, chainRun, push, pr, body }
+return { pre, merge, chainRun, push, pr, body: cleanBody }

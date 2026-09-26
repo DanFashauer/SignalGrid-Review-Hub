@@ -170,6 +170,50 @@ export function auditReviewCoverage(files, entries) {
   return { problems, coveredCount: covered.size, total: files.length, byArea, retiredCount };
 }
 
+const TIERS = "docs/agent/review-tiers.json";
+const SHA_RE = /^[0-9a-f]{7,40}$/;
+
+/**
+ * TIER COVERAGE. The plan's read-list (COMPANY_BUILD_PLAN.md, "TIER 1") lived only as
+ * prose, so "Tier 1: N/25" was a number nobody printed and nobody could ratchet. This
+ * reads it as data. For each listed file the BEST live row decides: no row → `none`;
+ * a row below the tier's target depth → `below`; at/above target with commits to the
+ * file since the row's `sha` (or since its `date` when no sha is recorded) → `stale`;
+ * otherwise `current`. N = current + stale (the read happened; staleness is the
+ * re-read queue, REPORTED). FATAL: N below the recorded `mark` (a read was un-read
+ * without a retirement), a listed file absent from the checkout (the list rotted), a
+ * malformed `sha` (a provenance claim that cannot be checked is not one).
+ * `commitsSince(path, {sha, date})` is injected so the self-test needs no git.
+ */
+export function auditTier(name, tier, entries, files, commitsSince) {
+  const problems = [];
+  const rows = { current: [], stale: [], below: [], none: [] };
+  if (!tier || !Array.isArray(tier.files) || !DEPTHS.includes(tier.targetDepth) || !Number.isInteger(tier.mark)) {
+    problems.push(`${TIERS}: ${name} needs files[], a targetDepth in ${DEPTHS.join(" | ")} and an integer mark`);
+    return { problems, rows, n: 0 };
+  }
+  const rank = (d) => DEPTHS.indexOf(d);
+  for (const path of tier.files) {
+    if (!files.includes(path)) { problems.push(`${TIERS}: ${name} lists \`${path}\`, which is not a tracked file — the read-list rotted`); continue; }
+    const live = (Array.isArray(entries) ? entries : []).filter((e) => e?.path === path && !isRetired(e) && DEPTHS.includes(e.depth));
+    for (const e of live) if (e.sha !== undefined && !(typeof e.sha === "string" && SHA_RE.test(e.sha))) {
+      problems.push(`${LEDGER}: review of \`${path}\` carries sha \`${e.sha}\` — a commit reference is 7 to 40 hex characters or absent`);
+    }
+    if (live.length === 0) { rows.none.push(path); continue; }
+    const best = live.slice().sort((a, b) => rank(b.depth) - rank(a.depth) || String(b.date).localeCompare(String(a.date)))[0];
+    if (rank(best.depth) < rank(tier.targetDepth)) { rows.below.push(path); continue; }
+    (commitsSince(path, { sha: best.sha, date: best.date }) > 0 ? rows.stale : rows.current).push(path);
+  }
+  const n = rows.current.length + rows.stale.length;
+  if (n < tier.mark) problems.push(`${TIERS}: ${name} fell to ${n}/${tier.files.length} at depth >= ${tier.targetDepth} (mark ${tier.mark}) — a read was un-read; retire it with a reason or restore the row`);
+  return { problems, rows, n };
+}
+
+function gitCommitsSince(path, { sha, date }) {
+  const args = sha ? ["rev-list", "--count", `${sha}..HEAD`, "--", path] : ["rev-list", "--count", `--since=${date}T23:59:59Z`, "HEAD", "--", path];
+  try { return Number(execFileSync("git", args, { cwd: repo, encoding: "utf8" }).trim()) || 0; } catch { return 1; } // an unanswerable question counts as stale, never as current
+}
+
 function selfTest() {
   const checks = [];
   const files = ["lib/a.ts", "lib/b.ts", "scripts/c.mjs"];
@@ -264,6 +308,29 @@ function selfTest() {
   ]);
 
   const failed = checks.filter(([, ok2]) => !ok2);
+
+  // TIER COVERAGE — the number the plan promised, and the ratchet on it.
+  const tFiles = ["lib/a.ts", "lib/b.ts", "lib/c.ts", "lib/d.ts"];
+  const tier = { targetDepth: "audited", mark: 2, files: tFiles };
+  const tEntries = [
+    { path: "lib/a.ts", reviewedBy: "r", date: "2026-08-25", depth: "audited", sha: "8fdc143c" },
+    { path: "lib/b.ts", reviewedBy: "r", date: "2026-08-25", depth: "audited" },
+    { path: "lib/c.ts", reviewedBy: "r", date: "2026-08-25", depth: "read" },
+  ];
+  const noCommits = () => 0;
+  let t = auditTier("tier1", tier, tEntries, tFiles, noCommits);
+  checks.push(["tier: N counts rows at or above the target depth; below and none are named", t.problems.length === 0 && t.n === 2 && t.rows.below[0] === "lib/c.ts" && t.rows.none[0] === "lib/d.ts"]);
+  t = auditTier("tier1", tier, tEntries, tFiles, (p) => (p === "lib/a.ts" ? 3 : 0));
+  checks.push(["tier: commits since the row make it STALE (reported) and still counted as read", t.problems.length === 0 && t.n === 2 && t.rows.stale[0] === "lib/a.ts" && t.rows.current[0] === "lib/b.ts"]);
+  t = auditTier("tier1", { ...tier, mark: 3 }, tEntries, tFiles, noCommits);
+  checks.push(["tier: N below the mark is FATAL (a read was un-read)", t.problems.some((p) => p.includes("fell to 2/4"))]);
+  t = auditTier("tier1", tier, [...tEntries, { path: "lib/b.ts", reviewedBy: "r", date: "2026-09-01", depth: "audited", sha: "not-a-sha" }], tFiles, noCommits);
+  checks.push(["tier: a malformed sha is FATAL", t.problems.some((p) => p.includes("carries sha"))]);
+  t = auditTier("tier1", { ...tier, files: [...tFiles, "lib/gone.ts"] }, tEntries, tFiles, noCommits);
+  checks.push(["tier: a listed file missing from the checkout is FATAL (the list rotted)", t.problems.some((p) => p.includes("not a tracked file"))]);
+  t = auditTier("tier1", { targetDepth: "deep", mark: 0, files: tFiles }, tEntries, tFiles, noCommits);
+  checks.push(["tier: an unknown target depth is FATAL", t.problems.length === 1 && t.n === 0]);
+
   for (const [name, ok2] of checks) console.log(`  ${ok2 ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
   return failed.length === 0 ? 0 : 1;
@@ -303,6 +370,23 @@ function runGate() {
   for (const [area, s] of rows) {
     const p = s.total === 0 ? 0 : ((s.covered / s.total) * 100).toFixed(0);
     console.log(`    ${area.padEnd(12)} ${String(s.covered).padStart(4)} / ${String(s.total).padEnd(5)} ${String(p).padStart(3)}%`);
+  }
+
+  // The tiers: the number the plan promised, printed every run and ratcheted.
+  const tiersPath = join(repo, TIERS);
+  if (!existsSync(tiersPath)) problems.push(`${TIERS} is missing — the read-list has no machine-readable form, so Tier 1 cannot be printed or ratcheted`);
+  else {
+    let tiers = null;
+    try { tiers = JSON.parse(readFileSync(tiersPath, "utf8")); } catch (err) { problems.push(`${TIERS} is not valid JSON — ${err.message}`); }
+    for (const [name, tier] of Object.entries(tiers ?? {}).filter(([k]) => !k.startsWith("$"))) {
+      const t = auditTier(name, tier, entries, files, gitCommitsSince);
+      problems.push(...t.problems);
+      const label = name.replace(/^tier/, "Tier ");
+      console.log(`\n  ${label}: ${t.n}/${tier.files?.length ?? 0} at depth >= ${tier.targetDepth} (mark ${tier.mark}) — ${t.rows.stale.length} stale (commits since the row), ${t.rows.below.length} below depth, ${t.rows.none.length} with no row`);
+      for (const p of t.rows.stale) console.log(`    · stale  ${p}`);
+      for (const p of t.rows.below) console.log(`    · below  ${p}`);
+      for (const p of t.rows.none) console.log(`    · none   ${p}`);
+    }
   }
 
   if (problems.length > 0) {

@@ -15,8 +15,9 @@
 //      (never `success`), and leaves the connector `degraded` (never `healthy`).
 //   3. A refresh can only tighten on absence. Posture that goes from compliant to
 //      unknown moves the verdict away from allow; the reverse needs a real
-//      affirmative from the source, and the run that carries NO records at all
-//      applies nothing rather than "confirming" the old answer.
+//      affirmative from the source. A run that carries NO records confirms nothing:
+//      partial, degraded, every prior fact retracted (DR-059). A refresh that omits
+//      a fact retracts that fact, and a posture never refreshed AGES at decision time.
 //   4. Never in demo mode: `refreshEstatePosture` refuses (403) on a demo core,
 //      which holds no estate connector.
 //   5. Deterministic: the core reads no wall time. Two cores stepped through the
@@ -162,11 +163,44 @@ function main(): void {
   ok("a refresh carrying a real affirmative restores allow (the tightening above was the posture, not a broken pipeline)",
     verdict() === "allow");
 
-  // 3b. an EMPTY refresh applies nothing — it never re-affirms the old answer
+  // 3b. an EMPTY refresh confirms NOTHING (DR-059). The old assertion — "processes
+  // nothing and normalizes nothing" — could not fail for `[]` by construction, and
+  // the run it described reported success on a healthy connector while every prior
+  // affirmative stood. Now: the run is partial, the connector degraded, every fact the
+  // source stopped reporting is retracted to unknown, and the verdict tightens.
   clock.advanceMinutes(5);
   const empty = core.refreshEstatePosture([]);
   ok("a refresh with no records processes nothing and normalizes nothing",
     empty.recordsProcessed === 0 && empty.signalsNormalized === 0);
+  ok("…and it is PARTIAL on a DEGRADED connector, never a healthy success",
+    empty.status === "partial" && core.listConnectors(OWNER)[0]!.status === "degraded",
+    `${empty.status}/${core.listConnectors(OWNER)[0]!.status}`);
+  ok("…and it retracts: the verdict after an empty refresh is not the allow the last real read earned",
+    verdict() !== "allow", verdict());
+  ok("the run note says so", empty.note.includes("nothing was confirmed") && empty.note.includes("retracted"), empty.note);
+
+  // 3c. a refresh that OMITS a fact retracts that fact (DR-059). Before: the upsert
+  // kept the last affirmative, so a source that stopped reporting encryption still
+  // allowed. Control: the same record WITH the fact restores allow.
+  clock.advanceMinutes(5);
+  core.refreshEstatePosture([record(healthy, { lastSyncAt: clock.now().toISOString() })]);
+  ok("control: a full record after the empty refresh restores allow", verdict() === "allow", verdict());
+  clock.advanceMinutes(5);
+  const omitted = core.refreshEstatePosture([record(healthy, { encrypted: undefined, lastSyncAt: clock.now().toISOString() })]);
+  ok("a refresh that omits encryption retracts it — the verdict leaves allow", verdict() !== "allow", verdict());
+  ok("…and the run says what it retracted", omitted.note.includes("retracted"), omitted.note);
+  clock.advanceMinutes(5);
+  core.refreshEstatePosture([record(healthy, { lastSyncAt: clock.now().toISOString() })]);
+  ok("control: reporting encryption again restores allow", verdict() === "allow", verdict());
+
+  // 3d. POSTURE AGES (DR-059). A device read fresh and never refreshed cannot stay
+  // fresh: at decision time the reading's own age is folded worst-wins with the
+  // value the sync stamped. Forty days with no refresh moves the verdict away from
+  // allow; a fresh refresh brings it back.
+  clock.advanceMinutes(60 * 24 * 40);
+  ok("forty days with no refresh: the posture read fresh at sync no longer allows", verdict() !== "allow", verdict());
+  const refreshed = core.refreshEstatePosture([record(healthy, { lastSyncAt: clock.now().toISOString() })]);
+  ok("control: a fresh refresh after the gap restores allow", verdict() === "allow" && refreshed.status === "success", `${verdict()}/${refreshed.status}`);
 
   // 2. the skip-and-count rule, unchanged from the boot sync
   clock.advanceMinutes(5);

@@ -11,19 +11,21 @@
     },
     {
       "id": "firecrawl",
+      "aliases": ["Firecrawl"],
       "registeredBy": "scripts/install-firecrawl.mjs (pnpm run mcp:setup), when FIRECRAWL_API_KEY is set; skips cleanly otherwise",
       "decision": "DR-022; adopted for research and source verification only, never a decision-path input",
       "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 46; docs/agent/RESOURCE_INTAKE.md (Firecrawl, DR-022); never probed under this roster's by-use protocol"
     },
     {
       "id": "neural-memory",
+      "aliases": ["Neural Memory", "NeuralMemory"],
       "registeredBy": "scripts/install-neural-memory.mjs (pnpm run mcp:setup), when uv and claude are present; skips cleanly otherwise",
       "decision": "DR-026; adopted as the memory substrate under the DR-024 stack",
       "note": "docs/MCP_AND_SKILLS_LANE_PARITY.md row 45; docs/agent/RESOURCE_INTAKE.md (Neural Memory, DR-026); never probed under this roster's by-use protocol"
     }
   ],
   "grants": {
-    "$comment": "A grant means a lane or a first-party skill MAY call that server, for the stated purpose. This gate (scripts/check-mcp-roster.mjs) checks DOCUMENTS — that a skill naming an mcp__<server>__ tool holds a matching grant here — it does not intercept or authorize any live call.",
+    "$comment": "A grant means a lane or a first-party skill MAY call that server, for the stated purpose. This gate (scripts/check-mcp-roster.mjs) checks DOCUMENTS — that a skill naming an mcp__<server>__ tool, or the server's own id/aliases as a whole word, holds a matching grant OR a `mentions` entry here — it does not intercept or authorize any live call. `mentions` means the opposite of a grant: the skill names the server as precedent, context or a cross-reference, never as something it calls.",
     "lanes": {
       "cloud": [
         {
@@ -121,6 +123,73 @@
           "for": "the first-party Mac-native grid_collected path"
         }
       ]
+    },
+    "mentions": {
+      "$comment": "scripts/check-mcp-roster.mjs D5: a first-party skill doc naming a server's id or one of its aliases as a whole word (or an mcp__<server>__ token) needs EITHER a grants.skills entry OR an entry here. Every row below was found naming the server in prose — a cross-reference, a workflow-file path, a precedent for how another server was adopted — never an instruction to call it; a skill that actually instructs a call keeps or gets a grants.skills entry instead, not a mention.",
+      "research-ops": [
+        {
+          "server": "firecrawl",
+          "why": "cited in docs/agent/RESOURCE_INTAKE.md as how Firecrawl itself was adopted (DR-022) — an adoption-process precedent for evaluating a NEW research tool, not an instruction for this skill to call Firecrawl"
+        }
+      ],
+      "stack-reference": [
+        {
+          "server": "firecrawl",
+          "why": "ai-cli.md cites the Firecrawl key's env-only `claude mcp add -e KEY=val` registration as the worked example of the credentialed-MCP-registration form, not an instruction to call Firecrawl"
+        },
+        {
+          "server": "github",
+          "why": "SKILL.md, git-ci.md, http-docs.md, mac-host.md and native.md all name GitHub as the platform (GitHub Actions, github.com, GitHub's Markdown rendering, `.github/workflows/*.yml` paths) — none instructs a call to the github MCP server"
+        }
+      ],
+      "signalgrid-master": [
+        {
+          "server": "neural-memory",
+          "why": "names Neural Memory as the memory substrate under the whole stack doctrine (DR-026) — descriptive of the stack this skill orchestrates, not an instruction for signalgrid-master itself to call it (the toolchain skill's own grant covers the actual calls)"
+        }
+      ],
+      "owner-comms": [
+        {
+          "server": "github",
+          "why": "names the GitHub mobile app as the surface a bad owner-action list pointed at, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/review-hub-ci.yml` path a new gate must also be registered in, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid-core": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/review-hub-ci.yml` path alongside the other gate registries, not a call to the github MCP server"
+        }
+      ],
+      "signalgrid-evidence-toolchain": [
+        {
+          "server": "github",
+          "why": "links a third-party skill's GitHub repository (mvanhorn/last30days-skill) as its provenance, not a call to the github MCP server"
+        }
+      ],
+      "landing-under-dr-037": [
+        {
+          "server": "github",
+          "why": "names `.github/workflows/**` as one of the path globs a SAFETY_MACHINERY PR may match, not a call to the github MCP server"
+        }
+      ],
+      "orchestrator-over-workers": [
+        {
+          "server": "github",
+          "why": "L15 names GitHub's own single-base mergeability check (as distinct from git's own recursive merge), not a call to the github MCP server"
+        }
+      ],
+      "raised-hands": [
+        {
+          "server": "github",
+          "why": "names the `.github/workflows/raised-hands.yml` page and GitHub's own 60-day scheduled-workflow disable behavior, not a call to the github MCP server"
+        }
+      ]
     }
   },
   "ungranted": {
@@ -174,6 +243,7 @@
     },
     {
       "id": "context7",
+      "aliases": ["Context7"],
       "upstream": "https://github.com/upstash/context7",
       "sha": "12db78ea043954de047277960fda7e1d28f1d420",
       "license": "MIT",
@@ -197,6 +267,7 @@
     },
     {
       "id": "wazuh",
+      "aliases": ["Wazuh"],
       "upstream": "https://github.com/gbrigandi/mcp-server-wazuh",
       "sha": "969f36fb833c5404055a668dc27b97f0ea3cc755",
       "license": "MIT",
@@ -253,6 +324,7 @@
     },
     {
       "id": "playwright",
+      "aliases": ["@playwright/mcp", "playwright-mcp"],
       "upstream": "https://github.com/microsoft/playwright-mcp",
       "sha": "a188920a0373ba2491472161a7ffda130fb75cb2",
       "license": "Apache-2.0",

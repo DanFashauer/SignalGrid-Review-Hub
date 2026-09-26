@@ -70,8 +70,8 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha - self-test confirmed 10/10 here); chain
               lock is a file <scratch>/chain.lock (noclobber, 40-min stale, trap-released as the detached job's first
               statement). #1126 WAS PREPARED, VALIDATED, PUSHED AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
-              MERGED BY THE COORDINATOR UNDER DR-037, which surfaced two defects fixed on the branch: a Haiku chain
-              worker returned exit -1 after ~10 min while the detached chain ran on to
+              MERGED BY THE COORDINATOR UNDER DR-037. The dogfooding surfaced two defects fixed on the branch: a
+              Haiku chain worker returned exit -1 after ~10 min while the detached chain ran on to
               PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 on the same head 7be12ad7 (fixed by reading the sentinel through short
               mechanical readers, never restarting the job), and the workflow refused at launch with "import.meta is
               only valid inside modules" since the Workflow sandbox has no import.meta/filesystem (fixed with a byte-

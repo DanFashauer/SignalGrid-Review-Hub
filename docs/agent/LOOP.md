@@ -56,7 +56,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106'S RE-MINT WENT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
+LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows
               the loop had refused as unstamped are now measured. The Mac's #1106 (9222c677, test:api + Bruno on
@@ -75,7 +75,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106'S RE-
               22/22, FATAL on shape, REPORTED past 14 days) in preflight and CI, with preflight's first step now
               reaping same-tree api-server orphans and the orchestrator skill carrying the stage table. Incident: a
               read-only worker ran `git fetch --depth=1` in the SHARED checkout at 05:59Z, making it shallow and
-              making `loop:state` misread Alpha as +1958 ahead; `git fetch --unshallow` at 06:03Z fixed it in 3.5s -
+              making `loop:state` misread Alpha as +1958 ahead; `git fetch --unshallow origin` fixed it in 3.5s -
               lesson L10 (guard branch in review, PR to follow). Six Mac ticks (#1101, #1105, #1107, #1108, #1112,
               #1115) were closed as superseded by newer green ticks. Next: three DR-060 follow-up PRs already built
               and awaiting landing - L10's shallow-fetch deny guard, L8's mainline-workflow red-streak checker, and
@@ -84,7 +84,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106'S RE-
               CodeQL call, the Copilot scanner's model setting, and Settings -> Pages -> Source -> GitHub Actions.
 TIERS THIS SESSION: two Sonnet readers mapped the hook/ledger/parity/port mechanics; three Sonnet builders built L10,
               L8 and the ports change in their own worktrees; Opus reviewers adversarially reviewed each; a Sonnet
-              worker built this record, an Opus reviewer checked it, a Haiku worker ran its chain - that much matches
+              worker built this record, an Opus reviewer checked it (fix-first once, for an unsourced time), a Haiku worker ran its chain - that much matches
               the stage table. L7 recurred anyway: the coordinator (creative tier) wrote every brief, ran DR-060's
               local preflight/breadth chain itself, wrote #1113's PR body itself, and performed every merge and PR-
               body edit - bulk stages the table assigns to the cheapest tier; the merges are the landing skill's own

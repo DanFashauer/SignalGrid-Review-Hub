@@ -58,7 +58,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               that does what it claims, real in hand for partners before GTM.
 LAST TOUCHED: 2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE LEARNS; THE LESSONS LEDGER OPENS WITH SEVEN ROWS.
               The owner restated the routing directive in his own words: spec, review and gate design run on Opus and
-              every other stage is dispatched to a cheaper tier; a creative-tier coordinator runs no stage itself. DR-060 (proposed, owner merges: it touches safety machinery)
+              every other stage is dispatched to a cheaper tier; a creative-tier coordinator runs no stage itself. DR-060 (ADOPTED, landed by the cloud lane under DR-037: safety machinery only)
               records it; docs/agent/LESSONS.md is the new ledger - every incident a cycle hits gets a row with evidence and
               a landing, gated by scripts/check-lessons.mjs in preflight and CI (pending past 14 days is REPORTED). L1-L7
               are this cycle's: the orphaned api-server on :5399 (landed as a skill rule; preflight's first step reaps only

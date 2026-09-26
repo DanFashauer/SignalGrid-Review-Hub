@@ -3718,6 +3718,10 @@ Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge p
           check run 108391088659)"
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1117 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
 Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108365605200 (tool read at 21:5xZ, recorded — not to be re-run)
+Output:   "Typecheck, build, and proof scaffold" completed success, head_sha 760e7185cfa3cb318f0845566dad07dfa018bfd2, completed_at 2026-09-26T08:04:42Z
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/actions/runs/36227993364 (tool read at 21:5xZ, recorded — not to be re-run)
+Output:   "SignalGrid CI" completed success, head_sha 760e7185cfa3cb318f0845566dad07dfa018bfd2, head_branch claude/tests-ephemeral-ports-oidc-load-observability
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1118 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
 Output:   state "open", merged_at null
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1121 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
@@ -3726,10 +3730,42 @@ Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1050 (t
 Output:   state "open", merged_at null
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1083 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
 Output:   state "open", merged_at null
-Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
-          the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
-          PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still
-          owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows, all five open
-          holds as a dated observation at 17:07Z per the recorded reads above; not verifiable here afterwards — PR state
-          is mutable and lives outside the repository (state/merged_at; a ruling is not something that read measures — the
-          golden-rule-1 ruling stands as a request in LOOP's Owner still owes list).
+Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha
+          origin/claude/tests-ephemeral-ports-oidc-load-observability   (22:35Z; #1117, per the review's 20:52Z read)
+Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md"
+Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha
+          origin/claude/build-puck6-return-binding   (22:35Z; #1050, head 331c6558)
+Output:   exit 1, conflicted "docs/DECISION_RECORDS.md"
+Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha
+          origin/claude/proposal-dr059-posture-ages-refresh-retracts   (22:35Z; #1083, head a98d2013)
+Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" and "docs/DECISION_RECORDS.md"
+Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=iso-local c10da110 && git merge-base --is-ancestor 44eed7a9
+          c10da110 && echo carries-44eed7a9
+Output:   "c10da1105a9ad1ea31f8babc21dcc5e4913e992d 2026-09-26 20:58:20 +0000 Merge pull request #1138: Land Mac PR
+          #1136, iOS joins the shared Assist-wire conformance vectors, with the lane's review fixes (DR-037, check run
+          108482957019)" / "carries-44eed7a9"
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133 (tool read at 22:26Z, recorded — not to
+          be re-run: PR state lives outside the tree)
+Output:   state "open", merged_at null, head afdeb8a5f84e6ff7f0c57b18b561ebccd12bd0d8 (branch
+          claude/land-branch-derive-klass)
+Command:  for sha in 177299f3 5f1f21e3 8a39aeef bf642ee5 bb2ed162 36c561c7; do git log -1 --format='%h %s' $sha; done
+Output:   "177299f3 Merge pull request #1119: L10 shallow-fetch deny guard, L11 coverage --write refuses a
+          mid-conflict index, L12 tick landing rule (DR-037, check run 108369513162)"
+          "5f1f21e3 Merge pull request #1123: L8 landing — check-mainline-workflow-streaks reports red streaks on
+          non-gating mainline workflows (DR-037, check run 108377728485)"
+          "8a39aeef Lane mail (cloud): hygiene-sweep heartbeat 09:40Z (#1125, gating run 36233627673)"
+          "bf642ee5 Lane mail (cloud): ack for the Mac's #1118 review ask; steward heartbeat 08:24Z (#1120, gating
+          check run 108369566206)"
+          "bb2ed162 Lane mail (cloud): ack for the Mac's #1121 review ask; steward heartbeat 09:24Z (#1124, gating run
+          36232741672)"
+          "36c561c7 Merge pull request #1130: harden land-branch (--verify from the worktree, &&-chained push, exact
+          sentinel lines) and check-mcp-roster; L16 (DR-037, check run 108425765136)"
+Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2
+          and the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five
+          owner-gated PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling,
+          each still owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows,
+          all five open holds as a dated observation at 17:07Z per the recorded reads above; not verifiable here
+          afterwards — PR state is mutable and lives outside the repository (state/merged_at; a ruling is not
+          something that read measures — the golden-rule-1 ruling stands as a request in LOOP's Owner still owes
+          list). POST-WINDOW: a sixth owner-merge PR, #1133, per the pulls/1133 read above; #1117's CI is green on
+          head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (20:52Z).

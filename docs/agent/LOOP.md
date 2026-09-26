@@ -56,16 +56,19 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 21:21Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 22:39Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z. Lines marked POST-WINDOW
-              record later events through the 20:33Z refresh.
-              Refreshed through Codex rounds 1-12 on #1128; the stamp is the last refresh.
+              record later events through 20:58Z (#1138) plus check-run reads at 21:5xZ; later mainline events (e.g.
+              the Mac's 21:39Z tenant-isolation hand, aaa5b321) belong to the next record.
+              Refreshed through Codex rounds 1-13 on #1128; the stamp is the last refresh.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), #1133 (OWNER_RESERVED by its own widened classifier: the OWNER merges it), the row-8
-              doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
-              PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
-              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and, in a BROWSER (the GitHub app has no Pages
+              doctrine hand (answer (a) raise to step_up or (b) day-one-quiet covers it, on the raised-hands issue
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands; file
+              artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json), #1037's CodeQL
+              call (https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037: dismiss the alert, or reply 'Mac
+              paths-ignore'), and, in a BROWSER (the GitHub app has no Pages
               settings), Settings -> Pages -> Source -> GitHub Actions at
               https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
               (Actions -> "Deploy site to Pages" -> Run workflow,
@@ -77,12 +80,14 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 21:21Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               checklists are the two acks,
               artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json and
               artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json; a granted
-              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands. Also review
-              + merge #1136 on the Mac's mail ask (POST-WINDOW (20:0xZ): reviewed refute-first - two lane fixes - row
-              48 restamped PARTIAL, ios-ci triggers on native/shared/** - landing on claude/land-mac-1136, which
-              carries the Mac's head 44eed7a9; the two P1s are cross-client follow-ups, see the PR threads); and the
-              .claude/workflows
-              read attribution the Mac asks for in docs/agent/SURFACE_REVIEW_COVERAGE.md.
+              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands. POST-WINDOW
+              (20:58Z): #1136 landed through #1138 (c10da110); the still-pending follow-up is the cross-client
+              Assist-wire fix (decisionId required on every outcome, duplicate keys and wrong-typed fields deny, in
+              Kotlin, Rust and Swift with shared vectors), built by the cloud lane; and the .claude/workflows read
+              attribution the Mac asks for in docs/agent/SURFACE_REVIEW_COVERAGE.md. Find where the Copilot
+              code-scanning model is set and a supported value, then ask the owner with a browser path; until then its
+              github-advanced-security job fails on every PR ("CAPIError: 400 The requested model is not supported",
+              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5); whether it is a required check has not been read.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -125,21 +130,29 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 21:21Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               base tip".
               Five owner-decision PRs were open at the window's close: three opened this window - #1117 classifies
               DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER merges it (CI
-              green run 36227993364); #1118 (Mac, DecisionEngine.swift DR-043 port) and #1121 (Mac, AppWorkflows.swift
+              green: check run 108365605200 'Typecheck, build, and proof scaffold' and workflow run 36227993364
+              'SignalGrid CI', both success on head 760e7185; POST-WINDOW tool reads at 21:5xZ, recorded — not to be
+              re-run). POST-WINDOW (20:52Z): #1117 (760e7185) conflicts with mainline on docs/BUILD_BACKLOG.md, and so
+              do #1050 (331c6558: docs/DECISION_RECORDS.md) and #1083 (a98d2013: docs/BUILD_BACKLOG.md,
+              docs/DECISION_RECORDS.md) per `git merge-tree --write-tree --name-only`; the lane refreshes each the
+              moment the owner rules on it, so each merge is one step. #1118
+              (Mac, DecisionEngine.swift DR-043 port) and #1121 (Mac, AppWorkflows.swift
               scoped step-up release, stacked on #1118) both touch golden-rule-1's two protected files - the lane
               asked Dan in chat at 08:20Z whether the Mac may re-port TS logic into them as parity maintenance (a rule
               exception if yes, a revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a
               request on #1118 and #1121 - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
-              still awaiting the owner; POST-WINDOW (20:33Z): a sixth, #1133 (the landing class derived from the diff;
-              OWNER_RESERVED by its own widened classifier, so the OWNER merges it).
+              still awaiting the owner; POST-WINDOW (branch from 822e657d, 15:27Z; OWNER_RESERVED since d1a5affe,
+              18:59Z): a sixth, #1133 (the landing class derived from the diff; OWNER_RESERVED by its own widened
+              classifier, so the OWNER merges it).
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
               heartbeat; the shared checkout was fast-forwarded twice, at 10:09:36Z (to 8bd63bae) and 11:08:42Z (to
-              8216cf6b) per `TZ=UTC git reflog` - it had been 34 commits behind (18 first-parent, `git rev-list
-              --count 221eabee..8bd63bae`), not 33. `df -h /` now reads 7.6G available; the hygiene-sweep heartbeat
-              (artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json, fired 09:42:51Z) recorded 5.1G free before
-              and 5.3G after its own sweep; it records no worktree-removal count, so none is stated here.
+              8216cf6b) per `TZ=UTC git -C /home/user/SignalGrid-Review-Hub reflog --date=iso-local` - it had been 34
+              commits behind (`git rev-list --count 221eabee..8bd63bae`; 18 with `--first-parent`), not 33. The
+              hygiene-sweep heartbeat (artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json, fired 09:42:51Z)
+              recorded 5.1G free before and 5.3G after its own sweep; it records no worktree-removal count, so none is
+              stated here.
 TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
               findings), the MCP roster (6) and this record (5 findings, fix-first, all resolved on this pass);
@@ -149,11 +162,12 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
               chain mechanics were delegated. (Of the record commits on this branch, a3353aeb, 857f2b59, 6d45b0ce,
-              93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5 and 43b3454a carry the harness's
-              fixed Fable trailer for this session — not a claim that the creative tier wrote them, see LESSONS L5 —
-              and a7729cc1 carries a Sonnet trailer, the Pre-stage worker's own tier; the Alpha-merge commits the
-              workflow's Merge stage made carry none; POST-WINDOW (15:07Z, #1130): #1130's merge -m change closed that
-              gap (36c561c7); this refresh commit carries the trailer of the tier that wrote it.)
+              93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5, 43b3454a, 3458a19c, 76344c54 and
+              7d7eba7c carry a Claude Fable 5.1 trailer — not a claim that the creative tier wrote them, see LESSONS
+              L5 — a7729cc1 a Claude Sonnet 5 trailer (the Pre-stage worker's tier) and c8e75ef4 a Claude Opus 5.5
+              trailer; of the Alpha-merge commits only b5cf88dc, 712126ab and 72f643cc carry none, the rest carry the
+              trailer of the record commit before them; POST-WINDOW (15:07Z, #1130): #1130's merge -m change closed
+              that gap (36c561c7); this refresh commit carries the trailer of the tier that wrote it.)
               POST-WINDOW (15:07Z, #1130): the wrong-tier stages named here (PR bodies on Sonnet where the skill's
               table says Haiku; the coordinator's own bulk edits) got ledger row L16 with the skill's stage-table
               correction, landed 36c561c7 under DR-037 (check run 108425765136) - not in this record PR.

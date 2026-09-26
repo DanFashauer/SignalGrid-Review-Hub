@@ -101,6 +101,10 @@ const STEPS = [
   // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
   { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
   { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
+  // DR-060 rule 2 / lesson L2: the land-branch saved workflow may push only when the
+  // script-side gate says so; this proves the gate refuses a missing, non-zero or
+  // stale (previous-run, wrong-sha) sentinel.
+  { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a

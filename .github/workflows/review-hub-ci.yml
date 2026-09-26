@@ -613,6 +613,10 @@ jobs:
         run: node scripts/check-lessons.mjs --self-test
       - name: "Lessons ledger (every incident has evidence and a landing)"
         run: node scripts/check-lessons.mjs
+      # DR-060 rule 2 / lesson L2: the land-branch saved workflow pushes only on the
+      # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
+      - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
+        run: node scripts/lib/land-branch-gate.mjs --self-test
       # One level up from doc-orphans: that one asks whether a reader can REACH a
       # document, this one whether the index tells the truth about it. Six entries
       # described SUPERSEDED / ARCHIVED / RETIRED documents in the present tense --

@@ -6,9 +6,9 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**104 of 104 surfaces have been read. 0 are partially read. 0 have not been read at all.**
+**104 of 105 surfaces have been read. 0 are partially read. 1 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2975 of 2975 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
+Coverage of the tree is asserted, not assumed: **2978 of 2978 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -25,6 +25,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.claude/commands` | tree | 12 | read | 2 | 2026-09-13 | cloud lane (firsthand author + Codex #704 adversarial review across successive rounds, every finding verified against the files and addressed on this branch) | docs/DECISION_RECORDS.md | 25 | 0 |
 | `.claude/hooks` | tree | 3 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 11 | 0 |
 | `.claude/skills` | tree | 812 | read | 5 | 2026-09-20 | cloud lane (DR-053 stage 1 by a separate Opus-tier agent, stage 2 firsthand) | docs/agent/RESOURCE_INTAKE.md | 37 | 1 |
+| `.claude/workflows` | tree | 2 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `.githooks` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/*` | loose files | 2 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/codeql` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
@@ -118,7 +119,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `native/ios/scripts` | native | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `native/ios/SignalGridMobile` | native | 46 | read | 1 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 8 | 1 |
 | `native/shared` | native | 3 | read | 1 | 2026-09-02 | cloud lane (two independent passes) | #386 | 0 | 0 |
-| `scripts` | package | 470 | read | 10 | 2026-09-21 | cloud lane (firsthand author; PR #953 reviewed by Codex across three rounds, every finding re-run firsthand and self-tested) | docs/agent/EVIDENCE.md | 100 | 4 |
+| `scripts` | package | 471 | read | 10 | 2026-09-21 | cloud lane (firsthand author; PR #953 reviewed by Codex across three rounds, every finding re-run firsthand and self-tested) | docs/agent/EVIDENCE.md | 100 | 4 |
 | `site` | tree | 2 | read | 2 | 2026-09-05 | cloud lane (firsthand read of every edit site; fixes + gates) | docs/agent/EVIDENCE.md | 2 | 3 |
 | `tests` | tree | 3 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 3 | 1 |
 | `tools` | tree | 3 | read | 1 | 2026-09-05 | cloud lane | docs/agent/EVIDENCE.md | 3 | 0 |
@@ -129,9 +130,9 @@ A named slice was read. The rest of the surface has not been.
 
 - None.
 
-## Not read (0)
+## Not read (1)
 
-None — every derived surface carries at least one read.
+- `.claude/workflows` (tree)
 
 ## Execution records (1)
 

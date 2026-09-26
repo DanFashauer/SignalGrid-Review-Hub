@@ -8,7 +8,7 @@ that choice, so an unread surface is visible rather than silent.
 
 **104 of 104 surfaces have been read. 0 are partially read. 0 have not been read at all.**
 
-Coverage of the tree is asserted, not assumed: **2969 of 2969 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
+Coverage of the tree is asserted, not assumed: **2970 of 2970 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
 A surface counts READ only when some read covers the whole of it. A read of a named
 slice is PARTIAL. Building or running a surface is neither, and is listed separately
@@ -30,7 +30,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.github/codeql` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/ISSUE_TEMPLATE` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/workflows` | tree | 17 | read | 2 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 13 | 0 |
-| `(root)` | loose files | 26 | read | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 10 | 2 |
+| `(root)` | loose files | 27 | read | 2 | 2026-09-06 | cloud lane (rule 5 gate + anchor gate + one extraction agent, every finding re-run firsthand) | docs/agent/EVIDENCE.md | 10 | 2 |
 | `artifacts/agent-heartbeats` | tree | mailbox | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 2 | 0 |
 | `artifacts/api-collection` | tree | 115 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/api-server` | package | 34 | read | 3 | 2026-09-06 | cloud lane (six independent fail-closed-auditor reads in parallel, seven fix agents, every edit site and every gate run read firsthand) | docs/agent/EVIDENCE.md | 16 | 0 |

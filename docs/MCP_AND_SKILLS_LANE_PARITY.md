@@ -85,7 +85,7 @@ there) are recorded with the reason, so the next person does not re-run the tria
 
 `docs/agent/mcp-roster.json`'s `grants.lanes` and `grants.skills` name which lane
 and which first-party skill may call which server, and for what; its `ungranted`
-block reports what a session sees beyond that set, uncounted by name. Its
+block reports what a session sees beyond that set, counted, not named. Its
 `servers[]`/`external[]` entries carry the dispositions above — `keycloak-admin`
 and `postgres-hardened` may never be granted.
 

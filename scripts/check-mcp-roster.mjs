@@ -9,7 +9,11 @@
 //   - `docs/agent/mcp-roster.json` parses and has `servers`/`grants`.
 //   - `signalgrid-mcp`'s `tools`/`toolNames` in the roster are DERIVED from
 //     `artifacts/mcp-server/src/index.ts`'s own `server.registerTool("name", ...)`
-//     calls, in source order — never hand-typed and left to drift.
+//     calls, in source order — never hand-typed and left to drift. The
+//     derivation itself is cross-checked against a plain `registerTool(` count,
+//     so a registration written in a shape the derivation doesn't recognize
+//     (single line, single-quoted name, ...) fails the gate instead of just
+//     vanishing from the count.
 //   - Every server id named in `grants.lanes.*` or `grants.skills.*` exists in
 //     `servers[]` or `external[]`.
 //   - Every `grants.skills` key is a real FIRST-PARTY skill directory (the same
@@ -87,6 +91,16 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   const derived = deriveToolNames(indexSource);
   if (derived.length === 0) {
     problems.push(`${INDEX_PATH}: zero server.registerTool(...) calls matched — the derivation itself is broken`);
+  }
+  // The derivation only recognizes one call shape (`registerTool(\n  "name"`); a
+  // registration written any other way (single line, single-quoted, etc.) would
+  // silently vanish from `derived` while still counting toward the real total.
+  // Cross-check against the plain call count so that shape drift fails closed.
+  const plainCallCount = (indexSource.match(/registerTool\(/g) ?? []).length;
+  if (plainCallCount !== derived.length) {
+    problems.push(
+      `${INDEX_PATH}: ${plainCallCount} registerTool( calls but only ${derived.length} in the derivable shape — a registration is written in a form the derivation does not recognize`,
+    );
   }
   const sg = r.servers.find((s) => s.id === "signalgrid-mcp");
   if (!sg) {
@@ -218,7 +232,7 @@ server.registerTool(
   expectFail(
     "a missing toolName FAILS",
     { roster: { ...goodRoster, servers: [{ ...goodRoster.servers[0], toolNames: ["alpha"] }, goodRoster.servers[1]] } },
-    "missing alpha".replace("alpha", "beta"), // missingFromRoster names "beta"
+    "missing beta", // missingFromRoster names "beta"
   );
   expectFail(
     "an extra toolName FAILS",
@@ -245,6 +259,47 @@ server.registerTool(
       },
     },
     'whose disposition is "evaluated-not-adopted"',
+  );
+  expectFail(
+    "a grant to a deferred server FAILS",
+    {
+      roster: {
+        ...goodRoster,
+        servers: [...goodRoster.servers, { id: "postgres-hardened", tools: null, disposition: "deferred" }],
+        grants: { ...goodRoster.grants, lanes: { cloud: [{ server: "postgres-hardened", for: "x", source: "y" }] } },
+      },
+    },
+    'whose disposition is "deferred"',
+  );
+  expectFail(
+    "a registerTool( call in a shape the derivation doesn't recognize FAILS",
+    { indexSource: goodIndex + `\nserver.registerTool("gamma", {}, async () => ({}));\n` },
+    "registerTool( calls but only",
+  );
+  expectFail(
+    "a roster missing servers[] or grants{} FAILS",
+    { roster: { servers: goodRoster.servers } },
+    "missing servers[] or grants{}",
+  );
+  expectFail(
+    "zero registerTool(...) calls FAILS",
+    { indexSource: "// no tools registered here" },
+    "zero server.registerTool(...) calls matched",
+  );
+  expectFail(
+    "zero first-party skill directories FAILS",
+    { firstPartyDirs: [] },
+    "zero first-party skill directories resolved",
+  );
+  expectFail(
+    "a grants.skills key that is not a first-party skill directory FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, skills: { "ghost-skill": [{ server: "signalgrid-mcp", for: "x" }] } } } },
+    'key "ghost-skill" that is not a first-party skill directory',
+  );
+  expectFail(
+    "a grants.skills entry naming an unknown server FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, skills: { "loop-start": [{ server: "nope", for: "x" }] } } } },
+    'grants.skills.loop-start names unknown server "nope"',
   );
   {
     const problems = run({ roster: "{ not json" });

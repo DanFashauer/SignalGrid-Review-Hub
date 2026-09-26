@@ -1,7 +1,7 @@
 {
-  "$comment": "Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None runs from this repository's .mcp.json (it carries only signalgrid-mcp) and none may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac.",
+  "$comment": "This $comment and `landing` describe the THIRD-PARTY servers[] entries only — everything below except `signalgrid-mcp`, the repository's own first-party server, which is documented by its own `firstParty`/`config`/`offline`/`reads`/`writes`/`network` fields on its entry and is exempt from this paragraph by name. Third-party MCP servers evaluated BY USE for SignalGrid (docs/agent/RESOURCE_INTAKE.md rules). Every third-party entry was cloned at the pinned sha, read for what it reads/writes/sends/hooks, built, and probed over stdio with every socket denied. None of them runs from this repository's .mcp.json (which carries only signalgrid-mcp) and none of them may enter the decision path. The four live-lane servers are aids for the Mac lane's rehearsal, added to a PERSON'S user-level MCP config by hand, never to a hook; context7 is the one exception in kind — a dev-docs aid both lanes register at user scope through `pnpm run mcp:setup` (scripts/install-context7.mjs), still never .mcp.json and never a hook. Measured 2026-09-18 on the cloud lane; context7 row measured 2026-09-19 on the Mac.",
   "measuredAt": "2026-09-18",
-  "landing": "Documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line.",
+  "landing": "For every THIRD-PARTY server: documented, registered by hand at USER scope on the machine that needs it (`claude mcp add … --scope user`), the same way the parity doc treats GitHub; never .mcp.json, never a hook, never the decision path. No installer script: an automated registration into a session config was refused by the harness on 2026-09-18, and the manual command is one line. `signalgrid-mcp` is the one exception, named on its own entry: it is registered through this repository's tracked `.mcp.json`, which both lanes get on pull, and its `evaluate_decision` tool is a first-party read of the same decision core the API server calls, not a third-party call into the decision path.",
   "external": [
     {
       "id": "github",
@@ -49,7 +49,7 @@
         {
           "server": "github",
           "for": "harness-provided GitHub access on the cloud lane",
-          "source": "docs/MCP_AND_SKILLS_LANE_PARITY.md"
+          "source": "this roster's own external[] entry for \"github\" (registeredBy: \"the harness, on the cloud lane\")"
         },
         {
           "server": "playwright",
@@ -119,12 +119,6 @@
         {
           "server": "signalgrid-mcp",
           "for": "the first-party Mac-native grid_collected path"
-        }
-      ],
-      "research-ops": [
-        {
-          "server": "firecrawl",
-          "for": "the owner-gated research act named beside the Firecrawl decision record"
         }
       ]
     }

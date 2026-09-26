@@ -3611,7 +3611,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 143. **`phase:summary-check` always reads the static template, so a CI gate verifies
     that a committed file contains its own bullet list.** — OPEN,
-    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations exact, unfixed): `scripts/src/phase-summary-check.ts` still resolves the summary path from an environment variable that is set in neither `.github/workflows/phase-pr-evidence.yml`, `package.json` nor `scripts/package.json`, falling back to `docs/AUTOMATION_PHASE_TEMPLATE.md`, and no commit since the row was filed added the refuse-on-template guard, so the gate still passes on the template's own bullets whatever the PR says. `phase-summary-check.ts:8-11` resolves
+    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations exact, unfixed): `scripts/src/phase-summary-check.ts` still resolves the summary path from an environment variable that is set in neither `.github/workflows/phase-pr-evidence.yml`, `package.json` nor `scripts/package.json`, falling back to the archived `docs/AUTOMATION_PHASE_TEMPLATE.md` (an archived process note since 2026-08-15, which is the row's whole point), and no commit since the row was filed added the refuse-on-template guard, so the gate still passes on the template's own bullets whatever the PR says. `phase-summary-check.ts:8-11` resolves
     `process.env.PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`, and that
     variable is set NOWHERE in the repo — verified across workflows and both
     package manifests. The template's own bullets are exactly the sections the gate

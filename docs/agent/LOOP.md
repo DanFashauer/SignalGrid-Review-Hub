@@ -56,7 +56,95 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
+LAST TOUCHED: 2026-09-26 (cloud lane, 19:52Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+              (THREE OPENED THIS WINDOW).
+              This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
+              Refreshed through Codex rounds 1-10 on #1128; the stamp is the last refresh.
+              Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
+              #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
+              PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
+              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and, in a BROWSER (the GitHub app has no Pages
+              settings), Settings -> Pages -> Source -> GitHub Actions at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages.
+              Next: #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
+              and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
+              Swift<->vector binding check; those are the headline items only - the authoritative pre-merge
+              checklists are the two acks,
+              artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json and
+              artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json; a granted
+              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands.
+              DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
+              deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
+              (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
+              108377728485) shipped L8, scripts/check-mainline-workflow-streaks.mjs (report-only on a red streak,
+              classification problems FATAL, API/HTTP errors FATAL in CI and REPORTED locally since this container's
+              GH_TOKEN gets 401 from the Actions API, SKIPPED with no token), self-test 32/32.
+              #1126 (8216cf6b, check 108391088659) is the L2 landing: .claude/workflows/land-branch.js is a tracked
+              saved Workflow script; scripts/lib/land-branch-gate.mjs canPush() is the single source of truth for "may
+              the chain push" (preflightExit 0, breadthExit 0, run head === merge head, both sentinel lines literally
+              carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha - self-test confirmed 10/10 here); chain
+              lock is a file <scratch>/chain.lock (noclobber, 40-min stale; the trap is installed as the detached
+              job's first statement and releases the lock when the job exits). #1126 WAS PREPARED, VALIDATED, PUSHED
+              AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
+              MERGED BY THE COORDINATOR UNDER DR-037. The dogfooding surfaced two defects fixed on the branch: a
+              Haiku chain worker returned exit -1 after ~10 min while the detached chain ran on to
+              PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 on the same head 7be12ad7 (fixed by reading the sentinel through short
+              mechanical readers, never restarting the job), and the workflow refused at launch with "import.meta is
+              only valid inside modules" since the Workflow sandbox has no import.meta/filesystem (fixed with a byte-
+              for-byte mirror of canPush that the self-test reads and fails on drift). Lessons L13 (a bare /proc scan
+              as a chain lock can deadlock two waiters, caught at design time) and L14 (a worker-owned background
+              chain died mid-preflight when the worker's turn ended) landed with L2.
+              #1127 (head e189552b) is DR-060 rule 3's first slice: docs/agent/mcp-roster.json gains a signalgrid-mcp
+              entry (16 tools DERIVED from registerTool( calls, readOnly 7 / mutating 1 / unannotated 8), an external
+              array (github, firecrawl, neural-memory), per-lane/per-skill grants and ungranted.cloud (12 connector
+              prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
+              a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
+              on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
+              conclusion "success" on head e189552b (GitHub MCP get_check_run). Re-run against mainline this cycle:
+              `node scripts/check-mcp-roster.mjs` now prints "mcp-roster: 6 servers (+3 external), signalgrid-mcp
+              16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".
+              Lesson L15 (in #1127, now landed on mainline): the branch had L2's tip merged into it before L2
+              landed, so L2 then landing by merge commit gave two merge bases (62b07014, 08949c61) - git's recursive
+              merge was clean but GitHub's single-base mergeability check read "dirty", refusing a PR nothing
+              conflicted in; repaired by merging Alpha at 8216cf6b (single base) and re-running the chain on e189552b
+              (PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 confirmed on e189552b in mcp2-pf.log/mcp2-br.log); landing adds the
+              orchestrator-skill rule "a stacked branch waits for its base PR to land, then merges Alpha, never the
+              base tip".
+              Five owner-decision PRs are now open: three opened this window - #1117 classifies
+              DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER
+              merges it (CI green run 36227993364); #1118 (Mac, DecisionEngine.swift DR-043 port) and
+              #1121 (Mac, AppWorkflows.swift scoped step-up release, stacked on #1118) both touch
+              golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
+              Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a
+              revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a request on
+              #1118 and #1121 - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
+              still awaiting the owner.
+              Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
+              MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
+              #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
+              heartbeat; the shared checkout was fast-forwarded twice, at 10:09:36Z (to 8bd63bae) and 11:08:42Z (to
+              8216cf6b) per `TZ=UTC git reflog` - it had been 34 commits behind (18 first-parent, `git rev-list
+              --count 221eabee..8bd63bae`), not 33. `df -h /` now reads 7.6G available; the hygiene-sweep heartbeat
+              (artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json, fired 09:42:51Z) recorded 5.1G free before
+              and 5.3G after its own sweep; it records no worktree-removal count, so none is stated here.
+TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
+              MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
+              findings), the MCP roster (6) and this record (5 findings, fix-first, all resolved on this pass);
+              Haiku workers ran lock waits, chain starts, sentinel reads, pushes and PR opens inside the saved
+              workflow; Sonnet wrote the PR bodies. L7 recurred: the coordinator wrote every brief, made the small
+              direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
+              canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
+              corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
+              chain mechanics were delegated. (Of the record commits on this branch, a3353aeb, 857f2b59, 6d45b0ce,
+              93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5 and 43b3454a carry the harness's
+              fixed Fable trailer for this session — not a claim that the creative tier wrote them, see LESSONS L5 —
+              and a7729cc1 carries a Sonnet trailer, the Pre-stage worker's own tier; the Alpha-merge commits the
+              workflow's Merge stage made carry none, which #1130's merge -m change closed (36c561c7, 15:07Z); this
+              refresh commit carries the trailer of the tier that wrote it.)
+              The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
+              coordinator's own bulk edits) got ledger row L16 with the skill's stage-table correction in #1130,
+              landed 36c561c7 at 15:07Z under DR-037 (check run 108425765136) - not in this record PR.
+PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows
               the loop had refused as unstamped are now measured. The Mac's #1106 (9222c677, test:api + Bruno on

@@ -3679,3 +3679,56 @@ Output:   "mintedAt": "2026-09-26T06:14:13.974Z", "manifestFingerprint": "7c1549
 Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/SignalGrid-Review-Hub)
 Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
+
+## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED on mainline; #1127 merged as a4507f9a with its gating check green"
+Command:  git fetch origin SignalGrid_Alpha && TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' origin/SignalGrid_Alpha
+Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
+          and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
+          DR-037, check run 108397317258)"
+Command:  GitHub MCP get_check_run 108397317258 (DanFashauer/SignalGrid-Review-Hub)
+Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold", head e189552b86db01d03b1a073fa9fb44845d7962e8)
+          #  in the worktree after merging a4507f9a, 2026-09-26 12:03Z
+Command:  node scripts/check-lessons.mjs
+Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
+          #  in the worktree after merging a4507f9a, 2026-09-26 12:03Z
+Command:  node scripts/check-mcp-roster.mjs
+Output:   "mcp-roster: 6 servers (+3 external), signalgrid-mcp 16/16 tools derived, 12 lane grants, 6 skill grants over
+          18 first-party skills, 0 problems" / "PASS"
+Command:  node scripts/check-readiness-figure.mjs
+Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
+Command:  node scripts/lib/land-branch-gate.mjs --self-test
+Output:   "10/10 passed"
+Command:  node scripts/check-publication-boundary.mjs
+Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
+Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
+Output:   "false"
+          # L2 landing's own chain, head 08949c61
+Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-br.log
+Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650"
+          # MCP roster's repair chain after the criss-cross-merge fix, head e189552b
+Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-br.log
+Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
+          # #1126's gating check
+Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)
+Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged
+          8216cf6b36c893df78171e9177442c1d9b065ebc committer time 11:08:12Z per the git log line below)
+Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H:%M:%SZ 8216cf6b
+Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
+          land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
+          check run 108391088659)"
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1117 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1118 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1121 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1050 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1083 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
+          the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
+          PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still
+          owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows, all five open
+          per the REST reads above (17:07Z) (state/merged_at; a ruling is not something that read measures — the
+          golden-rule-1 ruling stands as a request in LOOP's Owner still owes list).

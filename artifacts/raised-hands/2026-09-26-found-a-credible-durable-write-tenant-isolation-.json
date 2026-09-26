@@ -7,7 +7,12 @@
   "need": "A decision: is spec.tenant.id / externalRef / workflow key attacker-controlled at the provisioning boundary, or fully platform-assigned? If reachable -> core fix (escape/length-prefix the deterministicId delimiter or charset-validate the id inputs) + the store-side tenant-guard, verified on the PG proof lane. If provisioning input is entirely platform-controlled -> downgrade the BUILD_BACKLOG row to defense-in-depth. Either way the store's ON CONFLICT (id) should become tenant-aware / DO NOTHING (queued HIGH).",
   "whoCanUnblock": "security-engineer (provisioning trust model + core id construction) with data-persistence-engineer (the store upsert fix)",
   "domain": "security",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": "BUILD_BACKLOG durable-persistence findings (2026-09-26); lib/persistence/src/decision-store.ts"
+  "where": "BUILD_BACKLOG durable-persistence findings (2026-09-26); lib/persistence/src/decision-store.ts",
+  "takenBy": "cloud",
+  "takenAt": "2026-09-26T22:10:22.189Z",
+  "resolvedAt": "2026-09-26T22:10:22.235Z",
+  "resolvedBy": "cloud",
+  "resolution": "Answered by the cloud lane (read at 907fe2b9): LATENT, so defense-in-depth. tenant.id is operator-assigned: estateSpecFromEnv (artifacts/api-server/src/lib/core.ts:55-99) sets it to tenant_<slug> from SIGNALGRID_ESTATE_TENANT and refuses to start unless the slug matches the SLUG regex (core.ts:57), so it holds no '|' and no non-ASCII; one tenant per deployment. externalRef and the workflow key are not parts of the durable decision id: decision.ts:104-112 hashes tenantId, identity.id, device.id, workflow.id, version.id, createdAt and the per-tenant seq, and identity/device/workflow resolve inside the tenant's own store (decision.ts:42-65, 404 when absent). The first '|' therefore always ends the tenant segment, and two tenants cannot build the same joined string. Keep the store guard as defense-in-depth (decision-store.ts:173: ON CONFLICT (id) DO UPDATE ... WHERE decisions.tenant_id = EXCLUDED.tenant_id, then rowCount === 1 or fail closed; the same for evidence_snapshots). A bigger defect sits beside it: digest() (lib/signalgrid-core/src/util.ts:37) hashes only charCodeAt(i) & 0xff, so characters sharing a low byte alias. Reproduced: digest('Alice') equals digest('\\u0141lice'), and U+017C aliases '|'. Delimiter escaping alone would not close it. The fix changes every core id and digest, so it needs a DR-051 proposal and the owner's merge."
 }

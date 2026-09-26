@@ -591,8 +591,11 @@ function selfTest() {
   // emptied) must not be able to grade its own diff with the rules it just rewrote.
   // classifyBranchOutput() reads the classifier from `base` via `git show`, so the
   // manifest it actually runs is the BASE branch's real, full one — which still sees
-  // the change to scripts/check-owner-gated-surfaces.mjs itself (a scripts/ path) and
-  // classifies it SAFETY_MACHINERY, never "other".
+  // the change to scripts/check-owner-gated-surfaces.mjs itself. Review sweep on
+  // #1133, finding 6 made that exact path OWNER_RESERVED (closing the two-step bypass
+  // where PR 1 could delete a rule under the file's old SAFETY_MACHINERY classification
+  // and PR 2 then exploit it), so base's copy now resolves this diff to OWNER_RESERVED,
+  // never "other" and never merely SAFETY_MACHINERY.
   withKlassTempRepo((dir) => {
     const emptied = "export const SAFETY_MACHINERY = [];\nexport const OWNER_RESERVED = [];\nexport const DECISION_PATH = [];\n";
     writeFileSync(join(dir, "scripts", "check-owner-gated-surfaces.mjs"), emptied);
@@ -604,12 +607,12 @@ function selfTest() {
       const tag = "kt-selfrewrite";
       stampSentinels(scratch, tag, head);
 
-      let r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "SAFETY_MACHINERY", baseRef: "base" });
-      if (r.ok) { pass++; console.log("PASS: --verify --klass SAFETY_MACHINERY passes when the branch rewrote its own classifier to an emptied manifest (base's copy still classifies the scripts/ change)"); }
-      else console.error(`FAIL: --verify --klass SAFETY_MACHINERY on a self-rewritten classifier — refused: ${JSON.stringify(r.reasons)}`);
+      let r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "OWNER_RESERVED", baseRef: "base" });
+      if (r.ok) { pass++; console.log("PASS: --verify --klass OWNER_RESERVED passes when the branch rewrote its own classifier to an emptied manifest (base's copy still classifies the change OWNER_RESERVED)"); }
+      else console.error(`FAIL: --verify --klass OWNER_RESERVED on a self-rewritten classifier — refused: ${JSON.stringify(r.reasons)}`);
 
       r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
-      if (!r.ok && r.reasons.some((x) => x.includes("derived class SAFETY_MACHINERY !== resolved class other"))) { pass++; console.log("PASS: --verify --klass other refused when the branch rewrote its own classifier (base's copy still says SAFETY_MACHINERY)"); }
+      if (!r.ok && r.reasons.some((x) => x.includes("derived class OWNER_RESERVED !== resolved class other"))) { pass++; console.log("PASS: --verify --klass other refused when the branch rewrote its own classifier (base's copy still says OWNER_RESERVED)"); }
       else console.error(`FAIL: --verify --klass other on a self-rewritten classifier — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
     } finally {
       rmSync(scratch, { recursive: true, force: true });

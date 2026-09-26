@@ -56,22 +56,29 @@ const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // A changed path matching ANY of these is SAFETY_MACHINERY. Green never suffices.
 export const SAFETY_MACHINERY = [
   { rule: "scripts/**", re: /^scripts\// },
-  { rule: ".github/workflows/**", re: /^\.github\/workflows\// },
+  { rule: ".github/(workflows|codeql|actions)/**", re: /^\.github\/(workflows|codeql|actions)\// },
+  { rule: "secret-scan config", re: /^\.gitleaks(\.toml|ignore)$/ },
   { rule: "any proof harness", re: /(^|\/)[\w.-]*proof[\w.-]*\.(ts|mjs|js)$/i },
   { rule: "any fixtures dir", re: /(^|\/)fixtures?\// },
   { rule: "the gate/guard registries", re: /^scripts\/(mutation-guard|check-guard-registries|check-mutation-sharding)\.mjs$/ },
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
-  // Codex round 2 on #1133 (2026-09-26) P1: pnpm-workspace.yaml already classified via
-  // the rule above (it shares a regex with pnpm-lock.yaml); the root package.json did
-  // not classify at all — an unrecognised-but-plausible shape (CLAUDE.md's toolchain
-  // section: this file drives `pnpm install`'s `prepare` script, which is what installs
-  // the pre-push lockfile-drift hook in the first place) was reaching "other" and could
-  // land on green alone. Exact-path only: a per-package manifest (lib/x/package.json,
-  // scripts/package.json) is NOT this rule — it is already owner-gated by its own
-  // directory's blanket rule (DECISION_PATH's lib/, SAFETY_MACHINERY's scripts/**), or,
-  // for a package with no such blanket (e.g. artifacts/mcp-server/package.json), stays
-  // autonomous on purpose (see the negative self-test below).
-  { rule: "the root package manifest (package.json)", re: /^package\.json$/ },
+  // Review sweep on #1133 (2026-09-26), finding 1 (blocking): the root-only rule below
+  // used to be exact-path (`^package\.json$`), leaving every OTHER package.json in the
+  // tree classifying "other" even though its scripts ARE the commands the gates run —
+  // scripts/preflight.mjs:604 runs `pnpm --filter @workspace/mcp-server run test`
+  // (resolved from that package's own "test" script), and :474's `pnpm run typecheck`
+  // is `pnpm -r --filter "./artifacts/**" ... --if-present run typecheck` — `--if-present`
+  // means deleting the `typecheck` script from artifacts/signalgrid-app,
+  // signalgrid-desktop or signalgrid-mobile-pwa's package.json silently drops that
+  // package from the gate rather than failing it. A dependency change already escalates
+  // through pnpm-lock.yaml above, so widening this to every manifest costs little.
+  { rule: "any package manifest (its scripts are the gate commands preflight/typecheck run)", re: /(^|\/)package\.json$/ },
+  // TypeScript config defines the typecheck gate's own project set and strictness:
+  // tsconfig.json lists the project references `tsc --build` checks (e.g.
+  // ./lib/signalgrid-core), and tsconfig.base.json sets strictNullChecks and the other
+  // strict flags — removing a reference or loosening a flag weakens
+  // "Typecheck (all packages)" in preflight and CI without touching any gate script.
+  { rule: "TypeScript config (the typecheck gate's project set and strictness)", re: /(^|\/)tsconfig[\w.-]*\.json$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
   { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
   // DR-056: the declared objective — its criteria and the owner attestation pointer
@@ -103,6 +110,42 @@ export const SAFETY_MACHINERY = [
   { rule: "the landing-under-dr-037 skill (.claude/skills/landing-under-dr-037/**)", re: /^\.claude\/skills\/landing-under-dr-037\// },
   { rule: "the orchestrator-over-workers skill (.claude/skills/orchestrator-over-workers/**)", re: /^\.claude\/skills\/orchestrator-over-workers\// },
   { rule: "the git hooks (.githooks/**)", re: /^\.githooks\// },
+  // Review sweep on #1133, finding 4 (blocking): gate ratchets and pins are the same
+  // class as the launch-claims ceilings above — raising the stored number weakens the
+  // gate that reads it without touching any gate code. docs/agent/*-ratchet.json
+  // (backlog-evidence, cited-symbols, claim-inventory-anchors, role-coverage,
+  // surface-ownership) and artifacts/sync/*-pin.json (doc-orphan, package-reachability)
+  // all classified "other"; scripts/lib/ratchet-read.mjs itself says it "deliberately
+  // says NOTHING about whether a ceiling's VALUE is correct", so nothing else catches a
+  // raised value. Downward re-records still land under DR-037 (ownerDecisionText keeps
+  // the DR-037 self-merge text for SAFETY_MACHINERY).
+  { rule: "gate ratchets and pins (raising one weakens its gate)", re: /^(docs\/agent\/[\w-]*-ratchet\.json|artifacts\/sync\/[\w-]*-pin\.json)$/ },
+  // Review sweep on #1133, finding 5 (blocking): other files CI/preflight gates read as
+  // inputs that classified "other" despite backing a gate. validate-sim-macos.sh is run
+  // by mac-lane.yml; native/ios/.swiftlint.yml is read by ios-ci.yml and
+  // check-swiftlint-rules.mjs; native/shared/*.json vectors carry the TS-to-Swift
+  // parity floor (`requires.minCases`) alongside the cases they gate, so dropping cases
+  // and lowering minCases in the same edit shrinks decision-core parity coverage;
+  // docs/agent/KNOWN_CONDITIONS.json's `blocks_pr` flag controls whether scan-gaps.mjs
+  // fails; docs/agent/scheduled-routines.json's `cadenceToleranceHours` controls whether
+  // raised-hands --check (fatal in preflight) fires; docs/agent/hand-routing.json routes
+  // (or silently drops) a stall to a responder; .npmrc's `ignore-scripts` would skip the
+  // `prepare` script that installs the pre-push lockfile hook.
+  { rule: "gate inputs outside scripts/ (harness, lint config, parity vectors, diagnosis/tolerance registries, npm config)", re: /^(validate-sim-macos\.sh|native\/ios\/\.swiftlint\.yml|native\/shared\/[\w-]+\.json|docs\/agent\/(KNOWN_CONDITIONS|scheduled-routines|hand-routing)\.json|\.npmrc)$/ },
+  // Review sweep on #1133, finding 9 (should-fix): the Mac evidence records that feed
+  // the readiness figure (DR-036 outreach gate) classified "other" — check-readiness-
+  // figure.mjs, launch-profile.mjs and check-launch-proof-bindings.mjs all read
+  // artifacts/live-evidence/mac-run.json, and its binding is a digest/fingerprint
+  // stored in the file itself with no signature, so hand-forging it moves readiness
+  // without touching any gate code. Mac tick PRs still land under DR-037; only the
+  // escalation label changes.
+  { rule: "minted evidence records (feed the readiness figure)", re: /^artifacts\/(live-evidence|sim-results)\// },
+  // Review sweep on #1133, finding 10 (nit): the instruction-file rule's reasoning
+  // (AGENTS.md/CLAUDE.md steer agents) applies equally to the review/landing-ritual
+  // agent definitions and skills that steer the SAME autonomous-merge loop.
+  { rule: "review/landing agent definitions (.claude/agents/**)", re: /^\.claude\/agents\// },
+  { rule: "the loop-end skill (.claude/skills/loop-end/**)", re: /^\.claude\/skills\/loop-end\// },
+  { rule: "the signalgrid-reviewer skill (.claude/skills/signalgrid-reviewer/**)", re: /^\.claude\/skills\/signalgrid-reviewer\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -153,6 +196,20 @@ export const OWNER_RESERVED = [
   // which re-derives every gate script's relative imports at test time so a future one
   // cannot escape silently).
   { rule: "the launch-claims gate's ratchet-read helper (scripts/lib/ratchet-read.mjs, imported by scripts/check-launch-claims.mjs)", re: /^scripts\/lib\/ratchet-read\.mjs$/ },
+  // Review sweep on #1133, finding 6 (should-fix): this classifier manifest and the
+  // landing gate it feeds were only SAFETY_MACHINERY, which the lane merges itself
+  // under DR-037 (ownerDecisionText('SAFETY_MACHINERY')). That is a two-step bypass of
+  // every OTHER owner-reserved rule above: PR 1 deletes a rule (classifies
+  // SAFETY_MACHINERY via scripts/**, lane self-merges on green); PR 2 then edits the
+  // now-unprotected gate script the same way. Making these three files themselves
+  // OWNER_RESERVED closes that: a change to the classifier, the landing gate that reads
+  // its verdict, or the saved workflow now always escalates, regardless of what rule
+  // it also matches.
+  { rule: "the owner-gated-surfaces classifier and the landing gate/workflow that read it", re: /^(scripts\/check-owner-gated-surfaces\.mjs|scripts\/lib\/land-branch-gate\.mjs|\.claude\/workflows\/land-branch\.js)$/ },
+  // Review sweep on #1133, finding 10 (nit): the compliance rule above only matches
+  // docs/*THREAT_MODEL*.md and docs/COMPLIANCE*.md — the root threat_model.md and
+  // SECURITY.md escaped it entirely and classified "other".
+  { rule: "root compliance docs (threat_model.md, SECURITY.md)", re: /^(threat_model|SECURITY)\.md$/ },
 ];
 
 // A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
@@ -343,14 +400,56 @@ function selfTest() {
   // Codex round 2 on #1133 (2026-09-26) P1, finding 5: the root package manifests.
   t("the root package.json is SAFETY_MACHINERY", mostRestrictive(cls(["package.json"])) === "SAFETY_MACHINERY");
   t("pnpm-workspace.yaml is SAFETY_MACHINERY", mostRestrictive(cls(["pnpm-workspace.yaml"])) === "SAFETY_MACHINERY");
-  // Negative: the root package.json rule is exact-path, not "any package.json" — a
-  // per-package manifest under lib/** or scripts/** is already owner-gated by its own
-  // directory's blanket rule for an unrelated reason (checked with classifyDiff before
-  // writing this: lib/room-sim/package.json is DECISION_PATH, scripts/package.json is
-  // SAFETY_MACHINERY, so neither demonstrates "stays autonomous"); a per-package
-  // manifest OUTSIDE both blankets genuinely does, and stays that way on purpose — this
-  // rule is scoped to the repo's own root, not every package.json in the tree.
-  t("a per-package package.json outside lib/** and scripts/** (artifacts/mcp-server/package.json) stays autonomous", cls(["artifacts/mcp-server/package.json"]).tier === "autonomous");
+  // Review sweep on #1133, finding 1 (blocking): flipped from a negative to a
+  // positive test. The package.json rule is now ANY manifest, not just the root —
+  // scripts/preflight.mjs:604 runs `pnpm --filter @workspace/mcp-server run test`,
+  // which resolves to THIS file's own "test" script, so a per-package manifest outside
+  // lib/** and scripts/** is exactly as gate-bearing as the root one and must classify
+  // SAFETY_MACHINERY, not "stay autonomous".
+  t("a per-package package.json outside lib/** and scripts/** (artifacts/mcp-server/package.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/mcp-server/package.json"])) === "SAFETY_MACHINERY");
+  t("a TypeScript config (tsconfig.json) is SAFETY_MACHINERY", mostRestrictive(cls(["tsconfig.json"])) === "SAFETY_MACHINERY");
+  t("tsconfig.base.json is SAFETY_MACHINERY", mostRestrictive(cls(["tsconfig.base.json"])) === "SAFETY_MACHINERY");
+  t("a nested tsconfig (artifacts/mcp-server/tsconfig.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/mcp-server/tsconfig.json"])) === "SAFETY_MACHINERY");
+  // Finding 3 (blocking): CI security-scanner config outside .github/workflows/.
+  t("the CodeQL workflow config (.github/codeql/codeql-config.yml) is SAFETY_MACHINERY", mostRestrictive(cls([".github/codeql/codeql-config.yml"])) === "SAFETY_MACHINERY");
+  t(".gitleaks.toml is SAFETY_MACHINERY", mostRestrictive(cls([".gitleaks.toml"])) === "SAFETY_MACHINERY");
+  t(".gitleaksignore is SAFETY_MACHINERY", mostRestrictive(cls([".gitleaksignore"])) === "SAFETY_MACHINERY");
+  // Finding 4 (blocking): gate ratchets and pins.
+  t("a docs/agent ratchet file is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/backlog-evidence-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("cited-symbols-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/cited-symbols-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("claim-inventory-anchors-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/claim-inventory-anchors-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("role-coverage-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/role-coverage-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("surface-ownership-ratchet.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/surface-ownership-ratchet.json"])) === "SAFETY_MACHINERY");
+  t("a artifacts/sync pin file is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sync/doc-orphan-pin.json"])) === "SAFETY_MACHINERY");
+  t("package-reachability-pin.json is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sync/package-reachability-pin.json"])) === "SAFETY_MACHINERY");
+  // Finding 5 (blocking): other gate inputs outside scripts/.
+  t("validate-sim-macos.sh is SAFETY_MACHINERY", mostRestrictive(cls(["validate-sim-macos.sh"])) === "SAFETY_MACHINERY");
+  t("native/ios/.swiftlint.yml is SAFETY_MACHINERY", mostRestrictive(cls(["native/ios/.swiftlint.yml"])) === "SAFETY_MACHINERY");
+  t("a native/shared parity vector (posture-allow-vectors.json) is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/posture-allow-vectors.json"])) === "SAFETY_MACHINERY");
+  t("remediation-allow-vectors.json is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/remediation-allow-vectors.json"])) === "SAFETY_MACHINERY");
+  t("assist-wire-conformance.json is SAFETY_MACHINERY", mostRestrictive(cls(["native/shared/assist-wire-conformance.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/KNOWN_CONDITIONS.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/KNOWN_CONDITIONS.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/scheduled-routines.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/scheduled-routines.json"])) === "SAFETY_MACHINERY");
+  t("docs/agent/hand-routing.json is SAFETY_MACHINERY", mostRestrictive(cls(["docs/agent/hand-routing.json"])) === "SAFETY_MACHINERY");
+  t(".npmrc is SAFETY_MACHINERY", mostRestrictive(cls([".npmrc"])) === "SAFETY_MACHINERY");
+  // Finding 9 (should-fix): minted evidence records.
+  t("a live-evidence record (mac-run.json) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/live-evidence/mac-run.json"])) === "SAFETY_MACHINERY");
+  t("a sim-results record is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/sim-results/evidence-20260926.json"])) === "SAFETY_MACHINERY");
+  // Finding 10 (nit): review/landing agent definitions, the loop-end and
+  // signalgrid-reviewer skills, and the root compliance docs that escaped the
+  // existing THREAT_MODEL regex.
+  t(".claude/agents/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/agents/fail-closed-auditor.md"])) === "SAFETY_MACHINERY");
+  t(".claude/skills/loop-end/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/skills/loop-end/SKILL.md"])) === "SAFETY_MACHINERY");
+  t(".claude/skills/signalgrid-reviewer/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/skills/signalgrid-reviewer/SKILL.md"])) === "SAFETY_MACHINERY");
+  t("root threat_model.md is OWNER_RESERVED", mostRestrictive(cls(["threat_model.md"])) === "OWNER_RESERVED");
+  t("root SECURITY.md is OWNER_RESERVED", mostRestrictive(cls(["SECURITY.md"])) === "OWNER_RESERVED");
+  // Finding 6 (should-fix): the classifier manifest and the landing gate/workflow that
+  // read its verdict are themselves OWNER_RESERVED now, closing the two-step bypass
+  // (delete a rule via scripts/**-classified SAFETY_MACHINERY, then edit the
+  // now-unprotected gate the same way).
+  t("this classifier file (scripts/check-owner-gated-surfaces.mjs) is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-owner-gated-surfaces.mjs"])) === "OWNER_RESERVED");
+  t("the landing gate (scripts/lib/land-branch-gate.mjs) is OWNER_RESERVED", mostRestrictive(cls(["scripts/lib/land-branch-gate.mjs"])) === "OWNER_RESERVED");
+  t("the saved landing workflow (.claude/workflows/land-branch.js) is OWNER_RESERVED", mostRestrictive(cls([".claude/workflows/land-branch.js"])) === "OWNER_RESERVED");
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
@@ -429,6 +528,13 @@ function selfTest() {
       "scripts/publication-boundary.mjs",
       "scripts/check-launch-profile.mjs",
     ];
+    // Review sweep on #1133, finding 8 (should-fix): localImportsOf() swallows a read
+    // error and returns [] — a gate script renamed or deleted out from under this list
+    // would silently drop its (and its own imports') local helpers from the derived
+    // set instead of failing the self-test. Prove each one still exists and is
+    // readable BEFORE deriving imports from it, so that failure mode is loud, not
+    // silent.
+    for (const g of GATE_SCRIPTS) t(`gate script ${g} exists and is readable`, existsSync(resolve(repo, g)));
     // One level of transitivity (finding 4's instruction): the gate scripts' direct
     // imports, then those files' OWN direct imports — never further than that.
     const level1 = new Set(GATE_SCRIPTS.flatMap(localImportsOf));

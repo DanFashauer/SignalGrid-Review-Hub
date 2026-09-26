@@ -56,7 +56,8 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
+LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
+              This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -92,12 +93,14 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               (PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 confirmed on e189552b in mcp2-pf.log/mcp2-br.log); landing adds the
               orchestrator-skill rule "a stacked branch waits for its base PR to land, then merges Alpha, never the
               base tip".
-              Three owner-decision PRs remain open: #1117 classifies DECISION_PATH (fixed ports -> ephemeral in
-              oidc/load/observability tests), so the OWNER merges it (CI green run 36227993364); #1118 (Mac,
-              DecisionEngine.swift DR-043 port) and #1121 (Mac, AppWorkflows.swift scoped step-up release, stacked on
-              #1118) both touch golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
-              Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a revert if no). NO
-              ruling yet on any of the three.
+              Five owner-decision PRs are now open: three opened this window - #1117 classifies
+              DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER
+              merges it (CI green run 36227993364); #1118 (Mac, DecisionEngine.swift DR-043 port) and
+              #1121 (Mac, AppWorkflows.swift scoped step-up release, stacked on #1118) both touch
+              golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
+              Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a
+              revert if no); NO ruling yet on any of the three - plus two from earlier windows: #1050
+              (DR-058) and #1083 (DR-059), both still awaiting the owner.
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z

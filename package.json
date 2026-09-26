@@ -201,6 +201,7 @@
     "proof:signalgrid-grid": "pnpm --filter @workspace/scripts run proof:signalgrid-grid",
     "proof:remediation-allow": "pnpm --filter @workspace/scripts run proof:remediation-allow",
     "proof:decision-engine-parity": "pnpm --filter @workspace/scripts run proof:decision-engine-parity",
+    "proof:app-workflows-parity": "pnpm --filter @workspace/scripts run proof:app-workflows-parity",
     "proof:posture-allow": "pnpm --filter @workspace/scripts run proof:posture-allow",
     "proof:device-registry": "pnpm --filter @workspace/scripts run proof:device-registry",
     "proof:signalgrid-simulator": "pnpm --filter @workspace/scripts run proof:signalgrid-simulator",

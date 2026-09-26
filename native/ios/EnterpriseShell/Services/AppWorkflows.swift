@@ -90,6 +90,13 @@ enum AppWorkflows {
         var confirmedActionKeys: [String] = []
         /// True once the holder has satisfied a step-up (badge tap / biometric).
         var stepUpSatisfied: Bool = false
+        /// SCOPED release (review finding): keys of the specific actions a verified
+        /// step-up gesture was bound to. Only these actions are released — every other
+        /// gated/sensitive action stays held, so a gesture obtained for one pending
+        /// action can never release the rest of the integration. If the listed keys
+        /// cover EVERY held action, the plan is equivalent to a full release.
+        /// Ported 2026-09-26 (BUILD_BACKLOG row 101; declared drift closed).
+        var stepUpSatisfiedActionKeys: [String] = []
         /// Who confirms a sensitive action, phrased for the vertical.
         var confirmer: String? = nil
     }
@@ -109,17 +116,35 @@ enum AppWorkflows {
     }
 
     /// Who confirms a sensitive action for this integration's vertical.
+    /// Own-key guarded in the reference: a vertical the table does not know reads "an
+    /// authorized confirmer", never a named authority it did not earn (index.ts:116-119).
     static func confirmer(for integration: AppIntegration) -> String {
-        defaultConfirmer[integration.vertical] ?? "supervisor"
+        defaultConfirmer[integration.vertical] ?? "an authorized confirmer"
     }
 
     // MARK: - Planner (mirrors planAppSession)
 
     static func planAppSession(_ input: AppPlanInput) -> AppSessionPlan {
         let confirmed = Set(input.confirmedActionKeys)
-        let confirmer = input.confirmer ?? defaultConfirmer[input.integration.vertical] ?? "supervisor"
+        let confirmer = input.confirmer ?? confirmer(for: input.integration)
 
-        let stepUpDone = input.outcome == .step_up && input.stepUpSatisfied
+        // A release may be FULL (stepUpSatisfied — the simulated/demo path) or SCOPED to the
+        // action keys a verified gesture was actually bound to. A scoped release that happens
+        // to cover every held action is equivalent to a full one (so a single-gated-action
+        // integration still leaves step_up mode); otherwise the plan honestly STAYS in
+        // step_up mode with only the bound action released — a gesture for one action must
+        // never release the rest of the integration (review finding).
+        // Only keys the integration actually has can be released — a key it does not contain
+        // releases nothing. And an integration with NO held actions has nothing a gesture
+        // could satisfy, so it never reports a step-up as done: `allSatisfy` over an empty
+        // list is vacuously true, and a bogus key on a read-only integration must not turn a
+        // live step_up decision into `proceed` with a summary asserting a step-up that never
+        // happened.
+        let knownKeys = Set(input.integration.actions.map { $0.key })
+        let releasedKeys = Set(input.stepUpSatisfiedActionKeys.filter { knownKeys.contains($0) })
+        let heldKeys = input.integration.actions.filter { $0.gatedByStepUp || $0.sensitive }.map { $0.key }
+        let allHeldReleased = !heldKeys.isEmpty && !releasedKeys.isEmpty && heldKeys.allSatisfy { releasedKeys.contains($0) }
+        let stepUpDone = input.outcome == .step_up && (input.stepUpSatisfied || allHeldReleased)
         let effective: DecisionOutcome = stepUpDone ? .allow : input.outcome
 
         let actions: [AppActionPlan] = input.integration.actions.map { a in
@@ -127,7 +152,12 @@ enum AppWorkflows {
             var reason: String
             var requiresConfirmation = false
 
-            switch effective {
+            // This action's effective outcome: released individually iff the step-up gesture
+            // was bound to it (or the release was full).
+            let actionReleased = stepUpDone || (input.outcome == .step_up && releasedKeys.contains(a.key))
+            let eff: DecisionOutcome = actionReleased ? .allow : effective
+
+            switch eff {
             case .deny:
                 disposition = .blocked
                 reason = "Denied — \(firstReason(input.reasonCodes, "trust conditions not met"))"
@@ -163,7 +193,7 @@ enum AppWorkflows {
                     }
                 } else {
                     disposition = .auto
-                    reason = stepUpDone ? "Released after step-up" : "Trusted — performed automatically"
+                    reason = actionReleased ? "Released after step-up" : "Trusted — performed automatically"
                 }
             }
 

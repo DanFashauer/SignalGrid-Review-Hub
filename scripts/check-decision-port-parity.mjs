@@ -455,18 +455,15 @@ function compareTriggers({ tsSrc, swiftSrc, declared }) {
   return findings;
 }
 
-const DECLARED_WORKFLOW_DRIFT = [
-  {
-    shape: "AppPlanInput",
-    field: "stepUpSatisfiedActionKeys",
-    side: "ts",
-    why:
-      "scoped step-up release: TS releases only the actions a verified gesture was bound to " +
-      "(lib/app-workflows/src/index.ts, #107); the Swift port has only the global " +
-      "`stepUpSatisfied` boolean, so the device can release every held action or none " +
-      "(BUILD_BACKLOG row 101). /v1 already speaks the scoped form.",
-  },
-];
+// Empty since 2026-09-26. The one entry it carried — AppPlanInput.stepUpSatisfiedActionKeys,
+// TS only (the scoped step-up release: TS releases only the actions a verified gesture was
+// bound to, lib/app-workflows/src/index.ts, #107; the Swift port had only the global
+// `stepUpSatisfied` boolean, BUILD_BACKLOG row 101) — was closed when the Mac lane ported
+// the field and the release derivation, the day the behavioural vectors
+// (native/shared/app-workflows-vectors.json, scripts/src/app-workflows-parity-proof.ts)
+// first replayed the planner. A future TS-only field is declared here again, checked both
+// ways, until the port catches up.
+const DECLARED_WORKFLOW_DRIFT = [];
 
 /** The text between the brace at `open` and its matching close, with every NESTED
  *  brace block reduced to `{}` — so only depth-0 members remain. Null if unbalanced. */

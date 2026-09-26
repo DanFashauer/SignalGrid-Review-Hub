@@ -488,6 +488,7 @@ const STEPS = [
   // table are emitted to native/shared and replayed by the Swift twin in ios-ci; vocabulary
   // parity (check-decision-port-parity) cannot see a rule whose words match and logic does not.
   { name: "Proof: decision-engine-parity (the Swift port replays the TS engine's own decisions; vocabulary parity is not behaviour)", cmd: ["pnpm", "run", "proof:decision-engine-parity"] },
+  { name: "Proof: app-workflows-parity (the Swift planner port replays the TS planner's own plans; shape parity is not behaviour)", cmd: ["pnpm", "run", "proof:app-workflows-parity"] },
   // The second guard around the engine (eighth verdict-core round): an UNKNOWN posture
   // attribute matches none of the engine's bad literals, so the engine allows on it.
   // Same lane order as remediation-allow — TS wrapper + vectors first, Swift twin second.

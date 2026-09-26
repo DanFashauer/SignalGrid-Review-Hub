@@ -56,8 +56,9 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
+LAST TOUCHED: 2026-09-26 (cloud lane, 14:48Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
+              Refreshed through Codex rounds 1-4 on #1128; the stamp is the last refresh.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -111,8 +112,11 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               a disk figure from before that sweep was recorded, so neither is stated here.
               Next: #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
               and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
-              Swift<->vector binding check; a granted golden-rule-1 exception does not make either merge-ready until
-              those land.
+              Swift<->vector binding check; those are the headline items only - the authoritative pre-merge
+              checklists are the two acks,
+              artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json and
+              artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json; a granted
+              golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
@@ -125,7 +129,8 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
               canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
-              chain mechanics were delegated. (The record commits a3353aeb, 857f2b59, d830b333, 93eb5750 and a8be3e1f
+              chain mechanics were delegated. (The record commits on this branch - a3353aeb, 857f2b59, 6d45b0ce,
+              93eb5750, a8be3e1f, d31dbd95, 8b85874c and this refresh -
               carry the harness's fixed Fable trailer for this session, not a claim that the creative tier wrote them
               - see LESSONS L5; the Alpha-merge commits the workflow's Merge stage made carry none, which the
               hardening branch's merge -m change closes.)

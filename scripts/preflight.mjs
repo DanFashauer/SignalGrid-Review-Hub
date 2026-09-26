@@ -45,16 +45,18 @@ const quick = process.argv.includes("--quick");
 // footer says what that leaves out, recomputed from `.github/workflows/` on
 // every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
-  // FIRST OF ALL: reap api-server orphans whose binary is under THIS tree, on every
-  // platform (DR-060, lesson L1 in docs/agent/LESSONS.md). A killed run or a subagent
-  // that booted the server leaves it holding a fixed test port, and the next preflight
-  // then fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399 — it did,
-  // twice, on 2026-09-26. CI's Mac job already ran this script before and after
-  // preflight; a local run never did. The script matches the exact canonical path
-  // <tree>/artifacts/api-server/dist/index.mjs (another checkout is never touched),
-  // runs unchanged under Linux procps, and never fails. GITHUB_WORKSPACE is pinned to
-  // this tree so the match is by the path node resolved, not the caller's shell.
-  { name: "Free test ports (reap api-server orphans under this tree)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo } },
+  // FIRST OF ALL: reap ORPHANED api-servers under THIS tree (DR-060, lesson L1 in
+  // docs/agent/LESSONS.md). A killed run leaves a server holding a fixed test port, and
+  // the next preflight fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399.
+  // FREE_TEST_PORT_ORPHANS_ONLY limits the kill to servers whose parent is gone (ppid 1),
+  // so a live test:api, verify:breadth or tick evidence run in this checkout is reported
+  // and left alone. CEILING: it matches only an argv carrying the absolute path
+  // <tree>/artifacts/api-server/dist/index.mjs, so another worktree's orphan — L1's own
+  // case, orphans in a scratch worktree — is never touched, and neither is a relative
+  // `node ./dist/index.mjs`. The cross-tree case is covered by the orchestrator skill's
+  // rule (a read-only brief boots no server) and, at the root, by oidc.test.mjs moving off
+  // its fixed ports (docs/BUILD_BACKLOG.md, DR-060 section). Never fails.
+  { name: "Reap orphaned api-servers under this tree (ppid 1 only; live runs are left)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo, FREE_TEST_PORT_ORPHANS_ONLY: "1" } },
   // The first GATE, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
   // print "Safe to push" over a lockfile that did not match its manifests — CI then

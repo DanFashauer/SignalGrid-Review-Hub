@@ -784,11 +784,32 @@ earlier — that is the loop working, not a reason to soften the record.
     the operator's real secret now goes through the same constantTimeEquals
     the core already used for its PUBLIC demo keys. The weaker guard had been
     sitting on the stronger secret.
-48. **Native parity is textual, not behavioral** — mobile-native-engineer, days. DONE 2026-09-26 (Mac lane, three PRs the same day — #1118, #1121 and the Assist-wire client): the port-parity gate is backed by behavioural vectors for BOTH ports (native/shared/decision-engine-vectors.json, native/shared/app-workflows-vectors.json, replayed by DecisionEngineParityTests.swift and AppWorkflowsParityTests.swift); iOS is no longer carved out of the shared assist-wire vectors — `native/ios/EnterpriseShell/Services/AssistWire.swift` is a transcription of the Kotlin client and `native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift` replays all 44 cases of `native/shared/assist-wire-conformance.json` (2 tests, 0 failures; `node scripts/check-assist-conformance.mjs` → 3 clients bound), with the honest residual stated in the gate: the shell does not yet CALL /v1/authorize; and `.github/workflows/ios-ci.yml` triggers on `lib/signalgrid-simulator/**` and `lib/app-workflows/**`. How you'd check: the three commands above plus `cd native/ios && swift test`. Measured earlier that day (one of four claims closed): BackendService now calls only served /v1 routes (sessions start/refresh/end, context — each present in `artifacts/api-server/src/routes/v1.ts`) and refuses badge enrollment rather than faking a route (PR #387, 7554e088, 2026-09-02); the other three claims hold — the port-parity gate is vocabulary-only, iOS is carved out of the shared assist-wire conformance vectors, and `.github/workflows/ios-ci.yml` still does not trigger on lib/signalgrid-simulator or lib/app-workflows — the same gap row 18 asks to close. The
-    port-parity gate compares extracted vocabulary and says so itself; iOS is
-    carved out of the shared assist-wire conformance vectors; ios-ci does not
-    trigger on simulator/workflow library changes; BackendService still calls
-    five endpoints that exist nowhere.
+48. **Native parity is textual, not behavioral** — mobile-native-engineer, days.
+    PARTIAL 2026-09-26 (re-measured by the cloud lane at the #1136 review):
+    CLOSED by this PR — iOS is no longer carved out of the shared assist-wire
+    vectors: `native/ios/EnterpriseShell/Services/AssistWire.swift` is a
+    transcription of the Kotlin client and
+    `native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift` replays
+    all 44 cases of `native/shared/assist-wire-conformance.json` (Mac-measured
+    on the PR: 2 tests, 0 failures; `node scripts/check-assist-conformance.mjs`
+    → 3 clients bound to 44 shared cases), with the honest residual stated in
+    the gate: the shell does not yet CALL /v1/authorize (wiring it is a product
+    change, DR-007/DR-023). CLOSED earlier: BackendService calls only served /v1
+    routes (sessions start/refresh/end, context — each present in
+    `artifacts/api-server/src/routes/v1.ts`) and refuses badge enrollment rather
+    than faking a route (PR #387, 7554e088, 2026-09-02). STILL OPEN at this
+    commit: the behavioural port vectors and their parity tests — named here in
+    plain text with no backticks because the cited-paths gate requires a
+    backticked path to be a tracked file: decision-engine-vectors.json,
+    app-workflows-vectors.json, DecisionEngineParityTests.swift and
+    AppWorkflowsParityTests.swift — ride PRs #1118/#1121, unmerged pending the
+    owner's golden-rule-1 ruling, so the port-parity gate on mainline still
+    compares extracted vocabulary; and `.github/workflows/ios-ci.yml` does not
+    trigger on lib/signalgrid-simulator or lib/app-workflows changes (plain
+    text, no backticks for those two dirs) — this PR adds native/shared/** to
+    its filters. How you'd check: `git ls-files native/shared`, `node
+    scripts/check-assist-conformance.mjs`, `sed -n 26,44p
+    .github/workflows/ios-ci.yml`.
 49. **Assessor-facing overstatement** — compliance-analyst. HALF DONE 2026-08-23: the
     questionnaire pack told assessors that docs-sanity "fails the build if any
     document claims otherwise" for SOC 2 / ISO 27001 / HIPAA / FedRAMP. Of

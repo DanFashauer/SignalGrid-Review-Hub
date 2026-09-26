@@ -2784,7 +2784,7 @@ earlier — that is the loop working, not a reason to soften the record.
     contrast check. Per DR-005 the token change lands in `index.css` in the same commit.
 
 103. **iOS: `SignalGridOperator` pins dark mode at the app root.** — OPEN,
-    mobile-native-engineer. `SignalGridOperatorApp.swift:11` calls
+    mobile-native-engineer. DONE (measured 2026-09-26): commit c7dc6610 (PR #860, 2026-09-19) removed the preferredColorScheme pin from `native/ios/SignalGridMobile/SignalGridOperator/SignalGridOperatorApp.swift` after first making every token in `native/ios/SignalGridMobile/SignalGridOperator/Theme.swift` adaptive via light/dark pairs, in the order this row prescribed; no app-root pin remains (the only other occurrence is an Xcode preview canvas), and CLAUDE.md already names SignalGridOperator as outside the WardlinkDemo exemption. `SignalGridOperatorApp.swift:11` calls
     `.preferredColorScheme(.dark)` — the SwiftUI equivalent of pinning
     `UIUserInterfaceStyle`, which CLAUDE.md forbids by name. System UI it presents
     inherits the forced scheme.
@@ -2797,26 +2797,26 @@ earlier — that is the loop working, not a reason to soften the record.
     `SignalGridOperator`. The sentence should name the target. Not a UIKit conversion —
     fixable entirely in SwiftUI.
 
-104. **iOS: one stray colour value forks the palette.** — OPEN, mobile-native-engineer. NOTE.
+104. **iOS: one stray colour value forks the palette.** — OPEN, mobile-native-engineer. DONE (measured 2026-09-26): commit 27e0e713 (PR #436, 2026-09-05) corrected the background token in `native/ios/SignalGridMobile/SignalGridOperator/Theme.swift` from the stray #13171A to the canonical #15181B, matching `native/ios/EnterpriseShell/Services/DesignSystem.swift` and `artifacts/signalgrid-web/src/index.css`; the later adaptive-token rewrite kept that value verbatim. NOTE.
     `Theme.swift:5` decodes to `#13171A`; canonical Warm Charcoal 950 is `#15181B` in
     both `DesignSystem.swift:25` and `index.css:73`. Every OTHER token in the file
     decodes exactly and both asserted contrast figures verify, so this is one stray
     value in an otherwise carefully aligned file.
 
 105. **iOS: `armv7` declared as a required device capability.** — OPEN,
-    mobile-native-engineer. NOTE. `EnterpriseShell/Info.plist:53-55`. iOS has been 64-bit-only
+    mobile-native-engineer. DONE (measured 2026-09-26): commit 7554e088 (PR #387, 2026-09-02) changed UIRequiredDeviceCapabilities in `native/ios/EnterpriseShell/Info.plist` from armv7 to arm64; no live armv7 capability value remains anywhere in the tree (only the explanatory comment beside the fix); whether the old value blocked installation was never verified and is moot. NOTE. `EnterpriseShell/Info.plist:53-55`. iOS has been 64-bit-only
     since iOS 11; the correct value is `arm64` or omission. NOT VERIFIED that this
     blocks installation — that needs a device or a build, neither of which exists in
     the cloud lane.
 
 106. **iOS: `mdm/README.md` under-claims what the app can do alone.** — OPEN,
-    mobile-native-engineer. NOTE. `:58` lists "forced full screen" as requiring supervision,
+    mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): `native/ios/mdm/README.md` still lists forced full screen among the capabilities requiring a supervised device (now near line 79, shifted by an unrelated table inserted in 715417d5) while the file's own opening paragraph correctly attributes full screen to the app-declarable UIRequiresFullScreen key; the same internal contradiction, uncorrected. NOTE. `:58` lists "forced full screen" as requiring supervision,
     but `UIRequiresFullScreen` is an app-declarable key needing no MDM, and the plist
     comment correctly presents it as such. Errs CONSERVATIVE — the opposite of the
     platform-honesty failure mode — but it is still inaccurate.
 
 107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
-    has no legend, tooltip or axis.** — OPEN, web-engineer. BLOCKING. This confirms
+    has no legend, tooltip or axis.** — OPEN, web-engineer. RE-MEASURED 2026-09-26 (still open, confirmed live): `artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx` (bars now seven lines lower after 81a8919b) still paints restrict from the chart-4 variable and deny from the destructive variable, which `artifacts/signalgrid-mobile-pwa/src/index.css` defines with identical HSL in both appearances, with no Legend or Tooltip anywhere in the file; the console's `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still carries the dash-pattern remedy, unmatched here; the contrast and protanopia figures were not re-derived in this pass. BLOCKING. This confirms
     rows 76/77 by execution.
     `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
     `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
@@ -2832,7 +2832,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `--decision-*` tokens so the palette gate can reach them.
 
 108. **Web: the PWA still fetches fonts from Google on every cold load.** — OPEN,
-    web-engineer. The @fontsource migration was applied to `signalgrid-app` and never
+    web-engineer. RE-MEASURED 2026-09-26 (still open, confirmed by execution): `node scripts/review-invariants.mjs` today reports `artifacts/signalgrid-mobile-pwa/index.html` and `artifacts/signalgrid-mobile-pwa/src/index.css` still fetching Google fonts among the demo-only hits it does not fail on; its SHIPPED_TREES list still names only the web and app trees, and `artifacts/signalgrid-mobile-pwa/package.json` still carries no fontsource package. The @fontsource migration was applied to `signalgrid-app` and never
     to the PWA: 3 references in `index.html:19-21` plus an `@import` at `index.css:1`,
     and neither `@fontsource` package in its `package.json`.
     `review-invariants.mjs:384` lists only two SHIPPED_TREES, so the PWA falls into the
@@ -2842,7 +2842,7 @@ earlier — that is the loop working, not a reason to soften the record.
     first paint on bad hospital wifi, which is the exact condition it exists for.
 
 109. **Web: an unrecognised verdict renders as NOTHING in the console's live decision
-    panel.** — OPEN, web-engineer. `LiveDecisionPanel.tsx:50` indexes
+    panel.** — OPEN, web-engineer. RE-MEASURED 2026-09-26 (still open, unfixed): `artifacts/signalgrid-app/src/components/LiveDecisionPanel.tsx` still indexes the tone map by the raw outcome unguarded at the verdict block while the lookup 66 lines later is guarded; no UNKNOWN_TONE fallback exists anywhere in the tree (grep and git log -S both empty); the bare cast in `artifacts/signalgrid-app/src/lib/v1.ts` moved up one line after PR #366; the line is untouched since c95b97ac. `LiveDecisionPanel.tsx:50` indexes
     `TONE[decision.outcome]` unguarded; the same file guards the identical lookup 66
     lines later at `:116`. For an out-of-union outcome, `tone` is undefined, the verdict
     block is skipped, and the empty-state is ALSO skipped because `decision` is truthy —
@@ -2858,7 +2858,7 @@ earlier — that is the loop working, not a reason to soften the record.
     outcome as its label, and validate at the `v1.ts:78` boundary.
 
 110. **Web: the PWA's outcome badge falls back to grey at 3.00:1 on any unrecognised
-    verdict.** — OPEN, web-engineer. `OutcomeBadge.tsx:5` initialises to a zinc palette
+    verdict.** — OPEN, web-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05, sixth audit round) rewrote `artifacts/signalgrid-mobile-pwa/src/components/OutcomeBadge.tsx` to delegate to `artifacts/signalgrid-mobile-pwa/src/lib/outcome-tone.ts`, a total map over the four verdicts whose lookup falls back to the restrictive class for any unrecognised outcome; no zinc or grey fallback remains in the file. `OutcomeBadge.tsx:5` initialises to a zinc palette
     and only overwrites on four exact matches. Computed contrast of that fallback,
     composited the way the gate composites chips: **3.00:1**, below the 4.5 floor —
     the worst-contrast verdict rendering in the PWA, and the same shape as the historic
@@ -2868,14 +2868,14 @@ earlier — that is the loop working, not a reason to soften the record.
     FIX: initialise to the restrictive class and render the raw outcome as the label.
 
 111. **Web: four dead colour utilities in the PWA, two below AA, one a second red.** —
-    OPEN, web-engineer. NOTE. `index.css:150-153` declares `.text-nominal`,
+    OPEN, web-engineer. RE-MEASURED 2026-09-26 (still open, one claim corrected): the four signal-colour rules in `artifacts/signalgrid-mobile-pwa/src/index.css` (one line higher than cited) are still declared and still used nowhere; of the four text-status rules this row also called dead, the restrict one is now live — commit 81a8919b wired it into `artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx`, `artifacts/signalgrid-mobile-pwa/src/pages/Integrations.tsx` and `artifacts/signalgrid-mobile-pwa/src/pages/Decisions.tsx` as the unreachable-metrics banner; allow, step-up and deny remain dead. NOTE. `index.css:150-153` declares `.text-nominal`,
     `.text-anomalous`, `.text-critical` (#ef4444, **4.26:1**) and `.text-unknown`
     (#6b7280, **3.32:1**); zero uses anywhere. Someone reaching for a "critical" colour
     finds #ef4444 instead of the ratified #C67070 and nothing objects. Four
     `.text-status-*` rules are dead too.
 
 112. **Web: a hand-maintained list claims a gate protects it; no gate reads that
-    file.** — OPEN, web-engineer. NOTE. `Dashboard.tsx:310-313` pins the three launch
+    file.** — OPEN, web-engineer. DONE (measured 2026-09-26): commit 2ce433d4 (2026-09-06, batch W) replaced the false comment in `artifacts/signalgrid-app/src/pages/Dashboard.tsx` with one naming `scripts/check-console-launch-families.mjs`, which parses the Dashboard's launch-family list and diffs it against the launch profile in both directions; wired into `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, and it passes today (three of three match, self-test green); the block now sits near line 362. NOTE. `Dashboard.tsx:310-313` pins the three launch
     connector families and asserts "the profile gate fails the build if this set
     changes." Four differently-shaped searches say otherwise: `launch-profile.mjs`
     never reads the app tree, and nothing in `scripts/` or `.github/` references
@@ -2884,7 +2884,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `check-it-layer-model.mjs` already does for `route-owner.ts`) or delete the sentence.
 
 113. **Web: the PWA manifest points at two icons that do not exist.** — CLOSED as filed (2026-09-06 check: manifest.json:9 now declares `"icons": []` — the dangling references were removed, no icons were added; an empty array satisfies any consumer that only checks the key exists),
-    web-engineer. `manifest.json:10-11` declares 192px and 512px icons; neither file is
+    web-engineer. DONE (measured 2026-09-26): commit 81a8919b (2026-09-05) emptied the icons array in `artifacts/signalgrid-mobile-pwa/public/manifest.json`, removing the two dangling references, and it still reads an empty array today with no icon files added; the related gaps — the unserved /mobile/ start_url, no service worker anywhere tracked, no gate that resolves manifest icons to tracked files — remain open and were never claimed closed. `manifest.json:10-11` declares 192px and 512px icons; neither file is
     tracked or on disk. Without them the PWA cannot be installed to a home screen,
     which is the only reason a manifest exists. Related: `start_url` is `/mobile/` and
     no Dockerfile or workflow serves that prefix, and there is NO service worker
@@ -2896,7 +2896,7 @@ earlier — that is the loop working, not a reason to soften the record.
     file would stop the recurrence.
 
 114. **Web: the PWA's signal badge covers four of six signal types.** — OPEN,
-    web-engineer. NOTE. `SignalBadge.tsx` branches on four values; the `SignalType`
+    web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since the initial import): `artifacts/signalgrid-mobile-pwa/src/components/SignalBadge.tsx` still branches on four of the six SignalType values and sends network-posture and physical-access to the zinc fallback, while `artifacts/signalgrid-mobile-pwa/src/pages/Signals.tsx` still offers all six as filters; no enum-derived colour map has landed; the fallback's contrast figure was not re-derived in this pass. NOTE. `SignalBadge.tsx` branches on four values; the `SignalType`
     enum has six and `Signals.tsx:17` offers all six as filters, so the
     `network-posture` and `physical-access` filters yield all-grey screens. The
     fallback clears AA (5.28:1), so this is semantics-poor rather than illegible.
@@ -2905,7 +2905,7 @@ earlier — that is the loop working, not a reason to soften the record.
     through to grey.
 
 115. **Web: the PWA presents fixture decisions with no fixture label.** — OPEN,
-    web-engineer. Overview (metrics, chart, integration health) and Decisions (list
+    web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filing): `artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx` and `artifacts/signalgrid-mobile-pwa/src/pages/Decisions.tsx` still render the synthetic metrics, chart, integration health, decision list and detail sheet with no fixture label anywhere, and the PWA still has no AssuranceBadge equivalent; only `artifacts/signalgrid-mobile-pwa/src/pages/Signals.tsx` carries a rendered fixture label; the one later commit on those two pages (81a8919b) added error and loading states, not labels. Overview (metrics, chart, integration health) and Decisions (list
     AND detail sheet) render synthetic data unlabelled; only `Signals.tsx:22-23`
     carries a rendered label. The console labels ten equivalents and carries an
     `AssuranceBadge` the PWA has no equivalent of.
@@ -2913,14 +2913,14 @@ earlier — that is the loop working, not a reason to soften the record.
     "Allow Rate 94.2%" with no qualifier is a claim about a deployment.
 
 116. **Web: the PWA's support triage surface has no `deny` scenario.** — OPEN,
-    web-engineer. NOTE. `AccessSupport.tsx:22` types `Outcome` as
+    web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filing): `artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx` still types its outcome union as allow, step-up and restrict only, with no deny scenario, at the line cited when filed; the file has exactly one commit ever (its original addition in PR #89), so no fix has landed. NOTE. `AccessSupport.tsx:22` types `Outcome` as
     `"allow" | "step-up" | "restrict"` — a deliberate narrowing of the four-verdict
     vocabulary at the type level. The one screen a support lead opens first cannot show
     the outcome they most need guidance for. The page is otherwise the most honest in
     either tree.
 
 117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
-    OPEN, devex-tooling-engineer. BLOCKING. INDEPENDENTLY VERIFIED before filing.
+    OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06, batch Z, whose message names "phase-gate moved a string but not the exit code") — `scripts/src/phase-gate.ts` now sets a failing exit code whenever any blocking reason (unsafe path, affirmative unsafe claim, missing validation command) lands, not only on a RED lane, and `.github/workflows/phase-pr-evidence.yml` runs the file's own self-test, which plants an affirmative claim and asserts the real process exits 1, as a step before the gate; the docs-sanity mechanism this row's correction described is unchanged, only its line numbers moved. BLOCKING. INDEPENDENTLY VERIFIED before filing.
     `phase-gate.ts:153-160` escalates an affirmatively-asserted unsafe claim only to
     YELLOW, and `:194` sets a failing exit code only for RED, which is reachable solely
     from `redFilePattern`. Confirmed by running it: `unsafeClaims=ASSERTED`,

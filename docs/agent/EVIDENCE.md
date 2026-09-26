@@ -3643,3 +3643,14 @@ Output:   "✓ Determinism: 35 packages scanned (derived from lib/), 3 with decl
           "/v1 refusal coverage holds — every refusal the served source returns is documented."; PREFLIGHT_EXIT 0; Breadth PASSED (58)
           #1080 → 1cb79caf (gating 108300545174) after a 409 on a merge call whose expectedHeadSha was assembled, not read
 Verdict:  holds — #1083 stays open for the owner; its test:api / preflight / breadth lines are added to its body when the queued run finishes
+
+## 2026-09-26 — "The objective loop refuses unstamped rows and mailed the cloud its 108-row queue within three minutes; the CI-liveness gate had run unauthenticated since it was wired"
+Command:  node scripts/objective-loop.mjs --self-test / --json   (#1087 @ 98dd36cc → merged ebf302b9, gating 108313565986)
+Output:   "objective-loop self-test passed (77/77)"; dry derivation: verdict escalate, tasks [12], needsExecutor 0, unmeasured 108, escalations [plan-rows-unmeasured, owner-real-in-hand]
+          PREFLIGHT_EXIT 0; Breadth PASSED (58). Tick at 02:26Z re-derived at ebf302b9 (#1089: unmeasuredCount 108, tasks [12]) and mailed mac-objective-loop-plan-rows-unmeasured-needs-cl; acked in #1090
+Command:  CI=1 GITHUB_TOKEN= GH_TOKEN= node scripts/check-ci-liveness.mjs   (#1088 @ ab802378 → merged 85daff21, gating 108316069689; Mac job 108315921879)
+Output:   "✗ no GITHUB_TOKEN/GH_TOKEN in the environment — in CI this gate refuses to fall back to an unauthenticated call …" / "CI-liveness gate FAILED" (exit 1)
+          Finding, from #1086's run 36209251590: "403 rate limit exceeded (rate limited) [resource=core limit=60 used=60 remaining=0]" — limit=60 is the unauthenticated budget; the step set no env
+          First head 463a42a2: Linux gating job passed WITH the token; "PR — Mac-only checks" failed "Preflight FAILED at: CI liveness" (the Mac preflight steps had the same missing env) → fixed in ab802378, both green
+          PREFLIGHT_EXIT 0 (CI-liveness row ok on the off-CI REPORTED path); Breadth PASSED (58)
+Verdict:  holds — the loop's stamp refusal is live on mainline and the cloud's queue is the escalation itself; every preflight-running CI step now runs the liveness gate authenticated or fails naming the missing env

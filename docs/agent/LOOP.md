@@ -56,7 +56,8 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 14:48Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
+LAST TOUCHED: 2026-09-26 (cloud lane, 15:30Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+              (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
               Refreshed through Codex rounds 1-4 on #1128; the stamp is the last refresh.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
@@ -120,7 +121,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 14:48Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
-              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and Settings -> Pages -> Source -> GitHub Actions.
+              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and, in a BROWSER (the GitHub app has no Pages
+              settings), Settings -> Pages -> Source -> GitHub Actions at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages.
 TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
               findings), the MCP roster (6) and this record (5 findings, fix-first, all resolved on this pass);

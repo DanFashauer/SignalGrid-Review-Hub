@@ -3707,7 +3707,12 @@ Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH
 Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-br.log
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
 Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
-Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065ebc at 11:08:13Z)
+Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged
+          8216cf6b36c893df78171e9177442c1d9b065ebc committer time 11:08:12Z per the git log line below)
+Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H:%M:%SZ 8216cf6b
+Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
+          land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
+          check run 108391088659)"
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
           the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
           PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still

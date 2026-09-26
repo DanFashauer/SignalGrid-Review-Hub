@@ -3654,3 +3654,28 @@ Output:   "✗ no GITHUB_TOKEN/GH_TOKEN in the environment — in CI this gate r
           First head 463a42a2: Linux gating job passed WITH the token; "PR — Mac-only checks" failed "Preflight FAILED at: CI liveness" (the Mac preflight steps had the same missing env) → fixed in ab802378, both green
           PREFLIGHT_EXIT 0 (CI-liveness row ok on the off-CI REPORTED path); Breadth PASSED (58)
 Verdict:  holds — the loop's stamp refusal is live on mainline and the cloud's queue is the escalation itself; every preflight-running CI step now runs the liveness gate authenticated or fails naming the missing env
+
+## 2026-09-26 — "Eight tranches closed the plan-row backlog, #1106's re-mint went red then green, Pages went green after 34 days, DR-060 landed"
+Command:  node scripts/check-lessons.mjs   (worktree at 428a12a8, DR-060's merge)
+Output:   "check-lessons: ok — 9 lesson(s), 7 landed, 2 pending, 0 pending past 14 days (DR-060)" (as of 2026-09-26)
+Command:  node scripts/check-lessons.mjs --self-test
+Output:   "check-lessons self-test: 22/22"
+Command:  node scripts/check-readiness-figure.mjs
+Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
+Command:  node scripts/check-publication-boundary.mjs
+Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
+Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
+Output:   "false"
+Command:  node scripts/check-sim-requests.mjs
+Output:   "Simulation request loop — 22 request(s), 22 result(s)" / "operations that actually ran clean: 35" / "Simulation request loop passed — every result binds to a request it was asked for."
+Command:  cat /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/dr060d-pf.log (tail) / dr060d-br.log (tail)   — DR-060 head d2d39883
+Output:   "PREFLIGHT_EXIT 0" / "Breadth lane PASSED — 58 breadth proofs green (deferred families, doctrine documents, and the DR-005 decision-palette design gate)." / "BREADTH_EXIT 0"
+Command:  cat <scratchpad>/t6-pf.log /t6-br.log /t7-pf.log /t7-br.log /t8-pf.log /t8-br.log   — tranches 6/7/8 (heads bf6b9e4a, b0b3c038, b061c945)
+Output:   all six tail "PREFLIGHT_EXIT 0" / "Breadth lane PASSED — 58 breadth proofs green …" / "BREADTH_EXIT 0"
+Command:  cat artifacts/sim-results/objective-loop-evidence-fresh-2026-09-26.json
+Output:   "completedAt": "2026-09-26T06:14:16.976Z", provenance.commit "bb05aac7108b2c423bb539b1105e1622b1f9573f", provenance.workingTreeClean true, runs[0] operation "evidence" status "passed" exitCode 0
+Command:  cat artifacts/live-evidence/mac-run.json
+Output:   "mintedAt": "2026-09-26T06:14:13.974Z", "manifestFingerprint": "7c15496cfc1b936fb998d4879dcb9007f384fe778d3627036a49f6006eb7a04b", preflightCoverage.nativeBuildAttestation.treeSha "bb05aac7108b2c423bb539b1105e1622b1f9573f"
+Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/SignalGrid-Review-Hub)
+Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
+Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).

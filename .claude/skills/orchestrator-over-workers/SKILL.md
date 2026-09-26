@@ -202,4 +202,6 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   as diverged (L10). A fresh, disposable clone of some OTHER repository may still use
   `git clone --depth`; the rule is about re-fetching a checkout everyone shares, not
   about shallow clones in general. If a chain step's history seam looks broken after a
-  subagent ran, check `ls .git/shallow` first — `git fetch --unshallow origin` is the fix.
+  subagent ran, check `git rev-parse --is-shallow-repository` first (it prints `true` or
+  `false` from any worktree; `ls .git/shallow` fails open there, since a worktree's `.git`
+  is a file) — `git fetch --unshallow origin` is the fix.

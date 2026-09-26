@@ -35,18 +35,27 @@
 # wrote `.git/shallow` with the current mainline head as a boundary commit,
 # so every history-based check (loop:state, `git branch -vv`, ahead/behind)
 # read the tree as diverged that was not. `git fetch --unshallow origin` fixed
-# it, but the fetch that caused it should never have run. `fetch --depth`,
-# `fetch --deepen`, `fetch --shallow-since`, `fetch --shallow-exclude` and
-# `pull --depth` are now denied. `git clone --depth` is deliberately left
-# ALLOWED: a shallow clone into a brand-new directory (e.g. the ponytail
-# installer) never shallows a repo anyone else shares.
+# it, but the fetch that caused it should never have run. `--depth`,
+# `--deepen`, `--shallow-since` and `--shallow-exclude` on `git fetch` or
+# `git pull` are now denied by ONE regex, wherever the flag sits and whatever
+# global options come first (`git -C <wt> fetch origin x --depth=1` is the
+# worktree shape a worker actually types; a literal `git fetch --depth` token
+# let it through). `git fetch --unshallow` (the repair) is allowed, and so is
+# `git clone --depth`: a shallow clone into a brand-new directory (e.g. the
+# ponytail installer) never shallows a repo anyone else shares.
 # Still NOT caught, said plainly: a pattern assembled from a variable
-# (`F=--force; git push $F`) or split across a here-doc. This is a nudge
-# layer, not a security boundary; the permission classifier is the boundary.
+# (`F=--force; git push $F`) or split across a here-doc, and any command a
+# SCRIPT runs — this hook sees the Bash line, not what `pnpm run x` spawns.
+# (scripts/src/phase-pr-report.ts fetched `--depth=1` whenever PHASE_BASE_REF
+# was set, so a local run in the shared checkout repeated L10; it is now
+# CI-only, like phase-gate.ts.) This is a nudge layer, not a security
+# boundary; the permission classifier is the boundary.
 
 deny() {
   jq -nc --arg r "$1" '{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"deny", permissionDecisionReason:$r}}'
 }
+
+SHALLOW_PATTERN='git fetch/pull --depth|--deepen|--shallow-*'
 
 # Print the first forbidden pattern found in $1, or nothing (exit 1) if none.
 judge() {
@@ -76,12 +85,21 @@ judge() {
   # Whole-token matches: `git stash` must not fire on `git stash-list-helper`,
   # so each pattern is bounded by non-word characters (or the ends of the line).
   # Case-SENSITIVE: `git branch -d` (safe, merged-only) is not `git branch -D`.
-  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo" "git fetch --depth" "git fetch --deepen" "git fetch --shallow-since" "git fetch --shallow-exclude" "git pull --depth"; do
+  for p in "rm -rf" "git push --force" "git push -f" "--no-verify" "git stash" "git reset --hard" "git branch -D" "sudo"; do
     if printf '%s' "$stripped" | grep -qE -- "(^|[^A-Za-z0-9_-])${p}([^A-Za-z0-9_-]|$)"; then
       printf '%s' "$p"
       return 0
     fi
   done
+  # L10: a shallowing flag anywhere in a fetch/pull, after any `-C <dir>`/`-c k=v`/
+  # `--opt[=v]` global options, never across `;`, `&` or `|` (so `git fetch origin &&
+  # git clone --depth 1 x` stays allowed). The `-C`/`-c` value may not start with `-`,
+  # so a run of `-c` tokens has ONE parse (the ReDoS lesson above: no two quantifiers
+  # may claim the same token).
+  if printf '%s' "$stripped" | grep -qE -- '(^|[^A-Za-z0-9_-])git( +-[Cc] +[^ ;&|-][^ ;&|]*| +--?[A-Za-z][A-Za-z0-9-]*(=[^ ;&|]*)?)* +(fetch|pull)( +[^;&|]*)? +--(depth|deepen|shallow-since|shallow-exclude)([= ]|$)'; then
+    printf '%s' "$SHALLOW_PATTERN"
+    return 0
+  fi
   return 1
 }
 
@@ -120,10 +138,18 @@ if [ "${1:-}" = "--self-test" ]; then
   expect_deny "git fetch --deepen=5"
   expect_deny "git fetch --shallow-since=2026-09-01"
   expect_deny "git fetch --shallow-exclude=main"
+  expect_deny "git -C /tmp/wt fetch --depth=1 origin x"
+  expect_deny "git -c a=b fetch --depth=1 origin"
+  expect_deny "git fetch origin --depth=1"
+  expect_deny "git fetch -q --depth=1 origin x"
+  expect_deny "git pull --deepen=5"
+  expect_deny "git pull --shallow-since=2026-01-01"
   expect_allow "git commit -m 'never run git fetch --depth here'"
   expect_allow "echo \"git pull --depth is banned\""
   expect_allow "git clone --depth 1 https://example.invalid/x.git"
   expect_allow "git fetch origin"
+  expect_allow "git fetch origin && git clone --depth 1 x"
+  expect_allow "git fetch --unshallow origin"
   # ReDoS regression (Mac lane, 2026-09-13): a long flag run with no closing quote
   # and no forbidden pattern must judge quickly and ALLOW. The old adjacent-ambiguous
   # unwrap quantifiers hung BSD sed here; the linear form returns instantly. On a
@@ -132,10 +158,16 @@ if [ "${1:-}" = "--self-test" ]; then
   for _ in $(seq 1 200); do redos_input="$redos_input -x"; done
   redos_input="$redos_input 'no closing quote and nothing forbidden"
   expect_allow "$redos_input"
+  # The same probe for the L10 fetch/pull regex: 200 global `-c` flags, nothing forbidden.
+  redos_input="git"
+  for _ in $(seq 1 200); do redos_input="$redos_input -c"; done
+  expect_allow "$redos_input fetch origin"
   # The input path: unreadable stdin must DENY, and a well-formed harmless call must ALLOW.
   if printf 'not json' | bash "$0" | grep -q '"deny"'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ unreadable stdin should DENY"; fi
   if [ -z "$(printf '{"tool_input":{"command":"ls -la"}}' | bash "$0")" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ a harmless command should ALLOW"; fi
   if printf '{"tool_input":{"command":"bash -c '"'"'rm -rf /tmp/x'"'"'"}}' | bash "$0" | grep -q '"deny"'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ a wrapped rm -rf through stdin should DENY"; fi
+  # L10: the shallow-fetch refusal names the incident and the repair, not the generic line.
+  if printf '{"tool_input":{"command":"git fetch --depth=1 origin x"}}' | bash "$0" | grep -q -- '--unshallow'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ a shallow fetch through stdin should DENY naming git fetch --unshallow"; fi
   # Hole 4: valid JSON with the command field absent or renamed must DENY.
   if printf '{"tool_input":{"cmd":"rm -rf /"}}' | bash "$0" | grep -q '"deny"'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ valid JSON with NO command field should DENY"; fi
   if printf '{"toolInput":{"command":"rm -rf /"}}' | bash "$0" | grep -q '"deny"'; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "  ✗ valid JSON with a renamed wrapper should DENY"; fi
@@ -171,7 +203,11 @@ fi
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command')
 [ -z "$cmd" ] && exit 0
 if p=$(judge "$cmd"); then
-  deny "Blocked: matches forbidden pattern ${p}. Report the problem instead of working around it."
+  if [ "$p" = "$SHALLOW_PATTERN" ]; then
+    deny "Blocked: ${p} makes the SHARED repository shallow (.git/shallow in the common git dir) and breaks every history seam (lesson L10, docs/agent/LESSONS.md, 2026-09-26 05:59Z). Do not run it here; if the repo is already shallow (git rev-parse --is-shallow-repository prints true), git fetch --unshallow origin repairs it."
+  else
+    deny "Blocked: matches forbidden pattern ${p}. Report the problem instead of working around it."
+  fi
   exit 0
 fi
 exit 0

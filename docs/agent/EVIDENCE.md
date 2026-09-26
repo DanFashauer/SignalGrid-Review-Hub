@@ -3627,3 +3627,19 @@ Output:   "V2 read-40d-old at boot: restrict POSTURE_STALE_STRICT,BENCHMARK_SELE
           #1072 → 24708b33 (gating 108284759970); ticks #1073 → 8b6ded4e, #1076 → 3d52d8f3; heartbeat #1075 → 8fdc143c
           Copilot scanner job log (every PR today): "CAPIError: 400 The requested model is not supported" (COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5)
 Verdict:  holds — the inversions are recorded with reproductions as BUILD_BACKLOG rows and stay OPEN until their DR-051 proposal lands
+
+## 2026-09-26 — "Rows 11 and 14 were finished work; the Tier-1 line is printed and ratcheted; the DR-059 proposal reproduces and closes the estate-path inversions under proof"
+Command:  node scripts/check-review-coverage.mjs   (#1082 @ 8bdd2ca3 → merged e8ad6d02, gating 108303268860)
+Output:   "Tier 1: 19/25 at depth >= audited (mark 19) — 10 stale (commits since the row), 1 below depth, 5 with no row"
+          "self-test passed (22/22)"; PREFLIGHT_EXIT 0; Breadth PASSED (58)
+Command:  pnpm run proof:estate-refresh   (#1083 @ a98d2013, DR-059 proposal, the owner's merge)
+Output:   "ok — …and it is PARTIAL on a DEGRADED connector, never a healthy success"
+          "ok — a refresh that omits encryption retracts it — the verdict leaves allow" / "ok — control: reporting encryption again restores allow"
+          "ok — forty days with no refresh: the posture read fresh at sync no longer allows" / "ok — control: a fresh refresh after the gap restores allow"
+          "summary=pass (24/24)"; proof:signalgrid-core "Assertions: 597/597 passed"; proof:decision-cascade "summary=pass (100/100)"; proof:signalgrid-simulator "102/102 assertions passed"
+          generate-core-normalization-version --check: DRIFT before regen → CORE_NORMALIZATION_VERSION = 25 after; build:room-console rebuilt docs/room-entry-console.html
+Command:  node scripts/review-invariants.mjs / node scripts/check-v1-refusal-coverage.mjs   (#1081 @ d6b31f1f → merged 79db279f, gating 108306397946)
+Output:   "✓ Determinism: 35 packages scanned (derived from lib/), 3 with declared clock reads (38 pinned), 32 at zero"
+          "/v1 refusal coverage holds — every refusal the served source returns is documented."; PREFLIGHT_EXIT 0; Breadth PASSED (58)
+          #1080 → 1cb79caf (gating 108300545174) after a 409 on a merge call whose expectedHeadSha was assembled, not read
+Verdict:  holds — #1083 stays open for the owner; its test:api / preflight / breadth lines are added to its body when the queued run finishes

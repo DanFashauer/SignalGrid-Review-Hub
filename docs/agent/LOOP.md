@@ -52,7 +52,27 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 23:00Z) - ONE BUILT, ONE TICK LEAK CLOSED, ROW 5 RE-MEASURED; OWNER OWES ONE MERGE.
+LAST TOUCHED: 2026-09-26 (cloud lane, 00:20Z) - THE LOOP'S TOP FOUR ROWS WERE FINISHED WORK; ROW 8 IS NOW AN AUDIT WITH FINDINGS.
+              Before building the next ranked row the lane measured it, as with row 5: rows 6 and 9 had shipped
+              2026-08-20..22 (#253 / 905c243c; #219-#221) and read open for a month; row 8 was read 2026-08-23 but six
+              of nine files sat at depth read. #1074 (91d9556e) re-measured all three (6 and 9 DONE with checks named,
+              8 kept OPEN because the loop ranks open rows only) and added the consequence to BUILD_BACKLOG: open
+              rows need a re-measured stamp and the loop should refuse to rank a stale one. Then the row 8 unit:
+              verdict-core-reader (Opus, read-only) re-read engine/decision/policy/resolution/compose/adapters at depth
+              audited on 8fdc143c; the lane re-ran every reproduction before recording; #1077 (9cadddaa) carries the
+              ledger rows, row 8 DONE, five backlog rows and ONE OWNER HAND. Real findings: (1) estate posture freshness
+              never ages between syncs - `buildEvidence` in lib/signalgrid-core/src/decision.ts gets no clock, so a
+              record read fresh then aged `40` days with no refresh decides as fresh (v2: step_up with no stale code where
+              a 40-day-old read restricts POSTURE_STALE_STRICT; with encrypted/osSupported it stays allow) - reachable
+              on /v1 estate mode, refresh loop off by default; (2) a refresh never retracts - a fact omitted or a device
+              dropped keeps the old affirmative and `[]` is a healthy success; both HIGH, DR-051 proposal next. Latent:
+              `fromDevicePosture` grants on out-of-domain input (no caller); the malformed-rule skip is fail-closed only
+              for allow rules. Owner hand: v1 stays silent on an emitted unreadable reading in the deferred dock/custody
+              families where DR-043 fields step up - doctrine, not code. Records #1072 (24708b33), this one. Steward:
+              ticks #1073 (8b6ded4e) and #1076 (3d52d8f3) landed, heartbeat #1075 (8fdc143c). Every PR today carried a
+              red Copilot "AI findings" row: its job log now says `400 The requested model is not supported` - a
+              GitHub-side scanner model setting, the owner's to change, never this tree's. #1050 still the owner's merge.
+PREVIOUSLY:   2026-09-25 (cloud lane, 23:00Z) - ONE BUILT, ONE TICK LEAK CLOSED, ROW 5 RE-MEASURED; OWNER OWES ONE MERGE.
               Built and landed under DR-037 (SAFETY_MACHINERY): #1071 (a3bd808b) - scripts/check-shell-backend-paths.mjs
               GATES that every path EnterpriseShell's BackendService.swift builds (4) is declared in lib/api-spec/v1-openapi.yaml
               (62); the legacy OIDC api/auth/* sites are REPORTED; self-test 9/9 with the real tree as positive control;

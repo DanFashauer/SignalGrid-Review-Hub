@@ -56,10 +56,11 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 21:21Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
-              This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
-              Refreshed through Codex rounds 1-11 on #1128; the stamp is the last refresh.
+              This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z. Lines marked POST-WINDOW
+              record later events through the 20:33Z refresh.
+              Refreshed through Codex rounds 1-12 on #1128; the stamp is the last refresh.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), #1133 (OWNER_RESERVED by its own widened classifier: the OWNER merges it), the row-8
               doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
@@ -77,9 +78,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json and
               artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json; a granted
               golden-rule-1 exception does not make either merge-ready until EVERY item in its ack lands. Also review
-              + merge #1136 on the Mac's mail ask (reviewed refute-first 20:0xZ: two lane fixes - row 48 restamped
-              PARTIAL, ios-ci triggers on native/shared/** - landing on claude/land-mac-1136, which carries the Mac's
-              head 44eed7a9; the two P1s are cross-client follow-ups, see the PR threads); and the .claude/workflows
+              + merge #1136 on the Mac's mail ask (POST-WINDOW (20:0xZ): reviewed refute-first - two lane fixes - row
+              48 restamped PARTIAL, ios-ci triggers on native/shared/** - landing on claude/land-mac-1136, which
+              carries the Mac's head 44eed7a9; the two P1s are cross-client follow-ups, see the PR threads); and the
+              .claude/workflows
               read attribution the Mac asks for in docs/agent/SURFACE_REVIEW_COVERAGE.md.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
@@ -91,8 +93,8 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               saved Workflow script; scripts/lib/land-branch-gate.mjs canPush() is the single source of truth for "may
               the chain push" (as landed by #1126 at 11:08Z: preflightExit 0, breadthExit 0, run head === merge head,
               sentinel lines carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha, self-test 10/10 then;
-              hardened by #1130 at 15:07Z to EXACT whole-line sentinel equality after a concatenated-stale-data proof,
-              self-test 19/19); chain
+              POST-WINDOW (15:07Z, #1130): hardened to EXACT whole-line sentinel equality after a
+              concatenated-stale-data proof, self-test 19/19); chain
               lock is a file <scratch>/chain.lock (noclobber, 40-min stale; the trap is installed as the detached
               job's first statement and releases the lock when the job exits). #1126 WAS PREPARED, VALIDATED, PUSHED
               AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
@@ -110,9 +112,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
               a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
               on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
-              conclusion "success" on head e189552b (GitHub MCP get_check_run). Re-run against mainline this cycle:
-              `node scripts/check-mcp-roster.mjs` now prints "mcp-roster: 6 servers (+3 external), signalgrid-mcp
+              conclusion "success" on head e189552b (GitHub MCP get_check_run). At a4507f9a (the #1127 tree, before
+              #1130), `node scripts/check-mcp-roster.mjs` printed "mcp-roster: 6 servers (+3 external), signalgrid-mcp
               16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".
+              POST-WINDOW (15:07Z, #1130): on this branch's tree the same command prints "PASS".
               Lesson L15 (in #1127, now landed on mainline): the branch had L2's tip merged into it before L2
               landed, so L2 then landing by merge commit gave two merge bases (62b07014, 08949c61) - git's recursive
               merge was clean but GitHub's single-base mergeability check read "dirty", refusing a PR nothing
@@ -120,15 +123,15 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 20:33Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               (PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 confirmed on e189552b in mcp2-pf.log/mcp2-br.log); landing adds the
               orchestrator-skill rule "a stacked branch waits for its base PR to land, then merges Alpha, never the
               base tip".
-              Five owner-decision PRs are now open: three opened this window - #1117 classifies
-              DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER
-              merges it (CI green run 36227993364); #1118 (Mac, DecisionEngine.swift DR-043 port) and
-              #1121 (Mac, AppWorkflows.swift scoped step-up release, stacked on #1118) both touch
-              golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
-              Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a
-              revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a request on
-              #1118 and #1121 - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
-              still awaiting the owner.
+              Five owner-decision PRs were open at the window's close: three opened this window - #1117 classifies
+              DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER merges it (CI
+              green run 36227993364); #1118 (Mac, DecisionEngine.swift DR-043 port) and #1121 (Mac, AppWorkflows.swift
+              scoped step-up release, stacked on #1118) both touch golden-rule-1's two protected files - the lane
+              asked Dan in chat at 08:20Z whether the Mac may re-port TS logic into them as parity maintenance (a rule
+              exception if yes, a revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a
+              request on #1118 and #1121 - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
+              still awaiting the owner; POST-WINDOW (20:33Z): a sixth, #1133 (the landing class derived from the diff;
+              OWNER_RESERVED by its own widened classifier, so the OWNER merges it).
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
@@ -149,11 +152,11 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5 and 43b3454a carry the harness's
               fixed Fable trailer for this session — not a claim that the creative tier wrote them, see LESSONS L5 —
               and a7729cc1 carries a Sonnet trailer, the Pre-stage worker's own tier; the Alpha-merge commits the
-              workflow's Merge stage made carry none, which #1130's merge -m change closed (36c561c7, 15:07Z); this
-              refresh commit carries the trailer of the tier that wrote it.)
-              The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
-              coordinator's own bulk edits) got ledger row L16 with the skill's stage-table correction in #1130,
-              landed 36c561c7 at 15:07Z under DR-037 (check run 108425765136) - not in this record PR.
+              workflow's Merge stage made carry none; POST-WINDOW (15:07Z, #1130): #1130's merge -m change closed that
+              gap (36c561c7); this refresh commit carries the trailer of the tier that wrote it.)
+              POST-WINDOW (15:07Z, #1130): the wrong-tier stages named here (PR bodies on Sonnet where the skill's
+              table says Haiku; the coordinator's own bulk edits) got ledger row L16 with the skill's stage-table
+              correction, landed 36c561c7 under DR-037 (check run 108425765136) - not in this record PR.
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows

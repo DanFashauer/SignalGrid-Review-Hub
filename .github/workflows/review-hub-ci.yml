@@ -710,6 +710,16 @@ jobs:
         run: node scripts/check-vendor-doc-drift.mjs --self-test
       - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
         run: node scripts/check-vendor-doc-drift.mjs
+      # Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+      # and nothing read a non-gating workflow's conclusion. REPORT-ONLY on a streak (exit 0);
+      # exit 1 on its own errors (unclassified workflow file, HTTP error, unresolved workflow,
+      # or no token here). Needs only actions: read, already granted at the top of this file.
+      - name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)"
+        run: node scripts/check-mainline-workflow-streaks.mjs --self-test
+      - name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-mainline-workflow-streaks.mjs
       # The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
       # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
       # every figure gate stayed green, because none of them reads a bare 240 or 585.

@@ -56,7 +56,40 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE LEARNS; THE LESSONS LEDGER OPENS WITH SEVEN ROWS.
+LAST TOUCHED: 2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106'S RE-MINT WENT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
+              Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
+              #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows
+              the loop had refused as unstamped are now measured. The Mac's #1106 (9222c677, test:api + Bruno on
+              ephemeral ports) landed on its own mail ask (lesson L6) and changed api.test.mjs, a bound source of live
+              evidence; the next tick (#1109 a5347aa6) queued a re-mint request, and #1114 (1f337e7d) ran it - live-
+              evidence minted `06:14:13.974Z`, readiness 100 on that tree, 22/22 sim requests bound
+              (`node scripts/check-sim-requests.mjs`: "22 request(s), 22 result(s)"). That tick's own coverage-page
+              regen ran against a base mainline had since moved past, so #1114 landed RED (lesson L12, pending); the
+              next steward heartbeat #1116 (ffa8cc53) regenerated the page and mainline returned to green. #1111
+              (5f586f96) ended the Pages build failure that had run on every mainline push since 2026-08-23 (34 days,
+              vendored Liquid braces breaking Jekyll) with a root `.nojekyll`; workflow run 36223690198 confirms it -
+              conclusion `success` at head `1e26ec0c236f99b85cd5b3da538168d9707253cf`, the first green since the
+              outage began. #1111 failed CI four times first (gate-before-`git add`, twice-stale coverage page, an
+              unowned-count rise) - lesson L9. DR-060 (#1113, 428a12a8) landed: the routing decision record is
+              ADOPTED, and docs/agent/LESSONS.md opened as the incident ledger (L1-L9, `check-lessons.mjs` self-test
+              22/22, FATAL on shape, REPORTED past 14 days) in preflight and CI, with preflight's first step now
+              reaping same-tree api-server orphans and the orchestrator skill carrying the stage table. Incident: a
+              read-only worker ran `git fetch --depth=1` in the SHARED checkout at 05:59Z, making it shallow and
+              making `loop:state` misread Alpha as +1958 ahead; `git fetch --unshallow` at 06:03Z fixed it in 3.5s -
+              lesson L10 (guard branch in review, PR to follow). Six Mac ticks (#1101, #1105, #1107, #1108, #1112,
+              #1115) were closed as superseded by newer green ticks. Next: three DR-060 follow-up PRs already built
+              and awaiting landing - L10's shallow-fetch deny guard, L8's mainline-workflow red-streak checker, and
+              moving oidc.test.mjs/load.test.mjs/observability-proof.ts off fixed ports (L1's root cause); L11 and L12
+              ride the L10 PR. Owner still owes: #1050 (DR-058), #1083 (DR-059), the row-8 doctrine hand, #1037's
+              CodeQL call, the Copilot scanner's model setting, and Settings -> Pages -> Source -> GitHub Actions.
+TIERS THIS SESSION: two Sonnet readers mapped the hook/ledger/parity/port mechanics; three Sonnet builders built L10,
+              L8 and the ports change in their own worktrees; Opus reviewers adversarially reviewed each; a Sonnet
+              worker built this record, an Opus reviewer checked it, a Haiku worker ran its chain - that much matches
+              the stage table. L7 recurred anyway: the coordinator (creative tier) wrote every brief, ran DR-060's
+              local preflight/breadth chain itself, wrote #1113's PR body itself, and performed every merge and PR-
+              body edit - bulk stages the table assigns to the cheapest tier; the merges are the landing skill's own
+              step, but the briefs and bodies are not.
+PREVIOUSLY:   2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE LEARNS; THE LESSONS LEDGER OPENS WITH SEVEN ROWS.
               The owner restated the routing directive in his own words: spec, review and gate design run on Opus and
               every other stage is dispatched to a cheaper tier; a creative-tier coordinator runs no stage itself. DR-060 (ADOPTED, landed by the cloud lane under DR-037: safety machinery only)
               records it; docs/agent/LESSONS.md is the new ledger - every incident a cycle hits gets a row with evidence and
@@ -65,7 +98,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE L
               orphans under its own tree, which would not have caught it; oidc.test.mjs's fixed ports are a backlog row), the hand-picked gate subset (pending - backlog row), the pgrep waiters and the
               restart-killed chains (landed - orchestrator skill "Sequential chains and waiters"), the coordinator doing bulk
               work (landed - DR-060 and the skill's stage table), the Mac port collision of 2026-09-25 (landed - PR #1106, 9222c677), this PR breaking its own stage table (L7).
-TIERS THIS SESSION: Sonnet readers mapped the mechanics; the coordinator (creative tier) wrote the spec, which breaks
+              TIERS THIS SESSION: Sonnet readers mapped the mechanics; the coordinator (creative tier) wrote the spec, which breaks
               DR-047 rule 2 (spec runs on Opus); one Opus worker built this PR and ran its gates, where the table says Sonnet;
               review findings were fixed by an Opus worker, where the table also says Sonnet. All three are lesson L7.
 PREVIOUSLY:   2026-09-26 (cloud lane, 02:35Z) - THE LOOP NOW REFUSES STALE ROWS AND MAILED THE CLOUD ITS QUEUE; A CI GATE HAD RUN UNAUTHENTICATED SINCE IT WAS WIRED.

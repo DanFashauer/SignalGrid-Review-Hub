@@ -271,30 +271,30 @@
     {
       "path": "lib/signalgrid-core/src/policy.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "Validates authored rules at the write boundary, then most-restrictive-wins with a step_up default and an allow-on-degraded backstop. The backstop's critical set is five fields; shipped v1 rules mask the osSupported gap, but createPolicyDraft can activate a rule set that does not. 2026-09-02 CORRECTION: the osSupported gap is closed in deriveCriticalSignalsPresent (with 'expired' and 'stale' rejected on the posture ladder beside it), so this note describes a state the tree has left. A second read by verdict-core-reader at 19e53e0 found four v1 rules (identity-unknown, elevated-workflow-needs-encryption, custody-exception, tamper-confirmed), the NO_RULE_MATCHED_DEFAULT_STEP_UP arm, both MAX_POLICY_RULES/MAX_RULE_CONDITIONS ceilings and two validateCondition reject paths unproven — finding V6, now asserted in scripts/src/signalgrid-core-proof.ts."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "Validation at write, most-restrictive-wins, step_up default and the allow backstop all hold, and the DR-043 credential grid is proven cell by cell (audited 2026-09-25 after d868557e/dd574a27). v1 stays silent on an emitted present-but-unreadable reading in the deferred dock/custody families, so a fresh out-of-domain value allows where the DR-043 fields step up (latent: fixture-only sync path; owner's doctrine call, hand raised). The evaluate-time 'skip malformed rule' is fail-closed only for allow rules (unreachable while every stored version passes validatePolicyRules)."
     },
     {
       "path": "lib/signalgrid-core/src/engine.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "Tenant-safe facade: every method resolves a bearer token to a principal and checks one named Permission before any query; no method takes a caller-supplied tenant id. No fail-closed inversion found."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "Tenant-safe facade; auth and permission checks hold on every method (re-read at depth audited 2026-09-25 on 8fdc143c after fromEstate/refreshEstatePosture/answerStepUp landed). Estate posture is stamped fresh at sync and never ages or retracts: with no refresh (the default) or a failing one, a 40-day-old read decides as fresh, and a refresh that omits a fact or a device keeps the old affirmative (reproduced; allow is latent under today's Graph mapper, the reason code changes under v1 and the outcome changes under v2). BUILD_BACKLOG rows of 2026-09-25 carry both."
     },
     {
       "path": "lib/signalgrid-core/src/decision.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "The decision loop — resolve, gather, derive, evaluate, snapshot, persist, audit, remediate, webhook. No fail-closed inversion found."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "The decision loop; every missing-subject path throws before evaluation and the clock is injected (audited 2026-09-25; no commits since 2026-08-02). It hands buildEvidence no clock, so freshness is whatever the sync stamped — posture never ages between syncs (the root of the estate freshness inversion recorded against engine.ts). Decision.signalIds is served on /v1 and has no first-party reader."
     },
     {
       "path": "lib/signalgrid-core/src/resolution.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "Turns reason codes into ordered routed steps and can project a re-evaluation. Three fields written and never read: summaryForOperator, projectedReasonCodes, clears — while the sibling summaryForWorker IS rendered twice."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "Plans carry unresolvable codes as escalation — all four DR-043 codes included — and the absent-config default and the matched-rule-based allow exclusion hold under repro (audited 2026-09-25 after caabfdd9). Six served fields have no first-party reader (summaryForOperator, clears, projectedReasonCodes, appliedReasonCodes, originalOutcome, autoResolvable), and no proof asserts summaryForWorker text."
     },
     {
       "path": "lib/signalgrid-simulator/src/decisionEngine.ts",
@@ -306,16 +306,16 @@
     {
       "path": "lib/posture-composition/src/compose.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "Strongest action wins, tier follows, drivers most-severe-first. Zero signals compose to ok/none — handled downstream by signalCount and pinned by two proofs, so not a defect."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "Strongest-wins with an off-ladder guard that ranks an unknown action highest and tiers it blocked; every consumer found ranks through rankOf (audited 2026-09-25 after 459aedcf/8b8e9599). The empty case is ok/none, distinguished by signalCount at both consumers. The '40 casts' comment is one behind (41 since a10e5f5b)."
     },
     {
       "path": "lib/posture-composition/src/adapters.ts",
       "reviewedBy": "verdict-core-reader",
-      "date": "2026-08-23",
-      "depth": "read",
-      "note": "40 one-line mappings plus fromDevicePosture, the only one with real logic (13 conditions over five Graph fields; 3 of 900 input states grant). All 40 cast recommendedAction with no runtime check — every member is on the ladder today, so safe by construction, but it is a load-bearing invariant with no guard."
+      "date": "2026-09-25",
+      "depth": "audited",
+      "note": "41 one-line casts made safe by compose's off-ladder guard (audited 2026-09-25 after 9018a8bc/a10e5f5b). fromDevicePosture grants only on confirmed-clean in-domain input but falls through to COMPLIANT_MANAGED on any out-of-domain or missing value (reproduced; latent — it has no production caller). 42 of 43 adapters have no production caller and five have no caller at all."
     },
     {
       "path": "nginx.conf",

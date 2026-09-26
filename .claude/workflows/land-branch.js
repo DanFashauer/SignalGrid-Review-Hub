@@ -45,12 +45,15 @@
 //       exit path (success, failure, or the job's own `cd` failing) releases it —
 //       never a trailing `&& (...; rm)` that only runs if everything before it did.
 //   L15 a stacked branch merges Alpha after its base lands, never the base tip.
+//   L17 a worktree with no root node_modules (or a symlink to one) fails the chain
+//       at the first tsx proof; the Merge stage installs it from the lockfile
+//       (`pnpm install --frozen-lockfile --offline`) before anything else.
 export const meta = {
   name: 'land-branch',
   description: 'Optional pre-edit, merge Alpha + regenerate on a clean index, one sequential preflight+breadth chain, push only on 0/0 verified by the script, open the PR',
   phases: [
     { title: 'Pre', detail: 'optional Sonnet edit stage from args.preBrief' },
-    { title: 'Merge', detail: 'Sonnet merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
+    { title: 'Merge', detail: 'Sonnet installs the worktree if needed (L17), merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
     { title: 'Chain', detail: 'Haiku runs preflight + breadth with sentinels; the SCRIPT gates the push on 0/0, a Haiku push agent runs only when it clears' },
     { title: 'PR', detail: 'Sonnet drafts the body from the diff; Haiku opens the PR' },
   ],
@@ -207,6 +210,7 @@ ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium
 
 phase('Merge')
 const merge = await agent(`You are the Sonnet merge worker (DR-060 rule 1: mid tier). Worktree ${worktree}, branch ${branch}.
+0. \`cd ${worktree} && test -x scripts/node_modules/.bin/tsx || pnpm install --frozen-lockfile --offline\` — an uninstalled worktree (root node_modules missing or a symlink) fails the chain at the first tsx proof (L17); report the install's last line in gateResults if it ran.
 1. \`cd ${REPO} && git fetch origin SignalGrid_Alpha\` (plain fetch). \`cd ${worktree} && git status --short\` must be empty.
 2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
 3. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.

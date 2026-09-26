@@ -20,7 +20,7 @@ Invoke with the Workflow tool, `name: "land-branch"`, and this `args` object:
 | --- | --- | --- |
 | `repo` | yes | Absolute path to the shared repository root. |
 | `scratch` | yes | Absolute path to the scratchpad base holding the chain lock and logs. |
-| `worktree` | yes | Absolute path to the worker's own worktree — the only one touched. |
+| `worktree` | yes | Absolute path to the worker's own worktree — the only one touched. Must be a real `pnpm install --frozen-lockfile` checkout (the Merge stage installs it offline when `scripts/node_modules/.bin/tsx` is missing — L17); a root `node_modules` symlink is not an install. |
 | `branch` | yes | The branch being landed. |
 | `tag` | yes | Short tag for this run's lock/log filenames. |
 | `klass` | yes | The caller's initial GUESS at `SAFETY_MACHINERY` \| `DECISION_PATH` \| `OWNER_RESERVED` \| anything else. The Merge stage checks it against the diff and the DERIVED class wins for the PR's "Owner decision needed" section — see below. |

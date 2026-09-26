@@ -211,6 +211,12 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   an index holding three stages of the page and render wrong counts (L11). The generator
   now refuses (exit 1, naming the unmerged paths) when `git ls-files -u` prints anything;
   the same check applies to any other worker step that regenerates a file from the tree.
+- **A stacked branch waits for its base PR to land, then merges `origin/SignalGrid_Alpha`
+  — never the base branch's own tip (L15).** Landings are merge commits, so merging the
+  base tip early leaves the stacked branch with two merge bases against mainline: git's
+  recursive merge is clean, GitHub's single-base mergeability check reports `dirty`, and
+  the merge button refuses a PR in which nothing conflicts (#1127). An adjacent-line edit
+  shared with the base is resolved on the Alpha merge after the base lands, not before.
 - **Land a worker branch through the saved `land-branch` workflow, never a hand-run
   chain that pushes.** Workflow tool, `name: "land-branch"`, `args: { repo, scratch,
   worktree, branch, tag, klass, title, preBrief?, bodyNotes? }` — it merges Alpha,

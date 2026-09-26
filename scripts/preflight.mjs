@@ -105,6 +105,11 @@ const STEPS = [
   // script-side gate says so; this proves the gate refuses a missing, non-zero or
   // stale (previous-run, wrong-sha) sentinel.
   { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+  // first-party skill may call which MCP server, with signalgrid-mcp's tool count
+  // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+  { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
+  { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a

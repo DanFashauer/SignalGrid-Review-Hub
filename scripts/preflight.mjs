@@ -704,6 +704,19 @@ const STEPS = [
   // never a stale link) a pull request.
   { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
   { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
+  // Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak; fatal on
+  // its own errors (unclassified workflow file, HTTP error, unresolved workflow). It needs
+  // the Actions API, so without GITHUB_TOKEN it prints SKIPPED and preflight classifies that
+  // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
+  // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
+  {
+    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row)",
+    cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
+    selfSkipsWithout: "GITHUB_TOKEN",
+    env: { GH_TOKEN: "" },
+  },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed
@@ -815,8 +828,14 @@ if (selfSkipped.length > 0) {
   // where the decision to push is made, not in a comment nobody opens.
   console.log(`\n  ${selfSkipped.length} proof(s) SELF-SKIPPED — they exited 0 without running:`);
   for (const r of selfSkipped) console.log(`    · ${r.name} (${r.env} unset)`);
-  console.log("    Nothing they prove was verified by this run. CI's durable-persistence job");
-  console.log("    runs them against a real Postgres; set DATABASE_URL to run them here.");
+  console.log("    Nothing they prove was verified by this run.");
+  if (selfSkipped.some((r) => r.env === "DATABASE_URL")) {
+    console.log("    CI's durable-persistence job runs the DATABASE_URL ones against a real Postgres;");
+    console.log("    set DATABASE_URL to run them here.");
+  }
+  if (selfSkipped.some((r) => r.env === "GITHUB_TOKEN")) {
+    console.log("    CI's validation job runs the GITHUB_TOKEN one with the workflow token; set GITHUB_TOKEN to run it here.");
+  }
 }
 if (unavailable.length > 0) {
   // Stated WITH the verdict, not below it. "Everything it runs is green" is true

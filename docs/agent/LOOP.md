@@ -206,8 +206,13 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               through DecisionEngine.evaluate in Swift on both build systems; the first replay went red on
               6 cases and caught the declared DR-043 unauthorized-removal drift (TS-only since #748),
               ported and the declaration closed. proof 14/14, swift test 111/111, xcodebuild TEST SUCCEEDED,
-              preflight PASSED 430, breadth PASSED 58. NEXT for the Mac: the loop's next Mac-only row;
-              cloud: merge #1037, #1118.
+              preflight PASSED 430, breadth PASSED 58. 08:3xZ: THE OTHER PORT TOO (PR #1121, stacked on
+              #1118): AppWorkflows.swift replays 368 TS planner plans; the scoped step-up release (row 101,
+              declared since 2026-09-12) and the unknown-vertical confirmer default re-ported, both
+              declared-drift registries empty; proof 11/11, swift test 113/113, xcodebuild TEST
+              SUCCEEDED, preflight PASSED 431, breadth 58. Rows 101/48 (3 of 4 claims)/backlog 2113
+              closed. NEXT for the Mac: the assist-wire carve-out (row 48's last claim) or the loop's
+              next Mac-only row; cloud: merge #1037, #1118, then #1121.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

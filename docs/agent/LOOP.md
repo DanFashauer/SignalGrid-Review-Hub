@@ -244,8 +244,15 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               declared since 2026-09-12) and the unknown-vertical confirmer default re-ported, both
               declared-drift registries empty; proof 11/11, swift test 113/113, xcodebuild TEST
               SUCCEEDED, preflight PASSED 431, breadth 58. Rows 101/48 (3 of 4 claims)/backlog 2113
-              closed. NEXT for the Mac: the assist-wire carve-out (row 48's last claim) or the loop's
-              next Mac-only row; cloud: merge #1037, #1118, then #1121.
+              closed. 15:3xZ, on the owner's "work out no matter the issues": ROW 48 CLOSED OUTRIGHT
+              (PR #1136, off mainline) - iOS now has an Assist-wire client (AssistWire.swift, a
+              transcription of the Kotlin one) bound to the same 44 shared conformance cases as Kotlin
+              and Rust (2 tests, 0 failures on the first run; gate binds 3 clients); the honest residual
+              is stated in the gate, not hidden: the shell does not yet CALL /v1/authorize (its wire is
+              /v1/app-workflows/evaluate) - wiring it is a product change (DR-007/DR-023). preflight
+              PASSED 433, breadth 58, xcodebuild TEST SUCCEEDED. Cloud owes a read attribution for
+              .claude/workflows (its land-branch workflow). NEXT for the Mac: the loop's next
+              Mac-only row; cloud: merge #1037, #1118, #1121 (after #1118), #1136.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

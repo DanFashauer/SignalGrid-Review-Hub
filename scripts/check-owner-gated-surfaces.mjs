@@ -172,6 +172,20 @@ export const OWNER_RESERVED = [
   // scripts/, so raising either was an 'other' change: an autonomous merge could widen
   // what the launch-claims gate tolerates without ever touching the gate's own code.
   { rule: "the launch-claims ceilings (scripts/check-launch-claims.mjs's own RETIRED_CEILING_FILE / DOCS_CEILING_FILE — raising either weakens the gate through an 'other' change)", re: /^docs\/agent\/launch-claims-(retired-labels|docs)-ceiling\.json$/ },
+  // Codex round 3 on #1133 (thread 4112838155, 2026-09-26): the Dockerfile set feeding
+  // that same derivation is itself outside scripts/ and unowned by any rule above.
+  // scripts/check-launch-claims.mjs:46-73 derives its scanned source roots by walking
+  // `git ls-files 'Dockerfile*'` (a bare pathspec with no `/`, so it only matches
+  // top-level names — verified live: a nested Dockerfile in a subdirectory does not
+  // match it from the repo root) and mapping each Dockerfile's `COPY .../dist` lines to
+  // an `artifacts/<pkg>/src` root to scan. Adding, removing or rewriting a root
+  // Dockerfile.* changes WHICH roots get scanned without ever touching
+  // check-launch-claims.mjs itself — the same "widen the gate's blind spot from
+  // outside its own code" shape Finding 3's ceiling-files rule above already closes.
+  // Scoped to EXACTLY what that pathspec reads today: a root `Dockerfile` or
+  // `Dockerfile.*`, never a subdirectory (this rule widens only if that derivation is
+  // ever changed to read a nested one).
+  { rule: "the launch-claims gate's scanned Dockerfile set (root Dockerfile / Dockerfile.* — changes which artifacts/<pkg>/src trees scripts/check-launch-claims.mjs scans)", re: /^Dockerfile[^/]*$/ },
   // Codex round 2 on #1133 (2026-09-26) P1: the repo's own instruction files — every
   // rule in this manifest, DR-020/DR-021/DR-033/DR-037/DR-054/DR-060, the golden rules,
   // the "ask before" list — are prose the owner wrote and the whole autonomous-merge
@@ -182,6 +196,11 @@ export const OWNER_RESERVED = [
   // it is deliberately out of scope for this rule until named here).
   { rule: "the repository instructions (root AGENTS.md)", re: /^AGENTS\.md$/ },
   { rule: "the repository instructions (root CLAUDE.md)", re: /^CLAUDE\.md$/ },
+  // Codex round 3 on #1133 (thread 4112838146, 2026-09-26): docs/PURPOSE.md is
+  // canonical (DR-020, CLAUDE.md) — it states what SignalGrid IS and what may be
+  // claimed, the same class of owner-authored prose as AGENTS.md/CLAUDE.md above, and
+  // was previously unmatched by any rule here.
+  { rule: "the canonical purpose document (DR-020: states what SignalGrid is and what may be claimed)", re: /^docs\/PURPOSE\.md$/ },
   // Codex round 2 on #1133 (2026-09-26) P1: the LOCAL helper modules the owner-reserved
   // gate scripts above import. scripts/check-launch-claims.mjs delegates its ratchet-file
   // reading to scripts/lib/ratchet-read.mjs — without a dedicated rule, editing that
@@ -390,9 +409,16 @@ function selfTest() {
   // was an 'other' change that weakened the gate without ever touching its code.
   t("the launch-claims retired-labels ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-retired-labels-ceiling.json"])) === "OWNER_RESERVED");
   t("the launch-claims docs ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-docs-ceiling.json"])) === "OWNER_RESERVED");
+  // Codex round 3 on #1133 (thread 4112838155, 2026-09-26): the Dockerfile set that
+  // feeds scripts/check-launch-claims.mjs's own source-root derivation.
+  t("Dockerfile.api is OWNER_RESERVED (feeds the launch-claims gate's scanned Dockerfile set)", mostRestrictive(cls(["Dockerfile.api"])) === "OWNER_RESERVED");
+  t("Dockerfile.web is OWNER_RESERVED (same)", mostRestrictive(cls(["Dockerfile.web"])) === "OWNER_RESERVED");
+  t("a nested Dockerfile (docs/ops/Dockerfile.staging) stays autonomous — check-launch-claims.mjs's bare 'Dockerfile*' pathspec never matches a subdirectory", cls(["docs/ops/Dockerfile.staging"]).tier === "autonomous");
   // Codex round 2 on #1133 (2026-09-26) P1, finding 1: the repository instruction files.
   t("root AGENTS.md is OWNER_RESERVED", mostRestrictive(cls(["AGENTS.md"])) === "OWNER_RESERVED");
   t("root CLAUDE.md is OWNER_RESERVED", mostRestrictive(cls(["CLAUDE.md"])) === "OWNER_RESERVED");
+  // Codex round 3 on #1133 (thread 4112838146, 2026-09-26): the canonical purpose doc.
+  t("docs/PURPOSE.md is OWNER_RESERVED", mostRestrictive(cls(["docs/PURPOSE.md"])) === "OWNER_RESERVED");
   // Codex round 2 on #1133 (2026-09-26) P1, finding 4: the launch-claims gate's own
   // ratchet-read helper — a change here used to classify only SAFETY_MACHINERY (the
   // blanket scripts/** rule), one tier below the gate script that imports it.

@@ -164,6 +164,20 @@ function classifyBranchOutput(worktree, baseRef) {
     const firstLine = String(err.stderr || err.message || "").split("\n")[0].trim();
     return `base ref's classifier unreadable: git -C ${worktree} show ${baseRef}:${relPath} failed: ${firstLine}`;
   }
+  // Codex round 3 on #1133 (thread 4112838152, 2026-09-26): a base ref whose copy of
+  // this file PREDATES --classify-branch (the #1133 bootstrap: any commit before that
+  // CLI flag existed) has no --classify-branch handling anywhere in its source, so
+  // running it would fall through to its old default (validate(), which prints
+  // "Owner-gated surfaces manifest ok — ..." and exits 0) — text that happens not to
+  // match KLASS_LINE_RE today, but for an unnamed reason, and nothing here promises
+  // every pre-#1133 shape fails that same way. Detect the gap BEFORE writing or running
+  // anything the base carries, by the one fact that is actually true of every commit
+  // before the flag existed: the literal string is absent from its source. No fallback
+  // class, no head-side wrapper (running the WORKTREE's own newer copy instead of the
+  // base's) — a push must never pass on a class the base ref itself did not derive.
+  if (!source.includes("--classify-branch")) {
+    return "base ref's classifier predates --classify-branch (the #1133 bootstrap): it cannot derive a class, so this push is refused; land with the pre-derivation land-branch workflow until a base carrying the CLI exists";
+  }
   // realpathSync: on macOS os.tmpdir() sits under /var, a symlink to /private/var. Node
   // gives the classifier a realpath import.meta.url but keeps process.argv[1] as the path
   // it was handed, so the classifier's `import.meta.url === pathToFileURL(process.argv[1])`
@@ -661,6 +675,51 @@ function selfTest() {
     }
   });
 
+  // Codex round 3 on #1133 (thread 4112838152, 2026-09-26): a base ref whose classifier
+  // PREDATES --classify-branch (a pre-#1133 checkout, before the flag existed at all)
+  // must refuse the push with a reason that SAYS SO, decided before anything the base
+  // carries is ever written to disk or executed — no fallback class, no head-side
+  // wrapper (running the worktree's OWN newer copy instead of the base's): a push must
+  // never pass on a class the base ref itself did not derive. This base commit's copy of
+  // check-owner-gated-surfaces.mjs is a stand-in for the real pre-#1133 module (same
+  // classifyDiff() export, a CLI tail that runs unconditionally) but genuinely carries
+  // no --classify-branch anywhere in its source — the actual shape of every commit
+  // before the flag was added.
+  {
+    const dir = mkdtempSync(join(tmpdir(), "land-branch-gate-preklass-"));
+    try {
+      execFileSync("git", ["init", "-q", "-b", "base", dir]);
+      execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
+      execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
+      mkdirSync(join(dir, "scripts"), { recursive: true });
+      const preKlassSource = [
+        'export function classifyDiff() { return { tier: "autonomous", matched: [] }; }',
+        'console.log("Owner-gated surfaces manifest ok — 0 rules.");',
+        '',
+      ].join("\n");
+      writeFileSync(join(dir, "scripts", "check-owner-gated-surfaces.mjs"), preKlassSource);
+      execFileSync("git", ["-C", dir, "add", "-A"]);
+      execFileSync("git", ["-C", dir, "commit", "-q", "-m", "pre-#1133 classifier (no --classify-branch)"]);
+      execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+      writeFileSync(join(dir, "f.txt"), "x\n");
+      execFileSync("git", ["-C", dir, "add", "-A"]);
+      execFileSync("git", ["-C", dir, "commit", "-q", "-m", "feature change"]);
+      const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+      const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-preklass-scratch-"));
+      try {
+        const tag = "kt-preklass";
+        stampSentinels(scratch, tag, head);
+        const r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+        if (!r.ok && r.reasons.some((x) => x.includes("predates --classify-branch"))) { pass++; console.log("PASS: --verify refuses by name when the base ref's classifier predates --classify-branch (the #1133 bootstrap)"); }
+        else console.error(`FAIL: --verify base-predates-classify-branch — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+      } finally {
+        rmSync(scratch, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
   // Regression (#1133's Mac-only job, 2026-09-26): with os.tmpdir() behind a symlink,
   // which is macOS's /var -> /private/var and is reproduced here on any POSIX host, the
   // classifier copy must still print its KLASS line. Without the realpathSync() in
@@ -734,10 +793,12 @@ function selfTest() {
   // classifier case (review nit part 1, base's copy still wins); +1: a non-existent
   // baseRef refuses on the git-show failure (review nit part 2); +1: a non-zero
   // classifier exit (empty diff) refuses on the exit-code reason, never stdout-as-a-
-  // candidate-line (review nit part 2); +2: the CLI-level bare/invalid --klass refusals
-  // (review nit part 3); +1: the symlinked-tmpdir regression (#1133's Mac-only job) —
-  // none of these are collected into an array either.
-  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5 + 2 + 1 + 1 + 2 + 1;
+  // candidate-line (review nit part 2); +1: a base ref whose classifier predates
+  // --classify-branch (the #1133 bootstrap) refuses by name (Codex round 3 on #1133);
+  // +2: the CLI-level bare/invalid --klass refusals (review nit part 3); +1: the
+  // symlinked-tmpdir regression (#1133's Mac-only job) — none of these are collected
+  // into an array either.
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5 + 2 + 1 + 1 + 1 + 2 + 1;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

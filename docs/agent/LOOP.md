@@ -52,7 +52,23 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 00:20Z) - THE LOOP'S TOP FOUR ROWS WERE FINISHED WORK; ROW 8 IS NOW AN AUDIT WITH FINDINGS.
+LAST TOUCHED: 2026-09-26 (cloud lane, 01:25Z) - SIX OF SIX RANKED ROWS WERE STALE; THE TIER LINE IS REAL; DR-059 IS THE OWNER'S CALL.
+              Rows 11, 12, 14 measured before building (#1081, 79db279f): 11 shipped by 2026-09-06 (determinism scope
+              derived from lib/, lib/location dispositioned KEPT as deferred), 14 shipped 2026-09-20 (#863's refusal-
+              coverage gate IS the status-code arm), both read open for weeks - six of the loop's last six ranked rows
+              were finished work, so the staleness stamp + loop refusal (BUILD_BACKLOG 2026-09-25) is now the highest-
+              value gate on the loop's input. Row 12 stays open with its gate half landed (#1082, e8ad6d02): the Tier-1
+              read-list is data (docs/agent/review-tiers.json), check-review-coverage prints and ratchets it - first run
+              `Tier 1: 19/25 at depth >= audited (mark 19) - 10 stale, 1 below depth, 5 with no row` - and ledger rows
+              may carry a checked sha. Then the product change the row-8 audit demanded: #1083 (a98d2013) is the DR-059
+              PROPOSAL, the OWNER's merge - posture freshness re-derived at decision time worst-wins with the stamped
+              value (`buildEvidence` takes the decision instant), a refresh RETRACTS every fact or device the source
+              stopped reporting (value null, read as unknown), an empty refresh is partial/degraded; estate-refresh proof
+              `24/24` with controls, core `597/597`, cascade `100/100`, simulator `102/102`, CORE_NORMALIZATION 25.
+              Steward: heartbeat #1080 (1cb79caf; a first merge call carried a fabricated full sha and the API refused it -
+              the head is re-read from the PR, never assembled). Records #1079 (03a26339), this one. Owner owes: #1050
+              (DR-058), #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call; the Copilot scanner's model setting.
+PREVIOUSLY:   2026-09-26 (cloud lane, 00:20Z) - THE LOOP'S TOP FOUR ROWS WERE FINISHED WORK; ROW 8 IS NOW AN AUDIT WITH FINDINGS.
               Before building the next ranked row the lane measured it, as with row 5: rows 6 and 9 had shipped
               2026-08-20..22 (#253 / 905c243c; #219-#221) and read open for a month; row 8 was read 2026-08-23 but six
               of nine files sat at depth read. #1074 (91d9556e) re-measured all three (6 and 9 DONE with checks named,

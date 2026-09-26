@@ -69,8 +69,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 12:36Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               the chain push" (preflightExit 0, breadthExit 0, run head === merge head, both sentinel lines literally
               carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha - self-test confirmed 10/10 here); chain
               lock is a file <scratch>/chain.lock (noclobber, 40-min stale, trap-released as the detached job's first
-              statement). #1126 WAS LANDED BY THE WORKFLOW IT ADDS (dogfooding), which surfaced two defects fixed on
-              the branch: a Haiku chain worker returned exit -1 after ~10 min while the detached chain ran on to
+              statement). #1126 WAS PREPARED, VALIDATED, PUSHED AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
+              MERGED BY THE COORDINATOR UNDER DR-037, which surfaced two defects fixed on the branch: a Haiku chain
+              worker returned exit -1 after ~10 min while the detached chain ran on to
               PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 on the same head 7be12ad7 (fixed by reading the sentinel through short
               mechanical readers, never restarting the job), and the workflow refused at launch with "import.meta is
               only valid inside modules" since the Workflow sandbox has no import.meta/filesystem (fixed with a byte-
@@ -124,8 +125,10 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
               canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
-              chain mechanics were delegated. (The record commit's Fable trailer is the harness's fixed attribution
-              for this session, not a claim that the creative tier wrote it - see LESSONS L5.)
+              chain mechanics were delegated. (The record commits a3353aeb, 857f2b59, d830b333, 93eb5750 and a8be3e1f
+              carry the harness's fixed Fable trailer for this session, not a claim that the creative tier wrote them
+              - see LESSONS L5; the Alpha-merge commits the workflow's Merge stage made carry none, which the
+              hardening branch's merge -m change closes.)
               The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
               coordinator's own bulk edits) get ledger row L16 with the skill's stage-table correction on branch
               claude/harden-land-branch-and-mcp-roster, opening as a PR today - not in this record PR.

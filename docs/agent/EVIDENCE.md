@@ -3709,6 +3709,7 @@ Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH
 Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
 Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065ebc at 11:08:13Z)
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
-          the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: the three owner-
-          decision PRs #1117 (DECISION_PATH merge), #1118/#1121 (golden-rule-1 ruling on the two protected Swift files),
-          and no ruling yet from Dan on any of the three.
+          the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
+          PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still
+          owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows; no ruling yet
+          from Dan on any of them.

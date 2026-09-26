@@ -3610,3 +3610,20 @@ Output:   "self-test passed (9/9)"
           #1070 (lane files) → merged e171c0a5 (gating 108273925403); #1067 → a07c9e96
           #1050 @ 331c6558 (owner's merge): gating 108244715123 success; local PREFLIGHT_EXIT 0 and BREADTH_EXIT 0 after the console rebuild
 Verdict:  holds
+
+## 2026-09-26 — "Plan rows 6, 8, 9 re-measured; the row 8 audit read found two estate-path fail-closed inversions, reproduced by the lane before recording"
+Command:  bun <reader repros> against the worktree at 8fdc143c (scripts kept in the session scratchpad, nothing written to the tree)   (#1077 @ 392d2135)
+Output:   "V2 read-40d-old at boot: restrict POSTURE_STALE_STRICT,BENCHMARK_SELECTION_UNESTABLISHED_STRICT,SHIFT_CONTEXT_UNESTABLISHED_STRICT"
+          "V2 read-fresh at boot: step_up …" / "V2 same device +40 days, no refresh: step_up …" (no stale code)
+          "R1 boot a: allow TRUST_ESTABLISHED" / "R1 +40 days, no refresh, a: allow TRUST_ESTABLISHED"
+          "R2 refresh w/o encrypted -> run success a: allow TRUST_ESTABLISHED" / "R2 control boot w/o encrypted: step_up"
+          "R3 empty refresh +40d: success healthy a: allow TRUST_ESTABLISHED | b: allow TRUST_ESTABLISHED"
+          "R4 b omitted from refresh: success healthy b: allow TRUST_ESTABLISHED"
+          "A1 {} -> none/COMPLIANT_MANAGED" / "A1 {\"userRisk\":\"atRisk\"} -> none/COMPLIANT_MANAGED"
+          "P3 typo'd deny field + healthy-allow, tamper confirmed: allow" / "P5 plan POSTURE_STALE+CREDENTIAL_STRENGTH_UNKNOWN: \"escalation\"" (holds)
+          check-review-coverage: "Review-coverage check passed — every live claim names a real path, a reviewer, a date and a depth"; raised-hands --check: "Raised hands check passed"
+          #1077: PREFLIGHT_EXIT 0; Breadth PASSED (58) → merged 9cadddaa (gating 108294151474)
+          #1074 @ ef98f99a: PREFLIGHT_EXIT 0; Breadth PASSED (58); objective-loop dry ranking "tasks 8 | 11 | 12" → merged 91d9556e (gating 108287485325)
+          #1072 → 24708b33 (gating 108284759970); ticks #1073 → 8b6ded4e, #1076 → 3d52d8f3; heartbeat #1075 → 8fdc143c
+          Copilot scanner job log (every PR today): "CAPIError: 400 The requested model is not supported" (COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5)
+Verdict:  holds — the inversions are recorded with reproductions as BUILD_BACKLOG rows and stay OPEN until their DR-051 proposal lands

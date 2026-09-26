@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 109,
+        "open": 108,
         "partial": 5,
-        "closed": 79
+        "closed": 80
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -66,28 +66,36 @@
         "section": "Global backlog"
       },
       "firstRankedAt": "2026-09-25T23:48:15.242Z"
+    },
+    {
+      "rank": 2,
+      "rowId": "17",
+      "title": "Run the three wire-truth shifts and bind the records to the code",
+      "role": "itsm-ops-domain",
+      "executor": "skill:signalgrid-core",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T03:12:47.765Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "18",
+      "title": "Make iOS port parity behavioral, not textual",
+      "role": "mobile-native-engineer",
+      "executor": "skill:signalgrid-native",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T03:12:47.765Z"
     }
   ],
   "needsExecutor": [],
   "unmeasured": [
-    {
-      "rowId": "17",
-      "title": "Run the three wire-truth shifts and bind the records to the code",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "18",
-      "title": "Make iOS port parity behavioral, not textual",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
-    {
-      "rowId": "19",
-      "title": "Finish Dynamic Type and pin it with a lint rule",
-      "measuredAt": null,
-      "reason": "no re-measured stamp"
-    },
     {
       "rowId": "22",
       "title": "Stand up the cost model and shift economics",
@@ -723,7 +731,7 @@
     {
       "id": "plan-rows-unmeasured",
       "clears": "cloud",
-      "asks": "108 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 18, 19, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 36, 38, 40b, 48, 54, 55, 57, 58, 59, 61, 73, 76, 77, 78, 80, 81, 84, 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
+      "asks": "105 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 35, 36, 38, 40b, 48, 54, 55, 57, 58, 59, 61, 73, 76, 77, 78, 80, 81, 84, 85, 86, 87, 88, 90, 91, 92, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 127, 128, 129, 130, 131, 132, 137, 138, 140, 141, 143, 144, 145, 146, 147, 148, 149, 150, 152, 153, 154, 155, 156, 157, 158, 161, 162, 164, 165, 166, 167, 168, 182, 180, 176, 172, 171, 170. Measure each against the tree; close it, or restamp it with what was measured",
       "since": "2026-09-26T02:26:39.036Z"
     },
     {
@@ -739,12 +747,12 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 108,
-    "openRows": 109
+    "unmeasuredCount": 105,
+    "openRows": 108
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-26T02:26:39.036Z",
-  "derivedAtCommit": "ebf302b922b56e6651277f6136ebc720e99d7a8e",
+  "derivedAt": "2026-09-26T03:12:47.765Z",
+  "derivedAtCommit": "5cc4c9d0336d73023468b428b81176b879b1bfd5",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "58affafb1b3aa1644c0b25b0eccc697e700b9061f8e483633d12a208ab74d024"
+  "decisionAddress": "5efce45b81220b78f59ed1b3e967c482d41a3ed5867ec231e9f751d321d4a7a7"
 }

@@ -2793,6 +2793,22 @@
       "date": "2026-09-06",
       "depth": "audited",
       "note": "Full read (ninth round). Redis key non-injective (':' and '_' folded), allowlist opened by any value but 'true' and by absence, Redis enroll validated nothing, lastSeenAt never consulted. All fixed behind exported pure helpers; proof:device-registry (52) holds them."
+    },
+    {
+      "path": "lib/persistence/src/decision-store.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-09-26",
+      "sha": "46ef1951405b469dd6b8affc7e8e28107b62f19f",
+      "depth": "audited",
+      "note": "Read line by line at depth on 46ef1951 with the type contract, all callers (v1.ts, health.ts, engine.ts), the id-minting path and the in-memory twin (fail-closed-auditor lens, worktree-isolated read-only). Read-time axes hold: not-found->null->404, empty->[], countDecisions throws on a non-finite count, store/DB errors propagate (no permissive catch), the round-trip defaults nothing toward permissive, verifySnapshot tightens on corruption, init/schema/privilege fail closed, no Date.now/Math.random, no expiry/NaN shape. The durable store is write+read-for-display only -- every live decision is recomputed by core.evaluate, so no corrupt row grants live access. WRITE-SIDE findings (BUILD_BACKLOG 2026-09-26, bounded to display/audit history + the tamper flag): the upsert is keyed on id alone (ON CONFLICT (id) DO UPDATE, tenant_id neither in the target nor the SET) -- contradicting the header's read-side (id,tenant_id) isolation claim, able to overwrite across tenants and to rewrite a decision documented immutable, which then still passes verifySnapshot on a fixed clock; and an empty DATABASE_URL reads as the supported off-mode with readyz green."
+    },
+    {
+      "path": "lib/persistence/src/session-store.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-09-26",
+      "sha": "46ef1951405b469dd6b8affc7e8e28107b62f19f",
+      "depth": "audited",
+      "note": "Read line by line at depth on 46ef1951 with callers (v1.ts start/get/refresh/end, health.ts) and both proofs; the in-memory proof executed 13/13 (fail-closed-auditor lens, worktree-isolated read-only). The nil/NaN-expiry shape is CLEAN and PROVEN: withExpiry tightens any unparseable/absent/past expiresAt to 'expired' (the fifth NaN variant, in a shared helper the lexical gate cannot see), asserted BY REASON at scripts/src/session-store-proof.ts:66. Other axes hold: not-found->null, tenant-keyed reads/writes, errors propagate, clampTtl bounds an absent/NaN ttl to 900s in [60s,24h], no ?? true / default-to-active, no Math.random, Date.now only at the route boundary. Findings (BUILD_BACKLOG 2026-09-26, LOW/defense-in-depth, not API-reachable today): a corrupt DB status is blind-cast at :257 and a non-active status short-circuits the expiry check at :67, so an out-of-band 'valid' row with a past expiry is served unexpired; and refresh's UPDATE has no status='active' guard/RETURNING (a refresh/end TOCTOU yields one transient 'active' response, self-healing)."
     }
   ]
 }

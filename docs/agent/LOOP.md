@@ -368,6 +368,17 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               PASSED 433, breadth 58, xcodebuild TEST SUCCEEDED. Cloud owes a read attribution for
               .claude/workflows (its land-branch workflow). NEXT for the Mac: the loop's next
               Mac-only row; cloud: merge #1037, #1118, #1121 (after #1118), #1136.
+              16:xxZ, "work out no matter the issues": ROW 12 (loop rank 1) advanced (PR #1143) - Tier-1
+              READ of the durable persistence path (decision-store.ts, session-store.ts, no prior row),
+              Tier 1 19/25 -> 21/25, mark 21, role-coverage-ratchet regenerated. The read EARNED its
+              keep: session-store nil/NaN-expiry proven clean; a HIGH durable-write tenant-isolation
+              gap found (decision-store ON CONFLICT (id) keyed on id alone; deterministicId's '|' is
+              unescaped and the charset guard misses tenant.id/externalRef) - reachability is a
+              provisioning trust-model call, RAISED AS A HAND (aaa5b32, security-engineer). 4 findings
+              filed, all bounded (durable store never feeds a live gate). Preflight PASSED 375.
+              NEXT for the Mac: security-engineer's reachability answer -> maybe the tenant-guard build;
+              else the next Tier-1 read shift (3 meta-gate files, 1 below-depth, 10 stale).
+              cloud: merge #1037, #1118, #1121, #1136, #1143.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

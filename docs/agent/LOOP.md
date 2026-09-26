@@ -56,10 +56,10 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 18:06Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 19:13Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
-              Refreshed through Codex rounds 1-8 on #1128; the stamp is the last refresh.
+              Refreshed through Codex rounds 1-9 on #1128; the stamp is the last refresh.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
@@ -83,8 +83,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 18:06Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               saved Workflow script; scripts/lib/land-branch-gate.mjs canPush() is the single source of truth for "may
               the chain push" (preflightExit 0, breadthExit 0, run head === merge head, both sentinel lines literally
               carrying PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 plus the head sha - self-test confirmed 10/10 here); chain
-              lock is a file <scratch>/chain.lock (noclobber, 40-min stale, trap-released as the detached job's first
-              statement). #1126 WAS PREPARED, VALIDATED, PUSHED AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
+              lock is a file <scratch>/chain.lock (noclobber, 40-min stale; the trap is installed as the detached
+              job's first statement and releases the lock when the job exits). #1126 WAS PREPARED, VALIDATED, PUSHED
+              AND OPENED BY THE SAVED WORKFLOW IT ADDS (dogfooding);
               MERGED BY THE COORDINATOR UNDER DR-037. The dogfooding surfaced two defects fixed on the branch: a
               Haiku chain worker returned exit -1 after ~10 min while the detached chain ran on to
               PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 on the same head 7be12ad7 (fixed by reading the sentinel through short
@@ -115,8 +116,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 18:06Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               #1121 (Mac, AppWorkflows.swift scoped step-up release, stacked on #1118) both touch
               golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
               Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a
-              revert if no); NO ruling yet on any of the three - plus two from earlier windows: #1050
-              (DR-058) and #1083 (DR-059), both still awaiting the owner.
+              revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a request on
+              any of the three - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
+              still awaiting the owner.
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
@@ -133,11 +135,12 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
               canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
-              chain mechanics were delegated. (The record commits on this branch - a3353aeb, 857f2b59, 6d45b0ce,
-              93eb5750, a8be3e1f, d31dbd95, 8b85874c and this refresh -
-              carry the harness's fixed Fable trailer for this session, not a claim that the creative tier wrote them
-              - see LESSONS L5; the Alpha-merge commits the workflow's Merge stage made carry none, which
-              #1130's merge -m change closed (36c561c7, 15:07Z).)
+              chain mechanics were delegated. (Of the record commits on this branch, a3353aeb, 857f2b59, 6d45b0ce,
+              93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5 and 43b3454a carry the harness's
+              fixed Fable trailer for this session — not a claim that the creative tier wrote them, see LESSONS L5 —
+              and a7729cc1 carries a Sonnet trailer, the Pre-stage worker's own tier; the Alpha-merge commits the
+              workflow's Merge stage made carry none, which #1130's merge -m change closed (36c561c7, 15:07Z); this
+              refresh commit carries the trailer of the tier that wrote it.)
               The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
               coordinator's own bulk edits) got ledger row L16 with the skill's stage-table correction in #1130,
               landed 36c561c7 at 15:07Z under DR-037 (check run 108425765136) - not in this record PR.

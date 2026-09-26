@@ -2468,7 +2468,7 @@ earlier — that is the loop working, not a reason to soften the record.
     parity check move together. Coordinate with the Mac lane before touching it.
 
 85. **A comment claims four falsifiable conjuncts; a 1024-case sweep shows two are
-    constants.** — OPEN, principal-engineer. `decisionEngine.ts:38-66` says "the
+    constants.** — OPEN, principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the two constant conjuncts in `lib/signalgrid-simulator/src/decisionEngine.ts` are unchanged since the comment was written (f35d1fdd, 2026-08-23) — `lib/signalgrid-simulator/src/audit.ts` still derives routing_trace.references from the same routedActions the engine turns into routedIds, so evidenceCoversRouting cannot be false — and the comment claiming they diverge is uncorrected; the 2026-09-05 hardening (46ef1951) fixed the separate proof script's vacuous assertions, not this runtime status field. `decisionEngine.ts:38-66` says "the
     evidence must actually COVER what was routed… which diverges the moment routing
     and evidence disagree." They cannot disagree: `createAuditEvidence` builds
     `routing_trace.references` FROM the same `routedActions` array that line 57
@@ -2483,7 +2483,7 @@ earlier — that is the loop working, not a reason to soften the record.
     conjuncts and correct the comment. Deleting is honest and cheaper.
 
 86. **`registerVerifiedPrincipal` does not validate the role its docstring says it
-    validates.** — OPEN, principal-engineer. `engine.ts:147-174`; the docstring at
+    validates.** — OPEN, principal-engineer. RE-MEASURED 2026-09-26 (still open on its main point): registerVerifiedPrincipal in `lib/signalgrid-core/src/engine.ts` still writes input.role unchecked while its docstring claims a role check; the independent half landed — roleHasPermission in `lib/signalgrid-core/src/auth.ts` returns false for an unknown or prototype-polluted role rather than throwing (46ef1951, 2026-09-05); the one production caller is safe by upstream construction (`lib/enterprise-auth/src/config.ts` validates mapped roles at parse time), so the remaining defect is the method's own missing validation and its false docstring. `engine.ts:147-174`; the docstring at
     `:138-146` states "the target tenant must exist and the role must be known — and
     fails closed otherwise." The tenant check is there. There is no role check.
     REPRODUCED: roles `superuser`, `constructor`, `__proto__` and `toString` are all
@@ -2498,13 +2498,13 @@ earlier — that is the loop working, not a reason to soften the record.
     `Object.hasOwn` and return `false` for an unknown role.
 
 87. **`shift.ts` is the only core module missing from the barrel.** — OPEN,
-    principal-engineer. 18 of 19 exported from `index.ts`; verified two ways. An
+    principal-engineer. DONE (measured 2026-09-26): `lib/signalgrid-core/src/index.ts` exports shift (46ef1951, 2026-09-05, "shift.ts exported" in that round's EVIDENCE entry); all `26` modules under the core's src are exported today. 18 of 19 exported from `index.ts`; verified two ways. An
     external consumer can construct a `DockCustodyRecord` but not a
     `ShiftContextRecord`, though both are fixture-connector inputs of the same kind.
     Internal callers use relative imports, so nothing is broken today.
 
 88. **`computeMetrics` accumulates an out-of-union outcome into a bucket the
-    type says cannot exist, and serves it.** — OPEN, principal-engineer.
+    type says cannot exist, and serves it.** — OPEN, principal-engineer. DONE (measured 2026-09-26): fixed before this row's own last edit — `lib/signalgrid-core/src/metrics.ts` guards the accumulator with Object.hasOwn and reports window.unrecognizedOutcomes instead of minting a phantom bucket (PR #371, 99df95d5, 2026-09-01); proven by the F6d case in `scripts/src/signalgrid-core-proof.ts`; the stale note in `docs/agent/review-coverage.json` on this accumulator predates the fix.
     NOTE severity, reporting path only. RE-ANCHORED 2026-09-02: this row used to be
     anchored on `outcomesCovered()`, which 45cdecf (Ponytail cut 1) deleted as
     zero-importer code — the symbol exists nowhere in the tree now, so half of the
@@ -2559,19 +2559,19 @@ earlier — that is the loop working, not a reason to soften the record.
     must stay `"unknown"`, never `true`.
 
 90. **`groupLatest` orders timestamps with `localeCompare` on a decision path.** —
-    OPEN, principal-engineer. NOTE. `evidence.ts:232` uses ICU collation, not
+    OPEN, principal-engineer. DONE (measured 2026-09-26): `groupLatest` in `lib/signalgrid-core/src/evidence.ts` orders by parsed instant, keeps unparseable readings in an illegible bucket and exact ties worst-wins (PR #376, caabfdd9, 2026-09-02, five hours after this row was written); `node scripts/review-invariants.mjs` bans localeCompare across every planner file under lib/ and passes today. NOTE. `evidence.ts:232` uses ICU collation, not
     code-point ordering, to pick the latest signal. Correct today because every
     `observedAt` is the identical ISO shape, but a source emitting `+00:00` instead
     of `Z`, or omitting milliseconds, would misorder. Use `<` or `Date.parse`.
 
 91. **`activatePolicyVersion` does not require the version's own tests to pass.** —
-    OPEN, principal-engineer. NOTE, governance gap not a fail-open. `engine.ts:311-351`
+    OPEN, principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): activatePolicyVersion in `lib/signalgrid-core/src/engine.ts` still activates any target unconditionally — it never calls runPolicyTests and never rejects a superseded target; its only production caller is the activate route in `artifacts/api-server/src/routes/v1.ts`, which adds no pre-check; the two proof invocations activate a fresh valid draft and never exercise a failing-tests case. NOTE, governance gap not a fail-open. `engine.ts:311-351`
     never runs the pinned `PolicyTest` fixtures and does not reject a `superseded`
     target, so an owner can activate a version that fails its own tests. The
     `criticalSignalsPresent` backstop still holds.
 
 92. **`docs/PRODUCT_DATA_MODEL.md` lists 13 signal categories; the code has 17.** —
-    OPEN, docs-writer. Missing: `benchmark_selection`, `shift_context`,
+    OPEN, docs-writer. RE-MEASURED 2026-09-26 (still open, gap moved): the doc was corrected from 13 to 17 on 2026-09-06 (5f0017c6), then DR-043 (d868557e, 2026-09-23) added attach_state, enrollment_strength and credential_read_method, so `lib/signalgrid-core/src/types.ts` now enumerates 20 categories while `docs/PRODUCT_DATA_MODEL.md` still lists 17; the sync manifest pins all 20 against the code (`scripts/check-live-sync.mjs`) but nothing compares the code or the manifest to this doc table, so the fossil list recurs on every addition. Missing: `benchmark_selection`, `shift_context`,
     `device_management_health`, `local_authority`. `check-proof-figures.mjs` exits 0
     and its own output explains why it cannot see this: a hand-written list of
     backticked names is out of shape for `FIGURE_RE`. This is the fossil-list
@@ -2657,7 +2657,7 @@ earlier — that is the loop working, not a reason to soften the record.
     or CIDR and never by `true`.
 
 95. **`HEAD` on an allowlisted route 404s under the gateway profile.** — OPEN,
-    api-contract-architect. Express auto-serves `HEAD` from a `GET` handler, but
+    api-contract-architect. RE-MEASURED 2026-09-26 (still open, unchanged since 4f46b875): routeServedByGateway in `artifacts/api-server/src/lib/profile.ts` still matches the method literally against GET/POST allowlist entries (the function moved down the file after 93da3e28 added routes), and the GA fence in `artifacts/api-server/src/routes/index.ts` 404s before Express's GET-to-HEAD auto-serve runs; no test in test:api sends HEAD and no fix has landed. Express auto-serves `HEAD` from a `GET` handler, but
     `profile.ts:171-175` compares the method against an allowlist containing only
     `GET`, so it 404s before the handler is reached. Verified: `HEAD /api/healthz`
     -> 404 while `GET` -> 200. `HEAD` is a common load-balancer liveness default, so
@@ -2666,7 +2666,7 @@ earlier — that is the loop working, not a reason to soften the record.
     check; the comment at `:157-166` documents a real hole it closes.
 
 96. **The `/v1` limiter keys on the raw bearer string, not the principal — the
-    exact class `idempotency.ts` already fixed.** — OPEN, api-contract-architect.
+    exact class `idempotency.ts` already fixed.** — OPEN, api-contract-architect. DONE (measured 2026-09-26): PR #868 (9018a8bc, 2026-09-20, under DR-037) — rateLimitKey in `artifacts/api-server/src/middlewares/rateLimit.ts` keys on an unverified JWT iss/sub peek (peekJwtCallerRef in `lib/enterprise-auth/src/jwt.ts`) ahead of a hashed-token fallback, so a rotated bearer for the same subject shares one bucket and the pre-auth constraint is met without a second limiter; covered by the "limiter buckets by CALLER" cases in `artifacts/api-server/test/api.test.mjs`.
     NOTE. `rateLimit.ts:59-67` uses `tok:${token}`; the principal is never consulted.
     `idempotency.ts:56-62` spells out the reasoning for the mirror-image bug: under
     enterprise OIDC the context middleware mints a fresh opaque credential per
@@ -2678,7 +2678,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 97. **`POST /cp/v1/telemetry` is an unauthenticated, unbounded, cross-tenant
     WRITE that the profile documentation does not name as a write.** — OPEN,
-    api-contract-architect. Reproduced: one anonymous POST rewrote another tenant's
+    api-contract-architect. RE-MEASURED 2026-09-26 (still open, reproduced live today): `artifacts/api-server/src/routes/control-plane.ts` still accepts an anonymous POST with any string nodeId of any length and `lib/control-plane/src/index.ts` stores it by nodeId, so a post under another tenant's real node id rewrites that tenant's rollup (reproduced: `9000000` decisions, denyRate `1`) and a `60000`-character nodeId is ingested; PR #456 (65edddaf, 2026-09-05) closed only the count-folding defect (malformed counts now 400); still no auth, no membership check against the tenant's edge nodes, no length bound, no test; review-demo profile only, not mounted under the gateway. Reproduced: one anonymous POST rewrote another tenant's
     rollup, moving the top hotspot to `edge_nw_general` with 9,000,000 decisions and
     a denyRate of 1. A second probe sent 200 batches with 60KB `nodeId` values and
     grew RSS from 102,864 kB to 146,128 kB — the route validates only
@@ -2692,7 +2692,7 @@ earlier — that is the loop working, not a reason to soften the record.
     comments to name the write.
 
 98. **Under the gateway profile, unknown ROOT paths return Express's default HTML
-    error page.** — OPEN, api-contract-architect. NOTE. The JSON catch-all is scoped
+    error page.** — OPEN, api-contract-architect. RE-MEASURED 2026-09-26 (still open, reproduced live today): under the gateway profile GET / and any unknown root path return Express's default HTML 404 page; the JSON catch-all in `artifacts/api-server/src/routes/index.ts` is still mounted under /api only and `artifacts/api-server/src/app.ts` registers nothing at the root when the demo console is off; the gateway console test asserts status only, not body shape. NOTE. The JSON catch-all is scoped
     to `/api` on the stated reasoning that "the root serves human surfaces (demo
     console, /metrics) whose defaults stand" — but under the gateway profile the demo
     console is not mounted, so that premise is false. The path IS escaped (no XSS, no
@@ -2700,7 +2700,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `app.disable("x-powered-by")` was added to remove.
 
 99. **Two demo routers break the response-envelope contract.** — OPEN,
-    api-contract-architect. NOTE. `/api/simulator/*` mints a FRESH uuid as
+    api-contract-architect. RE-MEASURED 2026-09-26 (still open on its core claim, reproduced live today): `artifacts/api-server/src/routes/simulator.ts` still mints a fresh uuid per response instead of reusing req.requestId (a caller's x-request-id is echoed in the header and contradicted in the body), and `artifacts/api-server/src/routes/sim.ts` still returns bare objects with no requestId while forwarding the raw error message; the RELATED x-request-id shape bound and readyz coalescing (PR #456) are real and remain credited as separate. NOTE. `/api/simulator/*` mints a FRESH uuid as
     `requestId` instead of reusing `req.requestId` (verified: header
     `x-request-id: CALLER-ID-123` against a body `requestId` of an unrelated uuid),
     and `/api/sim/*` omits `requestId` entirely while forwarding a raw library
@@ -2730,7 +2730,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `probedAt` across a burst, held by two api assertions on the DB-loss server.
 
 100. **iOS: an unknown session expiry renders as "fresh", and a shipping identity
-    provider produces exactly that.** — OPEN, mobile-native-engineer. BLOCKING.
+    provider produces exactly that.** — OPEN, mobile-native-engineer. DONE (measured 2026-09-26): the nil-expiry state is unrepresentable — `native/ios/EnterpriseShell/Models/SessionData.swift` replaced the optional with ExpiryPolicy (5e3b5c32, 2026-08-31), a blank-justification nonExpiring reads as expired (a9116532, PR #390, pinned by `native/ios/EnterpriseShellTests/SessionExpiryTests.swift`), and the one producer of a nil expiry, MDMIdentityProvider, was retired in PR #436 (41b5ad87, 2026-09-05); the providers left in `native/ios/EnterpriseShell/Services/IdentityProvider.swift` fail closed on an unstated expiry; this row duplicates BUILD_BACKLOG row 58, closed there. BLOCKING.
     `SessionData.swift:44-47`: `guard let expiresAt = expiresAt else { return false }`.
     `expiresAt == nil` means "we do not know when this session expires", and the code
     answers "then it has not expired" — the permissive branch. It is reachable, not
@@ -2752,7 +2752,7 @@ earlier — that is the loop working, not a reason to soften the record.
     have `MDMIdentityProvider` supply a bounded default expiry instead of nil.
 
 101. **iOS: `AppWorkflows.swift` is missing the scoped step-up release the TS planner
-    has, so one gesture releases every held action.** — OPEN, mobile-native-engineer.
+    has, so one gesture releases every held action.** — OPEN, mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, deliberately): `native/ios/EnterpriseShell/Services/AppWorkflows.swift` still derives stepUpDone from the single stepUpSatisfied flag and none of releasedKeys, heldKeys, allHeldReleased or actionReleased exist on the Swift side; the gap is pinned as DECLARED_WORKFLOW_DRIFT in `scripts/check-decision-port-parity.mjs`, which fails if it closes silently; the file has one commit (the original port) and the re-port needs Xcode and the owner's call (BUILD_BACKLOG note of 2026-09-18).
     `AppWorkflows.swift:122` has only `let stepUpDone = input.outcome == .step_up &&
     input.stepUpSatisfied`; `lib/app-workflows/src/index.ts:124-137` computes
     `releasedKeys`/`heldKeys`/`allHeldReleased` and a per-action `actionReleased`.
@@ -2768,7 +2768,7 @@ earlier — that is the loop working, not a reason to soften the record.
     change the caller in the same commit.
 
 102. **iOS: white text on the brand header fill fails WCAG AA, one label in both
-    appearances.** — OPEN, mobile-native-engineer. `ActiveSessionViewController.swift:43`
+    appearances.** — OPEN, mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, citations moved): the cited view controller was replaced by `native/ios/EnterpriseShell/Views/ActiveSessionView.swift` in PR #412; its profileHeader still draws four labels in headerTextColor at three opacities, headerTextColor returns white for any tenant hex whose simple luma is at or below 0.6 (the shipped default primary hex is SG.primary's own dark value, so the default header is white on primary in both appearances), and color(fromHex:) applies a persona hex with no contrast check; `native/ios/EnterpriseShell/Services/DesignSystem.swift` still has onDeny and onAllow but no onPrimary, and `scripts/check-decision-palette.mjs` gates only allow, review and deny; the four ratios were not re-derived with the WCAG formula in this pass. `ActiveSessionViewController.swift:43`
     sets the header to `SG.primary`; four labels sit on it in hardcoded white at three
     alphas. Computed: `userRoleLabel` 5.08 light / **3.47 dark**; `departmentLabel`
     **4.39 light / 3.08 dark** — both under the 4.5 floor.

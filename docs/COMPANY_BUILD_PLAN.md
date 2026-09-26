@@ -2958,7 +2958,7 @@ earlier — that is the loop working, not a reason to soften the record.
     one that can. That split is the defect — not an absence of enforcement.
 
 118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
-    OPEN, devex-tooling-engineer. `unsafe-claim-classifier.ts:143-144` scopes negation
+    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, half fixed): `scripts/src/unsafe-claim-classifier.ts` gained postposed-negation handling and both-direction coverage in `scripts/src/unsafe-claim-proof.ts` via PR #492 (049e3f8e, 2026-09-06), but the bare-claim check in `scripts/docs-sanity.mjs` still looks for a negator only before the phrase and, replayed against the disclaimer form this row describes, still classifies it as an unsafe claim; no live doc currently carries that form outside the quoted-row exemption, and the script's own self-test has no case for it. `unsafe-claim-classifier.ts:143-144` scopes negation
     to the text BEFORE the match, so a sentence of the form "<product> replaces no
     system of record" — where the negator is the verb's direct object — classifies as
     affirmative. Both live hits pinning `unsafeClaims=ASSERTED` are citations of
@@ -2980,7 +2980,7 @@ earlier — that is the loop working, not a reason to soften the record.
     fail, and the gate that CAN fail is the naive one. Fix the pair together.
 
 119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
-    self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer.
+    self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, largely unchanged): `scripts/src/response-accountability-proof.ts` still carries six of the nine vendor-call patterns that `scripts/src/nac-proof.ts`, `scripts/src/uem-proof.ts`, `scripts/src/entitlement-binding-proof.ts` and `scripts/src/service-lifecycle-proof.ts` carry, and all five planted forms this row names still walk past it while the nine-pattern copies catch them; no shared module under scripts/src/lib exists; only the UEM proof gained a file-count floor and a two-pattern non-vacuity check (dc001f4e), the other four have neither.
     `response-accountability-proof.ts:546-553` carries 6 patterns where `nac-proof.ts`,
     `uem-proof.ts`, `entitlement-binding-proof.ts` and `service-lifecycle-proof.ts`
     each carry 9 byte-identical ones. Executed against planted lines: a static
@@ -3000,7 +3000,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `emit-gate-proof.ts:207` already applies exactly that floor and none of the five has it.
 
 120. **A character class where alternation was intended makes the link checker skip
-    every relative link starting with h, t or p.** — OPEN, devex-tooling-engineer.
+    every relative link starting with h, t or p.** — OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06) replaced the character class in `scripts/src/operating-method-proof.ts` with a negative lookahead that excludes absolute URLs and added the self-test this row asked for, whose embedded probe yields handbook, team and protocol links; the tracked regex was re-run against its own probe in this pass, the full proof was not.
     `operating-method-proof.ts:63` uses `[^)#http]`, which excludes the CHARACTERS
     h/t/p, not the string `http`. Executed against a control probe: `handbook.md` and
     `proofs.md` are silently dropped while the proof reports 31/31.
@@ -3012,7 +3012,7 @@ earlier — that is the loop working, not a reason to soften the record.
     asserting a `handbook.md`-shaped link is picked up.
 
 121. **An unguarded `indexOf` slice can turn two targeted assertions into whole-file
-    greps.** — OPEN, devex-tooling-engineer. NOTE. `emit-gate-proof.ts:238-241`: if
+    greps.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations drifted): the unguarded indexOf-then-slice in `scripts/src/emit-gate-proof.ts` is unchanged since it was introduced (6386ee61, 2026-08-07) — a missing closing-brace marker still lets the two following assertions match anywhere in the MDE source — while the guarded sibling idiom is unchanged since d02d8858; the file grew, so both cited line numbers now sit roughly seventy lines lower, and the gap between them is still about a hundred and sixteen lines. NOTE. `emit-gate-proof.ts:238-241`: if
     `"\n  }"` is not found, `indexOf` returns -1, `slice(0,-1)` yields nearly the whole
     file, and the two following tests match anywhere in `mde.ts`. The FIRST `indexOf`
     fails safe (both checks fail); only the second is fail-open. The same file guards
@@ -3021,7 +3021,7 @@ earlier — that is the loop working, not a reason to soften the record.
     preflight.
 
 122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
-    CLOSED 2026-09-06 (the root key exists and `pnpm run proof:live-glpi` resolves; note the proposed equality gate would fail on `proof:decision-palette`, a root-only alias — a subset rule is the right shape), devex-tooling-engineer. Registered only in `scripts/package.json`, never at
+    CLOSED 2026-09-06 (the root key exists and `pnpm run proof:live-glpi` resolves; note the proposed equality gate would fail on `proof:decision-palette`, a root-only alias — a subset rule is the right shape), devex-tooling-engineer. DONE (measured 2026-09-26): the root registration landed in 7a452662 (2026-08-25) and the closure note in 079c5a3e (2026-09-06), both on today's tree — `package.json` delegates proof:live-glpi into `scripts/package.json`, so the root invocation resolves; every scripts-side proof key is a subset of the root's today with proof:decision-palette the only root-only alias, matching the note; the proposed subset gate was never added. Registered only in `scripts/package.json`, never at
     the repo root, while `run-live-lanes.sh:387` invokes it after `cd` to the root.
     Verified: `pnpm run proof:live-glpi` -> `ERR_PNPM_NO_SCRIPT`. All seven sibling
     live proofs ARE registered at root; this is the sole scripts-only key.
@@ -3033,7 +3033,7 @@ earlier — that is the loop working, not a reason to soften the record.
     sets are equal. That bijection is what would have caught this and nothing checks it.
 
 123. **Five Postgres proofs exit 0 when skipped, and the local harness counts exit 0 as
-    PASS.** — OPEN, devex-tooling-engineer. Executed all five with `DATABASE_URL`
+    PASS.** — OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06, batch Z) — `validate-sim-macos.sh` derives the five self-skipping Postgres proofs from `scripts/check-preflight-ci-parity.mjs` (with a fail-closed floor) and routes them to its skip counter when DATABASE_URL is unset, and `scripts/preflight.mjs` reports its two as skipped-db, never ok, failing if a marked proof exits 0 without printing SKIPPED; the derivation's self-test passes twenty of twenty today; the proofs themselves were not executed in this pass. Executed all five with `DATABASE_URL`
     unset: each prints SKIPPED and exits 0. `validate-sim-macos.sh`'s `gate()` judges on
     exit code alone, so a Mac run reports five green proofs it never executed. CI does
     provision `DATABASE_URL`, so this is a LOCAL-HARNESS gap, not a CI one.
@@ -3047,7 +3047,7 @@ earlier — that is the loop working, not a reason to soften the record.
     switched off.
 
 124. **`ladderRungs` is published as a derived figure by twelve proofs, is a literal in
-    all twelve, and they disagree.** — OPEN, devex-tooling-engineer. NOTE. Ten publish
+    all twelve, and they disagree.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, and one copy worse): a thirteenth proof, `scripts/src/app-protection-proof.ts` (added 2026-09-20), also publishes ladderRungs as a literal, so eleven proofs print 6, one prints 5 and one prints 3; `scripts/src/verdict-attestation-proof.ts` still defines an unreconciled eight-rung ladder at its original line; `scripts/src/emitter-discipline-proof.ts` still says "five families" over a six-entry array, with its gateClausesPerFamily literal now printed near line 572; no shared ladder constant exists. NOTE. Ten publish
     6, one publishes 5, one publishes 3, and `verdict-attestation-proof.ts:53` defines
     an eight-rung ladder. Nothing reads the value. Inert today because the figure guard
     only holds docs to comma-formatted numbers >= 1,000 — but it sits on the same line
@@ -3166,7 +3166,7 @@ earlier — that is the loop working, not a reason to soften the record.
     reason.
 
 127. **`edr-threat` reports full protection from an unreadable signature age,
-    contradicting its own comment.** — OPEN, secops-domain. `evaluate.ts:87-88`
+    contradicting its own comment.** — OPEN, secops-domain. DONE (measured 2026-09-26): dc001f4e (PR #367, 2026-09-01) routed the caller-posed bound in `lib/integrations/src/integrations/edr-threat/evaluate.ts` through `lib/integrations/src/utils/posed-bound.ts`, and 079c5a3e (batch O, 2026-09-06) guarded the measured signature age with Number.isFinite so an unreadable age grades stale, never protected; the file's own comment records the old fail-open, and `node scripts/check-posed-bounds.mjs` passes today with zero violations across the gated evaluators. `evaluate.ts:87-88`
     guards only `null` then bare-compares with `>=`. A NaN on either side is false,
     so an unreadable freshness reads as FRESH, `protectionHealthy` goes true, and
     the verdict is `protected / NO_THREATS_HEALTHY / none`. The caller-posed
@@ -3190,7 +3190,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `app-update` shape.
 
 128. **The ITSM aggregate reports `unhealthy` for a call the gate never let it
-    make.** — OPEN, itsm-ops-domain. When the emit gate suppresses, all eight
+    make.** — OPEN, itsm-ops-domain. RE-MEASURED 2026-09-26 (still open, unchanged since 2026-08-04): the health loop in `lib/integrations/src/integrations/itsm/adapter.ts` (now near lines 322-336) still maps a gate-suppressed adapter's false return to unhealthy through its unchanged ternary; `lib/integrations/src/integrations/adapters/types.ts` still declares healthCheck as boolean-only, so no adapter can signal unchecked for suppression, and all eight ITSM adapters (for example `lib/integrations/src/integrations/itsm/servicenow.ts`) still return plain false on suppression before any network call. When the emit gate suppresses, all eight
     adapters' `healthCheck()` return `false` without touching the network, and
     `adapter.ts:266-274` records that as `'unhealthy'`. The `ITSMAdapterHealth` type
     carries `'unchecked'` for exactly this case and the aggregate already uses it
@@ -3209,7 +3209,7 @@ earlier — that is the loop working, not a reason to soften the record.
     return `'unchecked'` with the suppression reason.
 
 129. **Two more families accept an unvalidated staleness bound.** — OPEN,
-    network-domain (carrier) and physical-ot-domain (location-services). NOTE.
+    network-domain (carrier) and physical-ot-domain (location-services). DONE (measured 2026-09-26): PR #367 (dc001f4e, 2026-09-01) routed `lib/integrations/src/integrations/carrier/evaluate.ts` and `lib/integrations/src/integrations/location-services/evaluate.ts` through `lib/integrations/src/utils/posed-bound.ts`, and `lib/integrations/src/utils/freshness.ts` now resolves a null, NaN, Infinity or non-positive bound to stale; re-tracing this row's Infinity repro through today's code yields off_premises_stale / STALE_LOCATION_FIX / locate, and `node scripts/check-posed-bounds.mjs` reports zero violations. NOTE.
     Both read `options.staleAfterMs ?? DEFAULT` with no finiteness check. They fail
     CLOSED on NaN but OPEN on Infinity: reproduced against a 7.5-year-old fix, an
     Infinity bound turns `off_premises_stale / STALE_LOCATION_FIX / locate` into
@@ -3218,7 +3218,7 @@ earlier — that is the loop working, not a reason to soften the record.
     guard as row 127 and the three sites are one change.
 
 130. **`deviceResolver`'s class docstring names a source that does not exist.** —
-    OPEN, endpoint-uem-domain. NOTE. `deviceResolver.ts:52-60` lists four
+    OPEN, endpoint-uem-domain. RE-MEASURED 2026-09-26 (still open, unchanged since 2026-07-31): the class docstring in `lib/integrations/src/integrations/deviceResolver.ts` still names FleetDM as a fourth aggregation source, resolve and aggregate still try registry, UEM and NAC only, and the source union still cannot represent a FleetDM result; the real adapter in `lib/integrations/src/integrations/telemetry/fleetdm.ts` is never imported by this resolver. NOTE. `deviceResolver.ts:52-60` lists four
     aggregation sources; the fourth, "FleetDM (posture/telemetry)", has no code
     path — `resolve()` and `aggregate()` try registry, UEM and NAC only, and
     `DeviceIdentity.source` cannot even represent a FleetDM result. Same class as
@@ -3226,7 +3226,7 @@ earlier — that is the loop working, not a reason to soften the record.
     a source the code does not have.
 
 131. **The empty-candidate backstop is present in five families and absent in
-    ten.** — OPEN, secops-domain (to arbitrate, as the largest holder). NOTE, and
+    ten.** — OPEN, secops-domain (to arbitrate, as the largest holder). RE-MEASURED 2026-09-26 (still open, counts drifted): the five-versus-ten split is stale — today nine evaluate files under lib/integrations carry the explicit empty-candidate step-up backstop (including `lib/integrations/src/integrations/app-protection/evaluate.ts`, added 2026-09-20) out of forty-four evaluate files there, and no entry in `docs/DECISION_RECORDS.md` arbitrates the split this row asks secops-domain to decide; the per-family reachable-hole sweep was not repeated in this pass. NOTE, and
     recorded so the divergence is a decision rather than an accident. Five families
     end with an explicit "not positively confirmed and nothing objected -> force
     step_up" guard, each with its own reason code so a firing is visible. Ten do
@@ -3239,7 +3239,7 @@ earlier — that is the loop working, not a reason to soften the record.
     which is exactly what this guard exists to catch late.
 
 132. **`createTicketTemplate` mints ids at millisecond resolution.** — OPEN,
-    itsm-ops-domain. NOTE. `itsm/store.ts:780` uses `custom-${Date.now()}`; two
+    itsm-ops-domain. DONE (measured 2026-09-26): PR #366 (45cdecff, 2026-09-01, Ponytail cuts) deleted createTicketTemplate and the whole unreached ITSM template CRUD from `lib/integrations/src/integrations/itsm/store.ts` as zero-importer dead code; no id-minting logic remains there today (grep across the tree and git log -S on the removed symbol agree), and `scripts/review-invariants.mjs` records the same removal in its clock-read ledger. NOTE. `itsm/store.ts:780` uses `custom-${Date.now()}`; two
     templates created in the same millisecond collide and `getTicketTemplate`
     resolves by `find`, returning the first. Not a decision path and not a doctrine
     violation — but `generateId()` using `crypto.randomUUID()` sits sixty lines
@@ -3491,7 +3491,7 @@ earlier — that is the loop working, not a reason to soften the record.
     127.0.0.1 is intended.
 
 137. **A delivery the gate deliberately withheld is retried to exhaustion and
-    dead-lettered as a failure.** — OPEN, secops-domain.
+    dead-lettered as a failure.** — OPEN, secops-domain. DONE (measured 2026-09-26): PR #378 (3f0fe613, 2026-09-02) replaced the local isPermanentError closure with an exported isPermanentDeliveryError in `lib/integrations/src/integrations/webhooks/dispatch.ts` that treats a suppressed result as permanent, returning before any dead-letter write, and the dispatch summary counts suppressed separately from failed; `scripts/src/webhooks-proof.ts` asserts one suppressed row and zero failures at dev tier (read, not re-run, in this pass).
     `webhooks/dispatch.ts:253-298` — `isPermanentError` does not recognise
     `suppressed`.
     REPRODUCED at dev tier with a shortened 4-attempt config: `dispatchEvent`
@@ -3510,7 +3510,7 @@ earlier — that is the loop working, not a reason to soften the record.
     with no DLQ write; count suppressed separately from failed.
 
 138. **`addToDLQ` hardcodes an attempt count it did not observe.** — OPEN,
-    secops-domain. NOTE. `webhooks/store.ts:357` is `attempts: 6, // After max
+    secops-domain. RE-MEASURED 2026-09-26 (still open, unchanged since the file's creation commit d02d8858): addToDLQ in `lib/integrations/src/integrations/webhooks/store.ts` still hardcodes the attempt count at six (one line lower than cited) regardless of the caller's maxAttempts, and its only caller in `lib/integrations/src/integrations/webhooks/dispatch.ts` still passes no attempt count; the dead-letter section of `scripts/src/webhooks-proof.ts` exercises a different delivery model and does not cover this function. NOTE. `webhooks/store.ts:357` is `attempts: 6, // After max
     retries`. Reproduced: with `maxAttempts: 4` and four attempts actually made, the
     DLQ entry still reads 6. Small, but it is a record asserting a number nobody
     counted, in the artefact an operator reads to reconstruct what happened.

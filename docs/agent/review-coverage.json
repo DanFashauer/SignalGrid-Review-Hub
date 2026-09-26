@@ -2793,6 +2793,134 @@
       "date": "2026-09-06",
       "depth": "audited",
       "note": "Full read (ninth round). Redis key non-injective (':' and '_' folded), allowlist opened by any value but 'true' and by absence, Redis enroll validated nothing, lastSeenAt never consulted. All fixed behind exported pure helpers; proof:device-registry (52) holds them."
+    },
+    {
+      "path": "lib/enterprise-auth/src/jwt.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Full file, 238 lines, audited against the alg-confusion, forged-token and time-window question, after first reading the diffs of the two commits since the 2026-08-25 row (freshness comment, peekJwtCallerRef; peekJwtKid was added the same day as that row, not since it — corrected on verify: git blame dates it to the 2026-08-25 commit itself). Held and reproduced: the strict RS256 gate at 148, which refuses none, HS256 and rs256 before any key is selected; the signature checked before any claim; exp required; nbf/iat/iss/aud/sub checks with the tolerance applied only in the permissive direction for skew; an unknown kid refused; no kid with more than one key refused; no clock read inside the verifier; and both peeks fed only into the kid hint and rate-limit bucketing. Does not hold (should-fix, VERIFIED real 2026-09-26): a JSON-null header (`bnVsbA.<p>.x`, fully unauthenticated — no valid signature needed) throws TypeError at line 148 instead of returning a refusal, and provider.ts/context.ts turn it into a generic 500 with an error-level log; no principal is ever produced in any of the three reachable shapes (null header, null JWKS element, null signed payload), so authentication itself is never loosened, which is why this stays should-fix rather than blocking. Nits: a non-finite tolerance is unreachable through config.ts:84 (clamped to a finite value); a non-finite nowMs would disable the same time checks but is unreachable only because the sole production caller (context.ts:162) always supplies Date.now(), not because of config.ts:84 (corrected on verify — the original nit cited config.ts:84 for both halves, but that file has nothing to do with nowMs). Also the signature base64url decodes leniently, and crit, JWK use and non-numeric nbf/iat are ignored. The HTTP 500 was inferred from errors.ts; no server was exercised."
+    },
+    {
+      "path": "lib/enterprise-auth/src/jwks.ts",
+      "reviewedBy": "security-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Full file, 90 lines (the 2026-08-25 row read the 47-line version before the kid-miss refetch landed in a6c1d8f4), audited against the fetch-failure, forged-kid and rotation-race question. Held and reproduced: the cache is written only after an ok status and a keys-array check (78-86). A 503, a missing keys array, a json() that throws, or a fetch rejection each throw, and provider.ts refuses; the stale set is never served. Unknown-kid refetch is limited to one per 60s while the cache is fresh (71-76), and no clock is read. Nit, not a trust defect: no single-flight or negative cache, so a cold or stale cache with the IdP down fetches once per request. Concurrent fetches are last-resolved-wins, so an older keyset can overwrite a newer one within the TTL window. There is no body-size cap beyond the caller's 5s timeout. The real network, the undici timeout and oversize bodies were not exercised. No should-fix or blocking finding on this file this round."
+    },
+    {
+      "path": "artifacts/api-server/src/middlewares/context.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file at 6a70714, re-read after #741 (invalid OIDC now refuses to boot) and the Batch J x-request-id bound. Tenant and role come only from the verified OIDC principal or core.context(token). Executed through requireTenantContext with mock requests: forged x-tenant-id, x-role, query, body and cookie fields did not move a demo auditor off tenant_northwind/auditor. Under shared-device-gateway, and under a full OIDC config, the published demo keys, alg:none and oidc_-shaped tokens all 401, and OIDC_ISSUER alone makes the import throw. Does NOT hold, VERIFIED real (should-fix) 2026-09-26: a whitespace-only OIDC_ISSUER trims to 'disabled' (enterprise-auth config.ts:37-39) and, under the default (unset) profile, serves demo bearers byte-identically to the fully-unset baseline, where the file's own doctrine (and the METRICS_TOKEN precedent it cites at :110-115) says refuse to boot. Bounded: under shared-device-gateway the identical input still 401s, so the exposure is limited to the review-demo profile. The header comment at :61-63 still describes the pre-#741 warn-and-continue. NOT exercised: the positive OIDC verification path (no JWKS listener allowed in this stage) and test:oidc."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/profile.ts",
+      "reviewedBy": "iam-domain",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file at 6a70714, re-read after three commits that grew GA_ALLOWED_ROUTES from 14 to 21 entries (the Assist wire, step-up enroll/challenge/answer, launch-status). An explicitly set but unknown profile throws at module load, and the fence stays method-pinned, anchored at both ends and blind to the query string. Executed: /v1/keys, POST reconcile, :id/resolution, enroll/revoke, upper-case and double-slash paths all fall outside the fence, and check-launch-profile --self-test passes (the route count behind this check is 82 across 8 files, not 81 as first counted on a re-run; the \"no deferred GET rides a parameterised entry\" conclusion it supports is unaffected). Does NOT fail closed, both VERIFIED real 2026-09-26: an unset profile resolves to review-demo by design (:57, DEPLOYMENT.md:42) — should-fix, bounded because docker-compose.prod.yml:44 already supplies a safe non-empty default for the shipped production path; and a whitespace-only value is treated as unset rather than refused (:56-57), including through docker-compose.prod.yml's `${VAR:-default}` substitution, which does NOT fire on a whitespace-only value — SEVERITY RAISED TO BLOCKING on verify, because this specifically defeats that compose file's own documented safety default and lands an anonymous caller on GET /v1/keys (9 published bearer tokens, seven of them owner-role), the unauthenticated room-entry simulator, and the unauthenticated /cp/v1 control plane. The resolveProfile doc comment (:48-53) still says unrecognized values resolve to review-demo. NOT exercised: a live server under either profile."
+    },
+    {
+      "path": "artifacts/api-server/src/lib/core.ts",
+      "reviewedBy": "principal-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file, 344 lines, with the four diffs since the 2026-08-25 row read first (the estate constructor, the refresh loop, the secrets seam and _NEXT principals). Held, each with its line reference: an unknown core mode or a malformed estate bearer (blank, short, demo-shaped, duplicated) refuses at boot; the process serves one tenant, taken from the validated slug; an estate core publishes no demo keys; a failing refresh pass is caught and records nothing. allow was unreachable through this wiring (real core.ts booted in estate mode decides step_up). NOT held, all three VERIFIED real (should-fix) 2026-09-26 by independent reproduction against the real SignalGridCore/refreshEstatePosture (no live Postgres/Graph, no HTTP server): the refresh setInterval has no in-flight guard, so an older read that lands last overwrites a newer one (restrict became step_up, exact match); the refresh knob has no upper bound, so 2147484 or more seconds overflows setInterval to a ~1ms interval (~90 passes in 100ms); a blank-but-set GRAPH_ACCESS_TOKEN on prod with live integrations requested boots on fixture posture instead of refusing (boot log and synthetic-subject decision matched the claim verbatim) — real users still get not_found rather than a wrongly-loose decision. Posture that never ages and never retracts across refreshes was re-observed and is ALREADY TRACKED (BUILD_BACKLOG.md rows at \"Estate posture must age\" / \"A posture refresh must retract\", DR-059 proposal #1083 unmerged) — no new backlog row added for it here. Not exercised: the real 30s timer, the live Graph transport, and the /v1 routes' status-code mapping of these errors. No server was started."
+    },
+    {
+      "path": "artifacts/api-server/src/routes/v1.ts",
+      "reviewedBy": "api-contract-architect",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "All 1294 lines and all 39 routes, with the ten commits since 2026-08-25 read as diffs first (/v1/authorize, revoke, launch-status, the decision-bound step-up pair, the durable /v1/audit branch). Holding: the tenant comes from the verified token at every route; no body field can satisfy step-up (stored-context binding, stored-identity userId, purpose separation both ways); cross-tenant ids get the same 404 as nonexistent ones on the new routes (reproduced in-process). Not holding, all three VERIFIED real (should-fix) 2026-09-26 by live in-process reproduction (no HTTP listener, real core/webauthn/webauthnStore functions): POST /v1/decisions/:id/step-up and complete-step-up run WebAuthn verification (challenge consumed, counter advanced, step_up.success row written) before decision:evaluate, so an under-privileged same-tenant principal (decision:read only) can burn/DoS another principal's single-use challenge and leaves a false-positive success audit row for a ceremony whose privileged conclusion was actually rejected — the two sibling MINT routes get the ordering right (authorize() before any webauthn work), only the two COMPLETION routes do not. The durable /v1/audit hands every tenant the global ledger count/lastTs/headHash — a disclosed DR-025 tradeoff (docs/DECISION_RECORDS.md documents \"no per-tenant head hash exists, so none is claimed\"; verify flagged the tension against the blocking bar but kept should-fix since only aggregate metadata leaks, no tenant IDs or content). Revoke writes no audit row despite the route's own comment rating it \"exactly as consequential as enrolling one\" (confirmed: neither branch of webauthn store.ts's removeCredential calls appendAuditRecord). Each answer double-writes step_up.success, and the lib's row carries the unmasked credential id. NOT exercised: the Postgres /v1/audit branch through the route, Redis-mode stores, a real authenticator, and any HTTP listener."
+    },
+    {
+      "path": "lib/signalgrid-core/src/evidence.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "All 831 lines read at d868557e against the loosening/determinism question, with the 46ef1951 tie fold and the d868557e DR-043 readers read first. Holds: no clock, random or I/O in the file; same-instant twins and illegible peers fold worst-wins independent of order (groupLatest 327-358, resolveWorst 398-432); the DR-043 readers tell silence ('not_applicable') from unreadable ('unknown') via Map.has (774-780); out-of-union freshness reads 'unknown' at the backstop boundary (120-121). Does not hold, measured through buildEvidence -> evaluatePolicy(SHARED_DEVICE_RULES_V1), BOTH FINDINGS VERIFIED real 2026-09-26 by independent live reproduction against the real evaluator: (BLOCKING) the latest reading is chosen by observedAt alone via groupLatest's Date.parse, and its own freshness is never consulted by resolveWorst — a second dock feed stamped 2099 (freshness 'unknown'), or stamped later but 'expired', erases a fresh tamper 'confirmed' (deny -> step_up, reproduced exactly with plain Z-suffixed timestamps so it is host-timezone-independent), and the same shape moves an MDM restrict to step_up; (should-fix) offset-less observedAt stamps order by the host TZ — the identical wire input decided allow under UTC/America-New-York and restrict under Asia/Tokyo. The five non-freshness backstop fields are not normalized (omitted deviceCompliance passes). Not exercised: the /v1 HTTP path and the core proof suite."
+    },
+    {
+      "path": "lib/signalgrid-core/src/store.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "All 574 lines read at 93da3e28 against loosening, determinism and tenant scope, with the four diffs since 2026-08-25 read first. Holds: every by-id read goes through scoped(), every list filters on tenantId, and composite index keys are tenant-first. Sorts compare codepoints and the file has no clock. FIFO eviction ignores same-id re-puts, and the audit eviction boundary digest is kept. The row-83 connector-collision defect is gone, because connector.id is now in the signal id (connector.ts:241-250, dock.ts:125-131). Does not hold, measured with the real runDockSync + buildEvidence, BOTH FINDINGS VERIFIED real 2026-09-26: (BLOCKING) putSignal is last-write-wins by arrival — `this.signals.set(signal.id, signal)` with no observedAt comparison — so one connector delivering an older 'none' after a newer 'confirmed' in the SAME sync batch erases the confirmed tamper before evidence arbitration ever sees more than one row (record order alone, within one otherwise-ordinary batch, decides deny vs allow; reproduced verbatim); (should-fix) stepUpAnswers is never evicted with its decision despite the comment at 486-489 claiming it is — getStepUpAnswer still returns an answer after its decision is evicted (reproduced), memory-only, and answerStepUp's own 404-on-missing-decision check is unaffected. Write-side tenant isolation is by id convention only (put* keys by id, 183-185 etc.); a colliding cross-tenant id was not constructed. Not exercised: durable store and HTTP path."
+    },
+    {
+      "path": "lib/signalgrid-simulator/src/decisionEngine.ts",
+      "reviewedBy": "verdict-core-reader",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Audited end to end (361/361) after 0be82421 (unauthorized removal) and f35d1fdd (falsifiable PASS). Determinism holds: the only timestamp is a constant, and all 15 fixtures give byte-identical output across runs. Absent evidence never allows, and restrict/step_up/custody failure always strip an allow. Fail-closed on the UNKNOWN does not hold, ALL FIVE FINDINGS VERIFIED real (should-fix) 2026-09-26, none reachable via the 15 shipped fixtures or the scenarioId-only /simulator/run surface today: an unrecognised event type or attribute value is ignored and the base allow still fires (the attribute-value half is reachable with ordinary typed data; the event-type half needs a cast, since the type union is closed); identity integrity checks flag only identityState 'invalid'/'disabled', missing 'revoked' entirely, and only on layer==='identity'; `active:true` on ANY signal, regardless of subject, clears the unauthorized-removal custody exception — even the shipped \"good-path\" companion fixture never actually exercises subject-matching, it only happens to pair one active-bearing signal per scenario (verify called this the least-synthetic of the five and the closest call against escalating to blocking, but held at should-fix since no shipped scenario mixes two subjects and the route accepts no raw signals); the four `=== true` boolean checks (deviceCompromised/missingReturn/overdue/active) let a string `'true'` pass, matching a PRIOR, INDEPENDENT 2026-08-24 Swift-parity audit already on record for three of the four (the fourth, `active`, postdates that audit). Still OPEN, unfixed by design (byte-faithful SOURCE of the Swift port — corrected on verify: this TS file is the ORIGINAL the Swift file is byte-faithfully PORTED FROM, not the other way around): the remediation-allow bypass (no outcomes.size guard) from the 2026-08-23 row. Also confirmed: SignalGridDecision.confidence has zero readers anywhere."
+    },
+    {
+      "path": "lib/audit/src/backend.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Re-read in full at 6a707142 after #365 (tenant_id column, tenant-scoped read) and #371 (schema-aware readiness), diffs first. HOLDS: every statement is $n-parameterized; the tenant read binds tenant_id; the append serializes under pg_advisory_xact_lock with the head read after the lock and insert+commit in one transaction; readiness still asserts the forbidden direction (reproduced: forbidden=true refuses ping) and now the tenant_id shape on init and ping. DOES NOT HOLD, VERIFIED real (should-fix) 2026-09-26: appendWithChain discards the INSERT result (backend.ts:249-265, no `.rowCount` reference anywhere in the method), so a rowCount-0 insert (e.g. a BEFORE INSERT trigger returning NULL) still resolves with the record as appended — reproduced against the real class with a fake client; independently corroborated the same day by docs/COMPANY_BUILD_PLAN.md row 26. A failing ROLLBACK masks the original error and release() returns the broken client (nit). NOT exercised: live Postgres concurrency, trigger suppression and schema-USAGE behaviour — no database was booted."
+    },
+    {
+      "path": "lib/persistence/src/decision-store.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "First row; read in full at 6a707142 including 46ef1951's assertSchema hunk. HOLDS: every statement is $n-parameterized, every read is keyed on tenant_id (and id where single-object), the two upserts share one transaction, and readiness checks the bound columns. DOES NOT HOLD, BOTH FINDINGS VERIFIED real (should-fix) 2026-09-26: the readiness probe is positive-only — assertPrivileges (149-165) checks SELECT/INSERT/UPDATE only, unlike the ledger's own forbidden-direction check, so a fake pool granting DELETE and TRUNCATE leaves ping() green (reproduced; independently corroborated the same day by docs/COMPANY_BUILD_PLAN.md row 26); the upsert (175, 181) updates by id with no tenant guard or row-count check, and the FNV-1a id digest masks each character to its low byte, so tenant 'tenant-a' and 'tenant-š' mint the identical decision id — reproduced end to end against the real digest(), though full cross-tenant exploitation additionally needs a millisecond-exact createdAt coincidence not shown reachable, which is why this stays should-fix rather than blocking. NOT exercised: a live Postgres, schema-USAGE behaviour, and whether production tenant/identity ids can be non-ASCII."
+    },
+    {
+      "path": "lib/persistence/src/session-store.ts",
+      "reviewedBy": "data-persistence-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "First row; read in full at 6a707142 including 46ef1951's assertSchema hunk. HOLDS: every statement is $n-parameterized and carries tenant_id; end() confirms its write via RETURNING; an unparseable or past expiry reads EXPIRED; readiness checks all eleven bound columns. DOES NOT HOLD, BOTH FINDINGS VERIFIED real (should-fix) 2026-09-26: the readiness probe is positive-only, same shape and same fake-pool reproduction as decision-store.ts's (assertPrivileges 229-241 checks SELECT/INSERT/UPDATE only; corroborated the same day by docs/COMPANY_BUILD_PLAN.md row 26); refresh() is read-then-write with no status predicate or row-count check (295-303) — reproduced with a fake pool timed so end()'s UPDATE lands between refresh()'s SELECT and its own UPDATE: the persisted status column stays correctly 'ended', but the API response reads 'active' and the route writes a session.refresh audit row for a refresh that never happened. The in-memory twin resurrects an ended session under the same race, reachable only by concurrent in-process callers. NOT exercised: live Postgres locking and schema-USAGE behaviour."
+    },
+    {
+      "path": "scripts/preflight.mjs",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file (868 lines), audited against false-pass paths. Every node gate is invoked by a repo-relative path with cwd set to a realpath'd repo root (:17, :757-761), so the symlinked-argv entry-guard exit-0 cannot occur through preflight. Reproduced in scratch: the direct symlink run exits 0 silently, the preflight-shaped run executes the gate. Nonzero status, a signal, ENOENT, a self-skip without SKIPPED, and a platform-unavailable step each fail or are shown as not passed. Two holes remain, BOTH VERIFIED real (should-fix) 2026-09-26: the SBOM step (:706) has no ls-files guard although CI's copy has one (supply-chain.yml:116) — reproduced directly (an untracked SBOM file passes a bare `git diff --exit-code`; the guarded form correctly fails); latent at HEAD since the file is currently tracked, so CI's own guard is the actual backstop against a stale/untracked SBOM reaching mainline. With GITHUB_TOKEN set, a streak check that could not read the Actions API exits 0 and is ticked ✓ with no caveat — confirmed live in this very execution environment (both GITHUB_TOKEN and GH_TOKEN are set here), reproduced with a standalone copy of preflight's exact classification branch; the check is permanently report-only by design and CI's own `inCi` branch is fatal on the identical own-error, so this only produces false local confidence in an informational monitor. The full step list was NOT run, and no step's output was checked for non-emptiness, because preflight itself never checks it (:784)."
+    },
+    {
+      "path": "scripts/launch-profile.mjs",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file (876 lines), read only (owner-reserved), against whether its data can let a gate pass vacuously. The file is pure data with no entry guard or exit. An import probe found no duplicate ids, proofs on every launch entry and on no non-launch entry, and two gaps, each with a closedWhen whose anchor is present, so both read open. The step: bindings match the preflight step names at preflight.mjs:483 and :594. One nit: a moved closedWhen anchor file makes its gap permanently open with only a log line (check-launch-profile.mjs:277, :308 — corrected on verify from :305-306: :277 is the fail-closed missing-anchor return inside conditionMet(), but the no-op log line the nit describes is the `else` branch's console.log at :308, not the closed-gap branch at :305-306, which instead FAILS the gate). check-launch-profile.mjs itself was NOT audited beyond those lines. No should-fix or blocking finding on this file this round."
+    },
+    {
+      "path": "scripts/check-guard-registries.mjs",
+      "reviewedBy": "devex-tooling-engineer",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Whole file (188 lines), audited against vacuous or silent passes. It has no entry guard (top-level body), its detector self-controls exit 1, and every drift or dangling entry exits 1 (:183-186). The reverse and dangling checks mean an empty scan cannot pass against non-empty registries. Ran green at HEAD (39/50/55/50). One latent nit: FIGURES_EMISSION (:80) is blind to a figures= line emitted via a variable, stdout.write or console.info, confirmed with planted fixtures; no current proof uses those forms. The mutation sweep and the figure guard it cross-checks were NOT run. No should-fix or blocking finding on this file this round."
+    },
+    {
+      "path": "lib/integrations/src/integrations/device-management-health/evaluate.ts",
+      "reviewedBy": "endpoint-uem-domain",
+      "date": "2026-09-26",
+      "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
+      "depth": "audited",
+      "note": "Audited all 290 lines against the normalization half (device-management-health-connector.ts lines 30-265) and the type surface (types.ts, all 292 lines). No commits since the 2026-08-24 row for THIS file (evaluate.ts) or types.ts specifically (corrected on verify: the connector file itself DID gain one commit since then, f33ff1df 2026-09-01, which only replaced its guardReadOnly wrapper and did not touch the normalization logic this audit covers — oneOf/boolOrNull/enumMalformed/boolMalformed/normalizeReport). Normalization holds: oneOf and boolOrNull fold every absent, unparseable or out-of-range value to \"unknown\"/null, enumMalformed and boolMalformed independently mark it malformed, and a 160-variant sweep over all eight raw keys produced zero unexpected grants. Within the declared unions under strictNullChecks, only positive assertions reach the managed_healthy seed (the grant set is exactly three channel shapes — live-agent+healthy, live-agent+unassigned, agent-less — not the full 2x2 product of {fresh, not_applicable}x{healthy, not_applicable}, since channelReportInconsistent denies the fourth combination). It does NOT hold at the evaluator's own boundary, VERIFIED real (should-fix) 2026-09-26: every check except reportIntegrity (line 96) is an equality against a named bad value, so an out-of-union value from a cast, untyped JS or a deserialized object ('FRESH', 'RETIRED', undefined reachability) grants, and a future enum member would too — reproduced against the real evaluator for every claimed case. A real defense-in-depth gap in public API (index.ts exports it), but confirmed NOT reachable via any live path today: normalizeReport (both the bridge and Graph transports) is exhaustively closed over `unknown` and folds every off-type value to a declared union member before evaluate.ts ever sees it, and the only two direct-construction call sites in the tree are proof code using compile-time-checked literals. Not exercised: the graph transport's mapping into the raw shape (graph-transport.ts) and any live bridge."
     }
   ]
 }

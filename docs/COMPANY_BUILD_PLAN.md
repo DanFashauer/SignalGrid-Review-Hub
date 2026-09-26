@@ -3843,7 +3843,7 @@ earlier — that is the loop working, not a reason to soften the record.
     fallback to the restrictive tone.
 
 157. **Six rendered assertions of a passing CI gate that does not exist.** — CLOSED 2026-09-06 (row 160 records the removal; `rc:smoke` has zero occurrences in artifacts/signalgrid-review/src — the two rows disagreed for days),
-    web-engineer. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
+    web-engineer. DONE (measured 2026-09-26): the string has zero occurrences under artifacts/signalgrid-review/src, in `package.json`, under .github/workflows and under scripts, confirmed by full-tree grep; the removal landed in PR #309 (4f46b875, 2026-08-25), an ancestor of today's tree, and only the claim-inventory and evidence records still name it; row 160 records the same removal. The Review Hub scorecard cites `rc:smoke` as a passing workflow six
     times, and those citations are load-bearing for two of the eight published scores.
     Absence established three ways: `check:absence` returns INCONCLUSIVE with four
     word-mentions, all of which are the claim itself or the record of the claim — no
@@ -3858,7 +3858,7 @@ earlier — that is the loop working, not a reason to soften the record.
     two scores that leaned on it — the substitution changes what they claim.
 
 158. **52 claims marked for removal are still in the tree, and no gate reads the
-    register.** — OPEN, docs-writer. `docs/agent/CLAIM_INVENTORY.json` prescribes an
+    register.** — OPEN, docs-writer. DONE (measured 2026-09-26): `scripts/check-claim-inventory-anchors.mjs` (93462fd7, batch P, 2026-09-06), registered in `scripts/preflight.mjs` and `.github/workflows/review-hub-ci.yml`, now tests every quotable remove-actioned row in `docs/agent/CLAIM_INVENTORY.json` against its cited file and makes a rise fatal; a check-mode run today reports zero remove-actioned rows still present, matching `docs/agent/claim-inventory-anchors-ratchet.json`; unquotable rows stay outside its scope by design, as this row's own caveat anticipated. `docs/agent/CLAIM_INVENTORY.json` prescribes an
     action for each of 1,023 rendered claims. Three scripts name the file: one
     GENERATES markdown from it, and two name it only to EXCLUDE it from their own
     scans. None asks whether a prescribed action was taken.
@@ -3940,7 +3940,7 @@ earlier — that is the loop working, not a reason to soften the record.
     separate task.
 
 161. **Biometric and location privacy law is absent from the repo entirely.** —
-    OPEN, security-engineer. The founder's own architecture research names three
+    OPEN, security-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): docs still carry no substantive treatment of the Illinois biometric statute or of precise geolocation as sensitive personal information under California law; the one GDPR special-category mention remains a passing line in `docs/company/ROLE_CATALOG.md` for an unfilled future role, `docs/DATA_RETENTION_AND_PERSONAL_DATA.md` covers general retention and erasure but none of the three regimes, and a design-time comment in `lib/integrations/src/integrations/location-services/types.ts` flags the need for this legal review without performing it; still a prompt for human legal review, not a substitute. The founder's own architecture research names three
     regimes that bear directly on a badge-plus-biometric custody product, and
     `docs/` has zero hits for the operative ones: Illinois **BIPA** written notice
     and release (0), **CCPA precise geolocation as sensitive personal information**
@@ -3955,7 +3955,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 162. **The buyer's own program document describes the ICP in vocabulary the repo
     does not contain — and asks for the one thing the core refuses to do.** — OPEN,
-    positioning-messaging (primary), product/principal-engineer (the guardrail half).
+    positioning-messaging (primary), product/principal-engineer (the guardrail half). RE-MEASURED 2026-09-26 (still open, guardrail never landed): docs still hold no real hit for the buyer-deck vocabulary beyond this row's own text, `docs/PUBLIC_MESSAGING_GUARDRAILS.md` still carries no negative-requirement language for AI triage, predictive routing or auto-remediation, and the two customer figures have not migrated as SignalGrid's own claims (the one estate figure in `docs/PURPOSE.md` is attributed to the source estate); the owner's background-reading-only handling stands.
     `Enterprise_Mobility_Modernization` is a 200K+ device health-system mobility
     transformation deck. `docs/` returns ZERO hits for: "mobility modernization",
     "Access Central", "eSAF", "rogue tenant", "app consolidation", "Managed Apple
@@ -4008,7 +4008,7 @@ earlier — that is the loop working, not a reason to soften the record.
     public surface, and do not re-add a copy.
 
 164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
-    competitive-analyst. `docs/research/IGA_ADJACENCY.md` names four vendors. The
+    competitive-analyst. RE-MEASURED 2026-09-26 (still open, nothing landed): `docs/research/IGA_ADJACENCY.md` still names only its original six vendors, none of the five this row lists, and still has no sentence stating that SignalGrid does not do entitlement fulfilment; every match for the five names outside the connector catalog in `artifacts/api-server/src/routes/integrations.ts` is this row's own text. `docs/research/IGA_ADJACENCY.md` names four vendors. The
     Gartner category listing shows 115 products, and these have ZERO mentions
     anywhere in `docs/`: Radiant Logic, Oracle Identity Governance, Symantec IGA
     (Broadcom), OpenText NetIQ, IBM Security Verify Governance. Thinly covered:
@@ -4019,7 +4019,7 @@ earlier — that is the loop working, not a reason to soften the record.
     should state explicitly that SignalGrid does not do entitlement fulfilment.
 
 165. **`tamperState` is an enum where the source material describes a graph.** —
-    OPEN, product/principal-engineer. `docs/EVENT_CONTRACT.md` carries
+    OPEN, product/principal-engineer. RE-MEASURED 2026-09-26 (still open, no derivation added): `docs/EVENT_CONTRACT.md` still defines the tamper state as the bare three-value enum with no derivation notion, `lib/event-contract/src/validate.ts` and `lib/event-contract/src/detect.ts` still only validate and consume that enum, and no commit in the repository's history has introduced a tamper-graph concept (corroborated by the absence check across four probes); the row's file count for the word has grown with the tree, which changes nothing. `docs/EVENT_CONTRACT.md` carries
     `tamperState ∈ {none, suspected, confirmed}` with no notion of HOW "suspected"
     is reached. The architecture research names the constituent signals: latch
     forced, unexpected bay open, device absent while charge negotiation is unstable,
@@ -4031,7 +4031,7 @@ earlier — that is the loop working, not a reason to soften the record.
     signals is auditable in a way a bare enum is not.
 
 166. **Two iOS CI workflows are documented that do not exist.** — OPEN,
-    mobile-native-engineer. NOTE. The Drive copy of `CODE_REVIEW.md` cites
+    mobile-native-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #309): `.github/workflows/ios-ci.yml` remains the only iOS workflow and the two documented names exist nowhere in the tree or its history; `native/ios/EnterpriseShell/Services/BackendService.swift` still gates pinning behind an environment variable, off by default; no iOS-specific PR checklist exists (`docs/REVIEW_CHECKLIST.md` and `native/ios/SignalGridMobile/docs/COMPARISON_CHECKLIST.md` are unrelated), and `native/ios/.swiftlint.yml` now carries eight custom rules rather than seven. NOTE. The Drive copy of `CODE_REVIEW.md` cites
     `ios-code-quality.yml` and `swift-code-review.yml`; the repo has `ios-ci.yml`
     with a `lint-and-security` job. Every path it gives is `ios/…` rather than
     `native/ios/…`, against CLAUDE.md's rule. Importing it as-is would assert two CI
@@ -4044,7 +4044,7 @@ earlier — that is the loop working, not a reason to soften the record.
     opt-in (`CERT_PINNING_ENABLED`), off unless set.
 
 167. **The Fleet tradeoff is decided but never written down.** — OPEN,
-    product/principal-engineer. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
+    product/principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #309): CLAUDE.md still names Fleet the chosen MDM with no tradeoff beside it; `native/ios/FLEET_MDM.md`, `docs/FLEET_LIVE_INTEGRATION.md` and `fleet/README.md` contain no comparison against Jamf or Intune; DR-012 in `docs/DECISION_RECORDS.md` explains Fleet-first proof-stack sequencing, not the openness-versus-managed-depth product tradeoff this row asks to be written down. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
     founder's own architecture research rates Fleet as better suited to
     organisations valuing openness and infrastructure-as-code over the deepest
     traditional mobile-workflow features, and names Jamf or Intune as the
@@ -4055,7 +4055,7 @@ earlier — that is the loop working, not a reason to soften the record.
     so it reads as a decision rather than an assumption.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
-    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. Row 151
+    token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open — mitigated, not fixed): `scripts/check-verdict-tone-source.mjs` and `scripts/check-decision-palette.mjs` both pass today exactly as described, centralising every verdict-to-colour choice without validating it; `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still routes through the shared tone helper; options (b) distinct rendered values and (c) a single colour registry remain unimplemented, so a wrong mapping in the total record would still pass; the falsification by restoring the ternary was not re-run in this pass. Row 151
     was three real defects — fail-closed shown in the danger tone, `restrict`
     wearing the step-up tone, and two verdicts sharing one legend swatch — and
     `check-decision-palette.mjs` exited 0 before the fix and exits 0 after it. It
@@ -4192,7 +4192,7 @@ earlier — that is the loop working, not a reason to soften the record.
     needs its own decision — a hook that fires on every edit is a tax on every edit.
 
 182. **The claims gate read zero of 281 public documents.** — MITIGATED 2026-08-25,
-    positioning-messaging. `scripts/check-launch-claims.mjs` reads the website, the
+    positioning-messaging. RE-MEASURED 2026-09-26 (still open, figures drifted): `scripts/check-launch-claims.mjs` now scans one hundred forty-six buyer-facing files (not ninety-five) and the ceiling in `docs/agent/launch-claims-docs-ceiling.json` stands at four hundred seven mentions across one hundred nine files (not the original baseline), after an owner-approved rebaseline (7027db39) and the engineering-docs carve-out of PR #410; the item this row left undone — deriving buyer-facing scope from `scripts/publication-boundary.mjs` rather than a hand list — is still undone, since docs remain one undifferentiated public-review class there. `scripts/check-launch-claims.mjs` reads the website, the
     Pages-derived HTML, the outreach surface and anything carrying the public
     contact address — 95 files. It read NO markdown under `docs/`, in a repository
     whose own `NOTICE` calls it a public reference surface. The first docs-writer
@@ -4285,7 +4285,7 @@ earlier — that is the loop working, not a reason to soften the record.
     either way.
 
 180. **The permission gate credits a call inside `if (false)`.** — MITIGATED
-    2026-08-25, security-engineer. `check-permission-enforcement.mjs` matches
+    2026-08-25, security-engineer. RE-MEASURED 2026-09-26 (still open, mitigated only): `scripts/check-permission-enforcement.mjs` is unchanged since PR #318 (d0a9f7f4, 2026-08-25) — its self-test still drives the pure verdict function over a synthetic corpus asserting all four arms, and the gate passes today — but it is still a text-only match with no call graph or reachability analysis, so an unreachable authorize call would still satisfy it; that half remains declined, not fixed. `check-permission-enforcement.mjs` matches
     `authorize(principal, "scope")` with a regex over file text. It has no call
     graph and no reachability analysis, so a syntactically-present call in an
     unreachable branch of an unimported function satisfies it — proven by planting
@@ -4354,7 +4354,7 @@ earlier — that is the loop working, not a reason to soften the record.
     configuration-driven registry rather than the thing itself.
 
 176. **"Adding a signal to the grid" is already the architecture, and I recommended
-    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. The
+    against it on a mis-framing.** — MEASURED 2026-08-25, principal-engineer. RE-MEASURED 2026-09-26 (still open, one figure drifted): the source-agnostic adapter architecture, both proofs' printed verdicts and the three family mappings still hold; the Fleet converter in `lib/integration-bridge/src/evidence.ts` is still twenty-six lines while the Headwind one grew to thirty-two in an unrelated unknown-as-permissive fix (8b8e9599, 2026-09-05); that directory still holds only the converter file and its index, so the converter-catalog gap this row names is unaddressed and was never committed to. The
     owner, asked whether to build live lanes for Velociraptor, Zeek and OpenVAS,
     rejected the question: "it's a signal and it can be added to the grid for easier
     overall smart automation orchestrator that just makes things work without having
@@ -4506,7 +4506,7 @@ earlier — that is the loop working, not a reason to soften the record.
     registry every mutation target depends on and deserves its own falsification.
 
 172. **An evidence artifact asserts six safety properties that nothing measures.** —
-    OPEN, qa-engineer. `.github/workflows/connector-emulator-smoke.yml` generates an
+    OPEN, qa-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filed): the evidence step in `.github/workflows/connector-emulator-smoke.yml` still emits its six public-safety properties as hardcoded string literals with no static check behind any of them; the most recent commit on that file changed only the trigger's ignored paths, and `scripts/check-ungated-fetch.mjs` gates connector adapters generally without deriving or backing this manifest. `.github/workflows/connector-emulator-smoke.yml` generates an
     evidence manifest — uploaded as a build artifact, never committed, so it is not
     a path in this tree — carrying a `publicSafety` array that states, as literal
     data: synthetic fixtures only, no live vendor calls, no secrets, no tenant IDs,
@@ -4529,7 +4529,7 @@ earlier — that is the loop working, not a reason to soften the record.
     was intended.
 
 171. **The daily rot check watches a hand-picked tenth of the gate suite, and its
-    own header called that the full suite.** — OPEN, sre. Found by reading
+    own header called that the full suite.** — OPEN, sre. RE-MEASURED 2026-09-26 (still open, header corrected again, selection still hand-picked): `.github/workflows/scheduled-verification.yml` now names this row and points at `scripts/check-gate-census.mjs`, but its job steps are still a fixed list that never invokes `scripts/preflight.mjs`, no mechanism derives the selection from which gates can rot without a commit, and the row's own cited gate counts have drifted well below what `scripts/check-preflight-ci-parity.mjs` reports today. Found by reading
     `.github/` rather than by a gate. `scripts/preflight.mjs` registers the gates `node scripts/check-preflight-ci-parity.mjs` counts (327 on 2026-09-06)
     and `review-hub-ci.yml` runs every one per PR, kept in step by
     `check-preflight-ci-parity.mjs`. `scheduled-verification.yml` — the only thing
@@ -4559,7 +4559,7 @@ earlier — that is the loop working, not a reason to soften the record.
     is, which is the actual work here and is why this is filed rather than done.
 
 170. **A row's status can be WRONG in either direction, and no gate can tell.** —
-    OPEN, program-manager. This session produced both failures. Four rows (83, 89,
+    OPEN, program-manager. RE-MEASURED 2026-09-26 (still open, the harder half untouched): `scripts/check-backlog-evidence.mjs` and `scripts/check-backlog-ownership.mjs` remain wired into preflight and CI with their self-test passing today, and the debt ceiling in `docs/agent/backlog-evidence-ratchet.json` has ratcheted down since this row was written so its cited count is stale; the objective loop's 14-day stamp refusal (#1087) is now the one standing re-read of an open row's status, and nothing yet re-checks a closed row's status against the code. This session produced both failures. Four rows (83, 89,
     134, 135) read `open` for fixes that had already merged in PRs #309-#312; row 107
     earlier read `closed` for work that had not. A ledger wrong in both directions is
     not a ledger. (Status words are written in lower-case backticks throughout this

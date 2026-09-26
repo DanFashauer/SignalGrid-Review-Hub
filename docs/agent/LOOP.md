@@ -56,10 +56,10 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 15:30Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 16:15Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
-              Refreshed through Codex rounds 1-4 on #1128; the stamp is the last refresh.
+              Refreshed through Codex rounds 1-6 on #1128; the stamp is the last refresh.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -135,11 +135,11 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               chain mechanics were delegated. (The record commits on this branch - a3353aeb, 857f2b59, 6d45b0ce,
               93eb5750, a8be3e1f, d31dbd95, 8b85874c and this refresh -
               carry the harness's fixed Fable trailer for this session, not a claim that the creative tier wrote them
-              - see LESSONS L5; the Alpha-merge commits the workflow's Merge stage made carry none, which the
-              hardening branch's merge -m change closes.)
+              - see LESSONS L5; the Alpha-merge commits the workflow's Merge stage made carry none, which
+              #1130's merge -m change closed (36c561c7, 15:07Z).)
               The wrong-tier stages named here (PR bodies on Sonnet where the skill's table says Haiku; the
-              coordinator's own bulk edits) get ledger row L16 with the skill's stage-table correction on branch
-              claude/harden-land-branch-and-mcp-roster, opening as a PR today - not in this record PR.
+              coordinator's own bulk edits) got ledger row L16 with the skill's stage-table correction in #1130,
+              landed 36c561c7 at 15:07Z under DR-037 (check run 108425765136) - not in this record PR.
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows

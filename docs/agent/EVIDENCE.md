@@ -3687,7 +3687,9 @@ Command:  node scripts/lib/land-branch-gate.mjs --self-test
 Output:   "10/10 passed"
 Command:  node scripts/check-mcp-roster.mjs
 Output:   SKIPPED — #1127 (claude/mcp-roster-grants-gate) has not merged: state OPEN, head e189552b86db01d03b1a073fa9fb44845d7962e8,
-          combined status "pending" (GitHub MCP pull_request_read get_status), so this gate has nothing to check on mainline yet
+          so this gate has nothing to check on mainline yet. (The legacy combined-status API — GitHub MCP
+          pull_request_read get_status — reads "pending"/0 statuses for this repo regardless of check state and
+          proves nothing here; the real gating check is 108397317258, "Typecheck, build, and proof scaffold".)
 Command:  node scripts/check-readiness-figure.mjs
 Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
 Command:  node scripts/check-publication-boundary.mjs
@@ -3699,6 +3701,12 @@ Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH
 Command:  cat <scratchpad>/mcp2-pf.log (tail) / mcp2-br.log (tail)   — MCP roster's repair chain after the criss-cross-merge fix, head e189552b
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
 Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
-Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065eb at 11:08:13Z)
-Verdict:  holds. #1127 is the one item still pending: its gating check had not resolved at write time, so `check-mcp-roster.mjs`
-          has never run against mainline and its 15/15 self-test and roster figures remain claims made only in the PR body until it merges.
+Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065ebc at 11:08:13Z)
+Command:  GitHub MCP get_check_run 108397317258 (DanFashauer/SignalGrid-Review-Hub)   — #1127's gating check, re-checked
+          during this record's own review fixes
+Output:   status "completed", conclusion "success" on head e189552b86db01d03b1a073fa9fb44845d7962e8; PR #1127 itself
+          still reads state "open", merged false (GitHub MCP pull_request_read get)
+Verdict:  holds, updated. At write time #1127's gating check 108397317258 was pending, so `check-mcp-roster.mjs` had
+          never run against mainline and its 15/15 self-test and roster figures were claims made only in the PR body.
+          Re-checked now: the check itself has since gone green, but the PR has still not merged, so the gate remains
+          unrun against mainline and the figures remain PR-body claims until it does.

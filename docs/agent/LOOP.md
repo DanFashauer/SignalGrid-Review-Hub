@@ -56,7 +56,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED (THE SAVED WORKFLOW LANDED ITSELF), MCP ROSTER #1127 OPEN, THREE OWNER-DECISION PRs WAIT.
+LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED, MCP ROSTER #1127 OPEN, THREE OWNER-DECISION PRs WAIT.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -80,7 +80,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED (THE SAVED WORKFL
               entry (16 tools DERIVED from registerTool( calls, readOnly 7 / mutating 1 / unannotated 8), an external
               array (github, firecrawl, neural-memory), per-lane/per-skill grants and ungranted.cloud (12 connector
               prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. State at write
-              time (checked via GitHub MCP): OPEN, gating check PENDING on e189552b - check-mcp-roster.mjs was
+              time (checked via GitHub MCP): OPEN, gating check 108397317258 ("Typecheck, build, and proof scaffold")
+              PENDING on e189552b; re-checked during this record's own review fixes, that check now reads status
+              "completed" / conclusion "success", but the PR itself is still OPEN, unmerged - check-mcp-roster.mjs was
               therefore not run against mainline this cycle ("node scripts/check-mcp-roster.mjs" was skipped per plan,
               since #1127 has not merged). Lesson L15 (in #1127): the branch had L2's tip merged into it before L2
               landed, so L2 then landing by merge commit gave two merge bases (62b07014, 08949c61) - git's recursive
@@ -98,9 +100,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED (THE SAVED WORKFL
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
-              heartbeat; at ~11:22Z 25 worktrees of already-merged branches were removed with git worktree remove
-              (never rm -rf), disk 5.1G -> 7.6G free, and the shared checkout was fast-forwarded to
-              origin/SignalGrid_Alpha twice (it had been 33 behind).
+              heartbeat; the shared checkout was fast-forwarded twice, at 10:09:36Z (to 8bd63bae) and 11:08:42Z (to
+              8216cf6b) per `TZ=UTC git reflog` - it had been 34 commits behind (18 first-parent, `git rev-list
+              --count 221eabee..8bd63bae`), not 33. `df -h /` now reads 7.6G available; no worktree-removal count or
+              a disk figure from before that sweep was recorded, so neither is stated here.
               Next: DR-060 rule 3's next slice per the roster PR's own remaining-risks section; the Mac still owes
               Apple CI on #1121; the saved workflow's failure path has been validated only by its self-test's
               synthetic cases, not yet by a live red run (#1126's own remaining-risks section).
@@ -110,11 +113,14 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED (THE SAVED WORKFL
               COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5), and Settings -> Pages -> Source -> GitHub Actions.
 TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
-              findings), the MCP roster (6) and this record; Haiku workers ran lock waits, chain starts, sentinel
-              reads, pushes and PR opens inside the saved workflow; Sonnet wrote the PR bodies. L7 recurred in part:
-              the coordinator wrote every brief, made the small direct edits itself (registering the L2 gate self-test
-              in preflight/CI, the sentinel-wait loop and the canPush mirror in the saved workflow, the L15 row and
-              skill rule, the criss-cross repair merge), corrected the two PR bodies, and performed both merges.
+              findings), the MCP roster (6) and this record (5 findings, fix-first, all resolved on this pass);
+              Haiku workers ran lock waits, chain starts, sentinel reads, pushes and PR opens inside the saved
+              workflow; Sonnet wrote the PR bodies. L7 recurred: the coordinator wrote every brief, made the small
+              direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
+              canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
+              corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
+              chain mechanics were delegated. (The record commit's Fable trailer is the harness's fixed attribution
+              for this session, not a claim that the creative tier wrote it - see LESSONS L5.)
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows

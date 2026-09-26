@@ -10,8 +10,9 @@ by the filename.
 
 Lands a worker branch: optional pre-edit stage, merge `origin/SignalGrid_Alpha`
 and regenerate generated files on a clean index, run one sequential
-preflight+breadth chain behind a file lock, push ONLY when both exits are 0 on
-the unchanged expected head, then draft and open the PR.
+preflight+breadth chain behind a file lock, push ONLY when the SCRIPT (not a
+worker) verifies both exits are 0 on the unchanged expected head, then draft
+and open the PR.
 
 Invoke with the Workflow tool, `name: "land-branch"`, and this `args` object:
 
@@ -24,12 +25,21 @@ Invoke with the Workflow tool, `name: "land-branch"`, and this `args` object:
 | `tag` | yes | Short tag for this run's lock/log filenames. |
 | `klass` | yes | `SAFETY_MACHINERY` \| `DECISION_PATH` \| anything else, for the PR's "Owner decision needed" section. |
 | `title` | yes | The PR title. |
+| `trailers` | yes | The exact commit-trailer lines the caller wants on every commit this run makes. The script has no session baked in, so this and `sessionUrl` are how the caller supplies its own attribution. |
+| `sessionUrl` | yes | The caller's session URL, appended under the PR body's "Generated with Claude Code" line. |
 | `preBrief` | no | If set, runs an extra pre-edit stage before the merge. |
 | `bodyNotes` | no | Extra notes folded into the PR body. |
+
+Every required field is validated at the top of the script; a missing one
+throws immediately rather than silently landing as `undefined` in a filename
+or a lock.
 
 ## The one rule
 
 A workflow here never bypasses a gate. No `--no-verify`, no `--force`, no push
 before the preflight+breadth sentinel reads 0/0 on the exact head it is
-pushing. If a stage would need one of those to proceed, it returns a blocker
-instead.
+pushing — and that check is made by the SCRIPT itself
+(`scripts/lib/land-branch-gate.mjs`'s `canPush()`, self-tested with
+`node scripts/lib/land-branch-gate.mjs --self-test`), not inferred from a
+worker's report. If a stage would need one of those to proceed, it returns a
+blocker instead.

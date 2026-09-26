@@ -58,18 +58,26 @@ for (const [name, value] of Object.entries(REQUIRED)) {
 // Argument validation BEFORE any of these values are interpolated into shell text
 // handed to a worker (Codex #1126 P1, land-branch.js:165): a tag or path containing
 // shell metacharacters reaches the worker's Bash tool verbatim, since every command
-// below is a template string, not an argv array. title/klass/trailers/sessionUrl are
-// never interpolated into a literal backtick shell command in this file (only into
-// prose/prompt text and the PR body Markdown) — confirmed by inspection, not just
-// asserted, when this file is next changed.
+// below is a template string, not an argv array. title/klass/sessionUrl are only ever
+// interpolated into prose/prompt text and the PR body Markdown, never into a shell
+// command — but `trailers` IS pasted into a literal double-quoted shell argument (the
+// merge stage's `git merge --no-ff -m "..." -m "${trailers}"`, land-branch.js line
+// ~160), so it is validated below the same as tag/path, not merely required non-empty.
 const TAG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/
 const ABS_PATH_RE = /^\/[A-Za-z0-9._/-]+$/
 const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+// One or more "Key: value" lines; no double quote, backtick, `$` or backslash in the
+// value half — those are exactly the characters that can run a command or break out
+// of the double-quoted `-m "${trailers}"` argument the merge stage builds.
+const TRAILER_LINE_RE = /^[A-Za-z-]+: [^"`$\\]+$/
 if (!TAG_RE.test(tag)) throw new Error(`land-branch: args.tag ${JSON.stringify(tag)} must match ${TAG_RE}`)
 for (const [name, value] of [['repo', repo], ['scratch', scratch], ['worktree', worktree]]) {
   if (!ABS_PATH_RE.test(value)) throw new Error(`land-branch: args.${name} ${JSON.stringify(value)} must be an absolute path (${ABS_PATH_RE}) — no spaces or shell metacharacters`)
 }
 if (!BRANCH_RE.test(branch) || branch.includes('..')) throw new Error(`land-branch: args.branch ${JSON.stringify(branch)} must match ${BRANCH_RE} and contain no ".."`)
+const trailerLines = String(trailers).split('\n').filter((l) => l.length > 0)
+if (!trailerLines.length || !trailerLines.every((l) => TRAILER_LINE_RE.test(l)))
+  throw new Error(`land-branch: args.trailers ${JSON.stringify(trailers)} must be one or more "Key: value" lines matching ${TRAILER_LINE_RE}, with no '"', backtick, '$' or '\\' in any line`)
 const S = scratch
 const REPO = repo
 // canPush is MIRRORED from scripts/lib/land-branch-gate.mjs, byte-for-byte after whitespace
@@ -157,7 +165,7 @@ ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium
 phase('Merge')
 const merge = await agent(`You are the Sonnet merge worker (DR-060 rule 1: mid tier). Worktree ${worktree}, branch ${branch}.
 1. \`cd ${REPO} && git fetch origin SignalGrid_Alpha\` (plain fetch). \`cd ${worktree} && git status --short\` must be empty.
-2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending).
+2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
 3. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.
 4. Quick gates after \`git add -A\` (nothing should be pending): node scripts/check-publication-boundary.mjs; node scripts/check-surface-review-coverage.mjs; node scripts/check-surface-ownership.mjs (if it exists); node scripts/check-lessons.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-cited-paths.mjs; node scripts/check-doc-line-counts.mjs. Each exit 0, quote the last line; a failure is returned as a blocker with the output, NOT patched around.
 Return headSha = \`git rev-parse HEAD\`.
@@ -234,9 +242,9 @@ if (!gate.ok) {
 }
 
 const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it, and you do not re-derive it either: the ONLY git command you run is the one shell line below, which re-verifies the sentinel logs and the worktree's own HEAD/branch ref DETERMINISTICALLY (never from your own report of what a file says) before the push runs at all. Worktree ${worktree}, branch ${branch}.
-1. Run exactly this one command, in the worktree, in the foreground:
-   \`cd ${worktree} && node ${REPO}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} && git push -u origin HEAD:refs/heads/${branch}\`
-   If the verify half prints "REFUSED", the \`&&\` never reaches the push — report the printed reasons as a failure and pushed=false. Never run this with any other git command chained on, never pass --force.
+1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output):
+   \`cd ${worktree} && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} | tee /tmp/land-branch-verify-${tag}.out; grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} " /tmp/land-branch-verify-${tag}.out && git push -u origin HEAD:refs/heads/${branch}\`
+   If the verify half prints "REFUSED", or prints nothing, or its PASS line does not literally match (wrong head, wrong tag), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. Never run this with any other git command chained on, never pass --force.
 2. Only if the command above succeeded: \`git ls-remote origin refs/heads/${branch}\` → remoteSha.
 Never run any other git command; never fetch; never edit files.
 ${RULES}`, { label: `push:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: PUSH_SCHEMA })
@@ -265,8 +273,11 @@ ${RULES}`, { label: `body:${tag}`, phase: 'PR', model: 'sonnet', effort: 'medium
 // return "raw markdown, nothing else". Cut everything before the first "## " so the
 // opener never has to trust the worker's own compliance with that instruction.
 const bodyText = String(body || '')
-const cut = bodyText.indexOf('## ')
-const cleanBody = cut >= 0 ? bodyText.slice(cut) : bodyText
+// Cut at the first LINE that starts with "## ", not the first occurrence of the
+// substring anywhere — a preamble line containing "### not a heading" has "## " as a
+// substring one character in, so indexOf() alone turns it into a bogus leading H2.
+const headingMatch = /^## /m.exec(bodyText)
+const cleanBody = headingMatch ? bodyText.slice(headingMatch.index) : bodyText
 
 const pr = await agent(`You are the Haiku PR opener. Load the GitHub tool with ToolSearch "select:mcp__github__create_pull_request" and open a PR in DanFashauer/SignalGrid-Review-Hub: head ${branch}, base SignalGrid_Alpha, title exactly: ${JSON.stringify(title)}, body exactly the markdown between the BODY markers below (do not alter it). Return number, url, and headSha = ${push.remoteSha}. If the call fails, return the error as a blocker; do not retry more than twice.
 BODY-START

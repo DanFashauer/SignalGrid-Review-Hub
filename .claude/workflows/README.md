@@ -45,9 +45,18 @@ A workflow here never bypasses a gate. No `--no-verify`, no `--force`, no push
 before the preflight+breadth sentinel reads 0/0 on the exact head it is
 pushing.
 
-**The push gate is `--verify`, not a worker's report.** The push worker's only
-git command is one shell line:
-`node scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> && git push -u origin HEAD:refs/heads/<branch>`.
+**The push gate binds only when the push worker runs the given line as
+given** — `--verify` is deterministic about what it checks, not about
+whether an LLM agent's Bash tool actually runs it verbatim; a worker that ran
+a bare `git push` instead would not be stopped by anything in this file
+except the prompt telling it not to. Given that it runs, the push worker's
+only git command is one shell line, invoked from `<worktree>` — never from
+the shared `<repo>` checkout, which can sit on an older commit whose copy of
+`land-branch-gate.mjs` predates `--verify` and silently no-ops on it — and
+gated on the module's own literal `PASS` line via `grep`, not merely on exit
+code (an older module that doesn't recognize `--verify` also exits 0 with no
+output):
+`node <worktree>/scripts/lib/land-branch-gate.mjs --verify --scratch <scratch> --tag <tag> --worktree <worktree> --branch <branch> --head <headSha> | tee <tmpfile>; grep -q "^land-branch-gate --verify PASS: head <headSha> " <tmpfile> && git push -u origin HEAD:refs/heads/<branch>`.
 `--verify` reads `<scratch>/<tag>-pf.log` and `<scratch>/<tag>-br.log` itself,
 resolves `git -C <worktree> rev-parse HEAD` and
 `git -C <worktree> rev-parse refs/heads/<branch>` itself, requires both to
@@ -55,20 +64,33 @@ equal the given `--head`, and applies the same `canPush()` the script already
 uses for its own cheap first-pass gate
 (`scripts/lib/land-branch-gate.mjs`'s `canPush()`, self-tested with
 `node scripts/lib/land-branch-gate.mjs --self-test`, which also self-tests
-`--verify` against a throwaway git repo under `os.tmpdir()`). Nothing here is
-inferred from a worker's account of what a file says — a mismatch or a
-missing/unparsable log file prints its reasons and the `&&` never reaches the
-push. The push targets `HEAD:refs/heads/<branch>` explicitly, rather than
-`git push origin <branch>`, so the ref that gets pushed is always the
-validated worktree HEAD, never whatever `<branch>` happens to resolve to
+`--verify` against a throwaway git repo under `os.tmpdir()`). What is
+deterministic: file contents and ref resolution — `--verify` reads the
+sentinel files and the worktree's own refs itself rather than trusting a
+worker's paraphrase of them, and prints its literal `PASS`/`REFUSED` verdict
+independent of any agent's account. What is not proven by any of this: that
+`node scripts/preflight.mjs` and `pnpm run verify:breadth` actually ran on
+this head — `--verify` only reads the sentinel files the chain job wrote; a
+sentinel is trustworthy only insofar as the chain-run stage's own shell line
+(§ Chain, land-branch.js) was the thing that produced it. A mismatch or a
+missing/unparsable log file prints its reasons and the `grep -q` never
+reaches the push. The push targets `HEAD:refs/heads/<branch>` explicitly,
+rather than `git push origin <branch>`, so the ref that gets pushed is always
+the validated worktree HEAD, never whatever `<branch>` happens to resolve to
 locally if it does not match the checked-out ref. If a stage would need one
 of those to proceed, it returns a blocker instead.
 
 ## Re-running on a branch whose PR is already open
 
 Running the workflow again on the same `branch`/`tag` after its PR has
-already been opened is safe: the PR-opener stage's GitHub call for an
-existing `head`/`base` pair returns the existing open PR rather than creating
-a duplicate, so the run effectively refreshes that PR's body from the current
-diff and log files instead of failing or opening a second PR. The coordinator
-treats a re-run this way as "the body was refreshed," not as a new PR.
+already been opened pushes fine, but the PR-opener stage then fails: GitHub's
+create-pull-request endpoint rejects a second call for the same `head`/`base`
+pair with a 422 ("A pull request already exists for `<owner>:<branch>`") and
+does not touch the existing PR's body. The opener stage only calls
+`create_pull_request` — it has no update-on-existing path — so a re-run ends
+with the PR stage reporting that 422 as a blocker, not with a refreshed body.
+The coordinator refreshes the body by hand afterwards with
+`update_pull_request` using the same `cleanBody` the run produced. (An
+opener that instead called `update_pull_request` when create returns a 422
+would make a re-run genuinely self-healing; that path does not exist yet and
+should not be documented as if it did until it is built and tested.)

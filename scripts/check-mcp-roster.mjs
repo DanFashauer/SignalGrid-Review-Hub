@@ -185,6 +185,10 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
 
   const lanes = lanesRaw;
   for (const [lane, entries] of Object.entries(lanes)) {
+    if (entries != null && !Array.isArray(entries)) {
+      problems.push(`${ROSTER_PATH}: grants.lanes.${lane} must be an array, got ${typeof entries}`);
+      continue;
+    }
     for (const g of entries ?? []) {
       if (!knownIds.has(g.server)) {
         problems.push(`${ROSTER_PATH}: grants.lanes.${lane} names unknown server "${g.server}"`);
@@ -201,6 +205,10 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   for (const [skillDir, entries] of Object.entries(skillGrants)) {
     if (fpDirs.size > 0 && !fpDirs.has(skillDir)) {
       problems.push(`${ROSTER_PATH}: grants.skills has a key "${skillDir}" that is not a first-party skill directory`);
+    }
+    if (entries != null && !Array.isArray(entries)) {
+      problems.push(`${ROSTER_PATH}: grants.skills.${skillDir} must be an array, got ${typeof entries}`);
+      continue;
     }
     for (const g of entries ?? []) {
       if (!knownIds.has(g.server)) {
@@ -220,32 +228,55 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   const mentionsRaw = r.grants.mentions && typeof r.grants.mentions === "object" ? r.grants.mentions : {};
   const mentions = Object.fromEntries(Object.entries(mentionsRaw).filter(([k]) => !k.startsWith("$")));
   for (const [skillDir, entries] of Object.entries(mentions)) {
+    // A mentions key names a skill precedent/context reference, not a call — it is
+    // checked against the same first-party directory set as grants.skills keys, so a
+    // stray or misspelled skill directory here is caught the same way there.
+    if (fpDirs.size > 0 && !fpDirs.has(skillDir)) {
+      problems.push(`${ROSTER_PATH}: grants.mentions has a key "${skillDir}" that is not a first-party skill directory`);
+    }
+    if (entries != null && !Array.isArray(entries)) {
+      problems.push(`${ROSTER_PATH}: grants.mentions.${skillDir} must be an array, got ${typeof entries}`);
+      continue;
+    }
     for (const m of entries ?? []) {
       if (!knownIds.has(m.server)) problems.push(`${ROSTER_PATH}: grants.mentions.${skillDir} names unknown server "${m.server}"`);
       if (typeof m.why !== "string" || m.why.trim() === "") problems.push(`${ROSTER_PATH}: grants.mentions.${skillDir} names "${m.server}" with no non-empty "why"`);
     }
   }
 
-  // r4/D5 — a first-party skill doc naming a server (mcp__<server>__ token, or the
-  // server's own id/aliases as a whole word) must have a grant OR a mentions entry.
+  // r4/D5 — a first-party skill doc's ACTUAL CALLS (an `mcp__<server>__` tool token)
+  // must have a `grants.skills` entry — a `grants.mentions` entry means "not a call",
+  // so it can satisfy only a MENTION (the server's id/alias appearing as a whole word
+  // without a call token), never a call token itself; otherwise a mentions row could
+  // silently clear a real call that has no grant. Calls and mentions are therefore
+  // tracked as two separate named-sets, not merged into one.
   const grantedByskill = new Map();
   for (const [skillDir, entries] of Object.entries(skillGrants)) {
-    grantedByskill.set(skillDir, new Set((entries ?? []).map((g) => String(g.server).toLowerCase())));
+    if (!Array.isArray(entries)) continue; // already reported above
+    grantedByskill.set(skillDir, new Set(entries.map((g) => String(g.server).toLowerCase())));
   }
   const mentionedByskill = new Map();
   for (const [skillDir, entries] of Object.entries(mentions)) {
-    mentionedByskill.set(skillDir, new Set((entries ?? []).map((m) => String(m.server).toLowerCase())));
+    if (!Array.isArray(entries)) continue; // already reported above
+    mentionedByskill.set(skillDir, new Set(entries.map((m) => String(m.server).toLowerCase())));
   }
   for (const { dir, path, text } of skillDocs ?? []) {
-    const named = new Set(mcpServerNamesIn(text));
+    const calledNames = mcpServerNamesIn(text); // mcp__<server>__ tokens — actual calls
+    const mentionedNames = new Set();
     for (const id of knownIds) {
       const candidates = [id, ...(aliasesById.get(id) ?? [])];
-      if (anyWholeWordIn(text, candidates)) named.add(id.toLowerCase());
+      if (anyWholeWordIn(text, candidates)) mentionedNames.add(id.toLowerCase());
     }
-    if (named.size === 0) continue;
+    if (calledNames.size === 0 && mentionedNames.size === 0) continue;
     const granted = grantedByskill.get(dir) ?? new Set();
     const mentioned = mentionedByskill.get(dir) ?? new Set();
-    for (const server of named) {
+    for (const server of calledNames) {
+      if (!granted.has(server)) {
+        problems.push(`${path}: calls "mcp__${server}__..." but grants.skills.${dir} has no grant for it (a grants.mentions entry does not cover an actual call)`);
+      }
+    }
+    for (const server of mentionedNames) {
+      if (calledNames.has(server)) continue; // already checked above as a call
       if (!granted.has(server) && !mentioned.has(server)) {
         problems.push(`${path}: names "${server}" but grants.skills.${dir} has no grant and grants.mentions.${dir} has no mention for it`);
       }
@@ -339,7 +370,7 @@ server.registerTool(
   expectFail(
     "a skill doc naming an ungranted mcp__ghost__x call FAILS",
     { skillDocs: [{ dir: "loop-start", path: ".claude/skills/loop-start/SKILL.md", text: "call mcp__ghost__x here" }] },
-    'has no grant and grants.mentions.loop-start has no mention',
+    'calls "mcp__ghost__..." but grants.skills.loop-start has no grant',
   );
   expectFail(
     "a grant to an evaluated-not-adopted server FAILS",
@@ -465,6 +496,24 @@ server.registerTool(
     "a mention with empty why FAILS",
     { roster: { ...goodRoster, grants: { ...goodRoster.grants, mentions: { "loop-start": [{ server: "firecrawl", why: "" }] } } } },
     'names "firecrawl" with no non-empty "why"',
+  );
+  expectFail(
+    "a grants.mentions entry does NOT clear an actual mcp__ call FAILS",
+    {
+      roster: { ...goodRoster, grants: { ...goodRoster.grants, mentions: { "loop-start": [{ server: "context7", why: "precedent only" }] } } },
+      skillDocs: [{ dir: "loop-start", path: ".claude/skills/loop-start/SKILL.md", text: "call mcp__context7__query-docs here" }],
+    },
+    'calls "mcp__context7__..." but grants.skills.loop-start has no grant',
+  );
+  expectFail(
+    "a grants.mentions key that is not a first-party skill directory FAILS",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, mentions: { "ghost-skill": [{ server: "firecrawl", why: "x" }] } } } },
+    'key "ghost-skill" that is not a first-party skill directory',
+  );
+  expectFail(
+    "a non-array grants.skills entry FAILS instead of throwing",
+    { roster: { ...goodRoster, grants: { ...goodRoster.grants, skills: { "loop-start": { server: "signalgrid-mcp", for: "x" } } } } },
+    "grants.skills.loop-start must be an array, got object",
   );
 
   const bad = checks.filter(([, ok]) => !ok);

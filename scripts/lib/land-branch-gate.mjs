@@ -219,12 +219,21 @@ function selfTest() {
       if (!r.ok) { pass++; console.log("PASS: --verify sentinel at another sha → refused"); }
       else console.error("FAIL: --verify sentinel at another sha did not refuse");
 
+      // This case must exercise the BRANCH-REF check specifically, not the HEAD check:
+      // worktree HEAD stays AT the expected head (detached), while refs/heads/<branch>
+      // is force-moved elsewhere. If the branch-ref check were deleted, this would
+      // still pass (worktree HEAD matches) — the assertion below on the reason text
+      // is what catches that, not just `!r.ok`.
       writeGood();
-      execFileSync("git", ["-C", dir, "commit", "--allow-empty", "-q", "-m", "advance HEAD past the branch ref"]);
+      execFileSync("git", ["-C", dir, "checkout", "-q", "--detach", head]);
+      execFileSync("git", ["-C", dir, "commit", "--allow-empty", "-q", "-m", "a sha the branch ref will point to instead"]);
+      const otherSha = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+      execFileSync("git", ["-C", dir, "checkout", "-q", "--detach", head]);
+      execFileSync("git", ["-C", dir, "branch", "-f", "feature-branch", otherSha]);
       r = verify({ scratch, tag, worktree: dir, branch: "feature-branch", head });
-      if (!r.ok) { pass++; console.log("PASS: --verify refs/heads/<branch> not at HEAD → refused"); }
-      else console.error("FAIL: --verify refs/heads/<branch> not at HEAD did not refuse");
-      execFileSync("git", ["-C", dir, "reset", "-q", "--soft", head]);
+      if (!r.ok && r.reasons.some((x) => x.includes("refs/heads/"))) { pass++; console.log("PASS: --verify refs/heads/<branch> not at HEAD → refused (branch-ref reason)"); }
+      else console.error(`FAIL: --verify refs/heads/<branch> not at HEAD — got ok=${r.ok}, reasons=${JSON.stringify(r.reasons)}`);
+      execFileSync("git", ["-C", dir, "branch", "-f", "feature-branch", head]);
 
       writeFileSync(pf, `preflight output\nsomething that is not a sentinel line at all\n`);
       writeFileSync(br, `breadth output\nBREADTH_EXIT 0 ${head}\n`);

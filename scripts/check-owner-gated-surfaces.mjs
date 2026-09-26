@@ -175,17 +175,25 @@ export const OWNER_RESERVED = [
   // Codex round 3 on #1133 (thread 4112838155, 2026-09-26): the Dockerfile set feeding
   // that same derivation is itself outside scripts/ and unowned by any rule above.
   // scripts/check-launch-claims.mjs:46-73 derives its scanned source roots by walking
-  // `git ls-files 'Dockerfile*'` (a bare pathspec with no `/`, so it only matches
-  // top-level names — verified live: a nested Dockerfile in a subdirectory does not
-  // match it from the repo root) and mapping each Dockerfile's `COPY .../dist` lines to
-  // an `artifacts/<pkg>/src` root to scan. Adding, removing or rewriting a root
-  // Dockerfile.* changes WHICH roots get scanned without ever touching
-  // check-launch-claims.mjs itself — the same "widen the gate's blind spot from
-  // outside its own code" shape Finding 3's ceiling-files rule above already closes.
-  // Scoped to EXACTLY what that pathspec reads today: a root `Dockerfile` or
-  // `Dockerfile.*`, never a subdirectory (this rule widens only if that derivation is
-  // ever changed to read a nested one).
-  { rule: "the launch-claims gate's scanned Dockerfile set (root Dockerfile / Dockerfile.* — changes which artifacts/<pkg>/src trees scripts/check-launch-claims.mjs scans)", re: /^Dockerfile[^/]*$/ },
+  // `git ls-files 'Dockerfile*'` and mapping each Dockerfile's `COPY .../dist` lines to
+  // an `artifacts/<pkg>/src` root to scan. Adding, removing or rewriting a Dockerfile
+  // changes WHICH roots get scanned without ever touching check-launch-claims.mjs
+  // itself — the same "widen the gate's blind spot from outside its own code" shape
+  // Finding 3's ceiling-files rule above already closes.
+  // Review sweep on #1133 (round 3 fix pass): the round-3 comment above claimed this
+  // bare, slash-free pathspec "only matches top-level names" and scoped the rule to
+  // `^Dockerfile[^/]*$` on that belief. Both were wrong. `git ls-files 'Dockerfile*'`
+  // is fnmatch without FNM_PATHNAME, so `*` crosses `/`: it matches every tracked path
+  // whose FIRST path segment starts with `Dockerfile` — a root `Dockerfile`/
+  // `Dockerfile.*` file, but ALSO anything under a root entry named `Dockerfile*`
+  // (`Dockerfile.d/x`, `Dockerfiles/api`), while a path like `docs/ops/Dockerfile.staging`
+  // (first segment `docs`) never matches. Verified live in a throwaway repo (both the
+  // positive nested cases and the docs/ops negative). `^Dockerfile[^/]*$` rejected the
+  // nested-root cases because of the `/` after the prefix, so a tracked
+  // `Dockerfile.d/<x>` could be added or edited as an autonomous change and still widen
+  // check-launch-claims.mjs's scanned roots. The rule now mirrors the pathspec exactly:
+  // a plain `Dockerfile` prefix over the whole path, no end anchor.
+  { rule: "the launch-claims gate's scanned Dockerfile set (any tracked path starting with 'Dockerfile' — the set `git ls-files 'Dockerfile*'` returns — changes which artifacts/<pkg>/src trees scripts/check-launch-claims.mjs scans)", re: /^Dockerfile/ },
   // Codex round 2 on #1133 (2026-09-26) P1: the repo's own instruction files — every
   // rule in this manifest, DR-020/DR-021/DR-033/DR-037/DR-054/DR-060, the golden rules,
   // the "ask before" list — are prose the owner wrote and the whole autonomous-merge
@@ -413,7 +421,12 @@ function selfTest() {
   // feeds scripts/check-launch-claims.mjs's own source-root derivation.
   t("Dockerfile.api is OWNER_RESERVED (feeds the launch-claims gate's scanned Dockerfile set)", mostRestrictive(cls(["Dockerfile.api"])) === "OWNER_RESERVED");
   t("Dockerfile.web is OWNER_RESERVED (same)", mostRestrictive(cls(["Dockerfile.web"])) === "OWNER_RESERVED");
-  t("a nested Dockerfile (docs/ops/Dockerfile.staging) stays autonomous — check-launch-claims.mjs's bare 'Dockerfile*' pathspec never matches a subdirectory", cls(["docs/ops/Dockerfile.staging"]).tier === "autonomous");
+  // Review sweep on #1133 (round 3 fix pass): `git ls-files 'Dockerfile*'` is a prefix
+  // match that crosses `/`, so it lists these two nested paths as well (verified live) —
+  // the prior `^Dockerfile[^/]*$` rule missed both.
+  t("Dockerfile.d/api is OWNER_RESERVED (nested under a root entry named Dockerfile.d, still inside git ls-files 'Dockerfile*')", mostRestrictive(cls(["Dockerfile.d/api"])) === "OWNER_RESERVED");
+  t("Dockerfiles/api is OWNER_RESERVED (same — root entry Dockerfiles/ starts with 'Dockerfile')", mostRestrictive(cls(["Dockerfiles/api"])) === "OWNER_RESERVED");
+  t("a Dockerfile under an unrelated top-level dir (docs/ops/Dockerfile.staging) stays autonomous — its FIRST path segment ('docs') doesn't start with 'Dockerfile', so git ls-files 'Dockerfile*' never lists it", cls(["docs/ops/Dockerfile.staging"]).tier === "autonomous");
   // Codex round 2 on #1133 (2026-09-26) P1, finding 1: the repository instruction files.
   t("root AGENTS.md is OWNER_RESERVED", mostRestrictive(cls(["AGENTS.md"])) === "OWNER_RESERVED");
   t("root CLAUDE.md is OWNER_RESERVED", mostRestrictive(cls(["CLAUDE.md"])) === "OWNER_RESERVED");

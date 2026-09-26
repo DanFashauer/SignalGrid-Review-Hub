@@ -171,7 +171,7 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
   stages the coordinator did itself.
 
-## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9)
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9, L11)
 
 - **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
   test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
@@ -205,3 +205,9 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   subagent ran, check `git rev-parse --is-shallow-repository` first (it prints `true` or
   `false` from any worktree; `ls .git/shallow` fails open there, since a worktree's `.git`
   is a file) — `git fetch --unshallow origin` is the fix.
+- **A generated file is regenerated only with `git ls-files -u` empty.** Running
+  `--write` on `scripts/check-surface-review-coverage.mjs` while
+  `docs/agent/SURFACE_REVIEW_COVERAGE.md` sat mid-merge-conflict made the generator walk
+  an index holding three stages of the page and render wrong counts (L11). The generator
+  now refuses (exit 1, naming the unmerged paths) when `git ls-files -u` prints anything;
+  the same check applies to any other worker step that regenerates a file from the tree.

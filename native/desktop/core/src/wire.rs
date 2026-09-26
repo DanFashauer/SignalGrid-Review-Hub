@@ -10,13 +10,20 @@
 //! decision becomes DENY, carrying a reason that says which failure it was.
 
 use crate::assist::{Assist, AssistDecision};
-use serde_json::Value;
+use serde::de::{self, Deserializer as _, MapAccess, Visitor};
+use serde_json::{Map, Value};
+use std::fmt;
 
 /// Parse a gate response.
 ///
 /// `status` is the HTTP status actually received — use `0` for "the request never
 /// completed", which is the shape a timeout or DNS failure usually takes.
 /// `body` is the raw body exactly as read; `None` means there was none.
+///
+/// A 2xx body is a decision only if it is a JSON object with no repeated top-level
+/// key, a recognised `assist`, `obligations`/`reasons` each absent or a list of
+/// strings, and a non-blank string `decisionId`. Anything else is DENY, whatever
+/// `assist` says — the rule is the same for all four outcomes.
 pub fn parse(status: u16, body: Option<&str>) -> AssistDecision {
     // ── Transport-level outcomes ─────────────────────────────────────────────
     // A gate that could not be reached is not a gate that said yes. 5xx, 401/403 on
@@ -36,22 +43,25 @@ pub fn parse(status: u16, body: Option<&str>) -> AssistDecision {
     };
 
     // ── Body-level outcomes ──────────────────────────────────────────────────
-    let root =
-        match serde_json::from_str::<Value>(body) {
-            // Includes the realistic hostile case: a captive portal answering 200 with an
-            // HTML login page. It parses as neither JSON nor permission.
-            Err(e) => {
-                return AssistDecision::denied(format!(
-                    "the Assist gate's response was not a JSON object ({e})"
-                ))
-            }
-            Ok(Value::Object(map)) => map,
-            Ok(_) => return AssistDecision::denied(
-                "the Assist gate's response was not a JSON object (top level was not an object)",
-            ),
-        };
+    // Includes the realistic hostile case: a captive portal answering 200 with an
+    // HTML login page. It parses as neither JSON nor permission. A repeated
+    // top-level key fails here too: see `object_with_unique_keys`.
+    let root = match object_with_unique_keys(body) {
+        Ok(map) => map,
+        Err(e) => {
+            return AssistDecision::denied(format!(
+                "the Assist gate's response was not a JSON object ({e})"
+            ))
+        }
+    };
 
     let decision_id = string_field(root.get("decisionId"));
+    let refuse = |reason: &str| AssistDecision {
+        assist: Assist::Deny,
+        reasons: vec![reason.to_string()],
+        obligations: Vec::new(),
+        decision_id: decision_id.clone(),
+    };
 
     // A present-but-non-string `assist` is treated as present-and-unreadable, which
     // is DENY. Only a genuinely missing key reports as missing.
@@ -60,14 +70,8 @@ pub fn parse(status: u16, body: Option<&str>) -> AssistDecision {
         Some(Value::String(s)) => Assist::parse(Some(s)),
         Some(_) => Some(Assist::Deny),
     };
-
     let Some(assist) = parsed else {
-        return AssistDecision {
-            assist: Assist::Deny,
-            reasons: vec!["the Assist gate's response carried no \"assist\" field".to_string()],
-            obligations: Vec::new(),
-            decision_id,
-        };
+        return refuse("the Assist gate's response carried no \"assist\" field");
     };
 
     // `obligations` is OPTIONAL-ABSENT, and absent is the served case: the
@@ -76,32 +80,68 @@ pub fn parse(status: u16, body: Option<&str>) -> AssistDecision {
     // is known to be satisfied — nothing here turns an empty list into permission;
     // only `Assist::Allow` proceeds, whatever this list holds.
     //
-    // PRESENT-BUT-NOT-A-LIST IS MALFORMED, and malformed is DENY — the same rule
-    // `assist` gets above. Coercing it to empty (as this once did) let a step_up
-    // stand with its obligations silently dropped, an asymmetry the shared vectors
-    // now pin closed.
-    let obligations = match root.get("obligations") {
-        None => Vec::new(),
-        Some(Value::Array(_)) => string_list(root.get("obligations")),
-        Some(_) => {
-            return AssistDecision {
-                assist: Assist::Deny,
-                reasons: vec![
-                    "the Assist gate's response carried an \"obligations\" field that is not a list"
-                        .to_string(),
-                ],
-                obligations: Vec::new(),
-                decision_id,
-            }
-        }
+    // PRESENT-BUT-WRONG-TYPE IS MALFORMED, and malformed is DENY — for `obligations`
+    // and `reasons` alike, and for a non-string ENTRY as much as for a non-list.
+    // Coercing either to empty (as this once did) let a decision stand on a body this
+    // client did not understand, with an obligation silently dropped.
+    let Some(obligations) = string_list(root.get("obligations")) else {
+        return refuse(
+            "the Assist gate's response carried an \"obligations\" field that is not a list of strings",
+        );
     };
+    let Some(reasons) = string_list(root.get("reasons")) else {
+        return refuse(
+            "the Assist gate's response carried a \"reasons\" field that is not a list of strings",
+        );
+    };
+
+    // REQUIRED on every outcome (AssistResult `required: [assist, decisionId]`). Every
+    // real decision is persisted and audited under its id, and a step_up is answered
+    // through it; a body without one is not a decision anybody recorded.
+    if decision_id.is_none() {
+        return AssistDecision::denied(
+            "the Assist gate's response carried no usable \"decisionId\" (the contract requires a non-blank string)",
+        );
+    }
 
     AssistDecision {
         assist,
-        reasons: string_list(root.get("reasons")),
+        reasons,
         obligations,
         decision_id,
     }
+}
+
+/// Parse `body` as a JSON object whose top-level keys are all distinct.
+///
+/// serde_json's `Value` keeps the LAST copy of a repeated key, so
+/// `{"assist":"deny","assist":"allow"}` read as allow. Keys are compared after escape
+/// decoding, so `"assist"` is caught as a second `assist`. Only the top level is
+/// checked: nested values are ignored fields or string lists, where a repeated key
+/// cannot change anything this client reads.
+fn object_with_unique_keys(body: &str) -> Result<Map<String, Value>, serde_json::Error> {
+    struct UniqueKeys;
+    impl<'de> Visitor<'de> for UniqueKeys {
+        type Value = Map<String, Value>;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a JSON object")
+        }
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            let mut out = Map::new();
+            while let Some(key) = map.next_key::<String>()? {
+                if out.contains_key(&key) {
+                    return Err(de::Error::custom(format!("duplicate key \"{key}\"")));
+                }
+                let value = map.next_value()?;
+                out.insert(key, value);
+            }
+            Ok(out)
+        }
+    }
+    let mut de = serde_json::Deserializer::from_str(body);
+    let map = de.deserialize_map(UniqueKeys)?;
+    de.end()?;
+    Ok(map)
 }
 
 fn string_field(v: Option<&Value>) -> Option<String> {
@@ -111,25 +151,23 @@ fn string_field(v: Option<&Value>) -> Option<String> {
     }
 }
 
-/// Read a list of strings, tolerating the shapes a real server actually emits.
+/// Read an optional list of strings.
 ///
-/// A missing list is an EMPTY list, not an error — `reasons` is genuinely optional on
-/// an allow. But entries that are not strings are DROPPED rather than stringified:
-/// rendering `{"code":42}` to a worker as "{code=42}" is worse than showing nothing,
-/// because it looks like an explanation and is not one.
-fn string_list(v: Option<&Value>) -> Vec<String> {
+/// Absent is an EMPTY list, not an error — `reasons` is genuinely optional on an allow.
+/// Present must be a list whose every entry is a string; anything else is `None`,
+/// which the caller turns into DENY. Blank strings are well-typed and are dropped from
+/// display rather than shown as an empty explanation.
+fn string_list(v: Option<&Value>) -> Option<Vec<String>> {
     match v {
+        None => Some(Vec::new()),
         Some(Value::Array(items)) => items
             .iter()
-            .filter_map(|i| match i {
-                Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
+            .map(|i| i.as_str().map(str::to_string))
+            .collect::<Option<Vec<String>>>()
+            .map(|all| all.into_iter().filter(|s| !s.trim().is_empty()).collect()),
+        Some(_) => None,
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,7 +186,7 @@ mod tests {
         let d = parse(
             200,
             Some(
-                r#"{"assist":"step_up","reasons":["unmanaged device"],"obligations":["webauthn"]}"#,
+                r#"{"assist":"step_up","decisionId":"dec_2","reasons":["unmanaged device"],"obligations":["webauthn"]}"#,
             ),
         );
         assert_eq!(d.assist, Assist::StepUp);
@@ -181,6 +219,7 @@ mod tests {
             r#"{"assist":"allow","obligations":{"type":"webauthn"}}"#,
             r#"{"assist":"allow","obligations":1}"#,
             r#"{"assist":"allow","obligations":null}"#,
+            r#"{"assist":"step_up","obligations":["webauthn",42]}"#,
         ] {
             let d = parse(200, Some(body));
             assert_eq!(d.assist, Assist::Deny, "{body}");
@@ -196,7 +235,7 @@ mod tests {
     fn an_unknown_field_from_a_newer_server_does_not_break_an_older_client() {
         let d = parse(
             200,
-            Some(r#"{"assist":"allow","somethingAddedLater":{"a":1}}"#),
+            Some(r#"{"assist":"allow","decisionId":"dec_1","somethingAddedLater":{"a":1}}"#),
         );
         assert_eq!(d.assist, Assist::Allow);
     }
@@ -295,28 +334,81 @@ mod tests {
 
     #[test]
     fn absent_reasons_is_an_empty_list_not_a_failure() {
-        let d = parse(200, Some(r#"{"assist":"allow"}"#));
+        let d = parse(200, Some(r#"{"assist":"allow","decisionId":"dec_1"}"#));
         assert_eq!(d.assist, Assist::Allow);
         assert!(d.reasons.is_empty());
     }
 
     #[test]
-    fn non_string_reasons_are_dropped_rather_than_stringified() {
+    fn reasons_that_are_not_a_list_of_strings_are_malformed_and_deny() {
+        // Strict like obligations: a non-list, a null, or a non-string entry is a body
+        // this client does not understand. It used to read as absent and let an allow
+        // stand; it is never stringified either way.
+        for body in [
+            r#"{"assist":"allow","decisionId":"dec_1","reasons":"a string not an array"}"#,
+            r#"{"assist":"allow","decisionId":"dec_1","reasons":null}"#,
+            r#"{"assist":"allow","decisionId":"dec_1","reasons":[{"code":42},"real reason"]}"#,
+        ] {
+            let d = parse(200, Some(body));
+            assert_eq!(d.assist, Assist::Deny, "{body}");
+            assert!(d.explanation().contains("reasons"), "{}", d.explanation());
+        }
+    }
+
+    #[test]
+    fn blank_reasons_are_well_typed_and_dropped_from_display() {
         let d = parse(
             200,
-            Some(r#"{"assist":"deny","reasons":[{"code":42},"real reason",null,""]}"#),
+            Some(r#"{"assist":"allow","decisionId":"dec_1","reasons":["real reason",""," "]}"#),
         );
+        assert_eq!(d.assist, Assist::Allow);
         assert_eq!(d.reasons, vec!["real reason".to_string()]);
     }
 
     #[test]
-    fn reasons_that_is_not_an_array_at_all_is_treated_as_absent() {
+    fn every_outcome_needs_a_usable_decision_id() {
+        for body in [
+            r#"{"assist":"allow"}"#,
+            r#"{"assist":"allow","decisionId":null}"#,
+            r#"{"assist":"allow","decisionId":"   "}"#,
+            r#"{"assist":"allow","decisionId":42}"#,
+            r#"{"assist":"step_up","reasons":["device posture is stale"]}"#,
+            r#"{"assist":"restrict","reasons":["shared account"]}"#,
+            r#"{"assist":"deny","reasons":["device is jailbroken"]}"#,
+        ] {
+            let d = parse(200, Some(body));
+            assert_eq!(d.assist, Assist::Deny, "{body}");
+            assert!(
+                d.explanation().contains("decisionId"),
+                "{}",
+                d.explanation()
+            );
+            assert_eq!(d.decision_id, None, "{body}");
+        }
+    }
+
+    #[test]
+    fn a_repeated_top_level_key_denies_whatever_its_values() {
+        for body in [
+            r#"{"assist":"deny","assist":"allow","decisionId":"dec_1"}"#,
+            r#"{"assist":"allow","assist":"allow","decisionId":"dec_1"}"#,
+            r#"{"assist":"allow","assist":"allow","decisionId":"dec_1"}"#,
+            r#"{"assist":"allow","decisionId":"dec_1","decisionId":"dec_2"}"#,
+        ] {
+            let d = parse(200, Some(body));
+            assert_eq!(d.assist, Assist::Deny, "{body}");
+            assert!(d.explanation().contains("duplicate"), "{}", d.explanation());
+            assert_eq!(d.decision_id, None, "{body}");
+        }
+    }
+
+    #[test]
+    fn a_repeated_key_below_the_top_level_is_not_a_duplicate() {
         let d = parse(
             200,
-            Some(r#"{"assist":"deny","reasons":"a string not an array"}"#),
+            Some(r#"{"assist":"allow","decisionId":"dec_1","x":{"a":1,"a":2}}"#),
         );
-        assert_eq!(d.assist, Assist::Deny);
-        assert!(d.reasons.is_empty());
+        assert_eq!(d.assist, Assist::Allow);
     }
 
     #[test]

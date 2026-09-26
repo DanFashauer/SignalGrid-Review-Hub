@@ -32,15 +32,29 @@ const VALID_OUTCOMES = ["allow", "step_up", "restrict", "deny"];
 /** How far `cases.length` may run ahead of `requires.minCases` before the gate fails. */
 const FLOOR_SLACK = 4;
 /**
- * Every key a case may carry — exactly the keys the two harnesses READ
+ * Every key a case may carry — exactly the keys the three harnesses READ
  * (`case["…"]` in native/android/core/src/test/kotlin/.../SharedConformanceTest.kt,
- * `case.get("…")`/`case["…"]` in native/desktop/core/tests/conformance.rs). Any other
+ * `case.get("…")`/`case["…"]` in native/desktop/core/tests/conformance.rs,
+ * `c["…"]` in native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift). Any other
  * key is a typo or a field no client consumes, and either way it is a vector that
  * binds nothing while looking like one: `expectObligation` (no s) on the one case
  * that carries it left every gate green, because both harnesses treat the field as
  * opt-in by key presence. Add a key here only when a harness starts reading it.
  */
-const KNOWN_CASE_KEYS = ["id", "why", "status", "body", "expect", "expectExplanationContains", "expectObligations"];
+const KNOWN_CASE_KEYS = ["id", "why", "status", "body", "expect", "expectExplanationContains", "expectObligations", "expectDecisionId"];
+/** Outcomes a host app acts on beyond refusing; each needs the decision it acts under. */
+const NEEDS_DECISION_ID = ["allow", "step_up", "restrict"];
+
+/** The body's decisionId when it is a non-blank string, else null (JSON.parse is last-wins; duplicate cases expect deny). */
+function bodyDecisionId(body) {
+  try {
+    const v = typeof body === "string" ? JSON.parse(body) : null;
+    const id = v && typeof v === "object" && !Array.isArray(v) ? v.decisionId : undefined;
+    return typeof id === "string" && id.trim() !== "" ? id : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The one client whose core is not a `core` directory. iOS's Assist-wire client is
@@ -133,6 +147,15 @@ function validateVectors(doc) {
   if (withObligations === 0) {
     problems.push("no case carries expectObligations — the parsed-obligations assertion is opted into by nobody");
   }
+  // The parsed-id assertion must be exercised in BOTH directions: a string pins the id a
+  // client read, null pins "absent" (the reading a client that turns JSON null into the
+  // text "null" fails).
+  if (!cases.some((c) => typeof c.expectDecisionId === "string")) {
+    problems.push("no case carries a string expectDecisionId — nothing pins the id a client parsed");
+  }
+  if (!cases.some((c) => c.expectDecisionId === null)) {
+    problems.push("no case carries expectDecisionId: null — nothing pins that an unusable id is read as absent");
+  }
 
   for (const c of cases) {
     for (const key of Object.keys(c)) {
@@ -152,6 +175,15 @@ function validateVectors(doc) {
       problems.push(`case ${c.id}: body must be a string or null`);
     }
     if (!c.why) problems.push(`case ${c.id}: no "why" — a case nobody can justify is a case nobody can review`);
+    if (c.expectDecisionId !== undefined && c.expectDecisionId !== null &&
+        (typeof c.expectDecisionId !== "string" || c.expectDecisionId.trim() === "")) {
+      problems.push(`case ${c.id}: expectDecisionId must be a non-blank string or null (null = parsed as absent)`);
+    }
+    // THE RULE, CHECKED ON THE FILE: every client denies a body without a usable
+    // decisionId, so a non-deny case without one contradicts every client at once.
+    if (NEEDS_DECISION_ID.includes(c.expect) && bodyDecisionId(c.body) === null) {
+      problems.push(`case ${c.id}: expects ${c.expect} but its body carries no non-blank string decisionId — every client denies that body`);
+    }
     if (c.expectObligations !== undefined) {
       if (!Array.isArray(c.expectObligations) || c.expectObligations.some((o) => typeof o !== "string")) {
         problems.push(`case ${c.id}: expectObligations must be an array of strings`);
@@ -165,10 +197,10 @@ function selfTest() {
   const good = {
     requires: { minCases: 2, outcomesPresent: VALID_OUTCOMES },
     cases: [
-      { id: "a", why: "w", status: 200, body: '{"assist":"allow"}', expect: "allow", expectObligations: [] },
-      { id: "b", why: "w", status: 200, body: null, expect: "deny" },
-      { id: "c", why: "w", status: 200, body: '{"assist":"step_up"}', expect: "step_up" },
-      { id: "d", why: "w", status: 200, body: '{"assist":"restrict"}', expect: "restrict" },
+      { id: "a", why: "w", status: 200, body: '{"assist":"allow","decisionId":"d1"}', expect: "allow", expectObligations: [], expectDecisionId: "d1" },
+      { id: "b", why: "w", status: 200, body: null, expect: "deny", expectDecisionId: null },
+      { id: "c", why: "w", status: 200, body: '{"assist":"step_up","decisionId":"d2"}', expect: "step_up" },
+      { id: "d", why: "w", status: 200, body: '{"assist":"restrict","decisionId":"d3"}', expect: "restrict" },
     ],
   };
   const cases = [
@@ -235,6 +267,31 @@ function selfTest() {
       false,
     ],
     [
+      "a non-deny case whose body has no decisionId is caught (every client denies it)",
+      { ...good, cases: good.cases.map((c) => (c.id === "c" ? { ...c, body: '{"assist":"step_up"}' } : c)) },
+      false,
+    ],
+    [
+      "a JSON-null decisionId on an allow case is caught (it is not an id)",
+      { ...good, cases: good.cases.map((c) => (c.id === "a" ? { ...c, body: '{"assist":"allow","decisionId":null}', expectDecisionId: undefined } : c)) },
+      false,
+    ],
+    [
+      "a non-string expectDecisionId is caught",
+      { ...good, cases: good.cases.map((c) => (c.id === "a" ? { ...c, expectDecisionId: 42 } : c)) },
+      false,
+    ],
+    [
+      "a file where no case pins a parsed id is caught",
+      { ...good, cases: good.cases.map((c) => (c.id === "a" ? { ...c, expectDecisionId: undefined } : c)) },
+      false,
+    ],
+    [
+      "a file where no case pins an absent id is caught",
+      { ...good, cases: good.cases.map((c) => (c.id === "b" ? { ...c, expectDecisionId: undefined } : c)) },
+      false,
+    ],
+    [
       "removing allow from outcomesPresent does NOT let a deny-only file pass",
       {
         requires: { minCases: 1, outcomesPresent: ["deny"] },
@@ -277,6 +334,7 @@ function main() {
   console.log(`  ✓ ${VECTORS}: ${doc.cases.length} cases, all four outcomes, ${
     doc.cases.filter((c) => c.expect === "allow").length
   } proceedable, ${doc.cases.filter((c) => c.expectObligations !== undefined).length} asserting parsed obligations, ` +
+    `${doc.cases.filter((c) => c.expectDecisionId !== undefined).length} asserting the parsed decisionId, ` +
     `every key one of ${KNOWN_CASE_KEYS.length} the harnesses read`);
 
   const clients = discoverClients();

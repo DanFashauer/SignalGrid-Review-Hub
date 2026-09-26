@@ -1,4 +1,4 @@
-import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -164,7 +164,13 @@ function classifyBranchOutput(worktree, baseRef) {
     const firstLine = String(err.stderr || err.message || "").split("\n")[0].trim();
     return `base ref's classifier unreadable: git -C ${worktree} show ${baseRef}:${relPath} failed: ${firstLine}`;
   }
-  const tmpDir = mkdtempSync(join(tmpdir(), "land-branch-gate-classifier-"));
+  // realpathSync: on macOS os.tmpdir() sits under /var, a symlink to /private/var. Node
+  // gives the classifier a realpath import.meta.url but keeps process.argv[1] as the path
+  // it was handed, so the classifier's `import.meta.url === pathToFileURL(process.argv[1])`
+  // main guard reads false, it exits 0 having printed nothing, and verify() refuses (fail
+  // closed, but every landing refused: #1133's Mac-only job, 2026-09-26). A physical path
+  // keeps the guard true. The self-test reproduces it with a symlinked TMPDIR.
+  const tmpDir = realpathSync(mkdtempSync(join(tmpdir(), "land-branch-gate-classifier-")));
   const tmpFile = join(tmpDir, "check-owner-gated-surfaces.mjs");
   try {
     writeFileSync(tmpFile, source);
@@ -655,6 +661,42 @@ function selfTest() {
     }
   });
 
+  // Regression (#1133's Mac-only job, 2026-09-26): with os.tmpdir() behind a symlink,
+  // which is macOS's /var -> /private/var and is reproduced here on any POSIX host, the
+  // classifier copy must still print its KLASS line. Without the realpathSync() in
+  // classifyBranchOutput() this exact case read `classifier did not print a KLASS line: ""`.
+  {
+    const realTmp = mkdtempSync(join(tmpdir(), "land-branch-gate-symlinked-tmp-"));
+    const linkTmp = `${realTmp}-link`;
+    const savedTmpdir = process.env.TMPDIR;
+    try {
+      symlinkSync(realTmp, linkTmp);
+      process.env.TMPDIR = linkTmp;
+      withKlassTempRepo((dir) => {
+        mkdirSync(join(dir, "docs"), { recursive: true });
+        writeFileSync(join(dir, "docs", "NOTES.md"), "notes\n");
+        execFileSync("git", ["-C", dir, "add", "-A"]);
+        execFileSync("git", ["-C", dir, "commit", "-q", "-m", "docs-only change"]);
+        const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+        const scratch = mkdtempSync(join(tmpdir(), "land-branch-gate-klass-scratch-"));
+        try {
+          const tag = "kt-symlinked-tmp";
+          stampSentinels(scratch, tag, head);
+          const r = verify({ scratch, tag, worktree: dir, branch: "feature", head, klass: "other", baseRef: "base" });
+          if (r.ok) { pass++; console.log("PASS: --verify derives the class with os.tmpdir() behind a symlink (macOS /var -> /private/var)"); }
+          else console.error(`FAIL: --verify with os.tmpdir() behind a symlink — refused: ${JSON.stringify(r.reasons)}`);
+        } finally {
+          rmSync(scratch, { recursive: true, force: true });
+        }
+      });
+    } finally {
+      if (savedTmpdir === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = savedTmpdir;
+      rmSync(linkTmp, { force: true });
+      rmSync(realTmp, { recursive: true, force: true });
+    }
+  }
+
   // Review nit on #1133, part 3: a bare `--klass` (no value) at the CLI layer refuses,
   // exit 1, with a REFUSED reason — never the old no-klass PASS line. Exercised as a
   // real subprocess so the fix under test is runVerifyCli's own argv parsing, not
@@ -693,8 +735,9 @@ function selfTest() {
   // baseRef refuses on the git-show failure (review nit part 2); +1: a non-zero
   // classifier exit (empty diff) refuses on the exit-code reason, never stdout-as-a-
   // candidate-line (review nit part 2); +2: the CLI-level bare/invalid --klass refusals
-  // (review nit part 3) — none of these five are collected into an array either.
-  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5 + 2 + 1 + 1 + 2;
+  // (review nit part 3); +1: the symlinked-tmpdir regression (#1133's Mac-only job) —
+  // none of these are collected into an array either.
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1 + 5 + 2 + 1 + 1 + 2 + 1;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

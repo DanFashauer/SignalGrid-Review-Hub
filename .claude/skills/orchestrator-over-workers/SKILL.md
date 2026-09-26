@@ -171,7 +171,7 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
   stages the coordinator did itself.
 
-## Sequential chains and waiters (DR-060; lessons L1, L3, L4)
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9)
 
 - **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
   test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
@@ -190,3 +190,8 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
 - **A self-scheduled check-in is the recovery signal after a restart.** Before a long
   chain, schedule a message back into the session; when it fires, read the sentinels and
   resume what has no exit line.
+- **Gates run after `git add`, never before.** A gate that scans the tracked tree cannot
+  see a file still sitting as `?? path`; run it before staging and it measures the tree
+  without the new file and passes for the wrong reason (L9). Stage or commit first, then
+  run the gates, and have the worker's report quote `git status --short` right before the
+  gate run so the reviewer can see the tree the gates actually saw.

@@ -3679,3 +3679,26 @@ Output:   "mintedAt": "2026-09-26T06:14:13.974Z", "manifestFingerprint": "7c1549
 Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/SignalGrid-Review-Hub)
 Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
+
+## 2026-09-26 — "L8 and L2 landed on mainline, L2 landing itself by dogfooding; the MCP roster (#1127) sits open with its gating check pending"
+Command:  node scripts/check-lessons.mjs   (worktree at 7fc7fdd1, HEAD of origin/SignalGrid_Alpha)
+Output:   "check-lessons: ok — 14 lesson(s), 14 landed, 0 pending, 0 pending past 14 days (DR-060)"
+Command:  node scripts/lib/land-branch-gate.mjs --self-test
+Output:   "10/10 passed"
+Command:  node scripts/check-mcp-roster.mjs
+Output:   SKIPPED — #1127 (claude/mcp-roster-grants-gate) has not merged: state OPEN, head e189552b86db01d03b1a073fa9fb44845d7962e8,
+          combined status "pending" (GitHub MCP pull_request_read get_status), so this gate has nothing to check on mainline yet
+Command:  node scripts/check-readiness-figure.mjs
+Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
+Command:  node scripts/check-publication-boundary.mjs
+Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
+Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
+Output:   "false"
+Command:  cat <scratchpad>/l2-pf.log (tail) / l2-br.log (tail)   — L2 landing's own chain, head 08949c61
+Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650"
+Command:  cat <scratchpad>/mcp2-pf.log (tail) / mcp2-br.log (tail)   — MCP roster's repair chain after the criss-cross-merge fix, head e189552b
+Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
+Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
+Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065eb at 11:08:13Z)
+Verdict:  holds. #1127 is the one item still pending: its gating check had not resolved at write time, so `check-mcp-roster.mjs`
+          has never run against mainline and its 15/15 self-test and roster figures remain claims made only in the PR body until it merges.

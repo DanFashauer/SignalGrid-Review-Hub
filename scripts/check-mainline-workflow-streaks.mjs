@@ -35,10 +35,15 @@ const RED = new Set(["failure", "timed_out", "startup_failure"]);
 // A run cancelled by the next push, or skipped by a condition, says nothing about health.
 // Counting it as green would let a red workflow with concurrency cancels hide its streak.
 const NO_VERDICT = new Set(["cancelled", "skipped"]);
+// Everything else (neutral, stale, action_required, and any future value) is neither red nor
+// green — it must not fail-open a streak closed as if the run were healthy. It still ends the
+// streak (report-only tool, day one) but is named on the row instead of silently passing.
+const GREEN = new Set(["success", "neutral"]);
 
 // Keyed by the Actions API `path`, which survives a display-name rename.
 export const WATCHED = new Map([
   ["dynamic/pages/pages-build-deployment", "pages build and deployment"], // GitHub's, no file (deploy from branch)
+  [".github/workflows/review-hub-ci.yml", "Review Hub CI (gating workflow; branch filter below already restricts this to SignalGrid_Alpha push runs)"],
   [".github/workflows/codeql.yml", "CodeQL"],
   [".github/workflows/supply-chain.yml", "Supply Chain"],
   [".github/workflows/connector-emulator-smoke.yml", "Connector Emulator Smoke"],
@@ -52,13 +57,19 @@ export const WATCHED = new Map([
   [".github/workflows/firmware.yml", "Dock firmware"],
 ]);
 export const NOT_WATCHED = new Map([
-  [".github/workflows/review-hub-ci.yml", "the gating workflow: its validation job is the required check every merge reads"],
   [".github/workflows/pages.yml", "workflow_dispatch only: whoever runs the deploy sees its result"],
   [".github/workflows/branch-prune.yml", "workflow_dispatch only"],
   [".github/workflows/mac-runner-harness.yml", "workflow_call / workflow_dispatch only"],
-  [".github/workflows/phase-pr-evidence.yml", "pull_request only: no mainline runs"],
+  [".github/workflows/phase-pr-evidence.yml", "pull_request / workflow_dispatch only: no mainline runs"],
   [".github/workflows/pr-triage.yml", "pull_request_target only: no mainline runs"],
 ]);
+
+/** The workflow files that actually exist, as classificationProblems expects to see them. */
+export function workflowFilesIn(dir) {
+  return readdirSync(dir)
+    .filter((f) => /\.ya?ml$/.test(f))
+    .map((f) => `.github/workflows/${f}`);
+}
 
 /** Pure. Every workflow file is classified exactly once, and no entry names a file that is gone. */
 export function classificationProblems(files, watched = WATCHED, notWatched = NOT_WATCHED) {
@@ -74,20 +85,26 @@ export function classificationProblems(files, watched = WATCHED, notWatched = NO
   return out;
 }
 
-/** Pure. `conclusions` newest first. `oldest` indexes the earliest red run of the streak. */
+/** Pure. `conclusions` newest first. `oldest` indexes the earliest red run of the streak.
+ * `unknown` is the first conclusion seen that is in none of RED/GREEN/NO_VERDICT — it still
+ * ends the streak (report-only tool, day one) but must be named, never silently treated green. */
 export function streakVerdict(conclusions, k = K) {
   let judged = 0;
   let length = 0;
   let oldest = -1;
+  let unknown = null;
   for (let i = 0; i < conclusions.length; i += 1) {
     if (NO_VERDICT.has(conclusions[i])) continue;
     judged += 1;
-    if (!RED.has(conclusions[i])) break;
+    if (!RED.has(conclusions[i])) {
+      if (!GREEN.has(conclusions[i])) unknown = conclusions[i];
+      break;
+    }
     length += 1;
     oldest = i;
   }
-  if (judged === 0) return { kind: "no-runs", length: 0, oldest: -1 };
-  return { kind: length >= k ? "red" : "none", length, oldest };
+  if (judged === 0) return { kind: "no-runs", length: 0, oldest: -1, unknown: null };
+  return { kind: length >= k ? "red" : "none", length, oldest, unknown };
 }
 
 /** Pure. One report line for one workflow's runs payload. */
@@ -96,8 +113,9 @@ export function rowFor(label, runs) {
     .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || b.id - a.id)
     .slice(0, N);
   const v = streakVerdict(sorted.map((r) => r.conclusion));
+  const unknownSuffix = v.unknown ? `; unknown conclusion ${v.unknown}` : "";
   if (v.kind === "no-runs") return { red: false, line: `  no runs  ${label}: no judged completed run on ${BRANCH} in the last ${N}` };
-  if (v.kind === "none") return { red: false, line: `  ok       ${label}${v.length ? ` (last ${v.length} red, below ${K})` : ""}` };
+  if (v.kind === "none") return { red: false, line: `  ok       ${label}${v.length ? ` (last ${v.length} red, below ${K})` : ""}${unknownSuffix}` };
   const judged = sorted.filter((r) => !NO_VERDICT.has(r.conclusion)).length;
   const open = v.length === judged && sorted.length === N; // every run in a full window is red
   const first = sorted[v.oldest];
@@ -105,8 +123,15 @@ export function rowFor(label, runs) {
     red: true,
     line:
       `  RED      ${label}: ${open ? "≥" : ""}${v.length} consecutive red run(s)` +
-      `${open ? " — began before this window" : ""}; earliest in window ${first.created_at} ${first.html_url}`,
+      `${open ? " — began before this window" : ""}; earliest in window ${first.created_at} ${first.html_url}${unknownSuffix}`,
   };
+}
+
+/** Pure. Whether main() should read the API, skip (local, no token), or fail (CI, no token —
+ * a check that skips in CI is lesson L8 again). */
+export function tokenVerdict({ token, inCi }) {
+  if (token) return "run";
+  return inCi ? "fail" : "skip";
 }
 
 /** Pure. owner/repo from any remote URL form (https, ssh, a proxy path ending in owner/repo). */
@@ -127,10 +152,24 @@ export async function scan(fetchImpl, slug, apiOpts = {}) {
     if (body.workflows.length < 100) break;
   }
   const byPath = new Map(listed.map((w) => [w.path, w]));
-  const missing = [...WATCHED].filter(([p]) => !byPath.has(p)).map(([p, label]) => `"${label}" (${p})`);
-  if (missing.length) throw new Error(`the Actions API lists no workflow for ${missing.join(", ")} — renamed or removed`);
+  const missing = [...WATCHED].filter(([p]) => !byPath.has(p));
+  // The dynamic Pages path never lives in the tree, so its absence from the listing can only
+  // mean the API itself is broken or empty — that stays fatal. A workflow FILE can be missing
+  // from the listing because it is new on this branch (not yet run) or was just renamed; that
+  // is not this check's own error, so it is skipped and named instead of thrown.
+  const missingDynamic = missing.filter(([p]) => !p.startsWith(".github/workflows/"));
+  if (missingDynamic.length) {
+    throw new Error(
+      `the Actions API lists no workflow for ${missingDynamic.map(([p, label]) => `"${label}" (${p})`).join(", ")} — renamed or removed`,
+    );
+  }
+  const skipPaths = new Set(missing.map(([p]) => p));
   const rows = [];
   for (const [path, label] of WATCHED) {
+    if (skipPaths.has(path)) {
+      console.log(`${path}: not yet listed by the Actions API (new on this branch?) — not read`);
+      continue;
+    }
     const runsPath = `/repos/${slug}/actions/workflows/${byPath.get(path).id}/runs?branch=${BRANCH}&status=completed&per_page=${N}`;
     const body = await get(runsPath);
     if (!Array.isArray(body?.workflow_runs)) throw new Error(`GET ${runsPath}: no workflow_runs array`);
@@ -188,6 +227,10 @@ async function selfTest() {
   t("timed_out and startup_failure are red", kind(["timed_out", "startup_failure", "failure"]) === "red");
   t("a cancelled run neither breaks nor extends a streak", streakVerdict(["cancelled", "failure", "failure", "failure", "success"]).length === 3);
   t("only cancelled/skipped → no runs", kind(["cancelled", "skipped"]) === "no-runs");
+  t(
+    "an unknown conclusion ends the streak and is reported, never treated green",
+    (() => { const v = streakVerdict(["stale", "failure", "failure"]); return v.kind !== "red" && v.unknown === "stale"; })(),
+  );
 
   const dir = mkdtempSync(join(tmpdir(), "streaks-"));
   const fx = join(dir, "pages-runs.json");
@@ -202,6 +245,23 @@ async function selfTest() {
   t("an unclassified workflow file is named", classificationProblems([".github/workflows/new.yml", ...[...WATCHED.keys(), ...NOT_WATCHED.keys()].filter((p) => p.startsWith("."))]).some((p) => p.includes("new.yml")));
   t("a stale classification is named", classificationProblems([]).some((p) => p.includes("codeql.yml")));
 
+  // workflowFilesIn: pins the real readdir + extension-filter + path-prefix wiring, not just
+  // the pure classifier above it — a mutated readdir call or a dropped filter would still pass
+  // classificationProblems() alone.
+  const wfDir = mkdtempSync(join(tmpdir(), "streaks-wf-"));
+  for (const p of [...WATCHED.keys(), ...NOT_WATCHED.keys()].filter((p) => p.startsWith(".github/workflows/"))) {
+    writeFileSync(join(wfDir, p.replace(".github/workflows/", "")), "");
+  }
+  writeFileSync(join(wfDir, "new.yml"), "");
+  writeFileSync(join(wfDir, "ignore.txt"), ""); // non-yaml, must be filtered out
+  const wfProblems = classificationProblems(workflowFilesIn(wfDir));
+  t("workflowFilesIn: a temp dir with one unclassified file yields exactly one problem, naming it", wfProblems.length === 1 && wfProblems[0].includes("new.yml"));
+  rmSync(wfDir, { recursive: true, force: true });
+
+  t("tokenVerdict: empty token in CI → fail", tokenVerdict({ token: "", inCi: true }) === "fail");
+  t("tokenVerdict: empty token outside CI → skip", tokenVerdict({ token: "", inCi: false }) === "skip");
+  t("tokenVerdict: a real token → run, in or out of CI", tokenVerdict({ token: "x", inCi: true }) === "run" && tokenVerdict({ token: "x", inCi: false }) === "run");
+
   t("slug from https", slugFromRemote("https://github.com/o/r.git") === "o/r");
   t("slug from ssh", slugFromRemote("git@github.com:o/r.git") === "o/r");
   t("slug from a proxy path", slugFromRemote("http://proxy@127.0.0.1:1/git/o/r") === "o/r");
@@ -211,17 +271,31 @@ async function selfTest() {
   const listing = (paths) => ({ workflows: paths.map((path, id) => ({ id: id + 1, path })) });
   const allPaths = [...WATCHED.keys()];
   const green = { workflow_runs: [{ id: 1, conclusion: "success", created_at: "2026-09-26T00:00:00Z", html_url: "u" }] };
+  const calledRunsUrls = [];
   const fake = (over) => async (url) => {
     const u = new URL(url);
     if (u.pathname.endsWith("/actions/workflows")) return res(200, over.list ?? listing(allPaths));
+    calledRunsUrls.push(url);
     if (over.runsStatus) return res(over.runsStatus, {});
     return res(200, u.pathname.includes("/workflows/1/") ? SYNTHETIC_PAGES_RUNS : green);
   };
   const opts = { attempts: 1, wait: async () => {} };
   const rows = await scan(fake({}), "o/r", opts);
   t("scan: exactly the Pages workflow is red", rows.filter((r) => r.red).length === 1 && rows[0].red && rows.length === WATCHED.size);
+  t(
+    "scan: every runs request reads completed runs, N per page",
+    calledRunsUrls.length > 0 && calledRunsUrls.every((u) => u.includes("status=completed") && u.includes(`per_page=${N}`)),
+  );
   const threw = async (f, needle) => { try { await f(); return false; } catch (e) { return String(e.message).includes(needle); } };
-  t("scan: a watched workflow the API does not list fails, named", await threw(() => scan(fake({ list: listing(allPaths.filter((p) => !p.endsWith("codeql.yml"))) }), "o/r", opts), "CodeQL"));
+  t(
+    "scan: the dynamic Pages path missing from the listing still fails, named",
+    await threw(() => scan(fake({ list: listing(allPaths.filter((p) => p.startsWith(".github/workflows/"))) }), "o/r", opts), "pages build and deployment"),
+  );
+  const rowsMissingFile = await scan(fake({ list: listing(allPaths.filter((p) => !p.endsWith("codeql.yml"))) }), "o/r", opts);
+  t(
+    "scan: a watched workflow FILE missing from the listing is skipped, not thrown",
+    rowsMissingFile.length === WATCHED.size - 1 && !rowsMissingFile.some((r) => r.line.includes("CodeQL")),
+  );
   t("scan: an HTTP error fails, naming the path", await threw(() => scan(fake({ runsStatus: 404 }), "o/r", opts), "/runs?branch=SignalGrid_Alpha"));
 
   console.log(`mainline-workflow-streaks self-test: ${pass}/${pass + fail} passed`);
@@ -238,18 +312,20 @@ async function main() {
     print(fixtureRows(path));
     return 0;
   }
-  const files = readdirSync(join(repo, ".github/workflows")).filter((f) => /\.ya?ml$/.test(f)).map((f) => `.github/workflows/${f}`);
+  const files = workflowFilesIn(join(repo, ".github/workflows"));
   const problems = classificationProblems(files);
   if (problems.length) {
     for (const p of problems) console.error(`  ✗ ${p}`);
     return 1;
   }
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
-  if (!token) {
-    if (process.env.CI || process.env.GITHUB_ACTIONS) {
-      console.error("  ✗ no GITHUB_TOKEN/GH_TOKEN in CI — the workflow step lost its env block; a check that skips in CI is lesson L8 again.");
-      return 1;
-    }
+  const inCi = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
+  const verdict = tokenVerdict({ token, inCi });
+  if (verdict === "fail") {
+    console.error("  ✗ no GITHUB_TOKEN/GH_TOKEN in CI — the workflow step lost its env block; a check that skips in CI is lesson L8 again.");
+    return 1;
+  }
+  if (verdict === "skip") {
     console.log("SKIPPED — no GITHUB_TOKEN/GH_TOKEN (this check runs in CI)");
     return 0;
   }
@@ -260,10 +336,15 @@ async function main() {
   return 0;
 }
 
-main().then(
-  (code) => process.exit(code),
-  (err) => {
-    console.error(`  ✗ ${err.message}\nMainline workflow streak check FAILED on its own error — an API it could not read is not "no red streak".`);
-    process.exit(1);
-  },
-);
+// Importing this file (e.g. for WATCHED/streakVerdict/tokenVerdict) must not run main() or
+// call process.exit — that surprise is the same class of bug lesson L8 already names.
+const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().then(
+    (code) => process.exit(code),
+    (err) => {
+      console.error(`  ✗ ${err.message}\nMainline workflow streak check FAILED on its own error — an API it could not read is not "no red streak".`);
+      process.exit(1);
+    },
+  );
+}

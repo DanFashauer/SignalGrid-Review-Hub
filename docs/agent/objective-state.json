@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 111,
+        "open": 109,
         "partial": 5,
-        "closed": 77
+        "closed": 79
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -56,19 +56,6 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "11",
-      "title": "Widen the determinism gate and disposition lib/location",
-      "role": "devex-tooling-engineer",
-      "executor": "agent:gate-and-proof-engineer",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-09-25T23:48:15.242Z"
-    },
-    {
-      "rank": 2,
       "rowId": "12",
       "title": "Commit the tiered read-list and run Tier-1 shifts 3–5",
       "role": "program-manager",
@@ -81,17 +68,30 @@
       "firstRankedAt": "2026-09-25T23:48:15.242Z"
     },
     {
-      "rank": 3,
-      "rowId": "14",
-      "title": "Build the status-code arm of the contract gate",
-      "role": "qa-engineer",
-      "executor": "skill:signalgrid-reviewer",
+      "rank": 2,
+      "rowId": "17",
+      "title": "Run the three wire-truth shifts and bind the records to the code",
+      "role": "itsm-ops-domain",
+      "executor": "skill:signalgrid-core",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-26T00:18:54.405Z"
+      "firstRankedAt": "2026-09-26T01:25:16.132Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "18",
+      "title": "Make iOS port parity behavioral, not textual",
+      "role": "mobile-native-engineer",
+      "executor": "skill:signalgrid-native",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-09-26T01:25:16.132Z"
     }
   ],
   "needsExecutor": [
@@ -183,11 +183,11 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 9,
-    "openRows": 111
+    "openRows": 109
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-26T00:18:54.405Z",
-  "derivedAtCommit": "9cadddaa4a27271268726ccce502b05409ab1739",
+  "derivedAt": "2026-09-26T01:25:16.132Z",
+  "derivedAtCommit": "79db279f6fc5b9a9e52f6c667c2d17b70dd1ef96",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "af928efa159b75dba6a746c6b7c80d2ac19f15da3a448867682e2262ec8aaf45"
+  "decisionAddress": "d16a3b6dff3f46759dcb8644f62c175be03a42dc278cbb4968762f6efe16612a"
 }

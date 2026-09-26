@@ -61,6 +61,17 @@ export const SAFETY_MACHINERY = [
   { rule: "any fixtures dir", re: /(^|\/)fixtures?\// },
   { rule: "the gate/guard registries", re: /^scripts\/(mutation-guard|check-guard-registries|check-mutation-sharding)\.mjs$/ },
   { rule: "workspace/lockfile", re: /^(pnpm-workspace\.yaml|pnpm-lock\.yaml)$/ },
+  // Codex round 2 on #1133 (2026-09-26) P1: pnpm-workspace.yaml already classified via
+  // the rule above (it shares a regex with pnpm-lock.yaml); the root package.json did
+  // not classify at all — an unrecognised-but-plausible shape (CLAUDE.md's toolchain
+  // section: this file drives `pnpm install`'s `prepare` script, which is what installs
+  // the pre-push lockfile-drift hook in the first place) was reaching "other" and could
+  // land on green alone. Exact-path only: a per-package manifest (lib/x/package.json,
+  // scripts/package.json) is NOT this rule — it is already owner-gated by its own
+  // directory's blanket rule (DECISION_PATH's lib/, SAFETY_MACHINERY's scripts/**), or,
+  // for a package with no such blanket (e.g. artifacts/mcp-server/package.json), stays
+  // autonomous on purpose (see the negative self-test below).
+  { rule: "the root package manifest (package.json)", re: /^package\.json$/ },
   { rule: "the decision records", re: /^docs\/DECISION_RECORDS\.md$/ },
   { rule: "the brain-cycle veto config (its own safety net)", re: /^docs\/agent\/brain-cycle-config\.json$/ },
   // DR-056: the declared objective — its criteria and the owner attestation pointer
@@ -118,6 +129,30 @@ export const OWNER_RESERVED = [
   // scripts/, so raising either was an 'other' change: an autonomous merge could widen
   // what the launch-claims gate tolerates without ever touching the gate's own code.
   { rule: "the launch-claims ceilings (scripts/check-launch-claims.mjs's own RETIRED_CEILING_FILE / DOCS_CEILING_FILE — raising either weakens the gate through an 'other' change)", re: /^docs\/agent\/launch-claims-(retired-labels|docs)-ceiling\.json$/ },
+  // Codex round 2 on #1133 (2026-09-26) P1: the repo's own instruction files — every
+  // rule in this manifest, DR-020/DR-021/DR-033/DR-037/DR-054/DR-060, the golden rules,
+  // the "ask before" list — are prose the owner wrote and the whole autonomous-merge
+  // design defers to; a diff that edits either file was previously 'other' and could
+  // rewrite what an agent is told to do (including weakening the very escalation rule
+  // enforced here) without ever routing to the owner. Exact-path: only the ROOT copies
+  // (there are no nested AGENTS.md/CLAUDE.md in this tree today; if one is ever added,
+  // it is deliberately out of scope for this rule until named here).
+  { rule: "the repository instructions (root AGENTS.md)", re: /^AGENTS\.md$/ },
+  { rule: "the repository instructions (root CLAUDE.md)", re: /^CLAUDE\.md$/ },
+  // Codex round 2 on #1133 (2026-09-26) P1: the LOCAL helper modules the owner-reserved
+  // gate scripts above import. scripts/check-launch-claims.mjs delegates its ratchet-file
+  // reading to scripts/lib/ratchet-read.mjs — without a dedicated rule, editing that
+  // helper (e.g. to make readRatchetFile()/refusalLines() always report clean) only
+  // classified SAFETY_MACHINERY (the blanket scripts/** rule), one tier below what a
+  // change to check-launch-claims.mjs itself gets, understating exactly the surface a
+  // model-judged auto-merge must never touch. The launch-profile machinery rule above
+  // already covers scripts/launch-profile.mjs (check-launch-profile.mjs's own import),
+  // and the publication-boundary rule above already covers scripts/publication-boundary.mjs
+  // (check-publication-boundary.mjs's own import) — neither has a further relative
+  // import of its own (verified by grep, and re-verified live by the self-test below,
+  // which re-derives every gate script's relative imports at test time so a future one
+  // cannot escape silently).
+  { rule: "the launch-claims gate's ratchet-read helper (scripts/lib/ratchet-read.mjs, imported by scripts/check-launch-claims.mjs)", re: /^scripts\/lib\/ratchet-read\.mjs$/ },
 ];
 
 // A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
@@ -298,6 +333,24 @@ function selfTest() {
   // was an 'other' change that weakened the gate without ever touching its code.
   t("the launch-claims retired-labels ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-retired-labels-ceiling.json"])) === "OWNER_RESERVED");
   t("the launch-claims docs ceiling is OWNER_RESERVED", mostRestrictive(cls(["docs/agent/launch-claims-docs-ceiling.json"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 1: the repository instruction files.
+  t("root AGENTS.md is OWNER_RESERVED", mostRestrictive(cls(["AGENTS.md"])) === "OWNER_RESERVED");
+  t("root CLAUDE.md is OWNER_RESERVED", mostRestrictive(cls(["CLAUDE.md"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 4: the launch-claims gate's own
+  // ratchet-read helper — a change here used to classify only SAFETY_MACHINERY (the
+  // blanket scripts/** rule), one tier below the gate script that imports it.
+  t("the launch-claims gate's ratchet-read helper is OWNER_RESERVED", mostRestrictive(cls(["scripts/lib/ratchet-read.mjs"])) === "OWNER_RESERVED");
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 5: the root package manifests.
+  t("the root package.json is SAFETY_MACHINERY", mostRestrictive(cls(["package.json"])) === "SAFETY_MACHINERY");
+  t("pnpm-workspace.yaml is SAFETY_MACHINERY", mostRestrictive(cls(["pnpm-workspace.yaml"])) === "SAFETY_MACHINERY");
+  // Negative: the root package.json rule is exact-path, not "any package.json" — a
+  // per-package manifest under lib/** or scripts/** is already owner-gated by its own
+  // directory's blanket rule for an unrelated reason (checked with classifyDiff before
+  // writing this: lib/room-sim/package.json is DECISION_PATH, scripts/package.json is
+  // SAFETY_MACHINERY, so neither demonstrates "stays autonomous"); a per-package
+  // manifest OUTSIDE both blankets genuinely does, and stays that way on purpose — this
+  // rule is scoped to the repo's own root, not every package.json in the tree.
+  t("a per-package package.json outside lib/** and scripts/** (artifacts/mcp-server/package.json) stays autonomous", cls(["artifacts/mcp-server/package.json"]).tier === "autonomous");
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
@@ -352,6 +405,40 @@ function selfTest() {
     mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts", "docs/LAUNCH_PROFILE.md"])) === "OWNER_RESERVED");
   t("docs-only diff → other", mostRestrictive(cls(["docs/GLOSSARY.md"])) === "other");
   t("scripts/-only diff → SAFETY_MACHINERY beats other", mostRestrictive(cls(["scripts/mutation-guard.mjs"])) === "SAFETY_MACHINERY");
+
+  // Codex round 2 on #1133 (2026-09-26) P1, finding 4 (second half): re-derive the
+  // owner-reserved gate scripts' own LOCAL imports AT TEST TIME, from their real source
+  // on disk — not from the hardcoded list above. A future import added to any of these
+  // four gate scripts (or one level further, off whatever they import) must classify
+  // OWNER_RESERVED itself, or this self-test fails; it does not just prove today's four
+  // files are correct, it re-proves the property every time preflight/CI run it.
+  {
+    const RELATIVE_IMPORT_RE = /from\s+["'](\.\.?\/[^"']+)["']/g;
+    const localImportsOf = (relFile) => {
+      const abs = resolve(repo, relFile);
+      let src;
+      try { src = readFileSync(abs, "utf8"); } catch { return []; }
+      const dir = dirname(abs);
+      return [...src.matchAll(RELATIVE_IMPORT_RE)]
+        .map((m) => resolve(dir, m[1]))
+        .map((p) => p.slice(repo.length + 1).replace(/\\/g, "/"));
+    };
+    const GATE_SCRIPTS = [
+      "scripts/check-launch-claims.mjs",
+      "scripts/check-publication-boundary.mjs",
+      "scripts/publication-boundary.mjs",
+      "scripts/check-launch-profile.mjs",
+    ];
+    // One level of transitivity (finding 4's instruction): the gate scripts' direct
+    // imports, then those files' OWN direct imports — never further than that.
+    const level1 = new Set(GATE_SCRIPTS.flatMap(localImportsOf));
+    const level2 = new Set([...level1].flatMap(localImportsOf));
+    const derived = new Set([...level1, ...level2]);
+    t("re-derived import scan found at least one local helper (the scan itself is not vacuous)", derived.size > 0);
+    for (const imp of [...derived].sort()) {
+      t(`re-derived import ${imp} (of an owner-reserved gate script, within one level) classifies OWNER_RESERVED`, mostRestrictive(cls([imp])) === "OWNER_RESERVED");
+    }
+  }
 
   // --classify-branch itself, over a real git diff (finding 1): renaming an
   // owner-gated file out of its gated location, a non-ASCII lib/ path, an up-to-date

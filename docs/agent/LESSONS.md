@@ -48,8 +48,8 @@ block; a stage run on the wrong tier is a lesson here.
 - **lane:** cloud
 - **incident:** Measurement-tranche PRs were pushed after seven hand-picked doc gates instead of the full preflight. The list left out cross-doc banner parity, and CI's Mac job failed on PR #1100 (efcead31) because a stamp cited an archived note without repeating its banner. Fixed by b0b3c038.
 - **evidence:** Mac job 108335885542: `Preflight FAILED at: Cross-doc banner parity (no live doc cites a bannered doc as live)`
-- **landing:** pending — the open `docs/BUILD_BACKLOG.md` row "The plan-row measurement tranche is a scripted workflow" (DR-060 section).
-- **status:** pending
+- **landing:** `.claude/workflows/land-branch.js` — the saved workflow's Chain stage refuses to push unless both `PREFLIGHT_EXIT` and `BREADTH_EXIT` sentinels read 0 on the exact expected head; the `docs/BUILD_BACKLOG.md` row "The plan-row measurement tranche is a scripted workflow" is closed against it.
+- **status:** landed
 
 ### L3 — two waiters each waited for the other forever
 - **date:** 2026-09-26
@@ -129,4 +129,20 @@ block; a stage run on the wrong tier is a lesson here.
 - **incident:** Mac tick PR #1114 (head 3cb08b9f) carried a coverage page generated before #1111 (5f586f96, 06:24Z) added the root file `.nojekyll` to mainline. CI on the PR's merge ref was green (gating 108352073887), but after the merge landed at 1f337e7d (06:30Z) mainline's own run failed the surface-read-coverage gate; #1116 (ffa8cc53, 06:49Z) regenerated the page in its delivery and mainline went green again.
 - **evidence:** `git show 1f337e7d:docs/agent/SURFACE_REVIEW_COVERAGE.md` vs `git show ffa8cc53:docs/agent/SURFACE_REVIEW_COVERAGE.md` differ on one line: `2971 of 2971 in-scope tracked files` (1f337e7d) vs `2972 of 2972 in-scope tracked files` (ffa8cc53) — `.nojekyll` landing on mainline between the two runs is the extra file.
 - **landing:** `.claude/skills/landing-under-dr-037/SKILL.md`, "Order, when several land in a row" — a numbered rule that this applies to a Mac tick PR too: if mainline has moved a counted surface (`docs/`, `scripts/`, `artifacts/sim-requests/`, `artifacts/sim-results/`; the mailbox trees `artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands` are not counted) since the tick's page was generated, merge `SignalGrid_Alpha` into the tick branch and regenerate before merging — a green merge-ref run is not proof, because a counted file can land between the run and the merge. `docs/LANE_COORDINATION.md`'s Rule 2 (the steward's tick-PR practice) gets a matching sentence.
+- **status:** landed
+
+### L13 — a /proc scan as a chain lock let two workers wait on each other
+- **date:** 2026-09-26
+- **lane:** cloud
+- **incident:** The first land-branch script used a scan of running processes (`ps -eo args | grep -E 'scripts/preflight.mjs|verify-breadth.mjs'`) as its chain lock instead of a lock file. A record's Validate worker and the ports Chain worker would each have seen the other's sleeping shell in that scan and waited on it, so neither would ever have proceeded — the same failure class as L3, one level up: L3 was two waiters polling a process pattern to detect completion, this is two workers polling a process pattern to decide who holds the lock.
+- **evidence:** the two scripts' history in this session — the checkable path is `.claude/workflows/land-branch.js` in this branch, whose Chain stage now acquires `<scratch>/chain.lock` as a file (`set -o noclobber`) before starting the detached chain, instead of inferring "is anything running" from `ps`.
+- **landing:** `.claude/workflows/land-branch.js` — the lock-file protocol (acquire-with-noclobber, 40-minute stale-clear, foreground wait loop) lives in the script's own loop, never inside a worker that could return early and drop it.
+- **status:** landed
+
+### L14 — a worker-owned background chain died mid-preflight when the worker's turn ended
+- **date:** 2026-09-26
+- **lane:** cloud
+- **incident:** A background chain tagged `l8c`, started from inside a worker's own shell rather than detached, died mid-preflight when the worker's turn ended: its log stopped at 08:56:28Z after the line "Cost figures self-test", no process was left running, and no `PREFLIGHT_EXIT`/`BREADTH_EXIT` line was ever written. Three Haiku validators sent to check on it returned "blocked" after under a minute instead of waiting on the sentinel file, compounding the problem with L3's failure mode.
+- **evidence:** the `l8c` run in this session — log's last line text: `Cost figures self-test` (no exit line follows, and no matching process remained); the `l8d` coordinator re-run, started as one detached `setsid nohup` job, passed.
+- **landing:** `.claude/workflows/land-branch.js` — the Chain stage starts the whole preflight+breadth chain as ONE detached `setsid nohup` job that outlives the worker's own turn, and the lock wait lives in the workflow script's own loop rather than in a worker that can be torn down mid-wait.
 - **status:** landed

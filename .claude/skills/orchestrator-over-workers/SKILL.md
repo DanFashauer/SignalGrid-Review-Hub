@@ -211,3 +211,9 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   an index holding three stages of the page and render wrong counts (L11). The generator
   now refuses (exit 1, naming the unmerged paths) when `git ls-files -u` prints anything;
   the same check applies to any other worker step that regenerates a file from the tree.
+- **Land a worker branch through the saved `land-branch` workflow, never a hand-run
+  chain that pushes.** Workflow tool, `name: "land-branch"`, `args: { repo, scratch,
+  worktree, branch, tag, klass, title, preBrief?, bodyNotes? }` — it merges Alpha,
+  regenerates on a clean index, runs preflight+breadth behind a file lock (L13), starts
+  the chain as one detached job so a worker's own turn ending cannot kill it (L14), and
+  pushes only on a 0/0 sentinel read on the unchanged expected head (L2).

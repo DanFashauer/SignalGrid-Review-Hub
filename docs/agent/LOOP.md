@@ -52,7 +52,25 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 01:25Z) - SIX OF SIX RANKED ROWS WERE STALE; THE TIER LINE IS REAL; DR-059 IS THE OWNER'S CALL.
+LAST TOUCHED: 2026-09-26 (cloud lane, 02:35Z) - THE LOOP NOW REFUSES STALE ROWS AND MAILED THE CLOUD ITS QUEUE; A CI GATE HAD RUN UNAUTHENTICATED SINCE IT WAS WIRED.
+              #1087 (ebf302b9, DR-037): an open plan row is ranked only while it carries a `re-measured YYYY-MM-DD` stamp
+              at most `14` days old (`rowMeasuredAt` in scripts/objective-loop.mjs, quoted/code spans stripped); a refused
+              row lands in the state's `unmeasured[]` with its reason and ONE `plan-rows-unmeasured` escalation names every
+              id for the cloud; --check REPORTS the count rather than failing (`108` of `109` open rows were unstamped on
+              landing day - a fatal gate would have been switched off the same hour). Self-test `77/77`. Three minutes
+              after it landed the tick re-derived (#1089: tasks [12], unmeasured `108`) and mailed the cloud - the
+              loop-to-cloud edge works end to end; the ack (#1090) commits the lane to measuring the rows in document
+              order, one tranche per PR, starting 17/18/19, closing finished work and restamping only what was measured.
+              #1088 (85daff21, DR-037): a mail PR's red gating run exposed that check-ci-liveness had called GitHub
+              UNAUTHENTICATED on every CI run since it was wired (`limit=60`, the per-address budget) - Actions never
+              exports GITHUB_TOKEN and no step handed it over; its header said "CI always has a token". Fixed both halves:
+              the token env on every preflight-running step (review-hub-ci, both Mac workflows - the PR's own Mac run
+              failed at the new check first, proving the second site) and `tokenProblem` making an absent token FATAL in CI.
+              Lesson: two queued preflight waiters deadlocked because each one's `pgrep -f` pattern matched the OTHER
+              waiter's command line; one sequential chain replaced them. Records #1085 (b36de43f), this one; steward
+              #1086 (33c3640b). Owner owes: #1050 (DR-058), #1083 (DR-059, its test:api/preflight/breadth lines now in
+              the body), the row-8 doctrine hand, #1037's CodeQL call; the Copilot scanner's model setting.
+PREVIOUSLY:   2026-09-26 (cloud lane, 01:25Z) - SIX OF SIX RANKED ROWS WERE STALE; THE TIER LINE IS REAL; DR-059 IS THE OWNER'S CALL.
               Rows 11, 12, 14 measured before building (#1081, 79db279f): 11 shipped by 2026-09-06 (determinism scope
               derived from lib/, lib/location dispositioned KEPT as deferred), 14 shipped 2026-09-20 (#863's refusal-
               coverage gate IS the status-code arm), both read open for weeks - six of the loop's last six ranked rows

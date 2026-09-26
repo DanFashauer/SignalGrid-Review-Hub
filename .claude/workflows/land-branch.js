@@ -32,7 +32,8 @@
 //       match another waiter's own `grep` invocation — not a bare process scan, which
 //       is the shape that let two waiters each see the other's sleeping shell and wait
 //       on it forever.
-//   L14 the chain is ONE detached `setsid nohup` job; a worker-owned background
+//   L14 the chain is ONE detached `setsid nohup` job and BOTH waits (lock, sentinel)
+//       live in the script's own loops, never in one worker's patience; a worker-owned background
 //       process dies with the worker's turn and leaves no exit line. The lock is
 //       released by a `trap ... EXIT` as the FIRST statement inside that job, so any
 //       exit path (success, failure, or the job's own `cd` failing) releases it —
@@ -55,7 +56,30 @@ for (const [name, value] of Object.entries(REQUIRED)) {
 }
 const S = scratch
 const REPO = repo
-const { canPush } = await import(new URL('../../scripts/lib/land-branch-gate.mjs', import.meta.url).href)
+// canPush is MIRRORED from scripts/lib/land-branch-gate.mjs, byte-for-byte after whitespace
+// normalisation: the Workflow sandbox has no import.meta / filesystem, so the module
+// cannot be imported here. The module is the tested source of truth (`node
+// scripts/lib/land-branch-gate.mjs --self-test`), and its self-test READS THIS FILE and
+// fails when the two copies differ — change the module first, then paste it here.
+function canPush(run, expectedHead) {
+  const reasons = [];
+  if (!run || typeof run !== "object") return { ok: false, reasons: ["no chain-run result"] };
+  if (run.headSha !== expectedHead) reasons.push(`headSha ${run.headSha} !== expected ${expectedHead}`);
+  if (run.preflightExit !== 0) reasons.push(`preflightExit ${run.preflightExit} !== 0`);
+  if (run.breadthExit !== 0) reasons.push(`breadthExit ${run.breadthExit} !== 0`);
+  if (!/(?:^|\s)PREFLIGHT_EXIT 0(?:\s|$)/.test(run.preflightLastLine || ""))
+    reasons.push(`preflightLastLine does not literally contain "PREFLIGHT_EXIT 0": ${JSON.stringify(run.preflightLastLine)}`);
+  if (!/(?:^|\s)BREADTH_EXIT 0(?:\s|$)/.test(run.breadthLastLine || ""))
+    reasons.push(`breadthLastLine does not literally contain "BREADTH_EXIT 0": ${JSON.stringify(run.breadthLastLine)}`);
+  // The sentinel line itself must carry the expected head — a tag-scoped log can
+  // otherwise still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel
+  // is bound to the tag, not the sha); requiring the sha inside the line closes that.
+  if (!(run.preflightLastLine || "").includes(expectedHead))
+    reasons.push(`preflightLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.preflightLastLine)}`);
+  if (!(run.breadthLastLine || "").includes(expectedHead))
+    reasons.push(`breadthLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.breadthLastLine)}`);
+  return { ok: reasons.length === 0, reasons };
+}
 
 const RULES = `
 HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\`/\`--ours\` on the four generated paths named in the Merge stage's step 2, and only while a merge conflict is actually in progress there; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.
@@ -145,7 +169,7 @@ Return acquired=true only if the output contains a line starting with ACQUIRED; 
 }
 if (!acquired) { log('lock never acquired after 12 tries (~90 min)'); return { pre, merge, lockTries } }
 
-const chainRun = await agent(`You are the Haiku validation worker (mechanical gate run; READ-ONLY with respect to pushing — you never push, the script decides that from what you report). Worktree ${worktree}, branch ${branch}, expected head ${merge.headSha}. Call the Bash tool with timeout: 600000 for step 4's waits below (each can legitimately take several minutes; the tool's own 120s default would abort mid-wait and read as a missing sentinel).
+let chainRun = await agent(`You are the Haiku validation worker (mechanical gate run; READ-ONLY with respect to pushing — you never push, the script decides that from what you report). Worktree ${worktree}, branch ${branch}, expected head ${merge.headSha}. Call the Bash tool with timeout: 600000 for step 4's waits below (each can legitimately take several minutes; the tool's own 120s default would abort mid-wait and read as a missing sentinel).
 Steps, in order, stopping at the first failure:
 1. \`cd ${worktree} && git status --short\` must be empty and \`git rev-parse HEAD\` must equal ${merge.headSha}.
 2. The host's chain lock ${S}/chain.lock is ALREADY HELD FOR YOU by a previous stage (its first word is your tag). Confirm with \`cat ${S}/chain.lock\`; do not wait on anything, do not remove it - the background job in step 3 releases it itself (via a trap) when it starts, however it ends.
@@ -166,6 +190,20 @@ if (!chainRun || !chainRun.jobStarted) {
   return { pre, merge, chainRun }
 }
 log(`chain ran: head ${chainRun.headSha}, preflight ${chainRun.preflightExit}, breadth ${chainRun.breadthExit}`)
+// L14, second half: a worker's patience is not the wait. The chain-run worker above can
+// return before either sentinel exists (it did, ~10 minutes in on 2026-09-26, while the
+// detached job ran on to PREFLIGHT_EXIT 0 / BREADTH_EXIT 0 twenty minutes later) — so the
+// SCRIPT keeps waiting through short mechanical readers until both lines exist, never
+// re-starting the job. Up to 8 more reads of <=9 minutes each; a chain that has not
+// written both lines by then is reported as such and canPush() below refuses.
+const bothSentinels = (r) => /PREFLIGHT_EXIT/.test(r?.preflightLastLine || '') && /BREADTH_EXIT/.test(r?.breadthLastLine || '')
+let sentinelReads = 0
+while (!bothSentinels(chainRun) && sentinelReads < 8) {
+  sentinelReads++
+  const read = await agent(`You are the sentinel reader (mechanical: you start nothing, push nothing, edit nothing, remove nothing). Call the Bash tool with timeout: 600000 for this ONE command (it legitimately waits up to 9 minutes): \`timeout 540 bash -c 'until grep -q BREADTH_EXIT ${S}/${tag}-br.log 2>/dev/null; do sleep 30; done'; echo PF: $(tail -n 1 ${S}/${tag}-pf.log); echo BR: $(tail -n 1 ${S}/${tag}-br.log); cd ${worktree} && git rev-parse HEAD\`. Return jobStarted=true; preflightLastLine = the text after "PF: " EXACTLY as printed (empty string if nothing follows); breadthLastLine = the text after "BR: " likewise; preflightExit / breadthExit = the integer that follows PREFLIGHT_EXIT / BREADTH_EXIT on those lines, or -1 when the line is not a sentinel line yet; headSha = the rev-parse output; failures = []. Never paraphrase a line.`, { label: `sentinel-read:${tag}#${sentinelReads}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: CHAIN_RUN_SCHEMA })
+  if (read) chainRun = read
+  log(`sentinel read ${sentinelReads}: preflight ${chainRun.preflightExit}, breadth ${chainRun.breadthExit}`)
+}
 
 // The push decision is the SCRIPT's, not a worker's prose (lesson L2): canPush() requires
 // preflightExit===0 && breadthExit===0 && the run's own headSha===the merge head, AND both

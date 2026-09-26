@@ -450,6 +450,13 @@ jobs:
       - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
         run: node scripts/check-freshness-divergence.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
+        # The gate reads GITHUB_TOKEN from its environment, and Actions does NOT export the
+        # token as an env var by itself. Until 2026-09-26 this step handed it nothing, so the
+        # gate ran UNAUTHENTICATED on every push (x-ratelimit-limit=60, the per-address
+        # budget) and passed on that budget until a mail PR hit it exhausted. The gate is
+        # now FATAL in CI with no token, so this line cannot be dropped silently.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs

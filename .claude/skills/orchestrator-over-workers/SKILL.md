@@ -161,8 +161,8 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
 | Stage | Tier |
 | --- | --- |
 | Spec, review of a worker's report, judgment calls, decision records, doctrine, gate design | Opus |
-| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree | Sonnet |
-| PR bodies, commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
+| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree; PR bodies (Sonnet since L16 — Haiku fabricated a check-run id and file attributions twice on 2026-09-26) | Sonnet |
+| Commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
 
 - **The coordinator's own tier never runs a bulk stage.** Parsing a CI job listing,
   writing a commit message or re-running a gate by hand in the coordinating session is a

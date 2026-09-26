@@ -252,7 +252,7 @@ if (!push || !push.pushed) { log(`push failed: ${JSON.stringify(push?.failures)}
 log(`pushed ${push.remoteSha}`)
 
 phase('PR')
-const body = await agent(`You are the Sonnet PR-body writer (DR-060 rule 1 puts PR bodies on the cheapest tier that can read a diff; you are it here). Worktree ${worktree}, branch ${branch}, head ${push.remoteSha}. Read-only: git and node commands only, no edits, no pushes.
+const body = await agent(`You are the Sonnet PR-body writer (DR-060 rule 1 puts PR bodies on the cheapest tier that can read a diff; you are it here (L16)). Worktree ${worktree}, branch ${branch}, head ${push.remoteSha}. Read-only: git and node commands only, no edits, no pushes.
 Write the PR body in this repository's house template, every figure from output you ran or from the log files ${S}/${tag}-pf.log and ${S}/${tag}-br.log:
 ## Summary (what and why, 1-3 paragraphs, plain)
 ## What changed (one bullet per file, from \`git diff --stat $(git merge-base origin/SignalGrid_Alpha HEAD)..HEAD\`)

@@ -1673,6 +1673,13 @@ components:
           description: Sorted, deduplicated roll-up of signalsUsed[].sourceReference.
         digest: { type: string }
         coreNormalizationVersion: { type: integer }
+        digestAlg:
+          type: string
+          enum: [fnv1a64-utf8]
+          description: >-
+            Which digest function minted `digest`. Absent means the row was minted
+            before the UTF-8 digest fix and verifies against the legacy low-byte
+            function instead — never re-stamped.
       required:
         [id, tenantId, decisionId, capturedAt, evidence, signalsUsed,
          policyVersionId, policyVersion, sourceReferences]

@@ -32,6 +32,10 @@ import {
   EVIDENCE_VALUE_DOMAINS,
   canonicalJson,
   constantTimeEquals,
+  digest,
+  deterministicId,
+  DIGEST_ALG,
+  type EvidenceSnapshot,
   CoreError,
   evaluatePolicy,
   fixedClock,
@@ -211,7 +215,7 @@ const LEGACY_SNAPSHOT_DIGEST = "43b8b1702ae630de";
 const freshSnapshot = core.getSnapshot(T.operator, decisions[0].evidenceSnapshotId);
 
 // The exact shape a pre-stamp row deserializes into: every field the same, no stamp.
-const { coreNormalizationVersion: _omitted, ...legacyFields } = freshSnapshot;
+const { coreNormalizationVersion: _omitted, digestAlg: _alg, ...legacyFields } = freshSnapshot;
 const legacySnapshot = { ...legacyFields, digest: LEGACY_SNAPSHOT_DIGEST };
 
 check(
@@ -231,6 +235,39 @@ check(
     digest: LEGACY_SNAPSHOT_DIGEST,
   }) === false,
 );
+// ── 1c. digest(): UTF-8 bytes, not the low byte of each UTF-16 unit ─────────────
+// Until 2026-09 digest() hashed `charCodeAt(i) & 0xff`, so any two characters sharing a
+// low byte aliased, and deterministicId's bare "|" join was ambiguous. ASCII digests and
+// ids did NOT move (one byte per char either way), which is why the pins above hold.
+check("DIGEST: standard FNV-1a 64 vectors (a, foobar) — ASCII digests are unchanged by the UTF-8 fix",
+  digest("a") === "af63dc4c8601ec8c" && digest("foobar") === "85944171f73967e8");
+check("DIGEST: characters sharing a low byte no longer alias (Alice vs \u0141lice; lone surrogate vs U+FFFD)",
+  digest("Alice") !== digest("\u0141lice") && digest("a\uD800") !== digest("a\uFFFD"));
+check("IDS: the join is injective — a '|' inside a part, or U+017C (low byte 0x7C), cannot shift a part boundary",
+  deterministicId("dec", "t|a", "b") !== deterministicId("dec", "t", "a|b") &&
+    deterministicId("dec", "t\u017Ca", "b") !== deterministicId("dec", "t", "a", "b"));
+check("IDS: parts with no '|' or '\\' mint the same id as before the fix (dec_4851ac1906a7425e)",
+  deterministicId("dec", "t", "a", "b") === "dec_4851ac1906a7425e");
+// A NON-ASCII row minted by the PRE-FIX code (digest measured with it, not hand-picked):
+// the one shape whose digest the fix moves. It must still verify, via its missing marker.
+const PRE_FIX_ROW = {
+  id: "evid_prefix_row", tenantId: "t-\u0142\u00f3d\u017a", decisionId: "dec_prefix_row",
+  capturedAt: "2026-09-01T00:00:00.000Z", evidence: {} as EvidenceSnapshot["evidence"],
+  signalsUsed: [], policyVersionId: "pv_prefix", policyVersion: 1,
+  sourceReferences: ["fixture:\u0141ukasz"], digest: "277d335d96ad0713",
+} satisfies EvidenceSnapshot;
+check("MIGRATION: a non-ASCII row minted before the fix (no digestAlg) still verifies — no false tamper alarm",
+  verifySnapshot(PRE_FIX_ROW) === true);
+check("MIGRATION: forging the marker onto a pre-fix row fails; an unknown digestAlg fails closed",
+  verifySnapshot({ ...PRE_FIX_ROW, digestAlg: DIGEST_ALG }) === false &&
+    verifySnapshot({ ...PRE_FIX_ROW, digestAlg: "sha256" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a fresh snapshot is marked, and stripping the marker (downgrade to the legacy check) fails",
+  freshSnapshot.digestAlg === DIGEST_ALG && verifySnapshot(freshSnapshot) === true &&
+    verifySnapshot({ ...freshSnapshot, digestAlg: undefined }) === false);
+const aliasEdit = (s: string): string => String.fromCharCode(s.charCodeAt(0) + 0x100) + s.slice(1);
+check("TAMPER: a same-low-byte substitution in a MARKED snapshot is now detected",
+  verifySnapshot({ ...freshSnapshot, tenantId: aliasEdit(freshSnapshot.tenantId) }) === false);
+
 check(
   `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,
   freshSnapshot.coreNormalizationVersion === CORE_NORMALIZATION_VERSION &&

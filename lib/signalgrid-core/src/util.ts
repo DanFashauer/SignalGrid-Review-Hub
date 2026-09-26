@@ -29,16 +29,36 @@ export function fixedClock(iso: string): Clock {
  * cryptographic construction. Same input always yields the same digest.
  */
 export function digest(input: string): string {
-  const FNV_OFFSET = 0xcbf29ce484222325n;
   const FNV_PRIME = 0x100000001b3n;
   const MASK = 0xffffffffffffffffn;
-  let hash = FNV_OFFSET;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= BigInt(input.charCodeAt(i) & 0xff);
-    hash = (hash * FNV_PRIME) & MASK;
+  let hash = 0xcbf29ce484222325n;
+  const eat = (byte: number): void => {
+    hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK;
+  };
+  // FNV is byte-oriented, so hash the UTF-8 BYTES. The old loop took `charCodeAt & 0xff`,
+  // so every character sharing a low byte aliased ("Alice" === "\u0141lice"; U+017C === "|").
+  // Hand-encoded, not TextEncoder: the core's type env is es2022 with no DOM/Node globals,
+  // and TextEncoder maps every lone surrogate to U+FFFD (another alias). A lone surrogate is
+  // encoded as its own 3 bytes (WTF-8), so distinct strings are always distinct bytes.
+  // ASCII is one byte per char either way: an ASCII input digests exactly as before.
+  for (const ch of input) {
+    const c = ch.codePointAt(0) as number;
+    if (c < 0x80) {
+      eat(c);
+    } else if (c < 0x800) {
+      eat(0xc0 | (c >> 6)); eat(0x80 | (c & 0x3f));
+    } else if (c < 0x10000) {
+      eat(0xe0 | (c >> 12)); eat(0x80 | ((c >> 6) & 0x3f)); eat(0x80 | (c & 0x3f));
+    } else {
+      eat(0xf0 | (c >> 18)); eat(0x80 | ((c >> 12) & 0x3f)); eat(0x80 | ((c >> 6) & 0x3f)); eat(0x80 | (c & 0x3f));
+    }
   }
   return hash.toString(16).padStart(16, "0");
 }
+
+/** The digest algorithm `digest()` implements, stamped on every evidence snapshot so a
+ *  verifier never has to guess which function minted a durable row. */
+export const DIGEST_ALG = "fnv1a64-utf8" as const;
 
 /**
  * Maximum nesting depth `canonicalJson` will traverse. Digest inputs in this
@@ -78,7 +98,9 @@ function sortValue(value: unknown, depth: number): unknown {
 
 /** Deterministic, human-readable id derived from stable seed parts. */
 export function deterministicId(prefix: string, ...parts: string[]): string {
-  return `${prefix}_${digest(parts.join("|"))}`;
+  // Escape before joining so the join is injective: ("a|b","c") and ("a","b|c") used to
+  // mint one id. A part with no `\\` or `|` joins byte-identically, so its id does not move.
+  return `${prefix}_${digest(parts.map((p) => p.replace(/[\\|]/g, "\\$&")).join("|"))}`;
 }
 
 /**

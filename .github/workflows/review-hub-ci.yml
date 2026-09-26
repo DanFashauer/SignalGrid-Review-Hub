@@ -617,6 +617,13 @@ jobs:
       # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
       - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
         run: node scripts/lib/land-branch-gate.mjs --self-test
+      # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+      # first-party skill may call which MCP server, with signalgrid-mcp's tool count
+      # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+      - name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)"
+        run: node scripts/check-mcp-roster.mjs --self-test
+      - name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)"
+        run: node scripts/check-mcp-roster.mjs
       # One level up from doc-orphans: that one asks whether a reader can REACH a
       # document, this one whether the index tells the truth about it. Six entries
       # described SUPERSEDED / ARCHIVED / RETIRED documents in the present tense --

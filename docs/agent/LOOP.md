@@ -56,10 +56,10 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 19:13Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane, 19:52Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; FIVE OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z.
-              Refreshed through Codex rounds 1-9 on #1128; the stamp is the last refresh.
+              Refreshed through Codex rounds 1-10 on #1128; the stamp is the last refresh.
               Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
               #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call, the Copilot scanner's model setting (every
               PR's github-advanced-security job fails "CAPIError: 400 The requested model is not supported",
@@ -117,7 +117,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 19:13Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               golden-rule-1's two protected files - the lane asked Dan in chat at 08:20Z whether the
               Mac may re-port TS logic into them as parity maintenance (a rule exception if yes, a
               revert if no); the golden-rule-1 ruling asked in chat is still outstanding as a request on
-              any of the three - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
+              #1118 and #1121 - plus two from earlier windows: #1050 (DR-058) and #1083 (DR-059), both
               still awaiting the owner.
               Hygiene this window: #1125 (8a39aeef, gating run 36233627673) pruned 302 day-old scratchpad files (~57
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's

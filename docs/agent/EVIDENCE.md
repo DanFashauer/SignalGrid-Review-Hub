@@ -3716,12 +3716,19 @@ Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H
 Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
           land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
           check run 108391088659)"
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/<n> for n in 1117 1118 1121
-          1050 1083 (fields state, merged_at; read once at 17:07Z)
-Output:   1117 open null / 1118 open null / 1121 open null / 1050 open null / 1083 open null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1117 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1118 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1121 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1050 (read once at 17:07Z)
+Output:   state "open", merged_at null
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1083 (read once at 17:07Z)
+Output:   state "open", merged_at null
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
           the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five owner-gated
           PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling, each still
           owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows, all five open
-          per the REST read above (17:07Z) (state/merged_at; a ruling is not something that read measures — the
+          per the REST reads above (17:07Z) (state/merged_at; a ruling is not something that read measures — the
           golden-rule-1 ruling stands as a request in LOOP's Owner still owes list).

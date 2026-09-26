@@ -56,7 +56,30 @@ for (const [name, value] of Object.entries(REQUIRED)) {
 }
 const S = scratch
 const REPO = repo
-const { canPush } = await import(new URL('../../scripts/lib/land-branch-gate.mjs', import.meta.url).href)
+// canPush is MIRRORED from scripts/lib/land-branch-gate.mjs, byte-for-byte after whitespace
+// normalisation: the Workflow sandbox has no import.meta / filesystem, so the module
+// cannot be imported here. The module is the tested source of truth (`node
+// scripts/lib/land-branch-gate.mjs --self-test`), and its self-test READS THIS FILE and
+// fails when the two copies differ — change the module first, then paste it here.
+function canPush(run, expectedHead) {
+  const reasons = [];
+  if (!run || typeof run !== "object") return { ok: false, reasons: ["no chain-run result"] };
+  if (run.headSha !== expectedHead) reasons.push(`headSha ${run.headSha} !== expected ${expectedHead}`);
+  if (run.preflightExit !== 0) reasons.push(`preflightExit ${run.preflightExit} !== 0`);
+  if (run.breadthExit !== 0) reasons.push(`breadthExit ${run.breadthExit} !== 0`);
+  if (!/(?:^|\s)PREFLIGHT_EXIT 0(?:\s|$)/.test(run.preflightLastLine || ""))
+    reasons.push(`preflightLastLine does not literally contain "PREFLIGHT_EXIT 0": ${JSON.stringify(run.preflightLastLine)}`);
+  if (!/(?:^|\s)BREADTH_EXIT 0(?:\s|$)/.test(run.breadthLastLine || ""))
+    reasons.push(`breadthLastLine does not literally contain "BREADTH_EXIT 0": ${JSON.stringify(run.breadthLastLine)}`);
+  // The sentinel line itself must carry the expected head — a tag-scoped log can
+  // otherwise still hold a PREVIOUS run's "…_EXIT 0 <old-sha>" line (the sentinel
+  // is bound to the tag, not the sha); requiring the sha inside the line closes that.
+  if (!(run.preflightLastLine || "").includes(expectedHead))
+    reasons.push(`preflightLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.preflightLastLine)}`);
+  if (!(run.breadthLastLine || "").includes(expectedHead))
+    reasons.push(`breadthLastLine does not carry the expected head ${expectedHead}: ${JSON.stringify(run.breadthLastLine)}`);
+  return { ok: reasons.length === 0, reasons };
+}
 
 const RULES = `
 HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\`/\`--ours\` on the four generated paths named in the Merge stage's step 2, and only while a merge conflict is actually in progress there; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.

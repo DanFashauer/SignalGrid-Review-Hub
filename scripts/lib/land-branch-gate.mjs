@@ -1,9 +1,12 @@
+import { readFileSync } from "node:fs";
+
 // Pure push-gate for the land-branch saved workflow (docs/agent/LESSONS.md L2,
 // docs/BUILD_BACKLOG.md row "The plan-row measurement tranche is a scripted
 // workflow"). This is the single source of truth for "may the chain push?" —
-// .claude/workflows/land-branch.js inlines these same three checks (that file
-// cannot rely on a runtime-specific import mechanism, since the Workflow tool
-// executes it in its own sandbox), so a change here must be mirrored there.
+// .claude/workflows/land-branch.js inlines a byte-for-byte MIRROR of canPush (the
+// Workflow tool runs that file in a sandbox with no import.meta and no filesystem, so
+// it cannot import this module). The self-test below reads that file and FAILS when
+// the mirror drifts from this function — change here first, then paste there.
 //
 //   node scripts/lib/land-branch-gate.mjs --self-test
 //
@@ -52,8 +55,16 @@ function selfTest() {
     if (ok === c.expect) { pass++; console.log(`PASS: ${c.name}`); }
     else console.error(`FAIL: ${c.name} — got ok=${ok}, want ${c.expect}`);
   }
-  console.log(`${pass}/${cases.length} passed`);
-  if (pass !== cases.length) process.exit(1);
+  // The workflow's inlined copy must equal this function (whitespace-normalised); a
+  // drifted mirror would let the workflow push on a rule this file no longer holds.
+  const norm = (s) => s.replace(/\s+/g, " ").trim();
+  let mirrored = false;
+  try { mirrored = norm(readFileSync(new URL("../../.claude/workflows/land-branch.js", import.meta.url), "utf8")).includes(norm(canPush.toString())); } catch { mirrored = false; }
+  if (mirrored) { pass++; console.log("PASS: .claude/workflows/land-branch.js carries a byte-for-byte mirror of canPush"); }
+  else console.error("FAIL: .claude/workflows/land-branch.js does not carry this exact canPush — re-mirror it");
+  const total = cases.length + 1;
+  console.log(`${pass}/${total} passed`);
+  if (pass !== total) process.exit(1);
 }
 
 if (process.argv[1] && process.argv[1].endsWith("land-branch-gate.mjs") && process.argv.includes("--self-test")) {

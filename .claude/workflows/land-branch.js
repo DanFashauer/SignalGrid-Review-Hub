@@ -124,6 +124,8 @@ function resolveKlass(callerKlass, derivedLine) {
   const derivedKlass = m[1];
   const files = Number(m[2]);
   if (files === 0) return { ok: false, reasons: [`derived line reports files=0 (an empty diff is unknown, not "other"): ${JSON.stringify(derivedLine)}`] };
+  const matched = Number(m[3]);
+  if ((derivedKlass === "other") !== (matched === 0)) return { ok: false, reasons: [`derived line is internally inconsistent (klass ${derivedKlass} with matched=${matched}): ${JSON.stringify(derivedLine)}`] };
   return { ok: true, klass: derivedKlass, callerKlass, overridden: callerKlass !== derivedKlass };
 }
 function ownerDecisionText(klass) {
@@ -131,7 +133,7 @@ function ownerDecisionText(klass) {
     case "SAFETY_MACHINERY":
       return 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it';
     case "DECISION_PATH":
-      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone';
+      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (name the rule(s) that match <paths>: lib/*, artifacts/api-server/, or a native decision port): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence, from the diff, what the change touches (whether it alters any route, verdict or decision logic) so the owner can judge it from the phone';
     case "OWNER_RESERVED":
       return 'write: "OWNER_RESERVED (<paths>): the launch profile, launch-claims gate, publication boundary, pricing, LICENSE/NOTICE or another owner-reserved surface changed — the OWNER merges this PR; the cloud lane will not merge it under DR-037 whatever the checks say." and name the paths';
     case "other":

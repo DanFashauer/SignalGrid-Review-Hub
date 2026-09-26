@@ -63,15 +63,24 @@ export function resolveKlass(callerKlass, derivedLine) {
   const derivedKlass = m[1];
   const files = Number(m[2]);
   if (files === 0) return { ok: false, reasons: [`derived line reports files=0 (an empty diff is unknown, not "other"): ${JSON.stringify(derivedLine)}`] };
+  const matched = Number(m[3]);
+  if ((derivedKlass === "other") !== (matched === 0)) return { ok: false, reasons: [`derived line is internally inconsistent (klass ${derivedKlass} with matched=${matched}): ${JSON.stringify(derivedLine)}`] };
   return { ok: true, klass: derivedKlass, callerKlass, overridden: callerKlass !== derivedKlass };
 }
 
+// Finding 5 (should-fix, 2026-09-26): the DECISION_PATH paragraph used to be lifted
+// verbatim from a caller-chosen, api-server-test-harness context ("its blanket
+// artifacts/api-server rule matches <paths>" / "test harness only, no route or verdict
+// logic"). Derivation now selects this branch for ANY lib/**, artifacts/api-server/** or
+// native-port change, and for a lib/signalgrid-core decision change both statements were
+// false reassurance on the most safety-critical class — so the text below names no
+// specific rule and asserts nothing about the diff's content; it tells the writer to look.
 export function ownerDecisionText(klass) {
   switch (klass) {
     case "SAFETY_MACHINERY":
       return 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it';
     case "DECISION_PATH":
-      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone';
+      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (name the rule(s) that match <paths>: lib/*, artifacts/api-server/, or a native decision port): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence, from the diff, what the change touches (whether it alters any route, verdict or decision logic) so the owner can judge it from the phone';
     case "OWNER_RESERVED":
       return 'write: "OWNER_RESERVED (<paths>): the launch profile, launch-claims gate, publication boundary, pricing, LICENSE/NOTICE or another owner-reserved surface changed — the OWNER merges this PR; the cloud lane will not merge it under DR-037 whatever the checks say." and name the paths';
     case "other":
@@ -252,6 +261,14 @@ function selfTest() {
     else console.error(`FAIL: .claude/workflows/land-branch.js does not carry this exact ${name} — re-mirror it`);
   }
 
+  // KLASS_LINE_RE is not a function the loop above can .toString()-and-compare, but it
+  // holds all of resolveKlass's anchoring — dropping `$` (or both anchors) from either
+  // copy previously still passed every mirror/klass check, since nothing read the
+  // regex's own source text (finding 3, 2026-09-26).
+  const klassLineReMirrored = workflowSrc && normWorkflow.includes(norm(`const KLASS_LINE_RE = ${KLASS_LINE_RE};`));
+  if (klassLineReMirrored) { pass++; console.log("PASS: .claude/workflows/land-branch.js carries a byte-for-byte mirror of KLASS_LINE_RE"); }
+  else console.error("FAIL: .claude/workflows/land-branch.js does not carry this exact KLASS_LINE_RE — re-mirror it");
+
   // resolveKlass / ownerDecisionText (Codex finding 7 follow-up, docs/BUILD_BACKLOG.md
   // "land-branch.js's 'Owner decision needed' text should be derived from the changed
   // paths"): the derived class always wins, an unparsable or empty-diff line refuses,
@@ -277,6 +294,18 @@ function selfTest() {
   kt("ownerDecisionText throws on an unknown klass (fail closed)", (() => {
     try { ownerDecisionText("BOGUS"); return false; } catch { return true; }
   })());
+  // Finding 3 (should-fix): KLASS_LINE_RE's own anchoring was untested — these three
+  // would still pass if `^`/`$` were dropped from either copy.
+  kt("a KLASS line with trailing garbage after the sentinel shape is refused (anchored $)", !resolveKlass("other", "KLASS other files=2 matched=0 x").ok);
+  kt("a KLASS line with leading garbage before the sentinel shape is refused (anchored ^)", !resolveKlass("other", "x KLASS other files=2 matched=0").ok);
+  kt("two KLASS lines joined by a newline are refused, not matched as the first line", !resolveKlass("other", "KLASS other files=2 matched=0\nKLASS OWNER_RESERVED files=2 matched=1").ok);
+  // Finding 6 (should-fix): resolveKlass captured `matched` but never used it, so a
+  // fabricated/corrupted line whose klass and matched count disagree (klass "other"
+  // with matched>0, or a non-"other" klass with matched=0 — classifyDiff can never
+  // itself produce either) used to resolve fine and could override a caller's safer
+  // guess.
+  kt("klass=other with matched>0 is internally inconsistent, refused", !resolveKlass("OWNER_RESERVED", "KLASS other files=3 matched=2").ok);
+  kt("a non-other klass with matched=0 is internally inconsistent, refused", !resolveKlass("other", "KLASS OWNER_RESERVED files=3 matched=0").ok);
   for (const [name, ok] of klassCases) {
     if (ok) { pass++; console.log(`PASS: ${name}`); }
     else console.error(`FAIL: ${name}`);
@@ -360,7 +389,10 @@ function selfTest() {
     }
   });
 
-  const total = cases.length + mirrorChecks.length + klassCases.length + 7;
+  // +7: the inline --verify checks below (not collected into an array); +1: the
+  // standalone KLASS_LINE_RE mirror check above (finding 3), which isn't part of
+  // mirrorChecks since it compares a regex's source text, not a function's.
+  const total = cases.length + mirrorChecks.length + klassCases.length + 7 + 1;
   console.log(`${pass}/${total} passed`);
   if (pass !== total) process.exit(1);
 }

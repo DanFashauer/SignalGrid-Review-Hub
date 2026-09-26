@@ -16,7 +16,10 @@
 //     # classification; exit 2 with `KLASS ERROR <reason>` on a git failure or an
 //     # empty diff — an empty diff is not "other", it is unknown, and unknown fails
 //     # closed. mostRestrictive() picks the single most restrictive category present,
-//     # in order OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other.
+//     # in order OWNER_RESERVED > DECISION_PATH > SAFETY_MACHINERY > other. `matched`
+//     # counts RULE HITS, not files — one path can match more than one rule (e.g.
+//     # scripts/mutation-guard.mjs matches both the blanket scripts/** rule and the
+//     # gate/guard-registries rule), so matched can exceed files.
 //
 // WHY MECHANICAL, NOT REVIEWER JUDGMENT. An adversarial verification of the
 // autonomous-merge design found two ways owner-gated work slips through if the
@@ -42,10 +45,11 @@
 //   OWNER_RESERVED — legal, pricing, launch scope, decision records, buyer-facing
 //     copy. Correct code is not the question; these are the owner's to commit.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { tmpdir } from "node:os";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -74,6 +78,16 @@ export const OWNER_RESERVED = [
   { rule: "the cost model (owner billing)", re: /^docs\/COST_MODEL\.md$/ },
   { rule: "pricing & positioning", re: /(Pricing\.tsx$|^docs\/POSITIONING\.md$)/ },
   { rule: "buyer-facing site & outreach", re: /^(artifacts\/signalgrid-(web|review)\/|README\.md$|docs\/outreach\/)/ },
+  // DR-037 names these three surfaces explicitly as ones the lane never merges
+  // (land-branch-gate.mjs's OWNER_RESERVED text and README.md both name them) — without
+  // a manifest rule, mostRestrictive() cannot resolve to OWNER_RESERVED for them, and
+  // since the derived class now always overrides a caller's guess (Codex finding 7), a
+  // caller that correctly said OWNER_RESERVED would be downgraded to whatever weaker
+  // class the diff otherwise matched (usually SAFETY_MACHINERY, since these all live
+  // under scripts/ or docs/).
+  { rule: "the launch-claims gate", re: /^scripts\/check-launch-claims\.mjs$/ },
+  { rule: "the publication boundary", re: /^(scripts\/(check-)?publication-boundary\.mjs|docs\/PUBLICATION_BOUNDARY\.md)$/ },
+  { rule: "the launch-profile machinery", re: /^scripts\/(check-)?launch-profile\.(mjs|d\.mts)$/ },
 ];
 
 // A changed path matching ANY of these is DECISION_PATH — golden rule 2's core. A
@@ -155,8 +169,19 @@ function classifyBranch(baseRef) {
   }
   let files;
   try {
-    files = execFileSync("git", ["diff", "--name-only", `${mergeBase}..HEAD`], GIT_OPTS)
-      .split("\n")
+    // Codex finding 1 (2026-09-26): git's default rename detection collapses a
+    // rename/move diff down to just the NEW path, so `--no-renames` is required or an
+    // owner-gated file moved OUT of its gated location (or a decision-path file moved
+    // out of lib/) is invisible to the manifest — fail-open. `-c core.quotePath=false`
+    // stops git C-quoting a non-ASCII path (`lib/décision.ts` -> `"lib/d\303\251cision.ts"`,
+    // which matches no manifest rule — also fail-open). `-z` + split on NUL keeps a path
+    // containing a literal newline from being read as two paths.
+    files = execFileSync(
+      "git",
+      ["-c", "core.quotePath=false", "diff", "--no-renames", "--name-only", "-z", `${mergeBase}..HEAD`],
+      GIT_OPTS,
+    )
+      .split("\0")
       .filter((l) => l.length > 0);
   } catch (err) {
     console.log(`KLASS ERROR git diff --name-only ${mergeBase}..HEAD failed: ${firstLine(err.stderr || err.message)}`);
@@ -172,6 +197,37 @@ function classifyBranch(baseRef) {
   const klass = mostRestrictive(classification);
   console.log(`KLASS ${klass} files=${files.length} matched=${classification.matched.length}`);
   process.exit(0);
+}
+
+// Finding 1 (blocking, 2026-09-26): the CLI's own git-diff path had NO self-test —
+// only classifyDiff()/mostRestrictive() were exercised, both of which take a plain
+// array of path strings and never see git's rename-collapsing or path-quoting. These
+// build a throwaway repo under os.tmpdir() (never inside this tree) and shell out to
+// a FRESH node process running this same file, so the fix under test is the real CLI
+// path (parsing, exit code, and all), not classifyDiff() called directly.
+function withTempRepo(fn) {
+  const dir = mkdtempSync(join(tmpdir(), "check-owner-gated-surfaces-selftest-"));
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main", dir]);
+    execFileSync("git", ["-C", dir, "config", "user.email", "test@example.com"]);
+    execFileSync("git", ["-C", dir, "config", "user.name", "test"]);
+    fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function runClassifyBranchCli(cwd, baseRef) {
+  try {
+    const stdout = execFileSync(
+      process.execPath,
+      [fileURLToPath(import.meta.url), "--classify-branch", baseRef],
+      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+    return { code: 0, stdout: stdout.trim() };
+  } catch (err) {
+    return { code: typeof err.status === "number" ? err.status : 1, stdout: String(err.stdout || "").trim() };
+  }
 }
 
 function selfTest() {
@@ -195,6 +251,17 @@ function selfTest() {
   t("pricing is OWNER_RESERVED", cls(["artifacts/signalgrid-web/src/pages/Pricing.tsx"]).tier === "owner-gated");
   t("buyer-facing site is OWNER_RESERVED", cls(["artifacts/signalgrid-web/src/pages/About.tsx"]).tier === "owner-gated");
   t("the cost model is OWNER_RESERVED", cls(["docs/COST_MODEL.md"]).tier === "owner-gated");
+  // Finding 2 (blocking, 2026-09-26): DR-037 names these three surfaces as ones the
+  // lane never merges; without a manifest rule mostRestrictive() cannot resolve to
+  // OWNER_RESERVED for them, so a caller who correctly says OWNER_RESERVED was
+  // downgraded once the derived class started always winning (Codex finding 7).
+  t("the launch-claims gate is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-launch-claims.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary checker is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-publication-boundary.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary module is OWNER_RESERVED", mostRestrictive(cls(["scripts/publication-boundary.mjs"])) === "OWNER_RESERVED");
+  t("the publication-boundary doc is OWNER_RESERVED", mostRestrictive(cls(["docs/PUBLICATION_BOUNDARY.md"])) === "OWNER_RESERVED");
+  t("launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.mjs"])) === "OWNER_RESERVED");
+  t("check-launch-profile.mjs is OWNER_RESERVED", mostRestrictive(cls(["scripts/check-launch-profile.mjs"])) === "OWNER_RESERVED");
+  t("launch-profile.d.mts is OWNER_RESERVED", mostRestrictive(cls(["scripts/launch-profile.d.mts"])) === "OWNER_RESERVED");
 
   // The other direction: ordinary product/connector code IS autonomous, or the gate
   // refuses everything and means nothing.
@@ -228,6 +295,51 @@ function selfTest() {
   t("…plus the launch profile → OWNER_RESERVED beats both",
     mostRestrictive(cls(["scripts/mutation-guard.mjs", "lib/signalgrid-core/src/decision.ts", "docs/LAUNCH_PROFILE.md"])) === "OWNER_RESERVED");
   t("docs-only diff → other", mostRestrictive(cls(["docs/GLOSSARY.md"])) === "other");
+  t("scripts/-only diff → SAFETY_MACHINERY beats other", mostRestrictive(cls(["scripts/mutation-guard.mjs"])) === "SAFETY_MACHINERY");
+
+  // --classify-branch itself, over a real git diff (finding 1): renaming an
+  // owner-gated file out of its gated location, a non-ASCII lib/ path, an up-to-date
+  // branch, and a bad ref.
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, "docs"), { recursive: true });
+    writeFileSync(join(dir, "docs", "LAUNCH_PROFILE.md"), "profile\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+    execFileSync("git", ["-C", dir, "mv", "docs/LAUNCH_PROFILE.md", "docs/OLD_PROFILE.md"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "rename the launch profile away"]);
+    const res = runClassifyBranchCli(dir, "main");
+    t("--classify-branch: renaming an owner-reserved file away is not laundered to other by git's default rename detection", res.code === 0 && res.stdout.startsWith("KLASS OWNER_RESERVED"));
+  });
+
+  withTempRepo((dir) => {
+    mkdirSync(join(dir, "lib"), { recursive: true });
+    writeFileSync(join(dir, "lib", "placeholder.ts"), "export {};\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    execFileSync("git", ["-C", dir, "checkout", "-q", "-b", "feature"]);
+    writeFileSync(join(dir, "lib", "décision.ts"), "export const x = 1;\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "add a non-ascii decision-path file"]);
+    const res = runClassifyBranchCli(dir, "main");
+    t("--classify-branch: a non-ASCII lib/ path is not C-quoted past the manifest", res.code === 0 && res.stdout.startsWith("KLASS DECISION_PATH"));
+  });
+
+  withTempRepo((dir) => {
+    writeFileSync(join(dir, "f.txt"), "x\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    const res = runClassifyBranchCli(dir, "main"); // HEAD already at main: empty diff
+    t("--classify-branch: an up-to-date branch (empty diff) is KLASS ERROR at exit 2", res.code === 2 && res.stdout.startsWith("KLASS ERROR"));
+  });
+
+  withTempRepo((dir) => {
+    writeFileSync(join(dir, "f.txt"), "x\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "-q", "-m", "initial"]);
+    const res = runClassifyBranchCli(dir, "does-not-exist-ref");
+    t("--classify-branch: a bad base ref is KLASS ERROR at exit 2", res.code === 2 && res.stdout.startsWith("KLASS ERROR"));
+  });
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

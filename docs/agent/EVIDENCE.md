@@ -3680,18 +3680,22 @@ Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/Signa
 Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
 
-## 2026-09-26 — "L8 and L2 landed on mainline, L2 landing itself by dogfooding; the MCP roster (#1127) sits open with its gating check pending"
-Command:  node scripts/check-lessons.mjs   (worktree at 7fc7fdd1, HEAD of origin/SignalGrid_Alpha)
-Output:   "check-lessons: ok — 14 lesson(s), 14 landed, 0 pending, 0 pending past 14 days (DR-060)"
-Command:  node scripts/lib/land-branch-gate.mjs --self-test
-Output:   "10/10 passed"
-Command:  node scripts/check-mcp-roster.mjs
-Output:   SKIPPED — #1127 (claude/mcp-roster-grants-gate) has not merged: state OPEN, head e189552b86db01d03b1a073fa9fb44845d7962e8,
-          so this gate has nothing to check on mainline yet. (The legacy combined-status API — GitHub MCP
-          pull_request_read get_status — reads "pending"/0 statuses for this repo regardless of check state and
-          proves nothing here; the real gating check is 108397317258, "Typecheck, build, and proof scaffold".)
+## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED on mainline; #1127 merged as a4507f9a with its gating check green"
+Command:  git fetch origin SignalGrid_Alpha && TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' origin/SignalGrid_Alpha
+Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
+          and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
+          DR-037, check run 108397317258)"
+Command:  GitHub MCP get_check_run 108397317258 (DanFashauer/SignalGrid-Review-Hub)
+Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold", head e189552b86db01d03b1a073fa9fb44845d7962e8)
+Command:  node scripts/check-lessons.mjs   (worktree after merging a4507f9a)
+Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
+Command:  node scripts/check-mcp-roster.mjs   (worktree after merging a4507f9a)
+Output:   "mcp-roster: 6 servers (+3 external), signalgrid-mcp 16/16 tools derived, 12 lane grants, 6 skill grants over
+          18 first-party skills, 0 problems" / "PASS"
 Command:  node scripts/check-readiness-figure.mjs
 Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
+Command:  node scripts/lib/land-branch-gate.mjs --self-test
+Output:   "10/10 passed"
 Command:  node scripts/check-publication-boundary.mjs
 Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
 Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
@@ -3702,11 +3706,7 @@ Command:  cat <scratchpad>/mcp2-pf.log (tail) / mcp2-br.log (tail)   — MCP ros
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
 Command:  GitHub MCP get_check_run 108391088659 (DanFashauer/SignalGrid-Review-Hub)   — #1126's gating check
 Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged 8216cf6b36c893df78171e9177442c1d9b065ebc at 11:08:13Z)
-Command:  GitHub MCP get_check_run 108397317258 (DanFashauer/SignalGrid-Review-Hub)   — #1127's gating check, re-checked
-          during this record's own review fixes
-Output:   status "completed", conclusion "success" on head e189552b86db01d03b1a073fa9fb44845d7962e8; PR #1127 itself
-          still reads state "open", merged false (GitHub MCP pull_request_read get)
-Verdict:  holds, updated. At write time #1127's gating check 108397317258 was pending, so `check-mcp-roster.mjs` had
-          never run against mainline and its 15/15 self-test and roster figures were claims made only in the PR body.
-          Re-checked now: the check itself has since gone green, but the PR has still not merged, so the gate remains
-          unrun against mainline and the figures remain PR-body claims until it does.
+Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2 and
+          the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: the three owner-
+          decision PRs #1117 (DECISION_PATH merge), #1118/#1121 (golden-rule-1 ruling on the two protected Swift files),
+          and no ruling yet from Dan on any of the three.

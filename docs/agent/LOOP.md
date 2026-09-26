@@ -56,7 +56,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED, MCP ROSTER #1127 OPEN, THREE OWNER-DECISION PRs WAIT.
+LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; THREE OWNER-DECISION PRs WAIT.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -79,12 +79,13 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 11:45Z) - L8 + L2 LANDED, MCP ROSTER #1127
               #1127 (head e189552b) is DR-060 rule 3's first slice: docs/agent/mcp-roster.json gains a signalgrid-mcp
               entry (16 tools DERIVED from registerTool( calls, readOnly 7 / mutating 1 / unannotated 8), an external
               array (github, firecrawl, neural-memory), per-lane/per-skill grants and ungranted.cloud (12 connector
-              prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. State at write
-              time (checked via GitHub MCP): OPEN, gating check 108397317258 ("Typecheck, build, and proof scaffold")
-              PENDING on e189552b; re-checked during this record's own review fixes, that check now reads status
-              "completed" / conclusion "success", but the PR itself is still OPEN, unmerged - check-mcp-roster.mjs was
-              therefore not run against mainline this cycle ("node scripts/check-mcp-roster.mjs" was skipped per plan,
-              since #1127 has not merged). Lesson L15 (in #1127): the branch had L2's tip merged into it before L2
+              prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
+              a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
+              on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
+              conclusion "success" on head e189552b (GitHub MCP get_check_run). Re-run against mainline this cycle:
+              `node scripts/check-mcp-roster.mjs` now prints "mcp-roster: 6 servers (+3 external), signalgrid-mcp
+              16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".
+              Lesson L15 (in #1127, now landed on mainline): the branch had L2's tip merged into it before L2
               landed, so L2 then landing by merge commit gave two merge bases (62b07014, 08949c61) - git's recursive
               merge was clean but GitHub's single-base mergeability check read "dirty", refusing a PR nothing
               conflicted in; repaired by merging Alpha at 8216cf6b (single base) and re-running the chain on e189552b

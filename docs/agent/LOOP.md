@@ -70,8 +70,11 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               (core digest hashes WTF-8 bytes, escapes deterministicId's joined parts, gates legacy snapshot verification
               on digestAlg; DECISION_PATH) - owner merges at
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146. #1133 (land-branch derives the owner-
-              decision class from the diff; OWNER_RESERVED never lane-merged) - owner merges at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133. #1117 (ephemeral OIDC/load/observability test
+              decision class from the diff; OWNER_RESERVED never lane-merged) - owed at the close: the owner's merge,
+              then at head 765faf7a, https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133. The PR has moved
+              since (its current head, 992cb2a7, postdates the close - nothing further is claimed about it); the owner
+              merges only a head the PR's own body shows validated, not a head read live without that check. #1117
+              (ephemeral OIDC/load/observability test
               ports; DECISION_PATH) - owner merges at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117.
               #1118/#1121 (golden-rule-1 ruling asked in chat 2026-09-26 08:20Z, not yet given) - reply 'exception granted'
               or 'revert' in chat, https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
@@ -130,12 +133,17 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               reported a refused landing as landed; another threw on JSON-string arguments. L22 (#1159) - deleting finished
               agent worktrees resurfaced 19 old scratch branches as unpushed local work, raised as a hand on #1154. Ledger
               at 7b6ea61e: 22 lessons (21 landed, 1 pending).
-              Next (at 09:55Z): #1153 waits on the owner's merge (not a retry - the anchor fix is already pushed); the
-              SIGTERM ask in cloud-fyi-nothing-asked-your-tenant-isolation-ha (cloud to mac; its own item 3 names jobs for
-              #1141 and #1128) is still unread by the Mac as of the close; a third instance, #1147's job 108514569139, was
-              added later in a cloud ack of a different thread that `scripts/lane-message.mjs` never routes to the Mac's
-              inbox as its own message, so its read state is UNKNOWN, not shared with the other two; otherwise the queue
-              is the owner items above.
+              Next (at 09:55Z): #1153 waits on the owner's merge (not a retry - the anchor fix is already pushed); #1158
+              (Mac tick 20260927T074221Z) was open at the close with its gating check green (108576730594, "Typecheck,
+              build, and proof scaffold", success on head 0b214bfa..., completed 07:55:20Z, before the close) - the next
+              actor is the cloud steward, landing it under the tick-PR rule (.claude/skills/landing-under-dr-037/SKILL.md
+              item 5: check whether mainline moved a counted surface since the tick's coverage page was generated, and if
+              so merge Alpha into the tick branch and regenerate before merging); the SIGTERM ask in
+              cloud-fyi-nothing-asked-your-tenant-isolation-ha (cloud to mac; its own item 3 names jobs for #1141 and
+              #1128) is still unread by the Mac as of the close; a third instance, #1147's job 108514569139, was added
+              later in a cloud ack of a different thread that `scripts/lane-message.mjs` never routes to the Mac's inbox
+              as its own message, so its read state is UNKNOWN, not shared with the other two; otherwise the queue is the
+              owner items above.
 TIERS THIS SESSION: Opus reviewers ran two refute-first reviews on #1156 before it opened, and re-reviewed #1148 (an
               Opus review pass after Codex round 1, then two more Opus re-reviews after Codex round 2), per those PRs' own
               bodies; #1159's body names no reviewer tier for its own refute-first pass, so none is claimed for it here.

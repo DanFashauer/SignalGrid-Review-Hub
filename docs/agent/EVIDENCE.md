@@ -3766,14 +3766,16 @@ Output:   "24" — the matched commits are #1129 (edd92341, a mail commit gated 
           #1161 (7b6ea61e, the close itself). All 24 lie inside a4507f9a..7b6ea61e on the first-parent chain, a fixed range
           between two shas.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1136, /1147, /1150 (tool reads at
-          2026-09-27T10:20Z — AFTER the close; recorded, not re-runnable); git merge-base --is-ancestor 44eed7a9 c10da110;
-          git merge-base --is-ancestor a17b5fdd 2ebc4d3c; git merge-base --is-ancestor fe95e89a 2ebc4d3c; git merge-base
-          --is-ancestor 44eed7a9 a4507f9a; git merge-base --is-ancestor a17b5fdd a4507f9a; git merge-base --is-ancestor
-          fe95e89a a4507f9a
-Output:   the REST reads show #1136 merged (head 44eed7a9), #1147 merged (head a17b5fdd), #1150 merged (head fe95e89a) —
-          none of the three is a first-parent merge commit, so none is in the 24 above. All three ancestor checks against
-          their carrying merge exit 0 (44eed7a9 is an ancestor of c10da110/#1138; a17b5fdd and fe95e89a are ancestors of
-          2ebc4d3c/#1148), and all three checks against a4507f9a exit 1 (none was already in the tree at the window's
+          2026-09-27T10:20Z — AFTER the close; recorded, not re-runnable)
+Output:   #1136 merged (head 44eed7a9), #1147 merged (head a17b5fdd), #1150 merged (head fe95e89a) — none of the three is
+          a first-parent merge commit, so none is in the 24 above.
+Command:  for p in "44eed7a9 c10da110" "a17b5fdd 2ebc4d3c" "fe95e89a 2ebc4d3c" "44eed7a9 a4507f9a" "a17b5fdd a4507f9a"
+          "fe95e89a a4507f9a"; do set -- $p; git merge-base --is-ancestor "$1" "$2"; echo "$1 in $2: $?"; done (a chain of
+          `--is-ancestor` calls joined by semicolons would print only the LAST exit status; this loop prints each one)
+Output:   "44eed7a9 in c10da110: 0" / "a17b5fdd in 2ebc4d3c: 0" / "fe95e89a in 2ebc4d3c: 0" / "44eed7a9 in a4507f9a: 1" /
+          "a17b5fdd in a4507f9a: 1" / "fe95e89a in a4507f9a: 1" — all three ancestor checks against their carrying merge
+          exit 0 (44eed7a9 is an ancestor of c10da110/#1138; a17b5fdd and fe95e89a are ancestors of 2ebc4d3c/#1148), and
+          all three checks against a4507f9a exit 1 (none was already in the tree at the window's
           start). So 24 first-parent merges landed 27 PRs: #1136 through #1138, #1147 and #1150 through #1148.
 Command:  git log --first-parent --format='%H' a4507f9a..7b6ea61e | wc -l
 Output:   "96" — total first-parent commits in the window.
@@ -3845,6 +3847,13 @@ Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1158/timeline --
 Output:   "[]" — #1158's full timeline (paginated) contains no `closed` or `reopened` event at all, from its creation
           (07:42:28Z) through this read. It has therefore been continuously open since creation, which spans the
           09:54:52Z close; #1158 was open at the close.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108576730594 --jq '.name,.conclusion,.head_sha,
+          .completed_at' (tool read at 2026-09-27T12:48:15Z — AFTER the close; recorded, not re-runnable)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          0b214bfaafbf56acc7c1e165939cd41f68729f8d, completed_at "2026-09-27T07:55:20Z" — before the 09:54:52Z close, and
+          matching #1158's head at the time (`gh api .../pulls/1158 --jq .head.sha` reads the same 0b214bfa... at this
+          read; nothing about any state or event after the close is claimed here or in LOOP.md's Next line, which cites
+          only this pre-close green check).
 Command:  git show 7b6ea61e:artifacts/lane-messages/cloud-fyi-nothing-asked-your-tenant-isolation-ha.json
 Output:   `"from": "cloud", "to": "mac"`, sentAt 2026-09-26T22:10:22.289Z; item 3 of its body: "two Mac-only preflights on
           the self-hosted runner signalgrid-mac died by SIGTERM ...: #1141 job 108491528018 at 21:42:10Z during the
@@ -3936,32 +3945,42 @@ Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq
           (tail of the list; tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   "11b250d9" 2026-09-27T03:00:18Z / "1caf612b" 2026-09-27T03:05:26Z / "765faf7a" 2026-09-27T09:25:19Z /
           "f4e787ff" 2026-09-27T10:22:03Z / "992cb2a7" 2026-09-27T10:23:08Z.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1133/timeline --paginate --jq '.[]|select(.event==
+          "head_ref_force_pushed" or .event=="committed")|[.event,.sha,.created_at]' (tool read at 2026-09-27T12:45:28Z —
+          AFTER the close; recorded, not re-runnable)
+Output:   no `head_ref_force_pushed` event exists on #1133 at all (`.event` values on the whole timeline, deduplicated:
+          "commented","committed","cross-referenced","labeled","referenced","renamed","reviewed","unlabeled" — checked
+          separately). Every `committed` event's `.created_at` is `null` (GitHub does not populate that field for this
+          event type). So no PR-timeline event times the push more precisely than the two bounds below; the claim is
+          stated as a bounded interval, not a single instant.
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq '.[] | select(.sha | startswith
-          ("1caf612b")) | .commit.committer.date'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq
-          '.[] | select(.sha | startswith("765faf7a")) | .commit.committer.date'; gh api
+          ("765faf7a")) | .commit.committer.date'; gh api
           "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?head_sha=765faf7a6e59706de1659d24162de24fd9a206c5" --jq
           '.workflow_runs[0].created_at' (tool reads at 2026-09-27T12:09:24Z — AFTER the close; recorded, not re-runnable)
-Output:   1caf612b's own commit (its push instant) reads 2026-09-27T03:05:26Z. 765faf7a's own commit (ITS push instant,
-          which is the moment 1caf612b stopped being the head) reads 2026-09-27T09:25:19Z. 765faf7a's own CI runs were
-          created 2026-09-27T09:48:55Z (23 minutes after 765faf7a's own push — ordinary CI-dispatch lag, the same lag
-          1caf612b's own runs showed against its own 03:05:26Z push: 03:25:14Z, 20 minutes later). So 1caf612b's
-          03:25:14Z run timestamp answers "when was 1caf612b itself validated", not "when was it superseded" — an earlier
-          draft of this entry read it as the latter and is corrected here. The actual supersession instant is 765faf7a's
-          OWN push, 09:25:19Z: about 29 minutes BEFORE the 09:54:52Z close, not roughly 6.5 hours before it. 765faf7a then
-          remained the head across the close itself (until the next commit, f4e787ff, was pushed at 10:22:03Z, 27 minutes
-          after the close) — so #1133's head AT the close was 765faf7a, not 1caf612b, and the supersession that made it so
-          happened within about half an hour of the close, not hours earlier. (A prior instruction for this record
-          asserted the close-time head was 1caf612b; that assertion does not survive this check, and is corrected here
-          with the evidence above.)
+Output:   `.commit.committer.date` is commit metadata (when the commit object was made), not a recorded push instant, so
+          it is a LOWER bound on when 765faf7a became the PR's head, not the instant itself: 2026-09-27T09:25:19Z. Its
+          first workflow run's `created_at` — which cannot exist before GitHub has received the push — is an UPPER bound:
+          2026-09-27T09:48:55Z. Both bounds are before the 09:54:52Z close. So 765faf7a became #1133's head somewhere in
+          [09:25:19Z, 09:48:55Z] — at most about 30 minutes before the close, at least about 6 minutes before it — and
+          1caf612b was superseded within that same window, NOT "roughly 6.5 hours before the close" as an earlier draft
+          of this entry said (that draft read 1caf612b's OWN CI-dispatch timestamp, 03:25:14Z, as if it marked
+          supersession; it only marks when 1caf612b itself was validated). 765faf7a then remained the head across the
+          close itself (the next commit, f4e787ff, was pushed no earlier than its own committer date, 10:22:03Z, 27
+          minutes after the close) — so #1133's head AT the close was 765faf7a, not 1caf612b, and the supersession that
+          made it so happened within roughly half an hour before the close, bounded but not pinned to a single instant.
+          (A prior instruction for this record asserted the close-time head was 1caf612b; that assertion does not survive
+          this check, and is corrected here with the evidence above.)
 Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 're-read 2026-09-27 at `835883c5` (rename in `394032de`)'
 Output:   "re-read 2026-09-27 at `835883c5` (rename in `394032de`)" — the core-digest row's own citation of #1146's head, in
           the tree at the close (835883c5 is #1146's head as read live above, but the BUILD_BACKLOG line is a tree fact).
-Command:  git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l; git merge-base --is-ancestor 1caf612b 7b6ea61e;
-          git merge-base --is-ancestor 765faf7a 7b6ea61e; git merge-base --is-ancestor 992cb2a7 7b6ea61e; git merge-base
-          --is-ancestor 835883c5 7b6ea61e; git merge-base --is-ancestor 26a39479 7b6ea61e
+Command:  git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
 Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, one of its early merge-of-mainline commits,
-          but not from 7b6ea61e) mention "#1133" in their subject. All five ancestor checks (1caf612b, 765faf7a, 992cb2a7,
-          835883c5, 26a39479 against 7b6ea61e) exit 1 — none of #1133's heads (past or current), #1146's head or #1153's
+          but not from 7b6ea61e) mention "#1133" in their subject.
+Command:  for p in "1caf612b 7b6ea61e" "765faf7a 7b6ea61e" "992cb2a7 7b6ea61e" "835883c5 7b6ea61e" "26a39479 7b6ea61e"; do
+          set -- $p; git merge-base --is-ancestor "$1" "$2"; echo "$1 in $2: $?"; done (printed per-check, not chained by
+          semicolons)
+Output:   "1caf612b in 7b6ea61e: 1" / "765faf7a in 7b6ea61e: 1" / "992cb2a7 in 7b6ea61e: 1" / "835883c5 in 7b6ea61e: 1" /
+          "26a39479 in 7b6ea61e: 1" — all five exit 1: none of #1133's heads (past or current), #1146's head or #1153's
           head is part of the frozen tree.
 Verdict:  holds, with corrections against earlier drafts of this entry: #1153's head (26a39479, carrying the L20 anchor
           fix a894309f, still PENDING — the fix is written and pushed, not "landed") is proven three ways — a passing
@@ -3977,10 +3996,13 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           "unread same as the others" as an earlier draft of this entry said; DR-013's "10 for 10" sentence is measured by
           row 17's own prose (seven of a ten-check dated subset), not by the wire-truth gate's own count (11 checks, 7
           divergent) — two different denominators for two different claims; and #1133's head AT THE CLOSE was 765faf7a,
-          not 1caf612b — the actual supersession instant is 765faf7a's OWN push (09:25:19Z, about 29 minutes BEFORE the
-          close), not 1caf612b's own 03:25:14Z CI-dispatch time, which validates 1caf612b itself and says nothing about
-          when it stopped being the head (an earlier draft of this entry conflated the two and is corrected here); the
-          next commit (f4e787ff) did not land until 10:22:03Z, 27 minutes after the close. #1133's CURRENT head, read
+          not 1caf612b — 765faf7a became the head sometime in the bounded interval [09:25:19Z (its commit's committer
+          date, a lower bound), 09:48:55Z (its first CI run's creation, an upper bound)], both before the 09:54:52Z
+          close, so the supersession happened within roughly half an hour before the close, not "roughly 6.5 hours"
+          before it as an earlier draft of this entry said from misreading 1caf612b's own 03:25:14Z CI-dispatch time
+          (which validates 1caf612b itself and says nothing about when it stopped being the head — no PR-timeline event
+          times the push more precisely, per the check above); the next commit (f4e787ff) did not land until 10:22:03Z,
+          27 minutes after the close. #1133's CURRENT head, read
           live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing about it is claimed here beyond that
           it postdates the close. 24 first-parent PR merges closed the window between a4507f9a (11:55:30Z) and 7b6ea61e
           (09:54:52Z, the close), carrying 27 PRs landed in total once #1136, #1147 and #1150 (each merged, none

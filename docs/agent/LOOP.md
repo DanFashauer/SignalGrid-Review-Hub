@@ -60,13 +60,18 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
               This entry covers 07:15Z-11:55Z and is frozen there (lesson L18, written up with the next record); every later event
               belongs to the next record.
-              Owner still owes (at 11:55Z): #1117 (DECISION_PATH; CI green on head 760e7185) - reply 'merge #1117' in chat,
+              Owner still owes (at 11:55Z): #1117 (DECISION_PATH classifier; the OWNER merges it) - reply 'merge #1117' in chat,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117. #1118/#1121 (golden-rule-1 ruling asked in chat at
               08:20Z) - reply 'exception granted' or 'revert' in chat,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058) - reply 'merge #1050' in chat,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - reply 'merge #1083' in chat,
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. In a BROWSER: Settings -> Pages -> Source -> GitHub
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - answer (a) raise to step_up
+              or (b) day-one-quiet covers it, on the raised-hands issue
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands (file
+              artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json); #1037's CodeQL call -
+              dismiss the alert or reply 'Mac paths-ignore', https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037. In a
+              BROWSER: Settings -> Pages -> Source -> GitHub
               Actions at https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
               (Actions -> "Deploy site to Pages" -> Run workflow,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).
@@ -87,7 +92,15 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
               Next (at 11:55Z): #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
               and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
               Swift<->vector binding check, both gated by their full review acks even with the golden-rule-1 exception granted;
-              the three owner-merge PRs above (#1117, #1050, #1083) land in one step each once the owner rules.
+              the three owner-merge PRs above (#1117, #1050, #1083) wait on the owner's reply.
+TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
+              MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
+              findings) and the MCP roster (6); Haiku workers ran lock waits, chain starts, sentinel reads, pushes
+              and PR opens inside the saved workflow; Sonnet wrote the PR bodies. L7 recurred: the coordinator wrote
+              every brief, made the small direct edits itself (registering the L2 gate self-test in preflight/CI,
+              the sentinel-wait loop and the canPush mirror in the saved workflow, the L15 row and skill rule, the
+              criss-cross repair merge), corrected the two PR bodies, and performed both merges - only the fixes
+              themselves, the reviews and the chain mechanics were delegated.
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
               #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows

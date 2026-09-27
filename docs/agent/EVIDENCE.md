@@ -3680,7 +3680,7 @@ Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/Signa
 Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
 
-## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED on mainline; #1127 merged as a4507f9a with its gating check green"
+## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED; #1127 merged as a4507f9a with its gating check green"
 Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b a4507f9a; do TZ=UTC git log -1
           --date=iso-local --format='%H %cd %s' $sha; done  # the eight PRs merged this window: #1119, #1120, #1122, #1123,
           #1124, #1125, #1126, #1127
@@ -3700,8 +3700,8 @@ Output:   "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Me
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
           DR-037, check run 108397317258)" — local and deterministic, re-runnable in any clone; all eight dates fall inside the
           07:15Z-11:55Z window.
-Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a  # #1122 carries no sha in the LOOP.md
-          prose; derived here on a fixed range ending at a4507f9a
+Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a  # the pre-rewrite LOOP.md entry
+          (2b4b5586) carried no sha for #1122; derived here on a fixed range ending at a4507f9a
 Output:   "af82b564f0dc5b51d53d1c08298c2dd1afc11cde Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run
           108374280929)" — the only match; local and immutable (the range's upper bound is a fixed sha, not a branch).
 Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b; do git merge-base --is-ancestor $sha

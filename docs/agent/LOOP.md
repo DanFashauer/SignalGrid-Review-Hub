@@ -56,17 +56,21 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane, 22:39Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane; last refresh 2026-09-27 00:06Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z. Lines marked POST-WINDOW
-              record later events through 20:58Z (#1138) plus check-run reads at 21:5xZ; later mainline events (e.g.
+              record later events through 20:58Z (#1138) plus verification reads at 21:5xZ-23:45Z (check runs, PR state, merge-tree, ancestry); later mainline events (e.g.
               the Mac's 21:39Z tenant-isolation hand, aaa5b321) belong to the next record.
-              Refreshed through Codex rounds 1-13 on #1128; the stamp is the last refresh.
-              Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117'
-              and the lane refreshes it first, so the merge is one tap), #1118/#1121 (the golden-rule-1 ruling),
-              #1050 (DR-058; conflicts with mainline on docs only — reply 'merge #1050' and the lane refreshes
-              it first, so the merge is one tap), #1083 (DR-059; conflicts with mainline on docs only — reply
-              'merge #1083' and the lane refreshes it first, so the merge is one tap), #1133 (OWNER_RESERVED by
+              Refreshed through Codex rounds 1-14 on #1128; the stamp is the last refresh.
+              Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117' in
+              chat and the lane refreshes it first, so the merge is one tap on
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117), #1118/#1121 (the golden-rule-1
+              ruling), #1050 (DR-058; conflicts with mainline on docs only — reply 'merge #1050' in chat and
+              the lane refreshes it first, so the merge is one tap on
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050), #1083 (DR-059; conflicts with
+              mainline on docs only — reply 'merge #1083' in chat and the lane refreshes it first, so the
+              merge is one tap on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083), #1133
+              (OWNER_RESERVED by
               its own widened classifier: the OWNER merges it), the row-8
               doctrine hand (answer (a) raise to step_up or (b) day-one-quiet covers it, on the raised-hands issue
               https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands; file
@@ -121,7 +125,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 22:39Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
               a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
               on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
-              conclusion "success" on head e189552b (GitHub MCP get_check_run). At a4507f9a (the #1127 tree, before
+              conclusion "success" on head e189552b (GitHub MCP get_check_run; head from `git rev-parse a4507f9a^2`). At a4507f9a (the #1127 tree, before
               #1130), `node scripts/check-mcp-roster.mjs` printed "mcp-roster: 6 servers (+3 external), signalgrid-mcp
               16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".
               POST-WINDOW (15:07Z, #1130): on this branch's tree the same command prints "PASS".
@@ -136,7 +140,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 22:39Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               DECISION_PATH (fixed ports -> ephemeral in oidc/load/observability tests), so the OWNER merges it (CI
               green: check run 108365605200 'Typecheck, build, and proof scaffold' and workflow run 36227993364
               'SignalGrid CI', both success on head 760e7185; POST-WINDOW tool reads at 21:5xZ, recorded — not to be
-              re-run). POST-WINDOW (20:52Z): #1117 (760e7185) conflicts with mainline on docs/BUILD_BACKLOG.md, and so
+              re-run). POST-WINDOW (20:52Z review read for #1117; merge-tree reads at 22:35Z for all three): #1117 (760e7185) conflicts with mainline on docs/BUILD_BACKLOG.md, and so
               do #1050 (331c6558: docs/DECISION_RECORDS.md) and #1083 (a98d2013: docs/BUILD_BACKLOG.md,
               docs/DECISION_RECORDS.md) per `git merge-tree --write-tree --name-only`; the lane refreshes each the
               moment the owner rules on it, so each merge is one step. #1118

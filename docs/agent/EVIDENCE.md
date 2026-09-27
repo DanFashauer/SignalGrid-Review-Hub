@@ -3684,10 +3684,11 @@ Verdict:  holds. Two lessons still await their own landing per `check-lessons.mj
 Command:  git fetch origin SignalGrid_Alpha && TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' origin/SignalGrid_Alpha
 Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
-          DR-037, check run 108397317258)"
+          DR-037, check run 108397317258)" (first of three lines)
 Command:  GitHub MCP get_check_run 108397317258
-Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold", head e189552b86db01d03b1a073fa9fb44845d7962e8)
-          # (DanFashauer/SignalGrid-Review-Hub) in the worktree after merging a4507f9a, 2026-09-26 12:03Z
+Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
+          DanFashauer/SignalGrid-Review-Hub)
+          # in the worktree after merging a4507f9a, 2026-09-26 12:03Z
 Command:  node scripts/check-lessons.mjs
 Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
           #  in the worktree after merging a4507f9a, 2026-09-26 12:03Z
@@ -3710,9 +3711,11 @@ Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
           # #1126's gating check
 Command:  GitHub MCP get_check_run 108391088659
-Output:   conclusion "success", status "completed"; PR #1126 head sha 08949c61f377b56deff6f18ae15f39a232d9b650 (merged
-          8216cf6b36c893df78171e9177442c1d9b065ebc committer time 11:08:12Z per the git log line below)
-          # (DanFashauer/SignalGrid-Review-Hub)
+Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
+          DanFashauer/SignalGrid-Review-Hub)
+Command:  git rev-parse a4507f9a^2 8216cf6b^2
+Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — the merged
+          PR heads (second parents)
 Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H:%M:%SZ 8216cf6b
 Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
           land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
@@ -3733,16 +3736,14 @@ Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1083 (t
 Output:   state "open", merged_at null
 Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
           origin/claude/tests-ephemeral-ports-oidc-load-observability
-Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md"
-          # (recorded at 22:35Z; #1117, per the review's 20:52Z read)
+Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" (recorded at 22:35Z; #1117, per the review's 20:52Z read)
 Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
           origin/claude/build-puck6-return-binding
-Output:   exit 1, conflicted "docs/DECISION_RECORDS.md"
-          # (recorded at 22:35Z; #1050, head 331c6558)
+Output:   exit 1, conflicted "docs/DECISION_RECORDS.md" (recorded at 22:35Z; #1050, head 331c6558)
 Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
           origin/claude/proposal-dr059-posture-ages-refresh-retracts
-Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" and "docs/DECISION_RECORDS.md"
-          # (recorded at 22:35Z; #1083, head a98d2013)
+Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" and "docs/DECISION_RECORDS.md" (recorded at 22:35Z; #1083,
+          head a98d2013)
 Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=iso-local c10da110 && git merge-base --is-ancestor 44eed7a9 \
           c10da110 && echo carries-44eed7a9
 Output:   "c10da1105a9ad1ea31f8babc21dcc5e4913e992d 2026-09-26 20:58:20 +0000 Merge pull request #1138: Land Mac PR
@@ -3767,11 +3768,13 @@ Output:   "177299f3 Merge pull request #1119: L10 shallow-fetch deny guard, L11 
 Command:  git merge-base --is-ancestor 5f1f21e37bbd483c45ebc52d3fa1c1bcba0bc636 origin/SignalGrid_Alpha \
           && echo reachable
 Output:   "reachable" (exit 0) — L8's merge (PR #1123, 5f1f21e3) is an ancestor of origin/SignalGrid_Alpha
-          # (recorded at 23:45Z)
+          (recorded at 23:45Z)
 Command:  git merge-base --is-ancestor 8216cf6b36c893df78171e9177442c1d9b065ebc origin/SignalGrid_Alpha \
           && echo reachable
 Output:   "reachable" (exit 0) — L2's merge (PR #1126, 8216cf6b) is an ancestor of origin/SignalGrid_Alpha
-          # (recorded at 23:45Z)
+          (recorded at 23:45Z)
+Command:  git log --first-parent --format=%h a4507f9a | grep -n -e ^8216cf6b -e ^5f1f21e3
+Output:   "4:8216cf6b" / "11:5f1f21e3" (exit 0)
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2
           and the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five
           owner-gated PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling,
@@ -3783,4 +3786,5 @@ Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gati
           head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (20:52Z).
           Ancestry: L8's merge (5f1f21e3) and L2's merge (8216cf6b) are each confirmed reachable from
           origin/SignalGrid_Alpha by `git merge-base --is-ancestor` above ("reachable", exit 0 both) — the
-          three-commit first-parent walk above never reached either (L2 is its 4th commit back, L8 its 11th).
+          three-commit first-parent walk above never reached either (L2's merge is entry 4 and L8's entry 11 of the
+          first-parent walk from a4507f9a, which is entry 1).

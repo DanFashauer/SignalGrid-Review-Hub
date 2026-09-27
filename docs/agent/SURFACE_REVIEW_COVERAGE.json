@@ -818,9 +818,9 @@
         },
         {
           "date": "2026-09-27",
-          "read": "Codex review round 6 on #1168 (head 23c6c48c) read the article in full: 2 findings (the lede separates derivation from transport, since a vendor-specific attribute can carry posture beside the result; the compliance source is left vendor-specific), applied in the commit that adds this entry, so the record is the article itself.",
+          "read": "Codex review round 6 on #1168 (head 23c6c48c) read the article in full: 2 findings (the lede separates derivation from transport, since a vendor-specific attribute can carry posture beside the result; the compliance source is left vendor-specific), applied in a55d551f.",
           "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
-          "record": "docs/NAC_DERIVED_STATE_ARTICLE.md",
+          "record": "a55d551f",
           "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
           "open": 0,
           "closed": 2

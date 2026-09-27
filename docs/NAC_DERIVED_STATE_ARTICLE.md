@@ -33,7 +33,7 @@ attributes a real switch or WLC sends. Two findings carry the article:
 | Our shape says | What the wire actually returns |
 | --- | --- |
 | `authState: "quarantined"` — a state alongside `"authenticated"` | RADIUS has two terminal outcomes, `Access-Accept` / `Access-Reject` (`Access-Challenge` is a real third packet type for EAP/802.1X's multi-round exchanges; the lab drove PAP only, so it was never exercised here). The quarantined device we drove returned `Access-Accept` with a different `Tunnel-Private-Group-Id` plus a `Filter-Id` — a customer-chosen policy label the server was configured to hand back (in production, the NAC's policy engine picks it), not a protocol state |
-| `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither appeared in the lab's `Access-Accept`, and neither is a standard RADIUS attribute (RADIUS does permit vendor-specific attributes, so a NAC product can encode a posture result in one; no licensed console was driven to see whether any does). `nacCompliant` isn't a standard RADIUS concept — a posture-agent/console derivation; `lastAuthAt` comes from RADIUS accounting or the console's own session database, a different source with a different lifetime that can disagree with the auth result (accounting was not driven in the lab) |
+| `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither appeared in the lab's `Access-Accept`, and neither is a standard RADIUS attribute (RADIUS does permit vendor-specific attributes, so a NAC product can encode a posture result in one; no licensed console was driven to see whether any does). `nacCompliant` isn't a standard RADIUS concept — a posture-agent/console derivation; `lastAuthAt` is a timestamp recorded somewhere other than the reply — an `Event-Timestamp` (RFC 2869) the NAS may put in its `Access-Request` (the lab sent none), RADIUS accounting, an authentication log, or the console's session database — each a source with its own lifetime that can disagree with the auth result (accounting was not driven in the lab) |
 
 The same "two different sources" shape shows up in how the two console
 vendors describe their own APIs — as reported from vendor documentation
@@ -48,13 +48,13 @@ identity always arrives apart from authentication: RADIUS itself carries
 a wire identifier (`Calling-Station-Id` — the calling party's identifier,
 which 802.1X by convention fills with the supplicant's MAC, as in our lab)
 in the very same exchange
-as the auth result. What RADIUS keeps separate is session *timing*, not
-identity — the accounting-vs-authentication split above — and a MAC is not
+as the auth result. What the reply leaves out is session *timing*, not
+identity — the timestamp sources in the table above — and a MAC is not
 our `deviceId` either way: an adapter still needs a MAC-to-device mapping
-sourced elsewhere. A console that answers "is it compliant" is reporting
-its own derivation, never something it read off a cable — confirmed, after
-the fact, by a correction already recorded in our Cisco ISE adapter's own
-header: its old normalizer hardcoded `status: 'registered'` for every
+sourced elsewhere. A console that answers "is it compliant" is reporting a
+derived conclusion, not a measurement of the cable, whatever its transport
+and whoever computed it. A related correction is already recorded in our
+Cisco ISE adapter's own header: its old normalizer hardcoded `status: 'registered'` for every
 endpoint, asserting an authentication state the endpoint API never reports.
 
 This is structural, not a vendor shortcoming: a protocol's terminal
@@ -86,8 +86,9 @@ as verified-good.
 That's deliberate correction, not the original design: the build plan's own
 reading of the live shape check records that the prior code let an
 authenticated device with `nacCompliant` and `lastAuthAt` both `null` earn
-the full `on_trusted_segment`/`none` grant — "that unconfirmed combination is
-the *common* case on a real RADIUS wire, not an edge" — closed in one pull
+the full `on_trusted_segment`/`none` grant — the combination the lab's plain
+RADIUS exchange produced by default (it shows plain RADIUS does not supply
+either field, not how often deployments leave both unset) — closed in one pull
 request and pinned by a full state-space enumeration in the next.
 
 Segment gets the same treatment: an authenticated device on *any* VLAN used

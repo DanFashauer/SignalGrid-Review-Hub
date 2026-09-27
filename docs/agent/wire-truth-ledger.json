@@ -52,8 +52,11 @@
       "evidence": ["scripts/src/live-headwind-proof.ts", "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "artifacts/live-captures/headwind.json"],
       "date": "2026-08-18",
       "divergenceFound": true,
-      "divergenceRecord": { "path": "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "quote": "throws `NullPointerException`" },
-      "boundTo": [{ "path": "lib/integration-bridge/src/evidence.ts", "symbol": "headwindLabToDeviceManagementEvidence" }]
+      "divergenceRecord": { "path": "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "quote": "the two divergences (nesting of `model`," },
+      "boundTo": [
+        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "headwindLabToDeviceManagementEvidence" },
+        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "HeadwindLabDevice" }
+      ]
     },
     {
       "id": "live-idp-token-binding",

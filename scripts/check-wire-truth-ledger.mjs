@@ -56,21 +56,24 @@ export function audit(ledger, tree) {
     else if (ids.has(c.id)) problems.push(`${at}: duplicate id`);
     ids.add(c?.id);
     for (const f of ["product", "date"]) if (typeof c?.[f] !== "string" || !c[f]) problems.push(`${at}: missing ${f}`);
-    if (typeof c?.date === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(c.date)) problems.push(`${at}: date "${c.date}" is not YYYY-MM-DD`);
-    for (const d of c?.dimensions ?? []) if (!tree.dims.has(d)) problems.push(`${at}: dimension "${d}" is not a directory under ${INTEGRATIONS}/`);
+    if (typeof c?.date === "string" && !(/^\d{4}-\d{2}-\d{2}$/.test(c.date) && !Number.isNaN(Date.parse(c.date)) && new Date(c.date).toISOString().startsWith(c.date))) problems.push(`${at}: date "${c.date}" is not YYYY-MM-DD`);
+    if (!Array.isArray(c?.dimensions)) problems.push(`${at}: dimensions must be an array`);
+    else if (c.dimensions.length === 0 && c.divergenceFound !== null) problems.push(`${at}: no dimensions — only a divergenceFound null entry may check none`);
+    else if (c.dimensions.length > 0 && !(Array.isArray(c?.boundTo) && c.boundTo.length > 0)) problems.push(`${at}: checks a dimension but is bound to no code`);
+    for (const d of Array.isArray(c?.dimensions) ? c.dimensions : []) if (!tree.dims.has(d)) problems.push(`${at}: dimension "${d}" is not a directory under ${INTEGRATIONS}/`);
     if (!Array.isArray(c?.evidence) || c.evidence.length === 0) problems.push(`${at}: no evidence paths`);
     for (const p of c?.evidence ?? []) { cited.add(p); if (!tree.tracked.has(p)) problems.push(`${at}: evidence ${p} is not tracked`); }
     for (const b of c?.boundTo ?? []) {
       const text = read(b?.path ?? "");
       if (text === null) problems.push(`${at}: boundTo ${b?.path} does not exist`);
-      else if (!declares(text, b.symbol ?? "")) problems.push(`${at}: boundTo ${b.symbol} is not declared in ${b.path}`);
+      else if (typeof b?.symbol !== "string" || !/^[A-Za-z_$][\w$]*$/.test(b.symbol) || !declares(text, b.symbol)) problems.push(`${at}: boundTo ${b.symbol} is not declared in ${b.path}`);
     }
     if (c?.divergenceFound === true) {
       const r = c.divergenceRecord;
       const text = r?.path ? read(r.path) : null;
-      if (!r?.quote || text === null || !text.includes(r.quote)) problems.push(`${at}: divergenceFound true but its divergenceRecord quote is not found verbatim in ${r?.path ?? "(no path)"}`);
+      if (typeof r?.quote !== "string" || r.quote.trim().length < 12 || !(c.evidence ?? []).includes(r.path) || !r?.quote || text === null || !text.includes(r.quote)) problems.push(`${at}: divergenceFound true but its divergenceRecord quote is not found verbatim in ${r?.path ?? "(no path)"}`);
     } else if (c?.divergenceFound === null) {
-      if (!c.note) problems.push(`${at}: divergenceFound null needs a note saying why there was nothing to diverge from`);
+      if (typeof c.note !== "string" || !c.note.trim()) problems.push(`${at}: divergenceFound null needs a note saying why there was nothing to diverge from`);
     } else if (c?.divergenceFound !== false) problems.push(`${at}: divergenceFound must be true, false or null`);
   }
   for (const p of tree.tracked) if (LIVE_RECORD.test(p) && !cited.has(p)) problems.push(`${p} is a live record no ledger entry cites — add an entry`);
@@ -110,6 +113,9 @@ function selfTest() {
     ["an untracked evidence path fails", plant((l) => { l.checks[0].evidence.push("docs/untracked.md"); })],
     ["a boundTo symbol not declared in its file fails", plant((l) => { l.checks[0].boundTo[0].symbol = "Ghost"; })],
     ["a symbol merely MENTIONED, not declared, fails", plant((l) => { l.checks[0].boundTo[0].symbol = "Other"; })],
+    ["a boundTo with no symbol fails", plant((l) => { delete l.checks[0].boundTo[0].symbol; })],
+    ["a checked dimension bound to no code fails", plant((l) => { l.checks[0].boundTo = []; })],
+    ["a divergence quote outside the entry's evidence fails", plant((l) => { l.checks[0].divergenceRecord = { path: "lib/x.ts", quote: "export interface Thing" }; })],
     ["a duplicate id fails", plant((l) => { l.checks.push({ ...l.checks[0] }); })],
     ["a divergence quote not in its record fails", plant((l) => { l.checks[0].divergenceRecord.quote = "made up"; })],
     ["divergenceFound true with no record fails", plant((l) => { delete l.checks[0].divergenceRecord; })],
@@ -118,6 +124,7 @@ function selfTest() {
     ["an empty ledger fails", audit({ checks: [] }, tree).problems.length > 0],
     ["a dimension walk under the floor fails", audit(good(), { ...tree, dims: new Set(["d0"]) }).problems.length > 0],
     ["hits count only divergenceFound true", audit(good(), tree).figures.hits === 1 && audit(good(), tree).figures.unchecked.length === DIMENSION_FLOOR - 1],
+    ["a date that is not a real day fails", plant((l) => { l.checks[0].date = "2026-99-99"; })],
   ];
   for (const [name, ok] of cases) console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
   const failed = cases.filter(([, ok]) => !ok).length;

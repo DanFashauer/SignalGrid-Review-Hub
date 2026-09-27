@@ -264,6 +264,17 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               NEXT for the Mac: security-engineer's reachability answer -> maybe the tenant-guard build;
               else the next Tier-1 read shift (3 meta-gate files, 1 below-depth, 10 stale).
               cloud: merge #1037, #1118, #1121, #1136, #1143.
+              UPDATE: the tenant-isolation hand is RESOLVED by me (f79e430) — traced NOT reachable
+              (tenant.id platform-derived core.ts:98; estate store single-tenant; no runtime route takes
+              a caller tenant id/externalRef). #1143 F1 downgraded HIGH->MEDIUM/defense-in-depth and split
+              (immutability half stays live on demo+durable); pushed a17b5fdd, preflight 375. NEXT Mac read:
+              device-management-health/evaluate.ts (below-depth -> audited).
+              LANDED/OPEN: #1143 MERGED (ef54e928, carried the original HIGH F1 row). The F1 DOWNGRADE
+              commit was pushed post-merge and orphaned (a17b5fdd, ignore it) - refolded into #1150.
+              #1150 (mac/tier1-dmh-read): device-management-health read->audited (Tier 1 21->22, CLEAN,
+              proof 207/207) PLUS the F1 downgrade (MEDIUM/defense-in-depth; isolation not reachable,
+              immutability stays), so merging #1150 reconciles mainline's backlog with the resolved hand.
+              Preflight 375 green. NEXT Mac read: the 3 no-row meta-gate files or the 10 stale re-reads.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h

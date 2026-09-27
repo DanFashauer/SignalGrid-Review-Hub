@@ -3754,7 +3754,8 @@ Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this wi
           state is still not claimed, nor is mainline membership or any event after 11:55Z — those belong to the next record.
 
 ## 2026-09-27 — "24 FIRST-PARENT PR MERGES (27 PRs landed — #1136, #1147 and #1150 carried in) closed the window at #1161's
-merge (7b6ea61e); L16 and L17-L22 landed, L20 pending; #1153 is pushed and waits only on the owner"
+merge (7b6ea61e); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending; #1153 is pushed and waits only on the
+owner"
 Command:  TZ=UTC git log --first-parent --format='%H %cd %s' --date=iso-local a4507f9a..7b6ea61e | grep -E 'Merge pull
           request #|\(#[0-9]+, gating' | wc -l
 Output:   "24" — the matched commits are #1129 (edd92341, a mail commit gated at check run 108404680426, not a "Merge pull
@@ -3855,15 +3856,30 @@ Output:   `"ackedBy": "cloud"`, ackedAt 2026-09-27T00:26:42.888Z; its note: "Ite
           runner) had preflight killed 3m44s in, ... exit 143 ... Please find what sends preflight SIGTERM on the runner
           ... and say in mail." So job 108514569139/#1147 was added as a third instance in this later ack, not in the
           original cloud-fyi-nothing-asked-your-tenant-isolation-ha thread, whose own item 3 names only #1141's job and
-          #1128's job.
+          #1128's job. This ack carries no `to` field and is CLOUD's own ack (`ackedBy: "cloud"`) of a Mac→cloud message
+          (`mac-update-to-1143-durable-write-finding-downgra`) — a record that cloud read and answered the Mac's message,
+          not a message TO the Mac.
+Command:  grep -n 'export function loadMessages\|export function loadAcks\|cmd === "inbox"\|const messages = loadMessages\|m.to === me' scripts/lane-message.mjs
+Output:   `82:export function loadMessages() {` (reads only `MSG_DIR`, `artifacts/lane-messages/*.json`) / `86:export
+          function loadAcks() {` (reads only `ACK_DIR`, `artifacts/lane-messages/acks/*.json` — a SEPARATE directory) /
+          `305:  const messages = loadMessages();` (the `inbox` command's own message source) / `315:    .filter((m) =>
+          m.to === me && (all || !ackedIds.has(m.id)))` (the inbox filters `messages` by `to`; acks are read only via
+          `ackedIds` to mark an existing message id closed — an ack's own `note` text is never added to `messages` and
+          never rendered as an inbox entry to either lane). So job 108514569139's mention, which exists ONLY inside this
+          ack's `note` field, was never delivered as a lane-message addressed to the Mac at all: the Mac's inbox has no
+          mechanism that would ever show it, read or unread. Its read state for the Mac is UNKNOWN — not proven unread,
+          and not sharing the original thread's confirmed-unread status.
 Command:  git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json
 Output:   `"firedAt": "2026-09-27T09:30:45.823Z"` (24 minutes before the 09:54:52Z close, in the tree at 7b6ea61e) — its
           `result` field: "...The SIGTERM question in cloud-fyi-nothing-asked-your-tenant-isolation-ha is still unread.
           Owner still owes: #1117, the #1118/#1121 golden-rule-1 ruling, #1050, #1083, #1133, #1146, #1153, the row-8
           doctrine hand, #1037's CodeQL call, DR-013's 10-for-10 sentence (seven of ten by the ledger), the yes/no on 19
           local scratch branches (#1154), and in a browser the Pages source switch plus one Pages workflow run." Nothing on
-          the first-parent chain between this heartbeat and the close (7b6ea61e) reads or answers that thread, so the ask
-          (all three job instances, per the two messages above) is still unread by the Mac as of the close.
+          the first-parent chain between this heartbeat and the close (7b6ea61e) reads or answers that thread, so the
+          ORIGINAL message (naming #1141's and #1128's jobs) is still unread by the Mac as of the close. The third
+          instance (#1147's job, 108514569139) is NOT covered by this statement — per the lane-message.mjs read above, it
+          was never delivered to the Mac as its own addressed message, so this heartbeat's "still unread" cannot be read as
+          covering it; its read state stays UNKNOWN.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153 (tool read at 2026-09-27T11:31Z — AFTER
           the close; recorded, not re-runnable); git merge-base --is-ancestor a894309f 26a39479
 Output:   `{"state":"open","merged":false,"head":"26a39479b314e62caf65b4c229c4e10a5802e9e9"}`; the ancestor check exits 0 —
@@ -3882,8 +3898,10 @@ Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153/ccr/review_t
 Output:   "0" — no unresolved review thread remains on #1153. Together with the gating check and the local sentinel chain
           above, #1153's current head (26a39479, carrying the L20 fix) is proven three ways: it is pushed with its fix
           and waits only on the owner's merge, not a landing retry.
-Command:  git worktree add --detach <scratchpad>/wt-close 7b6ea61e928ecd54d48232fb0a51ad9909066c1c; cd <scratchpad>/wt-close
-          && node scripts/check-wire-truth-ledger.mjs; cd - && git worktree remove <scratchpad>/wt-close
+Command:  three separate steps (the tool's working directory resets between calls, so this was not one chained shell
+          line): (1) `git worktree add --detach <scratchpad>/wt-close 7b6ea61e928ecd54d48232fb0a51ad9909066c1c`; (2) `cd
+          <scratchpad>/wt-close && node scripts/check-wire-truth-ledger.mjs`; (3) `git worktree remove
+          <scratchpad>/wt-close`
 Output:   in a worktree detached at 7b6ea61e928ecd54d48232fb0a51ad9909066c1c (no node_modules symlinked in — the script
           needed none): "wire-truth-ledger: 11 checks, 7 with a recorded divergence; 9/52 dimensions live-checked, 43 not;
           0 problems" — identical to the figure from the shared worktree, now proven against a tree the checker's own full
@@ -3897,10 +3915,13 @@ Output:   "of the ten ledger checks dated on or before that record, seven record
           subset of the gate's 11); the row also says `docs/DECISION_RECORDS.md` is owner-gated
           (`scripts/check-owner-gated-surfaces.mjs` line 48/126), so the sentence itself waits for the owner to edit, or
           for the owner to say in chat that the lane may.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/{1153,1146,1133,1117,1050,1083,1118,1121,1037,1068} --jq
-          '.state' (tool reads at 2026-09-27T11:29Z — AFTER the close; recorded, not re-runnable; live state, not in the
-          tree)
-Output:   all ten read "open" (#1068 is the raised-hands issue, not a PR). `/issues/<n>` carries no `head` field at all —
+Command:  for n in 1117 1118 1121 1050 1083 1133 1146 1153 1037 1068; do printf '%s ' $n; gh api
+          repos/DanFashauer/SignalGrid-Review-Hub/issues/$n --jq .state; done (a brace-expanded single `gh api` call
+          cannot answer ten endpoints — `gh api` takes one — so this is a real loop, not shorthand; tool reads at
+          2026-09-27T12:13:42Z — AFTER the close; recorded, not re-runnable; live state, not in the tree)
+Output:   "1117 open" / "1118 open" / "1121 open" / "1050 open" / "1083 open" / "1133 open" / "1146 open" / "1153 open" /
+          "1037 open" / "1068 open" — all ten read "open" (#1068 is the raised-hands issue, not a PR). `/issues/<n>`
+          carries no `head` field at all —
           it cannot answer a head-sha question, so that question is asked of `/pulls/<n>` below instead (an earlier draft
           of this entry attributed a head sha to an `/issues/<n>` read, which is corrected here).
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133 --jq '.head.sha,.state,.updated_at'; gh api
@@ -3915,16 +3936,23 @@ Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq
           (tail of the list; tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   "11b250d9" 2026-09-27T03:00:18Z / "1caf612b" 2026-09-27T03:05:26Z / "765faf7a" 2026-09-27T09:25:19Z /
           "f4e787ff" 2026-09-27T10:22:03Z / "992cb2a7" 2026-09-27T10:23:08Z.
-Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?head_sha=1caf612b6e7ff5d61c40a9c3574e5a0d207429ed"
-          --jq '.workflow_runs[0].created_at'; gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?head_sha=
-          765faf7a6e59706de1659d24162de24fd9a206c5" --jq '.workflow_runs[0].created_at' (tool reads at 2026-09-27T11:31Z —
-          AFTER the close; recorded, not re-runnable)
-Output:   1caf612b's workflow runs were created 2026-09-27T03:25:14Z. 765faf7a's were created 2026-09-27T09:48:54Z — SIX
-          MINUTES BEFORE the 09:54:52Z close — and the commit that superseded it, f4e787ff, was not committed until
-          10:22:03Z, 27 minutes AFTER the close. So #1133's head AT the close was 765faf7a, not 1caf612b: 1caf612b had
-          already been superseded roughly 6.5 hours before the close, and 765faf7a was the live head spanning the close
-          itself. (A prior instruction for this record asserted the close-time head was 1caf612b; that assertion does not
-          survive this check, and is corrected here with the evidence above.)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq '.[] | select(.sha | startswith
+          ("1caf612b")) | .commit.committer.date'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq
+          '.[] | select(.sha | startswith("765faf7a")) | .commit.committer.date'; gh api
+          "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?head_sha=765faf7a6e59706de1659d24162de24fd9a206c5" --jq
+          '.workflow_runs[0].created_at' (tool reads at 2026-09-27T12:09:24Z — AFTER the close; recorded, not re-runnable)
+Output:   1caf612b's own commit (its push instant) reads 2026-09-27T03:05:26Z. 765faf7a's own commit (ITS push instant,
+          which is the moment 1caf612b stopped being the head) reads 2026-09-27T09:25:19Z. 765faf7a's own CI runs were
+          created 2026-09-27T09:48:55Z (23 minutes after 765faf7a's own push — ordinary CI-dispatch lag, the same lag
+          1caf612b's own runs showed against its own 03:05:26Z push: 03:25:14Z, 20 minutes later). So 1caf612b's
+          03:25:14Z run timestamp answers "when was 1caf612b itself validated", not "when was it superseded" — an earlier
+          draft of this entry read it as the latter and is corrected here. The actual supersession instant is 765faf7a's
+          OWN push, 09:25:19Z: about 29 minutes BEFORE the 09:54:52Z close, not roughly 6.5 hours before it. 765faf7a then
+          remained the head across the close itself (until the next commit, f4e787ff, was pushed at 10:22:03Z, 27 minutes
+          after the close) — so #1133's head AT the close was 765faf7a, not 1caf612b, and the supersession that made it so
+          happened within about half an hour of the close, not hours earlier. (A prior instruction for this record
+          asserted the close-time head was 1caf612b; that assertion does not survive this check, and is corrected here
+          with the evidence above.)
 Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 're-read 2026-09-27 at `835883c5` (rename in `394032de`)'
 Output:   "re-read 2026-09-27 at `835883c5` (rename in `394032de`)" — the core-digest row's own citation of #1146's head, in
           the tree at the close (835883c5 is #1146's head as read live above, but the BUILD_BACKLOG line is a tree fact).
@@ -3936,26 +3964,32 @@ Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, on
           835883c5, 26a39479 against 7b6ea61e) exit 1 — none of #1133's heads (past or current), #1146's head or #1153's
           head is part of the frozen tree.
 Verdict:  holds, with corrections against earlier drafts of this entry: #1153's head (26a39479, carrying the L20 anchor
-          fix a894309f) is proven three ways — a passing gating check (108537426452), a green local sentinel chain, and
-          zero unresolved review threads — so it waits only on the owner's merge, not a retried landing; the wire-truth
-          figure is now confirmed in a truly frozen worktree detached at 7b6ea61e (not three hand-picked paths read from a
-          shared checkout); #1158's open state at the close is proven by an empty closed/reopened timeline, not inferred
-          from a later read; the 68/4 mail-vs-LOOP trailer split is now an exhaustive count of all 68, not a sample; the
-          SIGTERM ask in cloud-fyi-nothing-asked-your-tenant-isolation-ha names jobs for #1141 and #1128 in its own thread,
-          with #1147's job added later in a separate ack, and the whole ask (all three instances) is unread by the Mac as
-          of the close; DR-013's "10 for 10" sentence is measured by row 17's own prose (seven of a ten-check dated
-          subset), not by the wire-truth gate's own count (11 checks, 7 divergent) — two different denominators for two
-          different claims; and #1133's head AT THE CLOSE was 765faf7a, not 1caf612b — 1caf612b was superseded roughly 6.5
-          hours before the close (its own workflow runs started 03:25:14Z), while 765faf7a's workflow runs started
-          09:48:54Z, six minutes before the 09:54:52Z close, and the next commit (f4e787ff) did not land until 10:22:03Z,
-          after it. #1133's CURRENT head, read live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing
-          about it is claimed here beyond that it postdates the close. 24 first-parent PR merges closed the window between
-          a4507f9a (11:55:30Z) and 7b6ea61e (09:54:52Z, the close), carrying 27 PRs landed in total once #1136, #1147 and
-          #1150 (each merged, none first-parent, each bound to its carrying merge by `git merge-base --is-ancestor`) are
-          counted; 72 Mac-lane pushes fill the rest of the 96 first-parent commits (68 mail commits with no session
-          trailer, exhaustively checked; 4 LOOP-state notes sharing one). The lesson ledger reads 22 lessons at 7b6ea61e, 21
-          landed and L20 pending, with L16 isolated to #1130's own merge and L17-L22 isolated to #1159's. Four gating
-          checks (#1148, #1156, #1159, #1145) are each bound to their merged PR head by head_sha. #1131, #1137 and #1140
+          fix a894309f, still PENDING — the fix is written and pushed, not "landed") is proven three ways — a passing
+          gating check (108537426452), a green local sentinel chain, and zero unresolved review threads — so it waits only
+          on the owner's merge, not a retried landing; the wire-truth figure is now confirmed in a truly frozen worktree
+          detached at 7b6ea61e (not three hand-picked paths read from a shared checkout); #1158's open state at the close
+          is proven by an empty closed/reopened timeline, not inferred from a later read; the 68/4 mail-vs-LOOP trailer
+          split is now an exhaustive count of all 68, not a sample; the SIGTERM ask in
+          cloud-fyi-nothing-asked-your-tenant-isolation-ha names jobs for #1141 and #1128 in its own thread and is
+          confirmed still unread by the Mac as of the close — the third instance (#1147's job, 108514569139) exists only
+          inside a cloud-written ack of an unrelated Mac→cloud thread, which `scripts/lane-message.mjs` never routes to
+          the Mac's inbox as its own message (lines 82-89, 305, 315), so that instance's read state is UNKNOWN, not
+          "unread same as the others" as an earlier draft of this entry said; DR-013's "10 for 10" sentence is measured by
+          row 17's own prose (seven of a ten-check dated subset), not by the wire-truth gate's own count (11 checks, 7
+          divergent) — two different denominators for two different claims; and #1133's head AT THE CLOSE was 765faf7a,
+          not 1caf612b — the actual supersession instant is 765faf7a's OWN push (09:25:19Z, about 29 minutes BEFORE the
+          close), not 1caf612b's own 03:25:14Z CI-dispatch time, which validates 1caf612b itself and says nothing about
+          when it stopped being the head (an earlier draft of this entry conflated the two and is corrected here); the
+          next commit (f4e787ff) did not land until 10:22:03Z, 27 minutes after the close. #1133's CURRENT head, read
+          live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing about it is claimed here beyond that
+          it postdates the close. 24 first-parent PR merges closed the window between a4507f9a (11:55:30Z) and 7b6ea61e
+          (09:54:52Z, the close), carrying 27 PRs landed in total once #1136, #1147 and #1150 (each merged, none
+          first-parent, each bound to its carrying merge by `git merge-base --is-ancestor`) are counted; 72 Mac-lane
+          pushes fill the rest of the 96 first-parent commits (68 mail commits with no session trailer, exhaustively
+          checked; 4 LOOP-state notes sharing one). The lesson ledger reads 22 lessons at 7b6ea61e: L16 landed, isolated
+          to #1130's own merge; L17-L19, L21 and L22 landed, added together at #1159's merge; L20 was ALSO added at
+          #1159's merge but stays PENDING (21 landed, 1 pending, matching the gate). Four gating checks (#1148, #1156,
+          #1159, #1145) are each bound to their merged PR head by head_sha. #1131, #1137 and #1140
           closed unmerged, each superseded by a PR that landed within minutes. Owner-owed items and the action each needs
           are itemized in LOOP.md's LAST TOUCHED block, not repeated here. Every live GitHub/issue read above happened
           AFTER the close and is recorded, not re-runnable; every sha-bound claim is a local, immutable command against

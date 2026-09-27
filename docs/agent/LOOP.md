@@ -57,8 +57,9 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
 LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 FIRST-PARENT PR MERGES (27 PRs LANDED,
-              #1136/#1147/#1150 CARRIED IN); L16 LANDED ON #1130, L17-L22 LANDED TOGETHER ON #1159 (L20 PENDING UNTIL
-              #1153 LANDS - #1153 IS PUSHED WITH THE FIX AND WAITS ONLY ON THE OWNER); THREE NEW OWNER PRs OPENED (#1146,
+              #1136/#1147/#1150 CARRIED IN); L16 LANDED ON #1130; L17-L19 AND L21-L22 LANDED ON #1159, L20 ADDED THERE BUT
+              PENDING UNTIL #1153 LANDS (#1153 IS PUSHED WITH THE FIX AND WAITS ONLY ON THE OWNER); THREE NEW OWNER PRs
+              OPENED (#1146,
               #1133, #1153).
               This entry covers 2026-09-26 11:55Z-2026-09-27 09:55Z and is frozen there (L18); every event after 09:54:52Z
               (7b6ea61e, #1161's merge) belongs to the next record.
@@ -117,7 +118,7 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               The other 72 first-parent commits in the window are Mac-lane pushes: 68 "Lane mail (mac)" commits, all 68
               checked and none carrying a Claude-Session trailer, and 4 "LOOP:" state notes (two say Mac-lane; all four
               share one Claude-Session trailer that no mail commit carries) - none a PR merge.
-              Lessons landed: L16 (#1130) - PR bodies fabricated facts on Haiku twice; the saved workflow now runs the body
+              Lessons this window (landed unless marked): L16 (#1130) - PR bodies fabricated facts on Haiku twice; the saved workflow now runs the body
               stage on Sonnet and the orchestrator skill's stage table agrees. L17 (#1159) - each review round on a large
               docs PR found a new instance of an old defect class; once two rounds find only old classes, the next review is
               a narrow verification pass. L18 (#1159) - the prior window's own record (#1128) reopened repeatedly as its
@@ -131,8 +132,10 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               at 7b6ea61e: 22 lessons (21 landed, 1 pending).
               Next (at 09:55Z): #1153 waits on the owner's merge (not a retry - the anchor fix is already pushed); the
               SIGTERM ask in cloud-fyi-nothing-asked-your-tenant-isolation-ha (cloud to mac; its own item 3 names jobs for
-              #1141 and #1128, with a third instance for #1147's job 108514569139 added in a later ack) is still unread by
-              the Mac as of the close; otherwise the queue is the owner items above.
+              #1141 and #1128) is still unread by the Mac as of the close; a third instance, #1147's job 108514569139, was
+              added later in a cloud ack of a different thread that `scripts/lane-message.mjs` never routes to the Mac's
+              inbox as its own message, so its read state is UNKNOWN, not shared with the other two; otherwise the queue
+              is the owner items above.
 TIERS THIS SESSION: Opus reviewers ran two refute-first reviews on #1156 before it opened, and re-reviewed #1148 (an
               Opus review pass after Codex round 1, then two more Opus re-reviews after Codex round 2), per those PRs' own
               bodies; #1159's body names no reviewer tier for its own refute-first pass, so none is claimed for it here.

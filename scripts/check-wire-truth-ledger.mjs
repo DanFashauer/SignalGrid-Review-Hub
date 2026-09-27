@@ -14,9 +14,11 @@
 // FATAL: a ledger dimension that is not a directory under
 // lib/integrations/src/integrations/ (every directory but adapters/, which is shared
 // wire plumbing no department owns); an evidence path git does not track; a boundTo
-// symbol not DECLARED in its file; divergenceFound true without a divergenceRecord
-// whose quote appears verbatim in its path; divergenceFound null without a note; a
-// duplicate id; and a tracked scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md
+// symbol not DECLARED in its file; no dimensions array; a non-null entry with no
+// dimensions; a checked dimension bound to no code; divergenceFound true without a
+// divergenceRecord whose path is one of the entry's evidence paths and whose quote (12
+// characters or more) appears verbatim in it; divergenceFound null without a note; a
+// date that is not a real day; a duplicate id; and a tracked scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md
 // that no entry cites — a new live check that nobody recorded is the drift itself.
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -71,7 +73,8 @@ export function audit(ledger, tree) {
     if (c?.divergenceFound === true) {
       const r = c.divergenceRecord;
       const text = r?.path ? read(r.path) : null;
-      if (typeof r?.quote !== "string" || r.quote.trim().length < 12 || !(c.evidence ?? []).includes(r.path) || !r?.quote || text === null || !text.includes(r.quote)) problems.push(`${at}: divergenceFound true but its divergenceRecord quote is not found verbatim in ${r?.path ?? "(no path)"}`);
+      if (!(c.evidence ?? []).includes(r?.path)) problems.push(`${at}: divergenceRecord path ${r?.path ?? "(no path)"} is not one of this entry's evidence paths`);
+      else if (typeof r?.quote !== "string" || r.quote.trim().length < 12 || text === null || !text.includes(r.quote)) problems.push(`${at}: divergenceFound true but its divergenceRecord quote is not found verbatim in ${r?.path ?? "(no path)"}`);
     } else if (c?.divergenceFound === null) {
       if (typeof c.note !== "string" || !c.note.trim()) problems.push(`${at}: divergenceFound null needs a note saying why there was nothing to diverge from`);
     } else if (c?.divergenceFound !== false) problems.push(`${at}: divergenceFound must be true, false or null`);
@@ -124,6 +127,9 @@ function selfTest() {
     ["an empty ledger fails", audit({ checks: [] }, tree).problems.length > 0],
     ["a dimension walk under the floor fails", audit(good(), { ...tree, dims: new Set(["d0"]) }).problems.length > 0],
     ["hits count only divergenceFound true", audit(good(), tree).figures.hits === 1 && audit(good(), tree).figures.unchecked.length === DIMENSION_FLOOR - 1],
+    ["a divergence quote under 12 characters fails", plant((l) => { l.checks[0].divergenceRecord.quote = "the"; })],
+    ["a non-null entry with no dimensions fails", plant((l) => { l.checks[0].dimensions = []; })],
+    ["a whitespace-only note fails", plant((l) => { l.checks[0].divergenceFound = null; l.checks[0].note = "  "; })],
     ["a date that is not a real day fails", plant((l) => { l.checks[0].date = "2026-99-99"; })],
   ];
   for (const [name, ok] of cases) console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);

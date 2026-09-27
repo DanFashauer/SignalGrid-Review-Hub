@@ -122,41 +122,60 @@ enum AssistWire {
                                   reasons: ["the Assist gate's response was not a JSON object (\((error as NSError).domain) \((error as NSError).code))"])
         }
 
+        // A repeated top-level key is ambiguous JSON, and which copy Foundation keeps is an
+        // implementation detail this client must not depend on. Measured on
+        // swift-corelibs-foundation (Linux): {"assist":"deny","assist":"allow"} read as
+        // allow — last-wins. Darwin's NSJSONSerialization, the one this app ships on, is
+        // NOT measured; treat its order as unspecified either way. Nothing is read from
+        // such a body regardless.
+        if let repeated = repeatedTopLevelKey(body) {
+            return AssistDecision(assist: .deny,
+                                  reasons: ["the Assist gate's response carried a duplicate \"\(repeated)\" key"])
+        }
+
+        let decisionId = stringOrNil(root, "decisionId")
+        func refuse(_ reason: String) -> AssistDecision {
+            AssistDecision(assist: .deny, reasons: [reason], decisionId: decisionId)
+        }
+
         let rawAssist = primitiveContent(root["assist"])
         guard let parsed = Assist.parse(rawAssist) else {
             // Present-and-unreadable is already DENY inside Assist.parse. Reaching here
             // means the field was absent entirely (or not a primitive) — a shape
             // mismatch, reported as one rather than silently defaulted.
-            return AssistDecision(assist: .deny,
-                                  reasons: ["the Assist gate's response carried no \"assist\" field"],
-                                  decisionId: stringOrNil(root, "decisionId"))
+            return refuse("the Assist gate's response carried no \"assist\" field")
         }
 
         // `obligations` is OPTIONAL-ABSENT, and absent is the served case: the
         // /api/v1/authorize contract declares `assist`, `decisionId` and `reasons` only.
         // Absent means no obligation is known to be satisfied — an empty list is never
         // permission; only ALLOW proceeds, whatever this list holds.
-        // PRESENT-BUT-NOT-A-LIST IS MALFORMED, and malformed is DENY — the same rule
-        // `assist` gets above. Coercing it to empty let a step_up stand with its
-        // obligations silently dropped, an asymmetry the shared vectors pin closed.
-        if let obligations = root["obligations"], !(obligations is [Any]) {
-            return AssistDecision(assist: .deny,
-                                  reasons: ["the Assist gate's response carried an \"obligations\" field that is not a list"],
-                                  decisionId: stringOrNil(root, "decisionId"))
+        // PRESENT-BUT-WRONG-TYPE IS MALFORMED, and malformed is DENY — for `obligations`
+        // and `reasons` alike, and for a non-string ENTRY as much as for a non-list.
+        // Coercing either to empty let a decision stand on a body this client did not
+        // understand, with an obligation silently dropped.
+        guard let obligations = stringList(root, "obligations") else {
+            return refuse("the Assist gate's response carried an \"obligations\" field that is not a list of strings")
+        }
+        guard let reasons = stringList(root, "reasons") else {
+            return refuse("the Assist gate's response carried a \"reasons\" field that is not a list of strings")
         }
 
-        return AssistDecision(assist: parsed,
-                              reasons: stringList(root, "reasons"),
-                              obligations: stringList(root, "obligations"),
-                              decisionId: stringOrNil(root, "decisionId"))
+        // REQUIRED on every outcome (AssistResult `required: [assist, decisionId]`). Every
+        // real decision is persisted and audited under its id, and a step_up is answered
+        // through it; a body without one is not a decision anybody recorded.
+        guard decisionId != nil else {
+            return AssistDecision(assist: .deny,
+                                  reasons: ["the Assist gate's response carried no usable \"decisionId\" (the contract requires a non-blank string)"])
+        }
+
+        return AssistDecision(assist: parsed, reasons: reasons, obligations: obligations, decisionId: decisionId)
     }
 
     /// The textual content of a JSON primitive, the way the Kotlin twin reads
-    /// `jsonPrimitive.content`: a string as itself, a number or boolean as its text
-    /// (so it reaches `Assist.parse` and is denied as unrecognised, never mistaken for
-    /// absent). An object, an array, or JSON null is not a primitive here → nil.
-    /// (Kotlin renders JSON null as the text "null"; it is denied on either reading, and
-    /// a null `decisionId` must not become the id "null", so null reads as absent.)
+    /// `jsonPrimitive.content` for `assist`: a string as itself, a number or boolean as
+    /// its text (so it reaches `Assist.parse` and is denied as unrecognised, never
+    /// mistaken for absent). An object, an array, or JSON null is not a primitive → nil.
     private static func primitiveContent(_ value: Any?) -> String? {
         guard let value = value else { return nil }
         if let s = value as? String { return s }
@@ -167,20 +186,69 @@ enum AssistWire {
         return nil
     }
 
+    /// A non-blank JSON STRING. Numbers, booleans, null, objects and lists are not ids —
+    /// a numeric 42 once became the id "42".
     private static func stringOrNil(_ root: [String: Any], _ key: String) -> String? {
-        guard let s = primitiveContent(root[key]) else { return nil }
+        guard let s = root[key] as? String else { return nil }
         return s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : s
     }
 
-    /// Read a list of strings, tolerating the shapes a real server actually emits. A
-    /// missing list is an EMPTY list, not an error — `reasons` is genuinely optional on
-    /// an allow. But an entry that is not a string is dropped rather than stringified:
-    /// rendering `{"code":42}` to a worker as "{code=42}" is worse than showing nothing.
-    private static func stringList(_ root: [String: Any], _ key: String) -> [String] {
-        guard let list = root[key] as? [Any] else { return [] }
-        return list.compactMap { item -> String? in
+    /// Read an optional list of strings. Absent is an EMPTY list, not an error —
+    /// `reasons` is genuinely optional on an allow. Present must be a list whose every
+    /// entry is a string; anything else is nil, which the caller turns into DENY. Blank
+    /// strings are well-typed and are dropped from display.
+    private static func stringList(_ root: [String: Any], _ key: String) -> [String]? {
+        guard let value = root[key] else { return [] }
+        guard let list = value as? [Any] else { return nil }
+        var out: [String] = []
+        for item in list {
             guard let s = item as? String else { return nil }
-            return s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : s
+            if !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append(s) }
         }
+        return out
+    }
+
+    /// The first top-level key that appears twice, or nil. Only ever run on a body
+    /// JSONSerialization has already accepted as an object, so the text is well-formed;
+    /// each key is decoded by the same parser before comparing, so "\u0061ssist" is
+    /// caught as a second "assist". Keys below the top level are out of scope: nothing
+    /// there is read as part of the decision. Bounds are checked anyway — a scan must
+    /// never trap the shell — and anything it cannot read is reported as a duplicate,
+    /// which denies. Mirrors `repeatedTopLevelKey` in the Kotlin twin.
+    private static func repeatedTopLevelKey(_ body: String) -> String? {
+        let b = Array(body.utf8)
+        let quote = UInt8(ascii: "\""), backslash = UInt8(ascii: "\\")
+        var seen = Set<String>()
+        var depth = 0
+        var i = 0
+        while i < b.count {
+            switch b[i] {
+            case UInt8(ascii: "{"), UInt8(ascii: "["):
+                depth += 1
+            case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                depth -= 1
+            case quote:
+                let start = i
+                i += 1
+                while i < b.count, b[i] != quote {
+                    if b[i] == backslash { i += 1 }
+                    i += 1
+                }
+                guard i < b.count else { return "(unterminated string)" }
+                guard depth == 1 else { break }
+                var j = i + 1
+                while j < b.count, [0x20, 0x09, 0x0A, 0x0D].contains(b[j]) { j += 1 }
+                guard j < b.count, b[j] == UInt8(ascii: ":") else { break }
+                let token = Data(b[start...i])
+                guard let key = (try? JSONSerialization.jsonObject(with: token, options: .fragmentsAllowed)) as? String else {
+                    return "(undecodable key)"
+                }
+                if !seen.insert(key).inserted { return key }
+            default:
+                break
+            }
+            i += 1
+        }
+        return nil
     }
 }

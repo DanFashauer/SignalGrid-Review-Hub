@@ -105,6 +105,13 @@ final class AssistWireConformanceTests: XCTestCase {
             if let want = c["expectObligations"] as? [String], decision.obligations != want {
                 failures.append("  \(id): obligations parsed as \(decision.obligations), expected \(want)")
             }
+            // The id a client must have PARSED: a string pins it, JSON null (NSNull) pins "absent".
+            if let want = c["expectDecisionId"] {
+                let wantId = want as? String
+                if decision.decisionId != wantId {
+                    failures.append("  \(id): decisionId parsed as \(decision.decisionId ?? "nil"), expected \(wantId ?? "nil")")
+                }
+            }
             for fragment in (c["expectExplanationContains"] as? [String] ?? []) where !decision.explanation().contains(fragment) {
                 failures.append("  \(id): explanation \"\(decision.explanation())\" does not mention \"\(fragment)\"")
             }

@@ -824,6 +824,24 @@
           "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
           "open": 0,
           "closed": 2
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 7 on #1168 (head a55d551f) read the article in full: 4 findings (console-compliance sentence made source-neutral; lastAuthAt sources widened to an RFC 2869 Event-Timestamp in the Access-Request and authentication logs; the unreported pair no longer called the common deployment case; round 6's record moved to a55d551f), applied in 998617d0, the head #1168 merged at.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied or answered)",
+          "record": "998617d0",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 8 on #1168 (head 998617d0): 2 findings, both answered on the PR without a change (a round's entry cannot cite the head that carries its own fixes, so round 7 is recorded here after the merge; the PR merged with a two-parent merge commit, so every cited record stays reachable from SignalGrid_Alpha). #1168 merged at 1762688a.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied or answered)",
+          "record": "#1168",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 2
         }
       ]
     },

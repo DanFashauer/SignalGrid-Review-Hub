@@ -1000,7 +1000,7 @@ function selfTest() {
   // restrictive DECISION_PATH. Was asserted SAFETY_MACHINERY via mostRestrictive() before
   // this round; that assertion would now fail, so it is split into the two truths it
   // actually is.
-  t("native/desktop/core/src/wire.rs (inline #[cfg(test)] mod, 19 #[test] measured live) still matches the Rust build-control rule as SAFETY_MACHINERY",
+  t("native/desktop/core/src/wire.rs (inline #[cfg(test)] mod, 19 #[test] measured live) still matches the inline-Rust-test rule as SAFETY_MACHINERY",
     cls(["native/desktop/core/src/wire.rs"]).matched.some((m) => m.category === "SAFETY_MACHINERY"));
   t("…but wire.rs's most restrictive category is now DECISION_PATH (it also parses the /v1 verdict)",
     mostRestrictive(cls(["native/desktop/core/src/wire.rs"])) === "DECISION_PATH");

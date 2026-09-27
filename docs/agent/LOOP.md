@@ -56,104 +56,26 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 FIRST-PARENT PR MERGES (27 PRs LANDED,
-              #1136/#1147/#1150 CARRIED IN); L16 LANDED ON #1130; L17-L19 AND L21-L22 LANDED ON #1159, L20 ADDED THERE BUT
-              PENDING UNTIL #1153 LANDS (#1153 IS PUSHED WITH THE FIX AND WAITS ONLY ON THE OWNER); THREE NEW OWNER PRs
-              OPENED (#1146,
-              #1133, #1153).
-              This entry covers 2026-09-26 11:55Z-2026-09-27 09:55Z and is frozen there (L18); every event after 09:54:52Z
-              (7b6ea61e, #1161's merge) belongs to the next record.
-              Owner still owes (at 09:55Z), per the in-tree steward heartbeat fired 09:30:45Z
-              (`artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`): #1153 (server Assist wire - /v1/authorize
-              returns a non-blank decisionId and string-only reasons on all four outcomes; pushed at 26a39479 with the L20
-              anchor fix a894309f) - owner merges at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153. #1146
-              (core digest hashes WTF-8 bytes, escapes deterministicId's joined parts, gates legacy snapshot verification
-              on digestAlg; DECISION_PATH) - owner merges at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146. #1133 (land-branch derives the owner-
-              decision class from the diff; OWNER_RESERVED never lane-merged) - owed at the close: the owner's merge,
-              then at head 765faf7a, https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133. The PR has moved
-              since (its current head, 992cb2a7, postdates the close - nothing further is claimed about it); the owner
-              merges only a head the PR's own body shows validated, not a head read live without that check. #1117
-              (ephemeral OIDC/load/observability test
-              ports; DECISION_PATH) - owner merges at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117.
-              #1118/#1121 (golden-rule-1 ruling asked in chat 2026-09-26 08:20Z, not yet given) - reply 'exception granted'
-              or 'revert' in chat, https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058 proposal) - owner merges at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059 proposal) - owner merges at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - reply in chat, or on
-              the raised-hands issue https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068, with (a) raise to
-              step_up or (b) day-one-quiet covers it
-              (file artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json). #1037's CodeQL
-              call - dismiss the alert on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac
-              paths-ignore' in chat. The Copilot code-review scanner (github-advanced-security) fails with `CAPIError: 400
-              The requested model is not supported`, thrown before any diff is read - the owner picks a supported model in
-              the repository's Copilot code-review settings; this tree names no more specific browser path than that.
-              DR-013's "10 for 10" sentence in docs/DECISION_RECORDS.md (OWNER_RESERVED) - row 17
-              re-measured it as seven of the ten checks dated on or before DR-013 (a dated subset; the live gate itself now
-              holds 11 checks, 7 divergent, a different count) - the owner edits the sentence, or replies in chat to have
-              the lane edit it. The 19 local scratch branches (asked on
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1154) - yes/no on deleting them, per L22. In a
-              BROWSER: Settings -> Pages -> Source -> GitHub Actions at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
-              (Actions -> "Deploy site to Pages" -> Run workflow,
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).
-              Landed this window (24 first-parent merges, 27 PRs total; first-parent chain a4507f9a..7b6ea61e): #1129
-              (edd92341, mail: steward heartbeat 12:24Z keepalive), #1130 (36c561c7, harden land-branch - verify from the
-              worktree, &&-chained push, exact sentinel lines - and check-mcp-roster; L16 lands here), #1132 (2e2bc4a9,
-              mail: heartbeat re-delivered with the tick time read from mainline), #1134 (6267092b, mail: heartbeat
-              16:24Z), #1135 (083c721a, mail: heartbeat 18:24Z), #1138 (c10da110, lands the Mac's #1136 - iOS joins the
-              shared Assist-wire conformance vectors, with the lane's review fixes), #1139 (75975c93, mail: ack #1136, FYI
-              cloud builds the Assist-wire follow-up, heartbeat 20:24Z), #1141 (45b73bad, Mac tick, objective state
-              re-derived), #1142 (5f9942b6, mail: tenant-isolation hand answered and cleared, row 12 overlap FYI, Mac-only
-              SIGTERM ask), #1143 (ef54e928, row 12 Tier-1 read of the durable persistence path, 19/25 to 21/25), #1144
-              (39ff56cb, mail: #1143 landed and acked), #1145 (70c2e767, Assist wire strict decision parsing in all three
-              clients, 65 shared vectors), #1149 (0b768046, mail: #1143 update acked, #1147 opened and paused behind
-              #1148), #1151 (6e8e2ce9, mail: #1150 correction acked, folded into #1148), #1152 (cff3dbf7, Assist clients -
-              Android core test task tracks the shared vectors, AssistWire.swift imports CoreFoundation), #1154 (99e62a73,
-              mail: owner hand on 19 local scratch branches), #1128 (594a8051, the prior window's own LOOP/EVIDENCE
-              record), #1155 (ea825bbc, mail: keepalive 05:24Z), #1148 (2ebc4d3c, plan row 12 done - Tier-1 reads at depth
-              audited 25/25, folding in the Mac's #1147 and #1150; row 48's stamp fixed), #1157 (9dd28e22, mail: keepalive
-              07:24Z), #1156 (929e94ad, wire-truth coverage ledger - every live check bound to its dimensions and the code
-              it verified, counts derived by a gate, plan row 17), #1159 (4bb57ed5, lessons L17-L22 and the orchestrator
-              skill's rules for briefs, reviews and records), #1160 (3cf4d8f2, mail: keepalive 09:24Z), #1161 (7b6ea61e,
-              mail: hygiene-sweep heartbeat 09:40Z - the close). #1136, #1147 and #1150 (each already merged, per a live
-              GitHub read) carried into #1138 and #1148 respectively rather than landing as their own first-parent merge.
-              The other 72 first-parent commits in the window are Mac-lane pushes: 68 "Lane mail (mac)" commits, all 68
-              checked and none carrying a Claude-Session trailer, and 4 "LOOP:" state notes (two say Mac-lane; all four
-              share one Claude-Session trailer that no mail commit carries) - none a PR merge.
-              Lessons this window (landed unless marked): L16 (#1130) - PR bodies fabricated facts on Haiku twice; the saved workflow now runs the body
-              stage on Sonnet and the orchestrator skill's stage table agrees. L17 (#1159) - each review round on a large
-              docs PR found a new instance of an old defect class; once two rounds find only old classes, the next review is
-              a narrow verification pass. L18 (#1159) - the prior window's own record (#1128) reopened repeatedly as its
-              window kept absorbing later events; a record now freezes at its window's close, a named mainline merge sha
-              (this record follows that rule). L19 (#1159) - four worker-brief defects: a note filed as a blocker, a
-              hand-picked gate list, an unproven "pre-existing", a relative path. L20 (#1159, PENDING) - a self-test
-              anchored to literal text went silently no-op when the anchored line changed; the fix (a894309f) is pushed on
-              open PR #1153 (head 26a39479), waiting on the owner's merge, not on further work. L21 (#1159) - a wrapper
-              reported a refused landing as landed; another threw on JSON-string arguments. L22 (#1159) - deleting finished
-              agent worktrees resurfaced 19 old scratch branches as unpushed local work, raised as a hand on #1154. Ledger
-              at 7b6ea61e: 22 lessons (21 landed, 1 pending).
-              Next (at 09:55Z): #1153 waits on the owner's merge (not a retry - the anchor fix is already pushed); #1158
-              (Mac tick 20260927T074221Z) was open at the close with its gating check green (108576730594, "Typecheck,
-              build, and proof scaffold", success on head 0b214bfa..., completed 07:55:20Z, before the close) - the next
-              actor is the cloud steward, landing it under the tick-PR rule (.claude/skills/landing-under-dr-037/SKILL.md
-              item 5: check whether mainline moved a counted surface since the tick's coverage page was generated, and if
-              so merge Alpha into the tick branch and regenerate before merging); the SIGTERM ask in
-              cloud-fyi-nothing-asked-your-tenant-isolation-ha (cloud to mac; its own item 3 names jobs for #1141 and
-              #1128) is still unread by the Mac as of the close; a third instance, #1147's job 108514569139, was added
-              later in a cloud ack of a different thread that `scripts/lane-message.mjs` never routes to the Mac's inbox
-              as its own message, so its read state is UNKNOWN, not shared with the other two; otherwise the queue is the
-              owner items above.
-TIERS THIS SESSION: Opus reviewers ran two refute-first reviews on #1156 before it opened, and re-reviewed #1148 (an
-              Opus review pass after Codex round 1, then two more Opus re-reviews after Codex round 2), per those PRs' own
-              bodies; #1159's body names no reviewer tier for its own refute-first pass, so none is claimed for it here.
-              Codex ran automated review rounds on #1148, #1156 and #1159, reaching its usage limit at 02:52Z on
-              2026-09-27 and resuming at 04:32Z (LESSONS.md L17); the lane's own Opus passes, not Codex, carried the
-              reviews in that gap (LESSONS.md's own L17 row). The saved land-branch workflow
-              (`.claude/workflows/land-branch.js`) runs its Pre, Merge and PR-body stages on Sonnet and its
-              lock/chain-run/sentinel-read/push/PR-open stages on Haiku (the script's own `model:` fields), which is how
-              this window's landings moved through the chain. This record: a Sonnet subagent drafted it, and an Opus
-              reviewer reviewed it before push (coordinator-attested).
+LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
+              #1136/#1147/#1150 carried in); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending until #1153;
+              #1158 (open at the close) landed afterwards as b42a0967 (post-close - not part of this frozen entry).
+              Owner still owes (at 09:55Z, per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`, firedAt 09:30:45.823Z):
+              #1153 (Assist-wire server, L20 fix pushed) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153
+              #1146 (core-digest, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
+              #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133
+              #1117 (ephemeral test ports, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117
+              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z) - reply 'exception granted' or 'revert': .../pull/1118, .../pull/1121
+              #1050 (DR-058) - merge: .../pull/1050. #1083 (DR-059) - merge: .../pull/1083.
+              Doctrine hand (plan row 8) - reply in chat or on .../issues/1068. #1037 CodeQL alert - dismiss on .../pull/1037 or reply 'Mac paths-ignore'
+              Copilot code-review scanner - CAPIError 400 unsupported model; owner picks a supported model in Copilot settings
+              DR-013 "10 for 10" sentence (OWNER_RESERVED) - owner edits it (dated subset 7/10; gate reads 11 checks, 7 divergent)
+              19 local scratch branches - yes/no on deleting, asked on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1154; Browser: Settings -> Pages -> Source -> GitHub Actions, then run the Pages workflow once
+              Next (at 09:55Z): #1153 waits on the owner (fix already pushed); the SIGTERM ask is still unread by the
+              Mac (a third instance never reached its inbox - read state unknown); otherwise the owner items above.
+TIERS THIS SESSION: Opus reviewed #1156 (two passes) and re-reviewed #1148; Codex ran the automated rounds and Opus
+              covered its usage-limit gap; land-branch ran Sonnet on Pre/Merge/PR-body and Haiku on lock/chain/push/PR-open;
+              a Sonnet subagent drafted this record, an Opus reviewer reviewed it before push. Window detail:
+              docs/agent/EVIDENCE.md, section "## 2026-09-27 - 24 FIRST-PARENT PR MERGES ..." (its only 2026-09-27 entry).
 PREVIOUSLY:   2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
               This entry covers 07:15Z-11:55Z and is frozen there (a rule the next record writes up as a lesson); every later

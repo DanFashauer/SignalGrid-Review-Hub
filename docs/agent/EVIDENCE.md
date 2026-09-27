@@ -3756,8 +3756,7 @@ Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this wi
 ## 2026-09-27 — "24 FIRST-PARENT PR MERGES (27 PRs landed — #1136, #1147 and #1150 carried in) closed the window at #1161's
 merge (7b6ea61e); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending; #1153 is pushed and waits only on the
 owner"
-Command:  TZ=UTC git log --first-parent --format='%H %cd %s' --date=iso-local a4507f9a..7b6ea61e | grep -E 'Merge pull
-          request #|\(#[0-9]+, gating' | wc -l
+Command:  TZ=UTC git log --first-parent --format='%H %cd %s' --date=iso-local a4507f9a..7b6ea61e | grep -E 'Merge pull request #|\(#[0-9]+, gating' | wc -l
 Output:   "24" — the matched commits are #1129 (edd92341, a mail commit gated at check run 108404680426, not a "Merge pull
           request" subject), #1130 (36c561c7), #1132 (2e2bc4a9), #1134 (6267092b), #1135 (083c721a), #1138 (c10da110), #1139
           (75975c93), #1141 (45b73bad), #1142 (5f9942b6), #1143 (ef54e928), #1144 (39ff56cb), #1145 (70c2e767), #1149
@@ -3765,13 +3764,38 @@ Output:   "24" — the matched commits are #1129 (edd92341, a mail commit gated 
           record), #1155 (ea825bbc), #1148 (2ebc4d3c), #1157 (9dd28e22), #1156 (929e94ad), #1159 (4bb57ed5), #1160 (3cf4d8f2),
           #1161 (7b6ea61e, the close itself). All 24 lie inside a4507f9a..7b6ea61e on the first-parent chain, a fixed range
           between two shas.
+Command:  TZ=UTC git log --first-parent --format='%H %cd %s' --date=iso-local a4507f9a..7b6ea61e | grep -E 'Merge pull request #|\(#[0-9]+, gating'
+Output:   (full subjects, newest first) 7b6ea61e #1161 "Lane mail (cloud): hygiene-sweep heartbeat, 09:40Z" / 3cf4d8f2
+          #1160 "Lane mail (cloud): steward keepalive heartbeat, 09:24Z cycle" / 4bb57ed5 #1159 "Lessons L17-L22 and the
+          orchestrator skill's rules for briefs, reviews and records (DR-060)" / 929e94ad #1156 "Wire-truth coverage
+          ledger: every live check bound to its dimensions and the code it verified, the counts derived by a gate (plan
+          row 17)" / 9dd28e22 #1157 "Lane mail (cloud): steward keepalive heartbeat, 07:24Z cycle" / 2ebc4d3c #1148
+          "Plan row 12 done: Tier-1 reads at depth audited (25/25), folding in the Mac's #1147 and #1150, the verified
+          findings as backlog rows, row 48's stamp fixed" / ea825bbc #1155 "Lane mail (cloud): steward keepalive
+          heartbeat, 05:24Z cycle" / 594a8051 #1128 "LOOP/EVIDENCE record: the 2026-09-26 07:15Z-11:55Z window, frozen
+          at its close" / 99e62a73 #1154 "Lane mail (cloud): owner hand on 19 local scratch branches, steward
+          heartbeat" / cff3dbf7 #1152 "Assist clients: the Android core test task tracks the shared vectors;
+          AssistWire.swift imports CoreFoundation" / 6e8e2ce9 #1151 "Lane mail (cloud): #1150 correction acked (folded
+          into #1148), steward heartbeat" / 70c2e767 #1145 "Assist wire strict decision parsing in all three clients,
+          65 shared vectors" / 0b768046 #1149 "Lane mail (cloud): #1143 update acked, #1147 opened and paused behind
+          #1148, steward and forward-build heartbeats" / 39ff56cb #1144 "Lane mail (cloud): #1143 landed and acked,
+          steward heartbeat" / ef54e928 #1143 "row 12 Tier-1 read of the durable persistence path, 19/25 to 21/25" /
+          5f9942b6 #1142 "Lane mail (cloud): tenant-isolation hand answered and cleared, row 12 overlap FYI, Mac-only
+          SIGTERM ask, heartbeats" / 45b73bad #1141 "Mac tick 20260926T213431Z, objective state re-derived" / 75975c93
+          #1139 "Lane mail (cloud): ack #1136 mail, FYI the cloud builds the Assist-wire follow-up, steward heartbeat
+          20:24Z" / c10da110 #1138 "Land Mac PR #1136, iOS joins the shared Assist-wire conformance vectors, with the
+          lane's review fixes" / 083c721a #1135 "Lane mail (cloud): steward heartbeat 18:24Z cycle" / 6267092b #1134
+          "lane mail (cloud) - steward heartbeat 16:24Z cycle" / 2e2bc4a9 #1132 "lane mail (cloud) - steward heartbeat
+          14:24Z cycle, re-delivered with the tick time read from mainline" / 36c561c7 #1130 "harden land-branch
+          (--verify from the worktree, &&-chained push, exact sentinel lines) and check-mcp-roster; L16" / edd92341
+          #1129 (no "Merge pull request" subject; matched via "(#1129, gating check 108404680426)") "Lane mail (cloud):
+          steward heartbeat 12:24Z - L8/L2/MCP-roster landed, record #1128 open, keepalive". This is the source the
+          shorter LOOP.md "Landed this window" line summarizes from.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1136, /1147, /1150 (tool reads at
           2026-09-27T10:20Z — AFTER the close; recorded, not re-runnable)
 Output:   #1136 merged (head 44eed7a9), #1147 merged (head a17b5fdd), #1150 merged (head fe95e89a) — none of the three is
           a first-parent merge commit, so none is in the 24 above.
-Command:  for p in "44eed7a9 c10da110" "a17b5fdd 2ebc4d3c" "fe95e89a 2ebc4d3c" "44eed7a9 a4507f9a" "a17b5fdd a4507f9a"
-          "fe95e89a a4507f9a"; do a=${p% *}; b=${p#* }; git merge-base --is-ancestor "$a" "$b"; echo "$a in $b: $?"; done (a chain of
-          `--is-ancestor` calls joined by semicolons would print only the LAST exit status; this loop prints each one)
+Command:  for p in "44eed7a9 c10da110" "a17b5fdd 2ebc4d3c" "fe95e89a 2ebc4d3c" "44eed7a9 a4507f9a" "a17b5fdd a4507f9a" "fe95e89a a4507f9a"; do a=${p% *}; b=${p#* }; git merge-base --is-ancestor "$a" "$b"; echo "$a in $b: $?"; done (a chain of `--is-ancestor` calls joined by semicolons would print only the LAST exit status; this loop prints each one; the `in` list is kept on one physical line — a real newline inside a `for ... in` word list is a syntax error, not a valid continuation)
 Output:   "44eed7a9 in c10da110: 0" / "a17b5fdd in 2ebc4d3c: 0" / "fe95e89a in 2ebc4d3c: 0" / "44eed7a9 in a4507f9a: 1" /
           "a17b5fdd in a4507f9a: 1" / "fe95e89a in a4507f9a: 1" — all three ancestor checks against their carrying merge
           exit 0 (44eed7a9 is an ancestor of c10da110/#1138; a17b5fdd and fe95e89a are ancestors of 2ebc4d3c/#1148), and
@@ -3779,8 +3803,7 @@ Output:   "44eed7a9 in c10da110: 0" / "a17b5fdd in 2ebc4d3c: 0" / "fe95e89a in 2
           start). So 24 first-parent merges landed 27 PRs: #1136 through #1138, #1147 and #1150 through #1148.
 Command:  git log --first-parent --format='%H' a4507f9a..7b6ea61e | wc -l
 Output:   "96" — total first-parent commits in the window.
-Command:  TZ=UTC git log --first-parent --format='%s' a4507f9a..7b6ea61e | grep -vE 'Merge pull request #|\(#[0-9]+,
-          gating' | sed -E 's/^(Lane mail \(mac\)):.*/\1/; s/^(LOOP): .*/\1/' | sort | uniq -c
+Command:  TZ=UTC git log --first-parent --format='%s' a4507f9a..7b6ea61e | grep -vE 'Merge pull request #|\(#[0-9]+, gating' | sed -E 's/^(Lane mail \(mac\)):.*/\1/; s/^(LOOP): .*/\1/' | sort | uniq -c
 Output:   "4 LOOP" / "68 Lane mail (mac)" — 96 minus the 24 first-parent merges above; none is a PR merge. Of the 4 "LOOP:"
           commits, 2 say "Mac-lane" in their subject (856977bf, 96ff95de) and 2 do not (d2e62dfa, eaf5f70a).
 Command:  git log --first-parent --format='%H %s' a4507f9a..7b6ea61e | grep 'Lane mail (mac)' | cut -d' ' -f1 | while
@@ -3793,9 +3816,7 @@ Output:   "68 0" — all 68 "Lane mail (mac)" commits, enumerated (not sampled),
           68 mail commits with no session trailer (mechanical, from `scripts/lane-deliver.mjs` — none of the 68 was
           sampled to reach this figure, all 68 were read) and 4 LOOP-state notes sharing one session trailer that no mail
           commit carries.
-Command:  git show 7b6ea61e:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'; git show 7b6ea61e:docs/agent/LESSONS.md |
-          grep -c '^- \*\*status:\*\* landed$'; git show 7b6ea61e:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\*
-          pending$'
+Command:  git show 7b6ea61e:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'; git show 7b6ea61e:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* landed$'; git show 7b6ea61e:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* pending$'
 Output:   "22" / "21" / "1" — 22 lesson rows in the tree at 7b6ea61e, 21 marked landed and 1 pending; the one other
           "landed | pending" string in the file (line 18) is the row-shape legend in the file's own header, not a lesson
           row. This worktree's `docs/agent/LESSONS.md` is byte-identical to 7b6ea61e (this record's own commit touches only
@@ -3806,10 +3827,20 @@ Command:  git show 36c561c7^1:docs/agent/LESSONS.md | grep -c '^### L16' ; git s
           grep -c '^### L16'
 Output:   "0" then "1" — L16 is absent from #1130's own parent tree and present at #1130's own merge (36c561c7), so it
           landed with #1130 alone (isolated to that one merge, not the wider a4507f9a..36c561c7 span).
-Command:  git show 4bb57ed5^1:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]' ; git show
-          4bb57ed5:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]'
+Command:  git show 4bb57ed5^1:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]' ; git show 4bb57ed5:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]'
 Output:   "0" then "6" — L17 through L22 (six rows) are absent from #1159's own parent tree and present at #1159's own
           merge (4bb57ed5), so all six arrive with that one merge, which check run 108589943266 gated (bound below).
+Command:  git show 7b6ea61e:docs/agent/LESSONS.md | grep -E '^### L1[6-9]|^### L2[0-2]'
+Output:   "### L16 - PR bodies written on Haiku fabricated facts twice; the saved workflow runs them on Sonnet and the
+          stage table now says so" / "### L17 - each review round on a large docs PR found a new instance of an old
+          defect class, in text the previous fix had added" / "### L18 - a window record reopened after its window
+          kept absorbing later events, and each refresh drew another review round" / "### L19 - worker briefs: a note
+          filed as a blocker, a hand-picked gate list, an unproven "pre-existing", and a relative path" / "### L20 -
+          a self-test that plants a mutation at a literal-text anchor went silently no-op when the anchored line
+          changed" / "### L21 - a wrapper reported a refused landing as landed, and another threw on arguments that
+          arrived as a JSON string" / "### L22 - removing finished agent worktrees resurfaced 19 old scratch branches
+          as unpushed local work" — the seven row titles verbatim, in the tree at the close. L20 is the only one of the
+          seven whose own row is marked pending (per the earlier count above); the other six are landed.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108573284940, /108580896054, /108589943266,
           /108519838291 (tool reads at 2026-09-27T10:20Z — AFTER the close; recorded, not re-runnable)
 Output:   each returns name "Typecheck, build, and proof scaffold", conclusion "success": 108573284940 head_sha
@@ -3841,14 +3872,11 @@ Output:   #1131: merged false, closed_at 2026-09-26T15:06:40Z, head lane/cloud-m
           22:14:24Z, six seconds earlier — a newer green tick landing before the older one closed). #1158 (Mac tick
           20260927T074221Z): still open, created 2026-09-27T07:42:28Z (before the close). None of the four is on the
           first-parent chain.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1158/timeline --paginate --jq '[.[] | select(.event==
-          "closed" or .event=="reopened") | .event+" "+.created_at]' (tool read at 2026-09-27T11:32:03Z — AFTER the close;
-          recorded, not re-runnable)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1158/timeline --paginate --jq '[.[] | select(.event=="closed" or .event=="reopened") | .event+" "+.created_at]' (tool read at 2026-09-27T11:32:03Z — AFTER the close; recorded, not re-runnable)
 Output:   "[]" — #1158's full timeline (paginated) contains no `closed` or `reopened` event at all, from its creation
           (07:42:28Z) through this read. It has therefore been continuously open since creation, which spans the
           09:54:52Z close; #1158 was open at the close.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108576730594 --jq '.name,.conclusion,.head_sha,
-          .completed_at' (tool read at 2026-09-27T12:48:15Z — AFTER the close; recorded, not re-runnable)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108576730594 --jq '.name,.conclusion,.head_sha,.completed_at' (tool read at 2026-09-27T12:48:15Z — AFTER the close; recorded, not re-runnable)
 Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
           0b214bfaafbf56acc7c1e165939cd41f68729f8d, completed_at "2026-09-27T07:55:20Z" — before the 09:54:52Z close, and
           matching #1158's head at the time (`gh api .../pulls/1158 --jq .head.sha` reads the same 0b214bfa... at this
@@ -3893,17 +3921,14 @@ Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153 (t
           the close; recorded, not re-runnable); git merge-base --is-ancestor a894309f 26a39479
 Output:   `{"state":"open","merged":false,"head":"26a39479b314e62caf65b4c229c4e10a5802e9e9"}`; the ancestor check exits 0 —
           the L20 anchor fix (a894309f) is included in #1153's current pushed head.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/commits/26a39479b314e62caf65b4c229c4e10a5802e9e9/check-runs
-          --jq '.check_runs[] | select(.name=="Typecheck, build, and proof scaffold") | [.id,.conclusion,.head_sha,
-          .completed_at]' (tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/commits/26a39479b314e62caf65b4c229c4e10a5802e9e9/check-runs --jq '.check_runs[] | select(.name=="Typecheck, build, and proof scaffold") | [.id,.conclusion,.head_sha,.completed_at]' (tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   `[108537426452,"success","26a39479b314e62caf65b4c229c4e10a5802e9e9","2026-09-27T03:07:07Z"]` — the gating check
           is bound to this exact head and passed.
 Command:  grep -l 26a39479 <scratchpad>/*-pf.log; tail -q -n 1 <scratchpad>/apitest3-pf.log <scratchpad>/apitest3-br.log
 Output:   `<scratchpad>/apitest3-pf.log` is the one matching sentinel; its last line and its `-br.log` twin both read
           "PREFLIGHT_EXIT 0 26a39479..." / "BREADTH_EXIT 0 26a39479..." — a local, green, fully-run chain on this exact
           head.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153/ccr/review_threads --jq '[.[]|select(.resolved==
-          false)]|length' (tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153/ccr/review_threads --jq '[.[]|select(.resolved==false)]|length' (tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   "0" — no unresolved review thread remains on #1153. Together with the gating check and the local sentinel chain
           above, #1153's current head (26a39479, carrying the L20 fix) is proven three ways: it is pushed with its fix
           and waits only on the owner's merge, not a landing retry.
@@ -3917,26 +3942,19 @@ Output:   in a worktree detached at 7b6ea61e928ecd54d48232fb0a51ad9909066c1c (no
           walk (lib/integrations, the tracked-file set, every evidence/boundTo path) actually read frozen at the close, not
           three hand-picked paths. The worktree was removed after the run. This is the GATE's own count (11 checks total),
           a different and larger denominator than row 17's dated-subset prose below.
-Command:  git show 7b6ea61e:docs/COMPANY_BUILD_PLAN.md | grep -o "of the ten ledger checks dated on or before that record,
-          seven recorded a divergence"
+Command:  git show 7b6ea61e:docs/COMPANY_BUILD_PLAN.md | grep -o "of the ten ledger checks dated on or before that record, seven recorded a divergence"
 Output:   "of the ten ledger checks dated on or before that record, seven recorded a divergence" — row 17's own
           re-measurement of DR-013's "10 for 10" sentence, counting only the ledger's checks dated on or before DR-013 (a
           subset of the gate's 11); the row also says `docs/DECISION_RECORDS.md` is owner-gated
           (`scripts/check-owner-gated-surfaces.mjs` line 48/126), so the sentence itself waits for the owner to edit, or
           for the owner to say in chat that the lane may.
-Command:  for n in 1117 1118 1121 1050 1083 1133 1146 1153 1037 1068; do printf '%s ' $n; gh api
-          repos/DanFashauer/SignalGrid-Review-Hub/issues/$n --jq .state; done (a brace-expanded single `gh api` call
-          cannot answer ten endpoints — `gh api` takes one — so this is a real loop, not shorthand; tool reads at
-          2026-09-27T12:13:42Z — AFTER the close; recorded, not re-runnable; live state, not in the tree)
+Command:  for n in 1117 1118 1121 1050 1083 1133 1146 1153 1037 1068; do printf '%s ' $n; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/$n --jq .state; done (a brace-expanded single `gh api` call cannot answer ten endpoints — `gh api` takes one — so this is a real loop, not shorthand; tool reads at 2026-09-27T12:13:42Z — AFTER the close; recorded, not re-runnable; live state, not in the tree)
 Output:   "1117 open" / "1118 open" / "1121 open" / "1050 open" / "1083 open" / "1133 open" / "1146 open" / "1153 open" /
           "1037 open" / "1068 open" — all ten read "open" (#1068 is the raised-hands issue, not a PR). `/issues/<n>`
           carries no `head` field at all —
           it cannot answer a head-sha question, so that question is asked of `/pulls/<n>` below instead (an earlier draft
           of this entry attributed a head sha to an `/issues/<n>` read, which is corrected here).
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133 --jq '.head.sha,.state,.updated_at'; gh api
-          repos/DanFashauer/SignalGrid-Review-Hub/pulls/1146 --jq '.head.sha,.state,.updated_at'; gh api
-          repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153 --jq '.head.sha,.state,.updated_at' (tool reads at
-          2026-09-27T11:29:16Z — AFTER the close; recorded, not re-runnable)
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133 --jq '.head.sha,.state,.updated_at'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1146 --jq '.head.sha,.state,.updated_at'; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153 --jq '.head.sha,.state,.updated_at' (tool reads at 2026-09-27T11:29:16Z — AFTER the close; recorded, not re-runnable)
 Output:   #1146: head 835883c5b78b45a57b4970580bc02da11022b1ab, open, updated_at 2026-09-27T01:28:14Z. #1153: head
           26a39479b314e62caf65b4c229c4e10a5802e9e9, open, updated_at 2026-09-27T03:07:55Z. #1133: head
           992cb2a73086bd5939e65059805c046d11dc3f9e, open, updated_at 2026-09-27T10:42:32Z — this head postdates the close;
@@ -3944,32 +3962,27 @@ Output:   #1146: head 835883c5b78b45a57b4970580bc02da11022b1ab, open, updated_at
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq '.[] | [.sha[0:8],.commit.committer.date]'
           (tail of the list; tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   "11b250d9" 2026-09-27T03:00:18Z / "1caf612b" 2026-09-27T03:05:26Z / "765faf7a" 2026-09-27T09:25:19Z /
-          "f4e787ff" 2026-09-27T10:22:03Z / "992cb2a7" 2026-09-27T10:23:08Z.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1133/timeline --paginate --jq '.[]|select(.event==
-          "head_ref_force_pushed" or .event=="committed")|[.event,.sha,.created_at]' (tool read at 2026-09-27T12:45:28Z —
-          AFTER the close; recorded, not re-runnable)
+          "f4e787ff" 2026-09-27T10:22:03Z / "992cb2a7" 2026-09-27T10:23:08Z. `committer.date` is caller-set metadata on
+          the commit object, not a record of when (or whether) GitHub received a push naming that commit as the branch
+          head — the server-side check below shows f4e787ff never was one.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/1133/timeline --paginate --jq '.[]|select(.event=="head_ref_force_pushed" or .event=="committed")|[.event,.sha,.created_at]' (tool read at 2026-09-27T12:45:28Z — AFTER the close; recorded, not re-runnable)
 Output:   no `head_ref_force_pushed` event exists on #1133 at all (`.event` values on the whole timeline, deduplicated:
           "commented","committed","cross-referenced","labeled","referenced","renamed","reviewed","unlabeled" — checked
           separately). Every `committed` event's `.created_at` is `null` (GitHub does not populate that field for this
-          event type). So no PR-timeline event times the push more precisely than the two bounds below; the claim is
-          stated as a bounded interval, not a single instant.
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133/commits --jq '.[] | select(.sha | startswith
-          ("765faf7a")) | .commit.committer.date'; gh api
-          "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?head_sha=765faf7a6e59706de1659d24162de24fd9a206c5" --jq
-          '.workflow_runs[0].created_at' (tool reads at 2026-09-27T12:09:24Z — AFTER the close; recorded, not re-runnable)
-Output:   `.commit.committer.date` is commit metadata (when the commit object was made), not a recorded push instant, so
-          it is a LOWER bound on when 765faf7a became the PR's head, not the instant itself: 2026-09-27T09:25:19Z. Its
-          first workflow run's `created_at` — which cannot exist before GitHub has received the push — is an UPPER bound:
-          2026-09-27T09:48:55Z. Both bounds are before the 09:54:52Z close. So 765faf7a became #1133's head somewhere in
-          [09:25:19Z, 09:48:55Z] — at most about 30 minutes before the close, at least about 6 minutes before it — and
-          1caf612b was superseded within that same window, NOT "roughly 6.5 hours before the close" as an earlier draft
-          of this entry said (that draft read 1caf612b's OWN CI-dispatch timestamp, 03:25:14Z, as if it marked
-          supersession; it only marks when 1caf612b itself was validated). 765faf7a then remained the head across the
-          close itself (the next commit, f4e787ff, was pushed no earlier than its own committer date, 10:22:03Z, 27
-          minutes after the close) — so #1133's head AT the close was 765faf7a, not 1caf612b, and the supersession that
-          made it so happened within roughly half an hour before the close, bounded but not pinned to a single instant.
-          (A prior instruction for this record asserted the close-time head was 1caf612b; that assertion does not survive
-          this check, and is corrected here with the evidence above.)
+          event type). So no PR-timeline event times the push directly; the branch's own workflow-run history, queried
+          next, does.
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?branch=claude/land-branch-derive-klass&per_page=30" --jq '.workflow_runs[] | select(.created_at > "2026-09-27T09:00:00Z" and .created_at < "2026-09-27T11:00:00Z") | "\(.created_at) \(.head_sha[0:8])"' | sort -u -k2,2 | sort (tool read at 2026-09-27T13:34:18Z — AFTER the close; recorded, not re-runnable)
+Output:   "2026-09-27T09:48:55Z 765faf7a" / "2026-09-27T10:41:15Z 992cb2a7" — every push to this branch dispatches its own
+          workflow runs (server-side, not caller-controlled, unlike a commit's `committer.date`), and querying the
+          branch's own run history for the whole 09:00Z-11:00Z window returns exactly these two distinct heads, in this
+          order, with NOTHING between them: no run for f4e787ff appears at all, at any timestamp in this window. So
+          f4e787ff — present in the PR's commit list with a 10:22:03Z committer date, but that date is caller-set and
+          proves nothing about a push — was never pushed to GitHub as its own distinct head; 765faf7a was the head from
+          09:48:55Z (its own first run) until 992cb2a7 superseded it at 10:41:15Z (its own first run). The 09:54:52Z close
+          falls inside that span, so #1133's head AT THE CLOSE was 765faf7a, not 1caf612b, and not f4e787ff (which never
+          existed as a live head at all). An earlier draft of this entry used commit committer dates as bounds and
+          inferred a distinct f4e787ff-headed interval; both are corrected here by this server-side evidence, which
+          supersedes them.
 Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 're-read 2026-09-27 at `835883c5` (rename in `394032de`)'
 Output:   "re-read 2026-09-27 at `835883c5` (rename in `394032de`)" — the core-digest row's own citation of #1146's head, in
           the tree at the close (835883c5 is #1146's head as read live above, but the BUILD_BACKLOG line is a tree fact).
@@ -3982,6 +3995,15 @@ Command:  for p in "1caf612b 7b6ea61e" "765faf7a 7b6ea61e" "992cb2a7 7b6ea61e" "
 Output:   "1caf612b in 7b6ea61e: 1" / "765faf7a in 7b6ea61e: 1" / "992cb2a7 in 7b6ea61e: 1" / "835883c5 in 7b6ea61e: 1" /
           "26a39479 in 7b6ea61e: 1" — all five exit 1: none of #1133's heads (past or current), #1146's head or #1153's
           head is part of the frozen tree.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1156 --jq '.body' | grep -n -i "opus refute-first"; gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1148 --jq '.body' | grep -n -i "opus audit\|opus review pass\|re-reviewed twice by opus"; grep -n "model: 'sonnet'\|model: 'haiku'" .claude/workflows/land-branch.js
+Output:   #1156's body: "Two Opus refute-first reviews ran before the PR opened: the first found 3 issues ..., the
+          second found three FATAL checks no self-test pinned ...". #1148's body: "Every finding went through an Opus
+          audit and a refute-first verifier before it became a row"; "the wording was tightened ... after an Opus
+          review pass"; "re-reviewed twice by Opus (`6eecade9`, `8d5b018b`)". #1159's own body names no reviewer tier
+          for its own pass (checked in an earlier round; not repeated here). `.claude/workflows/land-branch.js`'s own
+          `agent(...)` calls: Pre and Merge stages `model: 'sonnet'` (lines 160, 172); lock/chain-run/sentinel-read/push
+          stages `model: 'haiku'` (lines 190, 205, 227, 252); the PR-body stage `model: 'sonnet'` (line 271); the
+          PR-open stage `model: 'haiku'` (line 287). This is the source LOOP.md's one-line TIERS summary is drawn from.
 Verdict:  holds, with corrections against earlier drafts of this entry: #1153's head (26a39479, carrying the L20 anchor
           fix a894309f, still PENDING — the fix is written and pushed, not "landed") is proven three ways — a passing
           gating check (108537426452), a green local sentinel chain, and zero unresolved review threads — so it waits only
@@ -3996,13 +4018,13 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           "unread same as the others" as an earlier draft of this entry said; DR-013's "10 for 10" sentence is measured by
           row 17's own prose (seven of a ten-check dated subset), not by the wire-truth gate's own count (11 checks, 7
           divergent) — two different denominators for two different claims; and #1133's head AT THE CLOSE was 765faf7a,
-          not 1caf612b — 765faf7a became the head sometime in the bounded interval [09:25:19Z (its commit's committer
-          date, a lower bound), 09:48:55Z (its first CI run's creation, an upper bound)], both before the 09:54:52Z
-          close, so the supersession happened within roughly half an hour before the close, not "roughly 6.5 hours"
-          before it as an earlier draft of this entry said from misreading 1caf612b's own 03:25:14Z CI-dispatch time
-          (which validates 1caf612b itself and says nothing about when it stopped being the head — no PR-timeline event
-          times the push more precisely, per the check above); the next commit (f4e787ff) did not land until 10:22:03Z,
-          27 minutes after the close. #1133's CURRENT head, read
+          not 1caf612b — the branch's own server-side workflow-run history (queried by branch name, not by a
+          caller-controlled commit date) shows 765faf7a's first run at 09:48:55Z and the next distinct head's (992cb2a7)
+          first run at 10:41:15Z, with no run for any other head in between; the 09:54:52Z close falls inside that span,
+          so 765faf7a was the head at the close, and f4e787ff — a commit that appears in the PR's commit list with a
+          10:22:03Z committer date, which is caller-set and not evidence of a push — never existed as a live head at all
+          (an earlier draft of this entry used committer-date bounds and an f4e787ff-headed interval; both are corrected
+          here). #1133's CURRENT head, read
           live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing about it is claimed here beyond that
           it postdates the close. 24 first-parent PR merges closed the window between a4507f9a (11:55:30Z) and 7b6ea61e
           (09:54:52Z, the close), carrying 27 PRs landed in total once #1136, #1147 and #1150 (each merged, none

@@ -3681,129 +3681,60 @@ Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d970
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
 
 ## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED on mainline; #1127 merged as a4507f9a with its gating check green"
-Command:  TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' a4507f9a
-Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b a4507f9a; do TZ=UTC git log -1
+          --date=iso-local --format='%H %cd %s' $sha; done  # the eight PRs merged this window: #1119, #1120, #1122, #1123,
+          #1124, #1125, #1126, #1127
+Output:   "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Merge pull request #1119: L10 shallow-fetch deny
+          guard, L11 coverage --write refuses a mid-conflict index, L12 tick landing rule (DR-037, check run 108369513162)" /
+          "bf642ee52e2f7160b64be498513c300e85b6941a 2026-09-26 08:34:56 +0000 Lane mail (cloud): ack for the Mac's #1118 review
+          ask; steward heartbeat 08:24Z (#1120, gating check run 108369566206)" / "af82b564f0dc5b51d53d1c08298c2dd1afc11cde
+          2026-09-26 09:11:05 +0000 Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run 108374280929)" /
+          "5f1f21e37bbd483c45ebc52d3fa1c1bcba0bc636 2026-09-26 09:34:32 +0000 Merge pull request #1123: L8 landing —
+          check-mainline-workflow-streaks reports red streaks on non-gating mainline workflows (DR-037, check run 108377728485)"
+          / "bb2ed1627b4959f7e695c742eda0cd39ea67ea7d 2026-09-26 09:40:47 +0000 Lane mail (cloud): ack for the Mac's #1121
+          review ask; steward heartbeat 09:24Z (#1124, gating run 36232741672)" / "8a39aeef6ef851ed79b40b652b76b2254044174a
+          2026-09-26 09:58:49 +0000 Lane mail (cloud): hygiene-sweep heartbeat 09:40Z (#1125, gating run 36233627673)" /
+          "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26 11:08:12 +0000 Merge pull request #1126: L2 landing — land-branch
+          is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037, check run 108391088659)"
+          / "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
-          DR-037, check run 108397317258)" / "db88915d3050cf3e02799a6b27eb88329fa7a79d 2026-09-26 11:49:50 +0000 Lane
-          mail (mac): heartbeat mac-lane-tick" / "7fc7fdd130ac90ae80333f22713750b02c03eae9 2026-09-26 11:24:28 +0000
-          Lane mail (mac): heartbeat mac-lane-tick" — local and deterministic, re-runnable in any clone (re-run
-          2026-09-27 02:01Z, same three lines); at this record's writing (12:03Z) origin/SignalGrid_Alpha's tip was
-          a4507f9a, a dated observation from the original fetch.
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at
-          2026-09-27 01:14Z, recorded — not to be re-run)
-Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
-          "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z" — equal to `git rev-parse
-          a4507f9a^2` below, so #1127's gating check is bound to its merged head by head_sha.
-          # the five node commands below ran in the worktree at a4507f9a (after merging it, 2026-09-26 12:03Z);
-          POST-WINDOW (15:07Z, #1130 = 36c561c7): at 36c561c7 check-lessons prints "16 lesson(s), 16 landed" (L16),
-          check-mcp-roster adds "11 mentions" and the land-branch self-test prints "19/19 passed" (re-run in a
-          throwaway worktree at 36c561c7, 2026-09-27 02:08Z, same three strings)
-Command:  node scripts/check-lessons.mjs
-Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
-Command:  node scripts/check-mcp-roster.mjs
-Output:   "mcp-roster: 6 servers (+3 external), signalgrid-mcp 16/16 tools derived, 12 lane grants, 6 skill grants over
-          18 first-party skills, 0 problems" / "PASS"
-Command:  node scripts/check-readiness-figure.mjs
-Output:   "HEADLINE 100%  → OUTREACH OPEN — readiness 100% meets the 92–95% target (goal 100%)"
-Command:  node scripts/lib/land-branch-gate.mjs --self-test
-Output:   "10/10 passed"
-Command:  node scripts/check-publication-boundary.mjs
-Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
-Command:  git -C <repo> rev-parse --is-shallow-repository
-Output:   "false"
-          # L2 landing's own chain, head 08949c61
+          DR-037, check run 108397317258)" — local and deterministic, re-runnable in any clone; all eight dates fall inside the
+          07:15Z-11:55Z window.
+Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a  # #1122 carries no sha in the LOOP.md
+          prose; derived here on a fixed range ending at a4507f9a
+Output:   "af82b564f0dc5b51d53d1c08298c2dd1afc11cde Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run
+          108374280929)" — the only match; local and immutable (the range's upper bound is a fixed sha, not a branch).
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b; do git merge-base --is-ancestor $sha
+          a4507f9a && echo "$sha carried"; done
+Output:   "177299f3 carried" / "bf642ee5 carried" / "af82b564 carried" / "5f1f21e3 carried" / "bb2ed162 carried" / "8a39aeef
+          carried" / "8216cf6b carried" (exit 0 all seven) — each of the other seven merges is an ancestor of a4507f9a, i.e.
+          carried into #1127's own merge commit.
+Command:  git show a4507f9a:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'
+Output:   "15" — the lesson ledger AT a4507f9a (the #1127 tree), not today's tree.
+Command:  git show a4507f9a:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* landed$'
+Output:   "15" — all 15 rows read landed at a4507f9a; 0 pending.
 Command:  tail -n 1 <scratchpad>/l2-pf.log && tail -n 1 <scratchpad>/l2-br.log
-Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650"
-          — the lane host's ephemeral chain logs, recorded, not re-runnable elsewhere.
-          # MCP roster's repair chain after the criss-cross-merge fix, head e189552b
+Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0
+          08949c61f377b56deff6f18ae15f39a232d9b650" — recorded on the lane host before 11:08:12Z (L2's merge, 8216cf6b) — not
+          re-runnable elsewhere.
 Command:  tail -n 1 <scratchpad>/mcp2-pf.log && tail -n 1 <scratchpad>/mcp2-br.log
-Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
-          — the lane host's ephemeral chain logs, recorded, not re-runnable elsewhere.
-          # #1126's gating check
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108391088659 (tool read at
-          2026-09-27 01:14Z, recorded — not to be re-run)
+Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0
+          e189552b86db01d03b1a073fa9fb44845d7962e8" — recorded on the lane host before 11:55:30Z (#1127's merge, a4507f9a) — not
+          re-runnable elsewhere.
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at 2026-09-27 01:14Z,
+          recorded — not to be re-run)
 Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
-          "08949c61f377b56deff6f18ae15f39a232d9b650", completed_at "2026-09-26T11:05:07Z" — equal to `git rev-parse
-          8216cf6b^2` below, so #1126's gating check is bound to its merged head by head_sha.
+          "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z".
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108391088659 (tool read at 2026-09-27 01:14Z,
+          recorded — not to be re-run)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          "08949c61f377b56deff6f18ae15f39a232d9b650", completed_at "2026-09-26T11:05:07Z".
 Command:  git rev-parse a4507f9a^2 8216cf6b^2
-Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — the merged
-          PR heads (second parents)
-Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=format-local:%Y-%m-%dT%H:%M:%SZ 8216cf6b
-Output:   "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26T11:08:12Z Merge pull request #1126: L2 landing —
-          land-branch is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037,
-          check run 108391088659)"
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1117 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108365605200 (tool read at 21:5xZ, recorded — not to be re-run)
-Output:   "Typecheck, build, and proof scaffold" completed success, head_sha 760e7185cfa3cb318f0845566dad07dfa018bfd2, completed_at 2026-09-26T08:04:42Z
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/actions/runs/36227993364 (tool read at 21:5xZ, recorded — not to be re-run)
-Output:   "SignalGrid CI" completed success, head_sha 760e7185cfa3cb318f0845566dad07dfa018bfd2, head_branch claude/tests-ephemeral-ports-oidc-load-observability
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1118 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1121 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1050 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1083 (tool read at 17:07Z, recorded — not to be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null
-Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
-          origin/claude/tests-ephemeral-ports-oidc-load-observability
-Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" (recorded at 22:35Z; #1117, per the review's 20:52Z read)
-Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
-          origin/claude/build-puck6-return-binding
-Output:   exit 1, conflicted "docs/DECISION_RECORDS.md" (recorded at 22:35Z; #1050, head 331c6558)
-Command:  git merge-tree --write-tree --name-only --no-messages origin/SignalGrid_Alpha \
-          origin/claude/proposal-dr059-posture-ages-refresh-retracts
-Output:   exit 1, conflicted "docs/BUILD_BACKLOG.md" and "docs/DECISION_RECORDS.md" (recorded at 22:35Z; #1083,
-          head a98d2013)
-Command:  TZ=UTC git log -1 --format='%H %cd %s' --date=iso-local c10da110 && git merge-base --is-ancestor 44eed7a9 \
-          c10da110 && echo carries-44eed7a9
-Output:   "c10da1105a9ad1ea31f8babc21dcc5e4913e992d 2026-09-26 20:58:20 +0000 Merge pull request #1138: Land Mac PR
-          #1136, iOS joins the shared Assist-wire conformance vectors, with the lane's review fixes (DR-037, check run
-          108482957019)" / "carries-44eed7a9"
-Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1133 (tool read at 22:26Z, recorded — not to
-          be re-run: PR state lives outside the tree)
-Output:   state "open", merged_at null, head afdeb8a5f84e6ff7f0c57b18b561ebccd12bd0d8 (branch
-          claude/land-branch-derive-klass)
-Command:  for sha in 177299f3 5f1f21e3 8a39aeef bf642ee5 bb2ed162 36c561c7; do git log -1 --format='%h %s' $sha; done
-Output:   "177299f3 Merge pull request #1119: L10 shallow-fetch deny guard, L11 coverage --write refuses a
-          mid-conflict index, L12 tick landing rule (DR-037, check run 108369513162)"
-          "5f1f21e3 Merge pull request #1123: L8 landing — check-mainline-workflow-streaks reports red streaks on
-          non-gating mainline workflows (DR-037, check run 108377728485)"
-          "8a39aeef Lane mail (cloud): hygiene-sweep heartbeat 09:40Z (#1125, gating run 36233627673)"
-          "bf642ee5 Lane mail (cloud): ack for the Mac's #1118 review ask; steward heartbeat 08:24Z (#1120, gating
-          check run 108369566206)"
-          "bb2ed162 Lane mail (cloud): ack for the Mac's #1121 review ask; steward heartbeat 09:24Z (#1124, gating run
-          36232741672)"
-          "36c561c7 Merge pull request #1130: harden land-branch (--verify from the worktree, &&-chained push, exact
-          sentinel lines) and check-mcp-roster; L16 (DR-037, check run 108425765136)"
-Command:  git merge-base --is-ancestor 5f1f21e37bbd483c45ebc52d3fa1c1bcba0bc636 origin/SignalGrid_Alpha \
-          && echo reachable
-Output:   "reachable" (exit 0) — L8's merge (PR #1123, 5f1f21e3) is an ancestor of origin/SignalGrid_Alpha
-          (recorded at 23:45Z)
-Command:  git merge-base --is-ancestor 8216cf6b36c893df78171e9177442c1d9b065ebc origin/SignalGrid_Alpha \
-          && echo reachable
-Output:   "reachable" (exit 0) — L2's merge (PR #1126, 8216cf6b) is an ancestor of origin/SignalGrid_Alpha
-          (recorded at 23:45Z)
-Command:  git merge-base --is-ancestor a4507f9a571f681d0101302ce31a32d2d9cd8699 origin/SignalGrid_Alpha \
-          && echo reachable
-Output:   "reachable" (exit 0) — #1127's merge (a4507f9a) is an ancestor of origin/SignalGrid_Alpha (recorded at
-          2026-09-27 01:42Z)
-Command:  git log --first-parent --format=%h a4507f9a | grep -n -e ^8216cf6b -e ^5f1f21e3
-Output:   "4:8216cf6b" / "11:5f1f21e3" (exit 0)
-Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2
-          and the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Each gating check is bound
-          to its merged head by head_sha, per the REST reads above: 108397317258 → e189552b (#1127, `git rev-parse
-          a4507f9a^2`) and 108391088659 → 08949c61 (#1126, `git rev-parse 8216cf6b^2`). Still pending: five
-          owner-gated PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling,
-          each still owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows,
-          all five open holds as a dated observation at 17:07Z per the recorded reads above; not verifiable here
-          afterwards — PR state is mutable and lives outside the repository (state/merged_at; a ruling is not
-          something that read measures — the golden-rule-1 ruling stands as a request in LOOP's Owner still owes
-          list). POST-WINDOW: a sixth owner-merge PR, #1133, per the pulls/1133 read above; #1117's CI is green on
-          head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (merge-tree
-          read 22:35Z; review read 20:52Z).
-          Ancestry: L8's merge (5f1f21e3), L2's merge (8216cf6b) and #1127's merge (a4507f9a) are each confirmed
-          reachable from origin/SignalGrid_Alpha by `git merge-base --is-ancestor` above ("reachable", exit 0 all
-          three) — the three-commit first-parent walk above never reached the first two (L2's merge is entry 4 and
-          L8's entry 11 of the first-parent walk from a4507f9a, which is entry 1 of that walk).
+Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — matches the two recorded
+          head_sha values above exactly: #1127's gating check (108397317258) and #1126's (108391088659) are each bound to their
+          merged PR head by head_sha (local, immutable).
+Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this window — #1119, #1120, #1122, #1123, #1124, #1125,
+          #1126, #1127 — each log-dated inside 07:15Z-11:55Z and each an ancestor of #1127's own merge (a4507f9a, 2026-09-26
+          11:55:30Z). The lesson ledger read 15/15 landed AT a4507f9a. #1127's gating check and #1126's are each bound to their
+          merged head by head_sha, per the recorded REST reads matched against a local, immutable `git rev-parse`. Nothing here
+          claims PR state, mainline membership, or any event after 11:55Z — those belong to the next record.

@@ -3990,6 +3990,11 @@ Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 'Part two, TO ADD: a
 Output:   "Part two, TO ADD: a fixed regression corpus" — the same row's check has two parts, and at the close only part
           one (the targeted alias pairs) was asserted on #1146; part two (a fixed ASCII/Latin-1/CJK/astral corpus with
           no two members colliding) was not yet on the PR. The owner queue in LOOP.md says so beside #1146.
+Command:  for sha in 765faf7a 992cb2a7; do gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/$(git rev-parse $sha)/check-runs?check_name=github-advanced-security" --jq '.check_runs[]|"\(.id) \(.conclusion) \(.completed_at)"'; done (then each job's log grepped for CAPIError; tool read at 2026-09-27T16:2xZ — AFTER the close; recorded, not re-runnable once the logs expire)
+Output:   "108595540512 failure 2026-09-27T09:49:34Z" / "108603304641 failure 2026-09-27T10:41:55Z", each log reading
+          "CAPIError: 400 The requested model is not supported" — the Copilot scanner's model setting was still unsupported
+          five minutes before the 09:54:52Z close and again 47 minutes after it. The 09:30Z heartbeat does not name this
+          item, so this is the evidence behind listing it in the owner queue.
 Command:  git fetch origin refs/pull/1133/head && git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
 Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, one of its early merge-of-mainline commits,
           but not from 7b6ea61e) mention "#1133" in their subject.

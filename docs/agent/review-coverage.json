@@ -2928,7 +2928,7 @@
       "date": "2026-09-26",
       "sha": "6a70714262ece9d6b72ae37ab0c8420d33119580",
       "depth": "audited",
-      "note": "Whole file (188 lines), audited against vacuous or silent passes. It has no entry guard (top-level body), its detector self-controls exit 1, and every drift or dangling entry exits 1 (:183-186). The reverse and dangling checks mean an empty scan cannot pass against non-empty registries. Ran green at HEAD (39/50/55/50). One latent nit: FIGURES_EMISSION (:80) is blind to a figures= line emitted via a variable, stdout.write or console.info, confirmed with planted fixtures; no current proof uses those forms. The mutation sweep and the figure guard it cross-checks were NOT run. No should-fix or blocking finding on this file this round."
+      "note": "Whole file (188 lines), audited against vacuous or silent passes. It has no entry guard (top-level body), its detector self-controls exit 1, and every drift or dangling entry exits 1 (:183-186). The reverse and dangling checks mean an empty scan cannot pass against non-empty registries. Ran green at HEAD (39/50/55/50). One latent nit: FIGURES_EMISSION (:80) is blind to a figures= line emitted via a variable, stdout.write or console.info, confirmed with planted fixtures; no current proof uses those forms. First recorded here as a nit, it is a gate blind spot and is now a LOW row in docs/BUILD_BACKLOG.md (2026-09-27). The mutation sweep and the figure guard it cross-checks were NOT run. No blocking finding on this file."
     },
     {
       "path": "lib/integrations/src/integrations/device-management-health/evaluate.ts",

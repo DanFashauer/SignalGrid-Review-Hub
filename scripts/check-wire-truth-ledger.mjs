@@ -22,7 +22,8 @@
 // date that is not a real day; an id that is not a nonblank string, or a duplicate one; a
 // live record cited by more than one entry (one wire record is one check); and a tracked
 // scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md that no entry cites — a new
-// live check that nobody recorded is the drift itself.
+// live check that nobody recorded is the drift itself. Every entry must cite at least one
+// such live record, so a README cannot stand in for a wire.
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -76,6 +77,7 @@ export function audit(ledger, tree) {
     for (const b of Array.isArray(c?.boundTo) ? c.boundTo : []) if (!(c.dimensions ?? []).includes(b?.dimension)) problems.push(`${at}: boundTo ${b?.path} names dimension ${JSON.stringify(b?.dimension)}, which this entry does not check`);
     for (const d of Array.isArray(c?.dimensions) ? c.dimensions : []) if (!tree.dims.has(d)) problems.push(`${at}: dimension "${d}" is not a directory under ${INTEGRATIONS}/`);
     if (!Array.isArray(c?.evidence) || c.evidence.length === 0) problems.push(`${at}: no evidence paths`);
+    else if (!c.evidence.some((p) => LIVE_RECORD.test(p))) problems.push(`${at}: cites no live record (a scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md) — ordinary documentation is not a live check`);
     for (const p of c?.evidence ?? []) {
       if (LIVE_RECORD.test(p) && cited.has(p)) problems.push(`${at}: live record ${p} is already cited by ${cited.get(p)} — one wire record is one check`);
       else cited.set(p, at);
@@ -147,6 +149,7 @@ function selfTest() {
     ["a non-null entry with no dimensions fails", plant((l) => { l.checks[0].dimensions = []; })],
     ["a whitespace-only note fails", plant((l) => { l.checks[0].divergenceFound = null; l.checks[0].note = "  "; })],
     ["a date that is not a real day fails", plant((l) => { l.checks[0].date = "2026-99-99"; })],
+    ["an entry citing no live record fails", (() => { const l = good(); l.checks.push({ ...l.checks[0], id: "b", evidence: ["lib/x.ts"], divergenceFound: false, divergenceRecord: undefined }); return audit(l, tree).problems.some((p) => p.startsWith("b: cites no live record")); })()],
     ["an object id fails", plant((l) => { l.checks[0].id = {}; })],
     ["two entries citing the same live record fail", plant((l) => { l.checks.push({ ...l.checks[0], id: "b" }); })],
     ["a declaration only in a line comment fails", plant((l) => { l.checks[0].boundTo[0].symbol = "Phantom"; })],

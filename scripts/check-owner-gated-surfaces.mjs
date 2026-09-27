@@ -234,6 +234,28 @@ export const SAFETY_MACHINERY = [
   // Cargo.toml/build.rs/.cargo config, not Cargo.lock — so it stays a named gap for
   // the gate-registry-derivation backlog row (docs/BUILD_BACKLOG.md) rather than an
   // ad hoc partial rule here.
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900889): the rule above is Cargo-only
+  // — Swift and Gradle have their own build-control files, and none of them were named
+  // anywhere in this manifest, so editing one was an 'other' change that could rewrite
+  // what `swift test` or a Gradle test task actually compiles and runs, the same shape
+  // of gap the Cargo rule above exists to close. Package.swift declares the SwiftPM
+  // targets `swift test` builds (ios-ci.yml:157 `native/ios`, :161
+  // `native/ios/SignalGridMobile/SignalGridMobileCore`); project.yml is the XcodeGen
+  // input `xcodegen generate` (ios-ci.yml:82,177) expands into the .xcodeproj CI then
+  // builds and tests; build.gradle(.kts)/settings.gradle(.kts)/gradle.properties/
+  // gradle-wrapper.properties declare what `gradle -p native/android/core test`
+  // (android.yml:77) and `gradle -p native/android/app testDebugUnitTest`
+  // (android.yml:126) compile and run. Scoped to `native/` so an unrelated top-level
+  // Gradle/Swift file (none exist today) isn't swept in. Measured with `git ls-files
+  // native | grep -E '(^|/)(Package\.swift|project\.yml|build\.gradle(\.kts)?|settings\.
+  // gradle(\.kts)?|gradle\.properties|gradle-wrapper\.properties)$'`: exactly 9 tracked
+  // files match today (native/ios/Package.swift,
+  // native/ios/SignalGridMobile/SignalGridMobileCore/Package.swift,
+  // native/ios/project.yml, native/ios/SignalGridMobile/project.yml,
+  // native/android/app/build.gradle.kts, native/android/app/settings.gradle.kts,
+  // native/android/app/gradle.properties, native/android/core/build.gradle.kts,
+  // native/android/core/settings.gradle.kts) — nothing over-matched.
+  { rule: "native build manifests that decide what `swift test`, the generated Xcode projects and the Gradle test tasks compile and run (ios-ci.yml:82,157,161,177; android.yml:77,126)", re: /^native\/(?:.+\/)?(?:Package\.swift|project\.yml|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?|gradle\.properties|gradle-wrapper\.properties)$/ },
   // Review fixes on the round-4 changes (#1133): round 4's own TREE_GUARD note (below)
   // left three product-test files "deliberately alone" as merely outside its native-only
   // scope — but they are not incidental test dirs, they are the WHOLE input of two gates
@@ -528,11 +550,15 @@ export const OWNER_RESERVED = [
   // the "ask before" list — are prose the owner wrote and the whole autonomous-merge
   // design defers to; a diff that edits either file was previously 'other' and could
   // rewrite what an agent is told to do (including weakening the very escalation rule
-  // enforced here) without ever routing to the owner. Exact-path: only the ROOT copies
-  // (there are no nested AGENTS.md/CLAUDE.md in this tree today; if one is ever added,
-  // it is deliberately out of scope for this rule until named here).
-  { rule: "the repository instructions (root AGENTS.md)", re: /^AGENTS\.md$/ },
-  { rule: "the repository instructions (root CLAUDE.md)", re: /^CLAUDE\.md$/ },
+  // enforced here) without ever routing to the owner.
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900879): root-only anchoring was
+  // itself the gap, not a deliberate scope choice — a NESTED AGENTS.md/CLAUDE.md (e.g.
+  // docs/AGENTS.md, native/ios/CLAUDE.md) governs its own subtree exactly the way the
+  // root copy governs the repo, and `classifyDiff(["docs/AGENTS.md"])` measured
+  // "autonomous" before this fix. Widened both rules to match the filename at ANY
+  // depth (`(^|\/)`), not just the bare root anchor (`^...$`).
+  { rule: "the repository instructions (AGENTS.md, at any depth — a nested copy governs its own subtree)", re: /(^|\/)AGENTS\.md$/ },
+  { rule: "the repository instructions (CLAUDE.md, at any depth — a nested copy governs its own subtree)", re: /(^|\/)CLAUDE\.md$/ },
   // Codex round 3 on #1133 (thread 4112838146, 2026-09-26): docs/PURPOSE.md is
   // canonical (DR-020, CLAUDE.md) — it states what SignalGrid IS and what may be
   // claimed, the same class of owner-authored prose as AGENTS.md/CLAUDE.md above, and
@@ -576,6 +602,30 @@ export const DECISION_PATH = [
   { rule: "the decision core / connectors / flows (lib/*)", re: /^lib\// },
   { rule: "the /v1 decision API server", re: /^artifacts\/api-server\// },
   { rule: "the byte-faithful native decision ports", re: /^native\/ios\/EnterpriseShell\/Services\/(DecisionEngine|AppWorkflows)\.swift$/ },
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900894): the byte-faithful ports
+  // above are golden rule 1's exact-name pair, kept as its own rule so that rule's
+  // "never edit these two files for behavior" stays a literal, unwidened match. The
+  // files below are a DIFFERENT thing golden rule 2 also covers: native twins of
+  // `lib/` decision guards, plus the Assist-wire clients that parse the verdict a host
+  // app then acts on — each file's own header names the role (read before adding it
+  // here): DecisionContinuity.swift reconciles which of two decided outcomes stands
+  // (the iOS twin of `lib/signalgrid-core/src/continuity.ts`); DecisionService.swift is
+  // the abstraction the shell evaluates a decision through (on-device engine vs. the
+  // live control-plane route); PostureAllow.swift and RemediationAllow.swift are the
+  // guards that sit AROUND `DecisionEngine.swift` and can flip its allow (Swift twins of
+  // `lib/signalgrid-simulator/src/posture-allow.ts` / `remediation-allow.ts`);
+  // SignalContext.swift assembles the live signal context the engine decides from and
+  // is the pre-gate that can DENY before the engine ever runs; AssistWire.swift,
+  // `native/android/core/.../AssistWire.kt` + `AssistOutcome.kt`, and
+  // `native/desktop/core/src/wire.rs` + `assist.rs` are the three platforms' Assist-wire
+  // clients — each one's own header says "THIS FILE DOES NOT DECIDE ANYTHING, it parses
+  // a decision the server already made", which is exactly golden rule 2's fail-closed
+  // parse boundary (an unrecognised outcome must become deny, never allow). Left OUT:
+  // `native/desktop/core/src/endpoint.rs` and
+  // `native/android/core/.../GateEndpoint.kt` — both are TLS/loopback endpoint
+  // *configuration* (whether a URL is reachable at all), not verdict parsing or
+  // decision logic; their own headers describe a connectivity rule, not an outcome.
+  { rule: "the native twins of lib/ decision guards and the Assist-wire verdict parsers", re: /^(?:native\/ios\/EnterpriseShell\/Services\/(?:DecisionContinuity|DecisionService|PostureAllow|RemediationAllow|SignalContext|AssistWire)\.swift|native\/android\/core\/src\/main\/kotlin\/com\/signalgrid\/assist\/core\/(?:AssistWire|AssistOutcome)\.kt|native\/desktop\/core\/src\/(?:wire|assist)\.rs)$/ },
 ];
 
 // Normalize a diff path before classifying, so an owner-gated file cannot be laundered
@@ -759,6 +809,16 @@ function selfTest() {
   // Codex round 2 on #1133 (2026-09-26) P1, finding 1: the repository instruction files.
   t("root AGENTS.md is OWNER_RESERVED", mostRestrictive(cls(["AGENTS.md"])) === "OWNER_RESERVED");
   t("root CLAUDE.md is OWNER_RESERVED", mostRestrictive(cls(["CLAUDE.md"])) === "OWNER_RESERVED");
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900879): a nested instruction file
+  // governs its own subtree, so the two rules above now match at any depth.
+  t("docs/AGENTS.md (nested) is OWNER_RESERVED", mostRestrictive(cls(["docs/AGENTS.md"])) === "OWNER_RESERVED");
+  t("native/ios/CLAUDE.md (nested) is OWNER_RESERVED", mostRestrictive(cls(["native/ios/CLAUDE.md"])) === "OWNER_RESERVED");
+  // Negative: a filename that merely starts with or resembles AGENTS.md must not be
+  // swept in — the `(^|\/)...\.md$` anchor requires the exact basename.
+  t("docs/AGENTS.md.bak is not matched by the AGENTS.md rule (not the exact filename)",
+    !cls(["docs/AGENTS.md.bak"]).matched.some((m) => m.rule.startsWith("the repository instructions (AGENTS.md")));
+  t("docs/NOT_AGENTS.md is not matched by the AGENTS.md rule (not the exact filename)",
+    !cls(["docs/NOT_AGENTS.md"]).matched.some((m) => m.rule.startsWith("the repository instructions (AGENTS.md")));
   // Codex round 3 on #1133 (thread 4112838146, 2026-09-26): the canonical purpose doc.
   t("docs/PURPOSE.md is OWNER_RESERVED", mostRestrictive(cls(["docs/PURPOSE.md"])) === "OWNER_RESERVED");
   // Codex round 2 on #1133 (2026-09-26) P1, finding 4: the launch-claims gate's own
@@ -858,6 +918,37 @@ function selfTest() {
   t("the /v1 API server is DECISION_PATH", cls(["artifacts/api-server/src/routes/v1.ts"]).matched.some((m) => m.category === "DECISION_PATH"));
   t("the native DecisionEngine port is DECISION_PATH", cls(["native/ios/EnterpriseShell/Services/DecisionEngine.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
   t("AppWorkflows port is DECISION_PATH", cls(["native/ios/EnterpriseShell/Services/AppWorkflows.swift"]).tier === "owner-gated");
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900894): the native twins of lib/
+  // decision guards and the Assist-wire verdict parsers, one case per file.
+  t("DecisionContinuity.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/DecisionContinuity.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("DecisionService.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/DecisionService.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("PostureAllow.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/PostureAllow.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("RemediationAllow.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/RemediationAllow.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("SignalContext.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("AssistWire.swift is DECISION_PATH",
+    cls(["native/ios/EnterpriseShell/Services/AssistWire.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("native/android/core AssistWire.kt is DECISION_PATH",
+    cls(["native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistWire.kt"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("native/android/core AssistOutcome.kt is DECISION_PATH",
+    cls(["native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistOutcome.kt"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("native/desktop/core/src/wire.rs is DECISION_PATH",
+    cls(["native/desktop/core/src/wire.rs"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("native/desktop/core/src/assist.rs is DECISION_PATH",
+    cls(["native/desktop/core/src/assist.rs"]).matched.some((m) => m.category === "DECISION_PATH"));
+  // Negative: DesignSystem.swift (colors/fonts, no decision role) must not match.
+  t("DesignSystem.swift does NOT match DECISION_PATH",
+    !cls(["native/ios/EnterpriseShell/Services/DesignSystem.swift"]).matched.some((m) => m.category === "DECISION_PATH"));
+  // Left out on purpose: endpoint.rs / GateEndpoint.kt are TLS/loopback endpoint
+  // configuration, not verdict parsing — see the manifest comment above.
+  t("native/desktop/core/src/endpoint.rs does NOT match DECISION_PATH (endpoint config, not a verdict parser)",
+    !cls(["native/desktop/core/src/endpoint.rs"]).matched.some((m) => m.category === "DECISION_PATH"));
+  t("native/android/core GateEndpoint.kt does NOT match DECISION_PATH (endpoint config, not a verdict parser)",
+    !cls(["native/android/core/src/main/kotlin/com/signalgrid/assist/core/GateEndpoint.kt"]).matched.some((m) => m.category === "DECISION_PATH"));
   // A non-decision doc under lib is not caught by DECISION_PATH's blanket only if it is NOT under lib/ — lib/* is blanket, so this stays autonomous because it is a docs path.
   // Path-normalization bypasses must NOT launder an owner-gated file to autonomous.
   t("a leading ./ does not launder scripts/ to autonomous", cls(["./scripts/mutation-guard.mjs"]).tier === "owner-gated");
@@ -903,8 +994,16 @@ function selfTest() {
   // Review sweep on #1133 (round 3): the two rules above missed Rust's OWN test
   // convention — inline #[cfg(test)] mod tests {} in an ordinary src file — see the
   // new rule above.
-  t("native/desktop/core/src/wire.rs (inline #[cfg(test)] mod, 19 #[test] measured live) is SAFETY_MACHINERY",
-    mostRestrictive(cls(["native/desktop/core/src/wire.rs"])) === "SAFETY_MACHINERY");
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900894): wire.rs also parses the /v1
+  // verdict, so it now matches DECISION_PATH too — still SAFETY_MACHINERY via the
+  // build-control rule (harmlessly), but mostRestrictive() now resolves to the more
+  // restrictive DECISION_PATH. Was asserted SAFETY_MACHINERY via mostRestrictive() before
+  // this round; that assertion would now fail, so it is split into the two truths it
+  // actually is.
+  t("native/desktop/core/src/wire.rs (inline #[cfg(test)] mod, 19 #[test] measured live) still matches the Rust build-control rule as SAFETY_MACHINERY",
+    cls(["native/desktop/core/src/wire.rs"]).matched.some((m) => m.category === "SAFETY_MACHINERY"));
+  t("…but wire.rs's most restrictive category is now DECISION_PATH (it also parses the /v1 verdict)",
+    mostRestrictive(cls(["native/desktop/core/src/wire.rs"])) === "DECISION_PATH");
   t("firmware/dock/core/src/custody.rs (inline #[cfg(test)] mod, 20 #[test] measured live) is SAFETY_MACHINERY",
     mostRestrictive(cls(["firmware/dock/core/src/custody.rs"])) === "SAFETY_MACHINERY");
   // Review sweep on #1133 (round 4), finding 1: the src/-only rule above missed the
@@ -915,6 +1014,17 @@ function selfTest() {
     mostRestrictive(cls(["firmware/dock/core/examples/emit_fixtures.rs"])) === "SAFETY_MACHINERY");
   t("native/desktop/app/build.rs is SAFETY_MACHINERY (executed by desktop.yml's gated cargo test/build steps; can rewrite src/main.rs before it compiles)",
     mostRestrictive(cls(["native/desktop/app/build.rs"])) === "SAFETY_MACHINERY");
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900889): the native build-manifest
+  // rule (Swift/Gradle sibling of the Cargo build-control rule above).
+  t("native/ios/Package.swift is SAFETY_MACHINERY (declares what `swift test` builds, ios-ci.yml:157)",
+    mostRestrictive(cls(["native/ios/Package.swift"])) === "SAFETY_MACHINERY");
+  t("native/ios/project.yml is SAFETY_MACHINERY (the XcodeGen input CI expands and builds/tests, ios-ci.yml:82,177)",
+    mostRestrictive(cls(["native/ios/project.yml"])) === "SAFETY_MACHINERY");
+  t("native/android/app/build.gradle.kts is SAFETY_MACHINERY (declares what the Gradle test tasks compile and run, android.yml:126)",
+    mostRestrictive(cls(["native/android/app/build.gradle.kts"])) === "SAFETY_MACHINERY");
+  // Negative: an ordinary native resource file, same tree, is not a build manifest.
+  t("native/android/app/src/main/res/values/strings.xml stays autonomous (not a build manifest)",
+    cls(["native/android/app/src/main/res/values/strings.xml"]).tier === "autonomous");
   // Round 5 (#1133): classifyDiff takes path strings, not a working tree, so these
   // prove the new build-control rule fires whether or not the path exists on disk.
   t("firmware/dock/core/build.rs is SAFETY_MACHINERY (a build.rs anywhere is a Cargo build control)",
@@ -929,8 +1039,12 @@ function selfTest() {
   // Negative: a non-test file, and a doc NAMED like a test topic, must not over-match.
   t("a doc named TESTING.md stays autonomous (not swept in by the filename rule)",
     cls(["TESTING.md"]).tier === "autonomous");
-  t("an ordinary native source file (not under a test dir, not test-suffixed) stays autonomous",
-    cls(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).tier === "autonomous");
+  // Codex round 5 on #1133 (2026-09-27, thread 4114900894): SignalContext.swift moved
+  // into DECISION_PATH above (it assembles the live signal context the engine decides
+  // from and can DENY before the engine runs), so it can no longer serve as this test's
+  // "ordinary" example — swapped for DesignSystem.swift (colors/fonts, no decision role).
+  t("an ordinary native source file (not under a test dir, not test-suffixed, not a decision guard) stays autonomous",
+    cls(["native/ios/EnterpriseShell/Services/DesignSystem.swift"]).tier === "autonomous");
   // Negative: native/shared vectors keep their EXISTING class (the pre-existing
   // "gate inputs outside scripts/" rule), unaffected by the two new rules above.
   t("native/shared/assist-wire-conformance.json keeps its existing SAFETY_MACHINERY class",

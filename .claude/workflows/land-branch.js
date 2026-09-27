@@ -255,12 +255,34 @@ phase('Chain')
 // touches a marker it does not own. A marker's lifetime is now scoped to the lock that owns
 // it: a NEW acquisition never starts life carrying a previous run's already-dead pid. See the
 // release comment on the failure path below for the other half of this fix.
+// Codex round 5 on #1133 (2026-09-27, thread 4114900885): the chain now runs a detached
+// `pnpm install` before preflight (step 3, below), and the STALE-CLEAR check above never
+// consulted liveness at all — it read only the lock file's own mtime (`find "$LOCK" -mmin
+// +40`) and `busy()` named just two process shapes (`scripts/preflight.mjs`,
+// `verify-breadth.mjs`), neither of which an install matches. So a second landing whose
+// own lock-waiter runs while lane A's install is still inside its first 40 minutes would
+// find nothing wrong; but let that install run PAST 40 minutes (a slow network, a cold
+// pnpm store) and the second landing's very next poll reads the lock as stale and removes
+// it out from under a chain that is still alive — the two chains then race the SAME
+// worktree. `holder_alive()` fixes this by reading the LOCK's own first field (the owning
+// tag) and testing THAT tag's `${tag}-job.pid` marker as a process group (`kill -0 --
+// -PID`, the same test the failure-path release already uses below, so a lone SIGKILLed
+// top shell with its install/preflight/breadth child still running in the group still
+// reads alive) — never a name list, so it does not matter whether the group's live member
+// is `pnpm install`, `node scripts/preflight.mjs`, or `pnpm run verify:breadth`. The
+// 40-minute stale-clear now ALSO requires `! holder_alive`, and `busy()` now checks
+// `holder_alive()` first, falling back to the old process-name probe only when there is no
+// lock or no marker to consult (a foreign/legacy lock shape). Reproduced in scratch before
+// landing (see the mutation proof on this PR): the pre-fix script wrongly printed
+// STALE_CLEARED/ACQUIRED for a second tag while the first tag's job.pid process group was
+// still alive; the fixed script printed HELD/STILL_HELD instead, and only cleared once the
+// group had no live member.
 const LOCK_SCHEMA = { type: 'object', properties: { acquired: { type: 'boolean' }, holder: { type: 'string' }, note: { type: 'string' } }, required: ['acquired', 'holder', 'note'] }
 let acquired = false, lockTries = 0
 while (!acquired && lockTries < 12) {
   lockTries++
   const lk = await agent(`You are the lock waiter (mechanical). Call the Bash tool with timeout: 600000 for this command (it can legitimately run for up to 8 minutes; the tool's own 120s default would abort it mid-wait and read as a failure). Run EXACTLY this one command in the foreground and report what it prints; do nothing else, edit nothing, kill nothing:
-\`LOCK=${S}/chain.lock; TAG=${tag}; M=${S}/${tag}-job.pid; try() { ( set -o noclobber; echo "$TAG $(date -u +%FT%TZ)" > "$LOCK" ) 2>/dev/null && { rm -f "$M" 2>/dev/null || true; }; }; busy() { ps -eo args | grep -E '[s]cripts/preflight.mjs|[v]erify-breadth.mjs' >/dev/null; }; if [ -e "$LOCK" ] && [ -n "$(find "$LOCK" -mmin +40 2>/dev/null)" ]; then echo "STALE_CLEARED $(cat "$LOCK")"; rm -f "$LOCK"; fi; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; timeout 480 bash -c 'until [ ! -e "'"$LOCK"'" ] && ! (ps -eo args | grep -E "[s]cripts/preflight.mjs|[v]erify-breadth.mjs" >/dev/null); do sleep 15; done'; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "STILL_HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; fi; fi\`
+\`LOCK=${S}/chain.lock; TAG=${tag}; M=${S}/${tag}-job.pid; try() { ( set -o noclobber; echo "$TAG $(date -u +%FT%TZ)" > "$LOCK" ) 2>/dev/null && { rm -f "$M" 2>/dev/null || true; }; }; holder_alive() { [ -f "$LOCK" ] || return 1; OT=$(awk '{print $1}' "$LOCK" 2>/dev/null); [ -n "$OT" ] || return 1; OM="${S}/${OT}-job.pid"; [ -s "$OM" ] && kill -0 -- -"$(cat "$OM")" 2>/dev/null; }; busy() { holder_alive || ps -eo args | grep -E '[s]cripts/preflight.mjs|[v]erify-breadth.mjs' >/dev/null; }; if [ -e "$LOCK" ] && [ -n "$(find "$LOCK" -mmin +40 2>/dev/null)" ] && ! holder_alive; then echo "STALE_CLEARED $(cat "$LOCK")"; rm -f "$LOCK"; fi; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; timeout 480 bash -c 'holder_alive() { OT=$(awk "{print \$1}" "'"$LOCK"'" 2>/dev/null); [ -n "$OT" ] && [ -s "'"${S}"'/${OT}-job.pid" ] && kill -0 -- -"$(cat "'"${S}"'/${OT}-job.pid")" 2>/dev/null; }; until [ ! -e "'"$LOCK"'" ] && ! holder_alive && ! (ps -eo args | grep -E "[s]cripts/preflight.mjs|[v]erify-breadth.mjs" >/dev/null); do sleep 15; done'; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "STILL_HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; fi; fi\`
 Return acquired=true only if the output contains a line starting with ACQUIRED; holder = the text after HELD/STILL_HELD/ACQUIRED; note = the full output.`, { label: `lock:${tag}#${lockTries}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: LOCK_SCHEMA })
   acquired = !!(lk && lk.acquired)
   log(`lock try ${lockTries}: ${acquired ? 'acquired' : 'held by ' + (lk?.holder || '?')}`)

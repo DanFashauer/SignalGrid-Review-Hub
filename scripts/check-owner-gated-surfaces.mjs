@@ -201,11 +201,39 @@ export const SAFETY_MACHINERY = [
   // 0. One autonomous file change is therefore enough for every later firmware change to
   // merge under owner review without the contract gate ever running the firmware it
   // claims to check. Widened from `src/` alone to `(?:src|examples)`.
-  // native/desktop/app/build.rs is the only other autonomous .rs file in the tree
-  // (verified: `git ls-files '*.rs'` lists 12 tracked files; build.rs holds no
-  // #[cfg(test)] and no gate script or workflow step reads its output), so it stays out
-  // of scope.
   { rule: "Rust crates whose inline #[cfg(test)] modules check-desktop-core-tests.mjs counts, AND the crate's own executed example harness (desktop.yml:94,149; firmware.yml:86,114,118)", re: /^(?:native\/desktop\/(?:core|app)|firmware\/dock\/core)\/(?:src|examples)\/.*\.rs$/ },
+  // Round 5 review on #1133 (medium): the rule above still does not gate what CI
+  // actually runs — it gates the crate's own test/example SOURCE, not the build
+  // CONTROLS that decide what that source compiles and runs into. Reproduced with
+  // real cargo (--offline) on copies of firmware/dock/core, each reopening the exact
+  // bypass the rule above closed: (1) an appended [[example]] in Cargo.toml pointing
+  // at a fake harness gives byte-identical `cargo run --example emit_fixtures`
+  // output and the dock-contract gate still exits 0; (2) a new build.rs that
+  // overwrites examples/emit_fixtures.rs before the crate compiles — same output,
+  // exit 0; (3) a new .cargo/config.toml pointing the runner at `cat` so the
+  // firmware binary never runs at all — same output, exit 0. This is also why the
+  // "build.rs stays out of scope" sentence just above this rule (now deleted) was
+  // wrong: build.rs is not read by a gate SCRIPT, but it IS executed by desktop.yml's
+  // gated `cargo test` (core 84, app 145) and `cargo build --release` (app 152)
+  // steps, and can rewrite src/main.rs — which the rule above already gates — before
+  // that file compiles. The same reasoning covers firmware/dock/core's own
+  // `cargo test` (firmware.yml:80), Cortex-M4F `cargo build` (95) and
+  // `cargo run --example` (114). Measured with `git ls-files` through the regex
+  // below: exactly 4 tracked files match today — the three Cargo.toml
+  // (firmware/dock/core, native/desktop/app, native/desktop/core) and
+  // native/desktop/app/build.rs — nothing over-matched.
+  { rule: "Cargo build controls that decide what the gated crates' cargo test / cargo build / cargo run --example actually compile and execute (desktop.yml:84,145,152; firmware.yml:80,95,114)", re: /(^|\/)(?:Cargo\.toml|build\.rs|\.cargo\/config(?:\.toml)?|rust-toolchain(?:\.toml)?)$/ },
+  // Cargo.lock is deliberately NOT in the regex above. By the same test — does a
+  // gated cargo step consume it, would a swap change dependency versions under the
+  // gated tests — native/desktop/app and native/desktop/core both declare real
+  // [dependencies] (tauri/serde/serde_json; serde_json), so yes for those two; but
+  // firmware/dock/core's Cargo.toml declares an explicitly empty [dependencies]
+  // block ("NO DEPENDENCIES, deliberately"), so its Cargo.lock swap is a no-op. One
+  // filename-pattern rule can't say "these two crates, not that one" without a
+  // directory-scoped carve-out, and this round's reproductions covered
+  // Cargo.toml/build.rs/.cargo config, not Cargo.lock — so it stays a named gap for
+  // the gate-registry-derivation backlog row (docs/BUILD_BACKLOG.md) rather than an
+  // ad hoc partial rule here.
   // Review fixes on the round-4 changes (#1133): round 4's own TREE_GUARD note (below)
   // left three product-test files "deliberately alone" as merely outside its native-only
   // scope — but they are not incidental test dirs, they are the WHOLE input of two gates
@@ -885,8 +913,19 @@ function selfTest() {
   // autonomous before this fix.
   t("firmware/dock/core/examples/emit_fixtures.rs (the dock-contract gate's entire firmware input) is SAFETY_MACHINERY",
     mostRestrictive(cls(["firmware/dock/core/examples/emit_fixtures.rs"])) === "SAFETY_MACHINERY");
-  t("native/desktop/app/build.rs stays autonomous (no #[cfg(test)], not read by any gate script or workflow step)",
-    cls(["native/desktop/app/build.rs"]).tier === "autonomous");
+  t("native/desktop/app/build.rs is SAFETY_MACHINERY (executed by desktop.yml's gated cargo test/build steps; can rewrite src/main.rs before it compiles)",
+    mostRestrictive(cls(["native/desktop/app/build.rs"])) === "SAFETY_MACHINERY");
+  // Round 5 (#1133): classifyDiff takes path strings, not a working tree, so these
+  // prove the new build-control rule fires whether or not the path exists on disk.
+  t("firmware/dock/core/build.rs is SAFETY_MACHINERY (a build.rs anywhere is a Cargo build control)",
+    mostRestrictive(cls(["firmware/dock/core/build.rs"])) === "SAFETY_MACHINERY");
+  t("firmware/dock/core/Cargo.toml is SAFETY_MACHINERY (a fake [[example]] here is exactly what the dock-contract gate would then run)",
+    mostRestrictive(cls(["firmware/dock/core/Cargo.toml"])) === "SAFETY_MACHINERY");
+  t(".cargo/config.toml is SAFETY_MACHINERY (a runner override can swallow the binary a gated cargo step is meant to execute)",
+    mostRestrictive(cls([".cargo/config.toml"])) === "SAFETY_MACHINERY");
+  // Negative: same directory, not a build control — must not be swept in.
+  t("firmware/dock/core/README.md stays autonomous (not a Cargo build control)",
+    cls(["firmware/dock/core/README.md"]).tier === "autonomous");
   // Negative: a non-test file, and a doc NAMED like a test topic, must not over-match.
   t("a doc named TESTING.md stays autonomous (not swept in by the filename rule)",
     cls(["TESTING.md"]).tier === "autonomous");

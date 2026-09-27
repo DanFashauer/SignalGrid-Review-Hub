@@ -16,9 +16,11 @@ PUBLISHING IS THE OWNER'S SEND — nothing here authorizes posting it anywhere.
 Network Access Control looks, from outside, like a sensor: a device shows up
 on the wire, and the NAC console tells you whether it's compliant, and when
 it last checked in. Model it that way and you'll place those two facts
-beside the authentication result itself, as if all three arrived off the
-same wire at the same moment. They don't. One of them is a protocol outcome.
-The others are derived: compliance is a policy engine's conclusion (often
+beside the authentication result itself, as if all three were the same
+kind of fact. They aren't. Even when a NAC carries all three in one message
+(a vendor-specific attribute can ride along with the result), only one of
+them is a protocol outcome. The others are derived, with their own
+semantics and authority: compliance is a policy engine's conclusion (often
 the NAC product's own, but not a standard RADIUS attribute), and last-auth
 time is a record from a separate accounting stream or the console's session
 database, on a different clock.
@@ -56,8 +58,9 @@ header: its old normalizer hardcoded `status: 'registered'` for every
 endpoint, asserting an authentication state the endpoint API never reports.
 
 This is structural, not a vendor shortcoming: a protocol's terminal
-answer is accept or reject (with challenges in between for EAP), and a console's compliance flag is that
-console's own policy engine talking, sourced from its logs. Neither is
+answer is accept or reject (with challenges in between for EAP), and a compliance flag is a derived
+conclusion whose source is vendor-specific: the NAC's own policy engine, an
+endpoint agent it ingests, or an external service. Neither is
 dishonest. But if a decision fabric treats a fetched conclusion the way it
 treats a measurement, staleness in the source becomes invisible — you're
 trusting someone else's cache without an expiry on it.

@@ -3975,17 +3975,23 @@ Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/actions/runs?branch=cl
 Output:   "2026-09-27T09:48:55Z 765faf7a" / "2026-09-27T10:41:15Z 992cb2a7" — every push to this branch dispatches its own
           workflow runs (server-side, not caller-controlled, unlike a commit's `committer.date`), and querying the
           branch's own run history for the whole 09:00Z-11:00Z window returns exactly these two distinct heads, in this
-          order, with NOTHING between them: no run for f4e787ff appears at all, at any timestamp in this window. So
-          f4e787ff — present in the PR's commit list with a 10:22:03Z committer date, but that date is caller-set and
-          proves nothing about a push — was never pushed to GitHub as its own distinct head; 765faf7a was the head from
-          09:48:55Z (its own first run) until 992cb2a7 superseded it at 10:41:15Z (its own first run). The 09:54:52Z close
-          falls inside that span, so #1133's head AT THE CLOSE was 765faf7a, not 1caf612b, and not f4e787ff (which never
-          existed as a live head at all). An earlier draft of this entry used commit committer dates as bounds and
-          inferred a distinct f4e787ff-headed interval; both are corrected here by this server-side evidence, which
-          supersedes them.
+          order, with NOTHING between them: no run for f4e787ff appears at all, at any timestamp in this window. A push
+          that suppresses Actions would leave no run, so this alone does not prove head continuity; the branch's
+          ref-update log, next, does. An earlier draft of this entry used commit committer dates as bounds and inferred
+          a distinct f4e787ff-headed interval; both are corrected here by server-side evidence, which supersedes them.
+Command:  gh api 'repos/DanFashauer/SignalGrid-Review-Hub/activity?ref=refs/heads/claude/land-branch-derive-klass&per_page=20' --jq '.[]|select(.timestamp>"2026-09-27T09:00:00Z" and .timestamp<"2026-09-27T11:00:00Z")|"\(.timestamp) \(.activity_type) \(.before[0:8])->\(.after[0:8])"' (tool read at 2026-09-27T14:35Z — AFTER the close; recorded, not re-runnable)
+Output:   "2026-09-27T10:41:08Z push 765faf7a->992cb2a7" / "2026-09-27T09:48:49Z push 1caf612b->765faf7a" — GitHub's
+          repository activity log records every update of the branch ref with its before and after sha. The only two
+          updates in the window move 1caf612b to 765faf7a at 09:48:49Z and 765faf7a to 992cb2a7 at 10:41:08Z, so
+          765faf7a was the head from 09:48:49Z to 10:41:08Z, the 09:54:52Z close falls inside that span, and f4e787ff
+          never headed the branch (it reached GitHub inside the 10:41:08Z push).
 Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 're-read 2026-09-27 at `835883c5` (rename in `394032de`)'
 Output:   "re-read 2026-09-27 at `835883c5` (rename in `394032de`)" — the core-digest row's own citation of #1146's head, in
           the tree at the close (835883c5 is #1146's head as read live above, but the BUILD_BACKLOG line is a tree fact).
+Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 'Part two, TO ADD: a fixed regression corpus'
+Output:   "Part two, TO ADD: a fixed regression corpus" — the same row's check has two parts, and at the close only part
+          one (the targeted alias pairs) was asserted on #1146; part two (a fixed ASCII/Latin-1/CJK/astral corpus with
+          no two members colliding) was not yet on the PR. The owner queue in LOOP.md says so beside #1146.
 Command:  git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
 Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, one of its early merge-of-mainline commits,
           but not from 7b6ea61e) mention "#1133" in their subject.
@@ -4018,11 +4024,10 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           "unread same as the others" as an earlier draft of this entry said; DR-013's "10 for 10" sentence is measured by
           row 17's own prose (seven of a ten-check dated subset), not by the wire-truth gate's own count (11 checks, 7
           divergent) — two different denominators for two different claims; and #1133's head AT THE CLOSE was 765faf7a,
-          not 1caf612b — the branch's own server-side workflow-run history (queried by branch name, not by a
-          caller-controlled commit date) shows 765faf7a's first run at 09:48:55Z and the next distinct head's (992cb2a7)
-          first run at 10:41:15Z, with no run for any other head in between; the 09:54:52Z close falls inside that span,
-          so 765faf7a was the head at the close, and f4e787ff — a commit that appears in the PR's commit list with a
-          10:22:03Z committer date, which is caller-set and not evidence of a push — was never pushed on its own (no workflow run on the branch carries it)
+          not 1caf612b — the branch's ref-update log (repository activity, server-side) shows 1caf612b->765faf7a at
+          09:48:49Z and 765faf7a->992cb2a7 at 10:41:08Z with no other update between; the 09:54:52Z close falls inside
+          that span, so 765faf7a was the head at the close, and f4e787ff — a commit that appears in the PR's commit list
+          with a 10:22:03Z committer date, which is caller-set and not evidence of a push — never headed the branch
           (an earlier draft of this entry used committer-date bounds and an f4e787ff-headed interval; both are corrected
           here). #1133's CURRENT head, read
           live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing about it is claimed here beyond that

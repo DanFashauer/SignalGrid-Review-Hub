@@ -788,6 +788,24 @@
           "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
           "open": 0,
           "closed": 3
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 3 on #1168 (head 9489d2e6) read the article in full: 4 findings (coverage attribution split, vendor claims reframed as secondhand, lattice scoped to authenticated signals, Calling-Station-Id qualified), all applied in 20a8c47c.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "20a8c47c",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 4 on #1168 (head 20a8c47c) read the article in full: 4 findings (compliance described as derived, monitor scoped to expected segment or no policy, build plan queue, Opus record moved to 4f2a0448), all applied in 34bb7743.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "34bb7743",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
         }
       ]
     },

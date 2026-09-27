@@ -165,29 +165,62 @@ export const SAFETY_MACHINERY = [
   // that catches a native test convention neither rule below happens to name).
   { rule: "native test sources by directory (src/test/, src/androidTest/, a dir segment ending in Tests/, Rust tests/)", re: /^native\/(?:.+\/)?(?:tests?|__tests__|androidTest|[\w-]*Tests)\// },
   { rule: "native test sources by filename (*Test.kt, *Tests.kt, *Test.java, *Test.swift, *Tests.swift, *_test.rs)", re: /^native\/.*(?:Test\.(?:kt|java|swift)|Tests\.(?:kt|swift)|_test\.rs)$/ },
+  // Review fixes on the round-4 changes (#1133): round 4's own TREE_GUARD note (below)
+  // left three product-test files "deliberately alone" as merely outside its native-only
+  // scope — but they are not incidental test dirs, they are the WHOLE input of two gates
+  // preflight and CI already run, so an autonomous PR could gut either assertion file and
+  // keep the gate green. artifacts/mcp-server/test/server.test.ts is the entire "MCP
+  // server unit tests" step (scripts/preflight.mjs:604, review-hub-ci.yml:1041, via
+  // artifacts/mcp-server/package.json's own "test" script: `tsx --test test/server.test.ts`).
+  // artifacts/signalgrid-app/src/lib/{policyTests,facilityGraphLayout}.test.ts are together
+  // the entire "Console unit tests" step (scripts/preflight.mjs:597, review-hub-ci.yml:1033,
+  // via `pnpm run test:console` -> artifacts/signalgrid-app/package.json's "test" script:
+  // `node --test src/lib/policyTests.test.ts src/lib/facilityGraphLayout.test.ts`). Measured
+  // over `git ls-files`, this rule matches exactly 7 tracked files: these 3, plus the 4 under
+  // artifacts/api-server/test/ (already DECISION_PATH via the blanket "the /v1 decision API
+  // server" rule above, so this is a harmless second match for them) — and nothing else.
+  { rule: "product unit-test sources that preflight/CI run (artifacts/*/test/**, artifacts/**/*.test|spec.*)", re: /^artifacts\/[\w-]+\/(?:(?:.+\/)?(?:test|tests|__tests__)\/|.*\.(?:test|spec)\.[cm]?[jt]sx?$)/ },
+];
+
+// Review fixes on the round-4 changes (#1133): the guard below (findUngatedNativeTestSources)
+// is now REPO-WIDE, not native/-only — a repo-wide sweep of every tracked file matching
+// the test conventions below (TEST_CONVENTION_DIR_RE / TEST_CONVENTION_NAME_RE) finds
+// NINE files that classify autonomous today: the three product-test files above (now
+// closed by the rule above) plus these six, which really are not gate inputs. This is
+// the guard's own record of what is DELIBERATELY left out, one family per line, so a
+// future reader can see the reasoning next to the exclusion rather than inferring it
+// from silence — a directory prefix for the two families that are ENTIRELY out of scope
+// by design, and the two known files (by exact path) for the third, since an ordinary
+// skill directory could reasonably gain a file worth gating later and this list should
+// not wave that through blind.
+export const TEST_SOURCE_EXCLUSIONS = [
+  { rule: "vendored third_party/ code (pinned upstream, not this repo's own gate surface — e.g. third_party/cli-anything/tests/test_skill_generator.py)", re: /^third_party\// },
+  { rule: "k6 load drivers (tests/load/**) — CLAUDE.md and scripts/check-test-execution.mjs:46 already document these as REPORTED, invoked by nothing, deliberately outside the correctness gate", re: /^tests\/load\// },
+  { rule: "two test-shaped files inside ordinary, deliberately-autonomous skill directories (see the existing \"an unrelated skill dir stays autonomous\" self-test)", re: /^\.claude\/skills\/(?:ios-simulator-skill\/scripts\/test_recorder\.py|node\/rules\/assets\/graceful-server\.test\.ts)$/ },
 ];
 
 // Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD `validate()` runs (see
-// below) so the next native test directory cannot slip through a hand-written list like
-// SAFETY_MACHINERY above. It re-derives, independently of the two rules just added,
+// below) so the next test directory cannot slip through a hand-written list like
+// SAFETY_MACHINERY above. It re-derives, independently of the manifest rules above,
 // which tracked files look like a test source ANYWHERE in the repo by the same broad
 // conventions used to DERIVE this fix (dirs test/, tests/, __tests__/, src/test/,
 // src/androidTest/, a dir segment ending in Tests/; names *.test.*, *.spec.*, *Test.kt|
 // java|swift, *Tests.kt|swift, *_test.rs, test_*.py) and fails, naming the file, if any
-// NATIVE one still classifies autonomous. Scoped to native/ deliberately, not the whole
-// repo: the same repo-wide sweep also found three OTHER families that classify
-// autonomous today — artifacts/mcp-server/test/*.test.ts and two
-// artifacts/signalgrid-app/src/lib/*.test.ts files (real product tests, but outside
-// this finding's native-only scope and with no known "CI derives its expected set from
-// the files present" hazard the way the Android verifier has); tests/load/*.js (k6
-// load-harness scripts CLAUDE.md already documents as REPORTED, not gated the same way
-// as correctness proofs); and two files inside ordinary, deliberately-autonomous skill
-// directories (.claude/skills/node/, .claude/skills/ios-simulator-skill/ — see the
-// existing "an unrelated skill dir stays autonomous" self-test) plus one vendored
-// third_party/cli-anything test (pinned upstream code, not this repo's own gate
-// surface). None of those are native, so the guard leaves them alone rather than
-// silently widening this round's fix; a repo-wide version of this same guard is a
-// reasonable follow-up but is not what was asked here.
+// one still classifies autonomous.
+//
+// Review fixes on the round-4 changes (#1133): round 4 scoped this to native/ only and
+// left three OTHER autonomous test-shaped files "deliberately alone" as merely outside
+// that scope — but two of those three back real preflight/CI gates (closed by the new
+// SAFETY_MACHINERY rule above), so leaving the GUARD native-only left its own self-tests
+// asserting that gap was correct. The guard is now REPO-WIDE: it fails, naming the file,
+// if ANY tracked path (not just one under native/) matches the test conventions below
+// and still classifies autonomous. TEST_SOURCE_EXCLUSIONS (above) is the small, explicit,
+// commented list of the families that really are not gate inputs, so a repo-wide sweep
+// finds nothing left to flag: vendored third_party/ code, the k6 load drivers under
+// tests/load/ CLAUDE.md already documents as REPORTED not gated, and two files inside
+// ordinary, deliberately-autonomous skill directories. A future test-shaped file anywhere
+// else in the tree — the "next native test directory" this guard was built for, just no
+// longer limited to native/ — still fails this gate by name instead of merging silently.
 const TEST_CONVENTION_DIR_RE = /(^|\/)(test|tests|__tests__)\/|(^|\/)src\/(test|androidTest)\/|(^|\/)[^/]*Tests\//;
 const TEST_CONVENTION_NAME_RE = /\.test\.[^./]+$|\.spec\.[^./]+$|Test\.(kt|java|swift)$|Tests\.(kt|swift)$|_test\.rs$|(^|\/)test_[^/]+\.py$/;
 
@@ -203,13 +236,15 @@ export function looksLikeTestSource(f) {
 
 /** Pure function over a file list (never touches git itself) so the self-test can call
  *  it hermetically with a synthetic list, including a planted path that exercises the
- *  fix without writing anything into the real tree. Returns the NATIVE test-source
- *  paths among `files` that classifyDiff() still calls "autonomous" — empty means the
- *  guard is satisfied. */
+ *  fix without writing anything into the real tree. REPO-WIDE as of the review fixes on
+ *  the round-4 changes (#1133 — it used to filter to native/ only). Returns the
+ *  test-source paths among `files`, minus TEST_SOURCE_EXCLUSIONS, that classifyDiff()
+ *  still calls "autonomous" — empty means the guard is satisfied. The name is kept for
+ *  history/git-blame continuity; it no longer means native/-only. */
 export function findUngatedNativeTestSources(files) {
   return files
     .map(normalizePath)
-    .filter((f) => f.startsWith("native/") && looksLikeTestSource(f))
+    .filter((f) => looksLikeTestSource(f) && !TEST_SOURCE_EXCLUSIONS.some((p) => p.re.test(f)))
     .filter((f) => classifyDiff([f]).tier === "autonomous");
 }
 
@@ -615,12 +650,28 @@ function selfTest() {
   // "gate inputs outside scripts/" rule), unaffected by the two new rules above.
   t("native/shared/assist-wire-conformance.json keeps its existing SAFETY_MACHINERY class",
     mostRestrictive(cls(["native/shared/assist-wire-conformance.json"])) === "SAFETY_MACHINERY");
-  // Negative: the SAME convention outside native/ is deliberately NOT swept in by these
-  // two rules (the repo-wide sweep found it still autonomous; see the notes above
-  // TREE_GUARD's definition for why this round leaves it alone) — proves the `^native\/`
-  // anchor is load-bearing, not decorative.
-  t("an out-of-scope test file outside native/ is not caught by the new native rules (artifacts/mcp-server/test/server.test.ts)",
-    cls(["artifacts/mcp-server/test/server.test.ts"]).tier === "autonomous");
+  // Negative: the SAME convention outside native/ is not caught by these two NATIVE
+  // rules specifically — proves the `^native\/` anchor is load-bearing, not decorative.
+  // Review fixes on the round-4 changes (#1133): this used to illustrate the point with
+  // artifacts/mcp-server/test/server.test.ts, which the product-test rule above now
+  // gates for an unrelated reason — a bad example once it stopped being autonomous
+  // OVERALL. Repointed at a path that stays genuinely autonomous end to end (vendored,
+  // and in TEST_SOURCE_EXCLUSIONS below) so this still proves the anchor, not a stale
+  // reason.
+  t("an out-of-scope test file outside native/ is not caught by the new native rules (third_party/cli-anything/tests/test_skill_generator.py)",
+    cls(["third_party/cli-anything/tests/test_skill_generator.py"]).tier === "autonomous");
+  // Positive (review fixes on the round-4 changes, #1133): the gap the round-4 negative
+  // above used to assert was CORRECT — server.test.ts is the entire "MCP server unit
+  // tests" gate (preflight.mjs:604, review-hub-ci.yml:1041) and classified autonomous.
+  t("artifacts/mcp-server/test/server.test.ts is SAFETY_MACHINERY (the whole input of the MCP server unit-tests gate)",
+    mostRestrictive(cls(["artifacts/mcp-server/test/server.test.ts"])) === "SAFETY_MACHINERY");
+  t("artifacts/signalgrid-app/src/lib/policyTests.test.ts is SAFETY_MACHINERY (part of the Console unit-tests gate)",
+    mostRestrictive(cls(["artifacts/signalgrid-app/src/lib/policyTests.test.ts"])) === "SAFETY_MACHINERY");
+  t("artifacts/signalgrid-app/src/lib/facilityGraphLayout.test.ts is SAFETY_MACHINERY (part of the Console unit-tests gate)",
+    mostRestrictive(cls(["artifacts/signalgrid-app/src/lib/facilityGraphLayout.test.ts"])) === "SAFETY_MACHINERY");
+  t("the 4 artifacts/api-server/test/ files stay DECISION_PATH (the new product-test rule also matches them, harmlessly — DECISION_PATH still wins)",
+    ["artifacts/api-server/test/api.test.mjs", "artifacts/api-server/test/load.test.mjs", "artifacts/api-server/test/oidc.test.mjs", "artifacts/api-server/test/route-stack-dump.mjs"]
+      .every((f) => mostRestrictive(cls([f])) === "DECISION_PATH"));
 
   // The independent TREE GUARD (findUngatedNativeTestSources): a pure function over a
   // file list, so these run hermetically with no git and no real files.
@@ -651,12 +702,42 @@ function selfTest() {
         findUngatedNativeTestSources([planted]).length === 1 &&
         findUngatedNativeTestSources([planted])[0] === planted;
     })());
-  // Negative: the guard itself must not over-match — a non-test native file, and an
-  // out-of-native test file with the identical convention, are both left alone.
+  // Negative: the guard itself must not over-match — a non-test native file stays alone.
   t("the guard does not flag an ordinary native source file",
     findUngatedNativeTestSources(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).length === 0);
-  t("the guard does not flag a same-convention file outside native/",
-    findUngatedNativeTestSources(["artifacts/mcp-server/test/server.test.ts"]).length === 0);
+  // Review fixes on the round-4 changes (#1133): the guard is now REPO-WIDE (no more
+  // `f.startsWith("native/")` filter) — this used to prove the OLD native/-only scope by
+  // pointing at server.test.ts and expecting it untouched; now that the manifest gates
+  // server.test.ts directly, that is no longer a guard-scope question for this file. The
+  // guard-scope question is TEST_SOURCE_EXCLUSIONS instead: does the guard correctly
+  // leave the six genuinely-out-of-scope families alone even though it now looks at the
+  // WHOLE tree, not just native/.
+  t("the guard does not flag a vendored third_party/ test file",
+    findUngatedNativeTestSources(["third_party/cli-anything/tests/test_skill_generator.py"]).length === 0);
+  t("the guard does not flag a k6 load driver under tests/load/",
+    findUngatedNativeTestSources(["tests/load/location-report.js"]).length === 0);
+  t("the guard does not flag the two named skill-directory files",
+    findUngatedNativeTestSources([
+      ".claude/skills/ios-simulator-skill/scripts/test_recorder.py",
+      ".claude/skills/node/rules/assets/graceful-server.test.ts",
+    ]).length === 0);
+  // The comprehensive proof (mirrors "the guard finds nothing ungated among the four
+  // measured paths" above, now repo-wide): all NINE tracked files the repo-wide sweep
+  // found autonomous at 07d6f1ab are accounted for — three by the new manifest rule,
+  // six by TEST_SOURCE_EXCLUSIONS — so the real `git ls-files` run this same function
+  // backs (checkNativeTestSourcesGated) finds nothing left to flag.
+  t("the guard finds nothing ungated among the nine repo-wide measured paths now that they are fixed",
+    findUngatedNativeTestSources([
+      "artifacts/mcp-server/test/server.test.ts",
+      "artifacts/signalgrid-app/src/lib/policyTests.test.ts",
+      "artifacts/signalgrid-app/src/lib/facilityGraphLayout.test.ts",
+      "tests/load/location-report.js",
+      "tests/load/session-start.js",
+      "tests/load/webhooks.js",
+      "third_party/cli-anything/tests/test_skill_generator.py",
+      ".claude/skills/ios-simulator-skill/scripts/test_recorder.py",
+      ".claude/skills/node/rules/assets/graceful-server.test.ts",
+    ]).length === 0);
 
   // Non-vacuity: both lists carry rules, so the gate has a subject.
   t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
@@ -765,8 +846,9 @@ function selfTest() {
 // Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD itself, run by the
 // plain (non-self-test) `node scripts/check-owner-gated-surfaces.mjs` invocation that
 // preflight and CI already call. Walks the REAL tree (`git ls-files`, not a fixture)
-// so a native test directory added later — one the SAFETY_MACHINERY rules above were
-// never updated for — fails this gate by name instead of silently merging autonomous.
+// so a test source added later — one the SAFETY_MACHINERY rules above were never
+// updated for — fails this gate by name instead of silently merging autonomous. Repo-wide
+// as of the review fixes on the round-4 changes (#1133); see findUngatedNativeTestSources.
 function checkNativeTestSourcesGated() {
   let files;
   try {
@@ -784,7 +866,7 @@ function checkNativeTestSourcesGated() {
   const ungated = findUngatedNativeTestSources(files);
   if (ungated.length > 0) {
     console.error(
-      "tree guard: native test source(s) classify autonomous — add or widen a SAFETY_MACHINERY rule for:",
+      "tree guard: test source(s) classify autonomous — add or widen a SAFETY_MACHINERY rule, or a TEST_SOURCE_EXCLUSIONS entry, for:",
     );
     for (const f of ungated) console.error(`  ${f}`);
     process.exit(1);

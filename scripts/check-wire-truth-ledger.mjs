@@ -42,7 +42,7 @@ export function treeOf(root = ROOT) {
 }
 
 const declares = (text, symbol) =>
-  new RegExp(`\\b(?:function|class|interface|type|const|let|enum)\\s+${symbol.replace(/[$]/g, "\\$")}\\b`).test(text);
+  new RegExp(`\\b(?:function|class|interface|type|const|let|enum)\\s+${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text);
 
 export function audit(ledger, tree) {
   const problems = [];

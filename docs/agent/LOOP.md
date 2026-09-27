@@ -62,8 +62,12 @@ LAST TOUCHED: 2026-09-26 (cloud lane, 22:39Z) - L8 + L2 + MCP ROSTER #1127 ALL L
               record later events through 20:58Z (#1138) plus check-run reads at 21:5xZ; later mainline events (e.g.
               the Mac's 21:39Z tenant-isolation hand, aaa5b321) belong to the next record.
               Refreshed through Codex rounds 1-13 on #1128; the stamp is the last refresh.
-              Owner still owes: #1117 (DECISION_PATH merge), #1118/#1121 (the golden-rule-1 ruling), #1050 (DR-058),
-              #1083 (DR-059), #1133 (OWNER_RESERVED by its own widened classifier: the OWNER merges it), the row-8
+              Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117'
+              and the lane refreshes it first, so the merge is one tap), #1118/#1121 (the golden-rule-1 ruling),
+              #1050 (DR-058; conflicts with mainline on docs only — reply 'merge #1050' and the lane refreshes
+              it first, so the merge is one tap), #1083 (DR-059; conflicts with mainline on docs only — reply
+              'merge #1083' and the lane refreshes it first, so the merge is one tap), #1133 (OWNER_RESERVED by
+              its own widened classifier: the OWNER merges it), the row-8
               doctrine hand (answer (a) raise to step_up or (b) day-one-quiet covers it, on the raised-hands issue
               https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands; file
               artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json), #1037's CodeQL

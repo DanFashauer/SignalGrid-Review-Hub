@@ -60,20 +60,20 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
               This entry covers 07:15Z-11:55Z and is frozen there (lesson L18, written up with the next record); every later event
               belongs to the next record.
-              Owner still owes (at 11:55Z): #1117 (DECISION_PATH classifier; the OWNER merges it) - reply 'merge #1117' in chat,
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117. #1118/#1121 (golden-rule-1 ruling asked in chat at
-              08:20Z) - reply 'exception granted' or 'revert' in chat,
+              Owner still owes (at 11:55Z): #1117 (fixed test ports -> ephemeral in oidc/load/observability tests, classified
+              DECISION_PATH) - the OWNER merges it at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117. #1118/#1121
+              (golden-rule-1 ruling asked in chat at 08:20Z) - reply 'exception granted' or 'revert' in chat,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058) - reply 'merge #1050' in chat,
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - reply 'merge #1083' in chat,
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - answer (a) raise to step_up
-              or (b) day-one-quiet covers it, on the raised-hands issue
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058) - the owner merges it at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - the owner merges it at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - answer (a) raise to
+              step_up or (b) day-one-quiet covers it, on the raised-hands issue
               https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands (file
               artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json); #1037's CodeQL call -
               dismiss the alert or reply 'Mac paths-ignore', https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037. In a
-              BROWSER: Settings -> Pages -> Source -> GitHub
-              Actions at https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
-              (Actions -> "Deploy site to Pages" -> Run workflow,
+              BROWSER: Settings -> Pages -> Source -> GitHub Actions at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once (Actions ->
+              "Deploy site to Pages" -> Run workflow,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).
               Landed this window: #1119 (177299f3, L10 shallow-fetch deny guard + L11 clean-index guard for coverage --write + L12
               tick-landing rule), #1120 (bf642ee5, mail: ack for the Mac's #1118 review ask + 08:24Z heartbeat), #1122 (af82b564,
@@ -91,8 +91,8 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
               Ledger 15/15 landed at the window's close (`git show a4507f9a:docs/agent/LESSONS.md`).
               Next (at 11:55Z): #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
               and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
-              Swift<->vector binding check, both gated by their full review acks even with the golden-rule-1 exception granted;
-              the three owner-merge PRs above (#1117, #1050, #1083) wait on the owner's reply.
+              Swift<->vector binding check, both gated by every item in their review acks even if the golden-rule-1 exception is
+              granted; the three owner-merge PRs above (#1117, #1050, #1083) wait on the owner's merge.
 TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
               findings) and the MCP roster (6); Haiku workers ran lock waits, chain starts, sentinel reads, pushes

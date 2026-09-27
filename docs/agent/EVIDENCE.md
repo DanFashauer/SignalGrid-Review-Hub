@@ -3681,10 +3681,10 @@ Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d970
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
 
 ## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED; #1127 merged as a4507f9a with its gating check green"
-Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b a4507f9a; do TZ=UTC git log -1
-          --date=iso-local --format='%H %cd %s' $sha; done  # the eight PRs merged this window: #1119, #1120, #1122, #1123,
-          #1124, #1125, #1126, #1127
-Output:   "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Merge pull request #1119: L10 shallow-fetch deny
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b a4507f9a; do TZ=UTC git log -1 \
+          --date=iso-local --format='%H %cd %s' $sha; done
+Output:   the eight PRs merged this window: #1119, #1120, #1122, #1123, #1124, #1125, #1126, #1127.
+          "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Merge pull request #1119: L10 shallow-fetch deny
           guard, L11 coverage --write refuses a mid-conflict index, L12 tick landing rule (DR-037, check run 108369513162)" /
           "bf642ee52e2f7160b64be498513c300e85b6941a 2026-09-26 08:34:56 +0000 Lane mail (cloud): ack for the Mac's #1118 review
           ask; steward heartbeat 08:24Z (#1120, gating check run 108369566206)" / "af82b564f0dc5b51d53d1c08298c2dd1afc11cde
@@ -3700,11 +3700,11 @@ Output:   "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Me
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
           DR-037, check run 108397317258)" — local and deterministic, re-runnable in any clone; all eight dates fall inside the
           07:15Z-11:55Z window.
-Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a  # the pre-rewrite LOOP.md entry
-          (2b4b5586) carried no sha for #1122; derived here on a fixed range ending at a4507f9a
-Output:   "af82b564f0dc5b51d53d1c08298c2dd1afc11cde Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run
+Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a
+Output:   the pre-rewrite LOOP.md entry (2b4b5586) carried no sha for #1122; derived here on a fixed range ending at a4507f9a.
+          "af82b564f0dc5b51d53d1c08298c2dd1afc11cde Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run
           108374280929)" — the only match; local and immutable (the range's upper bound is a fixed sha, not a branch).
-Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b; do git merge-base --is-ancestor $sha
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b; do git merge-base --is-ancestor $sha \
           a4507f9a && echo "$sha carried"; done
 Output:   "177299f3 carried" / "bf642ee5 carried" / "af82b564 carried" / "5f1f21e3 carried" / "bb2ed162 carried" / "8a39aeef
           carried" / "8216cf6b carried" (exit 0 all seven) — each of the other seven merges is an ancestor of a4507f9a, i.e.
@@ -3733,8 +3733,22 @@ Command:  git rev-parse a4507f9a^2 8216cf6b^2
 Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — matches the two recorded
           head_sha values above exactly: #1127's gating check (108397317258) and #1126's (108391088659) are each bound to their
           merged PR head by head_sha (local, immutable).
+Command:  TZ=UTC git log --first-parent --format='%s' 221eabee~1..a4507f9a | grep -cE 'Merge pull request #|\(#[0-9]+, gating'
+Output:   "8" — 221eabee~1 is 428a12a8, #1113, merged 07:13:44Z just before the window, so the range is exactly the window's
+          first-parent landings; the other first-parent commits in the range are Mac lane pushes, not PRs.
+Command:  git show a4507f9a:artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json | \
+          grep -o -E "VERDICT: owner-decision|#1117 \(ephemeral OIDC/load/observability ports\) is open for the owner's merge"
+Output:   "VERDICT: owner-decision" / "#1117 (ephemeral OIDC/load/observability ports) is open for the owner's merge" — the
+          in-window ack for #1118, also carrying #1117's status.
+Command:  git show a4507f9a:artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json | \
+          grep -o -E 'VERDICT: owner-decision, same golden-rule-1 ruling as #1118 \(asked of Dan 08:20Z, not yet given\)'
+Output:   "VERDICT: owner-decision, same golden-rule-1 ruling as #1118 (asked of Dan 08:20Z, not yet given)" — the in-window ack
+          for #1121.
+Command:  git show a4507f9a:docs/agent/LOOP.md | grep -o 'Owner still owes: #1050 (DR-058), #1083 (DR-059)'
+Output:   "Owner still owes: #1050 (DR-058), #1083 (DR-059)" — LOOP.md's own STATE block at a4507f9a.
 Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this window — #1119, #1120, #1122, #1123, #1124, #1125,
           #1126, #1127 — each log-dated inside 07:15Z-11:55Z and each an ancestor of #1127's own merge (a4507f9a, 2026-09-26
           11:55:30Z). The lesson ledger read 15/15 landed AT a4507f9a. #1127's gating check and #1126's are each bound to their
-          merged head by head_sha, per the recorded REST reads matched against a local, immutable `git rev-parse`. Nothing here
-          claims PR state, mainline membership, or any event after 11:55Z — those belong to the next record.
+          merged head by head_sha, per the recorded REST reads matched against a local, immutable `git rev-parse`. The five
+          owner-decision PRs (#1117, #1118, #1121, #1050, #1083) were owed in the tree at a4507f9a, per the reads above; live PR
+          state is still not claimed, nor is mainline membership or any event after 11:55Z — those belong to the next record.

@@ -1397,9 +1397,12 @@ components:
           type: string
           enum: [allow, step_up, restrict, deny]
         # decisionId is always a dec_ id on a real decision (minLength: 1). The strict
-        # client parse (claude/assist-wire-strict-decision) denies a blank or missing
-        # one. Documentation only: the enforcement is
-        # artifacts/api-server/test/api.test.mjs's four-outcome /v1/authorize assertion.
+        # client parse landed (#1145): every Assist client (Kotlin, Rust, Swift) denies a
+        # 2xx whose decisionId is missing, not a string, or blank, and whose reasons is
+        # not a list of strings — native/shared/assist-wire-conformance.json is the
+        # shared vector file all three run against. Documentation only: the enforcement
+        # is artifacts/api-server/test/api.test.mjs's four-outcome /v1/authorize
+        # assertion.
         decisionId: { type: string, minLength: 1 }
         reasons:
           type: array

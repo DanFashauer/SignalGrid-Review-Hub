@@ -59,7 +59,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
 LAST TOUCHED: 2026-09-26 (cloud lane; events through 20:58Z, verification reads dated individually) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z. Lines marked POST-WINDOW
-              record later events through 20:58Z (#1138) plus verification reads at 21:5xZ-23:45Z (check runs, PR state, merge-tree, ancestry); later mainline events (e.g.
+              record later events through 20:58Z (#1138) plus verification reads, each dated where it is recorded (check runs, PR state, merge-tree, ancestry); later mainline events (e.g.
               the Mac's 21:39Z tenant-isolation hand, aaa5b321) belong to the next record.
               Refreshed through Codex rounds 1-15 on #1128; the refreshes' own commits carry later times and add no events.
               Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117' in
@@ -123,8 +123,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane; events through 20:58Z, verification reads 
               entry (16 tools DERIVED from registerTool( calls, readOnly 7 / mutating 1 / unannotated 8), an external
               array (github, firecrawl, neural-memory), per-lane/per-skill grants and ungranted.cloud (12 connector
               prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
-              a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
-              on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
+              a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `TZ=UTC git log
+              --first-parent --date=iso-local -3 ... a4507f9a`, EVIDENCE.md; mainline membership by `git merge-base
+              --is-ancestor a4507f9a origin/SignalGrid_Alpha`), gating check 108397317258 ("Typecheck, build, and proof scaffold")
               conclusion "success" on head e189552b — confirmed by `git rev-parse a4507f9a^2`, matching the check's own head_sha recorded in EVIDENCE.md. At a4507f9a (the #1127 tree, before
               #1130), `node scripts/check-mcp-roster.mjs` printed "mcp-roster: 6 servers (+3 external), signalgrid-mcp
               16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".

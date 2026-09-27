@@ -3691,15 +3691,16 @@ Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Me
 Command:  GitHub MCP get_check_run 108397317258
 Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
           DanFashauer/SignalGrid-Review-Hub)
-          # in the worktree after merging a4507f9a, 2026-09-26 12:03Z
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at
           2026-09-27 01:14Z, recorded — not to be re-run)
 Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
           "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z" — equal to `git rev-parse
           a4507f9a^2` below, so #1127's gating check is bound to its merged head by head_sha.
+          # the six node commands below ran in the worktree at a4507f9a (after merging it, 2026-09-26 12:03Z); on a
+          later tree check-lessons prints 16/16, check-mcp-roster adds "11 mentions" and the land-branch self-test
+          prints 19/19 (#1130, #1131+ lessons)
 Command:  node scripts/check-lessons.mjs
 Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
-          #  in the worktree after merging a4507f9a, 2026-09-26 12:03Z
 Command:  node scripts/check-mcp-roster.mjs
 Output:   "mcp-roster: 6 servers (+3 external), signalgrid-mcp 16/16 tools derived, 12 lane grants, 6 skill grants over
           18 first-party skills, 0 problems" / "PASS"
@@ -3720,10 +3721,6 @@ Command:  tail -n 1 <scratchpad>/mcp2-pf.log && tail -n 1 <scratchpad>/mcp2-br.l
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
           — the lane host's ephemeral chain logs, recorded, not re-runnable elsewhere.
           # #1126's gating check
-Command:  GitHub MCP get_check_run 108391088659
-Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
-          DanFashauer/SignalGrid-Review-Hub)
-          # in the worktree after merging a4507f9a, 2026-09-26 12:03Z
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108391088659 (tool read at
           2026-09-27 01:14Z, recorded — not to be re-run)
 Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
@@ -3789,6 +3786,10 @@ Command:  git merge-base --is-ancestor 8216cf6b36c893df78171e9177442c1d9b065ebc 
           && echo reachable
 Output:   "reachable" (exit 0) — L2's merge (PR #1126, 8216cf6b) is an ancestor of origin/SignalGrid_Alpha
           (recorded at 23:45Z)
+Command:  git merge-base --is-ancestor a4507f9a571f681d0101302ce31a32d2d9cd8699 origin/SignalGrid_Alpha \
+          && echo reachable
+Output:   "reachable" (exit 0) — #1127's merge (a4507f9a) is an ancestor of origin/SignalGrid_Alpha (recorded at
+          2026-09-27 01:42Z)
 Command:  git log --first-parent --format=%h a4507f9a | grep -n -e ^8216cf6b -e ^5f1f21e3
 Output:   "4:8216cf6b" / "11:5f1f21e3" (exit 0)
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2
@@ -3802,7 +3803,7 @@ Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gati
           something that read measures — the golden-rule-1 ruling stands as a request in LOOP's Owner still owes
           list). POST-WINDOW: a sixth owner-merge PR, #1133, per the pulls/1133 read above; #1117's CI is green on
           head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (20:52Z).
-          Ancestry: L8's merge (5f1f21e3) and L2's merge (8216cf6b) are each confirmed reachable from
-          origin/SignalGrid_Alpha by `git merge-base --is-ancestor` above ("reachable", exit 0 both) — the
-          three-commit first-parent walk above never reached either (L2's merge is entry 4 and L8's entry 11 of the
-          first-parent walk from a4507f9a, which is entry 1).
+          Ancestry: L8's merge (5f1f21e3), L2's merge (8216cf6b) and #1127's merge (a4507f9a) are each confirmed
+          reachable from origin/SignalGrid_Alpha by `git merge-base --is-ancestor` above ("reachable", exit 0 all
+          three) — the three-commit first-parent walk above never reached the first two (L2's merge is entry 4 and
+          L8's entry 11 of the first-parent walk from a4507f9a, which is entry 1 of that walk).

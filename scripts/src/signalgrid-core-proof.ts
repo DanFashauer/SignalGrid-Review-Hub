@@ -287,6 +287,28 @@ check("MIGRATION: a fresh snapshot is marked, and stripping the marker (downgrad
 const aliasEdit = (s: string): string => String.fromCharCode(s.charCodeAt(0) + 0x100) + s.slice(1);
 check("TAMPER: a same-low-byte substitution in a MARKED snapshot is now detected",
   verifySnapshot({ ...freshSnapshot, tenantId: aliasEdit(freshSnapshot.tenantId) }) === false);
+// Part two of the digest/deterministicId check named in BUILD_BACKLOG.md's util.ts row: not
+// the impossible universal no-collisions claim for a 64-bit hash, but a FIXED, literal corpus
+// spanning the alphabets the fix touches — ASCII, Latin-1, CJK, astral (surrogate-pair emoji
+// plus two lone/unpaired halves), and delimiter-bearing strings (`|`, `\`) — asserted pairwise
+// distinct. Against the unpatched (pre-fix) `charCodeAt(i) & 0xff` loop this collides: "Alice"
+// and "Łlice" share every low byte, so DIGEST_COLLISION_CORPUS's Set would shrink.
+const DIGEST_COLLISION_CORPUS = [
+  "", "a", "b", "Alice", "alice", "hello world", "The quick brown fox",
+  "café", "über", "señor", "Łlice", "Łukasz",
+  "日本語", "中文你好", "한국어",
+  "😀", "🎉", "𝄞",
+  "a\ud800", "\ud800", "\udc00", "a�",
+  "t|a", "t\\a", "a|b", "b|a", "a\\|b", "\\|", "|\\",
+];
+check(
+  `DIGEST: a fixed ${DIGEST_COLLISION_CORPUS.length}-member regression corpus (ASCII, Latin-1, CJK, astral, lone surrogates, '|'/'\\\\' strings) digests pairwise-distinct`,
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => digest(s))).size === DIGEST_COLLISION_CORPUS.length,
+);
+check(
+  "IDS: deterministicId over the same corpus (as lone parts) also stays pairwise-distinct",
+  new Set(DIGEST_COLLISION_CORPUS.map((s) => deterministicId("dec", s))).size === DIGEST_COLLISION_CORPUS.length,
+);
 
 check(
   `all three carriers report the version that was actually digested (v${CORE_NORMALIZATION_VERSION})`,

@@ -69,8 +69,8 @@ That's deliberate correction, not the original design: the build plan's own
 reading of the live shape check records that the prior code let an
 authenticated device with `nacCompliant` and `lastAuthAt` both `null` earn
 the full `on_trusted_segment`/`none` grant — "that unconfirmed combination is
-the *common* case on a real RADIUS wire, not an edge" — closed, together with
-the full state-space enumeration that now pins it, in one pull request.
+the *common* case on a real RADIUS wire, not an edge" — closed in one pull
+request and pinned by a full state-space enumeration in the next.
 
 Segment gets the same treatment: an authenticated device on *any* VLAN used
 to read `on_trusted_segment` even with no segment policy supplied. The
@@ -133,7 +133,8 @@ header). The grant lattice and segment handling:
 `lib/integrations/src/integrations/network-nac/evaluate.ts`
 (`grantIfPostureVerified` and the segment branch above it). Freshness:
 `lib/integrations/src/utils/freshness.ts`. The prior defect and its fix:
-`docs/COMPANY_BUILD_PLAN.md` row 1, PR #219. The enumeration and its
+`docs/COMPANY_BUILD_PLAN.md` row 1; the fix is PR #215 (957f310e, "two
+grant-wedge fixes") and the enumeration that pins it is PR #219 (6ee014bf). The enumeration and its
 negative control: `scripts/src/network-nac-proof.ts`.
 
 ---

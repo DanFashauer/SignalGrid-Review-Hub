@@ -59,7 +59,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
 LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
               #1136/#1147/#1150 carried in); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending until #1153;
               #1158 (open at the close) landed afterwards as b42a0967 (post-close - not part of this frozen entry).
-              Owner still owes (at 09:55Z, per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`, firedAt 09:30:45.823Z):
+              Owner still owes (PR states re-read after the close; settings, chat and branch items last confirmed 09:30Z per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`):
               #1153 (Assist-wire server, L20 fix pushed) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153
               #1146 (core-digest, DECISION_PATH) - its backlog check's part two (fixed regression corpus) is still TO ADD; merge once it is on the PR: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
               #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133

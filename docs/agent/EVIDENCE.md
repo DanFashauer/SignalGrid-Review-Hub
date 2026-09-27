@@ -3918,9 +3918,10 @@ Output:   `"firedAt": "2026-09-27T09:30:45.823Z"` (24 minutes before the 09:54:5
           was never delivered to the Mac as its own addressed message, so this heartbeat's "still unread" cannot be read as
           covering it; its read state stays UNKNOWN.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1153 (tool read at 2026-09-27T11:31Z — AFTER
-          the close; recorded, not re-runnable); git merge-base --is-ancestor a894309f 26a39479
+          the close; recorded, not re-runnable); git fetch origin refs/pull/1153/head && git merge-base --is-ancestor a894309f 26a39479
 Output:   `{"state":"open","merged":false,"head":"26a39479b314e62caf65b4c229c4e10a5802e9e9"}`; the ancestor check exits 0 —
-          the L20 anchor fix (a894309f) is included in #1153's current pushed head.
+          the L20 anchor fix (a894309f) is included in #1153's current pushed head. The fetch makes the PR-only objects
+          addressable from any clone: GitHub keeps `refs/pull/<n>/head` even after the branch is deleted.
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/commits/26a39479b314e62caf65b4c229c4e10a5802e9e9/check-runs --jq '.check_runs[] | select(.name=="Typecheck, build, and proof scaffold") | [.id,.conclusion,.head_sha,.completed_at]' (tool read at 2026-09-27T11:31Z — AFTER the close; recorded, not re-runnable)
 Output:   `[108537426452,"success","26a39479b314e62caf65b4c229c4e10a5802e9e9","2026-09-27T03:07:07Z"]` — the gating check
           is bound to this exact head and passed.
@@ -3992,10 +3993,11 @@ Command:  git show 7b6ea61e:docs/BUILD_BACKLOG.md | grep -o 'Part two, TO ADD: a
 Output:   "Part two, TO ADD: a fixed regression corpus" — the same row's check has two parts, and at the close only part
           one (the targeted alias pairs) was asserted on #1146; part two (a fixed ASCII/Latin-1/CJK/astral corpus with
           no two members colliding) was not yet on the PR. The owner queue in LOOP.md says so beside #1146.
-Command:  git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
+Command:  git fetch origin refs/pull/1133/head && git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
 Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, one of its early merge-of-mainline commits,
           but not from 7b6ea61e) mention "#1133" in their subject.
-Command:  for p in "1caf612b 7b6ea61e" "765faf7a 7b6ea61e" "992cb2a7 7b6ea61e" "835883c5 7b6ea61e" "26a39479 7b6ea61e"; do
+Command:  git fetch origin refs/pull/1133/head refs/pull/1146/head refs/pull/1153/head (1caf612b and 765faf7a are ancestors
+          of #1133's pull ref); for p in "1caf612b 7b6ea61e" "765faf7a 7b6ea61e" "992cb2a7 7b6ea61e" "835883c5 7b6ea61e" "26a39479 7b6ea61e"; do
           a=${p% *}; b=${p#* }; git merge-base --is-ancestor "$a" "$b"; echo "$a in $b: $?"; done (printed per-check, not chained by
           semicolons)
 Output:   "1caf612b in 7b6ea61e: 1" / "765faf7a in 7b6ea61e: 1" / "992cb2a7 in 7b6ea61e: 1" / "835883c5 in 7b6ea61e: 1" /

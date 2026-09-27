@@ -110,6 +110,10 @@ const STEPS = [
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
   { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
   { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
+  // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
+  { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },
+  { name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a

@@ -98,9 +98,9 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
               findings) and the MCP roster (6); Haiku workers ran lock waits, chain starts, sentinel reads, pushes
               and PR opens inside the saved workflow; Sonnet wrote the later PR bodies, from the L2 landing (#1126) on.
-              Earlier in the window, Haiku drafted the bodies for #1119, the 07:20Z record (#1122) and the L8 landing (#1123);
-              each invented facts, and the coordinator rewrote each by hand from verified output (recorded later as lesson
-              L16). L7 recurred: the coordinator wrote
+              Earlier in the window, Haiku wrote the #1119 body, which invented a check-run id and a Jekyll cause, and a body
+              draft for the 07:20Z record (#1122) and the L8 landing (#1123), which invented facts again; the coordinator rewrote
+              each by hand from verified output (recorded later as lesson L16). L7 recurred: the coordinator wrote
               every brief, made the small direct edits itself (registering the L2 gate self-test in preflight/CI,
               the sentinel-wait loop and the canPush mirror in the saved workflow, the L15 row and skill rule, the
               criss-cross repair merge), corrected the two Sonnet bodies and performed their merges - only the fixes

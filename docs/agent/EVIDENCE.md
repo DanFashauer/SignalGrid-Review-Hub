@@ -3681,14 +3681,22 @@ Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d970
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
 
 ## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED on mainline; #1127 merged as a4507f9a with its gating check green"
-Command:  git fetch origin SignalGrid_Alpha && TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' origin/SignalGrid_Alpha
+Command:  TZ=UTC git log --first-parent --date=iso-local -3 --format='%H %ad %s' a4507f9a
 Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
-          DR-037, check run 108397317258)" (first of three lines)
+          DR-037, check run 108397317258)" / "db88915d3050cf3e02799a6b27eb88329fa7a79d 2026-09-26 11:49:50 +0000 Lane
+          mail (mac): heartbeat mac-lane-tick" / "7fc7fdd130ac90ae80333f22713750b02c03eae9 2026-09-26 11:24:28 +0000
+          Lane mail (mac): heartbeat mac-lane-tick" — local and deterministic, re-run above; at this record's writing
+          (12:03Z) origin/SignalGrid_Alpha's tip was a4507f9a, a dated observation from the original fetch.
 Command:  GitHub MCP get_check_run 108397317258
 Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
           DanFashauer/SignalGrid-Review-Hub)
           # in the worktree after merging a4507f9a, 2026-09-26 12:03Z
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at
+          2026-09-27 01:14Z, recorded — not to be re-run)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z" — equal to `git rev-parse
+          a4507f9a^2` below, so #1127's gating check is bound to its merged head by head_sha.
 Command:  node scripts/check-lessons.mjs
 Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
           #  in the worktree after merging a4507f9a, 2026-09-26 12:03Z
@@ -3701,18 +3709,26 @@ Command:  node scripts/lib/land-branch-gate.mjs --self-test
 Output:   "10/10 passed"
 Command:  node scripts/check-publication-boundary.mjs
 Output:   "Publication-boundary gate passed — every tracked path is classified, and no declared breach is present."
-Command:  git -C /home/user/SignalGrid-Review-Hub rev-parse --is-shallow-repository
+Command:  git -C <repo> rev-parse --is-shallow-repository
 Output:   "false"
           # L2 landing's own chain, head 08949c61
-Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/l2-br.log
+Command:  tail -n 1 <scratchpad>/l2-pf.log && tail -n 1 <scratchpad>/l2-br.log
 Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650"
+          — the lane host's ephemeral chain logs, recorded, not re-runnable elsewhere.
           # MCP roster's repair chain after the criss-cross-merge fix, head e189552b
-Command:  tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-pf.log && tail -n 1 /tmp/claude-0/-home-user-SignalGrid-Review-Hub/21d833ed-695c-5bbe-a64f-c20755d0e7bd/scratchpad/mcp2-br.log
+Command:  tail -n 1 <scratchpad>/mcp2-pf.log && tail -n 1 <scratchpad>/mcp2-br.log
 Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8"
+          — the lane host's ephemeral chain logs, recorded, not re-runnable elsewhere.
           # #1126's gating check
 Command:  GitHub MCP get_check_run 108391088659
 Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
           DanFashauer/SignalGrid-Review-Hub)
+          # in the worktree after merging a4507f9a, 2026-09-26 12:03Z
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108391088659 (tool read at
+          2026-09-27 01:14Z, recorded — not to be re-run)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          "08949c61f377b56deff6f18ae15f39a232d9b650", completed_at "2026-09-26T11:05:07Z" — equal to `git rev-parse
+          8216cf6b^2` below, so #1126's gating check is bound to its merged head by head_sha.
 Command:  git rev-parse a4507f9a^2 8216cf6b^2
 Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — the merged
           PR heads (second parents)
@@ -3776,7 +3792,9 @@ Output:   "reachable" (exit 0) — L2's merge (PR #1126, 8216cf6b) is an ancesto
 Command:  git log --first-parent --format=%h a4507f9a | grep -n -e ^8216cf6b -e ^5f1f21e3
 Output:   "4:8216cf6b" / "11:5f1f21e3" (exit 0)
 Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gating check 108397317258 green; L8, L2
-          and the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Still pending: five
+          and the MCP roster (DR-060 rule 3's first slice) are all now landed on mainline. Each gating check is bound
+          to its merged head by head_sha, per the REST reads above: 108397317258 → e189552b (#1127, `git rev-parse
+          a4507f9a^2`) and 108391088659 → 08949c61 (#1126, `git rev-parse 8216cf6b^2`). Still pending: five
           owner-gated PRs — three opened this window (#1117 DECISION_PATH merge; #1118 and #1121 golden-rule-1 ruling,
           each still owing its ack's should-fix items) plus #1050 (DR-058) and #1083 (DR-059) from earlier windows,
           all five open holds as a dated observation at 17:07Z per the recorded reads above; not verifiable here

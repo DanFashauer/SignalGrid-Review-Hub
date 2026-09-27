@@ -56,12 +56,12 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane; last refresh 2026-09-27 00:06Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
+LAST TOUCHED: 2026-09-26 (cloud lane; events through 20:58Z, verification reads dated individually) - L8 + L2 + MCP ROSTER #1127 ALL LANDED; SIX OWNER-DECISION PRs WAIT
               (THREE OPENED THIS WINDOW).
               This entry covers the window 07:15Z-11:45Z, plus the #1127 merge at 11:55:30Z. Lines marked POST-WINDOW
               record later events through 20:58Z (#1138) plus verification reads at 21:5xZ-23:45Z (check runs, PR state, merge-tree, ancestry); later mainline events (e.g.
               the Mac's 21:39Z tenant-isolation hand, aaa5b321) belong to the next record.
-              Refreshed through Codex rounds 1-14 on #1128; the stamp is the last refresh.
+              Refreshed through Codex rounds 1-15 on #1128; the refreshes' own commits carry later times and add no events.
               Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117' in
               chat and the lane refreshes it first, so the merge is one tap on
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117), #1118/#1121 (the golden-rule-1
@@ -125,7 +125,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane; last refresh 2026-09-27 00:06Z) - L8 + L2 
               prefixes counted, not named); scripts/check-mcp-roster.mjs (self-test 15/15) gates it. MERGED as
               a4507f9a571f681d0101302ce31a32d2d9cd8699 at 2026-09-26 11:55:30Z (checked via `git log --first-parent`
               on origin/SignalGrid_Alpha), gating check 108397317258 ("Typecheck, build, and proof scaffold")
-              conclusion "success" on head e189552b (GitHub MCP get_check_run; head from `git rev-parse a4507f9a^2`). At a4507f9a (the #1127 tree, before
+              conclusion "success" on head e189552b — confirmed by `git rev-parse a4507f9a^2`, matching the check's own head_sha recorded in EVIDENCE.md. At a4507f9a (the #1127 tree, before
               #1130), `node scripts/check-mcp-roster.mjs` printed "mcp-roster: 6 servers (+3 external), signalgrid-mcp
               16/16 tools derived, 12 lane grants, 6 skill grants over 18 first-party skills, 0 problems" / "PASS".
               POST-WINDOW (15:07Z, #1130): on this branch's tree the same command prints "PASS".
@@ -156,7 +156,7 @@ LAST TOUCHED: 2026-09-26 (cloud lane; last refresh 2026-09-27 00:06Z) - L8 + L2 
               MB) and 18 pnpm store packages; steward mail #1120 (bf642ee5, gating check 108369566206) acked the Mac's
               #1118 review ask, and #1124 (bb2ed162, gating run 36232741672) acked the #1121 ask plus a 09:24Z
               heartbeat; the shared checkout was fast-forwarded twice, at 10:09:36Z (to 8bd63bae) and 11:08:42Z (to
-              8216cf6b) per `TZ=UTC git -C /home/user/SignalGrid-Review-Hub reflog --date=iso-local` - it had been 34
+              8216cf6b) per `TZ=UTC git -C <repo> reflog --date=iso-local` - it had been 34
               commits behind (`git rev-list --count 221eabee..8bd63bae`; 18 with `--first-parent`), not 33. The
               hygiene-sweep heartbeat (artifacts/agent-heartbeats/cloud-lane-hygiene-sweep.json, fired 09:42:51Z)
               recorded 5.1G free before and 5.3G after its own sweep; it records no worktree-removal count, so none is

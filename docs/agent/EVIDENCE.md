@@ -3679,3 +3679,76 @@ Output:   "mintedAt": "2026-09-26T06:14:13.974Z", "manifestFingerprint": "7c1549
 Command:  GitHub MCP actions_get get_workflow_run 36223690198 (DanFashauer/SignalGrid-Review-Hub)
 Output:   "conclusion":"success", "head_sha":"1e26ec0c236f99b85cd5b3da538168d9707253cf", head_branch "SignalGrid_Alpha" — the Pages build, first green since 2026-08-23
 Verdict:  holds. Two lessons still await their own landing per `check-lessons.mjs`'s count: L2 (a hand-picked gate subset stood in for preflight and CI caught what it missed) and L8 (the GitHub Pages branch build had failed on every mainline push for 34 days and nothing watched it; #1111 fixed the build itself, but the lesson row's own landing is a separate, later step).
+
+## 2026-09-26 — "L8, L2 and the MCP roster (#1127) are ALL LANDED; #1127 merged as a4507f9a with its gating check green"
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b a4507f9a; do TZ=UTC git log -1 \
+          --date=iso-local --format='%H %cd %s' $sha; done
+Output:   the eight PRs merged this window: #1119, #1120, #1122, #1123, #1124, #1125, #1126, #1127.
+          "177299f3b006f8d5f747d213728f77782ea7e42a 2026-09-26 08:35:38 +0000 Merge pull request #1119: L10 shallow-fetch deny
+          guard, L11 coverage --write refuses a mid-conflict index, L12 tick landing rule (DR-037, check run 108369513162)" /
+          "bf642ee52e2f7160b64be498513c300e85b6941a 2026-09-26 08:34:56 +0000 Lane mail (cloud): ack for the Mac's #1118 review
+          ask; steward heartbeat 08:24Z (#1120, gating check run 108369566206)" / "af82b564f0dc5b51d53d1c08298c2dd1afc11cde
+          2026-09-26 09:11:05 +0000 Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run 108374280929)" /
+          "5f1f21e37bbd483c45ebc52d3fa1c1bcba0bc636 2026-09-26 09:34:32 +0000 Merge pull request #1123: L8 landing —
+          check-mainline-workflow-streaks reports red streaks on non-gating mainline workflows (DR-037, check run 108377728485)"
+          / "bb2ed1627b4959f7e695c742eda0cd39ea67ea7d 2026-09-26 09:40:47 +0000 Lane mail (cloud): ack for the Mac's #1121
+          review ask; steward heartbeat 09:24Z (#1124, gating run 36232741672)" / "8a39aeef6ef851ed79b40b652b76b2254044174a
+          2026-09-26 09:58:49 +0000 Lane mail (cloud): hygiene-sweep heartbeat 09:40Z (#1125, gating run 36233627673)" /
+          "8216cf6b36c893df78171e9177442c1d9b065ebc 2026-09-26 11:08:12 +0000 Merge pull request #1126: L2 landing — land-branch
+          is a saved workflow under .claude/workflows, push only on a green preflight sentinel (DR-037, check run 108391088659)"
+          / "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Merge pull request #1127: MCP roster — per-lane
+          and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
+          DR-037, check run 108397317258)" — local and deterministic, re-runnable in any clone; all eight dates fall inside the
+          07:15Z-11:55Z window.
+Command:  git log --first-parent --grep='#1122' --format='%H %s' a4507f9a~20..a4507f9a
+Output:   the pre-rewrite LOOP.md entry (2b4b5586) carried no sha for #1122; derived here on a fixed range ending at a4507f9a.
+          "af82b564f0dc5b51d53d1c08298c2dd1afc11cde Merge pull request #1122: LOOP/EVIDENCE record 07:20Z (DR-037, check run
+          108374280929)" — the only match; local and immutable (the range's upper bound is a fixed sha, not a branch).
+Command:  for sha in 177299f3 bf642ee5 af82b564 5f1f21e3 bb2ed162 8a39aeef 8216cf6b; do git merge-base --is-ancestor $sha \
+          a4507f9a && echo "$sha carried"; done
+Output:   "177299f3 carried" / "bf642ee5 carried" / "af82b564 carried" / "5f1f21e3 carried" / "bb2ed162 carried" / "8a39aeef
+          carried" / "8216cf6b carried" (exit 0 all seven) — each of the other seven merges is an ancestor of a4507f9a, i.e.
+          carried into #1127's own merge commit.
+Command:  git show a4507f9a:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'
+Output:   "15" — the lesson ledger AT a4507f9a (the #1127 tree), not today's tree.
+Command:  git show a4507f9a:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* landed$'
+Output:   "15" — all 15 rows read landed at a4507f9a; 0 pending.
+Command:  tail -n 1 <scratchpad>/l2-pf.log && tail -n 1 <scratchpad>/l2-br.log
+Output:   "PREFLIGHT_EXIT 0 08949c61f377b56deff6f18ae15f39a232d9b650" / "BREADTH_EXIT 0
+          08949c61f377b56deff6f18ae15f39a232d9b650" — recorded on the lane host before 11:08:12Z (L2's merge, 8216cf6b) — not
+          re-runnable elsewhere.
+Command:  tail -n 1 <scratchpad>/mcp2-pf.log && tail -n 1 <scratchpad>/mcp2-br.log
+Output:   "PREFLIGHT_EXIT 0 e189552b86db01d03b1a073fa9fb44845d7962e8" / "BREADTH_EXIT 0
+          e189552b86db01d03b1a073fa9fb44845d7962e8" — recorded on the lane host before 11:55:30Z (#1127's merge, a4507f9a) — not
+          re-runnable elsewhere.
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at 2026-09-27 01:14Z,
+          recorded — not to be re-run)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z".
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108391088659 (tool read at 2026-09-27 01:14Z,
+          recorded — not to be re-run)
+Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
+          "08949c61f377b56deff6f18ae15f39a232d9b650", completed_at "2026-09-26T11:05:07Z".
+Command:  git rev-parse a4507f9a^2 8216cf6b^2
+Output:   "e189552b86db01d03b1a073fa9fb44845d7962e8" / "08949c61f377b56deff6f18ae15f39a232d9b650" — matches the two recorded
+          head_sha values above exactly: #1127's gating check (108397317258) and #1126's (108391088659) are each bound to their
+          merged PR head by head_sha (local, immutable).
+Command:  TZ=UTC git log --first-parent --format='%s' 221eabee~1..a4507f9a | grep -cE 'Merge pull request #|\(#[0-9]+, gating'
+Output:   "8" — 221eabee~1 is 428a12a8, #1113, merged 07:13:44Z just before the window, so the range is exactly the window's
+          first-parent landings; the other first-parent commits in the range are Mac lane pushes, not PRs.
+Command:  git show a4507f9a:artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json | \
+          grep -o -E "VERDICT: owner-decision|#1117 \(ephemeral OIDC/load/observability ports\) is open for the owner's merge"
+Output:   "VERDICT: owner-decision" / "#1117 (ephemeral OIDC/load/observability ports) is open for the owner's merge" — the
+          in-window ack for #1118, also carrying #1117's status.
+Command:  git show a4507f9a:artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json | \
+          grep -o -E 'VERDICT: owner-decision, same golden-rule-1 ruling as #1118 \(asked of Dan 08:20Z, not yet given\)'
+Output:   "VERDICT: owner-decision, same golden-rule-1 ruling as #1118 (asked of Dan 08:20Z, not yet given)" — the in-window ack
+          for #1121.
+Command:  git show a4507f9a:docs/agent/LOOP.md | grep -o 'Owner still owes: #1050 (DR-058), #1083 (DR-059)'
+Output:   "Owner still owes: #1050 (DR-058), #1083 (DR-059)" — LOOP.md's own STATE block at a4507f9a.
+Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this window — #1119, #1120, #1122, #1123, #1124, #1125,
+          #1126, #1127 — each log-dated inside 07:15Z-11:55Z and each an ancestor of #1127's own merge (a4507f9a, 2026-09-26
+          11:55:30Z). The lesson ledger read 15/15 landed AT a4507f9a. #1127's gating check and #1126's are each bound to their
+          merged head by head_sha, per the recorded REST reads matched against a local, immutable `git rev-parse`. The five
+          owner-decision PRs (#1117, #1118, #1121, #1050, #1083) were owed in the tree at a4507f9a, per the reads above; live PR
+          state is still not claimed, nor is mainline membership or any event after 11:55Z — those belong to the next record.

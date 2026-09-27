@@ -146,7 +146,72 @@ export const SAFETY_MACHINERY = [
   { rule: "review/landing agent definitions (.claude/agents/**)", re: /^\.claude\/agents\// },
   { rule: "the loop-end skill (.claude/skills/loop-end/**)", re: /^\.claude\/skills\/loop-end\// },
   { rule: "the signalgrid-reviewer skill (.claude/skills/signalgrid-reviewer/**)", re: /^\.claude\/skills\/signalgrid-reviewer\// },
+  // Codex round 4 on #1133 (P1, thread 4113330659, 2026-09-26): native test sources
+  // classified autonomous — measured live with classifyDiff() at 07d6f1ab:
+  // native/android/core/src/test/kotlin/com/signalgrid/assist/core/AssistWireTest.kt,
+  // native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift, and
+  // native/desktop/core/tests/conformance.rs are real tracked files that classified
+  // autonomous; native/android/app/src/androidTest/java/x/FooTest.kt is Codex's own
+  // illustrative src/androidTest/ shape (verified absent from this tree) — classifyDiff()
+  // takes a path string, not a file, so it came back "autonomous" the same way
+  // (native/shared/assist-wire-conformance.json was already SAFETY_MACHINERY via the
+  // "gate inputs outside scripts/" rule above). Deleting or weakening a native test
+  // removes proof coverage, and the Android CI verifier derives its EXPECTED test set
+  // from the files that remain, so a deletion shrinks its own expectation. Two rules —
+  // directory convention and filename convention — so a native test is caught whichever
+  // way it is organised; both scoped to native/ (see the negative self-test proving an
+  // out-of-scope file with the SAME convention, e.g. artifacts/mcp-server/test/*, is not
+  // swept in, and see TREE_GUARD below for the independent, self-test-hermetic backstop
+  // that catches a native test convention neither rule below happens to name).
+  { rule: "native test sources by directory (src/test/, src/androidTest/, a dir segment ending in Tests/, Rust tests/)", re: /^native\/(?:.+\/)?(?:tests?|__tests__|androidTest|[\w-]*Tests)\// },
+  { rule: "native test sources by filename (*Test.kt, *Tests.kt, *Test.java, *Test.swift, *Tests.swift, *_test.rs)", re: /^native\/.*(?:Test\.(?:kt|java|swift)|Tests\.(?:kt|swift)|_test\.rs)$/ },
 ];
+
+// Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD `validate()` runs (see
+// below) so the next native test directory cannot slip through a hand-written list like
+// SAFETY_MACHINERY above. It re-derives, independently of the two rules just added,
+// which tracked files look like a test source ANYWHERE in the repo by the same broad
+// conventions used to DERIVE this fix (dirs test/, tests/, __tests__/, src/test/,
+// src/androidTest/, a dir segment ending in Tests/; names *.test.*, *.spec.*, *Test.kt|
+// java|swift, *Tests.kt|swift, *_test.rs, test_*.py) and fails, naming the file, if any
+// NATIVE one still classifies autonomous. Scoped to native/ deliberately, not the whole
+// repo: the same repo-wide sweep also found three OTHER families that classify
+// autonomous today — artifacts/mcp-server/test/*.test.ts and two
+// artifacts/signalgrid-app/src/lib/*.test.ts files (real product tests, but outside
+// this finding's native-only scope and with no known "CI derives its expected set from
+// the files present" hazard the way the Android verifier has); tests/load/*.js (k6
+// load-harness scripts CLAUDE.md already documents as REPORTED, not gated the same way
+// as correctness proofs); and two files inside ordinary, deliberately-autonomous skill
+// directories (.claude/skills/node/, .claude/skills/ios-simulator-skill/ — see the
+// existing "an unrelated skill dir stays autonomous" self-test) plus one vendored
+// third_party/cli-anything test (pinned upstream code, not this repo's own gate
+// surface). None of those are native, so the guard leaves them alone rather than
+// silently widening this round's fix; a repo-wide version of this same guard is a
+// reasonable follow-up but is not what was asked here.
+const TEST_CONVENTION_DIR_RE = /(^|\/)(test|tests|__tests__)\/|(^|\/)src\/(test|androidTest)\/|(^|\/)[^/]*Tests\//;
+const TEST_CONVENTION_NAME_RE = /\.test\.[^./]+$|\.spec\.[^./]+$|Test\.(kt|java|swift)$|Tests\.(kt|swift)$|_test\.rs$|(^|\/)test_[^/]+\.py$/;
+
+/** True if `f` matches one of the general test-source conventions used to DERIVE the
+ *  native rules above (dirs test/tests/__tests__/src/test//src/androidTest//a *Tests/
+ *  segment; names *.test.*, *.spec.*, *Test.kt|java|swift, *Tests.kt|swift, *_test.rs,
+ *  test_*.py) — independent of, and broader than, the two SAFETY_MACHINERY regexes
+ *  above, so a manifest regression (a rule deleted or narrowed) is still caught. */
+export function looksLikeTestSource(f) {
+  const n = normalizePath(f);
+  return TEST_CONVENTION_DIR_RE.test(n) || TEST_CONVENTION_NAME_RE.test(n);
+}
+
+/** Pure function over a file list (never touches git itself) so the self-test can call
+ *  it hermetically with a synthetic list, including a planted path that exercises the
+ *  fix without writing anything into the real tree. Returns the NATIVE test-source
+ *  paths among `files` that classifyDiff() still calls "autonomous" — empty means the
+ *  guard is satisfied. */
+export function findUngatedNativeTestSources(files) {
+  return files
+    .map(normalizePath)
+    .filter((f) => f.startsWith("native/") && looksLikeTestSource(f))
+    .filter((f) => classifyDiff([f]).tier === "autonomous");
+}
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
 export const OWNER_RESERVED = [
@@ -531,6 +596,68 @@ function selfTest() {
   t("one owner-gated file taints an otherwise-autonomous diff",
     cls(["lib/signalgrid-core/src/decision.ts", "scripts/mutation-guard.mjs"]).tier === "owner-gated");
 
+  // Codex round 4 on #1133 (P1, thread 4113330659): native test sources, measured
+  // autonomous at 07d6f1ab, now classify SAFETY_MACHINERY.
+  t("an Android unit-test source (src/test/) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["native/android/core/src/test/kotlin/com/signalgrid/assist/core/AssistWireTest.kt"])) === "SAFETY_MACHINERY");
+  t("an iOS test-target source (a *Tests/ dir) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift"])) === "SAFETY_MACHINERY");
+  t("a Rust test source (tests/) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["native/desktop/core/tests/conformance.rs"])) === "SAFETY_MACHINERY");
+  t("an Android instrumented-test source (src/androidTest/) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["native/android/app/src/androidTest/java/x/FooTest.kt"])) === "SAFETY_MACHINERY");
+  // Negative: a non-test file, and a doc NAMED like a test topic, must not over-match.
+  t("a doc named TESTING.md stays autonomous (not swept in by the filename rule)",
+    cls(["TESTING.md"]).tier === "autonomous");
+  t("an ordinary native source file (not under a test dir, not test-suffixed) stays autonomous",
+    cls(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).tier === "autonomous");
+  // Negative: native/shared vectors keep their EXISTING class (the pre-existing
+  // "gate inputs outside scripts/" rule), unaffected by the two new rules above.
+  t("native/shared/assist-wire-conformance.json keeps its existing SAFETY_MACHINERY class",
+    mostRestrictive(cls(["native/shared/assist-wire-conformance.json"])) === "SAFETY_MACHINERY");
+  // Negative: the SAME convention outside native/ is deliberately NOT swept in by these
+  // two rules (the repo-wide sweep found it still autonomous; see the notes above
+  // TREE_GUARD's definition for why this round leaves it alone) — proves the `^native\/`
+  // anchor is load-bearing, not decorative.
+  t("an out-of-scope test file outside native/ is not caught by the new native rules (artifacts/mcp-server/test/server.test.ts)",
+    cls(["artifacts/mcp-server/test/server.test.ts"]).tier === "autonomous");
+
+  // The independent TREE GUARD (findUngatedNativeTestSources): a pure function over a
+  // file list, so these run hermetically with no git and no real files.
+  t("looksLikeTestSource recognizes all four measured Codex paths",
+    ["native/android/core/src/test/kotlin/com/signalgrid/assist/core/AssistWireTest.kt",
+     "native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift",
+     "native/desktop/core/tests/conformance.rs",
+     "native/android/app/src/androidTest/java/x/FooTest.kt"].every(looksLikeTestSource));
+  t("looksLikeTestSource does not flag TESTING.md",
+    !looksLikeTestSource("TESTING.md"));
+  t("the guard finds nothing ungated among the four measured paths now that they are fixed",
+    findUngatedNativeTestSources([
+      "native/android/core/src/test/kotlin/com/signalgrid/assist/core/AssistWireTest.kt",
+      "native/ios/EnterpriseShellTests/AssistWireConformanceTests.swift",
+      "native/desktop/core/tests/conformance.rs",
+      "native/android/app/src/androidTest/java/x/FooTest.kt",
+    ]).length === 0);
+  // Positive: a planted native test path that matches the BROAD test conventions (a
+  // Python test file, "test_*.py") but neither of the two manifest regexes above (which
+  // only name kt/java/swift/rs) must still be flagged — this is the guard doing work
+  // the hand-written manifest rules do not, exactly the "next test directory" case the
+  // finding asked for. Hermetic: no file is written, `native/toolkit/` need not exist.
+  t("the guard flags a planted native test path no manifest rule covers (native/toolkit/scripts/test_helper.py)",
+    (() => {
+      const planted = "native/toolkit/scripts/test_helper.py";
+      return looksLikeTestSource(planted) &&
+        classifyDiff([planted]).tier === "autonomous" &&
+        findUngatedNativeTestSources([planted]).length === 1 &&
+        findUngatedNativeTestSources([planted])[0] === planted;
+    })());
+  // Negative: the guard itself must not over-match — a non-test native file, and an
+  // out-of-native test file with the identical convention, are both left alone.
+  t("the guard does not flag an ordinary native source file",
+    findUngatedNativeTestSources(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).length === 0);
+  t("the guard does not flag a same-convention file outside native/",
+    findUngatedNativeTestSources(["artifacts/mcp-server/test/server.test.ts"]).length === 0);
+
   // Non-vacuity: both lists carry rules, so the gate has a subject.
   t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
 
@@ -635,6 +762,35 @@ function selfTest() {
   process.exit(failed.length === 0 ? 0 : 1);
 }
 
+// Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD itself, run by the
+// plain (non-self-test) `node scripts/check-owner-gated-surfaces.mjs` invocation that
+// preflight and CI already call. Walks the REAL tree (`git ls-files`, not a fixture)
+// so a native test directory added later — one the SAFETY_MACHINERY rules above were
+// never updated for — fails this gate by name instead of silently merging autonomous.
+function checkNativeTestSourcesGated() {
+  let files;
+  try {
+    files = execFileSync(
+      "git",
+      ["-C", repo, "-c", "core.quotePath=false", "ls-files", "-z"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    )
+      .split("\0")
+      .filter((l) => l.length > 0);
+  } catch (err) {
+    console.error(`tree guard: git ls-files failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(1);
+  }
+  const ungated = findUngatedNativeTestSources(files);
+  if (ungated.length > 0) {
+    console.error(
+      "tree guard: native test source(s) classify autonomous — add or widen a SAFETY_MACHINERY rule for:",
+    );
+    for (const f of ungated) console.error(`  ${f}`);
+    process.exit(1);
+  }
+}
+
 function validate() {
   // At rest there is no diff to classify; the gate proves the manifest is well-formed
   // and non-vacuous so a later empty manifest cannot silently classify everything
@@ -649,6 +805,7 @@ function validate() {
       process.exit(1);
     }
   }
+  checkNativeTestSourcesGated();
   console.log(`Owner-gated surfaces manifest ok — ${DECISION_PATH.length} decision-path rules, ${SAFETY_MACHINERY.length} safety-machinery rules, ${OWNER_RESERVED.length} owner-reserved rules.`);
   console.log("Run with --self-test to exercise classifyDiff (preflight + CI do).");
 }

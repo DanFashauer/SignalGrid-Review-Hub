@@ -29,22 +29,27 @@ attributes a real switch or WLC sends. Two findings carry the article:
 
 | Our shape says | What the wire actually returns |
 | --- | --- |
-| `authState: "quarantined"` — a state alongside `"authenticated"` | RADIUS has exactly two outcomes, `Access-Accept` / `Access-Reject`. The quarantined device we drove returned `Access-Accept` with a different `Tunnel-Private-Group-Id` plus a `Filter-Id` — a customer-chosen policy label the server was configured to hand back (in production, the NAC's policy engine picks it), not a protocol state |
+| `authState: "quarantined"` — a state alongside `"authenticated"` | RADIUS has two terminal outcomes, `Access-Accept` / `Access-Reject` (`Access-Challenge` is a real third packet type for EAP/802.1X's multi-round exchanges; the lab drove PAP only, so it was never exercised here). The quarantined device we drove returned `Access-Accept` with a different `Tunnel-Private-Group-Id` plus a `Filter-Id` — a customer-chosen policy label the server was configured to hand back (in production, the NAC's policy engine picks it), not a protocol state |
 | `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither is in an `Access-Accept`. `nacCompliant` isn't a RADIUS concept at all — a posture-agent/console derivation; `lastAuthAt` comes from RADIUS accounting or the console's own session database, a different source with a different lifetime that can disagree with the auth result (accounting was not driven in the lab) |
 
-The same split shows up twice more, independent of RADIUS: Cisco ISE's own
-documentation distinguishes its ERS/endpoint API (identity, administrative
-CRUD) from its MnT monitoring API (live session state) as separate
-permission grants — "not to be confused with" each other, in Cisco's words;
-Aruba ClearPass splits the same way, endpoint API versus session API. Three
-unrelated sources — the protocol, one vendor, a second vendor — converge on
-one fact: "who is this device" and "is it authenticated right now" are
-always two different data sources, and a console that answers "is it
-compliant" is reporting its own derivation, never something it read off a
-cable. The same conclusion confirms, after the fact, a correction already
-recorded in our Cisco ISE adapter's own header: its old normalizer
-hardcoded `status: 'registered'` for every endpoint, asserting an
-authentication state the endpoint API never reports.
+The same "two different sources" shape shows up in how the two console
+vendors structure their own APIs: Cisco ISE's documentation distinguishes
+its ERS/endpoint API (identity, administrative CRUD) from its MnT
+monitoring API (live session state) as separate permission grants — "not to
+be confused with" each other, in Cisco's words; Aruba ClearPass splits the
+same way, endpoint API versus session API. For those two consoles
+specifically, "who is this device" and "is it authenticated right now" are
+queried from two different data sources — a narrower claim than saying
+identity always arrives apart from authentication: RADIUS itself carries
+the wire identifier (`Calling-Station-Id`, a MAC) in the very same exchange
+as the auth result. What RADIUS keeps separate is session *timing*, not
+identity — the accounting-vs-authentication split above — and a MAC is not
+our `deviceId` either way: an adapter still needs a MAC-to-device mapping
+sourced elsewhere. A console that answers "is it compliant" is reporting
+its own derivation, never something it read off a cable — confirmed, after
+the fact, by a correction already recorded in our Cisco ISE adapter's own
+header: its old normalizer hardcoded `status: 'registered'` for every
+endpoint, asserting an authentication state the endpoint API never reports.
 
 This is structural, not a vendor shortcoming: a protocol answers
 accept/reject and nothing else, and a console's compliance flag is that
@@ -61,8 +66,9 @@ more than any single branch: a reported non-compliance or a reported-stale
 auth is rejected earlier and steps up outright (`NAC_NONCOMPLIANT`,
 `STALE_NETWORK_STATE`) — neither ever reaches the grant path. What's left
 after that — `nacCompliant: null`, or a `lastAuthAt` that is missing,
-unparseable, or dated in the future, all of which collapse to freshness
-`unknown` — reaches the grant branch and grades `monitor`, reason
+unparseable, or dated more than the clock-skew tolerance (60 seconds) in
+the future, all of which collapse to freshness `unknown` — reaches the
+grant branch and grades `monitor`, reason
 `AUTHENTICATED_POSTURE_UNVERIFIED`, never the same verdict as verified-good.
 
 That's deliberate correction, not the original design: the build plan's own
@@ -93,9 +99,12 @@ We pinned the corrected lattice into the proof rather than trusting the
 diff. The enumeration sweeps the full session-plane × segment-outcome space
 under a segment policy — 192 combinations, the product of the domains
 swept — and asserts a grant is reachable *only* by the fully-verified state,
-with a companion negative control that proves the harness can fail: declare
-unreported compliance clean, and it reports `mismatches > 0`. That count
-pins the sweep's size; it does not notice a new evaluator input on its
+with a companion negative control that proves the harness itself can fail,
+not just report green forever: a predicate that drops the `nacCompliant`
+check entirely and calls everything else clean still triggers
+`mismatches > 0`, so an obviously-wrong mutant of the check cannot slip
+through undetected. That count pins the sweep's size; it does not notice a
+new evaluator input on its
 own — a field added to the evaluator without also being added to the swept
 domains would simply go untested, not fail loudly. Run the proof yourself:
 
@@ -111,20 +120,23 @@ identifier validation the ISE/ClearPass adapters depend on, is
 
 **How these numbers trace.** `64/64` and `46/46` are the exact lines the two
 commands above print against this tree's current commit — rerun them for
-the live count rather than trusting this page. The RADIUS findings are
-reproducible per the live shape check's own reproduction section: stand up
-a FreeRADIUS server with a NAS client and two authorize entries carrying
-`Tunnel-Type`/`Tunnel-Private-Group-Id`/`Filter-Id`, drive it with
-`radclient -x`, and read the reply attributes — nothing here was taken on a
-vendor's word alone except the two console APIs, and that weaker claim is
-labeled as such at the source (see the boundary note below).
+the live count rather than trusting this page; that is the reproducible
+part. The RADIUS findings are a recorded historical observation, not a
+rerunnable fixture: the lab was ephemeral (2026-08-19, in-sandbox), and
+nothing about it — the container, its config, the `radclient` inputs — was
+committed to this tree. Its own write-up describes how to redo a similar
+experiment (a NAS client and two authorize entries carrying
+`Tunnel-Type`/`Tunnel-Private-Group-Id`/`Filter-Id`, driven with
+`radclient -x`, reading the reply attributes), which is a route to checking
+the claim yourself, not a guarantee of an identical replay.
 
-Worth being explicit about the boundary: the RADIUS lab and the evaluator
-lattice above are load-bearing and reproduced; the ISE/ClearPass session-API
-claims rest on published vendor documentation only, no licensed instance
-was driven, and that gap is labeled at the source, not smoothed over here.
-The connector this describes is not shipped; nothing here evaluates live
-NAC posture anywhere today.
+Worth being explicit about the boundary: the proof commands above are
+load-bearing and reproducible on demand; the RADIUS lab is a dated,
+recorded observation with instructions to redo it, not a committed fixture;
+the ISE/ClearPass session-API claims rest on published vendor documentation
+only, and no licensed instance was driven — that gap is labeled at the
+source, not smoothed over here. The connector this describes is not
+shipped; nothing here evaluates live NAC posture anywhere today.
 
 **Sources.** The RADIUS lab and its findings: `docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`
 (Findings 1 and 4, and the console-adapter addendum). The Cisco ISE
@@ -139,8 +151,8 @@ negative control: `scripts/src/network-nac-proof.ts`.
 
 ---
 
-*This came out of checking the network/NAC posture shape SignalGrid's decision
-core would consume against a real RADIUS wire, for SignalGrid, which connects
-the systems a building already runs into one grid that decides and acts on a
-person's behalf — fail-closed, on shared frontline devices; the full lab notes
-are public in our review repository.*
+*This came out of checking the network/NAC posture shape SignalGrid's
+decision core would consume against a real RADIUS wire. What SignalGrid
+is — canonical, not paraphrased here — is [`docs/PURPOSE.md`](PURPOSE.md)
+(DR-020); the full lab notes for this piece are public in our review
+repository.*

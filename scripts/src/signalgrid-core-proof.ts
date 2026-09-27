@@ -235,14 +235,32 @@ check(
     digest: LEGACY_SNAPSHOT_DIGEST,
   }) === false,
 );
-// ── 1c. digest(): UTF-8 bytes, not the low byte of each UTF-16 unit ─────────────
+// ── 1c. digest(): WTF-8 bytes, not the low byte of each UTF-16 unit ─────────────
 // Until 2026-09 digest() hashed `charCodeAt(i) & 0xff`, so any two characters sharing a
 // low byte aliased, and deterministicId's bare "|" join was ambiguous. ASCII digests and
 // ids did NOT move (one byte per char either way), which is why the pins above hold.
-check("DIGEST: standard FNV-1a 64 vectors (a, foobar) — ASCII digests are unchanged by the UTF-8 fix",
+check("DIGEST: standard FNV-1a 64 vectors (a, foobar) — ASCII digests are unchanged by the WTF-8 fix",
   digest("a") === "af63dc4c8601ec8c" && digest("foobar") === "85944171f73967e8");
 check("DIGEST: characters sharing a low byte no longer alias (Alice vs \u0141lice; lone surrogate vs U+FFFD)",
   digest("Alice") !== digest("\u0141lice") && digest("a\uD800") !== digest("a\uFFFD"));
+check("DIGEST_ALG: the stamped identifier names what digest() actually hashes (\"fnv1a64-wtf8\", not \"-utf8\")",
+  DIGEST_ALG === "fnv1a64-wtf8");
+// For every WELL-FORMED string, WTF-8 and UTF-8 are the same bytes by definition — they
+// diverge only on an unpaired surrogate. So a from-scratch FNV-1a 64 over Node's own
+// TextEncoder (real UTF-8, independent of digest()'s hand-rolled encoder loop) must match
+// digest() exactly across ASCII, Latin-1, CJK and an astral (surrogate-pair) emoji.
+function fnv1a64OverBytes(bytes: Uint8Array): string {
+  const FNV_PRIME = 0x100000001b3n;
+  const MASK = 0xffffffffffffffffn;
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of bytes) {
+    hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+const WELL_FORMED_DIGEST_SAMPLES = ["hello world", "caf\u00e9", "\u65e5\u672c\u8a9e", "\ud83d\ude00"];
+check("DIGEST: for well-formed strings (ASCII, Latin-1, CJK, astral emoji), digest() matches FNV-1a 64 over TextEncoder's real UTF-8 bytes exactly",
+  WELL_FORMED_DIGEST_SAMPLES.every((s) => digest(s) === fnv1a64OverBytes(new TextEncoder().encode(s))));
 check("IDS: the join is injective — a '|' inside a part, or U+017C (low byte 0x7C), cannot shift a part boundary",
   deterministicId("dec", "t|a", "b") !== deterministicId("dec", "t", "a|b") &&
     deterministicId("dec", "t\u017Ca", "b") !== deterministicId("dec", "t", "a", "b"));
@@ -261,6 +279,8 @@ check("MIGRATION: a non-ASCII row minted before the fix (no digestAlg) still ver
 check("MIGRATION: forging the marker onto a pre-fix row fails; an unknown digestAlg fails closed",
   verifySnapshot({ ...PRE_FIX_ROW, digestAlg: DIGEST_ALG }) === false &&
     verifySnapshot({ ...PRE_FIX_ROW, digestAlg: "sha256" as unknown as typeof DIGEST_ALG }) === false);
+check("MIGRATION: a snapshot stamped with the OLD name \"fnv1a64-utf8\" verifies false — no row was ever minted under it, and the verifier must not start accepting it",
+  verifySnapshot({ ...freshSnapshot, digestAlg: "fnv1a64-utf8" as unknown as typeof DIGEST_ALG }) === false);
 check("MIGRATION: a fresh snapshot is marked, and stripping the marker (downgrade to the legacy check) fails",
   freshSnapshot.digestAlg === DIGEST_ALG && verifySnapshot(freshSnapshot) === true &&
     verifySnapshot({ ...freshSnapshot, digestAlg: undefined }) === false);

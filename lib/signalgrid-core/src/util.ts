@@ -22,10 +22,12 @@ export function fixedClock(iso: string): Clock {
 }
 
 /**
- * Deterministic content digest (FNV-1a, 64-bit, hex). This is a fast,
- * dependency-free digest used to demonstrate tamper-evident evidence snapshots
- * and audit chaining in a public-safe review context. It is intentionally NOT a
- * cryptographic hash; the private production core would use a keyed
+ * Deterministic content digest: FNV-1a 64 over the WTF-8 encoding of the string —
+ * identical to UTF-8 for every well-formed string; an unpaired surrogate encodes as
+ * its own 3-byte sequence (never U+FFFD), so distinct strings never share bytes. This
+ * is a fast, dependency-free digest used to demonstrate tamper-evident evidence
+ * snapshots and audit chaining in a public-safe review context. It is intentionally
+ * NOT a cryptographic hash; the private production core would use a keyed
  * cryptographic construction. Same input always yields the same digest.
  */
 export function digest(input: string): string {
@@ -35,7 +37,7 @@ export function digest(input: string): string {
   const eat = (byte: number): void => {
     hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK;
   };
-  // FNV is byte-oriented, so hash the UTF-8 BYTES. The old loop took `charCodeAt & 0xff`,
+  // FNV is byte-oriented, so hash the WTF-8 BYTES. The old loop took `charCodeAt & 0xff`,
   // so every character sharing a low byte aliased ("Alice" === "\u0141lice"; U+017C === "|").
   // Hand-encoded, not TextEncoder: the core's type env is es2022 with no DOM/Node globals,
   // and TextEncoder maps every lone surrogate to U+FFFD (another alias). A lone surrogate is
@@ -56,9 +58,12 @@ export function digest(input: string): string {
   return hash.toString(16).padStart(16, "0");
 }
 
-/** The digest algorithm `digest()` implements, stamped on every evidence snapshot so a
- *  verifier never has to guess which function minted a durable row. */
-export const DIGEST_ALG = "fnv1a64-utf8" as const;
+/** The digest algorithm `digest()` implements: FNV-1a 64 over the WTF-8 encoding of the
+ *  string — identical to UTF-8 for every well-formed string; an unpaired surrogate encodes
+ *  as its own 3-byte sequence (never U+FFFD), so distinct strings never share bytes. Stamped
+ *  on every evidence snapshot so a verifier never has to guess which function minted a
+ *  durable row. */
+export const DIGEST_ALG = "fnv1a64-wtf8" as const;
 
 /**
  * Maximum nesting depth `canonicalJson` will traverse. Digest inputs in this

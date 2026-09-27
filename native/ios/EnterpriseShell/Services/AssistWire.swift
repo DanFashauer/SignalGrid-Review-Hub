@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation // Darwin's Foundation re-exports this; swift-corelibs-foundation (Linux) does not, and CFGetTypeID/CFBooleanGetTypeID below need it directly.
 
 // The iOS Assist-wire client — the third implementation of one fail-closed rule.
 //

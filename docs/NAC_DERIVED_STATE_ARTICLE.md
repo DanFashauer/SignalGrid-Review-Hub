@@ -30,7 +30,7 @@ attributes a real switch or WLC sends. Two findings carry the article:
 | Our shape says | What the wire actually returns |
 | --- | --- |
 | `authState: "quarantined"` — a state alongside `"authenticated"` | RADIUS has two terminal outcomes, `Access-Accept` / `Access-Reject` (`Access-Challenge` is a real third packet type for EAP/802.1X's multi-round exchanges; the lab drove PAP only, so it was never exercised here). The quarantined device we drove returned `Access-Accept` with a different `Tunnel-Private-Group-Id` plus a `Filter-Id` — a customer-chosen policy label the server was configured to hand back (in production, the NAC's policy engine picks it), not a protocol state |
-| `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither is in an `Access-Accept`. `nacCompliant` isn't a RADIUS concept at all — a posture-agent/console derivation; `lastAuthAt` comes from RADIUS accounting or the console's own session database, a different source with a different lifetime that can disagree with the auth result (accounting was not driven in the lab) |
+| `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither appeared in the lab's `Access-Accept`, and neither is a standard RADIUS attribute (RADIUS does permit vendor-specific attributes, so a NAC product can encode a posture result in one; no licensed console was driven to see whether any does). `nacCompliant` isn't a standard RADIUS concept — a posture-agent/console derivation; `lastAuthAt` comes from RADIUS accounting or the console's own session database, a different source with a different lifetime that can disagree with the auth result (accounting was not driven in the lab) |
 
 The same "two different sources" shape shows up in how the two console
 vendors structure their own APIs: Cisco ISE's documentation distinguishes
@@ -51,8 +51,8 @@ the fact, by a correction already recorded in our Cisco ISE adapter's own
 header: its old normalizer hardcoded `status: 'registered'` for every
 endpoint, asserting an authentication state the endpoint API never reports.
 
-This is structural, not a vendor shortcoming: a protocol answers
-accept/reject and nothing else, and a console's compliance flag is that
+This is structural, not a vendor shortcoming: a protocol's terminal
+answer is accept or reject (with challenges in between for EAP), and a console's compliance flag is that
 console's own policy engine talking, sourced from its logs. Neither is
 dishonest. But if a decision fabric treats a fetched conclusion the way it
 treats a measurement, staleness in the source becomes invisible — you're

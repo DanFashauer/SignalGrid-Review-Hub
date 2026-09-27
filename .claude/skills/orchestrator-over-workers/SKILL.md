@@ -235,8 +235,12 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
 ## Briefs, reviews and records (DR-060; lessons L17–L22)
 
 - **A report schema keeps `blockers` apart from `notes`.** `blockers` means the unit
-  cannot finish; a scope remark or an observation is a note. A wrapper stops only on
-  `blockers` — a note filed as a blocker stopped a landing once (L19).
+  cannot finish; a scope remark or an observation is a note, and a note never stops a
+  wrapper — a note filed as a blocker stopped a landing once (L19). A wrapper stops on any
+  `blockers` entry, and equally on any `gateResults` entry with a nonzero exit or a
+  required gate missing from `gateResults`: a worker that records a failed gate but leaves
+  `blockers` empty has still reported a failure, and a task-specific gate may not be rerun
+  by preflight or breadth.
 - **A stage's gate list is a subset, and its report says so.** Preflight boots servers,
   so it runs only in the host's one chain; a stage runs a subset. One stage's subset
   missed the line-count gate and another's missed the env-doc gate, and both surfaced only
@@ -247,7 +251,9 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `scripts/check-cited-commands.mjs`, `scripts/check-markdown-links.mjs`,
   `scripts/check-derived-doc-figures.mjs`, `scripts/check-cross-doc-banner-parity.mjs`
   and `scripts/check-lessons.mjs`. A failure is "pre-existing" only after the same gate
-  fails on `origin/SignalGrid_Alpha`; a figure the branch itself moved is the branch's.
+  fails on `origin/SignalGrid_Alpha` with the same diagnostic on the same subject (file,
+  figure or assertion); a nonzero exit alone does not say which check failed. A figure the
+  branch itself moved is the branch's.
 - **Every path in a brief is absolute.** The Bash tool's working directory resets to the
   main checkout between calls, so a `$(pwd)`-relative write lands in the shared tree (L19).
 - **A planted mutation asserts, as its own named case, that it took effect.** A
@@ -256,10 +262,13 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   matching turns the plant into a silent no-op: in L20 the two dependent cases failed
   under names that hid the cause (17/19), and a case that expects a pass would have passed
   silently.
-- **A caller of `land-branch` treats the branch as landed only when
-  `child?.push?.pushed === true`.** `push` is absent when the script refuses the push or
-  stops earlier, and null or `pushed: false` when the push itself fails; a returned child
-  is not a landing. A session wrapper
+- **A caller of `land-branch` treats the branch as pushed only when
+  `child?.push?.pushed === true`, and as landed only when `child.pr` also carries a PR
+  number and no blocker.** `push` is absent when the script refuses the push or stops
+  earlier, and null or `pushed: false` when the push itself fails; a returned child is not
+  a landing. A pushed branch whose PR stage returned a blocker (the opener failed, or the
+  head already has a PR) is resolved by hand: find the PR by its exact head ref, confirm
+  its head is `push.remoteSha`, and update its body. A session wrapper
   script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`
   (L21).
 - **To free disk, delete an agent worktree's build output, not the worktree.** Remove
@@ -267,13 +276,19 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `scripts/loop-state.mjs` uses to classify its scratch branches as ephemeral, and they
   come back as unpushed local work. Pushing is not the way out (loop-state: an attack
   reproduction must not be pushed), and deleting one needs the owner's OK, so keep the
-  worktree until its scratch branches are deleted with that OK (L22).
+  worktree until its scratch branches are deleted with that OK (L22). Keep a finished
+  worktree only for that reason: `loop-state` treats every branch in a kept worktree's
+  reflog as ephemeral, so real work left in one would be hidden from the unpushed-work
+  seam. Push or land any real work in a worktree before keeping it, and name the kept
+  worktrees and their branches in the owner's hand (#1154).
 - **Before a review-fix commit is pushed, sweep every sentence it adds against every
   defect class the PR's earlier rounds found.** Review rounds on large docs PRs found a new
   instance of an old class in each fix's own new text (L17). Once two rounds find only new
   instances of old classes, the next review is a narrow verification — is each finding
   fixed, and is each new sentence true of its cited source — and anything else goes to
-  notes or a backlog row.
+  notes or a backlog row, except a mandatory class: an unsafe allow, an approval or gate
+  bypass, exposed private data, a live API call, a prohibited product claim, or a
+  proof-coverage regression is fixed in the PR whenever it is found, never deferred.
 - **A record freezes at its window's close.** The close is a named mainline merge sha; an
   event after it goes to the next record, never into an open one (L18). An EVIDENCE
   entry's re-runnable commands are local reads pinned to fixed shas — no `origin`, no

@@ -14,12 +14,15 @@
 // FATAL: a ledger dimension that is not a directory under
 // lib/integrations/src/integrations/ (every directory but adapters/, which is shared
 // wire plumbing no department owns); an evidence path git does not track; a boundTo
-// symbol not DECLARED in its file; no dimensions array; a non-null entry with no
-// dimensions; a checked dimension bound to no code; divergenceFound true without a
+// symbol not DECLARED in its file (at the start of a line, outside block comments); no
+// dimensions array; a non-null entry with no dimensions; a checked dimension with no
+// boundTo of its own (each binding names the dimension it verified); divergenceFound true without a
 // divergenceRecord whose path is one of the entry's evidence paths and whose quote (12
 // characters or more) appears verbatim in it; divergenceFound null without a note; a
-// date that is not a real day; a duplicate id; and a tracked scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md
-// that no entry cites — a new live check that nobody recorded is the drift itself.
+// date that is not a real day; an id that is not a nonblank string, or a duplicate one; a
+// live record cited by more than one entry (one wire record is one check); and a tracked
+// scripts/src/live-*-proof.ts or docs/*_LIVE_SHAPE_CHECK.md that no entry cites — a new
+// live check that nobody recorded is the drift itself.
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -41,8 +44,15 @@ export function treeOf(root = ROOT) {
   return { dims: dimensionsOf(root), tracked, read: (rel) => readFileSync(join(root, rel), "utf8") };
 }
 
+// A declaration counts only at the start of a line and outside a block comment, so a
+// `// interface Phantom {}` or a commented-out block does not keep a stale binding green.
+// ponytail: line-anchored regex, not a parser; a template literal whose line starts with
+// a declaration would still match. Use the TypeScript parser if that ever happens.
 const declares = (text, symbol) =>
-  new RegExp(`\\b(?:function|class|interface|type|const|let|enum)\\s+${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(text);
+  new RegExp(
+    `^[ \\t]*(?:export[ \\t]+)?(?:default[ \\t]+)?(?:declare[ \\t]+)?(?:abstract[ \\t]+)?(?:async[ \\t]+)?(?:function\\*?|class|interface|type|const|let|enum)[ \\t]+${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+    "m",
+  ).test(text.replace(/\/\*[\s\S]*?\*\//g, ""));
 
 export function audit(ledger, tree) {
   const problems = [];
@@ -51,10 +61,10 @@ export function audit(ledger, tree) {
   if (tree.dims.size < DIMENSION_FLOOR) problems.push(`derived only ${tree.dims.size} dimensions (< ${DIMENSION_FLOOR}) — the walk is broken, not the tree`);
   const read = (rel) => { try { return tree.read(rel); } catch { return null; } };
   const ids = new Set();
-  const cited = new Set();
+  const cited = new Map();
   for (const c of checks) {
-    const at = c?.id ?? "(no id)";
-    if (!c?.id) problems.push("an entry has no id");
+    const at = typeof c?.id === "string" && c.id.trim() ? c.id : "(no id)";
+    if (typeof c?.id !== "string" || !c.id.trim()) problems.push(`an entry's id is not a nonblank string: ${JSON.stringify(c?.id)}`);
     else if (ids.has(c.id)) problems.push(`${at}: duplicate id`);
     ids.add(c?.id);
     for (const f of ["product", "date"]) if (typeof c?.[f] !== "string" || !c[f]) problems.push(`${at}: missing ${f}`);
@@ -62,9 +72,15 @@ export function audit(ledger, tree) {
     if (!Array.isArray(c?.dimensions)) problems.push(`${at}: dimensions must be an array`);
     else if (c.dimensions.length === 0 && c.divergenceFound !== null) problems.push(`${at}: no dimensions — only a divergenceFound null entry may check none`);
     else if (c.dimensions.length > 0 && !(Array.isArray(c?.boundTo) && c.boundTo.length > 0)) problems.push(`${at}: checks a dimension but is bound to no code`);
+    else for (const d of c.dimensions) if (!c.boundTo.some((b) => b?.dimension === d)) problems.push(`${at}: dimension "${d}" has no boundTo naming it — every checked dimension needs its own binding`);
+    for (const b of Array.isArray(c?.boundTo) ? c.boundTo : []) if (!(c.dimensions ?? []).includes(b?.dimension)) problems.push(`${at}: boundTo ${b?.path} names dimension ${JSON.stringify(b?.dimension)}, which this entry does not check`);
     for (const d of Array.isArray(c?.dimensions) ? c.dimensions : []) if (!tree.dims.has(d)) problems.push(`${at}: dimension "${d}" is not a directory under ${INTEGRATIONS}/`);
     if (!Array.isArray(c?.evidence) || c.evidence.length === 0) problems.push(`${at}: no evidence paths`);
-    for (const p of c?.evidence ?? []) { cited.add(p); if (!tree.tracked.has(p)) problems.push(`${at}: evidence ${p} is not tracked`); }
+    for (const p of c?.evidence ?? []) {
+      if (LIVE_RECORD.test(p) && cited.has(p)) problems.push(`${at}: live record ${p} is already cited by ${cited.get(p)} — one wire record is one check`);
+      else cited.set(p, at);
+      if (!tree.tracked.has(p)) problems.push(`${at}: evidence ${p} is not tracked`);
+    }
     for (const b of c?.boundTo ?? []) {
       const text = read(b?.path ?? "");
       if (text === null) problems.push(`${at}: boundTo ${b?.path} does not exist`);
@@ -106,9 +122,9 @@ function selfTest() {
   const tree = {
     dims: new Set(Array.from({ length: DIMENSION_FLOOR }, (_, i) => `d${i}`)),
     tracked: new Set(["docs/A_LIVE_SHAPE_CHECK.md", "lib/x.ts"]),
-    read: (rel) => ({ "docs/A_LIVE_SHAPE_CHECK.md": "the wire said no", "lib/x.ts": "export interface Thing {}\n// see Other" })[rel] ?? (() => { throw new Error("ENOENT"); })(),
+    read: (rel) => ({ "docs/A_LIVE_SHAPE_CHECK.md": "the wire said no", "lib/x.ts": "export interface Thing {}\n// see Other\n// interface Phantom {}\n/*\nclass Ghost2 {}\n*/" })[rel] ?? (() => { throw new Error("ENOENT"); })(),
   };
-  const good = () => ({ checks: [{ id: "a", product: "p", date: "2026-09-27", dimensions: ["d0"], evidence: ["docs/A_LIVE_SHAPE_CHECK.md"], divergenceFound: true, divergenceRecord: { path: "docs/A_LIVE_SHAPE_CHECK.md", quote: "the wire said no" }, boundTo: [{ path: "lib/x.ts", symbol: "Thing" }] }] });
+  const good = () => ({ checks: [{ id: "a", product: "p", date: "2026-09-27", dimensions: ["d0"], evidence: ["docs/A_LIVE_SHAPE_CHECK.md"], divergenceFound: true, divergenceRecord: { path: "docs/A_LIVE_SHAPE_CHECK.md", quote: "the wire said no" }, boundTo: [{ path: "lib/x.ts", symbol: "Thing", dimension: "d0" }] }] });
   const plant = (fn) => { const l = good(); fn(l); return audit(l, tree).problems.length > 0; };
   const cases = [
     ["a clean ledger passes", audit(good(), tree).problems.length === 0],
@@ -131,6 +147,12 @@ function selfTest() {
     ["a non-null entry with no dimensions fails", plant((l) => { l.checks[0].dimensions = []; })],
     ["a whitespace-only note fails", plant((l) => { l.checks[0].divergenceFound = null; l.checks[0].note = "  "; })],
     ["a date that is not a real day fails", plant((l) => { l.checks[0].date = "2026-99-99"; })],
+    ["an object id fails", plant((l) => { l.checks[0].id = {}; })],
+    ["two entries citing the same live record fail", plant((l) => { l.checks.push({ ...l.checks[0], id: "b" }); })],
+    ["a declaration only in a line comment fails", plant((l) => { l.checks[0].boundTo[0].symbol = "Phantom"; })],
+    ["a declaration only in a block comment fails", plant((l) => { l.checks[0].boundTo[0].symbol = "Ghost2"; })],
+    ["a dimension added without its own binding fails", plant((l) => { l.checks[0].dimensions.push("d1"); })],
+    ["a binding naming a dimension the entry does not check fails", plant((l) => { l.checks[0].boundTo[0].dimension = "d1"; })],
   ];
   for (const [name, ok] of cases) console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`);
   const failed = cases.filter(([, ok]) => !ok).length;

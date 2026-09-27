@@ -10,9 +10,9 @@
       "divergenceFound": true,
       "divergenceRecord": { "path": "scripts/src/live-edr-proof.ts", "quote": "realtimeProtection — Wazuh is HIDS/XDR, not signature-based AV" },
       "boundTo": [
-        { "path": "lib/integrations/src/integrations/edr-threat/edr-connector.ts", "symbol": "normalizeEndpoint" },
-        { "path": "lib/integrations/src/integrations/edr-threat/evaluate.ts", "symbol": "evaluateThreatPosture" },
-        { "path": "lib/integrations/src/integrations/edr-threat/types.ts", "symbol": "EndpointThreatRaw" }
+        { "path": "lib/integrations/src/integrations/edr-threat/edr-connector.ts", "symbol": "normalizeEndpoint", "dimension": "edr-threat" },
+        { "path": "lib/integrations/src/integrations/edr-threat/evaluate.ts", "symbol": "evaluateThreatPosture", "dimension": "edr-threat" },
+        { "path": "lib/integrations/src/integrations/edr-threat/types.ts", "symbol": "EndpointThreatRaw", "dimension": "edr-threat" }
       ]
     },
     {
@@ -23,7 +23,7 @@
       "date": "2026-07-31",
       "divergenceFound": true,
       "divergenceRecord": { "path": "scripts/src/live-fleet-proof.ts", "quote": "host- and policy-level route the adapter used was WRONG" },
-      "boundTo": [{ "path": "lib/integrations/src/integrations/telemetry/fleetdm.ts", "symbol": "FleetDMAdapter" }]
+      "boundTo": [{ "path": "lib/integrations/src/integrations/telemetry/fleetdm.ts", "symbol": "FleetDMAdapter", "dimension": "telemetry" }]
     },
     {
       "id": "live-fleet-workflow",
@@ -33,7 +33,7 @@
       "date": "2026-08-18",
       "divergenceFound": false,
       "note": "A workflow-closure proof: the live unmanaged host must reach RESTRICT. It checks a verdict, not a fixture assumption.",
-      "boundTo": [{ "path": "lib/integration-bridge/src/evidence.ts", "symbol": "fleetHostToDeviceManagementEvidence" }]
+      "boundTo": [{ "path": "lib/integration-bridge/src/evidence.ts", "symbol": "fleetHostToDeviceManagementEvidence", "dimension": "device-management-health" }]
     },
     {
       "id": "live-glpi-shape-discovery",
@@ -54,8 +54,8 @@
       "divergenceFound": true,
       "divergenceRecord": { "path": "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "quote": "the two divergences (nesting of `model`," },
       "boundTo": [
-        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "headwindLabToDeviceManagementEvidence" },
-        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "HeadwindLabDevice" }
+        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "headwindLabToDeviceManagementEvidence", "dimension": "device-management-health" },
+        { "path": "lib/integration-bridge/src/evidence.ts", "symbol": "HeadwindLabDevice", "dimension": "device-management-health" }
       ]
     },
     {
@@ -67,9 +67,9 @@
       "divergenceFound": false,
       "note": "An accept/reject proof of the production verifier; it records agreement, not a fixture-vs-wire finding.",
       "boundTo": [
-        { "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator" },
-        { "path": "lib/integrations/src/integrations/token-binding/token-binding-connector.ts", "symbol": "normalizeReport" },
-        { "path": "lib/integrations/src/integrations/token-binding/evaluate.ts", "symbol": "evaluateTokenBinding" }
+        { "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator", "dimension": "token-binding" },
+        { "path": "lib/integrations/src/integrations/token-binding/token-binding-connector.ts", "symbol": "normalizeReport", "dimension": "token-binding" },
+        { "path": "lib/integrations/src/integrations/token-binding/evaluate.ts", "symbol": "evaluateTokenBinding", "dimension": "token-binding" }
       ]
     },
     {
@@ -80,7 +80,7 @@
       "date": "2026-07-31",
       "divergenceFound": false,
       "note": "RFC 7638 cross-implementation agreement: the two thumbprints matched. DPoP-scoped; it reads no access-governance surface.",
-      "boundTo": [{ "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator" }]
+      "boundTo": [{ "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator", "dimension": "token-binding" }]
     },
     {
       "id": "identity-shape-check-sso-session",
@@ -91,11 +91,11 @@
       "divergenceFound": true,
       "divergenceRecord": { "path": "docs/IDENTITY_LIVE_SHAPE_CHECK.md", "quote": "no `amr` claim at all" },
       "boundTo": [
-        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "NormalizedSsoSession" },
-        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionAssurance" },
-        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionFreshness" },
-        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionBinding" },
-        { "path": "lib/integrations/src/integrations/sso-session/sso-session-connector.ts", "symbol": "normalizeReport" }
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "NormalizedSsoSession", "dimension": "sso-session" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionAssurance", "dimension": "sso-session" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionFreshness", "dimension": "sso-session" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionBinding", "dimension": "sso-session" },
+        { "path": "lib/integrations/src/integrations/sso-session/sso-session-connector.ts", "symbol": "normalizeReport", "dimension": "sso-session" }
       ]
     },
     {
@@ -106,7 +106,7 @@
       "date": "2026-07-31",
       "divergenceFound": true,
       "divergenceRecord": { "path": "scripts/src/live-location-proof.ts", "quote": "`geofenceIds: null` is AMBIGUOUS" },
-      "boundTo": [{ "path": "lib/integrations/src/integrations/location-services/evaluate.ts", "symbol": "evaluateLocation" }]
+      "boundTo": [{ "path": "lib/integrations/src/integrations/location-services/evaluate.ts", "symbol": "evaluateLocation", "dimension": "location-services" }]
     },
     {
       "id": "radius-nac-shape-check",
@@ -117,8 +117,8 @@
       "divergenceFound": true,
       "divergenceRecord": { "path": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md", "quote": "There is no quarantine packet type and no quarantine" },
       "boundTo": [
-        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NetworkPostureRaw" },
-        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NormalizedNetworkSignal" }
+        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NetworkPostureRaw", "dimension": "network-nac" },
+        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NormalizedNetworkSignal", "dimension": "network-nac" }
       ]
     },
     {
@@ -130,8 +130,8 @@
       "divergenceFound": true,
       "divergenceRecord": { "path": "docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md", "quote": "Unobservable behind a forward proxy" },
       "boundTo": [
-        { "path": "lib/integrations/src/integrations/link-usability/types.ts", "symbol": "LinkProgress" },
-        { "path": "lib/integrations/src/integrations/sse-egress/types.ts", "symbol": "SseEgressReportRaw" }
+        { "path": "lib/integrations/src/integrations/link-usability/types.ts", "symbol": "LinkProgress", "dimension": "link-usability" },
+        { "path": "lib/integrations/src/integrations/sse-egress/types.ts", "symbol": "SseEgressReportRaw", "dimension": "sse-egress" }
       ]
     }
   ]

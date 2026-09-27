@@ -33,6 +33,23 @@ A SAFETY_MACHINERY PR (`scripts/**`, `.github/workflows/**`, fixtures) may be
 merged under the same five conditions, and the PR body must say so under "Owner
 decision needed" as "merged under DR-037" with the check-run id.
 
+## Native client and shared-vector PRs
+
+The gating check runs only the static conformance gate (`review-hub-ci.yml`'s
+step, which checks each client HAS a test reading the vectors, not that it
+passes), so a PR that changes `native/shared/**`, `native/android/**`,
+`native/desktop/**` or `native/ios/**` also waits, before merge, for its
+client suites on the current head: "Assist core (pure Kotlin, no SDK)",
+"Android app (assembleDebug)", "Assist core (ubuntu-latest)" and
+"(windows-latest)", "Desktop shell (ubuntu-latest)" and "(windows-latest)",
+"Shared Assist vectors bind every client", the iOS simulator job and "macOS
+native (SwiftPM, no simulator)" — whichever the PR's paths trigger; making
+them required checks is an owner setting. `ios-ci.yml`'s `pull_request`
+trigger runs only for PRs targeting `SignalGrid_Alpha` (line 37), so a
+native PR stacked on another feature branch never runs the iOS simulator or
+macOS-native jobs at all — target `SignalGrid_Alpha` directly, or there is
+nothing to wait for.
+
 ## The merge call
 
 Pass the **full 40-character head sha** as `expectedHeadSha`. An abbreviated sha

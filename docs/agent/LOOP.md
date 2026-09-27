@@ -70,8 +70,9 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
               step_up or (b) day-one-quiet covers it, on the raised-hands issue
               https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands (file
               artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json); #1037's CodeQL call -
-              dismiss the alert or reply 'Mac paths-ignore', https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037. In a
-              BROWSER: Settings -> Pages -> Source -> GitHub Actions at
+              dismiss the alert or reply 'Mac paths-ignore', https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037. The
+              Copilot scanner's model setting (the 11:55Z tree names it without a browser path). In a BROWSER: Settings ->
+              Pages -> Source -> GitHub Actions at
               https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once (Actions ->
               "Deploy site to Pages" -> Run workflow,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).

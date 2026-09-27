@@ -105,7 +105,7 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               Android core test task tracks the shared vectors, AssistWire.swift imports CoreFoundation), #1154 (99e62a73,
               mail: owner hand on 19 local scratch branches), #1128 (594a8051, the prior window's own LOOP/EVIDENCE
               record), #1155 (ea825bbc, mail: keepalive 05:24Z), #1148 (2ebc4d3c, plan row 12 done - Tier-1 reads at depth
-              audited 25/25, folding in the Mac's #1147 and #1150, row 48's stamp fixed), #1157 (9dd28e22, mail: keepalive
+              audited 25/25, folding in the Mac's #1147 and #1150; row 48's stamp fixed), #1157 (9dd28e22, mail: keepalive
               07:24Z), #1156 (929e94ad, wire-truth coverage ledger - every live check bound to its dimensions and the code
               it verified, counts derived by a gate, plan row 17), #1159 (4bb57ed5, lessons L17-L22 and the orchestrator
               skill's rules for briefs, reviews and records), #1160 (3cf4d8f2, mail: keepalive 09:24Z), #1161 (7b6ea61e,
@@ -125,7 +125,7 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               open PR #1153 (head 26a39479), waiting on the owner's merge, not on further work. L21 (#1159) - a wrapper
               reported a refused landing as landed; another threw on JSON-string arguments. L22 (#1159) - deleting finished
               agent worktrees resurfaced 19 old scratch branches as unpushed local work, raised as a hand on #1154. Ledger
-              at 7b6ea61e: 22 rows, 21 landed, 1 pending.
+              at 7b6ea61e: 22 lessons (21 landed, 1 pending).
               Next (at 09:55Z): #1153 waits on the owner's merge (not a retry - the anchor fix is already pushed); the
               SIGTERM ask in cloud-fyi-nothing-asked-your-tenant-isolation-ha (cloud to mac; its own item 3 names jobs for
               #1141 and #1128, with a third instance for #1147's job 108514569139 added in a later ack) is still unread by

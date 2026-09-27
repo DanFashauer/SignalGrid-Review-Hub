@@ -4022,7 +4022,7 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           caller-controlled commit date) shows 765faf7a's first run at 09:48:55Z and the next distinct head's (992cb2a7)
           first run at 10:41:15Z, with no run for any other head in between; the 09:54:52Z close falls inside that span,
           so 765faf7a was the head at the close, and f4e787ff — a commit that appears in the PR's commit list with a
-          10:22:03Z committer date, which is caller-set and not evidence of a push — never existed as a live head at all
+          10:22:03Z committer date, which is caller-set and not evidence of a push — was never pushed on its own (no workflow run on the branch carries it)
           (an earlier draft of this entry used committer-date bounds and an f4e787ff-headed interval; both are corrected
           here). #1133's CURRENT head, read
           live, is 992cb2a7 (updated 10:42:32Z) — well after the close, and nothing about it is claimed here beyond that

@@ -314,9 +314,9 @@ if (!chainRun || !chainRun.jobStarted) {
   // (keep the lock) to fail-open (release a lock a live chain still needs). The check below
   // tests the marker's pid as a PROCESS GROUP instead (`kill -0 -- -PID`: POSIX sends signal
   // 0 to every process whose pgid is PID and succeeds if any one of them still exists) — not
-  // merely "does a marker file exist", and not merely "is the marker's own pid alive": no
-  // member of the job's process group alive means a real job still owns the lock (keep it);
-  // no member alive, or no marker at all, means nothing here still needs it (release it,
+  // merely "does a marker file exist", and not merely "is the marker's own pid alive": ANY
+  // member of the job's process group still alive means a real job still owns the lock (keep
+  // it); no member alive, or no marker at all, means nothing here still needs it (release it,
   // subject to the same tag-matched guard as before). All shapes were run with a stand-in
   // job in scratch before landing: a finished run's leftover marker + a freshly acquired
   // lock + the worker dying before step 3 -> RELEASED; a live job -> JOB_STARTED_KEEP; the

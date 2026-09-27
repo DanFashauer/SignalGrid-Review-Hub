@@ -180,23 +180,91 @@ export const SAFETY_MACHINERY = [
   // artifacts/api-server/test/ (already DECISION_PATH via the blanket "the /v1 decision API
   // server" rule above, so this is a harmless second match for them) — and nothing else.
   { rule: "product unit-test sources that preflight/CI run (artifacts/*/test/**, artifacts/**/*.test|spec.*)", re: /^artifacts\/[\w-]+\/(?:(?:.+\/)?(?:test|tests|__tests__)\/|.*\.(?:test|spec)\.[cm]?[jt]sx?$)/ },
+  // Review sweep on #1133 (round 2 of the review pass), finding 1 (blocking): the
+  // Bruno REQUESTS the live-run gate actually executes classified 'other', measured
+  // live with classifyDiff() at 802d1c9b — artifacts/api-collection/negative-tests/
+  // malformed-evaluate.bru, adversarial-trust/stale-evidence.bru and health/healthz.bru
+  // all returned {tier:'autonomous', matched:[]}. These files ARE the input of "Bruno
+  // collection live run" (preflight.mjs:610, review-hub-ci.yml:1054): scripts/run-
+  // bruno-collection.mjs:169-183 runs exactly the health/, v1/, control-plane/,
+  // review-demo/, adversarial-trust/ and negative-tests/ folders through the real
+  // Bruno CLI. 17 of the 103 tracked .bru files under artifacts/api-collection/ carry
+  // a hand-authored `assert {}` / `tests {}` block (malformed-evaluate.bru asserts
+  // `res.status: eq 400`), and the runner fails only on a failed assertion, a 5xx, or
+  // an empty run — an autonomous PR could loosen or delete one of those 17 refusal
+  // checks and the gate stays green, the identical shape to a weakened unit test.
+  // sources/ is DELIBERATELY left out: run-bruno-collection.mjs's own header says
+  // those requests target the external lab services run-live-lanes.sh starts and are
+  // never executed here (the Mac lane's live-lane loop runs them separately) — it does
+  // not exist in the tree today, but is named below in TEST_SOURCE_EXCLUSIONS ahead of
+  // time so a future file there reads as a known, intentional gap, not a silent one.
+  { rule: "Bruno requests the 'Bruno collection live run' gate executes (preflight.mjs:610, review-hub-ci.yml:1054; folder list in scripts/run-bruno-collection.mjs:169-183)", re: /^artifacts\/api-collection\/(?:health|v1|control-plane|review-demo|adversarial-trust|negative-tests)\// },
+  // Completeness sweep on #1133 (round 2): the SAME class of gap, found by re-running
+  // the sweep the finding above named against every OTHER gate that runs a checker
+  // over tracked, non-script data (CLAUDE.md's mandate for this round) — a second
+  // Bruno family with zero manifest coverage. scripts/check-lab-collections.mjs's
+  // entire input is artifacts/lab-collections/ (42 tracked files: fleet/, keycloak/,
+  // microsoft-graph/, traccar/ and wazuh/, each a bruno.json + environments/ + request
+  // .bru files, plus the directory's own README.md, which the check reads directly for
+  // its "is this folder declared in the lane table" cross-check) — a FATAL gate in both
+  // preflight.mjs:524 and review-hub-ci.yml:301 (plus its own self-test at :303), and
+  // classified 'other' end to end (measured live at the same sha:
+  // artifacts/lab-collections/fleet/hosts-list.bru, fleet/collection.bru,
+  // fleet/environments/Lab.bru and the directory README all returned
+  // {tier:'autonomous', matched:[]}). check-api-collection.mjs:205 explains why this
+  // tree was split out of the parent collection in the first place (it maps
+  // third-party vendor paths, never cross-checked against /v1 routes) — that split is
+  // exactly what left it unnamed by every rule above. Nothing here executes an
+  // `assert{}` block (check-lab-collections.mjs is a static structural audit, not a
+  // live Bruno run), so the risk is coverage erosion rather than assertion-loosening:
+  // deleting a request file, or a whole service folder plus its README row in the same
+  // diff so the cross-check stays internally consistent, silently shrinks what the lab
+  // collection maps without tripping any FATAL check — still "a diff quietly weakens
+  // what a gate proves, and the weakening is invisible to that gate", the shape this
+  // manifest exists to catch. Blanket over the whole tree rather than just the request
+  // files: the README, bruno.json and environments/ files feed the SAME verdict
+  // (hasBrunoJson / hasEnvironments / readmeNamed), so scoping the rule to only the
+  // *.bru requests would leave those other inputs unmatched for no reason.
+  { rule: "lab source collections the 'Lab source collections' gate validates (preflight.mjs:524, review-hub-ci.yml:301,303; scripts/check-lab-collections.mjs)", re: /^artifacts\/lab-collections\// },
 ];
 
 // Review fixes on the round-4 changes (#1133): the guard below (findUngatedNativeTestSources)
 // is now REPO-WIDE, not native/-only — a repo-wide sweep of every tracked file matching
-// the test conventions below (TEST_CONVENTION_DIR_RE / TEST_CONVENTION_NAME_RE) finds
-// NINE files that classify autonomous today: the three product-test files above (now
-// closed by the rule above) plus these six, which really are not gate inputs. This is
-// the guard's own record of what is DELIBERATELY left out, one family per line, so a
-// future reader can see the reasoning next to the exclusion rather than inferring it
-// from silence — a directory prefix for the two families that are ENTIRELY out of scope
-// by design, and the two known files (by exact path) for the third, since an ordinary
-// skill directory could reasonably gain a file worth gating later and this list should
-// not wave that through blind.
+// the test conventions below (TEST_CONVENTION_DIR_RE / TEST_CONVENTION_NAME_RE) found
+// NINE files that classified autonomous at 07d6f1ab: the three product-test files above
+// (closed by the rule above) plus the FIRST four rules below, which really are not gate
+// inputs. This is the guard's own record of what is DELIBERATELY left out, one family
+// per line, so a future reader can see the reasoning next to the exclusion rather than
+// inferring it from silence — a directory prefix for the families that are ENTIRELY out
+// of scope by design, and the known files (by exact path) where an ordinary directory
+// could reasonably gain a file worth gating later and this list should not wave that
+// through blind. Completeness sweep on #1133 (round 2): widening TEST_CONVENTION_NAME_RE
+// to `.bru$` (below) swept in two more Bruno families end to end — both closed by a
+// SAFETY_MACHINERY rule above, except the collection's own config/placeholder files,
+// which join this list as the last rule (see `node scripts/check-owner-gated-surfaces.mjs
+// --self-test` for the exact, currently-measured count of what this sweep finds today;
+// it is never retyped here as a bare number for the same reason CLAUDE.md gives for every
+// other figure in this repo — a comment is not re-run when the tree changes underneath it).
 export const TEST_SOURCE_EXCLUSIONS = [
   { rule: "vendored third_party/ code (pinned upstream, not this repo's own gate surface — e.g. third_party/cli-anything/tests/test_skill_generator.py)", re: /^third_party\// },
   { rule: "k6 load drivers (tests/load/**) — CLAUDE.md and scripts/check-test-execution.mjs:46 already document these as REPORTED, invoked by nothing, deliberately outside the correctness gate", re: /^tests\/load\// },
   { rule: "two test-shaped files inside ordinary, deliberately-autonomous skill directories (see the existing \"an unrelated skill dir stays autonomous\" self-test)", re: /^\.claude\/skills\/(?:ios-simulator-skill\/scripts\/test_recorder\.py|node\/rules\/assets\/graceful-server\.test\.ts)$/ },
+  // Completeness sweep on #1133 (round 2): adding `.bru$` to TEST_CONVENTION_NAME_RE
+  // (below) below so the tree guard sees the two Bruno families gated above pulls in
+  // the collection's own PLUMBING too — files that are real gate input (the live-run
+  // gate reads them the same way it reads a request) but carry no request of their
+  // own to assert on, so a SAFETY_MACHINERY rule scoped to "requests" does not name
+  // them: environments/*.bru sets shared vars/baseUrl (the live runner overrides
+  // baseUrl itself via --env-var, scripts/run-bruno-collection.mjs:43, so editing the
+  // file cannot silently change what gets asserted), and the root collection.bru sets
+  // the default auth scheme. check-api-collection.mjs's OWN definition of "a request
+  // file" (scripts/check-api-collection.mjs:217-218) already excludes both by the same
+  // two names, for the identical reason. sources/ does not exist in the tree today,
+  // but scripts/run-bruno-collection.mjs's own header names it as the deliberately-
+  // never-run folder for external-lab requests (see the SAFETY_MACHINERY rule above) —
+  // declared here ahead of time, like the k6 rule above it, so a future sources/*.bru
+  // file reads as a known, intentional gap rather than a silent one.
+  { rule: "the Bruno collection's own config, not a request the live-run gate asserts on (artifacts/api-collection/environments/, collection.bru, and the reserved-but-unpopulated sources/)", re: /^artifacts\/api-collection\/(?:environments\/|collection\.bru$|sources\/)/ },
 ];
 
 // Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD `validate()` runs (see
@@ -205,8 +273,8 @@ export const TEST_SOURCE_EXCLUSIONS = [
 // which tracked files look like a test source ANYWHERE in the repo by the same broad
 // conventions used to DERIVE this fix (dirs test/, tests/, __tests__/, src/test/,
 // src/androidTest/, a dir segment ending in Tests/; names *.test.*, *.spec.*, *Test.kt|
-// java|swift, *Tests.kt|swift, *_test.rs, test_*.py) and fails, naming the file, if any
-// one still classifies autonomous.
+// java|swift, *Tests.kt|swift, *_test.rs, test_*.py, *.bru) and fails, naming the file,
+// if any one still classifies autonomous.
 //
 // Review fixes on the round-4 changes (#1133): round 4 scoped this to native/ only and
 // left three OTHER autonomous test-shaped files "deliberately alone" as merely outside
@@ -217,17 +285,20 @@ export const TEST_SOURCE_EXCLUSIONS = [
 // and still classifies autonomous. TEST_SOURCE_EXCLUSIONS (above) is the small, explicit,
 // commented list of the families that really are not gate inputs, so a repo-wide sweep
 // finds nothing left to flag: vendored third_party/ code, the k6 load drivers under
-// tests/load/ CLAUDE.md already documents as REPORTED not gated, and two files inside
-// ordinary, deliberately-autonomous skill directories. A future test-shaped file anywhere
-// else in the tree — the "next native test directory" this guard was built for, just no
-// longer limited to native/ — still fails this gate by name instead of merging silently.
+// tests/load/ CLAUDE.md already documents as REPORTED not gated, two files inside
+// ordinary, deliberately-autonomous skill directories, and — completeness sweep on
+// #1133, round 2, once `.bru$` joined the name convention below — the Bruno
+// collection's own config (environments/, collection.bru) and its reserved-but-empty
+// sources/ folder. A future test-shaped file anywhere else in the tree — the "next
+// native test directory" this guard was built for, just no longer limited to native/ —
+// still fails this gate by name instead of merging silently.
 const TEST_CONVENTION_DIR_RE = /(^|\/)(test|tests|__tests__)\/|(^|\/)src\/(test|androidTest)\/|(^|\/)[^/]*Tests\//;
-const TEST_CONVENTION_NAME_RE = /\.test\.[^./]+$|\.spec\.[^./]+$|Test\.(kt|java|swift)$|Tests\.(kt|swift)$|_test\.rs$|(^|\/)test_[^/]+\.py$/;
+const TEST_CONVENTION_NAME_RE = /\.test\.[^./]+$|\.spec\.[^./]+$|Test\.(kt|java|swift)$|Tests\.(kt|swift)$|_test\.rs$|(^|\/)test_[^/]+\.py$|\.bru$/;
 
 /** True if `f` matches one of the general test-source conventions used to DERIVE the
  *  native rules above (dirs test/tests/__tests__/src/test//src/androidTest//a *Tests/
  *  segment; names *.test.*, *.spec.*, *Test.kt|java|swift, *Tests.kt|swift, *_test.rs,
- *  test_*.py) — independent of, and broader than, the two SAFETY_MACHINERY regexes
+ *  test_*.py, *.bru) — independent of, and broader than, the SAFETY_MACHINERY regexes
  *  above, so a manifest regression (a rule deleted or narrowed) is still caught. */
 export function looksLikeTestSource(f) {
   const n = normalizePath(f);
@@ -246,6 +317,22 @@ export function findUngatedNativeTestSources(files) {
     .map(normalizePath)
     .filter((f) => looksLikeTestSource(f) && !TEST_SOURCE_EXCLUSIONS.some((p) => p.re.test(f)))
     .filter((f) => classifyDiff([f]).tier === "autonomous");
+}
+
+// Completeness sweep on #1133 (round 2): the tree guard's OWN vacuity floor. Every
+// property this guard proves ("nothing tracked looks like a test source and stays
+// ungated") reads identically whether it swept a real, populated tree or a
+// TEST_CONVENTION_DIR_RE/TEST_CONVENTION_NAME_RE that regressed to matching nothing —
+// findUngatedNativeTestSources() over an empty candidate set returns [] either way, and
+// an empty list already reads as "the guard is satisfied" everywhere else in this file.
+// A future edit that narrows either regex to the point of matching zero tracked paths
+// (a typo'd anchor, a dropped alternative, the whole regex accidentally replaced with
+// something that never matches) would make checkNativeTestSourcesGated() print nothing
+// wrong FOREVER — the silent-regression shape this entire guard exists to prevent,
+// just one level up, in the guard's own detector rather than in the manifest it checks.
+// Exported so the self-test exercises it hermetically, with no git and no real files.
+export function noTestSourcesFoundAtAll(files) {
+  return !files.map(normalizePath).some(looksLikeTestSource);
 }
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -582,6 +669,24 @@ function selfTest() {
   t(".claude/skills/signalgrid-reviewer/ change is SAFETY_MACHINERY", mostRestrictive(cls([".claude/skills/signalgrid-reviewer/SKILL.md"])) === "SAFETY_MACHINERY");
   t("root threat_model.md is OWNER_RESERVED", mostRestrictive(cls(["threat_model.md"])) === "OWNER_RESERVED");
   t("root SECURITY.md is OWNER_RESERVED", mostRestrictive(cls(["SECURITY.md"])) === "OWNER_RESERVED");
+  // Review sweep on #1133 (round 2 of the review pass), finding 1 (blocking): the two
+  // files the finding measured autonomous at 802d1c9b, plus a third from the same
+  // folder list, are now SAFETY_MACHINERY (the live-run gate's actual input).
+  t("adversarial-trust/stale-evidence.bru is SAFETY_MACHINERY (the Bruno live-run gate's input)", mostRestrictive(cls(["artifacts/api-collection/adversarial-trust/stale-evidence.bru"])) === "SAFETY_MACHINERY");
+  t("negative-tests/malformed-evaluate.bru is SAFETY_MACHINERY (same)", mostRestrictive(cls(["artifacts/api-collection/negative-tests/malformed-evaluate.bru"])) === "SAFETY_MACHINERY");
+  t("health/healthz.bru is SAFETY_MACHINERY (same)", mostRestrictive(cls(["artifacts/api-collection/health/healthz.bru"])) === "SAFETY_MACHINERY");
+  // Negative: the collection's own plumbing and its reserved-but-unpopulated sources/
+  // folder stay autonomous — TEST_SOURCE_EXCLUSIONS names all three, and none of them
+  // is a request the live-run gate asserts on.
+  t("artifacts/api-collection/environments/Local.bru stays autonomous (collection plumbing, not a request)", cls(["artifacts/api-collection/environments/Local.bru"]).tier === "autonomous");
+  t("artifacts/api-collection/collection.bru stays autonomous (same)", cls(["artifacts/api-collection/collection.bru"]).tier === "autonomous");
+  t("a hypothetical artifacts/api-collection/sources/ request stays autonomous (deliberately never run by the live-run gate)", cls(["artifacts/api-collection/sources/fleet-lab-probe.bru"]).tier === "autonomous");
+  // Completeness sweep on #1133 (round 2): the second Bruno family the sweep found —
+  // scripts/check-lab-collections.mjs's entire input, previously unnamed by any rule.
+  t("a lab-collections request (fleet/hosts-list.bru) is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/lab-collections/fleet/hosts-list.bru"])) === "SAFETY_MACHINERY");
+  t("the lab-collections directory README is SAFETY_MACHINERY (the gate reads it directly for the declared-lane cross-check)", mostRestrictive(cls(["artifacts/lab-collections/README.md"])) === "SAFETY_MACHINERY");
+  t("a lab-collections environments file is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/lab-collections/fleet/environments/Lab.bru"])) === "SAFETY_MACHINERY");
+  t("a lab-collections bruno.json is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/lab-collections/keycloak/bruno.json"])) === "SAFETY_MACHINERY");
   // Finding 6 (should-fix): the classifier manifest and the landing gate/workflow that
   // read its verdict are themselves OWNER_RESERVED now, closing the two-step bypass
   // (delete a rule via scripts/**-classified SAFETY_MACHINERY, then edit the
@@ -739,6 +844,47 @@ function selfTest() {
       ".claude/skills/node/rules/assets/graceful-server.test.ts",
     ]).length === 0);
 
+  // Completeness sweep on #1133 (round 2): `.bru$` joined TEST_CONVENTION_NAME_RE
+  // (above) specifically so the tree guard sees both Bruno families — prove the
+  // convention itself recognizes the shape, then that the guard finds nothing left
+  // ungated across a representative sample of both (requests, config/plumbing,
+  // README, bruno.json, an environments file), mirroring the nine-path proof above.
+  t("looksLikeTestSource recognizes a .bru request", looksLikeTestSource("artifacts/api-collection/v1/evaluate-decision.bru"));
+  t("looksLikeTestSource recognizes a lab-collections .bru request", looksLikeTestSource("artifacts/lab-collections/wazuh/agents-list.bru"));
+  t("the guard finds nothing ungated among the Bruno families now that they are fixed",
+    findUngatedNativeTestSources([
+      "artifacts/api-collection/health/healthz.bru",
+      "artifacts/api-collection/negative-tests/malformed-evaluate.bru",
+      "artifacts/api-collection/adversarial-trust/stale-evidence.bru",
+      "artifacts/api-collection/environments/Local.bru",
+      "artifacts/api-collection/collection.bru",
+      "artifacts/lab-collections/fleet/hosts-list.bru",
+      "artifacts/lab-collections/README.md",
+      "artifacts/lab-collections/microsoft-graph/bruno.json",
+    ]).length === 0);
+  // Positive: a Bruno request under a folder NAME neither Bruno rule above lists (a
+  // hypothetical new api-collection lane) still gets caught by the guard's general
+  // backstop — the same "next test directory" proof the native planted-path case
+  // above makes, now for this family. Hermetic: no file is written.
+  t("the guard flags a planted Bruno request under an unlisted new folder (artifacts/api-collection/staging-lab/new-case.bru)",
+    (() => {
+      const planted = "artifacts/api-collection/staging-lab/new-case.bru";
+      return looksLikeTestSource(planted) &&
+        classifyDiff([planted]).tier === "autonomous" &&
+        findUngatedNativeTestSources([planted]).length === 1 &&
+        findUngatedNativeTestSources([planted])[0] === planted;
+    })());
+
+  // Completeness sweep on #1133 (round 2): the tree guard's own vacuity floor —
+  // a convention regex regressed to matching nothing must not read as a clean sweep.
+  t("the vacuity floor fires when nothing tracked looks like a test source by any convention (a broken regex must not read as 'all clear')",
+    noTestSourcesFoundAtAll(["lib/signalgrid-core/src/decision.ts", "docs/GLOSSARY.md", "scripts/preflight.mjs"]));
+  t("the vacuity floor does not fire while at least one real test-source shape is present",
+    !noTestSourcesFoundAtAll(["lib/signalgrid-core/src/decision.ts", "native/android/core/src/test/kotlin/com/signalgrid/assist/core/AssistWireTest.kt"]));
+  t("the vacuity floor does not fire on a single Bruno request alone (the new convention counts too)",
+    !noTestSourcesFoundAtAll(["artifacts/api-collection/health/healthz.bru"]));
+  t("an empty file list is vacuous", noTestSourcesFoundAtAll([]));
+
   // Non-vacuity: both lists carry rules, so the gate has a subject.
   t("all three manifests are non-empty", DECISION_PATH.length > 0 && SAFETY_MACHINERY.length > 0 && OWNER_RESERVED.length > 0);
 
@@ -861,6 +1007,18 @@ function checkNativeTestSourcesGated() {
       .filter((l) => l.length > 0);
   } catch (err) {
     console.error(`tree guard: git ls-files failed: ${firstLine(err.stderr || err.message)}`);
+    process.exit(1);
+  }
+  // Vacuity floor (completeness sweep on #1133, round 2): a convention regex that
+  // regressed to matching nothing would make the loop below find zero candidates and
+  // print nothing wrong — indistinguishable from a genuinely clean sweep. Fail loudly,
+  // by name, before that happens.
+  if (noTestSourcesFoundAtAll(files)) {
+    console.error(
+      "tree guard: zero tracked files look like a test source by ANY convention (TEST_CONVENTION_DIR_RE / " +
+        "TEST_CONVENTION_NAME_RE) — that is a regressed regex, not a clean tree; refusing to report " +
+        "'nothing ungated' from an empty candidate set.",
+    );
     process.exit(1);
   }
   const ungated = findUngatedNativeTestSources(files);

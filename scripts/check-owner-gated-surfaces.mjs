@@ -188,7 +188,24 @@ export const SAFETY_MACHINERY = [
   // change than this fix. See findUngatedInlineRustTests below for the independent,
   // self-test-hermetic content probe that backs this the same way the TREE GUARD
   // backs the two rules above, for a fourth crate this rule does not yet name.
-  { rule: "Rust crates whose inline #[cfg(test)] modules check-desktop-core-tests.mjs counts (desktop.yml:94,149; firmware.yml:86)", re: /^(?:native\/desktop\/(?:core|app)|firmware\/dock\/core)\/src\/.*\.rs$/ },
+  // Review sweep on #1133 (round 4, thread 4113330659), finding 1 (should-fix): the
+  // rule above still had the SAME under-match the round-3 Bruno finding had, one
+  // directory over — it gates each crate's src/ but not firmware/dock/core/examples/
+  // emit_fixtures.rs, which is still autonomous and is the ENTIRE input of the
+  // dock-contract gate: firmware.yml:114 runs `cargo run --example emit_fixtures`, and
+  // firmware.yml:118 pipes its stdout to `node scripts/check-dock-firmware-contract.mjs`.
+  // Reproduced in scratch with the real crate and cargo (--offline): the unmodified
+  // example emits 14 records and the gate exits 0; replacing its body with a `println!`
+  // of those same 14 lines verbatim — zero references to DockUnit or encode, so the
+  // firmware itself never runs — still prints "firmware emitted 14 record(s)" and exits
+  // 0. One autonomous file change is therefore enough for every later firmware change to
+  // merge under owner review without the contract gate ever running the firmware it
+  // claims to check. Widened from `src/` alone to `(?:src|examples)`.
+  // native/desktop/app/build.rs is the only other autonomous .rs file in the tree
+  // (verified: `git ls-files '*.rs'` lists 12 tracked files; build.rs holds no
+  // #[cfg(test)] and no gate script or workflow step reads its output), so it stays out
+  // of scope.
+  { rule: "Rust crates whose inline #[cfg(test)] modules check-desktop-core-tests.mjs counts, AND the crate's own executed example harness (desktop.yml:94,149; firmware.yml:86,114,118)", re: /^(?:native\/desktop\/(?:core|app)|firmware\/dock\/core)\/(?:src|examples)\/.*\.rs$/ },
   // Review fixes on the round-4 changes (#1133): round 4's own TREE_GUARD note (below)
   // left three product-test files "deliberately alone" as merely outside its native-only
   // scope — but they are not incidental test dirs, they are the WHOLE input of two gates
@@ -278,6 +295,29 @@ export const SAFETY_MACHINERY = [
   // (hasBrunoJson / hasEnvironments / readmeNamed), so scoping the rule to only the
   // *.bru requests would leave those other inputs unmatched for no reason.
   { rule: "lab source collections the 'Lab source collections' gate validates (preflight.mjs:524, review-hub-ci.yml:301,303; scripts/check-lab-collections.mjs)", re: /^artifacts\/lab-collections\// },
+  // Completeness sweep on #1133 (round 4), finding 2 (should-fix), predating this
+  // commit: docs/agent/FALSE_CLAIMS.json is the WHOLE assertion set of the
+  // "Known-false claims" gate (preflight.mjs:515-516, review-hub-ci.yml:498,500 — both
+  // run scripts/check-known-false-claims.mjs, which reads this one file as its REGISTRY
+  // and derives every denial pattern from its entries), and it classified 'other'.
+  // Verified against the current tree: classifyDiff(["docs/agent/FALSE_CLAIMS.json"])
+  // returns autonomous, and check-known-false-claims.mjs's own header says an entry must
+  // be "never silently deleted" — a claim without a manifest rule can be removed from
+  // the registry AND re-stated in a tracked document in the same autonomous diff, since
+  // the gate only checks denial patterns for entries still present in the file it reads.
+  { rule: "the known-false-claim registry, the whole assertion set of 'Known-false claims' (preflight.mjs:515, review-hub-ci.yml:498)", re: /^docs\/agent\/FALSE_CLAIMS\.json$/ },
+  // Completeness sweep on #1133 (round 4), finding 3 (nit), predating this commit:
+  // three CI gate programs live outside scripts/ and classified 'other' end to end
+  // (verified against the current tree; not executed here since xcodebuild is not on
+  // this host, only the classification and file contents). native/ios/SignalGridMobile/
+  // scripts/verify.sh is the entire "Verify SignalGridMobile" step (ios-ci.yml:186) — the
+  // parse check plus the SignalGridOperator and WardlinkDemo xcodebuilds; an `exit 0` at
+  // its top drops both app builds and the step stays green. native/ios/scripts/
+  // pick-simulator.py (ios-ci.yml:88,100) picks the destination for the EnterpriseShell
+  // `xcodebuild test` run, including its own --self-test. native/desktop/app/icons/
+  // generate-icons.mjs (desktop.yml:133, run with --check) is the whole "Icons match
+  // their generator" step.
+  { rule: "CI gate programs outside scripts/ (ios-ci.yml:88,100,186; desktop.yml:133)", re: /^(?:native\/ios\/SignalGridMobile\/scripts\/verify\.sh|native\/ios\/scripts\/pick-simulator\.py|native\/desktop\/app\/icons\/generate-icons\.mjs)$/ },
 ];
 
 // Review fixes on the round-4 changes (#1133): the guard below (findUngatedNativeTestSources)
@@ -764,6 +804,15 @@ function selfTest() {
   t("the lab-collections directory README is SAFETY_MACHINERY (the gate reads it directly for the declared-lane cross-check)", mostRestrictive(cls(["artifacts/lab-collections/README.md"])) === "SAFETY_MACHINERY");
   t("a lab-collections environments file is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/lab-collections/fleet/environments/Lab.bru"])) === "SAFETY_MACHINERY");
   t("a lab-collections bruno.json is SAFETY_MACHINERY", mostRestrictive(cls(["artifacts/lab-collections/keycloak/bruno.json"])) === "SAFETY_MACHINERY");
+  // Completeness sweep on #1133 (round 4), finding 2: the known-false-claim registry —
+  // deleting an entry here while restating the claim it refuted was an autonomous diff.
+  t("docs/agent/FALSE_CLAIMS.json is SAFETY_MACHINERY (the whole assertion set of the Known-false-claims gate)", mostRestrictive(cls(["docs/agent/FALSE_CLAIMS.json"])) === "SAFETY_MACHINERY");
+  t("docs/STATUS.md stays autonomous (a document the known-false-claims gate SCANS, not the registry itself)", cls(["docs/STATUS.md"]).tier === "autonomous");
+  // Completeness sweep on #1133 (round 4), finding 3: CI gate programs living outside
+  // scripts/ that classified 'other' end to end.
+  t("native/ios/SignalGridMobile/scripts/verify.sh is SAFETY_MACHINERY (the whole 'Verify SignalGridMobile' step, ios-ci.yml:186)", mostRestrictive(cls(["native/ios/SignalGridMobile/scripts/verify.sh"])) === "SAFETY_MACHINERY");
+  t("native/ios/scripts/pick-simulator.py is SAFETY_MACHINERY (picks the EnterpriseShell test destination, ios-ci.yml:88,100)", mostRestrictive(cls(["native/ios/scripts/pick-simulator.py"])) === "SAFETY_MACHINERY");
+  t("native/desktop/app/icons/generate-icons.mjs is SAFETY_MACHINERY (the whole 'Icons match their generator' step, desktop.yml:133)", mostRestrictive(cls(["native/desktop/app/icons/generate-icons.mjs"])) === "SAFETY_MACHINERY");
   // Finding 6 (should-fix): the classifier manifest and the landing gate/workflow that
   // read its verdict are themselves OWNER_RESERVED now, closing the two-step bypass
   // (delete a rule via scripts/**-classified SAFETY_MACHINERY, then edit the
@@ -830,6 +879,14 @@ function selfTest() {
     mostRestrictive(cls(["native/desktop/core/src/wire.rs"])) === "SAFETY_MACHINERY");
   t("firmware/dock/core/src/custody.rs (inline #[cfg(test)] mod, 20 #[test] measured live) is SAFETY_MACHINERY",
     mostRestrictive(cls(["firmware/dock/core/src/custody.rs"])) === "SAFETY_MACHINERY");
+  // Review sweep on #1133 (round 4), finding 1: the src/-only rule above missed the
+  // crate's own EXECUTED EXAMPLE — firmware/dock/core/examples/emit_fixtures.rs is the
+  // entire input of the dock-contract gate (firmware.yml:114,118) and classified
+  // autonomous before this fix.
+  t("firmware/dock/core/examples/emit_fixtures.rs (the dock-contract gate's entire firmware input) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["firmware/dock/core/examples/emit_fixtures.rs"])) === "SAFETY_MACHINERY");
+  t("native/desktop/app/build.rs stays autonomous (no #[cfg(test)], not read by any gate script or workflow step)",
+    cls(["native/desktop/app/build.rs"]).tier === "autonomous");
   // Negative: a non-test file, and a doc NAMED like a test topic, must not over-match.
   t("a doc named TESTING.md stays autonomous (not swept in by the filename rule)",
     cls(["TESTING.md"]).tier === "autonomous");

@@ -3686,19 +3686,18 @@ Output:   "a4507f9a571f681d0101302ce31a32d2d9cd8699 2026-09-26 11:55:30 +0000 Me
           and per-skill grants, signalgrid-mcp tool count derived, check-mcp-roster gate in preflight + CI (DR-060 rule 3;
           DR-037, check run 108397317258)" / "db88915d3050cf3e02799a6b27eb88329fa7a79d 2026-09-26 11:49:50 +0000 Lane
           mail (mac): heartbeat mac-lane-tick" / "7fc7fdd130ac90ae80333f22713750b02c03eae9 2026-09-26 11:24:28 +0000
-          Lane mail (mac): heartbeat mac-lane-tick" — local and deterministic, re-run above; at this record's writing
-          (12:03Z) origin/SignalGrid_Alpha's tip was a4507f9a, a dated observation from the original fetch.
-Command:  GitHub MCP get_check_run 108397317258
-Output:   status "completed", conclusion "success" (job "Typecheck, build, and proof scaffold"; repo
-          DanFashauer/SignalGrid-Review-Hub)
+          Lane mail (mac): heartbeat mac-lane-tick" — local and deterministic, re-runnable in any clone (re-run
+          2026-09-27 02:01Z, same three lines); at this record's writing (12:03Z) origin/SignalGrid_Alpha's tip was
+          a4507f9a, a dated observation from the original fetch.
 Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108397317258 (tool read at
           2026-09-27 01:14Z, recorded — not to be re-run)
 Output:   name "Typecheck, build, and proof scaffold", conclusion "success", head_sha
           "e189552b86db01d03b1a073fa9fb44845d7962e8", completed_at "2026-09-26T11:54:43Z" — equal to `git rev-parse
           a4507f9a^2` below, so #1127's gating check is bound to its merged head by head_sha.
-          # the six node commands below ran in the worktree at a4507f9a (after merging it, 2026-09-26 12:03Z); on a
-          later tree check-lessons prints 16/16, check-mcp-roster adds "11 mentions" and the land-branch self-test
-          prints 19/19 (#1130, #1131+ lessons)
+          # the five node commands below ran in the worktree at a4507f9a (after merging it, 2026-09-26 12:03Z);
+          POST-WINDOW (15:07Z, #1130 = 36c561c7): at 36c561c7 check-lessons prints "16 lesson(s), 16 landed" (L16),
+          check-mcp-roster adds "11 mentions" and the land-branch self-test prints "19/19 passed" (re-run in a
+          throwaway worktree at 36c561c7, 2026-09-27 02:08Z, same three strings)
 Command:  node scripts/check-lessons.mjs
 Output:   "check-lessons: ok — 15 lesson(s), 15 landed, 0 pending, 0 pending past 14 days (DR-060)"
 Command:  node scripts/check-mcp-roster.mjs
@@ -3802,7 +3801,8 @@ Verdict:  holds. #1127 has merged (a4507f9a, 2026-09-26 11:55:30Z) with its gati
           afterwards — PR state is mutable and lives outside the repository (state/merged_at; a ruling is not
           something that read measures — the golden-rule-1 ruling stands as a request in LOOP's Owner still owes
           list). POST-WINDOW: a sixth owner-merge PR, #1133, per the pulls/1133 read above; #1117's CI is green on
-          head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (20:52Z).
+          head 760e7185 (21:5xZ reads) and its branch conflicts with mainline on docs/BUILD_BACKLOG.md (merge-tree
+          read 22:35Z; review read 20:52Z).
           Ancestry: L8's merge (5f1f21e3), L2's merge (8216cf6b) and #1127's merge (a4507f9a) are each confirmed
           reachable from origin/SignalGrid_Alpha by `git merge-base --is-ancestor` above ("reachable", exit 0 all
           three) — the three-commit first-parent walk above never reached the first two (L2's merge is entry 4 and

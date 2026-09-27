@@ -65,13 +65,17 @@ LAST TOUCHED: 2026-09-26 (cloud lane; events through 20:58Z, verification reads 
               Owner still owes: #1117 (DECISION_PATH; conflicts with mainline on docs only — reply 'merge #1117' in
               chat and the lane refreshes it first, so the merge is one tap on
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117), #1118/#1121 (the golden-rule-1
-              ruling), #1050 (DR-058; conflicts with mainline on docs only — reply 'merge #1050' in chat and
+              ruling asked in chat at 08:20Z — reply 'exception granted' or 'revert' in chat;
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118,
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121), #1050 (DR-058; conflicts with
+              mainline on docs only — reply 'merge #1050' in chat and
               the lane refreshes it first, so the merge is one tap on
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050), #1083 (DR-059; conflicts with
               mainline on docs only — reply 'merge #1083' in chat and the lane refreshes it first, so the
               merge is one tap on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083), #1133
               (OWNER_RESERVED by
-              its own widened classifier: the OWNER merges it), the row-8
+              its own widened classifier: the OWNER merges it at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133), the row-8
               doctrine hand (answer (a) raise to step_up or (b) day-one-quiet covers it, on the raised-hands issue
               https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands; file
               artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json), #1037's CodeQL
@@ -93,9 +97,10 @@ LAST TOUCHED: 2026-09-26 (cloud lane; events through 20:58Z, verification reads 
               Assist-wire fix (decisionId required on every outcome, duplicate keys and wrong-typed fields deny, in
               Kotlin, Rust and Swift with shared vectors), built by the cloud lane; and the .claude/workflows read
               attribution the Mac asks for in docs/agent/SURFACE_REVIEW_COVERAGE.md. Find where the Copilot
-              code-scanning model is set and a supported value, then ask the owner with a browser path; until then its
-              github-advanced-security job fails on every PR ("CAPIError: 400 The requested model is not supported",
-              COPILOT_AGENT_MODEL sweagent-capi:claude-opus-5); whether it is a required check has not been read.
+              code-scanning model is set and a supported value, then ask the owner with a browser path; its
+              github-advanced-security job failed on every PR on 2026-09-26 per the Copilot scanner job log recorded
+              in EVIDENCE.md's 'Plan rows 6, 8, 9 re-measured' entry (a 2026-09-17 record found it intermittent, 7 of
+              9); whether it is a required check has not been read.
               DR-060's next two follow-ups landed: #1119 (177299f3, check 108369513162) shipped L10's shallow-fetch
               deny guard in the Bash deny-list hook, L11's clean-index guard in check-surface-review-coverage --write
               (self-test 57/57), and L12's tick landing rule, with LESSONS L10-L12 added; #1123 (5f1f21e3, check
@@ -170,13 +175,14 @@ TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders
               direct edits itself (registering the L2 gate self-test in preflight/CI, the sentinel-wait loop and the
               canPush mirror in the saved workflow, the L15 row and skill rule, the criss-cross repair merge),
               corrected the two PR bodies, and performed both merges - only the fixes themselves, the reviews and the
-              chain mechanics were delegated. (Of the record commits on this branch, a3353aeb, 857f2b59, 6d45b0ce,
-              93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5, 43b3454a, 3458a19c, 76344c54 and
-              7d7eba7c carry a Claude Fable 5.1 trailer — not a claim that the creative tier wrote them, see LESSONS
-              L5 — a7729cc1 a Claude Sonnet 5 trailer (the Pre-stage worker's tier) and c8e75ef4 a Claude Opus 5.5
-              trailer; of the Alpha-merge commits only b5cf88dc, 712126ab and 72f643cc carry none, the rest carry the
-              trailer of the record commit before them; POST-WINDOW (15:07Z, #1130): #1130's merge -m change closed
-              that gap (36c561c7); this refresh commit carries the trailer of the tier that wrote it.)
+              chain mechanics were delegated. (Through round 12 (c8e75ef4): of the record commits on this branch,
+              a3353aeb, 857f2b59, 6d45b0ce, 93eb5750, a8be3e1f, d31dbd95, 8b85874c, d0e2ac8e, e65398e5, 67ddb2d5,
+              43b3454a, 3458a19c, 76344c54 and 7d7eba7c carry a Claude Fable 5.1 trailer — not a claim that the
+              creative tier wrote them, see LESSONS L5 — a7729cc1 a Claude Sonnet 5 trailer (the Pre-stage worker's
+              tier) and c8e75ef4 a Claude Opus 5.5 trailer; of those rounds' Alpha merges only b5cf88dc, 712126ab
+              and 72f643cc carry no trailer. From round 13 on, each record commit carries its writing tier's
+              trailer (Sonnet 5) and each Alpha merge the coordinator's (Opus 5.5); `git log --format='%h
+              %(trailers:key=Co-Authored-By,valueonly)' origin/SignalGrid_Alpha..HEAD` lists them.)
               POST-WINDOW (15:07Z, #1130): the wrong-tier stages named here (PR bodies on Sonnet where the skill's
               table says Haiku; the coordinator's own bulk edits) got ledger row L16 with the skill's stage-table
               correction, landed 36c561c7 under DR-037 (check run 108425765136) - not in this record PR.

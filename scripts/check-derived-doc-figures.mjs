@@ -67,6 +67,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
 import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
+import { wireTruthFigures } from "./check-wire-truth-ledger.mjs";
 
 /** The connector tree the redirect census walks. */
 const INTEGRATIONS = "lib/integrations/src/integrations";
@@ -539,6 +540,13 @@ export const FIGURES = [
     derive: webhookEnvelopeSeconds,
     from: "the same envelope — the floor a receiver's window must clear, stated as a bound not an estimate",
   },
+  // docs/COMPANY_BUILD_PLAN.md row 17: the live-check coverage counts. The ledger holds
+  // the records; check-wire-truth-ledger.mjs derives the counts (never stored).
+  { id: "wire-truth-checks", doc: "docs/COMPANY_BUILD_PLAN.md", re: /the ledger holds (\d+) live checks/, derive: (root) => wireTruthFigures(root).checks, from: "checks[] in docs/agent/wire-truth-ledger.json" },
+  { id: "wire-truth-hits", doc: "docs/COMPANY_BUILD_PLAN.md", re: /live checks, (\d+) of them recorded a fixture-vs-wire divergence/, derive: (root) => wireTruthFigures(root).hits, from: "ledger checks with divergenceFound: true in docs/agent/wire-truth-ledger.json" },
+  { id: "wire-truth-checked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /and (\d+) of the tree's \d+ signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).checked, from: "distinct ledger dimensions that are directories under lib/integrations/src/integrations/" },
+  { id: "wire-truth-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /of the tree's (\d+) signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).dimensions, from: "directories under lib/integrations/src/integrations/ except adapters/" },
+  { id: "wire-truth-unchecked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /have a live check and (\d+) have none/, derive: (root) => wireTruthFigures(root).uncheckedCount, from: "dimension directories no entry in docs/agent/wire-truth-ledger.json names" },
 ];
 
 // ── Two rows considered on 2026-09-02 and deliberately NOT added ─────────────────────

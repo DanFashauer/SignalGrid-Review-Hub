@@ -1,0 +1,145 @@
+{
+  "$comment": "One entry per live check: a real server or wire driven against a signal dimension's shapes. Gated by scripts/check-wire-truth-ledger.mjs, which derives the dimension set from lib/integrations/src/integrations/ (every directory but adapters/) and prints the counts; the counts are never stored here. boundTo names the code a record verified, checked as a declaration in that file. divergenceFound: true needs divergenceRecord, a line that appears verbatim in its path; null means there was nothing to diverge from, and says why in note.",
+  "checks": [
+    {
+      "id": "live-edr-wazuh",
+      "product": "Wazuh 4.9.0 (HIDS/XDR)",
+      "dimensions": ["edr-threat"],
+      "evidence": ["scripts/src/live-edr-proof.ts"],
+      "date": "2026-07-31",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "scripts/src/live-edr-proof.ts", "quote": "realtimeProtection — Wazuh is HIDS/XDR, not signature-based AV" },
+      "boundTo": [
+        { "path": "lib/integrations/src/integrations/edr-threat/edr-connector.ts", "symbol": "normalizeEndpoint" },
+        { "path": "lib/integrations/src/integrations/edr-threat/evaluate.ts", "symbol": "evaluateThreatPosture" },
+        { "path": "lib/integrations/src/integrations/edr-threat/types.ts", "symbol": "EndpointThreatRaw" }
+      ]
+    },
+    {
+      "id": "live-fleet-telemetry",
+      "product": "Fleet 4.89.2 (self-hosted)",
+      "dimensions": ["telemetry"],
+      "evidence": ["scripts/src/live-fleet-proof.ts", "docs/FLEET_LIVE_INTEGRATION.md"],
+      "date": "2026-07-31",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "scripts/src/live-fleet-proof.ts", "quote": "host- and policy-level route the adapter used was WRONG" },
+      "boundTo": [{ "path": "lib/integrations/src/integrations/telemetry/fleetdm.ts", "symbol": "FleetDMAdapter" }]
+    },
+    {
+      "id": "live-fleet-workflow",
+      "product": "Fleet 4.89.2 with a real enrolled osqueryd, through the full decision path",
+      "dimensions": ["device-management-health"],
+      "evidence": ["scripts/src/live-fleet-workflow-proof.ts", "docs/FLEET_LIVE_INTEGRATION.md"],
+      "date": "2026-08-18",
+      "divergenceFound": false,
+      "note": "A workflow-closure proof: the live unmanaged host must reach RESTRICT. It checks a verdict, not a fixture assumption.",
+      "boundTo": [{ "path": "lib/integration-bridge/src/evidence.ts", "symbol": "fleetHostToDeviceManagementEvidence" }]
+    },
+    {
+      "id": "live-glpi-shape-discovery",
+      "product": "GLPI 11.0.8 (glpi/glpi Docker image)",
+      "dimensions": [],
+      "evidence": ["scripts/src/live-glpi-proof.ts", "artifacts/live-captures/glpi.json"],
+      "date": "2026-08-23",
+      "divergenceFound": null,
+      "note": "Shape discovery only. GLPI is not one of the seven named ITSM adapters, so no dimension is checked and there is no coded assumption to diverge from.",
+      "boundTo": []
+    },
+    {
+      "id": "live-headwind-dmh",
+      "product": "Headwind MDM Community Edition 5.30.3-os (headwindmdm/hmdm:0.1.5)",
+      "dimensions": ["device-management-health"],
+      "evidence": ["scripts/src/live-headwind-proof.ts", "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "artifacts/live-captures/headwind.json"],
+      "date": "2026-08-18",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "docs/HEADWIND_LIVE_SHAPE_CHECK.md", "quote": "throws `NullPointerException`" },
+      "boundTo": [{ "path": "lib/integration-bridge/src/evidence.ts", "symbol": "headwindLabToDeviceManagementEvidence" }]
+    },
+    {
+      "id": "live-idp-token-binding",
+      "product": "oidc-provider@9.10.0 (certified OIDC implementation, in-process)",
+      "dimensions": ["token-binding"],
+      "evidence": ["scripts/src/live-idp-proof.ts"],
+      "date": "2026-07-27",
+      "divergenceFound": false,
+      "note": "An accept/reject proof of the production verifier; it records agreement, not a fixture-vs-wire finding.",
+      "boundTo": [
+        { "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator" },
+        { "path": "lib/integrations/src/integrations/token-binding/token-binding-connector.ts", "symbol": "normalizeReport" },
+        { "path": "lib/integrations/src/integrations/token-binding/evaluate.ts", "symbol": "evaluateTokenBinding" }
+      ]
+    },
+    {
+      "id": "live-keycloak-token-binding",
+      "product": "Keycloak 26.4 (--features=dpop)",
+      "dimensions": ["token-binding"],
+      "evidence": ["scripts/src/live-keycloak-proof.ts", "docs/KEYCLOAK_LIVE_INTEGRATION.md"],
+      "date": "2026-07-31",
+      "divergenceFound": false,
+      "note": "RFC 7638 cross-implementation agreement: the two thumbprints matched. DPoP-scoped; it reads no access-governance surface.",
+      "boundTo": [{ "path": "lib/enterprise-auth/src/provider.ts", "symbol": "createEnterpriseAuthenticator" }]
+    },
+    {
+      "id": "identity-shape-check-sso-session",
+      "product": "Keycloak 26.4 (master realm at defaults)",
+      "dimensions": ["sso-session"],
+      "evidence": ["docs/IDENTITY_LIVE_SHAPE_CHECK.md"],
+      "date": "2026-08-19",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "docs/IDENTITY_LIVE_SHAPE_CHECK.md", "quote": "no `amr` claim at all" },
+      "boundTo": [
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "NormalizedSsoSession" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionAssurance" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionFreshness" },
+        { "path": "lib/integrations/src/integrations/sso-session/types.ts", "symbol": "SessionBinding" },
+        { "path": "lib/integrations/src/integrations/sso-session/sso-session-connector.ts", "symbol": "normalizeReport" }
+      ]
+    },
+    {
+      "id": "live-location-traccar",
+      "product": "Traccar 6.14.5",
+      "dimensions": ["location-services"],
+      "evidence": ["scripts/src/live-location-proof.ts", "docs/TRACCAR_LIVE_INTEGRATION.md"],
+      "date": "2026-07-31",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "scripts/src/live-location-proof.ts", "quote": "`geofenceIds: null` is AMBIGUOUS" },
+      "boundTo": [{ "path": "lib/integrations/src/integrations/location-services/evaluate.ts", "symbol": "evaluateLocation" }]
+    },
+    {
+      "id": "radius-nac-shape-check",
+      "product": "FreeRADIUS (freeradius/freeradius-server:latest)",
+      "dimensions": ["network-nac"],
+      "evidence": ["docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md"],
+      "date": "2026-08-19",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md", "quote": "There is no quarantine packet type and no quarantine" },
+      "boundTo": [
+        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NetworkPostureRaw" },
+        { "path": "lib/integrations/src/integrations/network-nac/types.ts", "symbol": "NormalizedNetworkSignal" }
+      ]
+    },
+    {
+      "id": "network-egress-shape-check",
+      "product": "a real TLS-intercepting forward proxy (this build environment's egress)",
+      "dimensions": ["link-usability", "sse-egress"],
+      "evidence": ["docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md"],
+      "date": "2026-08-19",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "docs/NETWORK_EGRESS_LIVE_SHAPE_CHECK.md", "quote": "Unobservable behind a forward proxy" },
+      "boundTo": [
+        { "path": "lib/integrations/src/integrations/link-usability/types.ts", "symbol": "LinkProgress" },
+        { "path": "lib/integrations/src/integrations/sse-egress/types.ts", "symbol": "SseEgressReportRaw" }
+      ]
+    },
+    {
+      "id": "macos-posture-mac-lane",
+      "product": "real Apple hardware (the Mac lane): the fixture suite on darwin-arm64 plus a native-build attestation",
+      "dimensions": ["macos-posture"],
+      "evidence": ["artifacts/live-evidence/mac-run.json", "docs/LIVE_SYNC_LOOP.md"],
+      "date": "2026-09-26",
+      "divergenceFound": false,
+      "note": "A pass/fail attestation, re-minted on every qualifying Mac run (date is the mintedAt this entry was written against). Not checked against an independent Apple management server.",
+      "boundTo": [{ "path": "lib/integrations/src/integrations/macos-posture/apple-schema.ts", "symbol": "APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION" }]
+    }
+  ]
+}

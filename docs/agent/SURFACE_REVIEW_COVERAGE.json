@@ -766,7 +766,7 @@
           "date": "2026-09-27",
           "read": "docs/NAC_DERIVED_STATE_ARTICLE.md (new, draft 2 of the plan row 24 article series) read in full by an Opus refute-first reviewer, claim by claim against the tree: 16 findings, applied in ca226657 (15) and 4f2a0448 (the PR #215/#219 attribution). proof:network-nac 64/64 and proof:nac 46/46 re-run.",
           "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
-          "record": "ca226657",
+          "record": "4f2a0448",
           "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
           "open": 0,
           "closed": 16

@@ -18,9 +18,10 @@ on the wire, and the NAC console tells you whether it's compliant, and when
 it last checked in. Model it that way and you'll place those two facts
 beside the authentication result itself, as if all three arrived off the
 same wire at the same moment. They don't. One of them is a protocol outcome.
-The others come from elsewhere: compliance is a different system's own
-conclusion, and last-auth time is a record from a separate accounting stream
-or the console's session database, on a different clock.
+The others are derived: compliance is a policy engine's conclusion (often
+the NAC product's own, but not a standard RADIUS attribute), and last-auth
+time is a record from a separate accounting stream or the console's session
+database, on a different clock.
 
 We checked this against a real wire rather than reasoning about it from
 vendor diagrams. The lab was FreeRADIUS, a lab NAS client, and two
@@ -72,9 +73,12 @@ reported-stale auth is rejected earlier and steps up outright (`NAC_NONCOMPLIANT
 `STALE_NETWORK_STATE`) — neither ever reaches the grant path. What's left
 after that — `nacCompliant: null`, or a `lastAuthAt` that is missing,
 unparseable, or dated more than the clock-skew tolerance (60 seconds) in
-the future, all of which collapse to freshness `unknown` — reaches the
-grant branch and grades `monitor`, reason
-`AUTHENTICATED_POSTURE_UNVERIFIED`, never the same verdict as verified-good.
+the future, all of which collapse to freshness `unknown` — still meets the
+segment check first (with a segment policy, an unreported or unexpected
+segment steps up and a restricted one restricts); on an expected segment,
+or with no segment policy, it reaches the grant branch and grades
+`monitor`, reason `AUTHENTICATED_POSTURE_UNVERIFIED`, never the same verdict
+as verified-good.
 
 That's deliberate correction, not the original design: the build plan's own
 reading of the live shape check records that the prior code let an

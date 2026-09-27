@@ -257,8 +257,9 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   under names that hid the cause (17/19), and a case that expects a pass would have passed
   silently.
 - **A caller of `land-branch` treats the branch as landed only when
-  `child?.push?.pushed === true`.** `push` is missing on every early return, including
-  the script's own refusal to push; a returned child is not a landing. A session wrapper
+  `child?.push?.pushed === true`.** `push` is absent when the script refuses the push or
+  stops earlier, and null or `pushed: false` when the push itself fails; a returned child
+  is not a landing. A session wrapper
   script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`
   (L21).
 - **To free disk, delete an agent worktree's build output, not the worktree.** Remove
@@ -266,7 +267,7 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   `scripts/loop-state.mjs` uses to classify its scratch branches as ephemeral, and they
   come back as unpushed local work. Pushing is not the way out (loop-state: an attack
   reproduction must not be pushed), and deleting one needs the owner's OK, so keep the
-  worktree until its branches are deleted with that OK (L22).
+  worktree until its scratch branches are deleted with that OK (L22).
 - **Before a review-fix commit is pushed, sweep every sentence it adds against every
   defect class the PR's earlier rounds found.** Review rounds on large docs PRs found a new
   instance of an old class in each fix's own new text (L17). Once two rounds find only new

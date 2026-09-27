@@ -200,7 +200,7 @@ block; a stage run on the wrong tier is a lesson here.
 - **lane:** cloud
 - **incident:** A session wrapper around the saved `land-branch` workflow reported #1153's first landing as landed after `PREFLIGHT_EXIT 1` and a refused push, because it read that the child workflow had returned, not whether it pushed. A second wrapper threw `TypeError` on `args.last.findings`, because its arguments reached the script as a JSON string rather than an object.
 - **evidence:** PR #1153 (the refused first landing on 75619db4); `.claude/workflows/land-branch.js`, which returns `{ pre, merge, chainRun, gate }` with no `push` when the script refuses the push, and `{ pre, merge, chainRun, push }` when the push worker reports `pushed: false`.
-- **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — a caller of `land-branch` treats the branch as landed only when `child?.push?.pushed === true` (`push` is missing on every early return, including a refused push), and a session wrapper script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`.
+- **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — a caller of `land-branch` treats the branch as landed only when `child?.push?.pushed === true` (`push` is absent when the script refuses the push or stops earlier, and null or `pushed: false` when the push itself fails), and a session wrapper script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`.
 - **status:** landed
 
 ### L22 — removing finished agent worktrees resurfaced 19 old scratch branches as unpushed local work
@@ -208,5 +208,5 @@ block; a stage run on the wrong tier is a lesson here.
 - **lane:** cloud
 - **incident:** Finished agent worktrees under `.claude/worktrees/` were removed to free disk. That deleted their per-worktree HEAD reflogs, which `branchesInAgentWorktrees()` in `scripts/loop-state.mjs` reads to classify an agent's scratch branches as ephemeral, so 19 local branches from 2026-09-14 (#758's review fixtures) then failed loop-state's "Local work not on the Review Hub" seam. Pushing them is not the way out — `scripts/loop-state.mjs` says an attack reproduction must not be pushed — and deleting them needs the owner's OK; the hand went out in #1154 (99e62a73).
 - **evidence:** `scripts/loop-state.mjs` (`branchesInAgentWorktrees`, the seam that names unpushed branches, and its rule against pushing attack reproductions); PR #1154's raised hand.
-- **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — to free disk, delete an agent worktree's build output (`node_modules`, `dist`) and keep the worktree until its branches are deleted with the owner's OK.
+- **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — to free disk, delete an agent worktree's build output (`node_modules`, `dist`) and keep the worktree until its scratch branches are deleted with the owner's OK.
 - **status:** landed

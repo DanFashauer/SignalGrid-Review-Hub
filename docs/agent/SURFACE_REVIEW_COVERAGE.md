@@ -56,7 +56,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sync` | tree | 5 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `config` | tree | 5 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `docker` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
-| `docs/*` | loose files | 216 | read | 7 | 2026-09-27 | cloud lane (Opus refute-first reviewer + Codex, every finding checked against the tree before it was applied) | ca226657 | 130 | 3 |
+| `docs/*` | loose files | 216 | read | 9 | 2026-09-27 | cloud lane (every finding checked against the tree before it was applied) | 9489d2e6 | 130 | 3 |
 | `docs/agent` | docs family | 49 | read | 8 | 2026-09-20 | mac lane (author + four-perspective confirm) | docs/agent/resource-scans/2026-09-19-two-videos.json | 28 | 11 |
 | `docs/assets` | docs family | 1 | read | 2 | 2026-09-06 | cloud lane (one independent fail-closed audit agent, every finding reproduced by running something; firsthand read of every edit site) | docs/agent/EVIDENCE.md | 4 | 0 |
 | `docs/company` | docs family | 10 | read | 4 | 2026-09-06 | cloud lane (prose by a general-purpose agent working from the findings file with every figure re-derived by command; gates by the gate engineer; firsthand spot-read of every edit site and every gate run) | docs/agent/EVIDENCE.md | 17 | 14 |

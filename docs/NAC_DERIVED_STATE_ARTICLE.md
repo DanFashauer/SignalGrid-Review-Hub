@@ -33,15 +33,18 @@ attributes a real switch or WLC sends. Two findings carry the article:
 | `nacCompliant`, `lastAuthAt` modeled beside `authState` | Neither appeared in the lab's `Access-Accept`, and neither is a standard RADIUS attribute (RADIUS does permit vendor-specific attributes, so a NAC product can encode a posture result in one; no licensed console was driven to see whether any does). `nacCompliant` isn't a standard RADIUS concept — a posture-agent/console derivation; `lastAuthAt` comes from RADIUS accounting or the console's own session database, a different source with a different lifetime that can disagree with the auth result (accounting was not driven in the lab) |
 
 The same "two different sources" shape shows up in how the two console
-vendors structure their own APIs: Cisco ISE's documentation distinguishes
-its ERS/endpoint API (identity, administrative CRUD) from its MnT
-monitoring API (live session state) as separate permission grants — "not to
-be confused with" each other, in Cisco's words; Aruba ClearPass splits the
-same way, endpoint API versus session API. For those two consoles
+vendors describe their own APIs — as reported from vendor documentation
+by the live shape check's addendum, which does not pin a document version
+or URL, so treat this as a secondhand reading that could drift: Cisco ISE
+separates its ERS/endpoint API (identity, administrative CRUD) from its MnT
+monitoring API (live session state) as different permission grants, and
+Aruba ClearPass splits the same way, endpoint API versus session API. For those two consoles
 specifically, "who is this device" and "is it authenticated right now" are
 queried from two different data sources — a narrower claim than saying
 identity always arrives apart from authentication: RADIUS itself carries
-the wire identifier (`Calling-Station-Id`, a MAC) in the very same exchange
+a wire identifier (`Calling-Station-Id` — the calling party's identifier,
+which 802.1X by convention fills with the supplicant's MAC, as in our lab)
+in the very same exchange
 as the auth result. What RADIUS keeps separate is session *timing*, not
 identity — the accounting-vs-authentication split above — and a MAC is not
 our `deviceId` either way: an adapter still needs a MAC-to-device mapping
@@ -62,8 +65,10 @@ Where this actually bites is what the evaluator does with a field it can't
 independently verify: does an *unreported* `nacCompliant` or `lastAuthAt`
 read as "nothing to worry about," or as "unknown, and unknown must never
 look like verified-good"? The answer is a lattice, and the ordering matters
-more than any single branch: a reported non-compliance or a reported-stale
-auth is rejected earlier and steps up outright (`NAC_NONCOMPLIANT`,
+more than any single branch. The other auth states are decided first and
+never reach this ladder (unauthenticated restricts, quarantined and unknown
+monitor); for an authenticated signal, a reported non-compliance or a
+reported-stale auth is rejected earlier and steps up outright (`NAC_NONCOMPLIANT`,
 `STALE_NETWORK_STATE`) — neither ever reaches the grant path. What's left
 after that — `nacCompliant: null`, or a `lastAuthAt` that is missing,
 unparseable, or dated more than the clock-skew tolerance (60 seconds) in

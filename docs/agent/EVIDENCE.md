@@ -3752,3 +3752,90 @@ Verdict:  holds, frozen at the window's close (11:55Z). Eight PRs landed this wi
           merged head by head_sha, per the recorded REST reads matched against a local, immutable `git rev-parse`. The five
           owner-decision PRs (#1117, #1118, #1121, #1050, #1083) were owed in the tree at a4507f9a, per the reads above; live PR
           state is still not claimed, nor is mainline membership or any event after 11:55Z — those belong to the next record.
+
+## 2026-09-27 — "24 PRs landed the 2026-09-26 11:55Z–2026-09-27 09:55Z window, frozen at #1161's merge (7b6ea61e); the ledger
+reads 22 lessons, 21 landed and L20 pending"
+Command:  TZ=UTC git log --first-parent --format='%H %cd %s' --date=iso-local a4507f9a..7b6ea61e | grep -E 'Merge pull
+          request #|\(#[0-9]+, gating' | wc -l
+Output:   "24" — the matched commits are #1129 (edd92341, a mail commit gated at check run 108404680426, not a "Merge pull
+          request" subject), #1130 (36c561c7), #1132 (2e2bc4a9), #1134 (6267092b), #1135 (083c721a), #1138 (c10da110), #1139
+          (75975c93), #1141 (45b73bad), #1142 (5f9942b6), #1143 (ef54e928), #1144 (39ff56cb), #1145 (70c2e767), #1149
+          (0b768046), #1151 (6e8e2ce9), #1152 (cff3dbf7), #1154 (99e62a73), #1128 (594a8051, the previous window's own
+          record), #1155 (ea825bbc), #1148 (2ebc4d3c), #1157 (9dd28e22), #1156 (929e94ad), #1159 (4bb57ed5), #1160 (3cf4d8f2),
+          #1161 (7b6ea61e, the close itself). All 24 lie inside a4507f9a..7b6ea61e on the first-parent chain, a fixed range
+          between two shas.
+Command:  git log --first-parent --format='%H' a4507f9a..7b6ea61e | wc -l
+Output:   "96" — total first-parent commits in the window.
+Command:  TZ=UTC git log --first-parent --format='%s' a4507f9a..7b6ea61e | grep -vE 'Merge pull request #|\(#[0-9]+,
+          gating' | wc -l
+Output:   "72" — 96 minus the 24 landings above, all Mac-lane pushes: 61 heartbeats, 4 sends, 1 ack, 1 clear, 1 raise and 4
+          "LOOP: ..." state notes (counted by subject prefix on the same 72 lines). None is a PR merge.
+Command:  node scripts/check-lessons.mjs   (run at HEAD, 7b6ea61e)
+Output:   "check-lessons: ok — 22 lesson(s), 21 landed, 1 pending, 0 pending past 14 days (DR-060)"
+Command:  git show 7b6ea61e:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'
+Output:   "22" — matches the gate's own count; the one non-row "landed | pending" string in the file (line 18) is the row-
+          shape legend in the file's own header, not a lesson.
+Command:  git show a4507f9a:docs/agent/LESSONS.md | grep -c '^### L16' ; git show 36c561c7:docs/agent/LESSONS.md | grep -c
+          '^### L16'
+Output:   "0" then "1" — L16 is absent from the tree at a4507f9a (the previous window's close) and present at 36c561c7
+          (#1130's merge), so it landed with #1130 in this window.
+Command:  git show 4bb57ed5^1:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]' ; git show
+          4bb57ed5:docs/agent/LESSONS.md | grep -cE '^### L1[7-9]|^### L2[0-2]'
+Output:   "0" then "6" — L17 through L22 (six rows) are absent from #1159's parent tree and present at #1159's own merge
+          (4bb57ed5), so all six landed together in this window, both authored and gated by the same PR.
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/check-runs/108573284940, /108580896054, /108589943266,
+          /108519838291 (tool reads, recorded — not to be re-run)
+Output:   each returns name "Typecheck, build, and proof scaffold", conclusion "success": 108573284940 head_sha
+          e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da (completed 2026-09-27T07:33:43Z, #1148's check); 108580896054 head_sha
+          4db64c6c016865061d595a28a988ee739cdf963f (completed 08:25:31Z, #1156's check); 108589943266 head_sha
+          835093348a2f4e1d1c415eec3682e740d3485109 (completed 09:23:25Z, #1159's check); 108519838291 head_sha
+          44c3611e4f5598bc2911a838900269f713f4b982 (completed 01:01:27Z, #1145's check).
+Command:  git rev-parse 2ebc4d3c^2 929e94ad^2 4bb57ed5^2 70c2e767^2
+Output:   "e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "4db64c6c016865061d595a28a988ee739cdf963f" /
+          "835093348a2f4e1d1c415eec3682e740d3485109" / "44c3611e4f5598bc2911a838900269f713f4b982" — each merge's own PR-head
+          parent matches the head_sha its named check ran on, exactly, for all four (local, immutable).
+Command:  tail -n 1 <scratchpad>/row12j-pf.log <scratchpad>/row12j-br.log <scratchpad>/wire6-pf.log
+          <scratchpad>/wire6-br.log <scratchpad>/lessons4-pf.log <scratchpad>/lessons4-br.log
+Output:   "PREFLIGHT_EXIT 0 e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "BREADTH_EXIT 0
+          e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "PREFLIGHT_EXIT 0 4db64c6c016865061d595a28a988ee739cdf963f" /
+          "BREADTH_EXIT 0 4db64c6c016865061d595a28a988ee739cdf963f" / "PREFLIGHT_EXIT 0
+          835093348a2f4e1d1c415eec3682e740d3485109" / "BREADTH_EXIT 0 835093348a2f4e1d1c415eec3682e740d3485109" — all six
+          files exist, each sha matching the corresponding merge's PR-head above; recorded on the lane host, not re-runnable
+          elsewhere.
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1131, /1137 (tool reads at 2026-09-27, recorded —
+          not to be re-run; live PR state, not in the tree)
+Output:   #1131: merged false, closed_at 2026-09-26T15:06:40Z, head lane/cloud-mail-20260926-144512Z — closed 20 minutes
+          before #1132 merged (15:26:22Z) with the tick time re-read from mainline. #1137: merged false, closed_at
+          2026-09-26T20:32:40Z, head lane/cloud-mail-20260926-202834Z — closed 26 minutes before #1139 merged (20:58:22Z).
+          Neither is on the first-parent chain; both are recorded as closed-unmerged, superseded by the PR that landed
+          shortly after each.
+Command:  git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json
+Output:   `"firedAt": "2026-09-27T09:30:45.823Z"` (24 minutes before the 09:54:52Z close, in the tree at HEAD) — its `result`
+          field: "...#1133 is being refreshed on mainline (its own lesson renumbers to L23) and stays the owner's merge...
+          Owner still owes: #1117, the #1118/#1121 golden-rule-1 ruling, #1050, #1083, #1133, #1146, #1153, the row-8
+          doctrine hand, #1037's CodeQL call, DR-013's 10-for-10 sentence (seven of ten by the ledger), the yes/no on 19
+          local scratch branches (#1154), and in a browser the Pages source switch plus one Pages workflow run."
+Command:  node scripts/check-wire-truth-ledger.mjs   (run at HEAD, 7b6ea61e)
+Output:   "wire-truth-ledger: 11 checks, 7 with a recorded divergence; 9/52 dimensions live-checked, 43 not; 0 problems"
+Command:  git show 7b6ea61e:docs/COMPANY_BUILD_PLAN.md | grep -o "of the ten ledger checks dated on or before that record,
+          seven recorded a divergence"
+Output:   "of the ten ledger checks dated on or before that record, seven recorded a divergence" — row 17's own re-
+          measurement of DR-013's "10 for 10" sentence; the row says the decision record is owner-gated so the sentence
+          itself waits for the owner.
+Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/issues/{1153,1146,1133,1117,1050,1083,1118,1121,1037,
+          1068} (tool reads, recorded — not to be re-run; live state, not in the tree)
+Output:   all ten are state "open" (#1068 is the raised-hands issue, not a PR); #1146 and #1133 are open PRs whose branches
+          the tree at 7b6ea61e cites by name and content (`docs/BUILD_BACKLOG.md`'s core-digest row cites #1146 "re-read
+          2026-09-27 at 835883c5"; `git log --all --oneline | grep 1133` shows its review-round commits) without their
+          heads being merged.
+Verdict:  holds. 24 PRs landed on the first-parent chain between a4507f9a (2026-09-26 11:55:30Z) and 7b6ea61e (2026-09-27
+          09:54:52Z, the close), against 72 Mac-lane pushes and no other first-parent commits (24+72=96, matching the raw
+          count). The lesson ledger reads 22/22 at the gate, 21 landed and L20 pending, with L16 traced to #1130 and L17-L22
+          traced to #1159 by tree diffs either side of each merge. Four gating checks (#1148, #1156, #1159 and #1145) are
+          each bound to their merged PR head by head_sha, cross-checked against local sentinel logs recorded on the lane
+          host for three of them. #1131 and #1137 closed unmerged, each superseded by the PR that landed within half an
+          hour. Owner-owed at the close (per the in-tree 09:30:45Z heartbeat, 24 minutes before it): #1117, #1118/#1121
+          (golden-rule-1 ruling), #1050, #1083, #1133, #1146, #1153, the row-8 doctrine hand, #1037's CodeQL call, DR-013's
+          "10 for 10" sentence (the ledger gate measures 7 of 10, per docs/COMPANY_BUILD_PLAN.md row 17), the 19-scratch-
+          branch yes/no, and the two browser Pages steps. #1133's later refresh (after the close) is out of scope for this
+          record; live PR/issue state above is recorded as a tool read, not a tree fact, and is marked as such.

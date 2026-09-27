@@ -56,7 +56,81 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
+LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 PRs LANDED; L16 LANDED ON #1130, L17-L22
+              LANDED TOGETHER ON #1159 (L20 PENDING UNTIL #1153 LANDS); THREE NEW OWNER PRs OPENED (#1146, #1133, #1153).
+              This entry covers 2026-09-26 11:55Z-2026-09-27 09:55Z and is frozen there (L18); every event after 09:54:52Z
+              (7b6ea61e, #1161's merge) belongs to the next record.
+              Owner still owes (at 09:55Z), per the in-tree steward heartbeat fired 09:30:45Z
+              (`artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`): #1153 (server Assist wire - /v1/authorize
+              returns a non-blank decisionId and string-only reasons on all four outcomes) - owner merges at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153. #1146 (core digest hashes WTF-8 bytes, escapes
+              deterministicId's joined parts, gates legacy snapshot verification on digestAlg; DECISION_PATH) - owner merges
+              at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146. #1133 (land-branch derives the owner-
+              decision class from the diff; OWNER_RESERVED never lane-merged) - owner merges at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133. #1117 (ephemeral OIDC/load/observability test
+              ports; DECISION_PATH) - owner merges at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117.
+              #1118/#1121 (golden-rule-1 ruling asked in chat 2026-09-26 08:20Z, not yet given) - reply 'exception granted'
+              or 'revert' in chat, https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058 proposal) - owner merges at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059 proposal) - owner merges at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - reply in chat, or on
+              the raised-hands issue https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068, with (a) raise to
+              step_up or (b) day-one-quiet covers it
+              (file artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json). #1037's CodeQL
+              call - dismiss the alert on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac
+              paths-ignore' in chat. DR-013's "10 for 10" sentence in docs/DECISION_RECORDS.md - the wire-truth ledger gate
+              now measures 7 of 10 (docs/COMPANY_BUILD_PLAN.md row 17); the decision record itself is owner-gated so the
+              sentence waits for the owner. The 19 local scratch branches (asked on
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1154) - yes/no on deleting them, per L22. In a
+              BROWSER: Settings -> Pages -> Source -> GitHub Actions at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once
+              (Actions -> "Deploy site to Pages" -> Run workflow,
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).
+              Landed this window (24; first-parent chain a4507f9a..7b6ea61e): #1129 (edd92341, mail: steward heartbeat
+              12:24Z keepalive), #1130 (36c561c7, harden land-branch - verify from the worktree, &&-chained push, exact
+              sentinel lines - and check-mcp-roster; L16 lands here), #1132 (2e2bc4a9, mail: heartbeat re-delivered with the
+              tick time read from mainline), #1134 (6267092b, mail: heartbeat 16:24Z), #1135 (083c721a, mail: heartbeat
+              18:24Z), #1138 (c10da110, lands the Mac's #1136 - iOS joins the shared Assist-wire conformance vectors, with
+              the lane's review fixes), #1139 (75975c93, mail: ack #1136, FYI cloud builds the Assist-wire follow-up,
+              heartbeat 20:24Z), #1141 (45b73bad, Mac tick, objective state re-derived), #1142 (5f9942b6, mail:
+              tenant-isolation hand answered and cleared, row 12 overlap FYI, Mac-only SIGTERM ask), #1143 (ef54e928, row 12
+              Tier-1 read of the durable persistence path, 19/25 to 21/25), #1144 (39ff56cb, mail: #1143 landed and acked),
+              #1145 (70c2e767, Assist wire strict decision parsing in all three clients, 65 shared vectors), #1149
+              (0b768046, mail: #1143 update acked, #1147 opened and paused behind #1148), #1151 (6e8e2ce9, mail: #1150
+              correction acked, folded into #1148), #1152 (cff3dbf7, Assist clients - Android core test task tracks the
+              shared vectors, AssistWire.swift imports CoreFoundation), #1154 (99e62a73, mail: owner hand on 19 local
+              scratch branches), #1128 (594a8051, the prior window's own LOOP/EVIDENCE record), #1155 (ea825bbc, mail:
+              keepalive 05:24Z), #1148 (2ebc4d3c, plan row 12 done - Tier-1 reads at depth audited 25/25, folding in the
+              Mac's #1147 and #1150, row 48's stamp fixed), #1157 (9dd28e22, mail: keepalive 07:24Z), #1156 (929e94ad,
+              wire-truth coverage ledger - every live check bound to its dimensions and the code it verified, counts derived
+              by a gate, plan row 17), #1159 (4bb57ed5, lessons L17-L22 and the orchestrator skill's rules for briefs,
+              reviews and records), #1160 (3cf4d8f2, mail: keepalive 09:24Z), #1161 (7b6ea61e, mail: hygiene-sweep
+              heartbeat 09:40Z - the close). The other 72 first-parent commits in the window are Mac-lane pushes (61
+              heartbeats, 4 sends, 1 ack, 1 clear, 1 raise, 4 LOOP-state notes), none a PR merge.
+              Lessons landed: L16 (#1130) - PR bodies fabricated facts on Haiku twice; the saved workflow now runs the body
+              stage on Sonnet and the orchestrator skill's stage table agrees. L17 (#1159) - each review round on a large
+              docs PR found a new instance of an old defect class; once two rounds find only old classes, the next review is
+              a narrow verification pass. L18 (#1159) - the prior window's own record (#1128) reopened repeatedly as its
+              window kept absorbing later events; a record now freezes at its window's close, a named mainline merge sha
+              (this record follows that rule). L19 (#1159) - four worker-brief defects: a note filed as a blocker, a
+              hand-picked gate list, an unproven "pre-existing", a relative path. L20 (#1159, PENDING) - a self-test
+              anchored to literal text went silently no-op when the anchored line changed; the fix (a894309f) is on open PR
+              #1153. L21 (#1159) - a wrapper reported a refused landing as landed; another threw on JSON-string arguments.
+              L22 (#1159) - deleting finished agent worktrees resurfaced 19 old scratch branches as unpushed local work,
+              raised as a hand on #1154. Ledger at the close: 22 rows, 21 landed, 1 pending (`node scripts/check-lessons.mjs`
+              at 7b6ea61e).
+              Next (at 09:55Z): #1153 needs its landing retried past L20/L21 (the anchor fix plus its own new case) before
+              it can push; the Mac's SIGTERM question in cloud-fyi-nothing-asked-your-tenant-isolation-ha (preflight killed
+              on the Mac's runner during draft #1147, job 108514569139) is still unread as of the close; otherwise the
+              queue is the owner items above.
+TIERS THIS SESSION: Opus coordinated - wrote the briefs, ran the L18 freeze rule and this record's small direct edits.
+              Sonnet builders built the #1156 wire-truth-ledger gate and self-test, and the L17-L22 lessons text and
+              orchestrator-skill rules; a Sonnet builder drafted this record. Opus reviewers ran refute-first adversarial
+              reviews on #1148 and #1159 (Codex carried the review rounds in between per L17's own evidence, until it hit
+              its usage limit at 02:52Z on 2026-09-27 and resumed at 04:32Z). Haiku workers ran the chain waits, sentinel
+              reads and mechanical heartbeat/mail steps inside the saved workflow. Where a tier claim above could not be
+              verified from the tree, it is left general rather than invented.
+PREVIOUSLY:   2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
               This entry covers 07:15Z-11:55Z and is frozen there (a rule the next record writes up as a lesson); every later
               event belongs to the next record.

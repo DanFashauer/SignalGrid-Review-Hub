@@ -3819,10 +3819,10 @@ Output:   "68 0" — all 68 "Lane mail (mac)" commits, enumerated (not sampled),
 Command:  git show 7b6ea61e:docs/agent/LESSONS.md | grep -cE '^### L[0-9]+'; git show 7b6ea61e:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* landed$'; git show 7b6ea61e:docs/agent/LESSONS.md | grep -c '^- \*\*status:\*\* pending$'
 Output:   "22" / "21" / "1" — 22 lesson rows in the tree at 7b6ea61e, 21 marked landed and 1 pending; the one other
           "landed | pending" string in the file (line 18) is the row-shape legend in the file's own header, not a lesson
-          row. This worktree's `docs/agent/LESSONS.md` is byte-identical to 7b6ea61e (this record's own commit touches only
-          EVIDENCE.md and LOOP.md — `git diff --stat 7b6ea61e HEAD -- docs/agent/LESSONS.md` is empty), so
-          `node scripts/check-lessons.mjs` run in this worktree reads the same tree: "check-lessons: ok — 22 lesson(s), 21
-          landed, 1 pending, 0 pending past 14 days (DR-060)".
+          row.
+Command:  git worktree add --detach <scratchpad>/wt-7b6e 7b6ea61e && cd <scratchpad>/wt-7b6e && node scripts/check-lessons.mjs
+Output:   "check-lessons: ok — 22 lesson(s), 21 landed, 1 pending, 0 pending past 14 days (DR-060)" — the checker run on
+          the frozen tree itself, so a later change to LESSONS.md cannot move it.
 Command:  git show 36c561c7^1:docs/agent/LESSONS.md | grep -c '^### L16' ; git show 36c561c7:docs/agent/LESSONS.md |
           grep -c '^### L16'
 Output:   "0" then "1" — L16 is absent from #1130's own parent tree and present at #1130's own merge (36c561c7), so it
@@ -3852,10 +3852,7 @@ Command:  git rev-parse 2ebc4d3c^2 929e94ad^2 4bb57ed5^2 70c2e767^2
 Output:   "e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "4db64c6c016865061d595a28a988ee739cdf963f" /
           "835093348a2f4e1d1c415eec3682e740d3485109" / "44c3611e4f5598bc2911a838900269f713f4b982" — each merge's own PR-head
           parent matches the head_sha its named check ran on, exactly, for all four (local, immutable).
-Command:  tail -q -n 1 <scratchpad>/row12j-pf.log <scratchpad>/row12j-br.log <scratchpad>/wire6-pf.log
-          <scratchpad>/wire6-br.log <scratchpad>/lessons4-pf.log <scratchpad>/lessons4-br.log; stat -c '%n %y'
-          <scratchpad>/row12j-pf.log <scratchpad>/row12j-br.log <scratchpad>/wire6-pf.log <scratchpad>/wire6-br.log
-          <scratchpad>/lessons4-pf.log <scratchpad>/lessons4-br.log
+Command:  for t in row12j wire6 lessons4; do for k in pf br; do tail -n 1 <scratchpad>/$t-$k.log; stat -c '%n %y' <scratchpad>/$t-$k.log; done; done
 Output:   "PREFLIGHT_EXIT 0 e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "BREADTH_EXIT 0
           e84af7bcf9b3c409f0c2f4e0f1a376d0ed14f5da" / "PREFLIGHT_EXIT 0 4db64c6c016865061d595a28a988ee739cdf963f" /
           "BREADTH_EXIT 0 4db64c6c016865061d595a28a988ee739cdf963f" / "PREFLIGHT_EXIT 0

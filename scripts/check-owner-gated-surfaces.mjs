@@ -165,6 +165,30 @@ export const SAFETY_MACHINERY = [
   // that catches a native test convention neither rule below happens to name).
   { rule: "native test sources by directory (src/test/, src/androidTest/, a dir segment ending in Tests/, Rust tests/)", re: /^native\/(?:.+\/)?(?:tests?|__tests__|androidTest|[\w-]*Tests)\// },
   { rule: "native test sources by filename (*Test.kt, *Tests.kt, *Test.java, *Test.swift, *Tests.swift, *_test.rs)", re: /^native\/.*(?:Test\.(?:kt|java|swift)|Tests\.(?:kt|swift)|_test\.rs)$/ },
+  // Review sweep on #1133 (round 3): the two rules above still had an under-match
+  // inside their own family — a Rust crate's tests are conventionally written INLINE,
+  // as `#[cfg(test)] mod tests { ... }` inside an ordinary src file, not under a
+  // tests/ dir or a `_test.rs` filename, so neither rule above sees them. Measured
+  // live with `grep -c '#[test]'` at this tree's HEAD: this repo has exactly three
+  // Cargo crates (`find . -name Cargo.toml`, gitignored build/target dirs aside), and
+  // every one of them puts the bulk of its suite inline — native/desktop/core/src/
+  // wire.rs (19), endpoint.rs (14), assist.rs (6); native/desktop/app/src/main.rs (5);
+  // firmware/dock/core/src/custody.rs (20), wire.rs (5), state.rs (3) — 72 #[test]
+  // attributes across 7 ordinary src files, all classifying autonomous before this
+  // rule, next to the 2 already-gated ones in native/desktop/core/tests/conformance.rs
+  // (caught by the directory rule above). This is the exact hazard the two rules above
+  // exist for: scripts/check-desktop-core-tests.mjs derives its EXPECTED #[test] count
+  // from <crate-dir>/src and <crate-dir>/tests for these same three crates
+  // (desktop.yml:94 native/desktop/core, desktop.yml:149 native/desktop/app,
+  // firmware.yml:86 firmware/dock/core), so an autonomous PR that deletes or weakens
+  // an inline test shrinks the verifier's own expectation in the same diff and CI
+  // stays green. A path classifier cannot split a file's test half from its product
+  // half, so this deliberately over-matches every .rs file under these three crates'
+  // own src/ — the alternative is moving every inline test into tests/, a bigger
+  // change than this fix. See findUngatedInlineRustTests below for the independent,
+  // self-test-hermetic content probe that backs this the same way the TREE GUARD
+  // backs the two rules above, for a fourth crate this rule does not yet name.
+  { rule: "Rust crates whose inline #[cfg(test)] modules check-desktop-core-tests.mjs counts (desktop.yml:94,149; firmware.yml:86)", re: /^(?:native\/desktop\/(?:core|app)|firmware\/dock\/core)\/src\/.*\.rs$/ },
   // Review fixes on the round-4 changes (#1133): round 4's own TREE_GUARD note (below)
   // left three product-test files "deliberately alone" as merely outside its native-only
   // scope — but they are not incidental test dirs, they are the WHOLE input of two gates
@@ -198,7 +222,35 @@ export const SAFETY_MACHINERY = [
   // never executed here (the Mac lane's live-lane loop runs them separately) — it does
   // not exist in the tree today, but is named below in TEST_SOURCE_EXCLUSIONS ahead of
   // time so a future file there reads as a known, intentional gap, not a silent one.
-  { rule: "Bruno requests the 'Bruno collection live run' gate executes (preflight.mjs:610, review-hub-ci.yml:1054; folder list in scripts/run-bruno-collection.mjs:169-183)", re: /^artifacts\/api-collection\/(?:health|v1|control-plane|review-demo|adversarial-trust|negative-tests)\// },
+  // Review sweep on #1133 (round 3): the rule just above this comment was, until this
+  // pass, folder-scoped to requests only, and left the collection's own EXECUTED
+  // PLUMBING unmatched: bruno.json and collection.bru are read on every single
+  // `bru run` invocation (scripts/run-bruno-collection.mjs's runBru() runs with
+  // `cwd: COLLECTION`, the collection root), and collection.bru's own
+  // script:pre-request block runs before EVERY request in the run — a one-block edit
+  // there can disable every assertion this gate has, not just one. Reproduced live in
+  // scratch with the real bru 4.0.0 from scripts/node_modules: appending
+  // `script:pre-request { bru.runner.skipRequest(); }` to a copy of collection.bru and
+  // running negative-tests/malformed-evaluate.bru (no server needed — the request
+  // never leaves the pre-request hook) printed "Status PASS", "Requests 1 (1
+  // Skipped)", "Assertions 0/0", exit 0. scripts/run-bruno-collection.mjs's own
+  // auditResults() counts that skipped result as one of its `requests` (a skipped
+  // result's `error` is null and it fails no check), so the empty-run floor never
+  // fires either — the identical fail-open the requests-only rule closed for the
+  // requests themselves, left open one level up in the file that runs before all of
+  // them. bruno.json was previously unmatched by ANY rule, not
+  // even TEST_SOURCE_EXCLUSIONS, because it is not a `.bru` file and
+  // TEST_CONVENTION_NAME_RE never covers it. environments/*.bru carries the same
+  // exposure a different way: it sets `token`, `ownerToken`, `atlasToken`, and the
+  // `policyId`/`policyVersionId`/`connectorId`/scenario ids every request interpolates
+  // — the runner overrides ONLY `baseUrl` via --env-var (run-bruno-collection.mjs:43),
+  // so every other var here is exactly what an assertion is keyed to (adversarial-trust/
+  // and negative-tests/cross-tenant-decision.bru pick their identity by which token
+  // they name) — editing one CAN silently change what gets asserted against which
+  // identity, the opposite of the claim this file used to make about it (see the
+  // TEST_SOURCE_EXCLUSIONS entry below, corrected in the same pass). The rule is
+  // therefore widened from requests-only to the collection's whole executed footprint.
+  { rule: "Bruno requests AND the collection's own executed plumbing the 'Bruno collection live run' gate reads or runs on every invocation (preflight.mjs:610, review-hub-ci.yml:1054; folder list in scripts/run-bruno-collection.mjs:169-183; collection.bru's script:pre-request runs before every request; bruno.json is read from cwd on every `bru run`; environments/ supplies every var but baseUrl)", re: /^artifacts\/api-collection\/(?:(?:health|v1|control-plane|review-demo|adversarial-trust|negative-tests|environments)\/|collection\.bru$|bruno\.json$)/ },
   // Completeness sweep on #1133 (round 2): the SAME class of gap, found by re-running
   // the sweep the finding above named against every OTHER gate that runs a checker
   // over tracked, non-script data (CLAUDE.md's mandate for this round) — a second
@@ -250,21 +302,24 @@ export const TEST_SOURCE_EXCLUSIONS = [
   { rule: "k6 load drivers (tests/load/**) — CLAUDE.md and scripts/check-test-execution.mjs:46 already document these as REPORTED, invoked by nothing, deliberately outside the correctness gate", re: /^tests\/load\// },
   { rule: "two test-shaped files inside ordinary, deliberately-autonomous skill directories (see the existing \"an unrelated skill dir stays autonomous\" self-test)", re: /^\.claude\/skills\/(?:ios-simulator-skill\/scripts\/test_recorder\.py|node\/rules\/assets\/graceful-server\.test\.ts)$/ },
   // Completeness sweep on #1133 (round 2): adding `.bru$` to TEST_CONVENTION_NAME_RE
-  // (below) below so the tree guard sees the two Bruno families gated above pulls in
-  // the collection's own PLUMBING too — files that are real gate input (the live-run
-  // gate reads them the same way it reads a request) but carry no request of their
-  // own to assert on, so a SAFETY_MACHINERY rule scoped to "requests" does not name
-  // them: environments/*.bru sets shared vars/baseUrl (the live runner overrides
-  // baseUrl itself via --env-var, scripts/run-bruno-collection.mjs:43, so editing the
-  // file cannot silently change what gets asserted), and the root collection.bru sets
-  // the default auth scheme. check-api-collection.mjs's OWN definition of "a request
-  // file" (scripts/check-api-collection.mjs:217-218) already excludes both by the same
-  // two names, for the identical reason. sources/ does not exist in the tree today,
-  // but scripts/run-bruno-collection.mjs's own header names it as the deliberately-
-  // never-run folder for external-lab requests (see the SAFETY_MACHINERY rule above) —
-  // declared here ahead of time, like the k6 rule above it, so a future sources/*.bru
-  // file reads as a known, intentional gap rather than a silent one.
-  { rule: "the Bruno collection's own config, not a request the live-run gate asserts on (artifacts/api-collection/environments/, collection.bru, and the reserved-but-unpopulated sources/)", re: /^artifacts\/api-collection\/(?:environments\/|collection\.bru$|sources\/)/ },
+  // (below) so the tree guard sees the Bruno families gated above. This entry used to
+  // also list environments/ and collection.bru here, autonomous, on the claim that
+  // editing them "cannot silently change what gets asserted" — check-api-collection.mjs
+  // excludes both from ITS OWN definition of "a request file" (scripts/check-api-
+  // collection.mjs:217-218), but that gate asks a different question (does every
+  // api-server route have a mapped request?), not whether editing the file can move
+  // what the LIVE run asserts. Review sweep on #1133 (round 3), corrected: it can, for
+  // both — collection.bru's script:pre-request block runs before every request bru
+  // executes from this collection (reproduced live: it can skip every one of them, see
+  // the SAFETY_MACHINERY rule above), and environments/*.bru supplies every var an
+  // assertion is keyed to except baseUrl. Both are SAFETY_MACHINERY now, not excluded
+  // here. sources/ is the one member of this family with no live-run exposure at all —
+  // it does not exist in the tree today, but scripts/run-bruno-collection.mjs's own
+  // header names it as the deliberately-never-run folder for external-lab requests (see
+  // the SAFETY_MACHINERY rule above) — declared here ahead of time, like the k6 rule
+  // above it, so a future sources/*.bru file reads as a known, intentional gap rather
+  // than a silent one.
+  { rule: "the Bruno collection's reserved-but-unpopulated sources/ (never executed by the live-run gate — everything else in this family is SAFETY_MACHINERY above)", re: /^artifacts\/api-collection\/sources\// },
 ];
 
 // Codex round 4 on #1133 (P1, thread 4113330659): the TREE GUARD `validate()` runs (see
@@ -288,8 +343,10 @@ export const TEST_SOURCE_EXCLUSIONS = [
 // tests/load/ CLAUDE.md already documents as REPORTED not gated, two files inside
 // ordinary, deliberately-autonomous skill directories, and — completeness sweep on
 // #1133, round 2, once `.bru$` joined the name convention below — the Bruno
-// collection's own config (environments/, collection.bru) and its reserved-but-empty
-// sources/ folder. A future test-shaped file anywhere else in the tree — the "next
+// collection's reserved-but-empty sources/ folder (round 3 moved this family's other
+// two members, environments/ and collection.bru, up into SAFETY_MACHINERY instead,
+// once both proved to be live-run-executed plumbing rather than excluded config). A
+// future test-shaped file anywhere else in the tree — the "next
 // native test directory" this guard was built for, just no longer limited to native/ —
 // still fails this gate by name instead of merging silently.
 const TEST_CONVENTION_DIR_RE = /(^|\/)(test|tests|__tests__)\/|(^|\/)src\/(test|androidTest)\/|(^|\/)[^/]*Tests\//;
@@ -317,6 +374,23 @@ export function findUngatedNativeTestSources(files) {
     .map(normalizePath)
     .filter((f) => looksLikeTestSource(f) && !TEST_SOURCE_EXCLUSIONS.some((p) => p.re.test(f)))
     .filter((f) => classifyDiff([f]).tier === "autonomous");
+}
+
+/** Review sweep on #1133 (round 3): findUngatedNativeTestSources above is path-only, so
+ *  it can never see a Rust crate's test half — that lives INSIDE an ordinary src file
+ *  (`#[cfg(test)] mod tests { ... }`), not in a path shape any convention names. This is
+ *  the independent backstop for exactly that: a pure content probe over (path, text)
+ *  pairs (never touches disk itself, so the self-test is hermetic) that flags a tracked
+ *  `.rs` file whose text holds `#[cfg(test)]` and that still classifies autonomous —
+ *  the same "gate input can be silently weakened" shape as the path-only guard, one
+ *  layer deeper, for the crate the SAFETY_MACHINERY rule above does not yet name. */
+export function findUngatedInlineRustTests(files) {
+  return files
+    .map(({ path, text }) => ({ path: normalizePath(path), text }))
+    .filter(({ path }) => path.endsWith(".rs"))
+    .filter(({ text }) => /#\[cfg\(test\)\]/.test(text))
+    .map(({ path }) => path)
+    .filter((path) => classifyDiff([path]).tier === "autonomous");
 }
 
 // Completeness sweep on #1133 (round 2): the tree guard's OWN vacuity floor. Every
@@ -675,11 +749,14 @@ function selfTest() {
   t("adversarial-trust/stale-evidence.bru is SAFETY_MACHINERY (the Bruno live-run gate's input)", mostRestrictive(cls(["artifacts/api-collection/adversarial-trust/stale-evidence.bru"])) === "SAFETY_MACHINERY");
   t("negative-tests/malformed-evaluate.bru is SAFETY_MACHINERY (same)", mostRestrictive(cls(["artifacts/api-collection/negative-tests/malformed-evaluate.bru"])) === "SAFETY_MACHINERY");
   t("health/healthz.bru is SAFETY_MACHINERY (same)", mostRestrictive(cls(["artifacts/api-collection/health/healthz.bru"])) === "SAFETY_MACHINERY");
-  // Negative: the collection's own plumbing and its reserved-but-unpopulated sources/
-  // folder stay autonomous — TEST_SOURCE_EXCLUSIONS names all three, and none of them
-  // is a request the live-run gate asserts on.
-  t("artifacts/api-collection/environments/Local.bru stays autonomous (collection plumbing, not a request)", cls(["artifacts/api-collection/environments/Local.bru"]).tier === "autonomous");
-  t("artifacts/api-collection/collection.bru stays autonomous (same)", cls(["artifacts/api-collection/collection.bru"]).tier === "autonomous");
+  // Review sweep on #1133 (round 3): these two used to assert "stays autonomous" —
+  // that was the bug (see the SAFETY_MACHINERY rule above). Both are executed plumbing,
+  // not excluded config, and are SAFETY_MACHINERY now.
+  t("artifacts/api-collection/environments/Local.bru is SAFETY_MACHINERY (supplies every var an assertion reads but baseUrl)", mostRestrictive(cls(["artifacts/api-collection/environments/Local.bru"])) === "SAFETY_MACHINERY");
+  t("artifacts/api-collection/collection.bru is SAFETY_MACHINERY (its script:pre-request block runs before every request bru executes)", mostRestrictive(cls(["artifacts/api-collection/collection.bru"])) === "SAFETY_MACHINERY");
+  t("artifacts/api-collection/bruno.json is SAFETY_MACHINERY (read from cwd on every `bru run` invocation; not a .bru file, so the tree guard alone would never have caught it)", mostRestrictive(cls(["artifacts/api-collection/bruno.json"])) === "SAFETY_MACHINERY");
+  // Negative: the reserved-but-unpopulated sources/ folder stays autonomous — it is the
+  // one member of this family the live-run gate deliberately never executes.
   t("a hypothetical artifacts/api-collection/sources/ request stays autonomous (deliberately never run by the live-run gate)", cls(["artifacts/api-collection/sources/fleet-lab-probe.bru"]).tier === "autonomous");
   // Completeness sweep on #1133 (round 2): the second Bruno family the sweep found —
   // scripts/check-lab-collections.mjs's entire input, previously unnamed by any rule.
@@ -746,6 +823,13 @@ function selfTest() {
     mostRestrictive(cls(["native/desktop/core/tests/conformance.rs"])) === "SAFETY_MACHINERY");
   t("an Android instrumented-test source (src/androidTest/) is SAFETY_MACHINERY",
     mostRestrictive(cls(["native/android/app/src/androidTest/java/x/FooTest.kt"])) === "SAFETY_MACHINERY");
+  // Review sweep on #1133 (round 3): the two rules above missed Rust's OWN test
+  // convention — inline #[cfg(test)] mod tests {} in an ordinary src file — see the
+  // new rule above.
+  t("native/desktop/core/src/wire.rs (inline #[cfg(test)] mod, 19 #[test] measured live) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["native/desktop/core/src/wire.rs"])) === "SAFETY_MACHINERY");
+  t("firmware/dock/core/src/custody.rs (inline #[cfg(test)] mod, 20 #[test] measured live) is SAFETY_MACHINERY",
+    mostRestrictive(cls(["firmware/dock/core/src/custody.rs"])) === "SAFETY_MACHINERY");
   // Negative: a non-test file, and a doc NAMED like a test topic, must not over-match.
   t("a doc named TESTING.md stays autonomous (not swept in by the filename rule)",
     cls(["TESTING.md"]).tier === "autonomous");
@@ -810,6 +894,21 @@ function selfTest() {
   // Negative: the guard itself must not over-match — a non-test native file stays alone.
   t("the guard does not flag an ordinary native source file",
     findUngatedNativeTestSources(["native/ios/EnterpriseShell/Services/SignalContext.swift"]).length === 0);
+  // Review sweep on #1133 (round 3): findUngatedInlineRustTests is pure over (path,
+  // text) pairs — no disk, so the planted-file case (the same "next test directory"
+  // proof as the Python one above, one layer deeper) is provable hermetically.
+  t("the content probe flags a planted Rust file with an inline #[cfg(test)] module no manifest rule covers (native/x/src/lib.rs)",
+    findUngatedInlineRustTests([
+      { path: "native/x/src/lib.rs", text: "#[cfg(test)]\nmod tests {\n    #[test]\n    fn it_works() {}\n}\n" },
+    ]).length === 1);
+  t("the content probe does not flag a .rs file with no #[cfg(test)] in it",
+    findUngatedInlineRustTests([
+      { path: "native/x/src/lib.rs", text: "pub fn add(a: i32, b: i32) -> i32 { a + b }\n" },
+    ]).length === 0);
+  t("the content probe agrees with the manifest — a real inline-tested crate file is not double-flagged (already SAFETY_MACHINERY)",
+    findUngatedInlineRustTests([
+      { path: "native/desktop/core/src/wire.rs", text: "#[cfg(test)]\nmod tests {}\n" },
+    ]).length === 0);
   // Review fixes on the round-4 changes (#1133): the guard is now REPO-WIDE (no more
   // `f.startsWith("native/")` filter) — this used to prove the OLD native/-only scope by
   // pointing at server.test.ts and expecting it untouched; now that the manifest gates
@@ -1027,6 +1126,29 @@ function checkNativeTestSourcesGated() {
       "tree guard: test source(s) classify autonomous — add or widen a SAFETY_MACHINERY rule, or a TEST_SOURCE_EXCLUSIONS entry, for:",
     );
     for (const f of ungated) console.error(`  ${f}`);
+    process.exit(1);
+  }
+  // Review sweep on #1133 (round 3): the content probe — findUngatedInlineRustTests
+  // needs the FILE TEXT, not just the path, so it cannot ride the path-only sweep
+  // above. Reads every tracked `.rs` file straight off disk (git ls-files already
+  // proved it is tracked; a file deleted between listing and reading is simply not a
+  // gate input any more, so a read failure there is not this guard's problem).
+  const rustFiles = files.filter((f) => f.endsWith(".rs"));
+  const rustPairs = rustFiles.map((f) => {
+    let text = "";
+    try {
+      text = readFileSync(resolve(repo, f), "utf8");
+    } catch {
+      // Deleted or unreadable between the ls-files snapshot and here — nothing to probe.
+    }
+    return { path: f, text };
+  });
+  const ungatedRust = findUngatedInlineRustTests(rustPairs);
+  if (ungatedRust.length > 0) {
+    console.error(
+      "tree guard: tracked *.rs file(s) hold an inline #[cfg(test)] module but classify autonomous — add or widen a SAFETY_MACHINERY rule for:",
+    );
+    for (const f of ungatedRust) console.error(`  ${f}`);
     process.exit(1);
   }
 }

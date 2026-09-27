@@ -3770,7 +3770,7 @@ Command:  GitHub REST GET /repos/DanFashauer/SignalGrid-Review-Hub/pulls/1136, /
 Output:   #1136 merged (head 44eed7a9), #1147 merged (head a17b5fdd), #1150 merged (head fe95e89a) — none of the three is
           a first-parent merge commit, so none is in the 24 above.
 Command:  for p in "44eed7a9 c10da110" "a17b5fdd 2ebc4d3c" "fe95e89a 2ebc4d3c" "44eed7a9 a4507f9a" "a17b5fdd a4507f9a"
-          "fe95e89a a4507f9a"; do set -- $p; git merge-base --is-ancestor "$1" "$2"; echo "$1 in $2: $?"; done (a chain of
+          "fe95e89a a4507f9a"; do a=${p% *}; b=${p#* }; git merge-base --is-ancestor "$a" "$b"; echo "$a in $b: $?"; done (a chain of
           `--is-ancestor` calls joined by semicolons would print only the LAST exit status; this loop prints each one)
 Output:   "44eed7a9 in c10da110: 0" / "a17b5fdd in 2ebc4d3c: 0" / "fe95e89a in 2ebc4d3c: 0" / "44eed7a9 in a4507f9a: 1" /
           "a17b5fdd in a4507f9a: 1" / "fe95e89a in a4507f9a: 1" — all three ancestor checks against their carrying merge
@@ -3977,7 +3977,7 @@ Command:  git log --oneline --grep='#1133' 7b6ea61e..1caf612b | wc -l
 Output:   "12" — twelve commits on #1133's branch (reachable from 1caf612b, one of its early merge-of-mainline commits,
           but not from 7b6ea61e) mention "#1133" in their subject.
 Command:  for p in "1caf612b 7b6ea61e" "765faf7a 7b6ea61e" "992cb2a7 7b6ea61e" "835883c5 7b6ea61e" "26a39479 7b6ea61e"; do
-          set -- $p; git merge-base --is-ancestor "$1" "$2"; echo "$1 in $2: $?"; done (printed per-check, not chained by
+          a=${p% *}; b=${p#* }; git merge-base --is-ancestor "$a" "$b"; echo "$a in $b: $?"; done (printed per-check, not chained by
           semicolons)
 Output:   "1caf612b in 7b6ea61e: 1" / "765faf7a in 7b6ea61e: 1" / "992cb2a7 in 7b6ea61e: 1" / "835883c5 in 7b6ea61e: 1" /
           "26a39479 in 7b6ea61e: 1" — all five exit 1: none of #1133's heads (past or current), #1146's head or #1153's

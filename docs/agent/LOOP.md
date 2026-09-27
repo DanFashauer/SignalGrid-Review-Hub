@@ -81,7 +81,10 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               step_up or (b) day-one-quiet covers it
               (file artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json). #1037's CodeQL
               call - dismiss the alert on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac
-              paths-ignore' in chat. DR-013's "10 for 10" sentence in docs/DECISION_RECORDS.md (OWNER_RESERVED) - row 17
+              paths-ignore' in chat. The Copilot code-review scanner (github-advanced-security) fails with `CAPIError: 400
+              The requested model is not supported`, thrown before any diff is read - the owner picks a supported model in
+              the repository's Copilot code-review settings; this tree names no more specific browser path than that.
+              DR-013's "10 for 10" sentence in docs/DECISION_RECORDS.md (OWNER_RESERVED) - row 17
               re-measured it as seven of the ten checks dated on or before DR-013 (a dated subset; the live gate itself now
               holds 11 checks, 7 divergent, a different count) - the owner edits the sentence, or replies in chat to have
               the lane edit it. The 19 local scratch branches (asked on
@@ -111,9 +114,9 @@ LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24
               skill's rules for briefs, reviews and records), #1160 (3cf4d8f2, mail: keepalive 09:24Z), #1161 (7b6ea61e,
               mail: hygiene-sweep heartbeat 09:40Z - the close). #1136, #1147 and #1150 (each already merged, per a live
               GitHub read) carried into #1138 and #1148 respectively rather than landing as their own first-parent merge.
-              The other 72 first-parent commits in the window are Mac-lane pushes: 68 "Lane mail (mac)" commits (no
-              Claude-Session trailer on any sampled) and 4 "LOOP:" state notes (two say Mac-lane; all four share one
-              Claude-Session trailer that no mail commit carries) - none a PR merge.
+              The other 72 first-parent commits in the window are Mac-lane pushes: 68 "Lane mail (mac)" commits, all 68
+              checked and none carrying a Claude-Session trailer, and 4 "LOOP:" state notes (two say Mac-lane; all four
+              share one Claude-Session trailer that no mail commit carries) - none a PR merge.
               Lessons landed: L16 (#1130) - PR bodies fabricated facts on Haiku twice; the saved workflow now runs the body
               stage on Sonnet and the orchestrator skill's stage table agrees. L17 (#1159) - each review round on a large
               docs PR found a new instance of an old defect class; once two rounds find only old classes, the next review is

@@ -56,7 +56,27 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
+LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
+              #1136/#1147/#1150 carried in); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending until #1153;
+              #1158 (open at the close) landed afterwards as b42a0967 (post-close - not part of this frozen entry).
+              Owner still owes (PR states re-read after the close; settings, chat and branch items last confirmed 09:30Z per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`):
+              #1153 (Assist-wire server, L20 fix pushed) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153
+              #1146 (core-digest, DECISION_PATH) - its backlog check's part two (fixed regression corpus) is still TO ADD; merge once it is on the PR: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
+              #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133
+              #1117 (ephemeral test ports, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117
+              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z) - reply 'exception granted' or 'revert': https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
+              #1050 (DR-058) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083
+              Doctrine hand (plan row 8) - reply in chat or on https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068. #1037 CodeQL alert - dismiss on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac paths-ignore'
+              Copilot code-review scanner - CAPIError 400 unsupported model; owner picks a supported model in Copilot settings (not in the 09:30Z heartbeat; confirmed unchanged across the close by #1133's scan runs at 09:49:34Z and 10:41:55Z, both CAPIError 400)
+              DR-013 "10 for 10" sentence (OWNER_RESERVED) - owner edits it (dated subset 7/10; gate reads 11 checks, 7 divergent)
+              19 local scratch branches - yes/no on deleting, asked on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1154; Browser: Settings -> Pages -> Source -> GitHub Actions, then run the Pages workflow once
+              Next (at 09:55Z): #1153 waits on the owner (fix already pushed); the SIGTERM ask is still unread by the
+              Mac (a third instance never reached its inbox - read state unknown); otherwise the owner items above.
+TIERS THIS SESSION: Opus reviewed #1156 (two passes) and re-reviewed #1148; Codex ran the automated rounds and Opus
+              covered its usage-limit gap; land-branch ran Sonnet on Pre/Merge/PR-body and Haiku on lock/chain/push/PR-open;
+              a Sonnet subagent drafted this record, an Opus reviewer reviewed it before push. Window detail:
+              docs/agent/EVIDENCE.md, section "## 2026-09-27 - 24 FIRST-PARENT PR MERGES ..." (its only 2026-09-27 entry).
+PREVIOUSLY:   2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
               This entry covers 07:15Z-11:55Z and is frozen there (a rule the next record writes up as a lesson); every later
               event belongs to the next record.

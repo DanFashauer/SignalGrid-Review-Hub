@@ -58,19 +58,19 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               that does what it claims, real in hand for partners before GTM.
 LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
               FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
-              This entry covers 07:15Z-11:55Z and is frozen there (lesson L18, written up with the next record); every later event
-              belongs to the next record.
+              This entry covers 07:15Z-11:55Z and is frozen there (a rule the next record writes up as a lesson); every later
+              event belongs to the next record.
               Owner still owes (at 11:55Z): #1117 (fixed test ports -> ephemeral in oidc/load/observability tests, classified
               DECISION_PATH) - the OWNER merges it at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117. #1118/#1121
               (golden-rule-1 ruling asked in chat at 08:20Z) - reply 'exception granted' or 'revert' in chat,
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058) - the owner merges it at
               https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - the owner merges it at
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - answer (a) raise to
-              step_up or (b) day-one-quiet covers it, on the raised-hands issue
-              https://github.com/DanFashauer/SignalGrid-Review-Hub/issues?q=is%3Aopen+label%3Araised-hands (file
-              artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json); #1037's CodeQL call -
-              dismiss the alert or reply 'Mac paths-ignore', https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037. The
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - reply in chat, or on the
+              raised-hands issue https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068, with (a) raise to step_up or
+              (b) day-one-quiet covers it (file artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json);
+              #1037's CodeQL call - dismiss the alert on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply
+              'Mac paths-ignore' in chat. The
               Copilot scanner's model setting (the 11:55Z tree names it without a browser path). In a BROWSER: Settings ->
               Pages -> Source -> GitHub Actions at
               https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once (Actions ->
@@ -97,10 +97,13 @@ LAST TOUCHED: 2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8
 TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
               MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
               findings) and the MCP roster (6); Haiku workers ran lock waits, chain starts, sentinel reads, pushes
-              and PR opens inside the saved workflow; Sonnet wrote the PR bodies. L7 recurred: the coordinator wrote
+              and PR opens inside the saved workflow; Sonnet wrote the later PR bodies, from the L2 landing (#1126) on.
+              Earlier in the window, Haiku drafted the bodies for #1119, the 07:20Z record (#1122) and the L8 landing (#1123);
+              each invented facts, and the coordinator rewrote each by hand from verified output (recorded later as lesson
+              L16). L7 recurred: the coordinator wrote
               every brief, made the small direct edits itself (registering the L2 gate self-test in preflight/CI,
               the sentinel-wait loop and the canPush mirror in the saved workflow, the L15 row and skill rule, the
-              criss-cross repair merge), corrected the two PR bodies, and performed both merges - only the fixes
+              criss-cross repair merge), corrected the two Sonnet bodies and performed their merges - only the fixes
               themselves, the reviews and the chain mechanics were delegated.
 PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
               Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,

@@ -231,3 +231,44 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   verified DETERMINISTICALLY by `scripts/lib/land-branch-gate.mjs --verify` on the
   unchanged expected head (L2), and — once its base has landed — merges
   `origin/SignalGrid_Alpha`, never the base branch's own tip (L15).
+
+## Briefs, reviews and records (DR-060; lessons L17–L22)
+
+- **A report schema keeps `blockers` apart from `notes`.** `blockers` means the unit
+  cannot finish; a scope remark or an observation is a note. A wrapper stops only on
+  `blockers` — a note filed as a blocker stopped a landing once (L19).
+- **A stage's gate list is a subset, and its report says so.** Preflight boots servers,
+  so it runs only in the host's one chain; a stage runs a subset. One stage's subset
+  missed the line-count gate and another's missed the env-doc gate, and both failures
+  surfaced a chain cycle later (L19, the L2 class recurring inside stages). A stage that
+  edits a document runs at least `scripts/check-doc-line-counts.mjs`,
+  `scripts/check-env-doc-readers.mjs`, `scripts/check-cited-paths.mjs`,
+  `scripts/check-cited-symbols.mjs`, `scripts/check-cited-commands.mjs`,
+  `scripts/check-markdown-links.mjs` and `scripts/check-derived-doc-figures.mjs`. A
+  failure is "pre-existing" only after the same gate fails on `origin/SignalGrid_Alpha`;
+  a figure the branch itself moved is the branch's.
+- **Every path in a brief is absolute.** The Bash tool's working directory resets to the
+  main checkout between calls, so a `$(pwd)`-relative write lands in the shared tree (L19).
+- **A planted mutation asserts it took effect.** A self-test that plants by replacing
+  text checks that the planted text is present and the original gone before it counts the
+  case; a literal anchor that stops matching otherwise turns the case into a silent pass
+  (L20).
+- **A caller of `land-branch` reads the child's `push.pushed`.** A returned child is not
+  a landing; compute the stage as landed only when `push.pushed` is true. A workflow
+  script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`
+  (L21).
+- **To free disk, delete an agent worktree's build output, not the worktree.** Remove
+  `node_modules` and `dist` inside it; removing the worktree deletes the HEAD reflog that
+  `scripts/loop-state.mjs` uses to classify its scratch branches as ephemeral, and they
+  resurface as unpushed local work until they are pushed or deleted (L22).
+- **Before a review-fix commit is pushed, sweep every sentence it adds against every
+  defect class the PR's earlier rounds found.** Review rounds on large docs PRs found a new
+  instance of an old class in each fix's own new text (L18). Once two rounds find only new
+  instances of old classes, the next review is a narrow verification — is each finding
+  fixed, and is each new sentence true of its cited source — and anything else goes to
+  notes or a backlog row.
+- **A record freezes at its window's close.** The close is a named mainline merge sha; an
+  event after it goes to the next record, never into an open one (L17). An EVIDENCE
+  entry's re-runnable commands are local reads pinned to fixed shas — no `origin`, no
+  `HEAD`, no network, no host paths — and a tool read that cannot be re-run is marked as
+  recorded and bound to its head by a local command.

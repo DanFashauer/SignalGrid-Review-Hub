@@ -133,16 +133,6 @@
         { "path": "lib/integrations/src/integrations/link-usability/types.ts", "symbol": "LinkProgress" },
         { "path": "lib/integrations/src/integrations/sse-egress/types.ts", "symbol": "SseEgressReportRaw" }
       ]
-    },
-    {
-      "id": "macos-posture-mac-lane",
-      "product": "real Apple hardware (the Mac lane): the fixture suite on darwin-arm64 plus a native-build attestation",
-      "dimensions": ["macos-posture"],
-      "evidence": ["artifacts/live-evidence/mac-run.json", "docs/LIVE_SYNC_LOOP.md"],
-      "date": "2026-09-26",
-      "divergenceFound": false,
-      "note": "A pass/fail attestation, re-minted on every qualifying Mac run (date is the mintedAt this entry was written against). Not checked against an independent Apple management server.",
-      "boundTo": [{ "path": "lib/integrations/src/integrations/macos-posture/apple-schema.ts", "symbol": "APPLE_DEVICE_MANAGEMENT_SCHEMA_VERSION" }]
     }
   ]
 }

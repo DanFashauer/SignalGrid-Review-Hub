@@ -18,9 +18,12 @@ name: Raised hands
 # `schedule` is best-effort. Between 2026-09-26T00:39Z and 2026-09-28T07:00Z GitHub
 # ran this "hourly" cron 13 times, at gaps of 2-6h, so the page went stale past
 # the steward's 2h freshness line. `push` to mainline is the dependable trigger:
-# the Mac tick heartbeat moves SignalGrid_Alpha every ~25 min, and the concurrency
-# group below keeps only the newest run (a cancelled run has no verdict in
-# scripts/check-mainline-workflow-streaks.mjs).
+# the Mac tick heartbeat moves SignalGrid_Alpha every ~25 min. The concurrency
+# group below serialises runs WITHOUT cancelling the one in progress: a run
+# cancelled between rewriting the body and posting its new-hand comment would let
+# the next run read the new id from the updated body and never notify the owner.
+# GitHub still replaces an older PENDING run with a newer one; that cancelled run
+# did no work, and it has no verdict in scripts/check-mainline-workflow-streaks.mjs.
 
 on:
   schedule:
@@ -37,7 +40,7 @@ permissions:
 
 concurrency:
   group: raised-hands
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   hands:

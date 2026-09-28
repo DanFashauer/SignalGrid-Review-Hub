@@ -33,6 +33,23 @@ A SAFETY_MACHINERY PR (`scripts/**`, `.github/workflows/**`, fixtures) may be
 merged under the same five conditions, and the PR body must say so under "Owner
 decision needed" as "merged under DR-037" with the check-run id.
 
+## Native client and shared-vector PRs
+
+The gating check runs only the static conformance gate (`review-hub-ci.yml`'s
+step, which checks each client HAS a test reading the vectors, not that it
+passes), so a PR that changes `native/shared/**`, `native/android/**`,
+`native/desktop/**` or `native/ios/**` also waits, before merge, for its
+client suites on the current head: "Assist core (pure Kotlin, no SDK)",
+"Android app (assembleDebug)", "Assist core (ubuntu-latest)" and
+"(windows-latest)", "Desktop shell (ubuntu-latest)" and "(windows-latest)",
+"Shared Assist vectors bind every client", the iOS simulator job and "macOS
+native (SwiftPM, no simulator)" — whichever the PR's paths trigger; making
+them required checks is an owner setting. `ios-ci.yml`'s `pull_request`
+trigger runs only for PRs targeting `SignalGrid_Alpha` (line 37), so a
+native PR stacked on another feature branch never runs the iOS simulator or
+macOS-native jobs at all — target `SignalGrid_Alpha` directly, or there is
+nothing to wait for.
+
 ## The merge call
 
 Pass the **full 40-character head sha** as `expectedHeadSha`. An abbreviated sha
@@ -59,6 +76,17 @@ is rebuilt on top of the last:
    the merge.
 4. Re-run `node scripts/preflight.mjs` and `pnpm run verify:breadth` on the merged
    tree, push, and wait for the check run on the NEW head before merging.
+5. This applies to a Mac tick PR too (lesson L12). Tick PR #1114's coverage page
+   was generated before #1111 added the root `.nojekyll` to mainline; the merge
+   ref's own gating run was green, but mainline's own run failed the
+   surface-read-coverage gate right after the merge landed, because a counted
+   surface (`docs/`, `scripts/`, `artifacts/sim-requests/`, `artifacts/sim-results/`
+   — the mailbox trees `artifacts/lane-messages`, `artifacts/agent-heartbeats`,
+   `artifacts/raised-hands` are not counted) had moved on mainline between the
+   run and the merge. A green merge-ref run is not proof of this: check whether
+   mainline has moved a counted surface since the tick's page was generated, and
+   if so merge `SignalGrid_Alpha` into the tick branch and regenerate (step 2)
+   before merging, exactly as for any other landing.
 
 ## After the last one
 

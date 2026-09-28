@@ -46,6 +46,7 @@ class AssistWireTest {
             """{"assist":"allow","obligations":{"type":"webauthn"}}""",
             """{"assist":"allow","obligations":1}""",
             """{"assist":"allow","obligations":null}""",
+            """{"assist":"step_up","obligations":["webauthn",42]}""",
         )) {
             val d = AssistWire.parse(200, body)
             assertEquals(Assist.DENY, d.assist, body)
@@ -55,7 +56,7 @@ class AssistWireTest {
 
     @Test
     fun `an unknown field from a newer server does not break an older client`() {
-        val d = AssistWire.parse(200, """{"assist":"allow","somethingAddedLater":{"a":1}}""")
+        val d = AssistWire.parse(200, """{"assist":"allow","decisionId":"dec_1","somethingAddedLater":{"a":1}}""")
         assertEquals(Assist.ALLOW, d.assist)
     }
 
@@ -134,24 +135,78 @@ class AssistWireTest {
 
     @Test
     fun `absent reasons is an empty list, not a failure`() {
-        val d = AssistWire.parse(200, """{"assist":"allow"}""")
+        val d = AssistWire.parse(200, """{"assist":"allow","decisionId":"dec_1"}""")
         assertEquals(Assist.ALLOW, d.assist)
         assertTrue(d.reasons.isEmpty())
     }
 
     @Test
-    fun `non string reasons are dropped rather than stringified`() {
-        // Rendering {"code":42} to a worker as "{code=42}" looks like an explanation
-        // and is not one. Showing nothing is more honest than showing that.
-        val d = AssistWire.parse(200, """{"assist":"deny","reasons":[{"code":42},"real reason",null,""]}""")
+    fun `reasons that are not a list of strings are malformed and deny`() {
+        // Strict like obligations: a non-list, a null, or a non-string entry is a body
+        // this client does not understand. It used to read as absent and let an allow
+        // stand; it is never stringified either way.
+        for (body in listOf(
+            """{"assist":"allow","decisionId":"dec_1","reasons":"a string not an array"}""",
+            """{"assist":"allow","decisionId":"dec_1","reasons":null}""",
+            """{"assist":"allow","decisionId":"dec_1","reasons":[{"code":42},"real reason"]}""",
+        )) {
+            val d = AssistWire.parse(200, body)
+            assertEquals(Assist.DENY, d.assist, body)
+            assertTrue(d.explanation().contains("reasons"), d.explanation())
+        }
+    }
+
+    @Test
+    fun `blank reasons are well typed and dropped from display`() {
+        val d = AssistWire.parse(200, """{"assist":"allow","decisionId":"dec_1","reasons":["real reason",""," "]}""")
+        assertEquals(Assist.ALLOW, d.assist)
         assertEquals(listOf("real reason"), d.reasons)
     }
 
     @Test
-    fun `reasons that is not an array at all is treated as absent`() {
-        val d = AssistWire.parse(200, """{"assist":"deny","reasons":"a string not an array"}""")
+    fun `every outcome needs a usable decision id`() {
+        for (body in listOf(
+            """{"assist":"allow"}""",
+            """{"assist":"allow","decisionId":null}""",
+            """{"assist":"allow","decisionId":"   "}""",
+            """{"assist":"allow","decisionId":42}""",
+            """{"assist":"step_up","reasons":["device posture is stale"]}""",
+            """{"assist":"restrict","reasons":["shared account"]}""",
+            """{"assist":"deny","reasons":["device is jailbroken"]}""",
+        )) {
+            val d = AssistWire.parse(200, body)
+            assertEquals(Assist.DENY, d.assist, body)
+            assertTrue(d.explanation().contains("decisionId"), d.explanation())
+            assertEquals(null, d.decisionId, body)
+        }
+    }
+
+    @Test
+    fun `a JSON null decision id is absent, never the text null`() {
+        val d = AssistWire.parse(200, """{"decisionId":null,"reasons":["x"]}""")
         assertEquals(Assist.DENY, d.assist)
-        assertTrue(d.reasons.isEmpty())
+        assertEquals(null, d.decisionId)
+    }
+
+    @Test
+    fun `a repeated top level key denies whatever its values`() {
+        for (body in listOf(
+            """{"assist":"deny","assist":"allow","decisionId":"dec_1"}""",
+            """{"assist":"allow","assist":"allow","decisionId":"dec_1"}""",
+            """{"assist":"allow","\u0061ssist":"allow","decisionId":"dec_1"}""",
+            """{"assist":"allow","decisionId":"dec_1","decisionId":"dec_2"}""",
+        )) {
+            val d = AssistWire.parse(200, body)
+            assertEquals(Assist.DENY, d.assist, body)
+            assertTrue(d.explanation().contains("duplicate"), d.explanation())
+            assertEquals(null, d.decisionId, body)
+        }
+    }
+
+    @Test
+    fun `a repeated key below the top level is not a duplicate`() {
+        val d = AssistWire.parse(200, """{"assist":"allow","decisionId":"dec_1","x":{"a":1,"a":2}}""")
+        assertEquals(Assist.ALLOW, d.assist)
     }
 
     @Test

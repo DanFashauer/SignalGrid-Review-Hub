@@ -30,6 +30,7 @@ on:
     branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - 'native/shared/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
       # The TS engine and its emitted parity vectors: a rule that changes on the TS side must
@@ -44,6 +45,7 @@ on:
     branches: [SignalGrid_Alpha]
     paths:
       - 'native/ios/**'
+      - 'native/shared/**'
       - '.github/workflows/ios-ci.yml'
       - 'scripts/check-ios-port-sources.mjs'
       # The TS engine and its emitted parity vectors: a rule that changes on the TS side must

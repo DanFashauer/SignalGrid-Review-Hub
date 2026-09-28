@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-24T15:11:48.443Z",
-  "result": "acted (landing, no new item): today's build slot landed 7 backlog PRs under DR-037 (#1016, #1012, #1017, #1021, #997, #1006, #1018) and readied #1024, #1026 and #1005 for the owner. No new item was opened: the owner's 2026-09-24 company-loop directive (DR-056, Mac-led) will replace this trigger, and a new product PR now would collide with that redesign."
+  "firedAt": "2026-09-27T15:26:07.509Z",
+  "result": "acted (15:08Z fire): state trusted (Mac tick 14:58Z names objective: escalate). tasks[0] row 17 (wire-truth shifts) needs the ITSM, shift-context and Keycloak labs this lane does not have; tasks[1] row 18 (iOS behavioral parity) is Swift-only and already open as Mac PR #1118; so tasks[2], row 24: draft 2 of the DR-005 article series (NAC as derived state, not wire fact) is being staged for owner review on claude/build-article-nac-derived-state. It publishes nowhere; its PR opens after its local preflight and breadth pass on the exact head, queued behind #1162 and #1146."
 }

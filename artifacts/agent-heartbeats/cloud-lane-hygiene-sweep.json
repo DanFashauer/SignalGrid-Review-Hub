@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-25T09:45:32.823Z",
-  "result": "freed 1.4G: 15 worktrees of landed PRs removed with git worktree remove (dirty trees would have been refused; none were); scratchpad 3 stale files (~0.1M); pnpm store pruned 1 package; no docker daemon or cache. 7.9G free (was 6.6G). Keepalive also due (last 2026-09-24T10:29Z)."
+  "firedAt": "2026-09-28T09:48:24.856Z",
+  "result": "freed about 0.7G (8 finished worktrees whose heads are all on origin: wt-rec7, wt-row12, wt-wire, wt-lessons, wt-rec8, wt-art2, wt-7b6e, wt-t5; 1 pnpm store package); 5.0G to 5.7G free; no docker layer cache present; also the 20h keepalive (last 2026-09-27T09:42Z)"
 }

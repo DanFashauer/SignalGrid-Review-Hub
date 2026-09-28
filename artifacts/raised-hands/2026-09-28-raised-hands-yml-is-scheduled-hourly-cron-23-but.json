@@ -7,7 +7,10 @@
   "need": "a trigger that does not depend on GitHub's best-effort schedule: add 'push: branches: [SignalGrid_Alpha]' to raised-hands.yml (mainline moves every ~25 min on the Mac tick heartbeat, and the workflow's concurrency group already serialises runs). Cloud lane: a SAFETY_MACHINERY PR with preflight + breadth, then clear this hand with the merge sha",
   "whoCanUnblock": "cloud lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
-  "where": ".github/workflows/raised-hands.yml"
+  "where": ".github/workflows/raised-hands.yml",
+  "resolvedAt": "2026-09-28T11:27:05.259Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1184 landed at e8df7e2a (DR-037, check run 108892970998): raised-hands.yml now also runs on every push to SignalGrid_Alpha, serialised without cancelling a run in progress, and always renders the current mainline. The merge itself started run 'push e8df7e2a' at 11:23:06Z, so the page no longer depends on GitHub's best-effort cron."
 }

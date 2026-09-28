@@ -40,8 +40,10 @@ fact:
 
 ## `amr` and `auth_time` are absent everywhere we looked
 
-A resource server has four places to look for authentication facts. We
-checked all four:
+Across the OIDC client and the session bridge there are four places to look
+for authentication facts: the ID token belongs to the client that asked for
+it, and the other three are what a resource server or the bridge can read.
+We checked all four:
 
 | Surface | `acr` | `amr` | `auth_time` |
 | --- | --- | --- | --- |
@@ -82,8 +84,11 @@ server:
   live SSO sessions for nurse.alice: 4
 ```
 
-The token was dead; all four sessions were alive. A freshness derived from
-the token would have called every one of them expired. And the session
+The token was dead; the session it came from was alive, and so were three
+other sessions for the same user. A freshness derived from that token would
+have called its session expired while the IdP still held it open. Only one
+token's expiry was observed, so this says nothing about the other three
+sessions' tokens. And the session
 record carries no expiry field of its own — only `start` and `lastAccess` —
 so real freshness has to be computed from those against the realm's policy,
 a second API call the token gives no hint of.
@@ -98,10 +103,13 @@ id, username, userId, ipAddress, start, lastAccess, rememberMe, clients, transie
 
 `ipAddress` is the nearest thing to a device identifier, and it is not one.
 Two logins by the same user from the same host produced two separate SSO
-sessions, identical in every field except `id` and `start`. That is the
-leftover-session case a shared-device session check exists to catch — the
-previous user's session still live when the next person picks the device
-up — and the IdP cannot tell the two apart by anything device-shaped.
+sessions, identical in every field except `id` and `start`. Nothing
+device-shaped tells the two apart. That is not yet the leftover-session case
+a shared-device session check exists to catch — the previous user's session
+still live when a different person picks the device up — and this run did
+not exercise a two-user handoff; `username` and `userId` would tell two
+people apart. What it shows is narrower: the IdP cannot say which device a
+session is on.
 
 The consequence for anyone building the bridge: the device-to-session
 association is not obtainable from this IdP. It has to come from the device
@@ -120,7 +128,7 @@ never derives freshness from a token: it normalizes a bridge-supplied
 the evaluated session state; it does not itself mint or refresh tokens."
 And the evaluator treats an `unknown` freshness or assurance as a reason to
 step up, never to grant — only a session positively confirmed active, fresh
-and MFA-backed reaches the top tier. The assurance type also already
+and MFA-backed or phishing-resistant reaches the top tier. The assurance type also already
 declines to widen itself into credential detail, pointing at a sibling
 passkey dimension instead; at session-evaluation time, a default Keycloak
 gives you an opaque `acr` and nothing else, so that refusal now has a
@@ -145,9 +153,11 @@ observation (2026-08-19, per the ledger entry), not a rerunnable fixture:
 the reads of `amr`, `auth_time`, the realm lifespans, the 75-second run and
 the session fields were made against a disposable local container, and the
 committed `proof:live-keycloak` does not re-check any of them — it is
-DPoP-scoped. The shape-check record gives the container command and proof
-invocation to bring the same lab back up, which is a route to checking the
-claims yourself, not a guarantee of an identical replay. The 14/14 and 13/14
+DPoP-scoped. The shape-check record gives the container command and the proof
+invocation, which bring up a Keycloak but not these observations: it does
+not create the user, drive the login, query the four surfaces or the admin
+sessions, or run the 75-second check. Treat the session-shape claims as a
+historical record, not something the cited record lets you replay. The 14/14 and 13/14
 are that record's report of a run, not a line this tree prints on demand
 without a Keycloak to point at.
 

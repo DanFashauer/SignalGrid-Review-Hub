@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-27T09:42:04.314Z",
-  "result": "freed about 1.5G (stale scratch review copies, an old Swift toolchain archive, 64 top-level scratch files, 2 pnpm store packages); 4.1G to 5.6G free"
+  "firedAt": "2026-09-28T09:48:24.856Z",
+  "result": "freed about 0.7G (8 finished worktrees whose heads are all on origin: wt-rec7, wt-row12, wt-wire, wt-lessons, wt-rec8, wt-art2, wt-7b6e, wt-t5; 1 pnpm store package); 5.0G to 5.7G free; no docker layer cache present; also the 20h keepalive (last 2026-09-27T09:42Z)"
 }

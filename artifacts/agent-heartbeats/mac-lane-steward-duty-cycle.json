@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-27T23:33:33.629Z",
-  "result": "keepalive (23:24Z cycle, quiet): the last steward heartbeat (21:30:00.708Z, #1172) passed 2h, so this one keeps it inside the 3h bound; the 22:24Z cycle was quiet and delivered nothing. Mac tick last fired 23:26:06Z (quiet; objective: escalate); live evidence minted 2026-09-26 06:14:18Z (about 41h old, under the 3-day line, no refresh asked); owner not escalated. No mail to cloud, no mac/* branch moved, no new sim result, no manifest drift (v84). Open hands: 5 on the owner (3 overdue, all owner-only), 1 on the Mac (a cloud FYI unread 25h, nothing asked). Open mac/* PRs: #1118 and #1121 (golden-rule-1 ruling, owner) and #1037 (CodeQL call, owner); no tick PR open."
+  "firedAt": "2026-09-28T01:34:05.825Z",
+  "result": "keepalive (01:24Z cycle, quiet; sent after 01:34Z): the last steward heartbeat (23:33:33.629Z, #1174) passed 2h, so this one keeps it inside the 3h bound; the 00:24Z cycle was quiet and delivered nothing. Mac tick last fired 01:07:17Z (quiet; objective: escalate); live evidence minted 2026-09-26 06:14:18Z (about 43h old, under the 3-day line, no refresh asked); owner not escalated. No mail to cloud, no mac/* branch moved, no new sim result, no manifest drift (v84). Open mac/* PRs: #1118 and #1121 (golden-rule-1 ruling, owner) and #1037 (CodeQL call, owner); no tick PR open."
 }

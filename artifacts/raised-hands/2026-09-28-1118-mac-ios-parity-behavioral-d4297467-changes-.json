@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-28-1118-mac-ios-parity-behavioral-d4297467-changes-",
+  "raisedAt": "2026-09-28T15:48:30.822Z",
+  "origin": "cloud",
+  "doing": "landing the Mac lane's three open PRs, which the Mac reports conflict-resolved and ready (mail mac-merge-steps-done-1118-and-1037-are-conflict-, 12:47Z)",
+  "blockedBy": "#1118 (mac/ios-parity-behavioral @ d4297467) changes DecisionEngine.swift behaviour: unauthorized dock removal becomes CUSTODY_EXCEPTION, ported from decisionEngine.ts. #1121 (mac/app-workflows-parity) changes AppWorkflows.swift behaviour and was conflicting again at 2848a9a1. CLAUDE.md golden rule 1 forbids behaviour edits to both files, so the cloud lane cannot land them. #1037 (mac/intake-unlazy-skills @ b1d6ea8d) adds a scripts/publication-boundary.mjs entry, which DR-037 condition 5 keeps owner-merged, and has an open CodeQL alert. The Mac's mail leaves preflight and breadth on #1037's merged head to the cloud, and they have not run",
+  "need": "Owner: (a) one ruling on golden rule 1 for #1118 and #1121: 'exception granted' or 'revert'. Either way, neither merges until the Mac lane (next actor) delivers what the review acks owe: #1121 Apple CI on its head plus the three surviving fail-closed mutants; #1118 a TRIGGERS-completeness check, a Linux Swift<->vector binding check, and a fix for the BUILD_BACKLOG unsafe allow (an unrelated signal's active:true clears the custody exception) with a regression case that must not reach allow. (b) #1037: dismiss its CodeQL alert, or reply 'Mac paths-ignore' so the Mac makes that change. It merges only after the cloud lane's preflight and breadth pass on its head b1d6ea8d (or its successor) and gating is green there; then merge or close it",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "PRs #1118, #1121, #1037"
+}

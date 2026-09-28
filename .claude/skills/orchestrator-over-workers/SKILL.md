@@ -6,9 +6,10 @@ description: Use when a build task splits into independent pieces and the cloud 
 # Orchestrator over workers
 
 The cloud lane's build pattern since 2026-09-12
-(`docs/LANE_COORDINATION.md`, "How the cloud lane runs build work"): the session
-model writes the spec and reviews; execution fans out to Opus sub-agents, each in
-its own worktree; the loop closes on a check that fails without the fix, never on
+(`docs/LANE_COORDINATION.md`, "How the cloud lane runs build work"): the
+orchestrator owns the spec and the review, run on Opus (by the session itself only
+when its model is Opus); execution fans out to tiered sub-agents per the stage table
+below, each in its own worktree; the loop closes on a check that fails without the fix, never on
 a description of one. The mechanics of dispatch are already written down in the
 vendored `dispatching-parallel-agents` and `subagent-driven-development` skills —
 this is what the orchestrator owns on top of them.
@@ -127,7 +128,8 @@ gates, then land the next. The landing conditions are DR-037's
 
 The owner's words: "You need to be passing off tasks to other models and or use best
 ultracode model that uses the least amount but best results." So a stage runs on the
-cheapest model that can do it, and the choice is stated in the brief:
+cheapest model that can do it, and the choice is stated in the brief. The per-stage
+table is the "Stage table" subsection below (DR-060); these are its tiers:
 
 - **Reading, mapping, checking, mechanical edits, adversarial verification** run on the
   smaller tier (Sonnet). These stages are bounded by what is in the tree, not by
@@ -175,3 +177,148 @@ failing with 429 — a one-tier limit became a lane-wide stall. So:
   Only the CLI's primary-model auto-fallback setting can, and the owner sets that to Opus so
   the session continues at full capability instead of waiting for a human to notice silence.
   Name that limit honestly in any run report rather than claiming the coordinator self-healed.
+
+### Stage table — the coordinator runs none of the bulk (owner directive, 2026-09-26; DR-060)
+
+The owner's words: "when I’m asking you to be the 🧠 you have the ability to expand to
+other 🧠 to do other tasks the can be done at lower token cost and model". Spec, review
+and gate design run on Opus. A coordinator on Opus may run them itself; a coordinator on
+the creative tier (Fable / Mythos) dispatches them to an Opus spawn too, keeps the
+conclusion, and runs no stage at all. Every other stage is dispatched:
+
+| Stage | Tier |
+| --- | --- |
+| Spec, review of a worker's report, judgment calls, decision records, doctrine, gate design | Opus |
+| Reads that feed a decision, measurement, adversarial verification, patch scripts and other mechanical edits, building in a worktree; PR bodies (Sonnet since L16 — Haiku fabricated a check-run id and file attributions twice on 2026-09-26) | Sonnet |
+| Commit messages, log and CI job-list parsing, doc regeneration, gate runs | Haiku |
+
+- **The coordinator's own tier never runs a bulk stage.** Parsing a CI job listing,
+  writing a commit message or re-running a gate by hand in the coordinating session is a
+  defect, and it gets a row in `docs/agent/LESSONS.md` (L5 is the first).
+- **No gate can see which tier ran a stage inside a session.** The record is the
+  `TIERS THIS SESSION` line in the LOOP STATE block; write it honestly, including the
+  stages the coordinator did itself.
+
+## Sequential chains and waiters (DR-060; lessons L1, L3, L4, L9, L11, L13, L14, L15)
+
+- **One sequential chain per host for port-bound gates.** Preflight, verify:breadth and
+  test:api boot servers on fixed ports; two chains on one host collide. Queue them in one
+  chain.
+- **A read-only brief forbids booting a server.** A measurement worker that starts the
+  api-server leaves it holding a test port when the worker ends (L1). The first preflight
+  step now reaps api-servers under its own tree, but a brief that says "read" means no
+  listening process.
+- **Wait on a sentinel file, never on a process pattern.** Each step of a chain writes
+  `<NAME>_EXIT=<code>` to its log; a waiter checks that line exists in the log. A waiter
+  that matches processes by pattern can match its own command line or the other
+  waiter's, and two such waiters wait on each other forever (L3).
+- **Chain state lives in files under the scratchpad, never only in a process.** The run
+  head, each exit sentinel and the worker notes are files; a container restart kills the
+  processes and keeps the files, and the chain is rebuilt from them (L4).
+- **A self-scheduled check-in is the recovery signal after a restart.** Before a long
+  chain, schedule a message back into the session; when it fires, read the sentinels and
+  resume what has no exit line.
+- **Gates run after `git add`, never before.** A gate that scans the tracked tree cannot
+  see a file still sitting as `?? path`; run it before staging and it measures the tree
+  without the new file and passes for the wrong reason (L9). Stage or commit first, then
+  run the gates, and have the worker's report quote `git status --short` right before the
+  gate run so the reviewer can see the tree the gates actually saw.
+- **A worker never runs a depth-limited or shallow fetch in the shared repository or any
+  of its worktrees.** `git fetch --depth=1 origin <ref>` inside a worktree of this repo
+  wrote `.git/shallow` with the current mainline head as a boundary commit, and every
+  history-based check (loop:state, `git branch -vv`, ahead/behind) then read a clean tree
+  as diverged (L10). A fresh, disposable clone of some OTHER repository may still use
+  `git clone --depth`; the rule is about re-fetching a checkout everyone shares, not
+  about shallow clones in general. If a chain step's history seam looks broken after a
+  subagent ran, check `git rev-parse --is-shallow-repository` first (it prints `true` or
+  `false` from any worktree; `ls .git/shallow` fails open there, since a worktree's `.git`
+  is a file) — `git fetch --unshallow origin` is the fix.
+- **A generated file is regenerated only with `git ls-files -u` empty.** Running
+  `--write` on `scripts/check-surface-review-coverage.mjs` while
+  `docs/agent/SURFACE_REVIEW_COVERAGE.md` sat mid-merge-conflict made the generator walk
+  an index holding three stages of the page and render wrong counts (L11). The generator
+  now refuses (exit 1, naming the unmerged paths) when `git ls-files -u` prints anything;
+  the same check applies to any other worker step that regenerates a file from the tree.
+- **A stacked branch waits for its base PR to land, then merges `origin/SignalGrid_Alpha`
+  — never the base branch's own tip (L15).** Landings are merge commits, so merging the
+  base tip early leaves the stacked branch with two merge bases against mainline: git's
+  recursive merge is clean, GitHub's single-base mergeability check reports `dirty`, and
+  the merge button refuses a PR in which nothing conflicts (#1127). An adjacent-line edit
+  shared with the base is resolved on the Alpha merge after the base lands, not before.
+- **Land a worker branch through the saved `land-branch` workflow, never a hand-run
+  chain that pushes.** Workflow tool, `name: "land-branch"`, `args: { repo, scratch,
+  worktree, branch, tag, klass, title, trailers, sessionUrl, preBrief?, bodyNotes? }` —
+  `repo`, `scratch`, `worktree`, `branch`, `tag`, `klass`, `title`, `trailers` and
+  `sessionUrl` are ALL required (the script throws on a missing one, and validates
+  `tag`/`repo`/`scratch`/`worktree`/`branch` for shape before using them); `trailers`
+  and `sessionUrl` are the caller's own attribution — the workflow has no session
+  baked in, so a call that omits them is not a shorter invocation, it is one that
+  throws before Pre even starts. It merges Alpha, regenerates on a clean index, runs
+  preflight+breadth behind a file lock (L13), starts the chain as one detached job so
+  a worker's own turn ending cannot kill it (L14), pushes only on a 0/0 sentinel
+  verified DETERMINISTICALLY by `scripts/lib/land-branch-gate.mjs --verify` on the
+  unchanged expected head (L2), and — once its base has landed — merges
+  `origin/SignalGrid_Alpha`, never the base branch's own tip (L15).
+
+## Briefs, reviews and records (DR-060; lessons L17–L22)
+
+- **A report schema keeps `blockers` apart from `notes`.** `blockers` means the unit
+  cannot finish; a scope remark or an observation is a note, and a note never stops a
+  wrapper — a note filed as a blocker stopped a landing once (L19). A wrapper stops on any
+  `blockers` entry, and equally on any `gateResults` entry with a nonzero exit or a
+  required gate missing from `gateResults`: a worker that records a failed gate but leaves
+  `blockers` empty has still reported a failure, and a task-specific gate may not be rerun
+  by preflight or breadth.
+- **A stage's gate list is a subset, and its report says so.** Preflight boots servers,
+  so it runs only in the host's one chain; a stage runs a subset. One stage's subset
+  missed the line-count gate and another's missed the env-doc gate, and both surfaced only
+  at landing: one at `land-branch`'s Merge stage, one in the chain's preflight (L19, the L2
+  class recurring inside stages). A stage that edits a document runs at least
+  `scripts/check-doc-line-counts.mjs`, `scripts/check-env-doc-readers.mjs`,
+  `scripts/check-cited-paths.mjs`, `scripts/check-cited-symbols.mjs`,
+  `scripts/check-cited-commands.mjs`, `scripts/check-markdown-links.mjs`,
+  `scripts/check-derived-doc-figures.mjs`, `scripts/check-cross-doc-banner-parity.mjs`
+  and `scripts/check-lessons.mjs`. A failure is "pre-existing" only after the same gate
+  fails on `origin/SignalGrid_Alpha` with the same diagnostic on the same subject (file,
+  figure or assertion); a nonzero exit alone does not say which check failed. A figure the
+  branch itself moved is the branch's.
+- **Every path in a brief is absolute.** The Bash tool's working directory resets to the
+  main checkout between calls, so a `$(pwd)`-relative write lands in the shared tree (L19).
+- **A planted mutation asserts, as its own named case, that it took effect.** A
+  self-test that plants by editing text checks that the output differs from the input
+  (for a substitution, that the replaced text is gone). Otherwise an anchor that stops
+  matching turns the plant into a silent no-op: in L20 the two dependent cases failed
+  under names that hid the cause (17/19), and a case that expects a pass would have passed
+  silently.
+- **A caller of `land-branch` treats the branch as pushed only when
+  `child?.push?.pushed === true`, and as landed only when `child.pr` also carries a PR
+  number and no blocker.** `push` is absent when the script refuses the push or stops
+  earlier, and null or `pushed: false` when the push itself fails; a returned child is not
+  a landing. A pushed branch whose PR stage returned a blocker (the opener failed, or the
+  head already has a PR) is resolved by hand: find the PR by its exact head ref, confirm
+  its head is `push.remoteSha`, and update its body. A session wrapper
+  script reads its arguments as `typeof args === 'string' ? JSON.parse(args) : args`
+  (L21).
+- **To free disk, delete an agent worktree's build output, not the worktree.** Remove
+  `node_modules` and `dist` inside it; removing the worktree deletes the HEAD reflog that
+  `scripts/loop-state.mjs` uses to classify its scratch branches as ephemeral, and they
+  come back as unpushed local work. Pushing is not the way out (loop-state: an attack
+  reproduction must not be pushed), and deleting one needs the owner's OK, so keep the
+  worktree until its scratch branches are deleted with that OK (L22). Keep a finished
+  worktree only for that reason: `loop-state` treats every branch in a kept worktree's
+  reflog as ephemeral, so real work left in one would be hidden from the unpushed-work
+  seam. Push or land any real work in a worktree before keeping it, and name the kept
+  worktrees and their branches in the owner's hand (#1154).
+- **Before a review-fix commit is pushed, sweep every sentence it adds against every
+  defect class the PR's earlier rounds found.** Review rounds on large docs PRs found a new
+  instance of an old class in each fix's own new text (L17). Once two rounds find only new
+  instances of old classes, the next review is a narrow verification — is each finding
+  fixed, and is each new sentence true of its cited source — and anything else goes to
+  notes or a backlog row, except a mandatory class: an unsafe allow, an approval or gate
+  bypass, exposed private data, a live API call, a prohibited product claim, or a
+  proof-coverage regression is fixed in the PR whenever it is found, never deferred.
+- **A record freezes at its window's close.** The close is a named mainline merge sha; an
+  event after it goes to the next record, never into an open one (L18). An EVIDENCE
+  entry's re-runnable commands are local reads pinned to fixed shas — no `origin`, no
+  `HEAD`, no network, no host paths — and a tool read that cannot be re-run is marked as
+  recorded and bound to its head by a local command.

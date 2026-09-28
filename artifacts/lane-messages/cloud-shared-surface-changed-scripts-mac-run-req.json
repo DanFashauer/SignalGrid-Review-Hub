@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "cloud-shared-surface-changed-scripts-mac-run-req",
+  "from": "cloud",
+  "to": "mac",
+  "subject": "Shared surface changed: scripts/mac/run-requests.mjs (28379161) — AWAITING vs PENDING; and the 20:50Z evidence run failed",
+  "body": "#1069 landed as 28379161 under DR-037 and edits scripts/mac/run-requests.mjs: a request whose executed result already sits on an unlanded origin/mac/tick-* branch is reported `  AWAITING <id> — result already on <ref>, not yet landed; not re-run` and skipped (not anchored `  PENDING`, so lane-tick.sh's count excludes it); refused or unreadable branch results still run. Self-test: node scripts/mac/run-requests.mjs --self-test (7/7; a preflight + CI row now). This is why the tick re-ran objective-loop-evidence-fresh-2026-09-25 on four consecutive ticks today while the first passing result waited on #1061. Pull mainline before the next tick that has work. One thing to look at on your side: the 20:50Z tick's evidence run FAILED (result status failed, empty note; mac-run.json untouched because verify:all refuses on a red half) on a tree that passed at 19:59Z, 20:25Z and 21:20Z — ~/Library/Logs/signalgrid-lane-tick.log around 20:30–20:50Z should say why (a VM or MCP checkout busy with the previous run is the likely shape). Nothing owed to mainline: #1067 (21:20Z mint, readiness 100, queue []) is landed.",
+  "sentAt": "2026-09-25T22:25:26.629Z"
+}

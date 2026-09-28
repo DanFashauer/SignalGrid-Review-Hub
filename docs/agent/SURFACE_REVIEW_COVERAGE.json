@@ -136,6 +136,7 @@
         }
       ]
     },
+    ".claude/workflows": { "path": ".claude/workflows", "reads": [] },
     ".claude/skills": {
       "path": ".claude/skills",
       "reads": [
@@ -364,6 +365,21 @@
           "scope": "surface",
           "open": 0,
           "closed": 1
+        }
+      ]
+    },
+    "artifacts/raised-hands": {
+      "path": "artifacts/raised-hands",
+      "reads": [
+        {
+          "date": "2026-09-23",
+          "read": "Created this day by the merged raise-your-hand system (DR-054, Mac #1014 + cloud). All four seed records read in full: each carries doing/blockedBy/need/whoCanUnblock, the ids match the filenames, and every one names a real, current blocker (PR #1005 scanner false positive, signalgrid-mcp #14/#15 outside cloud reach, build-Mac posture, 3 cloud messages unread by the Mac). Gated by scripts/raised-hands.mjs --check (coherence, and an uncovered stall past 3x its limit fails).",
+          "reviewer": "cloud lane, firsthand; the merged system's code (raise-hand.mjs, check-raised-hands.mjs, raised-hands.mjs) read in full and adversarially reviewed by the fail-closed-auditor agent",
+          "record": "docs/agent/EVIDENCE.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 4,
+          "scopeNote": "every record parsed and read; the four findings closed were the auditor's (sim partial-result age, gating-check rename going dark, cwd-relative loader, unguarded PR head ref)."
         }
       ]
     },
@@ -745,6 +761,87 @@
           "scope": "surface",
           "open": 3,
           "closed": 71
+        },
+        {
+          "date": "2026-09-27",
+          "read": "docs/NAC_DERIVED_STATE_ARTICLE.md (new, draft 2 of the plan row 24 article series) read in full by an Opus refute-first reviewer, claim by claim against the tree: 16 findings, applied in ca226657 (15) and 4f2a0448 (the PR #215/#219 attribution). proof:network-nac 64/64 and proof:nac 46/46 re-run.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "4f2a0448",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 16
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 1 on #1168 (head 3c04dd81) read the article in full: 6 findings (1 P1 PURPOSE.md paraphrase, 5 P2), all applied in 212249d0.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "212249d0",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 6
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 2 on #1168 (head 212249d0) read the article in full: 3 findings, all applied in 9489d2e6.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "9489d2e6",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 3
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 3 on #1168 (head 9489d2e6) read the article in full: 4 findings (coverage attribution split, vendor claims reframed as secondhand, lattice scoped to authenticated signals, Calling-Station-Id qualified), all applied in 20a8c47c.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "20a8c47c",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 4 on #1168 (head 20a8c47c) read the article in full: 4 findings (compliance described as derived, monitor scoped to expected segment or no policy, build plan queue, Opus record moved to 4f2a0448), all applied in 34bb7743.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "34bb7743",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 5 on #1168 (head 34bb7743) read the PR: 1 finding (the coverage ledger stopped at round 2), applied in 23c6c48c.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "23c6c48c",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 1
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 6 on #1168 (head 23c6c48c) read the article in full: 2 findings (the lede separates derivation from transport, since a vendor-specific attribute can carry posture beside the result; the compliance source is left vendor-specific), applied in a55d551f.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "a55d551f",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 2
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 7 on #1168 (head a55d551f) read the article in full: 4 findings (console-compliance sentence made source-neutral; lastAuthAt sources widened to an RFC 2869 Event-Timestamp in the Access-Request and authentication logs; the unreported pair no longer called the common deployment case; round 6's record moved to a55d551f), applied in 998617d0, the head #1168 merged at.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied or answered)",
+          "record": "998617d0",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 4
+        },
+        {
+          "date": "2026-09-27",
+          "read": "Codex review round 8 on #1168 (head 998617d0): 2 findings, both answered on the PR without a change (a round's entry cannot cite the head that carries its own fixes, so round 7 is recorded here after the merge; the PR merged with a two-parent merge commit, so every cited record stays reachable from SignalGrid_Alpha). #1168 merged at 1762688a.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied or answered)",
+          "record": "#1168",
+          "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
+          "open": 0,
+          "closed": 2
         }
       ]
     },

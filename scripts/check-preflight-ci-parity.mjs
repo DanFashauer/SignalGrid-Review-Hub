@@ -77,6 +77,24 @@ for (const [gate, reason] of LOCAL_ONLY) {
   }
 }
 
+// Gates CI runs WEAKER than preflight: `node scripts/x.mjs … --warn`, which the
+// wiring check below credits as the same gate even though CI cannot fail on its
+// main finding. Same rule as LOCAL_ONLY: every weakening is declared with a reason,
+// an undeclared `--warn` fails, and a declaration CI no longer uses is stale.
+// ponytail: matches only the `node scripts/x.mjs … --warn` form; an alias run with
+// `-- --warn` is not seen. Widen when a second warn-only gate uses an alias.
+const CI_WARN_ONLY = new Map([
+  ["scripts/raised-hands.mjs", "DR-054 §5 (2026-09-24): stalls are other lanes' clocks — a Mac quiet 9h turned mainline red until the next push. CI warns on stalls; register integrity still fails; preflight stays fatal."],
+]);
+/** Pure: every `scripts/x.mjs` a workflow invokes via `node` with `--warn` among its flags. */
+export function warnInvoked(rawWorkflowText) {
+  const out = new Set();
+  for (const m of stripYamlComments(rawWorkflowText).matchAll(/node\s+(scripts\/[\w./-]+\.mjs)((?:[ \t]+--?[\w=-]+)*)/g)) {
+    if (/(^|\s)--warn(?![\w-])/.test(m[2])) out.add(m[1]);
+  }
+  return out;
+}
+
 const preflight = readFileSync(join(repo, "scripts/preflight.mjs"), "utf8");
 
 // A workflow may invoke a gate by its PATH (`node scripts/x.mjs`) or through an
@@ -391,6 +409,8 @@ function selfTest() {
   ]);
 
   checks.push([`LIVE: ${gates.length} preflight gate token(s) parsed`, gates.length > 0]);
+  checks.push(["SYNTHETIC VIOLATION: a CI step running a gate with --warn is DETECTED", warnInvoked("  - run: node scripts/check-x.mjs --check --warn\n").has("scripts/check-x.mjs")]);
+  checks.push(["a --warn only in a YAML comment, or a --warning flag, is not", warnInvoked("  - run: node scripts/check-x.mjs --check # --warn\n  - run: node scripts/y.mjs --warning\n").size === 0]);
 
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
@@ -423,6 +443,18 @@ for (const [gate, reason] of LOCAL_ONLY) {
     console.error(`  ✗ ${gate}: listed as local-only but is no longer a preflight gate — remove the exemption`);
     problems += 1;
   }
+}
+
+const warned = warnInvoked(blob);
+for (const gate of warned) {
+  if (CI_WARN_ONLY.has(gate)) continue;
+  console.error(`  ✗ ${gate}: a workflow runs it with --warn, so CI cannot fail on its main finding, and CI_WARN_ONLY in this file gives no reason.`);
+  problems += 1;
+}
+for (const [gate, reason] of CI_WARN_ONLY) {
+  if (!String(reason ?? "").trim()) { console.error(`  ✗ ${gate}: CI_WARN_ONLY entry has no reason`); problems += 1; }
+  if (!warned.has(gate)) { console.error(`  ✗ ${gate}: listed in CI_WARN_ONLY but no workflow runs it with --warn — remove the exemption`); problems += 1; }
+  if (!gates.includes(gate)) { console.error(`  ✗ ${gate}: listed in CI_WARN_ONLY but is not a preflight gate — remove the exemption`); problems += 1; }
 }
 
 // ── Every `pnpm run <script>` the gates name must EXIST at the root ──────────
@@ -586,7 +618,7 @@ console.log(
 
 console.log(
   `preflight↔CI parity: ${gates.length} preflight gates, ${workflows.length} workflow files, ` +
-    `${localOnlyHit.length} declared local-only, ${problems} unwired`,
+    `${localOnlyHit.length} declared local-only, ${CI_WARN_ONLY.size} declared warn-only in CI, ${problems} unwired`,
 );
 
 if (problems > 0) {

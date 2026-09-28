@@ -274,10 +274,16 @@ jobs:
         run: node scripts/check-ios-restriction-defaults.mjs --self-test
       - name: iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)
         run: node scripts/check-ios-restriction-defaults.mjs
+      - name: Shell backend paths self-test (the gate must be able to fail)
+        run: node scripts/check-shell-backend-paths.mjs --self-test
+      - name: Shell backend paths (every shell control-plane path is a declared /v1 path)
+        run: node scripts/check-shell-backend-paths.mjs
       - name: Sim-script self-check self-test (the gate must be able to fail)
         run: node scripts/check-sim-scripts-selfcheck.mjs --self-test
       - name: Sim-script self-check (a queued Mac operation must name a script that runs)
         run: node scripts/check-sim-scripts-selfcheck.mjs
+      - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
+        run: node scripts/mac/run-requests.mjs --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -415,6 +421,10 @@ jobs:
         run: node scripts/check-skill-plane-conformance.mjs --self-test
       - name: Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)
         run: node scripts/check-skill-plane-conformance.mjs
+      - name: Agent raise-your-hand self-test (the gate must be able to fail)
+        run: node scripts/check-agent-raise-hand.mjs --self-test
+      - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
+        run: node scripts/check-agent-raise-hand.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)
@@ -425,6 +435,8 @@ jobs:
         run: node scripts/check-walker-floors.mjs
       - name: NaN fail-open (an unparseable expiry must read as EXPIRED)
         run: node scripts/check-nan-fail-open.mjs
+      - name: Native-build attestation self-test (a VM-run step is recorded only when bound to this exact tree)
+        run: node scripts/lib/native-build-attestation.mjs --self-test
       - name: Posed-bound self-test (the gate must be able to fail)
         run: node scripts/check-posed-bounds.mjs --self-test
       - name: Posed bounds (a caller-posed numeric bound is never read with ??)
@@ -438,6 +450,13 @@ jobs:
       - name: Freshness divergence (one future/age rule, one body; exemptions REPORTED)
         run: node scripts/check-freshness-divergence.mjs
       - name: CI liveness (a sweep that stops running must fail a build)
+        # The gate reads GITHUB_TOKEN from its environment, and Actions does NOT export the
+        # token as an env var by itself. Until 2026-09-26 this step handed it nothing, so the
+        # gate ran UNAUTHENTICATED on every push (x-ratelimit-limit=60, the per-address
+        # budget) and passed on that budget until a mail PR hit it exhausted. The gate is
+        # now FATAL in CI with no token, so this line cannot be dropped silently.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
@@ -497,6 +516,8 @@ jobs:
         run: node scripts/check-backlog-ownership.mjs --self-test
       - name: Loop-state seam self-test
         run: node scripts/loop-state.mjs --self-test
+      - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
+        run: node scripts/check-raised-hands.mjs --self-test
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -549,6 +570,18 @@ jobs:
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
         run: node scripts/check-lane-messages.mjs --self-test
+      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
+      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
+      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
+      - name: Raised hands (stalls warn in CI; register integrity is fatal)
+        run: node scripts/raised-hands.mjs --check --warn
+      - name: Raised hands self-test (the gate can fail)
+        run: node scripts/raised-hands.mjs --self-test
+      # DR-056 §5: the shared objective state is gated where the raised-hands register is.
+      - name: Objective loop state (well-formed, derived against the declared objective, nothing stalls silently)
+        run: node scripts/objective-loop.mjs --check
+      - name: Objective loop self-test (every clause driven from the failing side)
+        run: node scripts/objective-loop.mjs --self-test
       - name: Proof — operating method (the handbook is a gate, not a memory)
         run: pnpm run proof:operating-method
 
@@ -575,6 +608,28 @@ jobs:
         run: node scripts/check-doc-orphans.mjs
       - name: "Doc-orphan self-test (a prose mention is not a route)"
         run: node scripts/check-doc-orphans.mjs --self-test
+      # DR-060 rule 2: the lessons ledger — every incident a cycle hits has evidence and a landing.
+      - name: "Lessons ledger self-test (each malformed row shape must fail)"
+        run: node scripts/check-lessons.mjs --self-test
+      - name: "Lessons ledger (every incident has evidence and a landing)"
+        run: node scripts/check-lessons.mjs
+      # DR-060 rule 2 / lesson L2: the land-branch saved workflow pushes only on the
+      # script-side gate; a missing, non-zero or stale sentinel must refuse the push.
+      - name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)"
+        run: node scripts/lib/land-branch-gate.mjs --self-test
+      # DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+      # first-party skill may call which MCP server, with signalgrid-mcp's tool count
+      # DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+      - name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)"
+        run: node scripts/check-mcp-roster.mjs --self-test
+      - name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)"
+        run: node scripts/check-mcp-roster.mjs
+      # Row 17's live-check ledger: every live check, its dimensions and the code it verified;
+      # the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
+      - name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)"
+        run: node scripts/check-wire-truth-ledger.mjs --self-test
+      - name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)"
+        run: node scripts/check-wire-truth-ledger.mjs
       # One level up from doc-orphans: that one asks whether a reader can REACH a
       # document, this one whether the index tells the truth about it. Six entries
       # described SUPERSEDED / ARCHIVED / RETIRED documents in the present tense --
@@ -672,6 +727,16 @@ jobs:
         run: node scripts/check-vendor-doc-drift.mjs --self-test
       - name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)"
         run: node scripts/check-vendor-doc-drift.mjs
+      # Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+      # and nothing read a non-gating workflow's conclusion. REPORT-ONLY on a streak (exit 0);
+      # exit 1 on its own errors (unclassified workflow file, HTTP error, unresolved workflow,
+      # or no token here). Needs only actions: read, already granted at the top of this file.
+      - name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)"
+        run: node scripts/check-mainline-workflow-streaks.mjs --self-test
+      - name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row)"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-mainline-workflow-streaks.mjs
       # The four capacity figures RELIABILITY_SLO.md owns, wherever a document restates
       # them. COMPANY_BUILD_PLAN.md carried the superseded 5,128 for twelve days while
       # every figure gate stayed green, because none of them reads a bare 240 or 585.

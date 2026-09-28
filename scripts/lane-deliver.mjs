@@ -5,6 +5,8 @@
 //   pnpm run lane:deliver ack <message-id> "what I did"
 //   pnpm run lane:deliver heartbeat <routine-id> "quiet | acted: what"
 //   pnpm run lane:deliver batch ops.json        # [{op:"ack",id,note},{op:"send",subject,body},{op:"heartbeat",routine,result}]
+//                                               # + {op:"raise",doing,blocked,need,who,domain?,where?,covers?[]} / {op:"take",id} / {op:"clear",id,resolution}
+//                                               #   (a raised hand — artifacts/raised-hands/, scripts/raise-hand.mjs, DR-054)
 //
 //   The commit carries the mail directories and, when a message file was added,
 //   the regenerated docs/agent/SURFACE_REVIEW_COVERAGE.md (its file count moved).
@@ -52,7 +54,7 @@ import { currentLane } from "./lib/lane-identity.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MAINLINE = "SignalGrid_Alpha";
-const MAIL_DIRS = ["artifacts/lane-messages", "artifacts/agent-heartbeats"];
+const MAIL_DIRS = ["artifacts/lane-messages", "artifacts/agent-heartbeats", "artifacts/raised-hands"];
 const COVERAGE_SCRIPT = "scripts/check-surface-review-coverage.mjs";
 const COVERAGE_PAGE = "docs/agent/SURFACE_REVIEW_COVERAGE.md";
 const MAILBOX_FILE = "docs/agent/lane-mailbox.json";
@@ -124,8 +126,8 @@ function parseOps() {
     }
     if (!Array.isArray(ops) || ops.length === 0) die(`${file} must be a non-empty JSON array of operations`);
     for (const o of ops) {
-      if (!o || typeof o !== "object" || !["send", "ack", "heartbeat"].includes(o.op)) {
-        die(`unknown op in ${file}: ${JSON.stringify(o)} (send | ack | heartbeat)`);
+      if (!o || typeof o !== "object" || !["send", "ack", "heartbeat", "raise", "take", "clear"].includes(o.op)) {
+        die(`unknown op in ${file}: ${JSON.stringify(o)} (send | ack | heartbeat | raise | take | clear)`);
       }
     }
     return ops;
@@ -173,6 +175,7 @@ let pushedSha = null;
   const summary = [];
   const env = { ...process.env, SIGNALGRID_LANE_REPO: wt, SIGNALGRID_LANE: lane };
   let touchesHeartbeat = false;
+  let touchesHands = false;
   for (const o of ops) {
     if (o.op === "send") {
       // `supersedes` (one id or a list) withdraws earlier messages by reference —
@@ -205,13 +208,30 @@ let pushedSha = null;
       writeFileSync(target, `${JSON.stringify({ firedAt: now.toISOString(), result: String(o.result) }, null, 2)}\n`, "utf8");
       touchesHeartbeat = true;
       summary.push(`heartbeat ${o.routine}`);
+    } else if (o.op === "raise" || o.op === "take" || o.op === "clear") {
+      // A raised hand rides the same delivery as mail: a stuck lane must be able to
+      // say so without a code branch, a PR of its own, or a person to relay it.
+      const args = [join(repo, "scripts/raise-hand.mjs")];
+      if (o.op === "raise") {
+        for (const [flag, v] of [["--doing", o.doing], ["--blocked", o.blocked], ["--need", o.need], ["--who", o.who], ["--domain", o.domain], ["--where", o.where], ["--id", o.id], ["--origin", lane]]) if (v !== undefined) args.push(flag, String(v));
+        for (const c of o.covers ?? []) args.push("--covers", String(c));
+      } else if (o.op === "take") {
+        args.push("--take", String(o.id), "--by", String(o.by ?? lane));
+      } else {
+        args.push("--resolve", String(o.id), "--resolution", String(o.resolution ?? ""), "--by", lane);
+      }
+      const r = run("node", args, { cwd: wt, env });
+      if (r.code !== 0) die(`${o.op} refused:\n${r.err || r.out}`, r.code);
+      touchesHands = true;
+      summary.push(`${o.op} ${o.op === "raise" ? (/raised-hands\/(\S+)\.json/.exec(r.out)?.[1] ?? "(id?)") : o.id}`);
     }
   }
 
   // ── 3. gate INSIDE the worktree, with mainline's own copies of the gates ────
   const gates = [["scripts/check-lane-messages.mjs", "lane messages"]];
   if (touchesHeartbeat) gates.push(["scripts/check-scheduled-routines.mjs", "scheduled routines"]);
-  for (const [script, label] of gates) {
+  if (touchesHands) gates.push(["scripts/raised-hands.mjs", "raised hands", ["--coherence"]]);
+  for (const [script, label, extra = []] of gates) {
     if (!existsSync(join(wt, script))) {
       // A check that did not run is not a check that passed. This used to
       // `continue` silently — "an older mainline without the gate has nothing to
@@ -222,7 +242,7 @@ let pushedSha = null;
       console.log(`  gate        ${label}: SKIPPED — script absent at ${script} (--allow-ungated)`);
       continue;
     }
-    const r = run("node", [script], { cwd: wt, env });
+    const r = run("node", [script, ...extra], { cwd: wt, env });
     if (r.code !== 0) die(`the ${label} gate refused this delivery:\n${r.out}${r.err}`, 1);
     console.log(`  gate        ${label}: passed`);
   }

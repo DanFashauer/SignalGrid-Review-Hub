@@ -185,9 +185,11 @@ export function validateBindings(surfaces) {
  * passed against the CURRENT manifest fingerprint. A step flagged
  * `needsNativeBuild` is never refused as a binding target here (it is a real,
  * always-registered preflight step) — but on a machine where the build is
- * structurally excluded it will never be recorded as passed, so the ratio
- * reads that half honestly as unrecorded rather than silently inventing a
- * pass. That is dimension (b)'s question, not this gate's.
+ * structurally excluded it is recorded as passed ONLY from a native-build
+ * attestation bound to the same HEAD sha and a clean tree (DR-057,
+ * scripts/lib/native-build-attestation.mjs — the VM ran THIS tree); otherwise
+ * it stays unrecorded, so the ratio reads that half honestly rather than
+ * silently inventing a pass. That is dimension (b)'s question, not this gate's.
  *
  * Two STEPS shapes exist in scripts/preflight.mjs, and both are read: the
  * single-line `{ name: "…", cmd: […], … },` most entries use, and the MULTI-LINE

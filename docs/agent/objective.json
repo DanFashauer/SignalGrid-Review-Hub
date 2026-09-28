@@ -1,0 +1,38 @@
+{
+  "$comment": "The ONE declared objective the company brain evaluates against (DR-056, owner-directed 2026-09-24). VALUES only: the criterion id set, each criterion's scope, and the owner-attestation token are declared in scripts/objective-loop.mjs (SAFETY_MACHINERY), so weakening this file cannot reach goal_met — the loop reads `broken` if the ids or scopes here drift from the code's. Swap the objective by a decision record; never by editing this file alone.",
+  "schemaVersion": 1,
+  "id": "dr-033-core-product",
+  "record": "DR-033",
+  "statement": "A working core product that does what it claims — something real in hand for partners/collaborators before GTM (DR-033, 2026-09-10).",
+  "attestedIn": null,
+  "criteria": [
+    {
+      "id": "readiness-floor",
+      "scope": "machine",
+      "probe": "scripts/check-readiness-figure.mjs --json",
+      "predicate": "headline >= floor (DR-036: the outreach permission, read as a permission, never as a progress score)",
+      "escalationAsk": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it"
+    },
+    {
+      "id": "evidence-fresh",
+      "scope": "machine",
+      "probe": "scripts/check-readiness-figure.mjs --json (.details.evidence.pct)",
+      "predicate": "the live-evidence dimension is 100 — green on both halves, within FRESH_DAYS, fingerprint current. Named separately because it is the one input that decays on its own (FRESH_DAYS = 7); it is a restatement of the dimension that falls first, not a value recovered from behind the aggregate",
+      "escalationAsk": "artifacts/live-evidence/mac-run.json is stale or red — re-mint it on the Mac (SIGNALGRID_MCP_PATH=… pnpm run verify:all --require-mcp --emit-evidence)"
+    },
+    {
+      "id": "plan-owned",
+      "scope": "machine",
+      "probe": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)",
+      "predicate": "the ranked company queue parses to rows and every open row names a role from the roster (zero problems)",
+      "escalationAsk": "the ranked queue has a row nobody owns, or parsed to zero rows — fix docs/COMPANY_BUILD_PLAN.md"
+    },
+    {
+      "id": "owner-real-in-hand",
+      "scope": "owner",
+      "probe": "docs/DECISION_RECORDS.md section named by attestedIn",
+      "predicate": "attestedIn names a decision record whose own section text carries the attestation token declared in scripts/objective-loop.mjs — the owner writes that record; no lane can",
+      "escalationAsk": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue."
+    }
+  ]
+}

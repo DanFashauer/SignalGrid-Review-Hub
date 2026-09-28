@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-correction-to-my-ack-on-the-20-30z-evidence-",
+  "ackedBy": "cloud",
+  "note": "Read. Nothing owed on mainline. The root cause you named (fixed test ports, tick vs self-hosted runner) landed as #1106 at 9222c677 under DR-037 on your mail ask. The fixed ports still left (oidc.test.mjs 5397-5399, load.test.mjs 5320/5321, observability-proof.ts 5388) go into the DR-060 lessons ledger with a backlog row; no Mac action needed.",
+  "ackedAt": "2026-09-26T05:26:47.847Z"
+}

@@ -54,6 +54,10 @@ const MAX_AGE = 900; // the caller will act on a registration read up to 15 minu
  *  DIFFERENT app is a substitution, not evidence about this one (see the app_ref-mismatch
  *  isolation below). Every fixture and the caller-supplied ref use this same value. */
 const APP = "com.hospital.epic";
+/** The worker and device the registration is read FOR. Managed-app state is keyed per
+ *  (user, device, app); the connector refuses a returned registration whose own echo
+ *  is absent or names anyone else (see the binding isolation below). */
+const BINDING = { userRef: "w.okafor@hospital.example", deviceRef: "ipad-ed-07" };
 
 /** A fully-clean registration: a policy applied, an empty flagged set, read five
  *  minutes ago. Each targeted check below changes exactly ONE field of it. */
@@ -65,6 +69,8 @@ const clean = (over: AppProtectionReportRaw = {}): AppProtectionReportRaw => ({
   platform: "ios",
   registration_observed_at: FRESH,
   source_system: "intune",
+  user_ref: BINDING.userRef,
+  device_ref: BINDING.deviceRef,
   ...over,
 });
 
@@ -324,6 +330,8 @@ check("a flagged_reasons array whose length UNDER-reports its indices (length 0,
 const cleanNormalized: NormalizedAppProtection = {
   sourceSystem: "app-protection",
   appRef: APP,
+  managedUserRef: BINDING.userRef,
+  managedDeviceRef: BINDING.deviceRef,
   policyState: "applied",
   complianceState: "clean",
   appSensitivity: "standard",
@@ -484,6 +492,7 @@ const normDomains = {
 };
 const buildNorm = (c: Record<string, unknown>): NormalizedAppProtection => ({
   sourceSystem: "app-protection", appRef: "enum", source: "enum",
+  managedUserRef: null, managedDeviceRef: null,
   policyState: c.policyState as NormalizedAppProtection["policyState"],
   complianceState: c.complianceState as NormalizedAppProtection["complianceState"],
   appSensitivity: c.appSensitivity as NormalizedAppProtection["appSensitivity"],
@@ -621,17 +630,95 @@ const mock = createMockAppProtectionTransport({
   records: { "com.hospital.epic": clean({ policy_state: "not_applied", applied_policies: [] }) },
 });
 const connector = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid", source: "intune" }, mock);
-const roundTrip = await connector.fetchNormalized("com.hospital.epic", { appSensitivity: "sensitive", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+const roundTrip = await connector.fetchNormalized("com.hospital.epic", BINDING, { appSensitivity: "sensitive", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
 check("the connector fetches and normalizes a registration through an injected transport (no network)",
   roundTrip.policyState === "not_applied" && evaluateAppProtection(roundTrip).reasonCode === "MISSING_MAM_POLICY_SENSITIVE_APP");
 // a ref that only validates after trimming is dispatched in its CANONICAL (trimmed) form
 // (Codex P2): "  com.hospital.epic  " must reach the SAME record, not "%20com.hospital.epic%20".
-const whitespaceRef = await connector.fetchNormalized("  com.hospital.epic  ", { appSensitivity: "sensitive", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+const whitespaceRef = await connector.fetchNormalized("  com.hospital.epic  ", BINDING, { appSensitivity: "sensitive", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
 check("a whitespace-padded appRef is canonicalized before dispatch → reaches the same record and binds the trimmed appRef, not a %20-padded miss",
   whitespaceRef.appRef === "com.hospital.epic" && whitespaceRef.policyState === "not_applied");
-const unknownApp = await connector.fetchNormalized("com.unknown.app", { referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
-check("an unknown app yields an all-unknown record the evaluator fails closed on (never a fabricated grant)",
-  evaluateAppProtection(unknownApp).recommendedAction !== "none");
+let unknownAppCode: string | undefined;
+try {
+  await connector.fetchNormalized("com.unknown.app", BINDING, { referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+} catch (err) {
+  unknownAppCode = err instanceof AppProtectionConnectorError ? err.code : "other";
+}
+check("an unknown app yields the empty record, which carries no binding echo → the connector REFUSES it (binding_mismatch); no verdict, never a fabricated grant",
+  unknownAppCode === "binding_mismatch");
+// the empty record on the direct normalize path (no connector, no binding) still fails closed
+check("the empty record normalized directly still evaluates to a raise, never none",
+  evaluateAppProtection(normalizeAppProtectionReport(APP, {}, { referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE })).recommendedAction !== "none");
+
+// ── (user, device, app) binding isolation ───────────────────────────────────────
+// Managed-app state is keyed per (user, device, app). A request that names only the app
+// can be answered with a clean registration belonging to ANOTHER worker or made from
+// ANOTHER device, and "applied + clean + current" would then grant on borrowed evidence.
+// The connector validates the returned record's own echo against the requested binding
+// BEFORE normalization and refuses by name; nothing borrowed reaches the evaluator.
+const boundMock = createMockAppProtectionTransport({ records: { [APP]: clean() } });
+const boundConnector = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, boundMock);
+const bound = await boundConnector.fetchNormalized(APP, BINDING, { appSensitivity: "sensitive", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+check("a registration whose echo names the requested worker AND device is accepted, carries both refs, and (clean, current) grants",
+  bound.managedUserRef === BINDING.userRef && bound.managedDeviceRef === BINDING.deviceRef && evaluateAppProtection(bound).appProtected === true);
+const padded = await boundConnector.fetchNormalized(APP, { userRef: `  ${BINDING.userRef} `, deviceRef: ` ${BINDING.deviceRef}  ` }, { referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+check("a whitespace-padded binding is canonicalized before dispatch and compared trimmed (no %20 miss, no false mismatch)",
+  padded.managedUserRef === BINDING.userRef && padded.managedDeviceRef === BINDING.deviceRef);
+const bindingRefusal = async (record: AppProtectionReportRaw, label: string): Promise<void> => {
+  const t = createMockAppProtectionTransport({ records: { [APP]: record } });
+  const c = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, t);
+  let code: string | undefined;
+  try {
+    await c.fetchNormalized(APP, BINDING, { appSensitivity: "sensitive", mamApplicability: "applicable", referenceTime: REF, maxRegistrationAgeSeconds: MAX_AGE });
+  } catch (err) {
+    code = err instanceof AppProtectionConnectorError ? err.code : "other";
+  }
+  check(`${label} → the connector refuses it by name (binding_mismatch); the clean registration never reaches the evaluator`, code === "binding_mismatch");
+};
+await bindingRefusal(clean({ user_ref: "someone.else@hospital.example" }), "a clean registration belonging to ANOTHER worker");
+await bindingRefusal(clean({ device_ref: "ipad-icu-02" }), "a clean registration made from ANOTHER device");
+await bindingRefusal(clean({ user_ref: undefined }), "a clean registration with NO user echo (not proven to be this worker's)");
+await bindingRefusal(clean({ device_ref: undefined }), "a clean registration with NO device echo (not proven to be from this device)");
+await bindingRefusal(clean({ user_ref: 42 }), "a clean registration whose user echo is present but unreadable (42)");
+await bindingRefusal(clean({ device_ref: "   " }), "a clean registration whose device echo is blank");
+await bindingRefusal(Object.create(clean()) as AppProtectionReportRaw, "a record whose binding echo is only INHERITED (prototype claim)");
+{
+  const throwing = clean();
+  Object.defineProperty(throwing, "user_ref", { get() { throw new Error("nope"); }, enumerable: true });
+  await bindingRefusal(throwing, "a record whose user echo getter THROWS");
+}
+// the direct normalize path also records an unreadable echo as malformed, so a caller
+// that bypasses the connector's binding check still cannot grant on it
+check("normalized directly, a present-but-unreadable user_ref is a malformed report (raises), never a clean parse",
+  ev(clean({ user_ref: 42 }), "sensitive").reasonCode === "REPORT_MALFORMED");
+check("normalized directly, a present-but-unreadable device_ref is a malformed report (raises), never a clean parse",
+  ev(clean({ device_ref: {} }), "sensitive").reasonCode === "REPORT_MALFORMED");
+// pre-dispatch binding validation: an unsafe or blank ref is refused BEFORE the transport
+// is called, so it can never widen the authenticated query or leave the read unattributable
+for (const bad of [
+  { userRef: "", deviceRef: BINDING.deviceRef },
+  { userRef: BINDING.userRef, deviceRef: "   " },
+  { userRef: "../admin", deviceRef: BINDING.deviceRef },
+  { userRef: BINDING.userRef, deviceRef: "a/b?x=1" },
+  { userRef: ".", deviceRef: BINDING.deviceRef },
+]) {
+  let dispatched = false;
+  const spy = async (): Promise<AppProtectionReportRaw> => { dispatched = true; return clean(); };
+  const c = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, spy);
+  let code: string | undefined;
+  try { await c.fetchNormalized(APP, bad); } catch (err) { code = err instanceof AppProtectionConnectorError ? err.code : "other"; }
+  check(`an unsafe binding ${JSON.stringify(bad)} is refused BEFORE dispatch (invalid_binding) and the transport is never called`,
+    code === "invalid_binding" && dispatched === false);
+}
+{
+  let dispatched = false;
+  const spy = async (): Promise<AppProtectionReportRaw> => { dispatched = true; return clean(); };
+  const c = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, spy);
+  let code: string | undefined;
+  try { await c.fetchNormalized(APP, undefined as unknown as typeof BINDING); } catch (err) { code = err instanceof AppProtectionConnectorError ? err.code : "other"; }
+  check("a MISSING binding object is the same pre-dispatch refusal (invalid_binding), not a TypeError and not an unbound read",
+    code === "invalid_binding" && dispatched === false);
+}
 let guardThrew = false;
 try {
   guardReadOnly("DELETE");
@@ -654,7 +741,7 @@ check("a flagged_reasons array whose Symbol.iterator lies (yields nothing) still
 // entry for the requested appRef must NOT be returned and rebound to an unknown app.
 const inheritedRecords = Object.create({ "com.hospital.epic": clean() }) as Record<string, AppProtectionReportRaw>;
 const inheritMock = createMockAppProtectionTransport({ records: inheritedRecords });
-const inheritRaw = await inheritMock({ appRef: "com.hospital.epic", token: "t" });
+const inheritRaw = await inheritMock({ appRef: "com.hospital.epic", ...BINDING, token: "t" });
 check("the fixture transport returns ONLY own records — an INHERITED entry yields the empty unknown record, never a rebind to a fabricated grant",
   Object.keys(inheritRaw).length === 0);
 
@@ -670,7 +757,7 @@ for (const badRef of ["", "   ", ".", "..", "a/b", "../secret", "com.x/../../etc
   const guardedConnector = new AppProtectionConnector({ accessToken: "t", baseUrl: "https://x.invalid" }, spy);
   let code: string | undefined;
   try {
-    await guardedConnector.fetchNormalized(badRef);
+    await guardedConnector.fetchNormalized(badRef, BINDING);
   } catch (err) {
     code = err instanceof AppProtectionConnectorError ? err.code : "other";
   }
@@ -695,7 +782,7 @@ await checkDefaultTransport({
   check,
   family: "app-protection",
   transport: makeDefaultAppProtectionTransport("https://vendor.invalid/app-protection") as (a: never) => Promise<unknown>,
-  arg: { appRef: "appRef-1", token: "t" },
+  arg: { appRef: "appRef-1", ...BINDING, token: "t" },
   codeOf: (err) => (err instanceof AppProtectionConnectorError ? err.code : undefined),
 });
 

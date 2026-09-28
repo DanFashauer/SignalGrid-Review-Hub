@@ -74,8 +74,8 @@
 //      cadence cannot bound anything, and skipping it is the fail-open direction.
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REGISTRY = "docs/agent/scheduled-routines.json";
 const HEARTBEATS_DIR = "artifacts/agent-heartbeats";
@@ -402,15 +402,17 @@ function defaultListHeads(glob) {
   return r.stdout.split("\n").filter(Boolean).map((l) => l.split("\t")[1]?.replace("refs/heads/", "")).filter(Boolean);
 }
 
-function load() {
-  const registry = JSON.parse(readFileSync(REGISTRY, "utf8"));
+// Exported for scripts/raised-hands.mjs, so it reads from a ROOT, never the caller's cwd.
+// Keys stay repo-relative: heartbeatPath in the registry is compared against them.
+export function load(root = process.env.SIGNALGRID_LANE_REPO ? resolve(process.env.SIGNALGRID_LANE_REPO) : resolve(dirname(fileURLToPath(import.meta.url)), "..")) {
+  const registry = JSON.parse(readFileSync(join(root, REGISTRY), "utf8"));
   const heartbeats = {};
-  if (existsSync(HEARTBEATS_DIR)) {
-    for (const f of readdirSync(HEARTBEATS_DIR)) {
-      if (f.endsWith(".json")) heartbeats[join(HEARTBEATS_DIR, f)] = readFileSync(join(HEARTBEATS_DIR, f), "utf8");
+  if (existsSync(join(root, HEARTBEATS_DIR))) {
+    for (const f of readdirSync(join(root, HEARTBEATS_DIR))) {
+      if (f.endsWith(".json")) heartbeats[join(HEARTBEATS_DIR, f)] = readFileSync(join(root, HEARTBEATS_DIR, f), "utf8");
     }
   }
-  const rosterText = existsSync(ROSTER) ? readFileSync(ROSTER, "utf8") : "";
+  const rosterText = existsSync(join(root, ROSTER)) ? readFileSync(join(root, ROSTER), "utf8") : "";
   return { registry, heartbeats, rosterText };
 }
 

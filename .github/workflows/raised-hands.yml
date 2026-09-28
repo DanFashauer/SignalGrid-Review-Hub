@@ -24,6 +24,8 @@ name: Raised hands
 # the next run read the new id from the updated body and never notify the owner.
 # GitHub still replaces an older PENDING run with a newer one; that cancelled run
 # did no work, and it has no verdict in scripts/check-mainline-workflow-streaks.mjs.
+# Every run checks out the CURRENT SignalGrid_Alpha, not its event's sha, so a run
+# that starts after a newer push renders the newest ledger, never an older one.
 
 on:
   schedule:
@@ -51,6 +53,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          ref: SignalGrid_Alpha # the latest mainline, whichever event queued this run
           fetch-depth: 0 # a v1 lane message ages by its commit date
 
       - uses: actions/setup-node@v7

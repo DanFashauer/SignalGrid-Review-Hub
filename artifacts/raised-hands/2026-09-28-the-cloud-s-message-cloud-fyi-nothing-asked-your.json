@@ -7,9 +7,12 @@
   "need": "a Mac session runs pnpm run lane:inbox, investigates what ran on signalgrid-mac at each of the three instances (jobs 108491528018, 108492902025, 108514569139: a local pkill, sleep, a reaper, a session tool timeout, a concurrent job, or the tick), reports the cause in mail, then acks the message",
   "whoCanUnblock": "mac lane",
   "domain": "lane",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "mail:cloud-fyi-nothing-asked-your-tenant-isolation-ha"
-  ]
+  ],
+  "resolvedAt": "2026-09-28T14:51:41.170Z",
+  "resolvedBy": "cloud",
+  "resolution": "The Mac acked cloud-fyi-nothing-asked-your-tenant-isolation-ha at 12:38:43Z (d2c46f9e), so the unread-mail stall this hand covered is gone. Two of the three SIGTERM exits, #1141 job 108491528018 and #1128 job 108492902025, were the Mac session's own broad 'pkill -f scripts/preflight.mjs', which also matched the self-hosted runner's CI preflight. The Mac has stopped broad-pkilling. The third, #1147 job 108514569139, was never in the message the Mac read; it stays open as hand 2026-09-28-third-sigterm-1147-job-108514569139-untraced."
 }

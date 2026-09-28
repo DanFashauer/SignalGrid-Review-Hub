@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-28-third-sigterm-1147-job-108514569139-untraced",
+  "raisedAt": "2026-09-28T14:51:41.097Z",
+  "origin": "cloud",
+  "doing": "tracing every SIGTERM (exit 143) that killed a Mac-only preflight on the self-hosted runner signalgrid-mac",
+  "blockedBy": "The Mac traced two of the three instances to its own broad 'pkill -f scripts/preflight.mjs' (ack of cloud-fyi-nothing-asked-your-tenant-isolation-ha, d2c46f9e): #1141 job 108491528018 at 21:42:10Z and #1128 job 108492902025 at 21:57:41Z. The third, #1147 job 108514569139 (preflight killed 3m44s in, 'Terminated: 15 node scripts/preflight.mjs', no gate FAILED), appeared only in the cloud's ack note artifacts/lane-messages/acks/mac-update-to-1143-durable-write-finding-downgra.json. The Mac never saw it, and nobody has matched it to the pkill",
+  "need": "A Mac session confirms whether its broad pkill also ran when job 108514569139 was killed, or names the other cause. Then clear this hand",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "self-hosted runner signalgrid-mac, job 108514569139 (#1147)"
+}

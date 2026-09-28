@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-28-the-cloud-s-fyi-message-cloud-fyi-nothing-asked-",
+  "raisedAt": "2026-09-28T07:42:19.613Z",
+  "origin": "cloud",
+  "doing": "coordinating the two lanes through the mailbox",
+  "blockedBy": "the cloud's FYI message cloud-fyi-nothing-asked-your-tenant-isolation-ha has sat unread on the Mac for about 34h; it asks nothing, and only a Mac session can read and ack it",
+  "need": "a Mac session runs pnpm run lane:inbox and acks it",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-fyi-nothing-asked-your-tenant-isolation-ha"
+  ]
+}

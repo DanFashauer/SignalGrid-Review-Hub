@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-28-1118-mac-ios-parity-behavioral-d4297467-changes-",
+  "raisedAt": "2026-09-28T14:43:27.018Z",
+  "origin": "cloud",
+  "doing": "landing the Mac lane's three open PRs, which the Mac reports conflict-resolved and ready (mail mac-merge-steps-done-1118-and-1037-are-conflict-, 12:47Z)",
+  "blockedBy": "#1118 (mac/ios-parity-behavioral @ d4297467) changes DecisionEngine.swift behaviour: unauthorized dock removal becomes CUSTODY_EXCEPTION, ported from decisionEngine.ts. #1121 (mac/app-workflows-parity) changes AppWorkflows.swift behaviour and is conflicting again. CLAUDE.md golden rule 1 forbids behaviour edits to both files, so the cloud lane cannot land them. #1037 (mac/intake-unlazy-skills @ b1d6ea8d) adds a scripts/publication-boundary.mjs entry, which DR-037 condition 5 keeps owner-merged",
+  "need": "Owner: (a) one ruling on golden rule 1. Either parity fixes that bring the Swift port back in line with the TS engine are allowed, and the cloud then gates and lands #1118 then #1121; or they are not, and both close. (b) Merge or close #1037",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "PRs #1118, #1121, #1037"
+}

@@ -9,11 +9,13 @@
 //         is append-only BY PRIVILEGE, not just by convention — the hash chain
 //         detects tampering after the fact; the missing UPDATE/DELETE grant
 //         prevents the runtime credential from doing it at all.
-//       - decisions/evidence:    SELECT + INSERT + UPDATE (the stores upsert
-//         via INSERT … ON CONFLICT DO UPDATE).
+//       - decisions/evidence:    SELECT + INSERT. A decision is IMMUTABLE BY
+//         PRIVILEGE: the store inserts ON CONFLICT DO NOTHING and refuses a
+//         different record under an existing id, so no UPDATE is needed.
 //       - sessions:              SELECT + INSERT + UPDATE (status/heartbeat
 //         transitions are UPDATEs).
-//     No DELETE anywhere, no TRUNCATE, no REFERENCES, no TRIGGER, no DDL.
+//     No DELETE anywhere, no TRUNCATE, no REFERENCES, no TRIGGER, no DDL —
+//     TEMP tables included (TEMPORARY is revoked from PUBLIC on the database).
 //   · Schema and admin operations stay with the migration credential
 //     (`db:migrate`, backup/restore) — a different login entirely.
 //   · NO PASSWORD IS SET HERE, by design. A canonical file with a literal
@@ -91,24 +93,25 @@ const OWNER_RIGHTS_CHECKS = `
         'signalgrid_runtime), then re-run.';
     END IF;
     -- Triggers on the managed tables fire on the runtime's own permitted
-    -- INSERTs REGARDLESS of the runtime's EXECUTE privilege on the trigger
+    -- statements REGARDLESS of the runtime's EXECUTE privilege on the trigger
     -- function — so a SECURITY DEFINER trigger function is an owner-rights
-    -- write path that has_function_privilege can never see. (A SECURITY
-    -- INVOKER trigger runs with the runtime's own privileges and is bounded
-    -- by the grants above.)
+    -- write path that has_function_privilege can never see. And no grant
+    -- bounds a SECURITY INVOKER trigger either: a BEFORE trigger that RETURNs
+    -- NULL silently suppresses the runtime's INSERT, and one that edits NEW
+    -- rewrites the row it writes — neither needs a privilege the runtime
+    -- lacks. Managed tables are plain tables, so ANY trigger is refused.
     IF EXISTS (
       SELECT 1 FROM pg_trigger t
       JOIN pg_class c ON c.oid = t.tgrelid
       JOIN pg_namespace n ON n.oid = c.relnamespace
-      JOIN pg_proc p ON p.oid = t.tgfoid
       WHERE NOT t.tgisinternal
         AND n.nspname = 'public'
         AND c.relname IN ('audit_ledger', 'decisions', 'evidence_snapshots', 'sessions')
-        AND p.prosecdef
     ) THEN
-      RAISE EXCEPTION 'a SECURITY DEFINER trigger sits on a managed table — it fires with its owner''s '
-        'rights on the runtime''s own INSERTs, an owner-rights write path no EXECUTE revocation closes. '
-        'DROP the trigger (or make its function SECURITY INVOKER), then re-run.';
+      RAISE EXCEPTION 'a TRIGGER sits on a managed table — a SECURITY DEFINER trigger fires with its '
+        'owner''s rights on the runtime''s own INSERTs, and ANY trigger (invoker too) can suppress '
+        '(RETURN NULL) or rewrite the rows the runtime writes; no grant or EXECUTE revocation closes '
+        'that. DROP the trigger, then re-run.';
     END IF;
     -- REWRITE RULES are the third owner-rights write path: an ON INSERT DO
     -- ALSO UPDATE rule on the ledger executes its action with the table
@@ -142,7 +145,54 @@ const OWNER_RIGHTS_CHECKS = `
         '(directly or inherited from a PUBLIC grant) — it could create and own objects there, making '
         'the no-DDL posture false. REVOKE CREATE on that schema FROM PUBLIC / signalgrid_runtime, '
         'then re-run.';
-    END IF;`;
+    END IF;
+    -- Effective privileges on NON-canonical relations — most often inherited
+    -- from a PUBLIC grant, which leaves no role ACL entry and no pg_shdepend
+    -- row, so the allowlist check above never sees it and the apply never
+    -- resets it. Any relation in a schema the runtime can reach (USAGE),
+    -- outside the four managed tables and the ledger sequence, that the
+    -- runtime can read or write is more than the documented posture.
+    -- Extension members are excluded: their grants are the extension's own.
+    DECLARE
+      foreign_rels TEXT;
+    BEGIN
+      SELECT string_agg(c.oid::regclass::text, ', ' ORDER BY c.oid::regclass::text) INTO foreign_rels
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+        AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+        AND n.nspname NOT LIKE 'pg\\_%'
+        AND has_schema_privilege('signalgrid_runtime', n.oid, 'USAGE')
+        -- array_remove: a missing table is NULL, and <> ALL over a NULL is
+        -- NULL — every relation would drop out of the check on a bare database.
+        AND c.oid <> ALL (array_remove(ARRAY[
+          to_regclass('public.audit_ledger'), to_regclass('public.decisions'),
+          to_regclass('public.evidence_snapshots'), to_regclass('public.sessions'),
+          CASE WHEN to_regclass('public.audit_ledger') IS NOT NULL
+               THEN to_regclass(pg_get_serial_sequence('public.audit_ledger', 'seq')) END
+        ]::oid[], NULL))
+        AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                        WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
+        AND CASE WHEN c.relkind = 'S' THEN
+              has_sequence_privilege('signalgrid_runtime', c.oid, 'SELECT')
+              OR has_sequence_privilege('signalgrid_runtime', c.oid, 'UPDATE')
+              -- USAGE is nextval(): a write to another component's counter
+              OR has_sequence_privilege('signalgrid_runtime', c.oid, 'USAGE')
+            ELSE
+              has_table_privilege('signalgrid_runtime', c.oid, 'SELECT')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'INSERT')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'UPDATE')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'DELETE')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'TRUNCATE')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'REFERENCES')
+              OR has_table_privilege('signalgrid_runtime', c.oid, 'TRIGGER')
+            END;
+      IF foreign_rels IS NOT NULL THEN
+        RAISE EXCEPTION 'signalgrid_runtime holds effective privileges on non-canonical relation(s) % '
+          '(directly or inherited from a PUBLIC grant) — more than the documented posture, and the '
+          'split never resets them. REVOKE them FROM PUBLIC / signalgrid_runtime (granting the roles '
+          'that need them explicitly), then re-run.', foreign_rels;
+      END IF;
+    END;`;
 
 /**
  * Restore-context ONLY: `pg_restore --no-privileges` recreates every routine
@@ -331,12 +381,16 @@ export const ROLE_SPLIT_SQL = `
   -- fully-granted runtime role that still cannot open a connection. Database-
   -- level CREATE is RESET first: it permits creating SCHEMAS, and with the
   -- default '"$user", public' search_path a schema named signalgrid_runtime
-  -- would shadow the protected tables for unqualified queries. (The stores
-  -- also schema-qualify every statement, so shadowing of any kind — including
-  -- TEMP tables, which no ACL prevents — cannot redirect their queries.)
+  -- would shadow the protected tables for unqualified queries. TEMPORARY goes
+  -- with it: PostgreSQL grants it to PUBLIC on every database, and a temp table
+  -- is DDL the runtime would create and own. Revoking it from PUBLIC removes
+  -- ambient TEMP from every non-owner role on this database — the same blast
+  -- radius as the CREATE revoke; a role that needs temp tables is granted
+  -- TEMPORARY explicitly. (The stores also schema-qualify every statement, so
+  -- shadowing cannot redirect their queries either way.)
   DO $$
   BEGIN
-    EXECUTE format('REVOKE CREATE ON DATABASE %I FROM signalgrid_runtime, PUBLIC', current_database());
+    EXECUTE format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM signalgrid_runtime, PUBLIC', current_database());
     EXECUTE format('GRANT CONNECT ON DATABASE %I TO signalgrid_runtime', current_database());
   END $$;
 
@@ -368,9 +422,9 @@ export const ROLE_SPLIT_SQL = `
       SELECT * FROM (VALUES
         -- The ledger is append-only BY PRIVILEGE: no UPDATE, no DELETE, no TRUNCATE.
         ('audit_ledger',       'SELECT, INSERT'),
-        -- Upserting stores: UPDATE is required by INSERT … ON CONFLICT DO UPDATE.
-        ('decisions',          'SELECT, INSERT, UPDATE'),
-        ('evidence_snapshots', 'SELECT, INSERT, UPDATE'),
+        -- Immutable records: INSERT … ON CONFLICT DO NOTHING needs no UPDATE.
+        ('decisions',          'SELECT, INSERT'),
+        ('evidence_snapshots', 'SELECT, INSERT'),
         -- Session lifecycle transitions are UPDATEs.
         ('sessions',           'SELECT, INSERT, UPDATE')
       ) AS t(tbl, grants)

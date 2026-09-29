@@ -224,18 +224,30 @@ export class PostgresSessionStore implements SessionStore {
     }
   }
 
-  /** The exact per-table privileges the store's statements need; also run on
-   *  every ping() so /readyz flips when the posture regresses mid-flight. */
+  /** The exact per-table privileges the store's statements need, AND the
+   *  forbidden direction (no DELETE, TRUNCATE, REFERENCES or TRIGGER); also run
+   *  on every ping() so /readyz flips when the posture regresses mid-flight. */
   private async assertPrivileges(): Promise<void> {
     const priv = await this.pool.query(`
       SELECT has_table_privilege('public.sessions', 'SELECT')
          AND has_table_privilege('public.sessions', 'INSERT')
-         AND has_table_privilege('public.sessions', 'UPDATE') AS ok
+         AND has_table_privilege('public.sessions', 'UPDATE') AS ok,
+             has_table_privilege('public.sessions', 'DELETE')
+          OR has_table_privilege('public.sessions', 'TRUNCATE')
+          OR has_any_column_privilege('public.sessions', 'REFERENCES')
+          OR has_table_privilege('public.sessions', 'TRIGGER') AS forbidden
     `);
     if (!priv.rows[0]?.ok) {
       throw new Error(
         "this credential is missing table privileges on sessions — re-apply the role split " +
           "with the admin credential (`pnpm run db:migrate`); refusing to report ready for work that would fail.",
+      );
+    }
+    if (priv.rows[0]?.forbidden) {
+      throw new Error(
+        "this credential holds FORBIDDEN privileges on sessions (DELETE, TRUNCATE, REFERENCES, or " +
+          "TRIGGER — directly or via PUBLIC): more than the documented posture. Re-apply the role split " +
+          "with the admin credential (`pnpm run db:migrate`); refusing to report ready.",
       );
     }
   }
@@ -255,7 +267,9 @@ export class PostgresSessionStore implements SessionStore {
       identityRef: r.identity_ref,
       deviceRef: r.device_ref,
       workflowKey: r.workflow_key,
-      status: r.status as SessionStatus,
+      // The column is TEXT: a value outside the enum reads as EXPIRED (fail
+      // closed), never passed through as a status no caller handles.
+      status: (r.status === "active" || r.status === "expired" || r.status === "ended") ? r.status : "expired",
       outcome: r.outcome as DecisionOutcome,
       decisionId: r.decision_id,
       createdAt: iso(r.created_at),
@@ -296,11 +310,13 @@ export class PostgresSessionStore implements SessionStore {
     if (!current || current.status !== "active") return null;
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
-    await this.pool.query(
-      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+    // status='active' in the WRITE, not only the read above: an end() landing
+    // between the two would otherwise be refreshed over and reported active.
+    const res = await this.pool.query(
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4 AND status = 'active' RETURNING *",
       [lastSeenAt, expiresAt, id, tenantId],
     );
-    return { ...current, lastSeenAt, expiresAt };
+    return res.rows[0] ? this.rowToSession(res.rows[0]) : null;
   }
 
   async end(tenantId: string, id: string): Promise<Session | null> {

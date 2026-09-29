@@ -246,7 +246,7 @@ export class PostgresAuditBackend implements AuditBackend {
       );
       const prevHash: string = head.rows[0]?.hash ?? "";
       const record = build(prevHash);
-      await client.query(
+      const ins = await client.query(
         `INSERT INTO public.audit_ledger
            (id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -263,6 +263,12 @@ export class PostgresAuditBackend implements AuditBackend {
           record.hash,
         ],
       );
+      // An INSERT can succeed and write nothing (a BEFORE trigger returning
+      // NULL). Returning the record then would report an append that never
+      // reached the ledger.
+      if (ins.rowCount !== 1) {
+        throw new Error("audit append wrote " + ins.rowCount + " rows — refusing to report an unwritten record as appended");
+      }
       await client.query("COMMIT");
       return record;
     } catch (err) {

@@ -240,7 +240,7 @@ exactly the statements the stores execute —
 | Table | Grants | Why |
 | --- | --- | --- |
 | `audit_ledger` | `SELECT`, `INSERT` (+ sequence `USAGE`) | Append-only **by privilege**. The hash chain detects tampering after the fact; the missing `UPDATE`/`DELETE` grant prevents the runtime credential from doing it at all. |
-| `decisions`, `evidence_snapshots` | `SELECT`, `INSERT`, `UPDATE` | The stores upsert via `INSERT … ON CONFLICT DO UPDATE`. |
+| `decisions`, `evidence_snapshots` | `SELECT`, `INSERT` | Immutable **by privilege**: saves are `INSERT … ON CONFLICT DO NOTHING`, and a different record under an existing id is refused. |
 | `sessions` | `SELECT`, `INSERT`, `UPDATE` | Lifecycle transitions are `UPDATE`s. |
 
 No `DELETE` anywhere, no `TRUNCATE`, no DDL, no `CREATE` on the schema. Schema

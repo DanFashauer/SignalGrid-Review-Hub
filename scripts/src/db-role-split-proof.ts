@@ -12,8 +12,9 @@
 //
 // What it proves:
 //   1. POSITIVE   — as `signalgrid_runtime`, every legitimate write works:
-//      ledger appends chain and verify, decision/evidence upserts (twice, so the
-//      UPDATE grant is really exercised), session create/transition.
+//      ledger appends chain and verify, decision/evidence saves (twice, so an
+//      identical re-save is proven to need no UPDATE grant), session
+//      create/transition.
 //   2. NEGATIVE   — as `signalgrid_runtime`, every destructive statement fails
 //      with insufficient_privilege (42501): UPDATE/DELETE/TRUNCATE on the
 //      ledger, DELETE on decisions, DROP/ALTER on the table, CREATE TABLE.
@@ -131,6 +132,9 @@ async function main() {
       DROP FUNCTION IF EXISTS public.sg_locked_probe();
       DROP SCHEMA IF EXISTS sg_probe_schema CASCADE;
       DROP SCHEMA IF EXISTS sg_ambient_probe CASCADE;
+      DROP SCHEMA IF EXISTS sg_shadow CASCADE;
+      DROP TABLE IF EXISTS public.sg_foreign;
+      DROP FUNCTION IF EXISTS public.sg_invoker_trigger_probe();
     `);
     // Its own statement: DROP DATABASE refuses to run inside a transaction,
     // and a multi-statement simple query is one implicit transaction.
@@ -143,6 +147,25 @@ async function main() {
     // NULL, so every relation lookup must be guarded.
     check("apply succeeds on a BARE database (no tables) — every relation lookup is guarded",
       (await failureOf(() => applyRoleSplit(url!))) === "");
+    await admin.query(dropRuntimeRoleSql());
+
+    // Migrations must not follow the CALLER's search_path: with a schema ahead
+    // of public on it, the unqualified baseline DDL used to build every table
+    // there, and the role split (which grants only public.*) then guarded
+    // nothing the stores read.
+    await admin.query("CREATE SCHEMA sg_shadow");
+    const shadowUrl = new URL(url!);
+    shadowUrl.searchParams.set("options", "-c search_path=sg_shadow,public");
+    const shadowRun = await failureOf(() => runMigrations(shadowUrl.toString()));
+    const shadowed = (await admin.query(`
+      SELECT to_regclass('public.audit_ledger') IS NOT NULL AS in_public,
+             to_regclass('public.schema_version') IS NOT NULL AS version_in_public,
+             to_regclass('sg_shadow.audit_ledger') IS NULL AS not_shadowed
+    `)).rows[0] ?? {};
+    check("migrations pin search_path: a caller's sg_shadow,public path still builds the schema in public",
+      shadowRun === "" && shadowed.in_public === true && shadowed.version_in_public === true && shadowed.not_shadowed === true);
+    await admin.query("DROP SCHEMA sg_shadow CASCADE");
+    await admin.query("DROP TABLE IF EXISTS audit_ledger, decisions, evidence_snapshots, sessions, schema_version CASCADE");
     await admin.query(dropRuntimeRoleSql());
 
     // 0a. A migration credential that owns the schema but lacks CREATEROLE —
@@ -285,9 +308,10 @@ async function main() {
     const chain = await verifyLedger();
     check("runtime ledger appends work and the chain verifies (3 records)", chain.ok === true && chain.count === 3);
 
-    // A GENUINE decision + snapshot from the real core, saved twice so the
-    // upsert path (INSERT … ON CONFLICT DO UPDATE) really exercises the UPDATE
-    // grant — same minting approach as decision-store-pg-proof.
+    // A GENUINE decision + snapshot from the real core, saved twice: decisions
+    // are immutable (INSERT … ON CONFLICT DO NOTHING, then a JSONB equality
+    // check), so the identical re-save must succeed with NO UPDATE grant —
+    // same minting approach as decision-store-pg-proof.
     const core = SignalGridCore.demo();
     const token = core.demoApiKeys().find((k) => k.tenantId === "tenant_northwind" && k.role === "operator")!.token;
     const evalResult = core.evaluate(token, { identityRef: "nurse.compliant", deviceRef: "ipad-ward-01", workflowKey: "clinical-session" });
@@ -295,10 +319,14 @@ async function main() {
     const snapshot = core.getSnapshot(token, decision.evidenceSnapshotId);
     const decisions = new PostgresDecisionStore(runtimeUrl);
     await decisions.saveDecision(decision, snapshot);
-    await decisions.saveDecision(decision, snapshot); // upsert → UPDATE grant exercised
+    await decisions.saveDecision(decision, snapshot); // identical re-save — no UPDATE needed
     const readBack = await decisions.getDecision("tenant_northwind", decision.id);
-    check("runtime decision upsert works (INSERT … ON CONFLICT DO UPDATE exercised twice)",
+    check("runtime decision save works, and an identical re-save succeeds without any UPDATE grant",
       readBack !== null && readBack.id === decision.id);
+    check("runtime UPDATE on decisions is DENIED (42501) — a decision is immutable by privilege",
+      (await deniedCode(runtime, "UPDATE public.decisions SET outcome = 'allow'")) === "42501");
+    check("runtime UPDATE on evidence_snapshots is DENIED (42501)",
+      (await deniedCode(runtime, "UPDATE public.evidence_snapshots SET data = '{}'::jsonb")) === "42501");
 
     const sessions = new PostgresSessionStore(runtimeUrl);
     const now = "2026-08-20T18:00:00Z";
@@ -317,7 +345,7 @@ async function main() {
       (await deniedCode(runtime, "DELETE FROM audit_ledger WHERE seq = 1")) === "42501");
     check("runtime TRUNCATE on the ledger is DENIED (42501)",
       (await deniedCode(runtime, "TRUNCATE audit_ledger")) === "42501");
-    check("runtime DELETE on decisions is DENIED (42501) — upsert needs UPDATE, never DELETE",
+    check("runtime DELETE on decisions is DENIED (42501)",
       (await deniedCode(runtime, "DELETE FROM decisions WHERE id = 'dec-1'")) === "42501");
     check("runtime DROP TABLE is DENIED (not the owner)",
       (await deniedCode(runtime, "DROP TABLE audit_ledger")) === "42501");
@@ -325,6 +353,10 @@ async function main() {
       (await deniedCode(runtime, "ALTER TABLE audit_ledger ADD COLUMN sneaky TEXT")) === "42501");
     check("runtime CREATE TABLE is DENIED (no CREATE on the schema)",
       (await deniedCode(runtime, "CREATE TABLE runtime_probe (x INT)")) === "42501");
+    // TEMP is DDL too: PUBLIC holds TEMPORARY on every database by default, and a
+    // temp table is created (and owned) by the runtime.
+    check("runtime CREATE TEMP TABLE is DENIED (42501) — no ambient TEMPORARY",
+      (await deniedCode(runtime, "CREATE TEMP TABLE sg_tmp (x INT)")) === "42501");
 
     // ── 2b. POISONED GRANTS CONVERGE: the reset is wider than the role ───────
     // Three ways an UPDATE can reach the runtime that a plain role-level
@@ -357,6 +389,23 @@ async function main() {
     check("…and the audit backend's ping REFUSES while forbidden privileges stand (append-only is a negative claim)",
       /FORBIDDEN/.test(await failureOf(() => poisonedLedger.ping())));
     await poisonedLedger.close();
+    // The same negative claim for the other stores: decisions are immutable
+    // (no UPDATE, DELETE, TRUNCATE, REFERENCES or TRIGGER), sessions may
+    // UPDATE but never DELETE, TRUNCATE, REFERENCES or TRIGGER.
+    await admin.query("GRANT DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.decisions, public.evidence_snapshots TO PUBLIC");
+    const poisonedDecisions = new PostgresDecisionStore(runtimeUrl);
+    check("…the decision store's ping REFUSES while DELETE/TRUNCATE/REFERENCES/TRIGGER stand via PUBLIC",
+      /FORBIDDEN/.test(await failureOf(() => poisonedDecisions.ping())));
+    await poisonedDecisions.close();
+    await admin.query("REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.decisions, public.evidence_snapshots FROM PUBLIC");
+    for (const privilege of ["DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) {
+      await admin.query(`GRANT ${privilege} ON public.sessions TO PUBLIC`);
+      const poisonedSessions = new PostgresSessionStore(runtimeUrl);
+      check(`…the session store's ping REFUSES while ${privilege} on sessions stands via PUBLIC`,
+        /FORBIDDEN/.test(await failureOf(() => poisonedSessions.ping())));
+      await poisonedSessions.close();
+      await admin.query(`REVOKE ${privilege} ON public.sessions FROM PUBLIC`);
+    }
     await applyRoleSplit(url!);
     const converged = (await admin.query(WEDGES)).rows[0] ?? {};
     check("re-apply CONVERGES: all five back-door paths are revoked (PUBLIC, column ACL, sequence, schema CREATE, database CREATE)",
@@ -432,6 +481,20 @@ async function main() {
       /SECURITY DEFINER trigger/.test(await failureOf(() => applyRoleSplit(url!))));
     await admin.query("DROP TRIGGER sg_probe_trg ON public.audit_ledger");
     await admin.query("DROP FUNCTION public.sg_trigger_probe()");
+    // A SECURITY INVOKER trigger needs no owner rights to do harm: RETURN NULL
+    // silently suppresses the runtime's append, and a BEFORE trigger can
+    // rewrite NEW. So ANY trigger on a managed table is refused.
+    await admin.query(
+      "CREATE OR REPLACE FUNCTION public.sg_invoker_trigger_probe() RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER AS " +
+        "$fn$ BEGIN RETURN NULL; END $fn$",
+    );
+    await admin.query(
+      "CREATE TRIGGER sg_invoker_trg BEFORE INSERT ON public.audit_ledger FOR EACH ROW EXECUTE FUNCTION public.sg_invoker_trigger_probe()",
+    );
+    check("role split REFUSES a SECURITY INVOKER trigger on a managed table too (RETURN NULL suppresses appends)",
+      /TRIGGER sits on a managed table/.test(await failureOf(() => applyRoleSplit(url!))));
+    await admin.query("DROP TRIGGER sg_invoker_trg ON public.audit_ledger");
+    await admin.query("DROP FUNCTION public.sg_invoker_trigger_probe()");
 
     // REWRITE RULES are the third owner-rights path (after definer routines
     // and triggers): a rule's action runs with the table owner's privileges
@@ -451,6 +514,18 @@ async function main() {
     await admin.query("REVOKE CREATE ON SCHEMA sg_ambient_probe FROM PUBLIC");
     await admin.query("DROP SCHEMA sg_ambient_probe");
     await applyRoleSplit(url!); // clean again
+
+    // A PUBLIC grant on a NON-canonical relation reaches the runtime the same
+    // way — no role ACL, no pg_shdepend row — and the apply never resets it.
+    await admin.query("CREATE TABLE public.sg_foreign (i int)");
+    await admin.query("GRANT SELECT, INSERT ON public.sg_foreign TO PUBLIC");
+    const foreign = await failureOf(() => applyRoleSplit(url!));
+    check("role split REFUSES a PUBLIC grant on a non-canonical relation, naming it",
+      /non-canonical/.test(foreign) && /sg_foreign/.test(foreign));
+    await admin.query("REVOKE ALL ON public.sg_foreign FROM PUBLIC");
+    check("…and converges once the administrator revokes it",
+      (await failureOf(() => applyRoleSplit(url!))) === "");
+    await admin.query("DROP TABLE public.sg_foreign");
 
     // ── 3. NON-VACUITY: the ADMIN can do what the runtime cannot ─────────────
     // Inside a rolled-back transaction so the genuine chain is untouched: the

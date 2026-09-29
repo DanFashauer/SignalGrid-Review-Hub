@@ -348,6 +348,29 @@ see `docs/BACKUP_AND_RESTORE.md` § "The runtime role"). The sequence is:
 database it re-applies the idempotent role split, so a dropped grant is fixed
 by exactly the command the error messages name.
 
+**Upgrading a database an earlier revision migrated: re-run `db:migrate`
+before rolling the new image.** Decisions and evidence snapshots are now
+immutable by privilege — the runtime role holds `SELECT, INSERT` on them,
+no longer `UPDATE` — and `/readyz` refuses while the runtime still holds a
+forbidden privilege (`UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES` or
+`TRIGGER` on those tables; `DELETE`, `TRUNCATE`, `REFERENCES` or `TRIGGER`
+on `sessions`). A database not re-migrated still grants `UPDATE`, so the
+new image reports not-ready (503, naming `FORBIDDEN`) until
+`pnpm run db:migrate` runs. The same re-apply revokes `TEMPORARY` on the
+database from `PUBLIC`: every non-owner role loses ambient temp tables (the
+same radius as the `CREATE` revoke), so grant `TEMPORARY` explicitly to any
+other role that needs it. The split now also refuses any trigger on a
+managed table and any grant, inherited from `PUBLIC` included, that lets
+the runtime role read or write a relation outside the four managed tables
+and the ledger sequence. It names each one; revoke or drop it, then re-run.
+
+One behavior change follows from immutability. The demo core runs on a
+fixed clock and its decision ids come from a per-process counter, so a
+restarted demo process mints the same ids again. Re-saving an identical
+decision still answers 200; a different decision under a re-minted id now
+answers 500 ("refusing to overwrite an immutable record") instead of
+silently overwriting the stored one.
+
 ## Upgrade and rollback
 
 Upgrades: migrate first (admin credential), then roll the API image. The

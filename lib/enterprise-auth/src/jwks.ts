@@ -3,9 +3,10 @@ import type { Jwks } from "./jwt";
 /**
  * A tiny TTL cache for an IdP's published JWKS. The signing keys rotate rarely,
  * so we fetch once and reuse until the TTL lapses — but we never cache a failed
- * fetch, so a transient outage doesn't poison the cache. The HTTP client and the
- * clock are both INJECTED, which keeps this unit testable offline and lets the
- * proof exercise refresh/expiry without a real network or wall clock.
+ * fetch. A failure does open a short FETCH_FAILURE_BACKOFF_MS window in which
+ * get() refuses without fetching, so an IdP outage is not hammered. The HTTP
+ * client and the clock are both INJECTED, which keeps this unit testable offline
+ * and lets the proof exercise refresh/expiry without a real network or wall clock.
  *
  * IT ALSO REFETCHES ON AN UNKNOWN `kid`, and that half was missing.
  *
@@ -86,8 +87,11 @@ export function createJwksCache(uri: string, fetchImpl: JwksFetch, ttlMs = 10 * 
       if (inflight) {
         return inflight;
       }
+      // A clock stepped backwards must not stretch the backoff by the size of the step:
+      // on a cold cache that would refuse every request with no fetch at all.
       // freshness: local-by-design — the backoff after this process's own failed fetch; no foreign clock, no skew
-      if (nowMs - failedAtMs < FETCH_FAILURE_BACKOFF_MS) {
+      const sinceFailureMs = nowMs - failedAtMs;
+      if (sinceFailureMs >= 0 && sinceFailureMs < FETCH_FAILURE_BACKOFF_MS) {
         throw new Error("JWKS fetch failed recently; backing off");
       }
       if (fresh) {

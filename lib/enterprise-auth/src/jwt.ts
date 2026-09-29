@@ -191,6 +191,10 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   if (typeof claims.exp !== "number") {
     return fail("missing exp claim");
   }
+  // `"exp":1e999` parses to Infinity — a signed token that never expires.
+  if (!Number.isFinite(claims.exp)) {
+    return fail("malformed exp claim");
+  }
   // freshness: local-by-design — not the sighting-freshness rule — RFC 7519 `exp` validation with the OIDC clock tolerance (`clockToleranceSec`, default 60s, operator-configurable by standard)
   if (now > claims.exp * 1000 + tolMs) {
     return fail("token has expired");

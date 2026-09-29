@@ -186,6 +186,18 @@ const cases: Case[] = [
     })(),
     expectAccept: true,
   },
+  {
+    // Signed from a RAW payload string: JSON.stringify would turn Infinity into
+    // null, which the "missing exp" branch already refuses — proving nothing.
+    name: "exp 1e999 (parses to Infinity, never expires) is refused",
+    token: (() => {
+      const [h] = validToken.split(".");
+      const raw = JSON.stringify(validParts().payload).replace(/"exp":\d+/, '"exp":1e999');
+      const input = `${h}.${b64url(raw)}`;
+      return `${input}.${b64url(cryptoSign("RSA-SHA256", Buffer.from(input, "ascii"), privateKey))}`;
+    })(),
+    expectAccept: false,
+  },
 ];
 
 let passed = 0;
@@ -369,6 +381,15 @@ if (!accepted.ok) {
   idpUp = true;
   const afterBackoff = await settled(down.get(T + 11_000));
   check("after the backoff lapses, exactly ONE more fetch is made, and it recovers", downFetches === 2 && afterBackoff === "resolved");
+
+  let stepFetches = 0;
+  const stepped = createJwksCache(uri, async () => {
+    stepFetches += 1;
+    return stepFetches === 1 ? { ok: false, status: 503, json: async () => ({}) } : { ok: true, status: 200, json: async () => keyset };
+  });
+  await settled(stepped.get(T));
+  const afterStepBack = await settled(stepped.get(T - 60_000));
+  check("a clock stepped back after a failure does not stretch the backoff — it fetches", stepFetches === 2 && afterStepBack === "resolved");
 
   let joinFetches = 0;
   const join = createJwksCache(uri, slowOk(() => { joinFetches += 1; }));

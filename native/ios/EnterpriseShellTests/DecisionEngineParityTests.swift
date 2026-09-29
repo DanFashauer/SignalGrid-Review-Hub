@@ -21,7 +21,8 @@ import XCTest
 /// identical to what the TypeScript engine produced. Falsifiable — flip one expected
 /// outcome in the vectors and the named case goes red (exercised in the lane's delivery).
 /// A red case is repaired by a literal re-port from the TS that the owner has ruled on
-/// (CLAUDE.md golden rule 1; #1118's DR-043 removal rule was the first, 2026-09-29) —
+/// (DR-061, pending the owner's merge; golden rule 1 still forbids every other edit;
+/// #1118's DR-043 removal rule was the first, 2026-09-29) —
 /// never by editing `DecisionEngine.swift` to make this test pass.
 final class DecisionEngineParityTests: XCTestCase {
 

@@ -8,7 +8,7 @@
 // macOS jobs run — so until the cloud review of #1118 nothing on Linux bound the two:
 // deleting that test, gutting it, or pointing it at another file stayed green in every
 // Linux gate. This gate requires the test to exist, load the vectors by a quoted literal
-// outside a comment (a doc comment naming the file does not count), replay through
+// outside a comment (a `//`, `///` or `/* */` comment naming the file does not count), replay through
 // `DecisionEngine.evaluate`, and assert.
 //
 // NOT established by a green here: that the port AGREES with the TS engine. This gate
@@ -26,7 +26,7 @@ const SWIFT_TEST = "native/ios/EnterpriseShellTests/DecisionEngineParityTests.sw
 /** What is wrong with the Swift test's binding; `text` is null when the file is missing. */
 function bindingProblems(text) {
   if (text === null) return [`${SWIFT_TEST} is missing — nothing replays the vectors in Swift`];
-  const code = text.replace(/\/\/.*$/gm, ""); // comments never count as a binding
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, ""); // comments (block and line) never count as a binding
   const problems = [];
   if (!/"[^"\n]*decision-engine-vectors\.json"/.test(code)) problems.push("does not load decision-engine-vectors.json by a quoted literal");
   if (!/DecisionEngine\.evaluate\(/.test(code)) problems.push("never calls DecisionEngine.evaluate( — the cases are not replayed through the port");
@@ -41,6 +41,7 @@ function selfTest() {
     ["a missing test file is caught", null, false],
     ["a test naming ANOTHER vectors file is caught", good.replace("decision-engine-vectors", "remediation-allow-vectors"), false],
     ["the vectors named only in a comment is caught", good.replace('let p = "', '/// reads "'), false],
+    ["the vectors named only in a block comment is caught", good.replace('let p = "shared/decision-engine-vectors.json"', '/* was "shared/decision-engine-vectors.json" */ let p = "shared/remediation-allow-vectors.json"'), false],
     ["a test that never calls DecisionEngine.evaluate is caught", good.replace("DecisionEngine.evaluate(", "DecisionEngine.describe("), false],
     ["a test with no XCTAssert is caught", good.replace("XCTAssertEqual", "print"), false],
   ];

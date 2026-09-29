@@ -397,8 +397,9 @@ const MIN_SHAPE_FIELDS = 5;
  * present on its side (else the entry is stale — delete it) and still absent on the
  * other (else the port landed and the entry is hiding finished work — delete it and
  * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode, as a
- * literal re-port from the TS that the owner has ruled on (CLAUDE.md golden rule 1; the
- * first such ruling was #1118's, 2026-09-29) — never a hand edit to satisfy this gate.
+ * literal re-port from the TS that the owner has ruled on (DR-061, pending the owner's merge;
+ * golden rule 1 still forbids every other edit; the first such ruling was #1118's,
+ * 2026-09-29) — never a hand edit to satisfy this gate.
  */
 /**
  * SECTION 2b — DECLARED TRIGGER DRIFT (2026-09-14).
@@ -420,8 +421,9 @@ const MIN_SHAPE_FIELDS = 5;
  * the gate fails until the declaration is deleted, so a drift cannot outlive its reason.
  *
  * Repairing the port is the Mac lane's, with Xcode — a literal re-port from the TS that the
- * owner has ruled on (CLAUDE.md golden rule 1; #1118's DR-043 removal rule was the first,
- * 2026-09-29, replayed green against the shared vectors), never an edit to satisfy this gate.
+ * owner has ruled on (DR-061, pending the owner's merge; golden rule 1 still forbids every
+ * other edit; #1118's DR-043 removal rule was the first, 2026-09-29, replayed green against
+ * the shared vectors), never an edit to satisfy this gate.
  */
 // Empty since 2026-09-26. The one entry it carried — CUSTODY_EXCEPTION / `hasUnauthorizedRemoval`,
 // TS only (DR-043 item (b), PR #748: the TS engine raises CUSTODY_EXCEPTION when a

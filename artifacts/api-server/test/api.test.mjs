@@ -16,7 +16,27 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-const PORT = 5310;
+// Every server this test boots binds an EPHEMERAL port. Fixed ports (5310, 5311, …)
+// collided on the build Mac when the launchd tick's evidence run and a self-hosted
+// runner job both ran this file at once (2026-09-25 20:4xZ: the tick's server lost the
+// bind and its fetch read ECONNREFUSED). The OS hands out a free port; nothing here
+// needs a known number.
+// `handedOut` is the run's own ledger: freePort never repeats a number within one run
+// (the OS may re-offer a just-closed probe port), and the port-hygiene check at the
+// end reads this ledger instead of scanning the file's text for constants.
+const handedOut = [];
+const freePort = () => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(0, "127.0.0.1", () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort());
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "../dist/index.mjs");
@@ -1584,7 +1604,7 @@ async function run() {
   // independently. Runs against a second, short-lived server so the main server's
   // self-service coverage above is untouched.
   {
-    const PORT2 = 5311;
+    const PORT2 = await freePort();
     const BASE2 = `http://localhost:${PORT2}/api`;
     const SECRET = "test-out-of-band-enrollment-secret";
     const server2 = spawn("node", [serverEntry], {
@@ -1666,7 +1686,7 @@ async function run() {
   // credential set it could not actually observe. Third short-lived server so
   // the main (no-Redis) coverage above is untouched.
   {
-    const PORT3 = 5312;
+    const PORT3 = await freePort();
     const BASE3 = `http://localhost:${PORT3}/api`;
     const server3 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT3), NODE_ENV: "production", LOG_LEVEL: "silent", REDIS_URL: "redis://127.0.0.1:1" },
@@ -1708,7 +1728,7 @@ async function run() {
   // Fourth short-lived server, in the gateway profile, so the demo coverage above is
   // untouched and both halves are proven in one run.
   {
-    const PORT4 = 5313;
+    const PORT4 = await freePort();
     const BASE4 = `http://localhost:${PORT4}/api`;
     const server4 = spawn("node", [serverEntry], {
       env: {
@@ -1915,7 +1935,7 @@ async function run() {
     // outage reported as a dead process would restart-loop a working server.
     // Readiness must go 503, in the same flat envelope as every other error:
     // fail-closed, not fail-quiet.
-    const PORT5 = 5314;
+    const PORT5 = await freePort();
     const BASE5 = `http://localhost:${PORT5}/api`;
     const server5 = spawn("node", [serverEntry], {
       env: {
@@ -1981,7 +2001,7 @@ async function run() {
     // Sixth short-lived server with a registry entry injected through the
     // operator env lever — deprecating GET /v1/audit for this process only,
     // nothing in source. The dates are fixed so the wire assertions are exact.
-    const PORT6 = 5315;
+    const PORT6 = await freePort();
     const BASE6 = `http://localhost:${PORT6}/api`;
     const server6 = spawn("node", [serverEntry], {
       env: {
@@ -2239,7 +2259,7 @@ async function run() {
     // probe answering against a still-dying server. A flake, not a fail-open (the
     // positive controls below would go red, not green) — and cheaper to remove
     // than to reason about.
-    const PORT_OPEN = 5322;
+    const PORT_OPEN = await freePort();
     const openServer = spawnLimited(PORT_OPEN, {});
     try {
       check("rate-limit probe server (no METRICS_TOKEN) becomes ready", (await waitReady(PORT_OPEN)) === true);
@@ -2259,7 +2279,7 @@ async function run() {
       openServer.kill("SIGTERM");
     }
 
-    const PORT_TOKEN = 5323;
+    const PORT_TOKEN = await freePort();
     const tokenServer = spawnLimited(PORT_TOKEN, { METRICS_TOKEN: "row94-probe-token" });
     try {
       check("rate-limit probe server (METRICS_TOKEN set) becomes ready", (await waitReady(PORT_TOKEN)) === true);
@@ -2383,7 +2403,7 @@ async function run() {
   // `tier` is asserted first so the env is proven to have taken effect; without that
   // the second assertion would pass vacuously on a server that ignored the env.
   {
-    const PORT7 = 5316;
+    const PORT7 = await freePort();
     const BASE7 = `http://localhost:${PORT7}/api`;
     const server7 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT7), NODE_ENV: "production", LOG_LEVEL: "silent",
@@ -2408,7 +2428,7 @@ async function run() {
   // (maxPerTenant === 3) BEFORE anything is concluded from `capped` — without that, a
   // server ignoring the env would pass vacuously.
   {
-    const PORT8 = 5317;
+    const PORT8 = await freePort();
     const BASE8 = `http://localhost:${PORT8}/api`;
     const server8 = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT8), NODE_ENV: "production", LOG_LEVEL: "silent",
@@ -2446,7 +2466,7 @@ async function run() {
   // ── Ninth short-lived server: an INVALID cap must refuse to boot ──────────────
   // Asserted by watching the process die, not by reading the code that says it would.
   {
-    const PORT9 = 5318;
+    const PORT9 = await freePort();
     const bad = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT9), NODE_ENV: "production", LOG_LEVEL: "silent",
         SIGNALGRID_MAX_DECISIONS_PER_TENANT: "0" },
@@ -2469,7 +2489,7 @@ async function run() {
   // watching the process die, the same way the cap above is, and paired with a control
   // that proves it is the BLANKNESS being refused and not the variable's presence.
   {
-    const PORT10 = 5319;
+    const PORT10 = await freePort();
     const startBlank = (value) => spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT10), NODE_ENV: "production", LOG_LEVEL: "silent", METRICS_TOKEN: value },
       stdio: ["ignore", "ignore", "ignore"],
@@ -2543,7 +2563,7 @@ async function run() {
   // started empty and nothing said why. It now emits one line after the loop, and this
   // reads that line off the process's own stdout rather than trusting the source.
   {
-    const PORT11 = 5324;
+    const PORT11 = await freePort();
     const seedServer = spawn("node", [serverEntry], {
       env: { ...process.env, PORT: String(PORT11), NODE_ENV: "production", LOG_LEVEL: "info" },
       stdio: ["ignore", "pipe", "inherit"],
@@ -2575,11 +2595,11 @@ async function run() {
   // `pnpm run proof:estate-refresh` — an interval this suite could only observe by
   // sleeping past the 30s floor, and a gate that sleeps is a gate people switch off.
   {
-    const PORT12 = 5325;
-    const PORT13 = 5326;
-    const STUB_PORT = 5327;
-    const PORT14 = 5328;
-    const GATED_STUB_PORT = 5329;
+    const PORT12 = await freePort();
+    const PORT13 = await freePort();
+    const STUB_PORT = await freePort();
+    const PORT14 = await freePort();
+    const GATED_STUB_PORT = await freePort();
     const BASE12 = `http://localhost:${PORT12}/api`;
     // What the live transport actually put on the wire, recorded by the stub below.
     const graphStubSaw = [];
@@ -2804,17 +2824,17 @@ async function run() {
   // ── every spawned server binds its OWN port ──────────────────────────────
   // 5314 and 5315 were each used by TWO different spawned servers, and neither
   // predecessor is awaited on SIGTERM before the successor rebinds. That is a flake,
-  // not a fail-open — but a flake in a gate is a gate people learn to re-run. Derived
-  // from this file's own text rather than a list kept beside it, so a port added
-  // tomorrow is covered without anyone remembering to add it here.
+  // not a fail-open — but a flake in a gate is a gate people learn to re-run. Until
+  // 2026-09-26 this scanned the file's text for `PORT… = 53xx` constants; the ports
+  // are now handed out by the OS at run time (freePort, top of file), so the check
+  // reads the run's own ledger of what was handed out — a port added tomorrow is
+  // covered because it can only come from freePort.
   {
-    const selfSrc = await readFile(new URL("./api.test.mjs", import.meta.url), "utf8");
-    const portLiterals = [...selfSrc.matchAll(/\bPORT[A-Z0-9_]*\s*=\s*(\d{4})\b/g)].map((m) => m[1]);
-    const dupes = portLiterals.filter((p, i) => portLiterals.indexOf(p) !== i);
+    const dupes = handedOut.filter((p, i) => handedOut.indexOf(p) !== i);
     for (const d of new Set(dupes)) console.error(`  port bound by more than one spawned server: ${d}`);
-    // FLOOR FIRST: a regex that matched nothing would report "no duplicates".
-    check(`port hygiene: the port scan found the servers it should (${portLiterals.length} port constants)`,
-      portLiterals.length >= 12);
+    // FLOOR FIRST: an empty ledger would report "no duplicates".
+    check(`port hygiene: the servers this run booted each got a port from the OS (${handedOut.length} ports handed out)`,
+      handedOut.length >= 12);
     check("port hygiene: no two spawned servers are given the same port", dupes.length === 0);
   }
 
@@ -2962,13 +2982,7 @@ async function run() {
     // built at import and the process exits before Express's async listen can
     // report anything. Measured: with the port held by another process, the dumper
     // still exited 0 and returned 81 routes. So there is no port race to retry.
-    const freePort = () => new Promise((resolvePort) => {
-      const probe = netCreateServer();
-      probe.listen(0, "127.0.0.1", () => {
-        const p = probe.address().port;
-        probe.close(() => resolvePort(p));
-      });
-    });
+    // freePort: the module-level helper (every server here boots on an ephemeral port).
     // `new URL`, not path.resolve: `resolve` is shadowed by a local const inside
     // run() (the same reason the coverage block above reads its file that way).
     const dumper = fileURLToPath(new URL("./route-stack-dump.mjs", import.meta.url));

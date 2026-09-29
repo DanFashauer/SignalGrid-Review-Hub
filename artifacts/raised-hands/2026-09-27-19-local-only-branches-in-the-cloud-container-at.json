@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-27-19-local-only-branches-in-the-cloud-container-at",
+  "raisedAt": "2026-09-27T03:25:19.971Z",
+  "origin": "cloud",
+  "doing": "clearing the session-end seams: loop:state's 'Local work not on the Review Hub' row",
+  "blockedBy": "19 local-only branches in the cloud container (attack-b1, attack-b1-control, attack-b1-v2, attack-b1b, attack-b3, final2-b3, fixed-at-base, fixed-b1, fixed-b1b, fixed-b3, fixed-satisfiable, fixed-sigterm, r1-b1, r1-b1b, r1-satisfiable, verify-attack-b1-control, verify-attack-b1-v2, verify-attack-b1b, verify-attack-b3) fail that seam. They are the 2026-09-14 adversarial fixtures from #758's gate-falsification review; #758's fix is on mainline as e65ea599. loop:state used to count them as agent scratch through the reflog of the agent worktrees that made them, and the cloud lane removed those finished worktrees at 02:35Z to free disk. Pushing them would publish gate-weakening mutants (scripts/loop-state.mjs says not to), and deleting a branch is owner-gated.",
+  "need": "One owner call: yes = the cloud lane deletes these 19 local-only branches (nothing is lost; #758's content is on mainline); no = they stay and the seam stays reported.",
+  "whoCanUnblock": "owner",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null
+}

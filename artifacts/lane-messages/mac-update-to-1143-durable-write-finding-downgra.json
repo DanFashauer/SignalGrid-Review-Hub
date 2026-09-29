@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-update-to-1143-durable-write-finding-downgra",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Update to #1143: durable-write finding downgraded to defense-in-depth (I traced it; the hand I raised is resolved f79e430)",
+  "body": "Followup on #1143 (now @ a17b5fdd). I answered my own raised hand rather than leave it for you: the cross-tenant leak is NOT reachable — tenant.id is platform-derived (artifacts/api-server/src/lib/core.ts:98, tenant_<slug> from the SLUG-validated SIGNALGRID_ESTATE_TENANT env; demo uses fixture tenant ids), an estate store is single-tenant (buildEstateStore seeds one tenantId), and no runtime route accepts a caller-supplied tenant id or externalRef (routes grep empty; estate externalRefs come from the deployment's own Graph connector). Hand resolved on mainline f79e430 with the full trace + the reopen condition (a runtime provisioning route taking a caller tenant id/externalRef, or a store seeding >1 tenant from non-fixture input). So the #1143 backlog row is downgraded HIGH -> MEDIUM/defense-in-depth and SPLIT: the isolation half is defense-in-depth (the store should be tenant-safe on write regardless); the IMMUTABILITY half stays live on the demo+durable profile (fixed clock + DATABASE_URL rewrites a decision that then passes verifySnapshot). The DO-NOTHING + tenant-guard store fix stays queued as defense-in-depth on the PG-proof lane (retry-vs-collision subtlety noted). Preflight PASSED 375. Next Mac shift: the device-management-health/evaluate.ts Tier-1 read (below-depth -> audited). Open on your side unchanged: #1037, #1118, #1121, #1136, #1143.",
+  "sentAt": "2026-09-27T00:05:07.079Z"
+}

@@ -29,9 +29,18 @@
 //
 // FATAL IN CI, REPORTED LOCALLY. Unknown must tighten — but a gate that fails a
 // developer's preflight because they hold no API token is a gate that gets
-// switched off, and a switched-off gate protects nothing. CI always has a token,
-// so in CI an unreachable API is FATAL: it means the check could not run where
-// it must. Locally it is REPORTED, never silent.
+// switched off, and a switched-off gate protects nothing. CI has a token — when
+// the workflow STEP hands it over (`env: GITHUB_TOKEN: ${{ github.token }}`;
+// Actions never exports it on its own) — so in CI an unreachable API is FATAL: it
+// means the check could not run where it must. Locally it is REPORTED, never silent.
+//
+// AN ABSENT TOKEN IN CI IS FATAL TOO, NOT A FALLBACK. From the day it was wired until
+// 2026-09-26 the CI step set no env, this script found no token, and every call went
+// out unauthenticated on the runner address's 60-per-hour budget — the paragraph
+// above said "CI always has a token" while the gate had never once used one. It
+// passed on that budget until a mail PR found it exhausted (`limit=60 used=60`). A
+// gate that quietly degrades to a weaker credential is the fail-open shape golden
+// rule 2 forbids, so `tokenProblem` below refuses to run unauthenticated in CI.
 //
 // WHAT THIS DELIBERATELY DOES NOT DO. It does not judge whether the sweep's
 // FINDINGS are acceptable — only that the sweep ran and succeeded recently
@@ -67,6 +76,14 @@ const RUNS_TO_INSPECT = 10;
 const IN_CI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
 const TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 
+/** In CI, no token is a broken step, never a reason to call unauthenticated. Pure. */
+export function tokenProblem({ inCi, token }) {
+  if (!inCi || (typeof token === "string" && token.length > 0)) return null;
+  return "no GITHUB_TOKEN/GH_TOKEN in the environment — in CI this gate refuses to fall back to an " +
+    "unauthenticated call (a 60-per-hour per-address budget that this step ran on, unnoticed, until " +
+    "2026-09-26). Hand the step the token: env: GITHUB_TOKEN: ${{ github.token }}";
+}
+
 // ── the decision, as a pure function so it can be tested without a network ────
 export function evaluateLiveness({ lastSuccessIso, nowMs, staleAfterHours }) {
   if (!lastSuccessIso) {
@@ -101,6 +118,15 @@ export function evaluateLiveness({ lastSuccessIso, nowMs, staleAfterHours }) {
     ["empty timestamp FAILS", { lastSuccessIso: "", nowMs: now, staleAfterHours: 48 }, false],
   ];
   const bad = cases.filter(([, input, expected]) => evaluateLiveness(input).ok !== expected);
+  for (const [name, input, expectNull] of [
+    ["token: CI with a token → no problem", { inCi: true, token: "ghs_x" }, true],
+    ["token: local with no token → no problem (REPORTED path, not this check)", { inCi: false, token: "" }, true],
+    ["token: CI with an EMPTY token → FATAL problem naming the fix", { inCi: true, token: "" }, false],
+    ["token: CI with an undefined token → FATAL problem", { inCi: true, token: undefined }, false],
+  ]) {
+    const p = tokenProblem(input);
+    if ((p === null) !== expectNull || (p !== null && !/github\.token/.test(p))) bad.push([name]);
+  }
   if (bad.length > 0) {
     console.error(
       "✗ SELF-TEST FAILED — these cases did not behave as required:\n" +
@@ -582,6 +608,15 @@ if (!invokedDirectly) {
 
 console.log("CI liveness — a sweep that stops running must fail a build, not go quiet\n");
 
+{
+  const p = tokenProblem({ inCi: IN_CI, token: TOKEN });
+  if (p) {
+    console.error(`  ✗ ${p}`);
+    console.error("\nCI-liveness gate FAILED — it would have run unauthenticated where it is required to run for real.");
+    process.exit(1);
+  }
+}
+
 let found;
 try {
   found = await lastSweepSuccess();
@@ -590,7 +625,7 @@ try {
   if (IN_CI) {
     console.error(
       `  ✗ ${msg}\n` +
-        "      In CI this is FATAL. A token is always available here, so an unreachable\n" +
+        "      In CI this is FATAL. The step handed this gate a token, so an unreachable\n" +
         "      API means the check could not run where it is required to run — and a\n" +
         "      liveness gate that silently skips is the failure it exists to prevent.",
     );

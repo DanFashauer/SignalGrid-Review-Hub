@@ -1,23 +1,37 @@
 name: Raised hands
 
 # The owner's one page of everything stuck (owner, 2026-09-23: "All agents will
-# never raise their hand when they get stuck"). Hourly, this renders
+# never raise their hand when they get stuck"). On every run, this renders
 # scripts/raised-hands.mjs — every hand an agent raised in
 # docs/agent/RAISED_HANDS.json, plus every stall nobody raised a hand for (mail
 # unread past 24h, sim requests pending past 48h, routine heartbeats past their
 # tolerance, PRs red or green-and-idle too long) — into ONE open issue labelled
 # `raised-hands`.
 #
-# The issue BODY is rewritten every hour (an edit sends no notification). A
+# The issue BODY is rewritten on every run (an edit sends no notification). A
 # COMMENT is posted only when a hand appears that was not on the last body, so the
 # owner's phone buzzes for something new and never for the same thing twice.
 #
 # Report-only: no code is changed, no PR is touched. GitHub runs `schedule` only
 # on the default branch.
+#
+# `schedule` is best-effort. Between 2026-09-26T00:39Z and 2026-09-28T07:00Z GitHub
+# ran this "hourly" cron 13 times, at gaps of 2-6h, so the page went stale past
+# the steward's 2h freshness line. `push` to mainline is the dependable trigger:
+# the Mac tick heartbeat moves SignalGrid_Alpha every ~25 min. The concurrency
+# group below serialises runs WITHOUT cancelling the one in progress: a run
+# cancelled between rewriting the body and posting its new-hand comment would let
+# the next run read the new id from the updated body and never notify the owner.
+# GitHub still replaces an older PENDING run with a newer one; that cancelled run
+# did no work, and it has no verdict in scripts/check-mainline-workflow-streaks.mjs.
+# Every run checks out the CURRENT SignalGrid_Alpha, not its event's sha, so a run
+# that starts after a newer push renders the newest ledger, never an older one.
 
 on:
   schedule:
-    - cron: "23 * * * *" # hourly
+    - cron: "23 * * * *" # hourly, when GitHub honours it
+  push:
+    branches: [SignalGrid_Alpha]
   workflow_dispatch: {}
 
 permissions:
@@ -28,7 +42,7 @@ permissions:
 
 concurrency:
   group: raised-hands
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   hands:
@@ -39,6 +53,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          ref: SignalGrid_Alpha # the latest mainline, whichever event queued this run
           fetch-depth: 0 # a v1 lane message ages by its commit date
 
       - uses: actions/setup-node@v7

@@ -203,6 +203,9 @@ export class PostgresAuditBackend implements AuditBackend {
              has_any_column_privilege('public.audit_ledger', 'UPDATE')
           OR has_table_privilege('public.audit_ledger', 'DELETE')
           OR has_table_privilege('public.audit_ledger', 'TRUNCATE')
+          OR has_any_column_privilege('public.audit_ledger', 'REFERENCES')
+          -- TRIGGER lets the runtime attach a trigger that suppresses or edits appends
+          OR has_table_privilege('public.audit_ledger', 'TRIGGER')
           -- sequence UPDATE means setval(): the append counter could be wedged
           OR has_sequence_privilege(pg_get_serial_sequence('public.audit_ledger', 'seq'), 'UPDATE') AS forbidden
     `);
@@ -215,12 +218,13 @@ export class PostgresAuditBackend implements AuditBackend {
     }
     // The append-only boundary is a NEGATIVE claim, so readiness must also
     // check the forbidden direction: a grant of UPDATE (table- or
-    // column-level), DELETE, or TRUNCATE that appears under a running process
-    // means the ledger is rewritable — that is not a ready state for a
+    // column-level), DELETE, TRUNCATE, REFERENCES or TRIGGER that appears
+    // under a running process means the ledger is rewritable (or its appends
+    // suppressible) — that is not a ready state for a
     // tamper-evidence component, whatever the required privileges say.
     if (priv.rows[0]?.forbidden) {
       throw new Error(
-        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, or TRUNCATE — " +
+        "this credential holds FORBIDDEN privileges on audit_ledger (UPDATE, DELETE, TRUNCATE, REFERENCES or TRIGGER — " +
           "directly, via PUBLIC, or column-level): the ledger would not be append-only. Re-apply the " +
           "role split with the admin credential (`pnpm run db:migrate`); refusing to report ready.",
       );

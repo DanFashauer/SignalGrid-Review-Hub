@@ -270,7 +270,8 @@ export class PostgresSessionStore implements SessionStore {
       // The column is TEXT: a value outside the enum reads as EXPIRED (fail
       // closed), never passed through as a status no caller handles.
       status: (r.status === "active" || r.status === "expired" || r.status === "ended") ? r.status : "expired",
-      outcome: r.outcome as DecisionOutcome,
+      // Same for the outcome: an unknown word reads as DENY.
+      outcome: (["allow", "step_up", "restrict", "deny"] as const).includes(r.outcome) ? r.outcome : "deny",
       decisionId: r.decision_id,
       createdAt: iso(r.created_at),
       lastSeenAt: iso(r.last_seen_at),

@@ -66,12 +66,14 @@ async function main() {
   // only expires 'active', so the past expires_at was never applied.
   await admin.query(
     `INSERT INTO sessions (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
-     VALUES ('sess_pg_z', 'tenant_northwind', 'nurse.compliant', 'ipad-ward-01', 'clinical-session', 'zombie', 'allow', 'dec_test', $1, $1, $2)`,
+     VALUES ('sess_pg_z', 'tenant_northwind', 'nurse.compliant', 'ipad-ward-01', 'clinical-session', 'zombie', 'maybe', 'dec_test', $1, $1, $2)`,
     [iso(T0 - 120_000), iso(T0 - 60_000)],
   );
   check("an unknown stored status ('zombie', past expiry) reads as EXPIRED, never passed through",
     (await store.get("tenant_northwind", "sess_pg_z", T0 + 1000))?.status === "expired");
   check("…and it cannot be refreshed", (await store.refresh("tenant_northwind", "sess_pg_z", 900, T0 + 1000)) === null);
+  check("…and an unknown stored outcome ('maybe') reads as DENY, never passed through",
+    (await store.get("tenant_northwind", "sess_pg_z", T0 + 1000))?.outcome === "deny");
 
   // ── REFRESH RACING END: the UPDATE itself must require status='active' ─────
   // End the session between refresh's read and its write. The UPDATE used to

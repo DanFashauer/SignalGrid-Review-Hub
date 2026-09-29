@@ -83,8 +83,8 @@ const OWNER_RIGHTS_CHECKS = `
       WHERE c.relkind = 'v'
         AND n.nspname NOT IN ('pg_catalog', 'information_schema')
         AND n.nspname NOT LIKE 'pg\\_%'
-        AND (has_table_privilege('signalgrid_runtime', c.oid, 'INSERT')
-          OR has_table_privilege('signalgrid_runtime', c.oid, 'UPDATE')
+        AND (has_any_column_privilege('signalgrid_runtime', c.oid, 'INSERT')
+          OR has_any_column_privilege('signalgrid_runtime', c.oid, 'UPDATE')
           OR has_table_privilege('signalgrid_runtime', c.oid, 'DELETE'))
     ) THEN
       RAISE EXCEPTION 'signalgrid_runtime can WRITE through a view outside the system schemas — views '
@@ -178,12 +178,14 @@ const OWNER_RIGHTS_CHECKS = `
               -- USAGE is nextval(): a write to another component's counter
               OR has_sequence_privilege('signalgrid_runtime', c.oid, 'USAGE')
             ELSE
-              has_table_privilege('signalgrid_runtime', c.oid, 'SELECT')
-              OR has_table_privilege('signalgrid_runtime', c.oid, 'INSERT')
-              OR has_table_privilege('signalgrid_runtime', c.oid, 'UPDATE')
+              -- any_column: has_table_privilege reads false for a COLUMN-level
+              -- grant, which still lets the runtime read or write that column.
+              has_any_column_privilege('signalgrid_runtime', c.oid, 'SELECT')
+              OR has_any_column_privilege('signalgrid_runtime', c.oid, 'INSERT')
+              OR has_any_column_privilege('signalgrid_runtime', c.oid, 'UPDATE')
               OR has_table_privilege('signalgrid_runtime', c.oid, 'DELETE')
               OR has_table_privilege('signalgrid_runtime', c.oid, 'TRUNCATE')
-              OR has_table_privilege('signalgrid_runtime', c.oid, 'REFERENCES')
+              OR has_any_column_privilege('signalgrid_runtime', c.oid, 'REFERENCES')
               OR has_table_privilege('signalgrid_runtime', c.oid, 'TRIGGER')
             END;
       IF foreign_rels IS NOT NULL THEN

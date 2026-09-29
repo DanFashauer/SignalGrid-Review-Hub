@@ -2,11 +2,12 @@
 // and both directions are demonstrated, not asserted.
 //
 // Owner-ordered shift 2. The claim under test: the credential the API server runs
-// with can do its legitimate work (append to the ledger, upsert decisions and
-// evidence, walk sessions through their lifecycle) and CANNOT rewrite history or
-// touch the schema — the ledger is append-only BY PRIVILEGE, not just by hash
-// chain. A hash chain detects tampering after the fact; the missing UPDATE grant
-// prevents the runtime credential from tampering at all.
+// with can do its legitimate work (append to the ledger, save decisions and
+// evidence (immutable: insert-once), walk sessions through their lifecycle)
+// and CANNOT rewrite history or touch the schema — the ledger is append-only
+// BY PRIVILEGE, not just by hash chain. A hash chain detects tampering after
+// the fact; the missing UPDATE grant prevents the runtime credential from
+// tampering at all.
 //
 // SELF-SKIPS when DATABASE_URL is unset, like every real-Postgres proof here.
 //
@@ -415,6 +416,16 @@ async function main() {
       (await deniedCode(runtime, `SELECT setval('${ledgerSeq}', 1000)`)) === "42501");
     check("…and the runtime's CREATE TABLE is STILL denied after the staged direct schema grant (no-DDL holds)",
       (await deniedCode(runtime, "CREATE TABLE runtime_probe_2 (x INT)")) === "42501");
+    // The ledger's readiness names REFERENCES and TRIGGER too: a TRIGGER grant
+    // lets the runtime attach a trigger that suppresses or rewrites appends.
+    for (const privilege of ["REFERENCES", "TRIGGER"]) {
+      await admin.query(`GRANT ${privilege} ON public.audit_ledger TO PUBLIC`);
+      const poisoned = new PostgresAuditBackend(runtimeUrl);
+      check(`…the audit backend's ping REFUSES while ${privilege} on audit_ledger stands via PUBLIC`,
+        /FORBIDDEN/.test(await failureOf(() => poisoned.ping())));
+      await poisoned.close();
+      await admin.query(`REVOKE ${privilege} ON public.audit_ledger FROM PUBLIC`);
+    }
 
     // A grant on an object OUTSIDE the canonical set cannot be reset by the
     // apply step (it only manages the four tables + sequence + public), so
@@ -524,6 +535,15 @@ async function main() {
       /non-canonical/.test(foreign) && /sg_foreign/.test(foreign));
     await admin.query("REVOKE ALL ON public.sg_foreign FROM PUBLIC");
     check("…and converges once the administrator revokes it",
+      (await failureOf(() => applyRoleSplit(url!))) === "");
+    // A COLUMN-level grant: has_table_privilege reads false for it, so a check
+    // built on table privileges alone lets the runtime read the column anyway.
+    await admin.query("GRANT SELECT (i) ON public.sg_foreign TO PUBLIC");
+    const foreignColumn = await failureOf(() => applyRoleSplit(url!));
+    check("role split REFUSES a column-level PUBLIC grant on a non-canonical relation, naming it",
+      /non-canonical/.test(foreignColumn) && /sg_foreign/.test(foreignColumn));
+    await admin.query("REVOKE ALL ON public.sg_foreign FROM PUBLIC");
+    check("…and converges once the administrator revokes the column grant",
       (await failureOf(() => applyRoleSplit(url!))) === "");
     await admin.query("DROP TABLE public.sg_foreign");
 

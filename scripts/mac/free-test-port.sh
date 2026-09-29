@@ -23,16 +23,33 @@
 #  - bash 3.2 safe (no arrays; while-read from a heredoc keeps the counter out of a subshell),
 #    fail-safe (every step guarded; never aborts the job).
 #
+# ORPHANS ONLY (FREE_TEST_PORT_ORPHANS_ONLY=1, set by scripts/preflight.mjs). A local
+# preflight must not kill a LIVE same-tree server — a test:api, verify:breadth or tick
+# evidence run still going in this checkout. In this mode only a server whose parent is
+# gone (ppid 1, reparented to init/launchd) is reaped; a live one is reported and left.
+# CI's Mac job calls this without the flag and reaps everything under its workspace.
+#
+# CEILING. Only an argv carrying the ABSOLUTE path matches — the harnesses that spawn
+# with an absolute serverEntry (api.test, oidc.test, load.test, observability-proof). A
+# relative launch (`pnpm start` → `node ./dist/index.mjs`) is never matched, and another
+# worktree's orphan is never touched: a cross-tree collision (lesson L1) is not this
+# script's to fix.
+#
 # The optional first arg (a port) is accepted for call-site readability but is not used to
 # scope the reap — ownership is by binary path, which covers every port the suite uses.
 set -u
 OWN="${GITHUB_WORKSPACE:-$PWD}"
 SERVER="$OWN/artifacts/api-server/dist/index.mjs"   # the exact api-server this runner builds
+ORPHANS_ONLY="${FREE_TEST_PORT_ORPHANS_ONLY:-}"
 killed=0
-while read -r pid cmd; do
+while read -r pid ppid cmd; do
   [ -n "${pid:-}" ] || continue
   case "$cmd" in
     *"$SERVER"*)
+      if [ -n "$ORPHANS_ONLY" ] && [ "${ppid:-}" != "1" ]; then
+        echo "free-test-port: leaving live api-server pid $pid (parent $ppid is running)"
+        continue
+      fi
       echo "free-test-port: reaping runner-owned api-server pid $pid"
       echo "  cmd: $cmd"
       kill -9 "$pid" 2>/dev/null || true
@@ -40,6 +57,6 @@ while read -r pid cmd; do
       ;;
   esac
 done <<EOF
-$(ps -Aww -o pid= -o command= 2>/dev/null || true)
+$(ps -Aww -o pid= -o ppid= -o command= 2>/dev/null || true)
 EOF
 echo "free-test-port: done — reaped $killed runner-owned api-server(s) under $OWN"

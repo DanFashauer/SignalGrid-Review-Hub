@@ -18,6 +18,10 @@ END    ->  update the four lines below (3 min)
           push, and confirm it landed
 ```
 
+START also reads the [lessons ledger](LESSONS.md); END adds a row there for every
+incident the session hit: a failed gate, a stuck waiter, a lost chain, a wrong
+figure (DR-060).
+
 Ten minutes a week keeps this alive. Skipping the END step is how a week
 disappears - that is exactly how Phase 0 sat unpushed while every tool
 individually reported success.
@@ -52,7 +56,212 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOOP'S OWN REQUEST IS ON MAINLINE.
+LAST TOUCHED: 2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
+              (Tier-1 review coverage 19->22/25, iOS Assist-wire client, tenant-isolation finding traced+
+              downgraded). #1118 (iOS parity) and #1037 (intake) had gone CONFLICTING over 2 days; ran the
+              Mac merge step on both (cloud sandbox cannot git merge): #1118 d4297467 (rebuilt COMPANY_BUILD_PLAN
+              from mainline + row-18 DONE), #1037 b1d6ea8d (union, hook self-test 48/48) - pushed, gates green,
+              preflight/breadth are the cloud's. #1121 already MERGEABLE. Readiness 100%. MY MISTAKE, owned to
+              cloud + memory: broad `pkill -f scripts/preflight.mjs` also killed the self-hosted CI runner's
+              jobs (2 CI runs SIGTERMd); #1106 (ephemeral ports, merged) makes the kill pointless - STOPPED.
+              Cloud confirmed my tenant trace (LATENT) + found a bigger digest() low-byte-aliasing collision
+              (theirs). WAITING ON OWNER (raised hands 2-4d): gitleaks allowlist for #1005, signalgrid-mcp
+              #14/#15 merge, one policy.ts call, build-Mac hygiene.
+              PREVIOUSLY: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
+              #1136/#1147/#1150 carried in); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending until #1153;
+              #1158 (open at the close) landed afterwards as b42a0967 (post-close - not part of this frozen entry).
+              Owner still owes (PR states re-read after the close; settings, chat and branch items last confirmed 09:30Z per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`):
+              #1153 (Assist-wire server, L20 fix pushed) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1153
+              #1146 (core-digest, DECISION_PATH) - its backlog check's part two (fixed regression corpus) is still TO ADD; merge once it is on the PR: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
+              #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133
+              #1117 (ephemeral test ports, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117
+              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z) - reply 'exception granted' or 'revert': https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
+              #1050 (DR-058) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083
+              Doctrine hand (plan row 8) - reply in chat or on https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068. #1037 CodeQL alert - dismiss on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac paths-ignore'
+              Copilot code-review scanner - CAPIError 400 unsupported model; owner picks a supported model in Copilot settings (not in the 09:30Z heartbeat; confirmed unchanged across the close by #1133's scan runs at 09:49:34Z and 10:41:55Z, both CAPIError 400)
+              DR-013 "10 for 10" sentence (OWNER_RESERVED) - owner edits it (dated subset 7/10; gate reads 11 checks, 7 divergent)
+              19 local scratch branches - yes/no on deleting, asked on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1154; Browser: Settings -> Pages -> Source -> GitHub Actions, then run the Pages workflow once
+              Next (at 09:55Z): #1153 waits on the owner (fix already pushed); the SIGTERM ask is still unread by the
+              Mac (a third instance never reached its inbox - read state unknown); otherwise the owner items above.
+TIERS THIS SESSION: Opus reviewed #1156 (two passes) and re-reviewed #1148; Codex ran the automated rounds and Opus
+              covered its usage-limit gap; land-branch ran Sonnet on Pre/Merge/PR-body and Haiku on lock/chain/push/PR-open;
+              a Sonnet subagent drafted this record, an Opus reviewer reviewed it before push. Window detail:
+              docs/agent/EVIDENCE.md, section "## 2026-09-27 - 24 FIRST-PARENT PR MERGES ..." (its only 2026-09-27 entry).
+PREVIOUSLY:   2026-09-26 (cloud lane; frozen at the window's close, 11:55Z) - L8 + L2 + MCP ROSTER #1127 ALL LANDED;
+              FIVE OWNER-DECISION PRs WAIT AT THE WINDOW'S CLOSE (THREE OPENED THIS WINDOW).
+              This entry covers 07:15Z-11:55Z and is frozen there (a rule the next record writes up as a lesson); every later
+              event belongs to the next record.
+              Owner still owes (at 11:55Z): #1117 (fixed test ports -> ephemeral in oidc/load/observability tests, classified
+              DECISION_PATH) - the OWNER merges it at https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117. #1118/#1121
+              (golden-rule-1 ruling asked in chat at 08:20Z) - reply 'exception granted' or 'revert' in chat,
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121. #1050 (DR-058) - the owner merges it at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - the owner merges it at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083. The row-8 doctrine hand - reply in chat, or on the
+              raised-hands issue https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068, with (a) raise to step_up or
+              (b) day-one-quiet covers it (file artifacts/raised-hands/2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-.json);
+              #1037's CodeQL call - dismiss the alert on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply
+              'Mac paths-ignore' in chat. The
+              Copilot scanner's model setting (the 11:55Z tree names it without a browser path). In a BROWSER: Settings ->
+              Pages -> Source -> GitHub Actions at
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/settings/pages, then run the Pages workflow once (Actions ->
+              "Deploy site to Pages" -> Run workflow,
+              https://github.com/DanFashauer/SignalGrid-Review-Hub/actions/workflows/pages.yml).
+              Landed this window: #1119 (177299f3, L10 shallow-fetch deny guard + L11 clean-index guard for coverage --write + L12
+              tick-landing rule), #1120 (bf642ee5, mail: ack for the Mac's #1118 review ask + 08:24Z heartbeat), #1122 (af82b564,
+              the prior window's LOOP/EVIDENCE record), #1123 (5f1f21e3, L8 - check-mainline-workflow-streaks reports red streaks
+              on non-gating mainline workflows), #1124 (bb2ed162, mail: ack for the Mac's #1121 review ask + 09:24Z heartbeat),
+              #1125 (8a39aeef, hygiene sweep + heartbeat), #1126 (8216cf6b, L2 - land-branch is a saved workflow, pushes only on a
+              green preflight sentinel), #1127 (a4507f9a, MCP roster - DR-060 rule 3's first slice, per-lane/per-skill grants,
+              signalgrid-mcp tool count derived; gating check 108397317258 success on head e189552b).
+              L13 (a bare /proc scan alone as a chain lock can deadlock two waiters) - landed: the land-branch workflow's lock is
+              a FILE (noclobber, 40-min stale-clear), never a bare process scan.
+              L14 (a worker-owned background chain died mid-preflight when the worker's turn ended) - landed: the land-branch
+              workflow runs the whole chain as one detached setsid/nohup job.
+              L15 (a stacked branch's pre-merged base tip gave GitHub's single-base mergeability check a false conflict) - landed:
+              the orchestrator-skill rule "a stacked branch waits for its base PR to land, then merges Alpha, never the base tip".
+              Ledger 15/15 landed at the window's close (`git show a4507f9a:docs/agent/LESSONS.md`).
+              Next (at 11:55Z): #1121 still owes Apple CI on its head plus three fail-closed mutants surviving its vector table
+              and the unreachable 'no device change' path; #1118 still owes a TRIGGERS-completeness check and a Linux
+              Swift<->vector binding check, both gated by every item in their review acks even if the golden-rule-1 exception is
+              granted; the three owner-merge PRs above (#1117, #1050, #1083) wait on the owner's merge.
+TIERS THIS SESSION: one Sonnet reader mapped the roster context; Sonnet builders built the L2 fixes, the
+              MCP roster and this record in their own worktrees; Opus reviewers adversarially reviewed L2 (8
+              findings) and the MCP roster (6); Haiku workers ran lock waits, chain starts, sentinel reads, pushes
+              and PR opens inside the saved workflow; Sonnet wrote the later PR bodies, from the L2 landing (#1126) on.
+              Earlier in the window, Haiku wrote the #1119 body, which invented a check-run id and a Jekyll cause, and a body
+              draft for the 07:20Z record (#1122) and the L8 landing (#1123), which invented facts again; the coordinator rewrote
+              each by hand from verified output (recorded later as lesson L16). L7 recurred: the coordinator wrote
+              every brief, made the small direct edits itself (registering the L2 gate self-test in preflight/CI,
+              the sentinel-wait loop and the canPush mirror in the saved workflow, the L15 row and skill rule, the
+              criss-cross repair merge), corrected the two Sonnet bodies and performed their merges - only the fixes
+              themselves, the reviews and the chain mechanics were delegated.
+PREVIOUSLY:   2026-09-26 (cloud lane, 07:20Z) - EIGHT TRANCHES DONE, #1106 RE-MINT RED THEN GREEN, PAGES GREEN AFTER 34 DAYS, DR-060 LANDED.
+              Tranches 3-8 landed the remaining unstamped plan rows under DR-037: #1095 ed4a010a, #1097 980967e5,
+              #1098 ed8a7d65, #1099 72b3f23b, #1100 d154f3ec and #1102 bb05aac7 (the eighth and last) - all `108` rows
+              the loop had refused as unstamped are now measured. The Mac's #1106 (9222c677, test:api + Bruno on
+              ephemeral ports) landed on its own mail ask (lesson L6) and changed api.test.mjs, a bound source of live
+              evidence; the next tick (#1109 a5347aa6) queued a re-mint request, and #1114 (1f337e7d) ran it - live-
+              evidence minted `06:14:13.974Z`, readiness 100 on that tree, 22/22 sim requests bound
+              (`node scripts/check-sim-requests.mjs`: "22 request(s), 22 result(s)"). That tick's own coverage-page
+              regen ran against a base mainline had since moved past, so #1114 landed RED (lesson L12, pending); the
+              next steward heartbeat #1116 (ffa8cc53) regenerated the page and mainline returned to green. #1111
+              (5f586f96) ended the Pages build failure that had run on every mainline push since 2026-08-23 (34 days,
+              vendored Liquid braces breaking Jekyll) with a root `.nojekyll`; workflow run 36223690198 confirms it -
+              conclusion `success` at head `1e26ec0c236f99b85cd5b3da538168d9707253cf`, the first green since the
+              outage began. #1111 failed CI four times first (gate-before-`git add`, twice-stale coverage page, an
+              unowned-count rise) - lesson L9. DR-060 (#1113, 428a12a8) landed: the routing decision record is
+              ADOPTED, and docs/agent/LESSONS.md opened as the incident ledger (L1-L9, `check-lessons.mjs` self-test
+              22/22, FATAL on shape, REPORTED past 14 days) in preflight and CI, with preflight's first step now
+              reaping same-tree api-server orphans and the orchestrator skill carrying the stage table. Incident: a
+              read-only worker ran `git fetch --depth=1` in the SHARED checkout at 05:59Z, making it shallow and
+              making `loop:state` misread Alpha as +1958 ahead; `git fetch --unshallow origin` fixed it in 3.5s -
+              lesson L10 (guard branch in review, PR to follow). Six Mac ticks (#1101, #1105, #1107, #1108, #1112,
+              #1115) were closed as superseded by newer green ticks. Next: three DR-060 follow-up PRs already built
+              and awaiting landing - L10's shallow-fetch deny guard, L8's mainline-workflow red-streak checker, and
+              moving oidc.test.mjs/load.test.mjs/observability-proof.ts off fixed ports (L1's root cause); L11 and L12
+              ride the L10 PR. Owner still owes: #1050 (DR-058), #1083 (DR-059), the row-8 doctrine hand, #1037's
+              CodeQL call, the Copilot scanner's model setting, and Settings -> Pages -> Source -> GitHub Actions.
+TIERS THIS SESSION: two Sonnet readers mapped the hook/ledger/parity/port mechanics; three Sonnet builders built L10,
+              L8 and the ports change in their own worktrees; Opus reviewers adversarially reviewed each; a Sonnet
+              worker built this record, an Opus reviewer checked it (fix-first once, for an unsourced time), a Haiku worker ran its chain - that much matches
+              the stage table. L7 recurred anyway: the coordinator (creative tier) wrote every brief, ran DR-060's
+              local preflight/breadth chain itself, wrote #1113's PR body itself, and performed every merge and PR-
+              body edit - bulk stages the table assigns to the cheapest tier; the merges are the landing skill's own
+              step, but the briefs and bodies are not.
+PREVIOUSLY:   2026-09-26 (cloud lane) - DR-060: THE BRAIN DELEGATES, THE CYCLE LEARNS; THE LESSONS LEDGER OPENS WITH SEVEN ROWS.
+              The owner restated the routing directive in his own words: spec, review and gate design run on Opus and
+              every other stage is dispatched to a cheaper tier; a creative-tier coordinator runs no stage itself. DR-060 (ADOPTED, landed by the cloud lane under DR-037: safety machinery only)
+              records it; docs/agent/LESSONS.md is the new ledger - every incident a cycle hits gets a row with evidence and
+              a landing, gated by scripts/check-lessons.mjs in preflight and CI (pending past 14 days is REPORTED). L1-L7
+              are this cycle's: the orphaned api-server on :5399 (landed as a skill rule; preflight's first step reaps only
+              orphans under its own tree, which would not have caught it; oidc.test.mjs's fixed ports are a backlog row), the hand-picked gate subset (pending - backlog row), the pgrep waiters and the
+              restart-killed chains (landed - orchestrator skill "Sequential chains and waiters"), the coordinator doing bulk
+              work (landed - DR-060 and the skill's stage table), the Mac port collision of 2026-09-25 (landed - PR #1106, 9222c677), this PR breaking its own stage table (L7).
+              TIERS THIS SESSION: Sonnet readers mapped the mechanics; the coordinator (creative tier) wrote the spec, which breaks
+              DR-047 rule 2 (spec runs on Opus); one Opus worker built this PR and ran its gates, where the table says Sonnet;
+              review findings were fixed by an Opus worker, where the table also says Sonnet. All three are lesson L7.
+PREVIOUSLY:   2026-09-26 (cloud lane, 02:35Z) - THE LOOP NOW REFUSES STALE ROWS AND MAILED THE CLOUD ITS QUEUE; A CI GATE HAD RUN UNAUTHENTICATED SINCE IT WAS WIRED.
+              #1087 (ebf302b9, DR-037): an open plan row is ranked only while it carries a `re-measured YYYY-MM-DD` stamp
+              at most `14` days old (`rowMeasuredAt` in scripts/objective-loop.mjs, quoted/code spans stripped); a refused
+              row lands in the state's `unmeasured[]` with its reason and ONE `plan-rows-unmeasured` escalation names every
+              id for the cloud; --check REPORTS the count rather than failing (`108` of `109` open rows were unstamped on
+              landing day - a fatal gate would have been switched off the same hour). Self-test `77/77`. Three minutes
+              after it landed the tick re-derived (#1089: tasks [12], unmeasured `108`) and mailed the cloud - the
+              loop-to-cloud edge works end to end; the ack (#1090) commits the lane to measuring the rows in document
+              order, one tranche per PR, starting 17/18/19, closing finished work and restamping only what was measured.
+              #1088 (85daff21, DR-037): a mail PR's red gating run exposed that check-ci-liveness had called GitHub
+              UNAUTHENTICATED on every CI run since it was wired (`limit=60`, the per-address budget) - Actions never
+              exports GITHUB_TOKEN and no step handed it over; its header said "CI always has a token". Fixed both halves:
+              the token env on every preflight-running step (review-hub-ci, both Mac workflows - the PR's own Mac run
+              failed at the new check first, proving the second site) and `tokenProblem` making an absent token FATAL in CI.
+              Lesson: two queued preflight waiters deadlocked because each one's `pgrep -f` pattern matched the OTHER
+              waiter's command line; one sequential chain replaced them. Records #1085 (b36de43f), this one; steward
+              #1086 (33c3640b). Owner owes: #1050 (DR-058), #1083 (DR-059, its test:api/preflight/breadth lines now in
+              the body), the row-8 doctrine hand, #1037's CodeQL call; the Copilot scanner's model setting.
+PREVIOUSLY:   2026-09-26 (cloud lane, 01:25Z) - SIX OF SIX RANKED ROWS WERE STALE; THE TIER LINE IS REAL; DR-059 IS THE OWNER'S CALL.
+              Rows 11, 12, 14 measured before building (#1081, 79db279f): 11 shipped by 2026-09-06 (determinism scope
+              derived from lib/, lib/location dispositioned KEPT as deferred), 14 shipped 2026-09-20 (#863's refusal-
+              coverage gate IS the status-code arm), both read open for weeks - six of the loop's last six ranked rows
+              were finished work, so the staleness stamp + loop refusal (BUILD_BACKLOG 2026-09-25) is now the highest-
+              value gate on the loop's input. Row 12 stays open with its gate half landed (#1082, e8ad6d02): the Tier-1
+              read-list is data (docs/agent/review-tiers.json), check-review-coverage prints and ratchets it - first run
+              `Tier 1: 19/25 at depth >= audited (mark 19) - 10 stale, 1 below depth, 5 with no row` - and ledger rows
+              may carry a checked sha. Then the product change the row-8 audit demanded: #1083 (a98d2013) is the DR-059
+              PROPOSAL, the OWNER's merge - posture freshness re-derived at decision time worst-wins with the stamped
+              value (`buildEvidence` takes the decision instant), a refresh RETRACTS every fact or device the source
+              stopped reporting (value null, read as unknown), an empty refresh is partial/degraded; estate-refresh proof
+              `24/24` with controls, core `597/597`, cascade `100/100`, simulator `102/102`, CORE_NORMALIZATION 25.
+              Steward: heartbeat #1080 (1cb79caf; a first merge call carried a fabricated full sha and the API refused it -
+              the head is re-read from the PR, never assembled). Records #1079 (03a26339), this one. Owner owes: #1050
+              (DR-058), #1083 (DR-059), the row-8 doctrine hand, #1037's CodeQL call; the Copilot scanner's model setting.
+PREVIOUSLY:   2026-09-26 (cloud lane, 00:20Z) - THE LOOP'S TOP FOUR ROWS WERE FINISHED WORK; ROW 8 IS NOW AN AUDIT WITH FINDINGS.
+              Before building the next ranked row the lane measured it, as with row 5: rows 6 and 9 had shipped
+              2026-08-20..22 (#253 / 905c243c; #219-#221) and read open for a month; row 8 was read 2026-08-23 but six
+              of nine files sat at depth read. #1074 (91d9556e) re-measured all three (6 and 9 DONE with checks named,
+              8 kept OPEN because the loop ranks open rows only) and added the consequence to BUILD_BACKLOG: open
+              rows need a re-measured stamp and the loop should refuse to rank a stale one. Then the row 8 unit:
+              verdict-core-reader (Opus, read-only) re-read engine/decision/policy/resolution/compose/adapters at depth
+              audited on 8fdc143c; the lane re-ran every reproduction before recording; #1077 (9cadddaa) carries the
+              ledger rows, row 8 DONE, five backlog rows and ONE OWNER HAND. Real findings: (1) estate posture freshness
+              never ages between syncs - `buildEvidence` in lib/signalgrid-core/src/decision.ts gets no clock, so a
+              record read fresh then aged `40` days with no refresh decides as fresh (v2: step_up with no stale code where
+              a 40-day-old read restricts POSTURE_STALE_STRICT; with encrypted/osSupported it stays allow) - reachable
+              on /v1 estate mode, refresh loop off by default; (2) a refresh never retracts - a fact omitted or a device
+              dropped keeps the old affirmative and `[]` is a healthy success; both HIGH, DR-051 proposal next. Latent:
+              `fromDevicePosture` grants on out-of-domain input (no caller); the malformed-rule skip is fail-closed only
+              for allow rules. Owner hand: v1 stays silent on an emitted unreadable reading in the deferred dock/custody
+              families where DR-043 fields step up - doctrine, not code. Records #1072 (24708b33), this one. Steward:
+              ticks #1073 (8b6ded4e) and #1076 (3d52d8f3) landed, heartbeat #1075 (8fdc143c). Every PR today carried a
+              red Copilot "AI findings" row: its job log now says `400 The requested model is not supported` - a
+              GitHub-side scanner model setting, the owner's to change, never this tree's. #1050 still the owner's merge.
+PREVIOUSLY:   2026-09-25 (cloud lane, 23:00Z) - ONE BUILT, ONE TICK LEAK CLOSED, ROW 5 RE-MEASURED; OWNER OWES ONE MERGE.
+              Built and landed under DR-037 (SAFETY_MACHINERY): #1071 (a3bd808b) - scripts/check-shell-backend-paths.mjs
+              GATES that every path EnterpriseShell's BackendService.swift builds (4) is declared in lib/api-spec/v1-openapi.yaml
+              (62); the legacy OIDC api/auth/* sites are REPORTED; self-test 9/9 with the real tree as positive control;
+              preflight + CI rows after "iOS restriction defaults". COMPANY_BUILD_PLAN row 5 had said the shell "calls five
+              endpoints that exist nowhere" since 2026-09-02's port - re-measured DONE (port) + PINNED (gate). CodeQL caught
+              a stat-then-read in the walker on the first head (js/file-system-race, high) - fixed in c4c5981a before merge.
+              Also under DR-037: #1069 (28379161) - run-requests.mjs treats a result already on an unlanded mac/tick-* branch
+              as AWAITING LANDING and never re-runs it (the tick had re-run the evidence operation on four consecutive
+              ticks while the cloud landed the first; `self-test passed (7/7)`, a preflight row and a CI step). Steward: #1067 (a07c9e96,
+              re-derived shared state: readiness 100, queue empty), #1070 (e171c0a5, heartbeat + a send asking the Mac
+              to pull before its next tick and to look at the 20:50Z failed evidence run), #1063/#1064 closed superseded.
+              #1050 (Puck 6, DR-058 proposal) at 331c6558: gating 108244715123 green, local preflight + breadth exit 0,
+              body updated - the OWNER's merge is the one thing owed on the product side. Next bounded build comes from
+              the loop's ranking (rows 6 public-site rewrite / 8 verdict-core read / 9 grant-safety enumeration), scoped first.
+PREVIOUSLY:   2026-09-25 (cloud lane, 21:05Z) - READINESS 100% ON MAINLINE; THE LOOP CLOSED ITS OWN GAP.
+              The DR-056 loop queued the evidence request (#1052), the Mac tick ran it unattended (19:39Z tick), and
+              the cloud landed the result as #1061 (f248aece): mac-run.json re-minted 19:59Z with --vm-native-build
+              against manifest 7c15496c; `node scripts/check-readiness-figure.mjs` on mainline reads (b) 20/20,
+              launch items 28/28, HEADLINE 100% -> OUTREACH OPEN (DR-036 goal). #1060 (same request, older mint)
+              closed superseded. Also landed under DR-037: #1062 (e3732b51) - the executor gap is an auto hand
+              (needsExecutor rows standing 48h in a witnessed objective state raise ONE aggregated hand routed to
+              the blocker-dispatcher; raised-hands self-test 53/53). #1050 (Puck 6, DR-058 proposal) refreshed on
+              mainline (331c6558, local gates green) - the OWNER's merge. Both tick PRs went red on the coverage
+              page because launchd ran the pre-#1057 lane-tick.sh from an unpulled checkout; the Mac is asked to
+              pull, nothing else is owed. Record PRs #1059 (dcc47044) and this one; mail #1058 #1056 and the 21:02Z batch.
+PREVIOUSLY:   2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOOP'S OWN REQUEST IS ON MAINLINE.
               Landed under DR-037 as SAFETY_MACHINERY: #1057 (55490bee) - objective-loop --check and --self-test are
               preflight + CI gates (rows after the raised-hands self-test), docs/agent/objective.json is owner-gated
               (objective-state.json deliberately not: the tick rewrites it), and lane-tick.sh now stages the new
@@ -61,7 +270,9 @@ LAST TOUCHED: 2026-09-25 (cloud lane, 19:30Z) - DR-056 FOLLOW-UP LANDED; THE LOO
               landings: Mac tick #1054 (335bb282; mainline objective-state now reads readiness `25` / escalate, which is
               TRUE - the manifest moved to 7c15496c with #1019 and #1051 and the two Linux-only steps wait on the
               DR-057 re-mint with --vm-native-build) and #1052 (5474868a; Alpha merged in, objective-state kept from
-              #1054, page re-derived) so objective-loop-evidence-fresh-2026-09-25 reaches the tick. Mail #1056 #1058.
+              #1054, page re-derived) so objective-loop-evidence-fresh-2026-09-25 reached the tick - and as of 2026-09-25 20:00Z
+              it RAN: result passed, mac-run.json re-minted 19:59Z against 7c15496c (#1061), readiness on that tree
+              reads 20/20 and HEADLINE 100% - the cloud lands #1061 with the coverage page re-derived. Mail #1056 #1058.
               Not this lane's failures, each commented once: the Copilot "AI findings" scanner crashed in its own
               loop on every head today; #1052's Mac-only job failed CI-liveness while the sweep was green (run 84)
               and passed on the single re-run. Main checkout repaired (was 171 behind with a no-TTY install abort).
@@ -97,6 +308,53 @@ PREVIOUSLY:   2026-09-25 (Mac lane, latest, 16:30Z) - THE 5% GAP IS CLOSED ON A 
               tick); the #1019 MERGE STEP the cloud's sandbox refused is done here - nine conflict files,
               not four, resolved and pushed as merge 820521f1 on claude/raise-your-hand, doc/registry gates
               green, cloud mailed; DR-057 claimed for #1051 (Puck 6 takes DR-058).
+              2026-09-26 05:1xZ: #1019/#1051 LANDED; the loop re-minted through the tick unasked and MAINLINE
+              READS 100% (OUTREACH OPEN). The one failed tick evidence run (20:30Z) root-caused from its own
+              result tail: test:api ECONNREFUSED because a self-hosted runner job ran test:api on this Mac at
+              the same time on the same fixed ports - PR #1106 makes every harness port ephemeral (486/486,
+              Bruno green, preflight PASSED 368). Waiting on the owner: three raised hands (gitleaks allowlist
+              for #1005, signalgrid-mcp #14/#15, one policy.ts call). Cloud: merge #1037, #1106.
+              06:0xZ: #1106 landed. PLAN ROW 18 BUILT (PR #1118): iOS port parity is BEHAVIOURAL - the TS
+              engine's own decisions over 145 deterministic cases emitted to native/shared and replayed
+              through DecisionEngine.evaluate in Swift on both build systems; the first replay went red on
+              6 cases and caught the declared DR-043 unauthorized-removal drift (TS-only since #748),
+              ported and the declaration closed. proof 14/14, swift test 111/111, xcodebuild TEST SUCCEEDED,
+              preflight PASSED 430, breadth PASSED 58. 08:3xZ: THE OTHER PORT TOO (PR #1121, stacked on
+              #1118): AppWorkflows.swift replays 368 TS planner plans; the scoped step-up release (row 101,
+              declared since 2026-09-12) and the unknown-vertical confirmer default re-ported, both
+              declared-drift registries empty; proof 11/11, swift test 113/113, xcodebuild TEST
+              SUCCEEDED, preflight PASSED 431, breadth 58. Rows 101/48 (3 of 4 claims)/backlog 2113
+              closed. 15:3xZ, on the owner's "work out no matter the issues": ROW 48 CLOSED OUTRIGHT
+              (PR #1136, off mainline) - iOS now has an Assist-wire client (AssistWire.swift, a
+              transcription of the Kotlin one) bound to the same 44 shared conformance cases as Kotlin
+              and Rust (2 tests, 0 failures on the first run; gate binds 3 clients); the honest residual
+              is stated in the gate, not hidden: the shell does not yet CALL /v1/authorize (its wire is
+              /v1/app-workflows/evaluate) - wiring it is a product change (DR-007/DR-023). preflight
+              PASSED 433, breadth 58, xcodebuild TEST SUCCEEDED. Cloud owes a read attribution for
+              .claude/workflows (its land-branch workflow). NEXT for the Mac: the loop's next
+              Mac-only row; cloud: merge #1037, #1118, #1121 (after #1118), #1136.
+              16:xxZ, "work out no matter the issues": ROW 12 (loop rank 1) advanced (PR #1143) - Tier-1
+              READ of the durable persistence path (decision-store.ts, session-store.ts, no prior row),
+              Tier 1 19/25 -> 21/25, mark 21, role-coverage-ratchet regenerated. The read EARNED its
+              keep: session-store nil/NaN-expiry proven clean; a HIGH durable-write tenant-isolation
+              gap found (decision-store ON CONFLICT (id) keyed on id alone; deterministicId's '|' is
+              unescaped and the charset guard misses tenant.id/externalRef) - reachability is a
+              provisioning trust-model call, RAISED AS A HAND (aaa5b32, security-engineer). 4 findings
+              filed, all bounded (durable store never feeds a live gate). Preflight PASSED 375.
+              NEXT for the Mac: security-engineer's reachability answer -> maybe the tenant-guard build;
+              else the next Tier-1 read shift (3 meta-gate files, 1 below-depth, 10 stale).
+              cloud: merge #1037, #1118, #1121, #1136, #1143.
+              UPDATE: the tenant-isolation hand is RESOLVED by me (f79e430) — traced NOT reachable
+              (tenant.id platform-derived core.ts:98; estate store single-tenant; no runtime route takes
+              a caller tenant id/externalRef). #1143 F1 downgraded HIGH->MEDIUM/defense-in-depth and split
+              (immutability half stays live on demo+durable); pushed a17b5fdd, preflight 375. NEXT Mac read:
+              device-management-health/evaluate.ts (below-depth -> audited).
+              LANDED/OPEN: #1143 MERGED (ef54e928, carried the original HIGH F1 row). The F1 DOWNGRADE
+              commit was pushed post-merge and orphaned (a17b5fdd, ignore it) - refolded into #1150.
+              #1150 (mac/tier1-dmh-read): device-management-health read->audited (Tier 1 21->22, CLEAN,
+              proof 207/207) PLUS the F1 downgrade (MEDIUM/defense-in-depth; isolation not reachable,
+              immutability stays), so merging #1150 reconciles mainline's backlog with the resolved hand.
+              Preflight 375 green. NEXT Mac read: the 3 no-row meta-gate files or the 10 stale re-reads.
               PREVIOUSLY: 2026-09-25 (Mac lane) - "SEEMS LIKE THERE ARE DELAYS": ROOT CAUSES, AND NONE ON THE OWNER.
               Cloud landed 11 PRs in 24h. What looked delayed: (1) readiness read 0% because #686 moved the
               manifest (7c15496c) and the evidence had to be re-minted on the Mac; the cloud's request sat 12h
@@ -1500,7 +1758,12 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (00000) 2026-09-25 19:30Z: the Mac re-mints on mainline (the tick's queued evidence op, or by hand)
+NEXT ACTION: cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
+              calls - merge #1050 (DR-058 proposal) or leave it, and the #1037 CodeQL call. The cloud keeps both green
+              and conflict-free and does not press merge. Next bounded build from objective-state tasks[0..2] under the
+              heartbeat-witness rule (row 5 EnterpriseShell badge/session lane -> real backend is #1, skill:signalgrid-native)
+              - a proposal PR if it touches the decision core, DR-037 otherwise. Merge the 21:02Z mail PR when green.
+              PREVIOUSLY: cloud: (00000) 2026-09-25 19:30Z: the Mac re-mints on mainline (the tick's queued evidence op, or by hand)
               and (b) reads 20/20 again - nothing in the cloud clears that. Meanwhile keep building one bounded item:
               next is the executor-gap auto hand (one aggregated stall in raised-hands.mjs for objective-state's
               needsExecutor rows, routed to blocker-dispatcher via hand-routing.json) - a proposal-free SAFETY_MACHINERY

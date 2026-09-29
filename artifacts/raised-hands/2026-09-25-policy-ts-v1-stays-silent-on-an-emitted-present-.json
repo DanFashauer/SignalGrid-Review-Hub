@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-25-policy-ts-v1-stays-silent-on-an-emitted-present-",
+  "raisedAt": "2026-09-25T23:58:37.221Z",
+  "origin": "cloud",
+  "doing": "Recording the 2026-09-25 verdict-core audit read (plan row 8): six Tier-1 files re-read at depth audited; policy.ts finding 3 needs a doctrine call",
+  "blockedBy": "policy.ts v1 stays SILENT on an emitted, present-but-unreadable reading in the deferred dock/custody families: a fresh tamper-state or badge-binding signal whose value is outside the domain folds to unknown and the verdict is allow, while the identical shape on the DR-043 credential fields steps up. Reproduced on 8fdc143c (fixture-only sync path today). Whether the day-one-quiet doctrine covers an EMITTED unreadable reading or only silence is an owner decision, not a code fact.",
+  "need": "One owner call: (a) an emitted out-of-domain reading in a deferred family raises to step_up like the DR-043 fields (the lane then writes the DR-051 proposal + proof), or (b) day-one-quiet covers it and the ledger note records that as doctrine. Either answer closes the hand.",
+  "whoCanUnblock": "owner",
+  "domain": "decision-core",
+  "status": "open",
+  "routedTo": null
+}

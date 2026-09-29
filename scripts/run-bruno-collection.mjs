@@ -28,6 +28,7 @@
 // record, not a committed claim; committed evidence flows through the
 // sim-results loop with provenance).
 import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -36,7 +37,14 @@ const COLLECTION = resolve(repo, "artifacts/api-collection");
 const BRU = resolve(repo, "scripts/node_modules/.bin/bru");
 const SERVER = resolve(repo, "artifacts/api-server/dist/index.mjs");
 const OUT_DIR = resolve(repo, "artifacts/bruno");
-const PORT = 5310;
+// Ephemeral port: the Local environment bakes :5310 for a human at the keyboard, but
+// this runner shares the build Mac with the launchd tick and the self-hosted runner,
+// and a fixed port is a bind race between them (2026-09-25). bru gets the real base
+// URL via --env-var, which overrides the environment file's `baseUrl`.
+const PORT = await new Promise((resolvePort) => {
+  const probe = createServer();
+  probe.listen(0, "127.0.0.1", () => { const p = probe.address().port; probe.close(() => resolvePort(p)); });
+});
 
 function waitForServer(timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
@@ -68,7 +76,7 @@ function runBru(target, outFile) {
   // -r: a folder target runs its subfolders too (review-demo/ is ONLY
   // subfolders and executed zero requests without it — the empty-run check
   // below caught that, which is exactly why it exists).
-  const args = ["run", target, "-r", "--env", "Local", "--output", outFile, "--format", "json",
+  const args = ["run", target, "-r", "--env", "Local", "--env-var", `baseUrl=http://localhost:${PORT}/api`, "--output", outFile, "--format", "json",
     "--reporter-skip-all-headers", "--reporter-skip-response-body", "--reporter-skip-request-body"];
   const r = spawnSync(BRU, args, { cwd: COLLECTION, encoding: "utf8" });
   return r;

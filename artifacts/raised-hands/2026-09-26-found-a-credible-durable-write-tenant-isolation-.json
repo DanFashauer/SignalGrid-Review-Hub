@@ -1,0 +1,18 @@
+{
+  "id": "2026-09-26-found-a-credible-durable-write-tenant-isolation-",
+  "raisedAt": "2026-09-26T21:39:27.865Z",
+  "origin": "mac",
+  "doing": "Row-12 Tier-1 audit read of lib/persistence (fail-closed-auditor lens), recording durable-path reads in review-coverage.json",
+  "blockedBy": "Found a credible durable-write tenant-isolation gap but cannot classify it live-vs-latent without the provisioning trust model. deterministicId (lib/signalgrid-core/src/util.ts:81) joins id parts with an UNESCAPED '|'; validateRequest (decision.ts:208) checks non-empty string only; the SLUG charset guard (estate.ts:63,71) covers tenant.slug, but the decision id uses tenant.id (estate.ts:94, unvalidated) and externalRef / workflow key (no charset check anywhere). So delimiter injection into the decision id is not defended. IF two tenants can be induced to that collision, decision-store's ON CONFLICT (id) DO UPDATE (decision-store.ts:173, keyed on id alone) overwrites tenant A's row with B's data while keeping tenant_id=A -> a cross-tenant read on the console/audit surface (bounded: the durable store never feeds a live gate).",
+  "need": "A decision: is spec.tenant.id / externalRef / workflow key attacker-controlled at the provisioning boundary, or fully platform-assigned? If reachable -> core fix (escape/length-prefix the deterministicId delimiter or charset-validate the id inputs) + the store-side tenant-guard, verified on the PG proof lane. If provisioning input is entirely platform-controlled -> downgrade the BUILD_BACKLOG row to defense-in-depth. Either way the store's ON CONFLICT (id) should become tenant-aware / DO NOTHING (queued HIGH).",
+  "whoCanUnblock": "security-engineer (provisioning trust model + core id construction) with data-persistence-engineer (the store upsert fix)",
+  "domain": "security",
+  "status": "resolved",
+  "routedTo": null,
+  "where": "BUILD_BACKLOG durable-persistence findings (2026-09-26); lib/persistence/src/decision-store.ts",
+  "takenBy": "cloud",
+  "takenAt": "2026-09-26T22:10:22.189Z",
+  "resolvedAt": "2026-09-26T23:52:59.223Z",
+  "resolvedBy": "mac",
+  "resolution": "Traced, NOT reachable as a cross-tenant leak — resolving with the trace so security-engineer can falsify it in a minute: (1) tenant.id is always platform-derived — artifacts/api-server/src/lib/core.ts:98 sets tenant.id=tenant_<slug> where slug is the SLUG-validated SIGNALGRID_ESTATE_TENANT env; demo mode uses hardcoded fixture tenant ids (seed.ts) — it cannot contain a pipe. (2) an estate store is SINGLE-TENANT — buildEstateStore (lib/signalgrid-core/src/estate.ts) seeds exactly one tenantId — so there is no cross-tenant collision surface; multi-tenant exists only in demo/fixture mode, platform-controlled. (3) no runtime route accepts a caller-supplied tenant id or externalRef (grep of artifacts/api-server/src/routes for req.body/params/query tenant/externalRef is empty); estate externalRefs come from the deployment's own Graph connector (trusted infra). DOWNGRADE: the ISOLATION half of the finding falls to defense-in-depth. The IMMUTABILITY half is UNTOUCHED and stays live on demo+durable — a fixed-clock core + DATABASE_URL re-mints the same decision id, the upsert overwrites outcome/data and the snapshot, and verifySnapshot passes over the rewrite. The DO-NOTHING + tenant-guard store fix stays queued as defense-in-depth (PG-proof lane; retry-vs-collision subtlety: rowCount 0 covers both a retry and a collision, so distinguishing them needs a read of the existing row's tenant). REOPEN if: a runtime provisioning route ever accepts a caller-supplied tenant id or externalRef, or any store seeds more than one tenant from non-fixture input."
+}

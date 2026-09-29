@@ -66,6 +66,10 @@ jobs:
         # (the first dispatched run showed only half an answer). Gated on the install
         # instead of always(), so a broken checkout cannot produce a misleading failure.
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (inputs.lane == 'preflight' || inputs.lane == 'both') }}
+        # preflight runs check-ci-liveness.mjs, which is FATAL in CI without a token (2026-09-26):
+        # Actions does not export GITHUB_TOKEN by itself, so the step hands it over.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           code=0; node scripts/preflight.mjs > preflight.log 2>&1 || code=$?
           grep -E "Preflight (PASSED|FAILED)|FAILED at" preflight.log || true; exit "$code"

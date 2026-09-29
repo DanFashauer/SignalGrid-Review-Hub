@@ -36,9 +36,9 @@ in chat, never by committing it here.
 
 - **Fleet self-hosted**: mysql:8 + redis:6.2 + fleet server (MIT, license $0)
   = a second small VM — hosting TBD.
-- **Fleet Premium**: OPEN — the team-scoped `getPolicies()` branch needs
-  Premium; trial expires 2026-09-16; per-device price TBD (public page,
-  agent-computable). This is the one identified paid software dependency.
+- **Fleet Premium**: DECIDED — out of baseline COGS (DR-005, 2026-08-20); the
+  team-scoped `getPolicies()` branch was verified live against the owner's trial
+  on 2026-09-06 (trial expired 2026-09-16, unrenewed); per-device price TBD only if a customer requires Premium.
 - **APNs + Apple Business Manager**: NOT YET ENROLLED (owner-confirmed
   2026-08-22) — $0 today. The ~$99/yr fee lands only when the supervised-
   device path needs APNs; the 30-day plan schedules enrollment at that

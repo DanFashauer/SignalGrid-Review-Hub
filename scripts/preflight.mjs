@@ -45,7 +45,19 @@ const quick = process.argv.includes("--quick");
 // footer says what that leaves out, recomputed from `.github/workflows/` on
 // every run. `heavy` steps (full monorepo build) are skipped only under --quick.
 const STEPS = [
-  // FIRST, because it is the first thing CI does and the cheapest way to be told
+  // FIRST OF ALL: reap ORPHANED api-servers under THIS tree (DR-060, lesson L1 in
+  // docs/agent/LESSONS.md). A killed run leaves a server holding a fixed test port, and
+  // the next preflight fails at the OIDC middleware test with EADDRINUSE 127.0.0.1:5399.
+  // FREE_TEST_PORT_ORPHANS_ONLY limits the kill to servers whose parent is gone (ppid 1),
+  // so a live test:api, verify:breadth or tick evidence run in this checkout is reported
+  // and left alone. CEILING: it matches only an argv carrying the absolute path
+  // <tree>/artifacts/api-server/dist/index.mjs, so another worktree's orphan — L1's own
+  // case, orphans in a scratch worktree — is never touched, and neither is a relative
+  // `node ./dist/index.mjs`. The cross-tree case is covered by the orchestrator skill's
+  // rule (a read-only brief boots no server) and, at the root, by oidc.test.mjs moving off
+  // its fixed ports (docs/BUILD_BACKLOG.md, DR-060 section). Never fails.
+  { name: "Reap orphaned api-servers under this tree (ppid 1 only; live runs are left)", cmd: ["bash", "scripts/mac/free-test-port.sh"], env: { GITHUB_WORKSPACE: repo, FREE_TEST_PORT_ORPHANS_ONLY: "1" } },
+  // The first GATE, because it is the first thing CI does and the cheapest way to be told
   // this push cannot even install. It was missing, and that omission let preflight
   // print "Safe to push" over a lockfile that did not match its manifests — CI then
   // failed on `Install dependencies` before running a single gate.
@@ -85,6 +97,23 @@ const STEPS = [
   { name: "Docs sanity (required docs + unsafe-claim scan)", cmd: ["node", "scripts/docs-sanity.mjs"] },
   { name: "Doc orphans (a new doc must be reachable from an index)", cmd: ["node", "scripts/check-doc-orphans.mjs"] },
   { name: "Doc-orphan self-test (a prose mention is not a route)", cmd: ["node", "scripts/check-doc-orphans.mjs", "--self-test"] },
+  // DR-060 rule 2: every incident a cycle hits is a row in docs/agent/LESSONS.md with a
+  // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
+  { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
+  { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
+  // DR-060 rule 2 / lesson L2: the land-branch saved workflow may push only when the
+  // script-side gate says so; this proves the gate refuses a missing, non-zero or
+  // stale (previous-run, wrong-sha) sentinel.
+  { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+  // first-party skill may call which MCP server, with signalgrid-mcp's tool count
+  // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+  { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
+  { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
+  // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
+  { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },
+  { name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a
@@ -294,8 +323,11 @@ const STEPS = [
   { name: "Console unknown-render (no good-state render on unguarded query data)", cmd: ["node", "scripts/check-console-unknown-render.mjs"] },
   { name: "iOS restriction defaults self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs", "--self-test"] },
   { name: "iOS restriction defaults (a DLP restriction may not default to permitted on an unknown session)", cmd: ["node", "scripts/check-ios-restriction-defaults.mjs"] },
+  { name: "Shell backend paths self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-shell-backend-paths.mjs", "--self-test"] },
+  { name: "Shell backend paths (every path EnterpriseShell's control-plane client builds is a declared /v1 path — no silent device 404)", cmd: ["node", "scripts/check-shell-backend-paths.mjs"] },
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
+  { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
@@ -685,6 +717,23 @@ const STEPS = [
   // never a stale link) a pull request.
   { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
   { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
+  // Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak. An
+  // unclassified workflow file is a tree defect and stays fatal everywhere; every other own
+  // error (an HTTP error, an unresolved workflow, a malformed payload) is FATAL in CI and
+  // REPORTED, exit 0, here — a container or dev-shell token is frequently a git-proxy
+  // credential with no `actions: read` scope, and this step must not fail a preflight for
+  // that (check-ci-liveness.mjs's header: "FATAL IN CI, REPORTED LOCALLY"). It needs the
+  // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
+  // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
+  // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
+  {
+    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
+    cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
+    selfSkipsWithout: "GITHUB_TOKEN",
+    env: { GH_TOKEN: "" },
+  },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed
@@ -796,8 +845,14 @@ if (selfSkipped.length > 0) {
   // where the decision to push is made, not in a comment nobody opens.
   console.log(`\n  ${selfSkipped.length} proof(s) SELF-SKIPPED — they exited 0 without running:`);
   for (const r of selfSkipped) console.log(`    · ${r.name} (${r.env} unset)`);
-  console.log("    Nothing they prove was verified by this run. CI's durable-persistence job");
-  console.log("    runs them against a real Postgres; set DATABASE_URL to run them here.");
+  console.log("    Nothing they prove was verified by this run.");
+  if (selfSkipped.some((r) => r.env === "DATABASE_URL")) {
+    console.log("    CI's durable-persistence job runs the DATABASE_URL ones against a real Postgres;");
+    console.log("    set DATABASE_URL to run them here.");
+  }
+  if (selfSkipped.some((r) => r.env === "GITHUB_TOKEN")) {
+    console.log("    CI's validation job runs the GITHUB_TOKEN one with the workflow token; set GITHUB_TOKEN to run it here.");
+  }
 }
 if (unavailable.length > 0) {
   // Stated WITH the verdict, not below it. "Everything it runs is green" is true

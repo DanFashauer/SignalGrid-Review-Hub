@@ -52,7 +52,7 @@ const MUTATION_EXCLUDED = [
 const proofNameOf = (file) => `proof:${file.replace(/-proof\.ts$/, "")}`;
 
 // WHAT WE ARE DETECTING, stated precisely because getting it slightly wrong has
-// now cost this repo twice: `check-proof-figures.mjs` parses a stdout LINE THAT
+// now cost this repo three times: `check-proof-figures.mjs` parses a stdout LINE THAT
 // STARTS WITH `figures=`. Statically, "start of a line" inside a string literal
 // is one of three things — the start of the literal, a `\n` ESCAPE inside it, or
 // a real newline inside a template literal. All three are permitted here.
@@ -94,7 +94,7 @@ const emitsFiguresLine = (text) =>
 
 // Negative and positive controls for the detector itself. A regex nobody has
 // watched fail is indistinguishable from a comment — and this one has been wrong
-// twice while looking correct both times.
+// three times while looking correct each time.
 const DETECTOR_CONTROLS = [
   { expect: true, name: "single-line", src: "console.log(`figures=a=1`);" },
   { expect: true, name: "wrapped call", src: "console.log(\n  `figures=a=1`,\n);" },

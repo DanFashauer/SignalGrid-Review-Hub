@@ -271,24 +271,28 @@ function gatesIn(rawSource) {
 const gates = gatesIn(preflight);
 
 /**
- * Pure: the path of every `["bash", "-c", "… git diff --exit-code [--] <path> …"]` step whose
- * command lacks `git ls-files --error-unmatch <path>` for that path.
+ * Pure: the path of every `["bash", "-c", "… git diff --exit-code|--quiet [--] <path> …"]` step whose
+ * command lacks `git ls-files --error-unmatch <path> … &&` for that path.
  *
  * `git diff --exit-code <path>` reports NOTHING for a path git does not track, so a generated
  * file that was never committed (or was deleted) reads as "in sync" over no comparison at all.
  * The SBOM step ran without the guard its three siblings and supply-chain.yml carry; a guard
  * that is only a convention is what the next step forgets. Any hit is FATAL below.
+ * The bash string is captured whole (not the `[...]` array — a `[ -f x ]` test bracket ends
+ * that early), the guard must name the path exactly and gate what follows with `&&` (so
+ * `… || true` and `…;` do not count), and `--quiet` is `--exit-code` by another name.
  * ponytail: reads only the `bash -c` string shape; an argv-form `["git", "diff", …]` step
  * cannot carry a guard at all and is not seen here.
  */
 export function unguardedDiffSteps(rawSource) {
   const out = [];
-  for (const m of stripCommentedLines(rawSource).matchAll(/cmd:\s*\[([^\]]+)\]/g)) {
-    if (!/^\s*["']bash["']\s*,\s*["']-c["']/.test(m[1])) continue;
-    for (const d of m[1].matchAll(/git diff ([^"&;|]*)/g)) {
-      if (!/(^|\s)--exit-code(\s|$)/.test(d[1])) continue;
+  for (const m of stripCommentedLines(rawSource).matchAll(/cmd:\s*\[\s*["']bash["']\s*,\s*["']-c["']\s*,\s*(["'`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    const cmd = m[2];
+    const guarded = new Set([...cmd.matchAll(/git ls-files --error-unmatch ([^\s>&;|]+)[^;|]*?&&/g)].map((g) => g[1]));
+    for (const d of cmd.matchAll(/git diff ([^"&;|<>]*)/g)) {
+      if (!/(^|\s)--(exit-code|quiet)(\s|$)/.test(d[1])) continue;
       for (const path of d[1].split(/\s+/).filter((t) => t && !t.startsWith("-"))) {
-        if (!m[1].includes(`git ls-files --error-unmatch ${path}`)) out.push(path);
+        if (!guarded.has(path)) out.push(path);
       }
     }
   }
@@ -445,6 +449,11 @@ function selfTest() {
   checks.push(["the same step with the `git ls-files --error-unmatch` prefix is not flagged", unguardedDiffSteps(diffStep(`git ls-files --error-unmatch a/b.json >/dev/null && ${bare}`)).length === 0]);
   checks.push(["a guard on a DIFFERENT path does not cover the diffed one, and `--` is optional", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/c.json >/dev/null && git diff --exit-code a/b.json")).join() === "a/b.json"]);
   checks.push(["a COMMENTED-OUT unguarded step is not flagged", unguardedDiffSteps(`  // ${diffStep(bare).trim()}`).length === 0]);
+  checks.push(["SYNTHETIC VIOLATION: a `[ -f x ]` test bracket before the diff does not hide an unguarded step", unguardedDiffSteps(diffStep("[ -f a/b.json ] && git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["`git diff --quiet` is `--exit-code` by another name, and is flagged", unguardedDiffSteps(diffStep("git diff --quiet -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard on a path that only STARTS with the diffed one (a/b.json.bak) does not cover it", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json.bak >/dev/null && git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard neutered with `|| true` does not count", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json || true; git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard with a `2>&1` redirect before its `&&` still counts", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json >/dev/null 2>&1 && git diff --exit-code -- a/b.json")).length === 0]);
   checks.push(["a non-bash step, and a `git diff` without --exit-code, are not flagged", unguardedDiffSteps(`  { cmd: ["node", "scripts/x.mjs"] },\n${diffStep("git diff --stat -- a/b.json")}`).length === 0]);
 
   // ── classifyStep: exit 0 is not evidence (the verdict helper preflight.mjs calls) ──
@@ -460,6 +469,10 @@ function selfTest() {
   checks.push(["token unset + SKIPPED is 'skipped-env' (unchanged)", cs({ envSet: false, combined: "SKIPPED — no GITHUB_TOKEN/GH_TOKEN" }).verdict === "skipped-env"]);
   checks.push(["token unset, exit 0, no SKIPPED is 'failed' (unchanged)", cs({ envSet: false, combined: "all fine" }).verdict === "failed"]);
   checks.push(["a non-zero exit is 'failed', whatever it printed", cs({ status: 1, combined: `${redLine}\n${unread}` }).verdict === "failed"]);
+  checks.push([
+    "a step with no `surface` that merely PRINTS `REPORTED — could not read` (a passing self-test's fake-fetch case) is 'ok', not 'unverified'",
+    classifyStep({ status: 0, combined: `${unread}\nmainline-workflow-streaks self-test: 32/32 passed`, envSet: false }).verdict === "ok",
+  ]);
   checks.push(["a step with no `surface` prints a streak line as plain 'ok'", classifyStep({ status: 0, combined: redLine, envSet: false }).verdict === "ok"]);
   checks.push([
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",

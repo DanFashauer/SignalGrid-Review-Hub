@@ -733,7 +733,8 @@ const STEPS = [
   // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
   // With the token set it still exits 0 on BOTH report-only outcomes, so neither is a bare
   // "ok" (scripts/lib/preflight-verdict.mjs): `REPORTED — could not read …` is UNVERIFIED,
-  // and a line matching `surface` is a REPORTED finding, printed with the verdict.
+  // and a line matching `surface` is a REPORTED finding, printed with the verdict. Declaring
+  // `surface` is what opts a step in — a step without one (the self-tests) is never UNVERIFIED.
   { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
   {
     name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",

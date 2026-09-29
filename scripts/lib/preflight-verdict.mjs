@@ -11,6 +11,12 @@
 //   · it read fine and REPORTED a finding it does not fail on (the step's `surface` regex
 //     names that line, e.g. a red-streak count) — `reported`.
 //
+// The last two are OPT-IN: only a step that declares a `surface` — i.e. says it is
+// report-only — can come back `unverified` or `reported`. Every other step exits 0 as `ok`,
+// whatever it printed: a self-test that passes may well print a `REPORTED — could not read …`
+// line from a fake-fetch case, and calling that step unverified would be a false entry in
+// the block whose job is to be trusted.
+//
 // Returns { verdict: "ok" | "skipped-env" | "unverified" | "reported" | "failed", line? }.
 // `line` is the matching output line (trimmed) for `unverified` and `reported`.
 
@@ -19,11 +25,12 @@ const UNREAD = /^REPORTED — could not read/;
 export function classifyStep({ status, combined, selfSkipsWithout, envSet, surface }) {
   if (status !== 0) return { verdict: "failed" };
   if (selfSkipsWithout && !envSet) return { verdict: /\bSKIPPED\b/.test(combined) ? "skipped-env" : "failed" };
+  if (!surface) return { verdict: "ok" };
   const lines = combined.split("\n");
   const unread = lines.find((l) => UNREAD.test(l));
   if (unread) return { verdict: "unverified", line: unread.trim() };
   // search(), not test(): a surface with the g flag would carry lastIndex between lines.
-  const hit = surface && lines.find((l) => l.search(surface) !== -1);
+  const hit = lines.find((l) => l.search(surface) !== -1);
   if (hit) return { verdict: "reported", line: hit.trim() };
   return { verdict: "ok" };
 }

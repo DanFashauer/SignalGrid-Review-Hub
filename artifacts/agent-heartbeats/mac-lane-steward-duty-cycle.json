@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T22:37:03.618Z",
-  "result": "22:24Z cycle at tip 45e3b5fd | Mac tick last fired 2026-09-29T22:29:49Z, ticking | no mac/* branch new or moved since 21:54Z | acked mac-mac-is-building-13-units-3-merge-steps-now-o (Mac building 13 units + 3 merge steps; cloud will not duplicate) | Mac acked the live-evidence plea; live evidence re-minted 2026-09-29T22:26:35Z at 7486855d (fresh) | sim requests all bound | sync manifest in step | owner not escalated"
+  "firedAt": "2026-09-29T23:31:10.902Z",
+  "result": "23:24Z cycle at tip 7e106342 | Mac tick last fired 2026-09-29T22:55:58Z, ticking | NEW mac/objective-loop-awaiting (22:43Z) already has PR #1216 opened by the Mac lane; reviewed, no findings; gating green on c020e577, Mac-only pending; land ask mailed back (DR-037: Mac PRs land on a mail ask) | no mail addressed to cloud unread | sim requests all bound | sync manifest in step | live evidence minted 2026-09-29T22:26:35Z (fresh) | cloud PR #1215 (plan row 97) gating green on rerun, owner merges | owner not escalated"
 }

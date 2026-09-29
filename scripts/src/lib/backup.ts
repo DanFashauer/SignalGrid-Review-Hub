@@ -152,6 +152,10 @@ export async function createBackup(
  * THROWS on any doubt. A missing manifest is a refusal, not an assumption that the
  * archive is fine — "I could not check" and "I checked and it is good" must never
  * produce the same outcome.
+ *
+ * The archive's SHAPE is checked here too (`assertNoForeignMachinery`), after the
+ * integrity checks, so `backup-cli verify` and `restoreBackup` cannot disagree about
+ * an archive: one guard on the path every caller shares.
  */
 export async function verifyBackup(archivePath: string): Promise<BackupManifest> {
   let raw: string;
@@ -187,23 +191,35 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
       `archive checksum ${actual} does not match manifest ${manifest.sha256} — the archive has been altered`,
     );
   }
+  await assertNoForeignMachinery(archivePath);
   return manifest;
 }
 
-// A TRIGGER or RULE on a managed table in the archive's table of contents, as
-// `pg_restore --list` prints it: `<id>; <cat> <oid> TRIGGER public audit_ledger <name> <owner>`.
+// Machinery in the archive's table of contents that would install itself on a managed
+// table (TRIGGER, RULE, POLICY, ROW SECURITY) or database-wide (EVENT TRIGGER), as
+// `pg_restore --list` prints it: `<id>; <cat> <oid> TRIGGER public audit_ledger <name> <owner>`,
+// `<id>; <cat> <oid> ROW SECURITY public audit_ledger <owner>`, and
+// `<id>; <cat> <oid> EVENT TRIGGER - <name> <owner>` (no schema, no table).
 // The table list mirrors lib/persistence/src/role-split.ts OWNER_RIGHTS_CHECKS.
-const FOREIGN_MACHINERY = /^\d+; \d+ \d+ (TRIGGER|RULE) public (audit_ledger|decisions|evidence_snapshots|sessions) .*$/m;
+const FOREIGN_MACHINERY =
+  /^\d+; \d+ \d+ (?:(?:TRIGGER|RULE|POLICY|ROW SECURITY) public (?:audit_ledger|decisions|evidence_snapshots|sessions) |EVENT TRIGGER - ).*$/m;
 
 /**
- * Refuse an archive that would install a TRIGGER or RULE on a managed table.
+ * Refuse an archive whose table of contents lists a TRIGGER, RULE, POLICY or ROW
+ * SECURITY on a managed table, or any EVENT TRIGGER.
  *
  * The manifest proves the archive is the one that was written, not that its SHAPE is
- * safe to install. `pg_restore --clean` would replace the database and only then does
- * the role split refuse a rule or definer trigger — an invoker trigger, which can
- * suppress or rewrite a ledger append, is not refused at all. Definer routines are
- * re-locked after restore and `--no-privileges` strips grants, so triggers and rules
- * are the two shapes that must be caught in the archive itself.
+ * safe to install. A live check runs only after `pg_restore --clean` has already
+ * replaced the database, and it cannot see everything: an invoker trigger can suppress
+ * or rewrite a ledger append, and an event trigger runs as the restoring admin on every
+ * later DDL, the role split's own GRANTs included. Definer routines are re-locked after
+ * restore and `--no-privileges` strips grants, so this covers the shapes those two do
+ * not. It is a list of named shapes, not a proof that an archive is clean.
+ *
+ * WHAT IT DEFENDS AGAINST is a contaminated SOURCE database. It reads the objects as
+ * pg_dump labelled them in the archive's table of contents, so it is not a defense
+ * against a hand-crafted archive: the manifest proves integrity, not authenticity, and
+ * whoever can write the archive can rewrite the manifest and the labels with it.
  *
  * Unreadable is refused too: "could not list it" must not read as "nothing in it".
  */
@@ -220,7 +236,7 @@ async function assertNoForeignMachinery(archivePath: string): Promise<void> {
   const hit = FOREIGN_MACHINERY.exec(toc);
   if (hit) {
     throw new BackupError(
-      `archive carries a ${hit[1]} on managed table public.${hit[2]} (${hit[0]}) — refusing before pg_restore replaces anything`,
+      `archive carries machinery a restore must not install (${hit[0]}) — refusing before pg_restore replaces anything`,
     );
   }
 }
@@ -244,7 +260,6 @@ async function assertNoForeignMachinery(archivePath: string): Promise<void> {
  */
 export async function restoreBackup(url: string, archivePath: string): Promise<BackupManifest> {
   const manifest = await verifyBackup(archivePath);
-  await assertNoForeignMachinery(archivePath);
 
   // Refuse BEFORE pg_restore replaces the database if the post-restore role
   // re-provisioning would fail (role missing + credential lacks CREATEROLE).

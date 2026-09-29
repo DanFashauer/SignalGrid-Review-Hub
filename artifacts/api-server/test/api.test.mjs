@@ -1048,12 +1048,16 @@ async function run() {
 
   // ── DDM (macOS 27) — enforcement-currency fail-safe ──────────────────────
   // Telemetry UP: an unreadable count is a malformed report, never a measured zero.
-  const telBad = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: "many", allow: 1, stepUp: 0, restrict: 0, deny: 0 } });
+  const telBad = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: "many", allow: 1, stepUp: 0, restrict: 0, deny: 0 } });
   check("telemetry with a non-numeric count → 400 naming the field (not ingested as zero)", telBad.status === 400 && /decisions/.test(telBad.json?.message ?? ""));
-  const telMissing = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1 } });
+  const telMissing = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1 } });
   check("telemetry with a MISSING count → 400 naming the field", telMissing.status === 400 && /deny/.test(telMissing.json?.message ?? ""));
-  const telOk = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  const telOk = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "edge_nw_general", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
   check("telemetry with every count readable → 200 ingested (the two refusals above are not the route being closed)", telOk.status === 200 && telOk.json?.ingested !== undefined);
+  const telUnknown = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "node-test", windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry from a nodeId that is not a seeded edge node → 404, not ingested", telUnknown.status === 404 && telUnknown.json?.error === "not_found");
+  const telHuge = await req("POST", "/cp/v1/telemetry", { body: { nodeId: "x".repeat(60000), windowMins: 60, decisions: 3, allow: 1, stepUp: 1, restrict: 1, deny: 0 } });
+  check("telemetry with a 60,000-character nodeId → 404 (no unbounded growth)", telHuge.status === 404);
   const ddm = await req("GET", "/cp/v1/ddm");
   check("ddm surfaces update-enforcement currency + a dead-enforcement count", ddm.status === 200 && typeof ddm.json?.summary?.enforcementDead === "number" && ddm.json.summary.enforcementDead >= 1);
   const deadEnf = (ddm.json?.signals ?? []).find((s) => s.enforcementCurrency === "dead");

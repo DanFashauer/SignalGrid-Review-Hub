@@ -45,16 +45,22 @@ const PROFILES: readonly ProductProfile[] = ["review-demo", "shared-device-gatew
 /**
  * Resolve the configured profile.
  *
- * Unset or unrecognized resolves to `review-demo` — the CURRENT behaviour, so
- * this cannot silently change an existing deployment. Note the fail direction is
- * the opposite of `resolveTier`'s and deliberately so: an unreadable TIER must
- * not enable live vendor calls, whereas an unreadable PROFILE must not switch off
- * the demo surfaces a reviewer is relying on. In both cases the unknown value
- * resolves to the option that changes nothing.
+ * Unset or empty resolves to `review-demo` — the CURRENT behaviour, so this
+ * cannot silently change an existing deployment. Anything else that is not a
+ * known profile after trimming — whitespace-only included — refuses to boot (see
+ * the throw below). Note the unset default differs from `resolveTier`'s: an
+ * unset TIER must not enable live vendor calls, whereas an unset PROFILE must not
+ * switch off the demo surfaces a reviewer is relying on — in both cases unset
+ * resolves to the option that changes nothing. A SET value this file cannot read
+ * is a configuration error and is never mapped to either option.
  */
 export function resolveProfile(): ProductProfile {
-  const raw = (process.env["SIGNALGRID_PRODUCT_PROFILE"] ?? "").trim().toLowerCase();
-  if (raw === "") return "review-demo";
+  // The unset test runs on the RAW value: trimming first sent a whitespace-only
+  // value down the unset branch, and compose's `${VAR:-shared-device-gateway}`
+  // default only fires on unset-or-empty, so "   " served the demo surfaces.
+  const set = process.env["SIGNALGRID_PRODUCT_PROFILE"];
+  if (set === undefined || set === "") return "review-demo";
+  const raw = set.trim().toLowerCase();
   if ((PROFILES as readonly string[]).includes(raw)) return raw as ProductProfile;
   // An EXPLICITLY SET but unrecognized value refuses to boot. The old
   // behavior mapped it to review-demo — so a production operator who

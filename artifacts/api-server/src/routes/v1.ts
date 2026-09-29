@@ -710,12 +710,15 @@ router.post("/v1/step-up/enroll/verify", async (req: Request, res: Response, nex
 //     "wrong id" from "already revoked" and turn that into an oracle.
 router.post("/v1/step-up/enroll/revoke", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    requireEnrollmentPrincipal(req);
+    const { subjectId } = requireEnrollmentPrincipal(req);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const identityRef = requireString(body, "identityRef");
     const credentialId = requireString(body, "credentialId");
     const userId = webauthnUserId(req, identityRef);
     const revoked = await webauthnStore.removeCredential(userId, credentialId);
+    // Audited like enrollment is. Only a revocation that HAPPENED is recorded:
+    // `revoked: false` changed nothing, and a row for it would claim otherwise.
+    if (revoked) await audit(req, "security.webauthn.revoked", subjectId, undefined, { identityRef, credentialId });
     res.json(envelope(req, { revoked, identityRef, credentialId }));
   } catch (err) {
     next(err);
@@ -793,6 +796,12 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
 //    plan with the step-up satisfied.
 router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize BEFORE the binding gate and the verify: verifyAuthentication consumes
+    // the single-use challenge and appends a step_up.success row, so a caller without
+    // decision:evaluate refused only at core.evaluate below had already burned the
+    // challenge and left a false success in the ledger.
+    const stepCtx = core.context(token(req));
+    authorize(stepCtx.principal, "decision:evaluate");
     const body = (req.body ?? {}) as Record<string, unknown>;
     const integrationId = requireString(body, "integrationId");
     const identityRef = requireString(body, "identityRef");
@@ -815,7 +824,7 @@ router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Resp
       throw new CoreError("forbidden", "Unknown or expired step-up challenge.", 403);
     }
     const ctx = stored.context;
-    const tenantId = core.context(token(req)).tenant.id;
+    const tenantId = stepCtx.tenant.id;
     const deviceRef = requireString(body, "deviceRef");
     const actionKey = requireString(body, "actionKey");
     if (
@@ -1050,8 +1059,12 @@ router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, nex
     const challengeId = requireString(body, "challengeId");
     const assertion = requireObject(body, "assertion", "WebAuthn authentication");
     const ctx = core.context(token(req));
-    // 404 before anything else: a decision this tenant does not hold gets the same
-    // answer a nonexistent id gets.
+    // Authorize before anything is looked up or verified: the verify below consumes the
+    // challenge and appends a step_up.success row, so answerStepUp's own
+    // decision:evaluate check came too late to stop a read-only caller burning both.
+    authorize(ctx.principal, "decision:evaluate");
+    // Then 404: a decision this tenant does not hold gets the same answer a
+    // nonexistent id gets.
     const decision = core.getDecision(token(req), decisionId);
 
     // THE BINDING GATE, checked BEFORE any cryptography. The guarded values come from
@@ -1108,7 +1121,7 @@ async function audit(
   req: Request,
   eventType: Parameters<typeof appendAuditRecord>[0],
   subjectId: string | undefined,
-  target: AuditTarget,
+  target: AuditTarget | undefined,
   meta?: Record<string, unknown>,
 ): Promise<void> {
   await appendAuditRecord(eventType, { type: "user", id: subjectId }, {

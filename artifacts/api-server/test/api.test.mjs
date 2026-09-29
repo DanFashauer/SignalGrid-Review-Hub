@@ -1266,6 +1266,15 @@ async function run() {
     });
     const credentialId = rVerify.json?.credentialId;
     check("revoke fixture enrolled a credential to revoke", rVerify.status === 200 && typeof credentialId === "string");
+    // Revocation is audited like enrollment is. The durable ledger has no HTTP route
+    // (and /v1/audit here is the core's in-memory chain), so the row is witnessed by
+    // the counter the route's audit() helper increments beside appendAuditRecord.
+    const revokedAudited = async () => {
+      const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+      const m = text.match(/signalgrid_audit_events_total\{event_type="security\.webauthn\.revoked"\} (\d+)/);
+      return m ? Number(m[1]) : 0;
+    };
+    const revokedBefore = await revokedAudited();
 
     // NEGATIVE CONTROL (revocation RBAC): same privilege as enrolling — an auditor
     // key must be refused before any store work happens.
@@ -1285,12 +1294,14 @@ async function run() {
       token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId: "cred-never-enrolled" },
     });
     check("revoking an unknown credential id → 200 with revoked:false (fail-closed, not a 404 oracle)", unknownCred.status === 200 && unknownCred.json?.revoked === false);
+    check("...and a revocation that did not happen writes no security.webauthn.revoked row", (await revokedAudited()) === revokedBefore);
 
     // The real revoke.
     const revoke = await req("POST", "/v1/step-up/enroll/revoke", {
       token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
     });
     check("revoking the enrolled credential → 200 with revoked:true", revoke.status === 200 && revoke.json?.revoked === true);
+    check("the real revocation writes exactly one security.webauthn.revoked audit row", (await revokedAudited()) === revokedBefore + 1);
 
     // Effect proven end to end: a step-up challenge for this identity now fails
     // closed exactly like an identity that was never enrolled at all.
@@ -1396,13 +1407,30 @@ async function run() {
   check("step-up challenge refuses a read-only auditor → 403 (no decision:evaluate)",
     auditorChallenge.status === 403 && auditorChallenge.json?.challengeId === undefined);
 
-  const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
-    token: KEYS.operator,
+  // ...and COMPLETING one is refused to the auditor BEFORE the WebAuthn verify. The
+  // verify fetches-and-deletes the single-use challenge and appends a
+  // security.webauthn.step_up.success row, so an authorization check that ran after it
+  // left a consumed challenge and a false success row behind a 403. The operator
+  // reusing the SAME challenge below is the witness that the verify never ran (at a
+  // higher signCount, so the result is about the challenge, not counter regression).
+  const auditorComplete = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.auditor,
     body: {
       integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
+  check("complete-step-up refuses a read-only auditor → 403 with no plan", auditorComplete.status === 403 && auditorComplete.json?.plan === undefined);
+
+  const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.operator,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: authenticator.assertion(chalGood.json.publicKey.challenge, { signCount: 3 }),
+    },
+  });
+  check("the auditor's refused completion left the challenge UNCONSUMED — the operator completes with it (200)",
+    completed.status === 200 && completed.json?.stepUp?.released === true);
   check("verified assertion releases the BOUND action (no longer held)",
     completed.status === 200 && completed.json?.stepUp?.released === true &&
     completed.json?.stepUp?.actionKey === "controlled.administer" &&
@@ -1561,10 +1589,26 @@ async function run() {
     // THE ANSWER. A fresh challenge (the tampered attempt consumed the last one),
     // a genuinely signed UV assertion.
     const goodChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
-    const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
-      token: KEYS.operator,
+    const stepUpSuccessAudited = async () => {
+      const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+      const m = text.match(/signalgrid_audit_events_total\{event_type="security\.webauthn\.step_up\.success"\} (\d+)/);
+      return m ? Number(m[1]) : 0;
+    };
+    const successBefore = await stepUpSuccessAudited();
+    // A read-only auditor answering is refused BEFORE the WebAuthn verify, so the
+    // challenge survives for the operator below (the witness the verify never ran).
+    const auditorAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.auditor,
       body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 }) },
     });
+    check("a read-only auditor cannot answer a step_up decision → 403", auditorAnswer.status === 403);
+    const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.operator,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 51 }) },
+    });
+    check("the auditor's refused answer left the challenge UNCONSUMED — the operator answers with it (200)", answered.status === 200);
+    check("...and exactly one step-up success row is written across both attempts (the operator's)",
+      (await stepUpSuccessAudited()) === successBefore + 1);
     check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
       answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&
       answered.json?.stepUp?.method === "webauthn" && typeof answered.json?.stepUp?.answeredAt === "string");
@@ -1589,7 +1633,7 @@ async function run() {
     // Replay, twice over: the challenge is single-use AND one answer per decision.
     const replayedAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
       token: KEYS.operator,
-      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 51 }) },
+      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 52 }) },
     });
     check("replaying the same challenge → 403 (single-use)", replayedAnswer.status === 403);
     const secondCeremony = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
@@ -2555,6 +2599,41 @@ async function run() {
     }
   }
 
+  // ── A WHITESPACE-ONLY SIGNALGRID_PRODUCT_PROFILE must refuse to boot ──────────
+  //
+  // `resolveProfile` trimmed before its "unset" test, so "   " took the unset branch
+  // and served review-demo — the published demo bearers and the open simulator — on a
+  // stack whose compose default (`${SIGNALGRID_PRODUCT_PROFILE:-shared-device-gateway}`)
+  // only fires on unset-or-empty, so a whitespace value slips past it. Set-but-blank is
+  // a configuration error, answered the way METRICS_TOKEN's is: by not serving.
+  {
+    const PORT_P = await freePort();
+    const startProfile = (port, value) => spawn("node", [serverEntry], {
+      env: { ...process.env, PORT: String(port), NODE_ENV: "production", LOG_LEVEL: "silent", SIGNALGRID_PRODUCT_PROFILE: value },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const exitOf = (child) => new Promise((resolveExit) => {
+      const timer = setTimeout(() => { child.kill("SIGKILL"); resolveExit("still-running"); }, 8000);
+      child.on("exit", (code) => { clearTimeout(timer); resolveExit(code); });
+    });
+    const whitespaceProfileExit = await exitOf(startProfile(PORT_P, "   "));
+    check("SIGNALGRID_PRODUCT_PROFILE=\"   \" refuses at boot (never silently the review-demo profile)",
+      whitespaceProfileExit !== "still-running" && whitespaceProfileExit !== 0);
+    const misspeltProfileExit = await exitOf(startProfile(PORT_P, "gatewy"));
+    check("control: a misspelt SIGNALGRID_PRODUCT_PROFILE refuses at boot too",
+      misspeltProfileExit !== "still-running" && misspeltProfileExit !== 0);
+    // POSITIVE CONTROL: a padded REAL profile still boots, so the refusal above is about
+    // blankness and not about surrounding whitespace.
+    const PORT_P2 = await freePort();
+    const padded = startProfile(PORT_P2, " shared-device-gateway ");
+    try {
+      check("...and a padded \" shared-device-gateway \" boots (the value is still trimmed)", await waitReady(PORT_P2));
+    } finally {
+      padded.kill("SIGTERM");
+      await exitOf(padded);
+    }
+  }
+
   // ── Eleventh short-lived server: the boot seeder must SAY what it did ───────────
   //
   // The seed loop swallowed every failure in a bare `catch {}` and the module imported
@@ -2808,6 +2887,27 @@ async function run() {
     const tooFastExit = await exitOf(tooFast);
     check("estate refresh: an interval below the 30s floor refuses at boot",
       tooFastExit !== "still-running" && tooFastExit !== 0);
+
+    // Above the ceiling: setInterval clamps a delay over 2^31-1 ms to 1 ms, so a
+    // "monthly" interval became a 1 ms hammer. 2147483 s is the last value that fits.
+    const tooSlow = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147484" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const tooSlowExit = await exitOf(tooSlow);
+    check("estate refresh: an interval past setInterval's 2147483 s ceiling refuses at boot (never a 1 ms loop)",
+      tooSlowExit !== "still-running" && tooSlowExit !== 0);
+    const PORT_CEIL = await freePort();
+    const atCeiling = spawn("node", [serverEntry], {
+      env: estateEnv({ PORT: String(PORT_CEIL), SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147483" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    try {
+      check("control: an interval exactly AT the 2147483 s ceiling boots", await waitReady(PORT_CEIL));
+    } finally {
+      atCeiling.kill("SIGTERM");
+      await exitOf(atCeiling);
+    }
 
     // Set on a DEMO core: there is no estate connector to refresh, so a server that
     // booted anyway would report a loop that could never run.

@@ -25,6 +25,7 @@ export type AuditEventType =
   | "telemetry.sync.completed_with_errors"
   | "telemetry.sync.failed"
   | "security.webauthn.registered"
+  | "security.webauthn.revoked"
   | "security.webauthn.step_up.success"
   | "security.webauthn.step_up.failure"
   // Phase 5: SIEM events

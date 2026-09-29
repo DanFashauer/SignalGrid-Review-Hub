@@ -152,3 +152,27 @@ export function buildEstateStore(
   });
   return { store, connectorId: connector.id, postureRecords };
 }
+
+/**
+ * Wrap one estate posture-refresh pass so overlapping ticks never run concurrently.
+ * A tick that fires while the previous pass is still running is SKIPPED (`onSkip`),
+ * not queued: a slow older read that landed after a newer one would overwrite fresher
+ * posture, and `putSignal` keeps whichever write came last. The guard is released in
+ * `finally`, so a pass that throws cannot stop the loop for good. No timers, no I/O —
+ * the caller owns the interval.
+ */
+export function singleFlightTick(pass: () => Promise<void>, onSkip: () => void): () => Promise<void> {
+  let running = false;
+  return async () => {
+    if (running) {
+      onSkip();
+      return;
+    }
+    running = true;
+    try {
+      await pass();
+    } finally {
+      running = false;
+    }
+  };
+}

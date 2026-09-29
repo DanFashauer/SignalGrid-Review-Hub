@@ -23,10 +23,15 @@
 //      either way, and the mode never loosens a verdict.
 //   5. Deterministic: two builds on the same clock and the same read produce the
 //      same decision ids and the same verdicts.
+//   6. The served refresh loop's single-flight guard (`singleFlightTick`): a tick
+//      that fires while a posture read is still running is SKIPPED, not queued, so
+//      a slow older read can never land after a newer one; the guard releases when
+//      the pass ends, even when it throws. Planted control: an unguarded wrapper lets
+//      the older read land last, so the check is not vacuous.
 //
 // --self-test plants a loosening in the Graph→estate mapping (an unknown
 // compliance state read as compliant) and shows claim 2's check catches it.
-import { CoreError, SignalGridCore, fixedClock, type EstateSpec, type EstateSubject } from "@workspace/signalgrid-core";
+import { CoreError, SignalGridCore, fixedClock, singleFlightTick, type EstateSpec, type EstateSubject } from "@workspace/signalgrid-core";
 import { createFixtureGraphPostureConnector, toEstateSubjects, type GraphPostureSignal } from "@workspace/integrations/graph";
 
 const SELF_TEST = process.argv.includes("--self-test");
@@ -140,6 +145,23 @@ async function main(): Promise<void> {
   const second = mapped.subjects.map((s) => again.evaluate(OPERATOR, { identityRef: s.identity.externalRef, deviceRef: s.device.externalRef, workflowKey: "shared-device-session" }).decisionId);
   ok("two builds on the same clock and read mint the same decision ids", first.every((id, i) => id === second[i]));
 
+  // 6. single-flight refresh: an overlapping tick is skipped, so the older read cannot land last
+  const guarded = await overlappingTicks(singleFlightTick);
+  ok("two overlapping ticks run ONE posture pass and skip the other", guarded.calls === 1 && guarded.skips === 1 && guarded.landed.join(",") === "compliant",
+    `calls=${guarded.calls} skips=${guarded.skips} landed=${guarded.landed.join(",")}`);
+  ok("a tick after the running pass resolves runs again", guarded.callsAfter === 2 && guarded.landedAfter.join(",") === "compliant,non_compliant");
+  const unguarded = await overlappingTicks((pass) => pass);
+  ok("planted control: an UNGUARDED loop runs both passes and the older read lands last (the check can fail)",
+    unguarded.calls === 2 && unguarded.landed.at(-1) === "compliant", `calls=${unguarded.calls} landed=${unguarded.landed.join(",")}`);
+  let throwCalls = 0;
+  const throwing = singleFlightTick(async () => {
+    throwCalls += 1;
+    throw new Error("posture read failed");
+  }, () => {});
+  await throwing().catch(() => {});
+  await throwing().catch(() => {});
+  ok("a pass that throws still releases the guard (a failed read never stops the loop for good)", throwCalls === 2);
+
   console.log(`\nestate-core proof: ${checks - failed}/${checks} checks passed (${mapped.subjects.length} subjects from ${signals.length} Graph signals, ${mapped.skippedOwnerless} ownerless skipped)`);
   // The line check-proof-counts.mjs reads to hold "(N checks)" in the docs against the proof.
   console.log(`summary=${failed === 0 ? "pass" : "fail"} (${checks - failed}/${checks})`);
@@ -152,6 +174,37 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   process.exit(failed > 0 ? 1 : 0);
+}
+
+type TickWrapper = (pass: () => Promise<void>, onSkip: () => void) => () => Promise<void>;
+
+/** Fire two ticks while the first pass's posture read is still in flight: the first
+ *  read is the OLDER one ("compliant") and resolves only after the second tick fired;
+ *  the second is the newer read ("non_compliant"). Then one more tick after both settle. */
+async function overlappingTicks(wrap: TickWrapper): Promise<{
+  calls: number; skips: number; landed: string[]; callsAfter: number; landedAfter: string[];
+}> {
+  const landed: string[] = [];
+  let calls = 0;
+  let skips = 0;
+  let releaseOlderRead!: () => void;
+  const olderRead = new Promise<void>((resolve) => { releaseOlderRead = resolve; });
+  const tick = wrap(async () => {
+    calls += 1;
+    if (calls === 1) {
+      await olderRead;
+      landed.push("compliant");
+    } else {
+      landed.push("non_compliant");
+    }
+  }, () => { skips += 1; });
+  const first = tick();
+  const second = tick();
+  releaseOlderRead();
+  await Promise.all([first, second]);
+  const snapshot = { calls, skips, landed: [...landed] };
+  await tick();
+  return { ...snapshot, callsAfter: calls, landedAfter: [...landed] };
 }
 
 /** Self-test mutation: an unknown compliance state read as compliant — the loosening claim 2 exists to catch. */

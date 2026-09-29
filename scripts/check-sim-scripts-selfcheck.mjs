@@ -38,7 +38,8 @@
 //         text that script can actually print.
 //     (g) nothing bash 3.2 (stock macOS) cannot run — an unguarded `"${A[@]}"` under
 //         `set -u`, declare/local -A or -n, mapfile, `${v,,}`, `|&`, `&>>`, coproc, a
-//         negative subscript. Also run over validate-sim-macos.sh.
+//         negative subscript. The static rules (b), (d), (f) and (g) also run over
+//         validate-sim-macos.sh; (h) does not, it is not a scripts/mac script.
 //     (h) a `uname -s` Darwin guard, AFTER any `--self-check` branch (rule (c) runs that
 //         on the Linux CI runner), unless named in DARWIN_EXEMPT with its reason.
 //
@@ -425,8 +426,9 @@ export function bash32Problems(text, label) {
 export const DARWIN_EXEMPT = new Map([["free-test-port.sh", "preflight.mjs:59 runs it on Linux CI"]]);
 
 /**
- * Rule (h). The guard is a non-comment line naming `uname -s` and `Darwin` (a bare
- * `$(uname)` test inside a function is not a top-level refusal). Where the script has a
+ * Rule (h). The guard is a non-comment line naming `uname -s` and `Darwin`; a bare
+ * `$(uname)` does not count. Its POSITION beyond the self-check ordering is not checked
+ * (a `uname -s` test inside an uncalled function would pass). Where the script has a
  * --self-check branch the guard must come AFTER it: rule (c) runs that branch on the
  * Linux CI runner, and a guard ahead of it exits 1 there — invisible on the Mac.
  */
@@ -752,7 +754,7 @@ console.log(`\n  GREP MARKERS NOT CHECKED (${GREP_NOT_CHECKED.length} — REPORT
 for (const n of GREP_NOT_CHECKED) console.log(`    \u00b7 ${n}`);
 if (GREP_NOT_CHECKED.length === 0) console.log("    (none)");
 
-console.log(`\nsim-scripts-selfcheck: ${allMac.length} script(s) checked statically, ${referenced.size} referenced, ${problems.length} problem(s); self-test green`);
+console.log(`\nsim-scripts-selfcheck: ${allMac.length} scripts/mac script(s) + validate-sim-macos.sh checked statically, ${referenced.size} referenced, ${problems.length} problem(s); self-test green`);
 if (problems.length > 0) {
   for (const p of problems) console.error(`\n  x [rule ${p.rule}] ${p.label}\n      ${p.detail}`);
   console.error("\nsim-script self-check gate FAILED. The cloud lane queues these by name and the Mac lane runs them days\nlater; a script that cannot start is discovered by a human who already sat down to run it.");

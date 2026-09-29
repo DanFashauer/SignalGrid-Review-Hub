@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-28T15:38:21.056Z",
-  "result": "acted: opened PR #1190 for task 24 Stage the ledger-truncation article for your review — draft 4 (one-IdP Keycloak wire-truth article, docs/IDENTITY_WIRE_TRUTH_ARTICLE.md), preflight+breadth 0/0 on 9c45f0ea, owner merges. State trusted (tick 14:48Z, objective: escalate). tasks[0] row 17 needs ITSM/shift-context/Keycloak labs this lane lacks; tasks[1] row 18 is the Mac's Swift-only #1118."
+  "firedAt": "2026-09-29T15:20:11.722Z",
+  "result": "quiet: tasks[0..2] not cloud-buildable — state trusted (tick 15:13Z within staleAfterHours 3, result names objective: escalate = recorded verdict); row 17 (wire-truth shifts): offline half landed 2026-09-27 (wire-truth ledger + gate), what remains needs the ITSM, shift-context and Keycloak access-governance labs this lane does not have; row 18 (iOS behavioural parity): Swift-only, the Mac's own #1118 is open; row 24 (article): already open as #1190 (owner merges). Nothing built."
 }

@@ -49,6 +49,8 @@
 # =============================================================================
 set -u
 
+if [ "$(uname -s)" != "Darwin" ]; then echo "lane-tick.sh: macOS only" >&2; exit 1; fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
 

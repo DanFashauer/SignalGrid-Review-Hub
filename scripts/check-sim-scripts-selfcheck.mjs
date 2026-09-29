@@ -36,6 +36,11 @@
 //         $HOME / $TMPDIR — so `$ROOT/$OUT` passes and `$OUT` alone does not.
 //     (f) a LINE-ANCHORED grep against another repo script's stdout must anchor at
 //         text that script can actually print.
+//     (g) nothing bash 3.2 (stock macOS) cannot run — an unguarded `"${A[@]}"` under
+//         `set -u`, declare/local -A or -n, mapfile, `${v,,}`, `|&`, `&>>`, coproc, a
+//         negative subscript. Also run over validate-sim-macos.sh.
+//     (h) a `uname -s` Darwin guard, AFTER any `--self-check` branch (rule (c) runs that
+//         on the Linux CI runner), unless named in DARWIN_EXEMPT with its reason.
 //
 // RULE (f), and the defect it was written for. `scripts/mac/lane-tick.sh` — the
 // unattended 5-minute tick — counted the cloud lane's queued work with
@@ -89,9 +94,8 @@
 // set without the mode, and the cap can only be lowered. It is a ceiling that only
 // moves down — the honest word for the "floor" this was asked for.
 //
-// SELF-TEST: nine planted shell fixtures in a temp dir, driving the real checks in
-// both directions, including the ratchet. A gate that has never failed proves
-// nothing.
+// SELF-TEST: planted shell fixtures in a temp dir, driving the real checks in both
+// directions, including the ratchet. A gate that has never failed proves nothing.
 
 import { chmodSync, closeSync, fstatSync, mkdtempSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -202,12 +206,13 @@ function badSubshellRedirects(text) {
  * does not exist. The flag counts only where it meets a positional parameter or
  * stands as a `case` pattern; comments are stripped first.
  */
+function isSelfCheckBranch(raw) {
+  const line = raw.replace(/#.*$/, "");
+  if (!line.includes("--self-check")) return false;
+  return /\$\{?[0-9@*]/.test(line) || /(^|\|)\s*(?:"|')?--self-check(?:"|')?\s*\)/.test(line);
+}
 function declaresSelfCheck(text) {
-  return text.split("\n").some((raw) => {
-    const line = raw.replace(/#.*$/, "");
-    if (!line.includes("--self-check")) return false;
-    return /\$\{?[0-9@*]/.test(line) || /(^|\|)\s*(?:"|')?--self-check(?:"|')?\s*\)/.test(line);
-  });
+  return text.split("\n").some(isSelfCheckBranch);
 }
 
 /**
@@ -375,6 +380,70 @@ export function grepMarkerChecks(text, label, readTarget) {
   return { problems, notChecked };
 }
 
+// ── rule (g): stock macOS ships bash 3.2 ─────────────────────────────────────
+// CLAUDE.md states the array idiom and run-everything.sh still shipped without it,
+// because prose does not generalise. A comment is a `#` at line start or after
+// whitespace — NOT the `#` in `${#A[@]}` or `$#`, which a bare /#.*$/ strip would read
+// as one and then stop looking at the rest of the line.
+const shellCode = (text) => text.split("\n").map((l) => l.replace(/(^|\s)#.*$/, "$1"));
+
+const NOUNSET = /\bset\s+(?:-[A-Za-z]*u|.*-o\s+nounset)/;
+// Bash 4+ only; each one is a syntax or runtime error under 3.2.
+const BASH4_ONLY = [
+  [/\b(?:declare|local|typeset)\s+-[A-Za-z]*A/, "an associative array (declare -A)"],
+  [/\b(?:declare|local|typeset)\s+-[A-Za-z]*n/, "a nameref (declare -n)"],
+  [/\b(?:mapfile|readarray)\b/, "mapfile/readarray"],
+  [/\$\{\w+(?:\[[^\]]*\])?[,^]{1,2}[^}]*\}/, "case modification (${v,,} / ${v^^})"],
+  [/(?<=\s)\|&(?=\s)/, "|& (pipe stderr)"],
+  [/&>>/, "&>> (append both streams)"],
+  [/\bcoproc\b/, "coproc"],
+  [/\$\{[!#]?\w+\[\s*-[\d$]|(?:^|[\s;&|(])\w+\[\s*-\d[^\]]*\]=/, "a negative array subscript"],
+];
+
+/** Rule (g): constructs bash 3.2 cannot run. */
+export function bash32Problems(text, label) {
+  const problems = [];
+  const code = shellCode(text);
+  const strict = code.some((l) => NOUNSET.test(l));
+  code.forEach((line, i) => {
+    if (strict) {
+      for (const m of line.matchAll(/"\$\{([A-Za-z_]\w*)\[[@*]\]\}"/g)) {
+        const before = line.slice(0, m.index);
+        if (before.endsWith(`\${${m[1]}+`) || before.endsWith(`\${${m[1]}:+`)) continue;
+        problems.push({ label, rule: "g", detail: `line ${i + 1}: ${m[0]} under set -u — bash 3.2 aborts on an EMPTY array here ("unbound variable"); write \${${m[1]}+${m[0]}}` });
+      }
+    }
+    for (const [re, what] of BASH4_ONLY) {
+      if (re.test(line)) problems.push({ label, rule: "g", detail: `line ${i + 1}: ${what} — bash 4+ only, and stock macOS runs 3.2` });
+    }
+  });
+  return problems;
+}
+
+// ── rule (h): a scripts/mac script must refuse a non-Darwin host ─────────────
+// Keyed by basename; a name that no longer exists is a stale exemption.
+export const DARWIN_EXEMPT = new Map([["free-test-port.sh", "preflight.mjs:59 runs it on Linux CI"]]);
+
+/**
+ * Rule (h). The guard is a non-comment line naming `uname -s` and `Darwin` (a bare
+ * `$(uname)` test inside a function is not a top-level refusal). Where the script has a
+ * --self-check branch the guard must come AFTER it: rule (c) runs that branch on the
+ * Linux CI runner, and a guard ahead of it exits 1 there — invisible on the Mac.
+ */
+export function darwinGuardProblems(text, name, exempt = DARWIN_EXEMPT) {
+  if (exempt.has(name)) return [];
+  const label = `scripts/mac/${name}`;
+  const guard = shellCode(text).findIndex((l) => /\buname\s+-s\b/.test(l) && /\bDarwin\b/.test(l));
+  if (guard < 0) {
+    return [{ label, rule: "h", detail: `no \`uname -s\` Darwin guard, so on another host it half-executes instead of refusing. Add: if [ "$(uname -s)" != "Darwin" ]; then echo "${name}: macOS only" >&2; exit 1; fi — or name it in DARWIN_EXEMPT with the reason it must run elsewhere.` }];
+  }
+  const selfCheck = text.split("\n").findIndex(isSelfCheckBranch);
+  if (selfCheck >= 0 && guard < selfCheck) {
+    return [{ label, rule: "h", detail: `the Darwin guard (line ${guard + 1}) comes BEFORE the --self-check branch (line ${selfCheck + 1}); rule (c) runs --self-check on the Linux CI runner, where the guard would exit 1. Move it after the branch.` }];
+  }
+  return [];
+}
+
 // ── the checks ───────────────────────────────────────────────────────────────
 function staticChecks(absPath, label) {
   const problems = [];
@@ -390,6 +459,7 @@ function staticChecks(absPath, label) {
   });
   problems.push(...grepRes.problems);
   GREP_NOT_CHECKED.push(...grepRes.notChecked);
+  problems.push(...bash32Problems(text, label));
   return problems;
 }
 
@@ -452,6 +522,22 @@ const FIXTURES = {
   "grep-unanchored.sh": `#!/usr/bin/env bash\nN="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
   "grep-missing-target.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/gone.mjs --plan | grep -c '^  READY')"\n`,
   "grep-two-step.sh": `#!/usr/bin/env bash\nOUT="$(node scripts/mac/planner.mjs --plan 2>/dev/null)"\nN="$(printf '%s' "$OUT" | grep -c '^  PENDING')"\n`,
+  // rule (g): stock macOS bash 3.2
+  "b32-unguarded-array.sh": `#!/usr/bin/env bash\nset -euo pipefail; A=(); echo "\${A[@]}"\n`,
+  "b32-guarded-array.sh": `#!/usr/bin/env bash\nset -u; A=(); echo \${A+"\${A[@]}"}\n`,
+  "b32-array-no-nounset.sh": `#!/usr/bin/env bash\nA=(); echo "\${A[@]}"\n`,
+  "b32-assoc.sh": `#!/usr/bin/env bash\ndeclare -A m\n`,
+  "b32-mapfile.sh": `#!/usr/bin/env bash\nmapfile -t x < f\n`,
+  "b32-lowercase.sh": `#!/usr/bin/env bash\nv=A; echo \${v,,}\n`,
+  "b32-comment-only.sh": `#!/usr/bin/env bash\nset -u\n# bash 3.2: no mapfile, no \${v,,}, no declare -A, and "\${A[@]}" needs the guard\nA=(x); echo \${#A[@]} \${A+"\${A[@]}"} # trailing mapfile note\n`,
+  "b32-after-hash.sh": `#!/usr/bin/env bash\nset -u\nA=(x); echo \${#A[@]} "\${A[@]}"\n`,
+  // rule (h): a Darwin guard, and where it sits
+  "dw-unguarded.sh": `#!/usr/bin/env bash\nset -eu\necho hi\n`,
+  "dw-guarded.sh": `#!/usr/bin/env bash\nset -eu\nif [ "$(uname -s)" != "Darwin" ]; then echo "dw-guarded: macOS only" >&2; exit 1; fi\necho hi\n`,
+  "dw-guard-not-s.sh": `#!/usr/bin/env bash\nf() { [ "$(uname)" = "Darwin" ]; }\necho hi\n`,
+  "dw-guard-before-selfcheck.sh": `#!/usr/bin/env bash\nif [ "$(uname -s)" != "Darwin" ]; then exit 1; fi\nif [ "\${1:-}" = "--self-check" ]; then exit 0; fi\n`,
+  "dw-guard-after-selfcheck.sh": `#!/usr/bin/env bash\nif [ "\${1:-}" = "--self-check" ]; then exit 0; fi\nif [ "$(uname -s)" != "Darwin" ]; then exit 1; fi\n`,
+  "free-test-port.sh": `#!/usr/bin/env bash\necho "runs on Linux CI"\n`,
 };
 
 // The two fake targets rule (f)'s self-test reads. `planner.mjs` MENTIONS PENDING in
@@ -551,6 +637,31 @@ function selfTest() {
       grepClaims(readFileSync(join(dir, "case-selfcheck.sh"), "utf8")).length === 0,
       "grepClaims over-matched");
 
+    // ── rule (g): what bash 3.2 cannot run ───────────────────────────────────
+    const G = (n) => S(n).filter((p) => p.rule === "g");
+    expect("SYNTHETIC VIOLATION: an unguarded \"${A[@]}\" under set -u is caught", G("b32-unguarded-array.sh").length === 1,
+      `MISSED the run-everything.sh defect: ${JSON.stringify(G("b32-unguarded-array.sh"))}`);
+    expect("the guarded ${A+\"${A[@]}\"} spelling passes", G("b32-guarded-array.sh").length === 0,
+      `FALSE POSITIVE on the idiom CLAUDE.md prescribes: ${JSON.stringify(G("b32-guarded-array.sh"))}`);
+    expect("an array expansion without nounset is not a hazard", G("b32-array-no-nounset.sh").length === 0, "FALSE POSITIVE - only set -u makes an empty array unbound");
+    expect("declare -A is caught", G("b32-assoc.sh").length === 1, "MISSED an associative array");
+    expect("mapfile is caught", G("b32-mapfile.sh").length === 1, "MISSED mapfile");
+    expect("${v,,} is caught", G("b32-lowercase.sh").length === 1, "MISSED case modification");
+    expect("a ${#A[@]} earlier on the line does not blind the scan", G("b32-after-hash.sh").length === 1,
+      "the # in ${#A[@]} was read as a comment start, hiding the hazard after it");
+    expect("comments and ${#A[@]} are not scanned as code", G("b32-comment-only.sh").length === 0,
+      `FALSE POSITIVE on prose or a length expansion: ${JSON.stringify(G("b32-comment-only.sh"))}`);
+
+    // ── rule (h): the Darwin guard ───────────────────────────────────────────
+    const H = (n) => darwinGuardProblems(readFileSync(join(dir, n), "utf8"), n);
+    expect("SYNTHETIC VIOLATION: a scripts/mac script with no uname -s guard is caught", H("dw-unguarded.sh").length === 1, "MISSED an unguarded Mac script");
+    expect("a script with the guard passes", H("dw-guarded.sh").length === 0, `FALSE POSITIVE: ${JSON.stringify(H("dw-guarded.sh"))}`);
+    expect("a bare $(uname) comparison is not the guard", H("dw-guard-not-s.sh").length === 1, "a function-local Darwin test satisfied the top-level guard");
+    expect("an exempt name passes without a guard", H("free-test-port.sh").length === 0, "the exemption map is not consulted");
+    expect("a guard BEFORE the --self-check branch is caught", H("dw-guard-before-selfcheck.sh").length === 1,
+      "rule (c) runs --self-check on the Linux CI runner; a guard ahead of it exits 1 there and only CI would see it");
+    expect("a guard AFTER the --self-check branch passes", H("dw-guard-after-selfcheck.sh").length === 0, `FALSE POSITIVE: ${JSON.stringify(H("dw-guard-after-selfcheck.sh"))}`);
+
     // The derivation itself, driven on a fixture allowlist.
     const derived = referencedMacScripts({
       a: { argv: ["./scripts/mac/run-everything.sh"] },
@@ -574,7 +685,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 if (process.argv.includes("--self-test")) {
-  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length} planted shell fixtures behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target).`);
+  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length} planted shell fixtures behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target; rule (g) on a guarded and an unguarded array, declare -A, mapfile, \${v,,} and prose; rule (h) on a guarded, an unguarded, an exempt and a guard-before-self-check script).`);
   process.exit(0);
 }
 
@@ -600,7 +711,15 @@ console.log(`  DERIVED from SIM_OPERATIONS (${opCount} operations): ${referenced
   [...referenced].map(([p, keys]) => `${p} (${keys.join(", ")})`).join("; "));
 
 const problems = [];
-for (const f of allMac) problems.push(...staticChecks(join(MAC_DIR, f), `scripts/mac/${f}`));
+for (const f of allMac) {
+  problems.push(...staticChecks(join(MAC_DIR, f), `scripts/mac/${f}`));
+  problems.push(...darwinGuardProblems(readFileSync(join(MAC_DIR, f), "utf8"), f));
+}
+// The harness the Mac lane runs sits outside scripts/mac/ but gets the same static rules.
+problems.push(...staticChecks(resolve(repo, "validate-sim-macos.sh"), "validate-sim-macos.sh"));
+for (const [name, reason] of DARWIN_EXEMPT) {
+  if (!allMac.includes(name)) problems.push({ label: `DARWIN_EXEMPT ${name}`, rule: "h", detail: `exempt (${reason}) but scripts/mac/${name} does not exist — a stale exemption re-permits the gap it was granted for` });
+}
 
 const notSelfChecking = [];
 for (const [rel, keys] of referenced) {
@@ -639,4 +758,4 @@ if (problems.length > 0) {
   console.error("\nsim-script self-check gate FAILED. The cloud lane queues these by name and the Mac lane runs them days\nlater; a script that cannot start is discovered by a human who already sat down to run it.");
   process.exit(1);
 }
-console.log("sim-script self-check gate passed — every queueable Mac script exists, parses, is executable, and roots its subshell redirects.");
+console.log("sim-script self-check gate passed — every queueable Mac script exists, parses, is executable, roots its subshell redirects, runs on bash 3.2, and refuses a non-Darwin host.");

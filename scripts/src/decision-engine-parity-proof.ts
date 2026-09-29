@@ -39,7 +39,9 @@
 //
 // WHAT IS GATED: the table clears its floors; EVERY reason code the engine's source can
 // push appears in at least one case (the set is read from the source, so a rule added
-// tomorrow without a case is red here); building the table twice yields the same bytes;
+// tomorrow without a case is red here); EVERY signal-type literal and attribute pair the
+// engine's predicates read has a TRIGGERS row or a declared exclusion (also read from the
+// source, with a planted-literal self-test); building the table twice yields the same bytes;
 // and the committed file is byte-identical to the table (re-emit on a red). Nothing here
 // modifies either ported file, and nothing here reads a clock.
 
@@ -311,6 +313,43 @@ const missing = engineReasonCodes.filter((code) => !present.has(code));
 check(`engine source names ${engineReasonCodes.length} reason codes (floor 12)`, engineReasonCodes.length >= 12);
 check(`every reason code the engine can push appears in a case${missing.length ? ` — MISSING: ${missing.join(", ")}` : ""}`, missing.length === 0);
 check("every decision outcome literal the engine orders appears in a case except deny (no rule emits deny today; REPORTED)", ["allow", "step_up", "restrict", "alert_operator", "create_ticket", "route_to_owner", "request_remediation", "verify_remediation", "record_audit"].every((o) => document.requires.outcomesPresent.includes(o as DecisionOutcome)));
+
+// ── 2b. the trigger table covers every literal the engine's predicates read ──
+// TRIGGERS is hand-maintained, and until the cloud review of #1118 nothing checked it: a
+// planted hasType("dock.tamper_detected") feeding CUSTODY_EXCEPTION left this proof 14/0.
+// Every signal-type literal and `attributes[k] === v` pair is now read from the engine's
+// source and must have a TRIGGERS row or a declared exclusion (checked both ways: an
+// exclusion the source no longer reads is stale). A read the extractor cannot parse
+// (`!==`, a variable, dot access) is red, not skipped.
+const TRIGGER_EXCLUSIONS = [
+  "type:identity.authenticated", // base trust: BASE_TRUST, APPLE_DECLARED, every single-on-base case
+  "type:device.posture_observed", // base trust: BASE_TRUST
+  "type:apple.ddm_declared_state", // base trust: APPLE_DECLARED
+  "attr:active=true", // the removal pair: an undock with and without an active session
+];
+const engineLiterals = (source: string) => {
+  const literals = new Set<string>();
+  for (const m of source.matchAll(/hasType\("([^"]+)"\)|\.type === "([^"]+)"/g)) literals.add(`type:${m[1] ?? m[2]}`);
+  const pairs = [...source.matchAll(/attributes\["(\w+)"\] === (?:"([^"]*)"|(true|false))/g)];
+  for (const m of pairs) literals.add(`attr:${m[1]}=${m[2] ?? m[3]}`);
+  const count = (re: RegExp) => source.match(re)?.length ?? 0;
+  const unparsed = count(/attributes\[/g) - pairs.length + count(/hasType\(/g) - count(/hasType\("[^"]+"\)/g);
+  return { literals: [...literals].sort(), unparsed };
+};
+const triggerKeys = new Set(
+  TRIGGERS.flatMap((t) => [`type:${t.signal.type}`, ...Object.entries(t.signal.attributes).map(([k, v]) => `attr:${k}=${String(v)}`)]),
+);
+const uncovered = (literals: string[]) => literals.filter((l) => !triggerKeys.has(l) && !TRIGGER_EXCLUSIONS.includes(l));
+const live = engineLiterals(engineSource);
+const liveUncovered = uncovered(live.literals);
+const staleExclusions = TRIGGER_EXCLUSIONS.filter((e) => !live.literals.includes(e));
+check(`engine source reads ${live.literals.length} trigger literals (floor 30)`, live.literals.length >= 30);
+check(`every trigger literal the engine reads has a TRIGGERS row or a declared exclusion${liveUncovered.length ? ` — MISSING: ${liveUncovered.join(", ")}` : ""}`, liveUncovered.length === 0);
+check(`every attributes[…] / hasType(…) read in the engine source was parsed (${live.unparsed} unparsed)`, live.unparsed === 0);
+check(`every declared exclusion is still read by the engine${staleExclusions.length ? ` — STALE: ${staleExclusions.join(", ")}` : ""}`, staleExclusions.length === 0);
+const planted = engineLiterals(`${engineSource}\nhasType("dock.tamper_detected") || signal.attributes["tamper"] === "detected";`);
+check("self-test: a planted hasType(\"dock.tamper_detected\") and attributes[\"tamper\"] === \"detected\" are both reported MISSING", JSON.stringify(uncovered(planted.literals)) === JSON.stringify(["attr:tamper=detected", "type:dock.tamper_detected"]));
+check("self-test: a planted `!==` attribute read is reported unparsed", engineLiterals(`${engineSource}\nsignal.attributes["zone"] !== "right";`).unparsed === 1);
 
 // ── 3. determinism and no clock ──────────────────────────────────────────────
 check("building the table twice yields identical bytes", `${JSON.stringify(buildDocument(), null, 2)}\n` === serialized);

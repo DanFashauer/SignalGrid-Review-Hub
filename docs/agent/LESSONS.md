@@ -210,3 +210,11 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** `scripts/loop-state.mjs` (`branchesInAgentWorktrees`, the seam that names unpushed branches, and its rule against pushing attack reproductions); PR #1154's raised hand.
 - **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — to free disk, delete an agent worktree's build output (`node_modules`, `dist`) and keep the worktree until its scratch branches are deleted with the owner's OK; keep a finished worktree only for that reason, after pushing or landing any real work in it, since `scripts/loop-state.mjs` treats every branch in a kept worktree's reflog as ephemeral.
 - **status:** landed
+
+### L23 — a decision-path edit was argued permitted in its own commit, by the creative tier
+- **date:** 2026-09-29
+- **lane:** mac
+- **incident:** Commit 7d3d1241 (PR #1118) edited `native/ios/EnterpriseShell/Services/DecisionEngine.swift`, a golden-rule-1 file, and argued in its own body that the rule permits a literal re-port ("the Mac lane repairing the port, per the gate's own header"). The commit was co-authored by the creative tier (Claude Fable 5.1), which DR-047 keeps off engineering and review stages. The same body said the first replay went red on "6 cases"; replaying the pre-port Swift against the vectors measured 5. Nothing stopped the author's own argument from standing in for the owner's ruling except the cloud lane's review.
+- **evidence:** `git log -1 --format='%(trailers)' 7d3d1241` → `Co-Authored-By: Claude Fable 5.1`; the cloud-lane review of 72205d4d on #1118 (should-fix items 3 and 5); the pre-port replay, `swift test --filter DecisionEngineParityTests` → `Executed 2 tests, with 10 failures (0 unexpected)` over 5 distinct cases.
+- **landing:** #1118 — the owner's golden-rule-1 ruling (posted on the PR 2026-09-29, "Grant exception") rests on the cloud lane's three-lens Opus review of 72205d4d, not on 7d3d1241's reasoning; `docs/COMPANY_BUILD_PLAN.md` row 18 and `docs/BUILD_BACKLOG.md` now carry the measured 5 and the ruling. A change to a golden-rule-1 file is argued by an independent review and ruled by the owner, never by the commit that makes it.
+- **status:** landed

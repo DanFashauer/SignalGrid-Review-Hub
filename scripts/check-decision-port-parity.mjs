@@ -215,6 +215,8 @@ function checkEnginesAndWorkflows() {
         DECLARED_TRIGGER_DRIFT.map((d) => `${d.code}/${d.marker} (${d.side} only)`).join(", ") +
         `. REPORTED every run: a declared divergence that nobody is reminded of is an undeclared one.`,
     );
+  } else {
+    say("  declared trigger drift: 0 live declarations — nothing to check");
   }
 
   say(`decision-port parity: ${ts.size} TS rules vs ${swift.size} Swift rules, ${problems} divergence(s)`);
@@ -394,8 +396,9 @@ const MIN_SHAPE_FIELDS = 5;
  * port. Each entry is checked in BOTH directions on every run: the field must still be
  * present on its side (else the entry is stale — delete it) and still absent on the
  * other (else the port landed and the entry is hiding finished work — delete it and
- * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode
- * (CLAUDE.md golden rule 1: the Swift is never edited for behaviour from here).
+ * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode, as a
+ * literal re-port from the TS that the owner has ruled on (CLAUDE.md golden rule 1; the
+ * first such ruling was #1118's, 2026-09-29) — never a hand edit to satisfy this gate.
  */
 /**
  * SECTION 2b — DECLARED TRIGGER DRIFT (2026-09-14).
@@ -416,8 +419,9 @@ const MIN_SHAPE_FIELDS = 5;
  * on the other (else the port landed and the entry is hiding finished work). Either way
  * the gate fails until the declaration is deleted, so a drift cannot outlive its reason.
  *
- * Repairing the port is the Mac lane's, with Xcode — CLAUDE.md golden rule 1 means the
- * Swift is never edited for behaviour to satisfy this gate.
+ * Repairing the port is the Mac lane's, with Xcode — a literal re-port from the TS that the
+ * owner has ruled on (CLAUDE.md golden rule 1; #1118's DR-043 removal rule was the first,
+ * 2026-09-29, replayed green against the shared vectors), never an edit to satisfy this gate.
  */
 // Empty since 2026-09-26. The one entry it carried — CUSTODY_EXCEPTION / `hasUnauthorizedRemoval`,
 // TS only (DR-043 item (b), PR #748: the TS engine raises CUSTODY_EXCEPTION when a
@@ -841,7 +845,13 @@ function runSelfTests() {
   t("trigger: a marker surviving only in a COMMENT does not count as the port landing", tdCommentOnly.length === 0, `${tdCommentOnly.length} finding(s)`);
   // …and the REAL declaration must hold right now, or the gate is green about a lie.
   const tdLive = compareTriggers({ tsSrc, swiftSrc, declared: DECLARED_TRIGGER_DRIFT });
-  t("trigger: every LIVE declaration still describes a real, still-open drift", tdLive.length === 0, `${tdLive.length} finding(s)`);
+  t(
+    DECLARED_TRIGGER_DRIFT.length === 0
+      ? "trigger: 0 live declarations — nothing to check"
+      : "trigger: every LIVE declaration still describes a real, still-open drift",
+    tdLive.length === 0,
+    `${tdLive.length} finding(s)`,
+  );
 
   // ── 3b: the shape comparison must be able to fail, in every direction ──────
   const S = (...xs) => new Set(xs);

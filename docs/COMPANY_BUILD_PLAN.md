@@ -4900,7 +4900,7 @@ Auth chain (bearer token to tenant principal):
 11. lib/enterprise-auth/src/jwt.ts (238) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
-14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
+14. artifacts/api-server/src/lib/profile.ts (213) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
 15. artifacts/api-server/src/lib/core.ts (344) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 

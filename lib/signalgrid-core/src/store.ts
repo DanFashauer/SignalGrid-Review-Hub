@@ -295,13 +295,15 @@ export class MemoryStore {
     // An OLDER reading re-put under the same id does not erase a newer one
     // (BUILD_BACKLOG row 2521): one dock sync carrying a confirmed tamper at 09:30
     // and a "none" at 08:00, in that order, stored "none". A null value is a
-    // retraction and always replaces.
-    // ponytail: equal or illegible stamps keep last-write-wins, and posture sync
-    // stamps every record with its own nowIso (connector.ts:179, :194), so this
-    // guards only feeds that carry their own observedAt; a per-row sequence would
-    // be the upgrade if a posture feed ever re-puts out of order.
+    // retraction and always replaces. A stored row the sync itself stamped
+    // "unknown" (a future stamp) never blocks: one dock record dated 2099 would
+    // otherwise make every honest record after it "older" and drop it.
+    // ponytail: equal or illegible stamps keep last-write-wins; posture sync stamps
+    // every record with its own nowIso (connector.ts:179, :194), so posture rows
+    // are guarded too and a backward server-clock step drops posture updates until
+    // the clock passes the old stamp. A per-row sequence is the upgrade.
     const previous = this.signals.get(signal.id);
-    if (previous && signal.value !== null) {
+    if (previous && signal.value !== null && previous.freshness !== "unknown") {
       const incomingAt = parseInstant(signal.observedAt);
       const previousAt = parseInstant(previous.observedAt);
       if (Number.isFinite(incomingAt) && Number.isFinite(previousAt) && incomingAt < previousAt) return;

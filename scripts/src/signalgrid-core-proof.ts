@@ -2085,38 +2085,58 @@ for (const [fromRow, fromSignal, want, why] of [
   // (2521) One connector, one device, two records in one sync — the newer one
   // must be what the store keeps, whichever order they arrive in. A fresh seed per
   // order, and a cloned connector id so no seeded row takes part.
-  const storedTamper = (records: "newer-first" | "older-first"): string => {
+  type TamperRecord = { tamperState: "confirmed" | "none"; observedAt: string };
+  const storedTamperRows = (syncs: { now: string; records: TamperRecord[] }[]): NormalizedSignal[] => {
     const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
     const dock = seeded.store
       .listConnectors(seeded.tenants.northwind)
       .find((c) => c.kind === "dockbridge-custody");
     const base = dock ? seeded.dockRecords[dock.id]?.[0] : undefined;
-    if (!dock || !base) return "setup-missing";
+    if (!dock || !base) return [];
     const connector = { ...dock, id: "conn_dock_order" };
-    const newer = { ...base, tamperState: "confirmed" as const, observedAt: "2026-07-13T09:30:00.000Z" };
-    const older = { ...base, tamperState: "none" as const, observedAt: "2026-07-13T08:00:00.000Z" };
-    runDockSync(
-      seeded.store,
-      fixedClock("2026-07-13T15:00:00.000Z"),
-      connector,
-      records === "newer-first" ? [newer, older] : [older, newer],
-    );
+    for (const sync of syncs) {
+      runDockSync(seeded.store, fixedClock(sync.now), connector, sync.records.map((r) => ({ ...base, ...r })));
+    }
     const dev = seeded.store.findDeviceByRef(dock.tenantId, base.deviceRef);
-    const rows = dev
+    return dev
       ? seeded.store
           .listSignalsForSubject(dock.tenantId, "device", dev.id)
           .filter((s) => s.category === "tamper_state" && s.connectorId === connector.id)
       : [];
-    return rows.map((s) => `${String(s.value)}@${s.observedAt}`).join(",");
   };
+  const newer: TamperRecord = { tamperState: "confirmed", observedAt: "2026-07-13T09:30:00.000Z" };
+  const older: TamperRecord = { tamperState: "none", observedAt: "2026-07-13T08:00:00.000Z" };
   for (const order of ["newer-first", "older-first"] as const) {
-    const stored = storedTamper(order);
+    const stored = storedTamperRows([
+      { now: "2026-07-13T15:00:00.000Z", records: order === "newer-first" ? [newer, older] : [older, newer] },
+    ])
+      .map((s) => `${String(s.value)}@${s.observedAt}`)
+      .join(",");
     check(
       `2521: an OLDER record re-put by the same connector cannot erase a newer one (${order}) — the stored row is 'confirmed'@09:30Z`,
       stored === "confirmed@2026-07-13T09:30:00.000Z",
       `stored ${stored}`,
     );
   }
+  // A stored row the sync ITSELF stamped "unknown" (a dock clock reading 2099) must
+  // not block the honest record after it — or every later record from that dock is
+  // "older" and dropped, freezing tamper at "none" until wall time passes 2099.
+  const afterFuture = storedTamperRows([
+    { now: "2026-07-13T14:00:00.000Z", records: [{ tamperState: "none", observedAt: "2099-01-01T00:00:00Z" }] },
+    { now: "2026-07-13T15:00:00.000Z", records: [{ tamperState: "confirmed", observedAt: "2026-07-13T14:55:00Z" }] },
+  ]);
+  const storedAfterFuture = afterFuture.map((s) => `${String(s.value)}@${s.observedAt}/${s.freshness}`).join(",");
+  check(
+    "2521: a FUTURE-stamped stored row ('unknown') cannot block the next sync's honest record — the stored row is 'confirmed'@14:55Z, fresh",
+    storedAfterFuture === "confirmed@2026-07-13T14:55:00Z/fresh",
+    `stored ${storedAfterFuture}`,
+  );
+  const afterFutureEvaluation = evaluatePolicy(v1, buildEvidence(identity, device, workflow, [...healthy, ...afterFuture]));
+  check(
+    "2521: …and SHARED_DEVICE_RULES_V1 denies with TAMPER_CONFIRMED",
+    afterFutureEvaluation.outcome === "deny" && afterFutureEvaluation.reasonCodes.includes("TAMPER_CONFIRMED"),
+    `${afterFutureEvaluation.outcome} [${afterFutureEvaluation.reasonCodes.join(", ")}]`,
+  );
 }
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────

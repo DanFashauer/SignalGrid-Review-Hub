@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-28-1118-changes-decisionengine-swift-behaviour-clau",
+  "raisedAt": "2026-09-28T16:27:33.281Z",
+  "origin": "cloud",
+  "doing": "landing #1118, #1121 and #1037 (Mac lane PRs)",
+  "blockedBy": "#1118 changes DecisionEngine.swift behaviour; CLAUDE.md golden rule 1 forbids that, and docs/BUILD_BACKLOG.md says the sanctioned re-port needs a decision record (DR-020). #1118 also ports the unsafe allow in docs/BUILD_BACKLOG.md (any signal's active:true clears the custody exception, decisionEngine.ts:157, which #1118 ports as-is); that row names two repair shapes, an around-the-engine custody wrapper with a Swift twin against a shared vector file, or a correlated active check changed in both twins in one commit, and leaves the choice to the owner. #1121 changes AppWorkflows.swift behaviour; docs/BUILD_BACKLOG.md (2026-09-18) says that re-port is not owner-gated, while golden rule 1 and the 2026-09-28 review verdict say it is, and the cloud lane will not pick between them. #1037 (mac/intake-unlazy-skills @ b1d6ea8d) adds a scripts/publication-boundary.mjs entry, which DR-037 condition 5 keeps owner-merged, and has an open CodeQL alert; the cloud's preflight and breadth on b1d6ea8d both passed (posted on #1037)",
+  "need": "Owner: (a) a decision record that authorises or refuses the #1118 re-port (https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118); a bare 'exception granted' reply does not authorise it. (b) Pick the unsafe-allow repair shape for #1118: an around-the-engine custody wrapper with a Swift twin against a shared vector file, or a correlated active check changed in both twins in one commit. The Mac then builds it with its regression case. (c) Say whether #1121 (https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121) needs your decision too, or whether the 2026-09-18 backlog note ('not owner-gated') stands. (d) #1037 (https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037): open its CodeQL check (https://github.com/DanFashauer/SignalGrid-Review-Hub/runs/108934504414) and dismiss the alert it lists, or reply 'Mac paths-ignore' on the PR; then merge or close it. This supersedes the 'exception granted or revert' line in docs/agent/LOOP.md, which the next record corrects. The other Mac-owned fixes are routed to the Mac separately, not asked of you",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "where": "PRs #1118, #1121, #1037"
+}

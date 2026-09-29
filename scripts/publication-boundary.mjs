@@ -153,6 +153,11 @@ export const AREAS = [
   { path: ".claude/skills/raised-hands", class: "tooling", reason: "First-party DR-054 skill, authored here on 2026-09-23 on the owner's directive to monitor and answer the raise-your-hand function (the Mac lane's #1014 and the cloud lane's halves merged into one). Not part of the 100 vendored skills; carved out so the third_party_intake claim above stays literally true. The procedure the blocker-dispatcher follows: take, route, act, clear with evidence, and fill capability gaps." },
   { path: ".claude/skills/landing-under-dr-037", class: "tooling", reason: "First-party landing skill, authored here on 2026-09-12 — after the obra/superpowers vendoring on 2026-08-20. Not part of the 100 vendored skills; carved out so the third_party_intake claim above stays literally true. Holds DR-037's five merge conditions and the merge-Alpha-then-regenerate order the cloud lane used to land #656, #657, #653, #649 and #654." },
   { path: ".claude/skills/orchestrator-over-workers", class: "tooling", reason: "First-party build-pattern skill, authored here on 2026-09-12 — after the obra/superpowers vendoring on 2026-08-20. Not part of the 100 vendored skills; carved out so the third_party_intake claim above stays literally true. The orchestrator-over-Opus-workers pattern recorded in docs/LANE_COORDINATION.md the same day, with the two review pitfalls the first fan-out produced." },
+  // Would already resolve to the generic `.claude` area above (line 95) by
+  // longest-prefix-wins; carved out for a truthful, scoped reason instead of the
+  // generic one ("slash commands for prompt authoring"), which does not describe
+  // this directory.
+  { path: ".claude/workflows", class: "tooling", reason: "Saved Workflow tool scripts (DR-060 rule 2), authored here on 2026-09-26: plain JS with a pure-literal `meta` export, no product, tenant or customer specifics. `land-branch.js` automates landing a worker branch (merge, gate, push-on-green, open PR) against this repo's own scripts and gates." },
   { path: "docker", class: "tooling", reason: "Container assets." },
   { path: "Dockerfile.api", class: "tooling", reason: "API image build." },
   { path: "Dockerfile.web", class: "tooling", reason: "Web image build." },

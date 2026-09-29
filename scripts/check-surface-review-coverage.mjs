@@ -186,6 +186,22 @@ export function listTracked(root = REPO) {
   return files;
 }
 
+// L11: `--write` regenerated this page once while docs/agent/SURFACE_REVIEW_COVERAGE.md
+// itself sat mid-merge-conflict (e3b444cf) — the file walk saw three index stages
+// (ours/theirs/base) and rendered wrong counts. Pure so the self-test can exercise it
+// without a real merge: `unmergedListing` is `git ls-files -u`'s raw stdout (one line
+// per conflicted stage, tab-separated path last); any non-empty listing means the index
+// is mid-merge, regardless of which path is unmerged — a conflict anywhere else in the
+// tree still means the walk `--write` performs is reading multiple stages.
+export function writeRefusal(unmergedListing) {
+  const paths = [...new Set(unmergedListing.split("\n").filter(Boolean).map((l) => l.split("\t").slice(1).join("\t")))];
+  if (paths.length === 0) return null;
+  return (
+    `refusing to regenerate over a mid-conflict index — resolve the conflict first, then regenerate. ` +
+    `Unmerged path(s):\n` + paths.map((p) => `  ✗ ${p}`).join("\n")
+  );
+}
+
 const isDir = (p) => {
   try {
     return statSync(p).isDirectory();
@@ -1157,6 +1173,17 @@ function selfTest() {
     return p.includes("`third_party/`") && p.includes("`attached_assets/`") && p.includes("vendored");
   });
 
+  // ── L11: --write refuses over a mid-conflict index ──────────────────────────
+  check("an empty `git ls-files -u` listing lets --write proceed", () => writeRefusal("") === null);
+  check("a listing naming the coverage page itself refuses", () => {
+    const r = writeRefusal(`100644 abc123 1\t${PAGE_REL}\n100644 def456 2\t${PAGE_REL}\n100644 fed321 3\t${PAGE_REL}\n`);
+    return typeof r === "string" && r.includes(PAGE_REL) && r.includes("resolve the conflict first");
+  });
+  check("a listing naming an unrelated file refuses too — any unmerged path means a mid-merge index", () => {
+    const r = writeRefusal("100644 abc123 1\tdocs/README.md\n100644 def456 3\tdocs/README.md\n");
+    return typeof r === "string" && r.includes("docs/README.md");
+  });
+
   let bad = 0;
   console.log("Surface-read-coverage self-test — the gate must be able to fail\n");
   for (const c of controls) {
@@ -1174,6 +1201,15 @@ function selfTest() {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 function main({ write }) {
+  if (write) {
+    const unmergedListing = execFileSync("git", ["ls-files", "-u"], { cwd: REPO, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const refusal = writeRefusal(unmergedListing);
+    if (refusal) {
+      console.error(`✗ ${refusal}`);
+      process.exit(1);
+    }
+  }
+
   let ledger;
   try {
     ledger = JSON.parse(readFileSync(join(REPO, LEDGER_REL), "utf8"));

@@ -146,6 +146,17 @@ fn every_shared_case_agrees_with_this_client() {
             }
         }
 
+        // The id a client must have PARSED: a string pins it, JSON null pins "absent".
+        if let Some(want) = case.get("expectDecisionId") {
+            let want = want.as_str();
+            if decision.decision_id.as_deref() != want {
+                failures.push(format!(
+                    "  {id}: decisionId parsed as {:?}, expected {want:?}",
+                    decision.decision_id
+                ));
+            }
+        }
+
         if let Some(fragments) = case
             .get("expectExplanationContains")
             .and_then(|v| v.as_array())

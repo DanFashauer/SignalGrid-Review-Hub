@@ -5,7 +5,7 @@
   "routeComment": "The wire these vectors bind, as DATA \u2014 the gate (scripts/check-assist-wire-served.mjs) reads THIS field, not prose; DR-007 recorded the route as a declared gap until the spec served it; DR-023 closed that gap and the spec now serves it.",
   "requires": {
     "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing. KEPT CURRENT: check-assist-conformance.mjs fails when the file holds more than minCases + 4 cases, so a floor cannot lag far enough behind for a deleted vector to fail nothing.",
-    "minCases": 44,
+    "minCases": 65,
     "outcomesPresent": [
       "allow",
       "step_up",
@@ -19,34 +19,35 @@
       "why": "the only shape that may proceed with no further action",
       "status": 200,
       "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
-      "expect": "allow"
+      "expect": "allow",
+      "expectDecisionId": "dec_1"
     },
     {
       "id": "allow-with-unknown-field",
       "why": "a newer server adding a field must not break an older client",
       "status": 200,
-      "body": "{\"assist\":\"allow\",\"somethingAddedLater\":{\"a\":1}}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\",\"somethingAddedLater\":{\"a\":1}}",
       "expect": "allow"
     },
     {
       "id": "allow-no-reasons",
-      "why": "reasons is genuinely optional on an allow; absence is not an error",
+      "why": "reasons is genuinely optional on an allow; absence is not an error. Carries the served envelope fields (requestId may be null, timestamp) so the tolerance is proven against the real shape, not a hand-trimmed one",
       "status": 200,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"requestId\":null,\"timestamp\":\"2026-09-26T12:00:00.000Z\",\"assist\":\"allow\",\"decisionId\":\"dec_2\"}",
       "expect": "allow"
     },
     {
       "id": "allow-201",
       "why": "any 2xx is a completed request, not only 200",
       "status": 201,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "allow"
     },
     {
       "id": "step-up",
       "why": "not a refusal, but NOT proceedable either \u2014 the challenge is unanswered",
       "status": 200,
-      "body": "{\"assist\":\"step_up\",\"reasons\":[\"unmanaged device\"],\"obligations\":[\"webauthn\"]}",
+      "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_1\",\"reasons\":[\"unmanaged device\"],\"obligations\":[\"webauthn\"]}",
       "expect": "step_up"
     },
     {
@@ -55,48 +56,55 @@
       "status": 200,
       "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_9\",\"reasons\":[\"device posture is stale\"]}",
       "expect": "step_up",
-      "expectObligations": []
+      "expectObligations": [],
+      "expectDecisionId": "dec_9"
     },
     {
       "id": "step-up-obligations-wrong-type",
       "why": "obligations present but not a list is a malformed body, and malformed is DENY \u2014 the same rule `assist` already gets (present-but-wrong-type denies). An earlier version of this case expected step_up, which pinned an asymmetry: a wrong-typed assist denied while a wrong-typed obligations was quietly coerced to empty and let the step_up stand with its obligations silently dropped. Both clients are now strict on obligations.",
       "status": 200,
-      "body": "{\"assist\":\"step_up\",\"obligations\":\"webauthn\"}",
-      "expect": "deny"
+      "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_1\",\"obligations\":\"webauthn\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "obligations"
+      ]
     },
     {
       "id": "restrict",
       "why": "a reduced capability ceiling, not a denial",
       "status": 200,
-      "body": "{\"assist\":\"restrict\",\"reasons\":[\"shared account\"]}",
+      "body": "{\"assist\":\"restrict\",\"decisionId\":\"dec_1\",\"reasons\":[\"shared account\"]}",
       "expect": "restrict"
     },
     {
       "id": "deny-explicit",
       "why": "the gate said no, and said why",
       "status": 200,
-      "body": "{\"assist\":\"deny\",\"reasons\":[\"device is jailbroken\"]}",
-      "expect": "deny"
+      "body": "{\"assist\":\"deny\",\"decisionId\":\"dec_1\",\"reasons\":[\"device is jailbroken\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "device is jailbroken"
+      ]
     },
     {
       "id": "allow-uppercase",
       "why": "servers differ on casing; the vocabulary does not",
       "status": 200,
-      "body": "{\"assist\":\"ALLOW\"}",
+      "body": "{\"assist\":\"ALLOW\",\"decisionId\":\"dec_1\"}",
       "expect": "allow"
     },
     {
       "id": "step-up-mixed-case-padded",
       "why": "surrounding space in an enum value is a formatting artefact",
       "status": 200,
-      "body": "{\"assist\":\"  Step_Up  \"}",
+      "body": "{\"assist\":\"  Step_Up  \",\"decisionId\":\"dec_1\"}",
       "expect": "step_up"
     },
     {
       "id": "http-500",
       "why": "a server error is not a decision",
       "status": 500,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny",
       "expectExplanationContains": [
         "500"
@@ -106,7 +114,7 @@
       "id": "http-502",
       "why": "same, through a proxy",
       "status": 502,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny",
       "expectExplanationContains": [
         "502"
@@ -116,7 +124,7 @@
       "id": "http-503",
       "why": "same, while the gate is down",
       "status": 503,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny",
       "expectExplanationContains": [
         "503"
@@ -126,21 +134,21 @@
       "id": "http-401",
       "why": "we could not ask; a body saying allow must not rescue it",
       "status": 401,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "http-403",
       "why": "same as 401 \u2014 an authorization failure ON the gate",
       "status": 403,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "http-404",
       "why": "the route is gone; silence is not consent",
       "status": 404,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
@@ -161,7 +169,7 @@
       "id": "http-302-redirect-body",
       "why": "a redirect body is not a decision",
       "status": 302,
-      "body": "{\"assist\":\"allow\"}",
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
@@ -235,7 +243,8 @@
       "expect": "deny",
       "expectExplanationContains": [
         "assist"
-      ]
+      ],
+      "expectDecisionId": "dec_3"
     },
     {
       "id": "empty-object",
@@ -248,94 +257,315 @@
       "id": "assist-null",
       "why": "present and unreadable",
       "status": 200,
-      "body": "{\"assist\":null}",
+      "body": "{\"assist\":null,\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-empty-string",
       "why": "present and empty",
       "status": 200,
-      "body": "{\"assist\":\"\"}",
+      "body": "{\"assist\":\"\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-blank-string",
       "why": "present and blank",
       "status": 200,
-      "body": "{\"assist\":\"   \"}",
+      "body": "{\"assist\":\"   \",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-number",
       "why": "present, wrong type",
       "status": 200,
-      "body": "{\"assist\":1}",
+      "body": "{\"assist\":1,\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-object",
       "why": "present, wrong type",
       "status": 200,
-      "body": "{\"assist\":{\"value\":\"allow\"}}",
+      "body": "{\"assist\":{\"value\":\"allow\"},\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-array",
       "why": "present, wrong type",
       "status": 200,
-      "body": "{\"assist\":[\"allow\"]}",
+      "body": "{\"assist\":[\"allow\"],\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "assist-bool",
       "why": "present, wrong type",
       "status": 200,
-      "body": "{\"assist\":true}",
+      "body": "{\"assist\":true,\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "unknown-outcome-from-newer-server",
       "why": "a restriction this build cannot enforce",
       "status": 200,
-      "body": "{\"assist\":\"allow_with_conditions\"}",
+      "body": "{\"assist\":\"allow_with_conditions\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "allow-all",
       "why": "contains the word allow, is not the word allow",
       "status": 200,
-      "body": "{\"assist\":\"allow_all\"}",
+      "body": "{\"assist\":\"allow_all\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "disallow",
       "why": "contains allow as a substring and means the opposite",
       "status": 200,
-      "body": "{\"assist\":\"disallow\"}",
+      "body": "{\"assist\":\"disallow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "allowed",
       "why": "a plausible typo that must not be guessed through",
       "status": 200,
-      "body": "{\"assist\":\"allowed\"}",
+      "body": "{\"assist\":\"allowed\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "stepup-no-underscore",
       "why": "close is not the same as correct",
       "status": 200,
-      "body": "{\"assist\":\"stepup\"}",
+      "body": "{\"assist\":\"stepup\",\"decisionId\":\"dec_1\"}",
       "expect": "deny"
     },
     {
       "id": "wrong-key-case",
       "why": "Assist is not assist; JSON keys are case sensitive",
       "status": 200,
-      "body": "{\"Assist\":\"allow\"}",
+      "body": "{\"Assist\":\"allow\",\"decisionId\":\"dec_1\"}",
       "expect": "deny",
       "expectExplanationContains": [
         "assist"
+      ]
+    },
+    {
+      "id": "allow-decision-id-missing",
+      "why": "decisionId is REQUIRED by the served contract (AssistResult required: [assist, decisionId]) and every real decision carries one, because every real decision is persisted and audited under it. An allow with no id is a response nobody recorded: deny. This exact body was allow-no-reasons until the rule landed",
+      "status": 200,
+      "body": "{\"assist\":\"allow\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "allow-decision-id-null",
+      "why": "JSON null is not an id; one client read it as the text \"null\" and let the allow stand",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":null}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "allow-decision-id-blank",
+      "why": "a blank id correlates with nothing",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"   \"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "allow-decision-id-number",
+      "why": "the contract types decisionId as a string; two clients stringified 42 into an id",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":42}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "allow-decision-id-object",
+      "why": "present, wrong type",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":{\"id\":\"dec_1\"}}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "step-up-decision-id-missing",
+      "why": "the step-up ceremony is keyed on the decision (POST /v1/decisions/{id}/step-up/challenge); a step_up with no id cannot be answered and is not a decision anybody recorded. Every outcome needs the id, not only allow",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"reasons\":[\"device posture is stale\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "step-up-decision-id-null",
+      "why": "a null id read as text would send the worker to challenge decision \"null\"",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"decisionId\":null}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "restrict-decision-id-missing",
+      "why": "restrict still proceeds, under a ceiling; a proceed with no recorded decision behind it is an unauditable grant",
+      "status": 200,
+      "body": "{\"assist\":\"restrict\",\"reasons\":[\"shared account\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "deny-decision-id-missing",
+      "why": "the id check runs on every outcome, so an explicit deny without a usable id is reported as an unrecorded body (the explanation names decisionId) rather than relayed as a recorded decision; without this case a client that skips the check for deny passes every vector",
+      "status": 200,
+      "body": "{\"assist\":\"deny\",\"reasons\":[\"device is jailbroken\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "decisionId"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "missing-assist-decision-id-null",
+      "why": "a deny keeps the id it can read, for correlation (missing-assist pins dec_3); a JSON null is not one, and must be carried as absent, never as the text \"null\"",
+      "status": 200,
+      "body": "{\"decisionId\":null,\"reasons\":[\"x\"]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "assist"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "allow-reasons-not-a-list",
+      "why": "reasons is declared an array of strings. Present-but-wrong-type is malformed and malformed is DENY, the rule assist and obligations already get; reading it as absent let the allow stand on a body this client does not understand",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\",\"reasons\":\"TRUST_ESTABLISHED\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "reasons"
+      ]
+    },
+    {
+      "id": "allow-reasons-non-string-entry",
+      "why": "a non-string entry is a type violation, not an entry to drop quietly",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\",\"reasons\":[\"TRUST_ESTABLISHED\",42]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "reasons"
+      ]
+    },
+    {
+      "id": "allow-reasons-null",
+      "why": "present-and-null is present-and-wrong-type, as obligations: null already is",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\",\"reasons\":null}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "reasons"
+      ]
+    },
+    {
+      "id": "restrict-reasons-not-a-list",
+      "why": "the type rule holds for every outcome: a restrict is a grant under a ceiling",
+      "status": 200,
+      "body": "{\"assist\":\"restrict\",\"decisionId\":\"dec_1\",\"reasons\":\"shared account\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "reasons"
+      ]
+    },
+    {
+      "id": "step-up-obligations-non-string-entry",
+      "why": "dropping a non-string entry silently drops an obligation, the asymmetry step-up-obligations-wrong-type closed for the list itself",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_1\",\"obligations\":[\"webauthn\",{\"type\":\"totp\"}]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "obligations"
+      ]
+    },
+    {
+      "id": "assist-unquoted-literal",
+      "why": "not JSON. A parser that keeps unquoted tokens as primitives must still not read this as the word allow; assist must be a JSON string",
+      "status": 200,
+      "body": "{\"assist\":allow,\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "duplicate-assist-deny-then-allow",
+      "why": "a repeated top-level key is ambiguous JSON. kotlinx.serialization and serde_json were measured last-wins (this read as allow before the duplicate check); Foundation's order is unspecified (measured last-wins on swift-corelibs-foundation, Darwin not measured). Any duplicate top-level key is malformed regardless: deny, and nothing is read from the body",
+      "status": 200,
+      "body": "{\"assist\":\"deny\",\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "duplicate"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "duplicate-assist-same-value",
+      "why": "identical values, so first-wins and last-wins both read allow: only a client that DETECTS the duplicate passes, whatever order its parser resolves in",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"assist\":\"allow\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "duplicate"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "duplicate-assist-escaped-spelling",
+      "why": "\\u0061ssist IS assist once decoded; a duplicate check that compares raw key text misses it",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"\\u0061ssist\":\"allow\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "duplicate"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "duplicate-decision-id",
+      "why": "two ids, and no rule says which one the decision was recorded under",
+      "status": 200,
+      "body": "{\"assist\":\"allow\",\"decisionId\":\"dec_1\",\"decisionId\":\"dec_2\"}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "duplicate"
+      ],
+      "expectDecisionId": null
+    },
+    {
+      "id": "duplicate-obligations",
+      "why": "last-wins would drop the obligation the first copy stated",
+      "status": 200,
+      "body": "{\"assist\":\"step_up\",\"decisionId\":\"dec_1\",\"obligations\":[\"webauthn\"],\"obligations\":[]}",
+      "expect": "deny",
+      "expectExplanationContains": [
+        "duplicate"
       ]
     }
   ]

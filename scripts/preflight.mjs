@@ -101,6 +101,19 @@ const STEPS = [
   // landing. Fatal on shape; a row pending past 14 days is REPORTED, never fatal.
   { name: "Lessons ledger self-test (each malformed row shape must fail)", cmd: ["node", "scripts/check-lessons.mjs", "--self-test"] },
   { name: "Lessons ledger (every incident has evidence and a landing)", cmd: ["node", "scripts/check-lessons.mjs"] },
+  // DR-060 rule 2 / lesson L2: the land-branch saved workflow may push only when the
+  // script-side gate says so; this proves the gate refuses a missing, non-zero or
+  // stale (previous-run, wrong-sha) sentinel.
+  { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
+  // first-party skill may call which MCP server, with signalgrid-mcp's tool count
+  // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
+  { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
+  { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
+  // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
+  { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },
+  { name: "Wire-truth ledger (live checks bound to real dimensions, tracked evidence and declared symbols; coverage counts derived)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs"] },
   { name: "Index\u2194banner parity self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-index-banner-parity.mjs", "--self-test"] },
   { name: "Index\u2194banner parity (a bannered doc is not described alive in INDEX.md)", cmd: ["node", "scripts/check-index-banner-parity.mjs"] },
   // One level wider than the line above: the index is not the only page that routes a
@@ -704,6 +717,23 @@ const STEPS = [
   // never a stale link) a pull request.
   { name: "Vendor-doc drift watch self-test (the comparison logic must actually work)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs", "--self-test"] },
   { name: "Vendor-doc drift watch (report-only — informational, never fails on a stale or unverified URL)", cmd: ["node", "scripts/check-vendor-doc-drift.mjs"] },
+  // Lesson L8 (DR-060): the Pages branch build was red on every mainline push for 34 days
+  // and no gate read a non-gating workflow's conclusion. REPORT-ONLY on a streak. An
+  // unclassified workflow file is a tree defect and stays fatal everywhere; every other own
+  // error (an HTTP error, an unresolved workflow, a malformed payload) is FATAL in CI and
+  // REPORTED, exit 0, here — a container or dev-shell token is frequently a git-proxy
+  // credential with no `actions: read` scope, and this step must not fail a preflight for
+  // that (check-ci-liveness.mjs's header: "FATAL IN CI, REPORTED LOCALLY"). It needs the
+  // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
+  // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
+  // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
+  {
+    name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
+    cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
+    selfSkipsWithout: "GITHUB_TOKEN",
+    env: { GH_TOKEN: "" },
+  },
 ];
 
 // Is the native web build structurally impossible here? Derived from the committed
@@ -815,8 +845,14 @@ if (selfSkipped.length > 0) {
   // where the decision to push is made, not in a comment nobody opens.
   console.log(`\n  ${selfSkipped.length} proof(s) SELF-SKIPPED — they exited 0 without running:`);
   for (const r of selfSkipped) console.log(`    · ${r.name} (${r.env} unset)`);
-  console.log("    Nothing they prove was verified by this run. CI's durable-persistence job");
-  console.log("    runs them against a real Postgres; set DATABASE_URL to run them here.");
+  console.log("    Nothing they prove was verified by this run.");
+  if (selfSkipped.some((r) => r.env === "DATABASE_URL")) {
+    console.log("    CI's durable-persistence job runs the DATABASE_URL ones against a real Postgres;");
+    console.log("    set DATABASE_URL to run them here.");
+  }
+  if (selfSkipped.some((r) => r.env === "GITHUB_TOKEN")) {
+    console.log("    CI's validation job runs the GITHUB_TOKEN one with the workflow token; set GITHUB_TOKEN to run it here.");
+  }
 }
 if (unavailable.length > 0) {
   // Stated WITH the verdict, not below it. "Everything it runs is green" is true

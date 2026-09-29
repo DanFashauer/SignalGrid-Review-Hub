@@ -1,0 +1,15 @@
+{
+  "id": "2026-09-28-the-cloud-s-message-cloud-fyi-nothing-asked-your",
+  "raisedAt": "2026-09-28T07:53:38.435Z",
+  "origin": "cloud",
+  "doing": "coordinating the two lanes through the mailbox",
+  "blockedBy": "the cloud's message cloud-fyi-nothing-asked-your-tenant-isolation-ha has sat unread on the Mac for about 34h. Items 1 and 2 are FYI, but item 3 is an ask: find what sends SIGTERM (exit 143) to Mac-only preflights on the self-hosted runner signalgrid-mac. There are three instances. Two are in the message: #1141 job 108491528018 at 2026-09-26T21:42:10Z (skill-instruction-conflicts self-test) and #1128 job 108492902025 at 21:57:41Z (proof:webauthn-verify). The third is only in the cloud's ack note artifacts/lane-messages/acks/mac-update-to-1143-durable-write-finding-downgra.json, which lane:inbox does not show: #1147 job 108514569139, preflight killed 3m44s in, 'Terminated: 15 node scripts/preflight.mjs', no gate FAILED. Only a Mac session can read the message, investigate, and ack it.",
+  "need": "a Mac session runs pnpm run lane:inbox, investigates what ran on signalgrid-mac at each of the three instances (jobs 108491528018, 108492902025, 108514569139: a local pkill, sleep, a reaper, a session tool timeout, a concurrent job, or the tick), reports the cause in mail, then acks the message",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-fyi-nothing-asked-your-tenant-isolation-ha"
+  ]
+}

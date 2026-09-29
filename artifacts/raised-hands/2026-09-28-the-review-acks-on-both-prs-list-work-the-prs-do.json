@@ -1,0 +1,13 @@
+{
+  "id": "2026-09-28-the-review-acks-on-both-prs-list-work-the-prs-do",
+  "raisedAt": "2026-09-28T16:27:33.217Z",
+  "origin": "cloud",
+  "doing": "landing the Mac lane's #1118 (mac/ios-parity-behavioral @ d4297467) and #1121 (mac/app-workflows-parity), which the Mac reports ready (mail mac-merge-steps-done-1118-and-1037-are-conflict-, 12:47Z)",
+  "blockedBy": "The review acks on both PRs list work the PRs do not yet carry, and neither can merge without it. The #1118 unsafe-allow fix is NOT in this hand: its repair shape is the owner's choice (docs/BUILD_BACKLOG.md), asked in the owner hand",
+  "need": "The Mac lane delivers, on each PR's head, EVERY item its review ack lists: artifacts/lane-messages/acks/mac-pr-1118-ios-port-parity-is-now-behavioural-p.json for #1118 and artifacts/lane-messages/acks/mac-pr-1121-stacked-on-1118-appworkflows-port-pa.json for #1121 (docs/agent/LOOP.md: every item in those acks gates the PRs). They include, for #1118, a TRIGGERS-completeness check and a Linux Swift<->vector binding check; for #1121, Apple CI on its head, the three surviving fail-closed mutants, a Linux Swift-test<->vector binding gate, VectorInput typed over keyof Required<Omit<AppPlanInput,'integration'>>, the contradictory COMPANY_BUILD_PLAN rows 101 and 48, the wrong 'no device change' reason, and the creative-tier co-author on the port commits. The one exception is the #1118 unsafe-allow repair, which waits on the owner's choice of shape. Clear this hand only when every ack item is on the PR",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "where": "PRs #1118, #1121"
+}

@@ -67,6 +67,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { execSync } from "node:child_process";
 import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-collection.mjs";
 import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
+import { wireTruthFigures } from "./check-wire-truth-ledger.mjs";
 
 /** The connector tree the redirect census walks. */
 const INTEGRATIONS = "lib/integrations/src/integrations";
@@ -539,6 +540,13 @@ export const FIGURES = [
     derive: webhookEnvelopeSeconds,
     from: "the same envelope — the floor a receiver's window must clear, stated as a bound not an estimate",
   },
+  // docs/COMPANY_BUILD_PLAN.md row 17: the live-check coverage counts. The ledger holds
+  // the records; check-wire-truth-ledger.mjs derives the counts (never stored).
+  { id: "wire-truth-checks", doc: "docs/COMPANY_BUILD_PLAN.md", re: /the ledger holds (\d+) live checks/, derive: (root) => wireTruthFigures(root).checks, from: "checks[] in docs/agent/wire-truth-ledger.json" },
+  { id: "wire-truth-hits", doc: "docs/COMPANY_BUILD_PLAN.md", re: /live checks, (\d+) of them recorded a fixture-vs-wire divergence/, derive: (root) => wireTruthFigures(root).hits, from: "ledger checks with divergenceFound: true in docs/agent/wire-truth-ledger.json" },
+  { id: "wire-truth-checked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /and (\d+) of the tree's \d+ signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).checked, from: "distinct ledger dimensions that are directories under lib/integrations/src/integrations/" },
+  { id: "wire-truth-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /of the tree's (\d+) signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).dimensions, from: "directories under lib/integrations/src/integrations/ except adapters/" },
+  { id: "wire-truth-unchecked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /have a live check and (\d+) have none/, derive: (root) => wireTruthFigures(root).uncheckedCount, from: "dimension directories no entry in docs/agent/wire-truth-ledger.json names", zeroValid: "every dimension gaining a live check is the goal this count tracks, so 0 is a finished state, not a broken parser" },
 ];
 
 // ── Two rows considered on 2026-09-02 and deliberately NOT added ─────────────────────
@@ -1102,9 +1110,11 @@ export function auditFigure(row, text, derived) {
   const rx = new RegExp(row.re.source, row.re.flags.includes("g") ? row.re.flags : `${row.re.flags}g`);
   const ms = [...text.matchAll(rx)];
 
-  if (!Number.isInteger(derived) || derived < 1) {
+  // zeroValid: a row whose count legitimately reaches 0 says why in its own words.
+  const floor = typeof row.zeroValid === "string" && row.zeroValid.length > 12 ? 0 : 1;
+  if (!Number.isInteger(derived) || derived < floor) {
     problems.push(
-      `${row.id}: the deriver returned ${JSON.stringify(derived)} — a count of at least 1 was expected. ` +
+      `${row.id}: the deriver returned ${JSON.stringify(derived)} — a count of at least ${floor} was expected. ` +
         `This says the PARSER broke (${row.from}), not that the repository is empty. Refusing to compare.`,
     );
   }
@@ -1181,6 +1191,12 @@ function selfTest() {
     "a deriver returning 0 is a BROKEN PARSER, not an empty tree — fatal, and no comparison is made",
     auditFigure(row, "— 0 requests as plain-text", 0).problems.some((p) => p.includes("PARSER broke")),
   ]);
+  checks.push([
+    "a zeroValid row accepts 0 but still refuses a negative or non-integer derivation",
+    auditFigure({ ...row, zeroValid: "a count whose finished state is none left" }, "— 0 requests as plain-text `.bru` files", 0).problems.length === 0 &&
+      auditFigure({ ...row, zeroValid: "a count whose finished state is none left" }, "— 0 requests as plain-text `.bru` files", -1).problems.some((p) => p.includes("PARSER broke")) &&
+      auditFigure({ ...row, zeroValid: "a count whose finished state is none left" }, "— 0 requests as plain-text `.bru` files", NaN).problems.some((p) => p.includes("PARSER broke")),
+  ]);
   checks.push(["a spelled figure reads as a number", readCount("four") === 4 && readCount("12") === 12 && readCount("1,367") === 1367]);
   checks.push(["…and an unreadable one is NaN, never coerced to 0", Number.isNaN(readCount("several")) && Number.isNaN(readCount(undefined))]);
   checks.push([
@@ -1194,7 +1210,7 @@ function selfTest() {
   // Floors on the live tree: every deriver must find something, and every document must
   // hold exactly one matching sentence, BEFORE any mutation is judged.
   const live = auditAll();
-  checks.push(["every deriver produces at least 1 against the real tree", live.every(({ result }) => Number.isInteger(result.derived) && result.derived >= 1)]);
+  checks.push(["every deriver produces at least 1 against the real tree (0 only where the row says why)", live.every(({ row: r, result }) => Number.isInteger(result.derived) && result.derived >= (r.zeroValid ? 0 : 1))]);
   checks.push(["every document holds exactly one matching sentence", live.every(({ result }) => result.matches === 1)]);
   checks.push(["…and the real tree is clean right now (the positive control)", live.every(({ result }) => result.problems.length === 0)]);
 

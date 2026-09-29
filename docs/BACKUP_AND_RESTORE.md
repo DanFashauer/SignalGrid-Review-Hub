@@ -172,7 +172,7 @@ deliberate open decision, not an accident — until it is made, any statement ab
 
 ## What the CI proof actually establishes
 
-`proof:backup-restore` runs on every pull request against a real Postgres, 16
+`proof:backup-restore` runs on every pull request against a real Postgres, 22
 assertions:
 
 - a seeded ledger verifies **before** backup, and the manifest records its true head
@@ -186,6 +186,9 @@ assertions:
 - an archive with no manifest is refused rather than assumed good
 - and a positive control: a good archive is **accepted**, so the verifier cannot pass
   the negative tests by simply refusing everything
+- a checksum-valid archive carrying a **trigger or rule on a managed table** is refused
+  *before* `pg_restore` replaces anything — a sentinel row on the live ledger survives
+  the refusal, and nothing leaks into the live database
 
 ## What this does NOT give you
 

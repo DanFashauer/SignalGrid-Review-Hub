@@ -192,10 +192,11 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
     const rows = objective.needsExecutor.map((n) => n.rowId).join(", ");
     if (h > SOFT_LIMIT_H["executor-gap"]) out.push({ id: "executor-gap:objective-state", clears: "cloud", ageH: h, softH: SOFT_LIMIT_H["executor-gap"], what: `${objective.needsExecutor.length} backlog row(s) the objective loop cannot rank — every named role resolves to "lane" or dangles: rows ${rows}`, needs: "a dedicated executor (agent or skill) for the role, or the row re-owned by a role that has one — the blocker-dispatcher decides which (docs/agent/hand-routing.json executor-gap)" });
   }
-  // OWNER-SCOPED ESCALATIONS. objective-loop mails a `clears: mac|cloud` escalation to that lane
-  // (which then ages as mail:), but an ask only the owner can answer has no lane to read it and
-  // reached his page nowhere — it sat in objective-state.json. One hand per escalation, aged from
-  // its own `since` (the loop carries it across ticks), witnessed states only, as above.
+  // OWNER-SCOPED ESCALATIONS. objective-loop mails each NEW escalation once to the other lane (the
+  // cloud, from the Mac tick), whoever clears it: an owner ask therefore never reaches the owner,
+  // and one already in the committed state when delivery began was never mailed at all — it sat in
+  // objective-state.json. One hand per escalation, aged from its own `since` (the loop carries it
+  // across ticks), witnessed states only, as above.
   if (objective?.witnessed) {
     for (const e of objective.escalations ?? []) {
       if (e?.clears !== "owner") continue;
@@ -255,8 +256,8 @@ export function render({ open, auto }, { markdown = false, prsChecked = false } 
   ];
   const lines = [];
   const total = rows.length;
-  lines.push(markdown ? `# Raised hands — ${total} open` : `Raised hands — ${total} open${prsChecked ? "" : " (PRs NOT CHECKED here — the hourly issue job checks them)"}`);
-  if (markdown) lines.push("", `Oldest first. Anything marked OVERDUE or PAST LIMIT has waited too long.${prsChecked ? "" : " PRs were NOT checked on this run."}`);
+  lines.push(markdown ? `# Raised hands — ${total} open` : `Raised hands — ${total} open${prsChecked ? "" : " (PRs and the weekly Mac-lane run NOT CHECKED here — the hourly issue job checks them)"}`);
+  if (markdown) lines.push("", `Oldest first. Anything marked OVERDUE or PAST LIMIT has waited too long.${prsChecked ? "" : " PRs and the weekly Mac-lane run were NOT checked on this run."}`);
   for (const who of GROUP_ORDER) {
     const mine = rows.filter((r) => r.group === who).sort((a, b) => b.ageH - a.ageH);
     if (mine.length === 0) continue;
@@ -319,12 +320,23 @@ function githubApi() {
   };
 }
 
-/** The latest COMPLETED weekly Mac-lane run on mainline, or null when it has never completed one.
- *  A failed fetch throws (like loadPrs): a run we could not read is not a green one. */
-async function loadMacLane(api) {
-  const { workflow_runs: runs } = await api("/actions/workflows/mac-lane.yml/runs?branch=SignalGrid_Alpha&status=completed&per_page=1");
-  const r = runs?.[0];
+/** The newest run whose outcome is KNOWN, from a newest-first list of completed runs: a cancelled
+ *  run (a manual cancel, or concurrency killing a same-SHA duplicate) and a skipped one say nothing
+ *  about the suite, so they must not hide the red run behind them — an unknown outcome loosens the
+ *  answer. Null when the list holds no decisive run. */
+export const latestDecisiveRun = (runs) => {
+  const r = (runs ?? []).find((x) => !["cancelled", "skipped"].includes(x?.conclusion));
   return r ? { id: r.id, conclusion: r.conclusion, url: r.html_url, updatedAt: r.updated_at } : null;
+};
+
+/** The latest decisive COMPLETED weekly Mac-lane run on mainline, or null when there is none.
+ *  A failed fetch throws (like loadPrs): a run we could not read is not a green one.
+ *  ponytail: a green `sim_only` workflow_dispatch run is the newest run and hides a red full-suite
+ *  one — the runs API cannot tell them apart because mac-lane.yml sets no `run-name`. Upgrade:
+ *  a `run-name` carrying `sim_only`, which this loader then skips. */
+async function loadMacLane(api) {
+  const { workflow_runs: runs } = await api("/actions/workflows/mac-lane.yml/runs?branch=SignalGrid_Alpha&status=completed&per_page=10");
+  return latestDecisiveRun(runs);
 }
 
 async function loadPrs(api) {
@@ -412,7 +424,7 @@ function selfTest() {
 
   const text = render(evaluate([hand()], autoHands({ messages: [msg(30)] }, T), T, route), { markdown: true, prsChecked: true });
   checks.push(["the owner's page groups by who clears it and names both kinds", text.includes("## Needs you (Dan) — 1") && text.includes("## Needs the Mac lane — 1") && text.includes("(auto; nobody raised a hand")]);
-  checks.push(["a run that did not check PRs SAYS so", render(evaluate([], [], T, route), { markdown: true }).includes("PRs were NOT checked")]);
+  checks.push(["a run that did not check PRs or the Mac-lane run SAYS so", render(evaluate([], [], T, route), { markdown: true }).includes("PRs and the weekly Mac-lane run were NOT checked")]);
 
   // routing
   const allExist = () => true;
@@ -458,7 +470,7 @@ function selfTest() {
   a = autoHands({ objective: esc() }, T);
   checks.push(["a WITNESSED owner escalation standing 50h is ONE owner hand, aged from `since`", a.length === 1 && a[0].id === "objective-owner:rows-awaiting-owner" && a[0].clears === "owner" && a[0].what === "decide" && Math.round(a[0].ageH) === 50]);
   checks.push(["…the same escalation in an UNWITNESSED state is not", autoHands({ objective: esc({ witnessed: false }) }, T).length === 0]);
-  checks.push(["…a `clears: cloud` or `mac` escalation is not (lane mail carries those)", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "cloud", since: ago(50) }, { id: "b", clears: "mac", since: ago(50) }] }) }, T).length === 0]);
+  checks.push(["…a `clears: cloud` or `mac` escalation is not an owner hand", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "cloud", since: ago(50) }, { id: "b", clears: "mac", since: ago(50) }] }) }, T).length === 0]);
   checks.push(["…standing 10h is not a hand yet", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(10) }] }) }, T).length === 0]);
   checks.push(["…with no `since` it ages as unknown (never fresh) — a hand", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner" }] }) }, T).length === 1]);
   checks.push(["…two owner escalations are two hands", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(50) }, { id: "b", clears: "owner", since: ago(60) }] }) }, T).length === 2]);
@@ -476,6 +488,12 @@ function selfTest() {
   checks.push(["…a conclusion we do not know is not a hand either (only a named failure is red)", autoHands(ml("skipped"), T).length === 0 && autoHands(ml(null), T).length === 0 && autoHands({ macLane: null }, T).length === 0]);
   checks.push(["…failed 30 minutes ago is not a hand yet", autoHands(ml("failure", 0.5), T).length === 0]);
   checks.push(["…an unparseable updatedAt ages as unknown (never fresh) — a hand", autoHands({ macLane: { conclusion: "failure", id: 7, updatedAt: "soon" } }, T).length === 1]);
+  // which run the loader reads: past the cancelled/skipped ones, to the newest with a known outcome
+  const run = (conclusion, id) => ({ id, conclusion, html_url: `u${id}`, updated_at: `t${id}` });
+  checks.push(["a raw API-shaped run maps to id, conclusion, url and updatedAt", JSON.stringify(latestDecisiveRun([run("failure", 5)])) === JSON.stringify({ id: 5, conclusion: "failure", url: "u5", updatedAt: "t5" })]);
+  checks.push(["…a cancelled or skipped run newer than a failed one does not hide it", latestDecisiveRun([run("cancelled", 9), run("skipped", 8), run("failure", 7)])?.id === 7]);
+  checks.push(["…a success newer than a failure IS the answer (the red one is superseded)", latestDecisiveRun([run("success", 9), run("failure", 7)])?.conclusion === "success"]);
+  checks.push(["…no runs, or only cancelled ones, is null", latestDecisiveRun([]) === null && latestDecisiveRun(undefined) === null && latestDecisiveRun([run("cancelled", 1)]) === null]);
   // routing: the new kinds are REQUIRED, so a detector cannot ship without an answerer
   for (const k of ["objective-owner", "mac-lane-red"]) checks.push([`${k} is a REQUIRED route — a routing table without it is fatal`, REQUIRED_ROUTES.includes(k) && auditRouting({ routes: Object.fromEntries(REQUIRED_ROUTES.filter((r) => r !== k).map((r) => [r, { responder: { owner: true }, action: "a" }])) }, allExist).some((p) => p.includes(`"${k}"`))]);
 

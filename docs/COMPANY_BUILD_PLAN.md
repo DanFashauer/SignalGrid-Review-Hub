@@ -4897,9 +4897,9 @@ Decision core (the verdict mechanism):
 
 Auth chain (bearer token to tenant principal):
 10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
-11. lib/enterprise-auth/src/jwt.ts (238) — token verification.
+11. lib/enterprise-auth/src/jwt.ts (256) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
-13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
+13. lib/enterprise-auth/src/jwks.ts (124) — key fetch/cache; wrong caching means accepting rotated-out keys.
 14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
 15. artifacts/api-server/src/lib/core.ts (344) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.

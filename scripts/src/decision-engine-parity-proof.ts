@@ -40,8 +40,9 @@
 // WHAT IS GATED: the table clears its floors; EVERY reason code the engine's source can
 // push appears in at least one case (the set is read from the source, so a rule added
 // tomorrow without a case is red here); EVERY signal-type literal and attribute pair the
-// engine's predicates read has a TRIGGERS row or a declared exclusion (also read from the
-// source, with a planted-literal self-test); building the table twice yields the same bytes;
+// engine's predicates read has a TRIGGERS row labelled with it or a declared exclusion
+// (also read from the source; any read the extractor cannot parse is red, with planted
+// self-tests); building the table twice yields the same bytes;
 // and the committed file is byte-identical to the table (re-emit on a red). Nothing here
 // modifies either ported file, and nothing here reads a clock.
 
@@ -321,8 +322,9 @@ check("every decision outcome literal the engine orders appears in a case except
 // source and must have a TRIGGERS row of its own — keyed by the row's LABEL, so a literal
 // that only rides along on another row (zone=wrong on rtls.wrong_zone) does not count — or
 // a declared exclusion. Both are checked both ways: a row or an exclusion naming a literal
-// the source no longer reads is stale. Any other `attributes` read (bracket, dot, `?.`,
-// `!==`, single quotes, a variable key) and any other `.type` read (`!==`, single quotes,
+// the source no longer reads is stale. Any other `attributes` token (bracket, dot, `?.`,
+// `!==`, single quotes, a variable key, destructuring, `Object.values(…)`) — all but the
+// normalizer's `attributes: {` key and `...signal.attributes` spread — and any other `.type` read (`!==`, single quotes,
 // `.includes(signal.type)`) is counted as unparsed and is red, not skipped.
 const TRIGGER_EXCLUSIONS = [
   "type:identity.authenticated", // base trust: BASE_TRUST, APPLE_DECLARED, every single-on-base case
@@ -338,7 +340,7 @@ const engineLiterals = (source: string) => {
   const count = (re: RegExp) => source.match(re)?.length ?? 0;
   const typeReads = count(/\.type\b/g) - count(/signal\.type === type\b/g) - count(/\.type === "[^"]+"/g); // less the hasType helper
   const unparsed =
-    count(/attributes(?:\?\.)?(?:\[|\.\w)/g) - pairs.length + count(/hasType\(/g) - count(/hasType\("[^"]+"\)/g) + typeReads;
+    count(/\battributes\b/g) - count(/\battributes:\s*\{/g) - count(/\.\.\.[\w.]*\battributes\b/g) - pairs.length + count(/hasType\(/g) - count(/hasType\("[^"]+"\)/g) + typeReads;
   return { literals: [...literals].sort(), unparsed };
 };
 // A row covers the literal its label names (`type:x` / `attr:k=v`, before any `(note)`),
@@ -360,7 +362,7 @@ check(`every TRIGGERS row is labelled with a literal its own signal carries${mis
 check(`every TRIGGERS row's literal is still read by the engine${staleRows.length ? ` — STALE: ${staleRows.join(", ")}` : ""}`, staleRows.length === 0);
 const planted = engineLiterals(`${engineSource}\nhasType("dock.tamper_detected") || signal.attributes["tamper"] === "detected";`);
 check("self-test: a planted hasType(\"dock.tamper_detected\") and attributes[\"tamper\"] === \"detected\" are both reported MISSING", JSON.stringify(uncovered(planted.literals)) === JSON.stringify(["attr:tamper=detected", "type:dock.tamper_detected"]));
-for (const read of ['signal.attributes["zone"] !== "right"', 'signal.attributes.tamper === "detected"', 'signal.attributes?.["tamper"] === "detected"', "signal.type === 'dock.tamper_detected'", '["dock.tamper_detected"].includes(signal.type)']) {
+for (const read of ['signal.attributes["zone"] !== "right"', 'signal.attributes.tamper === "detected"', 'signal.attributes?.["tamper"] === "detected"', "const { tamper } = signal.attributes", 'Object.values(signal.attributes).includes("detected")', "signal.type === 'dock.tamper_detected'", '["dock.tamper_detected"].includes(signal.type)']) {
   check(`self-test: a planted \`${read}\` is reported unparsed`, engineLiterals(`${engineSource}\n${read};`).unparsed === 1);
 }
 

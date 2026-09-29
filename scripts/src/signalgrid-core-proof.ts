@@ -2051,6 +2051,33 @@ for (const [fromRow, fromSignal, want, why] of [
     clearedByFresh.tamperState === "none",
     `got ${String(clearedByFresh.tamperState)}`,
   );
+  // The accusation need not be fresh either: a not-fresh reading may accuse but
+  // cannot vouch, so a STALE "confirmed" survives a newer not-fresh "none" too.
+  const staleConfirmedA = sig("t_a", "tamper_state", "confirmed", "2026-07-12T10:00:00Z", "stale", "conn_a");
+  for (const [label, noneB] of [
+    ["a newer stamp classified 'expired'", sig("t_b", "tamper_state", "none", "2026-07-12T11:00:00Z", "expired", "conn_b")],
+    ["a FUTURE stamp classified 'unknown'", sig("t_b", "tamper_state", "none", "2099-01-01T00:00:00Z", "unknown", "conn_b")],
+  ] as const) {
+    const evidence = buildEvidence(identity, device, workflow, [...healthy, staleConfirmedA, noneB]);
+    const evaluation = evaluatePolicy(v1, evidence);
+    check(
+      `2519: a STALE CONFIRMED tamper survives ${label} — SHARED_DEVICE_RULES_V1 denies with TAMPER_CONFIRMED`,
+      evidence.tamperState === "confirmed" &&
+        evaluation.outcome === "deny" &&
+        evaluation.reasonCodes.includes("TAMPER_CONFIRMED"),
+      `tamperState=${String(evidence.tamperState)} ${evaluation.outcome} [${evaluation.reasonCodes.join(", ")}]`,
+    );
+  }
+  const staleClearedByFresh = buildEvidence(identity, device, workflow, [
+    ...healthy,
+    staleConfirmedA,
+    sig("t_b", "tamper_state", "none", "2026-07-12T11:00:00Z", "fresh", "conn_b"),
+  ]);
+  check(
+    "2519 control: a newer FRESH 'none' still clears a STALE tamper",
+    staleClearedByFresh.tamperState === "none",
+    `got ${String(staleClearedByFresh.tamperState)}`,
+  );
 
   // (2520) An offset-less stamp is local time in whatever zone the host runs. It
   // may accuse but it cannot vouch, and it can never win on time.

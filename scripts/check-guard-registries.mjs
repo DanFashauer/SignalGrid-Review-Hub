@@ -57,7 +57,7 @@ const proofNameOf = (file) => `proof:${file.replace(/-proof\.ts$/, "")}`;
 // is one of three things — the start of the literal, a `\n` ESCAPE inside it, or
 // a real newline inside a template literal. All three are permitted here.
 //
-// Two failures are recorded in this pattern, both the same root cause:
+// Three failures are recorded in this pattern, all the same root cause:
 //
 //   1. It was anchored to `console.log(` on ONE line, so a proof that wrapped its
 //      call read as "publishes no figures". `proof:iac` does exactly that, so it
@@ -77,7 +77,20 @@ const proofNameOf = (file) => `proof:${file.replace(/-proof\.ts$/, "")}`;
 //      all while three proofs published figures no guard was checking. A blind
 //      spot that lines up with a gap in the registry is silent by construction,
 //      which is why the controls below exist rather than another careful read.
-const FIGURES_EMISSION = /console\.log\(\s*[`"'](?:\\n|\s)*figures=/s;
+//
+//   3. It was anchored to `console.log(`, so the same line printed through a
+//      variable (`const line = `figures=…`; console.log(line)`), `console.info`
+//      or `process.stdout.write` read as "publishes no figures" — an unregistered
+//      proof the figure guard never looked at. The emission is now the QUOTED
+//      `figures=` at the start of a literal, whatever prints it; `\s*` spans
+//      newlines, so a wrapped call still reaches. The price is that a prose
+//      mention must not count, so whole-line comment lines are dropped first.
+//      ponytail: a trailing `// …"figures="…` comment on a CODE line still
+//      matches — a fail-closed false positive (an unregistered-proof error a
+//      reader clears by moving the comment); a real token scanner if one ever bites.
+const FIGURES_EMISSION = /[`"'](?:\\n|\s)*figures=/s;
+const emitsFiguresLine = (text) =>
+  FIGURES_EMISSION.test(text.split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n"));
 
 // Negative and positive controls for the detector itself. A regex nobody has
 // watched fail is indistinguishable from a comment — and this one has been wrong
@@ -94,9 +107,14 @@ const DETECTOR_CONTROLS = [
   // a green sweep red on every machine without a Redis.
   { expect: false, name: "prose mention", src: "// Deliberately NOT a `figures=` line." },
   { expect: false, name: "mid-line, not line start", src: "console.log(`summary=figures=nope`);" },
-  { expect: false, name: "not a console.log", src: "const s = `figures=a=1`;" },
+  // The emission is a quoted `figures=` at line start, NOT a `console.log(` — the
+  // proof may build the line in a variable, or print it through another call.
+  { expect: true, name: "variable form", src: "const s = `figures=a=1`;\nconsole.log(s);" },
+  { expect: true, name: "process.stdout.write", src: "process.stdout.write(`\\nfigures=a=1\\n`);" },
+  { expect: true, name: "console.info", src: "console.info(`figures=a=1`);" },
+  { expect: false, name: "block-comment mention", src: "/*\n * Deliberately NOT a `figures=` line.\n */" },
 ];
-const controlFailures = DETECTOR_CONTROLS.filter((c) => FIGURES_EMISSION.test(c.src) !== c.expect);
+const controlFailures = DETECTOR_CONTROLS.filter((c) => emitsFiguresLine(c.src) !== c.expect);
 if (controlFailures.length > 0) {
   console.error("✗ the figures= detector failed its own controls — it cannot be trusted to scan:");
   for (const c of controlFailures) {
@@ -111,7 +129,7 @@ const emitsFigures = [];
 for (const f of files) {
   const text = readFileSync(join(proofDir, f), "utf8");
   if (text.includes("enumerateGrantSafety")) usesGrantSafety.push(proofNameOf(f));
-  if (FIGURES_EMISSION.test(text)) emitsFigures.push(proofNameOf(f));
+  if (emitsFiguresLine(text)) emitsFigures.push(proofNameOf(f));
 }
 
 const mutationCovered = new Set(TARGETS.map((t) => t.proof));

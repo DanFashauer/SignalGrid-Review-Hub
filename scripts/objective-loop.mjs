@@ -437,7 +437,7 @@ export function collect() {
 export function derive(c) {
   const evaluation = evaluate({ objective: c.objective, probes: c.probes });
   const ranked = evaluation.verdict === "broken"
-    ? { tasks: [], needsExecutor: [], escalations: [], queue: [] }
+    ? { tasks: [], needsExecutor: [], unmeasured: [], awaiting: [], escalations: [], queue: [] }
     : rank({ rows: c.rows, openIds: [...(c.probes.plan?.open ?? []), ...(c.probes.plan?.partial ?? [])], roster: c.roster, roleIds: c.roleIds, evaluation, priorState: c.priorState, envKeys: c.envKeys, nowIso: c.nowIso, objective: c.objective });
   const fin = finalize(evaluation, ranked);
   const state = {
@@ -448,7 +448,7 @@ export function derive(c) {
     criteria: evaluation.criteria, unmet: evaluation.unmet, unknown: evaluation.unknown,
     tasks: ranked.tasks, needsExecutor: ranked.needsExecutor, unmeasured: ranked.unmeasured, awaiting: ranked.awaiting, escalations: ranked.escalations, queue: ranked.queue,
     probeErrors: evaluation.probeErrors,
-    report: { ...c.report, needsExecutorCount: ranked.needsExecutor.length, unmeasuredCount: ranked.unmeasured.length, openRows: c.probes.plan?.open?.length ?? null },
+    report: { ...c.report, needsExecutorCount: ranked.needsExecutor.length, unmeasuredCount: ranked.unmeasured.length, awaitingCount: ranked.awaiting.length, openRows: c.probes.plan?.open?.length ?? null, partialRows: c.probes.plan?.partial?.length ?? null },
     staleAfterHours: c.staleAfterHours,
     derivedAt: c.nowIso, derivedAtCommit: c.git.head, workingTreeCleanAtEntry: c.git.workingTreeCleanAtEntry,
   };
@@ -553,7 +553,7 @@ export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncesto
   const awaiting = Array.isArray(state.awaiting) ? state.awaiting : []; // likewise
   if (state.verdict === "replan" && state.tasks.length === 0) fatal.push("verdict replan with no task is a contradiction");
   if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && unmeasured.length === 0 && awaiting.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no unmeasured row, no awaiting row, no probe error — a broken resolver, never a finished company");
-  if (unmeasured.length > 0) reported.push(`${unmeasured.length} open plan row(s) ranked from nothing — no re-measured stamp within ${MEASURE_WINDOW_DAYS} days: ${unmeasured.map((u) => u.rowId).join(", ")}`);
+  if (unmeasured.length > 0) reported.push(`${unmeasured.length} open plan row(s) not ranked — stamp or marker missing, older than ${MEASURE_WINDOW_DAYS} days or future-dated: ${unmeasured.map((u) => u.rowId).join(", ")}`);
   if ((state.verdict === "escalate" || state.verdict === "broken") && state.escalations.length === 0 && state.probeErrors.length === 0 && !(state.brokenReasons?.length > 0)) fatal.push("a stall that names nothing it is stalled on (DR-054)");
   if (decisionAddress(state) !== state.decisionAddress) fatal.push("decisionAddress does not match the decision content — the file was hand-edited");
   const objectiveMoved = objectiveShaNow !== state.objectiveSha;
@@ -682,6 +682,9 @@ function selfTest() {
   t("awaiting: BLOCKED ON LAB gives kind lab, and still escalates once to the owner", (aLab.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "lab" && x.blocker === "ITSM lab") && escAsks(aLab).length === 1 && escAsks(aLab)[0].clears === "owner");
   const aOld = rk([arow("9", "AWAITING OWNER (#9, 2026-09-09)")]);
   t("awaiting: a marker dated 15 days before the instant is NOT ranked and is named unmeasured, with its reason", !aOld.tasks.some((x) => x.rowId === "9") && (aOld.awaiting ?? []).length === 0 && aOld.unmeasured.some((u) => u.rowId === "9" && /marker .* older than 14 days/.test(u.reason)));
+  const bare = (extra) => ({ id: "9", text: `9. **Parked** — web-engineer, days. AWAITING OWNER (#9, 2026-09-22)${extra}` }); // no fresh stamp: the marker alone must park it
+  t("awaiting: the marker is checked BEFORE the stamp — a parked row with NO stamp is awaiting, not unmeasured", (rk([bare("")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare("")]).unmeasured.length === 0);
+  t("awaiting: the marker is checked BEFORE the stamp — a parked row with a STALE stamp stays awaiting, not unmeasured", (rk([bare(" re-measured 2026-08-01.")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare(" re-measured 2026-08-01.")]).unmeasured.length === 0);
   const aFuture = rk([arow("9", "AWAITING OWNER (#9, 2026-10-01)")]);
   t("awaiting: a future-dated marker is NOT ranked and is named unmeasured as future", !aFuture.tasks.some((x) => x.rowId === "9") && (aFuture.awaiting ?? []).length === 0 && aFuture.unmeasured.some((u) => u.rowId === "9" && /future/.test(u.reason)));
   t("awaiting: a marker inside backticks or quotes is being discussed, not asserted — the row is ranked", ["`AWAITING OWNER (#9, 2026-09-22)`", "\"AWAITING OWNER (#9, 2026-09-22)\""].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
@@ -695,6 +698,7 @@ function selfTest() {
   // (f4) PARTIAL rows still carry work: derive() must rank them, not only the OPEN bucket
   const derivable = (p) => ({ objective: goodObjective(), objectiveSha: "o", rosterSha: "r", roster, roleIds, rows: [{ id: "11", text: "11. **Half built** — web-engineer, days. HALF DONE. re-measured 2026-09-22." }], priorState: null, nowIso: T0, staleAfterHours: 3, heartbeat: null, probes: probes({ plan: { problems: [], open: [], partial: [], closed: [], ...p } }), report: {}, git: { head: null, workingTreeCleanAtEntry: true }, envKeys: new Set() });
   t("partial: a HALF DONE row with a fresh stamp and a real executor is ranked by derive()", derive(derivable({ partial: ["11"] })).tasks.some((x) => x.rowId === "11"));
+  t("derive: a null objective reads broken and does not throw (the broken branch carries every list finalize reads)", (() => { try { return derive({ ...derivable({}), objective: null }).verdict === "broken"; } catch { return false; } })());
   t("partial: a CLOSED row is still not ranked (only open and partial carry work)", !derive(derivable({ closed: ["11"] })).tasks.some((x) => x.rowId === "11"));
   // (g) TASK_TABLE ops exist and their argv writes what the criterion reads
   for (const [cid, entry] of Object.entries(TASK_TABLE)) {
@@ -762,7 +766,7 @@ function selfTest() {
   t("check: staleAfterHours drifting from the registry row is REPORTED", chk(good, { registryToleranceNow: 5 }).reported.some((r) => /cadenceToleranceHours/.test(r)));
   const onlyUnmeasured = { ...good, tasks: [], needsExecutor: [], unmeasured: [{ rowId: "8", title: "No stamp", measuredAt: null, reason: "no re-measured stamp" }] };
   onlyUnmeasured.decisionAddress = decisionAddress(onlyUnmeasured);
-  t("check: a state whose only work is refused rows passes, and the refusal is REPORTED with the row ids", chk(onlyUnmeasured).fatal.length === 0 && chk(onlyUnmeasured).reported.some((r) => /ranked from nothing.*\b8\b/.test(r)));
+  t("check: a state whose only work is refused rows passes, and the refusal is REPORTED with the row ids", chk(onlyUnmeasured).fatal.length === 0 && chk(onlyUnmeasured).reported.some((r) => /not ranked.*\b8\b/.test(r)));
   t("check: the same state with the unmeasured list emptied is FATAL (no task, no row, no reason)", chk({ ...onlyUnmeasured, unmeasured: [], decisionAddress: decisionAddress({ ...onlyUnmeasured, unmeasured: [] }) }).fatal.some((f) => /broken resolver/.test(f)));
   const onlyAwaiting = { ...good, tasks: [], needsExecutor: [], unmeasured: [], awaiting: aAll.awaiting ?? [{ rowId: "9" }], escalations: aAll.escalations };
   onlyAwaiting.decisionAddress = decisionAddress(onlyAwaiting);

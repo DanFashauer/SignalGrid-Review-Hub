@@ -30,9 +30,11 @@
 //   2. The system raises hands FOR agents that do not: mail unread past 24h, a sim
 //      request pending past 48h, an active routine's heartbeat past its declared
 //      tolerance, backlog rows the objective loop cannot rank because no dedicated
-//      executor exists (needsExecutor[], past 48h, one aggregated hand), and (with
-//      --github) a PR red or idle-and-green too long. These are AUTO hands, derived
-//      on every run, never stored.
+//      executor exists (needsExecutor[], past 48h, one aggregated hand), an
+//      objective-loop escalation only the owner can clear (escalations[] with
+//      clears: owner, past 48h, one hand each), and (with --github) a PR red or
+//      idle-and-green too long, or the weekly Mac-lane run red. These are AUTO
+//      hands, derived on every run, never stored.
 //
 // THE GATE (--check) fails when an auto hand is past its HARD limit (3× its soft
 // limit) and no open raised hand `covers` it — silence past the limit is the
@@ -66,7 +68,7 @@ const H = 3_600_000;
 export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
-export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48, "executor-gap": 48 };
+export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48, "executor-gap": 48, "objective-owner": 48, "mac-lane-red": 1 };
 export const HARD_MULTIPLE = 3;
 /** Every auto-hand kind, plus the two routes every explicit hand falls into. Each needs a responder. */
 export const AUTO_KINDS = Object.keys(SOFT_LIMIT_H);
@@ -149,7 +151,7 @@ export function auditRouting(routing, exists) {
 
 // ── the auto hands: stalls nobody raised ─────────────────────────────────────
 /** Pure: every input injected, so the self-test drives this exact path. */
-export function autoHands({ messages = [], acks = [], simPending = [], routines = [], heartbeats = {}, prs = [], objective = null }, nowMs = Date.now()) {
+export function autoHands({ messages = [], acks = [], simPending = [], routines = [], heartbeats = {}, prs = [], objective = null, macLane = null }, nowMs = Date.now()) {
   const out = [];
   const acked = new Set(acks.map((a) => a.messageId));
   const withdrawn = new Set(messages.flatMap((m) => (m.supersedes === undefined || m.supersedes === null ? [] : [].concat(m.supersedes).map(String))));
@@ -189,6 +191,25 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
     const h = age(objective.derivedAt, nowMs);
     const rows = objective.needsExecutor.map((n) => n.rowId).join(", ");
     if (h > SOFT_LIMIT_H["executor-gap"]) out.push({ id: "executor-gap:objective-state", clears: "cloud", ageH: h, softH: SOFT_LIMIT_H["executor-gap"], what: `${objective.needsExecutor.length} backlog row(s) the objective loop cannot rank — every named role resolves to "lane" or dangles: rows ${rows}`, needs: "a dedicated executor (agent or skill) for the role, or the row re-owned by a role that has one — the blocker-dispatcher decides which (docs/agent/hand-routing.json executor-gap)" });
+  }
+  // OWNER-SCOPED ESCALATIONS. objective-loop mails a `clears: mac|cloud` escalation to that lane
+  // (which then ages as mail:), but an ask only the owner can answer has no lane to read it and
+  // reached his page nowhere — it sat in objective-state.json. One hand per escalation, aged from
+  // its own `since` (the loop carries it across ticks), witnessed states only, as above.
+  if (objective?.witnessed) {
+    for (const e of objective.escalations ?? []) {
+      if (e?.clears !== "owner") continue;
+      const h = age(e.since, nowMs);
+      if (h > SOFT_LIMIT_H["objective-owner"]) out.push({ id: `objective-owner:${e.id}`, clears: "owner", ageH: h, softH: SOFT_LIMIT_H["objective-owner"], what: e.asks, needs: "the owner decides; the loop re-derives" });
+    }
+  }
+  // THE WEEKLY MAC-LANE RUN (.github/workflows/mac-lane.yml, --github only). A red run of the full
+  // suite on macOS raised nothing: it was one red row in the Actions tab. Only a run that FAILED
+  // counts — success is green, and cancelled is concurrency replacing a same-SHA duplicate. The
+  // hand is per run id, so it clears itself when the next run completes.
+  if (macLane && ["failure", "timed_out", "startup_failure"].includes(macLane.conclusion)) {
+    const h = age(macLane.updatedAt, nowMs);
+    if (h > SOFT_LIMIT_H["mac-lane-red"]) out.push({ id: `mac-lane-red:${macLane.id}`, clears: "mac", ageH: h, softH: SOFT_LIMIT_H["mac-lane-red"], what: `the weekly Mac-lane run ${macLane.id} ended ${macLane.conclusion}, ${fmtAge(h)} ago`, needs: "the Mac lane reads the run, reproduces it with ./validate-sim-macos.sh, and fixes it or states the blocker", where: macLane.url });
   }
   return out;
 }
@@ -269,7 +290,9 @@ async function loadInputs({ github = false } = {}) {
     const d = /(\d+) day\(s\) old/.exec(m[2]);
     simPending.push({ id: m[1], ageDays: d ? Number(d[1]) : NaN });
   }
-  const prs = github ? await loadPrs() : [];
+  const api = github ? githubApi() : null; // --check without --github never needs a token
+  const prs = github ? await loadPrs(api) : [];
+  const macLane = github ? await loadMacLane(api) : null;
   // The objective state, witnessed by the tick heartbeat (DR-056 reader rule). Absent or
   // malformed is NOT a stall here — `objective-loop.mjs --check` (preflight + CI) owns that.
   let objective = null;
@@ -279,21 +302,32 @@ async function loadInputs({ github = false } = {}) {
     const hbRaw = heartbeats["artifacts/agent-heartbeats/mac-lane-tick.json"];
     let heartbeat = null;
     try { heartbeat = hbRaw === undefined ? null : JSON.parse(hbRaw); } catch { heartbeat = null; }
-    objective = { needsExecutor: state.needsExecutor ?? [], derivedAt: state.derivedAt, witnessed: readVerdict(state, { heartbeat, nowIso: new Date().toISOString() }).verdict !== "unknown" };
+    objective = { needsExecutor: state.needsExecutor ?? [], escalations: state.escalations ?? [], derivedAt: state.derivedAt, witnessed: readVerdict(state, { heartbeat, nowIso: new Date().toISOString() }).verdict !== "unknown" };
   } catch { objective = null; }
-  return { messages: loadMessages(), acks: loadAcks(), simPending, routines: registry.routines ?? [], heartbeats, prs, objective };
+  return { messages: loadMessages(), acks: loadAcks(), simPending, routines: registry.routines ?? [], heartbeats, prs, objective, macLane };
 }
 
 const GATING_CHECK = "Typecheck, build, and proof scaffold";
-async function loadPrs() {
+function githubApi() {
   const token = process.env.GITHUB_TOKEN;
   const slug = process.env.GITHUB_REPOSITORY;
   if (!token || !slug) throw new Error("--github needs GITHUB_TOKEN and GITHUB_REPOSITORY — refusing to report PRs as checked when they were not");
-  const api = async (path) => {
+  return async (path) => {
     const r = await fetch(`https://api.github.com/repos/${slug}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" } });
     if (!r.ok) throw new Error(`GitHub ${path}: HTTP ${r.status}`);
     return r.json();
   };
+}
+
+/** The latest COMPLETED weekly Mac-lane run on mainline, or null when it has never completed one.
+ *  A failed fetch throws (like loadPrs): a run we could not read is not a green one. */
+async function loadMacLane(api) {
+  const { workflow_runs: runs } = await api("/actions/workflows/mac-lane.yml/runs?branch=SignalGrid_Alpha&status=completed&per_page=1");
+  const r = runs?.[0];
+  return r ? { id: r.id, conclusion: r.conclusion, url: r.html_url, updatedAt: r.updated_at } : null;
+}
+
+async function loadPrs(api) {
   const mailbox = JSON.parse(readFileSync(join(repo, "docs/agent/lane-mailbox.json"), "utf8")).pr;
   const list = [];
   for (let page = 1; ; page += 1) {
@@ -418,6 +452,32 @@ function selfTest() {
   checks.push(["…and no rows is no hand", autoHands({ objective: gap({ needsExecutor: [] }) }, T).length === 0]);
   checks.push(["…a witnessed state with NO derivedAt ages as unknown (never fresh) — a hand", autoHands({ objective: gap({ derivedAt: undefined }) }, T).length === 1]);
   checks.push(["executor-gap is a REQUIRED route — a routing table without it is fatal", REQUIRED_ROUTES.includes("executor-gap") && auditRouting({ routes: Object.fromEntries(REQUIRED_ROUTES.filter((k) => k !== "executor-gap").map((k) => [k, { responder: { owner: true }, action: "a" }])) }, allExist).some((p) => p.includes('"executor-gap"'))]);
+
+  // owner-scoped objective escalations: the loop's `clears: owner` asks reach the owner's page
+  const esc = (over = {}) => ({ escalations: [{ id: "rows-awaiting-owner", clears: "owner", asks: "decide", since: ago(50) }], witnessed: true, ...over });
+  a = autoHands({ objective: esc() }, T);
+  checks.push(["a WITNESSED owner escalation standing 50h is ONE owner hand, aged from `since`", a.length === 1 && a[0].id === "objective-owner:rows-awaiting-owner" && a[0].clears === "owner" && a[0].what === "decide" && Math.round(a[0].ageH) === 50]);
+  checks.push(["…the same escalation in an UNWITNESSED state is not", autoHands({ objective: esc({ witnessed: false }) }, T).length === 0]);
+  checks.push(["…a `clears: cloud` or `mac` escalation is not (lane mail carries those)", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "cloud", since: ago(50) }, { id: "b", clears: "mac", since: ago(50) }] }) }, T).length === 0]);
+  checks.push(["…standing 10h is not a hand yet", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(10) }] }) }, T).length === 0]);
+  checks.push(["…with no `since` it ages as unknown (never fresh) — a hand", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner" }] }) }, T).length === 1]);
+  checks.push(["…two owner escalations are two hands", autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(50) }, { id: "b", clears: "owner", since: ago(60) }] }) }, T).length === 2]);
+  e = evaluate([], autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(150) }] }) }, T), T, route);
+  checks.push(["…standing past 3×48h with NO hand raised FAILS the gate", e.fatal.length === 1 && e.fatal[0].startsWith("objective-owner:a") && e.fatal[0].includes("--who owner")]);
+  e = evaluate([hand({ covers: ["objective-owner:a"] })], autoHands({ objective: esc({ escalations: [{ id: "a", clears: "owner", since: ago(150) }] }) }, T), T, route);
+  checks.push(["…and one raised owner hand covering it clears the gate", e.fatal.length === 0 && e.auto[0]?.covered === true]);
+
+  // a red weekly Mac-lane run (.github/workflows/mac-lane.yml): only under --github, only a real failure
+  const ml = (conclusion, h = 2) => ({ macLane: { conclusion, id: 7, updatedAt: ago(h), url: "u" } });
+  a = autoHands(ml("failure"), T);
+  checks.push(["a Mac-lane run that FAILED 2h ago is ONE Mac hand naming the run", a.length === 1 && a[0].id === "mac-lane-red:7" && a[0].clears === "mac" && a[0].where === "u"]);
+  checks.push(["…timed_out and startup_failure are hands too", autoHands(ml("timed_out"), T).length === 1 && autoHands(ml("startup_failure"), T).length === 1]);
+  checks.push(["…success and cancelled are not (concurrency cancels same-SHA duplicates)", autoHands(ml("success"), T).length === 0 && autoHands(ml("cancelled"), T).length === 0]);
+  checks.push(["…a conclusion we do not know is not a hand either (only a named failure is red)", autoHands(ml("skipped"), T).length === 0 && autoHands(ml(null), T).length === 0 && autoHands({ macLane: null }, T).length === 0]);
+  checks.push(["…failed 30 minutes ago is not a hand yet", autoHands(ml("failure", 0.5), T).length === 0]);
+  checks.push(["…an unparseable updatedAt ages as unknown (never fresh) — a hand", autoHands({ macLane: { conclusion: "failure", id: 7, updatedAt: "soon" } }, T).length === 1]);
+  // routing: the new kinds are REQUIRED, so a detector cannot ship without an answerer
+  for (const k of ["objective-owner", "mac-lane-red"]) checks.push([`${k} is a REQUIRED route — a routing table without it is fatal`, REQUIRED_ROUTES.includes(k) && auditRouting({ routes: Object.fromEntries(REQUIRED_ROUTES.filter((r) => r !== k).map((r) => [r, { responder: { owner: true }, action: "a" }])) }, allExist).some((p) => p.includes(`"${k}"`))]);
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

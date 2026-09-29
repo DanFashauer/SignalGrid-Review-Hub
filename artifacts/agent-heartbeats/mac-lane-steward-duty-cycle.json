@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T03:31:56.078Z",
-  "result": "03:24Z cycle, quiet; keepalive (the last heartbeat, 01:28:42Z, passed 2h). Diagnostics at mainline 0f745e01: 199 lane messages sent, 199 acknowledged; no mac/* branch moved since 12:47Z; no new sim result; sync manifest unchanged. Mac tick last fired 2026-09-29T03:13:54.924Z. Live evidence minted 2026-09-26 06:14:13Z (about 69h old, under the 3-day line, which it crosses at 06:14Z today). Owner not escalated. Open Mac PRs #1118, #1121 and #1037 wait on the owner hand delivered in #1195; the SIGTERM hand waits on the Mac's answer about job 108514569139."
+  "firedAt": "2026-09-29T05:34:04.777Z",
+  "result": "05:24Z cycle, quiet; keepalive (the last heartbeat, 03:31:56Z, passed 2h). Diagnostics at mainline e37e67d0: 199 lane messages sent, 199 acknowledged; no mac/* branch moved since 12:47Z; no new sim result; sync manifest unchanged. Mac tick last fired 2026-09-29T05:20:22.126Z. Live evidence minted 2026-09-26 06:14:13Z (about 71h old; it crosses the 3-day line at 06:14Z and the 06:24Z cycle asks the Mac for a refresh). Owner not escalated. Open Mac PRs #1118, #1121 and #1037 wait on the owner hand delivered in #1195; the SIGTERM hand waits on the Mac's answer about job 108514569139."
 }

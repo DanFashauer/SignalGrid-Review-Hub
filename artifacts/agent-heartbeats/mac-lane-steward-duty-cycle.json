@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T19:32:52.515Z",
-  "result": "19:24Z cycle quiet at tip 0335a568 (keepalive: previous heartbeat 17:29:10Z passed 2h) | Mac tick last fired 2026-09-29T19:26:13Z, ticking | no mac/* branch new or moved since 17:29Z, no mail addressed to cloud, sim requests all bound (22 requests, 22 results), sync manifest in step | open Mac PRs #1118/#1121/#1037 await the owner | live evidence last minted 2026-09-26T06:14:18Z (~85h); refresh asked in cloud-live-evidence-passed-3-days-at-06-14z-plea, still unread 13.0h, not re-sent | owner not escalated"
+  "firedAt": "2026-09-29T22:37:03.618Z",
+  "result": "22:24Z cycle at tip 45e3b5fd | Mac tick last fired 2026-09-29T22:29:49Z, ticking | no mac/* branch new or moved since 21:54Z | acked mac-mac-is-building-13-units-3-merge-steps-now-o (Mac building 13 units + 3 merge steps; cloud will not duplicate) | Mac acked the live-evidence plea; live evidence re-minted 2026-09-29T22:26:35Z at 7486855d (fresh) | sim requests all bound | sync manifest in step | owner not escalated"
 }

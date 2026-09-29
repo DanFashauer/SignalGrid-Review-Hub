@@ -1607,7 +1607,7 @@ async function run() {
       body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 51 }) },
     });
     check("the auditor's refused answer left the challenge UNCONSUMED — the operator answers with it (200)", answered.status === 200);
-    check("...and exactly one step-up success row is written across both attempts (the operator's)",
+    check("...and the route records exactly one step-up answer across both attempts (the operator's)",
       (await stepUpSuccessAudited()) === successBefore + 1);
     check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
       answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&

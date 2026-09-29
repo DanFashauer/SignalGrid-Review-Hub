@@ -27,7 +27,9 @@
 //      that fires while a posture read is still running is SKIPPED, not queued, so
 //      a slow older read can never land after a newer one; the guard releases when
 //      the pass ends, even when it throws. Planted control: an unguarded wrapper lets
-//      the older read land last, so the check is not vacuous.
+//      the older read land last, so the check is not vacuous. This exercises
+//      `singleFlightTick` alone: nothing here checks that core.ts's served loop
+//      calls it (a proof importing core.ts fails typecheck with TS6059).
 //
 // --self-test plants a loosening in the Graph→estate mapping (an unknown
 // compliance state read as compliant) and shows claim 2's check catches it.

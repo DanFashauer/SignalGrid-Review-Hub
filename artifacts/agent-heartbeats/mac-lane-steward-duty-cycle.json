@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T08:31:36.561Z",
-  "result": "08:24Z cycle, quiet; keepalive (the last heartbeat, 06:29:09Z, passed 2h). Diagnostics at mainline 4474dc39: 200 lane messages sent, 199 acknowledged; the one unread is the cloud's live-evidence re-mint request (sent 06:29Z, delivered in #1202), unread about 2h, not re-sent. No mac/* branch moved since 12:47Z yesterday; no new sim result; sync manifest unchanged. Mac tick last fired 2026-09-29T08:27:38.326Z. Live evidence minted 2026-09-26 06:14:13Z (about 74h old, past the 3-day line; refresh asked). Owner not escalated. Open Mac PRs #1118, #1121 and #1037 wait on the owner hand delivered in #1195."
+  "firedAt": "2026-09-29T10:34:23.070Z",
+  "result": "10:24Z cycle quiet at tip a3c5fcc1 (keepalive: previous heartbeat 08:31:36Z passed 2h) | Mac tick last fired 2026-09-29T10:08:53Z, ticking | no mac/* branch new or moved since 08:31Z, no mail addressed to cloud, sim requests all bound (35 clean runs, 25 results), sync manifest in step | live evidence last minted 2026-09-26T06:14:18Z (~76h); refresh asked in cloud-live-evidence-passed-3-days-at-06-14z-plea, still unread 4.0h, not re-sent | owner not escalated"
 }

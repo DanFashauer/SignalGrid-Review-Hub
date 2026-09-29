@@ -18,7 +18,7 @@ import {
 } from "node:crypto";
 import {
   createEnterpriseAuthenticator,
-  createJwksCache,
+  createJwksCache, verifyJwtRs256,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -169,6 +169,23 @@ const cases: Case[] = [
     expectAccept: false,
   },
   { name: "not a JWT (demo-key shape)", token: "sgk_demo_northwind_operator", expectAccept: false },
+  // A present nbf/iat that is not a finite number is REFUSED, as exp already is.
+  // Skipping it let an unparseable claim loosen the answer; absent still passes.
+  ...([["nbf", "1893456000"], ["nbf", null], ["iat", "0"], ["iat", {}]] as const).map(([claim, value]) => ({
+    name: `malformed ${claim} ${JSON.stringify(value)} is refused, not skipped`,
+    token: signRs256({ header: validParts().header, payload: { ...validParts().payload, [claim]: value } }),
+    expectAccept: false,
+  })),
+  {
+    name: "absent nbf and iat (both optional) still accepted",
+    token: (() => {
+      const p = { ...validParts().payload };
+      delete p.nbf;
+      delete p.iat;
+      return signRs256({ header: validParts().header, payload: p });
+    })(),
+    expectAccept: true,
+  },
 ];
 
 let passed = 0;
@@ -280,6 +297,83 @@ if (!accepted.ok) {
 
   await cache.get(T + 2_000 + 61_000, "still-unknown");
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
+}
+
+// ── JSON-NULL JOSE PARTS FAIL CLOSED ─────────────────────────────────────────
+//
+// `JSON.parse` returns `null` happily, and the verifier read `header.alg`,
+// `k.kty` and `claims.exp` off whatever came back. Each shape below threw a
+// TypeError that `authenticate()` never caught — an unauthenticated 500 for the
+// null header, which needs no signature at all. Called directly, so a throw
+// reads as a throw.
+{
+  const opts = { jwks, issuer: ISSUER, audience: AUDIENCE, nowMs: NOW_MS, clockToleranceSec: 60 };
+  const outcome = (token: string, keys: Jwks = jwks): boolean | "threw" => {
+    try {
+      return verifyJwtRs256(token, { ...opts, jwks: keys }).ok;
+    } catch {
+      return "threw";
+    }
+  };
+  const payloadSeg = validToken.split(".")[1];
+  check("a JSON-null header (`bnVsbA`) is refused, not thrown", outcome(`bnVsbA.${payloadSeg}.x`) === false);
+  check(
+    "a signed token whose payload decodes to null is refused, not thrown",
+    outcome(signRs256({ header: validParts().header, payload: null as unknown as Record<string, unknown> })) === false,
+  );
+  const withNull: Jwks = { keys: [null as unknown as JwkKey, ...jwks.keys] };
+  check("a JWKS holding a null element still verifies a valid token through the real key", outcome(validToken, withNull) === true);
+
+  const nullCache = createJwksCache("https://idp.example/jwks", async () => ({ ok: true, status: 200, json: async () => withNull }));
+  let warmKids: Array<string | undefined> = [];
+  try {
+    await nullCache.get(NOW_MS, KID);
+    warmKids = (await nullCache.get(NOW_MS + 1, KID)).keys.map((k) => k.kid);
+  } catch {
+    // a throw is the defect; warmKids stays empty
+  }
+  check("a JWKS cache fed a null element serves the real key on a warm kid lookup", warmKids.includes(KID));
+}
+
+// ── JWKS SINGLE-FLIGHT AND FAILURE BACKOFF ───────────────────────────────────
+//
+// The cooldown above guards only a FRESH cache. Cold or past its TTL, every
+// bearer request started its own fetch, so an unauthenticated burst became one
+// IdP request per API request for as long as the IdP stayed down. One shared
+// in-flight fetch per cache, and a short backoff after a failed one.
+{
+  const T = 2_000_000;
+  const uri = "https://idp.example/jwks";
+  const keyset = { keys: [{ kty: "RSA", kid: "k", n: "x", e: "AQAB" }] };
+  const slowOk = (count: () => void) => async () => {
+    count();
+    await new Promise((r) => setTimeout(r, 20));
+    return { ok: true, status: 200, json: async () => keyset };
+  };
+  const settled = (p: Promise<unknown>) => p.then(() => "resolved", () => "rejected");
+
+  let burstFetches = 0;
+  const burst = createJwksCache(uri, slowOk(() => { burstFetches += 1; }));
+  await Promise.all(Array.from({ length: 50 }, () => settled(burst.get(T))));
+  check("50 concurrent gets on a cold cache make exactly ONE IdP fetch", burstFetches === 1);
+
+  let idpUp = false;
+  let downFetches = 0;
+  const down = createJwksCache(uri, async () => {
+    downFetches += 1;
+    return idpUp ? { ok: true, status: 200, json: async () => keyset } : { ok: false, status: 503, json: async () => ({}) };
+  });
+  await settled(down.get(T));
+  const inBackoff = await settled(down.get(T + 1_000));
+  check("a get() 1s after a failed fetch refuses with ZERO extra IdP fetches", downFetches === 1 && inBackoff === "rejected");
+  idpUp = true;
+  const afterBackoff = await settled(down.get(T + 11_000));
+  check("after the backoff lapses, exactly ONE more fetch is made, and it recovers", downFetches === 2 && afterBackoff === "resolved");
+
+  let joinFetches = 0;
+  const join = createJwksCache(uri, slowOk(() => { joinFetches += 1; }));
+  const [a, b] = await Promise.all([join.get(T), join.get(T + 5)]);
+  check("a get() issued while a fetch is pending joins it — one fetch, the same keyset", joinFetches === 1 && a === b);
 }
 
 function check(name: string, condition: boolean): void {

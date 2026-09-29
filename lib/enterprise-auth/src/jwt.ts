@@ -143,6 +143,12 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   } catch {
     return fail("header or payload is not valid base64url JSON");
   }
+  // `JSON.parse` accepts `null`, arrays and scalars; reading `.alg` off `null`
+  // would throw an unauthenticated 500 instead of refusing.
+  const isObj = (v: unknown) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!isObj(header) || !isObj(claims)) {
+    return fail("header or payload is not a JSON object");
+  }
 
   // Algorithm gate FIRST — reject `none`/HMAC before touching key material.
   if (header.alg !== SUPPORTED_ALG) {
@@ -189,6 +195,14 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   if (now > claims.exp * 1000 + tolMs) {
     return fail("token has expired");
   }
+  // Optional, but a PRESENT nbf/iat that is not a finite number is refused, as
+  // exp is — skipping it would let an unparseable claim loosen the answer.
+  if (claims.nbf !== undefined && !Number.isFinite(claims.nbf)) {
+    return fail("malformed nbf claim");
+  }
+  if (claims.iat !== undefined && !Number.isFinite(claims.iat)) {
+    return fail("malformed iat claim");
+  }
   if (typeof claims.nbf === "number" && now + tolMs < claims.nbf * 1000) {
     return fail("token is not yet valid (nbf)");
   }
@@ -211,7 +225,7 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
 function selectKey(jwks: Jwks, kid: string | undefined): JwkKey | null {
   const keys = Array.isArray(jwks.keys) ? jwks.keys : [];
   const usable = keys.filter(
-    (k) => k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
+    (k) => k !== null && typeof k === "object" && k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
   );
   if (usable.length === 0) {
     return null;

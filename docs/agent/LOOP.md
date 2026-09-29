@@ -56,7 +56,18 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
+LAST TOUCHED: 2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
+              (Tier-1 review coverage 19->22/25, iOS Assist-wire client, tenant-isolation finding traced+
+              downgraded). #1118 (iOS parity) and #1037 (intake) had gone CONFLICTING over 2 days; ran the
+              Mac merge step on both (cloud sandbox cannot git merge): #1118 d4297467 (rebuilt COMPANY_BUILD_PLAN
+              from mainline + row-18 DONE), #1037 b1d6ea8d (union, hook self-test 48/48) - pushed, gates green,
+              preflight/breadth are the cloud's. #1121 already MERGEABLE. Readiness 100%. MY MISTAKE, owned to
+              cloud + memory: broad `pkill -f scripts/preflight.mjs` also killed the self-hosted CI runner's
+              jobs (2 CI runs SIGTERMd); #1106 (ephemeral ports, merged) makes the kill pointless - STOPPED.
+              Cloud confirmed my tenant trace (LATENT) + found a bigger digest() low-byte-aliasing collision
+              (theirs). WAITING ON OWNER (raised hands 2-4d): gitleaks allowlist for #1005, signalgrid-mcp
+              #14/#15 merge, one policy.ts call, build-Mac hygiene.
+              PREVIOUSLY: 2026-09-27 (cloud lane; frozen at the window's close, 09:55Z) - 24 first-parent PR merges (27 landed,
               #1136/#1147/#1150 carried in); L16 landed; L17-L19 and L21-L22 landed, L20 added but pending until #1153;
               #1158 (open at the close) landed afterwards as b42a0967 (post-close - not part of this frozen entry).
               Owner still owes (PR states re-read after the close; settings, chat and branch items last confirmed 09:30Z per `git show 7b6ea61e:artifacts/agent-heartbeats/mac-lane-steward-duty-cycle.json`):

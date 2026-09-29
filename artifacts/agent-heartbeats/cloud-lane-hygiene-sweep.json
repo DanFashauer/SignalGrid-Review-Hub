@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-28T09:48:24.856Z",
-  "result": "freed about 0.7G (8 finished worktrees whose heads are all on origin: wt-rec7, wt-row12, wt-wire, wt-lessons, wt-rec8, wt-art2, wt-7b6e, wt-t5; 1 pnpm store package); 5.0G to 5.7G free; no docker layer cache present; also the 20h keepalive (last 2026-09-27T09:42Z)"
+  "firedAt": "2026-09-29T09:51:01.497Z",
+  "result": "freed ~13 MB (617 scratchpad files older than 24h; helper scripts kept) + pnpm store prune (60 files, 1 package) | 5.5G free of 252G after the sweep (5.5G before); no docker daemon or /var/lib/docker on this host; scratchpad worktrees left in place (git worktrees, outside this routine's remit); owner not escalated (free space well above 1GB); keepalive delivery: the previous heartbeat (2026-09-28T09:48:24Z) was about 24h old"
 }

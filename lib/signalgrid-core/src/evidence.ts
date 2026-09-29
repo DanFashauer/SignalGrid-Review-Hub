@@ -1,5 +1,5 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { canonicalJson, deterministicId, digest } from "./util";
+import { canonicalJson, deterministicId, digest, parseInstant } from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -274,6 +274,11 @@ interface CategoryReading {
    * be dropped for the other; the readers fold them worst-wins, like `illegible`
    * but WITHOUT the "unknown" floor — a tied reading is legible and can vouch
    * for its own currency, it just cannot outrank its twin on time.
+   *
+   * ALSO the latest reading(s) that stamp THEMSELVES "fresh", when `ordered` does
+   * not and they are strictly older (BUILD_BACKLOG row 2519; see `groupLatest`).
+   * Every reader folds this list worst-wins, so a member can only ever make the
+   * answer worse, never better — which is the whole reason it is safe to add to.
    */
   tied: NormalizedSignal[];
   /** EVERY reading whose `observedAt` did not parse, in arrival order. */
@@ -323,17 +328,36 @@ type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
  * both halves are kept and every reader resolves them WORST-WINS, in both
  * directions. See `resolveWorst` for the value rule and `readDockEvidenceFreshness`
  * for the freshness one; they are the same rule applied to two kinds of member.
+ *
+ * AN OFFSET-LESS STAMP IS ILLEGIBLE (BUILD_BACKLOG row 2520). `Date.parse` reads
+ * "2026-07-13T08:00:00" in the host's local zone, so the same evidence derived
+ * `compliant` on a UTC runner and `non_compliant` in Tokyo. `parseInstant` refuses
+ * it, and it lands in `illegible`: it may accuse, it may not vouch.
+ *
+ * A READING THAT DISOWNS ITS OWN CURRENCY CANNOT ERASE ONE THAT CLAIMS IT (row
+ * 2519). Latest-wins looked only at the stamp, so a `tamper_state: "none"` stamped
+ * in 2099 — which the sync itself classified "unknown" — or one labelled "expired"
+ * erased a FRESH `"confirmed"` a few minutes older, and a deny became a step-up.
+ * Measured on `buildEvidence` → `evaluatePolicy(SHARED_DEVICE_RULES_V1)`. So when
+ * `ordered` is not fresh and a strictly older fresh reading exists, the latest
+ * fresh reading(s) join `tied` and are folded worst-wins. That can only make the
+ * answer worse: a fresh accusation survives, a fresh good value changes nothing.
+ * A newer reading that is ITSELF fresh still replaces everything older. No clock
+ * is read here — the sync already classifies a future stamp as "unknown".
  */
 function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
   const map: LatestByCategory = new Map();
   const at = new Map<NormalizedSignal["category"], number>();
+  // The latest instant per category among readings stamped "fresh", and EVERY
+  // reading at it, so arrival order cannot pick among fresh twins either.
+  const latestFresh = new Map<NormalizedSignal["category"], { at: number; signals: NormalizedSignal[] }>();
   for (const signal of signals) {
     let reading = map.get(signal.category);
     if (!reading) {
       reading = { tied: [], illegible: [] };
       map.set(signal.category, reading);
     }
-    const observed = Date.parse(signal.observedAt);
+    const observed = parseInstant(signal.observedAt);
     if (Number.isNaN(observed)) {
       // Present, but unorderable. Kept ALONGSIDE any parseable sibling rather
       // than instead of it — and ALONGSIDE its illegible peers, all of them.
@@ -342,6 +366,14 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       // worst-wins does not care what order they arrived in (finding F-1).
       reading.illegible.push(signal);
       continue;
+    }
+    if (signal.freshness === "fresh") {
+      const fresh = latestFresh.get(signal.category);
+      if (!fresh || observed > fresh.at) {
+        latestFresh.set(signal.category, { at: observed, signals: [signal] });
+      } else if (observed === fresh.at) {
+        fresh.signals.push(signal);
+      }
     }
     const currentAt = at.get(signal.category);
     if (currentAt === undefined || observed > currentAt) {
@@ -352,6 +384,13 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       // Same instant, equal claim. Kept, never dropped; folded worst-wins by
       // every reader, so arrival order cannot pick the answer.
       reading.tied.push(signal);
+    }
+  }
+  // Row 2519: a not-fresh latest reading cannot erase a strictly older fresh one.
+  for (const [category, fresh] of latestFresh) {
+    const reading = map.get(category)!;
+    if (reading.ordered?.freshness !== "fresh" && fresh.at < at.get(category)!) {
+      reading.tied.push(...fresh.signals);
     }
   }
   return map;

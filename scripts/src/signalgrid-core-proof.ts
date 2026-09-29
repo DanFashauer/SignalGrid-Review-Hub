@@ -21,6 +21,7 @@ import {
   authorize,
   buildEvidence,
   buildResolutionPlan,
+  classifyFreshness,
   computeMetrics,
   runDockSync,
   runFixtureSync,
@@ -1943,7 +1944,180 @@ for (const [fromRow, fromSignal, want, why] of [
   }
 }
 
+// ── Rows 2519/2520/2521: a stale, illegible or late reading cannot erase a fresh accusation ──
+//
+// Row 83 made both connectors' rows SURVIVE; `groupLatest` then picked the greatest
+// observedAt and nothing else. A reading that labels ITSELF not-fresh (a future
+// stamp the sync classified "unknown", an "expired" one) still won on time and
+// erased a fresh CONFIRMED tamper (2519). An offset-less stamp was ordered in the
+// HOST's zone, so the same evidence derived different answers in UTC and in Tokyo
+// (2520). And one connector re-putting an OLDER record over a newer one erased it
+// in the store before `groupLatest` ever ran (2521). Each case below was run
+// against the unfixed code and went red first.
+{
+  const tenantId = "tenant_northwind";
+  const identity: Identity = {
+    id: "id_ev_fresh",
+    tenantId,
+    externalRef: "nurse.ev.fresh",
+    displayName: "Nurse",
+    state: "enabled",
+    assignedRole: "nurse",
+  };
+  const device: Device = {
+    id: "dev_ev_fresh",
+    tenantId,
+    externalRef: "ipad-ev-fresh",
+    name: "Ward iPad",
+    osPlatform: "iPadOS",
+    osVersion: "18.5",
+    ownerType: "shared",
+    managementAgent: "intune",
+  };
+  const workflow: Workflow = {
+    id: "wf_ev_fresh",
+    tenantId,
+    key: "clinical-session",
+    name: "Clinical session",
+    riskTier: "standard",
+  };
+  const v1 = {
+    id: "pv_ev_fresh_1",
+    tenantId,
+    policyId: "pol_ev_fresh",
+    version: 1,
+    status: "active" as const,
+    rules: SHARED_DEVICE_RULES_V1,
+    createdAt: "2026-07-13T13:00:00.000Z",
+    digest: "test",
+  };
+  const sig = (
+    id: string,
+    category: SignalCategory,
+    value: NormalizedSignal["value"],
+    observedAt: string,
+    freshness: Freshness,
+    connectorId = "conn_a",
+  ): NormalizedSignal => ({
+    id,
+    tenantId,
+    connectorId,
+    subjectType: "device",
+    subjectId: device.id,
+    category,
+    value,
+    observedAt,
+    freshness,
+    sourceReference: "fixture:ev-fresh",
+  });
+  const at = "2026-07-13T13:00:00.000Z";
+  const healthy: NormalizedSignal[] = [
+    sig("h1", "device_compliance", "compliant", at, "fresh"),
+    sig("h2", "device_management", true, at, "fresh"),
+    sig("h3", "device_encryption", true, at, "fresh"),
+    sig("h4", "os_support", true, at, "fresh"),
+    sig("h5", "posture_freshness", "fresh", at, "fresh"),
+  ];
 
+  // (2519) A fresh CONFIRMED tamper from connector A, and a "none" from B that the
+  // sync itself labelled not-fresh. B wins on time; it must not win on value.
+  const confirmedA = sig("t_a", "tamper_state", "confirmed", "2026-07-13T14:55:00Z", "fresh", "conn_a");
+  for (const [label, noneB] of [
+    ["a FUTURE stamp classified 'unknown'", sig("t_b", "tamper_state", "none", "2099-01-01T00:00:00Z", "unknown", "conn_b")],
+    ["a newer stamp classified 'expired'", sig("t_b", "tamper_state", "none", "2026-07-13T14:59:00Z", "expired", "conn_b")],
+  ] as const) {
+    const evidence = buildEvidence(identity, device, workflow, [...healthy, confirmedA, noneB]);
+    const evaluation = evaluatePolicy(v1, evidence);
+    check(
+      `2519: a fresh CONFIRMED tamper survives ${label} — tamperState stays 'confirmed'`,
+      evidence.tamperState === "confirmed",
+      `got ${String(evidence.tamperState)}`,
+    );
+    check(
+      `2519: …and SHARED_DEVICE_RULES_V1 denies with TAMPER_CONFIRMED (${label})`,
+      evaluation.outcome === "deny" && evaluation.reasonCodes.includes("TAMPER_CONFIRMED"),
+      `${evaluation.outcome} [${evaluation.reasonCodes.join(", ")}]`,
+    );
+  }
+  // Control: a newer reading that is ITSELF fresh still clears the tamper, or the
+  // fix would have frozen every accusation in place forever.
+  const clearedByFresh = buildEvidence(identity, device, workflow, [
+    ...healthy,
+    confirmedA,
+    sig("t_b", "tamper_state", "none", "2026-07-13T14:59:00Z", "fresh", "conn_b"),
+  ]);
+  check(
+    "2519 control: a newer FRESH 'none' still clears the tamper",
+    clearedByFresh.tamperState === "none",
+    `got ${String(clearedByFresh.tamperState)}`,
+  );
+
+  // (2520) An offset-less stamp is local time in whatever zone the host runs. It
+  // may accuse but it cannot vouch, and it can never win on time.
+  const zoned = [
+    ...healthy.filter((s) => s.category !== "device_compliance"),
+    sig("c_z", "device_compliance", "non_compliant", "2026-07-13T07:30:00Z", "fresh"),
+    sig("c_local", "device_compliance", "compliant", "2026-07-13T08:00:00", "fresh"),
+  ];
+  const priorTz = process.env.TZ;
+  const byZone: Record<string, string> = {};
+  try {
+    for (const zone of ["UTC", "Asia/Tokyo"]) {
+      process.env.TZ = zone;
+      byZone[zone] = String(buildEvidence(identity, device, workflow, zoned).deviceCompliance);
+    }
+  } finally {
+    if (priorTz === undefined) delete process.env.TZ;
+    else process.env.TZ = priorTz;
+  }
+  check(
+    "2520: an offset-less 'compliant' cannot overrule a zoned 'non_compliant' — the answer is 'non_compliant' in UTC AND in Asia/Tokyo",
+    byZone.UTC === "non_compliant" && byZone["Asia/Tokyo"] === "non_compliant",
+    `UTC=${byZone.UTC} Asia/Tokyo=${byZone["Asia/Tokyo"]}`,
+  );
+  const localFreshness = classifyFreshness("2026-07-13T08:00:00", "2026-07-13T15:00:00.000Z", 24, 72);
+  check(
+    "2520: classifyFreshness reads an offset-less stamp as 'unknown', never 'fresh'",
+    localFreshness === "unknown",
+    `got ${localFreshness}`,
+  );
+
+  // (2521) One connector, one device, two records in one sync — the newer one
+  // must be what the store keeps, whichever order they arrive in. A fresh seed per
+  // order, and a cloned connector id so no seeded row takes part.
+  const storedTamper = (records: "newer-first" | "older-first"): string => {
+    const seeded = seedDemoStore(fixedClock("2026-07-13T15:00:00.000Z"));
+    const dock = seeded.store
+      .listConnectors(seeded.tenants.northwind)
+      .find((c) => c.kind === "dockbridge-custody");
+    const base = dock ? seeded.dockRecords[dock.id]?.[0] : undefined;
+    if (!dock || !base) return "setup-missing";
+    const connector = { ...dock, id: "conn_dock_order" };
+    const newer = { ...base, tamperState: "confirmed" as const, observedAt: "2026-07-13T09:30:00.000Z" };
+    const older = { ...base, tamperState: "none" as const, observedAt: "2026-07-13T08:00:00.000Z" };
+    runDockSync(
+      seeded.store,
+      fixedClock("2026-07-13T15:00:00.000Z"),
+      connector,
+      records === "newer-first" ? [newer, older] : [older, newer],
+    );
+    const dev = seeded.store.findDeviceByRef(dock.tenantId, base.deviceRef);
+    const rows = dev
+      ? seeded.store
+          .listSignalsForSubject(dock.tenantId, "device", dev.id)
+          .filter((s) => s.category === "tamper_state" && s.connectorId === connector.id)
+      : [];
+    return rows.map((s) => `${String(s.value)}@${s.observedAt}`).join(",");
+  };
+  for (const order of ["newer-first", "older-first"] as const) {
+    const stored = storedTamper(order);
+    check(
+      `2521: an OLDER record re-put by the same connector cannot erase a newer one (${order}) — the stored row is 'confirmed'@09:30Z`,
+      stored === "confirmed@2026-07-13T09:30:00.000Z",
+      `stored ${stored}`,
+    );
+  }
+}
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
 // A bound of 3 makes the eviction observable in a handful of evaluates. FIFO by
@@ -2030,6 +2204,50 @@ for (const [fromRow, fromSignal, want, why] of [
     poisonedMetrics.restrictDenyRate > computeMetrics(healthy, { capped: false, maxPerTenant: 5000 }).restrictDenyRate);
   check("NaN guard: a clean decision set reports zero unrecognized outcomes",
     computeMetrics(healthy, { capped: false, maxPerTenant: 5000 }).window.unrecognizedOutcomes === 0);
+}
+
+// ── Row 2522: a step-up answer is evicted WITH its decision ──────────────────────
+// The store's comment said this collection was bounded by the decisions that raised
+// it; nothing deleted an answer when its decision went, so it grew one row per
+// answered step-up forever and an evicted decision's answer stayed readable.
+{
+  const bounded = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 1 });
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    const id = bounded.evaluate(T.operator, { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" }).decisionId;
+    bounded.answerStepUp(T.operator, id, { credentialReference: `cred_bound_${i}` });
+    ids.push(id);
+  }
+  const answers = (bounded as unknown as { store: { stepUpAnswers: Map<string, unknown> } }).store.stepUpAnswers;
+  check("2522: an evicted decision's step-up answer is gone with it", bounded.getStepUpAnswer(T.operator, ids[0]) === undefined);
+  check("2522: the retained decision's answer is still readable (the eviction is not a wipe)", bounded.getStepUpAnswer(T.operator, ids[2]) !== undefined);
+  check(`2522: stepUpAnswers holds one row per RETAINED decision (1, got ${answers.size})`, answers.size === 1);
+}
+
+// ── Row 2545: an index key cannot be forged by a `|` inside a part ───────────────
+// The composite keys joined raw parts with `|`, so tenant "a|b" + ref "c" and
+// tenant "a" + ref "b|c" were the SAME key — and the by-ref lookups do not re-check
+// the tenant, so the second tenant's query resolved the first tenant's row.
+{
+  const s = new MemoryStore();
+  s.putDevice({ id: "dv_other", tenantId: "a|b", externalRef: "c", name: "x", osPlatform: "iPadOS", osVersion: "18.5", ownerType: "shared", managementAgent: "intune" });
+  s.putIdentity({ id: "id_other", tenantId: "a|b", externalRef: "c", displayName: "x", state: "enabled", assignedRole: "nurse" });
+  s.putWorkflow({ id: "wf_other", tenantId: "a|b", key: "c", name: "x", riskTier: "standard" });
+  s.putSignal({
+    id: "sig_other", tenantId: "a|device|b", connectorId: "conn", subjectType: "device", subjectId: "c",
+    category: "device_compliance", value: "compliant", observedAt: "2026-07-13T13:00:00.000Z", freshness: "fresh", sourceReference: "fixture:2545",
+  });
+  check("2545: device — tenant 'a' + ref 'b|c' does NOT resolve tenant 'a|b' + ref 'c'", s.findDeviceByRef("a", "b|c") === undefined);
+  check("2545: identity — tenant 'a' + ref 'b|c' does NOT resolve tenant 'a|b' + ref 'c'", s.findIdentityByRef("a", "b|c") === undefined);
+  check("2545: workflow — tenant 'a' + key 'b|c' does NOT resolve tenant 'a|b' + key 'c'", s.findWorkflowByKey("a", "b|c") === undefined);
+  check("2545: signals — tenant 'a' + subject 'b|device|c' does NOT list tenant 'a|device|b' + subject 'c'", s.listSignalsForSubject("a", "device", "b|device|c").length === 0);
+  check(
+    "2545: the rightful owner still resolves every one (escaping is not a lockout)",
+    s.findDeviceByRef("a|b", "c")?.id === "dv_other" &&
+      s.findIdentityByRef("a|b", "c")?.id === "id_other" &&
+      s.findWorkflowByKey("a|b", "c")?.id === "wf_other" &&
+      s.listSignalsForSubject("a|device|b", "device", "c").length === 1,
+  );
 }
 
 // ── 20. Rule arms nothing had ever executed (verdict-core finding V6, 2026-09-02) ──

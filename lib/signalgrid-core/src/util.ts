@@ -100,9 +100,23 @@ export function constantTimeEquals(a: string, b: string): boolean {
 }
 
 /**
+ * Parse an observed instant, or NaN. Only an ISO-8601 date-time with an explicit
+ * `Z` or `±hh:mm` offset is read (BUILD_BACKLOG row 2520): `Date.parse` reads an
+ * offset-less date-time in the HOST's local zone, so the same stamp was 08:00Z on
+ * a UTC runner and 23:00Z the day before in Tokyo, and ordering by it made the
+ * decision depend on where it ran. The regex fixes the SHAPE; `Date.parse` still
+ * validates the VALUE. Same shape as the simulator's `RFC3339_ZONED`, with the
+ * seconds optional as ISO-8601 allows.
+ */
+const ZONED_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+export function parseInstant(s: string): number {
+  return ZONED_INSTANT.test(s) ? Date.parse(s) : Number.NaN;
+}
+
+/**
  * Classify posture freshness from an observation time relative to the
- * evaluation clock. Fail-safe: unpariseable or future timestamps are "unknown",
- * never "fresh".
+ * evaluation clock. Fail-safe: unparseable, offset-less or future timestamps
+ * are "unknown", never "fresh".
  */
 export function classifyFreshness(
   observedAtIso: string | null | undefined,
@@ -113,7 +127,7 @@ export function classifyFreshness(
   if (!observedAtIso) {
     return "missing";
   }
-  const observedMs = Date.parse(observedAtIso);
+  const observedMs = parseInstant(observedAtIso);
   const nowMs = Date.parse(nowIso);
   // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — signalgrid-core is the BASE package with zero dependencies; the shared helper would have to move here, not be imported (tolerance 0, future reads `unknown`)
   if (Number.isNaN(observedMs) || Number.isNaN(nowMs) || observedMs > nowMs) {

@@ -190,6 +190,41 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
   return manifest;
 }
 
+// A TRIGGER or RULE on a managed table in the archive's table of contents, as
+// `pg_restore --list` prints it: `<id>; <cat> <oid> TRIGGER public audit_ledger <name> <owner>`.
+// The table list mirrors lib/persistence/src/role-split.ts OWNER_RIGHTS_CHECKS.
+const FOREIGN_MACHINERY = /^\d+; \d+ \d+ (TRIGGER|RULE) public (audit_ledger|decisions|evidence_snapshots|sessions) .*$/m;
+
+/**
+ * Refuse an archive that would install a TRIGGER or RULE on a managed table.
+ *
+ * The manifest proves the archive is the one that was written, not that its SHAPE is
+ * safe to install. `pg_restore --clean` would replace the database and only then does
+ * the role split refuse a rule or definer trigger — an invoker trigger, which can
+ * suppress or rewrite a ledger append, is not refused at all. Definer routines are
+ * re-locked after restore and `--no-privileges` strips grants, so triggers and rules
+ * are the two shapes that must be caught in the archive itself.
+ *
+ * Unreadable is refused too: "could not list it" must not read as "nothing in it".
+ */
+async function assertNoForeignMachinery(archivePath: string): Promise<void> {
+  let toc: string;
+  try {
+    toc = (await run("pg_restore", ["--list", archivePath], { maxBuffer: 1024 * 1024 * 64 })).stdout;
+  } catch (e) {
+    const err = e as { stderr?: string; message: string };
+    throw new BackupError(
+      `pg_restore --list failed: ${err.stderr?.trim() || err.message} — refusing an archive whose contents cannot be inspected`,
+    );
+  }
+  const hit = FOREIGN_MACHINERY.exec(toc);
+  if (hit) {
+    throw new BackupError(
+      `archive carries a ${hit[1]} on managed table public.${hit[2]} (${hit[0]}) — refusing before pg_restore replaces anything`,
+    );
+  }
+}
+
 /**
  * Restore an archive into `url`, after verifying it.
  *
@@ -209,6 +244,7 @@ export async function verifyBackup(archivePath: string): Promise<BackupManifest>
  */
 export async function restoreBackup(url: string, archivePath: string): Promise<BackupManifest> {
   const manifest = await verifyBackup(archivePath);
+  await assertNoForeignMachinery(archivePath);
 
   // Refuse BEFORE pg_restore replaces the database if the post-restore role
   // re-provisioning would fail (role missing + credential lacks CREATEROLE).

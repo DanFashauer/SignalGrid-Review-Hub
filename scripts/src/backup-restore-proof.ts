@@ -19,6 +19,9 @@
 //      other assertion would still pass.
 //   3. INTEGRITY     — a single flipped byte in the archive is REFUSED, not restored.
 //   4. HONEST GAPS   — a missing manifest is refused; a size mismatch is refused.
+//   5. ARCHIVE SHAPE — a checksum-valid archive carrying a TRIGGER or RULE on a
+//      managed table is refused BEFORE pg_restore replaces anything, proven by a
+//      sentinel row on the live ledger that a restore would have erased.
 
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -174,8 +177,64 @@ async function main() {
       acceptedGood = false;
     }
     check("a good archive is ACCEPTED (the verifier is not simply refusing everything)", acceptedGood);
+
+    // ── Archive shape: a TRIGGER or RULE on a managed table is refused UP FRONT ──
+    // The archive is checksum-valid and manifest-valid — it is the SHAPE that is
+    // wrong: foreign machinery on a managed table that pg_restore would install.
+    // Refused only after `pg_restore --clean` (by applyRoleSplit, and for an
+    // invoker trigger not at all), the ledger would already be replaced. The proof
+    // of "BEFORE" is a sentinel row appended to the live ledger after the backup:
+    // a restore that ran would erase it.
+    const shapes = [
+      {
+        kind: "RULE",
+        plant: ["CREATE RULE sg_r AS ON DELETE TO public.audit_ledger DO INSTEAD NOTHING"],
+        unplant: ["DROP RULE sg_r ON public.audit_ledger"],
+      },
+      {
+        kind: "TRIGGER",
+        plant: [
+          "CREATE FUNCTION public.sg_t() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN RETURN NEW; END $fn$",
+          "CREATE TRIGGER sg_t BEFORE INSERT ON public.audit_ledger FOR EACH ROW EXECUTE FUNCTION public.sg_t()",
+        ],
+        unplant: ["DROP TRIGGER sg_t ON public.audit_ledger", "DROP FUNCTION public.sg_t()"],
+      },
+    ];
+    for (const { kind, plant, unplant } of shapes) {
+      const shaped = join(workdir, `shaped-${kind}.dump`);
+      for (const sql of plant) await admin.query(sql);
+      await createBackup(url!, shaped, "2026-08-08T00:00:00Z");
+      for (const sql of unplant) await admin.query(sql);
+      await appendAuditRecord("policy.matched", { type: "system" }, { meta: { sentinel: kind } });
+      const live = await describeDatabase(url!);
+      let refusal: unknown;
+      try {
+        await restoreBackup(url!, shaped);
+      } catch (e) {
+        refusal = e;
+      }
+      check(
+        `an archive carrying a ${kind} on a managed table is REFUSED (BackupError naming ${kind})`,
+        refusal instanceof BackupError && String(refusal).includes(kind),
+      );
+      const kept = await describeDatabase(url!);
+      check(
+        `…and refused BEFORE pg_restore replaced anything (${kind} case: ledger and sentinel unchanged)`,
+        kept.auditCount === live.auditCount && kept.auditHeadHash === live.auditHeadHash,
+      );
+      const leaked = await admin.query(
+        `SELECT (SELECT count(*) FROM pg_rewrite r JOIN pg_class c ON c.oid = r.ev_class
+                  WHERE c.relname = 'audit_ledger' AND r.rulename <> '_RETURN')
+              + (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.audit_ledger'::regclass AND NOT tgisinternal) AS n`,
+      );
+      check(`…and the ${kind} did not leak into the live database`, Number(leaked.rows[0].n) === 0);
+    }
   } finally {
     await admin.query("DROP TABLE IF EXISTS audit_ledger").catch(() => {});
+    // The unplant steps run mid-proof; on a failed run the objects may still stand,
+    // and the next proof in CI order must start clean. Dropping the ledger above
+    // also removes the sentinel rows.
+    await admin.query("DROP FUNCTION IF EXISTS public.sg_t() CASCADE").catch(() => {});
     await admin.end().catch(() => {});
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }

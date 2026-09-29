@@ -90,6 +90,11 @@ export function evaluateDeviceManagementHealth(
 
   const candidates: Candidate[] = [];
 
+  // The "unknown" arms below are "not a NAMED member", not "=== 'unknown'". The grant
+  // must rest on positive confirmation here, not on `normalizeReport` having already
+  // folded every off-type value into a declared member: a value outside its union
+  // ('FRESH', a future enum member, an absent key) reads as `unknown` and steps up.
+
   // A report we could not fully parse is never a grant, independently of what its
   // fields normalized to. Defence in depth: the allow path must not rest on a value we
   // only think we understood.
@@ -155,7 +160,7 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "stale_management", action: "step_up", reason: "MDM_CHECKIN_NEVER" });
   } else if (health.mdmCheckInFreshness === "stale") {
     candidates.push({ posture: "stale_management", action: "step_up", reason: "MDM_CHECKIN_STALE" });
-  } else if (health.mdmCheckInFreshness === "unknown") {
+  } else if (health.mdmCheckInFreshness !== "fresh") {
     unknownSignals.push("mdm_check_in_freshness");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
@@ -172,7 +177,7 @@ export function evaluateDeviceManagementHealth(
     candidates.push({ posture: "stale_agent_channel", action: "step_up", reason: "AGENT_CHECKIN_NEVER" });
   } else if (health.agentCheckInFreshness === "stale") {
     candidates.push({ posture: "stale_agent_channel", action: "step_up", reason: "AGENT_CHECKIN_STALE" });
-  } else if (health.agentCheckInFreshness === "unknown") {
+  } else if (health.agentCheckInFreshness !== "fresh" && health.agentCheckInFreshness !== "not_applicable") {
     unknownSignals.push("agent_check_in_freshness");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
@@ -191,10 +196,11 @@ export function evaluateDeviceManagementHealth(
   // open detection would make the strongest action mean nothing.
   // Guarded by `!channelReportInconsistent`: when the report contradicts itself about the
   // agent channel, its remediation claim is not evidence of anything and is not judged.
-  // `unknown` is outside the guard because it is not an agent-produced state — a bridge
-  // that says "no agent channel" and "remediation state unreported" is silent, not
-  // self-contradictory, and silence still denies on its own.
-  if (health.remediationHealth === "unknown") {
+  // Anything but the four named states (`unknown`, an out-of-union value) is outside the
+  // guard because it is not an agent-produced state — a bridge that says "no agent
+  // channel" and "remediation state unreported" is silent, not self-contradictory, and
+  // silence still denies on its own.
+  if (!["healthy", "issues_detected", "failed", "not_applicable"].includes(health.remediationHealth)) {
     unknownSignals.push("remediation_health");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   } else if (!channelReportInconsistent) {
@@ -242,7 +248,7 @@ export function evaluateDeviceManagementHealth(
         reason: "ENROLLMENT_ROOT_CAUSE_UNVERIFIED",
       });
     }
-  } else if (health.enrollmentState === "unknown") {
+  } else if (health.enrollmentState !== "enrolled") {
     unknownSignals.push("enrollment_state");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
@@ -250,7 +256,7 @@ export function evaluateDeviceManagementHealth(
   if (health.complianceCoverage === "uncovered") {
     criticalFindings.push("compliance_uncovered");
     candidates.push({ posture: "unmanaged_device", action: "restrict", reason: "COMPLIANCE_UNCOVERED" });
-  } else if (health.complianceCoverage === "unknown") {
+  } else if (health.complianceCoverage !== "covered") {
     unknownSignals.push("compliance_coverage");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
@@ -258,7 +264,7 @@ export function evaluateDeviceManagementHealth(
   // ── step_up: governed, but the configuration is drifting ──────────────────────
   if (health.policyDrift === "drifted") {
     candidates.push({ posture: "drifted_config", action: "step_up", reason: "POLICY_DRIFTED" });
-  } else if (health.policyDrift === "unknown") {
+  } else if (health.policyDrift !== "on_baseline") {
     unknownSignals.push("policy_drift");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_STATE_UNKNOWN" });
   }
@@ -267,7 +273,7 @@ export function evaluateDeviceManagementHealth(
   // device. Without an explicit true the read may be stale or cached. The explicit
   // `false` was already judged above as a known-bad fact; this is the UNREPORTED case —
   // a gap, so it is raised late among the step_ups, after every named diagnosis.
-  if (health.managementReachable === null) {
+  if (health.managementReachable !== true && health.managementReachable !== false) {
     unknownSignals.push("management_reachable");
     candidates.push({ posture: "unverified", action: "step_up", reason: "MANAGEMENT_UNREACHABLE" });
   }

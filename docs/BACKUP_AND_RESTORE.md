@@ -174,8 +174,8 @@ deliberate open decision, not an accident — until it is made, any statement ab
 
 ## What the CI proof actually establishes
 
-`proof:backup-restore` runs on every pull request against a real Postgres, 22
-assertions:
+`proof:backup-restore` runs on every pull request against a real Postgres and
+asserts:
 
 - a seeded ledger verifies **before** backup, and the manifest records its true head
 - the database is **genuinely destroyed** in between — asserted, not assumed. Without

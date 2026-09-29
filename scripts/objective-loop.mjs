@@ -38,6 +38,19 @@
 //   · no silent stall (DR-054): escalate/broken must name what it is stalled on, and a NEW
 //     escalation id is mailed to the cloud once (--deliver), not every tick and not never.
 //
+// PARKING A ROW THE LOOP CANNOT BUILD (the AWAITING marker):
+//   · a plan row only the owner or a lab can unblock carries, in its head paragraph,
+//       AWAITING OWNER (<blocker>, YYYY-MM-DD)     or     BLOCKED ON LAB (<blocker>, YYYY-MM-DD)
+//     upper-case, the blocker in the parentheses (no nested parentheses), the date the blocker was last
+//     checked. With several markers the latest date wins. A marker with no date or an empty blocker is
+//     not a marker; a quoted or code-span marker is being discussed, not asserted (statusText's rule).
+//   · a marker dated 0–14 days back (MEASURE_WINDOW_DAYS) PARKS the row: it goes to awaiting[], is never
+//     ranked, and raises ONE `rows-awaiting-owner` escalation naming every parked row. Checked BEFORE the
+//     re-measured stamp, so a parked row need not be restamped to stay parked.
+//   · a marker older than 14 days, or dated in the future, is an unknown input: the row goes to
+//     unmeasured[] (reason "…re-check the blocker"), not ranked. The blocker must be re-dated to stay parked.
+//   · HALF DONE rows carry work too: derive() ranks plan.partial as well as plan.open.
+//
 // WHAT THIS IS NOT: not a second readiness figure (DR-036's stays what it is, read as a permission),
 // not a model (no LLM is called; a model may propose by editing the prose the ranker reads), not
 // a second Mac routine (it is a step inside the pulse that already fires), not a merger (its output
@@ -119,6 +132,15 @@ const isIso = (s) => typeof s === "string" && !Number.isNaN(Date.parse(s));
 export function rowMeasuredAt(text) {
   const dates = [...statusText(text ?? "").matchAll(/re-?measured\s+(\d{4}-\d{2}-\d{2})/gi)].map((m) => m[1]);
   return dates.length > 0 ? dates.sort().pop() : null;
+}
+/** The latest-dated `AWAITING OWNER (<blocker>, YYYY-MM-DD)` / `BLOCKED ON LAB (<blocker>, YYYY-MM-DD)`
+ *  marker in a row, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
+ *  blocker, markedAt} or null. A marker with no date or an empty blocker is not a marker. Pure. */
+export function rowAwaiting(text) {
+  const found = [...statusText(text ?? "").matchAll(/(?<![\w-])(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/g)]
+    .map((m) => ({ kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker: m[2].trim(), markedAt: m[3] }))
+    .filter((m) => m.blocker !== "");
+  return found.reduce((a, b) => (a === null || b.markedAt > a.markedAt ? b : a), null);
 }
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
 
@@ -227,12 +249,12 @@ export function parseQueueRow(row, roleIds) {
 
 /**
  * rank({rows, openIds, roster, roleIds, evaluation, priorState, envKeys, nowIso})
- *   → { tasks[], needsExecutor[], escalations[], queue[] }
+ *   → { tasks[], needsExecutor[], unmeasured[], awaiting[], escalations[], queue[] }
  * Pure. Document order IS the ranking (the human-committed "Blocking items first" order); this
  * function resolves executors and closes the code edge, it never re-judges priority.
  */
 export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evaluation, priorState = null, envKeys = new Set(), nowIso, simOps = SIM_OPERATIONS, table = TASK_TABLE, objective = null }) {
-  const tasks = [], needsExecutor = [], unmeasured = [], escalations = [], queue = [];
+  const tasks = [], needsExecutor = [], unmeasured = [], awaiting = [], escalations = [], queue = [];
   const priorSince = new Map((priorState?.escalations ?? []).map((e) => [e.id, e.since]));
   const priorFirst = new Map((priorState?.tasks ?? []).map((t) => [t.rowId, t.firstRankedAt]));
   const esc = (id, clears, asks) => escalations.push({ id, clears, asks, since: isIso(priorSince.get(id)) ? priorSince.get(id) : nowIso });
@@ -241,7 +263,17 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
   for (const row of rows) {
     if (!open.has(row.id)) continue;
     const q = parseQueueRow(row, roleIds);
-    // Stamp first: a row nobody measured against the tree within the window is not ranked, whoever owns it.
+    // Marker first: a row only the owner or a lab can unblock is parked and named, never ranked — the
+    // loop cannot build it, so ranking it stalls the brain on it. A marker nobody re-checked in the
+    // window (or dated in the future) is an UNKNOWN input, and unknown tightens: named, not ranked.
+    const mark = rowAwaiting(row.text);
+    if (mark !== null) {
+      const markH = hoursBetween(mark.markedAt, nowIso);
+      if (markH < 0 || markH > MEASURE_WINDOW_DAYS * 24) unmeasured.push({ rowId: q.id, title: q.title, measuredAt: rowMeasuredAt(row.text), reason: markH < 0 ? `${mark.kind} marker ${mark.markedAt} is in the future` : `${mark.kind} marker ${mark.markedAt} is older than ${MEASURE_WINDOW_DAYS} days - re-check the blocker` });
+      else awaiting.push({ rowId: q.id, title: q.title, kind: mark.kind, blocker: mark.blocker, markedAt: mark.markedAt });
+      continue;
+    }
+    // Stamp next: a row nobody measured against the tree within the window is not ranked, whoever owns it.
     const measuredAt = rowMeasuredAt(row.text);
     const ageH = measuredAt === null ? Infinity : hoursBetween(measuredAt, nowIso);
     if (measuredAt === null || ageH < 0 || ageH > MEASURE_WINDOW_DAYS * 24) {
@@ -259,7 +291,10 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
     }
   }
   if (unmeasured.length > 0) {
-    esc("plan-rows-unmeasured", "cloud", `${unmeasured.length} open row(s) in ${PLAN_REL} carry no \`re-measured YYYY-MM-DD\` stamp within ${MEASURE_WINDOW_DAYS} days and were ranked from nothing — a row nobody measured against the tree is an unknown input: ${unmeasured.map((u) => u.rowId).join(", ")}. Measure each against the tree; close it, or restamp it with what was measured`);
+    esc("plan-rows-unmeasured", "cloud", `${unmeasured.length} open row(s) in ${PLAN_REL} carry no \`re-measured YYYY-MM-DD\` stamp within ${MEASURE_WINDOW_DAYS} days and were ranked from nothing — a row nobody measured against the tree is an unknown input: ${unmeasured.map((u) => u.rowId).join(", ")}. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)`);
+  }
+  if (awaiting.length > 0) {
+    esc("rows-awaiting-owner", "owner", `${awaiting.length} open row(s) in ${PLAN_REL} are parked, not ranked, because only the owner or a lab can unblock them: ${awaiting.map((a) => `row ${a.rowId} ${a.kind} (${a.blocker})`).join("; ")}. Clear each blocker, or remove its marker once cleared`);
   }
   if (tasks[0] && priorState?.tasks?.[0]?.rowId === tasks[0].rowId && hoursBetween(tasks[0].firstRankedAt, nowIso) > STALLED_TOP_DAYS * 24) {
     esc("stalled-top-task", "cloud", `row ${tasks[0].rowId} ("${tasks[0].title}") has been ranked #1 for over ${STALLED_TOP_DAYS} days with no change in ${PLAN_REL} — build it, re-rank it, or record why it waits`);
@@ -279,7 +314,7 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
     if (missing.length > 0) { esc(`${c.id}-op-unrunnable`, "mac", `sim-operation "${entry.op}" needs ${missing.join(", ")} in the tick's environment and the tick does not carry it — export it in scripts/mac/lane-tick.sh (guarded on the sibling checkout existing); not queued, because a request nobody can service sits PENDING forever`); continue; }
     if (queue.length === 0) queue.push({ criterionId: c.id, op: entry.op, clears: entry.clears, id: `${REQUEST_PREFIX}${c.id}-${String(nowIso).slice(0, 10)}` });
   }
-  return { tasks, needsExecutor, unmeasured, escalations, queue };
+  return { tasks, needsExecutor, unmeasured, awaiting, escalations, queue };
 }
 
 /** The decision, and nothing else — what the content address covers. Pure. */
@@ -291,6 +326,7 @@ export function decisionAddress(state) {
     needsExecutor: (state.needsExecutor ?? []).map((n) => n.rowId),
     // Only when present: a state derived before the field existed keeps the address it was written with.
     ...(Array.isArray(state.unmeasured) && state.unmeasured.length > 0 ? { unmeasured: state.unmeasured.map((u) => u.rowId) } : {}),
+    ...(Array.isArray(state.awaiting) && state.awaiting.length > 0 ? { awaiting: state.awaiting.map((a) => a.rowId) } : {}),
     escalations: (state.escalations ?? []).map((e) => ({ id: e.id, clears: e.clears })),
     queue: (state.queue ?? []).map((q) => q.id),
   }));
@@ -300,8 +336,8 @@ export function decisionAddress(state) {
 export function finalize(evaluation, ranked) {
   let verdict = evaluation.verdict;
   const reasons = [];
-  if (verdict !== "goal_met" && ranked.tasks.length === 0 && ranked.needsExecutor.length === 0 && (ranked.unmeasured?.length ?? 0) === 0 && evaluation.probeErrors.length === 0) {
-    reasons.push("no task, no unresolvable row, no unmeasured row and no probe error — an evaluator that produced no work and no reason is broken, whatever the plan said");
+  if (verdict !== "goal_met" && ranked.tasks.length === 0 && ranked.needsExecutor.length === 0 && (ranked.unmeasured?.length ?? 0) === 0 && (ranked.awaiting?.length ?? 0) === 0 && evaluation.probeErrors.length === 0) {
+    reasons.push("no task, no unresolvable row, no unmeasured row, no awaiting row and no probe error — an evaluator that produced no work and no reason is broken, whatever the plan said");
     verdict = "broken";
   }
   if ((verdict === "escalate" || verdict === "broken") && ranked.escalations.length === 0 && evaluation.probeErrors.length === 0 && reasons.length === 0) {
@@ -402,7 +438,7 @@ export function derive(c) {
   const evaluation = evaluate({ objective: c.objective, probes: c.probes });
   const ranked = evaluation.verdict === "broken"
     ? { tasks: [], needsExecutor: [], escalations: [], queue: [] }
-    : rank({ rows: c.rows, openIds: c.probes.plan?.open ?? [], roster: c.roster, roleIds: c.roleIds, evaluation, priorState: c.priorState, envKeys: c.envKeys, nowIso: c.nowIso, objective: c.objective });
+    : rank({ rows: c.rows, openIds: [...(c.probes.plan?.open ?? []), ...(c.probes.plan?.partial ?? [])], roster: c.roster, roleIds: c.roleIds, evaluation, priorState: c.priorState, envKeys: c.envKeys, nowIso: c.nowIso, objective: c.objective });
   const fin = finalize(evaluation, ranked);
   const state = {
     schemaVersion: 1,
@@ -410,7 +446,7 @@ export function derive(c) {
     objectiveId: c.objective?.id ?? null, objectiveSha: c.objectiveSha, rosterSha: c.rosterSha,
     verdict: fin.verdict, brokenReasons: fin.brokenReasons,
     criteria: evaluation.criteria, unmet: evaluation.unmet, unknown: evaluation.unknown,
-    tasks: ranked.tasks, needsExecutor: ranked.needsExecutor, unmeasured: ranked.unmeasured, escalations: ranked.escalations, queue: ranked.queue,
+    tasks: ranked.tasks, needsExecutor: ranked.needsExecutor, unmeasured: ranked.unmeasured, awaiting: ranked.awaiting, escalations: ranked.escalations, queue: ranked.queue,
     probeErrors: evaluation.probeErrors,
     report: { ...c.report, needsExecutorCount: ranked.needsExecutor.length, unmeasuredCount: ranked.unmeasured.length, openRows: c.probes.plan?.open?.length ?? null },
     staleAfterHours: c.staleAfterHours,
@@ -514,8 +550,9 @@ export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncesto
     else if (Number.isFinite(nowMs) && ms > nowMs + 5 * 60e3) fatal.push(`date ${d} is in the future`);
   }
   const unmeasured = Array.isArray(state.unmeasured) ? state.unmeasured : []; // absent on a state derived before the field existed
+  const awaiting = Array.isArray(state.awaiting) ? state.awaiting : []; // likewise
   if (state.verdict === "replan" && state.tasks.length === 0) fatal.push("verdict replan with no task is a contradiction");
-  if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && unmeasured.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no unmeasured row, no probe error — a broken resolver, never a finished company");
+  if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && unmeasured.length === 0 && awaiting.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no unmeasured row, no awaiting row, no probe error — a broken resolver, never a finished company");
   if (unmeasured.length > 0) reported.push(`${unmeasured.length} open plan row(s) ranked from nothing — no re-measured stamp within ${MEASURE_WINDOW_DAYS} days: ${unmeasured.map((u) => u.rowId).join(", ")}`);
   if ((state.verdict === "escalate" || state.verdict === "broken") && state.escalations.length === 0 && state.probeErrors.length === 0 && !(state.brokenReasons?.length > 0)) fatal.push("a stall that names nothing it is stalled on (DR-054)");
   if (decisionAddress(state) !== state.decisionAddress) fatal.push("decisionAddress does not match the decision content — the file was hand-edited");
@@ -550,7 +587,7 @@ function runCheck() {
   console.log(`objective-loop --check over ${STATE_REL}`);
   for (const r of reported) console.log(`  REPORTED — ${r}`);
   for (const f of fatal) console.log(`  ✗ ${f}`);
-  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${(state.unmeasured ?? []).length} unmeasured, ${state.escalations.length} escalation(s); decided ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h ago; reader verdict: ${readVerdict(state, { heartbeat, nowIso }).verdict}`);
+  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${(state.unmeasured ?? []).length} unmeasured, ${(state.awaiting ?? []).length} awaiting, ${state.escalations.length} escalation(s); decided ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h ago; reader verdict: ${readVerdict(state, { heartbeat, nowIso }).verdict}`);
   console.log(fatal.length ? `objective-loop --check FAILED: ${fatal.length} problem(s).` : "objective-loop --check passed — the committed state is well-formed, derived against the declared objective, every ranked task has a real executor, and nothing stalls silently.");
   return fatal.length ? 1 : 0;
 }
@@ -633,6 +670,32 @@ function selfTest() {
   t("stamp: with EVERY open row refused, tasks is empty and finalize is not broken — the refused rows are the named reason", allStale.tasks.length === 0 && allStale.unmeasured.length === 2 && finalize({ ...e1, probeErrors: [] }, allStale).verdict === "escalate");
   t("stamp: with no open row at all, finalize is still broken (the unmeasured list does not excuse a vacuous plan)", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], unmeasured: [], escalations: [], queue: [] }).verdict === "broken");
   t("stamp: the window is declared in code, not read from anywhere", MEASURE_WINDOW_DAYS === 14);
+  // (f3) the AWAITING marker: a row only the owner or a lab can unblock is PARKED, named, and never ranked
+  const arow = (id, marker) => ({ id, text: `${id}. **Parked** — web-engineer, days. re-measured 2026-09-22. ${marker}` });
+  const rk = (rs) => rank({ rows: rs, openIds: rs.map((r) => r.id), roster, roleIds, evaluation: e1, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
+  const escAsks = (r) => r.escalations.filter((e) => e.id === "rows-awaiting-owner");
+  const named = (s, id) => new RegExp(`(?<![\\w#-])${id}(?![\\w-])`).test(s);
+  const aOwner = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)")]);
+  t("awaiting: a fresh-stamped, real-executor row marked AWAITING OWNER is parked, not ranked", !aOwner.tasks.some((x) => x.rowId === "9") && (aOwner.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "owner" && x.blocker === "#9" && x.markedAt === "2026-09-22"));
+  t("awaiting: ONE rows-awaiting-owner escalation clears owner and its asks name the row and the blocker", escAsks(aOwner).length === 1 && escAsks(aOwner)[0].clears === "owner" && named(escAsks(aOwner)[0].asks, "9") && escAsks(aOwner)[0].asks.includes("#9"));
+  const aLab = rk([arow("9", "BLOCKED ON LAB (ITSM lab, 2026-09-22)")]);
+  t("awaiting: BLOCKED ON LAB gives kind lab, and still escalates once to the owner", (aLab.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "lab" && x.blocker === "ITSM lab") && escAsks(aLab).length === 1 && escAsks(aLab)[0].clears === "owner");
+  const aOld = rk([arow("9", "AWAITING OWNER (#9, 2026-09-09)")]);
+  t("awaiting: a marker dated 15 days before the instant is NOT ranked and is named unmeasured, with its reason", !aOld.tasks.some((x) => x.rowId === "9") && (aOld.awaiting ?? []).length === 0 && aOld.unmeasured.some((u) => u.rowId === "9" && /marker .* older than 14 days/.test(u.reason)));
+  const aFuture = rk([arow("9", "AWAITING OWNER (#9, 2026-10-01)")]);
+  t("awaiting: a future-dated marker is NOT ranked and is named unmeasured as future", !aFuture.tasks.some((x) => x.rowId === "9") && (aFuture.awaiting ?? []).length === 0 && aFuture.unmeasured.some((u) => u.rowId === "9" && /future/.test(u.reason)));
+  t("awaiting: a marker inside backticks or quotes is being discussed, not asserted — the row is ranked", ["`AWAITING OWNER (#9, 2026-09-22)`", "\"AWAITING OWNER (#9, 2026-09-22)\""].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
+  t("awaiting: a marker with no date, or an empty blocker, is not a marker — the row is ranked", ["AWAITING OWNER (#9)", "AWAITING OWNER (, 2026-09-22)", "AWAITING OWNER (2026-09-22)"].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
+  const aAll = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)"), arow("10", "BLOCKED ON LAB (Keycloak lab, 2026-09-21)")]);
+  t("awaiting: ONE escalation names EVERY parked row, kind and blocker", escAsks(aAll).length === 1 && named(escAsks(aAll)[0].asks, "9") && named(escAsks(aAll)[0].asks, "10") && escAsks(aAll)[0].asks.includes("Keycloak lab"));
+  t("awaiting: with EVERY open row awaiting, tasks is empty and the verdict is escalate, not broken — the parked rows are the named reason", aAll.tasks.length === 0 && (aAll.awaiting ?? []).length === 2 && finalize({ ...e1, probeErrors: [] }, aAll).verdict === "escalate");
+  t("awaiting: an awaiting row is not double-counted as unmeasured or needsExecutor", aAll.unmeasured.length === 0 && aAll.needsExecutor.length === 0);
+  t("awaiting: rowAwaiting takes the LATEST-dated marker of several, whatever the order or kind", rowAwaiting("AWAITING OWNER (a, 2026-09-01) then BLOCKED ON LAB (b, 2026-09-20)")?.kind === "lab" && rowAwaiting("BLOCKED ON LAB (b, 2026-09-20) then AWAITING OWNER (a, 2026-09-01)")?.markedAt === "2026-09-20");
+  t("awaiting: rowAwaiting is a whole upper-case token, and absent text reads null", rowAwaiting("UNAWAITING OWNER (x, 2026-09-22)") === null && rowAwaiting("awaiting owner (x, 2026-09-22)") === null && rowAwaiting(undefined) === null);
+  // (f4) PARTIAL rows still carry work: derive() must rank them, not only the OPEN bucket
+  const derivable = (p) => ({ objective: goodObjective(), objectiveSha: "o", rosterSha: "r", roster, roleIds, rows: [{ id: "11", text: "11. **Half built** — web-engineer, days. HALF DONE. re-measured 2026-09-22." }], priorState: null, nowIso: T0, staleAfterHours: 3, heartbeat: null, probes: probes({ plan: { problems: [], open: [], partial: [], closed: [], ...p } }), report: {}, git: { head: null, workingTreeCleanAtEntry: true }, envKeys: new Set() });
+  t("partial: a HALF DONE row with a fresh stamp and a real executor is ranked by derive()", derive(derivable({ partial: ["11"] })).tasks.some((x) => x.rowId === "11"));
+  t("partial: a CLOSED row is still not ranked (only open and partial carry work)", !derive(derivable({ closed: ["11"] })).tasks.some((x) => x.rowId === "11"));
   // (g) TASK_TABLE ops exist and their argv writes what the criterion reads
   for (const [cid, entry] of Object.entries(TASK_TABLE)) {
     const op = SIM_OPERATIONS[entry.op];
@@ -661,6 +724,8 @@ function selfTest() {
   t("address: a changed staleAfterHours DOES change the address (it is a decision about the decision's lifetime)", decisionAddress(mk({})) !== decisionAddress(mk({ staleAfterHours: 1e9 })));
   t("address: an absent or EMPTY unmeasured list leaves the address as it was (a state derived before the field passes unchanged)", decisionAddress(mk({})) === decisionAddress(mk({ unmeasured: [] })));
   t("address: a changed unmeasured set DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ unmeasured: [{ rowId: "8" }] })));
+  t("address: an absent or EMPTY awaiting list leaves the address as it was (a state derived before the field passes unchanged)", decisionAddress(mk({})) === decisionAddress(mk({ awaiting: [] })));
+  t("address: a non-empty awaiting set DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ awaiting: [{ rowId: "9" }] })));
   // (l)/(m) finalize: non-vacuity and no silent stall
   t("finalize: escalate with no task, no needsExecutor and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
   t("finalize: escalate with nothing to escalate and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: r1.tasks, needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
@@ -699,6 +764,11 @@ function selfTest() {
   onlyUnmeasured.decisionAddress = decisionAddress(onlyUnmeasured);
   t("check: a state whose only work is refused rows passes, and the refusal is REPORTED with the row ids", chk(onlyUnmeasured).fatal.length === 0 && chk(onlyUnmeasured).reported.some((r) => /ranked from nothing.*\b8\b/.test(r)));
   t("check: the same state with the unmeasured list emptied is FATAL (no task, no row, no reason)", chk({ ...onlyUnmeasured, unmeasured: [], decisionAddress: decisionAddress({ ...onlyUnmeasured, unmeasured: [] }) }).fatal.some((f) => /broken resolver/.test(f)));
+  const onlyAwaiting = { ...good, tasks: [], needsExecutor: [], unmeasured: [], awaiting: aAll.awaiting ?? [{ rowId: "9" }], escalations: aAll.escalations };
+  onlyAwaiting.decisionAddress = decisionAddress(onlyAwaiting);
+  t("check: a state with NO awaiting field is still clean (derived before the field existed)", chk(good).fatal.length === 0 && !("awaiting" in good));
+  t("check: a state whose only work is parked awaiting rows passes", chk(onlyAwaiting).fatal.length === 0);
+  t("check: the same state with the awaiting list emptied is FATAL (no task, no row, no reason)", chk({ ...onlyAwaiting, awaiting: [], decisionAddress: decisionAddress({ ...onlyAwaiting, awaiting: [] }) }).fatal.some((f) => /broken resolver/.test(f)));
   t("check: a non-positive staleAfterHours is FATAL", chk({ ...good, staleAfterHours: 0, decisionAddress: decisionAddress({ ...good, staleAfterHours: 0 }) }).fatal.some((f) => /positive/.test(f)));
   // The attestation token must not be reachable by documentation: no decision-record section on
   // disk may carry it unless objective.json names that section. A record that QUOTES the token to

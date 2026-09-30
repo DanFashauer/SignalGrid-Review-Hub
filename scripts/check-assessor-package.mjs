@@ -38,38 +38,68 @@ if (!existsSync(pkgPath)) {
 }
 
 const text = readFileSync(pkgPath, "utf8");
-const failures = [];
-
-// ── 1. markdown links ────────────────────────────────────────────────────────
-// Relative links only. An external URL is not this gate's business and pinging one
-// would make the check network-dependent and flaky — a gate that fails on a captive
-// portal teaches people to ignore it.
-const links = [...text.matchAll(/\[[^\]]+\]\(([^)#\s]+)(?:#[^)\s]*)?\)/g)].map((m) => m[1]);
-const relative = links.filter((l) => !/^[a-z][a-z0-9+.-]*:/i.test(l));
-for (const l of relative) {
-  if (!existsSync(resolve(dirname(pkgPath), l))) failures.push(`link does not resolve: ${l}`);
-}
-
-// ── 2. named commands ────────────────────────────────────────────────────────
 const scripts = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")).scripts ?? {};
-const commands = [...new Set([...text.matchAll(/`pnpm run ([a-z0-9:_-]+)`/g)].map((m) => m[1]))];
-for (const c of commands) {
-  if (!(c in scripts)) failures.push(`\`pnpm run ${c}\` is named but is not a script in package.json`);
+
+/** The verdict, as a pure function of the package text: every door that does not
+ *  open, plus what was checked. `baseDir` is where relative links resolve from. */
+function auditPackage(body, baseDir) {
+  const failures = [];
+
+  // ── 1. markdown links ──────────────────────────────────────────────────────
+  // Relative links only. An external URL is not this gate's business and pinging one
+  // would make the check network-dependent and flaky — a gate that fails on a captive
+  // portal teaches people to ignore it.
+  const links = [...body.matchAll(/\[[^\]]+\]\(([^)#\s]+)(?:#[^)\s]*)?\)/g)].map((m) => m[1]);
+  const relative = links.filter((l) => !/^[a-z][a-z0-9+.-]*:/i.test(l));
+  for (const l of relative) {
+    if (!existsSync(resolve(baseDir, l))) failures.push(`link does not resolve: ${l}`);
+  }
+
+  // ── 2. named commands ──────────────────────────────────────────────────────
+  const commands = [...new Set([...body.matchAll(/`pnpm run ([a-z0-9:_-]+)`/g)].map((m) => m[1]))];
+  for (const c of commands) {
+    if (!(c in scripts)) failures.push(`\`pnpm run ${c}\` is named but is not a script in package.json`);
+  }
+
+  // ── 3. named source paths ──────────────────────────────────────────────────
+  // Backticked paths under the source roots the package sends an assessor to. A
+  // trailing `/*` means "this directory, whose children vary" — check the parent.
+  // Any backticked path with a slash — NOT a hand-maintained root list. The first
+  // version listed lib/artifacts/native/scripts, so a reference to `attached_assets/`
+  // (which the package does make) went unchecked: renaming that directory would have
+  // left this gate green while the package pointed at nothing. A partial root list is
+  // the same defect class as a partial coverage list.
+  const paths = [...new Set([...body.matchAll(/`([A-Za-z0-9._-]+\/[A-Za-z0-9._\-/*]*)`/g)].map((m) => m[1]))];
+  for (const p of paths) {
+    const probe = p.endsWith("/*") ? p.slice(0, -2) : p;
+    if (!existsSync(resolve(repoRoot, probe))) failures.push(`source path does not exist: ${p}`);
+  }
+
+  return { failures, relative, commands, paths };
 }
 
-// ── 3. named source paths ────────────────────────────────────────────────────
-// Backticked paths under the source roots the package sends an assessor to. A
-// trailing `/*` means "this directory, whose children vary" — check the parent.
-// Any backticked path with a slash — NOT a hand-maintained root list. The first
-// version listed lib/artifacts/native/scripts, so a reference to `attached_assets/`
-// (which the package does make) went unchecked: renaming that directory would have
-// left this gate green while the package pointed at nothing. A partial root list is
-// the same defect class as a partial coverage list.
-const paths = [...new Set([...text.matchAll(/`([A-Za-z0-9._-]+\/[A-Za-z0-9._\-/*]*)`/g)].map((m) => m[1]))];
-for (const p of paths) {
-  const probe = p.endsWith("/*") ? p.slice(0, -2) : p;
-  if (!existsSync(resolve(repoRoot, probe))) failures.push(`source path does not exist: ${p}`);
+// ── in-run control ───────────────────────────────────────────────────────────
+// One package with a door of each kind broken, one with every door open, on every
+// invocation. A verdict that stopped seeing a dead link — a regex drift, a resolve
+// against the wrong directory — would otherwise pass the real package forever.
+{
+  const baseDir = dirname(pkgPath);
+  const planted = auditPackage(
+    "[gone](./__assessor_control_missing__.md) `pnpm run __assessor_control_no_such_script__` `scripts/__assessor_control_missing__.mjs`",
+    baseDir,
+  );
+  const clean = auditPackage("[root](../package.json) `pnpm run typecheck` `scripts/preflight.mjs`", baseDir);
+  if (planted.failures.length !== 3 || clean.failures.length !== 0 || clean.relative.length !== 1) {
+    console.error(
+      `✗ SELF-TEST FAILED — planted defects caught: ${planted.failures.length}/3, clean package failures: ` +
+        `${clean.failures.length} (want 0). The verdict can no longer tell a dead door from an open one; ` +
+        "a green from it would be green about nothing.",
+    );
+    process.exit(1);
+  }
 }
+
+const { failures, relative, commands, paths } = auditPackage(text, dirname(pkgPath));
 
 console.log("Assessor-package integrity — every door in the package must open\n");
 console.log(`  ${PKG}`);
@@ -99,4 +129,4 @@ console.log(
     "  that the threat model is adequate or that the 'where to attack first' section\n" +
     "  points anywhere useful. This keeps the package navigable, not honest.",
 );
-console.log("\nAssessor-package check passed — every link, command and path in the package resolves.");
+console.log("\nAssessor-package check passed — every link, command and path in the package resolves; in-run control green.");

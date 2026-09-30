@@ -647,6 +647,22 @@ earlier — that is the loop working, not a reason to soften the record.
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE
+    FIX PROPOSED 2026-09-30 (branch claude/build-gates-failure-controls, lands under DR-037):
+    the six check-gates that had no failure control at all — no `--self-test` flag, no
+    in-run control, no exported verdict — now factor their verdict into a pure function
+    and run one planted-failing and one passing synthetic input through it on EVERY
+    invocation (the `scripts/check-decision-record-format.mjs` idiom, so no preflight
+    registration is needed): `scripts/check-assessor-package.mjs` (a dead link, an
+    unknown `pnpm run` script and a missing path), `scripts/check-container-native-base.mjs`
+    (a pinned amd64 builder on a musl base, against the real workspace strip list),
+    `scripts/check-shell.mjs` (a bare `cd` fed to shellcheck on stdin must be SC2164),
+    `scripts/check-ci-preflight-sync.mjs` (a proof in one lane only),
+    `scripts/check-durable-path-authorization.mjs` (a `core.context()` store read with no
+    `authorize()`) and `scripts/check-docker-lifecycle-copy.mjs` (an installing stage that
+    names the hook file in a comment but never COPYs it). Output on the real tree is
+    unchanged but for "in-run control green" on the pass line. Falsified both ways in a
+    scratch worktree: each gate's real defect planted → exit 1; each verdict stubbed to
+    pass → the control prints SELF-TEST FAILED and exits 1.
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not
     exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
@@ -680,6 +696,10 @@ earlier — that is the loop working, not a reason to soften the record.
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
     verdict core, and 21 of 50 check-gates carry no self-test.
+    RE-MEASURED 2026-09-30: that figure was stale. 26 of 150 `scripts/check-*.mjs`
+    take no `--self-test` flag; most of those carry an in-run control instead, and the
+    six that had neither (0–2 comment-only hits for self-test/control/planted/falsif)
+    are the ones fixed above. The flag count stays 26 of 150: an in-run control needs none.
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,

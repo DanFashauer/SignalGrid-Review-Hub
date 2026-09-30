@@ -183,7 +183,7 @@ export function measure(read, { results } = {}) {
 /** The workflow must emit this script's measurement and type no property itself. */
 export function checkWorkflow(text) {
   const findings = [];
-  if (!new RegExp(`node\\s+${SELF.replace(/[.]/g, "\\.")}\\b[^\\n]*--emit`).test(text)) findings.push(`${WORKFLOW} never runs \`node ${SELF} … --emit\` — the manifest's safety properties would be measured by nothing`);
+  if (!new RegExp(`node\\s+${SELF.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b[^\\n]*--emit`).test(text)) findings.push(`${WORKFLOW} never runs \`node ${SELF} … --emit\` — the manifest's safety properties would be measured by nothing`);
   if (/publicSafety\s*:\s*\[/.test(text)) findings.push(`${WORKFLOW} assigns publicSafety an array literal — a typed claim, not a measured one`);
   for (const phrase of ["synthetic fixtures only", "no live vendor calls", "no customer data", "no PHI/PII"]) {
     if (text.includes(`'${phrase}'`) || text.includes(`"${phrase}"`)) findings.push(`${WORKFLOW} carries the literal claim "${phrase}"`);

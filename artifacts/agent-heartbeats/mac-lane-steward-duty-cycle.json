@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T01:45:22.627Z",
-  "result": "non-quiet 01:24Z: five new Mac PRs (#1224-#1228) reviewed and mailed (fix-needed #1224 and #1225; ship #1226, #1227, #1228). #1226 gating re-run after a 401 in the streak check. Tick last firedAt 2026-09-30T01:21:50.143Z. Live evidence minted 2026-09-29T22:27:47Z (~3h, within 3 days, no refresh asked). Manifest --check clean; sim requests all bound; no mail addressed to cloud. Owner not escalated."
+  "firedAt": "2026-09-30T04:27:16.588Z",
+  "result": "keepalive 04:24Z: quiet. No mac/* branch moved since 00:42Z. Open Mac PRs #1224-#1228 were reviewed at 01:24Z. No mail to cloud. Tick last firedAt 2026-09-30T04:12:15.796Z. Live evidence minted 2026-09-29T22:27:47Z (~6h). Manifest --check clean. Sim requests all bound. Owner not escalated."
 }

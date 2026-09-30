@@ -308,6 +308,14 @@ if (!accepted.ok) {
     status({ OIDC_ISSUER: ISSUER }) === "invalid",
   );
   check(
+    "config: a non-blank OIDC_ISSUER with audience but no JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_AUDIENCE: AUDIENCE }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with JWKS but no audience is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER, OIDC_JWKS_URI: rest.OIDC_JWKS_URI }) === "invalid",
+  );
+  check(
     "config: a non-blank OIDC_ISSUER with audience + JWKS but no tenant/role maps is invalid",
     status({ OIDC_ISSUER: ISSUER, ...rest }) === "invalid",
   );

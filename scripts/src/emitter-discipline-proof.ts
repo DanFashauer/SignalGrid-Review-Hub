@@ -46,9 +46,10 @@ import { VENDOR_ERROR_TEXT_LIMIT } from "@workspace/integrations/emit-gate/bound
 
 let passed = 0;
 const failures: string[] = [];
-const check = (name: string, ok: boolean): void => {
+const check = (name: string, ok: boolean): boolean => {
   if (ok) { passed += 1; console.log(`  ok — ${name}`); }
   else { failures.push(name); console.log(`  FAIL — ${name}`); }
+  return ok;
 };
 
 console.log("Emitter-discipline proof");
@@ -130,8 +131,9 @@ const FAMILIES: FamilyUnderTest[] = [
 
 const noopTransport = async (): Promise<void> => {};
 
-// The gate's clauses, and which of them each family's checks actually flipped. The
-// `gateClausesPerFamily` figure is MEASURED from this map, never typed: it printed a
+// The gate's clauses, and which of them each family's checks flipped AND PASSED: a
+// clause is recorded only when its check returns ok, so a deleted or failing clause
+// check lowers the figure. `gateClausesPerFamily` is MEASURED from this map, never typed: it printed a
 // literal 4 for as long as nothing could notice the count moving (plan row 124).
 const GATE_CLAUSES = ["tier", "live flag", "credential", "transport"] as const;
 const clausesExercised = new Map<string, Set<(typeof GATE_CLAUSES)[number]>>();
@@ -150,26 +152,22 @@ for (const fam of FAMILIES) {
 
   // The gate, clause by clause. Each check flips exactly ONE condition off a
   // fully-armed environment, so a pass is attributable to the clause it names.
-  exercise(fam.name, "tier");
   const dev = fam.resolve({ ...armed, SIGNALGRID_TIER: "dev" }, noopTransport);
-  check(`${fam.name}: dev tier never emits, even fully armed with an injected transport`,
-    dev.mode === "fixture" && (dev.reason ?? "").includes("never makes live vendor calls"));
-  exercise(fam.name, "live flag");
+  if (check(`${fam.name}: dev tier never emits, even fully armed with an injected transport`,
+    dev.mode === "fixture" && (dev.reason ?? "").includes("never makes live vendor calls"))) exercise(fam.name, "tier");
   const noFlag = fam.resolve({ ...armed, SIGNALGRID_LIVE_INTEGRATIONS: "TRUE" }, noopTransport);
   // The REASON, not just the mode. `mode === "fixture"` is satisfied by refusing for
   // ANY of the four clauses — so this assertion passed while proving nothing about
   // the flag it names. Five of the six families would still have satisfied it if the
   // flag check had been deleted and the token check caught the call instead.
-  check(`${fam.name}: the live flag is an exact lowercase 'true' — 'TRUE' does not arm it`,
-    noFlag.mode === "fixture" && (noFlag.reason ?? "") === "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'");
-  exercise(fam.name, "credential");
+  if (check(`${fam.name}: the live flag is an exact lowercase 'true' — 'TRUE' does not arm it`,
+    noFlag.mode === "fixture" && (noFlag.reason ?? "") === "SIGNALGRID_LIVE_INTEGRATIONS is not 'true'")) exercise(fam.name, "live flag");
   const noToken = fam.resolve({ ...armed, [fam.tokenVar]: "   " }, noopTransport);
-  check(`${fam.name}: a whitespace-only credential reads as absent → fixture`,
-    noToken.mode === "fixture" && (noToken.reason ?? "").includes(fam.tokenVar));
-  exercise(fam.name, "transport");
+  if (check(`${fam.name}: a whitespace-only credential reads as absent → fixture`,
+    noToken.mode === "fixture" && (noToken.reason ?? "").includes(fam.tokenVar))) exercise(fam.name, "credential");
   const noTransport = fam.resolve(armed, undefined);
-  check(`${fam.name}: EVERYTHING set but no injected transport → fixture ("this repository ships none")`,
-    noTransport.mode === "fixture" && (noTransport.reason ?? "").includes("ships none"));
+  if (check(`${fam.name}: EVERYTHING set but no injected transport → fixture ("this repository ships none")`,
+    noTransport.mode === "fixture" && (noTransport.reason ?? "").includes("ships none"))) exercise(fam.name, "transport");
   const live = fam.resolve(armed, noopTransport);
   check(`${fam.name}: the live mode exists and carries exactly the INJECTED transport — the repo adds nothing to it`,
     live.mode === "live" && live.deliver === noopTransport);

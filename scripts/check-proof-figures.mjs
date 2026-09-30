@@ -60,7 +60,11 @@ export const PROOFS = ["proof:device-management-health", "proof:link-usability",
  *  `ladderRungs=` as a hand-typed number sitting on the same line as genuinely derived
  *  values, and they disagreed — eleven said 6, agent-behavior said 5 against its
  *  six-member action union, and the guard held docs to the 5 (plan rows 124 and 150).
- *  A key listed here must be printed from `${...}`; a literal fails the gate. */
+ *  A key listed here must be printed from `${...}`; a literal fails the gate.
+ *
+ *  SCOPE, stated so it is not over-read: this catches HONEST drift — someone typing the
+ *  count they believe. It does not catch `${6}`, a const that is itself a typed number,
+ *  or a figures template split across lines. Those are deliberate evasions, not drift. */
 export const DERIVED_ONLY_KEYS = ["ladderRungs", "gateClausesPerFamily"];
 
 /** Every `key=<digits>` a proof source prints for a derived-only key. Pure over the

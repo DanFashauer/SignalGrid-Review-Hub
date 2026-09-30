@@ -21,10 +21,11 @@
 //      unreadable instant is never an ordering.
 //   8. NO NETWORK I/O in the family.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { composeDeviceRisk, fromServiceLifecycle } from "@workspace/posture-composition";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   evaluateServiceLifecycle,
   evaluateServiceLifecycleFixture,
@@ -686,43 +687,21 @@ const verdicts = space.map((s) => evaluateServiceLifecycle(s));
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/service-lifecycle");
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)],
-    );
-  const files = walk(dir);
-  const offenders: string[] = [];
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,
-    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8")
-      .split("\n")
-      .forEach((line, i) => {
-        const t = line.trim();
-        if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-        if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
-      });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders } = scanForVendorCalls(dir);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   check(
     `no VENDOR-API call in any service-lifecycle/ source (${files.length} files scanned recursively)`,
-    offenders.length === 0,
+    files.length > 0 && offenders.length === 0,
   );
-  check(
-    "...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://graph.microsoft.com/v1.0/users", { method: "POST" })`)) &&
-      banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)),
-  );
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
   // NO CLOCK. The dimension's whole ordering argument rests on comparing two
   // source-reported instants, so a clock read anywhere in the family would
   // quietly turn a deterministic verdict into a time-dependent one.

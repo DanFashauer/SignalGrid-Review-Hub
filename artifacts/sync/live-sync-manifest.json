@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 84,
-  "fingerprint": "7c15496cfc1b936fb998d4879dcb9007f384fe778d3627036a49f6006eb7a04b",
+  "manifestVersion": 85,
+  "fingerprint": "1cfadac1118f68d873c628c4905058c64630c1723291eab98cac1d4c67b86a56",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -163,7 +163,7 @@
       "sso-session": 97,
       "task-exception": 204,
       "token-binding": 61,
-      "uem": 76,
+      "uem": 77,
       "unsafe-claim": 50,
       "verdict-attestation": 98,
       "webhooks": 243,

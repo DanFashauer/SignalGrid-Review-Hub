@@ -14,9 +14,10 @@
 //      boundary the type system cannot express and a future edit could quietly
 //      reintroduce.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   cellularHardwareFrom,
   evaluateUem,
@@ -318,67 +319,30 @@ check("evaluation is deterministic",
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/uem");
-  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
-  // hold anything at all and the guarantee would still print green.
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const offenders: string[] = [];
-
-  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
-  //
-  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
-  // source" while matching only fetch/axios/got/undici/https.request and a mutating
-  // `method:` literal. Adversarial review found `nac/store.ts` doing
-  // `await import("ioredis")` and opening a TCP connection to Redis — real network
-  // I/O, invisible to every pattern in the list. The scan was reporting success over
-  // something it had stopped looking at, which this repo's own guard-registry header
-  // calls WORSE than no guard.
-  //
-  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
-  // that actually matters here — Redis is configuration storage, not a device
-  // actuator, and banning it outright would be theatre. (2) The pattern list gained
-  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
-  // aliased fetch, so the next thing that sneaks in has fewer doors.
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
-    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
   // store.ts is EXEMPT and NAMED, not silently skipped. It talks to Redis to persist
   // connector configuration — configuration storage, not a vendor API call and not a
-  // device action. Listing it here is the honest form: the exemption is visible,
-  // scoped to one file, and a reader can disagree with it.
-  //
-  // Both this family and nac/ were found doing `await import("ioredis")` while their
-  // proofs printed "no network I/O". The broadened scan caught uem/ on its first run
-  // after the rewrite, which is the check earning its keep immediately.
+  // device action. The exemption is SCOPED TO THE REASON (row 119): it used to be a
+  // whole-file `allowed(rel)` evaluated before the pattern test, which switched all nine
+  // patterns off for store.ts — the shape nac-proof was already fixed for after a
+  // planted ISE quarantine call hid behind it. Now only a Redis-client load is skipped.
   const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
-  const allowed = (rel: string): boolean => CONFIG_STORAGE_FILES.has(rel);
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (allowed(rel) ) return;
-      if (banned.some((re) => re.test(line))) offenders.push(`${rel}:${i + 1}`);
-    });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders, exempted } = scanForVendorCalls(dir, CONFIG_STORAGE_FILES);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
+  console.log(`      config-storage exemptions taken (REPORTED): ${exempted.length ? exempted.join(", ") : "none"}`);
   check(`no VENDOR-API call in any uem/ source — an actuator cannot return (${files.length} files scanned recursively)`,
     files.length >= 6 && offenders.length === 0);
-  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
-  // list would leave the assertion green and nobody would notice.
-  check("...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
-    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
+  check("...and the store.ts exemption is scoped to the REASON: a planted vendor call in the EXEMPT file is still an offender",
+    classifyVendorCallLine("store.ts", `  await fetch("https://graph.microsoft.com/v1.0/deviceManagement/managedDevices/x/retire", { method: "POST" });`, CONFIG_STORAGE_FILES) === "offender" &&
+    classifyVendorCallLine("store.ts", `  const { Redis } = await import("ioredis");`, CONFIG_STORAGE_FILES) === "exempt");
 
   // ── THE FRESHNESS AXIS IS GONE, and this is the assertion that can say so ──
   //

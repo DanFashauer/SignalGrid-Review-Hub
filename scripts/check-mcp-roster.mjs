@@ -49,7 +49,7 @@
 //
 // Fail-closed: an unparseable roster, or one missing `servers`/`grants`, is
 // itself a finding — a broken roster is silence dressed as a green gate.
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -174,12 +174,11 @@ function loadContext7PinFiles() {
     const abs = resolve(repo, path);
     let buf;
     try {
-      if (statSync(abs).size > 2 * 1024 * 1024) continue;
-      buf = readFileSync(abs);
+      buf = readFileSync(abs); // one read, then judge the bytes read (no stat-then-read race)
     } catch {
       continue; // a tracked file deleted in the worktree is not a copy
     }
-    if (buf.includes(0)) continue;
+    if (buf.length > 2 * 1024 * 1024 || buf.includes(0)) continue;
     files[path] = buf.toString("utf8");
   }
   return files;

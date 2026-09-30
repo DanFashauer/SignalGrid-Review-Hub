@@ -9646,7 +9646,7 @@
    "claim": "\"Signal Types\" badge row per vendor — asserts which signal families each integration supplies.",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Badges render arbitrary fixture signal types (artifacts/api-server/src/routes/integrations.ts:14 and siblings) via src/components/SignalBadge.tsx:7-15, 18-20. Only three signal kinds are launch (scripts/launch-profile.mjs:246-259); the rest are deferred (:262-301). Mitigation ABSENT on this page.",
+   "evidence": "Badges render arbitrary fixture signal types (artifacts/api-server/src/routes/integrations.ts:14 and siblings) via src/components/SignalBadge.tsx:5-10. Only three signal kinds are launch (scripts/launch-profile.mjs:246-259); the rest are deferred (:262-301). Mitigation ABSENT on this page.",
    "action": "rewrite"
   },
   {
@@ -9687,8 +9687,8 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/components/SignalBadge.tsx",
-   "line": "7-15, 18-20",
-   "claim": "Signal-family badges rendering IDENTITY, DEVICE POSTURE, SESSION CONTEXT, OPERATIONAL SIGNALS and a grey fallback for any other family.",
+   "line": "5-10",
+   "claim": "Signal-family badges rendering all six SignalType families (tones in src/lib/signal-tone.ts) and a dashed UNKNOWN badge for any other family.",
    "kind": "capability",
    "classification": "deferred",
    "evidence": "Three of the four named families are deferred signal kinds — identity (scripts/launch-profile.mjs:279), session_readiness (:293) and the operational cluster (task_exception :297, shift_context :294). Only device posture is launch (:248-250). Rendered on Signals.tsx:55 (mitigated) and Integrations.tsx:147 (NOT mitigated).",

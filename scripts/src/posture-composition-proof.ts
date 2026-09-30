@@ -222,6 +222,32 @@ check("an unknown input never DENIES — it forecloses the grant, it does not re
   check("...and the grant path is still REACHABLE — exactly 3 confirmed-clean states", grants === 3);
 }
 
+// OUT-OF-DOMAIN: the sweep above covers the declared unions only. Every rule is a
+// `=== known-bad | "unknown"` test, so a value OUTSIDE the union (a new Graph enum
+// member, case drift, a missing field, a prototype key) matched nothing and fell
+// through to COMPLIANT_MANAGED. It must read exactly as that field's `unknown`.
+{
+  const OUT_OF_DOMAIN: Array<[string, Record<string, unknown>, string]> = [
+    ["identityStatus undefined", { identityStatus: undefined }, "IDENTITY_STATE_UNKNOWN"],
+    ["identityStatus 'Enabled' (case drift)", { identityStatus: "Enabled" }, "IDENTITY_STATE_UNKNOWN"],
+    ["userRisk 'atRisk'", { userRisk: "atRisk" }, "USER_RISK_UNKNOWN"],
+    ["userRisk '__proto__'", { userRisk: "__proto__" }, "USER_RISK_UNKNOWN"],
+    ["deviceComplianceState 'error'", { deviceComplianceState: "error" }, "COMPLIANCE_STATE_UNKNOWN"],
+    ["deviceComplianceState 'conflict'", { deviceComplianceState: "conflict" }, "COMPLIANCE_STATE_UNKNOWN"],
+    ["deviceComplianceState 'COMPLIANT' (case drift)", { deviceComplianceState: "COMPLIANT" }, "COMPLIANCE_STATE_UNKNOWN"],
+    ["deviceManagementState 'Managed' (case drift)", { deviceManagementState: "Managed" }, "MANAGEMENT_STATE_UNKNOWN"],
+    ["deviceManagementState undefined", { deviceManagementState: undefined }, "MANAGEMENT_STATE_UNKNOWN"],
+    ["deviceRegistrationState 'constructor' (prototype key)", { deviceRegistrationState: "constructor" }, "REGISTRATION_STATE_UNKNOWN"],
+    ["deviceRegistrationState 'toString' (prototype key)", { deviceRegistrationState: "toString" }, "REGISTRATION_STATE_UNKNOWN"],
+  ];
+  for (const [label, over, reason] of OUT_OF_DOMAIN) {
+    const r = fromDevicePosture(posture(over as Partial<import("@workspace/integrations/graph").GraphPostureSignal>));
+    check(`out-of-domain ${label} must not grant → step_up / ${reason}`, r.action === "step_up" && r.reason === reason);
+  }
+  check("a known-bad still wins over garbage: identityStatus disabled + deviceComplianceState 'error' → escalate",
+    fromDevicePosture(posture({ identityStatus: "disabled", deviceComplianceState: "error" as never })).action === "escalate");
+}
+
 // ── order-proof: the STRONGEST device-posture concern wins (a severe signal is
 // never diluted by a calmer one checked later — regression for the adapter bug) ──
 check("high user-risk (alert) is NOT diluted by unmanaged (step_up) → alert",

@@ -2,6 +2,7 @@ import React from "react";
 import { useGetDashboardMetrics, useGetDecisionSeries, useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { outcomeTone } from "../lib/outcome-tone";
+import { LiveRegion } from "@/components/LiveRegion";
 
 export default function DashboardPage() {
   const { data: metrics, isLoading } = useGetDashboardMetrics({ window: "24h" });
@@ -18,6 +19,13 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-xl">
+      <LiveRegion
+        message={
+          decisions?.decisions[0]
+            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}. ${signals?.signals.filter((s) => s.status === "critical").length ?? 0} critical signals.`
+            : ""
+        }
+      />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Overview</h1>
         <p className="text-xs font-mono text-muted-foreground mt-0.5">24H SYSTEM TELEMETRY (FIXTURE)</p>

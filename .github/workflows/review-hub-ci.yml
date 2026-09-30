@@ -319,6 +319,10 @@ jobs:
         run: node scripts/check-verdict-tone-source.mjs --self-test
       - name: Decision palette (one palette, every tree, AA everywhere)
         run: node scripts/check-decision-palette.mjs
+      - name: Web a11y basics self-test (the gate must be able to fail)
+        run: node scripts/check-web-a11y-basics.mjs --self-test
+      - name: Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)
+        run: node scripts/check-web-a11y-basics.mjs
       - name: Reason codes self-test (the gate must be able to fail)
         run: node scripts/check-reason-codes.mjs --self-test
       - name: Reason codes (the engine's vocabulary is the catalog's and the contract's)

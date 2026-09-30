@@ -308,6 +308,8 @@ const STEPS = [
   { name: "Verdict tone source (a verdict may not pick its own colour inline)", cmd: ["node", "scripts/check-verdict-tone-source.mjs"] },
   { name: "Verdict tone source self-test (the gate can actually fail)", cmd: ["node", "scripts/check-verdict-tone-source.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
+  { name: "Web a11y basics self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-web-a11y-basics.mjs", "--self-test"] },
+  { name: "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)", cmd: ["node", "scripts/check-web-a11y-basics.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
   { name: "Retention claims self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-retention-claims.mjs", "--self-test"] },

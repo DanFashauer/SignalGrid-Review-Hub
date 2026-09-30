@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useListIntegrations } from "@workspace/api-client-react";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const STATUS_COLOR: Record<string, string> = {
   connected: "text-green-400",
@@ -29,6 +30,15 @@ export default function IntegrationsPage() {
 
   return (
     <div className="p-6 space-y-4">
+      <LiveRegion
+        message={
+          isError && !data
+            ? "Integrations could not be loaded."
+            : data
+              ? `${connected} integrations connected, ${degraded} degraded.`
+              : ""
+        }
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Integrations</h1>

@@ -14,6 +14,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { OutcomeBadge, IntegrationStatusBadge, SignalStatusBadge } from "@/components/StatusBadge";
 import { LiveDecisionPanel } from "@/components/LiveDecisionPanel";
+import { LiveRegion } from "@/components/LiveRegion";
 import { formatTimeAgo, formatDate } from "@/lib/format";
 
 // Integration-health buckets, derived from the wire enum (lib/api-zod's generated
@@ -51,6 +52,13 @@ export function Dashboard() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <LiveRegion
+        message={
+          v1Decisions?.[0]
+            ? `Most recent decision: ${v1Decisions[0].outcome.replace("_", " ")} for ${v1Decisions[0].workflowId}.`
+            : ""
+        }
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">24H SYSTEM TELEMETRY (FIXTURE)</p>

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { CheckCircle2, AlertTriangle, Clock, GitBranch } from "lucide-react";
 import { outcomeTone } from "@/lib/outcome-tone";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const SHIFT_ZONES = ["ICU", "ZONE 3B", "ZONE 1A", "ER", "PHARMACY", "LAB", "FLOOR 4", "DOCK A"];
 const DEVICE_IDS = [
@@ -45,6 +46,13 @@ export default function HandoffPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <LiveRegion
+        message={
+          recentDecisions?.decisions[0]
+            ? `Most recent custody decision: ${recentDecisions.decisions[0].outcome.replace("_", " ")}.`
+            : ""
+        }
+      />
       <div className="flex items-center gap-3">
         <GitBranch className="w-5 h-5 text-primary" />
         <div>

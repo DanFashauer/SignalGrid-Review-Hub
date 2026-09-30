@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useListLatestSignals } from "@workspace/api-client-react";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const TYPES = [
   { value: undefined, label: "ALL" },
@@ -23,6 +24,9 @@ export default function SignalsPage() {
 
   return (
     <div className="p-6 space-y-4">
+      <LiveRegion
+        message={data ? `${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+      />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Signals</h1>
         <p className="text-xs font-mono text-muted-foreground mt-0.5">SIGNAL FEED (FIXTURE)</p>

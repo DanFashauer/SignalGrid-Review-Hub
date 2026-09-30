@@ -46,7 +46,7 @@ function check(name: string, ok: boolean, detail = ""): void {
   } else {
     failures.push(name);
     // `detail` can carry CLI output; one line, control characters stripped, bounded.
-    const safe = detail.replace(/[\u0000-\u001f\u007f]+/g, " ").slice(0, 300);
+    const safe = detail.replace(/\n|\r/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 300);
     console.log(`  ✗  — ${name}${safe ? ` (${safe})` : ""}`);
   }
 }

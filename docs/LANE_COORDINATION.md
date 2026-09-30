@@ -68,6 +68,14 @@ cloud's, the third is a sim request the tick runs.
 **What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
 Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
 
+**The build tick (DR-061, 2026-09-29).** The lane tick never builds. A second
+launchd job, `scripts/mac/build-tick.sh` (`bash scripts/mac/install-build-tick.sh`,
+every 3 hours), starts ONE headless Claude session on the objective loop's top
+`tasks[]` row that has no `mac/build-row-<id>-*` branch and no open PR naming it,
+in its own `<repo>.build` worktree. The session builds test-first, runs preflight
+and breadth, pushes `mac/build-row-<id>-<stamp>` and opens the PR — it never
+merges — or raises a hand. Registry row: `mac-build-tick`.
+
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 
 The owner's verdict on the loop below was "not working and causing delay". The

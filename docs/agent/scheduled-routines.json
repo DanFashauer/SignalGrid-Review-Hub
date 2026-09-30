@@ -87,6 +87,22 @@
    "status": "active"
   },
   {
+   "id": "mac-build-tick",
+   "trigger": "launchd:com.signalgrid.build-tick (installed by scripts/mac/install-build-tick.sh on the owner's Mac; not an account trigger)",
+   "cron": "0 */3 * * *",
+   "binding": "launchd user agent on the Mac lane's machine, running scripts/mac/build-tick.sh, which starts ONE headless `claude -p` session (opus, --permission-mode acceptEdits, an explicit tool allowlist, never bypassPermissions) capped at the 3 h interval",
+   "authorizedBy": "Dan Fashauer (owner)",
+   "authorizedOn": "2026-09-29",
+   "authorizationEvidence": "owner in a Mac Claude Code session, 2026-09-29 (DR-061 answer b): asked 'Should the Mac start a build session by itself every few hours when the brain has a buildable task? This uses your Claude usage.' he chose 'Yes, build it (Recommended) — The brain builds its top task unattended and opens PRs.' After the auto-mode classifier refused the build as an unattended agent, he confirmed explicitly: 'Build it, I confirm — You explicitly approve an unattended Claude agent on this Mac with push + PR rights.'",
+   "writeScope": "its own worktree <repo>.build (reset to origin/SignalGrid_Alpha every run) and ONE branch per run, mac/build-row-<rowId>-<stamp>, pushed to origin with ONE PR opened through scripts/mac/gh-pr.mjs; raised hands through lane-deliver batch (straight to SignalGrid_Alpha). Never merges, never force-pushes, never bypasses a hook, never touches the person's checkout or the lane tick's worktree, never edits DR-061 rule 2's owner-reserved paths.",
+   "escalationBoundary": "builds only objective-state.json tasks[] rows with no remote mac/build-row-<id>-* branch and no open PR naming the row; an unreadable task list, branch list or PR list stops the run rather than building blind; a non-zero session exit, the wall-clock cap, or a session that finds its row done or blocked raises a hand (DR-054) for the Mac lane",
+   "heartbeatPath": null,
+   "heartbeatPathReason": "each run's outcome is a pushed mac/build-row-* branch with its PR, or a raised hand; the Mac being awake is already watched by mac-lane-tick's 5-minute heartbeat. ponytail: a loaded-but-never-firing job is not caught here — add a heartbeat if that happens once.",
+   "status": "awaiting-activation",
+   "awaitingReason": "the launchd job is installed (bash scripts/mac/install-build-tick.sh from the main checkout) only after this row and scripts/mac/build-tick.sh land on SignalGrid_Alpha, so the job runs mainline's script, never a branch copy; the Mac lane flips this row to active in the same session it installs.",
+   "awaitingSince": "2026-09-29"
+  },
+  {
    "id": "brain-cycle",
    "trigger": "awaiting-activation — a cloud self-session trigger is created via create_trigger only AFTER this active row lands on SignalGrid_Alpha AND a Slice-2 dry run is proven end-to-end (DR-032 registry-first bootstrap). A same-session activation on 2026-09-13 was created out of that order and REVERTED (trigger deleted) per Codex #705. Not a launchd agent.",
    "cron": "35 8 * * *",

@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T06:11:36.146Z",
-  "result": "06:10Z acted: harvest in progress. Landed today: Mac #1226, Mac #1227, mail #1249. Wave: 12 of 12 workers in flight, so no refill; fixes are pushed on 9 PRs, three delta re-reviews are running, and #1235 lands after the chain finishes on 18b478f6. Fix-needed: #1243, #1244, Mac #1216, #1218, #1225 and #1248 (#1248 needs DR-061). The owner merges #1239, #1240, #1230, #1222, #1215, #1246 (DR-061), #1190, #1153, #1146, #1133 and #1117."
+  "firedAt": "2026-09-30T12:23:17.963Z",
+  "result": "acted 12:11Z: landed today #1243 #1264 #1263 #1241 (+ lane mail #1260 #1261 #1266 #1267 #1268 #1285); runaway Mac tick branches (#1269–#1294) diagnosed — objective-loop same-day request-id reuse, fix PR #1295 lands next; reviews posted #1272/#1274 (fix-needed), #1277/#1280 under review; dispatched B20 (ci-jobs line-1 + lane-tick dead line), B21 (mutation sweep 4 families), B22 (reason-code copy + stale rows); owner queue #1239 #1240 #1242 #1244 #1251 #1255 #1246 #1230 #1222 #1215 + close junk tick PRs"
 }

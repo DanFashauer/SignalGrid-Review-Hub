@@ -56,7 +56,28 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
+LAST TOUCHED: 2026-09-30 (Mac lane) - OWNER: "BUILD THE WHOLE SYSTEM USING THE BRAIN". 16 NEW PRs + #1118 FINISHED + 3 MERGE STEPS; DR-061 (#1246) IS HIS ONE MERGE.
+              WHY IT STALLED: objective-loop tasks[0..2] were plan rows 17/18/24, all owner- or lab-blocked; the lane
+              tick only ran sim requests + heartbeats (159 heartbeat commits since 09-27); ~10 PRs waited on owner merges.
+              OWNER DECIDED 2026-09-29 (AskUserQuestion, in a Mac session): golden-rule-1 exception for #1118/#1121
+              (comment on both PRs); lanes may merge DECISION_PATH PRs under conditions; an unattended Mac build session.
+              Recorded as DR-061 = #1246 (OWNER_RESERVED - HIS MERGE; after it the lanes merge the DECISION_PATH queue).
+              BUILT (each: test-first, Opus adversarial review applied, local preflight + breadth 0/0 at the pushed head):
+              wave 1 #1216 (loop parks owner/lab-blocked rows as awaiting) #1218 #1219 #1220 #1224 #1225 #1226 #1227 #1228
+              #1247 #1248 (build tick) + #1118 finished (review items 1-5) + Mac merge steps #1083 #1117 #1050; wave 2 #1251
+              #1252 #1255 #1256. Cloud landed #1226 #1227 so far. Live evidence re-minted 7486855d (readiness 100%).
+              LESSONS: (1) mint in a dedicated worktree - the lane tick ff-pulls the main checkout every ~25 min and moved
+              HEAD mid-mint (attestation bound nothing, discarded); (2) the auto-mode classifier judges workflow subagents
+              on their own context - owner approvals relayed in a prompt do not count; DRs, .claude edits and
+              unattended-agent machinery are done in the main session after asking the owner; (3) #1248 got no
+              pull_request CI run (dropped event) - dispatched SignalGrid CI on its head by hand.
+              BUILD TICK INSTALLED 2026-09-30 (launchd com.signalgrid.build-tick, every 3 h): it extracts mainline's
+              build-tick.sh each run, so it no-ops until #1248 lands and builds unattended from then on. Its brief makes
+              every outcome retire its plan row (DONE / AWAITING OWNER / BLOCKED ON LAB), else tasks[] (TOP_N 3) stalls.
+TIERS THIS SESSION: Opus triaged, reviewed (every unit) and built DECISION_PATH units; Sonnet built SAFETY_MACHINERY
+              units and ran landing chains; the coordinator wrote DR-061 and the build tick itself (classifier-blocked
+              in subagents - lesson 2).
+PREVIOUSLY:   2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136/#1143/#1150 MERGED
               (Tier-1 review coverage 19->22/25, iOS Assist-wire client, tenant-isolation finding traced+
               downgraded). #1118 (iOS parity) and #1037 (intake) had gone CONFLICTING over 2 days; ran the
               Mac merge step on both (cloud sandbox cannot git merge): #1118 d4297467 (rebuilt COMPANY_BUILD_PLAN
@@ -1758,7 +1779,10 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
+NEXT ACTION: mac: (2026-09-30) the build tick is INSTALLED; once #1248 is on mainline, flip the mac-build-tick row
+              to active and read the first real run's log (~/Library/Logs/signalgrid/build-tick-*.log); after #1247 lands (manifest
+              moved), re-mint live evidence in the .mint worktree. owner: merge #1246 (DR-061).
+              cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two
               calls - merge #1050 (DR-058 proposal) or leave it, and the #1037 CodeQL call. The cloud keeps both green
               and conflict-free and does not press merge. Next bounded build from objective-state tasks[0..2] under the
               heartbeat-witness rule (row 5 EnterpriseShell badge/session lane -> real backend is #1, skill:signalgrid-native)

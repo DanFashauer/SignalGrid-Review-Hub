@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T00:36:23.784Z",
-  "result": "acted: 00:11Z fire (first on the 2-hourly whole-backlog schedule). Objective state trusted (tick 00:07Z, verdict escalate), tasks 17 (lab), 18 (owner/Swift), 24 (owner) not cloud-buildable; took plan row 98 from the backlog (not Mac-claimed). Opened PR #1222 for row 98 (unknown root paths answer the JSON not_found envelope; test:api 488/488, mutant 486/488, preflight 0, breadth 58/58 on bd964d53); DECISION_PATH, owner merges. Previous fire's PR #1215 (row 97) gating green, awaiting owner merge."
+  "firedAt": "2026-09-30T02:54:19.795Z",
+  "result": "acted: opened PR #1230 for plan row 109 (console live decision panel: an unrecognised verdict renders restrictive, never a blank card; owner merges). Tasks 17/18/24 skipped: live lab / owner+Swift / owner. Rows 97 (#1215) and 98 (#1222) are still open and green, waiting on the owner."
 }

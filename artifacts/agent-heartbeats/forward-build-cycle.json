@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T15:20:11.722Z",
-  "result": "quiet: tasks[0..2] not cloud-buildable — state trusted (tick 15:13Z within staleAfterHours 3, result names objective: escalate = recorded verdict); row 17 (wire-truth shifts): offline half landed 2026-09-27 (wire-truth ledger + gate), what remains needs the ITSM, shift-context and Keycloak access-governance labs this lane does not have; row 18 (iOS behavioural parity): Swift-only, the Mac's own #1118 is open; row 24 (article): already open as #1190 (owner merges). Nothing built."
+  "firedAt": "2026-09-30T02:54:19.795Z",
+  "result": "acted: opened PR #1230 for plan row 109 (console live decision panel: an unrecognised verdict renders restrictive, never a blank card; owner merges). Tasks 17/18/24 skipped: live lab / owner+Swift / owner. Rows 97 (#1215) and 98 (#1222) are still open and green, waiting on the owner."
 }

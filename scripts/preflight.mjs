@@ -307,6 +307,8 @@ const STEPS = [
   { name: "Decision palette self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-palette.mjs", "--self-test"] },
   { name: "Verdict tone source (a verdict may not pick its own colour inline)", cmd: ["node", "scripts/check-verdict-tone-source.mjs"] },
   { name: "Verdict tone source self-test (the gate can actually fail)", cmd: ["node", "scripts/check-verdict-tone-source.mjs", "--self-test"] },
+  { name: "PWA fixture labels (control-plane data on the PWA says it is a fixture)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs"] },
+  { name: "PWA fixture labels self-test (the gate can actually fail)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
   { name: "Web a11y basics self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-web-a11y-basics.mjs", "--self-test"] },
   { name: "Web a11y basics (live regions on polling views, labelled icon buttons, reduced motion)", cmd: ["node", "scripts/check-web-a11y-basics.mjs"] },

@@ -346,6 +346,74 @@ async function main(): Promise<void> {
     check("a session path that reaches the repository through a symlink is refused (exit 2)",
       viaLink.code === 2 && /outside the tree/.test(viaLink.stderr) && !existsSync(join(repoRoot, "signalgrid-session.json")));
 
+    // ── review round 2 on PR #1321 ──
+    // A bad session must refuse BEFORE decide sends anything: exit 2 means nothing was sent.
+    const lockedSession = join(sessionDir, "locked.json");
+    writeFileSync(`${lockedSession}.lock`, "");
+    const badSessions: Array<[string, string]> = [
+      ["inside the repository", join(repoRoot, "signalgrid-session.json")],
+      ["relative", "relative-session.json"],
+      ["in a directory that does not exist", join(sessionDir, "no-such-dir", "s.json")],
+      ["locked by another process", lockedSession],
+    ];
+    for (const [label, sessionValue] of badSessions) {
+      seen.length = 0;
+      const beforeBad = await counts();
+      const r = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: sessionValue });
+      const afterBad = await counts();
+      check(`decide --allow-write with a session ${label} exits 2 and sends no POST`,
+        r.code === 2 && !seen.some((x) => x.startsWith("POST ")) && afterBad.decisions === beforeBad.decisions);
+    }
+    rmSync(`${lockedSession}.lock`, { force: true });
+
+    // Every command confirms the tenant, not only audit and decide.
+    for (const [label, args] of [
+      ["connectors sync --allow-write", ["connectors", "sync", connId, "--allow-write"]],
+      ["explain", ["explain", seedId]],
+      ["signals", ["signals", seedId]],
+      ["connectors runs", ["connectors", "runs", connId]],
+      ["connectors", ["connectors"]],
+    ] as const) {
+      seen.length = 0;
+      const r = await cli([...args], { ...env, SIGNALGRID_TENANT: "tenant_atlas" });
+      check(`${label} under a tenant mismatch exits 2 and requests nothing beyond /v1/context`,
+        r.code === 2 && seen.join() === "GET /api/v1/context");
+    }
+
+    // An ABSENT verdict field is not a passing one.
+    const noVerified = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { signalsUsed: [] } }, ["explain", "dec_x"]);
+    check("explain with no `verified` field in the evidence answer exits 1", noVerified.code === 1);
+    const noVerifiedSignals = await viaLiar({ evidence: { signalsUsed: [] } }, ["signals", "dec_x"]);
+    check("signals with no `verified` field exits 1", noVerifiedSignals.code === 1);
+    const noValid = await viaLiar({ events: [], chain: { length: 0 } }, ["audit"]);
+    check("audit with no `chain.valid` field exits 1", noValid.code === 1);
+
+    // decide refuses a decision id the server should never mint.
+    const badId = await viaLiar({ decision: { decisionId: "../x", outcome: "allow" } }, [...decideArgs, "--allow-write"]);
+    check("decide refuses a server-minted decision id outside the id shape (exit 1)", badId.code === 1 && !/^outcome/m.test(badId.stdout));
+
+    // A body that drops mid-read is no answer at all: exit 3, never a partial success.
+    const dropper = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json", "content-length": "4096" });
+      res.write('{"connectors":[');
+      setTimeout(() => res.socket?.destroy(), 20);
+    });
+    const dropPort = await listen(dropper);
+    liars.push(dropper);
+    const drop = await cli(["connectors"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${dropPort}/api` });
+    check("a body that drops mid-read exits 3 (unreachable), not 0 or 1", drop.code === 3);
+
+    // Credentials typed into the base URL never reach the output.
+    const secretPort = await freePort();
+    const leaky = await cli(["connectors", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://operator:SECRETPW@127.0.0.1:${secretPort}/api` });
+    check("userinfo in SIGNALGRID_BASE_URL is never echoed in an error",
+      leaky.code !== 0 && !(leaky.stdout + leaky.stderr).includes("SECRETPW"));
+
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});
     check("--help lists all five subcommands", help.code === 0 && ["decide", "explain", "signals", "audit", "connectors"].every((c) => help.stdout.includes(`signalgrid ${c}`)));

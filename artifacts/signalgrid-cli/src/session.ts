@@ -15,7 +15,7 @@
  * fcntl to what Node offers portably), and the file itself is replaced by rename,
  * so a reader never sees half a session.
  */
-import { closeSync, existsSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError, EXIT, safeId, type Config } from "./client.js";
@@ -79,6 +79,22 @@ export function readSession(path: string | null, cfg: Config): SessionData | nul
   if (data.version !== 1 || data.baseUrl !== cfg.baseUrl || data.tenant !== cfg.tenant) return null;
   if (data.lastDecisionId !== null) safeId(String(data.lastDecisionId), "the session's last decision id");
   return data;
+}
+
+/**
+ * Everything about a session write that can be known before a request is sent: its
+ * directory exists and no other process holds its lock. Called by a write command
+ * BEFORE the write, so a session problem refuses with nothing sent.
+ */
+export function checkSessionWritable(path: string | null): void {
+  if (!path) return;
+  const dir = dirname(path);
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    throw new CliError("session_invalid", `the directory for SIGNALGRID_CLI_SESSION (${dir}) does not exist; nothing was sent.`, EXIT.usage);
+  }
+  if (existsSync(`${path}.lock`)) {
+    throw new CliError("session_locked", `session ${path} is locked by another process (${path}.lock); nothing was sent.`, EXIT.usage);
+  }
 }
 
 export function writeSession(path: string | null, cfg: Config, lastDecisionId: string): void {

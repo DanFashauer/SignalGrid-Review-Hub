@@ -19,7 +19,7 @@
  */
 import { parseArgs } from "node:util";
 import { call, CliError, confirmTenant, EXIT, isSafeId, readConfig, safeId, type Config } from "./client.js";
-import { readSession, sessionPath, writeSession } from "./session.js";
+import { checkSessionWritable, readSession, sessionPath, writeSession } from "./session.js";
 
 /** The four words a host app obeys (lib/signalgrid-core/src/types.ts DecisionOutcome). */
 const OUTCOMES = new Set(["allow", "step_up", "restrict", "deny"]);
@@ -79,6 +79,8 @@ interface Out {
   json: unknown;
   human: string;
   exit?: number;
+  /** Printed to stderr in both modes; never changes the exit. */
+  warning?: string;
 }
 
 function table(headers: string[], rows: string[][]): string {
@@ -122,6 +124,11 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   // Refused before configuration is read: a preview needs no token and sends nothing.
   if (!v["allow-write"]) return writeRefused("decide", "POST", "/v1/decisions/evaluate", body);
   const cfg = getCfg();
+  // The session is settled BEFORE anything is sent: exit 2 means "no request was sent,
+  // or only /v1/context", so a bad session path must refuse here, not after a decision
+  // has been minted (review round 2 on PR #1321).
+  const session = sessionPath(env);
+  checkSessionWritable(session);
   const tenant = await confirmTenant(cfg);
   const { body: answer } = await call(cfg, "POST", "/v1/decisions/evaluate", body);
   const d = answer["decision"] as Record<string, unknown> | undefined;
@@ -133,10 +140,18 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
       EXIT.refused,
     );
   }
-  writeSession(sessionPath(env), cfg, d["decisionId"]);
+  // The decision now EXISTS on the server. A session write that still fails (a race on
+  // the lock, a disk error) must not hide it: the verdict is reported, with a warning.
+  let warning: string | undefined;
+  try {
+    writeSession(session, cfg, d["decisionId"]);
+  } catch (err) {
+    warning = `decision ${d["decisionId"]} was recorded, but the session file was not updated: ${(err as Error).message}`;
+  }
   const reasons = Array.isArray(d["reasonCodes"]) ? (d["reasonCodes"] as unknown[]).map(str) : [];
   return {
-    json: { ok: true, command: "decide", tenant: tenant.id, sent: true, decision: d },
+    warning,
+    json: { ok: true, command: "decide", tenant: tenant.id, sent: true, decision: d, ...(warning ? { sessionWarning: warning } : {}) },
     human: [
       `outcome     ${outcome}`,
       `decision    ${str(d["decisionId"])}`,
@@ -371,7 +386,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
       default: out = await connectors(getCfg, rest, v["allow-write"] === true);
     }
     const exit = out.exit ?? EXIT.ok;
-    return { stdout: `${json ? JSON.stringify(out.json, null, 2) : out.human}\n`, stderr: "", exit };
+    return { stdout: `${json ? JSON.stringify(out.json, null, 2) : out.human}\n`, stderr: out.warning ? `signalgrid: warning: ${out.warning}\n` : "", exit };
   } catch (err) {
     // An argument-parser error is a usage error; anything else unexpected is still a
     // non-zero exit, but labelled as what it is rather than as the operator's mistake.

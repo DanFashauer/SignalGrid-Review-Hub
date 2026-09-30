@@ -17,12 +17,13 @@
 //
 //   1. LIVE REGION. A POLLING VIEW (.tsx) must render <LiveRegion …/> or an
 //      aria-live="polite|assertive" attribute ("off" is not a live region). A
-//      file POLLS when it declares `refetchInterval`, drives a refetch from
-//      setInterval, calls a query hook while its tree's query defaults poll, or
-//      uses a hook or value a polling file exports — by name, by an
-//      `import { X as Y }` alias, or as the default import of a polling module
-//      (to a fixpoint). A component export does not carry polling upward: it
-//      renders its own region. A hook handed on without a visible call — a
+//      file POLLS when it declares `refetchInterval`, drives a refetch from a
+//      timer (setInterval, or a setTimeout loop), calls a query hook while its
+//      tree's query defaults poll, or uses a hook or value a polling file
+//      exports — by name, by an `import { X as Y }` alias, or as the default
+//      import of a polling module (to a fixpoint). A component export (a
+//      PascalCase name) does not carry polling upward: it renders its own
+//      region. A default export the gate cannot classify is followed. A hook handed on without a visible call — a
 //      re-export, `export *`, `const useY = useX`, `export default useX` —
 //      fails closed.
 //      Query defaults are read from every .ts/.tsx in the tree — the balanced
@@ -235,8 +236,19 @@ function exportedNames(code) {
 const hasDefaultExport = (code) => /export\s+default\b/.test(code) || /export\s*\{[^}]*\bas\s+default\b/.test(code);
 
 /** Is the default export a hook or a value (not a component)? */
-const defaultIsHookOrValue = (code) =>
-  /export\s+default\s+(?:async\s+)?function\s+use[A-Z]/.test(code) || /export\s+default\s+(?:\{|\[|[a-z_$][\w$]*\s*[;(]?\s*$)/m.test(code);
+/**
+ * Is the default export something that carries polling (a hook, a value, an
+ * anonymous function)? Only a default export that is plainly a component — a
+ * PascalCase function, class or binding, directly or via `export { X as
+ * default }` — is excluded; anything the gate cannot classify is followed.
+ */
+const defaultIsHookOrValue = (code) => {
+  if (!hasDefaultExport(code)) return false;
+  const component =
+    /export\s+default\s+(?:async\s+)?(?:function\s*\*?\s*|class\s+)?[A-Z][\w$]*/.test(code) ||
+    /export\s*\{[^}]*\b[A-Z][\w$]*\s+as\s+default\b/.test(code);
+  return !component;
+};
 
 /** Resolve an import specifier to a tree file (relative or `@/`), or null. */
 function resolveImport(fromRel, spec, rels) {
@@ -301,7 +313,8 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     changed = false;
     for (const f of parsed) {
       if (polls.has(f.rel)) continue;
-      const intervalRefetch = /\bsetInterval\s*\(/.test(f.code) && /\brefetch\w*\s*\(/.test(f.code);
+      // A timer driving a refetch polls: setInterval, or a setTimeout loop that re-arms itself.
+      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\brefetch\w*\s*\(/.test(f.code);
       if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
         // A component (PascalCase) renders its own live region; only hooks and
@@ -340,7 +353,8 @@ function openingTag(src, index) {
 function buttonText(src, openEnd, tagName = "button") {
   const close = src.indexOf(`</${tagName}>`, openEnd);
   if (close < 0) return null;
-  let body = src.slice(openEnd + 1, close);
+  // A whitespace-only string expression (`{" "}`) renders no name.
+  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])\s*\1\s*\}/g, "");
   for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
     const tag = openingTag(body, i);
     if (tag === null) return null;
@@ -596,6 +610,8 @@ function selfTest() {
       checkIconButtons("x.tsx", '<Button size="icon" onClick={() => remove(i)} aria-label={`Delete rule ${i}`}><Trash2 /></Button>').length === 0],
     ["icon button named by an sr-only child span passes",
       checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><PanelLeftIcon /><span className="sr-only">Toggle Sidebar</span></Button>').length === 0],
+    ["a whitespace-only {\" \"} child does not name an icon button",
+      checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><X />{" "}</Button>').length === 1],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -632,6 +648,14 @@ function selfTest() {
       checkLiveRegions([view("t/src/lib/feed.ts", "export default function useFeed() { return useQuery({ refetchInterval: 5 }); }"), view("t/src/pages/D.tsx", 'import useThing from "../lib/feed";\nconst f = useThing(); return <div/>;')], false).failures.length === 1],
     ["a polling component does not make the file rendering it a polling view",
       checkLiveRegions([view("t/src/pages/Dash.tsx", "export function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }"), view("t/src/App.tsx", 'import { Dash } from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
+    ["a wrapper exported `as default` and imported under any name is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "function useFeed() { return useQuery({ refetchInterval: 5 }); }\nexport { useFeed as default };"), view("t/src/pages/D.tsx", 'import useThing from "../lib/feed";\nconst f = useThing(); return <div/>;')], false).failures.length === 1],
+    ["an anonymous default-exported polling function is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "export default () => useQuery({ refetchInterval: 5 });"), view("t/src/pages/D.tsx", 'import useThing from "../lib/feed";\nconst f = useThing(); return <div/>;')], false).failures.length === 1],
+    ["a self-rescheduling setTimeout refetch loop is polling",
+      checkLiveRegions([view("t/src/pages/P.tsx", "useEffect(() => { setTimeout(function tick() { q.refetch(); setTimeout(tick, 5000); }, 5000); }, []);")], false).failures.length === 1],
+    ["a default-exported polling component does not make its importer a polling view",
+      checkLiveRegions([view("t/src/pages/Dash.tsx", "export default function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }"), view("t/src/App.tsx", 'import Dash from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
     ["a hook re-exported from another module fails closed",
       checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
     ["a hook bound to another name without a call fails closed",

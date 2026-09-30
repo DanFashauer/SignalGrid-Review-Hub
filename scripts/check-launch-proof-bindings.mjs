@@ -769,8 +769,14 @@ function selfTest() {
   const thrower = (code) => () => { throw Object.assign(new Error(`${code}: synthetic`), { code }); };
   const throws = (fn) => { try { fn(); return false; } catch { return true; } };
   checks.push(["liveSelfSkipping: an EACCES proof script THROWS, never reads as non-skipping", throws(() => liveSelfSkipping(repo, thrower("EACCES")))]);
+  // ONE unreadable proof among readable ones must throw (a `length > 1` threshold fails),
+  // and a non-EACCES code must too (a narrowed `=== "EACCES"` fails).
+  const oneBad = (code) => { let n = 0; return (p, enc) => { if (n++ === 0) thrower(code)(); return readFileSync(p, enc); }; };
+  checks.push(["liveSelfSkipping: exactly ONE unreadable proof script (EACCES) still THROWS", throws(() => liveSelfSkipping(repo, oneBad("EACCES")))]);
+  checks.push(["liveSelfSkipping: an EISDIR proof script THROWS too — every non-ENOENT code, not only EACCES", throws(() => liveSelfSkipping(repo, oneBad("EISDIR")))]);
   checks.push(["liveSelfSkipping: an ENOENT proof script (raced away) is skipped, not fatal", liveSelfSkipping(repo, thrower("ENOENT")).size === 0]);
   checks.push(["workspacePackageDirs: an EACCES package root THROWS, never an empty map", throws(() => workspacePackageDirs(repo, thrower("EACCES")))]);
+  checks.push(["workspacePackageDirs: an EIO (non-EACCES) error on a package root THROWS too", throws(() => workspacePackageDirs(repo, thrower("EIO")))]);
   checks.push(["workspacePackageDirs: an ENOENT package root is skipped (empty map, no throw)", workspacePackageDirs(repo, thrower("ENOENT")).size === 0]);
   const livePkgDirs = workspacePackageDirs(repo);
   checks.push(["workspacePackageDirs: LIVE — @workspace/signalgrid-core resolves to lib/signalgrid-core", livePkgDirs.get("@workspace/signalgrid-core") === "lib/signalgrid-core"]);

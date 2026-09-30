@@ -1165,12 +1165,22 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     (() => {
       const thrower = (code) => () => { throw Object.assign(new Error(`${code}: synthetic`), { code }); };
       const denied = [];
+      const isDir = [];
       const missing = [];
       const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+      // The consumer: the recorded list must still reach a failing exit. Sliced from the
+      // live guard to the next statement after its block, so deleting the exit or
+      // defusing the guard (`if (false && …)`) both fail here.
+      const guard = ["if (unreadableDocs", ".length) {"].join("");
+      const at = src.indexOf(guard);
+      const consumer = at < 0 ? "" : src.slice(at, src.indexOf("worst.sort(", at));
       return readScannedDoc("docs/x.md", denied, thrower("EACCES")) === null &&
         denied.length === 1 && denied[0].startsWith("docs/x.md: EACCES") &&
+        // Not only EACCES: any non-ENOENT code is recorded (a narrowed `=== "EACCES"` fails).
+        readScannedDoc("docs/x.md", isDir, thrower("EISDIR")) === null && isDir.length === 1 &&
         readScannedDoc("docs/x.md", missing, thrower("ENOENT")) === null && missing.length === 0 &&
         src.includes(["readScannedDoc(f, ", "unreadableDocs)"].join("")) &&
+        consumer.includes("process.exit(1)") &&
         !src.includes(["body = readFileSync(f, \"utf8\"); } ", "catch { continue; }"].join(""));
     })() &&
     // THE CEILING READ. Neither ceiling arm had a self-test at all until 2026-09-06,

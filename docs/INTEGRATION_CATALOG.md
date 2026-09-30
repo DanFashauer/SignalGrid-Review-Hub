@@ -758,7 +758,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   survive the adapter as three distinct postures, and a re-armed departed account
   actually drives the composed action to `restrict` while a consistent one composes to
   nothing.
-- **`proof:device-resolver` (14 checks)** — the injection boundary. `deviceResolver`
+- **`proof:device-resolver` (16 checks)** — the injection boundary. `deviceResolver`
   typed its NAC adapter map as `any`, so the read-only `NACAdapter` interface was not
   enforced at the one call site that consumes it. TypeScript alone cannot close this:
   structural typing means an object carrying `lookupEndpoint` **and**
@@ -941,7 +941,7 @@ the no-dual-accept rule — is §6 of
 Do not restate the numbers here; that document's figures are gated by
 `scripts/check-derived-doc-figures.mjs` and this one's would not be.
 
-- **`proof:webhooks` (243 checks)** — the tier gate and its per-tier refusal reasons,
+- **`proof:webhooks` (245 checks)** — the tier gate and its per-tier refusal reasons,
   SSRF and HTTPS target validation (including IPv4-mapped/IPv4-compatible IPv6
   literal spellings of the same loopback/metadata/private targets), retry
   permanence, the missing-secret refusal, and the v2 signing scheme end to end

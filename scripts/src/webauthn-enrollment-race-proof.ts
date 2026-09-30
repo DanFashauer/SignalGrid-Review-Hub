@@ -95,6 +95,101 @@ async function resetIdentity(userId: string) {
   await rawRedis((r) => r.del(tombstoneKey(userId)));
 }
 
+/**
+ * THE REVOCATION GAPS against the real Redis path (see the file header). Gap 1: an
+ * enrolment ceremony minted before a revocation and completed after it must not bring
+ * the revoked id back. Gap 2: a step-up whose credential is revoked after
+ * `verifyAuthentication`'s early read must not be released — placed, as in the lock-lost
+ * race, by patching ioredis's own `get`: the first GET of the user record after arming is
+ * that early read, and the patch lets it return the pre-revocation record only after a
+ * real `removeCredential` has committed. Armed AFTER the challenge is minted, because
+ * minting reads the same key.
+ */
+async function revocationRedis() {
+  const tenant = "tenant_enrollment_race_proof";
+
+  // Gap 1.
+  const user = "t_proof:revocation-redis";
+  await resetIdentity(user);
+  const device = newAuthenticator(false);
+  const first = await enrol(user, device, tenant);
+  check("redis: baseline — the authenticator enrols through a real ceremony", first.success === true && first.alreadyEnrolled === false, first.error);
+  const outstanding = await mintEnrolment(user);
+  check("redis: the revocation reports that it removed the credential", (await webauthnStore.removeCredential(user, device.id)) === true);
+  check(
+    "redis: …and tombstoned the id in the same write",
+    (await rawRedis((r) => r.sismember(tombstoneKey(user), device.id))) === 1,
+  );
+  const revived = await completeEnrolment(user, outstanding, device, tenant);
+  check(
+    "redis: a ceremony minted BEFORE the revocation and completed AFTER it is REFUSED",
+    revived.success === false,
+    `success=${revived.success} alreadyEnrolled=${revived.alreadyEnrolled} error=${revived.error}`,
+  );
+  const afterRevival = (await webauthnStore.getCredentialsForUser(user)).map((c) => c.id);
+  check("redis: …and the revoked credential id is NOT live again", !afterRevival.includes(device.id), `enrolled: [${afterRevival.join(", ")}]`);
+  let storeRefusal: unknown;
+  try {
+    await webauthnStore.addCredential(user, { ...credential(0), id: device.id });
+  } catch (err) {
+    storeRefusal = err;
+  }
+  check(
+    "redis: addCredential of a revoked id THROWS CredentialRevokedError under the lock",
+    storeRefusal instanceof Error && storeRefusal.name === "CredentialRevokedError",
+    String(storeRefusal),
+  );
+
+  // Gap 2.
+  const user2 = "t_proof:revocation-redis-release";
+  await resetIdentity(user2);
+  const passkey = newAuthenticator(false);
+  check("redis: baseline — a zero-counter authenticator enrols", (await enrol(user2, passkey, tenant)).success === true);
+  check("redis: baseline — …and releases a step-up", (await stepUp(user2, passkey, tenant)).success === true);
+  const stored = (await webauthnStore.getCredentialsForUser(user2)).find((c) => c.id === passkey.id);
+  check("redis: confirmCredentialEnrolled — true for the enrolled credential and its key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === true);
+  check("redis: confirmCredentialEnrolled — false for the right id under a different key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, "{}")) === false);
+
+  const { challengeId, response } = await signAssertion(user2, passkey);
+  const targetKey = `webauthn:user:${user2}`;
+  const realGet = IORedis.prototype.get;
+  let fired = false;
+  let revoked: boolean | undefined;
+  (IORedis.prototype as unknown as { get: typeof realGet }).get = function (
+    this: IORedis,
+    ...args: Parameters<typeof realGet>
+  ) {
+    const call = (realGet as (...a: unknown[]) => Promise<string | null>).apply(this, args);
+    if (!fired && args[0] === targetKey) {
+      fired = true;
+      return call.then(async (value) => {
+        revoked = await webauthnStore.removeCredential(user2, passkey.id); // committed for real
+        return value; // …while the early read still returns the pre-revocation record
+      });
+    }
+    return call;
+  } as typeof realGet;
+  let released: Awaited<ReturnType<typeof webauthn.verifyAuthentication>>;
+  try {
+    released = await webauthn.verifyAuthentication(user2, challengeId, response, tenant);
+  } finally {
+    IORedis.prototype.get = realGet;
+  }
+  check("redis: the revocation was placed after the early read, and committed", fired && revoked === true, `fired=${fired} revoked=${revoked}`);
+  check(
+    "redis: a zero-counter step-up whose credential was revoked mid-verification is NOT released",
+    released.success === false,
+    `success=${released.success} error=${released.error}`,
+  );
+  check(
+    "redis: confirmCredentialEnrolled — false once the credential is revoked",
+    (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === false,
+  );
+
+  await resetIdentity(user);
+  await resetIdentity(user2);
+}
+
 /** The in-memory store must not lose an enrolment that lands while a revocation is in
  *  flight. Deterministic: the enrolment is started after a fixed number of microtask
  *  turns (and once each behind nextTick / setImmediate / setTimeout), so every position
@@ -259,101 +354,6 @@ async function lockLostMidWriteRace() {
   // Cleanup, regardless of which branch actually persisted.
   const cleanup = await webauthnStore.getUser(userId).catch(() => null);
   for (const c of cleanup?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
-}
-
-/**
- * THE REVOCATION GAPS against the real Redis path (see the file header). Gap 1: an
- * enrolment ceremony minted before a revocation and completed after it must not bring
- * the revoked id back. Gap 2: a step-up whose credential is revoked after
- * `verifyAuthentication`'s early read must not be released — placed, as in the lock-lost
- * race, by patching ioredis's own `get`: the first GET of the user record after arming is
- * that early read, and the patch lets it return the pre-revocation record only after a
- * real `removeCredential` has committed. Armed AFTER the challenge is minted, because
- * minting reads the same key.
- */
-async function revocationRedis() {
-  const tenant = "tenant_enrollment_race_proof";
-
-  // Gap 1.
-  const user = "t_proof:revocation-redis";
-  await resetIdentity(user);
-  const device = newAuthenticator(false);
-  const first = await enrol(user, device, tenant);
-  check("redis: baseline — the authenticator enrols through a real ceremony", first.success === true && first.alreadyEnrolled === false, first.error);
-  const outstanding = await mintEnrolment(user);
-  check("redis: the revocation reports that it removed the credential", (await webauthnStore.removeCredential(user, device.id)) === true);
-  check(
-    "redis: …and tombstoned the id in the same write",
-    (await rawRedis((r) => r.sismember(tombstoneKey(user), device.id))) === 1,
-  );
-  const revived = await completeEnrolment(user, outstanding, device, tenant);
-  check(
-    "redis: a ceremony minted BEFORE the revocation and completed AFTER it is REFUSED",
-    revived.success === false,
-    `success=${revived.success} alreadyEnrolled=${revived.alreadyEnrolled} error=${revived.error}`,
-  );
-  const afterRevival = (await webauthnStore.getCredentialsForUser(user)).map((c) => c.id);
-  check("redis: …and the revoked credential id is NOT live again", !afterRevival.includes(device.id), `enrolled: [${afterRevival.join(", ")}]`);
-  let storeRefusal: unknown;
-  try {
-    await webauthnStore.addCredential(user, { ...credential(0), id: device.id });
-  } catch (err) {
-    storeRefusal = err;
-  }
-  check(
-    "redis: addCredential of a revoked id THROWS CredentialRevokedError under the lock",
-    storeRefusal instanceof Error && storeRefusal.name === "CredentialRevokedError",
-    String(storeRefusal),
-  );
-
-  // Gap 2.
-  const user2 = "t_proof:revocation-redis-release";
-  await resetIdentity(user2);
-  const passkey = newAuthenticator(false);
-  check("redis: baseline — a zero-counter authenticator enrols", (await enrol(user2, passkey, tenant)).success === true);
-  check("redis: baseline — …and releases a step-up", (await stepUp(user2, passkey, tenant)).success === true);
-  const stored = (await webauthnStore.getCredentialsForUser(user2)).find((c) => c.id === passkey.id);
-  check("redis: confirmCredentialEnrolled — true for the enrolled credential and its key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === true);
-  check("redis: confirmCredentialEnrolled — false for the right id under a different key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, "{}")) === false);
-
-  const { challengeId, response } = await signAssertion(user2, passkey);
-  const targetKey = `webauthn:user:${user2}`;
-  const realGet = IORedis.prototype.get;
-  let fired = false;
-  let revoked: boolean | undefined;
-  (IORedis.prototype as unknown as { get: typeof realGet }).get = function (
-    this: IORedis,
-    ...args: Parameters<typeof realGet>
-  ) {
-    const call = (realGet as (...a: unknown[]) => Promise<string | null>).apply(this, args);
-    if (!fired && args[0] === targetKey) {
-      fired = true;
-      return call.then(async (value) => {
-        revoked = await webauthnStore.removeCredential(user2, passkey.id); // committed for real
-        return value; // …while the early read still returns the pre-revocation record
-      });
-    }
-    return call;
-  } as typeof realGet;
-  let released: Awaited<ReturnType<typeof webauthn.verifyAuthentication>>;
-  try {
-    released = await webauthn.verifyAuthentication(user2, challengeId, response, tenant);
-  } finally {
-    IORedis.prototype.get = realGet;
-  }
-  check("redis: the revocation was placed after the early read, and committed", fired && revoked === true, `fired=${fired} revoked=${revoked}`);
-  check(
-    "redis: a zero-counter step-up whose credential was revoked mid-verification is NOT released",
-    released.success === false,
-    `success=${released.success} error=${released.error}`,
-  );
-  check(
-    "redis: confirmCredentialEnrolled — false once the credential is revoked",
-    (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === false,
-  );
-
-  await resetIdentity(user);
-  await resetIdentity(user2);
 }
 
 async function main() {

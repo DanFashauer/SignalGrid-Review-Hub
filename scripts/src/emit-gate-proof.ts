@@ -306,11 +306,45 @@ gateBeforeFirstCall(
 // methods already guard on — so assert the choke point itself, not each caller.
 // Asserted as "config flag AND emission gate": returning `config.enabled` alone was
 // the defect, and a tenant-controlled value is not a deployment boundary.
+//
+// The body is cut by `sliceBetween`, which returns null when EITHER anchor is
+// missing (plan row 121). The old inline `slice(0, indexOf("\n  }"))` turned a
+// missing closing anchor (-1) into `slice(0, -1)` — nearly the whole file — so both
+// body assertions below became whole-file greps and would pass on an `isEnabled()`
+// that returned `true`, as long as any other method mentioned the flag and the gate.
+/** The text from `start` up to (not including) the first `end` after it, or null
+ *  when either anchor is absent. Never widens: a missing anchor is a failed locate. */
+function sliceBetween(src: string, start: string, end: string): string | null {
+  const from = src.indexOf(start);
+  if (from === -1) return null;
+  const to = src.indexOf(end, from + start.length);
+  if (to === -1) return null;
+  return src.slice(from, to);
+}
+{
+  // Self-test: the helper must refuse, not widen, on a missing closing anchor. The
+  // planted source is the exact fail-open shape: a tab-indented (so "\n  }" never
+  // matches) isEnabled() that returns true, with the flag and the gate named only
+  // in a LATER method.
+  const planted =
+    "class X {\n\tisEnabled(): boolean {\n\t\treturn true;\n\t}\n" +
+    "\tother() { if (this.config?.enabled && resolveEmission(e).mode === 'live') {} }\n}";
+  check("sliceBetween self-test: a missing closing anchor yields null, not the rest of the file",
+    sliceBetween(planted, "isEnabled(): boolean", "\n  }") === null);
+  check("sliceBetween self-test: a missing opening anchor yields null",
+    sliceBetween(planted, "isEnabled(): number", "\n\t}") === null);
+  const cut = sliceBetween(planted, "isEnabled(): boolean", "\n\t}");
+  check("sliceBetween self-test: a present pair cuts the body only (later methods excluded)",
+    cut !== null && cut.includes("return true") && !cut.includes("config?.enabled"));
+}
 const mdeSrc = readFileSync(resolve(repo, "lib/integrations/src/integrations/telemetry/mde.ts"), "utf8");
-const mdeEnabled = mdeSrc.slice(mdeSrc.indexOf("isEnabled(): boolean"));
-const mdeBody = mdeEnabled.slice(0, mdeEnabled.indexOf("\n  }"));
-check("mde.isEnabled(): requires the local config flag", /config\?\.enabled/.test(mdeBody));
-check("mde.isEnabled(): ALSO requires the emission gate", /resolveEmission\s*\([^;]*\)\.mode === ['"]live['"]/.test(mdeBody));
+const mdeBody = sliceBetween(mdeSrc, "isEnabled(): boolean", "\n  }");
+check("mde.isEnabled(): method body located (both anchors present)", mdeBody !== null);
+check("mde.isEnabled(): requires the local config flag", mdeBody !== null && /config\?\.enabled/.test(mdeBody));
+check(
+  "mde.isEnabled(): ALSO requires the emission gate",
+  mdeBody !== null && /resolveEmission\s*\([^;]*\)\.mode === ['"]live['"]/.test(mdeBody),
+);
 check(
   "mde: every outbound method still routes through isEnabled()",
   (mdeSrc.match(/if \(!this\.isEnabled\(\)\)/g) ?? []).length >= 5,

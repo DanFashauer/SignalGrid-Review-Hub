@@ -76,18 +76,28 @@ export function deriveToolNames(indexSource) {
 //      package spec, and each `Context7 … <x.y.z>` phrase (case-insensitive, same
 //      line, ≤40 chars apart), must name PINNED. Nothing is typed in a list, so a
 //      new copy anywhere — a skill doc, .mcp.json, a new doc — is held on arrival.
+//      An UNPINNED spec (`@upstash/context7-mcp@latest`, any non-numeric tag) is
+//      a finding too. Binary and large files are swept as latin1, never skipped.
+//      It is a heuristic over wording: a version written BEFORE the word, on the
+//      next line, >40 chars away, two-component, or under another name ("ctx7")
+//      is not seen; an unrelated x.y.z close after "Context7" fails (closed).
 //      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
-//      what was true on a day (and this gate, whose fixtures plant stale pins).
+//      what was true on a day, vendored upstream trees (third_party/ — their
+//      configs are upstream's, not our pin), and this gate, whose fixtures plant
+//      stale pins.
 //   2. The known copy sites below must STILL carry a copy: a site whose copy was
 //      reworded out of the sweep's shapes is a finding, not a pass. The roster's
 //      `packageVersion` has no "context7" on its line, so it is held structurally.
 export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
 const CONTEXT7_SPEC_RE = /@upstash\/context7-mcp@(\d+\.\d+\.\d+[^\s`"'),;]*)/g;
+const CONTEXT7_UNPINNED_RE = /@upstash\/context7-mcp@([A-Za-z][\w.-]*)/g;
 const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
 export const CONTEXT7_PIN_HISTORY = [
   /^docs\/BUILD_BACKLOG\.md$/,
   /^docs\/agent\/RESOURCE_INTAKE\.md$/,
+  /^docs\/DECISION_RECORDS\.md$/,
   /^artifacts\/lane-messages\//,
+  /^third_party\//,
   /^scripts\/check-mcp-roster\.mjs$/,
 ];
 export const CONTEXT7_PIN_COPIES = [
@@ -130,6 +140,10 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
           }
         }
       }
+      for (const m of line.matchAll(new RegExp(CONTEXT7_UNPINNED_RE.source, CONTEXT7_UNPINNED_RE.flags))) {
+        swept++;
+        problems.push(`${path}:${i + 1}: Context7 spec is UNPINNED (@${m[1]}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+      }
     });
   }
 
@@ -166,7 +180,12 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   return problems;
 }
 
-/** The sweep's universe: every tracked, non-binary file under 2 MB. */
+/** Pure: one tracked file's bytes as sweepable text — utf8, or latin1 when binary (a NUL byte); never null. */
+export function decodeTracked(buf) {
+  return buf.toString(buf.includes(0) ? "latin1" : "utf8");
+}
+
+/** The sweep's universe: every tracked file, decoded by decodeTracked; none skipped. */
 function loadContext7PinFiles() {
   const files = {};
   const listed = execSync("git ls-files -z", { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
@@ -178,8 +197,7 @@ function loadContext7PinFiles() {
     } catch {
       continue; // a tracked file deleted in the worktree is not a copy
     }
-    if (buf.length > 2 * 1024 * 1024 || buf.includes(0)) continue;
-    files[path] = buf.toString("utf8");
+    files[path] = decodeTracked(buf);
   }
   return files;
 }
@@ -677,6 +695,20 @@ server.registerTool(
     checks.push([`a stale pin in ${what} (${path}) is named`, names(pinRun(appendTo(path, line)), path, lineCount(path), OLD)]);
   }
   checks.push([
+    "an UNPINNED spec (@latest) in an unlisted doc is named",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y ${SPEC}latest`)).some((p) =>
+      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@latest)`),
+    ),
+  ]);
+  checks.push([
+    "a stale spec in a file with a NUL byte (binary) is still named, not skipped",
+    names(pinRun({ "docs/agent/blob.bin": decodeTracked(Buffer.from(`\u0000\u0001junk\n${SPEC}${OLD}\n`, "latin1")) }), "docs/agent/blob.bin", 2, OLD),
+  ]);
+  checks.push([
+    "a dated decision record (docs/DECISION_RECORDS.md) and a vendored third_party/ config are exempt, by name",
+    pinRun({ ...appendTo("docs/DECISION_RECORDS.md", `Context7 ${OLD}`), "third_party/x/mcp.json": `"${SPEC}latest"` }).length === 0,
+  ]);
+  checks.push([
     "a stale pin in a dated history record (docs/agent/RESOURCE_INTAKE.md) is exempt, by name",
     pinRun(appendTo("docs/agent/RESOURCE_INTAKE.md", `${SPEC}${OLD}`)).length === 0,
   ]);
@@ -742,8 +774,9 @@ function main() {
   console.log(
     `mcp-roster: ${nServers} servers (+${nExternal} external), signalgrid-mcp ${sg?.tools ?? 0}/${derived.length} tools derived, ` +
       `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, ${mentionCount} mentions, ` +
-      `Context7 pin ${deriveContext7Pin(pinFiles[CONTEXT7_INSTALLER])} held across ${Object.keys(pinFiles).length} tracked text files ` +
-      `(${CONTEXT7_PIN_HISTORY.length} dated-record exemptions, ${CONTEXT7_PIN_COPIES.length} known sites present), 0 problems`,
+      `Context7 pin ${deriveContext7Pin(pinFiles[CONTEXT7_INSTALLER])} held across ${Object.keys(pinFiles).length} tracked files swept ` +
+      `(${CONTEXT7_PIN_HISTORY.length} exemption patterns: dated records, third_party/, this gate; ` +
+      `${CONTEXT7_PIN_COPIES.length} known copies in ${new Set(CONTEXT7_PIN_COPIES.map((c) => c.path)).size} files present), 0 problems`,
   );
   console.log("PASS");
 }

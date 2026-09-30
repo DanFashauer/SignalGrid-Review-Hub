@@ -265,8 +265,10 @@ function conditionMet(cond, root = repoRoot) {
     if (!existsSync(dirPath)) return { met: false, why: `${cond.dir} does not exist` };
     if (!statSync(dirPath).isDirectory()) return { met: false, why: `${cond.dir} is not a directory` };
     // No needles would make `every` vacuously true and close the gap on nothing. Fail closed.
-    if (!Array.isArray(cond.anyFileContainsAll) || cond.anyFileContainsAll.length === 0) {
-      return { met: false, why: `${cond.dir} condition names no anyFileContainsAll needles` };
+    // An empty-string needle is the same vacuous truth one level down: every source includes "".
+    const needles = cond.anyFileContainsAll;
+    if (!Array.isArray(needles) || needles.length === 0 || !needles.every((n) => typeof n === "string" && n.length > 0)) {
+      return { met: false, why: `${cond.dir} condition needs anyFileContainsAll to be non-empty strings` };
     }
     for (const f of readdirSync(dirPath)) {
       if (!f.endsWith(".ts")) continue;
@@ -296,7 +298,8 @@ function conditionMet(cond, root = repoRoot) {
 // `dir:` today, so nothing else executes it — a branch that never runs can be broken
 // for as long as nobody needs it, and then close a gap wrongly the day someone does.
 // A real directory with a real needle must read MET; a missing directory, an empty
-// directory, and a condition with no needles must each read NOT MET (fail-closed).
+// directory, a file named as the directory, and a condition with no needles or with
+// an empty/non-string needle must each read NOT MET (fail-closed).
 {
   const REAL_DIR = "artifacts/api-server/src/routes";
   const emptyRoot = mkdtempSync(join(tmpdir(), "launch-profile-dir-"));
@@ -305,6 +308,9 @@ function conditionMet(cond, root = repoRoot) {
     [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["Router"] }), true, "real directory, real needle"],
     [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["\u0000no-such-needle\u0000"] }), false, "real directory, absent needle"],
     [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [] }), false, "real directory, no needles"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [""] }), false, "real directory, empty-string needle"],
+    [conditionMet({ dir: REAL_DIR, anyFileContainsAll: [undefined] }), false, "real directory, undefined needle"],
+    [conditionMet({ dir: `${REAL_DIR}/v1.ts`, anyFileContainsAll: ["Router"] }), false, "a file named as the directory"],
     [conditionMet({ dir: "no/such/dir-for-self-test", anyFileContainsAll: ["Router"] }), false, "missing directory"],
     [conditionMet({ dir: "empty", anyFileContainsAll: ["Router"] }, emptyRoot), false, "empty directory"],
   ];
@@ -317,7 +323,7 @@ function conditionMet(cond, root = repoRoot) {
         "\n  A closedWhen dir condition cannot be trusted until the evaluator reads these correctly.",
     );
   }
-  console.log(`  dir-condition self-test: ${cases.length}/${cases.length} (real dir MET; missing, empty, no-needle NOT MET)`);
+  console.log(`  dir-condition self-test: ${cases.length}/${cases.length} (real dir MET; missing, empty, not-a-dir and every vacuous needle list NOT MET)`);
 }
 
 for (const gap of GAPS) {

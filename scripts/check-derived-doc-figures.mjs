@@ -590,6 +590,7 @@ export const FIGURES = [
   // docs/COMPANY_BUILD_PLAN.md row 29: the Assist-wire vector count, re-typed in the
   // contract and in the route that serves it.
   { id: "assist-conformance-vectors-openapi", doc: "lib/api-spec/v1-openapi.yaml", re: /Bound by the (\d+) shared conformance vectors/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
+  { id: "assist-conformance-vectors-plan", doc: "docs/COMPANY_BUILD_PLAN.md", re: /the fixture now holds `(\d+)`, non-ASCII/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
   { id: "assist-conformance-vectors-route", doc: "artifacts/api-server/src/routes/v1.ts", re: /The (\d+) shared conformance vectors \(native\/shared\/assist-wire-conformance\.json\)/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
 ];
 

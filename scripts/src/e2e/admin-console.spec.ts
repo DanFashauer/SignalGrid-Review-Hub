@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { guardEgress } from "./egress-guard";
 
 /**
  * signalgrid-app (admin console) + api-server — browser-level E2E.
@@ -14,19 +15,9 @@ import { test, expect, type Page } from "@playwright/test";
 const PORT = Number(process.env.E2E_ADMIN_PORT ?? 4614);
 const BASE = `http://localhost:${PORT}`;
 
-// index.html references Google Fonts; block non-localhost so runs are
-// hermetic and the /api proxy traffic is the only network that matters.
-async function blockExternal(page: Page): Promise<void> {
-  await page.route("**/*", (route) => {
-    const host = new URL(route.request().url()).hostname;
-    if (host === "localhost" || host === "127.0.0.1") return route.continue();
-    return route.abort();
-  });
-}
-
-test.beforeEach(async ({ page }) => {
-  await blockExternal(page);
-});
+// index.html references no off-page host, so the allowlist is empty: the /api proxy
+// traffic is the only network that matters, and any other host fails the test.
+guardEgress(test);
 
 test("api-server health and demo-key discovery respond through the app's own proxy", async ({ page }) => {
   await page.goto(BASE, { waitUntil: "domcontentloaded" });

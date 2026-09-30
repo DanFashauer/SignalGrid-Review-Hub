@@ -232,6 +232,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:service-lifecycle",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
       "lib/integrations/src/integrations/service-lifecycle/index.ts",
@@ -344,6 +345,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:credential-rotation",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
       "lib/integrations/src/integrations/credential-rotation/index.ts",
@@ -352,6 +354,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:observability-integrity",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
       "lib/integrations/src/integrations/observability-integrity/index.ts",
@@ -360,6 +363,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:local-authority",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/local-authority/evaluate.ts",
       "lib/integrations/src/integrations/local-authority/index.ts",
@@ -378,6 +382,7 @@ export const TARGETS = [
 
   {
     proof: "proof:challenge-capability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/challenge-capability/index.ts",
       "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
@@ -387,6 +392,7 @@ export const TARGETS = [
 
   {
     proof: "proof:sse-egress",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/sse-egress/index.ts",
       "lib/integrations/src/integrations/sse-egress/evaluate.ts",
@@ -517,6 +523,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:pacs-access",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
@@ -632,6 +639,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:macos-posture",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/macos-posture/evaluate.ts",
       "lib/integrations/src/integrations/macos-posture/index.ts",
@@ -735,6 +743,44 @@ export const ALLOWED = [
       "that narrows `k` from `string | symbol` to `string`. Verified in that order — " +
       "mutated, then deleted, then restored — rather than argued. Labelled inert in the " +
       "source with the same reason.",
+  },
+  {
+    file: "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — the same clause, in the same " +
+      "hasUnrecognizedKey shape, as the agent-identity entry above. `known` is " +
+      "SSE_EGRESS_REPORT_KEYS, a readonly string tuple, so `known.includes(k)` on the next " +
+      "line returns true for every symbol this clause catches: a symbol-keyed report is " +
+      "malformed either way. Found surviving `if (false)` when sse-egress joined the " +
+      "brace-less sweep (2026-09-30). Not deleted because it is the type guard narrowing " +
+      "`k` from `string | symbol` to `string` for that includes() — the TS2345 the " +
+      "agent-identity deletion hit. Not pinnable from a proof, since no input separates it.",
+  },
+  {
+    file: "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — identical reasoning to the " +
+      "sse-egress entry above: `known` is CHALLENGE_CAPABILITY_REPORT_KEYS or " +
+      "CHALLENGE_METHOD_ENTRY_KEYS, string tuples both, so `known.includes(k)` on the next " +
+      "line answers true for any symbol and the report or entry is malformed either way. " +
+      "Found surviving `if (false)` when challenge-capability joined the brace-less sweep " +
+      "(2026-09-30); kept as the `string | symbol` → `string` narrowing that includes() needs.",
+  },
+  {
+    file: "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT — the same clause, and the same reason, as the access-governance " +
+      "entry above. `ageMs(observedMs, referenceMs, 0)` on the next line returns null when " +
+      "`seenAt` is null (observedMs) and when `nowMs` is not a finite number (referenceMs), " +
+      "and the `age === null` line immediately after answers \"unknown\" — the verdict this " +
+      "clause gives. Found surviving `if (false)` with proof:pacs-access green when the " +
+      "family joined the brace-less sweep (2026-09-30). Kept because it names the two " +
+      "unreadable-instant causes at the point of use, and because `ageMs` lives in the " +
+      "shared lib/integrations/src/utils/freshness.ts, whose null contract this family " +
+      "does not own: if that contract narrows, this guard still refuses.",
   },
   {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
@@ -1327,6 +1373,35 @@ export const ALLOWED = [
     line: "if (!positivelyBound && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  // The three entries below are the SAME line in three sibling normalizers (`asInstant`),
+  // and were classified by RUNNING it, not by reading (2026-09-30, brace-less join). Each is
+  // INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER, so no fixture can pin it: with the guard
+  // mutated to `if (false)`, `Date.parse(null)` coerces to "null" and returns NaN
+  // (`node -e 'console.log(Date.parse(null))'` → NaN), the next line's `Number.isFinite`
+  // answers null, and the function returns the very value the guard returned — identical
+  // output for every input. Deleting it does NOT survive `tsc`: TS2345 on the `Date.parse(s)`
+  // line, because this is the clause that narrows `s` from `string | null` to `string`
+  // (mutated in place and `tsc --noEmit -p lib/integrations` run for each file; restored).
+  // Same shape and same justification as the agent-identity `typeof k === "symbol"` entry.
+  // Not labelled inert in the lib source: that edit is outside the change that added these.
+  {
+    file: "lib/integrations/src/integrations/credential-rotation/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: `Date.parse(null)` is NaN and the next line's `Number.isFinite` returns null for it, so the mutated guard gives the same answer for every input; deleting it fails `tsc` with TS2345 (narrows `string | null` to `string` for `Date.parse`). See the note above this entry.",
+  },
+  {
+    file: "lib/integrations/src/integrations/observability-integrity/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: same `asInstant` clause as credential-rotation/normalize.ts — `Date.parse(null)` is NaN, `Number.isFinite` returns null for it, and deleting the guard fails `tsc` with TS2345. See the note above the first of these three entries.",
+  },
+  {
+    file: "lib/integrations/src/integrations/local-authority/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: same `asInstant` clause as credential-rotation/normalize.ts — `Date.parse(null)` is NaN, `Number.isFinite` returns null for it, and deleting the guard fails `tsc` with TS2345. See the note above the first of these three entries.",
   },
 ];
 

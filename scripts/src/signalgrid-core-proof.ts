@@ -367,7 +367,9 @@ expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
 // role outside the five — including inherited Object members, which an `in` check
 // would wrongly accept — is a validation/400 at registration, and the token is
 // never bound, so it cannot surface later as an accepted-then-broken principal.
-for (const badRole of ["superuser", "constructor", "__proto__", "toString"]) {
+// Every inherited Object.prototype member is enumerated, not a hand-picked four, so a
+// deny-list of known-bad names cannot pass where the own-property allow-list is needed.
+for (const badRole of ["superuser", ...Object.getOwnPropertyNames(Object.prototype)]) {
   const badToken = `sgk_proof_bad_role_${badRole.replace(/_/g, "")}`;
   let status: number | undefined;
   expectError(

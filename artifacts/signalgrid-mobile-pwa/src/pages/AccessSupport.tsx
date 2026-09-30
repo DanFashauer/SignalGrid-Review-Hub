@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { OutcomeBadge } from "@/components/OutcomeBadge";
+import type { Outcome } from "@/lib/outcome-tone";
 import { LifeBuoy, ChevronRight } from "lucide-react";
 
 /**
  * Access support — an OPERATOR / support-desk surface of the SignalGrid mobile
  * app (iOS/Android via PWA). A support lead or floor supervisor looks at a
- * worker's session here to see why it was allowed, stepped up, or restricted,
+ * worker's session here to see why it was allowed, stepped up, restricted or denied,
  * and the plain-language guidance to relay to that worker.
  *
  * This is deliberately NOT a worker destination. Per docs/EMBEDDED_UX_PRINCIPLE.md
@@ -18,8 +19,6 @@ import { LifeBuoy, ChevronRight } from "lucide-react";
  * decision core's worker view. No live decision call, credential, or production
  * action is involved; every step is guidance, never an executed change.
  */
-
-type Outcome = "allow" | "step-up" | "restrict";
 
 interface AccessScenario {
   id: string;
@@ -34,7 +33,7 @@ interface AccessScenario {
   selfResolving: boolean;
 }
 
-const SCENARIOS: AccessScenario[] = [
+const SCENARIOS = [
   {
     id: "ok",
     device: "Ward iPad 01",
@@ -86,7 +85,30 @@ const SCENARIOS: AccessScenario[] = [
     ],
     selfResolving: false,
   },
-];
+  {
+    id: "lost",
+    device: "Ward iPad 09",
+    worker: "Casey L. · Nurse",
+    workflow: "Clinical session",
+    outcome: "deny",
+    reason: "This device has been reported lost, so every session on it is denied until it is recovered and re-verified.",
+    steps: [
+      "Do not try to get the worker back in on this device — the denial is the intended outcome.",
+      "Route the worker to a checked-in device for their session.",
+      "Hand the device to IT or security to recover and re-enroll; it stays denied until they clear it.",
+    ],
+    selfResolving: false,
+  },
+] as const satisfies readonly AccessScenario[];
+
+/**
+ * Backlog row 116: this page used to narrow `Outcome` to allow/step-up/restrict,
+ * so the verdict a support lead most needs guidance for could not be shown. The
+ * type now comes from lib/outcome-tone.ts, and this line fails typecheck if any
+ * verdict in that union has no scenario above.
+ */
+const EVERY_VERDICT_HAS_A_SCENARIO: [Exclude<Outcome, (typeof SCENARIOS)[number]["outcome"]>] extends [never] ? true : false = true;
+void EVERY_VERDICT_HAS_A_SCENARIO;
 
 export default function AccessSupport() {
   const [openId, setOpenId] = useState<string | null>("baseline");

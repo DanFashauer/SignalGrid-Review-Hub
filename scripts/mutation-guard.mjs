@@ -344,6 +344,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:credential-rotation",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/credential-rotation/evaluate.ts",
       "lib/integrations/src/integrations/credential-rotation/index.ts",
@@ -352,6 +353,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:observability-integrity",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/observability-integrity/evaluate.ts",
       "lib/integrations/src/integrations/observability-integrity/index.ts",
@@ -360,6 +362,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:local-authority",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/local-authority/evaluate.ts",
       "lib/integrations/src/integrations/local-authority/index.ts",
@@ -632,6 +635,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:macos-posture",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/macos-posture/evaluate.ts",
       "lib/integrations/src/integrations/macos-posture/index.ts",
@@ -1327,6 +1331,35 @@ export const ALLOWED = [
     line: "if (!positivelyBound && candidates.length === 0) {",
     reason:
       "The grant backstop itself — deliberately redundant defence-in-depth, documented in the source as never firing today; exists to catch a FUTURE weakening.",
+  },
+  // The three entries below are the SAME line in three sibling normalizers (`asInstant`),
+  // and were classified by RUNNING it, not by reading (2026-09-30, brace-less join). Each is
+  // INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER, so no fixture can pin it: with the guard
+  // mutated to `if (false)`, `Date.parse(null)` coerces to "null" and returns NaN
+  // (`node -e 'console.log(Date.parse(null))'` → NaN), the next line's `Number.isFinite`
+  // answers null, and the function returns the very value the guard returned — identical
+  // output for every input. Deleting it does NOT survive `tsc`: TS2345 on the `Date.parse(s)`
+  // line, because this is the clause that narrows `s` from `string | null` to `string`
+  // (mutated in place and `tsc --noEmit -p lib/integrations` run for each file; restored).
+  // Same shape and same justification as the agent-identity `typeof k === "symbol"` entry.
+  // Not labelled inert in the lib source: that edit is outside the change that added these.
+  {
+    file: "lib/integrations/src/integrations/credential-rotation/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: `Date.parse(null)` is NaN and the next line's `Number.isFinite` returns null for it, so the mutated guard gives the same answer for every input; deleting it fails `tsc` with TS2345 (narrows `string | null` to `string` for `Date.parse`). See the note above this entry.",
+  },
+  {
+    file: "lib/integrations/src/integrations/observability-integrity/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: same `asInstant` clause as credential-rotation/normalize.ts — `Date.parse(null)` is NaN, `Number.isFinite` returns null for it, and deleting the guard fails `tsc` with TS2345. See the note above the first of these three entries.",
+  },
+  {
+    file: "lib/integrations/src/integrations/local-authority/normalize.ts",
+    line: "if (s === null) return null;",
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER: same `asInstant` clause as credential-rotation/normalize.ts — `Date.parse(null)` is NaN, `Number.isFinite` returns null for it, and deleting the guard fails `tsc` with TS2345. See the note above the first of these three entries.",
   },
 ];
 

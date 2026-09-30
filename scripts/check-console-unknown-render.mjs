@@ -564,15 +564,36 @@ function analyzeSourceFile(relPath, text) {
   // the literal were inline. Object maps (`TONE[status]`) are not resolved.
   const RESOLVABLE_INIT = (n) => n && (ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) ||
     ts.isTemplateExpression(n) || ts.isCallExpression(n) || ts.isConditionalExpression(n) ||
-    ts.isParenthesizedExpression(n) || ts.isBinaryExpression(n));
+    ts.isParenthesizedExpression(n) || ts.isBinaryExpression(n) ||
+    // `"…" as const`, `"…" satisfies string`, `<string>"…"`, `x!`, and an alias `const GOOD = BASE`.
+    ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
+    ts.isNonNullExpression(n) || ts.isIdentifier(n));
+  // Does this scope bind `name` as something OTHER than a const we can resolve — a
+  // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
+  // at the use site is that binding, and resolution must stop (no false positive
+  // from `rows.map((cls) => <span className={cls}>…`).
+  const bindsNameOpaquely = (scope, name) => {
+    const bindsIn = (b) => ts.isIdentifier(b) ? b.text === name
+      : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsIn(el.name));
+    if (ts.isFunctionLike(scope) && scope.parameters?.some((p) => bindsIn(p.name))) return true;
+    if (ts.isCatchClause(scope) && scope.variableDeclaration && bindsIn(scope.variableDeclaration.name)) return true;
+    if ((ts.isForStatement(scope) || ts.isForOfStatement(scope) || ts.isForInStatement(scope)) &&
+        scope.initializer && ts.isVariableDeclarationList(scope.initializer) &&
+        scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
+    return false;
+  };
   const resolveConstInit = (id) => {
     for (let cur = id.parent; cur; cur = cur.parent) {
+      if (bindsNameOpaquely(cur, id.text)) return null;
       const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements : null;
       if (!stmts) continue;
       for (const st of stmts) {
-        if (!ts.isVariableStatement(st) || !(st.declarationList.flags & ts.NodeFlags.Const)) continue;
+        if (!ts.isVariableStatement(st)) continue;
+        const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
         for (const d of st.declarationList.declarations) {
-          if (ts.isIdentifier(d.name) && d.name.text === id.text) return RESOLVABLE_INIT(d.initializer) ? d.initializer : null;
+          if (ts.isIdentifier(d.name) && d.name.text === id.text) return isConst && RESOLVABLE_INIT(d.initializer) ? d.initializer : null;
+          if (!ts.isIdentifier(d.name) && (ts.isObjectBindingPattern(d.name) || ts.isArrayBindingPattern(d.name)) &&
+              d.name.elements.some((el) => !ts.isOmittedExpression(el) && ts.isIdentifier(el.name) && el.name.text === id.text)) return null;
         }
       }
     }
@@ -960,6 +981,28 @@ export function ConstShadowed() {
   return <span className={GOOD}>{rows.length} rows</span>;
 }`;
 
+// Brain review of #1274: const forms the first resolution pass missed, and a parameter
+// that shadows a good-state const.
+const constFixture = (pre, cls) => `
+import { useQuery } from "@tanstack/react-query";
+${pre}
+export function ConstForm() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return <span className={${cls}}>{rows.length} rows</span>;
+}`;
+const BUG_ASCONST = constFixture(`const GOOD = "text-emerald-400" as const;`, "GOOD");
+const BUG_SATISFIES = constFixture(`const GOOD = "text-emerald-400" satisfies string;`, "GOOD");
+const BUG_CONSTALIAS = constFixture(`const BASE = "text-emerald-400";\nconst GOOD = BASE;`, "GOOD");
+const OK_PARAMSHADOW = `
+import { useQuery } from "@tanstack/react-query";
+const cls = "text-emerald-400";
+export function ParamShadow() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return <div>{["text-slate-400"].map((cls) => <span className={cls}>{rows.length} rows</span>)}</div>;
+}`;
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1032,6 +1075,9 @@ function selfTest() {
     ["TWO-QUERY (guard on A, render of B)", BUG_TWOQUERY],
     ["CONST-CLASS (className={GOOD})", BUG_CONSTCLASS],
     ["TEMPLATE-CONST (const cls = `… emerald`)", BUG_TEMPLATECONST],
+    ["AS-CONST (const GOOD = \"…emerald\" as const)", BUG_ASCONST],
+    ["SATISFIES (const GOOD = \"…emerald\" satisfies string)", BUG_SATISFIES],
+    ["CONST-ALIAS (const GOOD = BASE)", BUG_CONSTALIAS],
   ];
   for (const [label, src] of fnBugs) {
     const v = analyze(src, "FN.tsx");
@@ -1045,6 +1091,7 @@ function selfTest() {
     ["CONST-TERNARY (const cls = s ? emerald : muted)", OK_CONSTTERNARY],
     ["CONST-CLASS static label, no data", OK_CONSTSTATIC],
     ["CONST-CLASS shadowed by a local non-good const", OK_CONSTSHADOWED],
+    ["CONST-CLASS shadowed by an arrow parameter", OK_PARAMSHADOW],
   ];
   for (const [label, src] of fnOk) {
     const v = analyze(src, "FNOK.tsx");

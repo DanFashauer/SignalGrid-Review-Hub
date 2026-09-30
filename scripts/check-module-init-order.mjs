@@ -44,13 +44,21 @@
 // to a `const f = () => …` declared ABOVE the call) is followed into that body,
 // transitively, with the same rules.
 //
+// Followed from load-time code (2026-09-30, after the brain's review of #1274):
+// calls to same-file functions at any nesting depth, `const` aliases of them
+// (`const g = f; g()`), `f.call`/`f.apply`, tagged-template tags, default
+// parameters, and `new C()` — its instance field initialisers, its constructor,
+// and an `extends` base's constructor.
+//
 // SCOPE LIMIT, stated rather than pretended away. This follows calls within ONE
 // file; it does not follow calls through imports, method calls on objects
-// (`obj.run()`), or a callback passed to a function other than the synchronous
-// array iterators; and it treats every branch as taken. `var` is not a TDZ
-// binding and is not checked. A clean run is proof that no same-file,
-// statically-resolvable TDZ read exists at module load — not that no TDZ bug
-// exists anywhere.
+// (`obj.run()`), getters, `f.bind(…)()`, a function reached through an object
+// or array (`handlers[0]()`), or a callback passed to a function other than the
+// synchronous array iterators and `Array.from`; and it treats every branch as
+// taken. `var` is not a TDZ binding and is not checked. A clean run therefore
+// means none of the FOLLOWED shapes reads a binding early — it is not proof that
+// no TDZ read exists at module load. A file the Program does not load, or that
+// does not parse, is reported as a problem, never counted clean.
 //
 // SELF-TEST: both real defects must be detected from synthetic reconstructions —
 // the grid-proof one in its REAL top-level-loop shape — the CORRECTED order must
@@ -71,7 +79,7 @@ const ROOTS = ["lib", "artifacts", "scripts"];
 // 200): a walk that reaches almost nothing is broken, not a clean tree.
 const FILE_FLOOR = 200;
 const SKIP = /(^|\/)(node_modules|dist|build|coverage|third_party)(\/|$)|\.d\.ts$/;
-const SOURCE = /\.(ts|mts|mjs|js)$/;
+const SOURCE = /\.(ts|tsx|mts|mjs|js)$/;
 
 // Array methods that invoke their callback synchronously, before returning. A
 // callback handed to anything else (a router, an emitter, a timer, a promise) is
@@ -109,7 +117,17 @@ function analyseFiles(sources) {
   const out = new Map();
   for (const name of sources.keys()) {
     const sf = program.getSourceFile(name);
-    out.set(name, sf ? analyseSourceFile(sf, checker) : []);
+    // FAIL CLOSED: a file the Program did not load, or one that does not parse,
+    // was not analysed — that is an error to report, never a clean file.
+    if (!sf) { out.set(name, [{ error: "the TypeScript Program did not load this file — not analysed" }]); continue; }
+    const syntax = program.getSyntacticDiagnostics(sf);
+    if (syntax.length > 0) {
+      const d = syntax[0];
+      const line = d.start !== undefined ? sf.getLineAndCharacterOfPosition(d.start).line + 1 : 0;
+      out.set(name, [{ error: `does not parse (line ${line}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}) — not analysed` }]);
+      continue;
+    }
+    out.set(name, analyseSourceFile(sf, checker));
   }
   return out;
 }
@@ -118,8 +136,6 @@ function analyseSourceFile(sf, checker) {
   // Module-scope TDZ bindings: declaration node -> { name, initEnd }. A binding is
   // initialised when its own declarator (or class declaration) finishes.
   const tdz = new Map();
-  // Module-scope callables whose bodies we may follow: declaration node -> body.
-  const callable = new Map();
   for (const st of sf.statements) {
     if (ts.isVariableStatement(st) && (st.declarationList.flags & ts.NodeFlags.BlockScoped)) {
       for (const d of st.declarationList.declarations) {
@@ -133,15 +149,9 @@ function analyseSourceFile(sf, checker) {
           const decl = ts.isIdentifier(d.name) ? d : id.parent;
           tdz.set(decl, { name: id.text, initEnd: d.end });
         }
-        const init = unparen(d.initializer);
-        if (ts.isIdentifier(d.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
-          callable.set(d, { name: d.name.text, body: init.body, declPos: d.pos });
-        }
       }
     } else if (ts.isClassDeclaration(st) && st.name) {
       tdz.set(st, { name: st.name.text, initEnd: st.end });
-    } else if (ts.isFunctionDeclaration(st) && st.name && st.body) {
-      callable.set(st, { name: st.name.text, body: st.body, declPos: -1 }); // hoisted
     }
   }
   if (tdz.size === 0) return [];
@@ -153,7 +163,60 @@ function analyseSourceFile(sf, checker) {
     return sym?.declarations ?? [];
   };
   const tdzOf = (id) => { for (const d of resolveDecls(id)) { const b = tdz.get(d); if (b) return b; } return undefined; };
-  const callableOf = (id) => { for (const d of resolveDecls(id)) { const c = callable.get(d); if (c) return c; } return undefined; };
+  const isModuleScope = (decl) => {
+    const st = ts.isVariableDeclaration(decl) ? decl.parent?.parent : decl;
+    return st?.parent === sf;
+  };
+  // What running a callee EXECUTES, resolved through the checker to any
+  // declaration in THIS file — module-scope or nested. Returns
+  // { key, name, run(ctx), declPos } or undefined. `declPos` is the position a
+  // module-scope `const` callee is initialised at (a call before it is itself a
+  // TDZ read, reported by the identifier check, and its body cannot run); -1
+  // for hoisted or nested callees.
+  const callableOfDecl = (decl, depth = 0) => {
+    if (!decl || decl.getSourceFile() !== sf || depth > 6) return undefined;
+    const fnRunner = (fn) => (ctx) => {
+      for (const p of fn.parameters) walk(p.initializer, ctx); // default parameters run on call
+      walk(fn.body, ctx);
+    };
+    if (ts.isFunctionDeclaration(decl) && decl.body) {
+      return { key: decl, name: decl.name?.text ?? "(function)", run: fnRunner(decl), declPos: -1 };
+    }
+    if (ts.isClassDeclaration(decl) || ts.isClassExpression(decl)) {
+      return {
+        key: decl, name: decl.name?.text ?? "(class)", declPos: -1,
+        run: (ctx) => {
+          // `new C()`: instance field initialisers and the constructor run; an
+          // `extends` base's constructor runs through `super()`.
+          for (const h of decl.heritageClauses ?? []) {
+            if (h.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+            for (const t of h.types) { const e = unparen(t.expression); if (ts.isIdentifier(e)) follow(e, ctx); }
+          }
+          for (const m of decl.members) {
+            if (ts.isPropertyDeclaration(m) && !hasModifier(m, ts.SyntaxKind.StaticKeyword)) walk(m.initializer, ctx);
+            if (ts.isConstructorDeclaration(m) && m.body) fnRunner(m)(ctx);
+          }
+        },
+      };
+    }
+    if (ts.isVariableDeclaration(decl) && decl.initializer) {
+      const init = unparen(decl.initializer);
+      const declPos = isModuleScope(decl) ? decl.pos : -1;
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
+        return { key: decl, name: ts.isIdentifier(decl.name) ? decl.name.text : "(function)", run: fnRunner(init), declPos };
+      }
+      if (ts.isClassExpression(init)) return { ...callableOfDecl(init, depth + 1), key: decl, declPos };
+      if (ts.isIdentifier(init)) {
+        // alias: `const g = f; g()` runs f.
+        for (const d of resolveDecls(init)) {
+          const c = callableOfDecl(d, depth + 1);
+          if (c) return { ...c, key: decl, declPos: Math.max(declPos, c.declPos) };
+        }
+      }
+    }
+    return undefined;
+  };
+  const callableOf = (id) => { for (const d of resolveDecls(id)) { const c = callableOfDecl(d); if (c) return c; } return undefined; };
 
   const findings = [];
   const seen = new Set();
@@ -166,6 +229,11 @@ function analyseSourceFile(sf, checker) {
     findings.push({ call: entryName, callLine: line, via, constName: binding.name, constLine });
   };
 
+  // `Array.from(x, fn)` / `Uint8Array.from(x, fn)` call fn synchronously too.
+  const isSyncIterator = (callee) => callee && ts.isPropertyAccessExpression(callee) &&
+    (SYNC_ITERATORS.has(callee.name.text) ||
+      (callee.name.text === "from" && ts.isIdentifier(callee.expression) && /Array$/.test(callee.expression.text)));
+
   // Walk code that EXECUTES. `at` is the source position of the module-load
   // point this execution hangs off (the top-level call site); `entry` names it.
   // `visited` stops recursion through mutually-calling functions per entry.
@@ -177,19 +245,35 @@ function analyseSourceFile(sf, checker) {
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) { walkClass(node, ctx); return; }
     if (isFunctionLike(node)) return; // defined here, run only when called
     if (ts.isVariableDeclaration(node)) { walk(node.initializer, ctx); return; }
+    if (ts.isTaggedTemplateExpression(node)) {
+      const tag = unparen(node.tag);
+      walk(node.tag, ctx);
+      walk(node.template, ctx);
+      if (ts.isIdentifier(tag)) follow(tag, ctx); // the tag function runs now
+      return;
+    }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const callee = unparen(node.expression);
       // IIFE: the function body runs now.
-      if (callee && (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee))) walk(callee.body, ctx);
-      else walk(node.expression, ctx);
-      const sync = callee && ts.isPropertyAccessExpression(callee) && SYNC_ITERATORS.has(callee.name.text);
+      if (callee && (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee))) {
+        for (const p of callee.parameters) walk(p.initializer, ctx);
+        walk(callee.body, ctx);
+      } else walk(node.expression, ctx);
+      const sync = isSyncIterator(callee);
       for (const arg of node.arguments ?? []) {
         const a = unparen(arg);
-        if (sync && (ts.isArrowFunction(a) || ts.isFunctionExpression(a))) walk(a.body, ctx);
-        else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
+        if (sync && (ts.isArrowFunction(a) || ts.isFunctionExpression(a))) {
+          for (const p of a.parameters) walk(p.initializer, ctx);
+          walk(a.body, ctx);
+        } else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
         else walk(arg, ctx);
       }
       if (callee && ts.isIdentifier(callee)) follow(callee, ctx);
+      // `f.call(…)` / `f.apply(…)` run f.
+      if (callee && ts.isPropertyAccessExpression(callee) && (callee.name.text === "call" || callee.name.text === "apply")) {
+        const target = unparen(callee.expression);
+        if (ts.isIdentifier(target)) follow(target, ctx);
+      }
       return;
     }
     if (ts.isIdentifier(node)) {
@@ -207,16 +291,13 @@ function analyseSourceFile(sf, checker) {
       else if (ts.isPropertyDeclaration(m) && hasModifier(m, ts.SyntaxKind.StaticKeyword)) walk(m.initializer, ctx);
     }
   };
-  // Enter a same-file function's body, as if it runs at ctx.at.
+  // Enter a same-file callee, as if it runs at ctx.at.
   const follow = (id, ctx) => {
     const c = callableOf(id);
-    if (!c || ctx.visited.has(c)) return;
-    // A `const f = () => …` declared after the call is itself a TDZ read, reported
-    // by the identifier check; its body cannot run.
+    if (!c || ctx.visited.has(c.key)) return;
     if (c.declPos >= 0 && c.declPos > ctx.at) return;
-    ctx.visited.add(c);
-    const inner = { ...ctx, entry: ctx.entry ?? id.text, entryNode: ctx.entryNode, via: c.name };
-    walk(c.body, inner);
+    ctx.visited.add(c.key);
+    c.run({ ...ctx, entry: ctx.entry ?? id.text, via: c.name });
   };
 
   for (const st of sf.statements) {
@@ -225,8 +306,8 @@ function analyseSourceFile(sf, checker) {
     // keeps `at` precise for statements that contain several calls.
     const visitTop = (node) => {
       if (!node) return;
-      if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
-        const callee = unparen(node.expression);
+      if (ts.isCallExpression(node) || ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)) {
+        const callee = unparen(ts.isTaggedTemplateExpression(node) ? node.tag : node.expression);
         const ctx = { at: node.pos, entry: callee && ts.isIdentifier(callee) ? callee.text : "(call)", entryNode: node, via: undefined, visited: new Set() };
         walk(node, ctx);
         return;
@@ -324,6 +405,62 @@ const SELF_TEST = [
     "function build() { return new Engine(); }",
     "class Engine {}",
   ), true],
+  // Brain review of #1274: shapes the first compiler-API version still missed.
+  ["constructor run by `new` at load", L(
+    "class E { constructor() { this.v = LIMIT; } }",
+    "new E();",
+    "const LIMIT = 1;",
+  ), true],
+  ["instance field initialiser run by `new` at load", L(
+    "class E { v = LIMIT; }",
+    "export const e = new E();",
+    "const LIMIT = 1;",
+  ), true],
+  ["default parameter of a called function", L(
+    "f();",
+    "function f(x = LIMIT) { return x; }",
+    "const LIMIT = 1;",
+  ), true],
+  ["tagged-template tag at load", L(
+    "export const q = tag`x`;",
+    "function tag(s) { return LIMIT; }",
+    "const LIMIT = 1;",
+  ), true],
+  ["nested function called inside a called function", L(
+    "outer();",
+    "function outer() { function inner() { return LIMIT; } return inner(); }",
+    "const LIMIT = 1;",
+  ), true],
+  ["f.call at load", L(
+    "f.call(null);",
+    "function f() { return LIMIT; }",
+    "const LIMIT = 1;",
+  ), true],
+  ["Array.from mapper at load", L(
+    "export const xs = Array.from({ length: 2 }, f);",
+    "function f() { return LIMIT; }",
+    "const LIMIT = 1;",
+  ), true],
+  ["alias of a hoisted function called at load", L(
+    "const g = f;",
+    "g();",
+    "function f() { return LIMIT; }",
+    "const LIMIT = 1;",
+  ), true],
+  ["unparseable file fails closed (reported, never clean)", L(
+    "const x = ;",
+    "function (",
+  ), true],
+  ["nested function defined but never called", L(
+    "outer();",
+    "function outer() { function inner() { return LIMIT; } return inner; }",
+    "const LIMIT = 1;",
+  ), false],
+  ["`new` does not run instance methods", L(
+    "class E { get() { return LIMIT; } }",
+    "export const e = new E();",
+    "const LIMIT = 1;",
+  ), false],
   // The shapes that produced the regex widening's 75 false positives — each is
   // correct code and must pass.
   ["route handler at module scope (runs later, not at load)", L(
@@ -420,12 +557,17 @@ console.log("Module init order — a const read before it is initialised\n");
 let problems = 0;
 const sources = new Map();
 for (const f of files) {
-  if (f.endsWith("check-module-init-order.mjs")) continue;
   sources.set(join(repo, f), readFileSync(join(repo, f), "utf8"));
 }
 const results = analyseFiles(sources);
 for (const f of files) {
-  for (const d of results.get(join(repo, f)) ?? []) {
+  const got = results.get(join(repo, f));
+  for (const d of got ?? [{ error: "no analysis result — not analysed" }]) {
+    if (d.error) {
+      console.error(`  ✗ ${f}: ${d.error}. An unanalysed file is not a clean file.`);
+      problems += 1;
+      continue;
+    }
     console.error(
       `  ✗ ${f}:${d.callLine}: \`${d.call}\` runs at module load and reads \`${d.constName}\` (via \`${d.via}\`), ` +
         `declared at line ${d.constLine}.\n` +
@@ -439,7 +581,8 @@ for (const f of files) {
 console.log(
   `\nmodule-init-order: ${files.length} source files scanned, ${problems} problem(s); self-test ${SELF_TEST.length}/${SELF_TEST.length} green. ` +
     "TypeScript-compiler scope analysis: module-load code (top-level loops included) followed through " +
-    "same-file calls. Not followed: imports, method calls, callbacks other than sync array iterators. " +
+    "same-file calls, aliases, constructors, default params and tags. Not followed: imports, method calls, " +
+    "callbacks other than sync array iterators. " +
     "See the SCOPE LIMIT note.",
 );
 if (problems > 0) {

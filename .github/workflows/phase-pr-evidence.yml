@@ -2,6 +2,8 @@ name: Phase PR Evidence
 
 on:
   pull_request:
+    # `edited`: the PR body is what the summary check reads, so fixing it must re-run.
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 permissions:
@@ -44,13 +46,22 @@ jobs:
       - name: Run phase gate
         run: pnpm run phase:gate
 
+      - name: Phase summary check self-test (unset or template input refuses)
+        run: pnpm --filter @workspace/scripts exec tsx ./src/phase-summary-check.ts --self-test
+      # The PR body is the summary under review (plan row 143). Passed through env,
+      # never interpolated into the script, so its text cannot become shell.
       - name: Run phase summary check
-        run: pnpm run phase:summary-check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr-summary.md"
+          PHASE_SUMMARY_FILE="$RUNNER_TEMP/pr-summary.md" pnpm run phase:summary-check
 
       - name: Generate phase report
         run: pnpm run phase:pr-report
 
       - name: Upload phase report artifact
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: phase-pr-report

@@ -40,17 +40,20 @@
 //
 // THE REVOCATION GAPS, Redis half (PR #1240 review, plan row 82). `proof:webauthn-revocation`
 // reproduces both in the in-memory store; `revocationRedis` below runs the same ceremonies
-// against the real Redis path: a revoked id is tombstoned in the SAME fenced script that
-// removes it (so an enrolment ceremony minted before the revocation cannot bring it
-// back), a lock lost mid-revocation writes neither the removal nor the tombstone, and a
-// step-up re-reads its credential under the per-user lock before it is released. Because
+// against the real Redis path: a revoked credential's id AND key are tombstoned in the
+// SAME fenced script that removes it (so an enrolment ceremony minted before the
+// revocation cannot bring it back, under its old id or a new one), in a key namespace no
+// identity name can collide with; a lock lost mid-revocation writes neither the removal
+// nor the tombstone; and a step-up re-reads its credential under the per-user lock
+// before it is released. Because
 // every revocation now leaves a durable tombstone, each section clears the tombstones of
 // its fixed test identities before it enrols — otherwise a second run against the same
 // Redis would be refused its own fixture ids by the first run's cleanup.
 
 import { webauthn, webauthnStore, webauthnTypes } from "@workspace/webauthn";
 import IORedis from "ioredis";
-import { completeEnrolment, enrol, mintEnrolment, newAuthenticator, signAssertion, stepUp } from "./lib/webauthn-ceremony";
+import { getAuditRecords } from "@workspace/audit";
+import { completeEnrolment, enrol, mintEnrolment, newAuthenticator, sameKeyNewId, signAssertion, stepUp } from "./lib/webauthn-ceremony";
 
 type WebAuthnCredential = webauthnTypes.WebAuthnCredential;
 
@@ -72,7 +75,9 @@ const credential = (i: number): WebAuthnCredential => ({
   createdAt: new Date(0).toISOString(),
 });
 
-const tombstoneKey = (userId: string) => `webauthn:user:${userId}:revoked`;
+/** Where the store keeps an identity's revocation tombstones — its own `webauthn:revoked:`
+ *  namespace, which no identity's record or lock key can reach (see revocationRedis 1c). */
+const tombstoneKey = (userId: string) => `webauthn:revoked:${userId}`;
 
 /** A direct client for what the store deliberately exposes no API for: reading and
  *  clearing a test identity's tombstone set. */
@@ -112,7 +117,7 @@ async function resetIdentity(userId: string) {
 /**
  * THE REVOCATION GAPS against the real Redis path (see the file header). Gap 1: an
  * enrolment ceremony minted before a revocation and completed after it must not bring
- * the revoked id back. Gap 2: a step-up whose credential is revoked after
+ * the revoked credential back — by its id or by its key. Gap 2: a step-up whose credential is revoked after
  * `verifyAuthentication`'s early read must not be released — placed, as in the lock-lost
  * race, by patching ioredis's own `get`: the first GET of the user record after arming is
  * that early read, and the patch lets it return the pre-revocation record only after a
@@ -132,7 +137,7 @@ async function revocationRedis() {
   check("redis: the revocation reports that it removed the credential", (await webauthnStore.removeCredential(user, device.id)) === true);
   check(
     "redis: …and tombstoned the id in the same write",
-    (await rawRedis((r) => r.sismember(tombstoneKey(user), device.id))) === 1,
+    (await rawRedis((r) => r.sismember(tombstoneKey(user), `id:${device.id}`))) === 1,
   );
   const revived = await completeEnrolment(user, outstanding, device, tenant);
   check(
@@ -153,6 +158,41 @@ async function revocationRedis() {
     storeRefusal instanceof Error && storeRefusal.name === "CredentialRevokedError",
     String(storeRefusal),
   );
+
+  // 1b — the revoked KEY under a fresh id (with `none` attestation nothing signs the id).
+  const disguised = sameKeyNewId(device);
+  const disguisedEnrol = await completeEnrolment(user, await mintEnrolment(user), disguised, tenant);
+  check(
+    "redis: the revoked KEY under a NEW credential id is refused",
+    disguisedEnrol.success === false && !(await webauthnStore.getCredentialsForUser(user)).some((c) => c.id === disguised.id),
+    `success=${disguisedEnrol.success} error=${disguisedEnrol.error}`,
+  );
+
+  // 1c — KEY NAMESPACE. identityRef is caller text and userId is `${tenant}:${identityRef}`,
+  // so a tombstone stored at `webauthn:user:<userId>:revoked` was ALSO the record key of
+  // the identity "<identityRef>:revoked". Enrolling that identity made the victim's
+  // revocation script fail on SADD (WRONGTYPE) AFTER it had deleted the record — Lua does
+  // not roll back — so the revocation threw, wrote no tombstone, and a ceremony minted
+  // before it could bring the credential back. Found by adversarial review.
+  const victim = "t_proof:revocation-redis-collide";
+  const collider = `${victim}:revoked`;
+  await resetIdentity(victim);
+  await resetIdentity(collider);
+  const victimDevice = newAuthenticator(false);
+  await enrol(victim, victimDevice, tenant);
+  await webauthnStore.addCredential(collider, credential(900));
+  const victimOutstanding = await mintEnrolment(victim);
+  let collideRevoke: unknown;
+  try {
+    collideRevoke = await webauthnStore.removeCredential(victim, victimDevice.id);
+  } catch (err) {
+    collideRevoke = err;
+  }
+  check("redis: an identity named '<victim>:revoked' cannot break the victim's revocation", collideRevoke === true, String(collideRevoke));
+  const victimRevived = await completeEnrolment(victim, victimOutstanding, victimDevice, tenant);
+  check("redis: …and the victim's revoked credential still cannot come back", victimRevived.success === false, `success=${victimRevived.success} error=${victimRevived.error}`);
+  await resetIdentity(collider);
+  await resetIdentity(victim);
 
   // Gap 2.
   const user2 = "t_proof:revocation-redis-release";
@@ -194,6 +234,16 @@ async function revocationRedis() {
     "redis: a zero-counter step-up whose credential was revoked mid-verification is NOT released",
     released.success === false,
     `success=${released.success} error=${released.error}`,
+  );
+  check(
+    "redis: …refused BECAUSE of the revocation (step_up.failure, reason credential_revoked), not some other check",
+    (await getAuditRecords(5000, 0)).some(
+      (r) =>
+        r.eventType === "security.webauthn.step_up.failure" &&
+        r.meta?.credentialId === passkey.id &&
+        r.meta?.reason === "credential_revoked" &&
+        r.tenantId === tenant,
+    ),
   );
   check(
     "redis: confirmCredentialEnrolled — false once the credential is revoked",
@@ -362,7 +412,7 @@ async function lockLostMidWriteRace() {
   );
   check(
     "…and no tombstone was written either (removal and tombstone are one fenced script)",
-    (await rawRedis((r) => r.sismember(tombstoneKey(userId), "cred-501"))) === 0,
+    (await rawRedis((r) => r.scard(tombstoneKey(userId)))) === 0,
   );
 
   // Cleanup, regardless of which branch actually persisted.

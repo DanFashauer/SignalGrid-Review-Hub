@@ -72,6 +72,14 @@ export function newAuthenticator(counting: boolean): Authenticator {
   return { id: idBytes.toString("base64url"), idBytes, privateKey, cose, counting, signCount: counting ? 1 : 0 };
 }
 
+/** The SAME key pair under a different credential id. With `none` attestation the id is
+ *  whatever the client puts in authData — nothing signs it — so this is what a party
+ *  holding a revoked authenticator (or just its public key) can present. */
+export function sameKeyNewId(auth: Authenticator): Authenticator {
+  const idBytes = randomBytes(16);
+  return { ...auth, id: idBytes.toString("base64url"), idBytes };
+}
+
 export interface MintedCeremony {
   challengeId: string;
   challenge: string;

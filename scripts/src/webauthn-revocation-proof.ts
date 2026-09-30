@@ -41,6 +41,7 @@ import {
   enrol as enrolAs,
   mintEnrolment,
   newAuthenticator,
+  sameKeyNewId,
   stepUp as stepUpAs,
   type Authenticator,
 } from "./lib/webauthn-ceremony";
@@ -108,10 +109,7 @@ async function gapOneRevivalByEnrolment() {
     !(await enrolledIds(user)).includes(device.id),
     `enrolled: [${(await enrolledIds(user)).join(", ")}]`,
   );
-  check(
-    "…and a step-up with the revoked authenticator is refused",
-    (await webauthnStore.hasWebAuthnCredentials(user)) === false || (await stepUp(user, device)).success === false,
-  );
+  check("…and a step-up with the revoked authenticator is refused", (await stepUp(user, device)).success === false);
 
   // The refusal is audited as its own event: a revoked credential trying to come back
   // is exactly what a security reviewer needs to see in the ledger.
@@ -134,6 +132,18 @@ async function gapOneRevivalByEnrolment() {
     fresh.success === false && !(await enrolledIds(user)).includes(device.id),
     `success=${fresh.success} error=${fresh.error}`,
   );
+
+  // The id is not the credential — the KEY is. With `none` attestation nothing signs the
+  // credential id, so whoever holds the revoked authenticator (or only its public key)
+  // can re-present the revoked key under a fresh id. The tombstone covers the key too.
+  const disguised = sameKeyNewId(device);
+  const disguisedEnrol = await completeEnrolment(user, await mintEnrolment(user), disguised, TENANT);
+  check(
+    "the revoked KEY under a NEW credential id is refused (the id is client-chosen; the key is what was revoked)",
+    disguisedEnrol.success === false && !(await enrolledIds(user)).includes(disguised.id),
+    `success=${disguisedEnrol.success} error=${disguisedEnrol.error}`,
+  );
+  check("…and a step-up signed by the revoked key under that id is not released", (await stepUp(user, disguised)).success === false);
 
   // What the tombstone does NOT block: re-enrolling the same person's device. A
   // conforming authenticator generates a new key pair and credential id on every

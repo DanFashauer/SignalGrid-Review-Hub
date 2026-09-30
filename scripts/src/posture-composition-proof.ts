@@ -232,6 +232,7 @@ check("an unknown input never DENIES — it forecloses the grant, it does not re
     ["identityStatus 'Enabled' (case drift)", { identityStatus: "Enabled" }, "IDENTITY_STATE_UNKNOWN"],
     ["userRisk 'atRisk'", { userRisk: "atRisk" }, "USER_RISK_UNKNOWN"],
     ["userRisk '__proto__'", { userRisk: "__proto__" }, "USER_RISK_UNKNOWN"],
+    ["userRisk null", { userRisk: null }, "USER_RISK_UNKNOWN"],
     ["deviceComplianceState 'error'", { deviceComplianceState: "error" }, "COMPLIANCE_STATE_UNKNOWN"],
     ["deviceComplianceState 'conflict'", { deviceComplianceState: "conflict" }, "COMPLIANCE_STATE_UNKNOWN"],
     ["deviceComplianceState 'COMPLIANT' (case drift)", { deviceComplianceState: "COMPLIANT" }, "COMPLIANCE_STATE_UNKNOWN"],
@@ -239,6 +240,7 @@ check("an unknown input never DENIES — it forecloses the grant, it does not re
     ["deviceManagementState undefined", { deviceManagementState: undefined }, "MANAGEMENT_STATE_UNKNOWN"],
     ["deviceRegistrationState 'constructor' (prototype key)", { deviceRegistrationState: "constructor" }, "REGISTRATION_STATE_UNKNOWN"],
     ["deviceRegistrationState 'toString' (prototype key)", { deviceRegistrationState: "toString" }, "REGISTRATION_STATE_UNKNOWN"],
+    ["deviceRegistrationState 'Registered' (case drift)", { deviceRegistrationState: "Registered" }, "REGISTRATION_STATE_UNKNOWN"],
   ];
   for (const [label, over, reason] of OUT_OF_DOMAIN) {
     const r = fromDevicePosture(posture(over as Partial<import("@workspace/integrations/graph").GraphPostureSignal>));

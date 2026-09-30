@@ -65,10 +65,47 @@ export function appSurfaceStatuses(surfaces = SURFACES) {
  * `<Route … component={N} />`.
  */
 export const PREVIEW = "preview route (not launch UI)";
+
+/**
+ * Remove // and /* *\/ comments while leaving string and template literals intact.
+ * A regex stripper treated the `//` inside `{"//"}` as a comment and erased the
+ * <Route> that followed it on the same line (round-2 review) — a page it could not
+ * see then read as `not routed` and passed. This walks the source once instead.
+ */
+export function stripComments(code) {
+  let out = "";
+  let i = 0;
+  while (i < code.length) {
+    const c = code[i];
+    const n = code[i + 1];
+    if (c === '"' || c === "'" || c === "`") {
+      // ' and " strings end on their own line; an unmatched one is JSX text such as
+      // "don't", not a string, so it must not swallow the lines after it.
+      let j = i + 1;
+      while (j < code.length && code[j] !== c && (c === "`" || code[j] !== "\n")) j += code[j] === "\\" ? 2 : 1;
+      if (j >= code.length || code[j] !== c) {
+        out += c;
+        i += 1;
+        continue;
+      }
+      out += code.slice(i, j + 1);
+      i = j + 1;
+    } else if (c === "/" && n === "/") {
+      while (i < code.length && code[i] !== "\n") i += 1;
+    } else if (c === "/" && n === "*") {
+      const end = code.indexOf("*/", i + 2);
+      i = end < 0 ? code.length : end + 2;
+    } else {
+      out += c;
+      i += 1;
+    }
+  }
+  return out;
+}
 const ROUTE_SHAPE = /^<Route(?:\s+path="[^"]*")?\s+component=\{(\w+)\}\s*\/>/;
 
 export function adminPlacements(appSource) {
-  const src = appSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const src = stripComments(appSource);
   const pageOf = new Map(); // component name → page path under src/pages
   for (const m of src.matchAll(/const\s+(\w+)\s*=\s*named\(\s*\(\)\s*=>\s*import\(\s*"@\/pages\/([^"]+)"\s*\)/g)) pageOf.set(m[1], m[2]);
   for (const m of src.matchAll(/import\s+(\w+)\s+from\s+"@\/pages\/([^"]+)"/g)) pageOf.set(m[1], m[2]);
@@ -134,6 +171,14 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   if (!vm) errors.push(`${DOC} does not name the launch-profile version it was checked against ("launch profile vN")`);
   else if (Number(vm[1]) !== profileVersion)
     errors.push(`${DOC} says launch profile v${vm[1]}; scripts/launch-profile.mjs is v${profileVersion} — re-read every status`);
+  // The demo path's step 4 is prose, but one defect in it already shipped (it named
+  // no credential, so the shell decided on-device). Keep the two load-bearing names.
+  const demo = doc.slice(doc.search(/^## The demo path/m));
+  const step4 = /^4\. [\s\S]*?(?=^5\. )/m.exec(demo)?.[0] ?? "";
+  if (!step4) errors.push(`${DOC}: demo path step 4 not found`);
+  for (const needle of ["-DemoBackendToken", "sgk_demo_northwind_operator"])
+    if (step4 && !step4.includes(needle))
+      errors.push(`${DOC}: demo step 4 no longer names ${needle} — without it the host app decides on-device or in another tenant`);
   const tracked = new Set(pageFiles);
   const seen = new Map();
   for (const r of rows) {
@@ -200,6 +245,9 @@ function selfTest() {
     row("signalgrid-app", pageFiles[3], "launch surface · not a launch screen", "404 fallback"),
     row("signalgrid-web", pageFiles[4], "demo_only", "—"),
     END,
+    "## The demo path",
+    "4. host app with -DemoBackendToken sgk_demo_northwind_operator",
+    "5. audit",
   ].join("\n");
   const base = { doc: good, pageFiles, statuses, placements, unparsedRoutes: unparsed, profileVersion: 7 };
   const arrowSrc = appSrc.replace('<Route path="/fleet" component={FleetPreview} />', '<Route path="/fleet" component={() => <Fleet />} />');
@@ -218,6 +266,18 @@ function selfTest() {
     ["a <Route> naming no known page fails", { ...base, unparsedRoutes: adminPlacements(unknownSrc).unparsed, placements: adminPlacements(unknownSrc).placement }, 1],
     ["a commented-out route does not count as routed", { ...base, doc: good.replace("| not routed |", "| launch route |") }, 1],
     ["an empty shows column fails", { ...base, doc: good.replace("| — | a screen |", "| — |  |") }, 1],
+    ["demo step 4 without -DemoBackendToken fails", { ...base, doc: good.replace("-DemoBackendToken ", "") }, 1],
+    ["demo step 4 without the northwind token fails", { ...base, doc: good.replace("sgk_demo_northwind_operator", "sgk_demo_atlas_owner") }, 1],
+    ["a {\"//\"} string before a <Route> does not hide it", (() => {
+      const src = appSrc.replace('<Route path="/sessions" component={SessionList} />', '{"//"}<Route path="/sessions" component={SessionList} />');
+      const r = adminPlacements(src);
+      return { ...base, doc: good.replace("| launch | launch route |", "| launch surface · not a launch screen | not routed |"), placements: r.placement, unparsedRoutes: r.unparsed };
+    })(), 1],
+    ["an apostrophe in JSX text does not hide the routes after it", (() => {
+      const src = appSrc.replace('<Route path="/sessions" component={SessionList} />', "<p>don't</p>\n<Route path=\"/sessions\" component={SessionList} />");
+      const r = adminPlacements(src);
+      return { ...base, placements: r.placement, unparsedRoutes: r.unparsed };
+    })(), 0],
     ["a placeholder shows column (TBD) fails", { ...base, doc: good.replace("| — | a screen |", "| — | TBD |") }, 1],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, 1],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, 1],

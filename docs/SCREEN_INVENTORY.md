@@ -32,8 +32,11 @@ under the console's PREVIEW banner — the Placement column says which.
 `node scripts/check-screen-inventory.mjs` fails when a tracked
 `artifacts/*/src/pages/**/*.tsx` file has no row, when a listed file is gone, when a
 Status disagrees with the launch profile, when a Placement disagrees with the
-route table, or when the route table holds a `<Route>` shape the gate cannot read. It
-runs in `scripts/preflight.mjs` and in CI.
+route table, when the route table holds a `<Route>` shape the gate cannot read, or
+when demo step 4 stops naming `-DemoBackendToken` and `sgk_demo_northwind_operator`.
+It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
+(`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file
+would not be seen, and the other surfaces make no placement claim.
 
 ## Inventory
 
@@ -117,8 +120,10 @@ SignalGrid.
    worker's side. The same seeded refs are handed to the host app
    (`-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`,
    `-DemoBackendURL` pointing at the same local api-server, and `-DemoBackendToken`
-   set to a tenant fixture token — the public `sgk_demo_*` keys listed in
-   `artifacts/api-collection/README.md`). All four are needed: without a non-empty
+   set to `sgk_demo_northwind_operator` — the same public fixture key the console uses
+   (`artifacts/signalgrid-app/src/lib/v1.ts`), so both sides act in the northwind
+   tenant that owns these seeded refs; another tenant's `sgk_demo_*` key would put the
+   decision in a different tenant's ledger). All four are needed: without a non-empty
    token `DecisionServiceProvider.resolve` (`native/ios/EnterpriseShell/Services/DecisionService.swift`)
    picks the on-device engine and the shell never calls the api-server. The investor sees the
    host app's own screens: an ordinary action runs with no friction; a sensitive

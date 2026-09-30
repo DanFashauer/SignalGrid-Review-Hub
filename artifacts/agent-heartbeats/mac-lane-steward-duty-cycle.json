@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T09:33:25.609Z",
-  "result": "non-quiet 09:25Z: landed Mac tick #1260 (68020786, evidence re-mint; live-evidence 2026-09-30 04:23 -04:00, readiness 100 on merged tree, sim requests all bound) and heartbeat #1261; tick #1257/#1262 are objective-state only and conflict — left open for the owner to close as superseded (next tick re-derives). Mac tick last firedAt 2026-09-30T09:25:36Z; no mail to cloud; owner not escalated. New: worker PRs #1263/#1264/#1265 under review; #1243 re-validating after a CodeQL escape fix."
+  "firedAt": "2026-09-30T11:35:39.995Z",
+  "result": "non-quiet 11:24Z: Mac tick firing normally (last 11:31:59Z) but cutting a tick branch+PR every ~5 min since 10:32Z (#1269–#1284, requestedAt churn only) — root cause in scripts/objective-loop.mjs same-day request id reuse; cloud fix claude/fix-objective-loop-same-day-requeue validating; Mac mailed; no mail to cloud; live-evidence 2026-09-30 04:23 -04:00 but stale vs current manifest (re-mint will run as -2 after the fix lands); owner not escalated. Landed since last heartbeat: #1243, #1264, #1263, #1268."
 }

@@ -113,15 +113,11 @@
 /* Table striping */
 .decision-row:nth-child(even) { background: hsl(210 13% 9% / 0.5); }
 
-/* Decision-state utilities over the ratified tokens (DR-005 deny, DR-006
-   allow). Review at its base value measures 4.58:1 on the 8%-tinted card;
-   deny needs the measured on-tint step (l+4 → #CC7F7F, 4.79:1 tinted card,
-   5.35:1 tinted background) — same composite math as DR-006's allow-on-tint. */
+/* Decision-state text utilities over the ratified tokens (DR-005 deny, DR-006
+   allow). This tree renders no tinted verdict chips, so it declares no
+   .bg-status-* rules (plan row 153): the sibling trees that do render them carry
+   the rules and the on-tint composites scripts/check-decision-palette.mjs measures. */
 .text-status-allow { color: hsl(var(--decision-allow)); }
-.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); border-color: hsl(var(--decision-allow) / 0.2); }
 .text-status-step-up { color: hsl(var(--decision-review)); }
-.bg-status-step-up { background-color: hsl(var(--decision-review) / 0.08); color: hsl(var(--decision-review)); border-color: hsl(var(--decision-review) / 0.2); }
 .text-status-restrict { color: hsl(var(--decision-deny)); }
-.bg-status-restrict { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }
 .text-status-deny { color: hsl(var(--decision-deny)); }
-.bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); border-color: hsl(var(--decision-deny) / 0.2); }

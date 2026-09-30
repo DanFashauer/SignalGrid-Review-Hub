@@ -1158,6 +1158,21 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // derivation that reports a set it never feeds is the decorative failure this
     // whole file keeps warning about. Deleting the `files.push` must fail here.
     audienceDocs.every((d) => files.includes(d.file)) &&
+    // THE RETIRED-LABEL DOC SCAN (DR-054 sweep #7). A bare `catch { continue }` there
+    // skipped an EACCES doc exactly like a deleted one and the gate then passed over
+    // text it never read. EACCES must be recorded; ENOENT must stay a silent skip; and
+    // the live loop must call the reader (pinned lexically, needle built from pieces).
+    (() => {
+      const thrower = (code) => () => { throw Object.assign(new Error(`${code}: synthetic`), { code }); };
+      const denied = [];
+      const missing = [];
+      const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
+      return readScannedDoc("docs/x.md", denied, thrower("EACCES")) === null &&
+        denied.length === 1 && denied[0].startsWith("docs/x.md: EACCES") &&
+        readScannedDoc("docs/x.md", missing, thrower("ENOENT")) === null && missing.length === 0 &&
+        src.includes(["readScannedDoc(f, ", "unreadableDocs)"].join("")) &&
+        !src.includes(["body = readFileSync(f, \"utf8\"); } ", "catch { continue; }"].join(""));
+    })() &&
     // THE CEILING READ. Neither ceiling arm had a self-test at all until 2026-09-06,
     // which is how a comment claiming "an unreadable ceiling can never silently
     // authorise a rise" sat above code that did exactly that. These cases drive the REAL
@@ -1333,6 +1348,14 @@ for (const f of docsSvg) {
 // above had to make, for the same reason: counting files makes a fresh violation in
 // an already-listed document invisible.
 const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.json";
+/** Read one scanned doc. ENOENT (deleted since `git ls-files`) is a legitimate skip and
+ *  returns null; any other error is a present-but-unreadable doc, recorded in `unreadable`
+ *  so the scan FAILS instead of counting it clean (DR-054 sweep #7; template:
+ *  check-override-parity.mjs). `read` is injectable so the self-test can throw EACCES. */
+function readScannedDoc(f, unreadable, read = readFileSync) {
+  try { return read(f, "utf8"); }
+  catch (e) { if (e.code !== "ENOENT") unreadable.push(`${f}: ${e.message}`); return null; }
+}
 {
   const docMd = execSync("git ls-files docs", { encoding: "utf8" })
     .trim().split("\n").filter((f) => f.endsWith(".md"));
@@ -1349,9 +1372,10 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
   let byBanner = 0;
   const quotedLines = [];
   const worst = [];
+  const unreadableDocs = [];
   for (const f of docMd) {
-    let body;
-    try { body = readFileSync(f, "utf8"); } catch { continue; }
+    const body = readScannedDoc(f, unreadableDocs);
+    if (body === null) continue;
     if (bannerLineIndex(body) >= 0 && RETIRED_LABELS.test(body)) bannered += 1;
     const r = retiredProseScan(f, body);
     quotedLines.push(...r.quotedLines);
@@ -1360,6 +1384,11 @@ const RETIRED_CEILING_FILE = "docs/agent/launch-claims-retired-labels-ceiling.js
     byBanner += r.byBanner;
     const n = r.violations.length;
     if (n > 0) { mentions += n; worst.push([f, n]); }
+  }
+  if (unreadableDocs.length) {
+    console.error(`✗ ${unreadableDocs.length} doc(s) present but unreadable — NOT scanned for retired labels, and a doc never read is not a doc found clean:`);
+    for (const u of unreadableDocs) console.error(`    ${u}`);
+    process.exit(1);
   }
   worst.sort((a, b) => b[1] - a[1]);
 

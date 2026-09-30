@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T05:28:59.853Z",
-  "result": "05:24Z non-quiet: acked the Mac land-5 mail; landed #1226 (7d2e0a12) and #1227 (32928d31) under DR-037; #1218 fix-needed (mailed); #1225 still fix-needed; #1216 in re-review. Tick last fired 05:05:39Z; live-evidence 2026-09-29 22:27Z (~7h); manifest check clean; sim requests all bound; no owner escalation. Mac PR #1246 (DR-061) is the owner's."
+  "firedAt": "2026-09-30T06:32:09.555Z",
+  "result": "06:24Z non-quiet. Acked the #1248 land ask: fix-needed, 1 HIGH, waits on DR-061. New Mac PRs #1251 and #1252 are in review. Since the last cycle: mail #1249 landed at 7a7e24e2 and the forward-build heartbeat #1250 landed at 3d917278. Tick last fired 06:20:56Z. Live-evidence is from 2026-09-29 22:27Z (~8h old). No owner escalation."
 }

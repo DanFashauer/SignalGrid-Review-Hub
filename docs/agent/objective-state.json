@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "met",
       "measured": {
-        "headline": 95,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 95,
-        "reason": "19/20 bound proofs/steps current against manifest 7c15496cfc1b; not current (stale fingerprint, stale/absent source digest, or unrecorded): step:Browser E2E (review console, website, admin); launch items fully current 27/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 484d26d9e4d1; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,7 +50,6 @@
     }
   ],
   "unmet": [
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -171,15 +170,7 @@
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-09-30",
-      "queuedAs": "this tick"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
@@ -189,8 +180,8 @@
     "openRows": 76
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-30T06:43:48.928Z",
-  "derivedAtCommit": "b307f83dad15c71145f56aa25ad168b6f2b18223",
-  "workingTreeCleanAtEntry": true,
-  "decisionAddress": "ea5466ad7646ce49c1e5969d1382ded7c056af2b47011d655c0915a4ea537573"
+  "derivedAt": "2026-09-30T08:23:26.701Z",
+  "derivedAtCommit": "d23f8e689b23abda67829d598a34f413c10ebe92",
+  "workingTreeCleanAtEntry": false,
+  "decisionAddress": "7794bc9b31a6b8c3446c1dc1374241f4a1f386b0ea135639bd95dde7e47dca3c"
 }

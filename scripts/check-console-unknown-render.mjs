@@ -49,16 +49,20 @@
 //      and NOT inside an event-handler attribute). (Codex P2.)
 // Exempt a specific occurrence with a `// unknown-ok: <reason>` on its line or the line above.
 //
-// KNOWN, DELIBERATE LIMITATIONS (conservative — they UNDER-flag, never over-flag; the
-// widened doctrine review still covers them, and each has a BUILD_BACKLOG follow-up):
-//   - Per-query provenance is not tracked, and provenance does not cross component/file
-//     boundaries: on a multi-query page a presence guard on query A is accepted for a
-//     conclusion backed by query B, and a value extracted into a child presentation
-//     component is analysed without its parent's query origin. A false NEGATIVE, not a
-//     false positive. (Codex P1 — deferred deliberately: naive origin-tracking risks the
-//     over-flag that would disqualify a mandatory gate.)
-//   - A good-state class stored in a constant (`const GOOD = "text-emerald-400"`) is not
-//     resolved to its literal. A false negative. (Codex P2.)
+// PER-QUERY PROVENANCE (2026-09-30, closes Codex P1-7 within one component): every tracked
+// name carries the set of query ORIGINS (hook calls) it descends from, and a guard proves
+// data present only for the query it tests. On a multi-query page, a presence guard on
+// query A no longer covers a good-state render of query B's data.
+// CONST-CLASS RESOLUTION (2026-09-30, closes Codex P2-5): a good-state class hoisted into a
+// `const` (a literal, template literal, `clsx`/`cn` call or ternary of those) is resolved
+// through lexical scope before the class match, so `className={GOOD}` is judged as inline.
+//
+// KNOWN, DELIBERATE LIMITATION (conservative — it UNDER-flags, never over-flags; the
+// widened doctrine review still covers it, and it has a BUILD_BACKLOG follow-up):
+//   - Provenance does not cross component/file boundaries: a value extracted into a child
+//     presentation component (`<Panel items={items} />`) is analysed in the child without
+//     its parent's query origin. A false NEGATIVE, not a false positive. Object-map classes
+//     (`TONE[status]`) are not resolved either.
 //
 // `--self-test` plants bug shapes (each must flag), gated shapes (must not), and a PLANT
 // into a real component — so the check can itself fail and can pass.
@@ -154,19 +158,34 @@ function collectStrings(node, out) {
 function analyzeSourceFile(relPath, text) {
   const sf = ts.createSourceFile(relPath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
-  const queryObjVars = new Set();   // const q = useQuery(...)
-  const dataVars = new Set();        // destructured `data`, and vars derived from query data
-  const statusVars = new Set();      // destructured isError/error/isLoading/isSuccess/status/... vars
-  const errorLoadingVars = new Set(); // the subset that means the query FAILED or is not ready
-  const errorVars = new Set();         // error flags specifically
-  const loadingVars = new Set();       // loading/pending/fetching flags specifically
+  // PER-QUERY PROVENANCE (backlog "two conservative false-negatives", P1-7). Every
+  // tracked name maps to the SET of query ORIGINS it descends from — one origin per hook
+  // call (its declaration's position). A guard proves data present only for the origins it
+  // tests, so a presence guard on query A no longer covers a render of query B's data.
+  const queryObjVars = new Map();   // const q = useQuery(...)                      name -> origins
+  const dataVars = new Map();        // destructured `data`, and vars derived from query data
+  const statusVars = new Map();      // destructured isError/error/isLoading/isSuccess/status/... vars
+  const errorLoadingVars = new Map(); // the subset that means the query FAILED or is not ready
+  const errorVars = new Map();         // error flags specifically
+  const loadingVars = new Map();       // loading/pending/fetching flags specifically
   let usesQueryHook = false;
-  const noteStatusLocal = (prop, local) => {
-    statusVars.add(local);
-    if (ERROR_LOADING.has(prop)) errorLoadingVars.add(local);
-    if (ERROR_MEMBERS.has(prop)) errorVars.add(local);
-    if (LOADING_MEMBERS.has(prop)) loadingVars.add(local);
+  const addOrigins = (map, name, origins) => {
+    let set = map.get(name);
+    if (!set) { set = new Set(); map.set(name, set); }
+    const before = set.size;
+    for (const o of origins) set.add(o);
+    return set.size !== before;
   };
+  const noteStatusLocal = (prop, local, origins) => {
+    let changed = addOrigins(statusVars, local, origins);
+    if (ERROR_LOADING.has(prop)) changed = addOrigins(errorLoadingVars, local, origins) || changed;
+    if (ERROR_MEMBERS.has(prop)) changed = addOrigins(errorVars, local, origins) || changed;
+    if (LOADING_MEMBERS.has(prop)) changed = addOrigins(loadingVars, local, origins) || changed;
+    return changed;
+  };
+  // `origin === undefined` means "any query" — the pre-provenance behaviour, used where a
+  // marker renders no query data of its own to attribute.
+  const inOrigin = (set, origin) => origin === undefined || (set !== undefined && set.has(origin));
 
   // Query-family hooks by their LOCAL name, resolving `import { useQuery as useRQ }`. A
   // call spelled with the alias is still a query hook. (Codex P2.)
@@ -195,21 +214,23 @@ function analyzeSourceFile(relPath, text) {
       const hasQueryField = fields.some((p) => QUERY_DESTRUCTURE.has(p));
       if (!(family || hasQueryField)) return;
       usesQueryHook = true;
+      const origin = [decl.pos];
       for (const el of decl.name.elements) {
         const prop = propOf(el);
         const local = ts.isIdentifier(el.name) ? el.name.text : undefined;
         if (!prop || !local) continue;
-        if (prop === "data") dataVars.add(local);
-        else if (QUERY_DESTRUCTURE.has(prop)) noteStatusLocal(prop, local);
+        if (prop === "data") addOrigins(dataVars, local, origin);
+        else if (QUERY_DESTRUCTURE.has(prop)) noteStatusLocal(prop, local, origin);
       }
     } else if (ts.isIdentifier(decl.name) && family) {
       usesQueryHook = true;
-      queryObjVars.add(decl.name.text);
+      addOrigins(queryObjVars, decl.name.text, [decl.pos]);
     } else if (ts.isArrayBindingPattern(decl.name) && family) {
-      // `const [q] = useQueries(...)` — each element is a query-result object. (Codex P2.)
+      // `const [q] = useQueries(...)` — each element is a query-result object, and each is
+      // its own origin. (Codex P2.)
       usesQueryHook = true;
       for (const el of decl.name.elements) {
-        if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) queryObjVars.add(el.name.text);
+        if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) addOrigins(queryObjVars, el.name.text, [el.pos]);
       }
     }
   };
@@ -232,21 +253,37 @@ function analyzeSourceFile(relPath, text) {
     return hit;
   };
 
+  // The query origins a subtree's query-state references descend from.
+  const originsIn = (n) => {
+    const out = new Set();
+    const walk = (x) => {
+      if (!x) return;
+      if (ts.isIdentifier(x) && !isMemberName(x)) {
+        for (const m of [queryObjVars, dataVars, statusVars]) for (const o of m.get(x.text) ?? []) out.add(o);
+      }
+      ts.forEachChild(x, walk);
+    };
+    walk(n);
+    return out;
+  };
+
   // Derived-from-data vars, to a fixpoint. Handles `const s = q.data?.x ?? []` and a later
-  // `const { data: d, isError: e } = q` destructure of a query-object var. (Codex P2.)
+  // `const { data: d, isError: e } = q` destructure of a query-object var. (Codex P2.) Each
+  // derived var inherits the origins of everything it was derived from.
   for (let changed = true, guard = 0; changed && guard < 8; guard++) {
     changed = false;
     const p2 = (n) => {
       if (ts.isVariableDeclaration(n) && n.initializer) {
-        if (ts.isIdentifier(n.name) && !dataVars.has(n.name.text) && referencesQueryState(n.initializer)) {
-          dataVars.add(n.name.text); changed = true;
+        if (ts.isIdentifier(n.name) && !queryObjVars.has(n.name.text) && !statusVars.has(n.name.text) && referencesQueryState(n.initializer)) {
+          if (addOrigins(dataVars, n.name.text, originsIn(n.initializer))) changed = true;
         } else if (ts.isObjectBindingPattern(n.name) && referencesQueryState(n.initializer)) {
+          const origins = originsIn(n.initializer);
           for (const el of n.name.elements) {
             const prop = propOf(el);
             const local = ts.isIdentifier(el.name) ? el.name.text : undefined;
             if (!prop || !local) continue;
-            if (prop === "data" && !dataVars.has(local)) { dataVars.add(local); changed = true; }
-            else if (QUERY_DESTRUCTURE.has(prop) && !statusVars.has(local) && !dataVars.has(local)) { noteStatusLocal(prop, local); changed = true; }
+            if (prop === "data") { if (addOrigins(dataVars, local, origins)) changed = true; }
+            else if (QUERY_DESTRUCTURE.has(prop) && !dataVars.has(local)) { if (noteStatusLocal(prop, local, origins)) changed = true; }
           }
         }
       }
@@ -270,56 +307,57 @@ function analyzeSourceFile(relPath, text) {
     return hit;
   };
   // referencesFlag: subtree references a specific flag kind (error or loading) of the query.
-  const referencesFlag = (n, memberSet, varSet) => {
+  const referencesFlag = (n, memberSet, varSet, origin) => {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
-      if (ts.isIdentifier(x) && !isMemberName(x) && varSet.has(x.text)) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && varSet.has(x.text) && inOrigin(varSet.get(x.text), origin)) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
-          queryObjVars.has(x.expression.text) && memberSet.has(x.name.text)) { hit = true; return; }
+          queryObjVars.has(x.expression.text) && memberSet.has(x.name.text) && inOrigin(queryObjVars.get(x.expression.text), origin)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
     return hit;
   };
   // referencesQueryData: subtree references the query's DATA specifically (a `data`/derived
-  // var, or `queryObj.data`) — NOT an error/loading flag, NOT a bare query object.
-  const referencesQueryData = (n) => {
+  // var, or `queryObj.data`) — NOT an error/loading flag, NOT a bare query object. With an
+  // `origin`, only data descending from THAT query counts.
+  const referencesQueryData = (n, origin) => {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
-      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text)) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && inOrigin(dataVars.get(x.text), origin)) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
-          queryObjVars.has(x.expression.text) && x.name.text === "data") { hit = true; return; }
+          queryObjVars.has(x.expression.text) && x.name.text === "data" && inOrigin(queryObjVars.get(x.expression.text), origin)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
     return hit;
   };
   const isNullish = (x) => (ts.isIdentifier(x) && x.text === "undefined") || x.kind === ts.SyntaxKind.NullKeyword;
-  const isDataPresenceAtom = (n) => referencesQueryData(n) && !referencesErrorLoading(n);
+  const isDataPresenceAtom = (n, origin) => referencesQueryData(n, origin) && !referencesErrorLoading(n);
   const isErrorAtom = (n) => referencesErrorLoading(n) && !referencesQueryData(n);
-  const eqNullishDataSide = (n) =>
-    (referencesQueryData(n.left) && isNullish(n.right)) || (referencesQueryData(n.right) && isNullish(n.left));
+  const eqNullishDataSide = (n, origin) =>
+    (referencesQueryData(n.left, origin) && isNullish(n.right)) || (referencesQueryData(n.right, origin) && isNullish(n.left));
 
   // PER-BRANCH boolean model. One polarity per test cannot read `&&`/`||` correctly, and
   // `!isError` is ALSO true while a query is still pending — so it is never proof of data.
   // dataPresentWhen(test, branchValue): does `test` evaluating to branchValue GUARANTEE the
   // data is present? dataAbsentWhen: does it guarantee absent/errored? (Codex P1/P2.)
   const K = ts.SyntaxKind;
-  const dataPresentWhen = (test, bv) => {
+  const dataPresentWhen = (test, bv, origin) => {
     if (!test) return false;
-    if (ts.isParenthesizedExpression(test)) return dataPresentWhen(test.expression, bv);
-    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return dataPresentWhen(test.operand, !bv);
+    if (ts.isParenthesizedExpression(test)) return dataPresentWhen(test.expression, bv, origin);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return dataPresentWhen(test.operand, !bv, origin);
     if (ts.isBinaryExpression(test)) {
       const op = test.operatorToken.kind;
-      if (op === K.AmpersandAmpersandToken) return bv ? (dataPresentWhen(test.left, true) || dataPresentWhen(test.right, true)) : false;
-      if (op === K.BarBarToken) return !bv ? (dataPresentWhen(test.left, false) || dataPresentWhen(test.right, false)) : false;
-      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken) return eqNullishDataSide(test) ? bv === false : false;
-      if (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) return eqNullishDataSide(test) ? bv === true : false;
+      if (op === K.AmpersandAmpersandToken) return bv ? (dataPresentWhen(test.left, true, origin) || dataPresentWhen(test.right, true, origin)) : false;
+      if (op === K.BarBarToken) return !bv ? (dataPresentWhen(test.left, false, origin) || dataPresentWhen(test.right, false, origin)) : false;
+      if (op === K.EqualsEqualsEqualsToken || op === K.EqualsEqualsToken) return eqNullishDataSide(test, origin) ? bv === false : false;
+      if (op === K.ExclamationEqualsEqualsToken || op === K.ExclamationEqualsToken) return eqNullishDataSide(test, origin) ? bv === true : false;
       return false;
     }
-    if (isDataPresenceAtom(test)) return bv === true;
+    if (isDataPresenceAtom(test, origin)) return bv === true;
     return false;
   };
   const dataAbsentWhen = (test, bv) => {
@@ -365,17 +403,17 @@ function analyzeSourceFile(relPath, text) {
   // this kind (error, or loading) is FALSE? Used to recognise the react-query success
   // pattern `isLoading ? … : isError ? … : <content>` — content is reached only with BOTH
   // flags false, i.e. data present. (Codex P2 — a false positive on the standard pattern.)
-  const flagFalseWhen = (test, bv, memberSet, varSet) => {
+  const flagFalseWhen = (test, bv, memberSet, varSet, origin) => {
     if (!test) return false;
-    if (ts.isParenthesizedExpression(test)) return flagFalseWhen(test.expression, bv, memberSet, varSet);
-    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return flagFalseWhen(test.operand, !bv, memberSet, varSet);
+    if (ts.isParenthesizedExpression(test)) return flagFalseWhen(test.expression, bv, memberSet, varSet, origin);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) return flagFalseWhen(test.operand, !bv, memberSet, varSet, origin);
     if (ts.isBinaryExpression(test)) {
       const op = test.operatorToken.kind;
-      if (op === K.AmpersandAmpersandToken) return bv ? (flagFalseWhen(test.left, true, memberSet, varSet) || flagFalseWhen(test.right, true, memberSet, varSet)) : false;
-      if (op === K.BarBarToken) return !bv ? (flagFalseWhen(test.left, false, memberSet, varSet) || flagFalseWhen(test.right, false, memberSet, varSet)) : false;
+      if (op === K.AmpersandAmpersandToken) return bv ? (flagFalseWhen(test.left, true, memberSet, varSet, origin) || flagFalseWhen(test.right, true, memberSet, varSet, origin)) : false;
+      if (op === K.BarBarToken) return !bv ? (flagFalseWhen(test.left, false, memberSet, varSet, origin) || flagFalseWhen(test.right, false, memberSet, varSet, origin)) : false;
       return false;
     }
-    if (referencesFlag(test, memberSet, varSet) && !referencesQueryData(test)) return bv === false;
+    if (referencesFlag(test, memberSet, varSet, origin) && !referencesQueryData(test)) return bv === false;
     return false;
   };
 
@@ -409,15 +447,23 @@ function analyzeSourceFile(relPath, text) {
   };
   // A good render is HANDLED when the guards governing it prove data present — either
   // directly, or by ruling out BOTH the error and loading flags (react-query: not-error and
-  // not-loading ⇒ data present).
-  const isHandled = (node) => {
-    let present = false, notError = false, notLoading = false;
-    for (const b of governingBranches(node)) {
-      if (dataPresentWhen(b.test, b.bv)) present = true;
-      if (flagFalseWhen(b.test, b.bv, ERROR_MEMBERS, errorVars)) notError = true;
-      if (flagFalseWhen(b.test, b.bv, LOADING_MEMBERS, loadingVars)) notLoading = true;
-    }
-    return present || (notError && notLoading);
+  // not-loading ⇒ data present). With `origins` (the queries whose data the render shows),
+  // EVERY one of them must be proven present by a guard on that same query; without, any
+  // query's guard counts (a marker that renders no query data of its own).
+  const isHandled = (node, origins) => {
+    const branches = governingBranches(node);
+    const provenFor = (origin) => {
+      let present = false, notError = false, notLoading = false;
+      for (const b of branches) {
+        if (dataPresentWhen(b.test, b.bv, origin)) present = true;
+        if (flagFalseWhen(b.test, b.bv, ERROR_MEMBERS, errorVars, origin)) notError = true;
+        if (flagFalseWhen(b.test, b.bv, LOADING_MEMBERS, loadingVars, origin)) notLoading = true;
+      }
+      return present || (notError && notLoading);
+    };
+    if (!origins || origins.size === 0) return provenFor(undefined);
+    for (const o of origins) if (!provenFor(o)) return false;
+    return true;
   };
 
   // Is `node` in the DATA-ABSENT branch of a query guard — the arm that renders when data
@@ -472,32 +518,110 @@ function analyzeSourceFile(relPath, text) {
   // member or a derived data var; NOT a bare query-object reference (`q.refetch()`), NOT a
   // ref in a guard test, NOT a same-named function parameter, and NOT anything inside an
   // event-handler attribute. (Codex P2.)
+  // Each data reference is judged against ITS OWN query origins: a `rows` derived from query
+  // B inside `a.data ? … : …` is NOT handled, because the guard tests query A. (P1-7.)
   const elementHasUnguardedDataRender = (jsxElement) => {
     let hit = false;
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isJsxAttribute(x) && ts.isIdentifier(x.name) && HANDLER_ATTR.test(x.name.text)) return; // skip onClick/onChange/…
       if (ts.isBinaryExpression(x) && x.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-          referencesQueryData(x.left) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
-      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
+          referencesQueryData(x.left) && !isHandled(x, originsIn(x.left)) && !inGuardTest(x)) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !isHandled(x, dataVars.get(x.text)) && !inGuardTest(x)) { hit = true; return; }
       if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
-          queryObjVars.has(x.expression.text) && x.name.text === "data" && !isHandled(x) && !inGuardTest(x)) { hit = true; return; }
+          queryObjVars.has(x.expression.text) && x.name.text === "data" && !isHandled(x, queryObjVars.get(x.expression.text)) && !inGuardTest(x)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(jsxElement);
     return hit;
   };
-
-  const goodClassStringNodes = (attr) => {
-    const nodes = [];
+  // The query origins whose DATA an element renders (not guard tests, not handlers, not a
+  // same-named prop). A good-state marker on that element must be proven present for all of
+  // them; an element that renders no query data yields none, and any query's guard counts.
+  const elementDataOrigins = (jsxElement) => {
+    const out = new Set();
+    if (!jsxElement) return out;
     const walk = (x) => {
       if (!x) return;
-      if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) nodes.push(x);
-      if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((s) => GOOD_CLASS.test(s.literal.text)))) nodes.push(x);
+      if (ts.isJsxAttribute(x) && ts.isIdentifier(x.name) && HANDLER_ATTR.test(x.name.text)) return;
+      if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !inGuardTest(x)) {
+        for (const o of dataVars.get(x.text)) out.add(o);
+      }
+      if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression) &&
+          queryObjVars.has(x.expression.text) && x.name.text === "data" && !inGuardTest(x)) {
+        for (const o of queryObjVars.get(x.expression.text)) out.add(o);
+      }
       ts.forEachChild(x, walk);
     };
-    walk(attr);
-    return nodes;
+    walk(jsxElement);
+    return out;
+  };
+
+  // CONST-CLASS RESOLUTION (backlog "two conservative false-negatives", P2-5). A class
+  // string hoisted into a `const` — a literal, a template literal, a `clsx`/`cn` call, or a
+  // ternary of those — is resolved to its initializer through lexical scope (the nearest
+  // enclosing block or the module that declares it), so `className={GOOD}` is judged as if
+  // the literal were inline. Object maps (`TONE[status]`) are not resolved.
+  // A wrapper — `"…" as const`, `"…" satisfies string`, `<string>"…"`, `x!`, parens — is
+  // resolvable only when what it WRAPS is: `{ ok: "…emerald…" } as const` is an object map,
+  // and resolving it would flag `className={T.muted}` (a false positive). An identifier is
+  // an alias (`const GOOD = BASE`) and resolves through its own binding.
+  const RESOLVABLE_INIT = (n) => {
+    if (!n) return false;
+    if (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
+        ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) return RESOLVABLE_INIT(n.expression);
+    return ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n) ||
+      ts.isCallExpression(n) || ts.isConditionalExpression(n) || ts.isBinaryExpression(n) || ts.isIdentifier(n);
+  };
+  // Does this scope bind `name` as something OTHER than a const we can resolve — a
+  // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
+  // at the use site is that binding, and resolution must stop (no false positive
+  // from `rows.map((cls) => <span className={cls}>…`).
+  const bindsNameOpaquely = (scope, name) => {
+    const bindsIn = (b) => ts.isIdentifier(b) ? b.text === name
+      : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsIn(el.name));
+    if (ts.isFunctionLike(scope) && scope.parameters?.some((p) => bindsIn(p.name))) return true;
+    if (ts.isCatchClause(scope) && scope.variableDeclaration && bindsIn(scope.variableDeclaration.name)) return true;
+    if ((ts.isForStatement(scope) || ts.isForOfStatement(scope) || ts.isForInStatement(scope)) &&
+        scope.initializer && ts.isVariableDeclarationList(scope.initializer) &&
+        scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
+    return false;
+  };
+  const resolveConstInit = (id) => {
+    for (let cur = id.parent; cur; cur = cur.parent) {
+      if (bindsNameOpaquely(cur, id.text)) return null;
+      const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements : null;
+      if (!stmts) continue;
+      for (const st of stmts) {
+        if (!ts.isVariableStatement(st)) continue;
+        const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
+        for (const d of st.declarationList.declarations) {
+          if (ts.isIdentifier(d.name) && d.name.text === id.text) return isConst && RESOLVABLE_INIT(d.initializer) ? d.initializer : null;
+          if (!ts.isIdentifier(d.name) && (ts.isObjectBindingPattern(d.name) || ts.isArrayBindingPattern(d.name)) &&
+              d.name.elements.some((el) => !ts.isOmittedExpression(el) && ts.isIdentifier(el.name) && el.name.text === id.text)) return null;
+        }
+      }
+    }
+    return null;
+  };
+  // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
+  // site (the string itself when inline; the identifier when resolved through a const).
+  const goodClassStringNodes = (attr) => {
+    const found = [];
+    // An alias chain of any length resolves; `resolving` stops a cycle (`const A = B; const B = A`).
+    const resolving = new Set();
+    const walk = (x, use) => {
+      if (!x) return;
+      if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) found.push({ node: x, use: use ?? x });
+      if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((s) => GOOD_CLASS.test(s.literal.text)))) found.push({ node: x, use: use ?? x });
+      if (ts.isIdentifier(x) && !isMemberName(x)) {
+        const init = resolveConstInit(x);
+        if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
+      }
+      ts.forEachChild(x, (c) => walk(c, use));
+    };
+    walk(attr, undefined);
+    return found;
   };
   const enclosingJsxElement = (node) => {
     let cur = node;
@@ -588,9 +712,10 @@ function analyzeSourceFile(relPath, text) {
       if (!scannable) { ts.forEachChild(n, p3); return; }
       const t = textOfNode(n);
       if (t) {
-        if (unnegatedMatch(STRONG_AFFIRMATIONS, t) && !isHandled(n)) {
+        const origins = elementDataOrigins(enclosingJsxElement(n));
+        if (unnegatedMatch(STRONG_AFFIRMATIONS, t) && !isHandled(n, origins)) {
           report(n, "affirmation-phrase", t);
-        } else if (unnegatedMatch(WEAK_CONCLUSIONS, t) && !isHandled(n)) {
+        } else if (unnegatedMatch(WEAK_CONCLUSIONS, t) && !isHandled(n, origins)) {
           const el = enclosingJsxElement(n);
           if (el && elementHasUnguardedDataRender(el)) report(n, "weak-conclusion-on-unguarded-data", t);
         }
@@ -599,13 +724,16 @@ function analyzeSourceFile(relPath, text) {
     // Good-state className on a JSX attribute.
     if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) &&
         (n.name.text === "className" || n.name.text === "accent" || n.name.text === "dot" || n.name.text === "text")) {
-      for (const strNode of goodClassStringNodes(n)) {
-        if (isHandled(strNode)) continue;
-        const el = enclosingJsxElement(n);
+      const el = enclosingJsxElement(n);
+      const origins = elementDataOrigins(el);
+      for (const { node: strNode, use } of goodClassStringNodes(n)) {
+        // Handled by a guard around the class string itself (inside a resolved const's
+        // ternary) or around its use at the JSX site — for the queries this element renders.
+        if (isHandled(strNode, origins) || (use !== strNode && isHandled(use, origins))) continue;
         // Report when the good class is chosen by the data-ABSENT branch (painted on
         // unknown), OR when the element renders unguarded query data.
-        if (inAbsentDataBranch(strNode) || (el && elementHasUnguardedDataRender(el))) {
-          report(strNode, "good-class-on-unguarded-data", strNode.text || "emerald");
+        if (inAbsentDataBranch(strNode) || inAbsentDataBranch(use) || (el && elementHasUnguardedDataRender(el))) {
+          report(use, "good-class-on-unguarded-data", strNode.text || (use !== strNode ? use.getText(sf) : "emerald"));
         }
       }
     }
@@ -784,6 +912,121 @@ export function Reasoned() {
   return <div>All clear</div>; // unknown-ok: static legend, not a live status
 }`;
 
+// Backlog "two conservative false-negatives" (2026-09-30). Must flag:
+const BUG_TWOQUERY = `
+import { useQuery } from "@tanstack/react-query";
+export function TwoQuery() {
+  const a = useQuery({ queryKey: ["a"], queryFn: fa });
+  const b = useQuery({ queryKey: ["b"], queryFn: fb });
+  const rows = b.data?.rows ?? [];
+  return <div>{a.data ? <span className="text-emerald-400">{rows.length} rows</span> : null}</div>;
+}`;
+const BUG_CONSTCLASS = `
+import { useQuery } from "@tanstack/react-query";
+const GOOD = "text-emerald-400";
+export function ConstClass() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return <span className={GOOD}>{rows.length} rows</span>;
+}`;
+const BUG_TEMPLATECONST = `
+import { useQuery } from "@tanstack/react-query";
+export function TemplateConst({ size }) {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  const cls = \`px-2 \${size} text-emerald-400\`;
+  return <span className={cls}>{rows.length} rows</span>;
+}`;
+// …and the correctly guarded versions must NOT flag:
+const OK_TWOQUERY_BOTH = `
+import { useQuery } from "@tanstack/react-query";
+export function TwoBoth() {
+  const a = useQuery({ queryKey: ["a"], queryFn: fa });
+  const b = useQuery({ queryKey: ["b"], queryFn: fb });
+  const rows = b.data?.rows ?? [];
+  return <div>{a.data && b.data ? <span className="text-emerald-400">{rows.length} rows</span> : null}</div>;
+}`;
+const OK_TWOQUERY_OWN = `
+import { useQuery } from "@tanstack/react-query";
+export function TwoOwn() {
+  const a = useQuery({ queryKey: ["a"], queryFn: fa });
+  const b = useQuery({ queryKey: ["b"], queryFn: fb });
+  const rows = b.data?.rows ?? [];
+  if (!a.data) return null;
+  return <div>{b.data ? <span className="text-emerald-400">{rows.length} rows</span> : null}</div>;
+}`;
+const OK_CONSTCLASS_GUARDED = `
+import { useQuery } from "@tanstack/react-query";
+const GOOD = "text-emerald-400";
+export function ConstGuarded() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return q.data ? <span className={GOOD}>{rows.length} rows</span> : <span>-</span>;
+}`;
+const OK_CONSTTERNARY = `
+import { useQuery } from "@tanstack/react-query";
+export function ConstTernary() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const s = q.data;
+  const cls = s ? "text-emerald-400" : "text-muted";
+  return <span className={cls}>{s ? String(s.n) : "-"}</span>;
+}`;
+const OK_CONSTSTATIC = `
+import { useQuery } from "@tanstack/react-query";
+const GOOD = "text-emerald-400";
+export function ConstStatic() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  return <span className={GOOD}>Vendor-integrated</span>;
+}`;
+const OK_CONSTSHADOWED = `
+import { useQuery } from "@tanstack/react-query";
+const GOOD = "text-emerald-400";
+export function ConstShadowed() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  const GOOD = "text-slate-400";
+  return <span className={GOOD}>{rows.length} rows</span>;
+}`;
+
+// Brain review of #1274: const forms the first resolution pass missed, and a parameter
+// that shadows a good-state const.
+const constFixture = (pre, cls) => `
+import { useQuery } from "@tanstack/react-query";
+${pre}
+export function ConstForm() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return <span className={${cls}}>{rows.length} rows</span>;
+}`;
+const BUG_ASCONST = constFixture(`const GOOD = "text-emerald-400" as const;`, "GOOD");
+const BUG_SATISFIES = constFixture(`const GOOD = "text-emerald-400" satisfies string;`, "GOOD");
+const BUG_CONSTALIAS = constFixture(`const BASE = "text-emerald-400";\nconst GOOD = BASE;`, "GOOD");
+// Brain review round 2: a 5-deep alias chain must flag; an object map wrapped in `as
+// const` must NOT resolve (false positive); a reassigned `let` is not resolved — the
+// literal it starts with is not the value it renders.
+const BUG_ALIASCHAIN5 = constFixture(
+  `const A0 = "text-emerald-400";\nconst A1 = A0;\nconst A2 = A1;\nconst A3 = A2;\nconst A4 = A3;\nconst GOOD = A4;`, "GOOD");
+const OK_ASCONSTMAP = constFixture(
+  `const T = { ok: "text-emerald-400", muted: "text-slate-400" } as const;`, "T.muted");
+const OK_LETREASSIGNED = `
+import { useQuery } from "@tanstack/react-query";
+export function LetReassigned() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  let cls = "text-emerald-400";
+  if (!q.data) cls = "text-slate-400";
+  return <span className={cls}>{rows.length} rows</span>;
+}`;
+const OK_ALIASCYCLE = constFixture(`const A = B;\nconst B = A;`, "A");
+const OK_PARAMSHADOW = `
+import { useQuery } from "@tanstack/react-query";
+const cls = "text-emerald-400";
+export function ParamShadow() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  return <div>{["text-slate-400"].map((cls) => <span className={cls}>{rows.length} rows</span>)}</div>;
+}`;
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -849,6 +1092,39 @@ function selfTest() {
     const v = analyze(src, "R3OK.tsx");
     console.log(`  self-test R3-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — round-3 false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Backlog "two conservative false-negatives" (2026-09-30): provenance + const-class.
+  const fnBugs = [
+    ["TWO-QUERY (guard on A, render of B)", BUG_TWOQUERY],
+    ["CONST-CLASS (className={GOOD})", BUG_CONSTCLASS],
+    ["TEMPLATE-CONST (const cls = `… emerald`)", BUG_TEMPLATECONST],
+    ["AS-CONST (const GOOD = \"…emerald\" as const)", BUG_ASCONST],
+    ["SATISFIES (const GOOD = \"…emerald\" satisfies string)", BUG_SATISFIES],
+    ["CONST-ALIAS (const GOOD = BASE)", BUG_CONSTALIAS],
+    ["ALIAS-CHAIN-5 (A0 → … → A4 → GOOD)", BUG_ALIASCHAIN5],
+  ];
+  for (const [label, src] of fnBugs) {
+    const v = analyze(src, "FN.tsx");
+    console.log(`  self-test FN ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — false-negative not closed: ${label}`); }
+  }
+  const fnOk = [
+    ["TWO-QUERY guarded on both", OK_TWOQUERY_BOTH],
+    ["TWO-QUERY each guarded on its own query", OK_TWOQUERY_OWN],
+    ["CONST-CLASS under a data guard", OK_CONSTCLASS_GUARDED],
+    ["CONST-TERNARY (const cls = s ? emerald : muted)", OK_CONSTTERNARY],
+    ["CONST-CLASS static label, no data", OK_CONSTSTATIC],
+    ["CONST-CLASS shadowed by a local non-good const", OK_CONSTSHADOWED],
+    ["CONST-CLASS shadowed by an arrow parameter", OK_PARAMSHADOW],
+    ["AS-CONST object map, className={T.muted}", OK_ASCONSTMAP],
+    ["reassigned `let` is not resolved", OK_LETREASSIGNED],
+    ["alias cycle terminates, no finding", OK_ALIASCYCLE],
+  ];
+  for (const [label, src] of fnOk) {
+    const v = analyze(src, "FNOK.tsx");
+    console.log(`  self-test FN-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 
   // Plant into a REAL component: drop the `s ?` presence guard on a metric with a static

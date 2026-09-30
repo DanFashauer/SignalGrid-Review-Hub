@@ -176,6 +176,11 @@ await (async () => {
     listed.length > 0 && members.length > 0);
   check(`the docstring lists exactly as many sources as DeviceIdentity.source can hold (${listed.length} vs ${members.length})`,
     listed.length === members.length);
+  // Counts alone would pass a docstring that swapped one real source for a fictional
+  // one. Each union member must be NAMED by exactly one listed source.
+  const unnamed = members.filter((m) => listed.filter((l) => l.toLowerCase().includes(m)).length !== 1);
+  check(`every DeviceIdentity.source member is named by exactly one docstring source (unnamed: ${unnamed.join(",") || "none"})`,
+    members.length > 0 && unnamed.length === 0);
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

@@ -1,6 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
-import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential, suppressedHealth } from '../adapters/emit-gate';
 import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 
 /**
@@ -250,8 +250,9 @@ export class JiraAdapter implements ITSMAdapter {
     // `/rest/api/3/myself` looks like the most harmless call in the file and is still a
     // credentialed request to a customer's Atlassian tenant from wherever this runs.
     const emission = resolveEmission(process.env, this.emissionCredential());
-    // Suppressed means NOT ASKED, which is not unhealthy — see ITSMAdapter.healthCheck.
-    if (emission.mode !== "live") return 'unchecked';
+    // Tier/flag suppression is NOT ASKED ('unchecked'); a missing credential with live
+    // emission on is a misconfiguration (false). See suppressedHealth in the gate.
+    if (emission.mode !== "live") return suppressedHealth(emission);
 
     try {
       const url = `${this.config.baseUrl}/rest/api/3/myself`;

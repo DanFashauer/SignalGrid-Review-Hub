@@ -389,6 +389,9 @@ export async function addToDLQ(
  * be checked against what the dispatcher actually did, not merely written.
  */
 export async function listDLQ(limit = 20): Promise<DLQEntry[]> {
+  // Same answer on both backends: `lrange(key, 0, -1)` would return EVERYTHING for a
+  // limit of 0 while the memory slice returns nothing.
+  if (!Number.isInteger(limit) || limit <= 0) return [];
   const r = getRedis();
 
   if (r) {

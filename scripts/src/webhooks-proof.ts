@@ -712,6 +712,17 @@ check(
         let refused = false;
         try { await addToDLQ(hook.id, "evt_probe", {}, "probe", Number.NaN); } catch { refused = true; }
         check("...and addToDLQ refuses a count nobody observed (NaN) rather than writing it as evidence", refused);
+        // Distinguishes the OBSERVED count from the CONFIGURED one: with maxAttempts -1
+        // the loop makes zero deliveries, so a record of 0 is the truth and a record
+        // echoing the config (-1) is refused. A three-attempt run alone could not tell
+        // `attemptsMade` from `config.retry.maxAttempts` — they are both 3 there.
+        const before = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id).length;
+        installSpy();
+        await dispatchEvent("siem.event", { probe: true },
+          { timeoutMs: 1000, retry: { maxAttempts: -1, baseDelayMs: 1, maxDelayMs: 1, jitterFactor: 0 } } as never).catch(() => undefined);
+        const after = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`a run that made ZERO deliveries dead-letters a record saying 0, not the configured ceiling (spy fired ${calls.length}x, new entries ${after.length - before}, newest says ${after[0]?.attempts})`,
+          calls.length === 0 && after.length === before + 1 && after[0]?.attempts === 0);
       }
     } finally {
       delete process.env[ENV_KEY];

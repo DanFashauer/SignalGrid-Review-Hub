@@ -1,6 +1,6 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
 import { TIMEOUT_PRESETS } from '../../utils/timeoutPresets';
-import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential, suppressedHealth } from '../adapters/emit-gate';
 import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 import { asNonEmptyString, asPositiveNumber, asVendorInstant } from '../adapters/vendor-values';
 
@@ -275,8 +275,9 @@ export class ServiceNowAdapter implements ITSMAdapter {
     // runs. Note the gate goes BEFORE ensureAuthenticated() — that helper performs its
     // own OAuth token fetch, so gating after it would still have reached the network.
     const emission = resolveEmission(process.env, this.emissionCredential());
-    // Suppressed means NOT ASKED, which is not unhealthy — see ITSMAdapter.healthCheck.
-    if (emission.mode !== "live") return 'unchecked';
+    // Tier/flag suppression is NOT ASKED ('unchecked'); a missing credential with live
+    // emission on is a misconfiguration (false). See suppressedHealth in the gate.
+    if (emission.mode !== "live") return suppressedHealth(emission);
 
     try {
       await this.ensureAuthenticated();

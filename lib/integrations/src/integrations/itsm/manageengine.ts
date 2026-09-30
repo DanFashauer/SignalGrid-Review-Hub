@@ -1,5 +1,5 @@
 import type { ITSMAdapter, ITSMTicketRequest, ITSMTicketResponse } from '../adapters/types';
-import { resolveEmission, type EmissionCredential } from '../adapters/emit-gate';
+import { resolveEmission, type EmissionCredential, suppressedHealth } from '../adapters/emit-gate';
 import { isRedirectStatus, redirectRefusal } from '../adapters/redirect';
 import { asVendorInstant } from '../adapters/vendor-values';
 
@@ -127,8 +127,9 @@ export class ManageEngineAdapter implements ITSMAdapter {
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
     const emission = resolveEmission(process.env, this.emissionCredential());
-    // Suppressed means NOT ASKED, which is not unhealthy — see ITSMAdapter.healthCheck.
-    if (emission.mode !== "live") return 'unchecked';
+    // Tier/flag suppression is NOT ASKED ('unchecked'); a missing credential with live
+    // emission on is a misconfiguration (false). See suppressedHealth in the gate.
+    if (emission.mode !== "live") return suppressedHealth(emission);
 
     try {
       const url = `${this.config.instanceUrl}/api/v3/requests?page=1&page_size=1`;

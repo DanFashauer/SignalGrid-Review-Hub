@@ -40,10 +40,12 @@ export interface ITSMAdapter {
   readonly vendor: string;
   createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse>;
   /**
-   * `true`/`false` only for a check that was actually MADE. `'unchecked'` when the
-   * emit gate suppressed it and no call left the process: a call never made has
-   * found nothing unhealthy, and reporting `false` there sent an operator chasing
-   * eight simultaneous vendor outages that were not happening (plan row 128).
+   * `true`/`false` for a check that was actually MADE. `'unchecked'` when the emit
+   * gate suppressed it by tier or flag and no call left the process: a call never
+   * made has found nothing unhealthy, and reporting `false` there sent an operator
+   * chasing eight simultaneous vendor outages that were not happening (plan row 128).
+   * A MISSING CREDENTIAL with live emission on still reports `false`: that is a
+   * broken integration, not an unasked one.
    */
   healthCheck?(): Promise<boolean | 'unchecked'>;
 }

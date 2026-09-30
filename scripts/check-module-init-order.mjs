@@ -57,28 +57,34 @@
 // Round 3 (review of f52e806f): a callee behind a type-only wrapper (`make!()`,
 // `(make as any)()`, `(make satisfies X)()`, `(<any>make)()`, `new (E as any)()`),
 // a comma sequence (`(0, make)()`) or a conditional (`(c ? f : g)()`, both
-// branches) is followed. Every file is forced to module scope — an import-less
-// file used to share one global scope with its twins, and all but the first went
-// silently unanalysed.
+// branches, nested either way) is followed — as a callee, a tag, a `.call`/
+// `.apply` target, an `extends` base, and a synchronous iterator's callback.
+// Calling a generator runs its parameter defaults, not its body. Every file is
+// forced to module scope — an import-less file used to share one global scope
+// with its twins, and all but the first went silently unanalysed.
 //
 // SCOPE LIMIT, stated rather than pretended away. This follows calls within ONE
 // file; it does not follow calls through imports, method calls on objects
 // (`obj.run()`), getters, `f.bind(…)()`, a function reached through an object
-// or array (`handlers[0]()`), a callee behind `||`/`??`/`&&`, a decorator
-// (standard or legacy — neither is walked), an alias chain deeper than 6 hops,
-// or a callback passed to a function other than the synchronous ones listed
-// above; and it treats every branch as taken. `var` is not a TDZ binding and is
-// not checked. A clean run therefore means none of the FOLLOWED shapes reads a binding early — it is not proof that
-// no TDZ read exists at module load. A file the Program does not load, or that
+// or array (`handlers[0]()`), a callee behind `||`/`??`/`&&`, an assignment
+// callee (`(x = f)()`), `Reflect.apply(f, …)`, an alias whose initializer is a
+// conditional or comma (`const h = c ? f : g; h()` — only a plain or cast
+// identifier alias is followed), a decorator (standard or legacy — neither is
+// walked), an alias chain deeper than 6 hops, or a callback passed to a
+// function other than the synchronous ones listed above; and it treats every
+// branch as taken. `var` is not a TDZ binding and is not checked. A clean run
+// therefore means none of the FOLLOWED shapes reads a binding early — it is not
+// proof that no TDZ read exists at module load. A file the Program does not load, or that
 // does not parse, is reported as a problem, never counted clean.
 //
 // SELF-TEST: both real defects must be detected from synthetic reconstructions —
 // the grid-proof one in its REAL top-level-loop shape — the CORRECTED order must
 // pass, and the shapes that fooled the regex widening (route handlers, shadowed
-// locals, functions only called from functions) must pass. Every branch named
-// above has a row that fails with that branch removed (mutation-checked
-// 2026-09-30), and a failing row prints the findings it saw. A gate that cannot
-// fail proves nothing.
+// locals, functions only called from functions) must pass. The round-3 shapes
+// and the six branches the #1274 review found unpinned each have a row that
+// fails when that branch is removed — the mutants run are listed in PR #1329,
+// and only those are claimed. A failing row prints the findings it saw. A gate
+// that cannot fail proves nothing.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -214,16 +220,17 @@ function analyseSourceFile(sf, checker) {
   // for hoisted or nested callees.
   // Calling a function runs its parameter defaults — including defaults inside
   // a destructured parameter (`function f({ a = X }) {}`) — and then its body.
+  // A generator's body waits for the first `next()`; only its defaults run.
   const fnRunner = (fn) => (ctx) => {
     for (const p of fn.parameters) { walkPattern(p.name, ctx); walk(p.initializer, ctx); }
-    walk(fn.body, ctx);
+    if (!fn.asteriskToken) walk(fn.body, ctx);
   };
   // `new C()`: instance field initialisers and the constructor run; an
   // `extends` base's constructor runs through `super()`.
   const classRunner = (cls) => (ctx) => {
     for (const h of cls.heritageClauses ?? []) {
       if (h.token !== ts.SyntaxKind.ExtendsKeyword) continue;
-      for (const t of h.types) { const e = unparen(t.expression); if (ts.isIdentifier(e)) follow(e, ctx); }
+      for (const t of h.types) for (const e of calleeTargets(t.expression)) if (ts.isIdentifier(e)) follow(e, ctx);
     }
     for (const m of cls.members) {
       if (ts.isPropertyDeclaration(m) && !hasModifier(m, ts.SyntaxKind.StaticKeyword)) walk(m.initializer, ctx);
@@ -319,10 +326,12 @@ function analyseSourceFile(sf, checker) {
       const sync = isSyncIterator(callee) ||
         (ts.isNewExpression(node) && callee && ts.isIdentifier(callee) && callee.text === "Promise");
       for (const arg of node.arguments ?? []) {
-        const a = unparen(arg);
-        if (sync && (ts.isArrowFunction(a) || ts.isFunctionExpression(a))) fnRunner(a)(ctx);
-        else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
-        else walk(arg, ctx);
+        walk(arg, ctx);
+        if (!sync) continue;
+        for (const a of calleeTargets(arg)) {
+          if (ts.isArrowFunction(a) || ts.isFunctionExpression(a)) fnRunner(a)(ctx);
+          else if (ts.isIdentifier(a)) follow(a, ctx);
+        }
       }
       // `f.call(…)` / `f.apply(…)` run f — a named function, or a function
       // expression written in place: `(function () { … }).call(null)`.
@@ -566,6 +575,19 @@ const SELF_TEST = [
   ["`new (E as any)()`", L("class E { constructor() { LIM; } }", "new (E as any)();", "const LIM = 1;"), true],
   ["comma-sequence callee `(0, make)()`", L("(0, make)();", "function make() { return LIM; }", "const LIM = 1;"), true],
   ["conditional callee, either branch", L("(Math.random() ? ok : make)();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  // Review of 7da6116d: each calleeTargets branch pinned from BOTH sides and on
+  // every path that uses it (tag, .call/.apply, extends, sync-iterator argument).
+  ["conditional callee, TRUE branch", L("(Math.random() ? make : ok)();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["comma inside a conditional", L("(Math.random() ? (0, make) : ok)();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["conditional inside a comma", L("(0, (Math.random() ? ok : make))();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["cast inside a conditional", L("(Math.random() ? (make as any) : ok)();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["comma tag of a tagged template", L("(0, tag)`x`;", "function tag() { return LIM; }", "const LIM = 1;"), true],
+  ["conditional target of .call", L("(Math.random() ? make : ok).call(null);", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["conditional `extends` base run by `new`", L("class B { constructor() { LIM; } }", "class A extends (Math.random() ? B : Object) {}", "new A();", "const LIM = 1;"), true],
+  ["comma `extends` base run by `new`", L("class B { constructor() { LIM; } }", "class A extends (0, B) {}", "new A();", "const LIM = 1;"), true],
+  ["conditional sync-iterator callback", L("[1].forEach(Math.random() ? ok : make);", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["generator call runs defaults, not the body", L("export const it = gen();", "function* gen() { yield LIM; }", "const LIM = 1;"), false],
+  ["generator call runs its parameter defaults", L("export const it = gen();", "function* gen(x = LIM) { yield x; }", "const LIM = 1;"), true],
   ["`as` tag of a tagged template", L("(tag as any)`x`;", "function tag() { return LIM; }", "const LIM = 1;"), true],
   ["pattern default inside a followed function", L("f();", "function f() { const { a = LIM } = {}; return a; }", "const LIM = 1;"), true],
   ["class static block at load", L("class A { static { LIM; } }", "const LIM = 1;"), true],

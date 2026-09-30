@@ -342,7 +342,7 @@ const proofOutput = {
   routedActionCount: routedActionsAll.length,
 };
 
-assertPublicSafety(JSON.stringify({ scenarios, proofOutput }, null, 2));
+assertPublicSafety({ scenarios, proofOutput });
 
 const failed = assertions.filter((item) => !item.passed);
 const unsafeAllowCount = mutationResults.filter(isPlainAllow).length;
@@ -1051,17 +1051,74 @@ function toEvidenceRecord(result: SimulatorRunResult) {
   };
 }
 
-function assertPublicSafety(content: string): void {
+// SECRETS ARE FOUND BY WALKING THE OBJECT, not by regexing its serialisation (plan
+// row 145). The old pattern — `(api_key|secret|token|password)\s*[:=]\s*value` — ran
+// against JSON.stringify output, where a key is followed by `"` before the colon and
+// a value opens with `"`; neither is `\s`, `[:=]` nor a value character, so the check
+// could not fire on the one shape this proof produces and had always passed. The
+// walk sees the key and the value as they are. Fail-closed on shape: any string of
+// 12+ non-space characters under a secret-named key is a finding, whatever alphabet
+// it uses. The in-string regex is kept as well, for `key=value` inside one literal.
+// (The patterns live inside the function: it runs from top-level code above this
+// point in the file, before a module-level const would be initialised.)
+
+/** Every `path` whose key names a secret and whose string value is credential-shaped,
+ *  plus every string anywhere holding an inline `key=value` credential. */
+function findSecretLikePairs(value: unknown, path = "$"): string[] {
+  const SECRET_KEY = /(?:api[_-]?key|secret|token|password|passwd|credential|bearer)/i;
+  const SECRET_VALUE = /^\S{12,}$/;
+  const SECRET_IN_STRING = /(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}/i;
+  const found: string[] = [];
+  if (typeof value === "string") {
+    if (SECRET_IN_STRING.test(value)) found.push(path);
+  } else if (Array.isArray(value)) {
+    value.forEach((v, i) => found.push(...findSecretLikePairs(v, `${path}[${i}]`)));
+  } else if (value !== null && typeof value === "object") {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const child = `${path}.${k}`;
+      if (SECRET_KEY.test(k) && typeof v === "string" && SECRET_VALUE.test(v)) found.push(child);
+      found.push(...findSecretLikePairs(v, child));
+    }
+  }
+  return found;
+}
+
+function assertPublicSafety(payload: unknown): void {
+  const content = JSON.stringify(payload, null, 2);
+  const secretPaths = findSecretLikePairs(payload);
+  assertions.push(
+    assertion(
+      "public safety: secret-like strings",
+      secretPaths.length === 0,
+      secretPaths.slice(0, 5).join(", ") || "none found",
+    ),
+  );
+  // NEGATIVE CONTROL: a synthetic object carrying fake credentials in exactly the
+  // serialisation shape above must be caught — the old regex returned false on all
+  // three, so without this control the check is invisible again the moment it rots.
+  const planted = {
+    apiKey: "FAKE0000example0000",
+    config: { client_secret: "FAKE-not-a-real-secret-0000" },
+    steps: [{ password: "FAKEpassword0000" }],
+  };
+  const plantedHits = findSecretLikePairs(planted);
+  assertions.push(
+    assertion(
+      "public safety self-test: secret walk catches credentials in the JSON shape this proof emits",
+      plantedHits.length === 3,
+      plantedHits.join(", ") || "none caught",
+    ),
+    assertion(
+      "public safety self-test: secret walk ignores short or non-string values under secret-named keys",
+      findSecretLikePairs({ token: "short", secret: 123456789012345, password: null }).length === 0,
+    ),
+  );
+
   // A phone number stands alone: not preceded or followed by a letter or digit,
   // so ten digits inside a hex hash or an alphanumeric id are not mistaken for one.
   const PHONE_NUMBER_PATTERN =
     /(?<![0-9A-Za-z])(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}(?![0-9A-Za-z])/;
   const checks = [
-    {
-      name: "secret-like strings",
-      pattern:
-        /(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}/i,
-    },
     {
       name: "tenant IDs",
       pattern:

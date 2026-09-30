@@ -218,4 +218,6 @@ announce in the commit message, not only in chat.
 - [ ] Docs cite only paths that exist; no figure quoted that will age
 - [ ] PR body: summary, what changed, validation performed, public-safety note,
       remaining risks, and what you could not verify
-- [ ] Owner merges, not you
+- [ ] Owner merges, not you — unless every DR-037 (SAFETY_MACHINERY) or DR-061
+      (DECISION_PATH) condition holds on the current head; DR-061 rule 2's paths
+      are always the owner's

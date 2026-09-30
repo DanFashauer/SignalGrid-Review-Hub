@@ -4134,3 +4134,61 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 **What does not change.** DR-047's tiers and fallback rules (rule 1 assigns two stages DR-047 did not name and re-maps none), DR-054's raise-your-hand law, DR-056's objective loop, the verdict enum, the determinism invariant and the Decision Envelope.
 
 **Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Amend rule 1 and the SKILL table together, as DR-047's own reversal clause requires of its rules and SKILL section. Making the 14-day report fatal is an amendment and needs a line here saying so.
+
+## DR-061 — Lanes may merge decision-path PRs under stated conditions; the Mac runs an unattended build session that opens PRs and never merges; the Swift ports may take a literal parity re-port the owner has ruled on, #1118/#1121 first (owner-directed 2026-09-29)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** This record touches `docs/DECISION_RECORDS.md`, which rule 2 below keeps with the owner, so no lane merges it.
+
+**Context.** On 2026-09-29 the owner opened a Claude Code session with: *"Please build the whole system using the brain why isn't this happening as I expected like I'm trying to get this done."* Three things held the build: every PR that touches the decision path waited for his merge; nothing was built unless a person opened a session; and PR #1118, which ports one TS engine rule into the iOS engine, was blocked by golden rule 1. The session put three questions to him and he chose one option on each. His answers are below, verbatim (the option label, then the option text he selected).
+
+**The owner's answers (2026-09-29, verbatim).**
+- (a) Q: *"About 10 decision-path PRs wait for your merge (#1153, #1146, #1083, #1050, #1118…). You're the bottleneck. What do you want?"* A: *"Delegate to the lanes (Recommended) — Lanes may merge decision-path PRs when CI, preflight and an Opus review are green. Needs a new decision record."*
+- (b) Q: *"Nothing builds unless a person opens a Claude session. Should the Mac start a build session by itself every few hours when the brain has a buildable task? This uses your Claude usage."* A: *"Yes, build it (Recommended) — The brain builds its top task unattended and opens PRs."*
+- (c) Q: *"PR #1118 edits the iOS DecisionEngine.swift to add one rule the TS engine already has, copied literally. Golden rule 1 bans behavior edits there. Allow it?"* A: *"Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121."*
+
+**The question this settles.** Who may merge a PR that `scripts/check-owner-gated-surfaces.mjs` classifies as DECISION_PATH, and on what evidence; what still needs the owner's merge; what the Mac may build with no session open; and whether the byte-faithful Swift ports may take a behavior change.
+
+**Decision.**
+1. **A lane may merge a DECISION_PATH PR only when ALL of the following hold on the current head.** Otherwise it waits for the owner.
+   - All five DR-037 conditions hold (`.claude/skills/landing-under-dr-037/SKILL.md`). This includes condition 5, which already decides which lane may merge which PR. This record widens what a lane may merge, not who merges.
+   - An adversarial review of that head, by an Opus-tier agent that did not author the change, found no unresolved blocking finding. The PR body quotes the review's verdict and names the reviewer's model.
+   - The PR body quotes an executed counterexample: a command, the line it printed on the base (failing) and on the head (passing).
+
+   A condition nobody can show is not met. A review or a counterexample on an earlier head is not one on this head. The PR body says, under "Owner decision needed": *"DECISION_PATH: merged under DR-061 with check run <id>"*.
+2. **These stay the owner's to merge. DR-061 delegates nothing on them:**
+   - `docs/DECISION_RECORDS.md`
+   - `docs/agent/objective.json`
+   - the launch profile (`docs/LAUNCH_PROFILE.md`, `scripts/launch-profile.mjs`)
+   - the launch-claims gate (`scripts/check-launch-claims.mjs`)
+   - the publication boundary (`scripts/publication-boundary.mjs`, `scripts/check-publication-boundary.mjs`)
+   - the golden rules in `CLAUDE.md`
+   - any change to `native/ios/EnterpriseShell/Services/DecisionEngine.swift` or `AppWorkflows.swift`, except a literal parity re-port the owner has ruled on in a decision record
+
+   The list is by path, not by classifier category. The classifier puts the records file and the objective under SAFETY_MACHINERY, puts the two gates under `scripts/**`, and does not classify `CLAUDE.md` at all, so a lane must not infer "mergeable" from a category. A PR that touches one of these paths is the owner's to merge in whole. This narrows a practice: DR-060's own PR, which added a record, was merged by a lane under DR-037. From this record on, a PR that adds or edits a record waits for the owner, as DR-037's "does not edit a decision record on its own authority" already implied.
+3. **Golden rule 1: the first owner ruling (answer c).** The rule's text is unchanged. The exception covers only these literal re-ports of TS rules already on mainline:
+   - PR #1118 (also carried by #1121): `DecisionEngine.swift` gains `hasUnauthorizedRemoval` from `lib/signalgrid-simulator/src/decisionEngine.ts`. An undock with no active session is a custody exception.
+   - PR #1121: `AppWorkflows.swift` gains two things from `lib/app-workflows/src/index.ts`. The first is the scoped step-up release (`stepUpSatisfiedActionKeys`). The second is the unknown-vertical confirmer fallback, `"an authorized confirmer"`. The owner's question named only the engine rule; his answer named #1121 as well, so its planner hunk is covered as a literal re-port and nothing more.
+
+   Both PRs still need every rule 1 condition. Both also need the native client suites that the landing skill names, and the shared vectors must replay green on the head. Any other hunk in those two files, and any later behavior edit, needs its own owner ruling, recorded as its own decision record.
+4. **The Mac runs an unattended build session (answer b).** The session is scripts/mac/build-tick.sh, built on branch mac/auto-build-tick. It lands in its own PR, with its own row in `docs/agent/scheduled-routines.json` that this record authorizes. Once landed, it works like this:
+   - It takes the top buildable task from the objective loop (`docs/agent/objective-state.json`, DR-056).
+   - It builds the task test-first, runs `node scripts/preflight.mjs` and `pnpm run verify:breadth`, and opens a PR.
+   - It never merges, never force-pushes and never bypasses a hook.
+   - When it is stuck, it raises a hand (DR-054).
+
+   Its runs use the owner's Claude usage, which his answer accepts. A PR it opens is merged, if at all, by a lane under rule 1. The tick authored the change, so the review must come from a separate agent.
+
+**What does not change, deliberately.** Nothing unattended gains merge authority over the decision path. The rule 1 conditions rest on a model's review, so merging under them is a lane's act.
+- `scripts/brain-cycle-merge-decide.mjs` and `docs/agent/brain-cycle-config.json` still refuse DECISION_PATH outright, because no model output authorizes an unattended merge.
+- `scripts/check-owner-gated-surfaces.mjs` still classifies the decision path as owner-gated for the autonomous loop.
+- Every routine row in `docs/agent/scheduled-routines.json` keeps its own scope. That includes forward-build-cycle's "never self-merges a product change". A routine's scope widens only when its own row is amended.
+
+DR-037's conditions, DR-054, DR-056's loop and the determinism invariant are unchanged. Nothing here changes what may be claimed to ship.
+
+**Follow-up.** `.claude/workflows/land-branch.js` still writes "the cloud lane will not self-merge it" into a DECISION_PATH PR body. Its `klass` row in `.claude/workflows/README.md` still feeds that text. Open PR #1133 is rewriting that script, so both belong to #1133 and are not touched here.
+
+**Evidence.** No gate refuses a lane's merge of a DECISION_PATH PR. The rule lived in prose: the landing skill, `docs/LANE_COORDINATION.md` protocol item 7, `.claude/agents/blocker-dispatcher.md` and `.claude/skills/signalgrid/SKILL.md`. The only code that refuses a decision-path merge is the unattended brain-cycle authorizer, and the landing workflow's PR-body text, which is left to #1133. Both code sites stay as they are. The PR that carries this record also points the four prose sites at DR-061 (each keeps rule 2's paths with the owner), so they and this record take effect together, when the owner merges it. The PR quotes the searches it ran and the self-test lines showing both refusals still hold.
+
+**What no gate can observe.** No gate checks the rule 1 conditions. Whether the reviewer ran on Opus, whether it authored the change, and whether the counterexample really failed on the base all rest on the PR body quoting them. This is the same footing as DR-037's condition 2.
+
+**Reversal / amendment.** The owner revokes any part of this with one line in chat. That part stops at the lane's next decision: decision-path PRs return to owner-merge, or the Mac lane stops the build session the same day. The next PR adds the revocation date here. Revoking one part leaves the others standing. A new golden-rule-1 exception is not an amendment. It is a separate owner ruling with its own record.

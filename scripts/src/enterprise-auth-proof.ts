@@ -282,6 +282,37 @@ if (!accepted.ok) {
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
 }
 
+// ── BLANK OIDC_ISSUER IS UNSET (a regression pin, not a fix) ─────────────────
+// loadEnterpriseAuthConfig trims OIDC_ISSUER and treats blank as unconfigured.
+// That is the documented contract (docker-compose.prod.yml: "Empty stays unset
+// server-side (the reader trims and treats blank as unconfigured)"), so templating
+// that emits whitespace keeps a review stack on its demo surface instead of
+// refusing to boot. Changing it needs a decision that amends that contract first
+// (BUILD_BACKLOG, "A whitespace-only OIDC_ISSUER..."); these pins make the change
+// visible. The other half stays fail-closed: a NON-blank issuer with missing
+// audience/JWKS is `invalid`, never quietly `disabled`.
+{
+  const { loadEnterpriseAuthConfig } = await import("@workspace/enterprise-auth");
+  const status = (env: Record<string, string | undefined>) => loadEnterpriseAuthConfig(env).status;
+  const rest = { OIDC_AUDIENCE: AUDIENCE, OIDC_JWKS_URI: "https://idp.example/jwks" };
+
+  check("config: OIDC_ISSUER unset resolves to disabled", status({}) === "disabled");
+  check("config: OIDC_ISSUER='' resolves to disabled", status({ OIDC_ISSUER: "" }) === "disabled");
+  check("config: OIDC_ISSUER='   ' (whitespace-only) resolves to disabled", status({ OIDC_ISSUER: "   " }) === "disabled");
+  check(
+    "config: whitespace-only OIDC_ISSUER is disabled even with audience + JWKS set",
+    status({ OIDC_ISSUER: " \t\n ", ...rest }) === "disabled",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER missing audience/JWKS is invalid, not disabled",
+    status({ OIDC_ISSUER: ISSUER }) === "invalid",
+  );
+  check(
+    "config: a non-blank OIDC_ISSUER with audience + JWKS but no tenant/role maps is invalid",
+    status({ OIDC_ISSUER: ISSUER, ...rest }) === "invalid",
+  );
+}
+
 function check(name: string, condition: boolean): void {
   if (condition) {
     passed += 1;

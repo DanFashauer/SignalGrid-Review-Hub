@@ -654,8 +654,14 @@ const DECLARED_LOCALE_COMPARE = new Map([
   // but once self-hosted a returning vendor fetch is a regression, not a backlog
   // item, so they are GATED like a served tree. The PWA joined 2026-09-30 (build
   // plan row 108): it is the one surface where a third-party font blocks first
-  // paint on bad hospital wifi, the exact condition it exists for.
-  const SELF_HOSTED_DEMO_TREES = ["artifacts/signalgrid-mobile-pwa/"];
+  // paint on bad hospital wifi, the exact condition it exists for. signalgrid-review
+  // and signalgrid-desktop joined the same day (build plan row 70 residual), which
+  // leaves no demo-only tree loading a remote font.
+  const SELF_HOSTED_DEMO_TREES = [
+    "artifacts/signalgrid-mobile-pwa/",
+    "artifacts/signalgrid-review/",
+    "artifacts/signalgrid-desktop/",
+  ];
   const isWebSource = (f) =>
     f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css");
   const inArtifactWebTree = (f) => f.startsWith("artifacts/") && isWebSource(f) && !f.includes("/dist/");
@@ -679,7 +685,7 @@ const DECLARED_LOCALE_COMPARE = new Map([
   if (reported.length) {
     console.log(`  ⚠ third-party vendor host in ${reported.length} DEMO-ONLY web file(s) — not served, so reported:`);
     for (const r of reported) console.log(`      ${r}`);
-    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web, signalgrid-app and signalgrid-mobile-pwa do.");
+    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web, signalgrid-app, signalgrid-mobile-pwa, signalgrid-review and signalgrid-desktop do.");
   }
   if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED or already-self-hosted artifact — ${hits.join(", ")}. Self-host it instead.`);
   else ok(`Public-safe web: no third-party vendor host in any SERVED or already-self-hosted web artifact (${scan.length} files scanned across every web tree)`);

@@ -17,20 +17,23 @@ under the console's PREVIEW banner — the Placement column says which.
 - **Status** is the surface's status in `scripts/launch-profile.mjs` (app-surfaces),
   checked against launch profile v7. `launch` is the Limited GA surface; `demo_only`
   exists to demonstrate and must never be presented as shipping product; `deferred`
-  and `internal` mean what the profile says they mean.
+  and `internal` mean what the profile says they mean. The profile classifies whole
+  surfaces, so an admin-console page that is not one of the launch console screens
+  reads `launch surface · not a launch screen`: the surface is launch, the page is not.
 - **Placement** applies to the admin console (`artifacts/signalgrid-app`) only and is
   read from its route table, `artifacts/signalgrid-app/src/App.tsx`:
   `launch route` is one of the launch console screens bound to the served `/v1` API;
-  `preview route` renders under the "PREVIEW — fixture-backed demo surface, not part
-  of the launch console" banner; `404 fallback` is the unmatched-route page;
+  `preview route (not launch UI)` renders under the "PREVIEW — fixture-backed demo
+  surface, not part of the launch console" banner; `404 fallback` is the unmatched-route page;
   `not routed` means no route renders it. Other surfaces show `—`.
 - **Shows** is a one-line description written by hand. It is the only column the gate
   cannot re-derive, so it is kept short and literal.
 
 `node scripts/check-screen-inventory.mjs` fails when a tracked
 `artifacts/*/src/pages/**/*.tsx` file has no row, when a listed file is gone, when a
-Status disagrees with the launch profile, or when a Placement disagrees with the
-route table. It runs in `scripts/preflight.mjs` and in CI.
+Status disagrees with the launch profile, when a Placement disagrees with the
+route table, or when the route table holds a `<Route>` shape the gate cannot read. It
+runs in `scripts/preflight.mjs` and in CI.
 
 ## Inventory
 
@@ -45,22 +48,22 @@ route table. It runs in `scripts/preflight.mjs` and in CI.
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/Status.tsx` | launch | launch route | Deployment assurance: profile, tier, signal source and engine metrics, all read from the server. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/ConnectorSetup.tsx` | launch | launch route | Microsoft connector setup: the gate checklist, the server-resolved mode, and a fixture sync run with its history. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/Audit.tsx` | launch | launch route | The tamper-evident audit chain with every digest recomputed. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/Dashboard.tsx` | launch | preview route | Overview (`/overview`): fixture telemetry tiles plus the live decision panel — the console's one place to run a live `/v1` evaluation from seeded presets. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyCreate.tsx` | launch | preview route | New-policy form preview; it states that no served route creates a policy. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/signals/SignalList.tsx` | launch | preview route | Signal feed on fixture data. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/integrations/IntegrationList.tsx` | launch | preview route | Integrations catalogue on fixture data. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/integrations/IntegrationDetail.tsx` | launch | preview route | One integration's vendor detail on fixture data. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/Fleet.tsx` | launch | preview route | Fleet and tenants — control-plane nodes and bundle targets, labelled FIXTURE. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/AppWorkflows.tsx` | launch | preview route | App workflows — pick an app and see its actions gated by a decision, labelled FIXTURE. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/GridOverview.tsx` | launch | preview route | Grid overview — links out to the grid capability demos. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/Intelligence.tsx` | launch | preview route | Grid intelligence — exceptions-first operational findings. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/Provisioning.tsx` | launch | preview route | Device recorder — record, validate and replay a provisioning plan, labelled SIMULATED. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/AppResilience.tsx` | launch | preview route | App resilience — how staff keep working when an application degrades. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/SignalSourcing.tsx` | launch | preview route | Signal sourcing — which sources feed the grid's coverage. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/GridConfig.tsx` | launch | preview route | Grid config — the organization's grid expressed as code. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/SystemHealth.tsx` | launch | preview route | System health — the administrative "just works" summary. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/FacilityGraph.tsx` | launch | preview route | Facility trust graph — click a space to inspect it. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/not-found.tsx` | launch | 404 fallback | 404 page. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/Dashboard.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Overview (`/overview`): fixture telemetry tiles plus the live decision panel — the console's one place to run a live `/v1` evaluation from seeded presets. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyCreate.tsx` | launch surface · not a launch screen | preview route (not launch UI) | New-policy form preview; it states that no served route creates a policy. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/signals/SignalList.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Signal feed on fixture data. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/integrations/IntegrationList.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Integrations catalogue on fixture data. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/integrations/IntegrationDetail.tsx` | launch surface · not a launch screen | preview route (not launch UI) | One integration's vendor detail on fixture data. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/Fleet.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Fleet and tenants — control-plane nodes and bundle targets, labelled FIXTURE. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/AppWorkflows.tsx` | launch surface · not a launch screen | preview route (not launch UI) | App workflows — pick an app and see its actions gated by a decision, labelled FIXTURE. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/GridOverview.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Grid overview — links out to the grid capability demos. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/Intelligence.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Grid intelligence — exceptions-first operational findings. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/Provisioning.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Device recorder — record, validate and replay a provisioning plan, labelled SIMULATED. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/AppResilience.tsx` | launch surface · not a launch screen | preview route (not launch UI) | App resilience — how staff keep working when an application degrades. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/SignalSourcing.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Signal sourcing — which sources feed the grid's coverage. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/GridConfig.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Grid config — the organization's grid expressed as code. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/SystemHealth.tsx` | launch surface · not a launch screen | preview route (not launch UI) | System health — the administrative "just works" summary. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/FacilityGraph.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Facility trust graph — click a space to inspect it. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/not-found.tsx` | launch surface · not a launch screen | 404 fallback | 404 page. |
 | signalgrid-review | `artifacts/signalgrid-review/src/pages/ReviewDashboard.tsx` | demo_only | — | The review deck: runs the decision core in the browser with no network so a reviewer can inspect strengths, gaps and open questions offline. |
 | signalgrid-review | `artifacts/signalgrid-review/src/pages/not-found.tsx` | demo_only | — | 404 page. |
 | signalgrid-desktop | `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` | demo_only | — | Desktop overview on fixture data. |
@@ -113,14 +116,20 @@ SignalGrid.
 4. **The host app** (`ios:EnterpriseShell`, its `HostAppViewController`). Now the
    worker's side. The same seeded refs are handed to the host app
    (`-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`,
-   `-DemoBackendURL` pointing at the same local api-server). The investor sees the
+   `-DemoBackendURL` pointing at the same local api-server, and `-DemoBackendToken`
+   set to a tenant fixture token — the public `sgk_demo_*` keys listed in
+   `artifacts/api-collection/README.md`). All four are needed: without a non-empty
+   token `DecisionServiceProvider.resolve` (`native/ios/EnterpriseShell/Services/DecisionService.swift`)
+   picks the on-device engine and the shell never calls the api-server. The investor sees the
    host app's own screens: an ordinary action runs with no friction; a sensitive
    action is held, the phone's own Face ID prompt appears, then the app's own
    confirmation dialog, then the action applies. No SignalGrid screen appears on the
    phone. `-DemoAssistAuto` walks these states unattended for a room;
    `-DemoAssistDecline` shows the fail-closed "nothing fires" ending.
-5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). The host app's
-   decision is in the ledger, and the audit chain recomputes its digests.
+5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). When step 4 reached
+   the api-server, the host app's decision is in the ledger and the audit chain
+   recomputes its digests. If it is not there, the shell decided on-device (no token,
+   or the server did not answer) — say so rather than skip the step.
 
 **Where the supervised iPhone fits, honestly.** The investor story is a host app on a
 supervised iPhone, and that step is the one this repository cannot yet show. The

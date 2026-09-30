@@ -19,9 +19,17 @@
 //     (an unclassified surface FAILS — the launch-profile gate owns classifying it)
 //   · the placement column, for the admin console (signalgrid-app), equals what
 //     its route table (src/App.tsx) actually does with the page: `launch route`,
-//     `preview route` (rendered under the PREVIEW banner), `404 fallback`, or
-//     `not routed`; for every other surface it is `—`
-//   · the "shows" column is not empty
+//     `preview route (not launch UI)` (rendered under the PREVIEW banner),
+//     `404 fallback`, or `not routed`; for every other surface it is `—`
+//   · an admin page that is NOT on a launch route says so in the status column
+//     too (`launch surface · not a launch screen`), because the profile classifies
+//     the whole surface and a skimmer reads the Status column alone
+//   · every <Route> in App.tsx has a shape this parser understands and names a
+//     known page or preview wrapper. An unrecognised shape (an inline arrow
+//     component, a spread, an unknown identifier) FAILS, whatever the doc says —
+//     otherwise a page it could not see would read as `not routed` and pass.
+//   · the "shows" column is not empty and not a placeholder (TBD, TODO, …); its
+//     accuracy is still a human's job — nothing here can read a screen
 //   · the doc names the launch-profile version it was checked against, and that
 //     version is the current LAUNCH_PROFILE_VERSION
 //
@@ -56,6 +64,9 @@ export function appSurfaceStatuses(surfaces = SURFACES) {
  * or a default import, `const Y = X` aliases, `const Z = preview(X)` wrappers, and
  * `<Route … component={N} />`.
  */
+export const PREVIEW = "preview route (not launch UI)";
+const ROUTE_SHAPE = /^<Route(?:\s+path="[^"]*")?\s+component=\{(\w+)\}\s*\/>/;
+
 export function adminPlacements(appSource) {
   const src = appSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
   const pageOf = new Map(); // component name → page path under src/pages
@@ -65,22 +76,32 @@ export function adminPlacements(appSource) {
   const previewOf = new Map();
   for (const m of src.matchAll(/const\s+(\w+)\s*=\s*preview\(\s*(\w+)\s*\)/g)) previewOf.set(m[1], m[2]);
   const placement = new Map();
-  const rank = { "launch route": 3, "preview route": 2, "404 fallback": 1 };
+  const rank = { "launch route": 3, [PREVIEW]: 2, "404 fallback": 1 };
+  const unparsed = [];
   const set = (page, p) => {
     if (!placement.has(page) || rank[p] > rank[placement.get(page)]) placement.set(page, p);
   };
-  for (const m of src.matchAll(/<Route\b([^>]*)\/>/g)) {
-    const comp = /component=\{(\w+)\}/.exec(m[1])?.[1];
-    if (!comp) continue;
-    const hasPath = /\bpath=/.test(m[1]);
-    if (previewOf.has(comp)) {
-      const page = pageOf.get(previewOf.get(comp));
-      if (page) set(page, "preview route");
+  // Every <Route occurrence is inspected, not just the ones a lenient regex matches:
+  // a shape this parser does not understand is a failure, never a silent skip.
+  for (const m of src.matchAll(/<Route\b/g)) {
+    const text = src.slice(m.index, m.index + 400);
+    const shape = ROUTE_SHAPE.exec(text);
+    const snippet = text.split("\n")[0].trim();
+    if (!shape) {
+      unparsed.push(`unrecognised <Route> shape: ${snippet}`);
+      continue;
+    }
+    const comp = shape[1];
+    const hasPath = /^<Route\s+path=/.test(text);
+    if (previewOf.has(comp) && pageOf.has(previewOf.get(comp))) {
+      set(pageOf.get(previewOf.get(comp)), PREVIEW);
     } else if (pageOf.has(comp)) {
       set(pageOf.get(comp), hasPath ? "launch route" : "404 fallback");
+    } else {
+      unparsed.push(`<Route> component ${comp} resolves to no page under src/pages: ${snippet}`);
     }
   }
-  return placement; // keys like "decisions/DecisionList"
+  return { placement, unparsed }; // placement keys like "decisions/DecisionList"
 }
 
 function adminPageKey(file) {
@@ -105,8 +126,8 @@ export function parseRows(doc) {
 }
 
 /** Pure check. Returns a list of failure strings; empty means green. */
-export function check({ doc, pageFiles, statuses, placements, profileVersion }) {
-  const errors = [];
+export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [], profileVersion }) {
+  const errors = unparsedRoutes.map((u) => `${ADMIN_ROUTES}: ${u} — teach scripts/check-screen-inventory.mjs the shape or rewrite the route`);
   const rows = parseRows(doc);
   if (!rows) return [`${DOC} has no ${BEGIN} … ${END} block`];
   const vm = /launch profile v(\d+)/i.exec(doc);
@@ -125,11 +146,15 @@ export function check({ doc, pageFiles, statuses, placements, profileVersion }) 
     if (r.surface !== dir) errors.push(`${r.file}: surface column says "${r.surface}", the file is under artifacts/${dir}`);
     const want = statuses.get(dir);
     if (!want) errors.push(`${r.file}: surface ${dir} is not classified in scripts/launch-profile.mjs app-surfaces`);
-    else if (r.status !== want) errors.push(`${r.file}: status column says "${r.status}", launch-profile.mjs says "${want}" for ${dir}`);
     const wantPlacement = dir === ADMIN ? (placements.get(adminPageKey(r.file)) ?? "not routed") : "—";
+    const wantStatus = want && dir === ADMIN && wantPlacement !== "launch route" ? `${want} surface · not a launch screen` : want;
+    if (want && r.status !== wantStatus)
+      errors.push(`${r.file}: status column says "${r.status}", expected "${wantStatus}" (launch-profile.mjs says "${want}" for ${dir})`);
     if (r.placement !== wantPlacement)
       errors.push(`${r.file}: placement column says "${r.placement}", ${dir === ADMIN ? ADMIN_ROUTES : "non-admin surface"} gives "${wantPlacement}"`);
     if (!r.shows || r.shows === "—") errors.push(`${r.file}: "shows" column is empty — say what the screen shows`);
+    else if (/^(tbd|todo|tk|xxx|fixme|n\/?a|\?+|\.\.\.|…)$/i.test(r.shows))
+      errors.push(`${r.file}: "shows" column is a placeholder ("${r.shows}") — say what the screen shows`);
   }
   for (const [f, n] of seen) if (n > 1) errors.push(`${f} is listed ${n} times`);
   for (const f of pageFiles) if (!seen.has(f)) errors.push(`page file missing from ${DOC}: ${f}`);
@@ -155,7 +180,7 @@ function selfTest() {
     '<Route path="/fleet" component={FleetPreview} />',
     "<Route component={NotFound} />",
   ].join("\n");
-  const placements = adminPlacements(appSrc);
+  const { placement: placements, unparsed } = adminPlacements(appSrc);
   const pageFiles = [
     "artifacts/signalgrid-app/src/pages/Fleet.tsx",
     "artifacts/signalgrid-app/src/pages/Orphan.tsx",
@@ -169,23 +194,31 @@ function selfTest() {
     BEGIN,
     "| Surface | File | Status | Placement | Shows |",
     "| --- | --- | --- | --- | --- |",
-    row("signalgrid-app", pageFiles[0], "launch", "preview route"),
-    row("signalgrid-app", pageFiles[1], "launch", "not routed"),
+    row("signalgrid-app", pageFiles[0], "launch surface · not a launch screen", PREVIEW),
+    row("signalgrid-app", pageFiles[1], "launch surface · not a launch screen", "not routed"),
     row("signalgrid-app", pageFiles[2], "launch", "launch route"),
-    row("signalgrid-app", pageFiles[3], "launch", "404 fallback"),
+    row("signalgrid-app", pageFiles[3], "launch surface · not a launch screen", "404 fallback"),
     row("signalgrid-web", pageFiles[4], "demo_only", "—"),
     END,
   ].join("\n");
-  const base = { doc: good, pageFiles, statuses, placements, profileVersion: 7 };
+  const base = { doc: good, pageFiles, statuses, placements, unparsedRoutes: unparsed, profileVersion: 7 };
+  const arrowSrc = appSrc.replace('<Route path="/fleet" component={FleetPreview} />', '<Route path="/fleet" component={() => <Fleet />} />');
+  const unknownSrc = appSrc.replace('<Route path="/fleet" component={FleetPreview} />', '<Route path="/fleet" component={SomethingElse} />');
   const cases = [
     ["clean fixture passes", base, 0],
     ["a page file missing from the doc fails", { ...base, pageFiles: [...pageFiles, "artifacts/signalgrid-web/src/pages/New.tsx"] }, 1],
     ["a listed file that is gone fails", { ...base, pageFiles: pageFiles.slice(0, 4) }, 1],
     ["a status disagreeing with launch-profile fails", { ...base, doc: good.replace("| demo_only |", "| launch |") }, 1],
     ["a status of an unclassified surface fails", { ...base, statuses: new Map([["signalgrid-app", "launch"]]) }, 1],
-    ["a wrong admin placement fails", { ...base, doc: good.replace("| preview route |", "| launch route |") }, 1],
+    ["a wrong admin placement fails", { ...base, doc: good.replace(`| ${PREVIEW} |`, "| launch route |") }, 1],
+    ["a preview page whose status reads plain 'launch' fails", { ...base, doc: good.replace("| launch surface · not a launch screen | preview", "| launch | preview") }, 1],
+    // The doc row is changed to match what a lenient parser would conclude (`not routed`),
+    // so ONLY the unparsed route can fail this case — the refuter's exact scenario.
+    ["an inline-arrow <Route> fails even when the row says 'not routed'", { ...base, doc: good.replace(`| ${PREVIEW} |`, "| not routed |"), unparsedRoutes: adminPlacements(arrowSrc).unparsed, placements: adminPlacements(arrowSrc).placement }, 1],
+    ["a <Route> naming no known page fails", { ...base, unparsedRoutes: adminPlacements(unknownSrc).unparsed, placements: adminPlacements(unknownSrc).placement }, 1],
     ["a commented-out route does not count as routed", { ...base, doc: good.replace("| not routed |", "| launch route |") }, 1],
     ["an empty shows column fails", { ...base, doc: good.replace("| — | a screen |", "| — |  |") }, 1],
+    ["a placeholder shows column (TBD) fails", { ...base, doc: good.replace("| — | a screen |", "| — | TBD |") }, 1],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, 1],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, 1],
     ["a duplicated row fails", { ...base, doc: good.replace(END, `${row("signalgrid-web", pageFiles[4], "demo_only", "—")}\n${END}`) }, 1],
@@ -220,7 +253,7 @@ else {
     doc: readFileSync(DOC, "utf8"),
     pageFiles,
     statuses: appSurfaceStatuses(),
-    placements: adminPlacements(readFileSync(ADMIN_ROUTES, "utf8")),
+    ...(({ placement, unparsed }) => ({ placements: placement, unparsedRoutes: unparsed }))(adminPlacements(readFileSync(ADMIN_ROUTES, "utf8"))),
     profileVersion: LAUNCH_PROFILE_VERSION,
   });
   if (errors.length) {

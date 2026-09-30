@@ -56,7 +56,61 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-09-30 (Mac lane) - OWNER: "BUILD THE WHOLE SYSTEM USING THE BRAIN". 16 NEW PRs + #1118 FINISHED + 3 MERGE STEPS; DR-061 (#1246) IS HIS ONE MERGE.
+LAST TOUCHED: 2026-09-30 (cloud lane; window 12:30Z-~16:05Z, closing at #1310's merge 96338294, 16:06:25Z) - FIVE CODE
+              LANDINGS UNDER DR-037 + ONE TICK LANDING + FOUR MAIL PRs; THE MAC ASKED THE CLOUD TO LAND FIVE - #1218 AND #1252
+              LANDED AT 16:22Z (just after the close, recorded here on the coordinator's instruction), #1216/#1225 FIX-NEEDED.
+              OWNER DIRECTIVE 2026-09-30 (verbatim): "Keep going and building everything you need and becoming the mega brain that
+              runs SignalGrid the worlds first smart automated orchestrator for all that want to bring modern era to legacy self
+              indepent systems across the entrire company this company provides to solution to self run and automate all signals
+              from any source and turn it into an actionable function on whatever platform the user is using the puck and it will
+              do things automated or self driven all depending on the user and how smart the workflows and varables on the company
+              itself using my product/solution." Consistent with docs/PURPOSE.md; any new platform/hardware scope still needs a
+              DR first (DR-020 rule). Building and claiming stay two acts: the quote is a directive, not a launch claim.
+              LANDED (cloud, DR-037; merge sha / gating check run): #1295 dde8c276 / 109882916391 (objective loop queues the next
+              free same-day request id, nextFreeRequestId - the Mac tick stopped cutting a branch every 5 min: no mac/tick-* PR
+              after #1300 at 12:42Z); #1237 3de208fe / 109910058858 (plan rows 146/147/148: SBOM maven half, e2e egress guard, e2e
+              README count) - FIVE gating attempts, two stale Actions listings ("last success was 644.4h ago") and two 502s read
+              as a ~1h rate limit; #1305 4a6a863c / 109927316942 (ci-liveness retries a 5xx carrying x-ratelimit-reset); #1277
+              3dee6a25 / 109935679941 (corepack pnpm fetch retry, grype fails on a crash - plan row 59); #1312 f1786167 /
+              109969353542 (ci-liveness confirms a red verdict against a second, differently-keyed runs listing). Tick landing
+              #1313 1dc2f7d9 / 109969646817 (Mac tick 20260930T124226Z, evidence re-mint request -2, coverage regenerated on
+              current mainline); #1300 reads merged through it. Mail/heartbeats: #1296 35ac13c9, #1304 3f91a9dd, #1306 2fa150a3
+              (forward-build cycle), #1310 96338294 (ack of the Mac land-5 ask + steward keepalive).
+              MAC ASK (mail mac-mac-5-safety-machinery-prs-are-green-clean-p, 14:52Z): land #1216 #1218 #1225 #1252 #1256 under
+              DR-037. Acked in #1310; each lands only after an independent Sonnet review + an Opus refutation, one at a time.
+              After the close: #1218 (owner escalations + a red weekly Mac-lane run become auto hands) merged 29b97fef /
+              109672057568 at 16:22:40Z and #1252 (four gates: an unreadable scanned file fails, only ENOENT skipped) merged
+              859b0d94 / 109767342465 at 16:22:58Z - both ship, upheld; #1216 and #1225 fix-needed, upheld, verdicts on the PRs;
+              #1256 had no verdict posted at the read. #1248 (build tick) lands after the Mac's conflict push; the DECISION_PATH
+              five (#1219 #1220 #1224 #1251 #1255) wait on the owner's #1246 (DR-061).
+              REVIEWS (brain): #1277 ship (landed); #1280 fix-needed: row 91 not built, the per-version test-binding call is the
+              owner's (hand raised on the branch), DECISION_PATH so the OWNER merges; #1272 and #1274 round-2 fix-needed (15:43Z) -
+              the original workers B16/B17 woke on the comments and are fixing; #1265 fix-needed (delta review 10:38Z), fix
+              worker F1 dispatched 14:14Z; #1309 owner-decision (16:23Z) - deleting lib/api-spec/product-openapi.json is
+              DECISION_PATH under --no-renames, so the owner merges.
+              WAVE 2026-09-30: B1-B22 dispatched earlier; this window F1 (#1265 fix), B23 brace-less sweep (#1311), B24 fonts +
+              OIDC pin (#1307), B25 fossil/census/orphan spec (#1309), B26 screen inventory (#1308), B27 signalgrid CLI (DR-040;
+              no PR at the close). HELD for file contention: DMH domains (#1247), session-store (#1219), audit-chain whole verify
+              (v1.ts), web-a11y floor (after #1265).
+              LESSON CANDIDATES (HELD - not numbered; #1133 claims L23): (a) create_session inherits the coordinator's model: two
+              fix workers (F2 #1272, F3 #1274) were created on Fable after a model switch and archived within 30 ms - every spawn
+              names its tier (DR-047); (b) a review comment on a worker's PR wakes the ORIGINAL worker, so a fix worker on the
+              same branch is a second writer - get_session the original first; (c) gated landing chains under load outrun the 1h
+              background timeout - use the 2h maximum.
+              OWNER QUEUE: merge #1239 #1240 #1242 #1244 #1215 #1222 #1230 #1190 #1146 #1153 #1050 #1280 (and #1309); close the
+              junk tick PRs #1257 #1262 and the mac/tick-* PRs in #1269-#1299; yes/no on deleting the 19 local
+              attack-reproduction branches (hand 2026-09-27-19-local-only-branches-in-the-cloud-container-at; branch deletion is
+              on the lane's deny list in .claude/settings.json).
+              Next (at 16:05Z): land the rest of the Mac's five as each review survives its refutation; #1248 after the Mac's
+              push; re-review #1272/#1274 on B16/B17's pushes; loop:state read readiness 0% (launch-evidence 0%) at 96338294 until
+              the Mac runs #1313's -2 re-mint request. Window detail: docs/agent/EVIDENCE.md, section "## 2026-09-30 -
+              FIVE CODE LANDINGS UNDER DR-037 ..." (its only cloud-lane 2026-09-30 entry).
+TIERS THIS SESSION: the coordinating session read model claude-fable-5-1 at 16:38Z (user_switched_model; configured
+              claude-opus-4-8) - the switch lesson candidate (a) names; every wave worker (B1-B27, F1) and the F2/F3 re-spawns ran
+              on Opus (configured_model claude-opus-5-5); the two Fable F2/F3 spawns were archived ~30 ms after creation; Sonnet
+              review + Opus refutation on the Mac's five per the coordinator (the PR comments name no model); an Opus
+              record-writer subagent wrote this record.
+PREVIOUSLY:   2026-09-30 (Mac lane) - OWNER: "BUILD THE WHOLE SYSTEM USING THE BRAIN". 16 NEW PRs + #1118 FINISHED + 3 MERGE STEPS; DR-061 (#1246) IS HIS ONE MERGE.
               WHY IT STALLED: objective-loop tasks[0..2] were plan rows 17/18/24, all owner- or lab-blocked; the lane
               tick only ran sim requests + heartbeats (159 heartbeat commits since 09-27); ~10 PRs waited on owner merges.
               OWNER DECIDED 2026-09-29 (AskUserQuestion, in a Mac session): golden-rule-1 exception for #1118/#1121
@@ -96,7 +150,7 @@ PREVIOUSLY:   2026-09-28 (Mac lane) - CONFLICTS CLEARED + A MISTAKE OWNED. #1136
               #1146 (core-digest, DECISION_PATH) - its backlog check's part two (fixed regression corpus) is still TO ADD; merge once it is on the PR: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1146
               #1133 (land-branch klass, OWNER_RESERVED; owed at the close as head 765faf7a, PR moved since) - merge only a body-validated head: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1133
               #1117 (ephemeral test ports, DECISION_PATH) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1117
-              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z) - reply 'exception granted' or 'revert': https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
+              #1118/#1121 (golden-rule-1 ruling, asked 08:20Z; corrected 2026-09-30 to the #1195 owner hand, 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau, which superseded the 'exception granted or revert' ask): the owner owed (a) a decision record authorising or refusing the #1118 re-port - a bare 'exception granted' reply does not authorise it, (b) the unsafe-allow repair shape, (c) whether #1121 needs his decision; he RULED 2026-09-29 (relayed by the Mac on both PRs): "Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121.", written up as DR-061 in #1246 (open - his merge), which names #1121 too; neither the ruling nor #1246's body names the repair shape (b): https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1118 and https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1121; exception or not, still owed before either merges: #1121 Apple CI on its head plus three fail-closed mutants, #1118 a TRIGGERS-completeness check and a Linux Swift<->vector binding check (next actor: the Mac lane, which opened both)
               #1050 (DR-058) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1050. #1083 (DR-059) - merge: https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1083
               Doctrine hand (plan row 8) - reply in chat or on https://github.com/DanFashauer/SignalGrid-Review-Hub/issues/1068. #1037 CodeQL alert - dismiss on https://github.com/DanFashauer/SignalGrid-Review-Hub/pull/1037 or reply 'Mac paths-ignore'
               Copilot code-review scanner - CAPIError 400 unsupported model; owner picks a supported model in Copilot settings (not in the 09:30Z heartbeat; confirmed unchanged across the close by #1133's scan runs at 09:49:34Z and 10:41:55Z, both CAPIError 400)

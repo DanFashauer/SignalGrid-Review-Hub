@@ -47,26 +47,42 @@ export function outcomeBadgeTone(outcome: string): string {
  * on purpose (the desktop Dashboard makes the same choice) and are separated by
  * a second, non-colour channel: restrict is hatched, deny is solid.
  *
- * `scripts/check-verdict-tone-source.mjs` asserts that every fill here is a
- * ratified `--decision-*` token, that no two verdicts share both token and
- * pattern, and that restrict and deny differ in pattern.
+ * `scripts/check-verdict-tone-source.mjs` IMPORTS this module and judges what it
+ * paints, not what it declares: `chartFill(restrict)` must differ from
+ * `chartFill(deny)`, every solid fill must be the verdict's ratified
+ * `--decision-*` token, the hatch must leave gaps, and each verdict must read
+ * its own series key. The keys are also bound per verdict at the type level, so
+ * swapping restrict's and deny's `dataKey` is a typecheck failure.
  */
 export type ChartPattern = "solid" | "hatch";
 
-export interface OutcomeChartMark {
-  /** Key of the verdict's count in the decision-series API rows. */
-  dataKey: "allow" | "stepUp" | "restrict" | "deny";
+/** Each verdict's count key in the decision-series API rows. */
+export interface OutcomeSeriesKey {
+  allow: "allow";
+  "step-up": "stepUp";
+  restrict: "restrict";
+  deny: "deny";
+}
+
+export interface OutcomeChartMark<O extends Outcome = Outcome> {
+  dataKey: OutcomeSeriesKey[O];
   label: string;
   token: string;
   pattern: ChartPattern;
 }
 
-export const OUTCOME_CHART_MARK: Record<Outcome, OutcomeChartMark> = {
+export const OUTCOME_CHART_MARK: { readonly [O in Outcome]: OutcomeChartMark<O> } = {
   allow: { dataKey: "allow", label: "Allow", token: "--decision-allow", pattern: "solid" },
   "step-up": { dataKey: "stepUp", label: "Step-up", token: "--decision-review", pattern: "solid" },
   restrict: { dataKey: "restrict", label: "Restrict", token: "--decision-deny", pattern: "hatch" },
   deny: { dataKey: "deny", label: "Deny", token: "--decision-deny", pattern: "solid" },
 };
+
+/**
+ * Hatch geometry, in user-space units. The stripe must be narrower than the
+ * tile, or the "hatch" is a solid block and restrict is deny's pixel again.
+ */
+export const HATCH_PATTERN = { size: 4, stripeWidth: 2, angle: 45 } as const;
 
 /** Stack order, least to most restrictive. */
 export const OUTCOME_ORDER: readonly Outcome[] = ["allow", "step-up", "restrict", "deny"];

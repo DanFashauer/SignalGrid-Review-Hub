@@ -4,7 +4,7 @@ import { formatNumber, formatLatency, formatRate } from "@/lib/format";
 import { ResponsiveContainer, BarChart, Bar, Legend, Tooltip, XAxis } from "recharts";
 import { StatusDot } from "@/components/StatusDot";
 import { FixtureLabel } from "@/components/FixtureLabel";
-import { OUTCOME_CHART_MARK, OUTCOME_ORDER, chartFill, hatchPatternId, type Outcome } from "@/lib/outcome-tone";
+import { HATCH_PATTERN, OUTCOME_CHART_MARK, OUTCOME_ORDER, chartFill, hatchPatternId, type Outcome } from "@/lib/outcome-tone";
 
 export default function Overview() {
   const [time, setTime] = useState(new Date().toLocaleTimeString());
@@ -121,9 +121,15 @@ function MetricCard({ title, value }: { title: string, value: string }) {
 function HatchPattern({ outcome, scope = "chart" }: { outcome: Outcome; scope?: string }) {
   const color = `hsl(var(${OUTCOME_CHART_MARK[outcome].token}))`;
   return (
-    <pattern id={hatchPatternId(outcome, scope)} width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <rect width="4" height="4" fill="hsl(var(--card))" />
-      <rect width="2" height="4" fill={color} />
+    <pattern
+      id={hatchPatternId(outcome, scope)}
+      width={HATCH_PATTERN.size}
+      height={HATCH_PATTERN.size}
+      patternUnits="userSpaceOnUse"
+      patternTransform={`rotate(${HATCH_PATTERN.angle})`}
+    >
+      <rect width={HATCH_PATTERN.size} height={HATCH_PATTERN.size} fill="hsl(var(--card))" />
+      <rect width={HATCH_PATTERN.stripeWidth} height={HATCH_PATTERN.size} fill={color} />
     </pattern>
   );
 }

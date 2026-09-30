@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { OutcomeBadge } from "@/components/OutcomeBadge";
+import { FixtureLabel } from "@/components/FixtureLabel";
 import type { Outcome } from "@/lib/outcome-tone";
 import { LifeBuoy, ChevronRight } from "lucide-react";
 
@@ -120,6 +121,7 @@ export default function AccessSupport() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Access support</h1>
           <p className="text-sm text-muted-foreground">Worker session triage · relay guidance</p>
+          <FixtureLabel className="mt-1" />
         </div>
       </header>
 

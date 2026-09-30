@@ -26,7 +26,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -180,62 +180,161 @@ export function offendingLines(src) {
 // — no `===`, no status class, so no finding — and both tokens resolve to
 // #C67070. Restrict and deny rendered as one band with a 1.0000:1 boundary and no
 // legend or tooltip. So, in any tree whose tone module declares a chart map:
-//   (1) the map itself: every fill is a ratified `--decision-*` token, no two
-//       verdicts share BOTH token and pattern, and restrict and deny differ in
-//       pattern (they share the deny tone on purpose; the second channel is
-//       what separates them, and it must not be colour);
-//   (2) every chart site: a series keyed by a verdict literal is a local
-//       colour decision, and a chart must render a Legend and a Tooltip and
+//   (1) the MODULE is imported and what it PAINTS is judged, not what it
+//       declares (brain review, PR #1243: a regex over `pattern:` strings passed
+//       a `chartFill` that ignored them). `chartFill(restrict)` must differ from
+//       `chartFill(deny)`; a solid fill must be its verdict's ratified
+//       `--decision-*` token; a hatched fill must reference the hatch pattern;
+//       the hatch stripe must be narrower than its tile; each verdict must read
+//       its own series key; restrict and deny must differ in pattern.
+//   (2) every CHART SITE (any file importing from recharts, aliases resolved,
+//       comments stripped): no series or Cell element may key on a verdict
+//       literal in any spelling or carry a literal colour; a `<pattern>` may not
+//       hardcode its geometry; the chart must render a Legend and a Tooltip and
 //       read its marks from OUTCOME_CHART_MARK.
 // The desktop tree has no chart map yet (its Dashboard carries literal fills
 // with a dash pattern of its own), so (2) does not reach it; that is printed on
 // every run rather than implied.
 
-/** Trees that MUST carry a chart map — removing it is a failure, not an opt-out. */
+/** Tone modules that MUST carry a chart map — removing it is a failure, not an opt-out. */
 const CHART_MAP_REQUIRED = new Set(["artifacts/signalgrid-mobile-pwa/src/lib/outcome-tone.ts"]);
 const CHART_VERDICTS = ["allow", "step-up", "restrict", "deny"];
-const CHART_ENTRY = /(allow|"step-up"|restrict|deny)\s*:\s*\{[^}]*?\btoken:\s*["']([^"']+)["'][^}]*?\bpattern:\s*["']([^"']+)["']/g;
+/** The decision-series API's count key for each verdict. */
+const SERIES_KEY = { allow: "allow", "step-up": "stepUp", restrict: "restrict", deny: "deny" };
+const RATIFIED_TOKEN = /^--decision-(?:allow|review|deny)$/;
 
-/** Problems in a tone module's OUTCOME_CHART_MARK; null when it declares none. */
-export function chartMapProblems(src) {
-  const at = src.indexOf("OUTCOME_CHART_MARK: Record<");
-  if (at < 0) return null;
-  const body = src.slice(at, src.indexOf("};", at) + 2);
-  const marks = new Map();
-  for (const m of body.matchAll(CHART_ENTRY)) marks.set(m[1].replace(/"/g, ""), { token: m[2], pattern: m[3] });
+/**
+ * Problems in an imported tone module's chart exports; null when it has none.
+ * `mod` is the module namespace (or a stand-in object in the self-test).
+ */
+export function chartModuleProblems(mod) {
+  if (!mod || !mod.OUTCOME_CHART_MARK) return null;
   const out = [];
+  const { OUTCOME_CHART_MARK: marks, chartFill, hatchPatternId, HATCH_PATTERN } = mod;
+  if (typeof chartFill !== "function") return ["no chartFill export — the paint is decided somewhere unjudged"];
+  const fills = {};
   for (const v of CHART_VERDICTS) {
-    const mk = marks.get(v);
+    const mk = marks[v];
     if (!mk) { out.push(`${v} has no chart mark`); continue; }
-    if (!/^--decision-(?:allow|review|deny)$/.test(mk.token)) out.push(`${v} fills from ${mk.token}, not a ratified --decision-* token`);
+    if (mk.dataKey !== SERIES_KEY[v]) out.push(`${v} reads series key "${mk.dataKey}", not "${SERIES_KEY[v]}"`);
+    if (!RATIFIED_TOKEN.test(mk.token)) out.push(`${v} fills from ${mk.token}, not a ratified --decision-* token`);
+    let fill;
+    try { fill = chartFill(v); } catch (e) { out.push(`chartFill(${v}) threw: ${e.message}`); continue; }
+    fills[v] = fill;
+    if (mk.pattern === "solid" && fill !== `hsl(var(${mk.token}))`) out.push(`${v} is declared solid ${mk.token} but paints ${fill}`);
+    if (mk.pattern === "hatch") {
+      const id = typeof hatchPatternId === "function" ? hatchPatternId(v) : null;
+      if (!id || fill !== `url(#${id})`) out.push(`${v} is declared hatched but paints ${fill}`);
+    }
+    if (mk.pattern !== "solid" && mk.pattern !== "hatch") out.push(`${v} has unknown pattern "${mk.pattern}"`);
   }
+  const r = marks.restrict, d = marks.deny;
+  if (r && d && r.pattern === d.pattern) out.push("restrict and deny share a pattern — they must differ by more than colour");
+  if (fills.restrict !== undefined && fills.restrict === fills.deny) out.push(`chartFill(restrict) === chartFill(deny) (${fills.restrict}) — the same pixel`);
   for (let i = 0; i < CHART_VERDICTS.length; i++) {
     for (let j = i + 1; j < CHART_VERDICTS.length; j++) {
-      const a = marks.get(CHART_VERDICTS[i]), b = marks.get(CHART_VERDICTS[j]);
-      if (a && b && a.token === b.token && a.pattern === b.pattern) {
-        out.push(`${CHART_VERDICTS[i]} and ${CHART_VERDICTS[j]} share token AND pattern — the same pixel`);
+      const a = fills[CHART_VERDICTS[i]], b = fills[CHART_VERDICTS[j]];
+      if (a !== undefined && a === b && !(CHART_VERDICTS[i] === "restrict" && CHART_VERDICTS[j] === "deny")) {
+        out.push(`${CHART_VERDICTS[i]} and ${CHART_VERDICTS[j]} paint the same fill (${a})`);
       }
     }
   }
-  const r = marks.get("restrict"), d = marks.get("deny");
-  if (r && d && r.pattern === d.pattern) out.push("restrict and deny share a pattern — they must differ by more than colour");
+  if (Object.values(marks).some((m) => m && m.pattern === "hatch")) {
+    const h = HATCH_PATTERN;
+    if (!h || !(h.stripeWidth > 0 && h.stripeWidth < h.size)) {
+      out.push(`hatch stripe ${h?.stripeWidth} is not narrower than its tile ${h?.size} — a solid block, not a hatch`);
+    }
+  }
   return out;
 }
 
-const CHART = /<(?:BarChart|AreaChart|LineChart|ComposedChart)\b/;
-const LITERAL_SERIES = /<(?:Bar|Area|Line)\b[^>]*\bdataKey=["'](?:allow|stepUp|step-up|restrict|deny)["']/;
+/** Remove block, JSX and line comments, keeping line count. `://` in a URL is not a comment. */
+export function stripComments(src) {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""))
+    .replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
+}
+
+const SERIES = new Set(["Bar", "Area", "Line", "Pie", "Cell", "RadialBar", "Scatter", "Radar", "Funnel"]);
+
+/** recharts import aliases: local name → recharts name ("R.*" for a namespace). */
+export function rechartsAliases(code) {
+  const map = new Map();
+  for (const m of code.matchAll(/import\s+([^;"'`]*?)\s+from\s*["']recharts["']/g)) {
+    const ns = m[1].match(/\*\s*as\s+(\w+)/);
+    if (ns) map.set(`${ns[1]}.`, "*");
+    const named = m[1].match(/\{([^}]*)\}/);
+    if (!named) continue;
+    for (const part of named[1].split(",")) {
+      const [orig, local] = part.trim().split(/\s+as\s+/);
+      if (orig) map.set(local || orig, orig);
+    }
+  }
+  return map;
+}
+
+/** Every opening tag `<Name …>` / `<Name … />` with its attribute text, scanned brace- and quote-aware. */
+function tags(code, localName) {
+  const out = [];
+  const esc = localName.replace(/[.$]/g, "\\$&");
+  const re = new RegExp(`<${esc}(?=[\\s/>])`, "g");
+  for (const m of code.matchAll(re)) {
+    let i = m.index + m[0].length, depth = 0, q = null;
+    for (; i < code.length; i++) {
+      const c = code[i];
+      if (q) { if (c === q && code[i - 1] !== "\\") q = null; continue; }
+      if (c === '"' || c === "'" || c === "`") q = c;
+      else if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === ">" && depth === 0) break;
+    }
+    out.push({ attrs: code.slice(m.index + m[0].length, i), line: code.slice(0, m.index).split("\n").length });
+  }
+  return out;
+}
+
+const VERDICT_SERIES_KEY = /\bdataKey\s*=\s*\{?\s*["'`](?:allow|stepUp|step-up|restrict|deny)["'`]\s*\}?/;
+const LITERAL_COLOUR = /\b(?:fill|stroke|color)\s*=\s*\{?\s*["'`][^"'`]*(?:--decision-|--destructive|--chart-|#[0-9a-fA-F]{3,8}\b|rgb|\b(?:red|green|amber|orange|yellow)\b)/;
 
 /** Problems at a chart site in a tree whose tone module declares a chart map. */
 export function chartSiteProblems(src) {
-  if (!CHART.test(src)) return [];
+  const code = stripComments(src);
+  const aliases = rechartsAliases(code);
+  if (aliases.size === 0) return [];
   const out = [];
-  const lines = src.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (LITERAL_SERIES.test(lines[i])) out.push(`line ${i + 1}: a verdict series keyed and filled inline`);
+  const localsOf = (name) => {
+    const l = [];
+    for (const [local, orig] of aliases) {
+      if (orig === name) l.push(local);
+      if (orig === "*") l.push(`${local}${name}`);
+    }
+    return l;
+  };
+  for (const name of SERIES) {
+    for (const local of localsOf(name)) {
+      for (const t of tags(code, local)) {
+        if (VERDICT_SERIES_KEY.test(t.attrs)) out.push(`line ${t.line}: a <${name}> keyed on a verdict literal`);
+        if (LITERAL_COLOUR.test(t.attrs)) out.push(`line ${t.line}: a <${name}> carries a literal colour`);
+      }
+    }
   }
-  if (!/<Legend\b/.test(src)) out.push("chart renders no <Legend>");
-  if (!/<Tooltip\b/.test(src)) out.push("chart renders no <Tooltip>");
-  if (!/\bOUTCOME_CHART_MARK\b/.test(src)) out.push("chart does not read its marks from OUTCOME_CHART_MARK");
+  for (const t of tags(code, "pattern")) {
+    if (/\b(?:width|height)\s*=\s*\{?\s*["'`]?\d/.test(t.attrs)) out.push(`line ${t.line}: a <pattern> hardcodes its geometry — read HATCH_PATTERN`);
+  }
+  for (const t of tags(code, "rect").filter(() => /<pattern\b/.test(code))) {
+    if (/\bwidth\s*=\s*\{?\s*["'`]?\d/.test(t.attrs) && /<pattern\b[\s\S]*?<\/pattern>/.test(code)) {
+      const inside = [...code.matchAll(/<pattern\b[\s\S]*?<\/pattern>/g)].some((p) => {
+        const start = code.slice(0, p.index).split("\n").length;
+        const end = start + p[0].split("\n").length - 1;
+        return t.line >= start && t.line <= end;
+      });
+      if (inside) out.push(`line ${t.line}: a hatch <rect> hardcodes its width — read HATCH_PATTERN`);
+    }
+  }
+  const used = (name) => localsOf(name).some((l) => tags(code, l).length > 0);
+  if (!used("Legend")) out.push("chart renders no <Legend>");
+  if (!used("Tooltip")) out.push("chart renders no <Tooltip>");
+  if (!/\bOUTCOME_CHART_MARK\b/.test(code)) out.push("chart does not read its marks from OUTCOME_CHART_MARK");
   return out;
 }
 
@@ -254,7 +353,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-function selfTest() {
+async function selfTest() {
   const checks = [];
 
   // The real defect, byte-for-byte as it stood in Dashboard.tsx.
@@ -303,25 +402,49 @@ function selfTest() {
   checks.push(["a `??` with no string (a variable) is not judged here", fallbackProblems(`x ?? fallbackTone`).length === 0]);
   checks.push(["a neutral fallback QUOTED in a comment is prose, not a finding", fallbackProblems(` * looked up with \`?? "text-stone-300"\` before the fix\n// and \`?? "text-muted-foreground"\` too`).length === 0]);
   // The third half (2026-09-30): the chart, byte-for-byte as Overview.tsx stood.
-  const oldChart = `<BarChart data={series.series}>\n  <Bar dataKey="allow" stackId="a" fill="hsl(var(--chart-2))" />\n  <Bar dataKey="restrict" stackId="a" fill="hsl(var(--chart-4))" />\n  <Bar dataKey="deny" stackId="a" fill="hsl(var(--destructive))" />\n</BarChart>`;
-  const oldProblems = chartSiteProblems(oldChart);
-  checks.push(["the real inline-filled verdict chart is caught (3 series, no legend, no tooltip, no map)", oldProblems.length === 6]);
-  const fixedChart = `import { OUTCOME_CHART_MARK } from "x";\n<BarChart><Tooltip /><Legend />{OUTCOME_ORDER.map(o => <Bar dataKey={OUTCOME_CHART_MARK[o].dataKey} />)}</BarChart>`;
+  const rc = `import { ResponsiveContainer, BarChart, Bar, Legend, Tooltip } from "recharts";\n`;
+  const oldChart = `import { ResponsiveContainer, BarChart, Bar } from "recharts";\n<BarChart data={series.series}>\n  <Bar dataKey="allow" stackId="a" fill="hsl(var(--chart-2))" />\n  <Bar dataKey="restrict" stackId="a" fill="hsl(var(--chart-4))" />\n  <Bar dataKey="deny" stackId="a" fill="hsl(var(--destructive))" />\n</BarChart>`;
+  checks.push(["the real inline-filled verdict chart is caught (3 keys, 3 colours, no legend/tooltip/map)", chartSiteProblems(oldChart).length === 9]);
+  const fixedChart = rc + `import { OUTCOME_CHART_MARK } from "x";\n<BarChart><Tooltip /><Legend />{OUTCOME_ORDER.map(o => <Bar dataKey={OUTCOME_CHART_MARK[o].dataKey} fill={chartFill(o)} stroke="hsl(var(--card))" />)}</BarChart>`;
   checks.push(["a chart reading OUTCOME_CHART_MARK with Legend + Tooltip is the fix", chartSiteProblems(fixedChart).length === 0]);
   checks.push(["a chart with no Legend is caught even when routed", chartSiteProblems(fixedChart.replace("<Legend />", "")).length === 1]);
-  checks.push(["a file with no chart is not judged", chartSiteProblems(`<Bar dataKey="deny" />`).length === 0]);
-  const mapOf = (r, d) => `OUTCOME_CHART_MARK: Record<Outcome, M> = {\n  allow: { dataKey: "allow", token: "--decision-allow", pattern: "solid" },\n  "step-up": { dataKey: "stepUp", token: "--decision-review", pattern: "solid" },\n  restrict: { dataKey: "restrict", token: "${r[0]}", pattern: "${r[1]}" },\n  deny: { dataKey: "deny", token: "${d[0]}", pattern: "${d[1]}" },\n};`;
-  checks.push(["a chart map separating restrict/deny by pattern passes", chartMapProblems(mapOf(["--decision-deny", "hatch"], ["--decision-deny", "solid"])).length === 0]);
-  checks.push(["restrict and deny as the SAME pixel is caught", chartMapProblems(mapOf(["--decision-deny", "solid"], ["--decision-deny", "solid"])).length === 2]);
-  checks.push(["restrict/deny separated by COLOUR ONLY is still caught", chartMapProblems(mapOf(["--decision-review", "solid"], ["--decision-deny", "solid"])).length === 2]);
-  checks.push(["an unratified fill token (--chart-4) is caught", chartMapProblems(mapOf(["--chart-4", "hatch"], ["--decision-deny", "solid"])).length === 1]);
-  checks.push(["a missing verdict in the chart map is caught", chartMapProblems(mapOf(["--decision-deny", "hatch"], ["--decision-deny", "solid"]).replace(/\n  deny:[^\n]*/, "")).length === 1]);
-  checks.push(["a module with no chart map declares none (null), not a pass", chartMapProblems(`export const X = 1;`) === null]);
+  checks.push(["a <Legend> only inside a JSX comment is not a legend", chartSiteProblems(fixedChart.replace("<Legend />", "{/* <Legend /> */}")).length === 1]);
+  checks.push(["recharts names are resolved when OTHER imports come first", chartSiteProblems(`import React, { useState } from "react";\n` + fixedChart).length === 0]);
+  checks.push(["a file importing nothing from recharts is not judged", chartSiteProblems(`<Bar dataKey="deny" />`).length === 0]);
+  // Holes from the brain review of PR #1243, each pinned.
+  checks.push(["dataKey on the line AFTER <Bar is caught", chartSiteProblems(fixedChart + `\n<Bar\n  dataKey="deny"\n/>`).length === 1]);
+  checks.push(['dataKey={"deny"} is caught', chartSiteProblems(fixedChart + `\n<Bar dataKey={"deny"} />`).length === 1]);
+  checks.push(["a template-string verdict key is caught", chartSiteProblems(fixedChart + "\n<Bar dataKey={`restrict`} />").length === 1]);
+  checks.push(["an aliased `Bar as B` is caught", chartSiteProblems(fixedChart.replace("Bar, Legend", "Bar as B, Legend") + `\n<B dataKey="deny" fill="hsl(var(--destructive))" />`).length === 2]);
+  checks.push(["a namespace `* as R` recharts import is caught", chartSiteProblems(`import * as R from "recharts";\nimport { OUTCOME_CHART_MARK } from "x";\n<R.BarChart><R.Tooltip /><R.Legend /><R.Bar dataKey="deny" /></R.BarChart>`).length === 1]);
+  checks.push(["a verdict PieChart with literal-coloured Cells is caught", chartSiteProblems(rc.replace("Bar,", "Pie, Cell, Bar,") + `import { OUTCOME_CHART_MARK } from "x";\n<Tooltip /><Legend /><Pie dataKey="value"><Cell fill="hsl(var(--decision-deny))" /><Cell fill="#C67070" /></Pie>`).length === 2]);
+  checks.push(["an arrow function in an attribute does not end the tag early", chartSiteProblems(fixedChart + `\n<Bar label={(p) => p > 1} dataKey="deny" />`).length === 1]);
+  checks.push(["a hardcoded 4-wide hatch stripe is caught", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width="4" height="4" />\n</pattern>`).length === 1]);
+  checks.push(["a hatch reading HATCH_PATTERN is the fix", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width={HATCH_PATTERN.stripeWidth} />\n</pattern>`).length === 0]);
+  // The module half: judged by what it PAINTS.
+  const mkMod = (over = {}) => {
+    const marks = {
+      allow: { dataKey: "allow", token: "--decision-allow", pattern: "solid" },
+      "step-up": { dataKey: "stepUp", token: "--decision-review", pattern: "solid" },
+      restrict: { dataKey: "restrict", token: "--decision-deny", pattern: "hatch" },
+      deny: { dataKey: "deny", token: "--decision-deny", pattern: "solid" },
+      ...(over.marks ?? {}),
+    };
+    const hatchPatternId = (o) => `h-${o}`;
+    const chartFill = over.chartFill ?? ((o) => (marks[o].pattern === "hatch" ? `url(#${hatchPatternId(o)})` : `hsl(var(${marks[o].token}))`));
+    return { OUTCOME_CHART_MARK: marks, chartFill, hatchPatternId, HATCH_PATTERN: over.hatch ?? { size: 4, stripeWidth: 2 } };
+  };
+  checks.push(["a sound chart module passes", chartModuleProblems(mkMod()).length === 0]);
+  checks.push(["chartFill IGNORING the pattern (restrict === deny pixel) is caught", chartModuleProblems(mkMod({ chartFill: (o) => `hsl(var(${o === "allow" ? "--decision-allow" : o === "step-up" ? "--decision-review" : "--decision-deny"}))` })).some((p) => /the same pixel/.test(p))]);
+  checks.push(["a hatch stripe as wide as its tile is caught", chartModuleProblems(mkMod({ hatch: { size: 4, stripeWidth: 4 } })).length === 1]);
+  checks.push(["restrict/deny dataKeys SWAPPED are caught", chartModuleProblems(mkMod({ marks: { restrict: { dataKey: "deny", token: "--decision-deny", pattern: "hatch" }, deny: { dataKey: "restrict", token: "--decision-deny", pattern: "solid" } } })).length === 2]);
+  checks.push(["restrict and deny sharing a pattern is caught", chartModuleProblems(mkMod({ marks: { restrict: { dataKey: "restrict", token: "--decision-deny", pattern: "solid" } } })).some((p) => /share a pattern/.test(p))]);
+  checks.push(["an unratified fill token (--chart-4) is caught", chartModuleProblems(mkMod({ marks: { restrict: { dataKey: "restrict", token: "--chart-4", pattern: "hatch" } } })).length === 1]);
+  checks.push(["a module with no chart map declares none (null), not a pass", chartModuleProblems({ X: 1 }) === null]);
   for (const rel of CHART_MAP_REQUIRED) {
-    let src = "";
-    try { src = readFileSync(join(repo, rel), "utf8"); } catch { /* reported below */ }
-    const p = chartMapProblems(src);
-    checks.push([`required chart map is present and sound: ${rel}`, p !== null && p.length === 0]);
+    let p = null;
+    try { p = chartModuleProblems(await import(pathToFileURL(join(repo, rel)).href)); } catch { /* reported below */ }
+    checks.push([`required chart module imports and is sound: ${rel}`, p !== null && p.length === 0]);
   }
 
   // The direction rule must hold on the REAL tone modules, each of which must exist.
@@ -343,7 +466,7 @@ function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv.includes("--self-test")) process.exit(selfTest());
+if (process.argv.includes("--self-test")) process.exit(await selfTest());
 
 const files = TREES.flatMap((t) => walk(join(repo, t)));
 if (files.length === 0) {
@@ -359,9 +482,16 @@ let exempted = 0;
 /** Trees whose tone module declares a chart map; their chart sites are judged. */
 const chartTrees = [];
 for (const rel of TONE_MODULES) {
-  let src = "";
-  try { src = readFileSync(join(repo, rel), "utf8"); } catch { /* absent tone module: judged by the self-test */ }
-  const p = chartMapProblems(src);
+  let mod = null;
+  try {
+    mod = await import(pathToFileURL(join(repo, rel)).href);
+  } catch (e) {
+    // Fail closed: a tone module that cannot be imported cannot be judged, and
+    // a required chart map that cannot be judged is not a pass.
+    if (CHART_MAP_REQUIRED.has(rel)) chartProblems.push(`${rel} — could not be imported to judge its chart map: ${e.message}`);
+    continue;
+  }
+  const p = chartModuleProblems(mod);
   if (p === null) {
     if (CHART_MAP_REQUIRED.has(rel)) chartProblems.push(`${rel} — required OUTCOME_CHART_MARK is missing`);
     continue;

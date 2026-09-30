@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T15:20:11.722Z",
-  "result": "quiet: tasks[0..2] not cloud-buildable — state trusted (tick 15:13Z within staleAfterHours 3, result names objective: escalate = recorded verdict); row 17 (wire-truth shifts): offline half landed 2026-09-27 (wire-truth ledger + gate), what remains needs the ITSM, shift-context and Keycloak access-governance labs this lane does not have; row 18 (iOS behavioural parity): Swift-only, the Mac's own #1118 is open; row 24 (article): already open as #1190 (owner merges). Nothing built."
+  "firedAt": "2026-09-30T00:36:23.784Z",
+  "result": "acted: 00:11Z fire (first on the 2-hourly whole-backlog schedule). Objective state trusted (tick 00:07Z, verdict escalate), tasks 17 (lab), 18 (owner/Swift), 24 (owner) not cloud-buildable; took plan row 98 from the backlog (not Mac-claimed). Opened PR #1222 for row 98 (unknown root paths answer the JSON not_found envelope; test:api 488/488, mutant 486/488, preflight 0, breadth 58/58 on bd964d53); DECISION_PATH, owner merges. Previous fire's PR #1215 (row 97) gating green, awaiting owner merge."
 }

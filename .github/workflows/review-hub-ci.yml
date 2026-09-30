@@ -1066,6 +1066,10 @@ jobs:
       - name: Observability (metrics endpoint) proof
         run: pnpm run proof:observability
 
+      # The signalgrid CLI over the real /v1 API (DR-040): read-only by default, fail-closed.
+      - name: signalgrid CLI proof (read-only by default, fail-closed, dual output)
+        run: pnpm run proof:signalgrid-cli
+
       - name: Enterprise auth (OIDC/JWT) proof
         run: pnpm run proof:enterprise-auth
 

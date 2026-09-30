@@ -6,7 +6,7 @@ Validation in this repository is whole-repo on every push. The deep independent
 reads are not: each one was chosen surface by surface. This page is the ledger of
 that choice, so an unread surface is visible rather than silent.
 
-**104 of 105 surfaces have been read. 0 are partially read. 1 have not been read at all.**
+**104 of 106 surfaces have been read. 0 are partially read. 2 have not been read at all.**
 
 Coverage of the tree is asserted, not assumed: **2993 of 2993 in-scope tracked files** belong to a surface on this page (92 more are in declared out-of-scope trees). A file belonging to no surface fails the gate. The mailbox trees (`artifacts/lane-messages`, `artifacts/agent-heartbeats`, `artifacts/raised-hands`) are surfaces like any other and every record in them is claimed, but their counts are not printed and are left out of the figures above: every lane delivery appends a record, and a page that moved on mail made every open pull request unmergeable.
 
@@ -47,6 +47,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `artifacts/sbom` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 1 | 0 |
 | `artifacts/scanner-comparison` | tree | 1 | read | 1 | 2026-09-06 | cloud lane (independent fail-closed auditor, then firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `artifacts/signalgrid-app` | package | 70 | read | 3 | 2026-09-06 | cloud lane (fixes by a general-purpose agent with the findings file, gates by the gate engineer; firsthand spot-read of every edit site and every gate run) | docs/agent/EVIDENCE.md | 15 | 17 |
+| `artifacts/signalgrid-cli` | package | 0 | **NOT READ** | 0 | — | — | — | 0 | 0 |
 | `artifacts/signalgrid-desktop` | package | 22 | read | 2 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 7 | 0 |
 | `artifacts/signalgrid-mobile-pwa` | package | 27 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 5 | 1 |
 | `artifacts/signalgrid-review` | package | 45 | read | 3 | 2026-09-06 | cloud lane (dispositions applied at their lines; presence decided by the anchor gate's own match) | docs/agent/EVIDENCE.md | 19 | 14 |
@@ -130,9 +131,10 @@ A named slice was read. The rest of the surface has not been.
 
 - None.
 
-## Not read (1)
+## Not read (2)
 
 - `.claude/workflows` (tree)
+- `artifacts/signalgrid-cli` (package)
 
 ## Execution records (1)
 

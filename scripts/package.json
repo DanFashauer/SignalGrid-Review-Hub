@@ -93,6 +93,7 @@
     "proof:intune-entra-posture": "tsx ./src/intune-entra-posture-proof.ts",
     "proof:isolation-scope": "tsx ./src/isolation-scope-proof.ts",
     "proof:itsm-credential-crypto": "tsx ./src/itsm-credential-crypto-proof.ts",
+    "proof:signalgrid-cli": "tsx ./src/signalgrid-cli-proof.ts",
     "proof:telemetry-posture-cache": "tsx ./src/telemetry-posture-cache-proof.ts",
     "proof:itsm-template": "tsx ./src/itsm-template-proof.ts",
     "proof:itsm-dispatch": "tsx ./src/itsm-dispatch-proof.ts",

@@ -60,14 +60,18 @@ const COMPLETION_PLAN = join(repo, "docs/PRODUCT_COMPLETION_PLAN.md");
  * leaves them nowhere to go.
  */
 export function hasSnapshotBanner(src) {
-  // A banner inside an HTML comment is invisible to the reader it exists for.
-  const visible = src.replace(/<!--[\s\S]*?-->/g, "");
   // "Above the first section" needs a first section: a document with no `## ` heading
   // would make the whole file the head, and a banner at the very bottom would pass.
-  const parts = visible.split(/^## /m);
+  const parts = src.split(/^## /m);
   if (parts.length < 2) return false;
   const m = parts[0].match(/^> \*\*Point-in-time snapshot \(census taken (\d{4}-\d{2}-\d{2})[^\n]*(?:\n>[^\n]*)*/m);
   if (!m) return false;
+  // A banner inside an HTML comment is invisible to the reader it exists for. Located
+  // by position rather than by stripping comments out: the banner is hidden when the
+  // last `<!--` before it has no `-->` between it and the banner.
+  const before = parts[0].slice(0, m.index);
+  const open = before.lastIndexOf("<!--");
+  if (open !== -1 && before.indexOf("-->", open) === -1) return false;
   const d = new Date(`${m[1]}T00:00:00Z`);
   if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== m[1]) return false;
   const text = m[0].replace(/\n>\s?/g, " ");

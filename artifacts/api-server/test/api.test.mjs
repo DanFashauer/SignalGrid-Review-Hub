@@ -1936,9 +1936,6 @@ async function run() {
       check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
         uptime >= 0.7);
 
-      // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
-      // boot, or a wrong base URL, would satisfy all of them. Something must still be
-      // served, or these prove nothing.
       // ── Row 95: HEAD is served wherever GET is, and nowhere else ────────────
       // Express answers HEAD from the GET handler, but the fence matched the verb
       // literally and 404'd first — a healthy instance reporting 404 to a
@@ -1946,8 +1943,8 @@ async function run() {
       const gwHeadHealth = await fetch(`${BASE4}/healthz`, { method: "HEAD" });
       check(`gateway: HEAD /healthz is served as GET is (${gwHeadHealth.status}, was 404)`, gwHeadHealth.status === 200);
       const gwHeadContext = await fetch(`${BASE4}/v1/context`, { method: "HEAD" });
-      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route (${gwHeadContext.status}, not 404)`,
-        gwHeadContext.status !== 404);
+      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route and demands a credential (${gwHeadContext.status}, want 401)`,
+        gwHeadContext.status === 401);
       const gwHeadKeys = await fetch(`${BASE4}/v1/keys`, { method: "HEAD" });
       check("gateway: HEAD on an unlisted route is still fenced (404)", gwHeadKeys.status === 404);
       // /v1/authorize is POST-only with no GET sibling pattern (unlike
@@ -1956,6 +1953,9 @@ async function run() {
       check("gateway: HEAD on a POST-only launch route is still fenced (404) — only HEAD→GET is folded",
         gwHeadAuthorize.status === 404);
 
+      // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
+      // boot, or a wrong base URL, would satisfy all of them. Something must still be
+      // served, or these prove nothing.
       const gwHealth = await fetch(`${BASE4}/healthz`);
       check("gateway: the server is genuinely up — the 404s above are refusals, not a dead port",
         gwHealth.status === 200);

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-asks-land-1323-live-demo-1248-build-tick",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac asks: land #1323 (live demo) + #1248 (build tick) + #1216 #1225 #1256 under DR-037",
+  "body": "All SAFETY_MACHINERY, Mac-opened, each with local preflight 0 + breadth 0 at its pushed head quoted in the body and an Opus adversarial review applied. #1323 mac/demo-live @1bfb7e73: pnpm run demo:live - the owner's chosen 'something real in hand' (real SignalGridCore + real cascade in-process, SSE page for a phone, proof:demo-live 108/108 registered in preflight+CI). #1248 mac/auto-build-tick @70459c1a: re-merged Alpha (coverage page regenerated). Still clean from before: #1216 (objective loop awaiting markers), #1225, #1256. Owner-reserved, his merges: #1246 (DR-061) and #1322 (DR-062: company scope + fully automatic by default; both DRs append after DR-060, so the second to land needs a union merge - the Mac does it). DECISION_PATH, lane-mergeable once #1246 lands: #1219 #1220 #1224 #1228 #1247 #1251 #1255.",
+  "sentAt": "2026-09-30T18:09:19.619Z"
+}

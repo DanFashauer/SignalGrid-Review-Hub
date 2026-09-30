@@ -23,7 +23,7 @@ export function Audit() {
           error && !data
             ? "Audit ledger could not be read; chain unverified."
             : data
-              ? `${data.events.length} audit events. Chain ${data.chain.valid ? "verified" : `broken at sequence ${data.chain.brokenAtSeq}`}.`
+              ? `${data.events.length} audit events. Hash chain ${data.chain.valid ? "intact" : `broken at sequence ${data.chain.brokenAtSeq}`}.`
               : ""
         }
       />

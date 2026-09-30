@@ -71,6 +71,14 @@ export const UNSAFE_CLAIM_SOURCE =
 
 export const UNSAFE_CLAIM_PATTERN = new RegExp(UNSAFE_CLAIM_SOURCE, "i");
 
+/** The one unsafe-FILE-PATH pattern, shared by `phase-gate.ts` (which gates on it) and
+ *  `phase-pr-report.ts` (which now exits 1 on it, plan row 144). The report used to carry
+ *  its own `/secret|tenant|customer|phi|pii/i`, which matched 15 tracked files this gate's
+ *  pattern does not (a `.bru` named `cross-tenant-refs`, anything spelled "graphics") —
+ *  harmless while the report could not fail, a false red on every such PR once it could. */
+export const RED_FILE_PATTERN =
+  /(^|\/)\.env($|\.)|(^|\/)secrets?\/|(^|\/)credentials?\/|(^|\/)credential-store\/|(^|\/)credentials?(?:\.env|\.secret|\.json$|[-_](?:secret|store|token|key|prod|production))|(^|\/)(?:tenant|customer|phi|pii)(?:\.|-|_|\/)/i;
+
 /** Files whose PURPOSE is to enumerate the banned wording. Exempted BY NAME, in a
  *  visible set, rather than by a pattern that would quietly grow — the same discipline
  *  the nac network-scan uses for its one exempt file. A registry that may not contain

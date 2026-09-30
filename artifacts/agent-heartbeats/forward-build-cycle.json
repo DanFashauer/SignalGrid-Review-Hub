@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T02:54:19.795Z",
-  "result": "acted: opened PR #1230 for plan row 109 (console live decision panel: an unrecognised verdict renders restrictive, never a blank card; owner merges). Tasks 17/18/24 skipped: live lab / owner+Swift / owner. Rows 97 (#1215) and 98 (#1222) are still open and green, waiting on the owner."
+  "firedAt": "2026-09-30T06:11:36.146Z",
+  "result": "06:10Z acted: harvest in progress. Landed today: Mac #1226, Mac #1227, mail #1249. Wave: 12 of 12 workers in flight, so no refill; fixes are pushed on 9 PRs, three delta re-reviews are running, and #1235 lands after the chain finishes on 18b478f6. Fix-needed: #1243, #1244, Mac #1216, #1218, #1225 and #1248 (#1248 needs DR-061). The owner merges #1239, #1240, #1230, #1222, #1215, #1246 (DR-061), #1190, #1153, #1146, #1133 and #1117."
 }

@@ -125,16 +125,31 @@ export function auditEcosystemWorkerCopy({ catalog, ecosystemMd }) {
   if (!section) return [`${ECOSYSTEM} has no §2.1 section — the worker-copy table cannot be checked`];
   const ROW = /^\| `([A-Z][A-Z0-9_]{4,})` \| (.*?) \| (.*?) \|$/;
   const rows = [];
-  // Fail closed on a row the parser cannot read: every line that opens like a code
-  // row (`| \``) must parse, or it is named. Before this, a row missing its trailing
-  // pipe or carrying a malformed code was dropped silently and the check passed
-  // (review of PR #1302 planted one; the floor of 7 did not notice one lost row).
-  for (const line of section[1].split("\n")) {
-    if (!line.startsWith("| `")) continue;
-    const m = ROW.exec(line);
-    if (m) rows.push(m);
-    else problems.push(`${ECOSYSTEM} §2.1 row does not parse (want: pipe, backticked CODE, worker cell, operator cell, closing pipe) — fix it, or nothing checks it: ${JSON.stringify(line.slice(0, 100))}`);
+  const seen = new Set();
+  const bad = (why, line) => problems.push(`${ECOSYSTEM} §2.1 ${why} — fix it, or nothing checks it: ${JSON.stringify(line.slice(0, 100))}`);
+  // A table inside an HTML comment or a code fence parses here but renders as no
+  // table at all: the reader sees nothing while the check reads seven rows.
+  for (const hide of ["<!--", "```", "~~~"]) {
+    if (section[1].includes(hide)) problems.push(`${ECOSYSTEM} §2.1 contains ${JSON.stringify(hide)} — a table hidden from the rendered doc is not worker copy anyone reads`);
   }
+  // Fail closed on every table line the parser cannot read (review of PR #1302,
+  // then of #1328): before this, a row missing its trailing pipe, an un-backticked
+  // or indented code, an extra column, an empty operator cell or a duplicated code
+  // each passed, and a duplicate could hold the floor of 7 while a real row was lost.
+  // Only the header (the line above a separator) and the separator are exempt.
+  const lines = section[1].split("\n");
+  const SEPARATOR = /^\s*\|(\s*:?-+:?\s*\|)+\s*$/;
+  lines.forEach((line, i) => {
+    if (!/^\s*\|/.test(line) || SEPARATOR.test(line) || SEPARATOR.test(lines[i + 1] ?? "")) return;
+    const m = ROW.exec(line);
+    if (!m) return bad("row does not parse (want: pipe, backticked CODE, worker cell, operator cell, closing pipe)", line);
+    const [, code, , operator] = m;
+    if (/(^|[^\\])\|/.test(operator)) return bad(`row for ${code} has an extra column (an unescaped pipe in the operator cell)`, line);
+    if (operator.trim() === "") return bad(`row for ${code} has an empty operator cell`, line);
+    if (seen.has(code)) return bad(`names ${code} twice — a duplicate can hold the row floor while a real row is lost`, line);
+    seen.add(code);
+    rows.push(m);
+  });
   if (rows.length < ECOSYSTEM_FLOOR) {
     problems.push(`vacuity: only ${rows.length} row(s) parsed from ${ECOSYSTEM} §2.1 (floor ${ECOSYSTEM_FLOOR}) — the parser or the table collapsed`);
   }
@@ -251,10 +266,24 @@ function selfTest() {
       /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `POSTURE_STALE` | "Totally invented worker sentence." | op')],
     ["a §2.1 row whose code fails the code regex FAILS (not dropped silently)", (md) => md.replace(
       /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `posture_stale` | "Totally invented worker sentence." | op |')],
+    ["a DUPLICATED §2.1 row (identical) FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` .*)$/m, "$1\n$1")],
+    ["a duplicated §2.1 row holding the floor while CUSTODY_EXCEPTION is deleted FAILS", (md) => md
+      .replace(/^(\| `POSTURE_STALE` .*)$/m, "$1\n$1").replace(/^\| `CUSTODY_EXCEPTION` .*\n/m, "")],
+    ["a §2.1 row with an EMPTY operator cell FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` \| "[^"]*" \| ).*( \|)$/m, "$1  $2")],
+    ["a §2.1 row with an EXTRA column FAILS", (md) => md.replace(/^(\| `POSTURE_STALE` .*)$/m, "$1 extra |")],
+    ["an INDENTED §2.1 row FAILS (not skipped by the prefix filter)", (md) => md.replace(/^(\| `POSTURE_STALE` )/m, " $1")],
+    ["an UN-BACKTICKED §2.1 code FAILS", (md) => md.replace("| `POSTURE_STALE` |", "| POSTURE_STALE |")],
+    ["a §2.1 table wrapped in an HTML COMMENT FAILS", (md) => md
+      .replace(/^(\| `POSTURE_STALE` )/m, "<!--\n$1").replace(/^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, "$1\n-->")],
+    ["a §2.1 table wrapped in a CODE FENCE FAILS", (md) => md
+      .replace(/^(\| Reason code )/m, "```\n$1").replace(/^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, "$1\n```")],
   ]) {
     const mutated = mutate(ecosystemMd);
     if (mutated === ecosystemMd) { checks.push([label + " (mutation applied)", false]); continue; }
-    checks.push([label, auditEcosystemWorkerCopy({ catalog, ecosystemMd: mutated }).length > 0]);
+    const found = auditEcosystemWorkerCopy({ catalog, ecosystemMd: mutated });
+    // A malformed-row case must fail by NAMING the row, not only by tripping the
+    // floor because the row went missing: the floor is exactly what a duplicate beats.
+    checks.push([label, found.length > 0 && (!/FAILS \(|DUPLICATED|duplicated|EMPTY|EXTRA|INDENTED|UN-BACKTICKED|COMMENT|FENCE/.test(label) || found.some((x) => !x.startsWith("vacuity")))]);
   }
   // Demoting §2.2 to `##` still ends §2.1 there: later tables must not be swept in.
   const demoted = ecosystemMd.replace("\n### 2.2 ", "\n## 2.2 ");

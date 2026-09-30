@@ -80,8 +80,18 @@ const TONE_MODULES = new Set([
 // restrictive token. The direction of the fallback is the whole point — a gate
 // that only asked "is it centralised" would have passed a centralised grey.
 
-/** Two verdict keys, each paired with a colour class, inside one object literal. */
-const VERDICT_KEY = String.raw`(?:allow|deny|restrict|"step-up"|'step-up')\s*:\s*["'][^"']*(?:text-|bg-|border-)`;
+/**
+ * Two verdict keys, each paired with a colour, inside one object literal. A
+ * colour is a status class OR a raw colour value (`hsl(`, `var(--`, `#hex`,
+ * `rgb(`): brain re-review of PR #1243 showed `const SERIES_FILL = { restrict:
+ * "hsl(var(--chart-4))", deny: "hsl(var(--destructive))" }` feeding `fill=`
+ * passing, which is row 107 again under a new name.
+ */
+// `stepUp` (the series-API spelling) is a verdict key only beside a RAW colour:
+// as a class key it would reach the review tree's CredentialReaderDashboardSection
+// map (`stepUp`/`restrict` over its own decision vocabulary), a pre-existing
+// finding named in PR #1243 for its own change rather than widened into this one.
+const VERDICT_KEY = String.raw`(?:(?:allow|deny|restrict|"step-up"|'step-up')\s*:\s*["'\`][^"'\`]*(?:text-|bg-|border-|hsl\(|var\(--|rgba?\(|#[0-9a-fA-F]{3,8}\b)|stepUp\s*:\s*["'\`][^"'\`]*(?:hsl\(|var\(--|rgba?\(|#[0-9a-fA-F]{3,8}\b))`;
 const LOCAL_MAP = new RegExp(VERDICT_KEY + String.raw`[^;]{0,240}?` + VERDICT_KEY);
 const VERDICT_KEY_LINE = new RegExp(VERDICT_KEY);
 const MAP_LOOKAHEAD = 6;
@@ -294,6 +304,10 @@ function tags(code, localName) {
 }
 
 const VERDICT_SERIES_KEY = /\bdataKey\s*=\s*\{?\s*["'`](?:allow|stepUp|step-up|restrict|deny)["'`]\s*\}?/;
+/** An accessor dataKey that reads a verdict field: `dataKey={(r) => r.deny}` or `r["deny"]`. */
+const VERDICT_ACCESSOR = /\bdataKey\s*=\s*\{[^}]*=>[^}]*(?:\.\s*(?:allow|stepUp|restrict|deny)\b|\[\s*["'`](?:allow|stepUp|step-up|restrict|deny)["'`]\s*\])/;
+/** A paint helper called with a verdict LITERAL decides one series' colour by hand. */
+const LITERAL_VERDICT_PAINT = /\b(?:chartFill|hatchPatternId)\s*\(\s*["'`](?:allow|step-up|restrict|deny)["'`]/;
 const LITERAL_COLOUR = /\b(?:fill|stroke|color)\s*=\s*\{?\s*["'`][^"'`]*(?:--decision-|--destructive|--chart-|#[0-9a-fA-F]{3,8}\b|rgb|\b(?:red|green|amber|orange|yellow)\b)/;
 
 /** Problems at a chart site in a tree whose tone module declares a chart map. */
@@ -314,6 +328,8 @@ export function chartSiteProblems(src) {
     for (const local of localsOf(name)) {
       for (const t of tags(code, local)) {
         if (VERDICT_SERIES_KEY.test(t.attrs)) out.push(`line ${t.line}: a <${name}> keyed on a verdict literal`);
+        if (VERDICT_ACCESSOR.test(t.attrs)) out.push(`line ${t.line}: a <${name}> keyed on a verdict through an accessor`);
+        if (LITERAL_VERDICT_PAINT.test(t.attrs)) out.push(`line ${t.line}: a <${name}> painted for a verdict named by hand`);
         if (LITERAL_COLOUR.test(t.attrs)) out.push(`line ${t.line}: a <${name}> carries a literal colour`);
       }
     }
@@ -394,6 +410,10 @@ async function selfTest() {
   // as they stood in desktop/pages/Decisions.tsx and pwa/components/OutcomeBadge.tsx.
   const localMap = `const OUTCOME_COLOR: Record<string, string> = {\n  allow: "text-status-allow", deny: "text-status-deny",\n  "step-up": "text-status-step-up", restrict: "text-status-restrict",\n};`;
   checks.push(["a local verdict→class map is caught, ONCE, on its first key's line", JSON.stringify(localMapLines(localMap)) === "[2]"]);
+  checks.push(["a local map of raw hsl() fills is caught (the row-107 shape renamed)", localMapLines(`const SERIES_FILL = { restrict: "hsl(var(--chart-4))", deny: "hsl(var(--destructive))" };`).length === 1]);
+  checks.push(["a local map of var(--) tokens is caught", localMapLines(`const F = {\n  allow: "var(--decision-allow)",\n  deny: "var(--decision-deny)",\n};`).length === 1]);
+  checks.push(["a local map of hex fills is caught", localMapLines(`const F = { stepUp: "#B08B57", deny: "#C67070" };`).length === 1]);
+  checks.push(["a verdict map of non-colour strings is not a colour map", localMapLines(`const L = { allow: "Allow", deny: "Deny" };`).length === 0]);
   checks.push(["a map with ONE verdict key is not a verdict map", localMapLines(`const M = { allow: "text-status-allow", other: 1 };`).length === 0]);
   checks.push(["a verdict key with no colour beside it is not a map", localMapLines(`const N = { allow: 3, deny: 4 };`).length === 0]);
   checks.push(["the neutral fallback is caught", fallbackProblems(`return OUTCOME_TONE[o as Outcome] ?? "text-muted-foreground";`).length === 1]);
@@ -418,6 +438,10 @@ async function selfTest() {
   checks.push(["an aliased `Bar as B` is caught", chartSiteProblems(fixedChart.replace("Bar, Legend", "Bar as B, Legend") + `\n<B dataKey="deny" fill="hsl(var(--destructive))" />`).length === 2]);
   checks.push(["a namespace `* as R` recharts import is caught", chartSiteProblems(`import * as R from "recharts";\nimport { OUTCOME_CHART_MARK } from "x";\n<R.BarChart><R.Tooltip /><R.Legend /><R.Bar dataKey="deny" /></R.BarChart>`).length === 1]);
   checks.push(["a verdict PieChart with literal-coloured Cells is caught", chartSiteProblems(rc.replace("Bar,", "Pie, Cell, Bar,") + `import { OUTCOME_CHART_MARK } from "x";\n<Tooltip /><Legend /><Pie dataKey="value"><Cell fill="hsl(var(--decision-deny))" /><Cell fill="#C67070" /></Pie>`).length === 2]);
+  checks.push(["an accessor dataKey reading a verdict field is caught", chartSiteProblems(fixedChart + `\n<Bar dataKey={(r) => r.deny} />`).length === 1]);
+  checks.push(["an accessor with bracket access is caught", chartSiteProblems(fixedChart + `\n<Bar dataKey={(r) => r["restrict"]} />`).length === 1]);
+  checks.push(['chartFill("restrict") named by hand is caught', chartSiteProblems(fixedChart + `\n<Bar dataKey={(r) => r.deny} fill={chartFill("restrict")} />`).length === 2]);
+  checks.push(["chartFill(o) over the verdict loop is the fix", chartSiteProblems(fixedChart).length === 0]);
   checks.push(["an arrow function in an attribute does not end the tag early", chartSiteProblems(fixedChart + `\n<Bar label={(p) => p > 1} dataKey="deny" />`).length === 1]);
   checks.push(["a hardcoded 4-wide hatch stripe is caught", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width="4" height="4" />\n</pattern>`).length === 1]);
   checks.push(["a hatch reading HATCH_PATTERN is the fix", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width={HATCH_PATTERN.stripeWidth} />\n</pattern>`).length === 0]);

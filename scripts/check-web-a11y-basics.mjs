@@ -17,9 +17,14 @@
 //
 //   1. LIVE REGION. A POLLING VIEW (.tsx) must render <LiveRegion …/> or an
 //      aria-live="polite|assertive" attribute ("off" is not a live region). A
-//      file POLLS when it declares `refetchInterval`, when its tree's query
-//      defaults poll and it calls a query hook, or when it calls a hook exported
-//      by a file that polls (a wrapper in a .ts file is followed, to a fixpoint).
+//      file POLLS when it declares `refetchInterval`, drives a refetch from
+//      setInterval, calls a query hook while its tree's query defaults poll, or
+//      uses a hook or value a polling file exports — by name, by an
+//      `import { X as Y }` alias, or as the default import of a polling module
+//      (to a fixpoint). A component export does not carry polling upward: it
+//      renders its own region. A hook handed on without a visible call — a
+//      re-export, `export *`, `const useY = useX`, `export default useX` —
+//      fails closed.
 //      Query defaults are read from every .ts/.tsx in the tree — the balanced
 //      argument list of each `new QueryClient(…)`, `setDefaultOptions(…)` and
 //      `setQueryDefaults(…)`, wherever the construction lives — and must be an
@@ -29,12 +34,14 @@
 //      hook; `import { X as Y }` aliases and `NS.useX()` calls resolve to it.
 //      App.tsx is scanned like any file once its construction is removed.
 //   2. ICON BUTTON. A `<Button … size="icon" …>`, or a raw `<button>` whose
-//      children render no text, must carry aria-label or aria-labelledby. Tags
+//      children render no text, must carry aria-label or aria-labelledby (a
+//      child text node such as an sr-only <span> also names it). Tags
 //      are parsed brace-aware; a tag the parser cannot close is a FAILURE,
 //      never a skip.
-//   3. REDUCED MOTION. Every web tree's src/index.css carries a non-empty
-//      `@media (prefers-reduced-motion: reduce)` block, read with CSS comments
-//      stripped.
+//   3. REDUCED MOTION. Every web tree's src/index.css carries a
+//      `@media (prefers-reduced-motion: reduce)` block that damps motion (an
+//      animation-*, transition-* or scroll-behavior declaration), read with
+//      CSS comments stripped.
 //   4. JS MOTION. recharts 2.x animates in JavaScript and never reads the media
 //      query, so CSS cannot reach it: every recharts series element — named,
 //      aliased or namespaced — must set `isAnimationActive={false}` or
@@ -42,6 +49,8 @@
 //      same file. `{true}` or any other value is not gated motion. Likewise a
 //      JS `behavior: "smooth"` ignores the stylesheet's scroll-behavior
 //      override, so a literal "smooth" fails; choose it from the preference.
+//
+// Every hand-written and vendored (components/ui) .ts/.tsx file is read.
 //
 // Limit: rule 1 checks that a live region is rendered, not that it stays
 // mounted or carries a message — `{msg && <div aria-live=…>}` passes. The
@@ -71,8 +80,7 @@ function sourceFiles(dir) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) {
-      // components/ui is vendored shadcn/radix, not hand-written view code.
-      if (e.name === "node_modules" || e.name === "dist" || (e.name === "ui" && dir.endsWith("components"))) continue;
+      if (e.name === "node_modules" || e.name === "dist") continue;
       out.push(...sourceFiles(p));
     } else if (/\.tsx?$/.test(e.name) && !e.name.endsWith(".d.ts")) {
       out.push(p);
@@ -209,9 +217,59 @@ function withoutDefaultsCalls(src) {
 const exportedHooks = (src) =>
   [...src.matchAll(/export\s+(?:default\s+)?(?:async\s+)?(?:function\s+|const\s+|let\s+)(use[A-Z]\w*)/g)].map((m) => m[1]);
 
+/** Every name a file exports by name: declarations and `export { a, b as c }` lists. */
+function exportedNames(code) {
+  const out = new Set();
+  for (const m of code.matchAll(/export\s+(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/g)) out.add(m[1]);
+  for (const m of code.matchAll(/export\s*\{([^}]*)\}(?!\s*from)/g)) {
+    for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) out.add(part.split(/\s+as\s+/).pop().trim());
+  }
+  out.delete("default");
+  return out;
+}
+
+/** Does the file have a default export? */
+const hasDefaultExport = (code) => /export\s+default\b/.test(code) || /export\s*\{[^}]*\bas\s+default\b/.test(code);
+
+/** Is the default export a hook or a value (not a component)? */
+const defaultIsHookOrValue = (code) =>
+  /export\s+default\s+(?:async\s+)?function\s+use[A-Z]/.test(code) || /export\s+default\s+(?:\{|\[|[a-z_$][\w$]*\s*[;(]?\s*$)/m.test(code);
+
+/** Resolve an import specifier to a tree file (relative or `@/`), or null. */
+function resolveImport(fromRel, spec, rels) {
+  const srcRoot = fromRel.match(/^(.*?\/src)\//)?.[1];
+  let base;
+  if (spec.startsWith(".")) base = join(dirname(fromRel), spec);
+  else if (spec.startsWith("@/") && srcRoot) base = join(srcRoot, spec.slice(2));
+  else return null;
+  for (const c of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) if (rels.has(c)) return c;
+  return null;
+}
+
+/**
+ * Names that hand a polling export on without the gate seeing a call: a hook
+ * re-exported from another module (`export { useX as useY } from`), a barrel
+ * (`export * from`), a hook bound to another name without being called
+ * (`const useFeed = useListPolicies`), or a hook default-exported by name.
+ * The wrapper follow cannot trace any of them, so each fails closed.
+ */
+export function opaqueHookExports(code) {
+  const out = [];
+  if (/export\s*\*\s*(?:as\s+\w+\s*)?from/.test(code)) out.push("re-exports a whole module (`export * from`)");
+  for (const m of code.matchAll(/export\s*\{([^}]*)\}\s*from/g)) if (/\buse[A-Z]\w*/.test(m[1])) out.push("re-exports a hook from another module");
+  for (const m of code.matchAll(/(?:const|let|var)\s+(use[A-Z]\w*)\s*=\s*([A-Za-z_$][\w$.]*)\s*(?:;|$)/gm)) out.push(`binds ${m[1]} to ${m[2]} without calling it`);
+  if (/export\s+default\s+use[A-Z]\w*\s*;?\s*$/m.test(code)) out.push("default-exports a hook by name");
+  return out;
+}
+
 /**
  * Rule 1 over one tree's files. `files` is [{ rel, src }]; `defaultPolls` from
  * queryDefaults. Returns { polling (views), failures }.
+ *
+ * A file POLLS when it declares refetchInterval, drives a refetch from
+ * setInterval, calls a query hook in a default-polling tree, or uses anything
+ * a polling file exports — by its exported name, by an `import { X as Y }`
+ * alias, or as the default import of a polling module. Iterated to a fixpoint.
  */
 export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   const failures = [];
@@ -219,17 +277,34 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   // file: its QueryClient construction is removed below, the rest is a view.
   const skip = (rel) => /\/LiveRegion\.tsx$/.test(rel);
   const parsed = files.filter((f) => !skip(f.rel)).map((f) => ({ ...f, code: withoutDefaultsCalls(stripComments(f.src)) }));
+  const rels = new Set(parsed.map((f) => f.rel));
+  for (const f of parsed) for (const why of opaqueHookExports(f.code)) failures.push(`${f.rel}: ${why} — the gate cannot follow it; failing closed`);
   const polls = new Set();
-  const hooks = new Set();
-  // Fixpoint: a file calling a hook exported by a polling file polls too.
+  const names = new Set();   // named exports of polling files
+  const escape = (n) => n.replace(/\$/g, "\\$");
+  const usesPolling = (f) => {
+    const own = exportedNames(f.code);
+    const local = new Set([...names].filter((n) => !own.has(n)));
+    for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*["']([^"']+)["']/g)) {
+      const target = resolveImport(f.rel, m[3], rels);
+      if (m[1] && target && polls.has(target) && defaultIsHookOrValue(parsed.find((x) => x.rel === target).code)) local.add(m[1]);
+      for (const part of (m[2] ?? "").split(",").map((x) => x.trim()).filter(Boolean)) {
+        const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
+        if (alias && (names.has(orig) || (orig === "default" && target && polls.has(target) && defaultIsHookOrValue(parsed.find((x) => x.rel === target).code)))) local.add(alias);
+      }
+    }
+    return [...local].some((n) => new RegExp(`(?<![\\w$])${escape(n)}(?![\\w$])`).test(f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "")));
+  };
   for (let changed = true; changed; ) {
     changed = false;
     for (const f of parsed) {
       if (polls.has(f.rel)) continue;
-      const callsWrapper = [...hooks].some((h) => new RegExp(`\\b${h}\\s*\\(`).test(f.code) && !exportedHooks(f.code).includes(h));
-      if (/\brefetchInterval\b/.test(f.code) || (defaultPolls && callsQueryHook(f.code, generated)) || callsWrapper) {
+      const intervalRefetch = /\bsetInterval\s*\(/.test(f.code) && /\brefetch\w*\s*\(/.test(f.code);
+      if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
-        for (const h of exportedHooks(f.code)) hooks.add(h);
+        // A component (PascalCase) renders its own live region; only hooks and
+        // values (options objects, fetchers) carry polling to the file using them.
+        for (const n of exportedNames(f.code)) if (/^[a-z_$]/.test(n)) names.add(n);
         changed = true;
       }
     }
@@ -238,7 +313,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   for (const f of parsed) {
     if (!polls.has(f.rel)) continue;
     if (f.rel.endsWith(".ts")) {
-      if (exportedHooks(f.code).length === 0) failures.push(`${f.rel}: polls but exports no use* hook the gate can follow — failing closed`);
+      if (exportedNames(f.code).size === 0 && !hasDefaultExport(f.code)) failures.push(`${f.rel}: polls but exports nothing the gate can follow — failing closed`);
       continue;
     }
     polling.push(f.rel);
@@ -260,8 +335,8 @@ function openingTag(src, index) {
 }
 
 /** Text a raw `<button>` renders: its children with every JSX tag removed. */
-function buttonText(src, openEnd) {
-  const close = src.indexOf("</button>", openEnd);
+function buttonText(src, openEnd, tagName = "button") {
+  const close = src.indexOf(`</${tagName}>`, openEnd);
   if (close < 0) return null;
   let body = src.slice(openEnd + 1, close);
   for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
@@ -296,14 +371,16 @@ export function checkIconButtons(rel, raw) {
     const line = src.slice(0, m.index).split("\n").length;
     const tag = openingTag(src, m.index);
     if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
-    if (/\bsize=["{]\s*["']?icon["']?/.test(tag) && !/\baria-label(ledby)?=/.test(tag)) {
+    // A child text node (an sr-only <span>) names the button as well as aria-label does.
+    const named = /\baria-label(ledby)?=/.test(tag) || (!tag.trimEnd().endsWith("/") && (buttonText(src, m.index + tag.length, "Button") ?? "").trim() !== "");
+    if (/\bsize=["{]\s*["']?icon["']?/.test(tag) && !named) {
       failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
   }
   return failures;
 }
 
-const SERIES = ["Area", "Bar", "Line", "Pie", "Radar", "RadialBar", "Scatter", "Funnel"];
+const SERIES = ["Area", "Bar", "Line", "Pie", "Radar", "RadialBar", "Scatter", "Funnel", "Treemap", "Sankey", "SunburstChart"];
 const RECHARTS_IMPORT = /import\s+([^;]*?)\s+from\s*["']recharts["']/g;
 
 /** Local JSX names that are recharts series in this file, or null if an import is unparseable. */
@@ -382,12 +459,14 @@ export function checkReducedMotion(rel, raw) {
     for (let i = m.index + m[0].length - 1; i < css.length; i++) {
       if (css[i] === "{") depth++;
       else if (css[i] === "}" && --depth === 0) {
-        if (/[\w-]+\s*:[^;{}]+[;}]/.test(css.slice(m.index + m[0].length, i + 1))) return [];
+        // It must actually damp motion: an animation-*, transition-* or
+        // scroll-behavior declaration. `.x { color: red }` reduces nothing.
+        if (/(?:^|[\s;{])(animation|transition)(-[\w-]+)?\s*:[^;{}]+[;}]|scroll-behavior\s*:[^;{}]+[;}]/.test(css.slice(m.index + m[0].length, i + 1))) return [];
         break;
       }
     }
   }
-  return [`${rel}: no non-empty @media (prefers-reduced-motion: reduce) block — WCAG 2.3.3`];
+  return [`${rel}: no @media (prefers-reduced-motion: reduce) block that damps animation, transition or scroll-behavior — WCAG 2.3.3`];
 }
 
 function webTrees() {
@@ -469,8 +548,8 @@ function selfTest() {
       ["useInfiniteQuery(o)", "useSuspenseQuery(o)", "useQueries(o)"].every((c) => checkLiveRegions([view("t/src/pages/C.tsx", c)], true).failures.length === 1)],
     ["a wrapper hook in a .ts file is followed to the view that calls it",
       checkLiveRegions([view("t/src/lib/feed.ts", "export function useFeed() { return useQuery({ refetchInterval: 5 }); }"), view("t/src/pages/D.tsx", "const f = useFeed(); return <div/>;")], false).failures.length === 1],
-    ["a polling .ts file exporting no hook fails closed",
-      checkLiveRegions([view("t/src/lib/opts.ts", "export const opts = { refetchInterval: 5 };")], false).failures.length === 1],
+    ["a polling .ts file exporting nothing fails closed",
+      checkLiveRegions([view("t/src/lib/opts.ts", "const opts = { refetchInterval: 5 };")], false).failures.length === 1],
     ["commented-out <LiveRegion> does not count",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); {/* <LiveRegion message=\"x\" /> */}")], false).failures.length === 1],
     ["default-polling tree: a layout component outside pages is a polling view",
@@ -511,6 +590,8 @@ function selfTest() {
       checkIconButtons("x.tsx", '<Button\n variant="ghost"\n size="icon"\n onClick={() => remove(i)}\n>\n<Trash2 /></Button>').length === 1],
     ["labelled icon button passes",
       checkIconButtons("x.tsx", '<Button size="icon" onClick={() => remove(i)} aria-label={`Delete rule ${i}`}><Trash2 /></Button>').length === 0],
+    ["icon button named by an sr-only child span passes",
+      checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><PanelLeftIcon /><span className="sr-only">Toggle Sidebar</span></Button>').length === 0],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -533,6 +614,24 @@ function selfTest() {
       checkChartMotion("c.tsx", 'const R = require("recharts");\n<R.Bar />').length === 1],
     ["a commented-out reduced-motion block does not count",
       checkReducedMotion("a.css", "/* @media (prefers-reduced-motion: reduce) { * { animation: none; } } */").length === 1],
+    ["a reduced-motion block that damps no motion does not count",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } }").length === 1],
+    ["a Treemap is a recharts series",
+      checkChartMotion("c.tsx", 'import { Treemap } from "recharts";\n<Treemap data={d} />').length === 1],
+    ["setInterval driving a refetch is polling",
+      checkLiveRegions([view("t/src/pages/T.tsx", "const q = useThing(); useEffect(() => { const id = setInterval(() => q.refetch(), 5000); return () => clearInterval(id); }, []);")], false).failures.length === 1],
+    ["polling options exported by value are followed",
+      checkLiveRegions([view("t/src/lib/poll.ts", "export const pollOpts = { refetchInterval: 5000 };\nexport function useUnrelated() { return 1; }"), view("t/src/pages/Q.tsx", 'import { pollOpts } from "../lib/poll";\nuseQuery({ ...pollOpts });')], false).failures.length === 1],
+    ["a wrapper hook imported under an alias is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "export function useFeed() { return useQuery({ refetchInterval: 5 }); }"), view("t/src/pages/D.tsx", 'import { useFeed as useF } from "../lib/feed";\nconst f = useF(); return <div/>;')], false).failures.length === 1],
+    ["a default-exported wrapper hook imported under any name is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "export default function useFeed() { return useQuery({ refetchInterval: 5 }); }"), view("t/src/pages/D.tsx", 'import useThing from "../lib/feed";\nconst f = useThing(); return <div/>;')], false).failures.length === 1],
+    ["a polling component does not make the file rendering it a polling view",
+      checkLiveRegions([view("t/src/pages/Dash.tsx", "export function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }"), view("t/src/App.tsx", 'import { Dash } from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
+    ["a hook re-exported from another module fails closed",
+      checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
+    ["a hook bound to another name without a call fails closed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "export const useFeed = useListPolicies;")], false).failures.length === 1],
     ["an empty reduced-motion block does not count",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) {}").length === 1],
     ["icon-only raw <button> without aria-label fails",

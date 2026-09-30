@@ -1,6 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Plan row 143. This used to read `PHASE_SUMMARY_FILE ?? "docs/AUTOMATION_PHASE_TEMPLATE.md"`,
 // and the variable was set nowhere, so every PR was checked against the archived
@@ -13,6 +15,7 @@ import { resolve } from "node:path";
 // the archived one's: its "Merge lane" heading appears in no PR template this repo
 // ships, so requiring it would fail every honest PR.
 const TEMPLATE = "docs/AUTOMATION_PHASE_TEMPLATE.md";
+const PR_TEMPLATE = ".github/pull_request_template.md";
 const requiredSections = [
   "Summary",
   "What changed",
@@ -24,9 +27,18 @@ const requiredSections = [
 /** Pure, for the self-test. A section counts when a line starts with it, optionally
  *  behind markdown heading hashes or a bullet — `## Summary` or `- Summary`. */
 function missingSections(text: string): string[] {
+  // A heading quoted inside a code fence is an example, not a section.
+  const prose = text.replace(/^[ \t]*```[\s\S]*?^[ \t]*```/gm, "");
   return requiredSections.filter(
-    (section) => !new RegExp(`(^|\\n)[ \\t]*(#{1,6}[ \\t]+|-[ \\t]*)?${section}\\b`, "i").test(text),
+    (section) => !new RegExp(`(^|\\n)[ \\t]*(#{1,6}[ \\t]+|-[ \\t]*)?${section}\\b`, "i").test(prose),
   );
+}
+
+/** The PR template's headings are the whole required list, so a body left exactly as
+ *  the template (whitespace aside) would pass on headings alone. It is refused. */
+function isUnfilledTemplate(text: string, template: string): boolean {
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+  return template !== "" && norm(text) === norm(template);
 }
 
 type Resolved = { ok: true; path: string } | { ok: false; why: string };
@@ -58,7 +70,36 @@ if (process.argv.includes("--self-test")) {
     ["the static template refuses", !resolveSummary(repoRoot, TEMPLATE).ok],
     ["the static template refuses by absolute path", !resolveSummary(repoRoot, resolve(repoRoot, TEMPLATE)).ok],
     ["a real summary file resolves", resolveSummary(repoRoot, "/tmp/pr-body.md").ok],
+    ["headings only inside a code fence do not count", missingSections("```\n" + full + "```\n").length === requiredSections.length],
+    ["the unfilled PR template is refused", isUnfilledTemplate("## Summary\n\n-\n", "## Summary\n-")],
+    ["a filled body is not the template", !isUnfilledTemplate(full, "## Summary\n-")],
   ];
+  // END TO END: the pure checks above can all hold while an exit path is dropped (the
+  // row-144 defect shape). Re-run THIS script as a child and read real exit codes.
+  const scratch = mkdtempSync(join(tmpdir(), "phase-summary-selftest-"));
+  const good = join(scratch, "good.md");
+  const bad = join(scratch, "bad.md");
+  writeFileSync(good, full);
+  writeFileSync(bad, "## Summary\nx\n");
+  const rc = (value: string | undefined) => {
+    const env = { ...process.env };
+    delete env.PHASE_SUMMARY_FILE;
+    if (value !== undefined) env.PHASE_SUMMARY_FILE = value;
+    return spawnSync(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url)], { encoding: "utf8", env }).status;
+  };
+  const e2e: Array<readonly [string, string | undefined, number]> = [
+    ["unset", undefined, 1],
+    ["the static template", TEMPLATE, 1],
+    ["the unfilled PR template", PR_TEMPLATE, 1],
+    ["a missing file", join(scratch, "absent.md"), 1],
+    ["a body missing sections", bad, 1],
+    ["a complete body", good, 0],
+  ];
+  for (const [name, value, want] of e2e) {
+    const got = rc(value);
+    checks.push([`end to end: ${name} exits ${want} (got ${got})`, got === want]);
+  }
+  rmSync(scratch, { recursive: true, force: true });
   let failed = 0;
   for (const [name, ok] of checks) {
     console.log(`  ${ok ? "ok" : "FAIL"} — ${name}`);
@@ -79,6 +120,11 @@ console.log(`file=${resolved.path}`);
 const text = existsSync(resolved.path) ? readFileSync(resolved.path, "utf8") : "";
 if (text.trim() === "") {
   console.error("summary=fail (the summary file is missing or empty)");
+  process.exit(1);
+}
+const prTemplatePath = resolve(repoRoot, PR_TEMPLATE);
+if (isUnfilledTemplate(text, existsSync(prTemplatePath) ? readFileSync(prTemplatePath, "utf8") : "")) {
+  console.error(`summary=fail (the body is ${PR_TEMPLATE} left unfilled)`);
   process.exit(1);
 }
 const missing = missingSections(text);

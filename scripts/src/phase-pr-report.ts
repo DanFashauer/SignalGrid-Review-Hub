@@ -1,6 +1,8 @@
-import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { classifyScanOutput, RED_FILE_PATTERN, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
 
@@ -159,15 +161,36 @@ if (process.argv.includes("--self-test")) {
     console.log(`  ${got === want ? "ok" : "FAIL"} — lane ${lane} exits ${want} (got ${got})`);
     if (got !== want) failures.push(`lane ${lane} exits ${got}, expected ${want}`);
   }
-  const total = cases.length + 1 + exitCases.length;
-  console.log(`\nphase-pr-report self-test ${failures.length === 0 ? "pass" : "FAIL"} (${total - failures.length}/${total}); NO report was written.`);
+  // END TO END: exitCodeFor() can be right while the last line throws it away (the
+  // original defect). Re-run THIS script as a child with one planted unsafe path and
+  // read the real process exit code and the report it wrote to a scratch dir.
+  const scratch = mkdtempSync(join(tmpdir(), "phase-pr-report-selftest-"));
+  const reportPath = join(scratch, "PHASE_REPORT.txt");
+  const planted = spawnSync(process.execPath, [...process.execArgv, fileURLToPath(import.meta.url)], {
+    encoding: "utf8",
+    env: { ...process.env, PHASE_REPORT_INJECT_CHANGED_FILE: ".env.phase-pr-report-self-test", PHASE_REPORT_PATH: reportPath },
+  });
+  let plantedReport = "";
+  try { plantedReport = readFileSync(reportPath, "utf8"); } catch { /* absent report is itself a failure below */ }
+  rmSync(scratch, { recursive: true, force: true });
+  const e2eOk = planted.status === 1 && plantedReport.includes("merge_recommendation: block_merge");
+  console.log(`  ${e2eOk ? "ok" : "FAIL"} — a planted unsafe path exits 1 end to end and still writes block_merge (exit=${planted.status}, report ${plantedReport ? "written" : "ABSENT"})`);
+  if (!e2eOk) failures.push(`a planted unsafe path must exit 1 with a block_merge report; got exit=${planted.status}, report ${plantedReport ? "without block_merge" : "absent"} — the RED lane is not wired to the exit code`);
+  const total = cases.length + 1 + exitCases.length + 1;
+  console.log(`\nphase-pr-report self-test ${failures.length === 0 ? "pass" : "FAIL"} (${total - failures.length}/${total}); the real report was NOT written.`);
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(failures.length === 0 ? 0 : 1);
 }
 
 const diffFiles = prDiffFiles();
 const changedSource: ChangedSource = diffFiles.length > 0 ? "pr-diff" : "local-worktree";
-const changedFiles = uniqueSorted(changedSource === "pr-diff" ? diffFiles : localFiles());
+// PHASE_REPORT_INJECT_CHANGED_FILE exists only for `--self-test`'s end-to-end case. It
+// can only ADD a path, never remove one, so the strictest thing it can do is fail the run.
+const injectedChangedFile = process.env.PHASE_REPORT_INJECT_CHANGED_FILE ?? "";
+const changedFiles = uniqueSorted([
+  ...(changedSource === "pr-diff" ? diffFiles : localFiles()),
+  ...(injectedChangedFile ? [injectedChangedFile] : []),
+]);
 
 const touchesDocs = changedFiles.some((file) => file === "README.md" || file.startsWith("docs/"));
 const touchesRuntime = changedFiles.some((file) => /^(artifacts\/signalgrid-review\/src|lib\/|apps\/|src\/)/.test(file));

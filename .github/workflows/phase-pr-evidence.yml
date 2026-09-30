@@ -50,7 +50,11 @@ jobs:
         run: pnpm --filter @workspace/scripts exec tsx ./src/phase-summary-check.ts --self-test
       # The PR body is the summary under review (plan row 143). Passed through env,
       # never interpolated into the script, so its text cannot become shell.
+      # Scoped to pull_request (a dispatch run has no body) and off the machine-written
+      # lane-mail and tick heads, whose bodies are delivery records, not summaries.
+      # Every other PR, agent-authored included, uses the template headings.
       - name: Run phase summary check
+        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'lane/') && !startsWith(github.head_ref, 'mac/tick-')
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |

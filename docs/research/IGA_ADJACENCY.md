@@ -62,6 +62,38 @@ IGA  ──(governance state: entitlements, cert status, privileged flag)──�
 SignalGrid  ──(runtime decision evidence, review / recertification request)──▶  IGA
 ```
 
+## What SignalGrid does not do: entitlement fulfilment
+
+SignalGrid does not do entitlement fulfilment. It does not grant, provision,
+deprovision or revoke entitlements, in a target system or by opening an
+ITSM/ticketing request for someone to fulfil one manually. Provisioning,
+including provisioning routed through ticketing for manual fulfilment, is an
+IGA capability and stays with the IGA product. The orchestration plan a
+SignalGrid decision carries acts on the workflow that is happening now; the
+most it sends toward governance is the review or recertification request in
+the handoff above, which the IGA product decides on and fulfils.
+
+## Further IGA vendors a buyer may run
+
+Named so the adjacency above is not read as limited to six products. Each line
+is the vendor's own public description, paraphrased, from the page cited and
+accessed on the date shown. Nothing here is a comparison, a rating, or a claim
+that SignalGrid integrates with, partners with, or has been tested against any
+of them.
+
+| Vendor / product | Public self-description (paraphrased) | Source (accessed 2026-09-30) |
+|---|---|---|
+| Radiant Logic — RadiantOne | An identity data platform that aggregates, correlates and synchronises identity data from many sources and monitors access paths, entitlements and identity changes. Presented as a data foundation for an IAM programme rather than as an IGA suite. | https://www.radiantlogic.com/ |
+| Oracle Identity Governance | Self-service, compliance, provisioning and password management for on-premises and cloud applications (product documentation, release 12.2.1.4). The Oracle marketing page https://www.oracle.com/security/identity-management/governance/ returned HTTP 403 on this date and was not read. | https://docs.oracle.com/en/middleware/idm/identity-governance/12.2.1.4/omadm/product-overview-oracle-identity-governance.html |
+| Symantec Identity Governance and Administration (IGA), Broadcom | Automates user provisioning and access governance to enforce least-privileged access (TechDocs, release 15.0). | https://techdocs.broadcom.com/us/en/symantec-security-software/identity-security/identity-suite/15-0.html |
+| OpenText NetIQ Identity Governance | Governs access across on-premises and SaaS resources, automating access reviews, approvals and policy enforcement. | https://www.opentext.com/products/identity-governance |
+| IBM Verify Identity Governance | Provisioning, audit and reporting on user access and activity across lifecycle, compliance and analytics, on premises and in the cloud. The product page accessed names it "IBM Verify Identity Governance"; the earlier name "IBM Security Verify Governance" was not re-checked against IBM's own naming history. | https://www.ibm.com/products/verify-governance |
+
+The four IGA products among them describe provisioning or access governance as
+their job, the side of the line in the table above that SignalGrid does not
+occupy; Radiant Logic describes itself as the identity data layer beneath an IAM
+programme.
+
 ## Objection handling
 
 **"We already have SailPoint / Saviynt / Entra ID Governance / Omada / One

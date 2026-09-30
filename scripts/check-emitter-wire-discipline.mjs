@@ -59,12 +59,18 @@ export function stripComments(text) {
  * The six emitter families, DERIVED. Identical rule to check-ungated-fetch.mjs:
  * a directory under the scan root is a family iff its `resolve.ts` imports
  * `createEmitterResolver`, the shared fail-closed factory.
+ *
+ * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
+ * family. Any other read error means a resolve.ts is present but unreadable, so the
+ * family list would silently shrink; it is pushed onto `unreadable` for the caller
+ * to fail on.
  */
-export function deriveEmitterFamilies(readDir, readFile) {
+export function deriveEmitterFamilies(readDir, readFile, unreadable = []) {
   const families = [];
   for (const entry of readDir()) {
     let src;
-    try { src = readFile(`${entry}/resolve.ts`); } catch { continue; }
+    try { src = readFile(`${entry}/resolve.ts`); }
+    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${entry}/resolve.ts: ${e.message}`); continue; }
     if (/createEmitterResolver/.test(src)) families.push(entry);
   }
   return families.sort();
@@ -334,6 +340,17 @@ function selfTest() {
       assignedHeaders("headers['X-Signature'] = sig;").has("X-Signature")],
     ["the family derivation finds a family only through createEmitterResolver",
       deriveEmitterFamilies(() => ["a", "b"], (p) => (p === "a/resolve.ts" ? "createEmitterResolver" : "nothing")).join() === "a"],
+    // Real fs errors, no chmod: reading a DIRECTORY is EISDIR, a missing path is ENOENT.
+    ["a present-but-unreadable resolve.ts (EISDIR) is reported, naming the path", (() => {
+      const u = [];
+      deriveEmitterFamilies(() => ["scripts"], () => readFileSync(resolve(repoRoot, "scripts"), "utf8"), u);
+      return u.length === 1 && u[0].startsWith("scripts/resolve.ts: ");
+    })()],
+    ["a missing resolve.ts (ENOENT) is skipped, not reported", (() => {
+      const u = [];
+      const fams = deriveEmitterFamilies(() => ["nope"], () => readFileSync(resolve(repoRoot, "nope/resolve.ts"), "utf8"), u);
+      return u.length === 0 && fams.length === 0;
+    })()],
   ];
 
   const failed = checks.filter(([, ok]) => !ok);
@@ -346,9 +363,11 @@ if (process.argv.includes("--self-test")) process.exit(selfTest());
 
 // ── THE SCAN ─────────────────────────────────────────────────────────────────
 
+const unreadableResolvers = [];
 const FAMILIES = deriveEmitterFamilies(
   () => readdirSync(resolve(repoRoot, SCAN_ROOT), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name),
   (rel) => readFileSync(resolve(repoRoot, SCAN_ROOT, rel), "utf8"),
+  unreadableResolvers,
 );
 
 const familyFiles = execFileSync("git", ["ls-files", SCAN_ROOT], { cwd: repoRoot, encoding: "utf8" })
@@ -475,6 +494,14 @@ for (const k of reportedKeys) {
 }
 
 let problems = 0;
+
+if (unreadableResolvers.length > 0) {
+  console.error(
+    `\n✗ ${unreadableResolvers.length} resolve.ts present but unreadable — its family was NOT derived, so its sources were never scanned:\n` +
+      unreadableResolvers.map((u) => `    ${u}`).join("\n"),
+  );
+  problems += 1;
+}
 
 // FLOORS. Each derivation can silently stop matching, and a scan that finds nothing
 // reports everything as clean.

@@ -34,7 +34,8 @@
 //          the exact failure mode the precedent guard was written to prevent.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -262,6 +263,10 @@ const tracked = new Set(
   execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" }).split("\n").filter(Boolean),
 );
 
+/** Tracked sources present but unreadable (non-ENOENT). A Set: `consumersOf` runs once
+ *  per family, so one bad file would otherwise be reported once per family. */
+const unreadable = new Set();
+
 function analyzeFamily(name) {
   const dir = join(familyDir, name);
   const sources = readdirSync(dir)
@@ -314,15 +319,19 @@ function analyzeFamily(name) {
  * is a legitimate thing to do once the decision is made — the gate's job here is to make
  * it impossible to do QUIETLY.
  */
-function consumersOf(name) {
+function consumersOf(name, files = tracked, root = repo, sink = unreadable) {
   const needle = new RegExp(`from ['"][^'"]*integrations/${name}(?:/|['"])|@workspace/integrations/${name}\\b`);
   const hits = [];
-  for (const rel of tracked) {
+  for (const rel of files) {
     if (!rel.endsWith(".ts") && !rel.endsWith(".tsx")) continue;
     if (rel.startsWith(`lib/integrations/src/integrations/${name}/`)) continue;
     if (rel.includes("/dist/")) continue;
     let text;
-    try { text = readFileSync(join(repo, rel), "utf8"); } catch { continue; }
+    // ENOENT (deleted since `git ls-files`) is a legitimate skip. Anything else is a
+    // tracked source that is present but unreadable: a consumer could be hiding in it,
+    // so it is recorded and the gate fails — never counted as "imports nothing".
+    try { text = readFileSync(join(root, rel), "utf8"); }
+    catch (e) { if (e.code !== "ENOENT") sink.add(`${rel}: ${e.message}`); continue; }
     if (needle.test(text)) hits.push(rel);
   }
   return hits;
@@ -381,6 +390,18 @@ function selfTestCases() {
     family(`export const live = (env) => env["SIGNALGRID_LIVE_INTEGRATIONS"] === "true";\n`),
     () => null,
   );
+  // (e)/(f): real fs errors, no chmod. A `.ts` path that is a DIRECTORY is EISDIR; an
+  // absent one is ENOENT.
+  const dir = mkdtempSync(join(tmpdir(), "connector-discipline-"));
+  const eisdir = new Set();
+  const enoent = new Set();
+  try {
+    mkdirSync(join(dir, "dir.ts"));
+    consumersOf("x", ["dir.ts"], dir, eisdir);
+    consumersOf("x", ["absent.ts"], dir, enoent);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
   return [
     { id: "a", want: "via lib/integrations/src/integrations/adapters/emitter-resolver.ts", got: a,
       what: "family calls the factory and the factory carries the check → gated via factory" },
@@ -390,6 +411,10 @@ function selfTestCases() {
       what: "the string only in line/block/trailing COMMENTS → NOT gated" },
     { id: "d", want: "own", got: d,
       what: "the check in the family's own code → gated: own" },
+    { id: "e", want: true, got: eisdir.size === 1 && [...eisdir][0].startsWith("dir.ts: "),
+      what: "a tracked source that is present but unreadable (EISDIR) → recorded, naming the path" },
+    { id: "f", want: true, got: enoent.size === 0,
+      what: "a tracked source that is absent (ENOENT) → skipped, not recorded" },
   ];
 }
 
@@ -465,6 +490,9 @@ if (looseProblems === 0) {
 }
 
 const results = families.map(analyzeFamily);
+for (const u of unreadable) {
+  bad(`tracked source present but unreadable, NOT scanned for consumers of any family: ${u}`);
+}
 const disciplined = results.filter((r) => r.gated && r.proven && !r.performsAction);
 
 // ── 1. Undisciplined and unregistered → FAIL (new debt cannot be added quietly) ──

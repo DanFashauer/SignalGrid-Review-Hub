@@ -82,12 +82,12 @@ export const NOT_A_GATE = new Map([
     "commits a regenerated SBOM back to a dependabot branch; bot plumbing, and the drift it fixes is gated by supply-chain.yml:sbom",
   ],
   [
-    // NOT "a cron re-run of the same suite" — that reason stood here and contradicted
-    // the workflow's own header, which states in capitals that it is NOT the full
-    // suite and runs a hand-picked selection. It is exempt because it is report-only:
-    // it opens or updates a tracking issue and never blocks a pull request.
+    // Exempt because it is report-only: it opens or updates a tracking issue and never
+    // blocks a pull request. Since plan row 171 (2026-09-30) it runs preflight whole
+    // plus the breadth lane — no longer a hand-picked selection, which this reason said
+    // until then; scripts/check-scheduled-verification-scope.mjs holds that shape.
     "scheduled-verification.yml:verify",
-    "report-only rot detection on a hand-picked selection of gates (see the workflow header); opens a tracking issue, never blocks a PR",
+    "report-only daily rot detection running full preflight + the breadth lane (see the workflow header); opens a tracking issue, never blocks a PR",
   ],
 ]);
 

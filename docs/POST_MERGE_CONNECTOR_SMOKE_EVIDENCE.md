@@ -41,7 +41,13 @@ The evidence manifest records:
 - connector emulator result artifact name
 - evidence artifact name
 - proof command
-- public-safety posture
+- public-safety properties — MEASURED, not typed: each entry is written by
+  `node scripts/check-connector-emulator-evidence.mjs --emit` in the run and carries
+  its id, statement, `result`, the check that produced it (`measuredBy`) and the
+  files it scanned. The six string literals that stood here until 2026-09-30 were
+  checked by nothing (docs/COMPANY_BUILD_PLAN.md row 172); "no customer data" and
+  "no PHI" are not decidable by a scan and are no longer asserted — the PII-shape
+  scan is what the manifest now says it checked.
 
 The manifest intentionally omits live credentials, tenant IDs, customer data, PHI/PII, live API results, and production integration details.
 

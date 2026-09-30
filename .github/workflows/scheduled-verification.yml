@@ -1,33 +1,31 @@
 name: Scheduled Verification
 
-# Report-only "continuous verification" bot. Runs a SELECTED set of deterministic
-# gates on a schedule (and on demand) and, if anything regresses, opens or
-# updates a single tracking issue. It NEVER pushes code or changes the repo —
-# it only reports, so a green main stays trustworthy between PRs.
+# Report-only "continuous verification" bot. Runs the WHOLE preflight gate suite
+# (`node scripts/preflight.mjs`, full mode, heavy builds included) plus the breadth
+# lane on a schedule (and on demand) and, if anything regresses, opens or updates a
+# single tracking issue. It NEVER pushes code or changes the repo — it only
+# reports, so a green main stays trustworthy between PRs.
 #
-# NOT the full suite, and this line used to say it was. For the gate population,
-# read the census — `node scripts/check-gate-census.mjs` — which asserts every
-# gate runs SOMEWHERE; and `check-preflight-ci-parity.mjs`, which asserts every
-# preflight gate is wired into SOME workflow. Neither claims that any single
-# workflow runs all of them: the gates are spread across `review-hub-ci.yml`,
-# the breadth lane and others, and the parity check additionally reports the CI
-# jobs no preflight gate covers. No count is typed here on purpose — the
-# sentence that stood in this slot ("registers 179 gates and `review-hub-ci.yml`
-# runs every one of them per PR") was wrong in both halves by the time anyone
-# read it. This workflow runs the named steps below and nothing else. The job
-# was already renamed once for the same reason — it read "Full gate suite" while
-# running about ten — and this header outlived that correction, which is how a
-# fossil survives: the visible label gets fixed and the prose above it does not.
+# WHY PREFLIGHT ITSELF, NOT A LIST (plan row 171). This job used to run about ten
+# hand-picked proofs — a tenth of the gate suite — while its header called that the
+# full suite, then (once corrected) admitted the selection was hand-picked. A
+# hand-picked list is the fossil shape this repo derives scope to avoid: every gate
+# added to preflight since was invisible to the only thing watching the default
+# branch between pull requests, including the time- and externally-dependent gates
+# that are the ones able to go red WITHOUT a commit. Running preflight makes the
+# selection preflight's STEPS, so a new gate joins the nightly run the day it is
+# registered. `scripts/check-scheduled-verification-scope.mjs` (preflight + CI)
+# fails if the verify job grows a hand-picked gate step again, stops running full
+# preflight, or loses the token the liveness gate needs.
 #
-# Whether the selection is the RIGHT one is an open question, filed as backlog
-# row 171. Most registered gates are deterministic over the tree and cannot rot
-# without a commit, so running them daily would mostly repeat what the PR lane
-# already did; the ones that genuinely rot are the time-dependent and
-# externally-dependent ones. The selection below is hand-picked rather than
-# derived from that distinction. Note also that simply adding preflight here
-# would fail every night: `check-ci-liveness.mjs` is FATAL in CI when it cannot
-# reach the Actions API, and this workflow's permissions do not include
-# `actions: read`.
+# WHAT THAT TAKES, and why it was not a one-line change: `check-ci-liveness.mjs` is
+# FATAL in CI when it cannot reach the Actions API, so the workflow grants
+# `actions: read` and the preflight step hands GITHUB_TOKEN over (Actions never
+# exports it on its own). Preflight also needs shellcheck and a Playwright
+# Chromium, installed below the same bounded way review-hub-ci.yml does.
+# What preflight does NOT cover it prints itself (derived from .github/workflows/
+# on every run); the mutation sweep, image vulnerability gate and hands watch
+# below are this workflow's own additions to it.
 #
 # Note: GitHub runs `schedule` triggers only on the repository's default branch,
 # so this fires once merged to the default branch. Use "Run workflow"
@@ -41,6 +39,8 @@ on:
 permissions:
   contents: read
   issues: write
+  # check-ci-liveness.mjs (inside preflight) reads workflow runs; FATAL in CI without it.
+  actions: read
 
 concurrency:
   group: scheduled-verification
@@ -51,11 +51,11 @@ jobs:
     # KEPT deliberately (plan §11.4 step 5, decided 2026-08-11): report-only rot
     # detection on the default branch between PRs is exactly the failure mode the
     # breadth lane's daily cadence should cover, so the lane runs here too. The
-    # job was previously named "Full gate suite" while running ~10 launch gates —
-    # renamed to what it actually runs.
-    name: Daily verification (launch gates + breadth lane)
+    # job was once named "Full gate suite" while running ~10 launch gates; it now
+    # runs preflight whole (plan row 171), and the name says so.
+    name: Daily verification (full preflight + breadth lane)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -75,34 +75,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (all projects)
-        run: pnpm run typecheck
+      - name: Install shellcheck (preflight's shell-lint gate needs it)
+        timeout-minutes: 5
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
 
-      - name: Build (all projects)
-        run: pnpm run build
-
-      - name: Core proof (deterministic invariants)
-        run: pnpm run proof:signalgrid-core
-
-      - name: API integration test
-        run: pnpm run test:api
-
-      - name: OpenAPI contract check
-        run: pnpm run proof:api-contract
-
-      - name: Decision-latency pilot gate
-        run: pnpm run bench:decision-latency
-
-      - name: Decision-throughput saturation gate
-        run: pnpm run bench:decision-throughput -- --seconds=2
-
-      - name: Grid / simulator / emulator / posture proofs
+      # Bounded and retried per attempt — the reasoning is review-hub-ci.yml's step of
+      # the same name (an unbounded apt/CDN stall once ate a whole job).
+      - name: Install Playwright Chromium for preflight's E2E gate
+        timeout-minutes: 10
         run: |
-          pnpm run proof:signalgrid-grid
-          pnpm run proof:signalgrid-simulator
-          pnpm run proof:connector-emulator
-          pnpm run proof:microsoft-graph-sandbox
-          pnpm run proof:intune-entra-posture
+          ok=
+          for attempt in 1 2 3; do
+            if timeout 180 pnpm --filter @workspace/scripts exec playwright install chromium; then
+              ok=1; break
+            fi
+            echo "::warning::Chromium download failed (attempt ${attempt}/3) — retrying"
+            sleep $((attempt * 10))
+          done
+          if [ -z "$ok" ]; then
+            echo "::error::Playwright Chromium download failed three times; preflight's E2E gate cannot run."
+            exit 1
+          fi
+          timeout 240 pnpm --filter @workspace/scripts exec playwright install-deps chromium \
+            || echo "::warning::playwright install-deps did not complete (distro mirror?); relying on the runner's preinstalled libraries."
+
+      - name: Preflight — the whole gate suite (daily rot check)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/preflight.mjs
 
       - name: Breadth lane (deferred families + doctrine docs — daily rot check)
         run: pnpm run verify:breadth

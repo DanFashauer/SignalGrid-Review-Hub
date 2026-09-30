@@ -333,6 +333,14 @@ jobs:
         run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      - name: Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)
+        run: node scripts/check-connector-emulator-evidence.mjs --self-test
+      - name: "Connector-emulator evidence (the manifest asserts only what a step measured)"
+        run: node scripts/check-connector-emulator-evidence.mjs
+      - name: Scheduled-verification scope self-test (a hand-picked nightly gate must fail)
+        run: node scripts/check-scheduled-verification-scope.mjs --self-test
+      - name: "Scheduled-verification scope (the daily rot check runs preflight whole)"
+        run: node scripts/check-scheduled-verification-scope.mjs
       # Sibling of the gate above: that one asks whether the call was allowed and whether
       # it is bounded, this one asks whether it went out SIGNED.
       - name: Signing-unconditional self-test (the gate must be able to fail)

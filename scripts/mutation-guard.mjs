@@ -213,6 +213,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
       "lib/integrations/src/integrations/task-exception/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:verdict-attestation",
@@ -281,6 +282,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
       "lib/integrations/src/integrations/passkey-assurance/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:change-window",
@@ -289,6 +291,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/change-window/change-window-connector.ts",
       "lib/integrations/src/integrations/change-window/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:app-protection",
@@ -332,6 +335,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
       "lib/integrations/src/integrations/shift-context/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:caep-events",
@@ -495,6 +499,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/uem/store.ts",
       "lib/integrations/src/integrations/uem/workspace-one.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:ot-posture",
@@ -751,6 +756,12 @@ export const ALLOWED = [
   },
   {
     file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:passkey-assurance green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
     line: "readThrew ||",
     reason:
       "INERT SINCE THE ABSENT-REPORT RULE LANDED (2026-09-02), verified rather than asserted: " +
@@ -870,6 +881,18 @@ export const ALLOWED = [
     line: "inert-at-top: request refused by the authorizer normalizer first */ ||",
     reason:
       "Genuinely inert at the TOP-LEVEL request normalizer, verified by mutation: forcing either term to `false` and running proof:dual-control leaves it at pass. A non-plain or throwing request reaches normalizeAuthorizer(undefined) for BOTH initiator and approver before these terms matter — a string/array/undefined body via hasUnrecognizedKey throwing on a non-object ownKeys, a null body via that authorizer normalizer's own (load-bearing) !plain — so `initiator.malformed || approver.malformed` folded in at the end already marks the request malformed. Pinned by the 'a null/undefined/string/array/number request body is malformed' vectors. Kept as defence in depth; it becomes load-bearing only if the authorizer normalizer's own guards are removed, which those vectors also forbid.",
+  },
+  {
+    file: "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:change-window green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT, same shape and reasoning as its access-governance twin above: `ageMs(observedMs, referenceMs, 0)` two lines down returns null for a null `seenAt` and for a non-finite `nowMs`, and the `age === null` line answers \"unknown\" for both — the verdict this clause gives. Survived `if (false)` with proof:change-window green, 2026-09-30. Kept because `ageMs` lives in lib/integrations/src/utils/freshness.ts, a shared util this family does not own: if its null contract narrows, this guard still refuses.",
   },
   {
     file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
@@ -1053,6 +1076,12 @@ export const ALLOWED = [
     reason: "Documented redundant in the source: an array fails the key scan on its own `length`.",
   },
   {
+    file: "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Documented redundant in the source: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:task-exception green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
     file: "lib/verdict-attestation/src/attest.ts",
     line: "return false;",
     reason:
@@ -1233,6 +1262,12 @@ export const ALLOWED = [
     line: "if (candidates.length === 0) {",
     reason:
       "The bootstrap backstop itself — deliberately redundant defence-in-depth with its OWN reason (BOOTSTRAP_UNGRADED), documented in the source as never firing today; it exists so a FUTURE weakened branch surfaces as ungraded instead of impersonating the branch it replaced.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:shift-context green, 2026-09-30; the symbol-keyed path is still malformed either way). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
   },
   {
     file: "lib/integrations/src/integrations/shift-context/evaluate.ts",

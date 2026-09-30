@@ -59,7 +59,10 @@
 // a comma sequence (`(0, make)()`) or a conditional (`(c ? f : g)()`, both
 // branches, nested either way) is followed — as a callee, a tag, a `.call`/
 // `.apply` target, an `extends` base, and a synchronous iterator's callback.
-// Calling a generator runs its parameter defaults, not its body. Every file is
+// A generator's body is walked on every call, as base did: iterating it at
+// load (`[...gen()]`, for-of, `Array.from`, `.next()`) really runs it, and the
+// call alone does not — so a bare `gen()` whose body reads a later binding is a
+// stated, fail-closed false positive, never a miss. Every file is
 // forced to module scope — an import-less file used to share one global scope
 // with its twins, and all but the first went silently unanalysed.
 //
@@ -220,10 +223,11 @@ function analyseSourceFile(sf, checker) {
   // for hoisted or nested callees.
   // Calling a function runs its parameter defaults — including defaults inside
   // a destructured parameter (`function f({ a = X }) {}`) — and then its body.
-  // A generator's body waits for the first `next()`; only its defaults run.
+  // A generator's body is walked too: it runs as soon as the result is
+  // iterated, and skipping it would miss `[...gen()]` (fail closed, not open).
   const fnRunner = (fn) => (ctx) => {
     for (const p of fn.parameters) { walkPattern(p.name, ctx); walk(p.initializer, ctx); }
-    if (!fn.asteriskToken) walk(fn.body, ctx);
+    walk(fn.body, ctx);
   };
   // `new C()`: instance field initialisers and the constructor run; an
   // `extends` base's constructor runs through `super()`.
@@ -586,8 +590,20 @@ const SELF_TEST = [
   ["conditional `extends` base run by `new`", L("class B { constructor() { LIM; } }", "class A extends (Math.random() ? B : Object) {}", "new A();", "const LIM = 1;"), true],
   ["comma `extends` base run by `new`", L("class B { constructor() { LIM; } }", "class A extends (0, B) {}", "new A();", "const LIM = 1;"), true],
   ["conditional sync-iterator callback", L("[1].forEach(Math.random() ? ok : make);", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
-  ["generator call runs defaults, not the body", L("export const it = gen();", "function* gen() { yield LIM; }", "const LIM = 1;"), false],
-  ["generator call runs its parameter defaults", L("export const it = gen();", "function* gen(x = LIM) { yield x; }", "const LIM = 1;"), true],
+  // Review of ecc333d4: a generator iterated at load runs its body — each of
+  // these throws a ReferenceError under node. A bare call is flagged too (a
+  // stated, fail-closed false positive).
+  ["generator spread at load", L("export const xs = [...gen()];", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["generator in a top-level for-of", L("for (const x of gen()) {}", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["generator through Array.from", L("export const xs = Array.from(gen());", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["generator array-destructured", L("const [a] = gen();", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["generator .next() at load", L("gen().next();", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["bare generator call (fail-closed false positive, stated)", L("export const it = gen();", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
+  ["comma on the FALSE side of a conditional", L("(Math.random() ? ok : (0, make))();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["the tag EXPRESSION itself is evaluated", L("const obj = {};", "obj[LIM]`x`;", "const LIM = 'k';"), true],
+  // Stated in SCOPE LIMIT: `||` is not a callee the gate follows. Change this row
+  // and that sentence together.
+  ["`||` callee is not followed (SCOPE LIMIT)", L("(Math.random() || make)();", "function make() { return LIM; }", "const LIM = 1;"), false],
   ["`as` tag of a tagged template", L("(tag as any)`x`;", "function tag() { return LIM; }", "const LIM = 1;"), true],
   ["pattern default inside a followed function", L("f();", "function f() { const { a = LIM } = {}; return a; }", "const LIM = 1;"), true],
   ["class static block at load", L("class A { static { LIM; } }", "const LIM = 1;"), true],

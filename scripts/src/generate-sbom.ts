@@ -7,7 +7,9 @@
  *   - npm        from pnpm's resolved tree (`pnpm ls`), licence read from each
  *                resolved package's own package.json
  *   - cargo      parsed from the three committed Cargo.lock files
- *   - maven      parsed from the two committed build.gradle.kts files
+ *   - maven      parsed from the two committed build.gradle.kts files — direct
+ *                declarations only (dependencies + plugins {} markers), every
+ *                statement accounted for or the run fails
  *   - swift      both Package.swift surfaces are READ and currently declare
  *                zero external packages (local targets only) — recorded as a
  *                metadata property so absence is a stated fact, not a gap
@@ -276,14 +278,205 @@ function collectCargo(registry: LicenceRegistry): Map<string, Component> {
   return components;
 }
 
+/**
+ * A Gradle build file, read as the set of DIRECT declarations it makes. Every
+ * non-blank statement inside every `plugins {}` and `dependencies {}` block must
+ * match one of the forms below, or the whole generation fails: the collector used
+ * to be one regex over `implementation|api|runtimeOnly` calls, so a `plugins {}`
+ * entry, a `kotlin("test")` shorthand, a `compileOnly`/`ksp`/`classpath` line or a
+ * version-catalog reference was silently absent from the SBOM while it passed its
+ * own staleness gate byte-for-byte (plan row 146). A form this parser does not
+ * know is now a named failure, never a smaller bill of materials.
+ *
+ * Transitives are NOT resolved — no Gradle lockfile is committed — and the
+ * ecosystems-covered property says so.
+ */
+interface GradleDecl {
+  group: string;
+  artifact: string;
+  version?: string;
+  pluginId?: string;
+}
+
+// Anchored: the configuration name is the WHOLE identifier, optionally prefixed by a
+// source set / variant (`test`, `androidTest`, `debug`, …) — never a substring match.
+const GRADLE_CONFIG =
+  "(?:[a-z][A-Za-z0-9]*?)?(?:[Ii]mplementation|[Aa]pi|[Cc]ompileOnly|[Rr]untimeOnly|" +
+  "[Kk]sp|[Kk]apt|[Aa]nnotationProcessor|classpath|coreLibraryDesugaring|lintChecks)";
+const GRADLE_COORD = '([^":\\s]+):([^":\\s]+)(?::([^"\\s]+))?';
+const GRADLE_FORMS = {
+  // `config("g:a[:v]")` and `config(platform("g:a:v"))`.
+  quoted: new RegExp(`^${GRADLE_CONFIG}\\(()"${GRADLE_COORD}"\\)$`),
+  platform: new RegExp(`^${GRADLE_CONFIG}\\((platform)\\("${GRADLE_COORD}"\\)\\)$`),
+  kotlinDep: new RegExp(`^${GRADLE_CONFIG}\\(kotlin\\("([\\w.-]+)"(?:\\s*,\\s*"([^"\\s]+)")?\\)\\)$`),
+  pluginId: /^id\("([\w.-]+)"\)\s+version\s+"([^"\s]+)"$/,
+  pluginKotlin: /^kotlin\("([\w.-]+)"\)\s+version\s+"([^"\s]+)"$/,
+};
+
+/** The bodies of every `<name> {` block, brace-matched, comments stripped. */
+function gradleBlocks(text: string, name: string): { body: string; line: number }[] {
+  const clean = text
+    .split("\n")
+    .map((l) => l.replace(/(^|\s)\/\/.*$/, "$1"))
+    .join("\n");
+  const out: { body: string; line: number }[] = [];
+  const opener = new RegExp(`(^|[^\\w.])${name}\\s*\\{`, "g");
+  for (const m of clean.matchAll(opener)) {
+    const open = (m.index ?? 0) + m[0].length;
+    let depth = 1;
+    let i = open;
+    for (; i < clean.length && depth > 0; i++) {
+      if (clean[i] === "{") depth++;
+      else if (clean[i] === "}") depth--;
+    }
+    if (depth !== 0) throw new Error(`unbalanced \`${name} {\` block`);
+    out.push({ body: clean.slice(open, i - 1), line: clean.slice(0, open).split("\n").length });
+  }
+  return out;
+}
+
+export function parseGradleDeclarations(text: string): { decls: GradleDecl[]; unparsed: string[] } {
+  const decls: GradleDecl[] = [];
+  const unparsed: string[] = [];
+  const kotlinDeps: { name: string; version?: string; at: string }[] = [];
+  const pluginVersions = new Set<string>();
+  const statements = (name: string) =>
+    gradleBlocks(text, name).flatMap(({ body, line }) =>
+      body.split("\n").map((s, k) => ({ s: s.trim(), at: `line ${line + k}` })).filter((x) => x.s !== ""),
+    );
+  for (const { s, at } of statements("plugins")) {
+    let m = GRADLE_FORMS.pluginId.exec(s);
+    const id = m ? m[1] : (m = GRADLE_FORMS.pluginKotlin.exec(s)) ? `org.jetbrains.kotlin.${m[1]}` : null;
+    if (!m || !id) {
+      unparsed.push(`${at}: plugins { ${s} }`);
+      continue;
+    }
+    if (id.startsWith("org.jetbrains.kotlin.")) pluginVersions.add(m[2]);
+    decls.push({ group: id, artifact: `${id}.gradle.plugin`, version: m[2], pluginId: id });
+  }
+  for (const { s, at } of statements("dependencies")) {
+    const q = GRADLE_FORMS.quoted.exec(s) ?? GRADLE_FORMS.platform.exec(s);
+    if (q) {
+      decls.push({ group: q[2], artifact: q[3], version: q[4] });
+      continue;
+    }
+    const k = GRADLE_FORMS.kotlinDep.exec(s);
+    if (k) {
+      kotlinDeps.push({ name: k[1], version: k[2], at });
+      continue;
+    }
+    unparsed.push(`${at}: dependencies { ${s} }`);
+  }
+  // `kotlin("x")` with no version is aligned by the Kotlin Gradle plugin to ITS version,
+  // so the version is read from this file's Kotlin plugin — and an ambiguous or absent
+  // one is a failure, never a versionless guess.
+  for (const d of kotlinDeps) {
+    const version = d.version ?? (pluginVersions.size === 1 ? [...pluginVersions][0] : undefined);
+    if (!version) {
+      unparsed.push(`${d.at}: kotlin("${d.name}") has no version and the file declares ${pluginVersions.size} Kotlin plugin versions`);
+      continue;
+    }
+    decls.push({ group: "org.jetbrains.kotlin", artifact: `kotlin-${d.name}`, version });
+  }
+  return { decls, unparsed };
+}
+
+/**
+ * Every tracked Gradle/Maven build surface must be one this generator reads. A new
+ * build file, a Groovy `.gradle`, a `pom.xml` or a version catalog would otherwise
+ * be a whole module missing from the SBOM with nothing to say so.
+ */
+function assertGradleFullyParsed(): void {
+  const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: repoRoot, encoding: "utf8" })
+    .split("\0")
+    .filter((f) => /(^|\/)(pom\.xml|[^/]*\.versions\.toml|[^/]*\.gradle(\.kts)?|gradle\.lockfile)$/.test(f));
+  const problems: string[] = [];
+  for (const f of tracked) {
+    if (GRADLE_FILES.includes(f)) continue;
+    if (/(^|\/)settings\.gradle\.kts$/.test(f)) {
+      const text = readFileSync(join(repoRoot, f), "utf8");
+      const blocks = ["plugins", "dependencies", "versionCatalogs", "buildscript"].filter(
+        (b) => gradleBlocks(text, b).length > 0,
+      );
+      if (blocks.length === 0) continue;
+      problems.push(`${f}: declares ${blocks.join("/")} {} — not read by the SBOM generator`);
+      continue;
+    }
+    problems.push(`${f}: a Gradle/Maven build surface the SBOM generator does not read`);
+  }
+  for (const f of GRADLE_FILES) {
+    for (const u of parseGradleDeclarations(readFileSync(join(repoRoot, f), "utf8")).unparsed) {
+      problems.push(`${f} ${u}`);
+    }
+  }
+  if (problems.length > 0) {
+    console.error(
+      "generate-sbom: the maven collector cannot account for every Gradle declaration — " +
+        "refusing to emit a silently incomplete SBOM. Teach parseGradleDeclarations in " +
+        "scripts/src/generate-sbom.ts the form, or list the file in GRADLE_FILES:\n" +
+        problems.map((p) => `  ${p}`).join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
+/**
+ * Runs on EVERY generation, before anything is collected: the parser must still
+ * collect each declared form this repo uses and must still refuse the forms it
+ * does not know. A regression back to the one-regex collector fails here.
+ */
+function selfTestGradleParser(): void {
+  const fixture = [
+    "plugins {",
+    '    id("com.android.application") version "8.7.3"',
+    '    kotlin("android") version "2.1.0" // trailing comment',
+    "}",
+    "dependencies {",
+    '    implementation("a.b:c:1.0")',
+    '    implementation(platform("a.b:bom:2"))',
+    '    implementation("a.b:managed")',
+    '    compileOnly("d.e:f:3")',
+    '    androidTestImplementation("g.h:i:4")',
+    "    testImplementation(kotlin(\"test\"))",
+    "}",
+  ].join("\n");
+  const got = parseGradleDeclarations(fixture);
+  const coords = got.decls.map((d) => `${d.group}:${d.artifact}${d.version ? `:${d.version}` : ""}`).sort();
+  const want = [
+    "a.b:bom:2",
+    "a.b:c:1.0",
+    "a.b:managed",
+    "com.android.application:com.android.application.gradle.plugin:8.7.3",
+    "d.e:f:3",
+    "g.h:i:4",
+    "org.jetbrains.kotlin.android:org.jetbrains.kotlin.android.gradle.plugin:2.1.0",
+    "org.jetbrains.kotlin:kotlin-test:2.1.0",
+  ];
+  const refuse = [
+    "dependencies {\n    implementation(libs.androidx.core)\n}",
+    'dependencies {\n    implementation(project(":x"))\n}',
+    'dependencies {\n    fooImplementationBar("a:b:1")\n}',
+    'dependencies {\n    implementation(platform("a:b:1")\n}',
+    'plugins {\n    id("x.y")\n}',
+    "dependencies {\n    testImplementation(kotlin(\"test\"))\n}",
+  ];
+  const failures: string[] = [];
+  if (got.unparsed.length > 0) failures.push(`fixture left unparsed: ${got.unparsed.join("; ")}`);
+  if (JSON.stringify(coords) !== JSON.stringify(want)) failures.push(`fixture collected ${JSON.stringify(coords)}`);
+  for (const r of refuse) {
+    if (parseGradleDeclarations(r).unparsed.length === 0) failures.push(`accepted an unknown form: ${JSON.stringify(r)}`);
+  }
+  if (failures.length > 0) {
+    console.error(`generate-sbom: Gradle parser self-test FAILED\n${failures.map((f) => `  ${f}`).join("\n")}`);
+    process.exit(1);
+  }
+}
+
 function collectMaven(registry: LicenceRegistry): Map<string, Component> {
   const components = new Map<string, Component>();
-  const coordRe =
-    /(?:implementation|api|runtimeOnly)\((?:platform\()?"([^":]+):([^":]+)(?::([^"]+))?"\)?\)/g;
   for (const file of GRADLE_FILES) {
     const text = readFileSync(join(repoRoot, file), "utf8");
-    for (const m of text.matchAll(coordRe)) {
-      const [, group, artifact, version] = m;
+    for (const { group, artifact, version, pluginId } of parseGradleDeclarations(text).decls) {
       // Workspace-internal coordinates are subjects, not components.
       if (group.startsWith("com.signalgrid")) continue;
       const purl = version
@@ -297,6 +490,9 @@ function collectMaven(registry: LicenceRegistry): Map<string, Component> {
       };
       const entry = registry.entries?.[purl];
       const properties: { name: string; value: string }[] = [];
+      if (pluginId) {
+        properties.push({ name: "signalgrid:gradle-plugin-id", value: pluginId });
+      }
       if (entry?.licence) {
         component.licence = entry.licence;
         properties.push({
@@ -341,6 +537,8 @@ function assertSwiftHasNoExternalPackages(): void {
 function main(): void {
   const registry = loadRegistry();
   assertSwiftHasNoExternalPackages();
+  selfTestGradleParser();
+  assertGradleFullyParsed();
 
   const all = new Map<string, Component>([
     ...collectNpm(registry),
@@ -370,7 +568,9 @@ function main(): void {
           name: "signalgrid:ecosystems-covered",
           value:
             "npm (pnpm resolved tree); cargo (3 committed Cargo.lock files); " +
-            "maven (2 committed build.gradle.kts files); swift (both " +
+            "maven (2 committed build.gradle.kts files — DIRECT declarations only, " +
+            "dependencies and plugins {} markers; transitives not resolved, no Gradle " +
+            "lockfile is committed); swift (both " +
             "Package.swift surfaces read — zero external packages declared)",
         },
         {

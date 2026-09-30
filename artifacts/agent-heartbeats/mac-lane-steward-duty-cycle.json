@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T00:29:02.354Z",
-  "result": "00:24Z cycle at tip 9669f239 | Mac tick last fired 2026-09-30T00:07:34Z, ticking | NEW Mac PRs #1218 (raised-hands-owner-mac), #1219 (pg-role-split-stores), #1220 (enterprise-auth-hardening), plus #1118 finish-1118 push (8f97bb73); all three reviewed, findings mailed (one doc fix on #1219, NaN guard on #1220, sim_only masking on #1218) | cloud->mac #1216 land-ask mail unread 54m | sim requests all bound | sync manifest in step | live evidence minted 2026-09-29T22:26:35Z (~2h) | cloud forward-build 00:11Z building plan row 98 (root JSON 404) | owner not escalated"
+  "firedAt": "2026-09-30T01:45:22.627Z",
+  "result": "non-quiet 01:24Z: five new Mac PRs (#1224-#1228) reviewed and mailed (fix-needed #1224 and #1225; ship #1226, #1227, #1228). #1226 gating re-run after a 401 in the streak check. Tick last firedAt 2026-09-30T01:21:50.143Z. Live evidence minted 2026-09-29T22:27:47Z (~3h, within 3 days, no refresh asked). Manifest --check clean; sim requests all bound; no mail addressed to cloud. Owner not escalated."
 }

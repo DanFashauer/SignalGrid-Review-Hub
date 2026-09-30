@@ -1893,7 +1893,8 @@ earlier — that is the loop working, not a reason to soften the record.
     `signalgrid-review/index.html`, `signalgrid-mobile-pwa/{index.html,src/index.css}`
     and `signalgrid-desktop/index.html` — three trees, four files.
     FIX PROPOSED 2026-09-30 (branch claude/build-self-host-fonts-review-desktop,
-    lands under DR-037): the two remaining trees (the PWA landed under row 108)
+    owner merges — classifyDiff: OWNER_RESERVED, signalgrid-review is
+    buyer-facing): the two remaining trees (the PWA landed under row 108)
     now self-host. `artifacts/signalgrid-review/index.html` and
     `artifacts/signalgrid-desktop/index.html` lose their three vendor-font link
     tags; `artifacts/signalgrid-review/src/main.tsx` and

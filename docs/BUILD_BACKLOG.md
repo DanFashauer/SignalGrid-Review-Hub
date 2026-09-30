@@ -2392,6 +2392,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       const is missed. Fix: resolve string-const bindings and template quasis before
       the class match. Ships with a self-test extending each shape. Cloud lane.
       Lane: devex-tooling-engineer.
+      FIX PROPOSED 2026-09-30 (branch claude/build-gate-scope-analysis, lands under DR-037):
+      `scripts/check-console-unknown-render.mjs` now carries PER-QUERY PROVENANCE — every
+      tracked name maps to the set of hook calls it descends from, and a guard proves data
+      present only for the query it tests, so a two-query file with the guard on query A and
+      the good-state render on query B's data flags — and CONST-CLASS RESOLUTION — a
+      good-state class hoisted into a `const` (literal, template literal, `clsx`/`cn` call, or a
+      ternary of those) is resolved through lexical scope before the class match. Self-test
+      (`node scripts/check-console-unknown-render.mjs --self-test`) adds three bug shapes
+      (two-query, `className={GOOD}`, template-literal const — each must flag) and six guarded
+      shapes (guard on both queries, each on its own, const under a data guard, const ternary,
+      static const label, shadowed const — each must pass); live tree still 0 findings.
+      Falsified: the new self-test run against the old analyser misses all three bug shapes.
+      STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
+      carried into the child; object-map classes (`TONE[status]`) are not resolved.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

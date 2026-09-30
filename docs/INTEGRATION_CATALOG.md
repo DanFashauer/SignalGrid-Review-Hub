@@ -132,7 +132,7 @@ service) with vendor codes carried verbatim in a passthrough audit field, never
 in the enum. Integrity-class exceptions (assignment mismatch, bypassed
 procedure) restrict and route to security operations; inventory-class alert and
 route to operations — the worker is never punished for the warehouse's inventory
-problem. Proven offline by `pnpm run proof:task-exception` (204 checks): 1,728
+problem. Proven offline by `pnpm run proof:task-exception` (205 checks): 1,728
 normalized states + 127,400 raw wire reports enumerated, exactly 5 granting
 shapes, each individually asserted coherent; four self-contradiction relations
 (including the `not_applicable` mirror caught in a sibling dimension's review,
@@ -496,7 +496,7 @@ in one place.
   provenance than a synced one. A synced credential's custody is unknowable by
   construction — no administrator can query where it synced — so it forecloses the grant
   rather than lowering it. User verification discouraged is possession-only, a known-false
-  reliance that restricts. `proof:passkey-assurance` (114 checks).
+  reliance that restricts. `proof:passkey-assurance` (116 checks).
 
 - **Outbound emitters under discipline** — the six delivery families (`itsm`, `siem`, `syslog`,
   `telemetry`, `webhooks`, `caep-events`) each carry the same unanimous live-call gate as every
@@ -541,7 +541,7 @@ in one place.
   schedule standing is DERIVED from the reported window at a caller-supplied reference instant — no
   clock in any decision path — and the site question is graded only when the caller poses it.
   Reading a schedule is not managing one: GET-only, no punch writes, nothing payroll-adjacent.
-  `proof:shift-context` (63 checks).
+  `proof:shift-context` (67 checks).
 
 - **Change window** — an approval is a claim about a SPECIFIC time, actor and record. `change_window`
   existed here only as a declared flow signal carrying a HEALTH status ("is the ITSM reachable"),
@@ -556,7 +556,7 @@ in one place.
   integrations usually work, and it would let anyone who can write an ITSM row write themselves a
   grant. `change_class: emergency` is carried as evidence for the human answering the step-up and is
   never read by the gate. Reading a change record is not managing one: no change is raised,
-  approved, scheduled or closed. `proof:change-window` (76 checks).
+  approved, scheduled or closed. `proof:change-window` (79 checks).
 
 - **Bootstrap credential** — the auth plane's provenance reading (intake ledger row 17's queued
   candidate; Entra Temporary Access Pass and its peers are the reference shape). A temporary
@@ -687,7 +687,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   the equal-rank tie-break unfalsifiable (the more specific candidate was also pushed
   first — the same `service-lifecycle` defect, fixed by pushing the less specific one
   first) and a three-field malformed guard with only one control.
-- **`proof:uem` (77 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (80 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an

@@ -33,11 +33,14 @@ under the console's PREVIEW banner — the Placement column says which.
 `artifacts/*/src/pages/**/*.tsx` file has no row, when a listed file is gone, when a
 Status disagrees with the launch profile, when a Placement disagrees with the
 route table, when the route table holds a `<Route>` shape the gate cannot read, or
-when demo step 4 stops naming any of the four launch arguments the shell needs (with
-the seeded refs and `sgk_demo_northwind_operator`) or gives a non-loopback URL.
+when demo step 4 stops giving any of the four launch arguments the shell needs with
+its exact value (the seeded refs, `sgk_demo_northwind_operator`, and an http(s) URL
+whose parsed host is loopback).
 It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
 (`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file
-would not be seen, and the other surfaces make no placement claim.
+would not be seen, and the other surfaces make no placement claim. The gate reads route
+elements, not reachability: a `<Route>` inside a branch that never renders (for example
+`{false && …}`) still counts as routed.
 
 ## Inventory
 
@@ -122,8 +125,8 @@ SignalGrid.
    (`-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`,
    `-DemoBackendURL http://127.0.0.1:8080` — the same local api-server, on whatever port
    it was started with; the shell accepts only a loopback host (`localhost`,
-   `127.0.0.1`, `::1`) and ignores any other — and `-DemoBackendToken`
-   set to `sgk_demo_northwind_operator` — the same public fixture key the console uses
+   `127.0.0.1`, `::1`) and ignores any other — and
+   `-DemoBackendToken sgk_demo_northwind_operator` — the same public fixture key the console uses
    (`artifacts/signalgrid-app/src/lib/v1.ts`), so both sides act in the northwind
    tenant that owns these seeded refs; another tenant's `sgk_demo_*` key would put the
    decision in a different tenant's ledger). All four are needed: without a loopback URL

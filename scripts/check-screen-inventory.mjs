@@ -47,7 +47,18 @@ const ADMIN_ROUTES = `artifacts/${ADMIN}/src/App.tsx`;
 const BEGIN = "<!-- screen-inventory:begin -->";
 const END = "<!-- screen-inventory:end -->";
 const PAGE_RE = /^artifacts\/([^/]+)\/src\/pages\/.+\.tsx$/;
-const STEP4_NEEDLES = ["-DemoBackendURL", "-DemoBackendToken", "sgk_demo_northwind_operator", "-DemoBackendIdentity nurse.compliant", "-DemoBackendDevice ipad-ward-01"];
+// Demo step 4's launch arguments and the exact value each must carry (null: a URL,
+// checked below). Values are read as the whole token after the flag, never as a
+// substring somewhere in the step — round 4 showed `nurse.compliantX` and a swapped
+// token beside "(not sgk_demo_northwind_operator)" both passing a substring check.
+export const STEP4_FLAGS = {
+  "-DemoBackendIdentity": "nurse.compliant",
+  "-DemoBackendDevice": "ipad-ward-01",
+  "-DemoBackendToken": "sgk_demo_northwind_operator",
+  "-DemoBackendURL": null,
+};
+// Hostnames as WHATWG `new URL().hostname` reports them — the same host Swift's
+// URL(string:).host yields, which DemoMode.backendURL compares against.
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** surface id → status, from the app-surfaces entry of the launch profile. */
@@ -153,6 +164,20 @@ function adminPageKey(file) {
   return file.replace(`artifacts/${ADMIN}/src/pages/`, "").replace(/\.tsx$/, "");
 }
 
+/** Why a -DemoBackendURL value would not reach a loopback api-server, or null if it would. */
+export function urlProblem(value) {
+  let u;
+  try {
+    u = new URL(value);
+  } catch {
+    return "it is not a URL";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return `its scheme is ${u.protocol} (http or https only)`;
+  if (u.username || u.password) return `it carries userinfo, so its real host is ${u.hostname}`;
+  if (!LOOPBACK.has(u.hostname)) return `its host is ${u.hostname} (loopback only: localhost, 127.0.0.1, ::1)`;
+  return null;
+}
+
 /** Rows of the inventory table: [{ surface, file, status, placement, shows, line }]. */
 export function parseRows(doc) {
   const b = doc.indexOf(BEGIN);
@@ -189,14 +214,26 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   const step4 = /^4\. [\s\S]*?(?=^5\. )/m.exec(demo)?.[0] ?? "";
   if (!step4) errors.push(`${DOC}: demo path step 4 not found`);
   else {
-    for (const needle of STEP4_NEEDLES)
-      if (!step4.includes(needle))
-        errors.push(`${DOC}: demo step 4 no longer names ${needle} — without it the host app decides on-device or in another tenant`);
-    const urls = [...step4.matchAll(/\bhttps?:\/\/(\[[^\]]+\]|[^\s/:`)]+)/g)].map((m) => m[1].toLowerCase());
-    if (urls.length === 0) errors.push(`${DOC}: demo step 4 gives no -DemoBackendURL value — say the loopback URL (e.g. http://127.0.0.1:8080)`);
-    for (const host of urls)
-      if (!LOOPBACK.has(host))
-        errors.push(`${DOC}: demo step 4 points -DemoBackendURL at ${host} — DemoMode.backendURL accepts loopback only, so the shell would decide on-device`);
+    for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
+      const esc = flag.replace(/[-]/g, "\\-");
+      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^\\s\`),;]+))?`, "g"))];
+      if (uses.length === 0) {
+        errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);
+        continue;
+      }
+      // EVERY use of the flag must carry the right value, so a second, wrong
+      // occurrence cannot hide behind a right one.
+      for (const [, value] of uses) {
+        if (!value) {
+          errors.push(`${DOC}: demo step 4 names ${flag} with no value after it — write "${flag} ${want ?? "http://127.0.0.1:8080"}"`);
+        } else if (want !== null && value !== want) {
+          errors.push(`${DOC}: demo step 4 gives ${flag} ${value}; the seeded demo needs ${flag} ${want}`);
+        } else if (want === null) {
+          const problem = urlProblem(value);
+          if (problem) errors.push(`${DOC}: demo step 4 gives -DemoBackendURL ${value} — ${problem}; DemoMode.backendURL would return nil and the shell would decide on-device`);
+        }
+      }
+    }
   }
   const tracked = new Set(pageFiles);
   const seen = new Map();
@@ -266,7 +303,7 @@ function selfTest() {
     "artifacts/signalgrid-web/src/pages/Home.tsx",
   ];
   const row = (s, f, st, p, sh = "a screen") => `| ${s} | \`${f}\` | ${st} | ${p} | ${sh} |`;
-  const STEP4 = "4. host app: -DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01 -DemoBackendURL http://127.0.0.1:8080 -DemoBackendToken sgk_demo_northwind_operator";
+  const STEP4 = "4. host app: `-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`, `-DemoBackendURL http://127.0.0.1:8080` and `-DemoBackendToken sgk_demo_northwind_operator`";
   const good = [
     "Checked against launch profile v7.",
     BEGIN,
@@ -314,11 +351,20 @@ function selfTest() {
     ["an App.tsx that does not parse fails", routeCase("export function Router() {", "export function Router( {"), "does not parse"],
     ["an empty shows column fails", { ...base, doc: good.replace("| — | a screen |", "| — |  |") }, "empty"],
     ["a placeholder shows column (TBD) fails", { ...base, doc: good.replace("| — | a screen |", "| — | TBD |") }, "placeholder"],
-    ...["-DemoBackendURL", "-DemoBackendToken", "sgk_demo_northwind_operator", "-DemoBackendIdentity nurse.compliant", "-DemoBackendDevice ipad-ward-01"].map((needle) =>
-      [`demo step 4 without ${needle} fails (round 3)`, { ...base, doc: good.replace(STEP4, STEP4.replace(needle, "")) }, `no longer names ${needle}`]),
+    ...Object.entries(STEP4_FLAGS).map(([flag, value]) =>
+      [`demo step 4 without ${flag} fails (round 3)`, { ...base, doc: good.replace(STEP4, STEP4.replace(`${flag} ${value ?? "http://127.0.0.1:8080"}`, "")) }, `no longer names ${flag}`]),
     ["demo step 4 with a non-loopback URL fails (round 3)", { ...base, doc: good.replace("http://127.0.0.1:8080", "https://api.example.com") }, "loopback only"],
-    ["demo step 4 with no URL value fails", { ...base, doc: good.replace(" http://127.0.0.1:8080", "") }, "gives no -DemoBackendURL value"],
+    ["demo step 4 with a flag but no value fails", { ...base, doc: good.replace(" http://127.0.0.1:8080`", "`") }, "no value after it"],
     ["demo step 4 with localhost passes", { ...base, doc: good.replace("127.0.0.1", "localhost") }, null],
+    ["demo step 4 with [::1] passes", { ...base, doc: good.replace("127.0.0.1", "[::1]") }, null],
+    // Round 4: each of these read as loopback to the old host regex.
+    ["port + userinfo before a foreign host fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:8080@api.example.com") }, "userinfo"],
+    ["localhost:pw@ before a foreign host fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://localhost:pw@api.example.com") }, "userinfo"],
+    ["a non-http scheme fails even with a loopback URL in the prose (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080`", "ftp://evil.com` (never http://127.0.0.1:8080)") }, "scheme is ftp:"],
+    ["[::1].evil.com fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://[::1].evil.com") }, "not a URL"],
+    ["a lookalike identity fails (round 4)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliantX ") }, "gives -DemoBackendIdentity nurse.compliantX"],
+    ["another tenant's token beside a mention of the right one fails (round 4)", { ...base, doc: good.replace("-DemoBackendToken sgk_demo_northwind_operator`", "-DemoBackendToken sgk_demo_acme_operator` (not sgk_demo_northwind_operator)") }, "gives -DemoBackendToken sgk_demo_acme_operator"],
+    ["a second, wrong use of a flag fails even beside a right one (round 4)", { ...base, doc: good.replace(STEP4, `${STEP4}; or \`-DemoBackendURL https://api.example.com\``) }, "its host is api.example.com"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],
     ["a duplicated row fails", { ...base, doc: good.replace(END, `${row("signalgrid-web", pageFiles[4], "demo_only", "—")}\n${END}`) }, "listed 2 times"],

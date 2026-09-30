@@ -69,14 +69,29 @@ const SKILL_FLOOR = 10;
 const AGENT_FLOOR = 5;
 const COMMAND_FLOOR = 5;
 
-/** Parse the leading `--- … ---` YAML block into a flat key→value map, or null. */
+/**
+ * Parse the leading `--- … ---` YAML block into a flat key→value map, or null.
+ * A block scalar (`|`, `>`, with chomping/indent modifiers) takes its indented
+ * continuation lines as its value, so `description: >` followed by nothing is
+ * empty rather than the literal `>`. YAML's empty spellings — `""`, `''`, `~`,
+ * `null` — read as empty, never as a description (Brain review on #1272).
+ */
 export function frontmatter(body) {
   const m = body.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) return null;
   const out = {};
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
-    if (kv) out[kv[1]] = kv[2].trim();
+  const lines = m[1].split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const kv = lines[i].match(/^([A-Za-z_-]+):\s*(.*)$/);
+    if (!kv) continue;
+    let value = kv[2].trim();
+    if (/^[|>][+-]?\d*[+-]?$/.test(value)) {
+      const block = [];
+      while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || lines[i + 1].trim() === "")) block.push(lines[++i].trim());
+      value = block.join(" ").trim();
+    }
+    if (/^(?:""|''|~|null|Null|NULL)$/.test(value)) value = "";
+    out[kv[1]] = value;
   }
   return out;
 }
@@ -190,10 +205,13 @@ const diskIo = {
     if (!existsSync(dir)) return [];
     return readdirSync(dir).filter((f) => f.endsWith(".md"));
   },
+  // Recursive: a namespaced command (`.claude/commands/ns/x.md`) is still a command.
   listCommands: () => {
     const dir = join(repo, COMMANDS_DIR);
     if (!existsSync(dir)) return [];
-    return readdirSync(dir).filter((f) => f.endsWith(".md"));
+    return readdirSync(dir, { recursive: true })
+      .map((f) => String(f).split("\\").join("/"))
+      .filter((f) => f.endsWith(".md"));
   },
   read: (rel) => readFileSync(join(repo, rel), "utf8"),
 };
@@ -222,11 +240,17 @@ function selfTest() {
     [`${COMMANDS_DIR}/nodesc-cmd.md`, "---\nargument-hint: [x]\n---\nbody"],
     [`${COMMANDS_DIR}/blank-cmd.md`, "---\ndescription:\n---\nbody"],
     [`${COMMANDS_DIR}/nofm-cmd.md`, "just a prompt, no frontmatter"],
+    [`${COMMANDS_DIR}/quoted-empty-cmd.md`, '---\ndescription: ""\n---\nbody'],
+    [`${COMMANDS_DIR}/tilde-cmd.md`, "---\ndescription: ~\n---\nbody"],
+    [`${COMMANDS_DIR}/null-cmd.md`, "---\ndescription: null\n---\nbody"],
+    [`${COMMANDS_DIR}/empty-block-cmd.md`, "---\ndescription: >\nargument-hint: [x]\n---\nbody"],
+    [`${COMMANDS_DIR}/block-cmd.md`, "---\ndescription: |\n  does a thing\n  over two lines\n---\nbody"],
+    [`${COMMANDS_DIR}/ns/nested-cmd.md`, "---\nargument-hint: [x]\n---\nbody"],
   ]);
   const fio = {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
     listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md"],
-    listCommands: () => ["good-cmd.md", "nodesc-cmd.md", "blank-cmd.md", "nofm-cmd.md"],
+    listCommands: () => [...commands.keys()].map((k) => k.slice(COMMANDS_DIR.length + 1)),
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
       if (agents.has(rel)) return agents.get(rel);
@@ -250,8 +274,13 @@ function selfTest() {
   checks.push(["a command missing `description` is RED", r.problems.some((p) => p.includes("nodesc-cmd.md") && p.includes("no non-empty `description`"))]);
   checks.push(["a command with an empty `description` is RED", r.problems.some((p) => p.includes("blank-cmd.md") && p.includes("no non-empty `description`"))]);
   checks.push(["a command with no frontmatter is RED", r.problems.some((p) => p.includes("nofm-cmd.md") && p.includes("no YAML frontmatter"))]);
+  for (const f of ["quoted-empty-cmd", "tilde-cmd", "null-cmd", "empty-block-cmd"]) {
+    checks.push([`a YAML-empty description (${f}) is RED, not present`, r.problems.some((p) => p.includes(`${f}.md`) && p.includes("no non-empty `description`"))]);
+  }
+  checks.push(["a block-scalar description with content is present", !r.problems.some((p) => p.includes("block-cmd.md") && !p.includes("empty-block"))]);
+  checks.push(["a namespaced command (ns/x.md) is walked and RED without a description", r.problems.some((p) => p.includes("ns/nested-cmd.md"))]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 4]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 10]);
 
   // FLOORS against the REAL tree: a walk that resolved nothing would make every
   // per-member check vacuous, which is the pass this gate exists to refuse.

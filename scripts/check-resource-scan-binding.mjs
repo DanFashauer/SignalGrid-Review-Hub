@@ -13,7 +13,8 @@
 // `scripts/check-sim-requests.mjs`: the claim and the record must agree.
 //
 // WHAT IS GATED, for every intake-log row that CITES a scan file by its full path:
-//   1. the cited file exists and parses as JSON;
+//   1. the cited file (full path, or a link relative to the intake file) exists
+//      and parses as JSON;
 //   2. `proposals[]` is non-empty and every proposal carries ≥1 `tasks[]` entry
 //      with a unique string `id`;
 //   3. `confirms[]` is non-empty, every confirm carries ≥1 vote, and every vote
@@ -29,23 +30,54 @@
 // zero citing rows is REPORTED as zero — never printed as a pass.
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const INTAKE = "docs/agent/RESOURCE_INTAKE.md";
-const SCAN_CITE = /docs\/agent\/resource-scans\/([A-Za-z0-9][A-Za-z0-9._-]*)/g;
-/** A repo-relative path token: at least one directory and a file extension. */
-const PATH_TOKEN = /(?:^|[\s(`'"])((?:\.?[A-Za-z0-9_-]+\/)+[A-Za-z0-9_.-]*[A-Za-z0-9_-]\.[A-Za-z0-9]+)/g;
+/**
+ * A scan-file citation in any spelling: the full repo path, or a link relative to
+ * the intake file (`resource-scans/x.json`, `./resource-scans/x.json`,
+ * `../agent/resource-scans/x.json`). The optional prefix is the path before it.
+ */
+const SCAN_CITE = /((?:\.{1,2}\/|[A-Za-z0-9_-]+\/)*)resource-scans\/([A-Za-z0-9][A-Za-z0-9._-]*)/g;
+/**
+ * A repo-relative path token: at least one directory and a file extension. No
+ * leading-boundary requirement, so `a/x.mjs,b/y.mjs` yields both paths.
+ */
+const PATH_TOKEN = /(?:\.?[A-Za-z0-9_-]+\/)+[A-Za-z0-9_.-]*[A-Za-z0-9_-]\.[A-Za-z0-9]+/g;
 
-/** Intake-log rows: markdown table lines whose first cell is an ISO date. */
+/**
+ * Intake-log rows: markdown table lines whose first cell STARTS with an ISO date
+ * (`| 2026-09-19 (mac) |` counts, and leading indentation is tolerated). Every
+ * other table data row — not a header, not a separator — is returned as
+ * `uncounted`, so a row the walk cannot read is reported, never silently skipped.
+ */
 export function intakeRows(text) {
-  return text.split("\n").map((line, i) => ({ line, n: i + 1 })).filter(({ line }) => /^\|\s*\d{4}-\d{2}-\d{2}\s*\|/.test(line));
+  const rows = [];
+  const uncounted = [];
+  const lines = text.split("\n");
+  const isSeparator = (l) => /^\s*\|[\s:|-]+\|?\s*$/.test(l ?? "");
+  // The log has blank lines INSIDE its table, so "header until a separator" would
+  // drop every row after the first gap; a header is the line right above a separator.
+  for (const [i, line] of lines.entries()) {
+    if (!/^\s*\|/.test(line) || isSeparator(line) || isSeparator(lines[i + 1])) continue;
+    if (/^\s*\|\s*\d{4}-\d{2}-\d{2}\b/.test(line)) rows.push({ line, n: i + 1 });
+    else uncounted.push({ line, n: i + 1 });
+  }
+  return { rows, uncounted };
 }
 
-/** Every distinct scan file a row cites, by its full repo-relative path. */
+/** Every distinct scan file a line cites, resolved to a repo-relative path. */
 export function citedScans(line) {
-  return [...new Set([...line.matchAll(SCAN_CITE)].map((m) => `docs/agent/resource-scans/${m[1].replace(/\.+$/, "")}`))];
+  const out = new Set();
+  for (const m of line.matchAll(SCAN_CITE)) {
+    const name = m[2].replace(/\.+$/, "");
+    const prefix = m[1];
+    const rel = prefix.startsWith("docs/") ? `${prefix}resource-scans/${name}` : posix.join(posix.dirname(INTAKE), `${prefix}resource-scans/${name}`);
+    out.add(posix.normalize(rel));
+  }
+  return [...out];
 }
 
 /** Problems with one scan file's content (already read), [] when it is bound. */
@@ -84,8 +116,11 @@ export function auditScan(rel, raw, exists) {
   for (const id of keys) {
     if (!taskIds.has(id)) problems.push(`${rel}: decision names \`${id}\`, which no proposal holds`);
     const d = decision[id];
-    if (d?.outcome === "landed") {
-      const paths = [...String(d?.where ?? "").matchAll(PATH_TOKEN)].map((m) => m[1]);
+    const outcome = typeof d?.outcome === "string" ? d.outcome.trim().toLowerCase() : "";
+    if (outcome === "") problems.push(`${rel}: decision \`${id}\` has no \`outcome\``);
+    if (outcome === "landed") {
+      const where = Array.isArray(d?.where) ? d.where.join(" ") : String(d?.where ?? "");
+      const paths = [...where.matchAll(PATH_TOKEN)].map((m) => m[0]);
       if (paths.length === 0) problems.push(`${rel}: decision \`${id}\` is \`landed\` but names no repo path`);
       for (const p of paths) if (!exists(p)) problems.push(`${rel}: decision \`${id}\` is \`landed\` at \`${p}\`, which does not exist`);
     }
@@ -96,10 +131,14 @@ export function auditScan(rel, raw, exists) {
 /** Pure audit over an injected reader: `io.read(rel)` and `io.exists(rel)`. */
 export function auditBinding(io) {
   const problems = [];
-  const rows = intakeRows(io.read(INTAKE));
+  const text = io.read(INTAKE);
+  const { rows, uncounted } = intakeRows(text);
   let citing = 0;
   const seen = new Map();
-  for (const { line, n } of rows) {
+  // The trigger is the citation on ANY line — a row the walk could not count, or
+  // prose outside the table, is still bound by the file it cites.
+  const lines = text.split("\n").map((line, i) => ({ line, n: i + 1 }));
+  for (const { line, n } of lines) {
     const cited = citedScans(line);
     if (cited.length === 0) continue;
     citing++;
@@ -110,7 +149,7 @@ export function auditBinding(io) {
       for (const p of seen.get(rel)) problems.push(`${INTAKE}:${n} → ${p}`);
     }
   }
-  return { problems, rows: rows.length, citing, files: seen.size };
+  return { problems, rows: rows.length, uncounted: uncounted.map((u) => u.n), citing, files: seen.size };
 }
 
 const diskIo = {
@@ -136,6 +175,10 @@ function selfTest() {
     [`${S}strayvote.json`, mut((c) => { c.confirms[0].votes[0].id = "Q-1"; })],
     [`${S}notasks.json`, mut((c) => { c.proposals = [{ tasks: [] }]; })],
     [`${S}garbled.json`, "{ not json"],
+    [`${S}commaland.json`, mut((c) => { c.decision["A-1"].where = "scripts/real.mjs,scripts/ghost.mjs"; })],
+    [`${S}arrayland.json`, mut((c) => { c.decision["A-1"].where = ["scripts/real.mjs", "scripts/ghost.mjs"]; })],
+    [`${S}caseland.json`, mut((c) => { c.decision["A-1"] = { outcome: "Landed", where: "scripts/ghost.mjs" }; })],
+    [`${S}nooutcome.json`, mut((c) => { delete c.decision["A-2"].outcome; })],
   ]);
   const intakeOf = (...cells) => ["# Intake", "", "| Date | Resource |", "| --- | --- |", ...cells.map((c) => `| 2026-09-19 | ${c} |`)].join("\n");
   const run = (intake) =>
@@ -159,6 +202,22 @@ function selfTest() {
   checks.push(["a confirm voting on a task no proposal holds is RED", redFor("strayvote", "`Q-1`, which no proposal holds")]);
   checks.push(["a proposal with no tasks[] is RED", redFor("notasks", "has no `tasks[]`")]);
   checks.push(["an unparseable scan file is RED", redFor("garbled", "not parseable JSON")]);
+  checks.push(["a `landed` path list split by a comma still checks every path", redFor("commaland", "`scripts/ghost.mjs`, which does not exist")]);
+  checks.push(["a `landed` path list given as an array still checks every path", redFor("arrayland", "`scripts/ghost.mjs`, which does not exist")]);
+  checks.push(["`outcome` is matched case-insensitively (`Landed` is checked)", redFor("caseland", "`scripts/ghost.mjs`, which does not exist")]);
+  checks.push(["a decision with no `outcome` is RED", redFor("nooutcome", "has no `outcome`")]);
+  for (const link of ["resource-scans/ghost.json", "./resource-scans/ghost.json", "../agent/resource-scans/ghost.json"]) {
+    const rr = run(intakeOf(`[scan](${link})`));
+    checks.push([`a relative link \`${link}\` resolves against the intake file and is RED when missing`, rr.citing === 1 && rr.problems.some((p) => p.includes("docs/agent/resource-scans/ghost.json: cited but does not exist"))]);
+  }
+  const rgood = run(intakeOf("[scan](resource-scans/good.json)"));
+  checks.push(["a relative link to a real, bound scan resolves and is clean", rgood.citing === 1 && rgood.problems.length === 0]);
+  const odd = run(intakeOf("x").replace("| 2026-09-19 | x |", "| 2026-09-19 (mac) | x |\n  | 2026-09-20 | indented |\n| undated | y |"));
+  checks.push(["a `| 2026-09-19 (mac) |` row and an indented row are counted; an undated data row is reported uncounted", odd.rows === 2 && odd.uncounted.length === 1]);
+  const gap = run(intakeOf("a", "b").replace(/(\| a \|)\n/, "$1\n\n"));
+  checks.push(["a blank line inside the table does not drop the rows after it", gap.rows === 2 && gap.uncounted.length === 0]);
+  const offRow = run(intakeOf("x").replace("| 2026-09-19 | x |", `| undated | \`${S}missing.json\` |`));
+  checks.push(["a citation on a row the walk could not count is still bound (RED when missing)", offRow.citing === 1 && offRow.problems.some((p) => p.includes("missing.json"))]);
   const word = run(intakeOf("Self-scan ran; results summarised here, no file written"));
   checks.push(["the word \"Self-scan\" with no citation reads as no scan file, never a match", word.rows === 1 && word.citing === 0 && word.problems.length === 0]);
   const dir = run(intakeOf(`stage outputs go under \`${S}\``));
@@ -181,8 +240,11 @@ const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(i
 if (runAsCli && process.argv.includes("--self-test")) process.exit(selfTest());
 
 if (runAsCli) {
-  const { problems, rows, citing, files } = auditBinding(diskIo);
-  console.log(`Resource-scan binding — ${rows} intake row(s) walked, ${citing} cite a scan file (${files} distinct file(s))\n`);
+  const { problems, rows, uncounted, citing, files } = auditBinding(diskIo);
+  console.log(`Resource-scan binding — ${rows} intake row(s) walked, ${citing} line(s) cite a scan file (${files} distinct file(s))\n`);
+  if (uncounted.length > 0) {
+    console.log(`REPORTED: ${uncounted.length} table row(s) in ${INTAKE} have no leading date and were not counted as intake rows (lines ${uncounted.join(", ")}) — any scan file they cite is still checked.\n`);
+  }
   if (rows === 0) {
     console.error(`✗ 0 intake rows walked in ${INTAKE} — the walk reached nothing, so it is green about nothing.`);
     process.exit(1);
@@ -196,6 +258,6 @@ if (runAsCli) {
   if (citing === 0) {
     console.log("REPORTED: 0 rows cite a scan file — nothing is bound, so nothing here passed.");
   } else {
-    console.log(`Resource-scan binding passed — ${citing} citing row(s), every cited scan file backs its claim.`);
+    console.log(`Resource-scan binding passed — ${citing} citing line(s), every cited scan file backs its claim.`);
   }
 }

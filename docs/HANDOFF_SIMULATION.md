@@ -122,7 +122,7 @@ between shared iPads. Nothing is wrong with the work; one device is stale.
 
 ## What the proof checks
 
-Proved by `pnpm run proof:handoff-sim` (66 checks) —
+Proved by `pnpm run proof:handoff-sim` (67 checks) —
 `scripts/src/handoff-sim-proof.ts`, fully offline and deterministic. It replays
 both scenarios above and asserts, among others:
 

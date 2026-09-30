@@ -496,6 +496,13 @@ check("release against a ledger whose hold for the task is a bare string (the pr
     ...fullLedger(trustedDecision),
     holds: { "task-0200": CTRL_ENTRY } as never,
   }))?.code === "exception_does_not_hold_task");
+// Own properties only: a hold reached through the ledger's PROTOTYPE is not a hold.
+// Without the own-property read, an inherited array naming the entry released.
+check("release against a ledger whose hold for the task is only INHERITED (on the holds object's prototype) → typed refusal `exception_does_not_hold_task`",
+  refusalOf(() => releaseHeldTask(heldCtx, "task-0200", CTRL_ENTRY, {
+    ...fullLedger(trustedDecision),
+    holds: Object.create({ "task-0200": [CTRL_ENTRY] }),
+  }))?.code === "exception_does_not_hold_task");
 
 // ── the seventh review's findings, each now a refusal with a fixture ─────────
 // 3a CROSS-EXCEPTION RELEASE: the named exception must be the one holding the

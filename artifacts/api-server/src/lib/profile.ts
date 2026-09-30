@@ -205,6 +205,10 @@ const GA_MATCHERS = GA_ALLOWED_ROUTES.map((r) => ({ method: r.method, re: pathMa
  */
 export function routeServedByGateway(method: string, path: string): boolean {
   const clean = path.split("?")[0]!.replace(/\/+$/, "") || "/";
-  const verb = method.toUpperCase();
+  // HEAD is answered by Express from the GET handler, so it is served exactly where
+  // GET is — a load-balancer probe sending HEAD /api/healthz must not read 404 from a
+  // healthy instance. Only HEAD is folded; every other verb still matches literally.
+  const upper = method.toUpperCase();
+  const verb = upper === "HEAD" ? "GET" : upper;
   return GA_MATCHERS.some((m) => m.method === verb && m.re.test(clean));
 }

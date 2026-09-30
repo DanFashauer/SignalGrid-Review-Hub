@@ -198,6 +198,11 @@ const headerOf = (headers, k) =>
 export function rateLimitWaitMs(headers, nowMs) {
   const retryAfter = Number(headerOf(headers, "retry-after"));
   if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
+  // GitHub stamps x-ratelimit-reset (the end of the hourly window) on EVERY response,
+  // a 502 included. It means "wait until then" only when the quota is spent; read
+  // otherwise, every transient 5xx became "clears in ~3600s, not retried" (2026-09-30,
+  // PR #1237: 502 with remaining=4999 failed the gating job twice).
+  if (headerOf(headers, "x-ratelimit-remaining") !== "0") return null;
   const reset = Number(headerOf(headers, "x-ratelimit-reset"));
   if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - nowMs);
   return null;
@@ -382,6 +387,14 @@ async function api(path) {
     const c = counting([limitedWith([["x-ratelimit-remaining", "0"]]), ok({ recovered: 1 })]);
     const r = recordingWait();
     await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
+  });
+  await t("a 502 carrying a FULL quota's reset header is retried on the backoff, not failed as a rate limit", async () => {
+    const h = new Map([["x-ratelimit-remaining", "4999"], ["x-ratelimit-reset", String(T0 / 1000 + 3600)]]); h.get = Map.prototype.get.bind(h);
+    const c = counting([{ ok: false, status: 502, statusText: "Bad Gateway", headers: h }, ok({ recovered: 1 })]);
+    const r = recordingWait();
+    const got = await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()}`);
     if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
   });
   await t("describeRateLimit: no headers, no note", () => {

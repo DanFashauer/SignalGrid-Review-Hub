@@ -28,7 +28,11 @@
 //      that reads as one thing and is filed as another.
 //   3. Every `.claude/agents/*.md` has YAML frontmatter with a non-empty `name`
 //      and a non-empty `description`, and its `name` equals its filename stem.
-//   4. FLOORS. The skills walk and the agents walk each reach at least a floor of
+//   4. Every `.claude/commands/*.md` slash command has YAML frontmatter with a
+//      non-empty `description` — the line the harness lists it by. (A command has
+//      no `name` field; its filename stem is the name.) Added 2026-09-30: the
+//      prompt-master scan counted 12 tracked commands no gate looked at.
+//   5. FLOORS. The skills, agents and commands walks each reach at least a floor of
 //      members. A walk that silently reaches nothing is the fail-open this whole
 //      repository keeps finding — a gate green about a tree it never opened.
 //
@@ -50,6 +54,7 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SKILLS_DIR = ".claude/skills";
 const AGENTS_DIR = ".claude/agents";
+const COMMANDS_DIR = ".claude/commands";
 /** The tiers DR-047 lets an agent name. Fable and Mythos are deliberately absent. */
 const AGENT_MODELS = new Set(["haiku", "sonnet", "opus"]);
 
@@ -62,6 +67,7 @@ const AGENT_MODELS = new Set(["haiku", "sonnet", "opus"]);
 // regression, the mistake CLAUDE.md warns about for the proof suite.
 const SKILL_FLOOR = 10;
 const AGENT_FLOOR = 5;
+const COMMAND_FLOOR = 5;
 
 /** Parse the leading `--- … ---` YAML block into a flat key→value map, or null. */
 export function frontmatter(body) {
@@ -147,7 +153,27 @@ export function auditPlane(io) {
     }
   }
 
-  return { problems, skills: skillDirs.length, agents: agentFiles.length };
+  const commandFiles = io.listCommands();
+  for (const file of commandFiles.slice().sort()) {
+    const rel = `${COMMANDS_DIR}/${file}`;
+    let body;
+    try {
+      body = io.read(rel);
+    } catch (err) {
+      problems.push(`${rel}: unreadable (${err.message}) — a slash command the harness lists but this gate cannot open`);
+      continue;
+    }
+    const fm = frontmatter(body);
+    if (!fm) {
+      problems.push(`${rel}: no YAML frontmatter — a slash command with no \`description\` is listed with nothing to say what it does`);
+      continue;
+    }
+    if (!fm.description || fm.description.trim() === "") {
+      problems.push(`${rel}: frontmatter has no non-empty \`description\` — nobody notices until a person types it`);
+    }
+  }
+
+  return { problems, skills: skillDirs.length, agents: agentFiles.length, commands: commandFiles.length };
 }
 
 // The real disk reader.
@@ -161,6 +187,11 @@ const diskIo = {
   },
   listAgents: () => {
     const dir = join(repo, AGENTS_DIR);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir).filter((f) => f.endsWith(".md"));
+  },
+  listCommands: () => {
+    const dir = join(repo, COMMANDS_DIR);
     if (!existsSync(dir)) return [];
     return readdirSync(dir).filter((f) => f.endsWith(".md"));
   },
@@ -186,12 +217,20 @@ function selfTest() {
     [`${AGENTS_DIR}/nomodel.md`, "---\nname: nomodel\ndescription: d\n---\nbody"],
     [`${AGENTS_DIR}/fable.md`, "---\nname: fable\ndescription: d\nmodel: fable\n---\nbody"],
   ]);
+  const commands = new Map([
+    [`${COMMANDS_DIR}/good-cmd.md`, "---\ndescription: does a thing\nargument-hint: [x]\n---\nbody"],
+    [`${COMMANDS_DIR}/nodesc-cmd.md`, "---\nargument-hint: [x]\n---\nbody"],
+    [`${COMMANDS_DIR}/blank-cmd.md`, "---\ndescription:\n---\nbody"],
+    [`${COMMANDS_DIR}/nofm-cmd.md`, "just a prompt, no frontmatter"],
+  ]);
   const fio = {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
     listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md"],
+    listCommands: () => ["good-cmd.md", "nodesc-cmd.md", "blank-cmd.md", "nofm-cmd.md"],
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
       if (agents.has(rel)) return agents.get(rel);
+      if (commands.has(rel)) return commands.get(rel);
       throw new Error(`ENOENT ${rel}`);
     },
   };
@@ -207,14 +246,19 @@ function selfTest() {
   checks.push(["an agent missing `name` is RED", has("noname.md") && has("no non-empty `name`")]);
   checks.push(["an agent missing `model` is RED (DR-047)", has("nomodel.md") && has("has no `model`")]);
   checks.push(["an agent naming a non-engineering tier is RED (DR-047)", has("fable.md") && has("is not one of")]);
+  checks.push(["a well-formed command raises no problem", !r.problems.some((p) => p.includes("good-cmd.md"))]);
+  checks.push(["a command missing `description` is RED", r.problems.some((p) => p.includes("nodesc-cmd.md") && p.includes("no non-empty `description`"))]);
+  checks.push(["a command with an empty `description` is RED", r.problems.some((p) => p.includes("blank-cmd.md") && p.includes("no non-empty `description`"))]);
+  checks.push(["a command with no frontmatter is RED", r.problems.some((p) => p.includes("nofm-cmd.md") && p.includes("no YAML frontmatter"))]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 4]);
 
   // FLOORS against the REAL tree: a walk that resolved nothing would make every
   // per-member check vacuous, which is the pass this gate exists to refuse.
   const live = auditPlane(diskIo);
   checks.push([`the real skills walk clears its floor (${live.skills} ≥ ${SKILL_FLOOR})`, live.skills >= SKILL_FLOOR]);
   checks.push([`the real agents walk clears its floor (${live.agents} ≥ ${AGENT_FLOOR})`, live.agents >= AGENT_FLOOR]);
+  checks.push([`the real commands walk clears its floor (${live.commands} ≥ ${COMMAND_FLOOR})`, live.commands >= COMMAND_FLOOR]);
   checks.push(["the real tree is itself conformant — the gate is green about a real plane, not only a fixture", live.problems.length === 0]);
 
   const failed = checks.filter(([, ok]) => !ok);
@@ -227,8 +271,8 @@ const runAsCli = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(i
 if (runAsCli && process.argv.includes("--self-test")) process.exit(selfTest());
 
 if (runAsCli) {
-  const { problems, skills, agents } = auditPlane(diskIo);
-  console.log(`Skill-plane conformance — ${skills} skill(s), ${agents} agent(s) walked\n`);
+  const { problems, skills, agents, commands } = auditPlane(diskIo);
+  console.log(`Skill-plane conformance — ${skills} skill(s), ${agents} agent(s), ${commands} command(s) walked\n`);
 
   let fatal = [...problems];
   if (skills < SKILL_FLOOR) {
@@ -236,6 +280,9 @@ if (runAsCli) {
   }
   if (agents < AGENT_FLOOR) {
     fatal.push(`only ${agents} agent(s) walked (floor ${AGENT_FLOOR}) — the .claude/agents walk is not reaching the tree it is meant to cover`);
+  }
+  if (commands < COMMAND_FLOOR) {
+    fatal.push(`only ${commands} command(s) walked (floor ${COMMAND_FLOOR}) — the .claude/commands walk is not reaching the tree it is meant to cover`);
   }
 
   if (fatal.length > 0) {
@@ -249,5 +296,5 @@ if (runAsCli) {
     process.exit(1);
   }
 
-  console.log("Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description.");
+  console.log("Skill-plane conformance passed — every skill and agent carries a name that matches its home and a non-empty description, and every slash command a description.");
 }

@@ -17,7 +17,7 @@ FROM --platform=linux/amd64 docker.io/library/node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
-RUN corepack enable pnpm
+RUN corepack enable pnpm && for attempt in 1 2 3 4; do corepack install -g pnpm@10.28.1 && exit 0; echo "corepack: pnpm@10.28.1 fetch attempt $attempt/4 failed, retrying" >&2; sleep $((attempt * 5)); done; echo "FATAL: corepack could not fetch pnpm@10.28.1 after 4 attempts" >&2; exit 1
 
 # tsconfig.base.json is NOT optional here. Both app tsconfigs open with
 # `"extends": "../../tsconfig.base.json"`, and vite reads them during the build —

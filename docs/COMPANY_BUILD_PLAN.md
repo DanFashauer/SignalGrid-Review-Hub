@@ -2373,7 +2373,7 @@ earlier — that is the loop working, not a reason to soften the record.
     security-engineer. FIX PROPOSED 2026-09-30 (branch
     claude/build-webauthn-revocation-race, owner merges): the defect as filed NO
     LONGER REPRODUCES. `removeCredential` in `lib/webauthn/src/webauthn/store.ts`
-    already shares `withUserLock` with `addCredential`, with fenced writes, and
+    already shares `withUserLock` and its fenced writes with `addCredential`.
     `POST /v1/step-up/enroll/revoke` in `artifacts/api-server/src/routes/v1.ts` now
     calls it, so the row is LIVE rather than latent. `proof:enrollment-race` passed
     15/15 on a real Redis before any change. What was missing was a check that forces

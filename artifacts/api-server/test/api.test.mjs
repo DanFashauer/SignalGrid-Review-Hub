@@ -199,6 +199,10 @@ async function run() {
     unknownPath.status === 404 && isEnvelope(unknownPath.json) && unknownPath.json.error === "not_found");
   check("…and the 404 carries x-request-id for correlation",
     typeof unknownPath.headers.get("x-request-id") === "string");
+  const unknownRoot = await fetch(`${BASE.replace(/\/api$/, "")}/zzz-definitely-not-a-root-route`);
+  const unknownRootBody = await unknownRoot.json().catch(() => null);
+  check("unknown ROOT path → 404 JSON envelope, not framework HTML",
+    unknownRoot.status === 404 && /application\/json/.test(unknownRoot.headers.get("content-type") ?? "") && isEnvelope(unknownRootBody) && unknownRootBody.error === "not_found");
 
   // Unknown path UNDER /v1, anonymous: auth answers FIRST, deliberately — a
   // 404-vs-401 difference would let an unauthenticated prober enumerate which
@@ -1853,6 +1857,9 @@ async function run() {
       // no enforced/observed label, which is Blocker 10 in rendered form.
       const gwConsole = await fetch(`http://localhost:${PORT4}/console`);
       check("gateway: the demo console is not served at the root (404)", gwConsole.status === 404);
+      const gwRoot = await fetch(`http://localhost:${PORT4}/`);
+      const gwRootBody = await gwRoot.json().catch(() => null);
+      check("gateway: GET / is a 404 JSON envelope, not Express's HTML page", gwRoot.status === 404 && /application\/json/.test(gwRoot.headers.get("content-type") ?? "") && gwRootBody?.error === "not_found");
 
       const gwDemoToken = await fetch(`${BASE4}/v1/context`, {
         headers: { authorization: `Bearer ${KEYS.owner}` },

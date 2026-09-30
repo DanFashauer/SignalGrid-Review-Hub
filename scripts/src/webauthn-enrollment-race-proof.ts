@@ -87,6 +87,20 @@ async function rawRedis<T>(fn: (r: IORedis) => Promise<T>): Promise<T> {
   }
 }
 
+/** Drop the tombstones EVERY `t_proof:` identity left in this Redis on earlier runs —
+ *  including sections that seed fixed ids without calling `resetIdentity` — so a rerun
+ *  against a persistent Redis is not refused its own fixture ids. Test identities only. */
+async function clearProofTombstones() {
+  await rawRedis(async (r) => {
+    let cursor = "0";
+    do {
+      const [next, keys] = await r.scan(cursor, "MATCH", tombstoneKey("t_proof:*"), "COUNT", 100);
+      if (keys.length > 0) await r.del(...keys);
+      cursor = next;
+    } while (cursor !== "0");
+  });
+}
+
 /** Clean slate for a fixed test identity: remove its credentials (each removal
  *  tombstones), THEN drop the tombstones, so this run may enrol the same ids again. */
 async function resetIdentity(userId: string) {
@@ -373,6 +387,7 @@ async function main() {
   }
 
   console.log("Concurrent-enrollment proof — every enrolled credential must survive\n");
+  await clearProofTombstones();
 
   // Clean slate: remove anything a previous run left behind, tombstones included.
   await resetIdentity(USER_ID);

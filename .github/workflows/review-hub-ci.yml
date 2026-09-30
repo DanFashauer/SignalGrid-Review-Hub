@@ -239,6 +239,10 @@ jobs:
       # workspace overrides). Static, so it catches that without a daemon.
       - name: "Container native base (a Dockerfile that cannot build is not a deploy path)"
         run: node scripts/check-container-native-base.mjs
+      - name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)"
+        run: node scripts/check-image-build-hardening.mjs
+      - name: "Image build hardening self-test (the gate must be able to fail)"
+        run: node scripts/check-image-build-hardening.mjs --self-test
       - name: "Publication boundary (public repo — nothing arrives unclassified)"
         run: node scripts/check-publication-boundary.mjs
       - name: API collection (a committed request must name a served route)
@@ -317,6 +321,10 @@ jobs:
         run: node scripts/check-verdict-tone-source.mjs
       - name: Verdict tone source self-test (the gate can fail)
         run: node scripts/check-verdict-tone-source.mjs --self-test
+      - name: PWA fixture labels (control-plane data on the PWA says it is a fixture)
+        run: node scripts/check-pwa-fixture-labels.mjs
+      - name: PWA fixture labels self-test (the gate can fail)
+        run: node scripts/check-pwa-fixture-labels.mjs --self-test
       - name: Decision palette (one palette, every tree, AA everywhere)
         run: node scripts/check-decision-palette.mjs
       - name: Reason codes self-test (the gate must be able to fail)

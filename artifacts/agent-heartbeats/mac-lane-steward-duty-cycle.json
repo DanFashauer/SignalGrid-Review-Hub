@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T07:36:27.735Z",
-  "result": "07:24Z non-quiet. Landed since the last cycle: #1235, #1233, #1234, #1245 and mail #1253. Tick #1254 is being landed via #1258 with the coverage page regenerated. New Mac PRs #1255 and #1256, plus the moved #1248, are in review. Mailed the Mac: the phase-summary headings requirement, and one re-mint for manifest v85. Tick last fired 07:20:17Z. Live-evidence is from 2026-09-29 22:27Z (~9h). Sim requests are all bound. No owner escalation."
+  "firedAt": "2026-09-30T15:26:37.631Z",
+  "result": "non-quiet 15:24Z: Mac mail mac-mac-5-safety-machinery-prs-are-green-clean-p (land-5 ask) read and acked; the five PRs are under independent review + refutation, landings under DR-037 follow this hour, one at a time. No mac/* branch moved since 13:40Z; #1248/#1228/#1247 still dirty, awaiting the Mac's push. Tick 15:03:46Z quiet. Live-evidence 2026-09-30 04:23 -04:00 (~7h; the -2 re-mint request lands with the #1300 tick landing branch, chain running). No manifest drift; sim requests all bound; no mail to cloud unread. Owner not escalated. Landed since last heartbeat: #1277 3dee6a25 (DR-037), #1305 4a6a863c (ci-liveness 5xx retry), #1306 2fa150a3 (forward-build heartbeat), #1304 3f91a9dd. In flight: claude/fix-ci-liveness-stale-listing (confirms a red liveness verdict against a second listing)."
 }

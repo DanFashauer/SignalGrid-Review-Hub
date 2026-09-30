@@ -1036,7 +1036,7 @@ jobs:
       - name: API integration test
         run: pnpm run test:api
 
-      - name: Console unit tests (policyTests, facilityGraphLayout)
+      - name: Console + PWA unit tests (policyTests, facilityGraphLayout, signal-tone)
         run: pnpm run test:console
 
       # The MCP server's own node:test suite — wire-visible tool/resource contract

@@ -7,14 +7,17 @@
  * resolution plan, an incident, a ticket through the `dispatchIncident` seam, a
  * change draft through `submitChangeDraft`, notices routed to the people affected,
  * a (simulated) approval, the MDM's next compliant report, allow again, and the
- * verifier reading the fix as cleared. Nothing on the page is pre-written: every
- * card is rendered from an event this module computed.
+ * verifier reading the fix as cleared. Every decision, reason code, id and status on
+ * the page is one the real code computed; `storyGaps` grades the whole story at the
+ * end and the page's banner shows that verdict, never a single hop's.
  *
- * What is NOT real, and says so wherever it shows: the ticket desk is an in-memory
- * emulator on this Mac (no vendor is contacted), the MDM feed is a fixture, and the
- * approval is simulated — SignalGrid executes no change on the MDM; the fix arrives
- * as the MDM's next report. The desk opens only because ONE call is handed a
- * beta/live env literal; `process.env` is never written (proof:demo-live control 1).
+ * What is NOT real, and says so wherever it shows: the people and their app screens
+ * are stand-ins, the ticket desk is an in-memory emulator on this Mac (no vendor is
+ * contacted), the MDM feed is a fixture, the incident's trigger (the detection) is
+ * scenario input scripted here, and the approval is simulated — SignalGrid executes
+ * no change on the MDM; the fix arrives as the MDM's next report. The desk opens only
+ * because ONE call is handed a beta/live env literal; `process.env` is never written
+ * (proof:demo-live control 1).
  *
  * Deterministic: the only clock is the stepping one below. No wall time is read in
  * this file; pacing is `setTimeout` and changes nothing but when a step runs.
@@ -23,6 +26,7 @@
  * Proof: pnpm run proof:demo-live
  */
 
+import { execFileSync } from "node:child_process";
 import { createServer, type ServerResponse } from "node:http";
 import { networkInterfaces } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -106,6 +110,10 @@ export const STORY_STEPS = [
   "cascade.complete",
 ] as const;
 
+/** The whole-story verdict, emitted last. Not in STORY_STEPS: storyGaps produces it. */
+export const STORY_END = ["story.passed", "story.failed"] as const;
+const isEnd = (step: string): boolean => (STORY_END as readonly string[]).includes(step);
+
 export interface DemoEvent {
   readonly seq: number;
   readonly step: string;
@@ -115,6 +123,8 @@ export interface DemoEvent {
   /** Who acted. */
   readonly system: string;
   readonly detail: Record<string, unknown>;
+  /** One plain-English sentence a partner reads first; the raw detail sits under it. */
+  readonly plain: string;
 }
 
 type SteppingClock = Clock & { advanceMinutes: (n: number) => void };
@@ -170,7 +180,7 @@ export interface Demo {
   started: boolean;
   stopped: boolean;
   subscribe(fn: (event: DemoEvent) => void): () => void;
-  emit(step: string, title: string, system: string, detail: Record<string, unknown>): DemoEvent;
+  emit(step: string, title: string, system: string, detail: Record<string, unknown>, plain: string): DemoEvent;
   wait(ms: number): Promise<void>;
   /** Host confirmation. 200 delivered, 404 unknown, 409 already delivered or not a device notice. */
   ack(noticeId: string): { status: number; body: Record<string, unknown> };
@@ -229,8 +239,8 @@ export function createDemo(): Demo {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
-    emit(step, title, system, detail) {
-      const event: DemoEvent = { seq: demo.events.length + 1, step, at: clock.now().toISOString(), title, system, detail };
+    emit(step, title, system, detail, plain) {
+      const event: DemoEvent = { seq: demo.events.length + 1, step, at: clock.now().toISOString(), title, system, detail, plain };
       demo.events.push(event);
       for (const fn of listeners) fn(event);
       return event;
@@ -258,14 +268,15 @@ export function createDemo(): Demo {
         demo.queue = demo.queue.map((q) => (q.id === item!.id ? item! : q));
       }
       const who = PEOPLE[notice.principalRef];
-      const event = demo.emit("notice.delivered", `${who?.name ?? notice.principalRef}'s host app confirmed the notice`, "Host app stand-in (this page)", {
+      const name = who?.name ?? notice.principalRef;
+      const event = demo.emit("notice.delivered", `${name}'s host app confirmed the notice`, "Host app stand-in (this page)", {
         noticeId,
         principalRef: notice.principalRef,
         label: who?.label ?? notice.principalRef,
         byHost: delivered.delivery.state === "delivered" ? delivered.delivery.byHost : null,
         at: delivered.delivery.state === "delivered" ? delivered.delivery.at : null,
         queueStatus: item?.status ?? null,
-      });
+      }, `${name}'s app showed the notice and told SignalGrid it was delivered.`);
       return { status: 200, body: { event } };
     },
     stop() {
@@ -286,7 +297,8 @@ const put = (demo: Demo, item: OutboundItem): OutboundItem => {
 };
 
 /**
- * The story, (a)…(m). Each step appends one event. Runs once per demo.
+ * The story, (a)…(m), then the whole-story verdict. Each step appends one event.
+ * Runs once per demo; a replay is a fresh demo.
  */
 export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: number }): Promise<void> {
   if (demo.started) return;
@@ -313,7 +325,7 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       outcome: first.outcome,
       reasonCodes: first.reasonCodes,
       decisionId: first.decisionId,
-    });
+    }, `Jordan opens his ward app on ${DEVICE_NAME}, and SignalGrid answers ${first.outcome}.`);
     if (await next()) return;
 
     // (b) the MDM reports non-compliant
@@ -325,31 +337,36 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       recordsProcessed: bad.recordsProcessed,
       signalsNormalized: bad.signalsNormalized,
       syncRunId: bad.id,
-    });
+    }, `The MDM's next report says ${DEVICE_NAME} is no longer compliant.`);
     if (await next()) return;
 
-    // (c) the decision
+    // (c) the decision. The cascade below runs only on a real restrict.
     const decision = core.getDecision(OWNER, core.evaluate(OPERATOR, request).decisionId);
     demo.emit("decision.restrict", `Decision: ${decision.outcome} (${decision.reasonCodes.join(", ")})`, SYS_CORE, {
       outcome: decision.outcome,
       reasonCodes: decision.reasonCodes,
       decisionId: decision.id,
       evidenceSnapshotId: decision.evidenceSnapshotId,
-    });
+    }, `SignalGrid decides the same request again and answers ${decision.outcome}, because of ${decision.reasonCodes.join(", ") || "no reason code"}.`);
+    if (decision.outcome !== "restrict") {
+      throw new Error(`the decision was ${decision.outcome}, not restrict, so no cascade ran`);
+    }
     demo.requested =
       core.listRemediations(OPERATOR).find((r) => r.decisionId === decision.id && r.kind === "request_device_remediation") ?? null;
     if (await next()) return;
 
-    // (d) the resolution plan
+    // (d) the resolution plan, and the words Jordan's own app shows for it
     const plan = core.getResolution(OPERATOR, decision.id);
     demo.emit("plan", `Resolution plan: ${plan.path}, ${plan.steps.length} step(s)`, "SignalGrid resolution planner", {
       path: plan.path,
+      summaryForWorker: plan.summaryForWorker,
       steps: plan.steps.map((s) => ({ reasonCode: s.reasonCode, resolutionClass: s.resolutionClass, channel: s.channel, action: s.action })),
       unresolvedCodes: plan.unresolvedCodes,
-    });
+    }, `SignalGrid works out the fix (${plan.path}, ${plan.steps.length} step(s)) and hands Jordan's app the words to show him.`);
     if (await next()) return;
 
-    // (e) the incident
+    // (e) the incident. The detection is SCENARIO INPUT scripted here; the playbook's
+    // priority, group and SLA are computed from it by the real code.
     const detection: Detection = {
       code: "CHECKOUT_WITHOUT_COMPLIANCE",
       severity: "high",
@@ -361,12 +378,14 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
     if (!incident) throw new Error("the playbook opened no incident for a high-severity detection");
     demo.incident = incident;
     demo.emit("incident", `Incident ${incident.priority}: ${incident.shortDescription}`, "Incident playbook (priority = impact × urgency)", {
+      trigger: "scenario input, scripted by this demo",
+      detection: detection.code,
       priority: incident.priority,
       category: incident.category,
       escalate: incident.escalate,
       assignmentGroup: incident.assignmentGroup,
       correlationId: incident.correlationId,
-    });
+    }, `An incident opens at ${incident.priority} for ${incident.assignmentGroup}. Its trigger is scenario input, scripted by this demo; the priority and routing are computed from it by the real incident playbook.`);
     if (await next()) return;
 
     // (f) the ticket, through the real dispatch seam
@@ -380,7 +399,10 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       title: dispatch.request.title,
       queueStatus: ticketItem.status,
       receiptRef: ticketItem.receiptRef,
-    });
+      emissionGate: "opened for this one call by a demo-only beta/live setting; under default settings the same ticket is refused",
+    }, dispatch.opened
+      ? `The ticket desk accepts ticket ${dispatch.response.ticketId} (its title carries the scripted trigger). The desk is a local emulator, and SignalGrid sends to it only because this demo hands this one call a demo-only setting; under default settings the same ticket is refused.`
+      : `The ticket desk refused the ticket: ${dispatch.reason}`);
     if (await next()) return;
 
     // (g) the change draft, exactly as decision-cascade-proof hop 5 builds it
@@ -399,7 +421,9 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       approvalRequired: draft.approvalRequired,
       simulatedOnly: draft.simulatedOnly,
       queueStatus: changeItem.status,
-    });
+    }, submission.status === "submitted"
+      ? "A change request for the iPad is drafted and sent to the same desk; it waits for a person to approve it."
+      : `The change request was not sent: ${submission.reason}`);
     if (await next()) return;
 
     // (h) the people affected. Jordan is the decision's own subject: his host app got
@@ -426,7 +450,7 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
         backstop: n.backstop,
         delivery: n.delivery,
       })),
-    });
+    }, `${demo.notices.length} other people who use this iPad or its workflow are told, each on a channel they already use. Jordan is not on this list: his own app already shows him the restriction.`);
     if (await next()) return;
 
     // (i) the approval — simulated; SignalGrid changes nothing on the MDM
@@ -439,7 +463,7 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       status: approved.status,
       approvedAt: approved.approvedAt,
       label: "approved automatically by this demo's workflow (simulated; SignalGrid executed no change on the MDM; the fix arrives as the MDM's next report)",
-    });
+    }, "The fix is approved. This approval is simulated by the demo, and SignalGrid changes nothing on the MDM itself.");
     if (await next()) return;
 
     // (j) the MDM's next report
@@ -451,7 +475,7 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       recordsProcessed: good.recordsProcessed,
       signalsNormalized: good.signalsNormalized,
       syncRunId: good.id,
-    });
+    }, `The MDM's next report says ${DEVICE_NAME} is compliant again.`);
     if (await next()) return;
 
     // (k) decide again
@@ -460,7 +484,7 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       outcome: after.outcome,
       reasonCodes: after.reasonCodes,
       decisionId: after.id,
-    });
+    }, `SignalGrid decides Jordan's request again and answers ${after.outcome}.`);
     if (await next()) return;
 
     // (l) did the fix land?
@@ -470,19 +494,40 @@ export async function playStory(demo: Demo, { stepDelayMs }: { stepDelayMs: numb
       restrictionHolds: restrictionHolds(v),
       observedAt: v.observedAt,
       note: v.note,
-    });
+    }, v.state === "cleared"
+      ? "SignalGrid checks the fix against the fresh decision: it landed, and the restriction is lifted."
+      : `SignalGrid checks the fix against the fresh decision: ${v.state}, so the restriction still holds.`);
     if (await next()) return;
 
-    // (m) the whole cascade, at a glance
+    // (m) the whole cascade, at a glance, with a plain reason for anything not delivered
     const summary = outboundSummary(demo.queue);
     const audit = core.verifyAudit(OWNER);
+    const notDelivered = demo.queue.filter((q) => q.status !== "delivered").map((q) => {
+      const n = q.channel === "notice" ? demo.notices.find((x) => x.id === q.subjectRef) : undefined;
+      const who = n ? (PEOPLE[n.principalRef]?.label ?? n.principalRef) : q.channel;
+      if (n?.channel === "operator_console") return `${who}: the console notice has no transport in this demo`;
+      if (n) return `${who}: waits for their app to confirm it (this page confirms it when it shows the card)`;
+      return `${who}: ${q.status}`;
+    });
     demo.emit("cascade.complete", `Cascade complete: ${summary.delivered}/${summary.total} outbound delivered; audit chain ${audit.valid ? "valid" : "INVALID"}`, "Outbound queue + audit ledger", {
       summary,
+      notDelivered,
       auditValid: audit.valid,
       auditLength: audit.length,
-    });
+    }, `${summary.delivered} of ${summary.total} outbound messages are confirmed delivered${notDelivered.length ? ` (not yet: ${notDelivered.join("; ")})` : ""}. The audit chain is ${audit.valid ? "intact" : "BROKEN"}.`);
+
+    // The verdict on the WHOLE story: the page's banner shows this, never one hop.
+    const gaps = storyGaps(demo.events);
+    if (gaps.length > 0) {
+      demo.emit("story.failed", `Story did not complete: ${gaps.join("; ")}`, "Story grader (storyGaps)", { gaps },
+        "At least one hop did not land; the cards above show which.");
+    } else {
+      demo.emit("story.passed", "Access restored: verified, not assumed. Every hop landed.", "Story grader (storyGaps)", { gaps },
+        "Every hop landed: decision, plan, incident, ticket, change, notices, approval, fresh signal, allow, verification and audit.");
+    }
   } catch (err) {
-    demo.emit("story.failed", err instanceof Error ? err.message : String(err), "demo runner", {});
+    const message = err instanceof Error ? err.message : String(err);
+    demo.emit("story.failed", `Story did not complete: ${message}`, "demo runner", { gaps: [message] }, "The story stopped part-way; the last card above is where.");
     throw err;
   }
 }
@@ -497,6 +542,8 @@ export function storyGaps(events: readonly DemoEvent[]): string[] {
   if (d("decision.restrict").outcome !== "restrict") gaps.push("no restrict");
   if (!list(d("decision.restrict").reasonCodes).includes("DEVICE_NONCOMPLIANT")) gaps.push("no DEVICE_NONCOMPLIANT");
   if (list(d("plan").steps).length === 0) gaps.push("no plan");
+  const worker = d("plan").summaryForWorker;
+  if (typeof worker !== "string" || worker.length === 0) gaps.push("no worker screen");
   if (typeof d("incident").priority !== "string") gaps.push("no incident");
   if (d("ticket").opened !== true) gaps.push("ticket not opened");
   if (d("change").status !== "submitted") gaps.push("change not submitted");
@@ -559,22 +606,34 @@ export const DEMO_PAGE_HTML = /* html */ `<!doctype html>
   .host{background:var(--panel);border:1px dashed var(--accent);border-radius:14px;padding:.8rem;margin-top:.6rem}
   .frame{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
   .hosttext{margin:.3rem 0;font-size:.95rem}
+  .plain{margin:.2rem 0 .1rem}
+  details{margin-top:.4rem}
+  summary{cursor:pointer;font-family:var(--mono);font-size:.72rem;color:var(--faint)}
+  .meta.ok{color:var(--allow)}.meta.bad{color:var(--deny)}
+  #replay{font:inherit;font-weight:600;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:.5rem .9rem;margin:0 0 .6rem;cursor:pointer}
+  #replay[hidden]{display:none}
+  #note{font-size:.8rem;color:var(--soft);margin:0 0 .6rem}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header><span class="brand">Signal<span>Grid</span></span><span class="chip" id="chip">waiting</span></header>
   <h1>One ward iPad, one signal, the whole cascade</h1>
-  <p class="lead">Each card is an event this Mac computed with SignalGrid's decision core and cascade code on a scripted clock. Nothing here is pre-written. The MDM feed is a fixture, the ticket desk is a local emulator, and no vendor system is contacted.</p>
+  <p class="lead">Every decision, reason code, id and status on this page is computed by SignalGrid's real engine, live on this Mac, on a scripted clock. The people and their app screens, the ticket desk and the MDM are local stand-ins; the incident's trigger and the approval are scripted by this demo, and their cards say so. No vendor system is contacted.</p>
   <div id="banner" role="status"></div>
+  <button id="replay" type="button" hidden>Replay the story</button>
+  <p id="note" aria-live="polite"></p>
   <ol id="timeline" aria-live="polite"></ol>
 </div>
 <script>
 (function () {
-  var seen = {};
+  var run = 0;
+  var mine = {};
   var chip = document.getElementById("chip");
   var list = document.getElementById("timeline");
   var banner = document.getElementById("banner");
+  var replay = document.getElementById("replay");
+  var note = document.getElementById("note");
   var HOST_WORDS = {
     scope_device_affected: "This shared iPad is restricted right now. Use another device until IT clears it.",
     scope_workflow_affected: "A device in your workflow is restricted.",
@@ -594,16 +653,34 @@ export const DEMO_PAGE_HTML = /* html */ `<!doctype html>
     if (typeof value === "object") return Object.keys(value).map(function (k) { return k + "=" + show(value[k]); }).join(", ");
     return String(value);
   }
+  function post(url) {
+    return fetch(url, { method: "POST" })
+      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, status: r.status, body: body || {} }; }); });
+  }
+  function mark(node, text, ok) { node.textContent = text; node.className = "meta " + (ok ? "ok" : "bad"); }
   function hostCard(n) {
     var box = el("div", "host");
     box.appendChild(el("div", "frame", "What " + n.name + "'s own ward-iPad app shows (host app stand-in)"));
     box.appendChild(el("p", "hosttext", HOST_WORDS[n.reason] || n.reason));
+    box.appendChild(el("div", "meta", "SignalGrid's reason: " + n.reason + ". The words are the host app's own."));
     var status = el("div", "meta", "confirming delivery to SignalGrid...");
     box.appendChild(status);
-    fetch("/ack/" + encodeURIComponent(n.id), { method: "POST" })
-      .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
-      .then(function (res) { status.textContent = res.ok ? "delivery confirmed by this host" : "not confirmed: " + (res.body.error || "refused"); })
-      .catch(function () { status.textContent = "not confirmed: the demo server did not answer"; });
+    var key = run + ":" + n.id;
+    if (mine[key]) { mark(status, "delivery confirmed by this screen", true); return box; }
+    post("/ack/" + encodeURIComponent(n.id))
+      .then(function (res) {
+        if (res.ok) { mine[key] = true; mark(status, "delivery confirmed by this screen", true); }
+        else if (res.status === 409 && res.body.error === "already delivered") mark(status, "confirmed on another screen", true);
+        else mark(status, "not confirmed: " + (res.body.error || "refused"), false);
+      })
+      .catch(function () { mark(status, "not confirmed: the demo server did not answer", false); });
+    return box;
+  }
+  function workerCard(text) {
+    var box = el("div", "host");
+    box.appendChild(el("div", "frame", "What Jordan's app shows"));
+    box.appendChild(el("p", "hosttext", text));
+    box.appendChild(el("div", "meta", "SignalGrid's worker summary for this decision, shown inside Jordan's own app; he never sees a SignalGrid screen."));
     return box;
   }
   function card(ev) {
@@ -611,20 +688,36 @@ export const DEMO_PAGE_HTML = /* html */ `<!doctype html>
     var li = el("li", "card" + (detail.outcome ? " o-" + detail.outcome : ""));
     li.appendChild(el("div", "meta", "#" + ev.seq + " · " + ev.at.slice(11, 19) + "Z · " + ev.step));
     li.appendChild(el("div", "title", ev.title));
+    if (ev.plain) li.appendChild(el("p", "plain", ev.plain));
     li.appendChild(el("div", "sys", "by " + ev.system));
+    if (typeof detail.summaryForWorker === "string") li.appendChild(workerCard(detail.summaryForWorker));
+    (detail.notices || []).forEach(function (n) {
+      if (n.channel === "device_prompt") li.appendChild(hostCard(n));
+      else li.appendChild(el("div", "sys", n.label + ": routed to " + n.channel + " (" + n.reason + "), " + n.delivery.state));
+    });
     var dl = el("dl");
     Object.keys(detail).forEach(function (k) {
       if (k === "notices") return;
       dl.appendChild(el("dt", "", k));
       dl.appendChild(el("dd", "", show(detail[k])));
     });
-    li.appendChild(dl);
-    (detail.notices || []).forEach(function (n) {
-      if (n.channel === "device_prompt") li.appendChild(hostCard(n));
-      else li.appendChild(el("div", "sys", n.label + ": routed to " + n.channel + " (" + n.reason + "), " + n.delivery.state));
-    });
+    var more = el("details");
+    more.appendChild(el("summary", "", "Details"));
+    more.appendChild(dl);
+    li.appendChild(more);
     return li;
   }
+  replay.onclick = function () {
+    replay.disabled = true;
+    note.textContent = "Starting the replay...";
+    post("/replay")
+      .then(function (res) {
+        if (res.ok) return;
+        replay.disabled = false;
+        note.textContent = res.status === 409 ? "A replay is already running; it shows here as it plays." : "Replay refused: " + (res.body.error || "unknown");
+      })
+      .catch(function () { replay.disabled = false; note.textContent = "Replay failed: the demo server did not answer"; });
+  };
   setChip("waiting");
   var source = new EventSource("/events");
   source.onopen = function () { setChip("live"); };
@@ -632,17 +725,22 @@ export const DEMO_PAGE_HTML = /* html */ `<!doctype html>
   source.onmessage = function (m) {
     var ev;
     try { ev = JSON.parse(m.data); } catch (e) { return; }
-    if (seen[ev.seq]) return;
-    seen[ev.seq] = true;
     setChip("live");
-    list.appendChild(card(ev));
-    if (ev.step === "verified" && ev.detail.state === "cleared" && ev.detail.restrictionHolds === false) {
-      banner.textContent = "Access restored: verified, not assumed";
-      banner.className = "on";
+    if (ev.reset) {
+      run = ev.run;
+      list.textContent = "";
+      banner.textContent = "";
+      banner.className = "";
+      replay.hidden = true;
+      replay.disabled = false;
+      note.textContent = "";
+      return;
     }
-    if (ev.step === "story.failed") {
-      banner.textContent = "The story stopped: " + ev.title;
-      banner.className = "on fail";
+    list.appendChild(card(ev));
+    if (ev.step === "story.passed" || ev.step === "story.failed") {
+      banner.textContent = ev.title;
+      banner.className = ev.step === "story.passed" ? "on" : "on fail";
+      replay.hidden = false;
     }
   };
 })();
@@ -660,9 +758,14 @@ export interface DemoServer {
   close(): Promise<void>;
 }
 
+/**
+ * Serves `first`, then a fresh `createDemo()` per POST /replay. Every /events viewer
+ * gets `{reset, run}` first, then the events so far, then live ones; a replay sends
+ * every attached viewer a new reset and plays the fresh story to all of them.
+ */
 export function startDemoServer(
-  demo: Demo,
-  { host, port, stepDelayMs = 2500 }: { host: string; port: number; stepDelayMs?: number },
+  first: Demo,
+  { host, port, stepDelayMs = 2500, onEvent }: { host: string; port: number; stepDelayMs?: number; onEvent?: (event: DemoEvent) => void },
 ): Promise<DemoServer> {
   const clients = new Set<ServerResponse>();
   const heartbeats = new Set<ReturnType<typeof setInterval>>();
@@ -670,6 +773,15 @@ export function startDemoServer(
     res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
     res.end(JSON.stringify(body));
   };
+  const frame = (body: unknown): string => `data: ${JSON.stringify(body)}\n\n`;
+  const broadcast = (event: DemoEvent): void => {
+    for (const res of clients) res.write(frame(event));
+    onEvent?.(event);
+  };
+  let demo = first;
+  let run = 1;
+  let unhook = demo.subscribe(broadcast);
+  const play = (): void => void playStory(demo, { stepDelayMs }).catch(() => undefined);
 
   const server = createServer((req, res) => {
     const path = (req.url ?? "/").split("?")[0];
@@ -680,22 +792,33 @@ export function startDemoServer(
     }
     if (req.method === "GET" && path === "/events") {
       res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
-      const send = (event: DemoEvent): void => {
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
-      };
-      for (const event of demo.events) send(event);
-      const unsubscribe = demo.subscribe(send);
+      res.write(frame({ reset: true, run }));
+      for (const event of demo.events) res.write(frame(event));
       const beat = setInterval(() => res.write(":\n\n"), 15_000);
       beat.unref();
       clients.add(res);
       heartbeats.add(beat);
       req.on("close", () => {
-        unsubscribe();
         clearInterval(beat);
         heartbeats.delete(beat);
         clients.delete(res);
       });
-      if (!demo.started) void playStory(demo, { stepDelayMs }).catch(() => undefined);
+      if (!demo.started) play();
+      return;
+    }
+    if (req.method === "POST" && path === "/replay") {
+      if (!demo.events.some((e) => isEnd(e.step))) {
+        json(res, 409, { error: demo.started ? "the story is still playing" : "the story has not started yet" });
+        return;
+      }
+      unhook();
+      demo.stop();
+      demo = createDemo();
+      run += 1;
+      unhook = demo.subscribe(broadcast);
+      for (const c of clients) c.write(frame({ reset: true, run }));
+      play();
+      json(res, 200, { run });
       return;
     }
     const ack = /^\/ack\/([^/]+)$/.exec(path ?? "");
@@ -752,30 +875,43 @@ function flag(name: string, fallback: number, max: number): number {
   return value;
 }
 
+/** The Wi-Fi device name macOS reports (en0 on a laptop, often en1 on a desktop); null off macOS. */
+function wifiDevice(): string | null {
+  try {
+    const ports = execFileSync("networksetup", ["-listallhardwareports"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    return /Hardware Port: (?:Wi-Fi|AirPort)\s*\nDevice: (\S+)/.exec(ports)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
   const port = flag("--port", 5180, 65535);
   const stepDelayMs = flag("--step-ms", 2500, 600_000);
-  const demo = createDemo();
-  demo.subscribe((e) => console.log(`  #${e.seq} ${e.at.slice(11, 19)}Z ${e.step}: ${e.title} [${e.system}]`));
+  const onEvent = (e: DemoEvent): void => console.log(`  #${e.seq} ${e.at.slice(11, 19)}Z ${e.step}: ${e.title} [${e.system}]`);
 
   let server: DemoServer;
   try {
-    server = await startDemoServer(demo, { host: "0.0.0.0", port, stepDelayMs });
+    server = await startDemoServer(createDemo(), { host: "0.0.0.0", port, stepDelayMs, onEvent });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE") throw err;
-    server = await startDemoServer(demo, { host: "0.0.0.0", port: 0, stepDelayMs });
+    server = await startDemoServer(createDemo(), { host: "0.0.0.0", port: 0, stepDelayMs, onEvent });
     console.log(`Port ${port} is busy, so the demo took port ${server.port} instead.`);
   }
 
-  console.log("\nSignalGrid live demo (this Mac only: no tenant, no internet, no database)");
+  console.log("\nSignalGrid live demo: runs on this Mac (no tenant, no internet, no database); viewable from phones on the same Wi-Fi");
   console.log(`  On this Mac:  http://localhost:${server.port}/`);
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) console.log(`  On a phone:   http://${a.address}:${server.port}/   (same Wi-Fi)`);
-    }
+  const wifi = wifiDevice();
+  const links: Array<{ name: string; address: string }> = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces())) {
+    for (const a of addrs ?? []) if (a.family === "IPv4" && !a.internal) links.push({ name, address: a.address });
+  }
+  links.sort((x, y) => Number(y.name === wifi) - Number(x.name === wifi));
+  for (const { name, address } of links) {
+    console.log(`  On a phone:   http://${address}:${server.port}/   (${name}${name === wifi ? ", Wi-Fi" : ""})`);
   }
   console.log("  macOS may ask once whether node may accept incoming connections; allow it for the phone link to work.");
-  console.log("  The story starts when the first page opens. Press Ctrl-C to stop.\n");
+  console.log("  The story starts when the first page opens; the page's Replay button plays it again. Press Ctrl-C to stop.\n");
 
   let stopping = false;
   const onSignal = (): void => {

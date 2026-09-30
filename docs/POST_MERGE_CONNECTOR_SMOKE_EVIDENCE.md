@@ -49,7 +49,7 @@ The evidence manifest records:
   "no PHI" are not decidable by a scan and are no longer asserted — the PII-shape
   scan is what the manifest now says it checked.
 
-The manifest intentionally omits live credentials, tenant IDs, customer data, PHI/PII, live API results, and production integration details.
+What the manifest may say about its own content is limited to the measured properties above: no secret-, GUID- (tenant-ID-), email-, SSN- or phone-shaped value and no URL in the fixtures or the proof output. It does not claim more than those scans check.
 
 ## Public-safety posture
 

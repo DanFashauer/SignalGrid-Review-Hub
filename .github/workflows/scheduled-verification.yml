@@ -104,7 +104,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/preflight.mjs
 
+      # Runs even when preflight went red: the first failing preflight gate must not
+      # hide the whole breadth lane from the same night's report.
       - name: Breadth lane (deferred families + doctrine docs — daily rot check)
+        if: success() || failure()
         run: pnpm run verify:breadth
 
       - name: Open or refresh the regression tracking issue on failure

@@ -224,8 +224,10 @@ decision and not an assumption (plan row 167 in `docs/COMPANY_BUILD_PLAN.md`).
 
 **What Fleet gives up.** Managed depth.
 - Teams, and so the host-transfer endpoint, are Fleet Premium; open-source Fleet
-  answers `422` (`docs/FLEET_LIVE_INTEGRATION.md`, "Boundary found"). The
-  connector never actuates by design, so this limits the lab, not SignalGrid.
+  answers `422` (`docs/FLEET_LIVE_INTEGRATION.md`, "Boundary found"). A Premium
+  trial answered `200` on 2026-09-06 ("Cloud-lane run, 2026-09-06" in the same
+  file), so managed depth in Fleet is a paid tier, not an open one. SignalGrid
+  exposes no transfer call on either tier; the connector never actuates by design.
 - The fleet connector does not yet speak Declarative Device Management; the DDM
   declarations above are delivered by "the MDM's declarative channel", not by
   anything in this tree.
@@ -253,7 +255,10 @@ device. The `DeviceManagementEvidence` contract is the boundary (DR-013), so the
 MDM is a source, not a dependency. Fleet is the one that is open, free to run
 and scriptable, which is what a proof needs. The Graph/Intune adapter already
 exists (`lib/integrations/src/integrations/graph/posture-connector.ts`) and
-awaits a real tenant. No Jamf adapter exists in `lib/` yet.
+awaits a real tenant. A read-only Jamf Pro normalizer also exists
+(`lib/integrations/src/integrations/uem/jamf.ts`, covered by `proof:uem`), but
+the repository ships no live UEM transport (`lib/integrations/src/integrations/uem/index.ts`)
+and no Jamf tenant has been read.
 
 **What does not change with the MDM.** Whichever one is used, the kiosk (ASAM),
 the app allow-list and the non-removable install need a **supervised** device

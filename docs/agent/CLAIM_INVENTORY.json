@@ -8948,12 +8948,12 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",
-   "line": "38, 39",
+   "line": "46, 47",
    "claim": "Page heading \"Decisions\" with subtitle \"RUNTIME ACCESS DECISION LOG\" — asserts a log of real runtime access decisions.",
    "kind": "capability",
    "classification": "demo-only",
    "action": "rewrite",
-   "evidence": "Rows come from the fixture monitoring route, not the decision core: artifacts/api-server/src/routes/monitoring.ts:10-21 (\"read-only, deterministic **fixtures** … This is intentionally separate from the `/v1` product surface\") and the 24-row constant at :39-49. MITIGATION ABSENT on this page — unlike Dashboard.tsx:22, Signals.tsx:28 and Handoff.tsx:43, the Decisions heading carries no FIXTURE qualifier; only the global chrome at DesktopLayout.tsx:51, 176 applies. This is the page most likely to be read as production evidence."
+   "evidence": "Rows come from the fixture monitoring route, not the decision core: artifacts/api-server/src/routes/monitoring.ts:10-21 (\"read-only, deterministic **fixtures** … This is intentionally separate from the `/v1` product surface\") and the 24-row constant at :39-49. MITIGATION ABSENT on this page — unlike Dashboard.tsx:40, Signals.tsx:33 and Handoff.tsx:61, the Decisions heading carries no FIXTURE qualifier; only the global chrome at DesktopLayout.tsx:66, 139 applies. This is the page most likely to be read as production evidence."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",
@@ -9425,7 +9425,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "32",
+   "line": "43",
    "claim": "Metric card \"Total Decisions\" rendering \"18.4k\" as a production decision volume.",
    "kind": "count",
    "classification": "unsubstantiated",
@@ -9443,7 +9443,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "34",
+   "line": "45",
    "claim": "Metric card \"Restrict/Deny\" rendering \"7.7%\" as a production restrict/deny rate.",
    "kind": "count",
    "classification": "unsubstantiated",

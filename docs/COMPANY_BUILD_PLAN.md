@@ -647,6 +647,22 @@ earlier — that is the loop working, not a reason to soften the record.
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE
+    FIX PROPOSED 2026-09-30 (branch claude/build-gates-failure-controls, lands under DR-037):
+    the six check-gates that had no failure control at all — no `--self-test` flag, no
+    in-run control, no exported verdict — now factor their verdict into a pure function
+    and run one planted-failing and one passing synthetic input through it on EVERY
+    invocation (the `scripts/check-decision-record-format.mjs` idiom, so no preflight
+    registration is needed): `scripts/check-assessor-package.mjs` (a dead link, an
+    unknown `pnpm run` script and a missing path), `scripts/check-container-native-base.mjs`
+    (a pinned amd64 builder on a musl base, against the real workspace strip list),
+    `scripts/check-shell.mjs` (a bare `cd` fed to shellcheck on stdin must be SC2164),
+    `scripts/check-ci-preflight-sync.mjs` (a proof in one lane only),
+    `scripts/check-durable-path-authorization.mjs` (a `core.context()` store read with no
+    `authorize()`, or with one only inside a comment) and `scripts/check-docker-lifecycle-copy.mjs` (an installing stage that
+    names the hook file in a comment but never COPYs it). Output on the real tree is
+    unchanged but for "in-run control green" on the pass line. Falsified both ways in a
+    scratch worktree: each gate's real defect planted → exit 1; each verdict stubbed to
+    pass → the control prints SELF-TEST FAILED and exits 1.
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not
     exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
@@ -680,6 +696,13 @@ earlier — that is the loop working, not a reason to soften the record.
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
     verdict core, and 21 of 50 check-gates carry no self-test.
+    RE-MEASURED 2026-09-30 (`grep -L -- '--self-test' scripts/check-*.mjs | wc -l`
+    at `SignalGrid_Alpha` 3a59d864): that figure was stale — 25 of 150 take no
+    `--self-test` flag (26 before #1274 gave `scripts/check-module-init-order.mjs` one).
+    Most of those carry an in-run control instead; the six that had neither (0–2
+    comment-only hits for self-test/control/planted/falsif) are the ones fixed above.
+    This is a dated measurement, not a held figure: no gate re-derives it, so re-run
+    the grep rather than trusting the number.
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,
@@ -1366,7 +1389,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 61. **Swept every gate for the exclusion shape that broke `check:absence`. Nine
     of ninety-seven carry one; one was hiding forty-three documents.** —
-    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, defect fixed): `node scripts/check-accuracy-doctrine.mjs` scans docs/research again (`314` first-party documents today) and its self-test FATALs if that directory is ever excluded again (c01c81e4, PR #292 for the same-day corrections); still open — the row's own decision on widening the EXTERNAL_STAT / same-block citation rule for docs/research's foot-citation convention has no record, and the sweep was a one-time hand audit of `97` scripts where `196` exist today, so the scripts added since are unaudited for the same exclusion shape. 2026-08-24, the generalisation of row 60.
+    devex-tooling-engineer. FIX PROPOSED 2026-09-30 (branch claude/build-gate-exclusion-registry, lands under DR-037): the "unaudited since" remainder is now a standing audit — `scripts/check-gate-census.mjs` (already in preflight and CI) DERIVES every exclusion site in `scripts/` (a named EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT constant, or a quoted `:!` / `:(exclude)` pathspec, typed or later-declarator names included; 42 sites in 34 scripts today) and requires a reasoned, dated entry per site in the new `docs/agent/gate-exclusions.json`; a site with no entry exits 1, an entry whose site is gone exits 1, and `--self-test` plants both in a copy of the real tree. Reading all 42 filed three findings in the registry, NOT edited here: `scripts/agent/absence-check.mjs` pathspec `:!*lock*` hides first-party content (`docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md`, `native/ios/EnterpriseShell/Views/LockedIdleView.swift`, `.claude/agents/blocker-dispatcher.md`) from the content probe; its `:!*dist*` matches any path containing 'dist', not only dist/; and `scripts/verify-all.mjs` IGNORED_UNTRACKED's `\.lock$` arm can stamp live evidence clean with an untracked uv.lock/poetry.lock present. Not derived (stated edge): unnamed inline filters and camelCase locals. The EXTERNAL_STAT foot-citation decision above is untouched and still open. RE-MEASURED 2026-09-26 (still open, defect fixed): `node scripts/check-accuracy-doctrine.mjs` scans docs/research again (`314` first-party documents today) and its self-test FATALs if that directory is ever excluded again (c01c81e4, PR #292 for the same-day corrections); still open — the row's own decision on widening the EXTERNAL_STAT / same-block citation rule for docs/research's foot-citation convention has no record, and the sweep was a one-time hand audit of `97` scripts where `196` exist today, so the scripts added since are unaudited for the same exclusion shape. 2026-08-24, the generalisation of row 60.
     Row 60's defect was not really about absence checking. It was: a checker that
     cannot see part of its subject does not report uncertainty about that part,
     it reports confidence about the rest. So every gate carrying an exclusion is
@@ -2278,7 +2301,7 @@ earlier — that is the loop working, not a reason to soften the record.
     deserves its own ratified tone. The dash is a correct stopgap, not an answer.
 
 80. **The Rust Assist client is the strongest of the three, and it is worth
-    recording that a clean read happened.** — CLOSED 2026-08-25, no defect. RE-MEASURED 2026-09-26 (still open for one item): the clean read still holds — in `native/desktop/core` cargo test passes `39` unit and `2` conformance tests today (three tests added in PR #386 since the `36` written here), fmt and clippy clean, cargo 1.94.1 — and the one action this row names is still undone: `native/shared/assist-wire-conformance.json` carries `44` cases, all ASCII, so nothing pins the Rust ASCII fold against Kotlin's Unicode fold; the non-ASCII vectors (NBSP-, U+3000- and ZWSP-padded allow, a Cyrillic homoglyph) are the remaining work.
+    recording that a clean read happened.** — CLOSED 2026-08-25, no defect. RE-MEASURED 2026-09-26 (still open for one item): the clean read still holds — in `native/desktop/core` cargo test passes `39` unit and `2` conformance tests today (three tests added in PR #386 since the `36` written here), fmt and clippy clean, cargo 1.94.1 — and the one action this row names is still undone: `native/shared/assist-wire-conformance.json` carries `44` cases, all ASCII, so nothing pins the Rust ASCII fold against Kotlin's Unicode fold; the non-ASCII vectors (NBSP-, U+3000- and ZWSP-padded allow, a Cyrillic homoglyph) are the remaining work. FIX PROPOSED 2026-09-30 (branch claude/build-assist-wire-whitespace-vectors, lands under DR-037 after the brain's review and green Kotlin, Rust, iOS and macOS-SwiftPM CI — classifier tier "autonomous", no owner-gated match): reproduced first — on origin/SignalGrid_Alpha an `allow` padded with U+0085 proceeded in Rust but not Kotlin, and one padded with U+001C proceeded in Kotlin but not Rust (NBSP, U+3000 and U+000B proceeded in both; ZWSP was denied by both). `native/shared/assist-wire-conformance.json` gains 10 cases (65 → 75, `requires.minCases` 65 → 75): an ASCII-whitespace-padded allow that must still proceed, and VT-, NBSP-, U+3000-, NEL-, U+001C- and ZWSP-padded allow, a Cyrillic-а homoglyph, fullwidth ALLOW and a dotted-capital-İ RESTRICT that must all deny. All three clients now trim ASCII whitespace only (space, tab, LF, FF, CR): `native/desktop/core/src/assist.rs` (`trim_matches(is_ascii_whitespace)` for `str::trim`), `native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistOutcome.kt` (explicit ASCII predicate for `trim()`/`isBlank()`), `native/ios/EnterpriseShell/Services/AssistWire.swift` (an ASCII `CharacterSet` for `.whitespacesAndNewlines`). Falsified: the pre-fix Rust and Kotlin sources each disagree on 4 of the new cases. The Swift leg was NOT run here (no Swift toolchain in the cloud box); CI's iOS and macOS SwiftPM jobs verify it. Not fixed, same defect class: the `decisionId` blank check and the blank-obligation filter still use each language's own Unicode whitespace set (`native/desktop/core/src/wire.rs`, `native/android/core/src/main/kotlin/com/signalgrid/assist/core/AssistWire.kt`, `native/ios/EnterpriseShell/Services/AssistWire.swift`), so a U+0085 or U+001C `decisionId` still splits the clients.
     The roster's standing open question — what an UNKNOWN resolves to in the
     Kotlin **and Rust** Assist clients — was answered for Kotlin on 2026-08-24 and
     left open for Rust. It is now answered, by execution rather than reading:
@@ -4911,7 +4934,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (919) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (921) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

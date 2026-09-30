@@ -299,6 +299,10 @@ const STEPS = [
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
   { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  // Plan row 59 + backlog "grype || true": the corepack pnpm fetch is retried and
+  // pinned, the CVE-closing corepack-cache strip stays, grype cannot swallow a crash.
+  { name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs"] },
+  { name: "Image build hardening self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs", "--self-test"] },
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },
@@ -519,6 +523,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Resource-scan binding (an intake row citing a scan file is backed by it)", cmd: ["node", "scripts/check-resource-scan-binding.mjs"] },
+  { name: "Resource-scan binding self-test (the gate can actually fail)", cmd: ["node", "scripts/check-resource-scan-binding.mjs", "--self-test"] },
   { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
   { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
   { name: "Memory freshness (an aging 'as of' claim is named; stale is reported, registry rot is fatal)", cmd: ["node", "scripts/check-memory-freshness.mjs"] },

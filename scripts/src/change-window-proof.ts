@@ -211,6 +211,18 @@ check("a window that CLOSES BEFORE IT OPENS is a wire contradiction → malforme
   norm(clean({ window_start: "2026-08-01T02:00:00Z", window_end: "2026-07-31T22:00:00Z" })).reportIntegrity === "malformed");
 check("a non-Zulu window bound ('2026-07-31T22:00:00+00:00') is malformed — an instant this fabric compares must be unambiguous",
   norm(clean({ window_start: "2026-07-31T22:00:00+00:00" })).reportIntegrity === "malformed");
+// Each check below isolates ONE brace-less guard the mutation sweep reaches
+// (`oneLine: true`): it fails when that guard alone is replaced by `if (false)`.
+let nonStringStateThrew = false;
+try {
+  const numericState = norm(clean({ change_state: 3 as unknown as string }));
+  check("a NON-STRING change state (a number) is an assertion we cannot read → malformed, approval unknown",
+    numericState.reportIntegrity === "malformed" && numericState.approvalState === "unknown");
+} catch { nonStringStateThrew = true; }
+check("...and it is judged, not thrown out of the normalizer as a TypeError", nonStringStateThrew === false);
+const { change_state: _stateHoisted, ...cleanSansState } = clean();
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope → malformed (read by nobody, asserted by the record)",
+  norm(Object.assign(Object.create({ change_state: "approved" }), cleanSansState) as ChangeWindowReportRaw).reportIntegrity === "malformed");
 const inherited = evaluateChangeWindow(norm(Object.create(clean()) as ChangeWindowReportRaw));
 check("a record with ZERO own keys asserts nothing and cannot grant", inherited.recommendedAction !== "none");
 const hidden = new Proxy(clean(), { ownKeys: () => [], getOwnPropertyDescriptor: () => undefined }) as ChangeWindowReportRaw;

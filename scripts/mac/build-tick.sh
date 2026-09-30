@@ -259,10 +259,10 @@ else
 fi
 [ -n "$BRIEF_SRC" ] || fail "could not read scripts/mac/build-tick-brief.md"
 # Rendered in node, not ${var//…}: a title is free text and `&` is special in bash 5.2.
-BRIEF="$(printf '%s' "$BRIEF_SRC" | node -e 'const [id, title, branch, run] = process.argv.slice(1);
+BRIEF="$(printf '%s' "$BRIEF_SRC" | node -e 'const [id, title, branch, run, today] = process.argv.slice(1);
   let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => process.stdout.write(
-    s.split("{{ROW_ID}}").join(id).split("{{ROW_TITLE}}").join(title).split("{{BRANCH}}").join(branch).split("{{RUN_DIR}}").join(run)));' \
-  "$PICK_ID" "$PICK_TITLE" "$BRANCH" "$RUN_DIR" 2>&1)" || fail "could not render the brief: $BRIEF"
+    s.split("{{ROW_ID}}").join(id).split("{{ROW_TITLE}}").join(title).split("{{BRANCH}}").join(branch).split("{{RUN_DIR}}").join(run).split("{{TODAY}}").join(today)));' \
+  "$PICK_ID" "$PICK_TITLE" "$BRANCH" "$RUN_DIR" "$(date -u +%Y-%m-%d)" 2>&1)" || fail "could not render the brief: $BRIEF"
 case "$BRIEF" in *"{{"*) fail "the brief still holds an unfilled {{placeholder}} after rendering" ;; esac
 EMPTY_GH="$CACHE/empty-gh-config"
 # The session's reach. Allow rules are not the boundary under the user's sandbox

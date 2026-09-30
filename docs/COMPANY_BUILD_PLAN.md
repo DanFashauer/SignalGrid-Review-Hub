@@ -647,6 +647,22 @@ earlier — that is the loop working, not a reason to soften the record.
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE
+    FIX PROPOSED 2026-09-30 (branch claude/build-gates-failure-controls, lands under DR-037):
+    the six check-gates that had no failure control at all — no `--self-test` flag, no
+    in-run control, no exported verdict — now factor their verdict into a pure function
+    and run one planted-failing and one passing synthetic input through it on EVERY
+    invocation (the `scripts/check-decision-record-format.mjs` idiom, so no preflight
+    registration is needed): `scripts/check-assessor-package.mjs` (a dead link, an
+    unknown `pnpm run` script and a missing path), `scripts/check-container-native-base.mjs`
+    (a pinned amd64 builder on a musl base, against the real workspace strip list),
+    `scripts/check-shell.mjs` (a bare `cd` fed to shellcheck on stdin must be SC2164),
+    `scripts/check-ci-preflight-sync.mjs` (a proof in one lane only),
+    `scripts/check-durable-path-authorization.mjs` (a `core.context()` store read with no
+    `authorize()`, or with one only inside a comment) and `scripts/check-docker-lifecycle-copy.mjs` (an installing stage that
+    names the hook file in a comment but never COPYs it). Output on the real tree is
+    unchanged but for "in-run control green" on the pass line. Falsified both ways in a
+    scratch worktree: each gate's real defect planted → exit 1; each verdict stubbed to
+    pass → the control prints SELF-TEST FAILED and exits 1.
     2026-08-23: the worst unfailable arm is fixed, and fixing it found a live
     bug. Note the path first, because the row named a package that does not
     exist: there is no `lib/signalgrid-grid`; `proof:signalgrid-grid` runs
@@ -680,6 +696,13 @@ earlier — that is the loop working, not a reason to soften the record.
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
     verdict core, and 21 of 50 check-gates carry no self-test.
+    RE-MEASURED 2026-09-30 (`grep -L -- '--self-test' scripts/check-*.mjs | wc -l`
+    at `SignalGrid_Alpha` 3a59d864): that figure was stale — 25 of 150 take no
+    `--self-test` flag (26 before #1274 gave `scripts/check-module-init-order.mjs` one).
+    Most of those carry an in-run control instead; the six that had neither (0–2
+    comment-only hits for self-test/control/planted/falsif) are the ones fixed above.
+    This is a dated measurement, not a held figure: no gate re-derives it, so re-run
+    the grep rather than trusting the number.
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,
@@ -4911,7 +4934,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (924) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (926) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (877) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

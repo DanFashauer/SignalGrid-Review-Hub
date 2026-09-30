@@ -49,19 +49,21 @@ export function runScenario(scenario: SimulatorScenario): SimulatorRunResult {
   // A verdict that cannot fail is a decoration, and this one sat on the
   // simulator's own definition of "did the scenario behave".
   //
-  // Both halves are now falsifiable. Expectations must EXIST — a scenario that
-  // asserts nothing is a FAIL, not a pass, because there is nothing it could
-  // have got wrong. And the evidence must actually COVER what was routed: every
-  // routed action id has to appear in the routing trace's references, which
-  // diverges the moment routing and evidence disagree.
-  const routedIds = new Set(routedActions.map((action) => action.id));
-  const evidenceReferences = new Set(auditEvidence.flatMap((record) => record.references));
-  const evidenceCoversRouting = [...routedIds].every((id) => evidenceReferences.has(id));
+  // The expectations half is now falsifiable: they must EXIST — a scenario that
+  // asserts nothing is a FAIL, not a pass, because there is nothing it could have
+  // got wrong — and every one must be met.
+  //
+  // The evidence half was DELETED, not repaired (plan row 85). It checked that the
+  // audit records referenced the decision id and every routed action id, and this
+  // comment claimed that "diverges the moment routing and evidence disagree". It
+  // cannot: `createAuditEvidence` (./audit.ts) builds the decision trace from
+  // `decision.id` and the routing trace from this same `routedActions` array, so
+  // both conjuncts were true for every input — a sweep of all 2^10 outcome subsets
+  // found zero falses. Evidence coverage is asserted from OUTSIDE, against the
+  // real records, in scripts/src/signalgrid-simulator-proof.ts.
   const status =
     scenario.expectedOutcomes.length > 0 &&
-    scenario.expectedOutcomes.every((outcome) => decision.outcomes.includes(outcome)) &&
-    evidenceReferences.has(decision.id) &&
-    evidenceCoversRouting
+    scenario.expectedOutcomes.every((outcome) => decision.outcomes.includes(outcome))
       ? "PASS"
       : "FAIL";
 

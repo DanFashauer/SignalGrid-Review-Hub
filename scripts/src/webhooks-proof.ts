@@ -39,7 +39,7 @@ import {
   WEBHOOK_URL_REFUSAL_REASONS,
 } from "@workspace/integrations/webhooks";
 import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
-import { createWebhook, getDeliveryLogs, updateWebhook } from "@workspace/integrations/webhooks/store";
+import { addToDLQ, createWebhook, getDeliveryLogs, listDLQ, updateWebhook } from "@workspace/integrations/webhooks/store";
 import { MemoryStore, deliverEvent, fixedClock } from "@workspace/signalgrid-core";
 
 let passed = 0;
@@ -702,6 +702,16 @@ check(
           dlLogs[0]?.status === "dead_letter");
         check("...while the ATTEMPTS themselves are still recorded as `failed` (the terminal row is added, not a relabel)",
           dlLogs.filter((l) => l.status === "failed").length >= 3);
+
+        // PLAN ROW 138: the DLQ record states the attempt count the dispatcher
+        // OBSERVED. addToDLQ hardcoded 6 whatever maxAttempts was, so this
+        // three-attempt dispatch dead-lettered a record claiming six.
+        const dlq = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`the DLQ entry records the attempts actually made (3 configured, spy fired ${calls.length}x, entry says ${dlq[0]?.attempts})`,
+          dlq.length >= 1 && dlq[0]?.attempts === calls.length && calls.length === 3);
+        let refused = false;
+        try { await addToDLQ(hook.id, "evt_probe", {}, "probe", Number.NaN); } catch { refused = true; }
+        check("...and addToDLQ refuses a count nobody observed (NaN) rather than writing it as evidence", refused);
       }
     } finally {
       delete process.env[ENV_KEY];

@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { resolveEmission, EMIT_SUPPRESSED, NO_CREDENTIAL } from "@workspace/integrations/emit-gate";
 import {
   createITSMAdapter,
+  ITSMAdapterManager,
   ZendeskAdapter,
   JiraAdapter,
   ServiceNowAdapter,
@@ -1292,6 +1293,48 @@ check(
     "every declared builder names a closed set and every open slot states why",
     OUTBOUND_BUILDERS.every((b) => b.closed.length > 0 && b.open.every((o) => o.why.trim().length > 20)),
   );
+}
+
+// ── PLAN ROW 128: a gate-suppressed health check is UNCHECKED, not UNHEALTHY ──
+//
+// Every ITSM adapter's healthCheck() consults the emit gate first and, suppressed,
+// returned `false` without touching the network — which the aggregate recorded as
+// 'unhealthy'. Eight simultaneous "outages" for calls that were never made, while an
+// adapter exposing no healthCheck at all was correctly 'unchecked'. Same ignorance,
+// two answers. Pinned on the REAL classes with empty credentials (suppressed on any
+// tier), a fetch spy that must never fire, and a stub pair that keeps the aggregate
+// honest in the other direction: a check that was MADE still maps true/false.
+{
+  const realFetch = globalThis.fetch;
+  let reached = 0;
+  globalThis.fetch = ((): never => { reached += 1; throw new Error("FETCH ATTEMPTED"); }) as unknown as typeof globalThis.fetch;
+  try {
+    const mgr = new ITSMAdapterManager();
+    mgr.registerAdapter("zendesk", new ZendeskAdapter({ instanceUrl: "https://acme.zendesk.com", email: "agent@acme.test", apiToken: "" }));
+    mgr.registerAdapter("jira", new JiraAdapter({ baseUrl: "https://acme.atlassian.net", email: "agent@acme.test", apiToken: "", serviceDeskId: "1" }));
+    mgr.registerAdapter("servicenow", new ServiceNowAdapter({ instanceUrl: "https://acme.service-now.com", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("freshservice", new FreshserviceAdapter({ instanceUrl: "https://acme.freshservice.com", apiKey: "" }));
+    mgr.registerAdapter("bmc-helix", new BMCHelixAdapter({ instanceUrl: "https://acme.bmc.test", auth: { type: "api_token", apiToken: "" } }));
+    mgr.registerAdapter("ivanti", new IvantiAdapter({ instanceUrl: "https://acme.ivanti.test", clientId: "cid", clientSecret: "" }));
+    mgr.registerAdapter("manageengine", new ManageEngineAdapter({ instanceUrl: "https://acme.me.test", technicianKey: "" }));
+    mgr.registerAdapter("generic_webhook", new GenericWebhookAdapter({ url: "https://hooks.example.test/x", method: "POST", headers: {}, bodyTemplate: '{"t":"{{title}}"}', signingSecret: "" }));
+    const health = await mgr.healthCheck();
+    const vendors = Object.keys(health);
+    const wrong = vendors.filter((v) => health[v as keyof typeof health] !== "unchecked");
+    check(`itsm aggregate: all eight gate-suppressed adapters report 'unchecked', not 'unhealthy' (${vendors.length} swept, wrong: ${wrong.join(",") || "none"})`,
+      vendors.length === 8 && wrong.length === 0);
+    check(`itsm aggregate: ...and that sweep reached the network zero times (fetch fired ${reached}x)`, reached === 0);
+
+    const made = new ITSMAdapterManager();
+    const stub = (answer: boolean) => ({ vendor: "stub", createTicket: async () => { throw new Error("unused"); }, healthCheck: async () => answer });
+    made.registerAdapter("zendesk", stub(true) as never);
+    made.registerAdapter("jira", stub(false) as never);
+    const madeHealth = await made.healthCheck();
+    check("itsm aggregate: a check that WAS made still maps true -> healthy and false -> unhealthy",
+      madeHealth.zendesk === "healthy" && madeHealth.jira === "unhealthy");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 
 const total = passed + failures.length;

@@ -117,14 +117,15 @@ export class ZendeskAdapter implements ITSMAdapter {
   /**
    * Health check - verify Zendesk connectivity
    */
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(): Promise<boolean | 'unchecked'> {
     // GATED, like every other outbound path. A health check is still a LIVE CALL:
     // it resolves a configured hostname and opens a connection from wherever the
     // process runs. Ungated, it reached the network in dev/alpha with no credential
     // — outside the three-condition boundary the security-review package tells an
     // assessor to verify FIRST. Found by review taking that document at its word.
     const emission = resolveEmission(process.env, this.emissionCredential());
-    if (emission.mode !== "live") return false;
+    // Suppressed means NOT ASKED, which is not unhealthy — see ITSMAdapter.healthCheck.
+    if (emission.mode !== "live") return 'unchecked';
 
     try {
       const url = `${this.config.instanceUrl}/api/v2/tickets.json?page=1&per_page=1`;

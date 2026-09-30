@@ -39,7 +39,13 @@ export interface ITSMAdapter {
   readonly name: string;
   readonly vendor: string;
   createTicket(request: ITSMTicketRequest): Promise<ITSMTicketResponse>;
-  healthCheck?(): Promise<boolean>;
+  /**
+   * `true`/`false` only for a check that was actually MADE. `'unchecked'` when the
+   * emit gate suppressed it and no call left the process: a call never made has
+   * found nothing unhealthy, and reporting `false` there sent an operator chasing
+   * eight simultaneous vendor outages that were not happening (plan row 128).
+   */
+  healthCheck?(): Promise<boolean | 'unchecked'>;
 }
 
 /**

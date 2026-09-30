@@ -215,7 +215,7 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   if (!step4) errors.push(`${DOC}: demo path step 4 not found`);
   else {
     for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
-      const esc = flag.replace(/[-]/g, "\\-");
+      const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
       const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^\\s\`),;]+))?`, "g"))];
       if (uses.length === 0) {
         errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);

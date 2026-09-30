@@ -63,7 +63,7 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
   let deviceSignals: ComposableSignal[] = [];
   let lastDecision: DeviceDecision | null = null;
   const resolutions: Record<string, string> = {};
-  const holdsMap: Record<string, string> = {};
+  const holdsMap: Record<string, string[]> = {};
   const verifications: Record<string, string> = {};
 
   const entries: HandoffTraceEntry[] = [];
@@ -137,7 +137,10 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
             if (!base.work.unresolvedExceptionRefs.includes(carriedEntry)) {
               base.work.unresolvedExceptionRefs.push(carriedEntry);
             }
-            holdsMap[step.taskRef] = carriedEntry;
+            // Appended, never assigned: a second hold on the same task must not
+            // erase the first (release frees the task only when none is left).
+            const taskHolds = (holdsMap[step.taskRef] ??= []);
+            if (!taskHolds.includes(carriedEntry)) taskHolds.push(carriedEntry);
           }
           const result = reevaluateForDevice(base, [...deviceSignals, signal]);
           context = result.nextContext;

@@ -68,6 +68,10 @@ moves held→active, the exception entry is removed via the real
   task-2's own blocker exc-B was still open. The ledger now records which
   exception holds which task at hold time, and release checks the pair
   (`exception_does_not_hold_task`).
+  The linkage is a LIST per task: a second hold-grade exception on the same task
+  once overwrote the first, so releasing the survivor freed the task while the
+  first was still unresolved. Now each release clears one hold, and the task
+  moves held→active only when no other carried entry still holds it.
 - **One evidence record proves one fix.** The same cycle-count ref verified two
   independent exceptions — evidence replay. An evidence ref already recorded as
   another exception's verification refuses (`verification_evidence_reused`), and
@@ -116,7 +120,7 @@ between shared iPads. Nothing is wrong with the work; one device is stale.
 
 ## What the proof checks
 
-Proved by `pnpm run proof:handoff-sim` (59 checks) —
+Proved by `pnpm run proof:handoff-sim` (63 checks) —
 `scripts/src/handoff-sim-proof.ts`, fully offline and deterministic. It replays
 both scenarios above and asserts, among others:
 

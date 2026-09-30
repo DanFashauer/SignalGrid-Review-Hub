@@ -325,7 +325,12 @@ function stripGradleComments(text: string): string {
 
 const GRADLE_UNREAD_SHAPES: [RegExp, string][] = [
   [/[\w)\]]\s*\.\s*(?:dependencies|plugins)\s*\{/, "a qualified dependencies/plugins block (e.g. commonMain.dependencies {})"],
-  [/\bapply\s*(?:\(\s*plugin\b|\s+plugin\b|\s*\(\s*from\b)/, "a plugin applied outside plugins {}"],
+  // Any `apply` call or block — `apply(plugin = …)`, `apply(from = …)`, `apply(mapOf(…))`,
+  // `apply { from(…) }`, `apply { plugin(…) }`, Groovy `apply plugin:` — and the
+  // `plugins.apply` / `pluginManager.apply` API. None is read, so each fails.
+  [/\bapply\s*[({]|\bapply\s+(?:plugin|from)\b|\b(?:plugins|pluginManager)\s*\.\s*apply\b/, "a plugin applied outside plugins {}"],
+  // Lifecycle hooks that configure other projects' builds from here.
+  [/\bgradle\s*\.\s*(?:beforeProject|afterProject|allprojects|rootProject|settingsEvaluated|projectsLoaded|projectsEvaluated)\b|\b(?:allprojects|subprojects)\s*\{/, "a hook that configures builds this generator does not read"],
   [/\bdependencies\s*\.\s*\w+\s*\(/, "a dependency added through the dependencies API"],
   [/\bresolutionStrategy\b|\.force\s*\(|\bdependencySubstitution\b|\bconstraints\s*\{|\buseModule\s*\(|\buseVersion\s*\(/, "a resolution rule that changes what resolves"],
   [/\bbuildscript\s*\{/, "a buildscript {} block"],
@@ -511,6 +516,13 @@ function selfTestGradleParser(): void {
     'dependencies {\n    implementation("a:b:${v}")\n}',
     'dependencies {\n    implementation("a:b:1@aar")\n}',
     'dependencies {\n    implementation("a:b:1:sources")\n}',
+    'apply {\n    from("extra.gradle.kts")\n}',
+    'apply {\n    plugin("x.y")\n}',
+    'plugins.apply("x.y")',
+    'pluginManager.apply("x.y")',
+    'apply(mapOf("plugin" to "x.y"))',
+    'gradle.beforeProject {\n    dependencies.add("implementation", "a:b:1")\n}',
+    'subprojects {\n    repositories { mavenCentral() }\n}',
   ];
   const failures: string[] = [];
   if (got.unparsed.length > 0) failures.push(`fixture left unparsed: ${got.unparsed.join("; ")}`);

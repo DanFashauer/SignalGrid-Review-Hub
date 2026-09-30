@@ -91,7 +91,7 @@ const REVOKED_PREFIX = 'webauthn:revoked:';
  *  not await between their read and their write. */
 function keyFingerprint(publicKey: string): string {
   try {
-    const { jwk } = JSON.parse(publicKey) as { jwk: JsonWebKey };
+    const { jwk } = JSON.parse(publicKey) as { jwk: Record<string, string> }; // the VerifiableKey shape (verify.ts)
     const der = createPublicKey({ key: jwk, format: 'jwk' }).export({ type: 'spki', format: 'der' });
     return `spki:${createHash('sha256').update(der).digest('base64url')}`;
   } catch {

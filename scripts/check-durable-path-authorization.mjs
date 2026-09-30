@@ -134,9 +134,15 @@ function scanRouteSource(file, source) {
     "control.ts",
     `${head}    const principal = core.context(token(req));\n    authorize(principal, "decision:read");\n    const tenantId = principal.tenant.id;\n${read}`,
   );
-  if (bad.findings.length !== 1 || good.findings.length !== 0 || good.durableReads !== 1 || good.authorizedReads !== 1) {
+  // An authorize() that exists only in a comment must NOT clear the read.
+  const commented = scanRouteSource(
+    "control.ts",
+    `${head}    const tenantId = core.context(token(req)).tenant.id;\n    // authorize(principal, "decision:read") is done upstream\n${read}`,
+  );
+  if (bad.findings.length !== 1 || commented.findings.length !== 1 || good.findings.length !== 0 || good.durableReads !== 1 || good.authorizedReads !== 1) {
     console.error(
-      `✗ SELF-TEST FAILED — unauthorized durable read caught: ${bad.findings.length}/1; authorized read ` +
+      `✗ SELF-TEST FAILED — unauthorized durable read caught: ${bad.findings.length}/1; commented-out ` +
+        `authorize() caught: ${commented.findings.length}/1; authorized read ` +
         `findings ${good.findings.length} (want 0), seen ${good.durableReads}/1, cleared ${good.authorizedReads}/1. ` +
         "The verdict can no longer tell an authenticate-only read from an authorized one.",
     );

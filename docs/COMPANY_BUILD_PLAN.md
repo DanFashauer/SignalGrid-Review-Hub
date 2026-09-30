@@ -658,7 +658,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `scripts/check-shell.mjs` (a bare `cd` fed to shellcheck on stdin must be SC2164),
     `scripts/check-ci-preflight-sync.mjs` (a proof in one lane only),
     `scripts/check-durable-path-authorization.mjs` (a `core.context()` store read with no
-    `authorize()`) and `scripts/check-docker-lifecycle-copy.mjs` (an installing stage that
+    `authorize()`, or with one only inside a comment) and `scripts/check-docker-lifecycle-copy.mjs` (an installing stage that
     names the hook file in a comment but never COPYs it). Output on the real tree is
     unchanged but for "in-run control green" on the pass line. Falsified both ways in a
     scratch worktree: each gate's real defect planted → exit 1; each verdict stubbed to
@@ -696,10 +696,13 @@ earlier — that is the loop working, not a reason to soften the record.
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
     verdict core, and 21 of 50 check-gates carry no self-test.
-    RE-MEASURED 2026-09-30: that figure was stale. 26 of 150 `scripts/check-*.mjs`
-    take no `--self-test` flag; most of those carry an in-run control instead, and the
-    six that had neither (0–2 comment-only hits for self-test/control/planted/falsif)
-    are the ones fixed above. The flag count stays 26 of 150: an in-run control needs none.
+    RE-MEASURED 2026-09-30 (`grep -L -- '--self-test' scripts/check-*.mjs | wc -l`
+    at `SignalGrid_Alpha` 3a59d864): that figure was stale — 25 of 150 take no
+    `--self-test` flag (26 before #1274 gave `scripts/check-module-init-order.mjs` one).
+    Most of those carry an in-run control instead; the six that had neither (0–2
+    comment-only hits for self-test/control/planted/falsif) are the ones fixed above.
+    This is a dated measurement, not a held figure: no gate re-derives it, so re-run
+    the grep rather than trusting the number.
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,

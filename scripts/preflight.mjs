@@ -532,6 +532,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Resource-scan binding (an intake row citing a scan file is backed by it)", cmd: ["node", "scripts/check-resource-scan-binding.mjs"] },
+  { name: "Resource-scan binding self-test (the gate can actually fail)", cmd: ["node", "scripts/check-resource-scan-binding.mjs", "--self-test"] },
   { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
   { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
   { name: "Memory freshness (an aging 'as of' claim is named; stale is reported, registry rot is fatal)", cmd: ["node", "scripts/check-memory-freshness.mjs"] },

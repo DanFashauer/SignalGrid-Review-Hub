@@ -73,6 +73,9 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Escape every RegExp metacharacter (backslash included) in a literal. */
+export const escapeRegExp = (s) => s.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
 const TREE_FLOOR = 5;
 
 function sourceFiles(dir) {
@@ -281,7 +284,6 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   for (const f of parsed) for (const why of opaqueHookExports(f.code)) failures.push(`${f.rel}: ${why} — the gate cannot follow it; failing closed`);
   const polls = new Set();
   const names = new Set();   // named exports of polling files
-  const escape = (n) => n.replace(/\$/g, "\\$");
   const usesPolling = (f) => {
     const own = exportedNames(f.code);
     const local = new Set([...names].filter((n) => !own.has(n)));
@@ -293,7 +295,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
         if (alias && (names.has(orig) || (orig === "default" && target && polls.has(target) && defaultIsHookOrValue(parsed.find((x) => x.rel === target).code)))) local.add(alias);
       }
     }
-    return [...local].some((n) => new RegExp(`(?<![\\w$])${escape(n)}(?![\\w$])`).test(f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "")));
+    return [...local].some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "")));
   };
   for (let changed = true; changed; ) {
     changed = false;
@@ -416,7 +418,7 @@ export function checkChartMotion(rel, raw) {
   const reduced = new Set([...src.matchAll(/(?:const|let)\s+(\w+)\s*=\s*usePrefersReducedMotion\s*\(\s*\)/g)].map((m) => m[1]));
   const failures = [];
   for (const name of names) {
-    const re = new RegExp(`<${name.replace(".", "\\.")}(?=[\\s/>])`, "g");
+    const re = new RegExp(`<${escapeRegExp(name)}(?=[\\s/>])`, "g");
     let m;
     while ((m = re.exec(src))) {
       const line = src.slice(0, m.index).split("\n").length;
@@ -586,6 +588,8 @@ function selfTest() {
       checkLiveRegions([view("t/src/pages/H.tsx", "const h = useHealthCheck();")], true, new Set(["useHealthCheck"])).failures.length === 1],
     ["generated hooks are classified by body: queries in, mutations out",
       (() => { const g = generatedQueryHooks("export function useHealthCheck() { const query = useQuery(o); }\nexport const useResetSimulator = () => { return useMutation(o); };"); return g.has("useHealthCheck") && !g.has("useResetSimulator"); })()],
+    ["escapeRegExp escapes every metacharacter, backslash included",
+      (() => { try { return new RegExp(`^${escapeRegExp("a\\b$.*+?()[]{}|/-^")}$`).test("a\\b$.*+?()[]{}|/-^"); } catch { return false; } })()],
     ["unlabelled icon button fails",
       checkIconButtons("x.tsx", '<Button\n variant="ghost"\n size="icon"\n onClick={() => remove(i)}\n>\n<Trash2 /></Button>').length === 1],
     ["labelled icon button passes",

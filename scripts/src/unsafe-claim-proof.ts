@@ -134,6 +134,8 @@ const cls = (text: string, file = "docs/SOME_DOC.md") => classifyClaim(file, 1, 
     "SignalGrid replaces no system of record except Jamf and Intune.",
     "SignalGrid replaces not one but three tools.",
     "SignalGrid replaces no other tool in the estate.",
+    "SignalGrid replaces nothing more than your MDM.",
+    "SignalGrid replaces no more than three tools.",
   ]) {
     check(`a postposed negator that opens an exception stays affirmative: ${line}`, cls(line) === "affirmative");
   }

@@ -95,13 +95,13 @@ const NEGATION_MARKERS =
  *  "replaces no-code tooling" is NOT read as a negation. "no fewer/less than" is
  *  excluded because it asserts rather than denies. */
 const POSTPOSED_NEGATION =
-  /^\s+(no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less|only|just|merely|one|other|short)\b)/i;
+  /^\s+(no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less|more|only|just|merely|one|other|short)\b)/i;
 
 /** A postposed negator is VOIDED by an exception later in the same clause: "replaces
  *  no system of record except Jamf" and "replaces no one but Jamf" assert a
  *  replacement. POSTPOSED_NEGATION's lookahead cannot see that far, so the rest of the
  *  clause (up to . ; or a table cell) is checked separately. The exclusions above
- *  ("not only", "not one", "no one", "no other", "nothing short") and this check came
+ *  ("not only", "not one", "no one", "no other", "nothing short", "no more than") and this check came
  *  from an adversarial review of plan row 118; each has a still-affirmative case in
  *  scripts/src/unsafe-claim-proof.ts. scripts/docs-sanity.mjs carries the same pair. */
 const POSTPOSED_EXCEPTION = /\b(?:but|except|save|besides|other\s+than|apart\s+from|beyond)\b/i;

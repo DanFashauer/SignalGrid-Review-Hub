@@ -181,11 +181,11 @@ const NEGATOR = /\b(?:not|no|never|cannot|can'?t|isn'?t|does\s?not|doesn'?t|won'
 // negators, and "no fewer/less than" excluded because it asserts. Anything wider
 // ("replaces Jamf and no one disputes it") stays a claim.
 // The window also REFUSES a negator that opens an intensifier or an exception —
-// "not only", "not one", "no one", "no other", "nothing short", or a later
+// "not only", "not one", "no one", "no other", "nothing short", "no more than", or a later
 // but/except/other than in the same clause — because "replaces no system of record
 // except Jamf" asserts a replacement (adversarial review of row 118). The classifier
 // carries the same pair: POSTPOSED_NEGATION and POSTPOSED_EXCEPTION.
-const POSTPOSED_NEGATOR = /^\s+(?:no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less|only|just|merely|one|other|short)\b)/i;
+const POSTPOSED_NEGATOR = /^\s+(?:no|none|nothing|neither|nobody|not)(?=[\s,.;:|]|$)(?!\s+(?:fewer|less|more|only|just|merely|one|other|short)\b)/i;
 const POSTPOSED_EXCEPTION = /\b(?:but|except|save|besides|other\s+than|apart\s+from|beyond)\b/i;
 function hasBareClaim(content, phrase) {
   const lower = content.toLowerCase();
@@ -335,6 +335,8 @@ function selfTest() {
     "SignalGrid replaces no system of record except Jamf and Intune.",
     "SignalGrid replaces not one but three tools.",
     "SignalGrid replaces no other tool in the estate.",
+    "SignalGrid replaces nothing more than your MDM.",
+    "SignalGrid replaces no more than three tools.",
   ]) {
     checks.push([
       `a postposed negator that opens an exception is still flagged: ${line}`,

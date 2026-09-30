@@ -922,6 +922,10 @@
         }
       ]
     },
+    "docs/archive": {
+      "path": "docs/archive",
+      "reads": []
+    },
     "docs/assets": {
       "path": "docs/assets",
       "reads": [

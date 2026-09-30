@@ -5,6 +5,14 @@
 > boundaries, and an operator can use it without the founder explaining every
 > screen.**
 
+> **Point-in-time snapshot (census taken 2026-08-10; banner added 2026-09-30).**
+> The census counts in §9 and §11 — connector families, gate-suite entries, gates
+> on deferred families, document totals — were hand-measured by the 2026-08-10 scans
+> and are NOT maintained. Read them as what was true that day, never as a current
+> measurement. The live figures come from the tree: `node scripts/check-preflight-ci-parity.mjs`
+> (gate-suite size), `pnpm run proof:launch-profile` (launch / deferred classification
+> counts), `node scripts/check-status-figures.mjs` (proof gates, workflows).
+
 This is the **operating plan of record**. It does not restate the plans that
 already exist — it sequences them and states what stops.
 

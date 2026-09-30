@@ -222,6 +222,7 @@ check("warehouse: the role/workflow context was PRESERVED end to end — workflo
 // cross-task version of this hole was closed earlier; this is its same-task twin.
 
 const TWIN_A = "INVENTORY_EXCEPTION_ACTIVE:exc-0107-first";
+const CTRL_ENTRY_TWIN = "INVENTORY_EXCEPTION_ACTIVE:exc-twin-4410";
 const TWIN_B = "INVENTORY_EXCEPTION_ACTIVE:exc-0107-second";
 const twin = runHandoffScript({
   scriptRef: "script-warehouse-twin-0001",
@@ -248,6 +249,61 @@ check("twin[6] releasing the SECOND hold (resolved + verified) while the FIRST i
 check("twin[9] only when the LAST hold is resolved, verified and released does task-0107 go active, with no entry left",
   twin[9].status === "applied" && twin[9].work?.activeTaskRefs.includes("task-0107") === true &&
   twin[9].work?.heldTaskRefs.length === 0 && twin[9].work?.unresolvedExceptionRefs.length === 0);
+
+// Refs that name an Object.prototype member are still just refs. With holds as lists,
+// a plain `{}` holds map answered "constructor" with an inherited function and the
+// run threw an untyped TypeError with no trace at all (review round 1 on this fix).
+const protoNamed = ["constructor", "__proto__", "toString", "hasOwnProperty"].map((name) => {
+  try {
+    const t = runHandoffScript({
+      scriptRef: `script-proto-${name.replace(/_/g, "")}`,
+      steps: [
+        { kind: "assemble", inputs: pickerInputs() },
+        { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },
+        { kind: "exception", taskRef: name, exceptionRef: `exc-proto-${name}`, raw: wrongAisleRaw },
+        { kind: "resolve", exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}`, resolutionRef: `wms-adj-proto-${name}` },
+        { kind: "verify", exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}`, verificationEvidenceRef: `cyclecount-proto-${name}` },
+        { kind: "release", taskRef: name, exceptionRef: `INVENTORY_EXCEPTION_ACTIVE:exc-proto-${name}` },
+      ],
+    }).trace.entries;
+    return t[2].status === "applied" && t[2].work?.heldTaskRefs.includes(name) === true &&
+      t[5].status === "applied" && t[5].work?.activeTaskRefs.includes(name) === true && t[5].work?.heldTaskRefs.length === 0;
+  } catch { return false; }
+});
+check("a taskRef named after an Object.prototype member (constructor, __proto__, toString, hasOwnProperty) is held and released like any other — never an untyped throw",
+  protoNamed.every(Boolean));
+
+// A sibling hold that is resolved AND verified but not yet RELEASED still holds the
+// task: only a release removes an entry from the context, so the ledger's say-so
+// about the sibling is not enough to free the task.
+const SIBLING = "INVENTORY_EXCEPTION_ACTIVE:exc-sibling-3300";
+const twoHeld = assembleWorkContext({
+  ...pickerInputs(),
+  work: { ...pickerInputs().work, activeTaskRefs: ["task-0300"], heldTaskRefs: ["task-0200"], unresolvedExceptionRefs: [CTRL_ENTRY_TWIN, SIBLING] },
+});
+const bothVerified = releaseHeldTask(twoHeld, "task-0200", CTRL_ENTRY_TWIN, {
+  holds: { "task-0200": [CTRL_ENTRY_TWIN, SIBLING] },
+  resolutions: { [CTRL_ENTRY_TWIN]: "wms-adj-sib-1", [SIBLING]: "wms-adj-sib-2" },
+  verifications: { [CTRL_ENTRY_TWIN]: "cyclecount-sib-1", [SIBLING]: "cyclecount-sib-2" },
+  currentDeviceDecision: reevaluateForDevice(twoHeld, healthyHandheld).decision,
+});
+check("releasing one hold while a sibling is resolved + verified but NOT released keeps the task held — the sibling entry is still carried",
+  bothVerified.work.heldTaskRefs.includes("task-0200") && !bothVerified.work.activeTaskRefs.includes("task-0200") &&
+  bothVerified.work.unresolvedExceptionRefs.includes(SIBLING) && !bothVerified.work.unresolvedExceptionRefs.includes(CTRL_ENTRY_TWIN));
+
+// An exception naming no task (past the type system: a JSON script) is refused, and
+// nothing is held — it once put `null` into heldTaskRefs and later activeTaskRefs.
+const noTask = [undefined, "", "   ", null].map((ref) => runHandoffScript({
+  scriptRef: "script-no-task",
+  steps: [
+    { kind: "assemble", inputs: pickerInputs() },
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },
+    { kind: "exception", taskRef: ref as never, exceptionRef: "exc-no-task", raw: wrongAisleRaw },
+  ],
+}).trace.entries[2]);
+check("an exception whose taskRef is missing, empty, blank or null → refused `task_ref_missing`, and nothing is held",
+  noTask.every((e) => e.status === "refused" && e.refusalCode === "task_ref_missing" && e.work?.heldTaskRefs.length === 0));
+const noTaskCode = noTask[0].refusalCode;
 
 // ── HEALTHCARE SCENARIO: three shared iPads, work identical, trust re-earned ──
 
@@ -534,6 +590,7 @@ const refusalsExercised = new Set<string>([
   ...(orphan.trace.entries[0].refusalCode ? [orphan.trace.entries[0].refusalCode] : []),
   ...refusalCodes,
   ...refusalsFromHardening,
+  ...(noTaskCode ? [noTaskCode] : ["MISSING"]),
 ]);
 // Derived from the package's own exported code list, never restated: the previous
 // hand-copy claimed "every" while two codes it asserted elsewhere were missing from

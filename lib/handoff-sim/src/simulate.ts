@@ -62,9 +62,12 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
   let deviceRef: string | null = null;
   let deviceSignals: ComposableSignal[] = [];
   let lastDecision: DeviceDecision | null = null;
-  const resolutions: Record<string, string> = {};
-  const holdsMap: Record<string, string[]> = {};
-  const verifications: Record<string, string> = {};
+  // Null-prototype maps: they are keyed by caller-supplied refs, and a plain `{}`
+  // answers `holdsMap["constructor"]` with an inherited function (review crashed a
+  // run with taskRef "constructor" once holds became lists).
+  const resolutions: Record<string, string> = Object.create(null);
+  const holdsMap: Record<string, string[]> = Object.create(null);
+  const verifications: Record<string, string> = Object.create(null);
 
   const entries: HandoffTraceEntry[] = [];
 
@@ -109,6 +112,14 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
         }
         case "exception": {
           const current = context as PortableWorkContext;
+          // A hold needs a task to hold. Past the type system (a JSON script) an
+          // absent or empty taskRef was applied and `null` became a held task.
+          if (typeof step.taskRef !== "string" || step.taskRef.trim().length === 0) {
+            throw new HandoffSimError(
+              "task_ref_missing",
+              "cannot apply this exception: it names no task — a hold is recorded against a task, never against nothing.",
+            );
+          }
           // The REAL chain, end to end: hardened normalize → fail-safe evaluate →
           // unified-ladder adapter. The simulator invents no verdict of its own.
           const normalized = normalizeReport(deviceRef ?? UNATTRIBUTED_DEVICE, step.raw);

@@ -80,7 +80,9 @@ export function releaseHeldTask(
   // what makes that naming checkable rather than decorative.
   // A LIST per task, read fail-closed: anything that is not an array naming this
   // exception (a missing key, a bare string from an untyped caller) refuses.
-  const taskHolds: unknown = ledger.holds[taskRef];
+  // Own properties only: a hand-built ledger is often a plain `{}`, whose inherited
+  // members ("constructor", "toString") are not holds.
+  const taskHolds: unknown = Object.hasOwn(ledger.holds, taskRef) ? ledger.holds[taskRef] : undefined;
   if (!Array.isArray(taskHolds) || !taskHolds.includes(exceptionRef)) {
     throw new HandoffSimError(
       "exception_does_not_hold_task",

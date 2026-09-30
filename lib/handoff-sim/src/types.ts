@@ -183,6 +183,10 @@ export const HANDOFF_SIM_ERROR_CODES = [
    *  action: the carried person-scoped ceiling is lowered only through its own
    *  resolution door, never by a release.) */
   "device_not_trusted_for_release",
+  /** An exception step named no task — missing, empty, or not a string (possible
+   *  only past the type system). A hold needs a task to hold; recording one against
+   *  `undefined` put `null` into heldTaskRefs and later into activeTaskRefs. */
+  "task_ref_missing",
   /** A non-assemble step arrived before any context existed. A script's first
    *  step must mint the context the rest of the script acts on. */
   "step_before_assemble",
@@ -205,6 +209,7 @@ export type HandoffSimErrorCode =
   | "verification_missing"
   | "verification_not_independent"
   | "device_not_trusted_for_release"
+  | "task_ref_missing"
   | "step_before_assemble"
   | "unknown_step_kind";
 

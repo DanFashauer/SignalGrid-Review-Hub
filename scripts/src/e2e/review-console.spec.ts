@@ -313,8 +313,8 @@ test("the rendered report and the control-plane route agree, number for number",
   // and a Node server), so "same source" does not by itself mean "same numbers". This
   // is the check that earns the claim for the pair under test.
   //
-  // `page.request` is not subject to the page's route interception, so the localhost-only
-  // block in beforeEach does not apply; the api-server is a webServer of this config.
+  // `page.request` is not subject to route interception, so the egress guard installed by
+  // `guardEgress` above does not apply; the api-server is a webServer of this config.
   // Every route is mounted under `/api` — the same prefix `api.test.mjs` uses.
   const apiPort = Number(process.env.E2E_API_PORT ?? 4613);
   const res = await page.request.get(

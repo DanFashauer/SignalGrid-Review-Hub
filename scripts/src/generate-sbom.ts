@@ -303,7 +303,10 @@ interface GradleDecl {
 const GRADLE_CONFIG =
   "(?:[a-z][A-Za-z0-9]*?)?(?:[Ii]mplementation|[Aa]pi|[Cc]ompileOnly|[Rr]untimeOnly|" +
   "[Kk]sp|[Kk]apt|[Aa]nnotationProcessor|classpath|coreLibraryDesugaring|lintChecks)";
-const GRADLE_COORD = '([^":\\s]+):([^":\\s]+)(?::([^"\\s]+))?';
+// group:artifact[:version] with no interpolation (`$v`, `${v}`), no `@ext` and no
+// fourth `:classifier` segment: each of those would otherwise land in a purl verbatim,
+// so they are left unmatched and the statement fails as unparsed.
+const GRADLE_COORD = '([^":@$\\s]+):([^":@$\\s]+)(?::([^":@$\\s]+))?';
 const GRADLE_FORMS = {
   // `config("g:a[:v]")` and `config(platform("g:a:v"))`.
   quoted: new RegExp(`^${GRADLE_CONFIG}\\(()"${GRADLE_COORD}"\\)$`),
@@ -313,12 +316,24 @@ const GRADLE_FORMS = {
   pluginKotlin: /^kotlin\("([\w.-]+)"\)\s+version\s+"([^"\s]+)"$/,
 };
 
-/** The bodies of every `<name> {` block, brace-matched, comments stripped. */
-function gradleBlocks(text: string, name: string): { body: string; line: number }[] {
-  const clean = text
+function stripGradleComments(text: string): string {
+  return text
     .split("\n")
     .map((l) => l.replace(/(^|\s)\/\/.*$/, "$1"))
     .join("\n");
+}
+
+const GRADLE_UNREAD_SHAPES: [RegExp, string][] = [
+  [/[\w)\]]\s*\.\s*(?:dependencies|plugins)\s*\{/, "a qualified dependencies/plugins block (e.g. commonMain.dependencies {})"],
+  [/\bapply\s*(?:\(\s*plugin\b|\s+plugin\b|\s*\(\s*from\b)/, "a plugin applied outside plugins {}"],
+  [/\bdependencies\s*\.\s*\w+\s*\(/, "a dependency added through the dependencies API"],
+  [/\bresolutionStrategy\b|\.force\s*\(|\bdependencySubstitution\b|\bconstraints\s*\{/, "a resolution rule that changes what resolves"],
+  [/\bbuildscript\s*\{/, "a buildscript {} block"],
+];
+
+/** The bodies of every `<name> {` block, brace-matched, comments stripped. */
+function gradleBlocks(text: string, name: string): { body: string; line: number }[] {
+  const clean = stripGradleComments(text);
   const out: { body: string; line: number }[] = [];
   const opener = new RegExp(`(^|[^\\w.])${name}\\s*\\{`, "g");
   for (const m of clean.matchAll(opener)) {
@@ -338,6 +353,15 @@ function gradleBlocks(text: string, name: string): { body: string; line: number 
 export function parseGradleDeclarations(text: string): { decls: GradleDecl[]; unparsed: string[] } {
   const decls: GradleDecl[] = [];
   const unparsed: string[] = [];
+  // Dependency-bearing shapes OUTSIDE the two block names read below. Only blocks literally
+  // named `plugins`/`dependencies` are parsed, so each of these would contribute zero
+  // declarations AND zero unparsed statements — a silent pass. Anywhere in the file, they fail.
+  const clean = stripGradleComments(text).split("\n");
+  clean.forEach((l, k) => {
+    for (const [re, what] of GRADLE_UNREAD_SHAPES) {
+      if (re.test(l)) unparsed.push(`line ${k + 1}: ${what}: ${l.trim()}`);
+    }
+  });
   const kotlinDeps: { name: string; version?: string; at: string }[] = [];
   const pluginVersions = new Set<string>();
   const statements = (name: string) =>
@@ -459,6 +483,14 @@ function selfTestGradleParser(): void {
     'dependencies {\n    implementation(platform("a:b:1")\n}',
     'plugins {\n    id("x.y")\n}',
     "dependencies {\n    testImplementation(kotlin(\"test\"))\n}",
+    'kotlin {\n    sourceSets {\n        commonMain.dependencies {\n            implementation("a:b:1")\n        }\n    }\n}',
+    'apply(plugin = "x.y")',
+    'dependencies.add("implementation", "a:b:1")',
+    'configurations.all {\n    resolutionStrategy.force("a:b:2")\n}',
+    'dependencies {\n    implementation("a:b:$v")\n}',
+    'dependencies {\n    implementation("a:b:${v}")\n}',
+    'dependencies {\n    implementation("a:b:1@aar")\n}',
+    'dependencies {\n    implementation("a:b:1:sources")\n}',
   ];
   const failures: string[] = [];
   if (got.unparsed.length > 0) failures.push(`fixture left unparsed: ${got.unparsed.join("; ")}`);

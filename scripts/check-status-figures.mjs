@@ -58,11 +58,20 @@ const E2E_README = join(repo, "scripts/src/e2e/README.md");
  * gate holds it at absent: the README points at `--list` instead. A dated historical
  * snapshot in `N/N` form ("15/15 at that point") is not a live count and is allowed.
  */
+const NUMBER_WORD =
+  "(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|seven|eight|nine))?|" +
+  "one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|" +
+  "seventeen|eighteen|nineteen|hundred|dozen)";
+// A number (digits or words, not one half of an `N/N` snapshot) followed within three
+// words by a test-ish noun, or "grown to N". Broad on purpose: the phrasing this gate
+// has to stop is whichever one the next hand-count reaches for, not the last one used.
+const COUNT_CLAIM = new RegExp(
+  `(?<![\\w/])(?:\\d+|${NUMBER_WORD})(?![\\w/])(?:[\\s\\x60*(]+[\\w\\x60().:-]+){0,3}?[\\s\\x60*(]+` +
+    `(?:e2e\\s+)?(?:tests?|specs?|spec\\s+files?|cases?|scenarios?|declarations?)\\b|\\bgrown\\s+to\\s+(?:\\d+|${NUMBER_WORD})\\b`,
+  "gi",
+);
 export function e2eReadmeCountClaims(src) {
-  const claims = [];
-  const re = /\b\d+\s+(?:`?test\(?`?\s+declarations?|tests?\b|spec(?:\s+files?|s)\b)|grown\s+to\s+\d+/gi;
-  for (const m of src.matchAll(re)) claims.push(m[0]);
-  return claims;
+  return [...src.matchAll(COUNT_CLAIM)].map((m) => m[0]);
 }
 
 /**
@@ -228,7 +237,10 @@ function selfTest() {
         e2eReadmeCountClaims("the suite has since grown to 35").length === 1 &&
         e2eReadmeCountClaims("41 `test(` declarations across 10 spec files").length === 2 &&
         e2eReadmeCountClaims("Total: 53 tests in 10 files").length === 1 &&
-        e2eReadmeCountClaims("green — 15/15 **at that point**").length === 0,
+        e2eReadmeCountClaims("green — 15/15 **at that point**").length === 0 &&
+        ["53 e2e tests", "53 Playwright tests", "fifty-three tests", "41 cases", "Forty-one `test(` declarations"].every(
+          (x) => e2eReadmeCountClaims(x).length === 1,
+        ),
     },
     {
       name: "the real e2e README types no live count",

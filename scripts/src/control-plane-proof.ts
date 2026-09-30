@@ -12,7 +12,7 @@
 //
 // Run: pnpm --filter @workspace/scripts run proof:control-plane
 
-import { ControlPlane, verifyBundleSignature, verifyBundleChecksum } from "@workspace/control-plane";
+import { ControlPlane, bundleChecksum, verifyBundleSignature, verifyBundleChecksum } from "@workspace/control-plane";
 
 let passed = 0;
 const failures: string[] = [];
@@ -125,6 +125,24 @@ function main() {
   const forgedSig = { ...good!, signature: flipHex(good!.signature[0]) + good!.signature.slice(1) };
   check("signature-only forgery still passes checksum (integrity intact)", verifyBundleChecksum(forgedSig));
   check("signature-only forgery fails the signature (authenticity broken)", !verifyBundleSignature(forgedSig));
+
+  // 9. One unambiguous canonical encoding (BUILD_BACKLOG row 2544). The old
+  // `${tenantId}:${version}:${workflows.join(",")}` let a ',' inside a workflow key
+  // or a ':' inside a tenant id collide two different bundles on one string.
+  check("['a,b'] and ['a','b'] get different checksums", bundleChecksum("tenant_atlas", 4, ["a,b"]) !== bundleChecksum("tenant_atlas", 4, ["a", "b"]));
+  check("':' in tenantId cannot shift into version/workflows", bundleChecksum("x:1", 2, ["w"]) !== bundleChecksum("x", 1, ["2:w"]));
+  // Re-split the signed seed bundle so the ','-joined string is unchanged.
+  const [w0, w1, ...rest] = good!.workflows;
+  const resplit = [`${w0},${w1}`, ...rest];
+  check("re-split has the same ','-join but a different array", resplit.join(",") === good!.workflows.join(",") && resplit.length !== good!.workflows.length);
+  // (b1) advertised checksum+signature kept: the checksum half must refuse it.
+  const resplitKept = { ...good!, workflows: resplit };
+  check("re-split with original checksum fails the checksum", !verifyBundleChecksum(resplitKept));
+  check("re-split with original checksum fails the signature", !verifyBundleSignature(resplitKept));
+  // (b2) checksum recomputed, original signature: ONLY the signature half can refuse it.
+  const resplitRechecked = { ...good!, workflows: resplit, checksum: bundleChecksum(good!.tenantId, good!.version, resplit) };
+  check("re-split with recomputed checksum passes integrity", verifyBundleChecksum(resplitRechecked));
+  check("re-split with recomputed checksum fails the signature (authenticity)", !verifyBundleSignature(resplitRechecked));
 
   const total = passed + failures.length;
   console.log(`Control-plane proof: ${passed}/${total} assertions passed`);

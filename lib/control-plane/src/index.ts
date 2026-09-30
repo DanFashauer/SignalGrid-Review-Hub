@@ -34,11 +34,19 @@ function fnv1a(input: string): string {
   return h.toString(16).padStart(8, "0");
 }
 
+/** The ONE canonical encoding of a bundle's content, shared by the checksum and
+ *  the signature so they cannot drift. JSON escapes every separator, so a ',' in
+ *  a workflow key or a ':' in a tenant id can no longer collide two bundles (the
+ *  old `${tenantId}:${version}:${workflows.join(",")}` did). */
+function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
+  return JSON.stringify([tenantId, version, workflows]);
+}
+
 /** Canonical checksum over a bundle's content (tenant + version + workflows).
  *  Exported so the edge-sync proof can mint a checksum-consistent bundle for an
  *  UNPROVISIONED tenant and prove it still fails authenticity. */
 export function bundleChecksum(tenantId: string, version: number, workflows: string[]): string {
-  return fnv1a(`${tenantId}:${version}:${workflows.join(",")}`);
+  return fnv1a(canonicalBundle(tenantId, version, workflows));
 }
 
 /**
@@ -67,10 +75,6 @@ const FIXTURE_SIGNING_KEYS: Record<string, string> = {
   tenant_forge: "cpk_demo_forge_signing",
   tenant_orion: "cpk_demo_orion_signing",
 };
-
-function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
-  return `${tenantId}:${version}:${workflows.join(",")}`;
-}
 
 /**
  * The signing key for a tenant, or undefined when the tenant is not provisioned

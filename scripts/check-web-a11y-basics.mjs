@@ -235,18 +235,22 @@ function exportedNames(code) {
 /** Does the file have a default export? */
 const hasDefaultExport = (code) => /export\s+default\b/.test(code) || /export\s*\{[^}]*\bas\s+default\b/.test(code);
 
-/** Is the default export a hook or a value (not a component)? */
 /**
  * Is the default export something that carries polling (a hook, a value, an
- * anonymous function)? Only a default export that is plainly a component — a
- * PascalCase function, class or binding, directly or via `export { X as
- * default }` — is excluded; anything the gate cannot classify is followed.
+ * anonymous function)? Only a default export that is plainly a component is
+ * excluded: a PascalCase name (an upper-case letter then a lower-case one, so
+ * `Dashboard` but not `POLL`) declared as a function or class, or exported as a
+ * bare identifier, directly or via `export { X as default }`. A call such as
+ * `export default Object.freeze({...})` is a value and is followed; anything
+ * the gate cannot classify is followed.
  */
+const PASCAL = "[A-Z][a-z][\\w$]*";
 const defaultIsHookOrValue = (code) => {
   if (!hasDefaultExport(code)) return false;
   const component =
-    /export\s+default\s+(?:async\s+)?(?:function\s*\*?\s*|class\s+)?[A-Z][\w$]*/.test(code) ||
-    /export\s*\{[^}]*\b[A-Z][\w$]*\s+as\s+default\b/.test(code);
+    new RegExp(`export\\s+default\\s+(?:async\\s+)?(?:function\\s*\\*?\\s*|class\\s+)${PASCAL}`).test(code) ||
+    new RegExp(`export\\s+default\\s+${PASCAL}\\s*;?\\s*$`, "m").test(code) ||
+    new RegExp(`export\\s*\\{[^}]*\\b${PASCAL}\\s+as\\s+default\\b`).test(code);
   return !component;
 };
 
@@ -353,8 +357,8 @@ function openingTag(src, index) {
 function buttonText(src, openEnd, tagName = "button") {
   const close = src.indexOf(`</${tagName}>`, openEnd);
   if (close < 0) return null;
-  // A whitespace-only string expression (`{" "}`) renders no name.
-  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])\s*\1\s*\}/g, "");
+  // A whitespace-only string expression (`{" "}`, `{"\n"}`) renders no name.
+  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])(?:\s|\\[nrtfv])*\1\s*\}/g, "");
   for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
     const tag = openingTag(body, i);
     if (tag === null) return null;
@@ -612,6 +616,8 @@ function selfTest() {
       checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><PanelLeftIcon /><span className="sr-only">Toggle Sidebar</span></Button>').length === 0],
     ["a whitespace-only {\" \"} child does not name an icon button",
       checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><X />{" "}</Button>').length === 1],
+    ["an escaped-newline {\"\\n\"} child does not name an icon button",
+      checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><X />{"\\n"}</Button>').length === 1],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -656,6 +662,11 @@ function selfTest() {
       checkLiveRegions([view("t/src/pages/P.tsx", "useEffect(() => { setTimeout(function tick() { q.refetch(); setTimeout(tick, 5000); }, 5000); }, []);")], false).failures.length === 1],
     ["a default-exported polling component does not make its importer a polling view",
       checkLiveRegions([view("t/src/pages/Dash.tsx", "export default function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }"), view("t/src/App.tsx", 'import Dash from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
+    ["an upper-case default-exported options value is followed",
+      ["const POLL = { refetchInterval: 5000 };\nexport default POLL;", "const POLL = { refetchInterval: 5000 };\nexport { POLL as default };", "export default Object.freeze({ refetchInterval: 5000 });"].every((lib) =>
+        checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", 'import opts from "../lib/feed";\nuseQuery({ ...opts }); return null;')], false).failures.length === 1)],
+    ["a PascalCase default-exported component bound by name is not followed",
+      checkLiveRegions([view("t/src/pages/Dash.tsx", "function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }\nexport default Dash;"), view("t/src/App.tsx", 'import Dash from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
     ["a hook re-exported from another module fails closed",
       checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
     ["a hook bound to another name without a call fails closed",

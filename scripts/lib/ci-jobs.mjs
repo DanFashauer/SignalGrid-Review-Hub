@@ -92,8 +92,8 @@ export const NOT_A_GATE = new Map([
 ]);
 
 /** Every job defined in `.github/workflows/`, as `file.yml:job-id`. */
-export function enumerateCiJobs() {
-  const { files, parsed, jobs } = readCiWorkflows(workflowDir);
+export function enumerateCiJobs(dir = workflowDir) {
+  const { files, parsed, jobs } = readCiWorkflows(dir);
   // Fail closed: a workflow file that contributed no `jobs:` block would otherwise
   // vanish from the count and shorten preflight's "not covered" disclaimer.
   if (parsed.length !== files.length) {

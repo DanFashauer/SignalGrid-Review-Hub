@@ -53,7 +53,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MIRRORED, NOT_A_GATE, classifyCiJobs, readCiWorkflows } from "./lib/ci-jobs.mjs";
+import { MIRRORED, NOT_A_GATE, classifyCiJobs, enumerateCiJobs, readCiWorkflows } from "./lib/ci-jobs.mjs";
 import { classifyStep } from "./lib/preflight-verdict.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -489,6 +489,12 @@ function selfTest() {
     const wf = readCiWorkflows(wfDir);
     checks.push(["a workflow whose first line is `jobs:` still enumerates its job id", wf.jobs.some((j) => j.id === "first-line.yml:lead")]);
     checks.push(["workflow files parsed equals the readdir count", wf.parsed.length === wf.files.length && wf.files.length === 2]);
+    // Fail closed: a workflow file with no top-level `jobs:` must make enumeration THROW,
+    // never drop out of the count (the silent `continue` this replaced).
+    writeFileSync(join(wfDir, "no-jobs.yml"), "name: N\non: push\n");
+    let threw = false;
+    try { enumerateCiJobs(wfDir); } catch (e) { threw = /no-jobs\.yml/.test(String(e?.message)); }
+    checks.push(["a workflow file with no parsable `jobs:` makes enumerateCiJobs() throw, naming the file", threw]);
   } finally {
     rmSync(wfDir, { recursive: true, force: true });
   }

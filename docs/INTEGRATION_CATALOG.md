@@ -668,7 +668,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   rejected one, an unconfirmed badge precondition steps up, and a malformed event stream or
   an unauditable check-out denies — ignorance never reaches `allow`, and the allow set is
   pinned by equality over the whole sequence state space.
-- **`proof:session-readiness` (63 checks)** — the DEX/EUC readiness dimension, from the
+- **`proof:session-readiness` (64 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law
   is that SILENCE IS NEVER READINESS: an endpoint nobody instrumented, a DEX plane that
@@ -687,7 +687,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   the equal-rank tie-break unfalsifiable (the more specific candidate was also pushed
   first — the same `service-lifecycle` defect, fixed by pushing the less specific one
   first) and a three-field malformed guard with only one control.
-- **`proof:uem` (76 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
+- **`proof:uem` (77 checks)** — the read-only MDM/UEM dimension across Intune, Jamf
   and Workspace ONE. Includes a **1,440-state exhaustive sweep** whose grant path is
   pinned to *exactly 9* fully-confirmed states, four isolated live-call-gate refusals,
   and a source scan asserting no vendor-API call. `personal` ownership on an

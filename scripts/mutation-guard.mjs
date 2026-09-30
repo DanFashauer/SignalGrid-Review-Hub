@@ -232,6 +232,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:service-lifecycle",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
       "lib/integrations/src/integrations/service-lifecycle/index.ts",
@@ -381,6 +382,7 @@ export const TARGETS = [
 
   {
     proof: "proof:challenge-capability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/challenge-capability/index.ts",
       "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
@@ -390,6 +392,7 @@ export const TARGETS = [
 
   {
     proof: "proof:sse-egress",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/sse-egress/index.ts",
       "lib/integrations/src/integrations/sse-egress/evaluate.ts",
@@ -520,6 +523,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:pacs-access",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
@@ -739,6 +743,44 @@ export const ALLOWED = [
       "that narrows `k` from `string | symbol` to `string`. Verified in that order — " +
       "mutated, then deleted, then restored — rather than argued. Labelled inert in the " +
       "source with the same reason.",
+  },
+  {
+    file: "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — the same clause, in the same " +
+      "hasUnrecognizedKey shape, as the agent-identity entry above. `known` is " +
+      "SSE_EGRESS_REPORT_KEYS, a readonly string tuple, so `known.includes(k)` on the next " +
+      "line returns true for every symbol this clause catches: a symbol-keyed report is " +
+      "malformed either way. Found surviving `if (false)` when sse-egress joined the " +
+      "brace-less sweep (2026-09-30). Not deleted because it is the type guard narrowing " +
+      "`k` from `string | symbol` to `string` for that includes() — the TS2345 the " +
+      "agent-identity deletion hit. Not pinnable from a proof, since no input separates it.",
+  },
+  {
+    file: "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — identical reasoning to the " +
+      "sse-egress entry above: `known` is CHALLENGE_CAPABILITY_REPORT_KEYS or " +
+      "CHALLENGE_METHOD_ENTRY_KEYS, string tuples both, so `known.includes(k)` on the next " +
+      "line answers true for any symbol and the report or entry is malformed either way. " +
+      "Found surviving `if (false)` when challenge-capability joined the brace-less sweep " +
+      "(2026-09-30); kept as the `string | symbol` → `string` narrowing that includes() needs.",
+  },
+  {
+    file: "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT — the same clause, and the same reason, as the access-governance " +
+      "entry above. `ageMs(observedMs, referenceMs, 0)` on the next line returns null when " +
+      "`seenAt` is null (observedMs) and when `nowMs` is not a finite number (referenceMs), " +
+      "and the `age === null` line immediately after answers \"unknown\" — the verdict this " +
+      "clause gives. Found surviving `if (false)` with proof:pacs-access green when the " +
+      "family joined the brace-less sweep (2026-09-30). Kept because it names the two " +
+      "unreadable-instant causes at the point of use, and because `ageMs` lives in the " +
+      "shared lib/integrations/src/utils/freshness.ts, whose null contract this family " +
+      "does not own: if that contract narrows, this guard still refuses.",
   },
   {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",

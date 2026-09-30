@@ -31,6 +31,7 @@ import {
 import { composeDeviceRisk, fromAgentBehavior } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety";
 import { checkDefaultTransport, checkLiveGateIsolated } from "./lib/live-gate.js";
+import { FAMILY_ACTIONS } from "@workspace/integrations/action-ladder";
 
 let passed = 0;
 const failures: string[] = [];
@@ -209,7 +210,7 @@ check("a report behind a 100-deep prototype chain is malformed (bounded walk)",
   normalizeReport("deep", Object.create(abDeepProto) as never).reportIntegrity === "malformed");
 
 // ── report ─────────────────────────────────────────────────────────────────────
-console.log(`figures=combos=${combosExpected},grantingCombos=${enumResult.noneCount},signals=5,ladderRungs=5`);
+console.log(`figures=combos=${combosExpected},grantingCombos=${enumResult.noneCount},signals=5,ladderRungs=${FAMILY_ACTIONS.length}`);
 
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //

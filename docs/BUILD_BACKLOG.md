@@ -2430,7 +2430,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       fail-closed exit codes), `artifacts/signalgrid-cli/src/session.ts` (optional session
       outside the tree, O_EXCL lock, never the token) and `artifacts/signalgrid-cli/src/bin.ts`;
       `decide` and `connectors sync` send nothing without `--allow-write` (exit 4). The generated
-      skill is `.claude/skills/signalgrid-cli/SKILL.md`. Proof `scripts/src/signalgrid-cli-proof.ts`
+      skill is `.claude/skills/cli-anything/signalgrid-cli/SKILL.md`. Proof `scripts/src/signalgrid-cli-proof.ts`
       (`pnpm run proof:signalgrid-cli`) boots the api-server on an OS-assigned port behind a
       recording proxy and is registered in `scripts/preflight.mjs` and
       `.github/workflows/review-hub-ci.yml`. Box left unticked until the owner merges.

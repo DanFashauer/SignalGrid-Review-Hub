@@ -17,7 +17,7 @@
 //     tenant mismatch, and a server that answers 200 with no verdict each exit
 //     non-zero with a message naming the cause, and none prints an outcome.
 //   · The session file never holds the token and is refused inside the tree.
-//   · The committed .claude/skills/signalgrid-cli/SKILL.md equals the generator.
+//   · The committed .claude/skills/cli-anything/signalgrid-cli/SKILL.md equals the generator.
 //
 // Offline and public-safe: the in-memory demo core and synthetic demo keys only.
 
@@ -33,7 +33,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const serverEntry = resolve(repoRoot, "artifacts/api-server/dist/index.mjs");
 const cliDir = resolve(repoRoot, "artifacts/signalgrid-cli");
 const cliBin = resolve(cliDir, "src/bin.ts");
-const skillPath = resolve(repoRoot, ".claude/skills/signalgrid-cli/SKILL.md");
+const skillPath = resolve(repoRoot, ".claude/skills/cli-anything/signalgrid-cli/SKILL.md");
 const TOKEN = "sgk_demo_northwind_owner";
 const TENANT = "tenant_northwind";
 
@@ -290,8 +290,15 @@ async function main(): Promise<void> {
     check("--help lists all five subcommands", help.code === 0 && ["decide", "explain", "signals", "audit", "connectors"].every((c) => help.stdout.includes(`signalgrid ${c}`)));
     const gen = await cli(["skill"], {});
     const committed = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "";
-    check(".claude/skills/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
+    check(".claude/skills/cli-anything/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
       gen.code === 0 && gen.stdout.length > 0 && gen.stdout === committed);
+    // scripts/check-skill-plane-conformance.mjs walks .claude/skills/*/SKILL.md one level deep, so
+    // this nested skill is outside its walk; its three rules are held here instead, not waived.
+    const fm = /^---\n([\s\S]*?)\n---\n/.exec(committed)?.[1] ?? "";
+    const fmName = /^name:\s*(.+)$/m.exec(fm)?.[1]?.trim();
+    const fmDesc = /^description:\s*(.+)$/m.exec(fm)?.[1]?.trim();
+    check("the generated SKILL.md meets the skill-plane shape: a name equal to its directory and a non-empty description",
+      fmName === "signalgrid-cli" && fmName === dirname(skillPath).split("/").pop() && !!fmDesc);
   } finally {
     api.kill();
     proxy.server.close();

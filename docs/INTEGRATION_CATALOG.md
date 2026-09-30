@@ -267,7 +267,7 @@ Fail-safe by construction, matched to a shared frontline session's stakes:
 - **reader/controller health** (intake row 26), distinct from bridge reachability: an explicit `offline` controller behind an entry steps up (the evidence plane may be blind) and `degraded` is a visible monitor — affirmative-only, so an unreported health never forecloses and pre-axis bridges keep their behavior;
 - the **mixed-estate axis** (intake row 21): a "granted" backed by a clonable static-identifier read and one backed by a cryptographic credential are different facts, and the caller may POSE a per-workflow technology floor — a read below it → `step_up` `CREDENTIAL_BELOW_FLOOR` (a stronger challenge, deliberately **never** restrict/deny: modernization is evolutionary, and the legacy estate is graded, not condemned); a posed floor the PACS could not answer → `step_up` (silence is not a cryptographic credential); an UNPOSED floor is `unassessed` and forecloses nothing, so a deployment adopts the axis at its own pace.
 
-Proven fully offline by `pnpm run proof:pacs-access` (103 checks, no network, no door control) — including a brute-force enumeration of the **entire 97,200-combination** normalized input space, graded twice: unposed (the technology axis forecloses nothing) and under a posed cryptographic floor (the allow path additionally demands a cryptographic read — exactly one third of the unposed grants — with 0 mismatches both ways), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated access state — it changes no door and revokes no credential; every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:pacs-access` (109 checks, no network, no door control) — including a brute-force enumeration of the **entire 97,200-combination** normalized input space, graded twice: unposed (the technology axis forecloses nothing) and under a posed cryptographic floor (the allow path additionally demands a cryptographic read — exactly one third of the unposed grants — with 0 mismatches both ways), via the shared grant-safety harness. Live calls are gated exactly like every other connector. SignalGrid reads and decides on the evaluated access state — it changes no door and revokes no credential; every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Agentic / non-human identity — the "who is actually acting" dimension (built, fixture-backed)
 
@@ -586,7 +586,7 @@ in one place.
   operator scale: fix enrollment or swap the device BEFORE the doomed challenge; anything less
   determinate is a visible blind spot. Reading a capability inventory is not running a
   challenge: nothing is enrolled, installed, or executed — ceremony execution stays with the
-  HOST app. `proof:challenge-capability` (51 checks, incl. the exhaustive 81-cell single-method
+  HOST app. `proof:challenge-capability` (53 checks, incl. the exhaustive 81-cell single-method
   standing sweep: answerable in exactly the all-affirmed cell).
 
 - **SSE egress** — the mandated edge path (intake ledger row 25; Zscaler Client Connector
@@ -603,7 +603,7 @@ in one place.
   never-installed are affirmative operator-scale defects (alert — the setup-bypassed
   precedent); a bypass is visible and steps up (a bypass rule can be deliberate policy);
   silence on a mandated path steps up. Reading an edge's device status is not steering
-  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (49 checks, incl.
+  traffic: nothing is routed, toggled, or rewritten. `proof:sse-egress` (52 checks, incl.
   the exhaustive 45-cell standing sweep in both poses: protected in exactly one cell,
   unposed always quiet).
 
@@ -730,7 +730,7 @@ proof reports — the numbers below are therefore evidence, not claims.
 - **`proof:entitlement-binding` (62 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
-- **`proof:service-lifecycle` (82 checks)** — whether the *service* plane still agrees
+- **`proof:service-lifecycle` (86 checks)** — whether the *service* plane still agrees
   with the *account* plane that this principal is here. `access-governance` grades
   `accountStatus`, and `active` is its clean state; but a Microsoft tenant reclaims the
   licence first (it bills monthly) and disables the account second (it costs nothing),

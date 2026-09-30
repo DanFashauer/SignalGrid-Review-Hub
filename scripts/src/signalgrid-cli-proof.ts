@@ -39,15 +39,17 @@ const TENANT = "tenant_northwind";
 
 let passed = 0;
 const failures: string[] = [];
-function check(name: string, ok: boolean, detail = ""): void {
+// Only the STATIC check name is ever logged — never a value taken from the CLI's
+// output, a request path or a server answer (the api-server suite's rule, and what
+// CodeQL's log-injection query holds this file to). `_detail` documents each check
+// at its call site; reproduce a failure by running the named command yourself.
+function check(name: string, ok: boolean, _detail = ""): void {
   if (ok) {
     passed += 1;
     console.log(`  ok — ${name}`);
   } else {
     failures.push(name);
-    // `detail` can carry CLI output; one line, control characters stripped, bounded.
-    const safe = detail.replace(/\n|\r/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 300);
-    console.log(`  ✗  — ${name}${safe ? ` (${safe})` : ""}`);
+    console.log(`  ✗  — ${name}`);
   }
 }
 

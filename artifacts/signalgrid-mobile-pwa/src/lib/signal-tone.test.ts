@@ -25,6 +25,13 @@ test("an unrecognised type renders AS unknown, never as an ordinary signal", () 
   }
 });
 
+test("the unknown tone is visibly unknown, never the old neutral grey", () => {
+  // Pinned on the constant itself: comparing a badge's tone to UNKNOWN_SIGNAL_TONE
+  // passes whatever that constant holds, so reverting it to grey stayed green.
+  assert.match(UNKNOWN_SIGNAL_TONE, /\bborder-dashed\b/);
+  assert.doesNotMatch(UNKNOWN_SIGNAL_TONE, /\b(?:text|bg|border)-(?:zinc|slate|gray|neutral|stone)-/);
+});
+
 test("labels replace every hyphen, not just the first", () => {
   assert.equal(signalBadge("operational-signals").label, "operational signals");
 });

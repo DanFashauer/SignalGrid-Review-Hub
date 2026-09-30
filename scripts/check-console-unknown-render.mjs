@@ -562,12 +562,17 @@ function analyzeSourceFile(relPath, text) {
   // ternary of those — is resolved to its initializer through lexical scope (the nearest
   // enclosing block or the module that declares it), so `className={GOOD}` is judged as if
   // the literal were inline. Object maps (`TONE[status]`) are not resolved.
-  const RESOLVABLE_INIT = (n) => n && (ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) ||
-    ts.isTemplateExpression(n) || ts.isCallExpression(n) || ts.isConditionalExpression(n) ||
-    ts.isParenthesizedExpression(n) || ts.isBinaryExpression(n) ||
-    // `"…" as const`, `"…" satisfies string`, `<string>"…"`, `x!`, and an alias `const GOOD = BASE`.
-    ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
-    ts.isNonNullExpression(n) || ts.isIdentifier(n));
+  // A wrapper — `"…" as const`, `"…" satisfies string`, `<string>"…"`, `x!`, parens — is
+  // resolvable only when what it WRAPS is: `{ ok: "…emerald…" } as const` is an object map,
+  // and resolving it would flag `className={T.muted}` (a false positive). An identifier is
+  // an alias (`const GOOD = BASE`) and resolves through its own binding.
+  const RESOLVABLE_INIT = (n) => {
+    if (!n) return false;
+    if (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
+        ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) return RESOLVABLE_INIT(n.expression);
+    return ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n) ||
+      ts.isCallExpression(n) || ts.isConditionalExpression(n) || ts.isBinaryExpression(n) || ts.isIdentifier(n);
+  };
   // Does this scope bind `name` as something OTHER than a const we can resolve — a
   // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
   // at the use site is that binding, and resolution must stop (no false positive
@@ -603,17 +608,19 @@ function analyzeSourceFile(relPath, text) {
   // site (the string itself when inline; the identifier when resolved through a const).
   const goodClassStringNodes = (attr) => {
     const found = [];
-    const walk = (x, use, depth) => {
+    // An alias chain of any length resolves; `resolving` stops a cycle (`const A = B; const B = A`).
+    const resolving = new Set();
+    const walk = (x, use) => {
       if (!x) return;
       if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) found.push({ node: x, use: use ?? x });
       if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((s) => GOOD_CLASS.test(s.literal.text)))) found.push({ node: x, use: use ?? x });
-      if (ts.isIdentifier(x) && !isMemberName(x) && depth < 4) {
+      if (ts.isIdentifier(x) && !isMemberName(x)) {
         const init = resolveConstInit(x);
-        if (init) walk(init, use ?? x, depth + 1);
+        if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
       }
-      ts.forEachChild(x, (c) => walk(c, use, depth));
+      ts.forEachChild(x, (c) => walk(c, use));
     };
-    walk(attr, undefined, 0);
+    walk(attr, undefined);
     return found;
   };
   const enclosingJsxElement = (node) => {
@@ -994,6 +1001,23 @@ export function ConstForm() {
 const BUG_ASCONST = constFixture(`const GOOD = "text-emerald-400" as const;`, "GOOD");
 const BUG_SATISFIES = constFixture(`const GOOD = "text-emerald-400" satisfies string;`, "GOOD");
 const BUG_CONSTALIAS = constFixture(`const BASE = "text-emerald-400";\nconst GOOD = BASE;`, "GOOD");
+// Brain review round 2: a 5-deep alias chain must flag; an object map wrapped in `as
+// const` must NOT resolve (false positive); a reassigned `let` is not resolved — the
+// literal it starts with is not the value it renders.
+const BUG_ALIASCHAIN5 = constFixture(
+  `const A0 = "text-emerald-400";\nconst A1 = A0;\nconst A2 = A1;\nconst A3 = A2;\nconst A4 = A3;\nconst GOOD = A4;`, "GOOD");
+const OK_ASCONSTMAP = constFixture(
+  `const T = { ok: "text-emerald-400", muted: "text-slate-400" } as const;`, "T.muted");
+const OK_LETREASSIGNED = `
+import { useQuery } from "@tanstack/react-query";
+export function LetReassigned() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  let cls = "text-emerald-400";
+  if (!q.data) cls = "text-slate-400";
+  return <span className={cls}>{rows.length} rows</span>;
+}`;
+const OK_ALIASCYCLE = constFixture(`const A = B;\nconst B = A;`, "A");
 const OK_PARAMSHADOW = `
 import { useQuery } from "@tanstack/react-query";
 const cls = "text-emerald-400";
@@ -1078,6 +1102,7 @@ function selfTest() {
     ["AS-CONST (const GOOD = \"…emerald\" as const)", BUG_ASCONST],
     ["SATISFIES (const GOOD = \"…emerald\" satisfies string)", BUG_SATISFIES],
     ["CONST-ALIAS (const GOOD = BASE)", BUG_CONSTALIAS],
+    ["ALIAS-CHAIN-5 (A0 → … → A4 → GOOD)", BUG_ALIASCHAIN5],
   ];
   for (const [label, src] of fnBugs) {
     const v = analyze(src, "FN.tsx");
@@ -1092,6 +1117,9 @@ function selfTest() {
     ["CONST-CLASS static label, no data", OK_CONSTSTATIC],
     ["CONST-CLASS shadowed by a local non-good const", OK_CONSTSHADOWED],
     ["CONST-CLASS shadowed by an arrow parameter", OK_PARAMSHADOW],
+    ["AS-CONST object map, className={T.muted}", OK_ASCONSTMAP],
+    ["reassigned `let` is not resolved", OK_LETREASSIGNED],
+    ["alias cycle terminates, no finding", OK_ALIASCYCLE],
   ];
   for (const [label, src] of fnOk) {
     const v = analyze(src, "FNOK.tsx");

@@ -2398,14 +2398,16 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       present only for the query it tests, so a two-query file with the guard on query A and
       the good-state render on query B's data flags — and CONST-CLASS RESOLUTION — a
       good-state class hoisted into a `const` (literal, template literal, `clsx`/`cn` call, a
-      ternary, `as const`/`satisfies`, or an alias `const GOOD = BASE`) is resolved through
-      lexical scope before the class match, stopping at a parameter/`let`/destructured binding
-      that shadows it. Self-test
-      (`node scripts/check-console-unknown-render.mjs --self-test`) adds six bug shapes
+      ternary, `as const`/`satisfies` over one of those, or an alias chain of any length) is
+      resolved through lexical scope before the class match, stopping at a parameter/`let`/
+      destructured binding that shadows it; an object map (even under `as const`) and a
+      reassigned `let` are deliberately not resolved. Self-test
+      (`node scripts/check-console-unknown-render.mjs --self-test`) adds seven bug shapes
       (two-query, `className={GOOD}`, template-literal const, `as const`, `satisfies`, const
-      alias — each must flag) and seven guarded shapes (guard on both queries, each on its own,
-      const under a data guard, const ternary, static const label, shadowed const, arrow-param
-      shadow — each must pass); live tree still 0 findings. Falsified: against the old analyser
+      alias, five-deep alias chain — each must flag) and ten guarded shapes (guard on both
+      queries, each on its own, const under a data guard, const ternary, static const label,
+      shadowed const, arrow-param shadow, `as const` object map, reassigned `let`, alias
+      cycle — each must pass); live tree still 0 findings. Falsified: against the old analyser
       the self-test misses every new bug shape.
       STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
       carried into the child; object-map classes (`TONE[status]`) are not resolved.

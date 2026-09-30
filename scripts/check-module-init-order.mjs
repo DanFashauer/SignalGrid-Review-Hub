@@ -44,11 +44,15 @@
 // to a `const f = () => …` declared ABOVE the call) is followed into that body,
 // transitively, with the same rules.
 //
-// Followed from load-time code (2026-09-30, after the brain's review of #1274):
+// Followed from load-time code (2026-09-30, after two brain reviews of #1274):
 // calls to same-file functions at any nesting depth, `const` aliases of them
-// (`const g = f; g()`), `f.call`/`f.apply`, tagged-template tags, default
-// parameters, and `new C()` — its instance field initialisers, its constructor,
-// and an `extends` base's constructor.
+// (`const g = f; g()`), `f.call`/`f.apply` on a named function or a function
+// written in place, tagged-template tags, default parameters and binding-pattern
+// defaults (top-level, for-of, and destructured parameters), `new C()` and
+// `new (class { … })()` — instance field initialisers, the constructor, and an
+// `extends` base's constructor — and callbacks that run before their call
+// returns: sync array iterators, `Array.from`, `Object.groupBy`/`Map.groupBy`,
+// `str.replace(re, fn)`, and a `new Promise` executor.
 //
 // SCOPE LIMIT, stated rather than pretended away. This follows calls within ONE
 // file; it does not follow calls through imports, method calls on objects
@@ -79,14 +83,14 @@ const ROOTS = ["lib", "artifacts", "scripts"];
 // 200): a walk that reaches almost nothing is broken, not a clean tree.
 const FILE_FLOOR = 200;
 const SKIP = /(^|\/)(node_modules|dist|build|coverage|third_party)(\/|$)|\.d\.ts$/;
-const SOURCE = /\.(ts|tsx|mts|mjs|js)$/;
+const SOURCE = /\.(ts|tsx|mts|cts|mjs|cjs|js|jsx)$/;
 
 // Array methods that invoke their callback synchronously, before returning. A
 // callback handed to anything else (a router, an emitter, a timer, a promise) is
 // assumed NOT to run during module evaluation.
 const SYNC_ITERATORS = new Set([
   "forEach", "map", "filter", "some", "every", "find", "findIndex", "findLast", "findLastIndex",
-  "reduce", "reduceRight", "flatMap", "sort", "toSorted",
+  "reduce", "reduceRight", "flatMap", "sort", "toSorted", "replace", "replaceAll",
 ]);
 
 const isFunctionLike = (n) =>
@@ -146,8 +150,13 @@ function analyseSourceFile(sf, checker) {
         };
         collect(d.name);
         for (const id of names) {
-          const decl = ts.isIdentifier(d.name) ? d : id.parent;
-          tdz.set(decl, { name: id.text, initEnd: d.end });
+          if (ts.isIdentifier(d.name)) { tdz.set(d, { name: id.text, initEnd: d.end }); continue; }
+          // A destructured binding is initialised left to right, once the
+          // initializer has run: a read inside the initializer is early, and so
+          // is a default that reads a LATER element — but `const { a, b = a }`
+          // is fine, so each element's own end is its initialisation point.
+          const init = d.initializer ? [d.initializer.pos, d.initializer.end] : null;
+          tdz.set(id.parent, { name: id.text, initEnd: id.parent.end, initRange: init });
         }
       }
     } else if (ts.isClassDeclaration(st) && st.name) {
@@ -173,31 +182,41 @@ function analyseSourceFile(sf, checker) {
   // module-scope `const` callee is initialised at (a call before it is itself a
   // TDZ read, reported by the identifier check, and its body cannot run); -1
   // for hoisted or nested callees.
+  // Calling a function runs its parameter defaults — including defaults inside
+  // a destructured parameter (`function f({ a = X }) {}`) — and then its body.
+  const fnRunner = (fn) => (ctx) => {
+    for (const p of fn.parameters) { walkPattern(p.name, ctx); walk(p.initializer, ctx); }
+    walk(fn.body, ctx);
+  };
+  // `new C()`: instance field initialisers and the constructor run; an
+  // `extends` base's constructor runs through `super()`.
+  const classRunner = (cls) => (ctx) => {
+    for (const h of cls.heritageClauses ?? []) {
+      if (h.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+      for (const t of h.types) { const e = unparen(t.expression); if (ts.isIdentifier(e)) follow(e, ctx); }
+    }
+    for (const m of cls.members) {
+      if (ts.isPropertyDeclaration(m) && !hasModifier(m, ts.SyntaxKind.StaticKeyword)) walk(m.initializer, ctx);
+      if (ts.isConstructorDeclaration(m) && m.body) fnRunner(m)(ctx);
+    }
+  };
+  // Defaults and computed keys inside a binding pattern run when it binds.
+  const walkPattern = (b, ctx) => {
+    if (!b || ts.isIdentifier(b)) return;
+    for (const el of b.elements) {
+      if (ts.isOmittedExpression(el)) continue;
+      if (el.propertyName && ts.isComputedPropertyName(el.propertyName)) walk(el.propertyName.expression, ctx);
+      walk(el.initializer, ctx);
+      walkPattern(el.name, ctx);
+    }
+  };
   const callableOfDecl = (decl, depth = 0) => {
     if (!decl || decl.getSourceFile() !== sf || depth > 6) return undefined;
-    const fnRunner = (fn) => (ctx) => {
-      for (const p of fn.parameters) walk(p.initializer, ctx); // default parameters run on call
-      walk(fn.body, ctx);
-    };
     if (ts.isFunctionDeclaration(decl) && decl.body) {
       return { key: decl, name: decl.name?.text ?? "(function)", run: fnRunner(decl), declPos: -1 };
     }
     if (ts.isClassDeclaration(decl) || ts.isClassExpression(decl)) {
-      return {
-        key: decl, name: decl.name?.text ?? "(class)", declPos: -1,
-        run: (ctx) => {
-          // `new C()`: instance field initialisers and the constructor run; an
-          // `extends` base's constructor runs through `super()`.
-          for (const h of decl.heritageClauses ?? []) {
-            if (h.token !== ts.SyntaxKind.ExtendsKeyword) continue;
-            for (const t of h.types) { const e = unparen(t.expression); if (ts.isIdentifier(e)) follow(e, ctx); }
-          }
-          for (const m of decl.members) {
-            if (ts.isPropertyDeclaration(m) && !hasModifier(m, ts.SyntaxKind.StaticKeyword)) walk(m.initializer, ctx);
-            if (ts.isConstructorDeclaration(m) && m.body) fnRunner(m)(ctx);
-          }
-        },
-      };
+      return { key: decl, name: decl.name?.text ?? "(class)", declPos: -1, run: classRunner(decl) };
     }
     if (ts.isVariableDeclaration(decl) && decl.initializer) {
       const init = unparen(decl.initializer);
@@ -231,7 +250,7 @@ function analyseSourceFile(sf, checker) {
 
   // `Array.from(x, fn)` / `Uint8Array.from(x, fn)` call fn synchronously too.
   const isSyncIterator = (callee) => callee && ts.isPropertyAccessExpression(callee) &&
-    (SYNC_ITERATORS.has(callee.name.text) ||
+    (SYNC_ITERATORS.has(callee.name.text) || (callee.name.text === "groupBy" && ts.isIdentifier(callee.expression)) ||
       (callee.name.text === "from" && ts.isIdentifier(callee.expression) && /Array$/.test(callee.expression.text)));
 
   // Walk code that EXECUTES. `at` is the source position of the module-load
@@ -244,7 +263,7 @@ function analyseSourceFile(sf, checker) {
     if (ts.isFunctionDeclaration(node)) return; // hoisted, runs only when called
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) { walkClass(node, ctx); return; }
     if (isFunctionLike(node)) return; // defined here, run only when called
-    if (ts.isVariableDeclaration(node)) { walk(node.initializer, ctx); return; }
+    if (ts.isVariableDeclaration(node)) { walk(node.initializer, ctx); walkPattern(node.name, ctx); return; }
     if (ts.isTaggedTemplateExpression(node)) {
       const tag = unparen(node.tag);
       walk(node.tag, ctx);
@@ -254,31 +273,37 @@ function analyseSourceFile(sf, checker) {
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const callee = unparen(node.expression);
-      // IIFE: the function body runs now.
-      if (callee && (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee))) {
-        for (const p of callee.parameters) walk(p.initializer, ctx);
-        walk(callee.body, ctx);
-      } else walk(node.expression, ctx);
-      const sync = isSyncIterator(callee);
+      // IIFE (called or `new`-ed): the function body runs now.
+      if (callee && (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee))) fnRunner(callee)(ctx);
+      else walk(node.expression, ctx);
+      // `new (class { … })()` / `new class { … }()`: statics ran above, as part of
+      // evaluating the class; the constructor and instance fields run now.
+      if (ts.isNewExpression(node) && callee && ts.isClassExpression(callee)) classRunner(callee)(ctx);
+      // A callback that runs before the call returns: sync array iterators,
+      // `Array.from`, `Object.groupBy`/`Map.groupBy`, `str.replace(re, fn)`, and a
+      // `new Promise(executor)` executor.
+      const sync = isSyncIterator(callee) ||
+        (ts.isNewExpression(node) && callee && ts.isIdentifier(callee) && callee.text === "Promise");
       for (const arg of node.arguments ?? []) {
         const a = unparen(arg);
-        if (sync && (ts.isArrowFunction(a) || ts.isFunctionExpression(a))) {
-          for (const p of a.parameters) walk(p.initializer, ctx);
-          walk(a.body, ctx);
-        } else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
+        if (sync && (ts.isArrowFunction(a) || ts.isFunctionExpression(a))) fnRunner(a)(ctx);
+        else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
         else walk(arg, ctx);
       }
       if (callee && ts.isIdentifier(callee)) follow(callee, ctx);
-      // `f.call(…)` / `f.apply(…)` run f.
+      // `f.call(…)` / `f.apply(…)` run f — a named function, or a function
+      // expression written in place: `(function () { … }).call(null)`.
       if (callee && ts.isPropertyAccessExpression(callee) && (callee.name.text === "call" || callee.name.text === "apply")) {
         const target = unparen(callee.expression);
         if (ts.isIdentifier(target)) follow(target, ctx);
+        else if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) fnRunner(target)(ctx);
       }
       return;
     }
     if (ts.isIdentifier(node)) {
       const b = tdzOf(node);
-      if (b && b.initEnd > ctx.at) report(ctx.entryNode, ctx.entry, ctx.via ?? node.text, b);
+      const early = b && (b.initEnd > ctx.at || (b.initRange && ctx.at >= b.initRange[0] && ctx.at < b.initRange[1]));
+      if (early) report(ctx.entryNode, ctx.entry, ctx.via ?? node.text, b);
       return;
     }
     ts.forEachChild(node, (c) => walk(c, ctx));
@@ -304,6 +329,16 @@ function analyseSourceFile(sf, checker) {
     const walkTop = (node, entryNode) => walk(node, { at: node.pos, entry: undefined, entryNode, via: undefined, visited: new Set() });
     // Each top-level statement is its own module-load point. Walking per call
     // keeps `at` precise for statements that contain several calls.
+    // Defaults inside a top-level binding pattern run at load: `const { a = X } = {}`.
+    const visitTopPattern = (b) => {
+      if (!b || ts.isIdentifier(b)) return;
+      for (const el of b.elements) {
+        if (ts.isOmittedExpression(el)) continue;
+        if (el.propertyName && ts.isComputedPropertyName(el.propertyName)) visitTop(el.propertyName.expression);
+        visitTop(el.initializer);
+        visitTopPattern(el.name);
+      }
+    };
     const visitTop = (node) => {
       if (!node) return;
       if (ts.isCallExpression(node) || ts.isNewExpression(node) || ts.isTaggedTemplateExpression(node)) {
@@ -320,7 +355,7 @@ function analyseSourceFile(sf, checker) {
         return;
       }
       if (isFunctionLike(node)) return;
-      if (ts.isVariableDeclaration(node)) { visitTop(node.initializer); return; }
+      if (ts.isVariableDeclaration(node)) { visitTop(node.initializer); visitTopPattern(node.name); return; }
       ts.forEachChild(node, visitTop);
     };
     visitTop(st);
@@ -451,6 +486,27 @@ const SELF_TEST = [
     "const x = ;",
     "function (",
   ), true],
+  // Brain review round 2 (710d8ed9): shapes still missed.
+  ["binding-pattern default at load", L("const { a = LIM } = {};", "const LIM = 1;"), true],
+  ["binding-pattern default in a top-level for-of", L("for (const { a = LIM } of [{}]) {}", "const LIM = 1;"), true],
+  ["destructured-parameter default of a called function", L("function f({ a = LIM }) {}", "f({});", "const LIM = 1;"), true],
+  ["destructuring that reads itself in its initializer", L("const { a } = a;"), true],
+  ["function expression run through .call", L("(function () { return LIM; }).call(null);", "const LIM = 1;"), true],
+  ["arrow run through .apply", L("(() => LIM).apply(null);", "const LIM = 1;"), true],
+  ["constructor of `new (class { … })()`", L("new (class { constructor() { LIM; } })();", "const LIM = 1;"), true],
+  ["instance field of `new class { … }()`", L("new class { v = LIM; }();", "const LIM = 1;"), true],
+  ["`new Promise` executor", L("new Promise(() => LIM);", "const LIM = 1;"), true],
+  ["`str.replace` callback", L("'a'.replace(/a/, () => LIM);", "const LIM = 1;"), true],
+  ["`Object.groupBy` callback", L("Object.groupBy([1], () => LIM);", "const LIM = 1;"), true],
+  ["`extends` base constructor run by `new`", L(
+    "class B { constructor() { LIM; } }",
+    "class D extends B {}",
+    "new D();",
+    "const LIM = 1;",
+  ), true],
+  ["pattern default reading an EARLIER element of the same pattern", L("const { a, b = a } = { a: 1 };", "export { b };"), false],
+  ["pattern default reading a binding declared above", L("const LIM = 1;", "const { a = LIM } = {};"), false],
+  ["`.then` callback (runs after load)", L("Promise.resolve().then(() => LIM);", "const LIM = 1;"), false],
   ["nested function defined but never called", L(
     "outer();",
     "function outer() { function inner() { return LIMIT; } return inner; }",
@@ -502,6 +558,10 @@ const SELF_TEST = [
     const got = analyse(src).length > 0;
     if (got !== expectFinding) failures.push(`${expectFinding ? "MISSED" : "FALSE POSITIVE"}: ${label}`);
   }
+  // FAIL CLOSED: a root the Program cannot load (an unsupported extension) must
+  // come back as an error, never as an empty — clean — result.
+  const unloaded = analyseFiles(new Map([["/self-test/fixture.txt", "const a = 1;"]])).get("/self-test/fixture.txt");
+  if (!unloaded?.some((d) => d.error)) failures.push("FAIL-OPEN: a file the Program did not load came back clean");
   // PLANT into the REAL file the regex could not reach: move grid-proof's
   // `allowedSignalTypes` below everything, and the gate must fire on the
   // top-level loop; the unmutated file must stay clean.
@@ -528,7 +588,7 @@ const SELF_TEST = [
     process.exit(1);
   }
   if (process.argv.includes("--self-test")) {
-    console.log(`module-init-order self-test: ${SELF_TEST.length}/${SELF_TEST.length} cases as expected, plus the real grid-proof plant.`);
+    console.log(`module-init-order self-test: ${SELF_TEST.length}/${SELF_TEST.length} cases as expected, plus the not-loaded fail-closed check and the real grid-proof plant.`);
     process.exit(0);
   }
 }
@@ -582,7 +642,7 @@ console.log(
   `\nmodule-init-order: ${files.length} source files scanned, ${problems} problem(s); self-test ${SELF_TEST.length}/${SELF_TEST.length} green. ` +
     "TypeScript-compiler scope analysis: module-load code (top-level loops included) followed through " +
     "same-file calls, aliases, constructors, default params and tags. Not followed: imports, method calls, " +
-    "callbacks other than sync array iterators. " +
+    "callbacks other than the listed synchronous ones. " +
     "See the SCOPE LIMIT note.",
 );
 if (problems > 0) {

@@ -138,10 +138,27 @@ const orphans = census.filter((c) => !c.lanes.length && !c.ci.length && !EXEMPT.
 //   - a named constant whose name carries EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT
 //     (`const SKIP = ...`, `export const CONTENT_EXEMPT = ...`);
 //   - a quoted git pathspec negation, ':!x' or ':(exclude)x'.
-// NOT derived: an inline filter with no name (`.filter((p) => !p.startsWith(...))`)
-// or a camelCase local. Those are the edge of this guard, stated rather than hidden.
+// A name is derived whether it is declared plain (`const SKIP =`), with a type
+// annotation (`const EXEMPTIONS: {...}[] =`, the annotation may span lines), or as
+// a later declarator (`const a = 1, B_SKIP = ...`) — review of PR #1317 found a
+// typed site the first regex could not see.
+// NOT derived, the edge of this guard, stated rather than hidden: an inline filter
+// with no name (`.filter((p) => !p.startsWith(...))`), a camelCase local, a pathspec
+// assembled by concatenation, and a script not yet tracked by git (CI's checkout
+// tracks everything, so that last gap is local-only).
+// THE REASON IS HUMAN-REVIEWED, NOT MACHINE-JUDGED: an entry is checked for a
+// reason of >= 20 characters and a YYYY-MM-DD date, nothing more. A junk reason
+// silences UNREGISTERED; what stops it is the registry being a reviewed file in
+// the diff that adds the exclusion, the same review the exclusion itself gets.
 export const REGISTRY_PATH = "docs/agent/gate-exclusions.json";
-const EXCL_NAME = /\b(?:const|let|var)\s+([A-Z0-9_]*(?:EXCLUDE|EXCLUSION|SKIP|IGNORE|EXEMPT)[A-Z0-9_]*)\s*=/g;
+const EXCL_WORD = String.raw`([A-Z0-9_]*(?:EXCLUDE|EXCLUSION|SKIP|IGNORE|EXEMPT)[A-Z0-9_]*)`;
+// First declarator: `=` or a type annotation's `:` follows the name. Later
+// declarator (after a comma): `=` only, so an object key `{ a: 1, B_SKIP: x }`
+// is not mistaken for a declaration. `=>` and `==` are never an assignment.
+const EXCL_NAME = new RegExp(
+  String.raw`\b(?:const|let|var)\s+${EXCL_WORD}\s*(?::|=(?![=>]))|,\s*${EXCL_WORD}\s*=(?![=>])`,
+  "g",
+);
 const EXCL_PATHSPEC = /["'`]:(?:!|\(exclude\))([^"'`\s]+)/g;
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*|#)/;
 
@@ -151,7 +168,7 @@ export function exclusionSites(files) {
   for (const [path, text] of Object.entries(files)) {
     for (const line of text.split("\n")) {
       if (COMMENT_LINE.test(line)) continue;
-      for (const m of line.matchAll(EXCL_NAME)) sites.add(`${path}|symbol:${m[1]}`);
+      for (const m of line.matchAll(EXCL_NAME)) sites.add(`${path}|symbol:${m[1] ?? m[2]}`);
       for (const m of line.matchAll(EXCL_PATHSPEC)) sites.add(`${path}|pathspec::!${m[1]}`);
     }
   }
@@ -262,6 +279,17 @@ if (process.argv.includes("--self-test")) {
   if (exclusionSites({ "scripts/x.mjs": "// const OLD_" + "SKIP = 1;\n * " + Q + ":" + "!x" + Q }).size !== 0) {
     failures.push("a commented-out exclusion was derived as a live site");
   }
+  // Review of PR #1317: typed and later-declarator names must be derived too.
+  const shapes = exclusionSites({
+    "scripts/t1.ts": "const NOSCAN_" + "SKIP: string[] = [" + Q + "docs" + Q + "];",
+    "scripts/t2.ts": "  const MULTI_" + "EXEMPTIONS: {\n    name: string;\n  }[] = [];",
+    "scripts/t3.mjs": "const a = 1, B_" + "SKIP = [];",
+    "scripts/t4.mjs": "const cfg = { a: 1, OBJ_" + "SKIP: 2 }; if (X_" + "SKIP === 1) {} const f = (Y_" + "SKIP) => 1;",
+  });
+  for (const want of ["scripts/t1.ts|symbol:NOSCAN_" + "SKIP", "scripts/t2.ts|symbol:MULTI_" + "EXEMPTIONS", "scripts/t3.mjs|symbol:B_" + "SKIP"]) {
+    if (!shapes.has(want)) failures.push(`a declared exclusion was not derived: ${want}`);
+  }
+  for (const k of shapes) if (k.startsWith("scripts/t4.mjs")) failures.push(`a non-declaration was derived as a site: ${k}`);
   if (realSites.size < 30) failures.push(`only ${realSites.size} exclusion sites derived (floor 30): the derivation drifted, not the tree`);
 
   if (failures.length) {
@@ -271,7 +299,7 @@ if (process.argv.includes("--self-test")) {
   }
   console.log(
     "PASS  self-test - covers() distinguishes invocation from mention, and coverage disappears when the lane text does; " +
-      "a planted exclusion (named or pathspec) is UNREGISTERED, a gone site is STALE, a reasonless entry fails",
+      "a planted exclusion (named, typed, later-declarator or pathspec) is UNREGISTERED, a gone site is STALE, a reasonless entry fails",
   );
   process.exit(0);
 }

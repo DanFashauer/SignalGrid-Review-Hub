@@ -31,7 +31,7 @@
     {
       "path": "scripts/check-accuracy-doctrine.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output and .git, plus docs/inspiration/ — imported reference catalogues this repository does not assert (plan row 61); the self-test FATALs if docs/research/ is ever excluded again.",
+      "reason": "Skips build output and .git, plus docs/inspiration/ \u2014 imported reference catalogues this repository does not assert (plan row 61); the self-test FATALs if docs/research/ is ever excluded again.",
       "date": "2026-09-30"
     },
     {
@@ -55,7 +55,7 @@
     {
       "path": "scripts/check-decision-vocabulary.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output and the orval-generated clients under lib/api-zod/src/generated and lib/api-client-react/src/generated, which are derived from lib/api-spec — the spec the gate already reads directly.",
+      "reason": "Skips build output and the orval-generated clients under lib/api-zod/src/generated and lib/api-client-react/src/generated, which are derived from lib/api-spec \u2014 the spec the gate already reads directly.",
       "date": "2026-09-30"
     },
     {
@@ -163,7 +163,7 @@
     {
       "path": "scripts/check-nan-fail-open.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output, .git, coverage, third_party and .next — compiled or vendored copies of source the walk already reads (confirmed by the row 61 sweep).",
+      "reason": "Skips build output, .git, coverage, third_party and .next \u2014 compiled or vendored copies of source the walk already reads (confirmed by the row 61 sweep).",
       "date": "2026-09-30"
     },
     {
@@ -229,7 +229,7 @@
     {
       "path": "scripts/check-test-execution.mjs",
       "symbol": "SKIP_DIR",
-      "reason": "Skips build output, coverage, .git and .claude/worktrees — other agents' checkouts reached only because the walk reads the filesystem, not the index.",
+      "reason": "Skips build output, coverage, .git and .claude/worktrees \u2014 other agents' checkouts reached only because the walk reads the filesystem, not the index.",
       "date": "2026-09-30"
     },
     {
@@ -242,6 +242,12 @@
       "path": "scripts/publication-boundary.mjs",
       "symbol": "CONTENT_EXEMPT",
       "reason": "The boundary's own rule file and the gate running it must contain the forbidden shapes as controls (publication boundary, not edited here).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/src/signalgrid-core-proof.ts",
+      "symbol": "EXEMPTIONS",
+      "reason": "Named mutation-sweep cells where an ABSENT signal (a tenant with no such connector) legitimately does not tighten the verdict, because no tenant-level expectation of a signal category is modelled; each entry names its exact cells and carries its own reason, and a loosening on any other cell still fails.",
       "date": "2026-09-30"
     },
     {

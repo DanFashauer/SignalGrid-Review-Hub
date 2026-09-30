@@ -330,7 +330,7 @@ export async function verifyRegistration(
 
   // Save credential. A credential id already enrolled for this user is NOT
   // replaced (no silent key swap) — and that is reported, not folded into success.
-  // A credential id this identity REVOKED is refused outright: without that, a
+  // A credential this identity REVOKED (its id or its key) is refused outright: without that, a
   // ceremony minted before the revocation (`excludeCredentials: []`) and completed
   // after it brought the revoked credential back (PR #1240 review, plan row 82).
   let stored: boolean;

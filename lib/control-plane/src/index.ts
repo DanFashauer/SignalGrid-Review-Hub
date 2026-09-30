@@ -37,8 +37,9 @@ function fnv1a(input: string): string {
 /** The ONE canonical encoding of a bundle's content, shared by the checksum and
  *  the signature so they cannot drift. JSON escapes every separator, so a ',' in
  *  a workflow key or a ':' in a tenant id can no longer collide two bundles (the
- *  old `${tenantId}:${version}:${workflows.join(",")}` did). */
-function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
+ *  old `${tenantId}:${version}:${workflows.join(",")}` did). Exported so a proof that
+ *  forges a signature signs the SAME string the library does, never a copy. */
+export function canonicalBundle(tenantId: string, version: number, workflows: string[]): string {
   return JSON.stringify([tenantId, version, workflows]);
 }
 

@@ -126,7 +126,8 @@ function main() {
   check("signature-only forgery still passes checksum (integrity intact)", verifyBundleChecksum(forgedSig));
   check("signature-only forgery fails the signature (authenticity broken)", !verifyBundleSignature(forgedSig));
 
-  // 9. One unambiguous canonical encoding (BUILD_BACKLOG row 2544). The old
+  // 9. One unambiguous canonical encoding (BUILD_BACKLOG row "canonicalBundle/
+  // bundleChecksum unescaped ',' join"). The old
   // `${tenantId}:${version}:${workflows.join(",")}` let a ',' inside a workflow key
   // or a ':' inside a tenant id collide two different bundles on one string.
   check("['a,b'] and ['a','b'] get different checksums", bundleChecksum("tenant_atlas", 4, ["a,b"]) !== bundleChecksum("tenant_atlas", 4, ["a", "b"]));

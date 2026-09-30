@@ -427,8 +427,8 @@ if (process.argv.includes("--self-test")) {
       (t.got === t.want ? "" : `  — wanted ${JSON.stringify(t.want)}, got ${JSON.stringify(t.got)}`));
   }
   console.log(selfTestOk
-    ? "\nPASS  self-test — the live-gate check follows a resolver fold and refuses a comment."
-    : "\nFAIL  self-test — the live-gate check has drifted; its verdicts cannot be trusted.");
+    ? "\nPASS  self-test — the live-gate check follows a resolver fold and refuses a comment (a-d); an unreadable source is recorded and an absent one skipped (e-f)."
+    : "\nFAIL  self-test — a-d are the live-gate check (a drift makes its verdicts untrustworthy); e-f are the unreadable-source scan (a failure means an unreadable file would be scanned as clean).");
   process.exit(selfTestOk ? 0 : 1);
 }
 

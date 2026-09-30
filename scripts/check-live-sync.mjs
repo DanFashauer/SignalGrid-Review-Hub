@@ -22,7 +22,8 @@
 //       stop all work. Staleness is surfaced so the scheduled bot / owner can see a
 //       real-device run is due — not enforced.
 //
-// Exit code: non-zero ONLY when half (a) fails.
+// Exit code: non-zero on a hard failure only: half (a) drift, a doc restating a status
+// wrongly, or a doc present but unreadable. Half (b) never fails.
 import { readdirSync, readFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";

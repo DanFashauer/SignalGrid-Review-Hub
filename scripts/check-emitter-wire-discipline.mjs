@@ -58,8 +58,8 @@ export function stripComments(text) {
 /**
  * The six emitter families, DERIVED. Same derivation rule as check-ungated-fetch.mjs:
  * a directory under the scan root is a family iff its `resolve.ts` imports
- * `createEmitterResolver`, the shared fail-closed factory. (That gate's copy still
- * swallows every read error; it is outside this change.)
+ * `createEmitterResolver`, the shared fail-closed factory. (check-ungated-fetch.mjs's
+ * copy of this function still swallows every read error; not yet fixed there.)
  *
  * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
  * family. Any other read error means a resolve.ts is present but unreadable, so the
@@ -499,7 +499,7 @@ let problems = 0;
 if (unreadableResolvers.length > 0) {
   console.error(
     `\n✗ ${unreadableResolvers.length} resolve.ts present but unreadable — its family was NOT derived, so its sources were never scanned:\n` +
-      unreadableResolvers.map((u) => `    ${u}`).join("\n"),
+      unreadableResolvers.map((u) => `    ${SCAN_ROOT}/${u}`).join("\n"),
   );
   problems += 1;
 }

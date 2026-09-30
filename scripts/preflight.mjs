@@ -299,6 +299,10 @@ const STEPS = [
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
   { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  // Plan row 59 + backlog "grype || true": the corepack pnpm fetch is retried and
+  // pinned, the CVE-closing corepack-cache strip stays, grype cannot swallow a crash.
+  { name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs"] },
+  { name: "Image build hardening self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs", "--self-test"] },
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },

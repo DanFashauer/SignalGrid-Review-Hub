@@ -4092,7 +4092,7 @@ Output:   "1218 closed merged=true 2026-09-30T16:22:40Z" (merge_commit_sha 29b97
           of 2026-09-30 14:52Z" comment, #1218's reading "Independent review + adversarial refutation: ship, upheld." #1216
           and #1225 open with "**Brain review: fix-needed** … (independent review, then an adversarial refutation that upheld
           it …)" at 16:23:01Z / 16:23:03Z. #1256 open, no verdict comment. #1309 "**Brain review: owner-decision** on head
-          `61c1e547`" at 16:23:05Z: "the deletion of `lib/api-spec/product-openapi.json` matches the `lib/*` rule" on the
+          `61c1e547`" at 16:23:05Z: "the deletion of lib/api-spec/product-openapi.json matches the `lib/*` rule" [inner backticks dropped 2026-09-30: PR #1309 moves that file to `docs/archive/product-openapi.json`] on the
           `--no-renames` diff form. All six reads postdate the ~16:05Z close.
 Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments for 1277, 1280, 1272, 1274, 1265
 Output:   #1277 12:54:17Z "**Brain review: ship**" then 14:52:05Z "Merged under DR-037 at 3dee6a25…"; #1280 12:54:18Z

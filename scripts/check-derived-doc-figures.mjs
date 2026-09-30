@@ -233,6 +233,22 @@ export function simOperationCount(root = ROOT) {
 }
 
 /**
+ * Entries of `SIGNAL_CATEGORIES` in the decision core, parsed from the source between
+ * the array's opening line and its `] as const;` close (this gate is .mjs, the core is
+ * .ts). `docs/PRODUCT_DATA_MODEL.md` restated the list by hand and fell behind twice —
+ * 13 against 17, then 17 against 20 after DR-043 (plan row 92) — so the doc now names
+ * the array and states only the count, and this row holds the count.
+ */
+const CORE_TYPES = "lib/signalgrid-core/src/types.ts";
+export function signalCategoryCount(root = ROOT) {
+  const src = read(CORE_TYPES, root);
+  const start = src.indexOf("export const SIGNAL_CATEGORIES = [");
+  const end = src.indexOf("] as const;", start);
+  if (start < 0 || end < 0) return 0;
+  return [...src.slice(start, end).matchAll(/^\s*"[a-z_]+",?\s*$/gm)].length;
+}
+
+/**
  * Distinct `METHOD /path` pairs the mounted routers register — the api-collection gate's
  * OWN parser, imported for the same reason the `.bru` walk is: the collection README
  * publishes this number, and a second parser for "a registered route" would be a second
@@ -365,6 +381,13 @@ export const FIGURES = [
     from: "directories under lib/integrations/src/integrations whose resolve.ts imports createEmitterResolver",
   },
 
+  {
+    id: "signal-categories-data-model",
+    doc: "docs/PRODUCT_DATA_MODEL.md",
+    re: /One of the \*\*(\d+)\*\* values of `SIGNAL_CATEGORIES`/,
+    derive: signalCategoryCount,
+    from: `quoted entries of the SIGNAL_CATEGORIES array in ${CORE_TYPES}`,
+  },
   {
     id: "bru-requests-index",
     doc: "docs/INDEX.md",

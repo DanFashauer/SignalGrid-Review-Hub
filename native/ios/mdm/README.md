@@ -1,11 +1,15 @@
 # Kiosk lockdown — MDM configuration
 
 **The device-side half of the kiosk.** An iOS app cannot make itself
-non-removable, force full screen, or auto-relaunch — those are OS capabilities
-gated on **supervision + MDM**. The app does its half (`UIRequiresFullScreen`,
-and `KioskController` requests Autonomous Single App Mode); this profile does the
-other half. **None of this works on an unsupervised device or the simulator** —
-that is why the shell looks windowed/removable there.
+non-removable, keep the worker from leaving it, or auto-relaunch — those are OS
+capabilities gated on **supervision + MDM**. The app does its half alone: it
+declares that it always takes the whole screen (`UIRequiresFullScreen` in
+`native/ios/EnterpriseShell/Info.plist` — no Split View, Slide Over or resizable
+window; an app-declared key, no MDM needed), and `KioskController` requests
+Autonomous Single App Mode, which only a supervised device carrying this profile
+grants. This profile does the other half. **None of the MDM half works on an
+unsupervised device or the simulator** — that is why the shell is removable and
+can be left there.
 
 ## What `EnterpriseShell-Kiosk.mobileconfig` does
 
@@ -75,7 +79,9 @@ Deployment guide, 2026-09-17 edition (`native/ios/FLEET_MDM.md` items c and d):
 ## What the simulator can and can't show
 
 - **Can**: the full session flow, the configured per-role workspace and its
-  launchable apps, teardown, idle-lock, the Assist gate.
-- **Can't**: Autonomous Single App Mode, non-removability, forced full screen,
-  auto-relaunch — all require a supervised device with this profile. On the
-  simulator the app is windowed and removable; that is expected, not a bug.
+  launchable apps, teardown, idle-lock, the Assist gate, and the app's own
+  full-screen declaration (`UIRequiresFullScreen` is app-declared and needs no MDM).
+- **Can't**: Autonomous Single App Mode (the device held on the shell so the
+  worker cannot leave it), non-removability, auto-relaunch — all require a
+  supervised device with this profile. On the simulator the app is removable and
+  can be left; that is expected, not a bug.

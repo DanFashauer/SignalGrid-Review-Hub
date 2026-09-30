@@ -178,7 +178,7 @@ lone repairs into unreachable code).
 
 - [x] **Change-window currency as a decision fact (intake row 45, the audit's one
       genuine near-term gap).** DONE — the `change-window` family
-      (`@workspace/integrations/change-window`), `proof:change-window` (76 checks),
+      (`@workspace/integrations/change-window`), `proof:change-window` (79 checks),
       fused as the `change_window` signal kind via `fromChangeWindow`.
       `change_window` had existed only as a declared flow signal id carrying a
       HEALTH status (`lib/flows/src/factory.ts:26,:94`) — "is the ITSM reachable",

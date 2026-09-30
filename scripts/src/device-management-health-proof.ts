@@ -463,15 +463,32 @@ check(
   "off-union control: the clean grant base grants (the counterexamples below start from a real grant)",
   evaluateDeviceManagementHealth(grantBase as NormalizedDeviceManagementHealth).managementEffective === true,
 );
+// The widened arm must be the UNKNOWN arm, not just any non-grant: posture unverified,
+// the field named in unknownSignals, and the reason its in-union `unknown` carries.
+const snake = (f: string) => f.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 for (const [field, junk] of Object.entries(offUnion)) {
+  const reason = field === "managementReachable" ? "MANAGEMENT_UNREACHABLE" : "MANAGEMENT_STATE_UNKNOWN";
   for (const [label, value] of [["out-of-union", junk], ["absent", undefined]] as const) {
     const v = evaluateDeviceManagementHealth({ ...grantBase, [field]: value } as unknown as NormalizedDeviceManagementHealth);
-    check(
-      `off-union: ${field} ${label} never grants (managementEffective=${v.managementEffective}, action=${v.recommendedAction})`,
-      v.managementEffective === false && v.recommendedAction !== "none",
-    );
+    const ok =
+      v.managementEffective === false &&
+      v.recommendedAction !== "none" &&
+      v.posture === "unverified" &&
+      v.reasonCode === reason &&
+      v.unknownSignals.includes(snake(field));
+    if (!ok) console.log(`    off-union ${field} ${label}: ${JSON.stringify({ effective: v.managementEffective, action: v.recommendedAction, posture: v.posture, reason: v.reasonCode, unknown: v.unknownSignals })}`);
+    check(`off-union: ${field} ${label} reads unverified (${reason}) and never grants`, ok);
   }
 }
+// A failed enrollment with an out-of-union root-cause value is the unverified-cause
+// restrict, never the explained one (BUILD_BACKLOG row on this evaluator).
+check(
+  "off-union: enrollmentState failed + rootCauseEvidence out-of-union restricts as ENROLLMENT_ROOT_CAUSE_UNVERIFIED",
+  (() => {
+    const v = evaluateDeviceManagementHealth({ ...grantBase, enrollmentState: "failed", rootCauseEvidence: "AVAILABLE" } as unknown as NormalizedDeviceManagementHealth);
+    return v.recommendedAction === "restrict" && v.reasonCode === "ENROLLMENT_ROOT_CAUSE_UNVERIFIED";
+  })(),
+);
 
 // Pass 2 quantifies over the RAW WIRE space, and unlike pass 1 it carries the MALFORMED
 // values a real bridge emits — a junk enum spelling, a string-quoted boolean, a number,

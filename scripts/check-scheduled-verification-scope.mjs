@@ -23,12 +23,13 @@
 //   - anything that lets the job stay green while preflight is red or never ran:
 //     `continue-on-error` anywhere in the job, or an `if:` on the job or on the
 //     preflight step;
-//   - the preflight step not handing a non-empty `${{ … }}` GITHUB_TOKEN over, or the
+//   - the preflight step not handing `${{ github.token }}` (or secrets.GITHUB_TOKEN) over,
+//     setting a custom `shell:`, or the
 //     workflow not granting `actions: read`: `check-ci-liveness.mjs` is FATAL in CI
 //     without both, so the nightly job would fail every morning and teach everyone to
 //     ignore its issue;
-//   - a breadth step that does not run when preflight has failed — the first red gate
-//     would otherwise hide the whole breadth lane;
+//   - a breadth step whose `if:` is not exactly `success() || failure()` or `always()` —
+//     otherwise the first red gate hides the whole breadth lane, or a green night skips it;
 //   - a header that does not name `scripts/preflight.mjs` as what it runs.
 // It parses the job by indentation rather than with a YAML library (none is a
 // dependency here); the self-test plants each defect in a copy of the real file.
@@ -140,13 +141,21 @@ export function check(text) {
   if (pre.length === 0) findings.push(`the ${JOB} job never runs \`node scripts/preflight.mjs\` — the nightly selection is no longer preflight's STEPS`);
   for (const s of pre) {
     for (const c of s.run) if (/preflight\.mjs\b.*--quick/.test(c)) findings.push(`step "${s.name}" runs preflight with --quick — the heavy gates are skipped, a hand-picked subset again`);
-    if (!s.env.some((e) => /^GITHUB_TOKEN:\s*\$\{\{\s*\S[^}]*\}\}\s*$/.test(e))) findings.push(`step "${s.name}" does not hand a non-empty \${{ … }} GITHUB_TOKEN to preflight — check-ci-liveness.mjs is FATAL in CI without it`);
+    // Exactly the job token, by either of its two names — an allowlist, because an
+    // expression that merely LOOKS non-empty (`${{ '' }}`) resolves to nothing.
+    if (!s.env.some((e) => /^GITHUB_TOKEN:\s*\$\{\{\s*(github\.token|secrets\.GITHUB_TOKEN)\s*\}\}\s*$/.test(e))) findings.push(`step "${s.name}" does not hand GITHUB_TOKEN: \${{ github.token }} (or secrets.GITHUB_TOKEN) to preflight — check-ci-liveness.mjs is FATAL in CI without it`);
     if ("if" in s.keys) findings.push(`step "${s.name}" has \`if: ${s.keys.if}\` — preflight must run every night`);
+    // A custom shell can swallow the exit code (`shell: true {0}` runs `true`), so the
+    // preflight step takes the runner default and nothing else.
+    if ("shell" in s.keys) findings.push(`step "${s.name}" sets \`shell: ${s.keys.shell}\` — a custom shell can discard preflight's exit code`);
   }
   const breadth = steps.filter((s) => s.run.some((c) => BREADTH.test(c)));
   if (breadth.length === 0) findings.push(`the ${JOB} job no longer runs the breadth lane`);
   for (const s of breadth) {
-    if (!/failure\(\)|always\(\)/.test(s.keys.if ?? "")) findings.push(`step "${s.name}" has no \`if: success() || failure()\` — the first red preflight gate hides the whole breadth lane`);
+    // Exactly one of the two conditions that run on a green AND a red night; a pattern
+    // match accepted `failure()` alone (never runs when green) and `failure() && false`.
+    const cond = (s.keys.if ?? "").replace(/^\$\{\{\s*|\s*\}\}$/g, "").trim();
+    if (!["success() || failure()", "always()"].includes(cond)) findings.push(`step "${s.name}" has no \`if: success() || failure()\` — the first red preflight gate hides the whole breadth lane`);
   }
   for (const s of steps) {
     for (const c of s.run) {
@@ -191,6 +200,12 @@ function selfTest() {
     ["a gate chained behind echo with ; fails", fails(planted(pfLine, "        run: |\n          echo hi; pnpm run proof:x\n          node scripts/preflight.mjs\n"))],
     ["a gate hidden in command substitution fails", fails(planted(pfLine, "        run: |\n          echo \"$(pnpm run proof:x)\"\n          node scripts/preflight.mjs\n"))],
     ["a breadth step without if: failure() fails", fails(planted(breadthIf, "        run: pnpm run verify:breadth\n"))],
+    ["breadth with if: failure() alone fails (never runs on a green night)", fails(planted(breadthIf, "        if: failure()\n        run: pnpm run verify:breadth\n"))],
+    ["breadth with if: failure() && false fails", fails(planted(breadthIf, "        if: failure() && false\n        run: pnpm run verify:breadth\n"))],
+    ["breadth with if: ${{ !always() }} fails", fails(planted(breadthIf, "        if: ${{ !always() }}\n        run: pnpm run verify:breadth\n"))],
+    ["breadth with if: ${{ always() }} passes", check(planted(breadthIf, "        if: ${{ always() }}\n        run: pnpm run verify:breadth\n")).length === 0],
+    ["a shell: key on the preflight step fails", fails(planted(pfLine, `        shell: true {0}\n${pfLine}`))],
+    ["GITHUB_TOKEN: ${{ '' }} fails", fails(real.replace(/GITHUB_TOKEN: \$\{\{ github\.token \}\}/, "GITHUB_TOKEN: ${{ '' }}"))],
     ["a ; inside a quoted echo is NOT a split (the real Playwright step passes)", segments('echo "::error::a; b"').length === 1],
   ];
   const failed = checks.filter(([, ok]) => !ok);

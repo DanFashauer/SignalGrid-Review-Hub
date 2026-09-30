@@ -327,7 +327,7 @@ const GRADLE_UNREAD_SHAPES: [RegExp, string][] = [
   [/[\w)\]]\s*\.\s*(?:dependencies|plugins)\s*\{/, "a qualified dependencies/plugins block (e.g. commonMain.dependencies {})"],
   [/\bapply\s*(?:\(\s*plugin\b|\s+plugin\b|\s*\(\s*from\b)/, "a plugin applied outside plugins {}"],
   [/\bdependencies\s*\.\s*\w+\s*\(/, "a dependency added through the dependencies API"],
-  [/\bresolutionStrategy\b|\.force\s*\(|\bdependencySubstitution\b|\bconstraints\s*\{/, "a resolution rule that changes what resolves"],
+  [/\bresolutionStrategy\b|\.force\s*\(|\bdependencySubstitution\b|\bconstraints\s*\{|\buseModule\s*\(|\buseVersion\s*\(/, "a resolution rule that changes what resolves"],
   [/\bbuildscript\s*\{/, "a buildscript {} block"],
 ];
 
@@ -350,18 +350,41 @@ function gradleBlocks(text: string, name: string): { body: string; line: number 
   return out;
 }
 
+/** Every line of `text` carrying a dependency-bearing shape no collector reads. */
+function unreadGradleShapes(text: string): string[] {
+  const found: string[] = [];
+  stripGradleComments(text).split("\n").forEach((l, k) => {
+    for (const [re, what] of GRADLE_UNREAD_SHAPES) {
+      if (re.test(l)) found.push(`line ${k + 1}: ${what}: ${l.trim()}`);
+    }
+  });
+  return found;
+}
+
+/**
+ * A settings file is not parsed for components, so it may carry NO dependency-bearing
+ * shape at all: no plugins/dependencies/versionCatalogs/buildscript block, and none of
+ * GRADLE_UNREAD_SHAPES (a `pluginManagement { resolutionStrategy { eachPlugin {
+ * useModule(...) } } }` swaps what a plugin id resolves to; `apply(from = ...)` pulls in
+ * a script nobody reads). Only repository and include declarations remain.
+ */
+function settingsFileProblems(text: string): string[] {
+  const blocks = ["plugins", "dependencies", "versionCatalogs", "buildscript"].filter(
+    (b) => gradleBlocks(text, b).length > 0,
+  );
+  return [
+    ...blocks.map((b) => `declares ${b} {}`),
+    ...unreadGradleShapes(text),
+  ];
+}
+
 export function parseGradleDeclarations(text: string): { decls: GradleDecl[]; unparsed: string[] } {
   const decls: GradleDecl[] = [];
   const unparsed: string[] = [];
   // Dependency-bearing shapes OUTSIDE the two block names read below. Only blocks literally
   // named `plugins`/`dependencies` are parsed, so each of these would contribute zero
   // declarations AND zero unparsed statements — a silent pass. Anywhere in the file, they fail.
-  const clean = stripGradleComments(text).split("\n");
-  clean.forEach((l, k) => {
-    for (const [re, what] of GRADLE_UNREAD_SHAPES) {
-      if (re.test(l)) unparsed.push(`line ${k + 1}: ${what}: ${l.trim()}`);
-    }
-  });
+  unparsed.push(...unreadGradleShapes(text));
   const kotlinDeps: { name: string; version?: string; at: string }[] = [];
   const pluginVersions = new Set<string>();
   const statements = (name: string) =>
@@ -418,12 +441,9 @@ function assertGradleFullyParsed(): void {
   for (const f of tracked) {
     if (GRADLE_FILES.includes(f)) continue;
     if (/(^|\/)settings\.gradle\.kts$/.test(f)) {
-      const text = readFileSync(join(repoRoot, f), "utf8");
-      const blocks = ["plugins", "dependencies", "versionCatalogs", "buildscript"].filter(
-        (b) => gradleBlocks(text, b).length > 0,
-      );
-      if (blocks.length === 0) continue;
-      problems.push(`${f}: declares ${blocks.join("/")} {} — not read by the SBOM generator`);
+      for (const p of settingsFileProblems(readFileSync(join(repoRoot, f), "utf8"))) {
+        problems.push(`${f}: ${p} — not read by the SBOM generator`);
+      }
       continue;
     }
     problems.push(`${f}: a Gradle/Maven build surface the SBOM generator does not read`);
@@ -497,6 +517,16 @@ function selfTestGradleParser(): void {
   if (JSON.stringify(coords) !== JSON.stringify(want)) failures.push(`fixture collected ${JSON.stringify(coords)}`);
   for (const r of refuse) {
     if (parseGradleDeclarations(r).unparsed.length === 0) failures.push(`accepted an unknown form: ${JSON.stringify(r)}`);
+  }
+  // Settings files: the repo's own shape must pass, and each planted shape must not.
+  const settingsOk = 'pluginManagement {\n    repositories {\n        mavenCentral()\n        gradlePluginPortal()\n    }\n}\nrootProject.name = "x"\nincludeBuild("../core")';
+  if (settingsFileProblems(settingsOk).length > 0) failures.push("a repositories-only settings file was refused");
+  for (const planted of [
+    settingsOk + '\npluginManagement {\n    resolutionStrategy {\n        eachPlugin {\n            useModule("com.evil:plugin:6.6.6")\n        }\n    }\n}',
+    settingsOk + '\napply(from = "extra.gradle.kts")',
+    settingsOk + '\nplugins {\n    id("x.y") version "1"\n}',
+  ]) {
+    if (settingsFileProblems(planted).length === 0) failures.push(`accepted a settings shape: ${JSON.stringify(planted.slice(settingsOk.length))}`);
   }
   if (failures.length > 0) {
     console.error(`generate-sbom: Gradle parser self-test FAILED\n${failures.map((f) => `  ${f}`).join("\n")}`);

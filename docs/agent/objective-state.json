@@ -12,7 +12,7 @@
       "scope": "machine",
       "state": "met",
       "measured": {
-        "headline": 100,
+        "headline": 95,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "met",
+      "state": "unmet",
       "measured": {
-        "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 1 day(s) old, manifest 7c15496cfc1b; launch items fully current 28/28"
+        "pct": 95,
+        "reason": "19/20 bound proofs/steps current against manifest 7c15496cfc1b; not current (stale fingerprint, stale/absent source digest, or unrecorded): step:Browser E2E (review console, website, admin); launch items fully current 27/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,6 +50,7 @@
     }
   ],
   "unmet": [
+    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -170,7 +171,15 @@
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [],
+  "queue": [
+    {
+      "criterionId": "evidence-fresh",
+      "op": "evidence",
+      "clears": "artifacts/live-evidence/mac-run.json",
+      "id": "objective-loop-evidence-fresh-2026-09-30",
+      "queuedAs": "this tick"
+    }
+  ],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
@@ -180,8 +189,8 @@
     "openRows": 76
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-27T07:42:24.296Z",
-  "derivedAtCommit": "2ebc4d3c9d03cc45a9b292af5a562986199c1857",
+  "derivedAt": "2026-09-30T06:43:48.928Z",
+  "derivedAtCommit": "b307f83dad15c71145f56aa25ad168b6f2b18223",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "7794bc9b31a6b8c3446c1dc1374241f4a1f386b0ea135639bd95dde7e47dca3c"
+  "decisionAddress": "ea5466ad7646ce49c1e5969d1382ded7c056af2b47011d655c0915a4ea537573"
 }

@@ -3,9 +3,10 @@
 **The device-side half of the kiosk.** An iOS app cannot make itself
 non-removable, keep the worker from leaving it, or auto-relaunch — those are OS
 capabilities gated on **supervision + MDM**. The app does its half alone: it
-declares that it always takes the whole screen (`UIRequiresFullScreen` in
-`native/ios/EnterpriseShell/Info.plist` — no Split View, Slide Over or resizable
-window; an app-declared key, no MDM needed), and `KioskController` requests
+declares full screen (`UIRequiresFullScreen` in
+`native/ios/EnterpriseShell/Info.plist`, which on current iPadOS opts out of Split
+View, Slide Over and resizable windows; an app-declared key, no MDM needed — Apple
+is deprecating it, so re-check on each major iPadOS), and `KioskController` requests
 Autonomous Single App Mode, which only a supervised device carrying this profile
 grants. This profile does the other half. **None of the MDM half works on an
 unsupervised device or the simulator** — that is why the shell is removable and
@@ -80,7 +81,8 @@ Deployment guide, 2026-09-17 edition (`native/ios/FLEET_MDM.md` items c and d):
 
 - **Can**: the full session flow, the configured per-role workspace and its
   launchable apps, teardown, idle-lock, the Assist gate, and the app's own
-  full-screen declaration (`UIRequiresFullScreen` is app-declared and needs no MDM).
+  full-screen declaration (`UIRequiresFullScreen` is app-declared and needs no MDM
+  on current iPadOS).
 - **Can't**: Autonomous Single App Mode (the device held on the shell so the
   worker cannot leave it), non-removability, auto-relaunch — all require a
   supervised device with this profile. On the simulator the app is removable and

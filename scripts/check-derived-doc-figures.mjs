@@ -245,7 +245,13 @@ export function signalCategoryCount(root = ROOT) {
   const start = src.indexOf("export const SIGNAL_CATEGORIES = [");
   const end = src.indexOf("] as const;", start);
   if (start < 0 || end < 0) return 0;
-  return [...src.slice(start, end).matchAll(/^\s*"[a-z_]+",?\s*$/gm)].length;
+  return countArrayEntries(src.slice(start, end));
+}
+
+/** Pure: quoted entries, one per line, tolerating a digit in the name and a trailing
+ *  same-line `//` comment — a stricter pattern silently skipped both (review of #1234). */
+export function countArrayEntries(body) {
+  return [...body.matchAll(/^\s*"[a-z0-9_]+",?\s*(?:\/\/.*)?$/gm)].length;
 }
 
 /**
@@ -1228,6 +1234,10 @@ function selfTest() {
   ]);
   checks.push(["every row declares exactly one capture group", FIGURES.every((r) => new RegExp(`${r.re.source}|`).exec("").length - 1 === 1)]);
   checks.push(["every row names where its truth comes from", FIGURES.every((r) => typeof r.from === "string" && r.from.length > 12)]);
+  checks.push([
+    "the SIGNAL_CATEGORIES parse counts an entry with a digit or a trailing // comment",
+    countArrayEntries('[\n  "a_one",\n  // a comment line is not an entry\n  "zz_new", // note\n  "v2_state"\n') === 3,
+  ]);
   checks.push(["the table is not empty and the ids are unique", FIGURES.length >= 3 && new Set(FIGURES.map((r) => r.id)).size === FIGURES.length]);
 
   // Floors on the live tree: every deriver must find something, and every document must

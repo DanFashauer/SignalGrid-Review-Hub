@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T15:20:11.722Z",
-  "result": "quiet: tasks[0..2] not cloud-buildable — state trusted (tick 15:13Z within staleAfterHours 3, result names objective: escalate = recorded verdict); row 17 (wire-truth shifts): offline half landed 2026-09-27 (wire-truth ledger + gate), what remains needs the ITSM, shift-context and Keycloak access-governance labs this lane does not have; row 18 (iOS behavioural parity): Swift-only, the Mac's own #1118 is open; row 24 (article): already open as #1190 (owner merges). Nothing built."
+  "firedAt": "2026-09-30T12:23:17.963Z",
+  "result": "acted 12:11Z: landed today #1243 #1264 #1263 #1241 (+ lane mail #1260 #1261 #1266 #1267 #1268 #1285); runaway Mac tick branches (#1269–#1294) diagnosed — objective-loop same-day request-id reuse, fix PR #1295 lands next; reviews posted #1272/#1274 (fix-needed), #1277/#1280 under review; dispatched B20 (ci-jobs line-1 + lane-tick dead line), B21 (mutation sweep 4 families), B22 (reason-code copy + stale rows); owner queue #1239 #1240 #1242 #1244 #1251 #1255 #1246 #1230 #1222 #1215 + close junk tick PRs"
 }

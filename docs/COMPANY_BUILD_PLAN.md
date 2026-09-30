@@ -1304,7 +1304,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 59. **The image build makes two un-retried network fetches, and one of them
     flaked.** — release-engineer (the retry) + security-engineer (if the fix
-    touches the corepack cache). RE-MEASURED 2026-09-26 (still open, unchanged): `Dockerfile.api` still runs corepack enable pnpm un-retried in both stages (the second occurrence has moved down the file as comment blocks were added above it); no retry wrapper exists in either Dockerfile or the build job; the deliberate corepack-cache strip that closes a CVE is still what any fix must not undo. 2026-08-24, first observed instance.
+    touches the corepack cache). FIX PROPOSED 2026-09-30 (branch claude/build-build-retry-and-grype-exit, lands under DR-037): `Dockerfile.api` (both stages) and `Dockerfile.web` now pre-fetch the pinned pnpm with `corepack install -g pnpm@10.28.1` inside a bounded 4-attempt retry (sleep between attempts, hard `exit 1` when exhausted) in the same RUN as `corepack enable`, so the later `pnpm install` resolves from corepack's cache instead of fetching lazily un-retried (checked locally: after the pre-fetch, `pnpm --version` in the repo runs with `COREPACK_ENABLE_NETWORK=0`). The corepack-cache strip in the runtime stage of `Dockerfile.api` is untouched and still runs after the last pnpm step. Held by `scripts/check-image-build-hardening.mjs` (preflight + CI, with `--self-test`): it fails on a bare `corepack enable` line, an unbounded retry, a pre-fetch version that drifts from `package.json` packageManager, a missing cache strip, and a pnpm step after the strip. Statically checked only; the deploy-stack CI job builds the image. RE-MEASURED 2026-09-26 (still open, unchanged): `Dockerfile.api` still runs corepack enable pnpm un-retried in both stages (the second occurrence has moved down the file as comment blocks were added above it); no retry wrapper exists in either Dockerfile or the build job; the deliberate corepack-cache strip that closes a CVE is still what any fix must not undo. 2026-08-24, first observed instance.
     `Dockerfile.api` runs `corepack enable pnpm` in BOTH stages (lines 19 and
     71). Corepack downloads pnpm lazily, so each stage fetches
     `registry.npmjs.org/pnpm/-/pnpm-10.28.1.tgz` at install time. On PR #287
@@ -4913,7 +4913,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (917) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (921) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

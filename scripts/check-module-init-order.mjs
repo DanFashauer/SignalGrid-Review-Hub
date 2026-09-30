@@ -54,20 +54,30 @@
 // returns: sync array iterators, `Array.from`, `Object.groupBy`/`Map.groupBy`,
 // `str.replace(re, fn)`, and a `new Promise` executor.
 //
+// Round 3 (review of f52e806f): a callee behind a type-only wrapper (`make!()`,
+// `(make as any)()`, `(make satisfies X)()`, `(<any>make)()`, `new (E as any)()`),
+// a comma sequence (`(0, make)()`) or a conditional (`(c ? f : g)()`, both
+// branches) is followed. Every file is forced to module scope — an import-less
+// file used to share one global scope with its twins, and all but the first went
+// silently unanalysed.
+//
 // SCOPE LIMIT, stated rather than pretended away. This follows calls within ONE
 // file; it does not follow calls through imports, method calls on objects
 // (`obj.run()`), getters, `f.bind(…)()`, a function reached through an object
-// or array (`handlers[0]()`), or a callback passed to a function other than the
-// synchronous array iterators and `Array.from`; and it treats every branch as
-// taken. `var` is not a TDZ binding and is not checked. A clean run therefore
-// means none of the FOLLOWED shapes reads a binding early — it is not proof that
+// or array (`handlers[0]()`), a callee behind `||`/`??`/`&&`, a decorator
+// (standard or legacy — neither is walked), an alias chain deeper than 6 hops,
+// or a callback passed to a function other than the synchronous ones listed
+// above; and it treats every branch as taken. `var` is not a TDZ binding and is
+// not checked. A clean run therefore means none of the FOLLOWED shapes reads a binding early — it is not proof that
 // no TDZ read exists at module load. A file the Program does not load, or that
 // does not parse, is reported as a problem, never counted clean.
 //
 // SELF-TEST: both real defects must be detected from synthetic reconstructions —
 // the grid-proof one in its REAL top-level-loop shape — the CORRECTED order must
 // pass, and the shapes that fooled the regex widening (route handlers, shadowed
-// locals, functions only called from functions) must pass. A gate that cannot
+// locals, functions only called from functions) must pass. Every branch named
+// above has a row that fails with that branch removed (mutation-checked
+// 2026-09-30), and a failing row prints the findings it saw. A gate that cannot
 // fail proves nothing.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -97,7 +107,22 @@ const isFunctionLike = (n) =>
   ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) ||
   ts.isMethodDeclaration(n) || ts.isGetAccessorDeclaration(n) || ts.isSetAccessorDeclaration(n) ||
   ts.isConstructorDeclaration(n);
-const unparen = (n) => { while (n && ts.isParenthesizedExpression(n)) n = n.expression; return n; };
+// Wrappers that change nothing about WHAT runs: parentheses and the
+// type-only `x!`, `x as T`, `x satisfies T`, `<T>x`.
+const unparen = (n) => {
+  while (n && (ts.isParenthesizedExpression(n) || ts.isNonNullExpression(n) || ts.isAsExpression(n) ||
+    ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n))) n = n.expression;
+  return n;
+};
+// What a callee expression can evaluate to: `(0, f)` is f, and `c ? f : g` is
+// either — both are followed, as every branch is.
+const calleeTargets = (n) => {
+  n = unparen(n);
+  if (!n) return [];
+  if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.CommaToken) return calleeTargets(n.right);
+  if (ts.isConditionalExpression(n)) return [...calleeTargets(n.whenTrue), ...calleeTargets(n.whenFalse)];
+  return [n];
+};
 const hasModifier = (n, kind) => (ts.canHaveModifiers(n) ? ts.getModifiers(n) ?? [] : []).some((m) => m.kind === kind);
 
 /**
@@ -109,6 +134,11 @@ function analyseFiles(sources) {
   const options = {
     allowJs: true, noResolve: true, noLib: true, types: [], noEmit: true,
     target: ts.ScriptTarget.Latest, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.Preserve,
+    // Every file is its own module scope. Without this an import-less (script-
+    // mode) file shares ONE global scope with every other such file, a second
+    // file's same-named `const` resolves to the first file's declaration, and
+    // that file is silently unanalysed.
+    moduleDetection: ts.ModuleDetectionKind.Force,
   };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
@@ -265,20 +295,24 @@ function analyseSourceFile(sf, checker) {
     if (isFunctionLike(node)) return; // defined here, run only when called
     if (ts.isVariableDeclaration(node)) { walk(node.initializer, ctx); walkPattern(node.name, ctx); return; }
     if (ts.isTaggedTemplateExpression(node)) {
-      const tag = unparen(node.tag);
       walk(node.tag, ctx);
       walk(node.template, ctx);
-      if (ts.isIdentifier(tag)) follow(tag, ctx); // the tag function runs now
+      for (const tag of calleeTargets(node.tag)) if (ts.isIdentifier(tag)) follow(tag, ctx); // the tag function runs now
       return;
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const callee = unparen(node.expression);
-      // IIFE (called or `new`-ed): the function body runs now.
-      if (callee && (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee))) fnRunner(callee)(ctx);
-      else walk(node.expression, ctx);
-      // `new (class { … })()` / `new class { … }()`: statics ran above, as part of
-      // evaluating the class; the constructor and instance fields run now.
-      if (ts.isNewExpression(node) && callee && ts.isClassExpression(callee)) classRunner(callee)(ctx);
+      // Evaluating the callee expression: a function written in place is only
+      // defined here; a class expression's statics run; `(0, f)` runs its `0`.
+      walk(node.expression, ctx);
+      for (const target of calleeTargets(node.expression)) {
+        // IIFE (called or `new`-ed): the function body runs now.
+        if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) fnRunner(target)(ctx);
+        // `new (class { … })()` / `new class { … }()`: statics ran above, as part of
+        // evaluating the class; the constructor and instance fields run now.
+        else if (ts.isNewExpression(node) && ts.isClassExpression(target)) classRunner(target)(ctx);
+        else if (ts.isIdentifier(target)) follow(target, ctx);
+      }
       // A callback that runs before the call returns: sync array iterators,
       // `Array.from`, `Object.groupBy`/`Map.groupBy`, `str.replace(re, fn)`, and a
       // `new Promise(executor)` executor.
@@ -290,13 +324,13 @@ function analyseSourceFile(sf, checker) {
         else if (sync && ts.isIdentifier(a)) { follow(a, ctx); walk(a, ctx); }
         else walk(arg, ctx);
       }
-      if (callee && ts.isIdentifier(callee)) follow(callee, ctx);
       // `f.call(…)` / `f.apply(…)` run f — a named function, or a function
       // expression written in place: `(function () { … }).call(null)`.
       if (callee && ts.isPropertyAccessExpression(callee) && (callee.name.text === "call" || callee.name.text === "apply")) {
-        const target = unparen(callee.expression);
-        if (ts.isIdentifier(target)) follow(target, ctx);
-        else if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) fnRunner(target)(ctx);
+        for (const target of calleeTargets(callee.expression)) {
+          if (ts.isIdentifier(target)) follow(target, ctx);
+          else if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) fnRunner(target)(ctx);
+        }
       }
       return;
     }
@@ -363,6 +397,11 @@ function analyseSourceFile(sf, checker) {
   return findings.map((f) => ({ ...f, call: f.call ?? f.via }));
 }
 
+/** One finding as text — the CLI and a failing self-test print the same line. */
+const describe = (f, d) => d.error
+  ? `${f}: ${d.error}. An unanalysed file is not a clean file.`
+  : `${f}:${d.callLine}: \`${d.call}\` runs at module load and reads \`${d.constName}\` (via \`${d.via}\`), declared at line ${d.constLine}.`;
+
 /** Single-file convenience for the self-test. */
 function analyse(text, name = "fixture.ts") {
   return analyseFiles(new Map([[name, text]])).get(name);
@@ -372,7 +411,8 @@ function analyse(text, name = "fixture.ts") {
 // fooled the regex widening ────────────────────────────────────────────────
 const L = (...lines) => lines.join("\n");
 const SELF_TEST = [
-  // [label, source, expected findings > 0]
+  // [label, source, expected]: `true`/`false` = any finding or none; an array =
+  // exactly these const names are reported (pins WHICH read, not just whether).
   ["OIDC defect (column-0 call, const 4 lines below)", L(
     "const enterpriseAuth = initEnterpriseAuth();",
     "function initEnterpriseAuth() {",
@@ -517,6 +557,23 @@ const SELF_TEST = [
     "export const e = new E();",
     "const LIMIT = 1;",
   ), false],
+  // Brain review round 3 (f52e806f): callees behind a type-only or comma/conditional
+  // wrapper, and six load-bearing branches that survived mutation at 41/41.
+  ["non-null callee `make!()`", L("make!();", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["`as` callee `(make as any)()`", L("(make as any)();", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["`satisfies` callee", L("(make satisfies Function)();", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["type-assertion callee `(<any>make)()`", L("(<any>make)();", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["`new (E as any)()`", L("class E { constructor() { LIM; } }", "new (E as any)();", "const LIM = 1;"), true],
+  ["comma-sequence callee `(0, make)()`", L("(0, make)();", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["conditional callee, either branch", L("(Math.random() ? ok : make)();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
+  ["`as` tag of a tagged template", L("(tag as any)`x`;", "function tag() { return LIM; }", "const LIM = 1;"), true],
+  ["pattern default inside a followed function", L("f();", "function f() { const { a = LIM } = {}; return a; }", "const LIM = 1;"), true],
+  ["class static block at load", L("class A { static { LIM; } }", "const LIM = 1;"), true],
+  ["computed class member key at load", L("class A { [LIM]() {} }", "const LIM = 'k';"), true],
+  ["shorthand property at load", L("export const o = { LIM };", "const LIM = 1;"), true],
+  // The call of a later `const` callee is the TDZ read; its body cannot run, so a
+  // read inside it is NOT a second finding.
+  ["later `const` callee: the call is reported, its body is not entered", L("g();", "const g = () => LIM;", "const LIM = 1;"), ["g"]],
   // The shapes that produced the regex widening's 75 false positives — each is
   // correct code and must pass.
   ["route handler at module scope (runs later, not at load)", L(
@@ -554,10 +611,34 @@ const SELF_TEST = [
 ];
 {
   const failures = [];
-  for (const [label, src, expectFinding] of SELF_TEST) {
-    const got = analyse(src).length > 0;
-    if (got !== expectFinding) failures.push(`${expectFinding ? "MISSED" : "FALSE POSITIVE"}: ${label}`);
+  // Every finding the self-test did not expect is printed with its line — a
+  // label alone does not say what the detector saw.
+  const shown = (name, got) => got.map((d) => `\n      ${describe(name, d)}`).join("");
+  for (const [label, src, expected] of SELF_TEST) {
+    const got = analyse(src);
+    if (Array.isArray(expected)) {
+      const names = [...new Set(got.map((d) => d.constName ?? "(error)"))].sort().join(",");
+      if (names !== [...expected].sort().join(",")) failures.push(`WRONG FINDINGS (want ${expected.join(",")}): ${label}${shown("fixture.ts", got)}`);
+    } else if ((got.length > 0) !== expected) {
+      failures.push(`${expected ? "MISSED" : "FALSE POSITIVE"}: ${label}${shown("fixture.ts", got)}`);
+    }
   }
+  // Each file is its own module: two import-less files declaring the same const
+  // must BOTH be analysed, not collapsed into one global scope.
+  const script = L("const { a = LIM } = {};", "const LIM = 1;");
+  const pair = analyseFiles(new Map([["/self-test/a.ts", script], ["/self-test/b.ts", script]]));
+  for (const [name, got] of pair) {
+    if (!got.some((d) => d.constName === "LIM")) failures.push(`MISSED: script-mode ${name} shares a scope with its twin and went unanalysed`);
+  }
+  // Every extension the walk collects must be loaded AND analysed by the Program,
+  // and the walk must collect every extension the Program accepts.
+  for (const ext of ["ts", "tsx", "mts", "cts", "mjs", "cjs", "js", "jsx"]) {
+    const name = `/self-test/x.${ext}`;
+    if (!SOURCE.test(name)) failures.push(`NOT WALKED: .${ext} files are never collected`);
+    const got = analyseFiles(new Map([[name, "f();\nfunction f() { return LIM; }\nconst LIM = 1;"]])).get(name);
+    if (!got?.some((d) => d.constName === "LIM")) failures.push(`MISSED: the defect in a .${ext} file${shown(name, got ?? [])}`);
+  }
+  if (SKIP.test("lib/x.d.ts") !== true) failures.push("WALKED: .d.ts declarations are collected");
   // FAIL CLOSED: a root the Program cannot load (an unsupported extension) must
   // come back as an error, never as an empty — clean — result.
   const unloaded = analyseFiles(new Map([["/self-test/fixture.txt", "const a = 1;"]])).get("/self-test/fixture.txt");
@@ -573,10 +654,12 @@ const SELF_TEST = [
   if (at < 0 || end < 3) {
     failures.push("PLANT ANCHOR MISSING: `const allowedSignalTypes … ]);` not found in scripts/src/signalgrid-grid-proof.ts");
   } else {
-    if (analyse(grid, "grid.ts").length !== 0) failures.push("FALSE POSITIVE: real signalgrid-grid-proof.ts, unmutated");
+    const real = analyse(grid, "grid.ts");
+    if (real.length !== 0) failures.push(`FINDING IN the real, unmutated signalgrid-grid-proof.ts (a reintroduced defect, or a false positive)${shown("scripts/src/signalgrid-grid-proof.ts", real)}`);
     const planted = `${grid.slice(0, at)}${grid.slice(end)}\n${grid.slice(at, end)}\n`;
-    if (!analyse(planted, "grid.ts").some((d) => d.constName === "allowedSignalTypes")) {
-      failures.push("MISSED: real signalgrid-grid-proof.ts with allowedSignalTypes moved below its top-level loop");
+    const got = analyse(planted, "grid.ts");
+    if (!got.some((d) => d.constName === "allowedSignalTypes")) {
+      failures.push(`MISSED: real signalgrid-grid-proof.ts with allowedSignalTypes moved below its top-level loop${shown("(planted) signalgrid-grid-proof.ts", got)}`);
     }
   }
   if (failures.length > 0) {
@@ -588,7 +671,7 @@ const SELF_TEST = [
     process.exit(1);
   }
   if (process.argv.includes("--self-test")) {
-    console.log(`module-init-order self-test: ${SELF_TEST.length}/${SELF_TEST.length} cases as expected, plus the not-loaded fail-closed check and the real grid-proof plant.`);
+    console.log(`module-init-order self-test: ${SELF_TEST.length}/${SELF_TEST.length} cases as expected, plus the not-loaded fail-closed check, the script-mode twin check, the extension check and the real grid-proof plant.`);
     process.exit(0);
   }
 }
@@ -624,13 +707,12 @@ for (const f of files) {
   const got = results.get(join(repo, f));
   for (const d of got ?? [{ error: "no analysis result — not analysed" }]) {
     if (d.error) {
-      console.error(`  ✗ ${f}: ${d.error}. An unanalysed file is not a clean file.`);
+      console.error(`  ✗ ${describe(f, d)}`);
       problems += 1;
       continue;
     }
     console.error(
-      `  ✗ ${f}:${d.callLine}: \`${d.call}\` runs at module load and reads \`${d.constName}\` (via \`${d.via}\`), ` +
-        `declared at line ${d.constLine}.\n` +
+      `  ✗ ${describe(f, d)}\n` +
         "      `function` hoists, `const`/`let`/`class` do not — the read lands in the temporal dead zone and can\n" +
         "      surface as undefined rather than throwing. Move the declaration above the call.",
     );
@@ -641,7 +723,8 @@ for (const f of files) {
 console.log(
   `\nmodule-init-order: ${files.length} source files scanned, ${problems} problem(s); self-test ${SELF_TEST.length}/${SELF_TEST.length} green. ` +
     "TypeScript-compiler scope analysis: module-load code (top-level loops included) followed through " +
-    "same-file calls, aliases, constructors, default params and tags. Not followed: imports, method calls, " +
+    "same-file calls (through casts, comma and conditional callees), aliases, constructors, default params and tags. " +
+    "Not followed: imports, method calls, " +
     "callbacks other than the listed synchronous ones. " +
     "See the SCOPE LIMIT note.",
 );

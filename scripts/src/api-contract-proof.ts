@@ -80,7 +80,8 @@ const DOCUMENTS: readonly ContractDocument[] = [
 export function ungovernedSpecs(files: readonly string[], documents: readonly ContractDocument[] = DOCUMENTS): string[] {
   const governed = new Set(documents.map((d) => d.spec.split("/").pop()!));
   return files
-    .filter((f) => /\.(ya?ml|json)$/.test(f) && f !== "package.json" && !/^tsconfig.*\.json$/.test(f))
+    .filter((f) => !/(^|\/)node_modules\//.test(f))
+    .filter((f) => /\.(ya?ml|json)$/i.test(f) && f !== "package.json" && !/^tsconfig.*\.json$/i.test(f))
     .filter((f) => !governed.has(f))
     .sort();
 }
@@ -209,7 +210,9 @@ function selfTest(): number {
   checks.push([
     "a third spec in lib/api-spec IS ungoverned (the orphan product-openapi.json), and the two documents plus package.json are not",
     ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "orval.config.ts", "product-openapi.json"]).join() === "product-openapi.json" &&
-      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "tsconfig.json", "orval.config.ts"]).length === 0,
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "tsconfig.json", "orval.config.ts"]).length === 0 &&
+      // nested and upper-case spellings are specs too; the package's own node_modules is not
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "legacy/Old.JSON", "X.YAML", "node_modules/x/openapi.json"]).join() === "X.YAML,legacy/Old.JSON",
   ]);
   checks.push([
     "every document names at least one route file, and every UNDOCUMENTED_BY_DESIGN entry carries a reason",
@@ -245,7 +248,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const strays = ungovernedSpecs(await readdir(resolve(root, "lib/api-spec")));
+  // Recursive: a spec one directory down is still in the contract directory.
+  const strays = ungovernedSpecs(
+    (await readdir(resolve(root, "lib/api-spec"), { recursive: true })).map((f) => String(f).split("\\").join("/")),
+  );
   if (strays.length > 0) {
     for (const f of strays) console.error(`- lib/api-spec/${f} is a spec in the contract directory that no DOCUMENTS entry governs — add it above, or archive it under docs/archive/`);
     process.exitCode = 1;

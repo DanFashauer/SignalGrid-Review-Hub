@@ -60,9 +60,18 @@ const COMPLETION_PLAN = join(repo, "docs/PRODUCT_COMPLETION_PLAN.md");
  * leaves them nowhere to go.
  */
 export function hasSnapshotBanner(src) {
-  const head = src.split(/^## /m)[0];
-  const m = head.match(/^> \*\*Point-in-time snapshot \(census taken (\d{4}-\d{2}-\d{2})[^\n]*(?:\n>[^\n]*)*/m);
-  return !!m && /`node scripts\/check-preflight-ci-parity\.mjs`/.test(m[0]);
+  // A banner inside an HTML comment is invisible to the reader it exists for.
+  const visible = src.replace(/<!--[\s\S]*?-->/g, "");
+  // "Above the first section" needs a first section: a document with no `## ` heading
+  // would make the whole file the head, and a banner at the very bottom would pass.
+  const parts = visible.split(/^## /m);
+  if (parts.length < 2) return false;
+  const m = parts[0].match(/^> \*\*Point-in-time snapshot \(census taken (\d{4}-\d{2}-\d{2})[^\n]*(?:\n>[^\n]*)*/m);
+  if (!m) return false;
+  const d = new Date(`${m[1]}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== m[1]) return false;
+  const text = m[0].replace(/\n>\s?/g, " ");
+  return /`node scripts\/check-preflight-ci-parity\.mjs`/.test(text) && /\bNOT maintained\b/.test(text);
 }
 
 /**
@@ -101,7 +110,11 @@ export function e2eReadmeCountClaims(src) {
  * `~`/`about`/`over` and thousands separators; "thousands of tracked files" is prose,
  * not a count, and does not fire.
  */
-const FILE_COUNT_CLAIM = /(?<![\w/.:])~?\d[\d,]*\+?(?:\s+(?:tracked|source|repository|repo))?\s+files\b/gi;
+// \p{Nd} rather than \d so full-width and other Unicode digits count too. Up to three
+// qualifying words may stand between the figure and "files" ("3,515 Markdown and TS
+// files"), and a magnitude word ("3.5 thousand files") is part of the figure.
+const FILE_COUNT_CLAIM =
+  /(?<![\p{L}\p{Nd}_/.:])~?\p{Nd}[\p{Nd},.]*(?:\s*(?:k|thousand|hundred))?\+?(?:\s+[\p{L}`*/-]+){0,3}?\s+files\b|\bfile\s+count\s*[:=]?\s*~?\p{Nd}[\p{Nd},.]*/giu;
 export function skillFileCountClaims(src) {
   return [...src.matchAll(FILE_COUNT_CLAIM)].map((m) => m[0]);
 }
@@ -302,7 +315,8 @@ function selfTest() {
     {
       name: "the skill's retired file-count phrasings are caught, and prose without a count is not",
       run: () =>
-        ["With ~1,800 files, 144", "3515 files", "about 3,446 tracked files", "~3,500+ files"].every((x) => skillFileCountClaims(x).length === 1) &&
+        ["With ~1,800 files, 144", "3515 files", "about 3,446 tracked files", "~3,500+ files", "file count: 3,515",
+          "3.5 thousand files", "3,515 Markdown and TS files", "\uFF13\uFF15\uFF11\uFF15 files"].every((x) => skillFileCountClaims(x).length === 1) &&
         skillFileCountClaims("With thousands of tracked files (`git ls-files | wc -l` counts them)").length === 0 &&
         skillFileCountClaims("144 `proof:*` scripts").length === 0 &&
         skillFileCountClaims("see SKILL.md:205 files").length === 0,
@@ -315,13 +329,17 @@ function selfTest() {
       name: "the completion plan's snapshot banner is found, and a missing, undated, command-less or buried one is not",
       run: () => {
         const real = readFileSync(COMPLETION_PLAN, "utf8");
-        const banner = "> **Point-in-time snapshot (census taken 2026-08-10).**\n> live: `node scripts/check-preflight-ci-parity.mjs`\n";
+        const banner = "> **Point-in-time snapshot (census taken 2026-08-10).**\n> The figures are NOT maintained; live: `node scripts/check-preflight-ci-parity.mjs`\n";
         return hasSnapshotBanner(real) &&
           hasSnapshotBanner(`# T\n\n${banner}\n## 1. x\n`) &&
           !hasSnapshotBanner("# T\n\n## 1. x\n") &&
           !hasSnapshotBanner(`# T\n\n${banner.replace("census taken 2026-08-10", "census taken recently")}\n## 1.\n`) &&
           !hasSnapshotBanner(`# T\n\n${banner.replace("`node scripts/check-preflight-ci-parity.mjs`", "the tree")}\n## 1.\n`) &&
-          !hasSnapshotBanner(`# T\n\n## 1. x\n\n${banner}`);
+          !hasSnapshotBanner(`# T\n\n## 1. x\n\n${banner}`) &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace("2026-08-10", "9999-99-99")}\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\n<!--\n${banner}-->\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\nbody\n\n${banner}`) &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace(" NOT maintained", "")}\n## 1.\n`);
       },
     },
     {

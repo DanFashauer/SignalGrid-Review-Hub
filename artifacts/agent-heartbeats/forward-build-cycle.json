@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T04:14:34.060Z",
-  "result": "acted: owner directive 03:5xZ ('the brain needs to control the whole build'): dispatched a 12-session build wave (B1-B12, 34 plan rows: 82, 92, 95, 99, 106-108, 111, 114-116, 118, 119, 121, 124, 128, 130, 138, 140, 143-148, 150, 153, 154, 166, 171, 172). Each worker opens one PR. Brain reviews each PR; tooling PRs land under DR-037, product PRs go to the owner. Rows 97/98/109 are already PRs #1215/#1222/#1230. Skipped: core-behaviour rows 84-86/91 (need a DR), Swift 78/101/102, owner/research 161-167."
+  "firedAt": "2026-09-30T06:11:36.146Z",
+  "result": "06:10Z acted: harvest in progress. Landed today: Mac #1226, Mac #1227, mail #1249. Wave: 12 of 12 workers in flight, so no refill; fixes are pushed on 9 PRs, three delta re-reviews are running, and #1235 lands after the chain finishes on 18b478f6. Fix-needed: #1243, #1244, Mac #1216, #1218, #1225 and #1248 (#1248 needs DR-061). The owner merges #1239, #1240, #1230, #1222, #1215, #1246 (DR-061), #1190, #1153, #1146, #1133 and #1117."
 }

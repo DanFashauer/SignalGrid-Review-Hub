@@ -9325,7 +9325,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "99, 100",
+   "line": "121",
    "claim": "Heading \"Access support\" with subtitle \"Worker session triage · relay guidance\" — asserts a support-desk triage capability over worker sessions.",
    "kind": "capability",
    "classification": "demo-only",
@@ -9334,7 +9334,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "105, 106-110",
+   "line": "127",
    "claim": "\"SIGNAL → GUIDANCE TO RELAY\" plus \"Tap a worker's session to see the signal, the call, and the guidance to relay. The worker never opens SignalGrid — their resolution happens inside their own app, invisibly.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -9407,7 +9407,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "146",
+   "line": "168",
    "claim": "Per-scenario status label \"Resolves on the worker's device\" vs \"Needs an operator\" — asserts the product classifies self-resolving versus operator-required outcomes.",
    "kind": "status",
    "classification": "demo-only",
@@ -9470,7 +9470,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "57, 62-67",
+   "line": "90",
    "claim": "\"Integration Health\" strip rendering vendor name, product name, a green/amber/red status dot and a latency figure per integration — asserts live vendor connection health.",
    "kind": "status",
    "classification": "unsubstantiated",

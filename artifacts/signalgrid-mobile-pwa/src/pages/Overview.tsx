@@ -48,7 +48,7 @@ export default function Overview() {
 
       {series && (
         <div className="bg-card border rounded-xl p-4 space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">Decision Volume (24h, fixture)</h2>
+          <h2 className="text-sm font-medium text-muted-foreground">Decision Volume (24h) · fixture</h2>
           {/* Verdict fills, labels and patterns come from lib/outcome-tone.ts.
               Restrict and deny share the deny tone; restrict is hatched, so the
               two bands differ by more than colour, and the legend reproduces the

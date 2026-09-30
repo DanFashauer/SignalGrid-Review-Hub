@@ -21,13 +21,18 @@
 # =============================================================================
 set -u
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# The MAIN checkout, never a linked worktree this installer happens to run from (a
+# .claude/worktrees/* copy is temporary). git lists the main worktree first.
+REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")" worktree list --porcelain | sed -n '1s/^worktree //p')"
+[ -n "$REPO_ROOT" ] || { echo "install-build-tick.sh: could not find the main checkout" >&2; exit 1; }
+CACHE="$HOME/Library/Caches/signalgrid/build-tick"
 LABEL="com.signalgrid.build-tick"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/signalgrid-build-tick.log"
 # MUST be a bare integer of seconds: check-scheduled-routines.mjs holds it equal to
-# the mac-build-tick row's cron ("0 */3 * * *"). Edit BOTH together. build-tick.sh
-# caps each session at the same 3 h, so a session never outlives its own slot.
+# the mac-build-tick row's cron ("0 */3 * * *"). Edit BOTH together. A run can outlast
+# its slot (2 h session + preflight + breadth); launchd never overlaps its own label and
+# build-tick.sh holds a lock, so a late slot is skipped, never doubled.
 INTERVAL_SECONDS=10800
 UID_NUM="$(id -u)"
 
@@ -57,7 +62,11 @@ case "${1:-}" in
   *) echo "unknown flag: $1 (known: --uninstall, --status)" >&2; exit 2 ;;
 esac
 
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$CACHE"
+# The job never runs the checkout's file: the launcher extracts origin/SignalGrid_Alpha's
+# copy into a fresh cache file each run, so a checkout on another branch (or behind)
+# cannot change what runs, or stop it with "No such file".
+LAUNCHER="cd '$REPO_ROOT' || exit 1; git fetch -q origin; f=\$(mktemp '$CACHE/mainline.XXXXXX') || exit 1; git show origin/SignalGrid_Alpha:scripts/mac/build-tick.sh > \"\$f\" || { rm -f \"\$f\"; echo 'build-tick: mainline has no scripts/mac/build-tick.sh'; exit 0; }; SG_BUILD_TICK_MAINLINE=1 SG_REPO_ROOT='$REPO_ROOT' exec /bin/bash \"\$f\""
 cat > "$PLIST" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -67,7 +76,8 @@ cat > "$PLIST" <<PLIST_EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$REPO_ROOT/scripts/mac/build-tick.sh</string>
+    <string>-c</string>
+    <string>$LAUNCHER</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO_ROOT</string>
   <key>StartInterval</key><integer>$INTERVAL_SECONDS</integer>

@@ -39,17 +39,17 @@
 //     for that server, or a `grants.mentions[skill]` entry naming it as
 //     precedent/context rather than a call. An unaccounted-for name is a FAIL
 //     naming the file, the server and the missing grant/mention.
-//   - Every copy of the Context7 pin (the parity doc, the roster's context7
-//     `packageVersion`/`build`/`config`, `scripts/setup-mcp-lane.mjs`'s header,
-//     the installer's own "published" comment) equals the version in
+//   - Every copy of the Context7 pin equals the version in
 //     `scripts/install-context7.mjs`'s `export const PINNED`, read from its
-//     SOURCE by regex (importing it would run `claude mcp add`). A stale copy
-//     FAILS naming file:line; a copy site the pattern can no longer find FAILS
-//     too. Pin-vs-published staleness needs the network and is not checked here.
+//     SOURCE by regex (importing it would run `claude mcp add`). The copies are
+//     DERIVED: every tracked text file is swept for the package spec and for a
+//     `Context7 … x.y.z` phrase; only the dated records in CONTEXT7_PIN_HISTORY
+//     are exempt. A stale copy FAILS naming file:line; a known copy site whose
+//     copy vanished FAILS too. Pin-vs-published needs the network: not here.
 //
 // Fail-closed: an unparseable roster, or one missing `servers`/`grants`, is
 // itself a finding — a broken roster is silence dressed as a green gate.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -69,18 +69,33 @@ export function deriveToolNames(indexSource) {
 }
 
 // Context7 pin parity (BUILD_BACKLOG "Context7 pin staleness", offline half).
-// `scripts/install-context7.mjs` owns the pin; every other copy is DERIVED from
-// its SOURCE by regex — never imported, because importing it runs
-// `claude mcp add` at module load. Each copy site must still be findable: a
-// pattern that matches nothing is a finding, not a pass, so a reworded copy
-// cannot silently leave the gate's sight.
+// `scripts/install-context7.mjs` owns the pin; it is read from that file's
+// SOURCE by regex — never imported, because importing it runs `claude mcp add`
+// at module load. Two layers:
+//   1. A DERIVED sweep of every tracked text file: each `@upstash/context7-mcp@<v>`
+//      package spec, and each `Context7 … <x.y.z>` phrase (case-insensitive, same
+//      line, ≤40 chars apart), must name PINNED. Nothing is typed in a list, so a
+//      new copy anywhere — a skill doc, .mcp.json, a new doc — is held on arrival.
+//      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
+//      what was true on a day (and this gate, whose fixtures plant stale pins).
+//   2. The known copy sites below must STILL carry a copy: a site whose copy was
+//      reworded out of the sweep's shapes is a finding, not a pass. The roster's
+//      `packageVersion` has no "context7" on its line, so it is held structurally.
 export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
+const CONTEXT7_SPEC_RE = /@upstash\/context7-mcp@(\d+\.\d+\.\d+[^\s`"'),;]*)/g;
+const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
+export const CONTEXT7_PIN_HISTORY = [
+  /^docs\/BUILD_BACKLOG\.md$/,
+  /^docs\/agent\/RESOURCE_INTAKE\.md$/,
+  /^artifacts\/lane-messages\//,
+  /^scripts\/check-mcp-roster\.mjs$/,
+];
 export const CONTEXT7_PIN_COPIES = [
   { path: CONTEXT7_INSTALLER, re: /^\/\/ (\d+\.\d+\.\d+) published/g },
-  { path: "docs/MCP_AND_SKILLS_LANE_PARITY.md", re: /@upstash\/context7-mcp@(\d[^\s`"),]*)/g },
+  { path: "docs/MCP_AND_SKILLS_LANE_PARITY.md", re: CONTEXT7_SPEC_RE },
   { path: ROSTER_PATH, re: /"packageVersion":\s*"([^"]+)"/g, section: /"id":\s*"context7"/ },
-  { path: ROSTER_PATH, re: /@upstash\/context7-mcp@(\d[^\s`"),]*)/g, section: /"id":\s*"context7"/ },
-  { path: "scripts/setup-mcp-lane.mjs", re: /Context7 (\d+\.\d+\.\d+)/g },
+  { path: ROSTER_PATH, re: CONTEXT7_SPEC_RE, section: /"id":\s*"context7"/ },
+  { path: "scripts/setup-mcp-lane.mjs", re: CONTEXT7_PHRASE_RE },
 ];
 
 /** Pure: the version in install-context7's `export const PINNED = "@upstash/context7-mcp@X"`, or null. */
@@ -89,11 +104,36 @@ export function deriveContext7Pin(installerSource) {
   return m ? m[1] : null;
 }
 
-/** Pure: every copy of the Context7 pin that differs from PINNED (or cannot be found), as file:line findings. */
-export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN_COPIES }) {
+/**
+ * Pure: every Context7 pin copy that differs from PINNED, as file:line findings.
+ * `files` maps every tracked text path to its contents (the sweep's universe).
+ */
+export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN_COPIES, history = CONTEXT7_PIN_HISTORY }) {
   const pin = deriveContext7Pin(installerSource);
   if (!pin) return [`${CONTEXT7_INSTALLER}: no \`export const PINNED = "@upstash/context7-mcp@<version>"\` — the pin every copy is held to cannot be derived`];
   const problems = [];
+  const stale = (path, line, v) => `${path}:${line}: Context7 pin copy says ${v}, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`;
+
+  // 1. the derived sweep
+  let swept = 0;
+  for (const [path, text] of Object.entries(files)) {
+    if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
+    if (!/context7/i.test(text)) continue;
+    text.split("\n").forEach((line, i) => {
+      const seen = new Set();
+      for (const re of [CONTEXT7_SPEC_RE, CONTEXT7_PHRASE_RE]) {
+        for (const m of line.matchAll(new RegExp(re.source, re.flags))) {
+          swept++;
+          if (m[1] !== pin && !seen.has(m[1])) {
+            seen.add(m[1]);
+            problems.push(stale(path, i + 1, m[1]));
+          }
+        }
+      }
+    });
+  }
+
+  // 2. the known sites must still hold a copy (and the roster's packageVersion is held here)
   for (const { path, re, section } of copies) {
     const text = files[path];
     if (typeof text !== "string") {
@@ -116,12 +156,33 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     for (let i = from; i < to; i++) {
       for (const m of lines[i].matchAll(new RegExp(re.source, re.flags))) {
         seen++;
-        if (m[1] !== pin) problems.push(`${path}:${i + 1}: Context7 pin copy says ${m[1]}, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        const msg = stale(path, i + 1, m[1]);
+        if (m[1] !== pin && !problems.includes(msg)) problems.push(msg);
       }
     }
     if (!seen) problems.push(`${path}: no Context7 pin copy matching ${re} — reworded or removed, so the gate can no longer hold it to PINNED ${pin}`);
   }
+  if (!swept) problems.push(`the Context7 pin sweep matched nothing across ${Object.keys(files).length} tracked file(s) — a sweep that sees nothing is not a pass`);
   return problems;
+}
+
+/** The sweep's universe: every tracked, non-binary file under 2 MB. */
+function loadContext7PinFiles() {
+  const files = {};
+  const listed = execSync("git ls-files -z", { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
+  for (const path of listed) {
+    const abs = resolve(repo, path);
+    let buf;
+    try {
+      if (statSync(abs).size > 2 * 1024 * 1024) continue;
+      buf = readFileSync(abs);
+    } catch {
+      continue; // a tracked file deleted in the worktree is not a copy
+    }
+    if (buf.includes(0)) continue;
+    files[path] = buf.toString("utf8");
+  }
+  return files;
 }
 
 /** Pure: the mcp__<server>__ prefixes (lowercased) named in a chunk of markdown. */
@@ -367,15 +428,6 @@ function loadSkillDocs(firstPartyDirs) {
   return out;
 }
 
-function loadContext7PinFiles() {
-  const files = {};
-  for (const { path } of CONTEXT7_PIN_COPIES) {
-    const abs = resolve(repo, path);
-    if (existsSync(abs)) files[path] = readFileSync(abs, "utf8");
-  }
-  return files;
-}
-
 function selfTest() {
   const goodIndex = `
 server.registerTool(
@@ -588,42 +640,59 @@ server.registerTool(
     "grants.skills.loop-start must be an array, got object",
   );
 
-  // Context7 pin parity, against the REAL committed copies: a bumped PINNED must
-  // name every stale copy by file:line; the unbumped installer must name none.
+  // Context7 pin parity, against the REAL tracked tree. Stale versions are built
+  // at run time so this file never carries a literal stale pin of its own.
   const pinFiles = loadContext7PinFiles();
   const realInstaller = pinFiles[CONTEXT7_INSTALLER] ?? "";
   const realPin = deriveContext7Pin(realInstaller);
-  checks.push(["the committed Context7 pin copies all equal PINNED", realPin !== null && checkContext7Pin({ installerSource: realInstaller, files: pinFiles }).length === 0]);
+  const OLD = ["4", "0", "4"].join(".");
+  const SPEC = ["@upstash", "context7-mcp"].join("/") + "@";
+  const pinRun = (over = {}, installer = realInstaller) => checkContext7Pin({ installerSource: installer, files: { ...pinFiles, ...over } });
+  const appendTo = (path, line) => ({ [path]: `${pinFiles[path] ?? ""}\n${line}\n` });
+  const lineCount = (path) => (pinFiles[path] ?? "").split("\n").length + 1;
+  const names = (problems, path, line, v) => problems.some((p) => p.startsWith(`${path}:${line}: Context7 pin copy says ${v},`));
+  checks.push(["the committed tree holds every Context7 pin copy at PINNED", realPin !== null && pinRun().length === 0]);
+
   const bumped = realInstaller.replace(/(export const PINNED = "@upstash\/context7-mcp@)[^"]+"/, '$19.9.9"');
-  const stale = checkContext7Pin({ installerSource: bumped, files: pinFiles });
+  const stale = pinRun({}, bumped);
   const expectStale = [];
-  for (const { path, re, section } of CONTEXT7_PIN_COPIES) {
-    if (path === CONTEXT7_INSTALLER) continue; // the installer's own comment is read from the unbumped files map
-    const lines = (pinFiles[path] ?? "").split("\n");
-    const from = section ? lines.findIndex((l) => section.test(l)) : 0;
-    const next = section ? lines.findIndex((l, i) => i > from && /"id":\s*"/.test(l)) : -1;
-    const to = next > 0 ? next : lines.length;
-    lines.forEach((l, i) => {
-      if (i >= from && i < to && new RegExp(re.source, re.flags).test(l)) expectStale.push(`${path}:${i + 1}:`);
+  for (const [path, text] of Object.entries(pinFiles)) {
+    if (path === CONTEXT7_INSTALLER || CONTEXT7_PIN_HISTORY.some((re) => re.test(path))) continue;
+    text.split("\n").forEach((l, i) => {
+      if (/@upstash\/context7-mcp@\d|context7[^0-9\n]{0,40}?\d+\.\d+\.\d+|"packageVersion":\s*"4/i.test(l) && (path !== ROSTER_PATH || /context7|packageVersion/.test(l)))
+        expectStale.push(`${path}:${i + 1}:`);
     });
   }
   checks.push([
     `a bumped PINNED (9.9.9) names every stale copy (${expectStale.join(" ")})`,
     expectStale.length >= 5 && expectStale.every((loc) => stale.some((p) => p.startsWith(loc) && p.includes("PINNED is 9.9.9"))),
   ]);
+  const plants = [
+    ["docs/agent/mcp-roster-UNLISTED.md", `${SPEC}${OLD}`, "an UNLISTED file's package spec"],
+    [".mcp.json", `"x": "${SPEC}${OLD}"`, "an unlisted .mcp.json key"],
+    [".claude/skills/signalgrid-master/SKILL.md", `npx -y ${SPEC}${OLD}`, "the context7-granted skill's doc"],
+    ["docs/MCP_AND_SKILLS_LANE_PARITY.md", `Context7 pinned at ${OLD}`, "a reworded phrase in a listed doc"],
+    ["scripts/setup-mcp-lane.mjs", `// ${SPEC}${OLD}`, "the package-spec form in a phrase-shaped site"],
+  ];
+  for (const [path, line, what] of plants) {
+    checks.push([`a stale pin in ${what} (${path}) is named`, names(pinRun(appendTo(path, line)), path, lineCount(path), OLD)]);
+  }
   checks.push([
-    "an installer with no PINNED FAILS",
-    checkContext7Pin({ installerSource: "const X = 1;", files: pinFiles }).some((p) => p.includes("cannot be derived")),
+    "a stale pin in a dated history record (docs/agent/RESOURCE_INTAKE.md) is exempt, by name",
+    pinRun(appendTo("docs/agent/RESOURCE_INTAKE.md", `${SPEC}${OLD}`)).length === 0,
   ]);
+  checks.push(["an installer with no PINNED FAILS", pinRun({}, "const X = 1;").some((p) => p.includes("cannot be derived"))]);
   checks.push([
-    "a reworded copy (no match left) FAILS instead of passing unseen",
-    checkContext7Pin({ installerSource: realInstaller, files: { ...pinFiles, "scripts/setup-mcp-lane.mjs": "// Context seven, pinned" } }).some((p) =>
-      p.startsWith("scripts/setup-mcp-lane.mjs: no Context7 pin copy"),
-    ),
+    "a reworded copy (no match left at a known site) FAILS instead of passing unseen",
+    pinRun({ "scripts/setup-mcp-lane.mjs": "// Context seven, pinned" }).some((p) => p.startsWith("scripts/setup-mcp-lane.mjs: no Context7 pin copy")),
   ]);
   checks.push([
     "a roster with no context7 entry FAILS",
-    checkContext7Pin({ installerSource: realInstaller, files: { ...pinFiles, [ROSTER_PATH]: "{}" } }).some((p) => p.includes("Context7 entry holding the pin copy is gone")),
+    pinRun({ [ROSTER_PATH]: "{}" }).some((p) => p.includes("Context7 entry holding the pin copy is gone")),
+  ]);
+  checks.push([
+    "an empty sweep universe FAILS",
+    checkContext7Pin({ installerSource: realInstaller, files: {}, copies: [] }).some((p) => p.includes("matched nothing")),
   ]);
 
   const bad = checks.filter(([, ok]) => !ok);
@@ -674,7 +743,8 @@ function main() {
   console.log(
     `mcp-roster: ${nServers} servers (+${nExternal} external), signalgrid-mcp ${sg?.tools ?? 0}/${derived.length} tools derived, ` +
       `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, ${mentionCount} mentions, ` +
-      `Context7 pin ${deriveContext7Pin(pinFiles[CONTEXT7_INSTALLER])} held across ${CONTEXT7_PIN_COPIES.length} copy sites, 0 problems`,
+      `Context7 pin ${deriveContext7Pin(pinFiles[CONTEXT7_INSTALLER])} held across ${Object.keys(pinFiles).length} tracked text files ` +
+      `(${CONTEXT7_PIN_HISTORY.length} dated-record exemptions, ${CONTEXT7_PIN_COPIES.length} known sites present), 0 problems`,
   );
   console.log("PASS");
 }

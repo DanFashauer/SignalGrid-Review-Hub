@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T10:22:51.316Z",
-  "result": "acted 10:11Z: landed today #1260 (Mac evidence re-mint), #1261/#1266/#1267 (lane mail); #1243 landing head 95132104 validated (preflight+breadth 0/0), merges on gating; #1264 ship, lands next; delta re-reviews running on #1236/#1237/#1241/#1242/#1244/#1263/#1265; dispatched B16 (backlog gate detectors), B17 (row 40b + unknown-render), B18 (row 59 + grype exit), B19 (rows 86, 91); owner queue #1239 #1240 #1242 #1244 #1251 #1255 #1246 #1230 #1222 #1215"
+  "firedAt": "2026-09-30T12:23:17.963Z",
+  "result": "acted 12:11Z: landed today #1243 #1264 #1263 #1241 (+ lane mail #1260 #1261 #1266 #1267 #1268 #1285); runaway Mac tick branches (#1269–#1294) diagnosed — objective-loop same-day request-id reuse, fix PR #1295 lands next; reviews posted #1272/#1274 (fix-needed), #1277/#1280 under review; dispatched B20 (ci-jobs line-1 + lane-tick dead line), B21 (mutation sweep 4 families), B22 (reason-code copy + stale rows); owner queue #1239 #1240 #1242 #1244 #1251 #1255 #1246 #1230 #1222 #1215 + close junk tick PRs"
 }

@@ -168,6 +168,7 @@
     "proof:verdict-attestation": "tsx ./src/verdict-attestation-proof.ts",
     "proof:vuln-scan": "tsx ./src/vuln-scan-proof.ts",
     "proof:webauthn-verify": "tsx ./src/webauthn-verify-proof.ts",
+    "proof:webauthn-revocation": "tsx ./src/webauthn-revocation-proof.ts",
     "proof:webhooks": "tsx ./src/webhooks-proof.ts",
     "proof:work-context": "tsx ./src/work-context-proof.ts",
     "proof:zero-trust-principles": "tsx ./src/zero-trust-principles-proof.ts",

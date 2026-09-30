@@ -37,9 +37,20 @@
 // the real lock key mid-section (see its own comment for how, without any production
 // injection point) and asserts the write is REFUSED, not applied — on both the enrolment
 // and the revocation path.
+//
+// THE REVOCATION GAPS, Redis half (PR #1240 review, plan row 82). `proof:webauthn-revocation`
+// reproduces both in the in-memory store; `revocationRedis` below runs the same ceremonies
+// against the real Redis path: a revoked id is tombstoned in the SAME fenced script that
+// removes it (so an enrolment ceremony minted before the revocation cannot bring it
+// back), a lock lost mid-revocation writes neither the removal nor the tombstone, and a
+// step-up re-reads its credential under the per-user lock before it is released. Because
+// every revocation now leaves a durable tombstone, each section clears the tombstones of
+// its fixed test identities before it enrols — otherwise a second run against the same
+// Redis would be refused its own fixture ids by the first run's cleanup.
 
-import { webauthnStore, webauthnTypes } from "@workspace/webauthn";
+import { webauthn, webauthnStore, webauthnTypes } from "@workspace/webauthn";
 import IORedis from "ioredis";
+import { completeEnrolment, enrol, mintEnrolment, newAuthenticator, signAssertion, stepUp } from "./lib/webauthn-ceremony";
 
 type WebAuthnCredential = webauthnTypes.WebAuthnCredential;
 
@@ -60,6 +71,29 @@ const credential = (i: number): WebAuthnCredential => ({
   counter: 0,
   createdAt: new Date(0).toISOString(),
 });
+
+const tombstoneKey = (userId: string) => `webauthn:user:${userId}:revoked`;
+
+/** A direct client for what the store deliberately exposes no API for: reading and
+ *  clearing a test identity's tombstone set. */
+async function rawRedis<T>(fn: (r: IORedis) => Promise<T>): Promise<T> {
+  const r = new IORedis(process.env.REDIS_URL as string, { lazyConnect: true, maxRetriesPerRequest: 1 });
+  r.on("error", () => undefined);
+  try {
+    await r.connect();
+    return await fn(r);
+  } finally {
+    await r.quit().catch(() => undefined);
+  }
+}
+
+/** Clean slate for a fixed test identity: remove its credentials (each removal
+ *  tombstones), THEN drop the tombstones, so this run may enrol the same ids again. */
+async function resetIdentity(userId: string) {
+  const prior = await webauthnStore.getUser(userId).catch(() => null);
+  for (const c of prior?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+  await rawRedis((r) => r.del(tombstoneKey(userId)));
+}
 
 /** The in-memory store must not lose an enrolment that lands while a revocation is in
  *  flight. Deterministic: the enrolment is started after a fixed number of microtask
@@ -162,9 +196,7 @@ async function lockLostMidWriteRace() {
     };
   }
 
-  // Clean slate.
-  const prior = await webauthnStore.getUser(userId).catch(() => null);
-  for (const c of prior?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+  await resetIdentity(userId);
 
   // 3a — addCredential: the lock disappears between the read and the write.
   let disarm = armLockDeletion();
@@ -191,11 +223,10 @@ async function lockLostMidWriteRace() {
   // Seed EXACTLY one real credential — lock intact — for 3b to revoke. Cleaned first and
   // independently of 3a's outcome: on the unfixed store 3a's write lands despite the
   // refusal it should have hit, and an uncleaned cred-500 left sitting alongside cred-501
-  // would route 3b through the OTHER write branch (`fence.set` on a non-empty array)
-  // instead of the one it targets (`fence.del` on the now-empty array) — a correct 3a
+  // would route 3b through the OTHER write branch (the fenced revoke writing a non-empty
+  // record) instead of the one it targets (the fenced revoke deleting it) — a correct 3a
   // must not change which branch 3b exercises.
-  const betweenCases = await webauthnStore.getUser(userId).catch(() => null);
-  for (const c of betweenCases?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+  await resetIdentity(userId);
   await webauthnStore.addCredential(userId, credential(501));
 
   // 3b — removeCredential, last-credential branch (the fenced DELETE path): same fault
@@ -220,10 +251,109 @@ async function lockLostMidWriteRace() {
     (afterRemove?.credentials ?? []).some((c) => c.id === "cred-501"),
     `credentials: [${(afterRemove?.credentials ?? []).map((c) => c.id).join(", ")}]`,
   );
+  check(
+    "…and no tombstone was written either (removal and tombstone are one fenced script)",
+    (await rawRedis((r) => r.sismember(tombstoneKey(userId), "cred-501"))) === 0,
+  );
 
   // Cleanup, regardless of which branch actually persisted.
   const cleanup = await webauthnStore.getUser(userId).catch(() => null);
   for (const c of cleanup?.credentials ?? []) await webauthnStore.removeCredential(userId, c.id);
+}
+
+/**
+ * THE REVOCATION GAPS against the real Redis path (see the file header). Gap 1: an
+ * enrolment ceremony minted before a revocation and completed after it must not bring
+ * the revoked id back. Gap 2: a step-up whose credential is revoked after
+ * `verifyAuthentication`'s early read must not be released — placed, as in the lock-lost
+ * race, by patching ioredis's own `get`: the first GET of the user record after arming is
+ * that early read, and the patch lets it return the pre-revocation record only after a
+ * real `removeCredential` has committed. Armed AFTER the challenge is minted, because
+ * minting reads the same key.
+ */
+async function revocationRedis() {
+  const tenant = "tenant_enrollment_race_proof";
+
+  // Gap 1.
+  const user = "t_proof:revocation-redis";
+  await resetIdentity(user);
+  const device = newAuthenticator(false);
+  const first = await enrol(user, device, tenant);
+  check("redis: baseline — the authenticator enrols through a real ceremony", first.success === true && first.alreadyEnrolled === false, first.error);
+  const outstanding = await mintEnrolment(user);
+  check("redis: the revocation reports that it removed the credential", (await webauthnStore.removeCredential(user, device.id)) === true);
+  check(
+    "redis: …and tombstoned the id in the same write",
+    (await rawRedis((r) => r.sismember(tombstoneKey(user), device.id))) === 1,
+  );
+  const revived = await completeEnrolment(user, outstanding, device, tenant);
+  check(
+    "redis: a ceremony minted BEFORE the revocation and completed AFTER it is REFUSED",
+    revived.success === false,
+    `success=${revived.success} alreadyEnrolled=${revived.alreadyEnrolled} error=${revived.error}`,
+  );
+  const afterRevival = (await webauthnStore.getCredentialsForUser(user)).map((c) => c.id);
+  check("redis: …and the revoked credential id is NOT live again", !afterRevival.includes(device.id), `enrolled: [${afterRevival.join(", ")}]`);
+  let storeRefusal: unknown;
+  try {
+    await webauthnStore.addCredential(user, { ...credential(0), id: device.id });
+  } catch (err) {
+    storeRefusal = err;
+  }
+  check(
+    "redis: addCredential of a revoked id THROWS CredentialRevokedError under the lock",
+    storeRefusal instanceof Error && storeRefusal.name === "CredentialRevokedError",
+    String(storeRefusal),
+  );
+
+  // Gap 2.
+  const user2 = "t_proof:revocation-redis-release";
+  await resetIdentity(user2);
+  const passkey = newAuthenticator(false);
+  check("redis: baseline — a zero-counter authenticator enrols", (await enrol(user2, passkey, tenant)).success === true);
+  check("redis: baseline — …and releases a step-up", (await stepUp(user2, passkey, tenant)).success === true);
+  const stored = (await webauthnStore.getCredentialsForUser(user2)).find((c) => c.id === passkey.id);
+  check("redis: confirmCredentialEnrolled — true for the enrolled credential and its key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === true);
+  check("redis: confirmCredentialEnrolled — false for the right id under a different key", (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, "{}")) === false);
+
+  const { challengeId, response } = await signAssertion(user2, passkey);
+  const targetKey = `webauthn:user:${user2}`;
+  const realGet = IORedis.prototype.get;
+  let fired = false;
+  let revoked: boolean | undefined;
+  (IORedis.prototype as unknown as { get: typeof realGet }).get = function (
+    this: IORedis,
+    ...args: Parameters<typeof realGet>
+  ) {
+    const call = (realGet as (...a: unknown[]) => Promise<string | null>).apply(this, args);
+    if (!fired && args[0] === targetKey) {
+      fired = true;
+      return call.then(async (value) => {
+        revoked = await webauthnStore.removeCredential(user2, passkey.id); // committed for real
+        return value; // …while the early read still returns the pre-revocation record
+      });
+    }
+    return call;
+  } as typeof realGet;
+  let released: Awaited<ReturnType<typeof webauthn.verifyAuthentication>>;
+  try {
+    released = await webauthn.verifyAuthentication(user2, challengeId, response, tenant);
+  } finally {
+    IORedis.prototype.get = realGet;
+  }
+  check("redis: the revocation was placed after the early read, and committed", fired && revoked === true, `fired=${fired} revoked=${revoked}`);
+  check(
+    "redis: a zero-counter step-up whose credential was revoked mid-verification is NOT released",
+    released.success === false,
+    `success=${released.success} error=${released.error}`,
+  );
+  check(
+    "redis: confirmCredentialEnrolled — false once the credential is revoked",
+    (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === false,
+  );
+
+  await resetIdentity(user);
+  await resetIdentity(user2);
 }
 
 async function main() {
@@ -244,9 +374,8 @@ async function main() {
 
   console.log("Concurrent-enrollment proof — every enrolled credential must survive\n");
 
-  // Clean slate: remove anything a previous run left behind.
-  const prior = await webauthnStore.getUser(USER_ID).catch(() => null);
-  for (const c of prior?.credentials ?? []) await webauthnStore.removeCredential(USER_ID, c.id);
+  // Clean slate: remove anything a previous run left behind, tombstones included.
+  await resetIdentity(USER_ID);
 
   // THE RACE. All appends are issued before any of them is awaited, so they interleave
   // at the store rather than running in sequence.
@@ -320,6 +449,10 @@ async function main() {
   console.log("");
   console.log("Lock-lease fence — a lock deleted mid-section must refuse the write, not apply it\n");
   await lockLostMidWriteRace();
+
+  console.log("");
+  console.log("Revocation — a revoked credential stays revoked, and is re-read before release\n");
+  await revocationRedis();
 
   // Deliberately NOT a `figures=` line. That marker registers a proof with the figure
   // guard, which re-runs it during the standard sweep — and this proof refuses to run

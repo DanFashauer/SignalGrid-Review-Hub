@@ -215,6 +215,7 @@
     "proof:verdict-attestation": "pnpm --filter @workspace/scripts run proof:verdict-attestation",
     "proof:vuln-scan": "pnpm --filter @workspace/scripts run proof:vuln-scan",
     "proof:webauthn-verify": "pnpm --filter @workspace/scripts run proof:webauthn-verify",
+    "proof:webauthn-revocation": "pnpm --filter @workspace/scripts run proof:webauthn-revocation",
     "proof:webhooks": "pnpm --filter @workspace/scripts run proof:webhooks",
     "proof:work-context": "pnpm --filter @workspace/scripts run proof:work-context",
     "proof:zero-trust-principles": "pnpm --filter @workspace/scripts run proof:zero-trust-principles",

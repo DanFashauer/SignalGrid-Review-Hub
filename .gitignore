@@ -173,3 +173,11 @@ docs/handoffs/
 docs/plans/
 build-gate-ledger.md
 .lock-compass/
+
+# Leonxlnx/unlazy (owner-directed 2026-09-24, third_party/unlazy/): the un-vendored executor
+# writes `.unlazy/<scope>/` INSIDE a checkout, and vercel-labs/skills (evaluated, not adopted)
+# writes `skills-lock.json` at the project root. Nothing vendored here creates either — belt
+# and braces, because one untracked directory stamps every LATER sim result as minted from a
+# dirty tree (run-requests.mjs samples `git status --porcelain`, untracked included).
+.unlazy/
+/skills-lock.json

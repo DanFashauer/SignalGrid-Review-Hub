@@ -75,7 +75,20 @@ enum DecisionEngine {
             $0.attributes["requiredApproval"] == "missing" ||
             $0.attributes["escalationDestination"] == "unavailable"
         }
-        let hasActiveCustodyIntegrityFailure = hasCustodyFailure ||
+        // UNAUTHORIZED REMOVAL — the "key pulled from the ignition" case (DR-043's
+        // removal-suspends-the-session function). A device physically removed from its dock
+        // while NOTHING asserts an active session owns it is a custody exception, not a
+        // normal shift handoff. Fail-closed on ABSENCE (golden rule 2): the lack of an
+        // active-session assertion is not permission. An undock WITH an active session
+        // (`active` == "true") is the ordinary handoff and is untouched. Removal is observed
+        // here, never commanded (DR-043: the dock is evidence, never the policy engine).
+        // Ported 2026-09-26 from decisionEngine.ts `hasUnauthorizedRemoval`; until then the
+        // drift was DECLARED in scripts/check-decision-port-parity.mjs and the same lift was
+        // a custody exception in the fabric and `allow` on the phone — the first divergence
+        // native/shared/decision-engine-vectors.json caught.
+        let hasUnauthorizedRemoval = hasType("dock.device_undocked") &&
+            !signals.contains { $0.attributes["active"] == "true" }
+        let hasActiveCustodyIntegrityFailure = hasCustodyFailure || hasUnauthorizedRemoval ||
             hasType("dock.device_missing") || hasType("dock.wrong_slot_return") ||
             hasType("rtls.wrong_zone") || hasType("rts.staff_safety_alert")
 
@@ -91,7 +104,7 @@ enum DecisionEngine {
         if hasStateFreshnessFailure {
             outcomes.formUnion(["step_up", "request_remediation"]); reasonCodes.append("STATE_FRESHNESS_FAILURE")
         }
-        if hasCustodyFailure {
+        if hasCustodyFailure || hasUnauthorizedRemoval {
             outcomes.formUnion(["create_ticket", "alert_operator", "route_to_owner"]); reasonCodes.append("CUSTODY_EXCEPTION")
         }
         if hasWorkflowRoutingFailure {

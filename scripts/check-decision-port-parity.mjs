@@ -6,8 +6,9 @@
 //
 // `native/ios/EnterpriseShell/Services/DecisionEngine.swift` is documented as a
 // BYTE-FAITHFUL port of `lib/signalgrid-simulator/src/decisionEngine.ts`. That
-// claim was true when written and is true today (verified: all 18 reason codes
-// match). Nothing enforced it.
+// claim was true when written. What THIS gate verifies is narrower than the claim: that
+// no reason code, outcome literal or trigger was added, removed or rewired on one side
+// alone. Whether the two engines DECIDE alike is the vectors' job (below, 2026-09-26).
 //
 // That is the one drift in this repo with no ratchet, and it is the worst place
 // to have one. Every other gate here exists because a claim can quietly stop
@@ -37,8 +38,11 @@
 // Renaming a variable or rewording a comment cannot trip it; changing what a
 // verdict MEANS on one side and not the other always will.
 //
-// It cannot prove behavioural equivalence — only running both engines over shared
-// vectors would, and that needs a Mac. It catches the failure that actually
+// It does not prove behavioural equivalence — `scripts/src/decision-engine-parity-proof.ts`
+// emits the TS engine's own decisions to `native/shared/decision-engine-vectors.json` and
+// `native/ios/EnterpriseShellTests/DecisionEngineParityTests.swift` replays them on both
+// build systems ios-ci.yml runs (2026-09-26; the old excuse was "that needs a Mac", and
+// the macos-native job is one). This gate catches the failure that actually
 // happens: a rule added, removed, or rewired on one side alone.
 //
 // SECTION 3b (2026-09-12) compares the AppWorkflows RECORD SHAPES field by field —
@@ -211,6 +215,8 @@ function checkEnginesAndWorkflows() {
         DECLARED_TRIGGER_DRIFT.map((d) => `${d.code}/${d.marker} (${d.side} only)`).join(", ") +
         `. REPORTED every run: a declared divergence that nobody is reminded of is an undeclared one.`,
     );
+  } else {
+    say("  declared trigger drift: 0 live declarations — nothing to check");
   }
 
   say(`decision-port parity: ${ts.size} TS rules vs ${swift.size} Swift rules, ${problems} divergence(s)`);
@@ -390,8 +396,10 @@ const MIN_SHAPE_FIELDS = 5;
  * port. Each entry is checked in BOTH directions on every run: the field must still be
  * present on its side (else the entry is stale — delete it) and still absent on the
  * other (else the port landed and the entry is hiding finished work — delete it and
- * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode
- * (CLAUDE.md golden rule 1: the Swift is never edited for behaviour from here).
+ * let the plain comparison govern). Repairing the port is the Mac lane's, with Xcode, as a
+ * literal re-port from the TS that the owner has ruled on (DR-061, pending the owner's merge;
+ * golden rule 1 still forbids every other edit; the first such ruling was #1118's,
+ * 2026-09-29) — never a hand edit to satisfy this gate.
  */
 /**
  * SECTION 2b — DECLARED TRIGGER DRIFT (2026-09-14).
@@ -412,24 +420,20 @@ const MIN_SHAPE_FIELDS = 5;
  * on the other (else the port landed and the entry is hiding finished work). Either way
  * the gate fails until the declaration is deleted, so a drift cannot outlive its reason.
  *
- * Repairing the port is the Mac lane's, with Xcode — CLAUDE.md golden rule 1 means the
- * Swift is never edited for behaviour to satisfy this gate.
+ * Repairing the port is the Mac lane's, with Xcode — a literal re-port from the TS that the
+ * owner has ruled on (DR-061, pending the owner's merge; golden rule 1 still forbids every
+ * other edit; #1118's DR-043 removal rule was the first, 2026-09-29, replayed green against
+ * the shared vectors), never an edit to satisfy this gate.
  */
-const DECLARED_TRIGGER_DRIFT = [
-  {
-    code: "CUSTODY_EXCEPTION",
-    marker: "hasUnauthorizedRemoval",
-    side: "ts",
-    why:
-      "removal suspends the session (DR-043 item (b), PR #748): the TS engine raises " +
-      "CUSTODY_EXCEPTION when a dock.device_undocked arrives with no active session. The " +
-      "Swift port's mirror of that block has no removal predicate, so the same lift is a " +
-      "custody exception in the fabric and `allow` on the phone. The two sides agree on " +
-      "the code and on its outcomes, which is why sections 1 and 2 stay green. /v1 is the " +
-      "decision authority (CLAUDE.md golden rule 4 — on-device evaluation is a demo, not " +
-      "enforcement), so the divergence is bounded; it is declared rather than tolerated.",
-  },
-];
+// Empty since 2026-09-26. The one entry it carried — CUSTODY_EXCEPTION / `hasUnauthorizedRemoval`,
+// TS only (DR-043 item (b), PR #748: the TS engine raises CUSTODY_EXCEPTION when a
+// dock.device_undocked arrives with no active session; the Swift port had no removal
+// predicate, so the same lift was a custody exception in the fabric and `allow` on the
+// phone) — was closed when the Mac lane ported the predicate, the day the behavioural
+// vectors (native/shared/decision-engine-vectors.json, scripts/src/decision-engine-parity-proof.ts)
+// first replayed it red on the Swift side. A future TS-only rule is declared here again,
+// checked both ways, until the port catches up.
+const DECLARED_TRIGGER_DRIFT = [];
 
 /**
  * Pure, so the self-tests below can plant every arm. `tsSrc`/`swiftSrc` are the
@@ -843,7 +847,13 @@ function runSelfTests() {
   t("trigger: a marker surviving only in a COMMENT does not count as the port landing", tdCommentOnly.length === 0, `${tdCommentOnly.length} finding(s)`);
   // …and the REAL declaration must hold right now, or the gate is green about a lie.
   const tdLive = compareTriggers({ tsSrc, swiftSrc, declared: DECLARED_TRIGGER_DRIFT });
-  t("trigger: every LIVE declaration still describes a real, still-open drift", tdLive.length === 0, `${tdLive.length} finding(s)`);
+  t(
+    DECLARED_TRIGGER_DRIFT.length === 0
+      ? "trigger: 0 live declarations — nothing to check"
+      : "trigger: every LIVE declaration still describes a real, still-open drift",
+    tdLive.length === 0,
+    `${tdLive.length} finding(s)`,
+  );
 
   // ── 3b: the shape comparison must be able to fail, in every direction ──────
   const S = (...xs) => new Set(xs);

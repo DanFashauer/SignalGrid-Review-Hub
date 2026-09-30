@@ -153,6 +153,7 @@
     "proof:signalgrid-core": "tsx ./src/signalgrid-core-proof.ts",
     "proof:signalgrid-grid": "tsx ./src/signalgrid-grid-proof.ts",
     "proof:remediation-allow": "tsx ./src/remediation-allow-proof.ts",
+    "proof:decision-engine-parity": "tsx ./src/decision-engine-parity-proof.ts",
     "proof:posture-allow": "tsx ./src/posture-allow-proof.ts",
     "proof:device-registry": "tsx ./src/device-registry-proof.ts",
     "proof:signalgrid-simulator": "tsx ./src/signalgrid-simulator-proof.ts",

@@ -56,9 +56,10 @@ export function stripComments(text) {
 }
 
 /**
- * The six emitter families, DERIVED. Identical rule to check-ungated-fetch.mjs:
+ * The six emitter families, DERIVED. Same derivation rule as check-ungated-fetch.mjs:
  * a directory under the scan root is a family iff its `resolve.ts` imports
- * `createEmitterResolver`, the shared fail-closed factory.
+ * `createEmitterResolver`, the shared fail-closed factory. (That gate's copy still
+ * swallows every read error; it is outside this change.)
  *
  * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
  * family. Any other read error means a resolve.ts is present but unreadable, so the

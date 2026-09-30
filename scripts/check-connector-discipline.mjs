@@ -592,11 +592,12 @@ for (const r of results) {
 }
 
 if (selfTestOk) {
-  ok(`self-test: the live-gate check follows a resolver fold (a) and refuses a stripped factory (b), a comment (c); own-code check still counts (d)`);
+  ok(`self-test: the live-gate check follows a resolver fold (a) and refuses a stripped factory (b), a comment (c); own-code check still counts (d); an unreadable source is recorded (e) and an absent one skipped (f)`);
 } else {
   bad(
     `SELF-TEST FAILED — ${selfTest.filter((t) => t.got !== t.want).map((t) => t.id).join(", ")}. ` +
-      `The live-gate detection has drifted, so every "gated" verdict below is unreliable. ` +
+      `Cases a-d are the live-gate detection (a drift makes every "gated" verdict below unreliable); ` +
+      `e-f are the unreadable-source scan (a failure means an unreadable file would be scanned as clean). ` +
       `Run \`node scripts/check-connector-discipline.mjs --self-test\` for the detail.`,
   );
 }

@@ -7720,7 +7720,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Audit.tsx",
-   "line": ":37, 40, 41",
+   "line": "57",
    "claim": "\"chain verified\" / \"CHAIN BROKEN\" badge plus \"{n} events, every digest recomputed on this request\" and \"— broken at seq {n}\"",
    "kind": "capability",
    "classification": "launch",
@@ -9169,7 +9169,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Handoff.tsx",
-   "line": "42, 43",
+   "line": "59",
    "claim": "Page heading \"Shift Handoff\" with subtitle \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\".",
    "kind": "status",
    "classification": "demo-only",

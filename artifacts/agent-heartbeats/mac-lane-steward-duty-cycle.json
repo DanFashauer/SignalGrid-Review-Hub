@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T23:31:10.902Z",
-  "result": "23:24Z cycle at tip 7e106342 | Mac tick last fired 2026-09-29T22:55:58Z, ticking | NEW mac/objective-loop-awaiting (22:43Z) already has PR #1216 opened by the Mac lane; reviewed, no findings; gating green on c020e577, Mac-only pending; land ask mailed back (DR-037: Mac PRs land on a mail ask) | no mail addressed to cloud unread | sim requests all bound | sync manifest in step | live evidence minted 2026-09-29T22:26:35Z (fresh) | cloud PR #1215 (plan row 97) gating green on rerun, owner merges | owner not escalated"
+  "firedAt": "2026-09-30T00:29:02.354Z",
+  "result": "00:24Z cycle at tip 9669f239 | Mac tick last fired 2026-09-30T00:07:34Z, ticking | NEW Mac PRs #1218 (raised-hands-owner-mac), #1219 (pg-role-split-stores), #1220 (enterprise-auth-hardening), plus #1118 finish-1118 push (8f97bb73); all three reviewed, findings mailed (one doc fix on #1219, NaN guard on #1220, sim_only masking on #1218) | cloud->mac #1216 land-ask mail unread 54m | sim requests all bound | sync manifest in step | live evidence minted 2026-09-29T22:26:35Z (~2h) | cloud forward-build 00:11Z building plan row 98 (root JSON 404) | owner not escalated"
 }

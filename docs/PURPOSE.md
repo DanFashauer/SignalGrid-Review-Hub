@@ -17,12 +17,13 @@ operational context.**
 
 ## 2. Product
 
-**SignalGrid connects the systems a building already runs - access control,
-identity, device management, location, applications, ticketing - into one grid
-that decides and acts on the person's behalf.**
+**SignalGrid connects the systems a company already runs - access control,
+identity, device management, location, applications, ticketing, the legacy ones
+never built to talk to each other included - into one grid that decides and acts
+on the person's behalf.**
 
 One credential the person already carries - badge, phone, token, biometric -
-carries them through the building. Tap in at the door. Pick up a device. Enter
+carries them through every building and system the company runs. Tap in at the door. Pick up a device. Enter
 the room. Open the app. **The identity is continuous; the systems are what is
 fragmented.** SignalGrid makes them behave as one, so the person never
 negotiates with technology.
@@ -78,8 +79,8 @@ it did not open.
 
 ### The system underneath is replaceable
 
-**Source-agnostic is the point, not a feature.** The building is the first scope; the
-same grid spans every system the company runs — across all of its sites and buildings —
+**Source-agnostic is the point, not a feature.** The company is the scope: the grid
+spans every system it runs, legacy or new — across all of its sites and buildings —
 that exposes an API or SDK — the devices
 staff use, the admins who run those systems, and the workflows between them. Any such
 system is a candidate signal source. None is a dependency. **Vendor lock, in either

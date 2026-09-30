@@ -4134,3 +4134,23 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 **What does not change.** DR-047's tiers and fallback rules (rule 1 assigns two stages DR-047 did not name and re-maps none), DR-054's raise-your-hand law, DR-056's objective loop, the verdict enum, the determinism invariant and the Decision Envelope.
 
 **Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Amend rule 1 and the SKILL table together, as DR-047's own reversal clause requires of its rules and SKILL section. Making the 14-day report fatal is an amendment and needs a line here saying so.
+
+## DR-062 — The product's scope is the whole company, legacy systems included; when a company has not chosen, the cascade acts automatically (owner-directed 2026-09-30)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** It edits `docs/PURPOSE.md` §2 (canonical under DR-020) and its live mirrors, which only the owner merges.
+
+**Context.** On 2026-09-30 the owner, in a Mac Claude Code session, described the product as *"SignalGrid the worlds first smart automated orchestrator for all that want to bring modern era to legacy self indepent systems across the entrire company this company provides to solution to self run and automate all signals from any source and turn it into an actionable function on whatever platform the user is using the puck and it will do things automated or self driven all depending on the user and how smart the workflows and varables on the company itself using my product/solution."* The session then asked him three questions; two are product decisions this record carries. His answers, verbatim (the option he chose, then its text):
+
+- Q: *"Your vision says each company sets how far SignalGrid acts on its own. What should the default be when a company hasn't chosen?"* A: *"Fully automatic — SignalGrid acts on every decision unless a workflow says ask first."* (The session had recommended "Recommend, human approves"; the owner chose otherwise.)
+- Q: *"The product definition (PURPOSE.md) still says SignalGrid runs 'a building'. Your words say 'the entire company' and legacy systems. Widen it?"* A: *"Widen to the company (Recommended) — Update PURPOSE.md and its copies to 'the whole company, including legacy systems'. You merge that PR."*
+
+(His third answer, "One-command live demo", is a build priority, not a product rule; it is being built.)
+
+**Decision.**
+1. **Scope.** `docs/PURPOSE.md` §2's product sentence now reads "the systems a company already runs … the legacy ones never built to talk to each other included"; §2's second paragraph and the "Source-agnostic" paragraph say the company is the scope. The live mirrors that quote the sentence change with it: `docs/POSITIONING.md`, `artifacts/signalgrid-web/index.html` (meta description), `docs/SIGNAL_SOURCE_CATALOG.md`, `docs/OPERATIONAL_HEALTH_DEX_LAYER_STRATEGY.md`. Dated research documents that quote the old sentence are records of their day and are not rewritten. "World's first" is the owner's ambition, not a product claim: nothing here may be said to ship until the launch-claims gate and the launch profile say so.
+2. **Autonomy default.** When a company has not declared how far SignalGrid acts on its own, the cascade that follows a decision runs **automatically**: every action a workflow names executes without a person approving it, unless that workflow declares *ask first*. This governs ACTING, not DECIDING: the decision stays deterministic and fail-closed (golden rule 2) — an unknown, stale or missing signal still tightens the verdict, and an action whose own preconditions cannot be verified is refused, never run on a guess. Learning still only proposes (DR-035); nothing learned changes a verdict without a person.
+3. **Building it.** The per-company autonomy setting (`automatic | ask first`, per workflow, default automatic) is a new tenant input and is built as its own change after this record lands; until then every existing approval step (for example remediation approval in `lib/signalgrid-core/src/engine.ts`) is unchanged.
+
+**What does not change.** DR-020's rule that `docs/PURPOSE.md` is canonical; DR-019's "no category label"; the launch-claims gate, the launch profile and the publication boundary; golden rule 2; DR-035's "learning proposes".
+
+**Reversal / amendment.** The owner reverses either part with one line in chat or by reverting the pull request that carries this record, with the date added here. Changing the autonomy default is an amendment to rule 2 and needs a line here saying so.

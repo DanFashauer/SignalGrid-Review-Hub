@@ -363,6 +363,38 @@ expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
     () => core.listDecisions(connectorToken),
   );
 }
+// registerVerifiedPrincipal validates the role at the boundary (plan row 86): a
+// role outside the five — including inherited Object members, which an `in` check
+// would wrongly accept — is a validation/400 at registration, and the token is
+// never bound, so it cannot surface later as an accepted-then-broken principal.
+for (const badRole of ["superuser", "constructor", "__proto__", "toString"]) {
+  const badToken = `sgk_proof_bad_role_${badRole.replace(/_/g, "")}`;
+  let status: number | undefined;
+  expectError(
+    `registerVerifiedPrincipal: role "${badRole}" is refused as validation at registration`,
+    "validation",
+    () => {
+      try {
+        return core.registerVerifiedPrincipal(badToken, {
+          tenantId: core.context(T.owner).tenant.id,
+          role: badRole as Role,
+          subjectId: "svc_proof_bad_role",
+          principalType: "service",
+          keyReference: "proof:bad-role",
+        });
+      } catch (err) {
+        if (err instanceof CoreError) status = err.status;
+        throw err;
+      }
+    },
+  );
+  check(`registerVerifiedPrincipal: role "${badRole}" refusal is a 400`, status === 400, `got ${status}`);
+  expectError(
+    `registerVerifiedPrincipal: the "${badRole}" token was never bound (unknown token → unauthorized)`,
+    "unauthorized",
+    () => core.context(badToken),
+  );
+}
 check(
   "rbac: auditor CAN read the audit ledger",
   core.listAudit(T.auditor).length > 0,

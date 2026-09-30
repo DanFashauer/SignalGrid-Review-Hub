@@ -41,9 +41,11 @@ executed counterexample (the command, its failing line on the base, its passing
 line on the head). The body says "DECISION_PATH: merged under DR-061 with check
 run <id>". DR-061 rule 2's paths stay the owner's merge whatever their category:
 `docs/DECISION_RECORDS.md`, `docs/agent/objective.json`, the launch profile, the
-launch-claims gate, the publication boundary, CLAUDE.md's golden rules, and
-`DecisionEngine.swift` / `AppWorkflows.swift` outside a literal re-port the owner
-has ruled on in a record.
+launch-claims gate and its two ceiling ratchets, the publication boundary, every
+path `scripts/check-owner-gated-surfaces.mjs` classifies OWNER_RESERVED (pricing,
+positioning, the buyer-facing site and outreach among them), CLAUDE.md's golden
+rules, and `DecisionEngine.swift` / `AppWorkflows.swift` outside a literal re-port
+the owner has ruled on in a record. A PR touching any of them is the owner's whole.
 
 ## Native client and shared-vector PRs
 

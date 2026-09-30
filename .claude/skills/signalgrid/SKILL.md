@@ -73,7 +73,8 @@ Then measure rather than assume: `git ls-files | grep …`, not "the doc says."
 5. **Read-only and fixture-backed first.** New connectors start read-only unless
    the task explicitly says otherwise and supplies a safe private context.
 6. **Approval gates are explicit.** A default path must never bypass one.
-7. **Don't merge your own PR.** Merge decisions belong to the owner. Ask before
+7. **Don't merge your own PR.** Merge decisions belong to the owner, except where
+   DR-037 or DR-061 hand one to a lane (see the checklist below). Ask before
    destructive git, before sending data anywhere external, and before pushing.
 
 ---
@@ -218,6 +219,6 @@ announce in the commit message, not only in chat.
 - [ ] Docs cite only paths that exist; no figure quoted that will age
 - [ ] PR body: summary, what changed, validation performed, public-safety note,
       remaining risks, and what you could not verify
-- [ ] Owner merges, not you — unless every DR-037 (SAFETY_MACHINERY) or DR-061
+- [ ] Owner merges, not you — unless every DR-037 or DR-061
       (DECISION_PATH) condition holds on the current head; DR-061 rule 2's paths
       are always the owner's

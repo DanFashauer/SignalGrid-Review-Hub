@@ -4158,36 +4158,39 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 2. **These stay the owner's to merge. DR-061 delegates nothing on them:**
    - `docs/DECISION_RECORDS.md`
    - `docs/agent/objective.json`
-   - the launch profile (`docs/LAUNCH_PROFILE.md`, `scripts/launch-profile.mjs`)
-   - the launch-claims gate (`scripts/check-launch-claims.mjs`)
-   - the publication boundary (`scripts/publication-boundary.mjs`, `scripts/check-publication-boundary.mjs`)
+   - the launch profile, including `docs/LAUNCH_PROFILE.md`, `scripts/launch-profile.mjs`, `scripts/launch-profile.d.mts`, `scripts/check-launch-profile.mjs` and `scripts/src/launch-profile-proof.ts`
+   - the launch-claims gate, including `scripts/check-launch-claims.mjs` and its two ratchets, `docs/agent/launch-claims-docs-ceiling.json` and `docs/agent/launch-claims-retired-labels-ceiling.json`
+   - the publication boundary, including `docs/PUBLICATION_BOUNDARY.md`, `scripts/publication-boundary.mjs` and `scripts/check-publication-boundary.mjs`
+   - every path `scripts/check-owner-gated-surfaces.mjs` classifies OWNER_RESERVED — among them pricing and positioning, the buyer-facing site and outreach, `README.md`, LICENSE/NOTICE, the compliance and threat-model documents and `docs/COST_MODEL.md`. The owner delegated decision-path code, not buyer copy or price.
    - the golden rules in `CLAUDE.md`
    - any change to `native/ios/EnterpriseShell/Services/DecisionEngine.swift` or `AppWorkflows.swift`, except a literal parity re-port the owner has ruled on in a decision record
 
-   The list is by path, not by classifier category. The classifier puts the records file and the objective under SAFETY_MACHINERY, puts the two gates under `scripts/**`, and does not classify `CLAUDE.md` at all, so a lane must not infer "mergeable" from a category. A PR that touches one of these paths is the owner's to merge in whole. This narrows a practice: DR-060's own PR, which added a record, was merged by a lane under DR-037. From this record on, a PR that adds or edits a record waits for the owner, as DR-037's "does not edit a decision record on its own authority" already implied.
+   The list is by path, not only by classifier category. The classifier puts the records file and the objective under SAFETY_MACHINERY, puts the gates under `scripts/**`, and does not classify `CLAUDE.md` at all (until #1133), so a lane must not infer "mergeable" from a category. A PR that touches one of these paths is the owner's to merge in whole — a DECISION_PATH change riding with a price edit is the owner's. This narrows a practice: DR-060's own PR, which added a record, was merged by a lane under DR-037. From this record on, a PR that adds or edits a record waits for the owner, as DR-037's "It still does not: edit `AGENTS.md` or a decision record on its own authority" already implied. Rule 2 amends DR-037's "What stays owner-gated" list by reference, not in place.
 3. **Golden rule 1: the first owner ruling (answer c).** The rule's text is unchanged. The exception covers only these literal re-ports of TS rules already on mainline:
-   - PR #1118 (also carried by #1121): `DecisionEngine.swift` gains `hasUnauthorizedRemoval` from `lib/signalgrid-simulator/src/decisionEngine.ts`. An undock with no active session is a custody exception.
+   - PR #1118 (also carried by #1121): `DecisionEngine.swift` gains `hasUnauthorizedRemoval` from `lib/signalgrid-simulator/src/decisionEngine.ts`: an undock while no signal asserts an active session raises `CUSTODY_EXCEPTION`, as the TS engine already does.
    - PR #1121: `AppWorkflows.swift` gains two things from `lib/app-workflows/src/index.ts`. The first is the scoped step-up release (`stepUpSatisfiedActionKeys`). The second is the unknown-vertical confirmer fallback, `"an authorized confirmer"`. The owner's question named only the engine rule; his answer named #1121 as well, so its planner hunk is covered as a literal re-port and nothing more.
 
-   Both PRs still need every rule 1 condition. Both also need the native client suites that the landing skill names, and the shared vectors must replay green on the head. Any other hunk in those two files, and any later behavior edit, needs its own owner ruling, recorded as its own decision record.
+   The ruling covers those hunks as reviewed at #1118 head `8f97bb73` and #1121 head `2848a9a1`; any later change to them needs a fresh Opus review under rule 1. Both PRs still need every rule 1 condition. Both also need the native client suites that the landing skill names, and the shared vectors must replay green on the head. Any other hunk in those two files, and any later behavior edit, needs its own owner ruling, recorded as its own decision record.
 4. **The Mac runs an unattended build session (answer b).** The session is scripts/mac/build-tick.sh, built on branch mac/auto-build-tick. It lands in its own PR, with its own row in `docs/agent/scheduled-routines.json` that this record authorizes. Once landed, it works like this:
-   - It takes the top buildable task from the objective loop (`docs/agent/objective-state.json`, DR-056).
-   - It builds the task test-first, runs `node scripts/preflight.mjs` and `pnpm run verify:breadth`, and opens a PR.
-   - It never merges, never force-pushes and never bypasses a hook.
+   - It takes the top unclaimed task from the objective loop (`docs/agent/objective-state.json`, DR-056) and claims it by pushing an empty branch first.
+   - The headless session only edits its own worktree and runs local checks, started with no git or GitHub credentials in its environment and with push, merge and `gh` commands deny-listed. The script, not the session, commits, runs `node scripts/preflight.mjs` and `pnpm run verify:breadth`, and pushes that one branch and opens its PR only when both are green.
+   - Nothing in it merges, force-pushes or bypasses a hook. This is enforced by the environment and the deny list, not by an OS boundary: a session that deliberately wrote its own push script could still escape, so the claim rests on those layers plus the brief.
    - When it is stuck, it raises a hand (DR-054).
 
    Its runs use the owner's Claude usage, which his answer accepts. A PR it opens is merged, if at all, by a lane under rule 1. The tick authored the change, so the review must come from a separate agent.
 
-**What does not change, deliberately.** Nothing unattended gains merge authority over the decision path. The rule 1 conditions rest on a model's review, so merging under them is a lane's act.
+   Rule 4 amends DR-056 §4 ("Mac derives and opens; cloud reviews, merges and consumes"): the Mac now also consumes `tasks[]`. A row with an open PR naming it, or a pushed `mac/build-row-<id>-*` branch, is claimed, and the build tick skips it; the cloud's forward-build cycle skips the same. Two lanes can still start the same row inside one cycle; the later PR is closed as superseded.
+
+**What does not change, deliberately.** No deterministic auto-merge authorizer, and no routine whose own row does not say so, gains merge authority over the decision path. The rule 1 conditions rest on a model's review, so merging under them is the cloud lane's act (DR-037 condition 5).
 - `scripts/brain-cycle-merge-decide.mjs` and `docs/agent/brain-cycle-config.json` still refuse DECISION_PATH outright, because no model output authorizes an unattended merge.
 - `scripts/check-owner-gated-surfaces.mjs` still classifies the decision path as owner-gated for the autonomous loop.
-- Every routine row in `docs/agent/scheduled-routines.json` keeps its own scope. That includes forward-build-cycle's "never self-merges a product change". A routine's scope widens only when its own row is amended.
+- Every routine row in `docs/agent/scheduled-routines.json` keeps its own scope. That includes forward-build-cycle's "NEVER self-merges a product / launch-profile / launch-claims-gate / publication-boundary change". A routine's scope widens only when its own row is amended.
 
-DR-037's conditions, DR-054, DR-056's loop and the determinism invariant are unchanged. Nothing here changes what may be claimed to ship.
+DR-037's conditions, DR-054 and the determinism invariant are unchanged, and DR-056's loop is unchanged except as rule 4 amends its §4. Nothing here changes what may be claimed to ship.
 
-**Follow-up.** `.claude/workflows/land-branch.js` still writes "the cloud lane will not self-merge it" into a DECISION_PATH PR body. Its `klass` row in `.claude/workflows/README.md` still feeds that text. Open PR #1133 is rewriting that script, so both belong to #1133 and are not touched here.
+**Follow-up.** `.claude/workflows/land-branch.js` still writes "the cloud lane will not self-merge it" into a DECISION_PATH PR body, and its `klass` row in `.claude/workflows/README.md` still feeds that text; open PR #1133 moves that text into `scripts/lib/land-branch-gate.mjs` (`ownerDecisionText`). All three belong to #1133 and are not touched here.
 
-**Evidence.** No gate refuses a lane's merge of a DECISION_PATH PR. The rule lived in prose: the landing skill, `docs/LANE_COORDINATION.md` protocol item 7, `.claude/agents/blocker-dispatcher.md` and `.claude/skills/signalgrid/SKILL.md`. The only code that refuses a decision-path merge is the unattended brain-cycle authorizer, and the landing workflow's PR-body text, which is left to #1133. Both code sites stay as they are. The PR that carries this record also points the four prose sites at DR-061 (each keeps rule 2's paths with the owner), so they and this record take effect together, when the owner merges it. The PR quotes the searches it ran and the self-test lines showing both refusals still hold.
+**Evidence.** No gate refuses a lane's merge of a DECISION_PATH PR. The rule lived in prose: the landing skill, `docs/LANE_COORDINATION.md` protocol item 7, `.claude/agents/blocker-dispatcher.md`, `.claude/skills/signalgrid/SKILL.md` (two places) and the project-manager charter in `docs/agent/agent-tiers.json`. The only code that refuses a decision-path merge is the unattended brain-cycle authorizer, and the landing workflow's PR-body text, which is left to #1133. Both code sites stay as they are. The PR that carries this record also points the five prose sites at DR-061 (each keeps rule 2's paths with the owner), so they and this record take effect together, when the owner merges it. The PR quotes the searches it ran and the self-test lines showing both refusals still hold.
 
 **What no gate can observe.** No gate checks the rule 1 conditions. Whether the reviewer ran on Opus, whether it authored the change, and whether the counterexample really failed on the base all rest on the PR body quoting them. This is the same footing as DR-037's condition 2.
 

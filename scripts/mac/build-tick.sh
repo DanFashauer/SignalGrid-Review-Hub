@@ -1,43 +1,47 @@
 #!/usr/bin/env bash
 # =============================================================================
-# SignalGrid — the Mac lane's BUILD tick. Runs WITHOUT a person, from launchd every
-# 3 hours (scripts/mac/install-build-tick.sh, label com.signalgrid.build-tick): one
-# headless Claude session builds the objective loop's top buildable task and opens
-# a PR. The lane tick (lane-tick.sh) is unchanged and separate — it runs sim
-# requests and heartbeats; this one builds.
+# SignalGrid — the Mac lane's BUILD tick (DR-061 rule 4). Runs WITHOUT a person, from
+# launchd every 3 hours (scripts/mac/install-build-tick.sh, label
+# com.signalgrid.build-tick). The lane tick (lane-tick.sh) is separate and never builds.
 #
 #   bash scripts/mac/build-tick.sh                   # one run, prints a one-line result
 #   bash scripts/mac/build-tick.sh --dry-run         # the task it would pick + the exact
-#                                                    # claude command; runs nothing
+#                                                    # session command; runs nothing
 #   bash scripts/mac/build-tick.sh --dry-run --state <file> [--remote <name|path>]
 #                                                    # the same, against a scratch state
 #                                                    # file / a scratch remote's heads
 #
-# WHY (owner, 2026-09-29, DR-061: "Yes, build it — The brain builds its top task
-# unattended and opens PRs"). The objective loop ranks tasks[] in
-# docs/agent/objective-state.json every 5 minutes, and until this script nothing
-# STARTED one of them without a person opening a session.
+# WHY (owner, 2026-09-29: "Yes, build it — The brain builds its top task unattended and
+# opens PRs", then "Build it, I confirm"). Until this, nothing STARTED a ranked task in
+# docs/agent/objective-state.json without a person opening a session.
 #
-# WHAT ONE RUN DOES, in order:
-#   1. one run at a time (mkdir lock; a dead holder's lock is stale and cleared);
-#   2. fetch, then read tasks[] from origin/SignalGrid_Alpha's objective-state.json;
-#   3. walk tasks[] in rank order and take the first row with NO in-flight work — no
-#      remote branch mac/build-row-<id>-*, and no open PR whose title or head names
-#      "plan row <id>" (REST, never GraphQL). Work that cannot be LISTED is not known
-#      to be absent: an unreadable branch or PR list stops the run, never builds blind;
-#   4. its OWN worktree (<repo>.build, a sibling of <repo>.tick), reset to a fresh
-#      origin/SignalGrid_Alpha every run — never the person's checkout, never the tick's;
-#   5. deps only when the lockfile moved (lane-tick.sh's stamp), and tsx's darwin
-#      esbuild binary from a cache OUTSIDE the repo (package.json and the lockfile are
-#      never touched), exported as ESBUILD_BINARY_PATH;
-#   6. `claude -p` on scripts/mac/build-tick-brief.md with the row substituted, an
-#      explicit tool allowlist and --permission-mode acceptEdits (NEVER
-#      bypassPermissions / --dangerously-skip-permissions), under a wall-clock cap;
-#   7. log to ~/Library/Logs/signalgrid/build-tick-<stamp>.log, print one result line,
-#      and raise a hand (DR-054, delivered through lane-deliver) on any failure after
-#      the pick — including a non-zero session exit.
+# WHO DOES WHAT. The headless session only EDITS its worktree and runs local checks. It
+# starts with no git or GitHub credentials (no ssh agent, GIT_SSH_COMMAND=false, no git
+# global config so no credential helper, an empty gh config, no tokens) and with push,
+# commit, merge, gh and lane-mail commands deny-listed. THIS SCRIPT does every outward
+# act: it claims the row, commits the session's change, runs preflight + breadth, and
+# only on 0/0 pushes that one branch and opens its PR. Nothing here merges. That is
+# enforced by the environment and the deny list, not an OS boundary — a session that
+# deliberately wrote its own push script could still escape (DR-061 rule 4 says so).
 #
-# Stock macOS bash 3.2: guarded array expansion only, no mapfile, no ${var,,}.
+# ONE RUN, in order:
+#   0. re-exec mainline's copy of this script (a real run never runs a branch copy);
+#   1. one run at a time (a lock under ~/Library/Caches, never $TMPDIR, whose value
+#      differs between launchd, a sandboxed shell and a plain one);
+#   2. fetch (four failures in a row raise a hand), read tasks[] from mainline's state;
+#   3. take the first row nobody has claimed: no remote head and no open PR names it
+#      ("row 12", "row-12", "rows 12", "#12" in a head or title; "plan row 12" or
+#      "row-12" in a body). A false match only skips a row — the safe direction;
+#   4. its OWN worktree <repo>.build, reset to origin/SignalGrid_Alpha every run;
+#   5. deps when the lockfile moved; tsx's darwin esbuild from a cache outside the repo;
+#   6. CLAIM: push the empty branch mac/build-row-<id>-<stamp> before the session, so the
+#      next run and the cloud lane skip the row even if the session finds nothing to do;
+#   7. the session, under a wall-clock cap, writing its commit message, PR title and
+#      body — or a hand — into a run directory OUTSIDE the worktree (--add-dir);
+#   8. commit, preflight + breadth, push + PR only on 0/0; anything else raises a hand
+#      and leaves the claim in place for a person.
+#
+# Stock macOS bash 3.2: guarded array expansion, here-strings, no mapfile, no ${var,,}.
 # =============================================================================
 set -u
 
@@ -45,9 +49,6 @@ if [ "$(uname -s)" != "Darwin" ]; then
   echo "build-tick.sh: the build tick is the Mac lane's (launchd + a local claude CLI); on this host the cloud lane builds." >&2
   exit 2
 fi
-
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
 
 DRY=0
 STATE_FILE=""
@@ -69,15 +70,33 @@ if [ "$DRY" = "0" ] && { [ -n "$STATE_FILE" ] || [ "$REMOTE" != "origin" ]; }; t
   exit 2
 fi
 
-# launchd starts with a minimal PATH (install-launchd.sh); claude lives in ~/.local/bin.
-# Appended, never prepended, so a person's PATH still wins when run by hand.
+# launchd starts with a minimal PATH (install-build-tick.sh); claude lives in ~/.local/bin.
 PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nvm/current/bin:$HOME/Library/pnpm"
 export PATH
+CACHE="$HOME/Library/Caches/signalgrid/build-tick"
+mkdir -p "$CACHE" || { echo "cannot create $CACHE" >&2; exit 1; }
+
+# ── 0. always mainline's copy ─────────────────────────────────────────────────
+# launchd runs the path the installer wrote, in whatever state the person's checkout is
+# in (another branch, behind). A real run fetches and re-execs origin/SignalGrid_Alpha's
+# copy, so the job is always mainline's; --dry-run runs the file in front of you.
+if [ "$DRY" = "0" ] && [ -z "${SG_BUILD_TICK_MAINLINE:-}" ]; then
+  _root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  git -C "$_root" fetch -q origin 2>/dev/null || true
+  if ! git -C "$_root" show origin/SignalGrid_Alpha:scripts/mac/build-tick.sh > "$CACHE/build-tick.mainline.sh" 2>/dev/null; then
+    echo "build-tick: origin/SignalGrid_Alpha has no scripts/mac/build-tick.sh — nothing to run"
+    exit 0
+  fi
+  SG_BUILD_TICK_MAINLINE=1 SG_REPO_ROOT="$_root" exec /bin/bash "$CACHE/build-tick.mainline.sh"
+fi
+REPO_ROOT="${SG_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
 
 MAX_TURNS=200
-WALL_SECONDS=10800   # the launchd interval: a session never outlives its own slot
+SESSION_SECONDS=7200     # the session; preflight + breadth follow inside the 3 h slot's spirit
+PREFLIGHT_SECONDS=5400
+BREADTH_SECONDS=3600
 BUILD_WT="$(cd "$REPO_ROOT/.." && pwd)/$(basename "$REPO_ROOT").build"
-BRIEF_FILE="$REPO_ROOT/scripts/mac/build-tick-brief.md"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_LOG=""
 say() {
@@ -86,17 +105,16 @@ say() {
   return 0
 }
 
-PICK_ID=""
 # A hand through lane-deliver (straight to mainline on the Mac), never only a file in the
 # build worktree — that worktree is reset next run. raise-hand.mjs keys a hand on the day
-# and its `blocked` text, so a failure that repeats every 3 hours raises ONE hand a day.
+# and its `blocked` text.
 raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
-  _ops="$(mktemp "${TMPDIR:-/tmp}/build-tick-hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
+  _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
   if node -e 'const [f, blocked, where] = process.argv.slice(1);
       require("fs").writeFileSync(f, JSON.stringify([{ op: "raise", who: "mac lane", domain: "lane", where,
         doing: "the unattended build tick (scripts/mac/build-tick.sh)", blocked,
-        need: "a person on the Mac to read the log named in where, fix the cause, or re-rank the row" }]));' \
+        need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" }]));' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" \
     && node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1; then
     say "raised a hand: $1"
@@ -108,13 +126,14 @@ raise_hand() {
 fail() { say "result: failed: $1"; raise_hand "$1"; exit 1; }
 
 # ── 1. one run at a time ─────────────────────────────────────────────────────
-# launchd never overlaps its own label; a PERSON running this by hand mid-session
-# would. mkdir is atomic and needs no flock (bash 3.2). Same shape as lane-tick.sh.
-LOCK="${TMPDIR:-/tmp}/signalgrid-build-tick.lock"
+# mkdir is atomic (bash 3.2 has no flock). A lock with a live holder, or with no pid yet
+# and younger than 60 s (the holder is between mkdir and writing its pid), is live.
+LOCK="$CACHE/build-tick.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then
   _holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
-  if [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; then
-    say "result: skipped: another build tick (pid $_holder) holds $LOCK"
+  _age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || date +%s) ))
+  if { [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; } || { [ -z "$_holder" ] && [ "$_age" -lt 60 ]; }; then
+    say "result: skipped: another build tick (pid ${_holder:-starting}) holds $LOCK"
     exit 0
   fi
   say "stale build lock (holder ${_holder:-unknown} is gone) — clearing it"
@@ -129,17 +148,24 @@ for _tool in git gh node pnpm npm claude perl; do
 done
 
 # ── 2. the ranked tasks, from mainline ───────────────────────────────────────
+# An asleep Mac is common and says nothing; four failures in a row (12 h) is not.
+FETCH_FAILS="$CACHE/fetch-failures"
 if ! git fetch -q origin --prune 2>/dev/null; then
-  say "result: skipped: origin unreachable (offline?)"
+  _n=$(( $(cat "$FETCH_FAILS" 2>/dev/null || echo 0) + 1 ))
+  printf '%s' "$_n" > "$FETCH_FAILS"
+  [ "$_n" = "4" ] && raise_hand "git fetch origin has failed on 4 build ticks in a row (auth expired? repo locked?)"
+  say "result: skipped: git fetch origin failed ($_n in a row)"
   exit 0
 fi
+rm -f "$FETCH_FAILS"
 if [ -n "$STATE_FILE" ]; then
   STATE_JSON="$(cat "$STATE_FILE" 2>/dev/null)"
 else
   STATE_JSON="$(git show origin/SignalGrid_Alpha:docs/agent/objective-state.json 2>/dev/null)"
 fi
-# rowId goes into a branch name, a regex and the brief, so anything but [A-Za-z0-9]
-# is refused rather than escaped.
+# rowId goes into a branch name, a regex and the brief, so anything but [A-Za-z0-9] is
+# refused rather than escaped. stderr goes to a file: a warning is never a task line.
+_err="$(mktemp "$CACHE/tasks-err.XXXXXX")"
 TASKS="$(printf '%s' "$STATE_JSON" | node -e '
   let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
     try {
@@ -152,81 +178,96 @@ TASKS="$(printf '%s' "$STATE_JSON" | node -e '
       }
       process.stdout.write(out.join(""));
     } catch (e) { console.error(e.message); process.exit(1); }
-  });' 2>&1)" || fail "could not read tasks[] from ${STATE_FILE:-origin/SignalGrid_Alpha:docs/agent/objective-state.json}: $TASKS"
+  });' 2>"$_err")" || fail "could not read tasks[] from ${STATE_FILE:-origin/SignalGrid_Alpha:docs/agent/objective-state.json}: $(cat "$_err")"
+rm -f "$_err"
 if [ -z "$TASKS" ]; then
   say "result: nothing buildable (the state ranks no task)"
   exit 0
 fi
 
-# ── 3. the first row with no in-flight work ──────────────────────────────────
-HEADS="$(git ls-remote --heads "$REMOTE" 'refs/heads/mac/build-row-*' 2>&1)" \
-  || fail "could not list $REMOTE's mac/build-row-* branches — in-flight work unknown, not building blind"
-# gh fills {owner}/{repo} from this checkout's origin; --paginate reads past 100. The body
-# rides along flattened to one line: a PR whose title was cut before its "(plan row N)"
-# still names the row in its body (#1219 did, 2026-09-29).
-PRS="$(gh api --paginate 'repos/{owner}/{repo}/pulls?state=open&per_page=100' --jq '.[] | "\(.head.ref)\t\(.title)\t\(.body // "" | gsub("\\s+"; " "))"' 2>&1)" \
+# ── 3. the first row nobody has claimed ──────────────────────────────────────
+HEADS="$(git ls-remote --heads "$REMOTE" 2>&1)" \
+  || fail "could not list $REMOTE's branches — in-flight work unknown, not building blind"
+# gh fills {owner}/{repo} from this checkout's origin; --paginate reads past 100. Title
+# (with its head) and body are matched separately: a body names rows in passing, so only
+# "plan row N" / "row-N" there counts.
+PRS="$(gh api --paginate 'repos/{owner}/{repo}/pulls?state=open&per_page=100' --jq '.[] | "\(.head.ref)\t\(.title | gsub("\\s+"; " "))\t\(.body // "" | gsub("\\s+"; " "))"' 2>&1)" \
   || fail "could not list open PRs (gh api) — in-flight work unknown, not building blind"
+PR_HEADS_TITLES="$(cut -f1,2 <<< "$PRS")"
+PR_BODIES="$(cut -f3- <<< "$PRS")"
 in_flight() {
-  # Here-strings, not printf | grep -q: grep -q exits at the first match and printf then
-  # dies on SIGPIPE, printing "write error: Broken pipe" into every log.
-  if grep -q "refs/heads/mac/build-row-$1-" <<< "$HEADS"; then
-    echo "a remote mac/build-row-$1-* branch exists"; return 0
-  fi
-  # "plan row 24" in a title or body, "plan-row-24" in a head, "row-24 bullet" in a body;
-  # never row 241. A false match only skips a row — the safe direction.
-  if grep -qiE "(plan[ -]row[ -]|row-)$1([^0-9A-Za-z]|\$)" <<< "$PRS"; then
-    echo "an open PR names plan row $1"; return 0
+  _broad="(^|[^0-9A-Za-z])rows?[ -]*#?$1([^0-9A-Za-z]|\$)"
+  if grep -qiE "$_broad" <<< "$HEADS"; then echo "a remote branch names row $1"; return 0; fi
+  if grep -qiE "$_broad" <<< "$PR_HEADS_TITLES"; then echo "an open PR's title or head names row $1"; return 0; fi
+  if grep -qiE "(plan[ -]rows?[ -]*#?|(^|[^0-9A-Za-z])row-)$1([^0-9A-Za-z]|\$)" <<< "$PR_BODIES"; then
+    echo "an open PR's body names plan row $1"; return 0
   fi
   return 1
 }
+PICK_ID=""
 PICK_TITLE=""
 N_TASKS=0
 while IFS="$(printf '\t')" read -r _id _title; do
   [ -n "$_id" ] || continue
   N_TASKS=$((N_TASKS + 1))
-  if _why="$(in_flight "$_id")"; then say "row $_id in flight ($_why) — next"; continue; fi
+  if _why="$(in_flight "$_id")"; then say "row $_id claimed ($_why) — next"; continue; fi
   PICK_ID="$_id"; PICK_TITLE="$_title"; break
 done <<TASKS_EOF
 $TASKS
 TASKS_EOF
 if [ -z "$PICK_ID" ]; then
-  say "result: nothing buildable ($N_TASKS ranked task(s), every one in flight)"
+  say "result: nothing buildable ($N_TASKS ranked task(s), every one claimed)"
   exit 0
 fi
 BRANCH="mac/build-row-$PICK_ID-$STAMP"
+RUN_DIR="$CACHE/runs/$STAMP"
 say "picked plan row $PICK_ID ('$PICK_TITLE') → $BRANCH"
 
 # ── the brief and the exact command ──────────────────────────────────────────
-# Rendered in node, not ${var//…}: bash 5.2 treats `&` in a replacement specially, and
-# a title is free text.
-BRIEF="$(node -e 'const [f, id, title, branch] = process.argv.slice(1);
-  process.stdout.write(require("fs").readFileSync(f, "utf8")
-    .split("{{ROW_ID}}").join(id).split("{{ROW_TITLE}}").join(title).split("{{BRANCH}}").join(branch));' \
-  "$BRIEF_FILE" "$PICK_ID" "$PICK_TITLE" "$BRANCH" 2>&1)" || fail "could not render $BRIEF_FILE: $BRIEF"
-case "$BRIEF" in *"{{"*) fail "$BRIEF_FILE still holds an unfilled {{placeholder}} after rendering" ;; esac
-# The allowlist is the session's whole reach; anything else is denied, never prompted
-# (-p has nobody to ask). acceptEdits covers edits inside the worktree only.
-CLAUDE_CMD=(claude -p "$BRIEF" --model opus --max-turns "$MAX_TURNS" --permission-mode acceptEdits
-  --allowedTools Read Edit Write Grep Glob "Bash(git *)" "Bash(pnpm *)" "Bash(node *)" "Bash(gh *)" "Bash(xcodebuild *)" "Bash(swift *)")
 if [ "$DRY" = "1" ]; then
-  say "dry-run: would run in $BUILD_WT, under a ${WALL_SECONDS}s cap:"
-  printf '%q ' perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$WALL_SECONDS" ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"}
+  BRIEF_SRC="$(cat "$REPO_ROOT/scripts/mac/build-tick-brief.md" 2>/dev/null)"
+else
+  BRIEF_SRC="$(git show origin/SignalGrid_Alpha:scripts/mac/build-tick-brief.md 2>/dev/null)"
+fi
+[ -n "$BRIEF_SRC" ] || fail "could not read scripts/mac/build-tick-brief.md"
+# Rendered in node, not ${var//…}: a title is free text and `&` is special in bash 5.2.
+BRIEF="$(printf '%s' "$BRIEF_SRC" | node -e 'const [id, title, branch, run] = process.argv.slice(1);
+  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => process.stdout.write(
+    s.split("{{ROW_ID}}").join(id).split("{{ROW_TITLE}}").join(title).split("{{BRANCH}}").join(branch).split("{{RUN_DIR}}").join(run)));' \
+  "$PICK_ID" "$PICK_TITLE" "$BRANCH" "$RUN_DIR" 2>&1)" || fail "could not render the brief: $BRIEF"
+case "$BRIEF" in *"{{"*) fail "the brief still holds an unfilled {{placeholder}} after rendering" ;; esac
+EMPTY_GH="$CACHE/empty-gh-config"
+# The session's reach. Allow rules are not the boundary under the user's sandbox
+# auto-allow; deny rules still bind, and the scrubbed environment below is what makes a
+# push or a gh call fail even if a command slips through.
+SESSION_ENV=(env -u SSH_AUTH_SOCK -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN
+  GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GH_CONFIG_DIR="$EMPTY_GH")
+CLAUDE_CMD=(claude -p "$BRIEF" --model opus --max-turns "$MAX_TURNS"
+  --permission-mode acceptEdits --permission-prompts none --strict-mcp-config --add-dir "$RUN_DIR"
+  --allowedTools Read Edit Write Grep Glob "Bash(git status*)" "Bash(git diff*)" "Bash(git log*)" "Bash(git show*)"
+    "Bash(pnpm *)" "Bash(node *)" "Bash(xcodebuild *)" "Bash(swift *)"
+  --disallowedTools "Bash(git push*)" "Bash(git commit*)" "Bash(git -C *)" "Bash(git remote*)" "Bash(git config*)"
+    "Bash(gh *)" "Bash(ssh*)" "Bash(curl*)" "Bash(wget*)" "Bash(node scripts/lane-deliver*)" "Bash(node scripts/mac/gh-pr*)"
+    "Bash(pnpm run lane:*)" "Bash(pnpm run hand:*)")
+if [ "$DRY" = "1" ]; then
+  say "dry-run: would claim $BRANCH, then run in $BUILD_WT under a ${SESSION_SECONDS}s cap:"
+  printf '%q ' ${SESSION_ENV+"${SESSION_ENV[@]}"} perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$SESSION_SECONDS" ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"}
   printf '\n'
   exit 0
 fi
 
 # ── 4. its own worktree, fresh every run ─────────────────────────────────────
 LOG_DIR="$HOME/Library/Logs/signalgrid"
-mkdir -p "$LOG_DIR" || fail "cannot create $LOG_DIR"
+mkdir -p "$LOG_DIR" "$RUN_DIR" "$EMPTY_GH" || fail "cannot create $LOG_DIR / $RUN_DIR"
 RUN_LOG="$LOG_DIR/build-tick-$STAMP.log"
 say "picked plan row $PICK_ID ('$PICK_TITLE') → $BRANCH; log $RUN_LOG"
+git worktree prune >> "$RUN_LOG" 2>&1
 if [ ! -e "$BUILD_WT/.git" ]; then
   git worktree add -q --detach "$BUILD_WT" origin/SignalGrid_Alpha >> "$RUN_LOG" 2>&1 \
     || fail "could not create the build worktree at $BUILD_WT"
 fi
 cd "$BUILD_WT" || fail "cannot enter the build worktree at $BUILD_WT"
-# Dedicated to this script and locked above, so a leftover is a dead session's, and the
-# run resets over it (named in the log, never silently).
+# Dedicated to this script and locked above, so a leftover is a dead session's.
 _left="$(git status --porcelain | wc -l | tr -d ' ')"
 [ "$_left" = "0" ] || say "discarding $_left leftover path(s) from an earlier run"
 { git checkout -q -f --detach origin/SignalGrid_Alpha && git clean -fdq; } >> "$RUN_LOG" 2>&1 \
@@ -254,22 +295,56 @@ if [ ! -x "$ESBUILD_BINARY_PATH" ]; then
 fi
 export ESBUILD_BINARY_PATH
 
-# ── 6. the session ───────────────────────────────────────────────────────────
+# ── 6. claim the row before any work ─────────────────────────────────────────
 git switch -q -c "$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not create $BRANCH in the build worktree"
-say "session starting (opus, ${MAX_TURNS} turns, ${WALL_SECONDS}s cap)"
-# No `timeout` on macOS. alarm survives exec, so SIGALRM ends claude at the cap; `or die`
-# keeps a failed exec from exiting 0. ponytail: a tool the session left running (a
-# preflight child) is orphaned, not killed — add a process group if that bites.
-perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$WALL_SECONDS" ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"} >> "$RUN_LOG" 2>&1 < /dev/null
-SESSION_STATUS=$?
+git push -q origin "HEAD:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not push the claim branch $BRANCH"
+say "claimed plan row $PICK_ID with $BRANCH (at mainline's tip)"
 
-# ── 7. one result line ───────────────────────────────────────────────────────
-if [ "$SESSION_STATUS" != "0" ]; then
-  fail "the headless build session for plan row $PICK_ID exited $SESSION_STATUS (142 = the ${WALL_SECONDS}s cap)"
+# ── 7. the session ───────────────────────────────────────────────────────────
+say "session starting (opus, ${MAX_TURNS} turns, ${SESSION_SECONDS}s cap, no git/GitHub credentials)"
+# No `timeout` on macOS. alarm survives exec, so SIGALRM ends claude at the cap (142).
+# ponytail: a tool the session left running is orphaned, not killed — add a process
+# group if that bites.
+${SESSION_ENV+"${SESSION_ENV[@]}"} perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$SESSION_SECONDS" \
+  ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"} >> "$RUN_LOG" 2>&1 < /dev/null
+SESSION_STATUS=$?
+say "session exited $SESSION_STATUS (142 = the ${SESSION_SECONDS}s cap)"
+
+# ── 8. the outward half: commit, gate, push, PR ──────────────────────────────
+if [ -s "$RUN_DIR/hand.txt" ]; then
+  fail "plan row $PICK_ID: the session stopped and asked for a hand: $(head -c 600 "$RUN_DIR/hand.txt" | tr '\n' ' '). Claim $BRANCH stays until a person deletes it"
 fi
-if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-  say "result: acted: plan row $PICK_ID pushed on $BRANCH (the PR is in the log)"
-else
-  say "result: session exited 0 without pushing $BRANCH — it stopped on purpose (already done or blocked; its hand says which); log $RUN_LOG"
+if [ -z "$(git status --porcelain)" ]; then
+  fail "plan row $PICK_ID: the session (exit $SESSION_STATUS) changed nothing and left no hand.txt. Claim $BRANCH stays until a person deletes it"
 fi
+for _f in commit-msg.txt pr-title.txt pr-body.md; do
+  [ -s "$RUN_DIR/$_f" ] || fail "plan row $PICK_ID: the session (exit $SESSION_STATUS) left changes but no $RUN_DIR/$_f. The work is uncommitted in $BUILD_WT until the next run resets it"
+done
+printf '\nCo-Authored-By: Claude <noreply@anthropic.com>\nBuild-Tick: %s\n' "$STAMP" >> "$RUN_DIR/commit-msg.txt"
+{ git add -A && git commit -q -F "$RUN_DIR/commit-msg.txt"; } >> "$RUN_LOG" 2>&1 \
+  || fail "plan row $PICK_ID: could not commit the session's change on $BRANCH"
+HEAD_SHA="$(git rev-parse HEAD)"
+say "committed $HEAD_SHA; preflight then breadth"
+perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1
+PF=$?
+BR=1
+if [ "$PF" = "0" ]; then
+  perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$BREADTH_SECONDS" pnpm run verify:breadth > "$RUN_DIR/breadth.log" 2>&1
+  BR=$?
+fi
+PF_LINE="$(grep -E 'Preflight (PASSED|FAILED)' "$RUN_DIR/preflight.log" | tail -1)"
+BR_LINE="$(grep -E 'Breadth lane (PASSED|FAILED)' "$RUN_DIR/breadth.log" 2>/dev/null | tail -1)"
+if [ "$PF" != "0" ] || [ "$BR" != "0" ]; then
+  fail "plan row $PICK_ID: gates red on $HEAD_SHA (preflight exit $PF: ${PF_LINE:-no verdict line}; breadth exit $BR: ${BR_LINE:-not run}). Nothing pushed past the claim; the commit is the local branch $BRANCH in $BUILD_WT until the next run resets it. Logs: $RUN_DIR"
+fi
+git push -q origin "HEAD:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "plan row $PICK_ID: gates green but the push of $BRANCH failed"
+{ cat "$RUN_DIR/pr-body.md"
+  printf '\n\n## Gates (run by scripts/mac/build-tick.sh on %s, after the session)\n\n- `node scripts/preflight.mjs` exit %s: %s\n- `pnpm run verify:breadth` exit %s: %s\n\nOpened by the unattended build tick (DR-061 rule 4). It never merges; a lane merges it, if at all, under DR-037 / DR-061 rule 1.\n' \
+    "$HEAD_SHA" "$PF" "$PF_LINE" "$BR" "$BR_LINE"
+} > "$RUN_DIR/pr-body-final.md"
+node scripts/mac/gh-pr.mjs open --head "$BRANCH" --title "$(head -1 "$RUN_DIR/pr-title.txt")" --body-file "$RUN_DIR/pr-body-final.md" >> "$RUN_LOG" 2>&1 \
+  || fail "plan row $PICK_ID: pushed $BRANCH but gh-pr.mjs could not open its PR"
+_open="$(gh api "repos/{owner}/{repo}/pulls?head=$(gh api 'repos/{owner}/{repo}' --jq .owner.login 2>/dev/null):$BRANCH&state=open" --jq length 2>/dev/null)"
+[ "${_open:-0}" -ge 1 ] 2>/dev/null || fail "plan row $PICK_ID: pushed $BRANCH but no open PR for it could be found afterwards"
+say "result: acted: plan row $PICK_ID — $BRANCH at $HEAD_SHA, preflight + breadth green, PR open"
 exit 0

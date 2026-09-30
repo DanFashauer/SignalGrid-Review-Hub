@@ -70,11 +70,13 @@ Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running
 
 **The build tick (DR-061, 2026-09-29).** The lane tick never builds. A second
 launchd job, `scripts/mac/build-tick.sh` (`bash scripts/mac/install-build-tick.sh`,
-every 3 hours), starts ONE headless Claude session on the objective loop's top
-`tasks[]` row that has no `mac/build-row-<id>-*` branch and no open PR naming it,
-in its own `<repo>.build` worktree. The session builds test-first, runs preflight
-and breadth, pushes `mac/build-row-<id>-<stamp>` and opens the PR — it never
-merges — or raises a hand. Registry row: `mac-build-tick`.
+every 3 hours), claims the objective loop's top `tasks[]` row that no remote
+branch or open PR names by pushing an empty `mac/build-row-<id>-<stamp>`, then
+starts ONE headless Claude session in its own `<repo>.build` worktree. The session
+only edits and runs local checks, with no git or GitHub credentials; the script
+commits, runs preflight and breadth, and only on 0/0 pushes the branch and opens
+the PR. Nothing in it merges; a stuck or red run raises a hand and keeps the claim
+for a person. Registry row: `mac-build-tick`.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 

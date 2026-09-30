@@ -283,10 +283,20 @@ export function rechartsAliases(code) {
   return map;
 }
 
+/**
+ * Escape EVERY regex metacharacter, backslash included. Tag names come from the
+ * scanned file's own import clause, so they are input, not trusted literals
+ * (CodeQL js/incomplete-sanitization on PR #1243: the first version escaped
+ * only `.` and `$`).
+ */
+export function escapeRegExp(text) {
+  return text.replace(/[\\^$.*+?()[\]{}|/-]/g, "\\$&");
+}
+
 /** Every opening tag `<Name …>` / `<Name … />` with its attribute text, scanned brace- and quote-aware. */
 function tags(code, localName) {
   const out = [];
-  const esc = localName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const esc = escapeRegExp(localName);
   const re = new RegExp(`<${esc}(?=[\\s/>])`, "g");
   for (const m of code.matchAll(re)) {
     let i = m.index + m[0].length, depth = 0, q = null;
@@ -442,6 +452,15 @@ async function selfTest() {
   checks.push(["an accessor with bracket access is caught", chartSiteProblems(fixedChart + `\n<Bar dataKey={(r) => r["restrict"]} />`).length === 1]);
   checks.push(['chartFill("restrict") named by hand is caught', chartSiteProblems(fixedChart + `\n<Bar dataKey={(r) => r.deny} fill={chartFill("restrict")} />`).length === 2]);
   checks.push(["chartFill(o) over the verdict loop is the fix", chartSiteProblems(fixedChart).length === 0]);
+  const literalEscapes = [..."\\^$.*+?()[]{}|/-"].every((c) => {
+    try {
+      const re = new RegExp(`^x${escapeRegExp(c)}y$`);
+      return re.test(`x${c}y`) && !re.test("xZy") && !re.test("xy");
+    } catch {
+      return false; // an escape that leaves an invalid pattern is not an escape
+    }
+  });
+  checks.push(["escapeRegExp makes EVERY metacharacter literal, backslash included", literalEscapes]);
   checks.push(["an arrow function in an attribute does not end the tag early", chartSiteProblems(fixedChart + `\n<Bar label={(p) => p > 1} dataKey="deny" />`).length === 1]);
   checks.push(["a hardcoded 4-wide hatch stripe is caught", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width="4" height="4" />\n</pattern>`).length === 1]);
   checks.push(["a hatch reading HATCH_PATTERN is the fix", chartSiteProblems(fixedChart + `\n<pattern id={x} width={HATCH_PATTERN.size}>\n<rect width={HATCH_PATTERN.stripeWidth} />\n</pattern>`).length === 0]);

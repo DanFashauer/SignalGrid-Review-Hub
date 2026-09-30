@@ -429,6 +429,67 @@ check("exhaustive (normalized): some clean states DO grant (the enumeration is n
 // widening.
 check("exhaustive (normalized): exactly THREE channel shapes grant — live-agent+healthy, live-agent+unassigned, agent-less", enumRes.noneCount === 3);
 
+// The enumeration above is closed over the DECLARED unions, so it cannot see a value
+// outside them, and the evaluator used to deny only the named-bad literals: an
+// out-of-union or absent field fell straight through to the `managed_healthy` seed.
+// Nothing reaches it today (`normalizeReport` folds every off-type value into a
+// declared member first), but the grant must not rest on that upstream promise. Each
+// judged field is set, on an otherwise-clean grant, to a value outside its union and
+// then to `undefined`, BYPASSING `normalizeReport`, and must never grant.
+const grantBase = {
+  sourceSystem: "device-management-health",
+  deviceId: "off-union",
+  source: "off-union",
+  mdmCheckInFreshness: "fresh",
+  agentCheckInFreshness: "fresh",
+  remediationHealth: "healthy",
+  policyDrift: "on_baseline",
+  complianceCoverage: "covered",
+  enrollmentState: "enrolled",
+  managementReachable: true,
+  rootCauseEvidence: "unknown",
+  reportIntegrity: "clean",
+} as const;
+const offUnion: Record<string, unknown> = {
+  mdmCheckInFreshness: "FRESH",
+  agentCheckInFreshness: "zzz",
+  remediationHealth: "green",
+  policyDrift: "ON_BASELINE",
+  complianceCoverage: "partial",
+  enrollmentState: "RETIRED",
+  managementReachable: "true",
+};
+check(
+  "off-union control: the clean grant base grants (the counterexamples below start from a real grant)",
+  evaluateDeviceManagementHealth(grantBase as NormalizedDeviceManagementHealth).managementEffective === true,
+);
+// The widened arm must be the UNKNOWN arm, not just any non-grant: posture unverified,
+// the field named in unknownSignals, and the reason its in-union `unknown` carries.
+const snake = (f: string) => f.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+for (const [field, junk] of Object.entries(offUnion)) {
+  const reason = field === "managementReachable" ? "MANAGEMENT_UNREACHABLE" : "MANAGEMENT_STATE_UNKNOWN";
+  for (const [label, value] of [["out-of-union", junk], ["absent", undefined]] as const) {
+    const v = evaluateDeviceManagementHealth({ ...grantBase, [field]: value } as unknown as NormalizedDeviceManagementHealth);
+    const ok =
+      v.managementEffective === false &&
+      v.recommendedAction !== "none" &&
+      v.posture === "unverified" &&
+      v.reasonCode === reason &&
+      v.unknownSignals.includes(snake(field));
+    if (!ok) console.log(`    off-union ${field} ${label}: ${JSON.stringify({ effective: v.managementEffective, action: v.recommendedAction, posture: v.posture, reason: v.reasonCode, unknown: v.unknownSignals })}`);
+    check(`off-union: ${field} ${label} reads unverified (${reason}) and never grants`, ok);
+  }
+}
+// A failed enrollment with an out-of-union root-cause value is the unverified-cause
+// restrict, never the explained one (BUILD_BACKLOG row on this evaluator).
+check(
+  "off-union: enrollmentState failed + rootCauseEvidence out-of-union restricts as ENROLLMENT_ROOT_CAUSE_UNVERIFIED",
+  (() => {
+    const v = evaluateDeviceManagementHealth({ ...grantBase, enrollmentState: "failed", rootCauseEvidence: "AVAILABLE" } as unknown as NormalizedDeviceManagementHealth);
+    return v.recommendedAction === "restrict" && v.reasonCode === "ENROLLMENT_ROOT_CAUSE_UNVERIFIED";
+  })(),
+);
+
 // Pass 2 quantifies over the RAW WIRE space, and unlike pass 1 it carries the MALFORMED
 // values a real bridge emits — a junk enum spelling, a string-quoted boolean, a number,
 // an array, an object, an omitted key. Built only from well-formed values,

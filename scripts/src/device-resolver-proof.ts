@@ -167,8 +167,10 @@ await (async () => {
     "utf8",
   );
   const doc = src.match(/\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*export class DeviceIdentityResolver/);
-  const listed = doc ? [...doc[1].matchAll(/^\s*\*\s*\d+\.\s+(.+)$/gm)].map((m) => m[1]) : [];
-  const union = src.match(/^\s*source:\s*((?:'[a-z]+'\s*\|?\s*)+);/m);
+  const listed = doc ? [...doc[1].matchAll(/^[ \t]*\*[ \t]*\d+\.[ \t]+(.+)$/gm)].map((m) => m[1]) : [];
+  // One line, no nested quantifier (a `(…\s*\|?\s*)+` group backtracks exponentially);
+  // the members are pulled out of the captured line separately.
+  const union = src.match(/^[ \t]*source:[ \t]*('[^;\n]*);/m);
   const members = union ? [...union[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
   check("the resolver docstring and the source union were both located (assertion is not vacuous)",
     listed.length > 0 && members.length > 0);

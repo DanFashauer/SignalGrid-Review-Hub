@@ -13,6 +13,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
+import { classifyStep } from "./lib/preflight-verdict.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
@@ -706,8 +707,11 @@ const STEPS = [
   },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
-  // was added but the committed SBOM wasn't regenerated).
-  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
+  // was added but the committed SBOM wasn't regenerated). `git ls-files --error-unmatch`
+  // FIRST, like the sync steps above and supply-chain.yml: `git diff --exit-code <path>`
+  // is silent for an untracked path. check-preflight-ci-parity.mjs enforces this for every
+  // such step (unguardedDiffSteps).
+  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch artifacts/sbom/cyclonedx.json >/dev/null && pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
   // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
@@ -727,12 +731,17 @@ const STEPS = [
   // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
   // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
   // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  // With the token set it still exits 0 on BOTH report-only outcomes, so neither is a bare
+  // "ok" (scripts/lib/preflight-verdict.mjs): `REPORTED — could not read …` is UNVERIFIED,
+  // and a line matching `surface` is a REPORTED finding, printed with the verdict. Declaring
+  // `surface` is what opts a step in — a step without one (the self-tests) is never UNVERIFIED.
   { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
   {
     name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
     cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
     selfSkipsWithout: "GITHUB_TOKEN",
     env: { GH_TOKEN: "" },
+    surface: /red streak\(s\) of \d+\+ .* REPORTED, not fatal/,
   },
 ];
 
@@ -764,30 +773,47 @@ for (const step of STEPS) {
     env: { ...process.env, ...(step.env ?? {}) },
   });
   const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  // A proof that SELF-SKIPS prints one line and exits 0. Exit 0 is not evidence:
-  // nothing it claims to prove was executed. Classify it rather than tick it.
-  if (r.status === 0 && step.selfSkipsWithout && !process.env[step.selfSkipsWithout]) {
-    if (!/\bSKIPPED\b/.test(combined)) {
-      // The declaration and the behaviour disagree. Either the proof stopped
-      // self-skipping (drop the marker) or it ran a real path with no database,
-      // which is worse. Fail rather than guess — an unexplained exit 0 from a gate
-      // declared unable to run here is exactly the unearned green this classifies.
-      console.log("FAILED");
-      console.error(
-        `\n─── ${step.name} ───\n` +
-          `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
-          `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
-      );
-      failed = step.name;
-      break;
-    }
+  // Exit 0 is not evidence. A proof that SELF-SKIPS prints one line and exits 0; a report-only
+  // check that could not read its input, or found something it does not fail on, exits 0
+  // too. Classify each rather than tick it (scripts/lib/preflight-verdict.mjs).
+  const c = classifyStep({
+    status: r.status,
+    combined,
+    selfSkipsWithout: step.selfSkipsWithout,
+    envSet: Boolean(step.selfSkipsWithout && process.env[step.selfSkipsWithout]),
+    surface: step.surface,
+  });
+  if (c.verdict === "skipped-env") {
     console.log(`SELF-SKIPPED (${step.selfSkipsWithout} unset — not run, not passed)`);
     results.push({ name: step.name, status: "skipped-db", env: step.selfSkipsWithout });
     continue;
   }
-  if (r.status === 0) {
+  if (c.verdict === "unverified") {
+    console.log(`NOT VERIFIED — ${c.line}`);
+    results.push({ name: step.name, status: "unverified", line: c.line });
+    continue;
+  }
+  if (c.verdict === "reported") {
+    console.log(`ok — REPORTED: ${c.line}`);
+    results.push({ name: step.name, status: "reported", line: c.line });
+    continue;
+  }
+  if (c.verdict === "ok") {
     console.log("ok");
     results.push({ name: step.name, status: "ok" });
+  } else if (r.status === 0) {
+    // The declaration and the behaviour disagree: it exited 0 with its input unset and no
+    // SKIPPED. Either the proof stopped self-skipping (drop the marker) or it ran a real
+    // path with no database, which is worse. Fail rather than guess — an unexplained exit 0
+    // from a gate declared unable to run here is exactly the unearned green this classifies.
+    console.log("FAILED");
+    console.error(
+      `\n─── ${step.name} ───\n` +
+        `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
+        `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
+    );
+    failed = step.name;
+    break;
   } else {
     console.log("FAILED");
     // Surface the tail of the failing output so the cause is visible inline.
@@ -800,11 +826,13 @@ for (const step of STEPS) {
 
 console.log("\n── preflight summary ──");
 for (const r of results) {
-  const mark = r.status === "ok" ? "✓" : "–";
+  const mark = r.status === "ok" || r.status === "reported" ? "✓" : "–";
   const note =
     r.status === "skipped" ? " (skipped)"
     : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
     : r.status === "skipped-db" ? ` (SELF-SKIPPED — ${r.env} unset; not run, not passed)`
+    : r.status === "unverified" ? ` (NOT VERIFIED — ${r.line})`
+    : r.status === "reported" ? ` (REPORTED — ${r.line})`
     : "";
   console.log(`  ${mark} ${r.name}${note}`);
 }
@@ -839,7 +867,20 @@ const unavailable = results.filter((r) => r.status === "unavailable");
 // that decides for itself that it cannot run, says SKIPPED, and exits 0. It was
 // indistinguishable from a pass in every line preflight printed.
 const selfSkipped = results.filter((r) => r.status === "skipped-db");
+// Fourth and fifth: a report-only check that exits 0 having read nothing (`unverified`), or
+// having found something it does not fail on (`reported`). Both used to print a bare "ok".
+const unverified = results.filter((r) => r.status === "unverified");
+const reported = results.filter((r) => r.status === "reported");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (unverified.length > 0) {
+  console.log(`\n  ${unverified.length} step(s) exited 0 WITHOUT verifying what they check — they could not read their input:`);
+  for (const r of unverified) console.log(`    · ${r.name}\n        ${r.line}`);
+  console.log("    Nothing they check was verified by this run. CI fails these on their own error.");
+}
+if (reported.length > 0) {
+  console.log(`\n  ${reported.length} step(s) REPORTED a finding and exited 0 — report-only, not a clean result:`);
+  for (const r of reported) console.log(`    · ${r.name}\n        ${r.line}`);
+}
 if (selfSkipped.length > 0) {
   // WITH the verdict, for the same reason as the block below: the caveat has to be
   // where the decision to push is made, not in a comment nobody opens.

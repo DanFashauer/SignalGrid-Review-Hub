@@ -53,6 +53,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIRRORED, NOT_A_GATE, classifyCiJobs } from "./lib/ci-jobs.mjs";
+import { classifyStep } from "./lib/preflight-verdict.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(repo, ".github/workflows");
@@ -269,6 +270,35 @@ function gatesIn(rawSource) {
 }
 const gates = gatesIn(preflight);
 
+/**
+ * Pure: the path of every `["bash", "-c", "… git diff --exit-code|--quiet [--] <path> …"]` step whose
+ * command lacks `git ls-files --error-unmatch <path> … &&` for that path.
+ *
+ * `git diff --exit-code <path>` reports NOTHING for a path git does not track, so a generated
+ * file that was never committed (or was deleted) reads as "in sync" over no comparison at all.
+ * The SBOM step ran without the guard its three siblings and supply-chain.yml carry; a guard
+ * that is only a convention is what the next step forgets. Any hit is FATAL below.
+ * The bash string is captured whole (not the `[...]` array — a `[ -f x ]` test bracket ends
+ * that early), the guard must name the path exactly and gate what follows with `&&` (so
+ * `… || true` and `…;` do not count), and `--quiet` is `--exit-code` by another name.
+ * ponytail: reads only the `bash -c` string shape; an argv-form `["git", "diff", …]` step
+ * cannot carry a guard at all and is not seen here.
+ */
+export function unguardedDiffSteps(rawSource) {
+  const out = [];
+  for (const m of stripCommentedLines(rawSource).matchAll(/cmd:\s*\[\s*["']bash["']\s*,\s*["']-c["']\s*,\s*(["'`])((?:(?!\1)[^\\]|\\.)*)\1/g)) {
+    const cmd = m[2];
+    const guarded = new Set([...cmd.matchAll(/git ls-files --error-unmatch ([^\s>&;|]+)[^;|]*?&&/g)].map((g) => g[1]));
+    for (const d of cmd.matchAll(/git diff ([^"&;|<>]*)/g)) {
+      if (!/(^|\s)--(exit-code|quiet)(\s|$)/.test(d[1])) continue;
+      for (const path of d[1].split(/\s+/).filter((t) => t && !t.startsWith("-"))) {
+        if (!guarded.has(path)) out.push(path);
+      }
+    }
+  }
+  return out;
+}
+
 // The breadth lane's gates (scripts/verify-breadth.mjs) are held to the SAME
 // rule — a proof that runs only on a developer's machine is not a gate — but
 // CI invokes the lane as one step (`pnpm run verify:breadth`), so each of its
@@ -412,6 +442,43 @@ function selfTest() {
   checks.push(["SYNTHETIC VIOLATION: a CI step running a gate with --warn is DETECTED", warnInvoked("  - run: node scripts/check-x.mjs --check --warn\n").has("scripts/check-x.mjs")]);
   checks.push(["a --warn only in a YAML comment, or a --warning flag, is not", warnInvoked("  - run: node scripts/check-x.mjs --check # --warn\n  - run: node scripts/y.mjs --warning\n").size === 0]);
 
+  // ── a `git diff --exit-code <path>` step needs `git ls-files --error-unmatch <path>` first ──
+  const diffStep = (c) => `  { name: "X", cmd: ["bash", "-c", "${c}"] },`;
+  const bare = "pnpm run x && git diff --exit-code -- a/b.json";
+  checks.push(["SYNTHETIC VIOLATION: a `git diff --exit-code -- a/b.json` step with no ls-files guard is flagged", unguardedDiffSteps(diffStep(bare)).join() === "a/b.json"]);
+  checks.push(["the same step with the `git ls-files --error-unmatch` prefix is not flagged", unguardedDiffSteps(diffStep(`git ls-files --error-unmatch a/b.json >/dev/null && ${bare}`)).length === 0]);
+  checks.push(["a guard on a DIFFERENT path does not cover the diffed one, and `--` is optional", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/c.json >/dev/null && git diff --exit-code a/b.json")).join() === "a/b.json"]);
+  checks.push(["a COMMENTED-OUT unguarded step is not flagged", unguardedDiffSteps(`  // ${diffStep(bare).trim()}`).length === 0]);
+  checks.push(["SYNTHETIC VIOLATION: a `[ -f x ]` test bracket before the diff does not hide an unguarded step", unguardedDiffSteps(diffStep("[ -f a/b.json ] && git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["`git diff --quiet` is `--exit-code` by another name, and is flagged", unguardedDiffSteps(diffStep("git diff --quiet -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard on a path that only STARTS with the diffed one (a/b.json.bak) does not cover it", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json.bak >/dev/null && git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard neutered with `|| true` does not count", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json || true; git diff --exit-code -- a/b.json")).join() === "a/b.json"]);
+  checks.push(["a guard with a `2>&1` redirect before its `&&` still counts", unguardedDiffSteps(diffStep("git ls-files --error-unmatch a/b.json >/dev/null 2>&1 && git diff --exit-code -- a/b.json")).length === 0]);
+  checks.push(["a non-bash step, and a `git diff` without --exit-code, are not flagged", unguardedDiffSteps(`  { cmd: ["node", "scripts/x.mjs"] },\n${diffStep("git diff --stat -- a/b.json")}`).length === 0]);
+
+  // ── classifyStep: exit 0 is not evidence (the verdict helper preflight.mjs calls) ──
+  const streakSurface = /red streak\(s\) of \d+\+ .* REPORTED, not fatal/;
+  const unread = "REPORTED — could not read the Actions API locally (HTTP 401); this check is FATAL in CI";
+  const redLine = "2 red streak(s) of 3+ on SignalGrid_Alpha — REPORTED, not fatal (day one, by design).";
+  const cs = (o) => classifyStep({ status: 0, combined: "", selfSkipsWithout: "GITHUB_TOKEN", envSet: true, surface: streakSurface, ...o });
+  const unreadV = cs({ combined: `window: x\n${unread}\n` });
+  const redV = cs({ combined: `window: x\n\n${redLine}\n` });
+  checks.push(["SYNTHETIC VIOLATION: token set, exit 0, `REPORTED — could not read` is 'unverified', not 'ok'", unreadV.verdict === "unverified" && unreadV.line === unread]);
+  checks.push(["exit 0 with a red-streak REPORTED line is 'reported' and carries that line", redV.verdict === "reported" && redV.line === redLine]);
+  checks.push(["exit 0 with `no red streak` is 'ok'", cs({ combined: "window: x\n\nno red streak\n" }).verdict === "ok"]);
+  checks.push(["token unset + SKIPPED is 'skipped-env' (unchanged)", cs({ envSet: false, combined: "SKIPPED — no GITHUB_TOKEN/GH_TOKEN" }).verdict === "skipped-env"]);
+  checks.push(["token unset, exit 0, no SKIPPED is 'failed' (unchanged)", cs({ envSet: false, combined: "all fine" }).verdict === "failed"]);
+  checks.push(["a non-zero exit is 'failed', whatever it printed", cs({ status: 1, combined: `${redLine}\n${unread}` }).verdict === "failed"]);
+  checks.push([
+    "a step with no `surface` that merely PRINTS `REPORTED — could not read` (a passing self-test's fake-fetch case) is 'ok', not 'unverified'",
+    classifyStep({ status: 0, combined: `${unread}\nmainline-workflow-streaks self-test: 32/32 passed`, envSet: false }).verdict === "ok",
+  ]);
+  checks.push(["a step with no `surface` prints a streak line as plain 'ok'", classifyStep({ status: 0, combined: redLine, envSet: false }).verdict === "ok"]);
+  checks.push([
+    "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",
+    gatesIn('  {\n    name: "X",\n    cmd: ["node", "scripts/x.mjs"],\n    selfSkipsWithout: "GITHUB_TOKEN",\n    env: { GH_TOKEN: "" },\n    surface: /red streak\\(s\\) of \\d+\\+ .* REPORTED, not fatal/,\n  },').join() === "scripts/x.mjs",
+  ]);
+
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -455,6 +522,15 @@ for (const [gate, reason] of CI_WARN_ONLY) {
   if (!String(reason ?? "").trim()) { console.error(`  ✗ ${gate}: CI_WARN_ONLY entry has no reason`); problems += 1; }
   if (!warned.has(gate)) { console.error(`  ✗ ${gate}: listed in CI_WARN_ONLY but no workflow runs it with --warn — remove the exemption`); problems += 1; }
   if (!gates.includes(gate)) { console.error(`  ✗ ${gate}: listed in CI_WARN_ONLY but is not a preflight gate — remove the exemption`); problems += 1; }
+}
+
+// ── A diff-against-committed step must first prove the path is tracked ───────
+for (const path of [...unguardedDiffSteps(preflight), ...unguardedDiffSteps(breadthSource)]) {
+  console.error(
+    `  ✗ ${path}: a step runs \`git diff --exit-code\` on it with no \`git ls-files --error-unmatch ${path}\` before it — ` +
+      `git reports nothing for an untracked path, so a never-committed file reads as "in sync".`,
+  );
+  problems += 1;
 }
 
 // ── Every `pnpm run <script>` the gates name must EXIST at the root ──────────

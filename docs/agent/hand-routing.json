@@ -45,6 +45,17 @@
       "alternates": [{ "agent": "project-manager", "when": "the row should be re-owned by a role that has an executor, or re-ranked, rather than staffed" }],
       "skills": ["raised-hands"],
       "action": "The objective loop (DR-056) put these backlog rows in needsExecutor[] because every role they name resolves to \"lane\" (nothing dedicated) or dangles. For each row the dispatcher either specifies the agent or skill that would own it (then the agent-platform-steward creates and registers it, and the org-roster role gains an executor) or hands it to the project-manager to re-own the row under a role that already has one. Cleared when the loop's next state no longer lists the row, never by editing objective-state.json (the Mac tick is its sole writer)."
+    },
+    "objective-owner": {
+      "responder": { "owner": true },
+      "skills": ["owner-comms"],
+      "action": "The objective loop (DR-056) raised an escalation only the owner can clear (`clears: owner` in docs/agent/objective-state.json) and it has stood past 48h. Never act for the owner and never edit the state file: put the escalation's ask into the ONE bundled owner message (owner-comms), in one line with the one thing he must decide. It is cleared when the loop re-derives without it, after his answer lands in the repo (for example the decision record the ask names)."
+    },
+    "mac-lane-red": {
+      "responder": { "lane": "mac" },
+      "alternates": [{ "agent": "gate-and-proof-engineer", "when": "the failing step is a gate or proof under scripts/" }],
+      "skills": ["debugging-and-error-recovery"],
+      "action": "The weekly Mac-lane run (.github/workflows/mac-lane.yml, the full suite on macOS) ended failure, timed_out or startup_failure. Read the run, reproduce with ./validate-sim-macos.sh on the Mac, then fix it or state the blocker. Cleared when the next completed run is green; a run that was cancelled never raises this."
     }
   }
 }

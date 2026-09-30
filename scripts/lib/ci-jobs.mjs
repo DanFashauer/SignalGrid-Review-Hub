@@ -92,12 +92,32 @@ export const NOT_A_GATE = new Map([
 ]);
 
 /** Every job defined in `.github/workflows/`, as `file.yml:job-id`. */
-export function enumerateCiJobs() {
+export function enumerateCiJobs(dir = workflowDir) {
+  const { files, parsed, jobs } = readCiWorkflows(dir);
+  // Fail closed: a workflow file that contributed no `jobs:` block would otherwise
+  // vanish from the count and shorten preflight's "not covered" disclaimer.
+  if (parsed.length !== files.length) {
+    const lost = files.filter((f) => !parsed.includes(f));
+    throw new Error(`ci-jobs: ${lost.join(", ")} has no top-level \`jobs:\` this parser can find — refusing to enumerate a partial CI job list`);
+  }
+  return jobs;
+}
+
+/**
+ * Read every workflow in `dir`. `files` is the readdir count, `parsed` the files a
+ * top-level `jobs:` was found in; callers compare the two. `jobs:` is anchored with
+ * /^jobs:/m, NOT indexOf("\njobs:") — the newline form missed a workflow whose FIRST
+ * line is `jobs:` and dropped it with no log (BUILD_BACKLOG, finding #5).
+ */
+export function readCiWorkflows(dir) {
+  const files = readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort();
+  const parsed = [];
   const jobs = [];
-  for (const file of readdirSync(workflowDir).filter((f) => /\.ya?ml$/.test(f))) {
-    const text = readFileSync(join(workflowDir, file), "utf8");
-    const at = text.indexOf("\njobs:");
+  for (const file of files) {
+    const text = readFileSync(join(dir, file), "utf8");
+    const at = text.search(/^jobs:/m);
     if (at < 0) continue;
+    parsed.push(file);
     const body = text.slice(at);
     for (const m of body.matchAll(/^ {2}([a-zA-Z0-9_-]+):$/gm)) {
       const after = body.slice(m.index + m[0].length, m.index + m[0].length + 400);
@@ -108,7 +128,7 @@ export function enumerateCiJobs() {
       });
     }
   }
-  return jobs.sort((a, b) => a.id.localeCompare(b.id));
+  return { files, parsed, jobs: jobs.sort((a, b) => a.id.localeCompare(b.id)) };
 }
 
 /**

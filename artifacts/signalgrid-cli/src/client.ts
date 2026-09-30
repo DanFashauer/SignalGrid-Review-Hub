@@ -76,6 +76,21 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
   return { baseUrl: baseUrl.replace(/\/+$/, ""), tenant, token };
 }
 
+/**
+ * An id the CLI will put in a request path or a session file. Decision and connector
+ * ids are server-minted (`dec_…`, `conn_…`); anything outside this shape — a slash, a
+ * dot-dot, a query string, a newline — is refused before it reaches a URL or a file,
+ * whether it came from the command line, the session file or the server's answer.
+ */
+const ID_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+export const isSafeId = (raw: unknown): raw is string => typeof raw === "string" && ID_SHAPE.test(raw);
+export function safeId(raw: string, what: string): string {
+  if (!isSafeId(raw)) {
+    throw new CliError("id_invalid", `${what} is not a well-formed id (letters, digits, _ and - only); refused.`, EXIT.usage);
+  }
+  return raw;
+}
+
 export interface Answer {
   status: number;
   body: Record<string, unknown>;

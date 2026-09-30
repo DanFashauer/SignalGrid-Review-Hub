@@ -18,7 +18,7 @@
 import { closeSync, existsSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CliError, EXIT, type Config } from "./client.js";
+import { CliError, EXIT, safeId, type Config } from "./client.js";
 
 interface SessionData {
   version: 1;
@@ -69,11 +69,14 @@ export function readSession(path: string | null, cfg: Config): SessionData | nul
   }
   // A session minted against another server or tenant does not apply here.
   if (data.version !== 1 || data.baseUrl !== cfg.baseUrl || data.tenant !== cfg.tenant) return null;
+  if (data.lastDecisionId !== null) safeId(String(data.lastDecisionId), "the session's last decision id");
   return data;
 }
 
 export function writeSession(path: string | null, cfg: Config, lastDecisionId: string): void {
   if (!path) return;
+  // The id came from the server's answer; it is written only in the shape the CLI would send.
+  const id = safeId(lastDecisionId, "the decision id the server returned");
   const lock = `${path}.lock`;
   let fd: number;
   try {
@@ -85,7 +88,7 @@ export function writeSession(path: string | null, cfg: Config, lastDecisionId: s
     throw new CliError("session_invalid", `cannot lock session ${path}: ${(err as Error).message}`, EXIT.usage);
   }
   try {
-    const data: SessionData = { version: 1, baseUrl: cfg.baseUrl, tenant: cfg.tenant, lastDecisionId };
+    const data: SessionData = { version: 1, baseUrl: cfg.baseUrl, tenant: cfg.tenant, lastDecisionId: id };
     const tmp = `${path}.tmp`;
     writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
     renameSync(tmp, path);

@@ -18,7 +18,7 @@
  *      SIGNALGRID_BASE_URL.
  */
 import { parseArgs } from "node:util";
-import { call, CliError, confirmTenant, EXIT, readConfig, type Config } from "./client.js";
+import { call, CliError, confirmTenant, EXIT, isSafeId, readConfig, safeId, type Config } from "./client.js";
 import { readSession, sessionPath, writeSession } from "./session.js";
 
 /** The four words a host app obeys (lib/signalgrid-core/src/types.ts DecisionOutcome). */
@@ -107,9 +107,9 @@ function need(value: string | undefined, flag: string): string {
 }
 
 function decisionIdArg(positional: string | undefined, cfg: Config, env: NodeJS.ProcessEnv): string {
-  if (positional) return positional;
+  if (positional) return safeId(positional, "the decision id");
   const last = readSession(sessionPath(env), cfg)?.lastDecisionId;
-  if (last) return last;
+  if (last) return safeId(last, "the session's last decision id");
   throw new CliError("usage", "a decision id is required (no session holds a last decision).", EXIT.usage);
 }
 
@@ -126,7 +126,7 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   const { body: answer } = await call(cfg, "POST", "/v1/decisions/evaluate", body);
   const d = answer["decision"] as Record<string, unknown> | undefined;
   const outcome = d?.["outcome"];
-  if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || typeof d["decisionId"] !== "string") {
+  if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || !isSafeId(d["decisionId"])) {
     throw new CliError(
       "malformed_answer",
       "POST /v1/decisions/evaluate answered without a recognisable outcome and decision id; nothing is reported as decided.",
@@ -224,7 +224,7 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
 async function connectors(getCfg: () => Config, args: string[], allowWrite: boolean): Promise<Out> {
   const [sub, id] = args;
   if (sub === "sync") {
-    const cid = need(id, "connectors sync <connectorId>");
+    const cid = safeId(need(id, "connectors sync <connectorId>"), "the connector id");
     const path = `/v1/connectors/${encodeURIComponent(cid)}/sync`;
     if (!allowWrite) return writeRefused("connectors sync", "POST", path, undefined);
     const cfg = getCfg();
@@ -238,7 +238,7 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     };
   }
   if (sub === "runs") {
-    const cid = need(id, "connectors runs <connectorId>");
+    const cid = safeId(need(id, "connectors runs <connectorId>"), "the connector id");
     const cfg = getCfg();
     const tenant = await confirmTenant(cfg);
     const { body } = await call(cfg, "GET", `/v1/connectors/${encodeURIComponent(cid)}/sync-runs`);

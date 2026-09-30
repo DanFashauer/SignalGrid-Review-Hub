@@ -24,7 +24,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,7 +45,9 @@ function check(name: string, ok: boolean, detail = ""): void {
     console.log(`  ok — ${name}`);
   } else {
     failures.push(name);
-    console.log(`  ✗  — ${name}${detail ? ` (${detail})` : ""}`);
+    // `detail` can carry CLI output; one line, control characters stripped, bounded.
+    const safe = detail.replace(/[\u0000-\u001f\u007f]+/g, " ").slice(0, 300);
+    console.log(`  ✗  — ${name}${safe ? ` (${safe})` : ""}`);
   }
 }
 
@@ -248,6 +250,16 @@ async function main(): Promise<void> {
     check("the session file records the minted decision id and never the token", !!minted && sessionText.includes(minted) && !sessionText.includes(TOKEN));
     const ex = await cli(["explain", "--json"], { ...env, SIGNALGRID_CLI_SESSION: sessionFile });
     check("explain with no id follows the session's last decision", ex.code === 0 && (parse(ex.stdout)?.["decision"] as Record<string, unknown> | undefined)?.["id"] === minted, `exit ${ex.code}`);
+    seen.length = 0;
+    const traversal = await cli(["explain", "../connectors"], env);
+    check("a decision id shaped like a path is refused before any request (exit 2)",
+      traversal.code === 2 && /not a well-formed id/.test(traversal.stderr) && seen.length === 0, `exit ${traversal.code} ${seen.join(", ")}`);
+    const poisoned = join(sessionDir, "poisoned.json");
+    writeFileSync(poisoned, JSON.stringify({ version: 1, baseUrl: VIA, tenant: "northwind-health", lastDecisionId: "x/../../v1/connectors" }));
+    seen.length = 0;
+    const pz = await cli(["explain"], { ...env, SIGNALGRID_CLI_SESSION: poisoned });
+    check("a session file holding a malformed decision id is refused, not followed",
+      pz.code === 2 && /not a well-formed id/.test(pz.stderr) && !seen.some((x) => x.includes("connectors")), `exit ${pz.code} ${seen.join(", ")}`);
     const inTree = await cli(["explain"], { ...env, SIGNALGRID_CLI_SESSION: join(repoRoot, "signalgrid-session.json") });
     check("a session path inside the repository is refused (exit 2)", inTree.code === 2 && /outside the tree/.test(inTree.stderr), `exit ${inTree.code}`);
 

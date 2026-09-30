@@ -24,7 +24,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -298,6 +298,53 @@ async function main(): Promise<void> {
       check(`a 200 carrying ${label} is not a success: decide exits 1 and prints no outcome`,
         r.code === 1 && !/^outcome/m.test(r.stdout) && /without a recognisable outcome/.test(r.stderr), `exit ${r.code}`);
     }
+
+    // A liar that answers every non-context route with `body`; each case is one lie the
+    // CLI must refuse to report as a clean answer (review round 1 on PR #1321).
+    const viaLiar = async (body: unknown, args: string[]) => {
+      const liar = await startLiar(body);
+      liars.push(liar.server);
+      return cli(args, { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${liar.port}/api` });
+    };
+    const oov = await viaLiar(
+      { decision: { id: "dec_x", outcome: "probably_fine" }, evidence: { signalsUsed: [] }, verified: true },
+      ["explain", "dec_x"],
+    );
+    check("explain refuses a recorded outcome outside the four words (exit 1, no outcome line)",
+      oov.code === 1 && !/^outcome/m.test(oov.stdout) && /no recognisable outcome/.test(oov.stderr));
+    const unverified = { decision: { id: "dec_x", outcome: "allow" }, evidence: { signalsUsed: [{ category: "identity_state" }] }, verified: false };
+    const exU = await viaLiar(unverified, ["explain", "dec_x"]);
+    check("explain on evidence that does not verify exits 1 and says so",
+      exU.code === 1 && /DOES NOT VERIFY/.test(exU.stdout));
+    const exUj = await viaLiar(unverified, ["explain", "dec_x", "--json"]);
+    check("explain --json on unverifiable evidence exits 1 with ok:false",
+      exUj.code === 1 && parse(exUj.stdout)?.["ok"] === false && parse(exUj.stdout)?.["evidenceVerified"] === false);
+    const sgU = await viaLiar(unverified, ["signals", "dec_x"]);
+    check("signals on evidence that does not verify exits 1 and says so",
+      sgU.code === 1 && /DOES NOT VERIFY/.test(sgU.stdout));
+    const broken = await viaLiar({ events: [{ seq: 1, type: "decision.evaluated" }], chain: { valid: false, brokenAtSeq: 1, length: 1 }, source: "memory" }, ["audit"]);
+    check("audit on a broken ledger chain exits 1 and names the break",
+      broken.code === 1 && /BROKEN at seq 1/.test(broken.stdout));
+    const brokenJ = await viaLiar({ events: [], chain: { valid: false, brokenAtSeq: 1, length: 1 } }, ["audit", "--json"]);
+    check("audit --json on a broken chain exits 1 with ok:false", brokenJ.code === 1 && parse(brokenJ.stdout)?.["ok"] === false);
+    const emptyRun = await viaLiar({ syncRun: {} }, ["connectors", "sync", "conn_x", "--allow-write"]);
+    check("connectors sync refuses a sync run with no id or status (exit 1)",
+      emptyRun.code === 1 && !/^sync run /m.test(emptyRun.stdout));
+
+    // The write path's tenant check: the wrong credential must not mint a decision.
+    seen.length = 0;
+    const beforeMism = await counts();
+    const wMism = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_TENANT: "tenant_atlas" });
+    const afterMism = await counts();
+    check("decide --allow-write under a tenant mismatch exits 2 and sends no POST",
+      wMism.code === 2 && seen.join() === "GET /api/v1/context" && afterMism.decisions === beforeMism.decisions);
+
+    // A symlink outside the tree that points INTO it must not carry the session inside.
+    const link = join(sessionDir, "into-repo");
+    symlinkSync(repoRoot, link);
+    const viaLink = await cli(["explain"], { ...env, SIGNALGRID_CLI_SESSION: join(link, "signalgrid-session.json") });
+    check("a session path that reaches the repository through a symlink is refused (exit 2)",
+      viaLink.code === 2 && /outside the tree/.test(viaLink.stderr) && !existsSync(join(repoRoot, "signalgrid-session.json")));
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

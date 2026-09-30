@@ -15,8 +15,8 @@
  * fcntl to what Node offers portably), and the file itself is replaced by rename,
  * so a reader never sees half a session.
  */
-import { closeSync, existsSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { closeSync, existsSync, openSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError, EXIT, safeId, type Config } from "./client.js";
 
@@ -47,7 +47,8 @@ export function sessionPath(env: NodeJS.ProcessEnv): string | null {
   const path = resolve(raw);
   const root = repoRoot();
   if (root) {
-    const rel = relative(root, path);
+    // Compare REAL paths: a symlink outside the tree that points into it must not pass.
+    const rel = relative(realpathSync(root), realOf(path));
     if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
       throw new CliError(
         "session_in_tree",
@@ -57,6 +58,13 @@ export function sessionPath(env: NodeJS.ProcessEnv): string | null {
     }
   }
   return path;
+}
+
+/** The real path of `p`: its deepest existing ancestor resolved through symlinks, plus the rest. */
+function realOf(p: string): string {
+  if (existsSync(p)) return realpathSync(p);
+  const parent = dirname(p);
+  return parent === p ? p : join(realOf(parent), basename(p));
 }
 
 export function readSession(path: string | null, cfg: Config): SessionData | null {

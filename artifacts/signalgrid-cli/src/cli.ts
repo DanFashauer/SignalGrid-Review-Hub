@@ -153,8 +153,10 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   const { body: rec } = await call(cfg, "GET", `/v1/decisions/${enc}`);
   const { body: ev } = await call(cfg, "GET", `/v1/decisions/${enc}/evidence`);
   const d = rec["decision"] as Record<string, unknown> | undefined;
-  if (!d || typeof d["outcome"] !== "string") {
-    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried no outcome; nothing is reported.`, EXIT.refused);
+  // The same four-word check decide applies: a recorded decision whose outcome is not one
+  // of the words a host app obeys is not reported as a decision at all.
+  if (!d || typeof d["outcome"] !== "string" || !OUTCOMES.has(d["outcome"])) {
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried no recognisable outcome; nothing is reported.`, EXIT.refused);
   }
   const verified = ev["verified"] === true;
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
@@ -231,7 +233,9 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     const tenant = await confirmTenant(cfg);
     const { body } = await call(cfg, "POST", path);
     const run = body["syncRun"] as Record<string, unknown> | undefined;
-    if (!run) throw new CliError("malformed_answer", `POST ${path} carried no syncRun; nothing is reported.`, EXIT.refused);
+    if (!run || typeof run["id"] !== "string" || typeof run["status"] !== "string") {
+      throw new CliError("malformed_answer", `POST ${path} carried no sync run with an id and a status; nothing is reported.`, EXIT.refused);
+    }
     return {
       json: { ok: true, command: "connectors sync", tenant: tenant.id, sent: true, syncRun: run },
       human: `sync run ${str(run["id"])} · status ${str(run["status"])} · ${str(run["note"])}`,
@@ -369,7 +373,14 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     const exit = out.exit ?? EXIT.ok;
     return { stdout: `${json ? JSON.stringify(out.json, null, 2) : out.human}\n`, stderr: "", exit };
   } catch (err) {
-    const e = err instanceof CliError ? err : new CliError("usage", (err as Error).message, EXIT.usage);
+    // An argument-parser error is a usage error; anything else unexpected is still a
+    // non-zero exit, but labelled as what it is rather than as the operator's mistake.
+    const parseError = String((err as { code?: unknown }).code ?? "").startsWith("ERR_PARSE_ARGS");
+    const e = err instanceof CliError
+      ? err
+      : parseError
+        ? new CliError("usage", (err as Error).message, EXIT.usage)
+        : new CliError("unexpected", `unexpected error (${(err as Error).name}); nothing is reported.`, EXIT.refused);
     return json
       ? { stdout: `${JSON.stringify({ ok: false, error: { code: e.code, message: e.message, exit: e.exit } }, null, 2)}\n`, stderr: "", exit: e.exit }
       : { stdout: "", stderr: `signalgrid: ${e.message}\n`, exit: e.exit };

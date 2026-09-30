@@ -38,6 +38,8 @@ export interface Config {
   /** The tenant the operator believes this token belongs to (id or slug). */
   tenant: string;
   token: string;
+  /** baseUrl with any userinfo removed — the only form an error message may print. */
+  display: string;
 }
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
@@ -73,7 +75,8 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
       EXIT.usage,
     );
   }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), tenant, token };
+  const display = `${url.protocol}//${url.host}${url.pathname}`.replace(/\/+$/, "");
+  return { baseUrl: baseUrl.replace(/\/+$/, ""), tenant, token, display };
 }
 
 /**
@@ -120,11 +123,21 @@ export async function call(
     const cause = c?.code ?? c?.errors?.[0]?.code ?? (err as Error).name;
     throw new CliError(
       "unreachable",
-      `could not reach ${cfg.baseUrl} (${cause}); no answer was received, so nothing is reported.`,
+      `could not reach ${cfg.display} (${cause}); no answer was received, so nothing is reported.`,
       EXIT.unreachable,
     );
   }
-  const text = await res.text();
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    // Headers arrived but the body did not: no complete answer was received.
+    throw new CliError(
+      "unreachable",
+      `${method} ${path}: the connection to ${cfg.display} dropped mid-answer; nothing is reported.`,
+      EXIT.unreachable,
+    );
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

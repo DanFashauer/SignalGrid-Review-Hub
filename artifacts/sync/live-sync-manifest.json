@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 85,
-  "fingerprint": "1cfadac1118f68d873c628c4905058c64630c1723291eab98cac1d4c67b86a56",
+  "manifestVersion": 86,
+  "fingerprint": "484d26d9e4d1e708f65be9cd444717f39c51e24a675343dc44876826450f43a3",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -157,7 +157,7 @@
       "secrets": 28,
       "self-audit": 61,
       "service-lifecycle": 82,
-      "session-readiness": 63,
+      "session-readiness": 64,
       "shift-context": 63,
       "sse-egress": 49,
       "sso-session": 97,

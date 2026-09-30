@@ -198,6 +198,7 @@ check("no fixture carries a wall-clock timestamp",
     classify("store.ts", `  await adapter.quarantineEndpoint(mac, { method: "POST" });`) === "offender" &&
     classify("index.ts", `  await fetch("https://ise.vendor/ers/config/ancendpoint/apply", { method: "POST" });`) === "offender" &&
     classify("index.ts", `  const { Redis } = await import("ioredis");`) === "offender" &&
+    classify("store.ts", `  const r = await import("redis"); const a = require("axios");`) === "offender" &&
     classify("store.ts", `  const { Redis } = await import("ioredis");`) === "exempt");
 }
 

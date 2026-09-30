@@ -668,7 +668,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   rejected one, an unconfirmed badge precondition steps up, and a malformed event stream or
   an unauditable check-out denies — ignorance never reaches `allow`, and the allow set is
   pinned by equality over the whole sequence state space.
-- **`proof:session-readiness` (63 checks)** — the DEX/EUC readiness dimension, from the
+- **`proof:session-readiness` (64 checks)** — the DEX/EUC readiness dimension, from the
   IGEL + ControlUp tap-to-app work (intake ledger row 57). A **1,728-state exhaustive
   sweep** whose clean set is pinned to exact SHAPES rather than a count. The headline law
   is that SILENCE IS NEVER READINESS: an endpoint nobody instrumented, a DEX plane that

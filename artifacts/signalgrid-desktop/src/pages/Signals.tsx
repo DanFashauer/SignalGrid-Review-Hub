@@ -20,12 +20,13 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function SignalsPage() {
   const [typeFilter, setTypeFilter] = useState<typeof TYPES[number]["value"]>(undefined);
-  const { data, isLoading } = useListLatestSignals({ limit: 100, signalType: typeFilter });
+  const { data, isLoading, isError } = useListLatestSignals({ limit: 100, signalType: typeFilter });
 
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
         message={data ? `${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+        alert={isError && !data ? "Signal feed unreachable; critical signal count unknown." : ""}
       />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Signals</h1>

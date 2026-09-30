@@ -45,12 +45,9 @@ export function DecisionList() {
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
         message={
-          error && !decisions
-            ? "Decision ledger could not be read."
-            : decisions
-              ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied.`
-              : ""
+          decisions ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied.` : ""
         }
+        alert={error && !decisions ? "Decision ledger could not be read." : ""}
       />
       <div className="flex items-center justify-between">
         <div>

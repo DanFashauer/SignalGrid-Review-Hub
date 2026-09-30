@@ -31,13 +31,8 @@ export default function IntegrationsPage() {
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
-        message={
-          isError && !data
-            ? "Integrations could not be loaded."
-            : data
-              ? `${connected} integrations connected, ${degraded} degraded.`
-              : ""
-        }
+        message={data ? `${connected} integrations connected, ${degraded} degraded.` : ""}
+        alert={isError && !data ? "Integrations could not be loaded." : ""}
       />
       <div className="flex items-center justify-between">
         <div>

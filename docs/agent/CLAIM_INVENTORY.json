@@ -7475,7 +7475,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "60",
+   "line": "71",
    "claim": "Metric tiles \"Total Decisions\", \"Allow Rate\", \"Restrict/Deny Rate\", \"Avg Latency\" as 24h figures",
    "kind": "count",
    "classification": "demo-only",
@@ -7484,7 +7484,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "70",
+   "line": "81",
    "claim": "\"Decision Volume\" stacked area chart of allow/stepUp/restrict/deny over 24h",
    "kind": "count",
    "classification": "demo-only",
@@ -7493,7 +7493,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "118",
+   "line": "129",
    "claim": "\"Recent decisions · /v1 core\" list linking to decision detail",
    "kind": "capability",
    "classification": "launch",
@@ -7502,7 +7502,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "151",
+   "line": "162",
    "claim": "Card \"Integration Health\" on the launch Overview screen",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7538,7 +7538,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "232",
+   "line": "243",
    "claim": "Card \"Stale / non-compliant\" listing anomalous/critical signals, with the empty state \"No stale or non-compliant signals\"",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7547,7 +7547,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "270",
+   "line": "281",
    "claim": "\"Shift Handoff\" / \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\"",
    "kind": "status",
    "classification": "demo-only",
@@ -7574,7 +7574,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "380",
+   "line": "391",
    "claim": "Card \"Connector health · launch families\"",
    "kind": "capability",
    "classification": "launch",
@@ -7583,7 +7583,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "366",
+   "line": "377",
    "claim": "Three launch families listed with what each reads: graph — \"Entra/Intune identity + device posture\"; device-management-health — \"management-plane health rollup\"; local-authority — \"offline local-authority grant state\"",
    "kind": "count",
    "classification": "launch",
@@ -7601,7 +7601,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "402",
+   "line": "413",
    "claim": "\"live read-only vendor reads — the connector refuses any non-GET by construction\"",
    "kind": "capability",
    "classification": "launch",
@@ -8710,7 +8710,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "49",
+   "line": "64",
    "claim": "Title-bar wordmark \"SIGNALGRID DESKTOP\" presented as a native desktop application window (macOS traffic-light controls rendered at :39-43).",
    "kind": "surface",
    "classification": "demo-only",
@@ -8719,7 +8719,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "50, 51",
+   "line": "65",
    "claim": "Persistent title-bar labels \"review build\" and \"FIXTURE DATA\".",
    "kind": "status",
    "classification": "demo-only",
@@ -8728,7 +8728,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "57, 58",
+   "line": "73",
    "claim": "Status indicator \"ENGINE · FIXTURE\" with a live pulsing dot.",
    "kind": "status",
    "classification": "demo-only",
@@ -8910,7 +8910,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
-   "line": "107",
+   "line": "124",
    "claim": "Card header \"Recent decisions (fixture)\".",
    "kind": "status",
    "classification": "demo-only",
@@ -9169,7 +9169,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Handoff.tsx",
-   "line": "59",
+   "line": "60, 61",
    "claim": "Page heading \"Shift Handoff\" with subtitle \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\".",
    "kind": "status",
    "classification": "demo-only",

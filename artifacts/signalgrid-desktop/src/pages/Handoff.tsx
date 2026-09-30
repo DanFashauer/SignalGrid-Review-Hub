@@ -42,7 +42,7 @@ export default function HandoffPage() {
   const complete = handoffs.filter(h => h.status === "checked-in");
   const inProgress = handoffs.filter(h => h.status === "in-progress");
 
-  const { data: recentDecisions } = useListDecisions({ limit: 5 });
+  const { data: recentDecisions, isError: recentDecisionsError } = useListDecisions({ limit: 5 });
 
   return (
     <div className="p-6 space-y-6">
@@ -52,6 +52,7 @@ export default function HandoffPage() {
             ? `Most recent custody decision: ${recentDecisions.decisions[0].outcome.replace("_", " ")}.`
             : ""
         }
+        alert={recentDecisionsError && !recentDecisions ? "Recent custody decisions could not be loaded." : ""}
       />
       <div className="flex items-center gap-3">
         <GitBranch className="w-5 h-5 text-primary" />

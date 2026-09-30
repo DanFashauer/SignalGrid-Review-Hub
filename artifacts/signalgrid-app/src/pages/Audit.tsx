@@ -19,11 +19,12 @@ export function Audit() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
-        message={
+        message={data?.chain.valid ? `${data.events.length} audit events. Hash chain intact.` : ""}
+        alert={
           error && !data
             ? "Audit ledger could not be read; chain unverified."
-            : data
-              ? `${data.events.length} audit events. Hash chain ${data.chain.valid ? "intact" : `broken at sequence ${data.chain.brokenAtSeq}`}.`
+            : data && !data.chain.valid
+              ? `Hash chain broken at sequence ${data.chain.brokenAtSeq}.`
               : ""
         }
       />

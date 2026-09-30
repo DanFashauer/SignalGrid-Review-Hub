@@ -3,12 +3,14 @@ import { useGetDashboardMetrics, useGetDecisionSeries, useListDecisions, useList
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { outcomeTone } from "../lib/outcome-tone";
 import { LiveRegion } from "@/components/LiveRegion";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 
 export default function DashboardPage() {
+  const reduceMotion = usePrefersReducedMotion();
   const { data: metrics, isLoading } = useGetDashboardMetrics({ window: "24h" });
   const { data: series } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
-  const { data: decisions } = useListDecisions({ limit: 10 });
-  const { data: signals } = useListLatestSignals({ limit: 8 });
+  const { data: decisions, isError: decisionsError } = useListDecisions({ limit: 10 });
+  const { data: signals, isError: signalsError } = useListLatestSignals({ limit: 8 });
 
   const METRICS = [
     { label: "TOTAL DECISIONS", value: metrics?.totalDecisions.toLocaleString() ?? "–" },
@@ -24,6 +26,13 @@ export default function DashboardPage() {
           decisions?.decisions[0]
             ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}. ${signals?.signals.filter((s) => s.status === "critical").length ?? 0} critical signals.`
             : ""
+        }
+        alert={
+          decisionsError && !decisions
+            ? "Decisions could not be loaded."
+            : signalsError && !signals
+              ? "Signal feed unreachable; critical signal count unknown."
+              : ""
         }
       />
       <div>
@@ -64,10 +73,10 @@ export default function DashboardPage() {
                 <XAxis dataKey="timestamp" tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} stroke="hsl(var(--muted-foreground))" fontSize={10} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
                 <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", fontSize: 12 }} labelFormatter={t => new Date(t).toLocaleString()} />
-                <Area type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#ga)" stackId="1" />
-                <Area type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.4} fill="hsl(var(--decision-review))" stackId="1" />
-                <Area type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.25} fill="hsl(var(--decision-deny))" stackId="1" />
-                <Area type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#gd)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#ga)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.4} fill="hsl(var(--decision-review))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.25} fill="hsl(var(--decision-deny))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#gd)" stackId="1" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

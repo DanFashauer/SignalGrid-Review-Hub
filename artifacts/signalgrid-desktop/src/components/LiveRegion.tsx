@@ -1,12 +1,18 @@
-// A polite, visually hidden status region (WCAG 4.1.3, plan row 76). Views that
-// poll render one with a short summary of what they show; a screen reader
-// announces the summary only when its text changes, so a refetch that returns
-// the same data is silent and a new deny landing in the list is not.
+// Visually hidden live regions (WCAG 4.1.3, plan row 76). Views that poll render
+// one: `message` is a short polite summary of what the view shows, and `alert`
+// is an assertive channel for a read that FAILED or a state that is broken — an
+// unreachable feed must not be silent. Both regions stay mounted so a change of
+// text is what gets announced; a refetch that returns the same data is silent.
 // scripts/check-web-a11y-basics.mjs fails a polling view that renders none.
-export function LiveRegion({ message }: { message: string }) {
+export function LiveRegion({ message, alert = "" }: { message: string; alert?: string }) {
   return (
-    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-      {message}
-    </div>
+    <>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {message}
+      </div>
+      <div role="alert" aria-live="assertive" aria-atomic="true" className="sr-only">
+        {alert}
+      </div>
+    </>
   );
 }

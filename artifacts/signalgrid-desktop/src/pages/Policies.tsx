@@ -4,11 +4,11 @@ import { failModeTone, outcomeTone } from "@/lib/outcome-tone";
 import { LiveRegion } from "@/components/LiveRegion";
 
 export default function PoliciesPage() {
-  const { data, isLoading } = useListPolicies();
+  const { data, isLoading, isError } = useListPolicies();
 
   return (
     <div className="p-6 space-y-4">
-      <LiveRegion message={data ? `${data.policies.length} policies.` : ""} />
+      <LiveRegion message={data ? `${data.policies.length} policies.` : ""} alert={isError && !data ? "Policies could not be loaded." : ""} />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Policies</h1>
         <p className="text-xs font-mono text-muted-foreground mt-0.5">ACCESS CONTROL POLICY ENGINE</p>

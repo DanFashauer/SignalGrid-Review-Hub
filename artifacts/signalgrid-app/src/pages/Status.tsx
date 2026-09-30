@@ -24,12 +24,11 @@ export function Status() {
     <div className="p-8 max-w-5xl mx-auto space-y-6">
       <LiveRegion
         message={
-          metrics.error && !metrics.data
-            ? "Decision metrics could not be read."
-            : metrics.data
-              ? `${metrics.data.totalDecisions} decisions: ${metrics.data.byOutcome.deny} denied, ${metrics.data.byOutcome.restrict} restricted, ${metrics.data.pendingReview} pending review.`
-              : ""
+          metrics.data
+            ? `${metrics.data.totalDecisions} decisions: ${metrics.data.byOutcome.deny} denied, ${metrics.data.byOutcome.restrict} restricted, ${metrics.data.pendingReview} pending review.`
+            : ""
         }
+        alert={metrics.error && !metrics.data ? "Decision metrics could not be read." : ""}
       />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Deployment assurance</h1>

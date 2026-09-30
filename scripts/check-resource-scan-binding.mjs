@@ -118,7 +118,9 @@ export function auditScan(rel, raw, exists) {
     const d = decision[id];
     const outcome = typeof d?.outcome === "string" ? d.outcome.trim().toLowerCase() : "";
     if (outcome === "") problems.push(`${rel}: decision \`${id}\` has no \`outcome\``);
-    if (outcome === "landed") {
+    // Any outcome that STARTS with the word `landed` claims a landing — `landed-partial`,
+    // `landed.`, `landed (mac)` — so it is held to its paths too (Brain review 2, #1272).
+    if (/^landed\b/.test(outcome)) {
       const where = Array.isArray(d?.where) ? d.where.join(" ") : String(d?.where ?? "");
       const paths = [...where.matchAll(PATH_TOKEN)].map((m) => m[0]);
       if (paths.length === 0) problems.push(`${rel}: decision \`${id}\` is \`landed\` but names no repo path`);
@@ -178,6 +180,9 @@ function selfTest() {
     [`${S}commaland.json`, mut((c) => { c.decision["A-1"].where = "scripts/real.mjs,scripts/ghost.mjs"; })],
     [`${S}arrayland.json`, mut((c) => { c.decision["A-1"].where = ["scripts/real.mjs", "scripts/ghost.mjs"]; })],
     [`${S}caseland.json`, mut((c) => { c.decision["A-1"] = { outcome: "Landed", where: "scripts/ghost.mjs" }; })],
+    [`${S}partialland.json`, mut((c) => { c.decision["A-1"] = { outcome: "landed-partial", where: "scripts/ghost.mjs" }; })],
+    [`${S}dotland.json`, mut((c) => { c.decision["A-1"] = { outcome: "landed.", where: "scripts/ghost.mjs" }; })],
+    [`${S}macland.json`, mut((c) => { c.decision["A-1"] = { outcome: "landed (mac)", where: "scripts/ghost.mjs" }; })],
     [`${S}nooutcome.json`, mut((c) => { delete c.decision["A-2"].outcome; })],
   ]);
   const intakeOf = (...cells) => ["# Intake", "", "| Date | Resource |", "| --- | --- |", ...cells.map((c) => `| 2026-09-19 | ${c} |`)].join("\n");
@@ -205,6 +210,9 @@ function selfTest() {
   checks.push(["a `landed` path list split by a comma still checks every path", redFor("commaland", "`scripts/ghost.mjs`, which does not exist")]);
   checks.push(["a `landed` path list given as an array still checks every path", redFor("arrayland", "`scripts/ghost.mjs`, which does not exist")]);
   checks.push(["`outcome` is matched case-insensitively (`Landed` is checked)", redFor("caseland", "`scripts/ghost.mjs`, which does not exist")]);
+  for (const f of ["partialland", "dotland", "macland"]) {
+    checks.push([`an outcome starting with \`landed\` (${f}) is held to its paths`, redFor(f, "`scripts/ghost.mjs`, which does not exist")]);
+  }
   checks.push(["a decision with no `outcome` is RED", redFor("nooutcome", "has no `outcome`")]);
   for (const link of ["resource-scans/ghost.json", "./resource-scans/ghost.json", "../agent/resource-scans/ghost.json"]) {
     const rr = run(intakeOf(`[scan](${link})`));

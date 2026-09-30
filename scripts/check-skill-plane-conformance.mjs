@@ -47,8 +47,9 @@
 // red; and the FLOORS are proven against the real tree, so a walk that resolves
 // nothing cannot report green about nothing.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -70,6 +71,26 @@ const AGENT_FLOOR = 5;
 const COMMAND_FLOOR = 5;
 
 /**
+ * A plain YAML scalar as the harness would read it: a trailing `# comment` is
+ * dropped (outside quotes), one layer of quotes removed, whitespace trimmed, and
+ * YAML's empty spellings — `~`, `null`, `!!null`, `[]`, `{}` — read as "".
+ * `"  "`, `# todo` and `!!null` were each counted as a description until the
+ * second Brain review on #1272.
+ */
+export function yamlScalar(raw) {
+  let v = String(raw).trim();
+  const q = v[0];
+  if ((q === '"' || q === "'") && v.lastIndexOf(q) > 0) {
+    v = v.slice(1, v.lastIndexOf(q));
+  } else {
+    v = v.replace(/(^|\s)#.*$/, "$1");
+  }
+  v = v.trim();
+  if (/^(?:~|null|Null|NULL|!!null(?:\s.*)?|\[\s*\]|\{\s*\})$/.test(v)) return "";
+  return v;
+}
+
+/**
  * Parse the leading `--- … ---` YAML block into a flat key→value map, or null.
  * A block scalar (`|`, `>`, with chomping/indent modifiers) takes its indented
  * continuation lines as its value, so `description: >` followed by nothing is
@@ -85,12 +106,15 @@ export function frontmatter(body) {
     const kv = lines[i].match(/^([A-Za-z_-]+):\s*(.*)$/);
     if (!kv) continue;
     let value = kv[2].trim();
-    if (/^[|>][+-]?\d*[+-]?$/.test(value)) {
+    // A block scalar's body is literal text (a `#` in it is not a comment); only
+    // a plain one-line value goes through the scalar cleanup.
+    if (/^[|>][+-]?\d*[+-]?(?:\s+#.*)?$/.test(value)) {
       const block = [];
       while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || lines[i + 1].trim() === "")) block.push(lines[++i].trim());
       value = block.join(" ").trim();
+    } else {
+      value = yamlScalar(value);
     }
-    if (/^(?:""|''|~|null|Null|NULL)$/.test(value)) value = "";
     out[kv[1]] = value;
   }
   return out;
@@ -136,7 +160,7 @@ export function auditPlane(io) {
   const agentFiles = io.listAgents();
   for (const file of agentFiles.slice().sort()) {
     const rel = `${AGENTS_DIR}/${file}`;
-    const id = file.replace(/\.md$/, "");
+    const id = basename(file).replace(/\.md$/, "");
     let body;
     try {
       body = io.read(rel);
@@ -192,29 +216,29 @@ export function auditPlane(io) {
 }
 
 // The real disk reader.
-const diskIo = {
+/** A recursive `.md` listing under `dir`, as forward-slash paths relative to it. */
+const listMdRecursive = (dir) =>
+  existsSync(dir)
+    ? readdirSync(dir, { recursive: true })
+        .map((f) => String(f).split("\\").join("/"))
+        .filter((f) => f.endsWith(".md"))
+    : [];
+
+/** The disk reader rooted at `root` — the real repo, or a planted temp tree in the self-test. */
+const diskIoAt = (root) => ({
   listSkills: () => {
-    const dir = join(repo, SKILLS_DIR);
+    const dir = join(root, SKILLS_DIR);
     if (!existsSync(dir)) return [];
     return readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "SKILL.md")))
       .map((d) => d.name);
   },
-  listAgents: () => {
-    const dir = join(repo, AGENTS_DIR);
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir).filter((f) => f.endsWith(".md"));
-  },
-  // Recursive: a namespaced command (`.claude/commands/ns/x.md`) is still a command.
-  listCommands: () => {
-    const dir = join(repo, COMMANDS_DIR);
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir, { recursive: true })
-      .map((f) => String(f).split("\\").join("/"))
-      .filter((f) => f.endsWith(".md"));
-  },
-  read: (rel) => readFileSync(join(repo, rel), "utf8"),
-};
+  // Recursive, both: a namespaced agent or command (`ns/x.md`) is still one.
+  listAgents: () => listMdRecursive(join(root, AGENTS_DIR)),
+  listCommands: () => listMdRecursive(join(root, COMMANDS_DIR)),
+  read: (rel) => readFileSync(join(root, rel), "utf8"),
+});
+const diskIo = diskIoAt(repo);
 
 function selfTest() {
   const checks = [];
@@ -246,6 +270,14 @@ function selfTest() {
     [`${COMMANDS_DIR}/empty-block-cmd.md`, "---\ndescription: >\nargument-hint: [x]\n---\nbody"],
     [`${COMMANDS_DIR}/block-cmd.md`, "---\ndescription: |\n  does a thing\n  over two lines\n---\nbody"],
     [`${COMMANDS_DIR}/ns/nested-cmd.md`, "---\nargument-hint: [x]\n---\nbody"],
+    [`${COMMANDS_DIR}/spaces-cmd.md`, '---\ndescription: "  "\n---\nbody'],
+    [`${COMMANDS_DIR}/sq-spaces-cmd.md`, "---\ndescription: '  '\n---\nbody"],
+    [`${COMMANDS_DIR}/comment-cmd.md`, "---\ndescription: # todo\n---\nbody"],
+    [`${COMMANDS_DIR}/bangnull-cmd.md`, "---\ndescription: !!null\n---\nbody"],
+    [`${COMMANDS_DIR}/list-cmd.md`, "---\ndescription: []\n---\nbody"],
+    [`${COMMANDS_DIR}/map-cmd.md`, "---\ndescription: {}\n---\nbody"],
+    [`${COMMANDS_DIR}/hash-in-text-cmd.md`, '---\ndescription: "the #1 pass"\n---\nbody'],
+    [`${COMMANDS_DIR}/hash-in-block-cmd.md`, "---\ndescription: > # folded\n  #1 pass, not a comment\n---\nbody"],
   ]);
   const fio = {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
@@ -274,13 +306,31 @@ function selfTest() {
   checks.push(["a command missing `description` is RED", r.problems.some((p) => p.includes("nodesc-cmd.md") && p.includes("no non-empty `description`"))]);
   checks.push(["a command with an empty `description` is RED", r.problems.some((p) => p.includes("blank-cmd.md") && p.includes("no non-empty `description`"))]);
   checks.push(["a command with no frontmatter is RED", r.problems.some((p) => p.includes("nofm-cmd.md") && p.includes("no YAML frontmatter"))]);
-  for (const f of ["quoted-empty-cmd", "tilde-cmd", "null-cmd", "empty-block-cmd"]) {
+  for (const f of ["quoted-empty-cmd", "tilde-cmd", "null-cmd", "empty-block-cmd", "spaces-cmd", "sq-spaces-cmd", "comment-cmd", "bangnull-cmd", "list-cmd", "map-cmd"]) {
     checks.push([`a YAML-empty description (${f}) is RED, not present`, r.problems.some((p) => p.includes(`${f}.md`) && p.includes("no non-empty `description`"))]);
   }
   checks.push(["a block-scalar description with content is present", !r.problems.some((p) => p.includes("block-cmd.md") && !p.includes("empty-block"))]);
+  checks.push(["a quoted description containing `#` is present (a `#` inside quotes is not a comment)", !r.problems.some((p) => p.includes("hash-in-text-cmd.md"))]);
+  checks.push(["a block-scalar description starting with `#` is present (a block body is text)", !r.problems.some((p) => p.includes("hash-in-block-cmd.md"))]);
   checks.push(["a namespaced command (ns/x.md) is walked and RED without a description", r.problems.some((p) => p.includes("ns/nested-cmd.md"))]);
   // The counts the floors are checked against are the walked counts, not a guess.
-  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 10]);
+  checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 18]);
+
+  // The REAL disk walker, not the injected one: plant a namespaced agent and command
+  // in a temp tree and read it back through diskIoAt. The injected fixture above
+  // cannot catch a walker that stopped recursing.
+  const tmp = mkdtempSync(join(tmpdir(), "skill-plane-"));
+  try {
+    mkdirSync(join(tmp, COMMANDS_DIR, "ns"), { recursive: true });
+    mkdirSync(join(tmp, AGENTS_DIR, "ns"), { recursive: true });
+    writeFileSync(join(tmp, COMMANDS_DIR, "ns", "zz.md"), "---\nargument-hint: [x]\n---\nbody");
+    writeFileSync(join(tmp, AGENTS_DIR, "ns", "zz.md"), "---\nname: zz\ndescription: d\nmodel: fable\n---\nbody");
+    const walked = auditPlane(diskIoAt(tmp));
+    checks.push(["the real disk walker reaches a namespaced command and turns it RED", walked.commands === 1 && walked.problems.some((p) => p.includes(`${COMMANDS_DIR}/ns/zz.md`))]);
+    checks.push(["the real disk walker reaches a namespaced agent and holds it to DR-047", walked.agents === 1 && walked.problems.some((p) => p.includes(`${AGENTS_DIR}/ns/zz.md`) && p.includes("is not one of"))]);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 
   // FLOORS against the REAL tree: a walk that resolved nothing would make every
   // per-member check vacuous, which is the pass this gate exists to refuse.

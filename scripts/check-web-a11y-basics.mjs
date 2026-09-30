@@ -22,17 +22,30 @@
 //      by a file that polls (a wrapper in a .ts file is followed, to a fixpoint).
 //      Query defaults are read from every .ts/.tsx in the tree — the balanced
 //      argument list of each `new QueryClient(…)`, `setDefaultOptions(…)` and
-//      `setQueryDefaults(…)`, wherever the construction lives.
-//   2. ICON BUTTON. A `<Button … size="icon" …>` must carry aria-label or
-//      aria-labelledby. The tag is parsed brace-aware; a tag the parser cannot
-//      close is a FAILURE, never a skip.
-//   3. REDUCED MOTION. Every web tree's src/index.css carries
-//      `@media (prefers-reduced-motion: reduce)`.
+//      `setQueryDefaults(…)`, wherever the construction lives — and must be an
+//      inline object: options passed by name, spread or shorthand fail closed.
+//      A query hook is react-query's own, any List/Get hook, or any hook the
+//      generated client (lib/api-client-react) exports whose body calls a query
+//      hook; `import { X as Y }` aliases and `NS.useX()` calls resolve to it.
+//      App.tsx is scanned like any file once its construction is removed.
+//   2. ICON BUTTON. A `<Button … size="icon" …>`, or a raw `<button>` whose
+//      children render no text, must carry aria-label or aria-labelledby. Tags
+//      are parsed brace-aware; a tag the parser cannot close is a FAILURE,
+//      never a skip.
+//   3. REDUCED MOTION. Every web tree's src/index.css carries a non-empty
+//      `@media (prefers-reduced-motion: reduce)` block, read with CSS comments
+//      stripped.
 //   4. JS MOTION. recharts 2.x animates in JavaScript and never reads the media
 //      query, so CSS cannot reach it: every recharts series element — named,
 //      aliased or namespaced — must set `isAnimationActive={false}` or
 //      `isAnimationActive={!x}` where `x = usePrefersReducedMotion()` in the
-//      same file. `{true}` or any other value is not gated motion.
+//      same file. `{true}` or any other value is not gated motion. Likewise a
+//      JS `behavior: "smooth"` ignores the stylesheet's scroll-behavior
+//      override, so a literal "smooth" fails; choose it from the preference.
+//
+// Limit: rule 1 checks that a live region is rendered, not that it stays
+// mounted or carries a message — `{msg && <div aria-live=…>}` passes. The
+// regions this gate was written for are always mounted (components/LiveRegion).
 //
 // Comments are stripped before any rule reads a file: a commented-out
 // <LiveRegion/> is not a live region, and a comment inside defaultOptions must
@@ -68,7 +81,46 @@ function sourceFiles(dir) {
   return out;
 }
 
-const QUERY_HOOK = /\buse(Query|Queries|InfiniteQuery|SuspenseQuery|SuspenseQueries|SuspenseInfiniteQuery|List[A-Z]\w*|Get[A-Z]\w*)\s*\(/;
+const QUERY_HOOK_NAME = /^use(Query|Queries|InfiniteQuery|SuspenseQuery|SuspenseQueries|SuspenseInfiniteQuery|List[A-Z]\w*|Get[A-Z]\w*)$/;
+const GENERATED_CLIENT = "lib/api-client-react/src/generated/api.ts";
+
+/**
+ * Query hooks the generated API client exports — every `export function use*`
+ * whose body calls a react-query query hook. `useHealthCheck` polls as surely as
+ * `useListPolicies`; a List/Get prefix is not the contract, the body is.
+ */
+export function generatedQueryHooks(src) {
+  const out = new Set();
+  const re = /export\s+(?:function\s+|const\s+)(use[A-Z]\w*)/g;
+  const starts = [...src.matchAll(re)];
+  starts.forEach((m, i) => {
+    const body = src.slice(m.index, i + 1 < starts.length ? starts[i + 1].index : src.length);
+    if (/\buse(Suspense)?(Infinite)?Quer(y|ies)\s*\(/.test(body)) out.add(m[1]);
+  });
+  return out;
+}
+
+/** Local names that call a query hook: the name itself, an alias (`X as Y`) of one. */
+function queryHookNames(code, generated) {
+  const isHook = (n) => QUERY_HOOK_NAME.test(n) || generated.has(n);
+  const local = new Set();
+  for (const m of code.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from/g)) {
+    for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+      const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/);
+      if (alias && isHook(orig)) local.add(alias.trim());
+    }
+  }
+  return { isHook: (n) => isHook(n) || local.has(n) };
+}
+
+/** Does `code` call a query hook — directly, by alias, or through a namespace (`NS.useX(`)? */
+export function callsQueryHook(code, generated = new Set()) {
+  const { isHook } = queryHookNames(code, generated);
+  for (const m of code.matchAll(/(?<![\w$])(?:[A-Za-z_$][\w$]*\.)?(use[A-Z]\w*|[A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g)) {
+    if (isHook(m[1])) return true;
+  }
+  return false;
+}
 const LIVE = /<LiveRegion\b|aria-live=\{?\s*["'`](polite|assertive)["'`]/;
 const DEFAULTS_CALL = /new\s+QueryClient\s*\(|\.setDefaultOptions\s*\(|\.setQueryDefaults\s*\(/g;
 
@@ -111,15 +163,39 @@ export function queryDefaults(files) {
   let constructions = 0;
   let providers = 0;
   const unparsed = [];
+  const opaque = [];
   for (const { rel, src: raw } of files) {
     const src = stripComments(raw);
     if (/\bQueryClientProvider\b/.test(src)) providers++;
     constructions += (src.match(/new\s+QueryClient\s*\(/g) ?? []).length;
     const { spans, unbalanced } = callSpans(src, DEFAULTS_CALL);
     if (unbalanced) unparsed.push(rel);
-    for (const [a, b] of spans) if (/\brefetchInterval\b/.test(src.slice(a, b))) polls = true;
+    for (const [a, b] of spans) {
+      const call = src.slice(a, b);
+      if (/\brefetchInterval\b/.test(call)) polls = true;
+      if (optionsOpaque(call)) opaque.push(rel);
+    }
   }
-  return { polls, constructions, providers, unparsed };
+  return { polls, constructions, providers, unparsed, opaque };
+}
+
+/**
+ * True when a query-defaults call takes its options from somewhere the gate
+ * cannot read: `new QueryClient(OPTS)`, `setDefaultOptions(DEFAULTS)`,
+ * `defaultOptions: DEFAULTS`, `queries: Q`, a shorthand `{ defaultOptions }`,
+ * or a spread. Any of them could carry `refetchInterval`, so each fails closed.
+ */
+export function optionsOpaque(call) {
+  const inner = call.slice(call.indexOf("(") + 1, -1).trim();
+  if (/^new\s+QueryClient/.test(call)) {
+    if (inner !== "" && !inner.startsWith("{")) return true;
+  } else if (!inner.includes("{")) {
+    return true;
+  }
+  if (/\.\.\./.test(inner)) return true;
+  if (/\b(defaultOptions|queries)\s*:(?!\s*\{)/.test(inner)) return true;
+  if (/[{,]\s*(defaultOptions|queries)\s*[,}]/.test(inner)) return true;
+  return false;
 }
 
 /** A file's source with its query-defaults call arguments removed. */
@@ -137,9 +213,11 @@ const exportedHooks = (src) =>
  * Rule 1 over one tree's files. `files` is [{ rel, src }]; `defaultPolls` from
  * queryDefaults. Returns { polling (views), failures }.
  */
-export function checkLiveRegions(files, defaultPolls) {
+export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   const failures = [];
-  const skip = (rel) => /\/(App|main|LiveRegion)\.tsx$/.test(rel);
+  // Only the LiveRegion component itself is exempt. App.tsx is read like any
+  // file: its QueryClient construction is removed below, the rest is a view.
+  const skip = (rel) => /\/LiveRegion\.tsx$/.test(rel);
   const parsed = files.filter((f) => !skip(f.rel)).map((f) => ({ ...f, code: withoutDefaultsCalls(stripComments(f.src)) }));
   const polls = new Set();
   const hooks = new Set();
@@ -149,7 +227,7 @@ export function checkLiveRegions(files, defaultPolls) {
     for (const f of parsed) {
       if (polls.has(f.rel)) continue;
       const callsWrapper = [...hooks].some((h) => new RegExp(`\\b${h}\\s*\\(`).test(f.code) && !exportedHooks(f.code).includes(h));
-      if (/\brefetchInterval\b/.test(f.code) || (defaultPolls && QUERY_HOOK.test(f.code)) || callsWrapper) {
+      if (/\brefetchInterval\b/.test(f.code) || (defaultPolls && callsQueryHook(f.code, generated)) || callsWrapper) {
         polls.add(f.rel);
         for (const h of exportedHooks(f.code)) hooks.add(h);
         changed = true;
@@ -181,10 +259,37 @@ function openingTag(src, index) {
   return null;
 }
 
+/** Text a raw `<button>` renders: its children with every JSX tag removed. */
+function buttonText(src, openEnd) {
+  const close = src.indexOf("</button>", openEnd);
+  if (close < 0) return null;
+  let body = src.slice(openEnd + 1, close);
+  for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
+    const tag = openingTag(body, i);
+    if (tag === null) return null;
+    body = body.slice(0, i) + body.slice(i + tag.length + 1);
+  }
+  return body;
+}
+
 /** Rule 2 over one file. Returns failure strings. */
 export function checkIconButtons(rel, raw) {
   const src = stripComments(raw);
   const failures = [];
+  // A raw <button> whose children are only tags (an <svg>, an icon component)
+  // renders no text, so without aria-label its accessible name is empty. A
+  // `{expression}` child may be text, so it is not flagged.
+  const raw_ = /<button\b/g;
+  let r;
+  while ((r = raw_.exec(src))) {
+    const line = src.slice(0, r.index).split("\n").length;
+    const tag = openingTag(src, r.index);
+    if (tag === null) { failures.push(`${rel}:${line}: <button> tag could not be parsed — failing closed`); continue; }
+    if (/\baria-label(ledby)?=/.test(tag) || tag.trimEnd().endsWith("/")) continue;
+    const text = buttonText(src, r.index + tag.length);
+    if (text === null) { failures.push(`${rel}:${line}: <button> body could not be parsed — failing closed`); continue; }
+    if (text.trim() === "") failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+  }
   const re = /<Button\b/g;
   let m;
   while ((m = re.exec(src))) {
@@ -249,11 +354,40 @@ export function checkChartMotion(rel, raw) {
   return failures;
 }
 
-/** Rule 3 over one stylesheet. */
-export function checkReducedMotion(rel, css) {
-  return /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)/.test(css)
-    ? []
-    : [`${rel}: no @media (prefers-reduced-motion: reduce) block — WCAG 2.3.3`];
+/**
+ * Rule 4, scrolling half. A JS `behavior: "smooth"` ignores the stylesheet's
+ * `scroll-behavior` override, so a literal "smooth" is ungated motion; the value
+ * must be chosen from the reduced-motion preference.
+ */
+export function checkScrollMotion(rel, raw) {
+  const src = stripComments(raw);
+  const failures = [];
+  for (const m of src.matchAll(/\bbehavior\s*:\s*["'`]smooth["'`]/g)) {
+    const line = src.slice(0, m.index).split("\n").length;
+    failures.push(`${rel}:${line}: behavior: "smooth" in JS ignores prefers-reduced-motion — choose it from the preference (WCAG 2.3.3)`);
+  }
+  return failures;
+}
+
+/**
+ * Rule 3 over one stylesheet. Comments are stripped first, and the block must
+ * hold at least one declaration: a commented-out or empty block reduces nothing.
+ */
+export function checkReducedMotion(rel, raw) {
+  const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
+  const re = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/g;
+  let m;
+  while ((m = re.exec(css))) {
+    let depth = 0;
+    for (let i = m.index + m[0].length - 1; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) {
+        if (/[\w-]+\s*:[^;{}]+[;}]/.test(css.slice(m.index + m[0].length, i + 1))) return [];
+        break;
+      }
+    }
+  }
+  return [`${rel}: no non-empty @media (prefers-reduced-motion: reduce) block — WCAG 2.3.3`];
 }
 
 function webTrees() {
@@ -269,8 +403,12 @@ function run() {
   if (trees.length < TREE_FLOOR) {
     failures.push(`found ${trees.length} web trees with src/index.css, floor is ${TREE_FLOOR} — the scan lost its inputs`);
   }
+  const genPath = join(repo, GENERATED_CLIENT);
+  const generated = existsSync(genPath) ? generatedQueryHooks(readFileSync(genPath, "utf8")) : new Set();
+  if (generated.size === 0) failures.push(`${GENERATED_CLIENT}: no generated query hooks found — the hook detector lost its inputs`);
   let pollingTotal = 0;
   let buttons = 0;
+  let rawButtons = 0;
   let charts = 0;
   for (const tree of trees) {
     const treeRel = relative(repo, tree);
@@ -279,10 +417,11 @@ function run() {
     const files = sourceFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), src: readFileSync(p, "utf8") }));
     const qd = queryDefaults(files);
     for (const rel of qd.unparsed) failures.push(`${rel}: a query-defaults call the gate cannot close — failing closed`);
+    for (const rel of qd.opaque) failures.push(`${rel}: query defaults are passed by name, spread or shorthand — the gate cannot see whether they poll; inline the options object (failing closed)`);
     if (qd.providers > 0 && qd.constructions === 0) {
       failures.push(`${treeRel}: mounts a QueryClientProvider but no \`new QueryClient(…)\` the gate can read — failing closed`);
     }
-    const lr = checkLiveRegions(files, qd.polls);
+    const lr = checkLiveRegions(files, qd.polls, generated);
     if (qd.polls && lr.polling.length === 0) {
       failures.push(`${treeRel}: its query defaults poll but zero polling views were found — the detector is broken, not the tree clean`);
     }
@@ -297,10 +436,12 @@ function run() {
     failures.push(...lr.failures);
     for (const f of files.filter((x) => x.rel.endsWith(".tsx"))) {
       buttons += (f.src.match(/<Button\b/g) ?? []).length;
+      rawButtons += (stripComments(f.src).match(/<button\b/g) ?? []).length;
       failures.push(...checkIconButtons(f.rel, f.src));
       if (/["']recharts["']/.test(f.src)) charts++;
       failures.push(...checkChartMotion(f.rel, f.src));
     }
+    for (const f of files) failures.push(...checkScrollMotion(f.rel, f.src));
   }
   if (pollingTotal === 0) failures.push("zero polling views found — the detector is broken, not the tree clean");
   if (failures.length) {
@@ -308,7 +449,7 @@ function run() {
     console.error(`FAIL web a11y basics — ${failures.length} finding(s)`);
     process.exit(1);
   }
-  console.log(`OK web a11y basics — ${trees.length} trees reduce motion; ${pollingTotal} polling views each render a live region; ${buttons} <Button> tags, every icon-only one labelled; ${charts} recharts files, every series animation gated`);
+  console.log(`OK web a11y basics — ${trees.length} trees reduce motion; ${pollingTotal} polling views each render a live region; ${buttons} <Button> and ${rawButtons} <button> tags, every icon-only one labelled; ${generated.size} generated query hooks resolved; ${charts} recharts files, every series animation gated`);
 }
 
 function selfTest() {
@@ -346,6 +487,26 @@ function selfTest() {
       (() => { const q = queryDefaults([view("t/src/App.tsx", "<QueryClientProvider client={makeClient()}>")]); return q.providers === 1 && q.constructions === 0; })()],
     ["an unclosable QueryClient construction fails closed",
       queryDefaults([view("t/src/App.tsx", "const q = new QueryClient({ defaultOptions: {")]).unparsed.length === 1],
+    ["query options passed by name fail closed",
+      queryDefaults([view("t/src/App.tsx", "const OPTS = { defaultOptions: { queries: { refetchInterval: 30_000 } } };\nconst q = new QueryClient(OPTS);")]).opaque.length === 1],
+    ["defaultOptions passed by name fails closed",
+      queryDefaults([view("t/src/App.tsx", "const q = new QueryClient({ defaultOptions: DEFAULTS });")]).opaque.length === 1],
+    ["spread or shorthand query options fail closed",
+      ["new QueryClient({ ...base })", "new QueryClient({ defaultOptions })", "qc.setDefaultOptions(D)"].every((c) => queryDefaults([view("t/src/App.tsx", c)]).opaque.length === 1)],
+    ["inline query options are readable",
+      queryDefaults([view("t/src/App.tsx", "const q = new QueryClient({ defaultOptions: { queries: { refetchInterval: 30_000 } } });")]).opaque.length === 0],
+    ["a polling component in App.tsx is a polling view",
+      checkLiveRegions([view("t/src/App.tsx", "const q = new QueryClient();\nfunction DenyTicker() { useQuery({ refetchInterval: 5_000 }); return <p/>; }")], false).failures.length === 1],
+    ["App.tsx's own QueryClient construction is not a polling view",
+      checkLiveRegions([view("t/src/App.tsx", "const q = new QueryClient({ defaultOptions: { queries: { refetchInterval: 30_000 } } });")], true).polling.length === 0],
+    ["an aliased generated hook is still a query hook",
+      checkLiveRegions([view("t/src/pages/P.tsx", 'import { useListPolicies as usePolicyFeed } from "@workspace/api-client-react";\nconst { data } = usePolicyFeed();')], true).failures.length === 1],
+    ["a namespaced generated hook is still a query hook",
+      checkLiveRegions([view("t/src/pages/P.tsx", 'import * as api from "@workspace/api-client-react";\nconst { data } = api.useListPolicies();')], true).failures.length === 1],
+    ["a generated query hook outside List/Get polls in a default-polling tree",
+      checkLiveRegions([view("t/src/pages/H.tsx", "const h = useHealthCheck();")], true, new Set(["useHealthCheck"])).failures.length === 1],
+    ["generated hooks are classified by body: queries in, mutations out",
+      (() => { const g = generatedQueryHooks("export function useHealthCheck() { const query = useQuery(o); }\nexport const useResetSimulator = () => { return useMutation(o); };"); return g.has("useHealthCheck") && !g.has("useResetSimulator"); })()],
     ["unlabelled icon button fails",
       checkIconButtons("x.tsx", '<Button\n variant="ghost"\n size="icon"\n onClick={() => remove(i)}\n>\n<Trash2 /></Button>').length === 1],
     ["labelled icon button passes",
@@ -370,10 +531,24 @@ function selfTest() {
       checkChartMotion("c.tsx", 'import * as R from "recharts";\n<R.Bar dataKey="x" />').length === 1],
     ["an unparseable recharts import fails closed",
       checkChartMotion("c.tsx", 'const R = require("recharts");\n<R.Bar />').length === 1],
+    ["a commented-out reduced-motion block does not count",
+      checkReducedMotion("a.css", "/* @media (prefers-reduced-motion: reduce) { * { animation: none; } } */").length === 1],
+    ["an empty reduced-motion block does not count",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) {}").length === 1],
+    ["icon-only raw <button> without aria-label fails",
+      checkIconButtons("x.tsx", '<button\n onClick={() => open(true)}\n>\n<svg width="16"><rect y="2" /></svg>\n</button>').length === 1],
+    ["icon-only raw <button> with aria-label passes",
+      checkIconButtons("x.tsx", '<button onClick={() => open(true)} aria-label="Open navigation"><svg /></button>').length === 0],
+    ["raw <button> with text passes",
+      checkIconButtons("x.tsx", '<button onClick={() => go()}><Icon /> Save</button>').length === 0],
+    ["a literal smooth scroll fails",
+      checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: "smooth" });').length === 1],
+    ["a preference-chosen scroll behaviour passes",
+      checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });').length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * {} }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before { animation-duration: 0.01ms !important; } }").length === 0],
   ];
   const bad = cases.filter(([, ok]) => !ok);
   for (const [name, ok] of cases) console.log(`${ok ? "ok" : "FAIL"}  ${name}`);

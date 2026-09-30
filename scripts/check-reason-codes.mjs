@@ -119,9 +119,22 @@ export function auditReasonCodes({ catalog, committedMd, specYaml }) {
 // descriptor, or a cell that is not the engine's sentence each FAIL.
 export function auditEcosystemWorkerCopy({ catalog, ecosystemMd }) {
   const problems = [];
-  const section = /### 2\.1 [^\n]*\n([\s\S]*?)\n### /.exec(ecosystemMd);
+  // The section ends at the next heading of the SAME or higher level (###, ##, #),
+  // not at any `### ` — demoting §2.2 to `##` must not sweep later tables in.
+  const section = /### 2\.1 [^\n]*\n([\s\S]*?)(?=\n#{1,3} |$)/.exec(ecosystemMd);
   if (!section) return [`${ECOSYSTEM} has no §2.1 section — the worker-copy table cannot be checked`];
-  const rows = [...section[1].matchAll(/^\| `([A-Z][A-Z0-9_]{4,})` \| (.*?) \| (.*?) \|$/gm)];
+  const ROW = /^\| `([A-Z][A-Z0-9_]{4,})` \| (.*?) \| (.*?) \|$/;
+  const rows = [];
+  // Fail closed on a row the parser cannot read: every line that opens like a code
+  // row (`| \``) must parse, or it is named. Before this, a row missing its trailing
+  // pipe or carrying a malformed code was dropped silently and the check passed
+  // (review of PR #1302 planted one; the floor of 7 did not notice one lost row).
+  for (const line of section[1].split("\n")) {
+    if (!line.startsWith("| `")) continue;
+    const m = ROW.exec(line);
+    if (m) rows.push(m);
+    else problems.push(`${ECOSYSTEM} §2.1 row does not parse (want: pipe, backticked CODE, worker cell, operator cell, closing pipe) — fix it, or nothing checks it: ${JSON.stringify(line.slice(0, 100))}`);
+  }
   if (rows.length < ECOSYSTEM_FLOOR) {
     problems.push(`vacuity: only ${rows.length} row(s) parsed from ${ECOSYSTEM} §2.1 (floor ${ECOSYSTEM_FLOOR}) — the parser or the table collapsed`);
   }
@@ -234,11 +247,21 @@ function selfTest() {
     ["a §2.1 row naming a code the engine never emits FAILS", (md) => md.replace("| `POSTURE_STALE` |", "| `DEVICE_POSTURE_STALE` |")],
     ["a collapsed §2.1 table trips its vacuity floor", (md) => md.replace(/^\| `CUSTODY_EXCEPTION` .*\n/m, "")],
     ["a missing §2.1 section FAILS", (md) => md.replace("### 2.1 ", "### 2.x ")],
+    ["a §2.1 row with its trailing pipe removed FAILS (not dropped silently)", (md) => md.replace(
+      /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `POSTURE_STALE` | "Totally invented worker sentence." | op')],
+    ["a §2.1 row whose code fails the code regex FAILS (not dropped silently)", (md) => md.replace(
+      /^(\| `CRITICAL_WORKFLOW_UNTRUSTED_DEVICE` .*)$/m, '$1\n| `posture_stale` | "Totally invented worker sentence." | op |')],
   ]) {
     const mutated = mutate(ecosystemMd);
     if (mutated === ecosystemMd) { checks.push([label + " (mutation applied)", false]); continue; }
     checks.push([label, auditEcosystemWorkerCopy({ catalog, ecosystemMd: mutated }).length > 0]);
   }
+  // Demoting §2.2 to `##` still ends §2.1 there: later tables must not be swept in.
+  const demoted = ecosystemMd.replace("\n### 2.2 ", "\n## 2.2 ");
+  checks.push([
+    "demoting §2.2 to `##` still ends §2.1 there (mutation applied, still passes)",
+    demoted !== ecosystemMd && auditEcosystemWorkerCopy({ catalog, ecosystemMd: demoted }).length === 0,
+  ]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);

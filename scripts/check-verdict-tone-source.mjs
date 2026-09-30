@@ -286,7 +286,7 @@ export function rechartsAliases(code) {
 /** Every opening tag `<Name …>` / `<Name … />` with its attribute text, scanned brace- and quote-aware. */
 function tags(code, localName) {
   const out = [];
-  const esc = localName.replace(/[.$]/g, "\\$&");
+  const esc = localName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`<${esc}(?=[\\s/>])`, "g");
   for (const m of code.matchAll(re)) {
     let i = m.index + m[0].length, depth = 0, q = null;

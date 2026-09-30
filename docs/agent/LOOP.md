@@ -110,6 +110,12 @@ TIERS THIS SESSION: the coordinating session read model claude-fable-5-1 at 16:3
               on Opus (configured_model claude-opus-5-5); the two Fable F2/F3 spawns were archived ~30 ms after creation; Sonnet
               review + Opus refutation on the Mac's five per the coordinator (the PR comments name no model); an Opus
               record-writer subagent wrote this record.
+AFTER THE WINDOW (to 17:35Z; the next record owns the detail): #1302 merged 9f771e34 (DR-037, check run 109895364861);
+              Mac #1256 merged ed62554f (DR-037, 109773993346) after the cloud lane reshaped its body to the seven headings -
+              SignalGrid_Alpha's phase-pr-evidence enforces them since #1233 and does not re-run on an edit, so the reshape was
+              proved with `pnpm run phase:summary-check` (summary=pass) before the merge; mail #1316 merged 60cc677c (110000705328).
+              #1301 fix-needed (untested enumerateCiJobs throw); #1307 and #1309 owner-decision; workers B28-B31 dispatched on Opus;
+              #1236 and #1303 landing chains running.
 PREVIOUSLY:   2026-09-30 (Mac lane) - OWNER: "BUILD THE WHOLE SYSTEM USING THE BRAIN". 16 NEW PRs + #1118 FINISHED + 3 MERGE STEPS; DR-061 (#1246) IS HIS ONE MERGE.
               WHY IT STALLED: objective-loop tasks[0..2] were plan rows 17/18/24, all owner- or lab-blocked; the lane
               tick only ran sim requests + heartbeats (159 heartbeat commits since 09-27); ~10 PRs waited on owner merges.

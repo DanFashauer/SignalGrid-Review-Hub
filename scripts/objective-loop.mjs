@@ -39,14 +39,18 @@
 //     escalation id is mailed to the cloud once (--deliver), not every tick and not never.
 //
 // PARKING A ROW THE LOOP CANNOT BUILD (the AWAITING marker):
-//   · a plan row only the owner or a lab can unblock carries, in its head paragraph,
+//   · a plan row only the owner or a lab can unblock carries, in its STATUS SLOT — the first sentence after
+//     the role/size clause on the row's head line ("17. **Title** — roles, days. <marker>") —
 //       AWAITING OWNER (<blocker>, YYYY-MM-DD)     or     BLOCKED ON LAB (<blocker>, YYYY-MM-DD)
 //     upper-case, the blocker in the parentheses (no nested parentheses), the date the blocker was last
-//     checked. With several markers the latest date wins. A marker with no date or an empty blocker is
-//     not a marker; a quoted or code-span marker is being discussed, not asserted (statusText's rule).
+//     checked. ONLY the slot counts: the same words in history ("no longer AWAITING OWNER", "was … until"),
+//     negated, naming another row, or in a later paragraph describe a blocker, they do not assert one. A
+//     marker with no date or an empty blocker is not a marker; a quoted or code-span marker is being
+//     discussed, not asserted (statusText's rule). Anything the slot does not read plainly is NOT parked.
 //   · a marker dated 0–14 days back (MEASURE_WINDOW_DAYS) PARKS the row: it goes to awaiting[], is never
-//     ranked, and raises ONE `rows-awaiting-owner` escalation naming every parked row. Checked BEFORE the
-//     re-measured stamp, so a parked row need not be restamped to stay parked.
+//     ranked, and raises its OWN `awaiting-owner-row-<id>` escalation (one per parked row, so a row parked
+//     after the first mail is a new id and is mailed, and each row keeps its own `since`). Checked BEFORE
+//     the re-measured stamp, so a parked row need not be restamped to stay parked.
 //   · a marker older than 14 days, or dated in the future, is an unknown input: the row goes to
 //     unmeasured[] (reason "…re-check the blocker"), not ranked. The blocker must be re-dated to stay parked.
 //   · HALF DONE rows carry work too: derive() ranks plan.partial as well as plan.open.
@@ -142,14 +146,17 @@ export function rowMeasuredAt(text) {
   const dates = [...statusText(text ?? "").matchAll(/re-?measured\s+(\d{4}-\d{2}-\d{2})/gi)].map((m) => m[1]);
   return dates.length > 0 ? dates.sort().pop() : null;
 }
-/** The latest-dated `AWAITING OWNER (<blocker>, YYYY-MM-DD)` / `BLOCKED ON LAB (<blocker>, YYYY-MM-DD)`
- *  marker in a row, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
- *  blocker, markedAt} or null. A marker with no date or an empty blocker is not a marker. Pure. */
+/** The row's STATUS SLOT: head line, title, " — ", the role/size clause (no full stop inside), a full stop, then
+ *  the marker `AWAITING OWNER (<blocker>, YYYY-MM-DD)` or `BLOCKED ON LAB (<blocker>, YYYY-MM-DD)`. The slot is
+ *  where every real row carries it. Anywhere else the words DESCRIBE a blocker ("no longer AWAITING OWNER",
+ *  "was … until", "NOT", another row's marker, a later paragraph) and parking on them hides buildable work. */
+const AWAITING_SLOT = /^\d[\w-]*\.\s+\*\*.+?\*\*\s+—\s+[^.]*\.\s+(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/;
+/** The marker in a row's status slot, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
+ *  blocker, markedAt} or null. A marker outside the slot, with no date or with an empty blocker is not a marker:
+ *  unknown tightens to "not parked" (the row stays visible and ranked). Pure. */
 export function rowAwaiting(text) {
-  const found = [...statusText(text ?? "").matchAll(/(?<![\w-])(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/g)]
-    .map((m) => ({ kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker: m[2].trim(), markedAt: m[3] }))
-    .filter((m) => m.blocker !== "");
-  return found.reduce((a, b) => (a === null || b.markedAt > a.markedAt ? b : a), null);
+  const m = AWAITING_SLOT.exec(statusText((text ?? "").split("\n")[0]));
+  return m && m[2].trim() !== "" ? { kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker: m[2].trim(), markedAt: m[3] } : null;
 }
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
 
@@ -302,8 +309,10 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
   if (unmeasured.length > 0) {
     esc("plan-rows-unmeasured", "cloud", `${unmeasured.length} open row(s) in ${PLAN_REL} carry no \`re-measured YYYY-MM-DD\` stamp within ${MEASURE_WINDOW_DAYS} days and were ranked from nothing — a row nobody measured against the tree is an unknown input: ${unmeasured.map((u) => u.rowId).join(", ")}. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)`);
   }
-  if (awaiting.length > 0) {
-    esc("rows-awaiting-owner", "owner", `${awaiting.length} open row(s) in ${PLAN_REL} are parked, not ranked, because only the owner or a lab can unblock them: ${awaiting.map((a) => `row ${a.rowId} ${a.kind} (${a.blocker})`).join("; ")}. Clear each blocker, or remove its marker once cleared`);
+  // One escalation PER parked row: the mail-once ledger and the owner hand's `since` both key on the id, so a
+  // constant id mailed only the first parked row and a set-keyed id would reset every older row's age.
+  for (const a of awaiting) {
+    esc(`awaiting-owner-row-${a.rowId}`, "owner", `row ${a.rowId} ("${a.title}") in ${PLAN_REL} is parked, not ranked, because only the owner or a lab can unblock it: ${a.kind} (${a.blocker}), checked ${a.markedAt}. Clear the blocker, or remove its marker once cleared`);
   }
   if (tasks[0] && priorState?.tasks?.[0]?.rowId === tasks[0].rowId && hoursBetween(tasks[0].firstRankedAt, nowIso) > STALLED_TOP_DAYS * 24) {
     esc("stalled-top-task", "cloud", `row ${tasks[0].rowId} ("${tasks[0].title}") has been ranked #1 for over ${STALLED_TOP_DAYS} days with no change in ${PLAN_REL} — build it, re-rank it, or record why it waits`);
@@ -694,18 +703,18 @@ function selfTest() {
   t("stamp: with no open row at all, finalize is still broken (the unmeasured list does not excuse a vacuous plan)", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], unmeasured: [], escalations: [], queue: [] }).verdict === "broken");
   t("stamp: the window is declared in code, not read from anywhere", MEASURE_WINDOW_DAYS === 14);
   // (f3) the AWAITING marker: a row only the owner or a lab can unblock is PARKED, named, and never ranked
-  const arow = (id, marker) => ({ id, text: `${id}. **Parked** — web-engineer, days. re-measured 2026-09-22. ${marker}` });
+  const arow = (id, marker) => ({ id, text: `${id}. **Parked** — web-engineer, days. ${marker} re-measured 2026-09-22.` }); // marker in the status slot
   const rk = (rs) => rank({ rows: rs, openIds: rs.map((r) => r.id), roster, roleIds, evaluation: e1, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
-  const escAsks = (r) => r.escalations.filter((e) => e.id === "rows-awaiting-owner");
+  const escAsks = (r) => r.escalations.filter((e) => /^awaiting-owner-row-/.test(e.id));
   const named = (s, id) => new RegExp(`(?<![\\w#-])${id}(?![\\w-])`).test(s);
   const aOwner = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)")]);
   t("awaiting: a fresh-stamped, real-executor row marked AWAITING OWNER is parked, not ranked", !aOwner.tasks.some((x) => x.rowId === "9") && (aOwner.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "owner" && x.blocker === "#9" && x.markedAt === "2026-09-22"));
-  t("awaiting: ONE rows-awaiting-owner escalation clears owner and its asks name the row and the blocker", escAsks(aOwner).length === 1 && escAsks(aOwner)[0].clears === "owner" && named(escAsks(aOwner)[0].asks, "9") && escAsks(aOwner)[0].asks.includes("#9"));
+  t("awaiting: a parked row raises its own awaiting-owner-row-<id> escalation, clearing owner, whose ask names the row and the blocker", escAsks(aOwner).length === 1 && escAsks(aOwner)[0].id === "awaiting-owner-row-9" && escAsks(aOwner)[0].clears === "owner" && named(escAsks(aOwner)[0].asks, "9") && escAsks(aOwner)[0].asks.includes("#9"));
   const aLab = rk([arow("9", "BLOCKED ON LAB (ITSM lab, 2026-09-22)")]);
   t("awaiting: BLOCKED ON LAB gives kind lab, and still escalates once to the owner", (aLab.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "lab" && x.blocker === "ITSM lab") && escAsks(aLab).length === 1 && escAsks(aLab)[0].clears === "owner");
   const aOld = rk([arow("9", "AWAITING OWNER (#9, 2026-09-09)")]);
   t("awaiting: a marker dated 15 days before the instant is NOT ranked and is named unmeasured, with its reason", !aOld.tasks.some((x) => x.rowId === "9") && (aOld.awaiting ?? []).length === 0 && aOld.unmeasured.some((u) => u.rowId === "9" && /marker .* older than 14 days/.test(u.reason)));
-  const bare = (extra) => ({ id: "9", text: `9. **Parked** — web-engineer, days. AWAITING OWNER (#9, 2026-09-22)${extra}` }); // no fresh stamp: the marker alone must park it
+  const bare = (extra) => ({ id: "9", text: `9. **Parked** — web-engineer, days. AWAITING OWNER (#9, 2026-09-22).${extra}` }); // no fresh stamp: the marker alone must park it
   t("awaiting: the marker is checked BEFORE the stamp — a parked row with NO stamp is awaiting, not unmeasured", (rk([bare("")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare("")]).unmeasured.length === 0);
   t("awaiting: the marker is checked BEFORE the stamp — a parked row with a STALE stamp stays awaiting, not unmeasured", (rk([bare(" re-measured 2026-08-01.")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare(" re-measured 2026-08-01.")]).unmeasured.length === 0);
   const aFuture = rk([arow("9", "AWAITING OWNER (#9, 2026-10-01)")]);
@@ -713,11 +722,39 @@ function selfTest() {
   t("awaiting: a marker inside backticks or quotes is being discussed, not asserted — the row is ranked", ["`AWAITING OWNER (#9, 2026-09-22)`", "\"AWAITING OWNER (#9, 2026-09-22)\""].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
   t("awaiting: a marker with no date, or an empty blocker, is not a marker — the row is ranked", ["AWAITING OWNER (#9)", "AWAITING OWNER (, 2026-09-22)", "AWAITING OWNER (2026-09-22)"].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
   const aAll = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)"), arow("10", "BLOCKED ON LAB (Keycloak lab, 2026-09-21)")]);
-  t("awaiting: ONE escalation names EVERY parked row, kind and blocker", escAsks(aAll).length === 1 && named(escAsks(aAll)[0].asks, "9") && named(escAsks(aAll)[0].asks, "10") && escAsks(aAll)[0].asks.includes("Keycloak lab"));
+  t("awaiting: EVERY parked row is escalated, each under its own id with its kind and blocker", escAsks(aAll).length === 2 && escAsks(aAll).some((e) => e.id === "awaiting-owner-row-9" && e.asks.includes("owner (#9)")) && escAsks(aAll).some((e) => e.id === "awaiting-owner-row-10" && e.asks.includes("lab (Keycloak lab)")));
   t("awaiting: with EVERY open row awaiting, tasks is empty and the verdict is escalate, not broken — the parked rows are the named reason", aAll.tasks.length === 0 && (aAll.awaiting ?? []).length === 2 && finalize({ ...e1, probeErrors: [] }, aAll).verdict === "escalate");
   t("awaiting: an awaiting row is not double-counted as unmeasured or needsExecutor", aAll.unmeasured.length === 0 && aAll.needsExecutor.length === 0);
-  t("awaiting: rowAwaiting takes the LATEST-dated marker of several, whatever the order or kind", rowAwaiting("AWAITING OWNER (a, 2026-09-01) then BLOCKED ON LAB (b, 2026-09-20)")?.kind === "lab" && rowAwaiting("BLOCKED ON LAB (b, 2026-09-20) then AWAITING OWNER (a, 2026-09-01)")?.markedAt === "2026-09-20");
-  t("awaiting: rowAwaiting is a whole upper-case token, and absent text reads null", rowAwaiting("UNAWAITING OWNER (x, 2026-09-22)") === null && rowAwaiting("awaiting owner (x, 2026-09-22)") === null && rowAwaiting(undefined) === null);
+  const head = (s) => `9. **Parked** — web-engineer, days. ${s}`;
+  t("awaiting: rowAwaiting reads the status slot only — a second marker after it never overrides it, whatever the kind or date", rowAwaiting(head("AWAITING OWNER (a, 2026-09-01). BLOCKED ON LAB (b, 2026-09-20)"))?.kind === "owner" && rowAwaiting(head("BLOCKED ON LAB (b, 2026-09-20). AWAITING OWNER (a, 2026-09-01)"))?.markedAt === "2026-09-20");
+  t("awaiting: rowAwaiting is a whole upper-case token in the slot, and absent text reads null (control: the same slot with the real marker reads)", !!rowAwaiting(head("AWAITING OWNER (x, 2026-09-22)")) && rowAwaiting(head("UNAWAITING OWNER (x, 2026-09-22)")) === null && rowAwaiting(head("awaiting owner (x, 2026-09-22)")) === null && rowAwaiting(undefined) === null);
+  t("awaiting: a marker with no row head to anchor it is not a marker", rowAwaiting("AWAITING OWNER (x, 2026-09-22)") === null);
+  // (f3b) the marker is a row ATTRIBUTE read from the status slot (the first sentence after the role/size clause on the
+  // head line), not a phrase found anywhere in the row's prose: history, negation, another row's marker and a later
+  // paragraph all describe something other than THIS row's blocker, and parking on them hides buildable work.
+  const stamped = " re-measured 2026-09-22.";
+  const slot = (s) => ({ id: "9", text: `9. **Parked** — web-engineer, days. ${s}${stamped}` });
+  const ranked9 = (r) => r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0 && r.unmeasured.length === 0;
+  t("awaiting: history prose is not a marker — \"no longer\", \"was … until\" and \"never\" leave the row ranked", [
+    "It is no longer AWAITING OWNER (#9, 2026-09-22), the owner ruled.", "No longer AWAITING OWNER (#9, 2026-09-22).",
+    "Was AWAITING OWNER (#9, 2026-09-22) until 2026-09-25.", "It never was AWAITING OWNER (#9, 2026-09-22).",
+  ].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: a negated marker is not a marker — NOT AWAITING OWNER leaves the row ranked", ["NOT AWAITING OWNER (#9, 2026-09-22).", "Row 9 is NOT BLOCKED ON LAB (Keycloak lab, 2026-09-22)."].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: ANOTHER row's marker named in this row's prose does not park this row", ["Row 18 is AWAITING OWNER (#1118, 2026-09-22).", "Unlike row 18, which is AWAITING OWNER (#1118, 2026-09-22), this one is buildable."].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: a marker in a LATER paragraph (a continuation line) does not park the row", [
+    { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n\nAWAITING OWNER (#9, 2026-09-22)` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n    - AWAITING OWNER (#9, 2026-09-22)` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.\nAWAITING OWNER (#9, 2026-09-22)${stamped}` },
+  ].every((row) => ranked9(rk([row]))));
+  t("awaiting: a marker later on the head line (not in the status slot) does not park the row", ranked9(rk([{ id: "9", text: `9. **Parked** — web-engineer, days.${stamped} Body prose. AWAITING OWNER (#9, 2026-09-22)` }])));
+  const realShape = rk([{ id: "17", text: "17. **Run the three shifts** — itsm-ops-domain, web-engineer, days. BLOCKED ON LAB (ITSM lab for the seven vendor adapters; shift-context live source, 2026-09-22). RE-MEASURED 2026-09-26 (still open): the offline half landed. Also: more." }]);
+  t("awaiting: the real plan shape (many roles, marker first, a long RE-MEASURED paragraph after it) parks", (realShape.awaiting ?? []).some((x) => x.rowId === "17" && x.kind === "lab" && x.blocker === "ITSM lab for the seven vendor adapters; shift-context live source") && realShape.tasks.length === 0);
+  const awaitingId = (r, id) => r.escalations.find((e) => e.id === `awaiting-owner-row-${id}`);
+  const aNow = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)")]);
+  const aLater = rank({ rows: [arow("9", "AWAITING OWNER (#9, 2026-09-22)"), arow("10", "BLOCKED ON LAB (Keycloak lab, 2026-09-21)")], openIds: ["9", "10"], roster, roleIds, evaluation: e1, priorState: { escalations: aNow.escalations, tasks: [] }, envKeys: new Set(), nowIso: T1, simOps: ops, objective: goodObjective() });
+  t("awaiting: each parked row has its OWN escalation id (awaiting-owner-row-<id>), so a row parked after the first mail is a NEW id and is mailed", !!awaitingId(aNow, "9") && !!awaitingId(aLater, "10") && awaitingId(aNow, "10") === undefined && aLater.escalations.filter((e) => /^awaiting-owner-row-/.test(e.id)).length === 2);
+  t("awaiting: a row parked earlier keeps its own `since` when a later row parks (the 3×48h clock is per row, not reset by the set changing)", awaitingId(aLater, "9")?.since === T0 && awaitingId(aLater, "10")?.since === T1);
+  t("awaiting: each row's ask names ITS row, kind and blocker and no other parked row", named(awaitingId(aLater, "10")?.asks ?? "", "10") && (awaitingId(aLater, "10")?.asks ?? "").includes("Keycloak lab") && !named(awaitingId(aLater, "10")?.asks ?? "", "9") && awaitingId(aLater, "10")?.clears === "owner");
   // (f4) PARTIAL rows still carry work: derive() must rank them, not only the OPEN bucket
   const derivable = (p) => ({ objective: goodObjective(), objectiveSha: "o", rosterSha: "r", roster, roleIds, rows: [{ id: "11", text: "11. **Half built** — web-engineer, days. HALF DONE. re-measured 2026-09-22." }], priorState: null, nowIso: T0, staleAfterHours: 3, heartbeat: null, probes: probes({ plan: { problems: [], open: [], partial: [], closed: [], ...p } }), report: {}, git: { head: null, workingTreeCleanAtEntry: true }, envKeys: new Set() });
   t("partial: a HALF DONE row with a fresh stamp and a real executor is ranked by derive()", derive(derivable({ partial: ["11"] })).tasks.some((x) => x.rowId === "11"));

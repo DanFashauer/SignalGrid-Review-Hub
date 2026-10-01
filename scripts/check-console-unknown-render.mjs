@@ -57,12 +57,18 @@
 // `const` (a literal, template literal, `clsx`/`cn` call or ternary of those) is resolved
 // through lexical scope before the class match, so `className={GOOD}` is judged as inline.
 //
-// KNOWN, DELIBERATE LIMITATION (conservative — it UNDER-flags, never over-flags; the
-// widened doctrine review still covers it, and it has a BUILD_BACKLOG follow-up):
-//   - Provenance does not cross component/file boundaries: a value extracted into a child
-//     presentation component (`<Panel items={items} />`) is analysed in the child without
-//     its parent's query origin. A false NEGATIVE, not a false positive. Object-map classes
-//     (`TONE[status]`) are not resolved either.
+// PROPS PROVENANCE (2026-10-01, backlog 2379 remainder (a)): `<Panel items={items} />` where
+// `Panel` is a function component declared in the same file taints the matching destructured
+// parameter when the call site passes query data no guard there proves present; the child's
+// render is then judged with the parent's origins (a child-side `if (!items) return …`, or a
+// parent-side `q.data ? <Panel …/> : null`, handles it).
+// OBJECT-MAP CLASSES (same date, remainder (b)): `className={TONE[status]}` resolves a same-file
+// const object literal; a lookup is unknown-safe only with an explicit non-good fallback
+// (`?? TONE.default`, `?? "text-muted"`) — otherwise it is judged like an inline good class.
+//
+// KNOWN, DELIBERATE LIMITATION (conservative — it UNDER-flags, never over-flags): provenance
+// and maps are followed only WITHIN one file. A child component or class map imported from
+// another file is not resolved (no module resolver here); the widened doctrine review covers it.
 //
 // `--self-test` plants bug shapes (each must flag), gated shapes (must not), and a PLANT
 // into a real component — so the check can itself fail and can pass.
@@ -107,7 +113,12 @@ const USER_FACING_ATTRS = new Set([
 
 // An identifier that is the MEMBER of a property access (`obj.status`) is not a variable
 // reference — it must never match a same-named tracked var. (Codex P2 false positive.)
-const isMemberName = (id) => ts.isPropertyAccessExpression(id.parent) && id.parent.name === id;
+// Likewise a JSX attribute name (`<Metric value={…} />`) and an object-literal key are names, not
+// reads — once a prop is tracked as data, `value=` must not read as a render of it.
+const isMemberName = (id) =>
+  (ts.isPropertyAccessExpression(id.parent) && id.parent.name === id) ||
+  (ts.isJsxAttribute(id.parent) && id.parent.name === id) ||
+  (ts.isPropertyAssignment(id.parent) && id.parent.name === id);
 
 // A negator immediately before an affirmation flips its meaning: "Not all healthy" and
 // "Not all systems are operational" REPORT a bad state, they do not paint an unknown one.
@@ -270,7 +281,7 @@ function analyzeSourceFile(relPath, text) {
   // Derived-from-data vars, to a fixpoint. Handles `const s = q.data?.x ?? []` and a later
   // `const { data: d, isError: e } = q` destructure of a query-object var. (Codex P2.) Each
   // derived var inherits the origins of everything it was derived from.
-  for (let changed = true, guard = 0; changed && guard < 8; guard++) {
+  const deriveFixpoint = () => { for (let changed = true, guard = 0; changed && guard < 8; guard++) {
     changed = false;
     const p2 = (n) => {
       if (ts.isVariableDeclaration(n) && n.initializer) {
@@ -290,7 +301,8 @@ function analyzeSourceFile(relPath, text) {
       ts.forEachChild(n, p2);
     };
     p2(sf);
-  }
+  } };
+  deriveFixpoint();
 
   // referencesErrorLoading: subtree mentions an error/loading flag (`isError`, `isLoading`,
   // …) of the query — a term whose truth means the query failed or is not yet ready.
@@ -497,6 +509,10 @@ function analyzeSourceFile(relPath, text) {
   // A name that is bound as a PARAMETER of an enclosing function is a prop, not the query's
   // data — `function Child({ data }) { … }` shares the name but is a distinct binding, so
   // its render must not be attributed to a query in the same file. (Codex P2 false positive.)
+  // PROPS PROVENANCE: a destructured parameter that receives unguarded query data from a
+  // same-file `<Comp prop={data} />` call site is registered here and is NOT opaque — it IS
+  // the query's data, so the child's render is judged against the parent's origins.
+  const taintedParams = new Set();
   const boundAsParamInEnclosingFn = (node) => {
     const name = ts.isIdentifier(node) ? node.text : null;
     if (!name) return false;
@@ -506,7 +522,7 @@ function analyzeSourceFile(relPath, text) {
         for (const p of cur.parameters) {
           if (ts.isIdentifier(p.name) && p.name.text === name) return true;
           if (ts.isObjectBindingPattern(p.name)) {
-            for (const el of p.name.elements) { if (ts.isIdentifier(el.name) && el.name.text === name) return true; }
+            for (const el of p.name.elements) { if (ts.isIdentifier(el.name) && el.name.text === name && !taintedParams.has(el)) return true; }
           }
         }
       }
@@ -557,6 +573,46 @@ function analyzeSourceFile(relPath, text) {
     return out;
   };
 
+  // DATA PROVENANCE ACROSS COMPONENT PROPS (backlog 2379 remainder (a)). `<Panel items={items} />`
+  // where `Panel` is a function component declared in THIS file: if the call site passes query
+  // data that no guard there proves present, the matching destructured parameter of `Panel`
+  // becomes a data var carrying the same origins, so `Panel`'s render is judged exactly as if
+  // it were inline — its own guard (`if (!items) return …`) handles it, its absence is the bug.
+  // A call site that IS guarded (`q.data ? <Panel items={items} /> : null`) taints nothing.
+  // Components defined in another file are not followed (no module resolver here).
+  const localComponents = new Map(); // name -> parameters
+  {
+    const reg = (n) => {
+      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.set(n.name.text, n.parameters);
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer &&
+          (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) localComponents.set(n.name.text, n.initializer.parameters);
+      ts.forEachChild(n, reg);
+    };
+    reg(sf);
+  }
+  const propagateProps = () => {
+    let changed = false;
+    const visit = (n) => {
+      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer) && n.initializer.expression) {
+        const tag = n.parent.parent.tagName; // JsxAttributes -> element opening/self-closing
+        const params = tag && ts.isIdentifier(tag) ? localComponents.get(tag.text) : undefined;
+        const expr = n.initializer.expression;
+        // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
+        if (params && params[0] && ts.isObjectBindingPattern(params[0].name) && elementHasUnguardedDataRender(expr)) {
+          for (const el of params[0].name.elements) {
+            if (propOf(el) !== n.name.text || !ts.isIdentifier(el.name)) continue;
+            if (addOrigins(dataVars, el.name.text, originsIn(expr))) changed = true;
+            if (!taintedParams.has(el)) { taintedParams.add(el); changed = true; }
+          }
+        }
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return changed;
+  };
+  for (let i = 0; i < 8 && propagateProps(); i++) deriveFixpoint();
+
   // CONST-CLASS RESOLUTION (backlog "two conservative false-negatives", P2-5). A class
   // string hoisted into a `const` — a literal, a template literal, a `clsx`/`cn` call, or a
   // ternary of those — is resolved to its initializer through lexical scope (the nearest
@@ -587,7 +643,7 @@ function analyzeSourceFile(relPath, text) {
         scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
     return false;
   };
-  const resolveConstInit = (id) => {
+  const resolveConstInit = (id, accept = RESOLVABLE_INIT) => {
     for (let cur = id.parent; cur; cur = cur.parent) {
       if (bindsNameOpaquely(cur, id.text)) return null;
       const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements : null;
@@ -596,13 +652,51 @@ function analyzeSourceFile(relPath, text) {
         if (!ts.isVariableStatement(st)) continue;
         const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
         for (const d of st.declarationList.declarations) {
-          if (ts.isIdentifier(d.name) && d.name.text === id.text) return isConst && RESOLVABLE_INIT(d.initializer) ? d.initializer : null;
+          if (ts.isIdentifier(d.name) && d.name.text === id.text) return isConst && accept(d.initializer) ? d.initializer : null;
           if (!ts.isIdentifier(d.name) && (ts.isObjectBindingPattern(d.name) || ts.isArrayBindingPattern(d.name)) &&
               d.name.elements.some((el) => !ts.isOmittedExpression(el) && ts.isIdentifier(el.name) && el.name.text === id.text)) return null;
         }
       }
     }
     return null;
+  };
+  // OBJECT-MAP CLASS RESOLUTION (backlog 2379 remainder (b)). `className={TONE[status]}` where
+  // `TONE` is a same-file `const` object literal (optionally `as const`/`satisfies`) holding a
+  // good-state class: a literal key (`TONE.ok`, `TONE["ok"]`) resolves to that one entry; a
+  // dynamic key may select ANY entry. The lookup is unknown-safe only when it carries an explicit
+  // fallback that is not itself good-state — `TONE[status] ?? TONE.default`, `?? "text-muted"` —
+  // so a value the map does not cover cannot land on a good class. Anything else is judged like
+  // an inline good class (flagged on unguarded query data). A map that is not a same-file const
+  // object literal (imported, a parameter, `let`) is not resolved.
+  const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
+    ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
+  const mapObject = (id) => {
+    const init = resolveConstInit(id, (n) => n && ts.isObjectLiteralExpression(unwrapExpr(n)));
+    return init ? unwrapExpr(init) : null;
+  };
+  const mapEntries = (obj, keyNode) => {
+    const lit = keyNode && ts.isStringLiteralLike(keyNode) ? keyNode.text : null;
+    return obj.properties.filter((p) => ts.isPropertyAssignment(p) && (lit === null ||
+      ((ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === lit))).map((p) => p.initializer);
+  };
+  const hasGoodClass = (n) => {
+    let hit = false;
+    const w = (x, seen) => {
+      if (hit || !x) return;
+      if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) { hit = true; return; }
+      if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((t) => GOOD_CLASS.test(t.literal.text)))) { hit = true; return; }
+      if (ts.isIdentifier(x) && !isMemberName(x)) { const i = resolveConstInit(x); if (i && !seen.has(i)) { seen.add(i); w(i, seen); } }
+      if (ts.isElementAccessExpression(x) && ts.isIdentifier(x.expression)) { const o = mapObject(x.expression); if (o) for (const e of mapEntries(o, x.argumentExpression)) w(e, seen); }
+      if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression)) { const o = mapObject(x.expression); if (o) for (const e of mapEntries(o, ts.factory.createStringLiteral(x.name.text))) w(e, seen); }
+      ts.forEachChild(x, (c) => w(c, seen));
+    };
+    w(n, new Set());
+    return hit;
+  };
+  const lookupHasSafeFallback = (lookup) => {
+    const p = lookup.parent;
+    return p && ts.isBinaryExpression(p) && p.left === lookup &&
+      (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) && !hasGoodClass(p.right);
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -617,6 +711,13 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isIdentifier(x) && !isMemberName(x)) {
         const init = resolveConstInit(x);
         if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
+      }
+      if (ts.isElementAccessExpression(x) && ts.isIdentifier(x.expression)) {
+        const obj = mapObject(x.expression);
+        if (obj) {
+          if (!lookupHasSafeFallback(x)) for (const e of mapEntries(obj, x.argumentExpression)) walk(e, use ?? x);
+          return; // the map and the key are fully accounted for; do not re-walk them as plain nodes
+        }
       }
       ts.forEachChild(x, (c) => walk(c, use));
     };
@@ -1027,6 +1128,52 @@ export function ParamShadow() {
   return <div>{["text-slate-400"].map((cls) => <span className={cls}>{rows.length} rows</span>)}</div>;
 }`;
 
+// Backlog 2379 remainder: props provenance and object-map classes — each bug has a guarded twin.
+const BUG_PROPS = `
+import { useQuery } from "@tanstack/react-query";
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items ?? [];
+  return <Panel items={items} />;
+}
+function Panel({ items }) {
+  return <span className="text-emerald-400">{items.length} rows</span>;
+}`;
+const OK_PROPS_CHILDGUARD = `
+import { useQuery } from "@tanstack/react-query";
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items;
+  return <Panel items={items} />;
+}
+function Panel({ items }) {
+  if (!items) return <span>-</span>;
+  return <span className="text-emerald-400">{items.length} rows</span>;
+}`;
+const OK_PROPS_PARENTGUARD = `
+import { useQuery } from "@tanstack/react-query";
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items ?? [];
+  return q.data ? <Panel items={items} /> : null;
+}
+function Panel({ items }) {
+  return <span className="text-emerald-400">{items.length} rows</span>;
+}`;
+const mapFixture = (use) => `
+import { useQuery } from "@tanstack/react-query";
+const TONE = { ok: "text-emerald-400", bad: "text-red-400", default: "text-slate-400" };
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  const status = q.data?.status;
+  return <span className={${use}}>{rows.length} rows</span>;
+}`;
+const BUG_MAP = mapFixture("TONE[status]");
+const OK_MAP_FALLBACK = mapFixture("TONE[status] ?? TONE.default");
+const OK_MAP_LITFALLBACK = mapFixture(`TONE[status] ?? "text-slate-400"`);
+const OK_MAP_STATICKEY = mapFixture("TONE.bad");
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1124,6 +1271,24 @@ function selfTest() {
   for (const [label, src] of fnOk) {
     const v = analyze(src, "FNOK.tsx");
     console.log(`  self-test FN-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Backlog 2379 remainder: props provenance + object-map class resolution.
+  for (const [label, src] of [["PROPS (<Panel items={items} />, child unguarded)", BUG_PROPS], ["MAP (className={TONE[status]}, no fallback)", BUG_MAP]]) {
+    const v = analyze(src, "REMAINDER.tsx");
+    console.log(`  self-test REMAINDER ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — false-negative not closed: ${label}`); }
+  }
+  for (const [label, src] of [
+    ["PROPS guarded in the child", OK_PROPS_CHILDGUARD],
+    ["PROPS guarded at the call site", OK_PROPS_PARENTGUARD],
+    ["MAP with `?? TONE.default` fallback", OK_MAP_FALLBACK],
+    ["MAP with literal non-good fallback", OK_MAP_LITFALLBACK],
+    ["MAP literal non-good key (TONE.bad)", OK_MAP_STATICKEY],
+  ]) {
+    const v = analyze(src, "REMAINDEROK.tsx");
+    console.log(`  self-test REMAINDER-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 

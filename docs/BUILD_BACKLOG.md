@@ -2413,6 +2413,19 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       the self-test misses every new bug shape.
       STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
       carried into the child; object-map classes (`TONE[status]`) are not resolved.
+      FIX PROPOSED 2026-10-01 (branch claude/build-console-unknown-render-props-maps, lands under DR-037 after the brain's review):
+      `scripts/check-console-unknown-render.mjs` now follows PROPS PROVENANCE within a file — a
+      same-file `<Panel items={items} />` taints the child's matching destructured parameter when
+      the call site passes query data no guard there proves present (a self-gated prop such as
+      `s ? String(s.n) : "-"` taints nothing), so the child's render is judged with the parent's
+      query origins — and resolves OBJECT-MAP CLASSES: `className={TONE[status]}` over a same-file
+      const object literal is judged like an inline good class unless the lookup carries an
+      explicit non-good fallback (`?? TONE.default`, `?? "text-muted"`). JSX attribute names and
+      object-literal keys no longer read as references to a tracked name. Self-test adds two bug
+      fixtures (props, map — each must flag) and five guarded twins (child-guarded, call-site-
+      guarded, `?? TONE.default`, `?? "literal"`, literal non-good key — each must pass); live
+      tree still 0 findings. Still not followed: a child component or class map imported from
+      another file (no module resolver). Row stays open for that cross-file remainder.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

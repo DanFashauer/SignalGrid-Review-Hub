@@ -39,6 +39,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import MarkdownIt from "markdown-it";
+import { parseFragment } from "parse5";
 import ts from "typescript";
 import { LAUNCH_PROFILE_VERSION, SURFACES } from "./launch-profile.mjs";
 
@@ -192,57 +193,71 @@ export function urlProblem(value) {
  * The TEXT of demo step 4 as a reader sees and copies it — not its markdown source.
  *
  * Rounds 4–7 of review were all one gap: the gate read raw markdown while an operator
- * copies the rendered page. An HTML comment satisfied the check and rendered nothing;
- * `&#45;` rendered as `-`; a backtick that OPENS a span was read as one that closes
- * it; a double-backtick span's inner backtick ended the value early. So the step is
- * rendered by markdown-it (the same renderer the repo already installs) and the
- * checks run on what comes out: HTML dropped, entities decoded, code spans and
- * fenced blocks flattened to their literal text.
+ * copies the rendered page. Round 8 found the same gap one level down: raw HTML was
+ * stripped by hand-written regexes, which disagree with a browser on RCDATA
+ * (`<textarea>`), on comment ends (`<!-->`, `--!>`), on `<?…?>`, and on text that is
+ * in the DOM but never shown (`hidden`, `display:none`, `<style>`).
  *
- * Returns null when the demo section has no ordered-list item numbered 4.
+ * So there are no regexes over HTML here. markdown-it (`html: true`) renders the demo
+ * section; parse5, an HTML5-conformant parser, builds the tree a browser would; the
+ * text is read from that tree the way a browser shows it (comments, script, style,
+ * template, noscript and hidden elements skipped; RCDATA such as textarea kept).
+ *
+ * And because no tree walk can evaluate CSS, and renderers disagree on raw HTML (GitHub
+ * strips `<style>`; a local preview does not), raw HTML anywhere in the demo section is
+ * refused outright, as are images (alt text shows only when an image fails to load).
+ * The text is still read, so a raw-HTML step reports its flag problems too.
+ *
+ * Returns { text, problems } for the one list item numbered 4 in the one section
+ * headed "## The demo path" (up to the next h1/h2), or { text: null, problems } when
+ * that section or item is missing or ambiguous.
  */
 export function renderedStep4(doc) {
-  const start = doc.search(/^## The demo path/m);
-  if (start < 0) return null;
   const md = new MarkdownIt({ html: true });
-  const tokens = md.parse(doc.slice(start), {});
-  // Raw HTML is shown as a browser shows it: comments and tags removed, the text
-  // between them kept, entities decoded. Dropping an html_block whole would hide
-  // `<!-- x --> &#45;DemoBackendURL https://evil` — the text after the comment renders.
-  // A comment with no `-->` hides everything after it, so it is cut to the end; only a
-  // real tag (`<` + letter, or `</` + letter) is removed — `<-DemoBackendURL …>` is
-  // visible text in a browser and stays. Removal repeats until nothing changes, so a
-  // nested `<!<!---->--…` cannot leave a comment opener behind (CodeQL
-  // js/incomplete-multi-character-sanitization on this PR).
-  const visible = (html) => {
-    let text = html;
-    for (let prev = null; prev !== text; ) {
-      prev = text;
-      text = text.replace(/<!--[\s\S]*?(?:-->|$)/g, "").replace(/<\/?[A-Za-z][^>]*(?:>|$)/g, "");
-    }
-    return md.utils.unescapeAll(text);
-  };
-  const open = tokens.findIndex((t) => t.type === "list_item_open" && t.info === "4");
-  if (open < 0) return null;
-  const parts = [];
-  for (let i = open + 1, depth = 0; i < tokens.length; i += 1) {
-    const t = tokens[i];
-    if (t.type === "list_item_open") depth += 1;
-    if (t.type === "list_item_close") {
+  const tokens = md.parse(doc, {});
+  const problems = [];
+  const headingText = (i) => tokens[i + 1]?.type === "inline" ? tokens[i + 1].content.trim() : "";
+  const sections = tokens.flatMap((t, i) =>
+    t.type === "heading_open" && t.tag === "h2" && /^The demo path\b/.test(headingText(i)) ? [i] : []);
+  if (sections.length === 0) return { text: null, problems: ["no \"## The demo path\" section"] };
+  if (sections.length > 1) problems.push(`${sections.length} "## The demo path" sections — the demo path must be stated once`);
+  const from = sections[0];
+  let to = tokens.findIndex((t, i) => i > from + 2 && t.type === "heading_open" && (t.tag === "h1" || t.tag === "h2"));
+  if (to < 0) to = tokens.length;
+  const section = tokens.slice(from, to);
+  if (section.some((t) => t.type === "html_block" || (t.type === "inline" && t.children.some((c) => c.type === "html_inline"))))
+    problems.push("the demo path section contains raw HTML — the gate cannot know how every renderer shows it, so write it in markdown");
+  const items = section.flatMap((t, i) => t.type === "list_item_open" && t.info === "4" ? [i] : []);
+  if (items.length === 0) return { text: null, problems: [...problems, "the demo path has no step numbered 4"] };
+  if (items.length > 1) problems.push(`${items.length} list items numbered 4 in the demo path — step 4 must be stated once`);
+  const open = items[0];
+  let close = open + 1;
+  for (let depth = 0; close < section.length; close += 1) {
+    if (section[close].type === "list_item_open") depth += 1;
+    if (section[close].type === "list_item_close") {
       if (depth === 0) break;
       depth -= 1;
     }
-    if (t.type === "fence" || t.type === "code_block") parts.push(t.content);
-    if (t.type === "html_block") parts.push(visible(t.content));
-    if (t.type === "inline") {
-      parts.push(t.children.map((c) =>
-        c.type === "text" || c.type === "code_inline" ? c.content
-          : c.type === "softbreak" || c.type === "hardbreak" ? "\n"
-          : c.type === "html_inline" ? visible(c.content)
-          : "").join(""));
-    }
   }
-  return parts.join("\n");
+  const body = section.slice(open + 1, close);
+  if (body.some((t) => t.type === "inline" && t.children.some((c) => c.type === "image")))
+    problems.push("demo step 4 contains an image — its alt text shows only if it fails to load");
+  const html = md.renderer.render(body, md.options, {});
+  return { text: visibleText(parseFragment(html)), problems };
+}
+
+// Elements whose content a browser never shows as text.
+const UNSHOWN = new Set(["script", "style", "template", "noscript", "head", "title"]);
+const isHidden = (node) => (node.attrs ?? []).some(({ name, value }) =>
+  name === "hidden" || (name === "style" && /(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))/i.test(value)));
+
+/** Text of a parse5 tree as a browser shows it. Comment nodes are dropped by node type. */
+export function visibleText(node) {
+  if (node.nodeName === "#text") return node.value;
+  if (node.nodeName === "#comment" || node.nodeName === "#documentType") return "";
+  if (node.tagName && (UNSHOWN.has(node.tagName) || isHidden(node))) return "";
+  if (node.tagName === "br") return "\n";
+  return (node.childNodes ?? []).map(visibleText).join("");
 }
 
 /** Rows of the inventory table: [{ surface, file, status, placement, shows, line }]. */
@@ -277,8 +292,9 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   // DemoMode.backendURL returns nil for any host that is not loopback; the refs must be
   // the seeded ones or the decision is fail-closed), so every one is gated, and every
   // URL step 4 gives must be loopback.
-  const step4 = renderedStep4(doc);
-  if (!step4) errors.push(`${DOC}: demo path step 4 not found`);
+  const { text: step4, problems: step4Problems } = renderedStep4(doc);
+  for (const p of step4Problems) errors.push(`${DOC}: ${p}`);
+  if (step4 === null) errors.push(`${DOC}: demo path step 4 not found`);
   else {
     for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
       const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
@@ -474,11 +490,22 @@ function selfTest() {
     ["an entity-encoded flag is read as rendered (round 7)", withProse("<!-- x --> &#45;DemoBackendURL https://api.example.com"), "its host is api.example.com"],
     // CodeQL follow-up: comments and tags are stripped as a browser hides them.
     ["a flag only after an unclosed <!-- does not count", withArg("-DemoBackendToken", undefined, "<!-- -DemoBackendToken sgk_demo_northwind_operator"), "no longer names -DemoBackendToken"],
-    // markdown-it does not treat `<!<!---->…` as HTML; it renders as literal text, so a
-    // reader sees the flag and the gate must count it (and check its value).
-    ["text after a malformed comment opener renders, so its flag counts", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_northwind_operator -->"), null],
-    ["…and its value is still checked", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_acme_operator -->"), "gives -DemoBackendToken sgk_demo_acme_operator"],
+    ["a malformed comment opener is raw HTML and is refused", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_northwind_operator -->"), "raw HTML"],
+    ["…and the value after it is still checked", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_acme_operator -->"), "gives -DemoBackendToken sgk_demo_acme_operator"],
     ["`<-DemoBackendURL …>` is visible text and is checked", withProse("<p>x</p> <-DemoBackendURL https://api.example.com >"), "its host is api.example.com"],
+    // Round 8: HTML is read by an HTML5 parser, as a browser shows it — and refused.
+    ["any raw HTML in the demo section fails, even a harmless comment (round 8)", withProse("<!-- note -->"), "raw HTML"],
+    ["textarea (RCDATA) text is shown, so its URL is checked (round 8)", withProse("<textarea><b -DemoBackendURL https://evil.example.com></textarea>"), "gives -DemoBackendURL https://evil.example.com>"],
+    ["text after <!--> is shown (round 8)", withProse("<!--> -DemoBackendURL https://evil.example.com -->"), "its host is evil.example.com"],
+    ["text after --!> is shown (round 8)", withProse("<!-- a --!> -DemoBackendURL https://evil.example.com -->"), "its host is evil.example.com"],
+    ["text between non-tag < … > in a <div> is shown (round 8)", withProse("<div>1 < -DemoBackendURL https://evil.example.com > 2</div>"), "its host is evil.example.com"],
+    ...[["<span hidden>", "</span>", "a hidden span"], ['<span style="display: none">', "</span>", "a display:none span"],
+      ["<style>", "</style>", "a <style> element"], ["<script>", "</script>", "a <script> element"], ["<?x ", " ?>", "a processing instruction"]].map(([o, c, what]) =>
+      [`a token only inside ${what} does not count (round 8)`, withArg("-DemoBackendToken", undefined, `${o}-DemoBackendToken sgk_demo_northwind_operator${c}`), "no longer names -DemoBackendToken"]),
+    ["an image in step 4 fails (round 8)", withProse("![-DemoBackendToken sgk_demo_northwind_operator](x.png)"), "contains an image"],
+    ["a second demo-path section fails (round 8)", { ...base, doc: `${good}\n\n## The demo path again\n\n4. -DemoBackendURL https://evil.example.com\n` }, "sections"],
+    ["a second item numbered 4 fails (round 8)", { ...base, doc: good.replace("5. audit", "5. audit\n\n   4. -DemoBackendURL http://127.0.0.1:8080") }, "numbered 4"],
+    ["a 4. under a later h2 is not step 4 (round 8)", { ...base, doc: `${good}\n\n## Elsewhere\n\n4. unrelated\n` }, null],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

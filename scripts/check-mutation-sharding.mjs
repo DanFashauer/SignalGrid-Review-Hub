@@ -15,7 +15,10 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs } from "./mutation-guard.mjs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, classifyRun } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -139,6 +142,42 @@ for (const [proof, file] of [
 ]) {
   check(`${proof} keeps its connector registered: ${file.split("/").pop()}`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
 }
+
+// The decision ladder the carrier proof imports (evaluateReachability) was registered under no
+// entry until 2026-10-01, so its mutations were never swept. Dropping the line must go red.
+check("proof:carrier-reachability keeps its decision ladder registered: evaluate.ts",
+  TARGETS.find((t) => t.proof === "proof:carrier-reachability")?.files.includes("lib/integrations/src/integrations/carrier/evaluate.ts") === true);
+
+// ── The mutation journal: a killed sweep must not leave a broken guard in the tree ─────────────
+// Exercised on a scratch directory, through the SAME functions the sweep calls. A journal whose
+// restore silently did nothing would read as green here only if the restore check below passed.
+{
+  const root = mkdtempSync(join(tmpdir(), "mg-journal-root-"));
+  const jdir = mkdtempSync(join(tmpdir(), "mg-journal-dir-"));
+  try {
+    mkdirSync(join(root, "lib"), { recursive: true });
+    const file = "lib/guard.ts";
+    const original = "if (x) return 1;\n";
+    writeFileSync(join(root, file), original);
+    journalWrite(jdir, 4242, [{ file, original }]);
+    writeFileSync(join(root, file), "if (false) return 1;\n"); // the mutation, never restored
+    const stale = journalStale(jdir, root, () => false);
+    check("a dead sweep's journal is reported stale, naming the file whose bytes differ",
+      stale.length === 1 && stale[0].differing.length === 1 && stale[0].differing[0] === file);
+    check("a journal whose sweep is still alive is NOT reported stale", journalStale(jdir, root, () => true).length === 0);
+    const restored = journalRestore(jdir, 4242, root);
+    check("journalRestore writes the original bytes back and reports the file",
+      restored.length === 1 && readFileSync(join(root, file), "utf8") === original);
+    check("journalRestore is idempotent and leaves no journal behind", journalRestore(jdir, 4242, root).length === 0 && journalStale(jdir, root, () => false).length === 0);
+    writeFileSync(join(jdir, "7.json"), "{not json");
+    check("an unreadable journal is stale (fail closed), not ignored", journalStale(jdir, root, () => false).some((j) => j.unreadable));
+    journalClear(jdir, 7); journalWrite(jdir, 8, [{ file, original }]); journalClear(jdir, 8);
+    check("journalClear removes the journal", journalStale(jdir, root, () => false).length === 0);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(jdir, { recursive: true, force: true }); }
+}
+check("classifyRun: pass → survivor, fail/no summary → killed, timeout → hung",
+  classifyRun(false, "summary=pass (3/3)") === "survivor" && classifyRun(false, "summary=fail (2/3)") === "killed" && classifyRun(false, "") === "killed" && classifyRun(true, "summary=pass (3/3)") === "hung");
+check("--restore-stale is a known flag", unknownArgs(["--restore-stale"]).length === 0);
 
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);

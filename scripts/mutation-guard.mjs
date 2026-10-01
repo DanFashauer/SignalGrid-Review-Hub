@@ -46,8 +46,10 @@
 // source files already label them. An allowlist entry that stops matching is itself a
 // failure: it means the code moved and the justification was not revisited.
 
-import { readFileSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -574,7 +576,9 @@ export const TARGETS = [
     oneLine: true,
     // reachability-connector.ts registered 2026-10-01: the proof drives the real connector, and
     // its one-line decision guards (normalizeReachability) are what `oneLine` sweeps.
+    // evaluate.ts (evaluateReachability, the decision ladder the proof imports) registered 2026-10-01.
     files: [
+      "lib/integrations/src/integrations/carrier/evaluate.ts",
       "lib/integrations/src/integrations/carrier/index.ts",
       "lib/integrations/src/integrations/carrier/reachability-connector.ts",
     ],
@@ -1522,13 +1526,108 @@ export function runProof(proof) {
   // `spawnSync` reports a timeout via `error.code === "ETIMEDOUT"` on some platforms and
   // via a null status with a signal on others. Treat both as a hang.
   const timedOut = run.error?.code === "ETIMEDOUT" || (run.status === null && run.signal !== null);
+  return classifyRun(timedOut, `${run.stdout ?? ""}${run.stderr ?? ""}`);
+}
+
+// One classifier for the sync and the async runner, so the two cannot drift on what
+// "killed" means.
+export function classifyRun(timedOut, out) {
   if (timedOut) return "hung";
-  const out = `${run.stdout ?? ""}${run.stderr ?? ""}`;
   const summary = out.match(/summary=(pass|fail) \((\d+)\/(\d+)\)/);
   // No summary line at all means the proof crashed — the mutation broke it, which counts
   // as killed.
   if (!summary) return "killed";
   return summary[1] === "pass" ? "survivor" : "killed";
+}
+
+// The sweep's own runner. NOT `spawnSync`: a synchronous wait blocks the event loop, so a
+// SIGTERM/SIGINT could not run any handler until the proof finished — and a sweep killed by
+// `timeout` never reached its restore (reproduced 2026-10-01: the registered file stayed
+// MUTATED and the next baseline read "killed" unmutated). The child runs in its own process
+// group so the handler can kill the proof before it restores the file.
+let activeChild = null;
+export function runProofAsync(proof) {
+  return new Promise((resolveRun) => {
+    const child = spawn("pnpm", ["run", proof], { cwd: repoRoot, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    activeChild = child;
+    let out = "";
+    let timedOut = false;
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { out += d; });
+    const timer = setTimeout(() => { timedOut = true; killGroup(child); }, PROOF_TIMEOUT_MS);
+    const done = (hung) => {
+      clearTimeout(timer);
+      activeChild = null;
+      resolveRun(classifyRun(hung || timedOut, out));
+    };
+    child.on("error", () => done(false)); // cannot spawn → no summary → "killed", caught by the baseline probe
+    child.on("close", (code, signal) => done(code === null && signal !== null));
+  });
+}
+
+function killGroup(child) {
+  try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
+}
+
+// ── in-place mutation journal ─────────────────────────────────────────────────
+// The sweep rewrites registered SOURCE files (deliberately broken security guards) in the
+// working tree. Before the first write it records {path, original bytes} in a journal under
+// the OS temp dir — never an untracked file in the tree — and restores from it on exit/
+// SIGINT/SIGTERM/SIGHUP. Where no handler can run (SIGKILL, power loss) the journal survives,
+// and the NEXT startup refuses to sweep over a file whose bytes differ from the journal's
+// original, naming the entry; `--restore-stale` applies it.
+
+export function journalDir(root = repoRoot) {
+  return join(tmpdir(), `signalgrid-mutation-journal-${createHash("sha1").update(root).digest("hex").slice(0, 12)}`);
+}
+
+export function journalWrite(dir, pid, entries) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${pid}.json`), JSON.stringify({ pid, entries }));
+}
+
+export function journalClear(dir, pid) {
+  rmSync(join(dir, `${pid}.json`), { force: true });
+}
+
+/** Write every journalled original back (idempotent). Returns the files whose bytes it changed. */
+export function journalRestore(dir, pid, root = repoRoot) {
+  const path = join(dir, `${pid}.json`);
+  if (!existsSync(path)) return [];
+  const restored = [];
+  const { entries } = JSON.parse(readFileSync(path, "utf8"));
+  for (const e of entries) {
+    const abs = join(root, e.file);
+    let current = null;
+    try { current = readFileSync(abs, "utf8"); } catch { /* missing → rewrite it */ }
+    if (current !== e.original) { writeFileSync(abs, e.original); restored.push(e.file); }
+  }
+  rmSync(path, { force: true });
+  return restored;
+}
+
+/** Journals left by a sweep that is no longer running, with the entries whose file differs. */
+export function journalStale(dir, root = repoRoot, isAlive = pidAlive) {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    if (!/^\d+\.json$/.test(name)) continue;
+    const pid = Number.parseInt(name, 10);
+    if (isAlive(pid)) continue;
+    let entries;
+    try { entries = JSON.parse(readFileSync(join(dir, name), "utf8")).entries; } catch { entries = null; }
+    // An unreadable journal is itself stale: fail closed, say so.
+    if (!Array.isArray(entries)) { out.push({ pid, journal: join(dir, name), unreadable: true, differing: [] }); continue; }
+    const differing = entries.filter((e) => {
+      try { return readFileSync(join(root, e.file), "utf8") !== e.original; } catch { return true; }
+    }).map((e) => e.file);
+    out.push({ pid, journal: join(dir, name), unreadable: false, differing });
+  }
+  return out;
+}
+
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (err) { return err?.code === "EPERM"; }
 }
 
 /**
@@ -1687,14 +1786,40 @@ export function unknownArgs(argv) {
   // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
   // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
   // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
-  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a) && a !== "--restore-stale");
 }
 
-function main() {
+async function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
     console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
     process.exit(1);
+  }
+  const jDir = journalDir();
+  // Stale journals FIRST, before any other work: a registered file left mutated by a killed
+  // sweep must be named, never swept over (its baseline would read "killed" UNMUTATED).
+  const stale = journalStale(jDir);
+  if (stale.length > 0) {
+    if (process.argv.includes("--restore-stale")) {
+      for (const j of stale) {
+        try {
+          const restored = journalRestore(jDir, j.pid);
+          console.log(`restored ${restored.length} file(s) from stale journal ${j.journal}: ${restored.join(", ") || "(already clean)"}`);
+        } catch (err) {
+          console.error(`Mutation guard FAILED: cannot restore from ${j.journal}: ${err instanceof Error ? err.message : String(err)}`);
+          process.exit(1);
+        }
+      }
+    } else {
+      console.error("Mutation guard REFUSES to start: a previous sweep died without restoring its source files.");
+      for (const j of stale) {
+        if (j.unreadable) console.error(`  journal ${j.journal} is unreadable — cannot say which file it covers.`);
+        for (const f of j.differing) console.error(`  ${f} differs from the original recorded in journal ${j.journal} (pid ${j.pid}) — that entry explains it.`);
+        if (!j.unreadable && j.differing.length === 0) console.error(`  journal ${j.journal} (pid ${j.pid}) is stale but every file already matches its original.`);
+      }
+      console.error("Review `git diff`, then run `node scripts/mutation-guard.mjs --restore-stale` to write the journalled originals back (or delete the journal if the files are intended).");
+      process.exit(1);
+    }
   }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
@@ -1768,6 +1893,20 @@ function main() {
   const zeroMutation = [];
   const baselineFailures = [];
 
+  // Restore on any exit path a handler can run on. Registered AFTER the stale-journal check
+  // (never restore over another sweep's journal) and only once the sweep proper starts.
+  const myPid = process.pid;
+  const restoreAll = () => { try { journalRestore(jDir, myPid); } catch { /* best effort at exit */ } };
+  process.on("exit", restoreAll);
+  for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
+    process.on(sig, () => {
+      if (activeChild) killGroup(activeChild); // the proof must not outlive the restore
+      restoreAll();
+      console.error(`\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
+      process.exit(code);
+    });
+  }
+
   for (const target of targets) {
     console.log(`── ${target.proof}`);
     // See baselineProbe(): without this, a harness that cannot run the proof at all
@@ -1800,14 +1939,18 @@ function main() {
       }
       for (const mutation of mutations) {
         total += 1;
+        // Journal BEFORE the first write: if this process dies between the write and the
+        // restore, the originals are on disk outside the tree.
+        journalWrite(jDir, myPid, [{ file: mutation.file, original: mutation.original }]);
         writeFileSync(mutation.abs, mutation.content);
         let verdict;
         try {
-          verdict = runProof(target.proof);
+          verdict = await runProofAsync(target.proof);
         } finally {
           // ALWAYS restore, including on an unexpected throw. A mutation left on disk would
           // be catastrophic — it is a deliberately broken security guard.
           writeFileSync(mutation.abs, mutation.original);
+          journalClear(jDir, myPid);
         }
         if (verdict === "killed") {
           killed += 1;
@@ -1902,4 +2045,4 @@ function main() {
 
 }
 
-if (IS_MAIN) main();
+if (IS_MAIN) main().catch((err) => { console.error(err); process.exitCode = 1; });

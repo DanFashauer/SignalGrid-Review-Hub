@@ -334,6 +334,11 @@ export function definitionProblems(doc) {
   // cmark-gfm and markdown-it both end a line at a lone CR; a scan that splits on LF only
   // reads `a\r[^t]: x` as one harmless line (round 14). A lone CR is refused outright, and
   // the scan splits on every line ending. CRLF files render the same in both and pass.
+  // cmark-gfm drops a byte-order mark at the start of the file before it reads blocks;
+  // markdown-it and the line scans below keep it, so BOM + `<pre` on line 1 was a
+  // paragraph to the gate and an HTML block swallowing the table on GitHub (round 16).
+  if (doc.startsWith("\ufeff"))
+    problems.push("the file starts with a byte-order mark (U+FEFF) — GitHub drops it before reading line 1 and the gate does not, so save the file without one");
   const cr = doc.search(/\r(?!\n)/);
   if (cr >= 0)
     problems.push(`line ${doc.slice(0, cr).split(/\r\n|\r|\n/).length} holds a carriage return that is not part of a CRLF — GitHub ends the line there, so write a real line break or remove it`);
@@ -772,6 +777,9 @@ function selfTest() {
       [`a ${JSON.stringify(x)} line before the inventory fails (round 15)`, { ...base, doc: good.replace(BEGIN, `${x}\n${BEGIN}`) }, 'starts with "<"']),
     ["a \"<source\" line after the inventory fails (round 15)", { ...base, doc: good.replace(END, `${END}\n<source\n`) }, 'starts with "<"'],
     ["a link definition whose label starts with ^ on its second line fails (round 15)", { ...base, doc: `${good}\n\n[\n^x]: http://a\n` }, "defines link reference"],
+    // Round 16: GitHub drops a leading BOM, so line 1 is read without it.
+    ...["<pre", "<script", "<?php", ""].map((x) =>
+      [`a leading byte-order mark${x ? ` before "${x}"` : ""} fails (round 16)`, { ...base, doc: `\ufeff${x}${x ? "\n" : ""}${good}` }, "byte-order mark"]),
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

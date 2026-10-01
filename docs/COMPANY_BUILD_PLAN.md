@@ -46,7 +46,7 @@ An OPEN row is ranked by the objective loop (`scripts/objective-loop.mjs`, DR-05
 10. **Fix the gates that cannot fail or over-claim** — devex-tooling-engineer + qa-engineer. DONE 2026-08-22, all four in one pass, each falsification-checked: (1) check-pagination-truncation gained a vacuity floor (11 capped connectors detected, floor 8 — fewer means the DETECTOR broke) and a self-test the regexes must pass before the scan may conclude anything; (2) the mutation-guard header's hand-written 'every connector' claim is now self-limiting — coverage is the proof's own output, because a hand-written 'every' once outlives its registry; (3) the parity checker no longer silently drops bash -c gate registrations while claiming otherwise — the three bash gates now resolve to real keys (all three were, fortunately, already wired in CI) and an unparseable bash gate fails loudly; (4) the iOS 'Security Analysis' step, which ended every check in '|| echo PASS' and could not fail in either direction, now FAILS on credential-shaped literals and non-local http:// URLs (filters verified clean against the tree AND catching planted bad lines) with TODO counts honestly labelled reported-not-gated. Four in one batch: the mutation-guard header claiming coverage it does not have; check-pagination-truncation's missing vacuity floor and self-test; the parity checker silently skipping bash -c steps while its comment says otherwise; and the iOS CI "Security Analysis" step that passes whether or not it finds a secret. A gate that is green in both directions is the repo's own named worst defect class. (Decision-core, gate-estate, native lenses.)
 11. **Widen the determinism gate and disposition lib/location** — devex-tooling-engineer + principal-engineer. DONE (gate widened by 2026-09-06; disposition 2026-08-23) and RE-MEASURED 2026-09-26: `scripts/review-invariants.mjs` no longer hand-lists libraries — its comment reads "DETERMINISM SCOPE IS DERIVED FROM THE FILESYSTEM, not listed here" and the run prints `Determinism: 35 packages scanned (derived from lib/), 3 with declared clock reads (38 pinned), 32 at zero`, so `lib/integrations` (every evaluator family) and `lib/location` are inside the scan; `lib/location` was dispositioned KEPT as a deferred family (row 51a below: deletion considered and rejected 2026-08-23; its remaining age-check reads are declared and pinned in the gate with a named retirement condition). Check: `pnpm run review:invariants`. The row read open for three weeks after the gate widened — the fifth such row (5, 6, 8, 9, 11) found since 2026-09-25. (Decision-core + gate-estate lenses.)
 12. **Commit the tiered read-list and run Tier-1 shifts 3–5** — program-manager, security-engineer, data-persistence-engineer, devex-tooling-engineer. RE-MEASURED 2026-09-26 (cloud lane, plan row 12 reads): DONE — `node scripts/check-review-coverage.mjs` now prints `Tier 1: 25/25 at depth >= audited (mark 25) — 0 stale (commits since the row), 0 below depth, 0 with no row` on a full clone (a shallow checkout cannot read a row's history, and the gate counts such a row as stale by design) (`docs/agent/review-tiers.json`'s `mark` raised 21→25 to match — the Mac lane had raised it 19→21 in #1143). 16 files re-read at depth `audited` on `6a70714262ece9d6b72ae37ab0c8420d33119580` — the ten stale ones, the one below-depth one and the five with no row named in the prior stamp below: `lib/enterprise-auth/src/jwt.ts`, `jwks.ts`; `artifacts/api-server/src/middlewares/context.ts`, `artifacts/api-server/src/lib/profile.ts`, `core.ts`, `artifacts/api-server/src/routes/v1.ts`; `lib/signalgrid-core/src/evidence.ts`, `store.ts`; `lib/signalgrid-simulator/src/decisionEngine.ts`; `lib/audit/src/backend.ts`, `lib/persistence/src/decision-store.ts`, `session-store.ts`; `scripts/preflight.mjs`, `launch-profile.mjs`, `check-guard-registries.mjs`; `lib/integrations/src/integrations/device-management-health/evaluate.ts`. No file left below depth or unread. BOTH LANES read the two durable-path files: the Mac lane recorded `decision-store.ts` and `session-store.ts` at depth `audited` on `46ef1951` (#1143, merged `ef54e928`) first, moving the tier to 21/25; this PR's independent read of the same two files (above, on `6a70714262ece9d6b72ae37ab0c8420d33119580`) landed after — both ledger rows are kept in `docs/agent/review-coverage.json`, not reconstructed by hand. The Mac lane also independently deepened `lib/integrations/src/integrations/device-management-health/evaluate.ts` `read`→`audited` in #1150 (CLEAN; `proof:device-management-health` 207/207; ledger row at `b1a6040c`), in parallel with this branch's own read of the same file above (`sha` `6a70714262ece9d6b72ae37ab0c8420d33119580`) — both ledger rows are kept in `docs/agent/review-coverage.json`, side by side. Twenty-eight findings came out of the read (auditor + refute-first verify, real repro against real code, no server booted); the twenty-eighth (estate posture never ages, `core.ts`) was already tracked under DR-059/#1083 and not duplicated, and two of the durable-path findings (the decision/snapshot upsert's missing tenant guard, the session `refresh`/`end` race) duplicate what the Mac lane's own independent read had already filed as rows above, so this commit adds twenty-five new `BUILD_BACKLOG.md` rows rather than restating the other two: twenty-four in the row-12 findings section (three HIGH, eighteen MEDIUM, three LOW regression pins with no implementation queued: the whitespace `OIDC_ISSUER`, the DR-025 `/v1/audit` scope, and the remediation-verified allow already closed around the engine) and one OWNER DECISION under Owner-gated (a `prod`-tier deployment on `review-demo`). Codex review of the landing PR later promoted two of the read's nits to MEDIUM rows at the end of the findings section: a non-numeric `nbf`/`iat` in `jwt.ts` skips its check instead of refusing, and a cold JWKS cache in `jwks.ts` fans every bearer request out to the IdP. A self-sweep of the read's other nits then promoted a third, as a LOW row: the guard-registry check sees a figure-publishing proof only in one `console.log` form. Check: `node scripts/check-review-coverage.mjs` (the Tier 1 line). Superseded-but-kept below for the read-by-read history: RE-MEASURED 2026-09-26 (still open; the loop ranks open rows only): shift 3 IS read — `docs/agent/review-coverage.json` carries `2026-08-25|audited` rows for `context.ts`, `jwt.ts`, `claims.ts`, `jwks.ts`, `profile.ts`, `core.ts` and `routes/v1.ts` — but five of them have taken commits since (context `2`, jwt `2`, jwks `1`, profile `3`, core `4`; `routes/v1.ts` `10`) and are stale by the ledger's own logic; the durable path's `lib/persistence/src/decision-store.ts` and `session-store.ts` have NO row; the meta-gates `scripts/preflight.mjs`, `scripts/launch-profile.mjs` and `scripts/check-guard-registries.mjs` have NO row; `device-management-health/evaluate.ts` sits at depth `read` (2026-08-24), `local-authority/evaluate.ts` at `audited`. The other half of the row landed 2026-09-26 (PR #1082): `docs/agent/review-tiers.json` carries the 25 Tier-1 paths, `scripts/check-review-coverage.mjs` prints and ratchets the tier line — first run `Tier 1: 19/25 at depth >= audited (mark 19) — 10 stale (commits since the row), 1 below depth, 5 with no row` — and ledger rows may carry a `sha` the gate validates (the six #1077 rows do). What remains is the reading: the ten stale files re-read at depth audited on the current tree, the one shallow file deepened, the five unread files read, in shift order, each row dated with its sha so the tier line moves. UPDATE 2026-09-26 (Mac lane): the two durable-path no-row files — `lib/persistence/src/decision-store.ts` and `session-store.ts` — were read at depth audited (fail-closed-auditor lens) and recorded in `docs/agent/review-coverage.json` at `46ef1951`, so **Tier 1 19/25 → 21/25** and `docs/agent/review-tiers.json` mark raised 19 → 21. The read produced four durable-persistence findings (`docs/BUILD_BACKLOG.md` "Now"); severity and reachability were re-assessed after this row landed (see the durable-decision-write row there, now MEDIUM/defense-in-depth). Still open, as of that read: three meta-gate files with no row (`scripts/preflight.mjs`, `scripts/launch-profile.mjs`, `scripts/check-guard-registries.mjs`), one below depth (`device-management-health/evaluate.ts`), and ten stale re-reads — all closed by this PR's read above. Check: `node scripts/check-review-coverage.mjs` (the Tier 1 line). (Review-coverage lens.)
-13. **Fix the OpenAPI spec's omissions and structural invalidity** — api-contract-architect. LARGELY DONE 2026-08-22: the three sessions paths declare {id} via the components Id ref, and the new validator exposed 12 responses whose unquoted flow-style descriptions had silently parsed into bogus extra keys (a comma inside { } splits the scalar) — all quoted; the file now validates as OpenAPI 3.1. REMAINING: the response-code completeness half (missing 401/403/400/404 entries) — that enumeration belongs to row 14's observed-vs-documented probe, which is the gate that keeps it closed. Add the missing 401/403/400/404 entries this sweep enumerated, declare the {id} parameter on the three sessions paths (any partner validator rejects the file today), scope the rate-limit sentence, document the idempotency edges. All additive. (API lens.)
+13. **Fix the OpenAPI spec's omissions and structural invalidity** — api-contract-architect. DONE (measured 2026-10-01): PR #863 merge 4df66f2a (the two API documents corrected from served truth; row 14's gate closes the remainder). Check: `node scripts/check-v1-refusal-coverage.mjs`. (API lens.)
 14. **Build the status-code arm of the contract gate** — qa-engineer. DONE 2026-09-20 (PR #863) and RE-MEASURED 2026-09-26: `scripts/check-v1-refusal-coverage.mjs` derives every status the served routes can return (each `res.status(NNN)` and CoreError code in `routes/v1.ts` and `routes/control-plane.ts`, one level through shared helpers, plus the 401/429 every guarded route inherits) and FAILS when one is absent from `lib/api-spec/v1-openapi.yaml`; a documented status the derivation cannot confirm is REPORTED (a document that lists more than the gate can prove is the safe direction). Registered in `scripts/preflight.mjs` (self-test + run) and the CI validation job. The row's literal "probe each route from the live harness" became a static derivation from the route source — the fail-closed goal (an undocumented 4xx cannot land) is met either way, and the static form runs without a booted server. Check: `node scripts/check-v1-refusal-coverage.mjs` → `/v1 refusal coverage holds — every refusal the served source returns is documented.` Read open for a month after it shipped. (API lens.)
 15. **Put a real OpenAPI validator in preflight** — devex-tooling-engineer. DONE 2026-08-22: scripts/check-openapi-valid.mjs — @seriousme/openapi-schema-validator (zero transitive deps) plus the AST path-parameter check the schema alone does not enforce, SELF-TESTED first (refuses to run if the validator passes a broken document), registered in preflight AND CI (parity green). It caught 12 real corrupted responses on its first run — the gate paid for itself before it was even committed. Nothing in the repo parses the published contract as OpenAPI — two regex readers, and codegen reads the other file. One devDependency, one preflight row. (API lens.)
 16. **Close the markdown secret-scan blind spot** — security-engineer. DONE 2026-08-22, both halves FALSIFICATION-TESTED: the blanket .md path exemption in .gitleaks.toml is REPLACED by line-scoped allowances (measured first — gitleaks 8.30.0 over the full tree found exactly 5 findings without the exemption, every one illustrative: the RFC 7638 public-thumbprint exhibit, YOUR_* placeholders, two word/word prose fragments — each allowlisted by its own shape, with the prose class targeted at the candidate SECRET so real keys on the same line still fire). A high-entropy GitHub PAT planted in a doc is now CAUGHT (github-pat rule; it passed green before). The safety-check backstop grew from 5 to 10 patterns plus the connection-string-with-real-password rule the row named (entropy-proxy tuned so lab fleet:fleet and CI ci-smoke throwaways do not fire), with a SELF-TEST that refuses to scan if any pattern misses its runtime-built plant. Gitleaks path-allowlists every .md file and the backstop scanner knows five patterns, so a real connection-string password or API key pasted into docs passes both gates green — in exactly the file class where operators paste DATABASE_URL command lines. Widen the backstop patterns with self-test fixtures, replace the blanket .md exemption with line-scoped ones. (Security-persistence lens.)
@@ -58,7 +58,7 @@ An OPEN row is ranked by the objective loop (`scripts/objective-loop.mjs`, DR-05
 22. **Stand up the cost model and shift economics** — finance-fundraising + agent-ops-economics. RE-MEASURED 2026-09-26 (still open, remainder corrected): the Apple Developer fee line this row lists as remaining was CLOSED the same afternoon it was written (PR #252, f4bb9ec4: not enrolled, $0); the TBD lines still open in `docs/COST_MODEL.md` are VM hosting, backup storage for the Postgres volume, Fleet self-hosted VM hosting and Fleet Premium's per-device price (only if a customer requires Premium, DR-005); the shift denominators are published. LANDED 2026-08-22 as docs/COST_MODEL.md from this sweep's draft: serving economics, device lines, run-rate exposure, cost-per-shift denominators published, every unpriced line TBD with its closing condition named, and the owner-private channel defined (billing VALUES never committed; computation in-session; only derived aggregates may land). REMAINING: the TBD closures per the doc's own table — two agent-computable at decision time, one owner billing fact (Apple fee), the spend numerator recomputed monthly in the private channel. The site publishes $8/$14 per-device prices with no cost side anywhere in the tree. The skeleton is fully derivable from committed files today (see Drafts); every unpriced line stays TBD, never guessed. Publish shift denominators now so one owner billing number later yields cost-per-shift instantly. (Finance lens.)
 23. **Decide the Fleet Premium question before 2026-09-16** — endpoint-uem-domain, hours. DONE (measured 2026-09-26): decided the day this row was filed — DR-005 item 5 (2026-08-20): do not renew Fleet Premium for the baseline build, Premium out of baseline COGS; the one capability that needed it (team-scoped getPolicies with inherited policies) was verified live against the owner's Premium trial on 2026-09-06 (`pnpm run proof:live-fleet`, `pnpm run proof:live-fleet-workflow`) with the inherited-policies bug fixed, ten days before the trial expired on 2026-09-16, so the deferred/unverified-premium marker was never needed; `docs/COST_MODEL.md` trued in the same PR. The one identified paid dependency in the evidence path; whether a per-deployment license line exists in COGS is currently unknowable, and the trial clock has ~27 days. (Finance lens.)
 24. **Stage the ledger-truncation article for your review** — proof-led-content + compliance-analyst, hours. RE-MEASURED 2026-09-26 (still open): draft 1 is finished, corrected per DR-005 item 2 and staged at `docs/HASH_CHAIN_TAIL_ARTICLE.md` with its independent recheck a standing CI proof (`pnpm run proof:audit-ledger-pg`); it publishes nowhere until the owner's send, and the company blog venue DR-005 named does not exist yet; drafts 3–4 (the gateway CA generalized, the one-IdP Keycloak caveat) have not been started anywhere in the tree. The draft exists (below), every number traces, and it publishes nowhere without your approval. Independent verification pass first; drafts 3–4 queue behind it with the corrected framings (the gateway CA name generalized; the one-IdP caveat in the Keycloak lede). RE-MEASURED 2026-09-27: draft 2 is now staged too, at `docs/NAC_DERIVED_STATE_ARTICLE.md` — grounded in the RADIUS live shape check (`docs/RADIUS_NAC_LIVE_SHAPE_CHECK.md`) and `lib/integrations/src/integrations/network-nac/evaluate.ts`'s grant lattice, every number traceable to `pnpm run proof:network-nac` / `proof:nac`; it is unreviewed and unpublished, awaiting the owner's review, and drafts 3–4 (the gateway CA generalized, the one-IdP Keycloak caveat) remain unstarted. (Proof-led-content lens.) RE-MEASURED 2026-09-28: draft 4 is now staged too, at `docs/IDENTITY_WIRE_TRUTH_ARTICLE.md` — grounded in the Keycloak live shape check (`docs/IDENTITY_LIVE_SHAPE_CHECK.md`), with the one-IdP caveat in its lede; it is unreviewed and unpublished, awaiting the owner's review, and draft 3 (the gateway CA generalized) remains unstarted because no source in the tree defines it.
-25. **Bound the CI jobs and wire the Mac lane's alarm** — sre, hours. RE-MEASURED 2026-09-26 (still open, half done): every CI job is bounded — `node scripts/check-ci-job-timeouts.mjs` prints `37` jobs, `0` unbounded, gated in preflight and CI since PR #276 (70d18172, 2026-08-23); the Mac lane's alarm is not built — a red weekly `.github/workflows/mac-lane.yml` run writes a step summary and nothing else (no workflow_run watcher, no issue, no raised hand; the raised-hands page watches the laptop tick's heartbeat, a different thing). Nine CI jobs have no timeout (two of them PR-gating; a hang holds a required check for six hours), and the weekly macOS lane fails into a tab nobody reads between Mondays. (Gate-estate lens.)
+25. **Bound the CI jobs and wire the Mac lane's alarm** — sre, hours. DONE (measured 2026-10-01): PR #1218 merge 29b97fef (commit 53550b63; `scripts/raised-hands.mjs` 'mac-lane-red' auto hand). The alarm is the hourly raised-hands auto hand, NOT a workflow_run watcher. Every CI job is bounded. Check: `node scripts/check-ci-job-timeouts.mjs`. (Gate-estate lens.)
 
 26. **Role-split follow-ups from PR #222's round-9 review (post-cutoff)** — data-persistence-engineer + security-engineer, days total, none launch-blocking. RE-MEASURED 2026-09-26 (still open): no recorded closure for any of the eight findings; four confirmed absent by direct read — the ledger append in `lib/audit/src/backend.ts` does not check the inserted row count, the restore in `scripts/src/lib/backup.ts` applies the role-split refusal AFTER pg_restore, and the session and decision stores' readiness probes are positive-only (no forbidden-privilege or schema USAGE check); the other four (PUBLIC-inherited grants, search_path qualification, TEMP privilege, definer-routine over-fire) were not re-derived from source in this pass. Eight findings arrived after the declared review cutoff (PR #222 comment, 2026-08-20); the core append-only-by-privilege claim is unaffected — these deepen adjacent hardening. Each needs its executed counterexample when picked up, per the standing acceptance bar:
     - Invoker (non-definer) BEFORE INSERT triggers on the ledger can suppress or rewrite an append without UPDATE privilege; also have `appendWithChain` verify the inserted row count. (P1)
@@ -749,18 +749,7 @@ earlier — that is the loop working, not a reason to soften the record.
     they are invoked by nothing, target routes that do not exist, and
     `pnpm run test:load` already covers the served surface — the cloud lane
     cannot delete tracked files, so the drivers stay until the owner says.
-44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). HALF DONE
-    2026-08-23: the decision-record format contract now has
-    scripts/check-decision-record-format.mjs (preflight + CI). DR-010 through
-    DR-013 — every record written in one fast day — were missing the reversal
-    clause the file's own preamble promises; all four now carry one. The gate
-    GATES the reversal clause (the explicit safety promise, and the exact
-    property that drifted) and REPORTS prose-shaped question/call/grounding
-    sections rather than policing style: an earlier draft demanded a status
-    line the file never promised and would have had nine older records
-    rewritten to satisfy a regex. REMAINING: `CLAIM_INVENTORY.md` is declared
-    always-derived but its generator is not a package script and no gate
-    enforces the derivation.
+44. **Two ungated contracts in the governance layer** — devex-tooling-engineer (the gates) + principal-engineer (the records). DONE (measured 2026-10-01): PR #374 merge 19e53e03 wires `gen-claim-inventory-md.mjs --check` into preflight and CI. Check: `node scripts/gen-claim-inventory-md.mjs --check`.
 45. **~~DR-002's mandated mechanical check was never built~~** — DONE
     2026-08-23: scripts/check-permission-enforcement.mjs extracts the
     Permission union and every authorize() call site, and fails when a
@@ -1327,28 +1316,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 59. **The image build makes two un-retried network fetches, and one of them
     flaked.** — release-engineer (the retry) + security-engineer (if the fix
-    touches the corepack cache). RE-MEASURED 2026-09-26 (still open, unchanged): `Dockerfile.api` still runs corepack enable pnpm un-retried in both stages (the second occurrence has moved down the file as comment blocks were added above it); no retry wrapper exists in either Dockerfile or the build job; the deliberate corepack-cache strip that closes a CVE is still what any fix must not undo. 2026-08-24, first observed instance.
-    `Dockerfile.api` runs `corepack enable pnpm` in BOTH stages (lines 19 and
-    71). Corepack downloads pnpm lazily, so each stage fetches
-    `registry.npmjs.org/pnpm/-/pnpm-10.28.1.tgz` at install time. On PR #287
-    head `f52d54a` the BUILDER fetch succeeded — "Done in 5s using pnpm
-    v10.28.1" — and the RUNTIME fetch four seconds later died inside Node's
-    bundled HTTP parser: `AssertionError: assert(!this.paused)` at
-    `Parser.finish (node:internal/deps/undici/undici:6165:9)`. A TLS stream
-    aborted mid-download and surfaced as an internal assertion, failing the job.
-    NOT A LOCKFILE PROBLEM, checked four ways before concluding: the commit
-    touches no manifest or lockfile; `pnpm install --lockfile-only` locally
-    regenerates the lockfile with zero diff; the builder stage resolved the same
-    lockfile seconds earlier; and the same job passed on the previous commit.
-    Re-running the failed job was the correct response and is what was done.
-    THE FIX IS NOT OBVIOUS, which is why this is a row and not a patch. The
-    cheap mitigation is a retry around the install. The tempting one — carry
-    corepack's cache forward from the builder — is exactly what lines 97-111
-    deliberately REMOVE from the shipping image, because corepack's downloaded
-    pnpm is the copy that hides a CVE. Any fix must not undo that.
-    Until then: an image build that depends on an unretried network fetch will
-    flake again, and the failure will look like a build break rather than a
-    network blip. That is the part worth having written down.
+    touches the corepack cache). DONE (measured 2026-10-01): PR #1277 merge 3dee6a25 adds corepack retry wrapper in `Dockerfile.api`. Both stages run `corepack enable pnpm` with retry protection. Check: `node scripts/check-image-build-hardening.mjs`. (Release lens.)
 
 60. **The tool this repo mandates before writing "X does not exist" could not
     read documents — and the failure it was built to prevent was documents.** —
@@ -2860,8 +2828,7 @@ earlier — that is the loop working, not a reason to soften the record.
     platform-honesty failure mode — but it is still inaccurate.
 
 107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
-    has no legend, tooltip or axis.** — OPEN, web-engineer. RE-MEASURED 2026-09-26 (still open, confirmed live): `artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx` (bars now seven lines lower after 81a8919b) still paints restrict from the chart-4 variable and deny from the destructive variable, which `artifacts/signalgrid-mobile-pwa/src/index.css` defines with identical HSL in both appearances, with no Legend or Tooltip anywhere in the file; the console's `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still carries the dash-pattern remedy, unmatched here; the contrast and protanopia figures were not re-derived in this pass. BLOCKING. This confirms
-    rows 76/77 by execution.
+    has no legend, tooltip or axis.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds Legend and Tooltip to the PWA chart. Check: `node scripts/check-pwa-fixture-labels.mjs` and `node scripts/check-verdict-tone-source.mjs`.
     `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
     `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
     segment contrast = **1.0000:1** — no rendered boundary at all. A 40%-restrict /
@@ -2948,20 +2915,9 @@ earlier — that is the loop working, not a reason to soften the record.
     colour map from the enum keys so a new value fails typecheck instead of falling
     through to grey.
 
-115. **Web: the PWA presents fixture decisions with no fixture label.** — OPEN,
-    web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filing): `artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx` and `artifacts/signalgrid-mobile-pwa/src/pages/Decisions.tsx` still render the synthetic metrics, chart, integration health, decision list and detail sheet with no fixture label anywhere, and the PWA still has no AssuranceBadge equivalent; only `artifacts/signalgrid-mobile-pwa/src/pages/Signals.tsx` carries a rendered fixture label; the one later commit on those two pages (81a8919b) added error and loading states, not labels. Overview (metrics, chart, integration health) and Decisions (list
-    AND detail sheet) render synthetic data unlabelled; only `Signals.tsx:22-23`
-    carries a rendered label. The console labels ten equivalents and carries an
-    `AssuranceBadge` the PWA has no equivalent of.
-    WHY IT MATTERS: the PWA is the surface most likely to be held up in a room, and
-    "Allow Rate 94.2%" with no qualifier is a claim about a deployment.
+115. **Web: the PWA presents fixture decisions with no fixture label.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds FixtureLabel components. Check: `node scripts/check-pwa-fixture-labels.mjs` and `node scripts/check-verdict-tone-source.mjs`.
 
-116. **Web: the PWA's support triage surface has no `deny` scenario.** — OPEN,
-    web-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since filing): `artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx` still types its outcome union as allow, step-up and restrict only, with no deny scenario, at the line cited when filed; the file has exactly one commit ever (its original addition in PR #89), so no fix has landed. NOTE. `AccessSupport.tsx:22` types `Outcome` as
-    `"allow" | "step-up" | "restrict"` — a deliberate narrowing of the four-verdict
-    vocabulary at the type level. The one screen a support lead opens first cannot show
-    the outcome they most need guidance for. The page is otherwise the most honest in
-    either tree.
+116. **Web: the PWA's support triage surface has no `deny` scenario.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d expands AccessSupport to full four-verdict vocabulary; `EVERY_VERDICT_HAS_A_SCENARIO` in `artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx` is a compile-time guard (renaming the `deny` scenario to `restrict` fails it with TS2322). Check: `pnpm --filter @workspace/signalgrid-mobile-pwa run typecheck`.
 
 117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
     OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06, batch Z, whose message names "phase-gate moved a string but not the exit code") — `scripts/src/phase-gate.ts` now sets a failing exit code whenever any blocking reason (unsafe path, affirmative unsafe claim, missing validation command) lands, not only on a RED lane, and `.github/workflows/phase-pr-evidence.yml` runs the file's own self-test, which plants an affirmative claim and asserts the real process exits 1, as a step before the gate; the docs-sanity mechanism this row's correction described is unchanged, only its line numbers moved. BLOCKING. INDEPENDENTLY VERIFIED before filing.
@@ -3002,26 +2958,7 @@ earlier — that is the loop working, not a reason to soften the record.
     one that can. That split is the defect — not an absence of enforcement.
 
 118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
-    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, half fixed): `scripts/src/unsafe-claim-classifier.ts` gained postposed-negation handling and both-direction coverage in `scripts/src/unsafe-claim-proof.ts` via PR #492 (049e3f8e, 2026-09-06), but the bare-claim check in `scripts/docs-sanity.mjs` still looks for a negator only before the phrase and, replayed against the disclaimer form this row describes, still classifies it as an unsafe claim; no live doc currently carries that form outside the quoted-row exemption, and the script's own self-test has no case for it. `unsafe-claim-classifier.ts:143-144` scopes negation
-    to the text BEFORE the match, so a sentence of the form "<product> replaces no
-    system of record" — where the negator is the verb's direct object — classifies as
-    affirmative. Both live hits pinning `unsafeClaims=ASSERTED` are citations of
-    exactly that disclaimer. (The phrase is deliberately NOT quoted verbatim here:
-    writing it out trips `docs-sanity.mjs`, which is the point of the correction on
-    row 117.)
-    WHY IT MATTERS: it restores the defect the classifier was built to remove — a
-    signal that reads the same on every run — inverted from constant-noisy to
-    constant-alarming. It is invisible while row 117 stands; the moment 117 is fixed
-    this becomes a permanently red gate someone will switch off.
-    FIX: when the matched phrase ends in `replaces`, extend the negation window to the
-    following token (`no|nothing|none`). Add BOTH directions to the proof — the
-    disclaimer must clear and a genuine replacement claim followed by a trailing
-    negation must still flag (that case exists at `:92-93` and must not regress).
-    THE SAME DEFECT EXISTS IN THE HARD-FAILING GATE, and that is the more urgent half:
-    `docs-sanity.mjs` has NO negation awareness at all. It matched the disclaimer form
-    above as an unsafe claim and failed the build on it. So the negation-aware
-    classifier — the one that would get this right — is wired to the gate that cannot
-    fail, and the gate that CAN fail is the naive one. Fix the pair together.
+    devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 handles postposed negators. Check: `pnpm run proof:unsafe-claim`.
 
 119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
     self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer. FIX PROPOSED 2026-09-30 (branch claude/build-no-vendor-call-scanner-single, lands under DR-037): one shared scanner `scripts/src/lib/no-vendor-call.ts` (all nine patterns, the reason-scoped config-storage exemption, a recursive walk of every file) now backs `scripts/src/nac-proof.ts`, `scripts/src/uem-proof.ts`, `scripts/src/entitlement-binding-proof.ts`, `scripts/src/service-lifecycle-proof.ts` and `scripts/src/response-accountability-proof.ts`; each proof's non-vacuity check is the module's self-test, which plants one control PER PATTERN CLASS and requires the drifted six-pattern list to fail them; all five gained a `files.length > 0` floor. A SECOND permissive drift found while consolidating: `scripts/src/uem-proof.ts` still carried the whole-file `allowed(rel)` store.ts exemption nac had been fixed for, so a planted vendor `fetch` in `lib/integrations/src/integrations/uem/store.ts` printed green; it now uses the shared reason-scoped classifier and a planted call there fails the proof. After the brain's review the self-test also runs the REAL scan over a planted temp tree (so a skip rule that blinds the loop fails it), the Redis exemption is scoped per MODULE (`await import("redis"); require("axios")` on one `store.ts` line is an offender), a sixth inline scanner in `scripts/src/session-readiness-proof.ts` now uses the shared module, and the list gained `require("https")`/`from "https"`/`import("node:https")`, `http2`, `tls.connect`, `ky`, `globalThis.fetch` aliases, non-literal `import(`/`require(`, comment-prefixed code and a call split across lines. RE-MEASURED 2026-09-26 (still open, largely unchanged): `scripts/src/response-accountability-proof.ts` still carries six of the nine vendor-call patterns that `scripts/src/nac-proof.ts`, `scripts/src/uem-proof.ts`, `scripts/src/entitlement-binding-proof.ts` and `scripts/src/service-lifecycle-proof.ts` carry, and all five planted forms this row names still walk past it while the nine-pattern copies catch them; no shared module under scripts/src/lib exists; only the UEM proof gained a file-count floor and a two-pattern non-vacuity check (dc001f4e), the other four have neither.
@@ -3056,13 +2993,7 @@ earlier — that is the loop working, not a reason to soften the record.
     asserting a `handbook.md`-shaped link is picked up.
 
 121. **An unguarded `indexOf` slice can turn two targeted assertions into whole-file
-    greps.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citations drifted): the unguarded indexOf-then-slice in `scripts/src/emit-gate-proof.ts` is unchanged since it was introduced (6386ee61, 2026-08-07) — a missing closing-brace marker still lets the two following assertions match anywhere in the MDE source — while the guarded sibling idiom is unchanged since d02d8858; the file grew, so both cited line numbers now sit roughly seventy lines lower, and the gap between them is still about a hundred and sixteen lines. NOTE. `emit-gate-proof.ts:238-241`: if
-    `"\n  }"` is not found, `indexOf` returns -1, `slice(0,-1)` yields nearly the whole
-    file, and the two following tests match anywhere in `mde.ts`. The FIRST `indexOf`
-    fails safe (both checks fail); only the second is fail-open. The same file guards
-    this correctly 116 lines earlier at `:124`, so the idiom is known here. Reported by
-    reading, not by execution — the mutation guard was off-limits during a concurrent
-    preflight.
+    greps.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 guards slice helper. Check: `pnpm run proof:emit-gate`.
 
 122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
     CLOSED 2026-09-06 (the root key exists and `pnpm run proof:live-glpi` resolves; note the proposed equality gate would fail on `proof:decision-palette`, a root-only alias — a subset rule is the right shape), devex-tooling-engineer. DONE (measured 2026-09-26): the root registration landed in 7a452662 (2026-08-25) and the closure note in 079c5a3e (2026-09-06), both on today's tree — `package.json` delegates proof:live-glpi into `scripts/package.json`, so the root invocation resolves; every scripts-side proof key is a subset of the root's today with proof:decision-palette the only root-only alias, matching the note; the proposed subset gate was never added. Registered only in `scripts/package.json`, never at
@@ -3688,62 +3619,16 @@ earlier — that is the loop working, not a reason to soften the record.
     distinguish git exit 1 from any other exit.
 
 145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
-    OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the secret-like-strings pattern in `scripts/src/signalgrid-grid-proof.ts` (now near line 1063 as the file grew) still cannot match a quoted JSON key-value pair — re-executed in this pass against a stringified object holding three fake credentials, no match — and no negative control exists to catch the regression; only the phone-number pattern has a self-test. `signalgrid-grid-proof.ts:946-951` matches
-    `(api[_-]?key|secret|token|password)\s*[:=]\s*[a-z0-9_\-.]{12,}` against
-    `JSON.stringify(...)`. In JSON a key is followed by `"` before the colon and a
-    value begins with `"` — neither is `\s`, `[:=]`, nor a member of the value class.
-    Executed: three plainly-leaked credentials in exactly the serialisation shape this
-    proof produces, and the check returns false. It fires only if `key: value` appears
-    INSIDE a single string literal — the least likely leak shape.
-    This is one of two gates standing between the fixtures and a published
-    public-safe evidence file, it is aimed at the highest-severity leak class, and it
-    has always passed.
-    FIX: walk the parsed object rather than regexing the serialised text, and add a
-    negative control — a synthetic object carrying a fake credential must make the
-    check FAIL — since without one this is invisible again the moment it recurs.
+    devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 walks parsed JSON. Check: `pnpm run proof:signalgrid-grid`.
 
 146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
-    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, unchanged): the maven collector in `scripts/src/generate-sbom.ts` (now near line 282) still matches only implementation, api and runtimeOnly calls, missing every plugin declaration and non-quoted dependency form; no maven completeness guard exists (git log -S finds the proposed name only in the commit that filed this row) and the ecosystems-covered property carries no caveat; `artifacts/sbom/cyclonedx.json` still lists seven maven components against hundreds of npm and cargo, with the five Gradle plugins across `native/android/app/build.gradle.kts` and `native/android/core/build.gradle.kts` unrepresented; the npm figure has drifted from 875 to 826.
-    `generate-sbom.ts:256-258`. Executed against real Gradle forms: it COLLECTS a
-    quoted `implementation("group:artifact:version")` and MISSES version-catalog
-    references, `compileOnly`, `ksp`, `androidTestImplementation`, `classpath`, and
-    every `plugins {}` entry. The committed SBOM carries 875 npm and 418 cargo
-    components against SEVEN maven — the seven quoted lines, no transitives, no
-    plugins — while five third-party Gradle plugins are declared across the two build
-    files and reach the document not at all.
-    The generator HAS a fail-closed completeness guard and it is pointed at the
-    ecosystem it does not parse: `assertSwiftHasNoExternalPackages` exits 1 if a
-    Swift package appears. No maven twin exists — corroborated three ways plus
-    `check:absence` (CORROBORATED across 4 probes).
-    WHY IT MATTERS: an SBOM is read by whoever is deciding whether to accept the
-    software, and this one presents the Android surface as having seven third-party
-    dependencies. It passes its own staleness gate byte-for-byte, so nothing signals
-    incompleteness.
-    FIX: add a `assertGradleFullyParsed()` twin that fails on any dependency-like
-    call the regex did not collect, anchor the configuration alternation, and either
-    resolve transitives from a committed Gradle lock or state "direct declarations
-    only" in the ecosystems-covered property.
+    one ecosystem with no completeness guard.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds maven completeness guard. Check: `pnpm run sbom`.
 
 147. **Three e2e specs abort external requests without asserting none were
-    attempted; the fourth documents exactly why that is wrong.** — OPEN,
-    devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, no drift): `scripts/src/e2e/admin-console.spec.ts`, `scripts/src/e2e/review-console.spec.ts` and `scripts/src/e2e/website.spec.ts` still abort every off-page request without asserting the aborted list is empty, `scripts/src/e2e/evidence-coverage-page.spec.ts` is still the only spec carrying that assertion, and no shared allowlist helper exists under scripts/src/e2e. NOTE. `admin-console`, `review-console` and `website`
-    call `route.abort()` and stop there. `evidence-coverage-page.spec.ts:56-61`
-    records the lesson in its own words — "a page that grew a webfont, a logo or an
-    analytics beacon would be silently neutered by the test and ship green to a
-    public marketing domain. Aborting is the setup; this assertion is the test" — and
-    the lesson stayed in the file it was learned in. `website.spec.ts` is the public
-    marketing site, the surface that sentence names.
-    FIX: an allowlist assertion rather than `toEqual([])` (these pages do legitimately
-    use font hosts), in a shared helper so the next spec inherits it.
+    attempted; the fourth documents exactly why that is wrong.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds e2e allowlist helper. Check: `pnpm run test:e2e`.
 
 148. **The e2e README states a test count 18 behind, in the section whose own lesson
-    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, citation drifted): 079c5a3e (2026-09-06) already replaced the quoted "grown to 35" in `scripts/src/e2e/README.md` with a hand-counted forty-one declarations dated that day, which still undercounts — `scripts/src/e2e/decision-matrix.spec.ts` and `scripts/src/e2e/route-sweep.spec.ts` each generate tests in a loop, so the executed total is fifty-three across the same ten files, a twelve-test gap no gate reads; the row's own fix (drop the number or point at the list command) was not taken.
-    NOTE. It says the suite "has since grown to 35"; `playwright test --list` reports
-    53 tests in 10 files. Two lines below, the same section says "a README describing
-    a test's live state is a hand-maintained claim, and the test itself is the only
-    version of that claim that cannot go stale."
-    FIX: drop the parenthetical or point at `--list`. A number in a README that no
-    gate reads has two stable states: absent, or wrong.
+    is that hand-maintained test claims go stale.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe removes hand-maintained test count. Check: `pnpm run test:e2e`.
 
 149. **1,700 lines and 239 assertions of the decision core's own proof are
     unreviewed.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, larger than cited): `scripts/src/signalgrid-core-proof.ts` has grown past four thousand lines with more than three hundred static assertion call sites after the DR-043 rounds of 2026-09-23 and 2026-09-24, well beyond the cited size, and no tracked document records a full line-by-line read of it at this size — `docs/PROOF_COVERAGE_AUDIT.md` rates the gate at a per-gate summary level and disclaims anything added after 2026-08-03. The reader executed
@@ -4051,16 +3936,7 @@ earlier — that is the loop working, not a reason to soften the record.
     never reproduce passages, never cite ratings or "Customers' Choice" marks on a
     public surface, and do not re-add a copy.
 
-164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
-    competitive-analyst. RE-MEASURED 2026-09-26 (still open, nothing landed): `docs/research/IGA_ADJACENCY.md` still names only its original six vendors, none of the five this row lists, and still has no sentence stating that SignalGrid does not do entitlement fulfilment; every match for the five names outside the connector catalog in `artifacts/api-server/src/routes/integrations.ts` is this row's own text. `docs/research/IGA_ADJACENCY.md` names four vendors. The
-    Gartner category listing shows 115 products, and these have ZERO mentions
-    anywhere in `docs/`: Radiant Logic, Oracle Identity Governance, Symantec IGA
-    (Broadcom), OpenText NetIQ, IBM Security Verify Governance. Thinly covered:
-    Veza, Pathlock, One Identity, Netwrix, Lumos.
-    ALSO, and it sharpens the boundary rather than widening it: "provisioning via
-    integration to ITSM/ticketing to trigger manual fulfilment" is a MANDATORY IGA
-    feature. That sits close to our orchestration story, so `IGA_ADJACENCY.md`
-    should state explicitly that SignalGrid does not do entitlement fulfilment.
+164. **Five IGA vendors the competitive surface has never mentioned.** — competitive-analyst. DONE (measured 2026-10-01): PR #1264 merge facf6a10 adds IGA-adjacent briefs. Check: `grep -c "What SignalGrid does not do" docs/research/IGA_ADJACENCY.md`.
 
 165. **`tamperState` is an enum where the source material describes a graph.** —
     OPEN, product/principal-engineer. RE-MEASURED 2026-09-26 (still open, no derivation added): `docs/EVENT_CONTRACT.md` still defines the tamper state as the bare three-value enum with no derivation notion, `lib/event-contract/src/validate.ts` and `lib/event-contract/src/detect.ts` still only validate and consume that enum, and no commit in the repository's history has introduced a tamper-graph concept (corroborated by the absence check across four probes); the row's file count for the word has grown with the tree, which changes nothing. `docs/EVENT_CONTRACT.md` carries
@@ -4087,16 +3963,7 @@ earlier — that is the loop working, not a reason to soften the record.
     requests signed with HMAC" as present-tense guarantees; pinning is an env-var
     opt-in (`CERT_PINNING_ENABLED`), off unless set.
 
-167. **The Fleet tradeoff is decided but never written down.** — OPEN,
-    product/principal-engineer. RE-MEASURED 2026-09-26 (still open, unchanged since PR #309): CLAUDE.md still names Fleet the chosen MDM with no tradeoff beside it; `native/ios/FLEET_MDM.md`, `docs/FLEET_LIVE_INTEGRATION.md` and `fleet/README.md` contain no comparison against Jamf or Intune; DR-012 in `docs/DECISION_RECORDS.md` explains Fleet-first proof-stack sequencing, not the openness-versus-managed-depth product tradeoff this row asks to be written down. NOTE. CLAUDE.md names Fleet as "the chosen MDM". The
-    founder's own architecture research rates Fleet as better suited to
-    organisations valuing openness and infrastructure-as-code over the deepest
-    traditional mobile-workflow features, and names Jamf or Intune as the
-    conservative choice for Apple estates. Fleet also does not appear in the Gartner
-    endpoint-management listing — stated carefully, that listing showed 40 of 78
-    products with a region filter, so it is corroboration and NOT proof of absence.
-    The choice may well be right. What is missing is the tradeoff written beside it,
-    so it reads as a decision rather than an assumption.
+167. **The Fleet tradeoff is decided but never written down.** — product/principal-engineer. DONE (measured 2026-10-01): PR #1263 merge 119347ba documents Fleet tradeoff. Check: `grep -c "tradeoff" native/ios/FLEET_MDM.md`.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
     token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open — mitigated, not fixed): `scripts/check-verdict-tone-source.mjs` and `scripts/check-decision-palette.mjs` both pass today exactly as described, centralising every verdict-to-colour choice without validating it; `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still routes through the shared tone helper; options (b) distinct rendered values and (c) a single colour registry remain unimplemented, so a wrong mapping in the total record would still pass; the falsification by restoring the ternary was not re-run in this pass. Row 151
@@ -4329,7 +4196,7 @@ earlier — that is the loop working, not a reason to soften the record.
     either way.
 
 180. **The permission gate credits a call inside `if (false)`.** — MITIGATED
-    2026-08-25, security-engineer. RE-MEASURED 2026-09-26 (still open, mitigated only): `scripts/check-permission-enforcement.mjs` is unchanged since PR #318 (d0a9f7f4, 2026-08-25) — its self-test still drives the pure verdict function over a synthetic corpus asserting all four arms, and the gate passes today — but it is still a text-only match with no call graph or reachability analysis, so an unreachable authorize call would still satisfy it; that half remains declined, not fixed. `check-permission-enforcement.mjs` matches
+    2026-08-25, security-engineer. FIX PROPOSED 2026-10-01 (branch claude/build-permission-gate-reachability, lands under DR-037): `scripts/check-permission-enforcement.mjs` now parses every shipping file with the TypeScript compiler API (the parser #1274 brought to `scripts/check-module-init-order.mjs`) and credits only a LIVE `authorize(<expr>, "<scope>")` CallExpression — a call in a comment, a string or a template literal's text, behind a constant-false condition (`if (false)`, `while (0)`, `false ? :`, `false &&`, `true ||`), after an unconditional return/throw (or an if/try whose arms all end that way), or inside a module-private function nothing in its file names, credits nothing; a file that does not parse credits nothing. Fifty-five self-test controls (one per claimed shape and arm, after review rounds 1-4 of #1347 found arms with no control) plus an unparseable-file control; type-only/ambient positions, overload signatures, `-0`/`0n` and `null?.authorize` also credit nothing; the 2026-08-25 planted shape is reproduced in a scratch tree and now fails. On the real tree it drops one regex credit (`lib/signalgrid-core/src/engine.ts` line 191, a comment) and gains one real call the regex could not see (`artifacts/api-server/src/routes/v1.ts` line 920); all ten enforced scopes still pass. Still within ONE file: an exported function nothing imports still counts (no import graph). RE-MEASURED 2026-09-26 (still open, mitigated only): `scripts/check-permission-enforcement.mjs` is unchanged since PR #318 (d0a9f7f4, 2026-08-25) — its self-test still drives the pure verdict function over a synthetic corpus asserting all four arms, and the gate passes today — but it is still a text-only match with no call graph or reachability analysis, so an unreachable authorize call would still satisfy it; that half remains declined, not fixed. `check-permission-enforcement.mjs` matches
     `authorize(principal, "scope")` with a regex over file text. It has no call
     graph and no reachability analysis, so a syntactically-present call in an
     unreachable branch of an unimported function satisfies it — proven by planting

@@ -8,8 +8,13 @@
 //
 // Runs from any directory: the ledgers are read from HEAD at the repository
 // top level (`git show HEAD:<ledger>`), never from the working tree, so the
-// line numbers always match the history `git log -L` walks. A ledger missing
-// at HEAD is a NOT MEASURED line, never silently skipped.
+// line numbers always match the history `git log -L` walks. A ledger that is
+// not a readable UTF-8 text file with rows at HEAD (missing, a directory, a
+// symlink, a submodule, binary or UTF-16, a Git LFS pointer, empty) is a NOT
+// MEASURED line, never silently zero. A ledger with uncommitted edits gets a
+// NOTE saying HEAD's copy was measured and the edit was not. The exit code is
+// 0 in every case, NOT MEASURED included: report-only is the contract this
+// row was dispatched with (making NOT MEASURED fatal is the owner's call).
 //
 // WHY THIS EXISTS (plan row 170, the harder half). `check-backlog-evidence.mjs`
 // says in its own header that it cannot tell a WRONG status. On 2026-10-01
@@ -225,16 +230,47 @@ export function classify(cwd, a, opts = {}) {
   return { ...a, status, intro, land: l.land, pr: l.pr, hit, branchEvidence: branch };
 }
 
+/**
+ * A ledger's text at HEAD, or the reason it cannot be measured. Only a regular
+ * file blob holding UTF-8 text with at least one row counts: a directory, a
+ * symlink, a submodule, a binary or UTF-16 file, a Git LFS pointer, or a file
+ * with no rows would otherwise read as "no annotations" — a clean-looking count
+ * for a ledger nobody read. Line endings are normalised WITHOUT changing the
+ * line count, so the numbers still match the history `git log -L` walks: CRLF
+ * becomes LF, and a lone CR or a Unicode line/paragraph separator a space.
+ */
+export function readLedger(cwd, file) {
+  let entry = "";
+  try { entry = git(cwd, ["ls-tree", "HEAD", "--", file]); } catch { /* treated as absent */ }
+  if (!entry) return { why: "not present at HEAD" };
+  const mode = entry.split(/\s/)[0];
+  if (mode !== "100644" && mode !== "100755") return { why: `not a regular file at HEAD (git mode ${mode})` };
+  const raw = execFileSync("git", ["show", `HEAD:${file}`], { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  // UTF-16 puts a NUL beside every ASCII character, so this catches it with or without a BOM.
+  if (raw.includes(0)) return { why: "holds a NUL byte (binary or UTF-16), not UTF-8 text" };
+  const text = raw.toString("utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/[\r\u2028\u2029]/g, " ");
+  if (text.startsWith("version https://git-lfs")) return { why: "is a Git LFS pointer, not the ledger" };
+  const rows = parseRows(text).length + (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length;
+  if (rows === 0) return { why: "has no rows (empty or truncated)" };
+  return { text };
+}
+
 export function measure(where, ledgers = LEDGERS, opts = {}) {
   fpCache.clear();
   const cwd = git(where, ["rev-parse", "--show-toplevel"]);
   const results = [];
   for (const file of ledgers) {
-    let text;
-    try { text = git(cwd, ["show", `HEAD:${file}`]); } catch { results.push({ file, line: 0, row: "(whole ledger)", status: "NO-LEDGER" }); continue; }
+    const { text, why } = readLedger(cwd, file);
+    if (why) { results.push({ file, line: 0, row: "(whole ledger)", status: "NO-LEDGER", why }); continue; }
     for (const a of findAnnotations(file, text)) results.push(classify(cwd, a, opts));
   }
   return results;
+}
+
+/** Ledgers whose working-tree copy differs from HEAD: HEAD is what was measured, and the report says so. */
+export function uncommittedLedgers(where, ledgers = LEDGERS) {
+  const cwd = git(where, ["rev-parse", "--show-toplevel"]);
+  return ledgers.filter((f) => { try { return git(cwd, ["status", "--porcelain", "--", f]) !== ""; } catch { return true; } });
 }
 
 /** --rest: compare the PR's head.ref with the annotation's branch. Unreachable = still unknown. */
@@ -250,7 +286,8 @@ function restBranch(cwd) {
   };
 }
 
-function report(results) {
+function report(results, dirty = []) {
+  for (const f of dirty) console.log(`  NOTE   ${f} has uncommitted changes; HEAD's copy was measured, the working-tree edit was NOT — commit it to have it read`);
   const by = (s) => results.filter((r) => r.status === s);
   const note = (r) => (r.branchEvidence === "match" ? "branch verified" : "branch unverified offline");
   for (const r of by("STALE")) {
@@ -260,7 +297,7 @@ function report(results) {
     const why = r.branchEvidence === "mismatch" ? `PR #${r.pr} came from a different branch than ${r.branch}` : `that commit changed none of the ${r.cited.length} path(s) it cites`;
     console.log(`  READ   ${r.file}:${r.line} ${r.row} — annotation landed via PR #${r.pr} at ${r.land.slice(0, 8)}, but ${why}; read by hand`);
   }
-  for (const r of by("NO-LEDGER")) console.log(`  ?      ${r.file} — not present at HEAD; NOT MEASURED (a renamed or missing ledger is never a clean result)`);
+  for (const r of by("NO-LEDGER")) console.log(`  ?      ${r.file} — ${r.why}; NOT MEASURED (a ledger nobody could read is never a clean result)`);
   for (const r of by("NO-HISTORY")) console.log(`  ?      ${r.file}:${r.line} ${r.row} — no adding commit in this row's line history; NOT MEASURED`);
   const s = by("STALE"), u = by("LANDED-UNCORROBORATED").length, n = by("NOT-VIA-PR").length, h = by("NO-HISTORY").length + by("NO-LEDGER").length, c = by("CLOSED-RESIDUE").length;
   const rows = new Set(s.map((r) => `${r.file}|${r.row}`)).size;
@@ -361,6 +398,7 @@ function selfTest() {
     checks.push(["measured from a subdirectory, the result is identical", sig(measure(join(dir, "scripts"))) === sig(Object.values(res))]);
     write(plan, "inserted line\n" + read(plan));
     checks.push(["an uncommitted ledger edit does not shift the measurement (HEAD is read)", sig(measure(dir)) === sig(Object.values(res))]);
+    checks.push(["…and the uncommitted ledger is named in a NOTE, not silently ignored", JSON.stringify(uncommittedLedgers(dir)) === JSON.stringify([plan])]);
     let sub = "";
     try { sub = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: join(dir, "scripts"), encoding: "utf8" }); } catch { /* counted below */ }
     checks.push(["the CLI run from a subdirectory reports the real annotation count", sub.includes(`REPORTED: ${Object.values(res).length} FIX PROPOSED`)]);
@@ -375,10 +413,66 @@ function selfTest() {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+  // A plan ledger committed in a shape nobody can read must be NOT MEASURED, never zero annotations.
+  const shapeOf = (shape) => {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-shape-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main");
+      mkdirSync(join(d, "docs"), { recursive: true });
+      writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n");
+      shape(join(d, plan), d);
+      gs("add", "-A"); gs("commit", "-qm", "shape");
+      const r = measure(d).find((x) => x.file === plan);
+      return r ? `${r.status}: ${r.why ?? ""}` : "(no entry)";
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  };
+  const planText = "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/x, lands under DR-037): `scripts/a.mjs`.\n";
+  const shapes = [
+    // Each shape must be refused for ITS reason, so every guard is load-bearing on its own.
+    ["a directory", /not a regular file/, (f) => { mkdirSync(f); writeFileSync(join(f, "x.md"), planText); }],
+    ["a symlink to /dev/null", /not a regular file/, (f) => symlinkSync("/dev/null", f)],
+    ["a symlink to the sibling ledger", /not a regular file/, (f) => symlinkSync("BUILD_BACKLOG.md", f)],
+    ["UTF-16 with a BOM", /NUL byte/, (f) => writeFileSync(f, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(planText, "utf16le")]))],
+    ["UTF-16LE with no BOM", /NUL byte/, (f) => writeFileSync(f, Buffer.from(planText, "utf16le"))],
+    ["a Git LFS pointer", /LFS pointer/, (f) => writeFileSync(f, "version https://git-lfs.github.com/spec/v1\noid sha256:00\nsize 1\n")],
+    ["an empty file", /no rows/, (f) => writeFileSync(f, "")],
+    ["a file truncated before its first row", /no rows/, (f) => writeFileSync(f, "## Global backlog\n\n")],
+  ];
+  for (const [name, why, shape] of shapes) {
+    let st = "";
+    try { st = shapeOf(shape); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push([`a plan ledger committed as ${name} is NOT MEASURED (${why.source})`, st.startsWith("NO-LEDGER: ") && why.test(st)]);
+  }
+  // CRLF endings and a stray U+2028 inside a box line: rows and closure still read right.
+  {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-crlf-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main");
+      mkdirSync(join(d, "docs"), { recursive: true }); mkdirSync(join(d, "scripts"));
+      writeFileSync(join(d, plan), "## Global backlog\r\n\r\n1. **Row 1.** — DONE (PR #4).\r\n2. **Row 2.** — OPEN, qa.\r\n");
+      writeFileSync(join(d, backlog), "- [x] **Done** — closed.\r\n- [ ] **Open** — open,\u2028 still.\r\n");
+      writeFileSync(join(d, "scripts/a.mjs"), "0\n");
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      gs("checkout", "-qb", "claude/fix-o");
+      const a = " FIX PROPOSED 2026-10-01 (branch claude/fix-o, lands under DR-037): `scripts/a.mjs`.";
+      writeFileSync(join(d, plan), readFileSync(join(d, plan), "utf8").replace("DONE (PR #4).", "DONE (PR #4)." + a).replace("OPEN, qa.", "OPEN, qa." + a));
+      writeFileSync(join(d, backlog), readFileSync(join(d, backlog), "utf8").replace("still.", "still." + a).replace("— closed.", "— closed." + a));
+      writeFileSync(join(d, "scripts/a.mjs"), "1\n");
+      gs("add", "-A"); gs("commit", "-qm", "fix o");
+      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5: fix o", "claude/fix-o");
+      const r = Object.fromEntries(measure(d).map((x) => [`${x.file}|${x.row}`, x.status]));
+      checks.push(["CRLF ledgers: a closed plan row and a ticked box stay residue", r[`${plan}|row 1`] === "CLOSED-RESIDUE" && r[`${backlog}|"Done"`] === "CLOSED-RESIDUE"]);
+      checks.push(["CRLF ledgers: an open plan row and a box line holding U+2028 flag STALE", r[`${plan}|row 2`] === "STALE" && Object.entries(r).some(([k, v]) => k.startsWith(`${backlog}|"Open`) && v === "STALE")]);
+    } catch (e) {
+      checks.push([`CRLF fixture ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  }
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 21;
+  return failed === 0 && checks.length === 32;
 }
 
 let isMain = false;
@@ -404,7 +498,7 @@ if (isMain) {
     process.exit(0);
   }
   try {
-    report(measure(cwd, LEDGERS, process.argv.includes("--rest") ? { rest: restBranch(cwd) } : {}));
+    report(measure(cwd, LEDGERS, process.argv.includes("--rest") ? { rest: restBranch(cwd) } : {}), uncommittedLedgers(cwd));
   } catch (e) {
     console.log(`REPORTED: NOT MEASURED — ${String(e.message).split("\n")[0]} (plan row 170).`);
   }

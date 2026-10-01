@@ -2328,7 +2328,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
       batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
@@ -2376,7 +2376,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       shape not) and a validation that plants an unknown-as-emerald into a real
       component and watches it fail. Cloud lane. Lane: devex-tooling-engineer.
 
-- [x] **`check-console-unknown-render` — two conservative false-negatives to close
+- [ ] **`check-console-unknown-render` — two conservative false-negatives to close
       (Codex review of #953).** Both UNDER-flag (never over-flag), so the gate stays
       sound; each is deferred because the naive fix would raise the false-positive
       rate on a mandatory gate. (1) **Per-query provenance (P1-7):** the handled-check

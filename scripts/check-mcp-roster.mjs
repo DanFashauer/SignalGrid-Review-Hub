@@ -20,7 +20,7 @@
 //     an ORDERED ARRAY (same length, same element at each position), so a
 //     duplicate entry fails even though it changes neither the missing nor the
 //     extra set.
-//   - Every `servers[]` entry carries its source and security label (DR-063):
+//   - Every `servers[]` entry carries its source and security label (LABEL_DR below):
 //     `upstream`, `reads`, `writes` and `network` are each a non-empty string. The
 //     failure names the server and the field. `sha` may be null (the in-tree server);
 //     `external[]` entries are not held to this (never probed, nothing measured to
@@ -55,6 +55,9 @@ import { firstPartySkillDirsIn, SKILLS_DIR, VENDORED_DOC } from "./lib/skill-pla
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROSTER_PATH = "docs/agent/mcp-roster.json";
+// The decision record that makes the source + security label mandatory. Named here
+// and nowhere else in this file, so a renumbering is this one line.
+const LABEL_DR = "DR-063";
 const INDEX_PATH = "artifacts/mcp-server/src/index.ts";
 
 /** Pure: ordered tool names from `server.registerTool(\n  "name"` calls in the source. */
@@ -128,7 +131,7 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   // honest to check it against — report just the shape failures above.
   if (problems.length) return problems;
 
-  // DR-063 — every servers[] entry carries its source and security label: where it
+  // Source + security label — every servers[] entry carries it: where it
   // comes from (`upstream`) and what it touches (`reads`, `writes`, `network`). A
   // string, never null or empty: "unknown" is written down, not left blank. `sha`
   // stays free (null for the in-tree server); external[] is NOT held to this — those
@@ -137,7 +140,7 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   r.servers.forEach((s, i) => {
     for (const field of ["upstream", "reads", "writes", "network"]) {
       if (typeof s?.[field] !== "string" || s[field].trim() === "") {
-        problems.push(`${ROSTER_PATH}: ${s?.id ?? `servers[${i}]`}: no ${field} — every server carries its source and security label (DR-063)`);
+        problems.push(`${ROSTER_PATH}: ${s?.id ?? `servers[${i}]`}: no ${field} — every server carries its source and security label (${LABEL_DR})`);
       }
     }
   });
@@ -336,7 +339,7 @@ server.registerTool(
   async () => {},
 );
 `;
-  // The source + security label every servers[] entry carries (DR-063).
+  // The source + security label every servers[] entry carries.
   const label = { upstream: "u", reads: "r", writes: "w", network: "n" };
   const goodRoster = {
     servers: [
@@ -504,13 +507,15 @@ server.registerTool(
     'whose disposition is "totally-unknown"',
   );
 
-  // DR-063 — every servers[] entry carries its source and security label.
-  {
-    const { network: _dropped, ...noNetwork } = goodRoster.servers[0];
+  // Source + security label: dropping ANY one of the four fields must fail. The list is
+  // written out by hand, not read from the gate — a mutant that drops a field from the
+  // gate would otherwise drop it from this loop too and stay green.
+  for (const f of ["upstream", "reads", "writes", "network"]) {
+    const { [f]: _dropped, ...without } = goodRoster.servers[0];
     expectFail(
-      "a server with no network label FAILS",
-      { roster: { ...goodRoster, servers: [noNetwork, goodRoster.servers[1]] } },
-      "signalgrid-mcp: no network",
+      `a server with no ${f} label FAILS`,
+      { roster: { ...goodRoster, servers: [without, goodRoster.servers[1]] } },
+      `signalgrid-mcp: no ${f}`,
     );
   }
   expectFail(

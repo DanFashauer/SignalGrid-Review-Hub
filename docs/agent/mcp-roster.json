@@ -263,7 +263,7 @@
       "sha": "10c5b52e0181720cd6497fabeb1f4892d83ad1f4",
       "license": "MIT",
       "language": "python",
-      "reads": "local macOS system state through system binaries (scutil, system_profiler, security, sw_vers, launchctl, defaults, codesign, spctl, profiles, kextstat, dscl, tmutil and others) and the file path handed to signalgrid_codesign_inspect",
+      "reads": "local macOS system state through system binaries (scutil, system_profiler, sw_vers, launchctl, defaults, csrutil, fdesetup, systemsetup, pmset, socketfilterfw, networksetup, systemextensionsctl, codesign, spctl, profiles, kextstat, kmutil, dscl, tmutil, lsof, ps, stat, uname and others); a direct directory listing (names and mtimes) of /Library/LaunchDaemons, /Library/LaunchAgents, ~/Library/LaunchAgents and ~/Library/LaunchDaemons; and the file path handed to signalgrid_codesign_inspect",
       "writes": "nothing on disk",
       "network": "no socket of its own (imports no HTTP client); signalgrid_software_updates with check_online=true runs `softwareupdate -l`, which contacts Apple's update catalog, and signalgrid_codesign_inspect runs `spctl --assess`, which may make a Gatekeeper lookup",
       "hooks": "none",
@@ -272,8 +272,8 @@
       "mutatingTools": 0,
       "offline": "not probed under this roster's by-use protocol (no stdio run with sockets denied); 22 mcp__signalgrid-macos__ tools were listed in a Mac session on 2026-10-01, matching 22 @mcp.tool(… READ_ONLY) decorators at the pinned sha",
       "disposition": "adopted",
-      "reason": "first-party sibling; the Mac lane's grid_collected evidence path (verify-all --require-mcp, the evidence sim-operation)",
-      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope; never .mcp.json)"
+      "reason": "first-party sibling; the Mac-native grid_collected path the signalgrid-evidence-toolchain and signalgrid-native skills name (SKILL.md 134 / 74); its code is also exercised by verify-all --require-mcp through the sibling's pytest, not through this registration",
+      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope, a departure from DR-060 rule 3's user scope that mac-kickoff.sh keeps; not yet tracked, for the coordinator; never .mcp.json)"
     },
     {
       "id": "context7",

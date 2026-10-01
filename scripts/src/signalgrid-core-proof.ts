@@ -369,8 +369,10 @@ expectError("rbac: operator cannot read the audit ledger", "forbidden", () =>
 // never bound, so it cannot surface later as an accepted-then-broken principal.
 // Every inherited Object.prototype member is enumerated, not a hand-picked four, so a
 // deny-list of known-bad names cannot pass where the own-property allow-list is needed.
-for (const badRole of ["superuser", ...Object.getOwnPropertyNames(Object.prototype)]) {
-  const badToken = `sgk_proof_bad_role_${badRole.replace(/_/g, "")}`;
+// Case and whitespace variants pin EXACT-match semantics: a normalising check would
+// accept "OWNER" here and then fail later on the raw-keyed matrix lookup.
+for (const [badIndex, badRole] of ["superuser", "OWNER", " owner", "owner ", ...Object.getOwnPropertyNames(Object.prototype)].entries()) {
+  const badToken = `sgk_proof_bad_role_${badIndex}`;
   let status: number | undefined;
   expectError(
     `registerVerifiedPrincipal: role "${badRole}" is refused as validation at registration`,

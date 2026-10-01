@@ -20,6 +20,16 @@
 //     (.github/actions/**), may name shellcheck or hide its package list behind a `$`
 //     variable. Backslash-continued commands are joined before the scan, so a package
 //     list split across lines is still seen.
+//   · Fail closed on YAML this gate cannot read: in .github/**/*.yml every line must be a bare
+//     `key:` / `- key:` / `- value` line or sit inside a `|` / `>` block. Explicit keys (`? k`),
+//     quoted keys, anchors/aliases/tags, multi-line plain or quoted scalars and `\x`/`\u` escapes
+//     are reported as unsupported rather than guessed at. No YAML dependency: scripts/ has none
+//     on purpose (see check-swift-serious.mjs), so the grammar is narrowed instead.
+//   · A pinned file may not set `defaults:` (workflow or job level) or `BASH_ENV`, which could
+//     turn the lint into a no-op without touching the step.
+// THREAT MODEL: this is a tripwire against accidental and lazy regressions of the lock race, not
+// a sandbox against deliberate obfuscation (shell word-splitting tricks, a variable holding the
+// command name). Those are out of scope.
 // KNOWN LIMIT: a workflow that calls a script which itself installs shellcheck is not
 // followed (the script is not workflow text); the pinned steps are the supported path.
 // A missing or unparseable step FAILS.
@@ -85,6 +95,7 @@ function stepProblems(step, spec) {
       if (key === "run") runIdx = k;
     }
   });
+  if (new Set(keys).size !== keys.length) problems.push("step has a duplicate key");
   for (const k of keys) if (!spec.keys.includes(k)) problems.push(`step has a forbidden key \`${k}\` (it can skip or soften the step)`);
   if (runIdx < 0) return [...problems, "step has no run block"];
   const first = step.lines[runIdx].trim();
@@ -108,6 +119,40 @@ function stepProblems(step, spec) {
   return problems;
 }
 
+/**
+ * Fail-closed grammar for workflow YAML (see header). Returns problem strings.
+ */
+export function unsupportedYaml(text) {
+  const out = [];
+  const lines = text.split("\n");
+  let blk = -1;
+  lines.forEach((l, i) => {
+    if (!l.trim() || l.trim().startsWith("#")) return;
+    if (blk >= 0) { if (indentOf(l) > blk) return; blk = -1; }
+    const t = l.replace(/\s+#.*$/, "").trim();
+    if (/^(\s*)(?:-\s+)?[A-Za-z0-9_.-]+:\s*[|>][-+0-9]*\s*(#.*)?$/.test(l)) { blk = indentOf(l); return; }
+    const key = t.match(/^(?:-\s+)?([A-Za-z0-9_.-]+):(?:\s+(.*))?$/);
+    const item = !key && /^-\s+\S/.test(t) && !/^-\s+["'][^"']*["']\s*:/.test(t);
+    if (!key && !item && t !== "-") { out.push(`line ${i + 1}: unsupported YAML shape \`${t.slice(0, 60)}\` (explicit/quoted key, or a multi-line scalar)`); return; }
+    const val = (key ? key[2] : t.replace(/^-\s+/, "")) ?? "";
+    if (/^[&*!]/.test(val)) out.push(`line ${i + 1}: anchors, aliases and tags are not supported: \`${val.slice(0, 40)}\``);
+    const q = val[0];
+    if ((q === '"' || q === "'") && !(val.length > 1 && val.endsWith(q) && !val.endsWith("\\" + q))) out.push(`line ${i + 1}: a multi-line quoted scalar is not supported`);
+    if (q === '"' && key?.[1] === "run" && /\\[xuU0-7]/.test(val)) out.push(`line ${i + 1}: a double-quoted \`run:\` scalar with a \\x/\\u/octal escape is not supported`);
+  });
+  return out;
+}
+
+/** Workflow-level and job-level knobs that can neutralise a step without touching it. */
+function fileKnobProblems(lines) {
+  const out = [];
+  lines.forEach((l, i) => {
+    if (/^defaults:/.test(l)) out.push(`line ${i + 1}: workflow-level \`defaults:\` can change the shell of every step`);
+    if (/\bBASH_ENV\b/.test(l.replace(/\s+#.*$/, ""))) out.push(`line ${i + 1}: BASH_ENV can neutralise a step`);
+  });
+  return out;
+}
+
 /** The job holding the step must not be skippable or non-gating either. */
 function jobProblems(lines, stepStart) {
   let h = stepStart;
@@ -118,7 +163,7 @@ function jobProblems(lines, stepStart) {
   const out = [];
   for (let k = h + 1; k < e; k++) {
     const km = lines[k].match(/^ {4}(["']?)([^\s"':][^"':]*?)\1\s*:(\s|$)/);
-    if (km && ["continue-on-error", "if"].includes(km[2].trim())) out.push(`the job holding the step sets \`${km[2].trim()}\` (it can skip or soften the lint)`);
+    if (km && ["continue-on-error", "if", "defaults", "container"].includes(km[2].trim())) out.push(`the job holding the step sets \`${km[2].trim()}\` (it can skip or soften the lint)`);
   }
   return out;
 }
@@ -129,7 +174,7 @@ export function verdictFor(yaml, spec) {
   const steps = findSteps(lines, spec.name);
   if (steps.length === 0) return [`step "${spec.name}" not found in ${spec.file}`];
   if (steps.length > 1) return [`step "${spec.name}" appears ${steps.length} times in ${spec.file}; it must be unique`];
-  const problems = [...stepProblems(steps[0], spec), ...jobProblems(lines, steps[0].start)].map((p) => `${spec.file}: ${p}`);
+  const problems = [...unsupportedYaml(yaml), ...fileKnobProblems(lines), ...stepProblems(steps[0], spec), ...jobProblems(lines, steps[0].start)].map((p) => `${spec.file}: ${p}`);
   // No other command may install shellcheck.
   problems.push(...strayInstallsIn(yaml, spec.file, steps[0]));
   return problems;
@@ -183,7 +228,7 @@ function joinedStatements(rawLines) {
   return out;
 }
 
-const APT_INSTALL = /\b(apt(-get)?|aptitude)\b.*\binstall\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
+const APT_INSTALL = /\b(apt(-get)?|aptitude|nala)\b.*\b(re)?install\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
 
 /** apt installs outside `skip` (a pinned step's line range) that name shellcheck or hide the package list. */
 function strayInstallsIn(text, file, skip) {
@@ -208,16 +253,24 @@ function listFiles(dir, readDir, rel = "") {
   return out;
 }
 
-/** Every workflow file and composite action NOT pinned. */
+/** Every workflow file and every composite action anywhere in the repo, NOT pinned. */
 function strayInstalls(dir, readFile, pinnedFiles) {
   const out = [];
-  const files = [];
-  for (const base of [".github/workflows", ".github/actions"]) {
-    try { files.push(...listFiles(dir, readdirSync, base)); } catch { /* no such directory */ }
-  }
-  for (const rel of files) {
+  const skip = new Set(["node_modules", ".git", "third_party", "dist"]);
+  const walk = (rel) => {
+    const found = [];
+    for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? join(rel, e.name) : e.name;
+      if (e.isDirectory()) { if (!skip.has(e.name)) found.push(...walk(r)); }
+      else if (/\.ya?ml$/.test(e.name)) found.push(r);
+    }
+    return found;
+  };
+  for (const rel of walk("")) {
     if (pinnedFiles.includes(rel)) continue;
-    out.push(...strayInstallsIn(readFile(rel), rel, null));
+    const text = readFile(rel);
+    if (rel.startsWith(".github/")) out.push(...unsupportedYaml(text).map((p) => `${rel}: ${p}`));
+    out.push(...strayInstallsIn(text, rel, null));
   }
   return out;
 }
@@ -268,6 +321,17 @@ function selfTest() {
     ["folded `run: >` pinned step", wrap(spec.name, good).replace("run: |", "run: >")],
     ["job-level continue-on-error", wrap(spec.name, good).replace("  a:\n", "  a:\n    continue-on-error: true\n")],
     ["job-level if", wrap(spec.name, good).replace("  a:\n", "  a:\n    if: false\n")],
+    ["explicit key `? if` / `: false`", wrap(spec.name, good, "        ? if\n        : false\n")],
+    ["explicit key `? continue-on-error`", wrap(spec.name, good, "        ? continue-on-error\n        : true\n")],
+    ["duplicate `run` key", wrap(spec.name, good, '        run: echo hi\n')],
+    ["key-only run with plain continuation lines", wrap(spec.name, good) + "      - name: planted\n        run:\n          sudo apt-get install -y -qq jq\n          shellcheck\n"],
+    ["trailing-space run with plain continuation lines", wrap(spec.name, good) + "      - name: planted\n        run: \n          sudo apt-get update -qq && sudo apt-get install -y -qq jq\n          shellcheck\n"],
+    ["multi-line double-quoted run", wrap(spec.name, good) + '      - name: planted\n        run: "sudo apt-get install -y -qq jq\n          shellcheck"\n'],
+    ["escaped package name in a double-quoted run", wrap(spec.name, good) + '      - name: planted\n        run: "sudo apt-get install -y -qq shell\\x63heck"\n'],
+    ["job-level defaults.run.shell", wrap(spec.name, good).replace("  a:\n", "  a:\n    defaults:\n      run:\n        shell: true {0}\n")],
+    ["workflow-level defaults.run.shell", "defaults:\n  run:\n    shell: true {0}\n" + wrap(spec.name, good)],
+    ["BASH_ENV neutralising the step", wrap(spec.name, good).replace("  a:\n", "  a:\n    env:\n      BASH_ENV: ./exit0.sh\n")],
+    ["job-level container", wrap(spec.name, good).replace("  a:\n", "  a:\n    container: alpine\n")],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -297,6 +361,9 @@ function selfTest() {
     ["aptitude install shellcheck", "      - run: sudo aptitude install -y shellcheck\n", true],
     ["snap install shellcheck", "      - run: sudo snap install shellcheck\n", true],
     ["dpkg -i shellcheck.deb", "      - run: sudo dpkg -i shellcheck.deb\n", true],
+    ["same-indent backslash continuation naming shellcheck", "      - run: |\n          sudo apt-get install -y -qq jq \\\n          shellcheck\n", true],
+    ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
+    ["apt-get reinstall shellcheck", "      - run: sudo apt-get reinstall shellcheck\n", true],
     ["unrelated continued install is NOT flagged (desktop.yml's real shape)", "        run: |\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            patchelf\n", false],
   ];
   for (const [label, t, want] of strayCases) {

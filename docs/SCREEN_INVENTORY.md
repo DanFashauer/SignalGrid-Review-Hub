@@ -54,7 +54,9 @@ break, and any line that starts with `<` (after any indentation, `>` or list mar
 other than the two inventory markers: GitHub and the gate's renderer disagree on which
 tags open an HTML block, and an open one hides every line after it up to the next blank,
 the inventory table included. The file may not start with a byte-order mark either,
-because GitHub drops it before reading the first line and the gate does not. Between the begin and end markers the block may hold only the header row, the
+because GitHub drops it before reading the first line and the gate does not, nor with a
+`---` line, which GitHub reads as YAML front matter and renders outside markdown.
+Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
 because GitHub may end the table at one while the gate's renderer continues it. The
 table must render as one table showing every row the source lists. The section and

@@ -339,6 +339,12 @@ export function definitionProblems(doc) {
   // paragraph to the gate and an HTML block swallowing the table on GitHub (round 16).
   if (doc.startsWith("\ufeff"))
     problems.push("the file starts with a byte-order mark (U+FEFF) — GitHub drops it before reading line 1 and the gate does not, so save the file without one");
+  // GitHub's blob view strips YAML front matter (a `---` first line through the next
+  // `---` or `...`) before cmark-gfm runs and shows it as a YAML table or an "Error in
+  // user YAML" box; the gate and markdown-it read the same `---` as a thematic break. So a
+  // file opened with `---` could show the inventory as raw YAML on GitHub (round 17).
+  if (/^---[ \t]*(?:\r\n|\r|\n|$)/.test(doc))
+    problems.push("the file's first line is `---`, which GitHub reads as the start of YAML front matter and renders outside markdown — start the file with its heading");
   const cr = doc.search(/\r(?!\n)/);
   if (cr >= 0)
     problems.push(`line ${doc.slice(0, cr).split(/\r\n|\r|\n/).length} holds a carriage return that is not part of a CRLF — GitHub ends the line there, so write a real line break or remove it`);
@@ -780,6 +786,10 @@ function selfTest() {
     // Round 16: GitHub drops a leading BOM, so line 1 is read without it.
     ...["<pre", "<script", "<?php", ""].map((x) =>
       [`a leading byte-order mark${x ? ` before "${x}"` : ""} fails (round 16)`, { ...base, doc: `\ufeff${x}${x ? "\n" : ""}${good}` }, "byte-order mark"]),
+    // Round 17: GitHub reads a `---` first line as YAML front matter.
+    ...[["---\n", "---"], ["--- \n", "--- with a trailing space"], ["---\r\n", "--- in a CRLF file"], ["---", "--- alone"]].map(([x, what]) =>
+      [`a first line of ${what} fails (round 17)`, { ...base, doc: `${x}${x.endsWith("\n") ? "" : "\n"}${good}` }, "YAML front matter"]),
+    ["a --- thematic break later in the file passes (round 17)", { ...base, doc: good.replace(BEGIN, `\n---\n\n${BEGIN}`) }, null],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

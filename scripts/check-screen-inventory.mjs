@@ -180,6 +180,7 @@ export function urlProblem(value) {
   if (u.protocol !== "http:" && u.protocol !== "https:") return `its scheme is ${u.protocol} (http or https only)`;
   if (u.username || u.password) return `it carries userinfo, so its real host is ${u.hostname}`;
   if (!LOOPBACK.has(u.hostname)) return `its host is ${u.hostname} (loopback only: localhost, 127.0.0.1, ::1)`;
+  if (u.port === "0") return "its port is 0, which no api-server listens on, so every request fails and the shell falls back on-device";
   // WHATWG agreed it is loopback; the shell compares the literal text, so require it.
   if (!CANONICAL_LOOPBACK_URL.test(value))
     return "it is not written as http(s)://localhost|127.0.0.1|[::1][:port][/path] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
@@ -224,16 +225,28 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   else {
     for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
       const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
-      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^\\s\`]+))?`, "g"))];
+      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^ \\t\\n\`]+))?`, "g"))];
       if (uses.length === 0) {
         errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);
         continue;
       }
       // EVERY use of the flag must carry the right value, so a second, wrong
       // occurrence cannot hide behind a right one. The value is the whole argument up
-      // to whitespace or the closing backtick of its code span — the shell receives
-      // all of it, so `,x`, `)x` or `;x` stays part of the value (round 5).
-      for (const [, value] of uses) {
+      // to ASCII space, tab or newline — what the shell splits arguments on; a Unicode
+      // space (NBSP, U+FEFF, U+2028, …) is part of the argument (round 6) — or up to
+      // the closing backtick of its code span. `,x`, `)x` and `;x` stay part of it
+      // (round 5). A code span closed mid-token (`value`x) renders and copies as a
+      // different token, so text touching the closing backtick is refused (round 6).
+      for (const use of uses) {
+        const value = use[1];
+        let after = use.index + use[0].length;
+        if (value && step4[after] === "`") {
+          while (step4[after] === "`") after += 1;
+          if (after < step4.length && !/[ \t\n,;)]/.test(step4[after])) {
+            errors.push(`${DOC}: demo step 4 closes ${flag}'s code span mid-token ("${value}\`${step4.slice(after, after + 8)}…") — the rendered and copied value would differ from the one checked`);
+            continue;
+          }
+        }
         if (!value) {
           errors.push(`${DOC}: demo step 4 names ${flag} with no value after it — write "${flag} ${want ?? "http://127.0.0.1:8080"}"`);
         } else if (want !== null && value !== want) {
@@ -384,6 +397,16 @@ function selfTest() {
     ["a token with ,x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator,x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator,x"],
     ["a token with )x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator)x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator)x"],
     ["an identity with ;x appended fails (round 5)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliant;x ") }, "gives -DemoBackendIdentity nurse.compliant;x"],
+    // Round 6: a Unicode space is part of the shell argument, so it must be part of the checked value.
+    ...[["\u00a0", "NBSP"], ["\ufeff", "U+FEFF"], ["\u2028", "U+2028"], ["\u3000", "U+3000"]].map(([ch, name]) =>
+      [`a URL with ${name} inside fails (round 6)`, { ...base, doc: good.replace("http://127.0.0.1:8080", `http://127.0.0.1${ch}@evil.com`) }, "-DemoBackendURL http://127.0.0.1"]),
+    ["a token with NBSP+x appended fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator\u00a0x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator\u00a0x"],
+    ["an identity with U+202F+x appended fails (round 6)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliant\u202fx ") }, "gives -DemoBackendIdentity nurse.compliant\u202fx"],
+    ["a code span closed mid-token fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator`x") }, "closes -DemoBackendToken's code span mid-token"],
+    ["a doubled backtick closed mid-token fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator``x") }, "closes -DemoBackendToken's code span mid-token"],
+    ["a code span followed by a comma still passes", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator`, then") }, null],
+    ["port 0 fails (round 6)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:0") }, "its port is 0"],
+    ["port 00 fails (round 6)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:00") }, "its port is 0"],
     ["a loopback URL with a path still passes", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:8080/api") }, null],
     ["an upper-case LOCALHOST URL passes (Swift lowercases the host)", { ...base, doc: good.replace("http://127.0.0.1:8080", "HTTP://LOCALHOST:8080") }, null],
     ["a second, wrong use of a flag fails even beside a right one (round 4)", { ...base, doc: good.replace(STEP4, `${STEP4}; or \`-DemoBackendURL https://api.example.com\``) }, "its host is api.example.com"],

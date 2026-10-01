@@ -140,7 +140,8 @@ export function callsQueryHook(code, generated = new Set()) {
   }
   return false;
 }
-const LIVE = /<LiveRegion\b|aria-live=\{?\s*["'`](polite|assertive)["'`]/;
+// `(?<![\w-])` so `data-aria-live="polite"` is not read as a live region.
+const LIVE = /<LiveRegion\b|(?<![\w-])aria-live=\{?\s*["'`](polite|assertive)["'`]/;
 const DEFAULTS_CALL = /new\s+QueryClient\s*\(|\.setDefaultOptions\s*\(|\.setQueryDefaults\s*\(/g;
 
 /** Remove JSX `{/* … *\/}`, block and line comments (a `//` after `:` is a URL). */
@@ -370,8 +371,8 @@ function openingTag(src, index) {
   let depth = 0;
   for (let i = index + 1; i < src.length; i++) {
     const c = src[i];
-    // A quoted attribute value may hold `>` (`title="a>b"`): skip it whole.
-    if (depth === 0 && (c === '"' || c === "'") && src[i - 1] === "=") {
+    // A quoted attribute value may hold `>` (`title="a>b"`, `title = "a>b"`): skip it whole.
+    if (depth === 0 && (c === '"' || c === "'") && /=\s*$/.test(src.slice(index, i))) {
       const q = src.indexOf(c, i + 1);
       if (q < 0) return null;
       i = q;
@@ -485,7 +486,8 @@ function dropAriaHidden(body) {
  * `aria-label=" "` or `aria-label={""}` names nothing; any other expression may.
  */
 export function hasNonBlankLabel(tag) {
-  for (const m of tag.matchAll(/\baria-label(?:ledby)?\s*=\s*(?:(["'])([\s\S]*?)\1|\{\s*(["'`])((?:\\[\s\S]|(?!\3)[^\\])*)\3\s*\}|\{)/g)) {
+  // `(?<![\w-])` so `data-aria-label` is not read as a label.
+  for (const m of tag.matchAll(/(?<![\w-])aria-label(?:ledby)?\s*=\s*(?:(["'])([\s\S]*?)\1|\{\s*(["'`])((?:\\[\s\S]|(?!\3)[^\\])*)\3\s*\}|\{)/g)) {
     if (m[1] !== undefined) { if (!isBlank(decodeEntities(m[2]))) return true; }
     else if (m[3] !== undefined) { if (!isBlank(decodeEscapes(m[4]))) return true; }
     else return true; // an expression the gate cannot evaluate
@@ -686,6 +688,9 @@ function selfTest() {
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <LiveRegion message=\"x\" />")], false).failures.length === 0],
     ["aria-live=\"off\" is not a live region",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"off\" />")], false).failures.length === 1],
+    ["a data-aria-live attribute is not a live region",
+      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div data-aria-live=\"polite\" />")], false).failures.length === 1 &&
+      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"polite\" />")], false).failures.length === 0],
     ["default-polling tree: page with a list hook and no live region fails",
       checkLiveRegions([view("t/src/pages/B.tsx", "const { data } = useListThings();")], true).failures.length === 1],
     ["non-default tree: page with a list hook is not a polling view",
@@ -769,12 +774,17 @@ function selfTest() {
         checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
       checkIconButtons("x.tsx", '<button onClick={f}><svg aria-hidden="true" /><span className="sr-only">Close</span></button>').length === 0 &&
       ['aria-hidden="false"', "aria-hidden={false}", 'aria-hidden={"false"}', 'data-aria-hidden="true"'].every((a) =>
-        checkIconButtons("x.tsx", `<button onClick={f}><span ${a}>Close</span></button>`).length === 0)],
+        checkIconButtons("x.tsx", `<button onClick={f}><span ${a}>Close</span></button>`).length === 0) &&
+      checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true" data-aria-hidden="false">×</span></button>').length === 1],
+    ["a data-aria-label or data-aria-labelledby is not a label",
+      ['data-aria-label="Close"', 'data-aria-labelledby="x"'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1)],
     ["a same-name child inside an aria-hidden element does not close it early",
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span>Y</span></button>').length === 1 &&
       checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span></span>Close</button>').length === 0],
     ["a `>` inside a quoted attribute does not end the tag",
-      checkIconButtons("x.tsx", '<button onClick={f}><span title="a>b" aria-hidden="true">×</span></button>').length === 1 &&
+      ['title="a>b"', "title='a>b'", 'title = "a>b"'].every((t) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><span ${t} aria-hidden="true">×</span></button>`).length === 1) &&
       checkIconButtons("x.tsx", '<button onClick={f} title="a>b"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<button onClick={f} title="a>b">Close</button>').length === 0],
     ["astral invisible characters do not name a button",

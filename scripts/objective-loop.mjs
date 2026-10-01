@@ -48,7 +48,8 @@
 //     checked. ONLY the slot counts: the same words in history ("no longer AWAITING OWNER", "was … until"),
 //     negated, naming another row, or in a later paragraph describe a blocker, they do not assert one. A
 //     marker with no date or an empty blocker is not a marker; a quoted or code-span marker is being
-//     discussed, not asserted (statusText's rule). Anything the slot does not read plainly is NOT parked.
+//     discussed, not asserted (statusText's spans, blanked with a sentinel so a span between the full stop and
+//     the marker cannot be read through either). Anything the slot does not read plainly is NOT parked.
 //     WRITER CONTRACT: put the marker IN the slot — right after the first full stop that follows the title's
 //     " — " (the role/size clause; a few rows open with a bare status word there) — never appended to the end
 //     of the line, and prove the edit with `rowAwaiting(newRow.text) !== null`. The slot may sit on a later
@@ -161,12 +162,19 @@ const headParagraph = (text) => (text ?? "").split(/\n\s*\n/)[0].replace(/\s*\n\
  *  longer AWAITING OWNER", "was … until", "NOT", another row's marker, a later paragraph) and parking on them hides
  *  buildable work. */
 const AWAITING_SLOT = /^\d[\w-]*\.\s+\*\*(?:(?!\*\*).)+\*\*\s+—\s+[^.]*\.\s+(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/;
+/** Quoted and code spans become ONE non-space sentinel, not statusText's space: `\.\s+` reads straight through a space,
+ *  so `days. "No longer" AWAITING OWNER (...)` or `days. \`NOT\` AWAITING OWNER (...)` still parked the row. A span is
+ *  never a marker and never the gap before one. A private-use code point, so no real prose carries it. Same spans, same
+ *  order as statusText — which marks() and the stamp reader share, so it is not changed here. */
+const SPAN = "\uE000";
+const stripSpans = (s) => s.replace(/`[^`]*`/g, SPAN).replace(/"[^"]*"/g, SPAN).replace(/\u201c[^\u201d]*\u201d/g, SPAN);
 /** The marker in a row's status slot, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
  *  blocker, markedAt} or null. A marker outside the slot, with no date or with an empty blocker is not a marker:
  *  unknown tightens to "not parked" (the row stays visible and ranked). Pure. */
 export function rowAwaiting(text) {
-  const m = AWAITING_SLOT.exec(statusText(headParagraph(text)));
-  return m && m[2].trim() !== "" ? { kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker: m[2].trim(), markedAt: m[3] } : null;
+  const m = AWAITING_SLOT.exec(stripSpans(headParagraph(text)));
+  const blocker = m?.[2].replaceAll(SPAN, " ").trim();
+  return blocker ? { kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker, markedAt: m[3] } : null;
 }
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
 
@@ -765,6 +773,15 @@ function selfTest() {
   t("awaiting: a wrapped-title row is not parked by history, negation or a later-line marker either (control: the same shape parks above)", ["It is no longer AWAITING OWNER (#9, 2026-09-22).", "NOT AWAITING OWNER (#9, 2026-09-22).", "Row 18 is AWAITING OWNER (#1118, 2026-09-22)."].every((m) => ranked9(rk([wrapped(m)]))) && ranked9(rk([{ ...wrapped(""), text: `${wrapped("").text}\n    AWAITING OWNER (#9, 2026-09-22)` }])));
   t("awaiting: a wrapped title keeps a title in the ranked tasks too (it was \"\" for every wrapped row)", rk([wrapped("")]).tasks.some((x) => x.rowId === "9" && x.title.startsWith("iOS:")));
   t("awaiting: a marker later on the head line (not in the status slot) does not park the row", ranked9(rk([{ id: "9", text: `9. **Parked** — web-engineer, days.${stamped} Body prose. AWAITING OWNER (#9, 2026-09-22)` }])));
+  // A quoted or code span is blanked to a SENTINEL, not a space: `\.\s+` reads straight through a space, so a span between
+  // the slot's full stop and the marker (a negation or history word, quoted) used to leave the marker looking like the slot.
+  t("awaiting: a quoted or code-span word between the full stop and the marker does not open the slot — 'No longer', `NOT` and a smart-quoted span leave the row ranked", [
+    '"No longer" AWAITING OWNER (x, 2026-09-22).', "`NOT` AWAITING OWNER (x, 2026-09-22).", "“No longer” AWAITING OWNER (x, 2026-09-22).",
+  ].every((m) => rowAwaiting(head(m)) === null && ranked9(rk([slot(m)]))));
+  // The control: the same stripping must still let a span sit INSIDE the role clause (a full stop in it) without moving the slot.
+  const spanClause = { id: "9", text: `9. **T** — web-engineer (\`a.b\`), days. AWAITING OWNER (x, 2026-09-22).${stamped}` };
+  t("awaiting: a code span with a full stop INSIDE the role clause does not move the slot — the marker after the clause still parks (fails if the stripping is removed)", rowAwaiting(spanClause.text)?.blocker === "x" && (rk([spanClause]).awaiting ?? []).some((x) => x.rowId === "9"));
+  t("awaiting: a span inside the blocker is blanked in the owner-facing blocker, never shown as the sentinel; a blocker that is only a span is not a marker", /^the\s+ruling$/.test(rowAwaiting(head("AWAITING OWNER (the `foo` ruling, 2026-09-22).")).blocker) && rowAwaiting(head("AWAITING OWNER (`foo`, 2026-09-22).")) === null);
   const realShape = rk([{ id: "17", text: "17. **Run the three shifts** — itsm-ops-domain, web-engineer, days. BLOCKED ON LAB (ITSM lab for the seven vendor adapters; shift-context live source, 2026-09-22). RE-MEASURED 2026-09-26 (still open): the offline half landed. Also: more." }]);
   t("awaiting: the real plan shape (many roles, marker first, a long RE-MEASURED paragraph after it) parks", (realShape.awaiting ?? []).some((x) => x.rowId === "17" && x.kind === "lab" && x.blocker === "ITSM lab for the seven vendor adapters; shift-context live source") && realShape.tasks.length === 0);
   const awaitingId = (r, id) => r.escalations.find((e) => e.id === `awaiting-owner-row-${id}`);

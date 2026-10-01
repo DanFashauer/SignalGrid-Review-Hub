@@ -8,17 +8,18 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over six review rounds on PR #1349):
+// WHAT IS GATED (hardened over seven review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
 //      split rows too, so an unplaced row fails rather than vanishing. Each row's
 //      cell count matches its header, and every table header is EXACT (no extra,
 //      renamed or re-cased column; round 4). No link reference definitions, no
-//      bare carriage returns, no repeated legend word (round 5). A Framework
-//      refs / Short ref cell is plain ASCII with no claim word; a Control name
-//      carries no legend word. No HTML block, code fence, or whitespace-only
-//      line that Markdown does not treat as blank (round 6). The line
+//      bare carriage returns, no repeated legend word (round 5). A Control
+//      name carries no legend word, "<" or "&". No HTML block, code fence, or
+//      whitespace-only line that Markdown does not treat as blank (round 6).
+//      A Framework refs cell holds only [A-Za-z0-9 .;,()/+-] and no claim
+//      word; the Short ref table is pinned verbatim (round 7). The line
 //      after a table is blank (GFM would render it as a row). No raw-HTML table
 //      tags. Control names are unique as a reader sees them (case, whitespace,
 //      entities, zero-width characters folded). The legend's words AND meanings
@@ -73,7 +74,21 @@ const EXPECTED_MEANINGS = new Map([
   ["Private-core (planned)", "Belongs to the protected private production repository (real providers, real secrets, durable persistence); intentionally absent from this public repo."],
   ["Human-owned (planned)", "A program/governance control that authorized humans must own and approve; it cannot be responsibly automated away."],
 ]);
-const DOC_SELF = "docs/SECURITY_CONTROLS_MATRIX.md"; // the matrix cannot be its own evidence
+const DOC_SELF = "docs/SECURITY_CONTROLS_MATRIX.md";
+/** The Short ref table's rows, verbatim (round 7). It is a fixed reference
+ *  list; a cell there can be split by Markdown link or image syntax that still
+ *  READS as a claim, so the rows are pinned rather than pattern-checked. */
+const EXPECTED_SHORT_REF = [
+  "| **ASVS 5.0** | OWASP Application Security Verification Standard 5.0 (testable app-security requirements) |",
+  "| **API Top 10** | OWASP API Security Top 10 (esp. **API1 Broken Object Level Authorization**) |",
+  "| **800-207** | NIST SP 800-207, Zero Trust Architecture |",
+  "| **CSF 2.0** | NIST Cybersecurity Framework 2.0 (org security/risk program functions) |",
+  "| **CIS** | CIS Benchmarks (device hardening) + CIS Controls v8 (safeguards); see [Security-Baseline Alignment](SECURITY_BASELINE_ALIGNMENT.md) |"
+];
+/** A Framework refs cell names frameworks and nothing else: this charset only
+ *  (round 7). No brackets, so no link or image syntax can split a word; no
+ *  emphasis, entity, markup, homoglyph or invisible character. */
+const FRAMEWORK_REFS_CHARSET = /^[A-Za-z0-9 .;,()\/+-]+$/; // the matrix cannot be its own evidence
 /** Statuses whose cited paths must exist. Any status reading "implement…" gets
  *  the FULL Implemented check (paths + proof), legend word or not. */
 const IMPLEMENTED_LIKE = /implement/i;
@@ -164,6 +179,7 @@ export function parseMatrix(raw) {
   lines.forEach((l, k) => { if (l.includes("\r")) bareCR.push({ line: k + 1, raw: l.replace(/\r/g, "\\r") }); });
   const legendDup = [];
   const claimCells = [];
+  const shortRefRows = [];
   const controlCells = [];
   // lines GitHub reads as content (or as a hiding block) that this gate cannot see
   // into: a whitespace-only line that is not CommonMark-blank, an HTML block
@@ -202,7 +218,7 @@ export function parseMatrix(raw) {
       // a repeated legend word would let an earlier, inflated meaning render while
       // the Map kept only the last one (round 5)
       if (isLegend) { if (legend.has(unbold(c[0]))) legendDup.push({ line: j + 1, raw: lines[j] }); legend.set(unbold(c[0]), c[1]); }
-      else if (isOther) c.forEach((x) => claimCells.push({ line: j + 1, raw: lines[j], cell: x }));
+      else if (isOther) shortRefRows.push({ line: j + 1, raw: lines[j] });
       else if (isControls) { claimCells.push({ line: j + 1, raw: lines[j], cell: c[1] }); controlCells.push({ line: j + 1, raw: lines[j], cell: c[0] }); }
       if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
     }
@@ -236,7 +252,7 @@ export function parseMatrix(raw) {
     if (m) bindings.push(m[1]);
   });
   const closing = bindings.length === 1 ? [null, bindings[0]] : null;
-  return { opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
+  return { shortRefRows, opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -339,7 +355,7 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
+  const { shortRefRows, opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
@@ -357,8 +373,13 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   // Framework refs cells and the Short ref table are plain ASCII in the real
   // matrix; anything else there (entities, markup, homoglyphs, invisible
   // characters) fails outright, and the folded text may not carry a claim
+  const shortRaw = shortRefRows.map((r) => r.raw);
+  if (shortRaw.length !== EXPECTED_SHORT_REF.length || !EXPECTED_SHORT_REF.every((x, k) => x === shortRaw[k])) {
+    const off = shortRefRows.find((r, k) => r.raw !== EXPECTED_SHORT_REF[k]) ?? shortRefRows.at(-1) ?? { line: 0, raw: "(no Short ref rows)" };
+    structural.push(`line ${off.line}: the Short ref table differs from its pinned rows (EXPECTED_SHORT_REF) — update the pin in the same change\n      ${off.raw}`);
+  }
   for (const c of claimCells) {
-    if (/[^\x20-\x7E]|&|</.test(c.cell)) structural.push(`line ${c.line}: a Framework refs / Short ref cell must be plain ASCII text, got "${c.cell}"\n      ${c.raw}`);
+    if (!FRAMEWORK_REFS_CHARSET.test(c.cell)) structural.push(`line ${c.line}: a Framework refs cell may hold only [A-Za-z0-9 .;,()/+-], got "${c.cell}"\n      ${c.raw}`);
     else if (/implement|certif|attest|audit|complian|accredit/.test(claimFold(c.cell))) structural.push(`line ${c.line} carries a status-like claim ("${c.cell}") outside a Status cell, where no check reaches it\n      ${c.raw}`);
   }
   // a Control name may not wear a legend status word either
@@ -530,6 +551,14 @@ function selfTest() {
     ["fail: a legend word split by markup in a Control name", plant("| Imple<b></b>mented (public core) MFA | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a legend word hidden by an entity in a Control name", plant("| Imple&shy;mented (public core) MFA | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    // round 7: link/image syntax splitting a claim; every claim word exercised
+    ["fail: an empty link splitting a claim in Framework refs", plant("| Planted L | Imple[](/x)mented | Private-core (planned) | private repo |"), 1],
+    ["fail: an empty image splitting a claim in Framework refs", plant("| Planted I | cert![](/x)ified | Private-core (planned) | private repo |"), 1],
+    ["fail: an empty link splitting a claim in the Short ref table", real.replace("| **ASVS 5.0** |", "| **MFA** | Imple[](/x)mented (public core) |\n| **ASVS 5.0** |"), 1],
+    ["fail: 'compliant' in Framework refs", plant("| Planted C | SOC 2 compliant | Private-core (planned) | private repo |"), 1],
+    ["fail: 'accredited' in Framework refs", plant("| Planted A | ISO accredited | Private-core (planned) | private repo |"), 1],
+    ["fail: 'audited' in Framework refs", plant("| Planted U | audited yearly | Private-core (planned) | private repo |"), 1],
+    ["fail: 'attested' in Framework refs", plant("| Planted T | SOC 2 attested | Private-core (planned) | private repo |"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];
   let ok = true;

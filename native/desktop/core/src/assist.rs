@@ -29,9 +29,16 @@ impl Assist {
     /// The asymmetry is the point. A newer server answering `allow_with_conditions`
     /// is telling an older client about a restriction it cannot enforce, so the only
     /// safe reading is DENY — never "close enough to allow".
+    ///
+    /// ASCII WHITESPACE ONLY is trimmed (space, tab, LF, FF, CR — `is_ascii_whitespace`).
+    /// `str::trim` strips Unicode White_Space, so an `allow` padded with NBSP, U+3000 or
+    /// U+0085 used to proceed here while Kotlin, whose `trim()` uses a different set,
+    /// disagreed on U+0085 and U+001C. A value that is not a known outcome after the
+    /// ASCII trim is DENY in every client (the shared vectors pin each padding).
     pub fn parse(raw: Option<&str>) -> Option<Assist> {
         let raw = raw?;
-        Some(match raw.trim().to_ascii_lowercase().as_str() {
+        let trimmed = raw.trim_matches(|c: char| c.is_ascii_whitespace());
+        Some(match trimmed.to_ascii_lowercase().as_str() {
             "allow" => Assist::Allow,
             "step_up" => Assist::StepUp,
             "restrict" => Assist::Restrict,

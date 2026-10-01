@@ -669,6 +669,52 @@ const verdicts = space.map((s) => evaluateServiceLifecycle(s));
       provisionedPlans: [{ provisioningStatus: "Whatever" }],
     }).provisioning === "unknown",
   );
+  // The brace-less guards the mutation sweep could not reach until this family joined
+  // it (`oneLine: true`, 2026-09-30). Each check below fails with its guard removed.
+  {
+    // asInstant's `null`-vs-`"malformed"` split. Without it, an ABSENT leave date reads
+    // as an unreadable one, so a current employee's closure becomes `unknown` instead of
+    // `none_recorded`, and an absent assignment instant poisons the ordering.
+    const noLeave = normalizeGraphServiceLifecycle({ id: ID, assignedPlans: [] });
+    check(
+      "an ABSENT leave date is `none_recorded` — not asserted is not the same claim as unreadable",
+      noLeave.closure === "none_recorded" && noLeave.assignmentOrder === "not_comparable",
+    );
+    const undatedPlan = normalizeGraphServiceLifecycle({
+      id: ID,
+      assignedPlans: [{ capabilityStatus: "Enabled" }],
+      employeeLeaveDateTime: "2026-02-01T00:00:00Z",
+    });
+    check(
+      "…and a live plan with NO assignedDateTime leaves the ordering not_comparable, never malformed",
+      undatedPlan.closure === "recorded" && undatedPlan.assignmentOrder === "not_comparable",
+    );
+  }
+  {
+    let provisioning: string | undefined;
+    let threw = false;
+    try {
+      provisioning = normalizeGraphServiceLifecycle({
+        id: ID,
+        assignedPlans: [],
+        provisionedPlans: [{ provisioningStatus: "Success" }, { servicePlanId: "no-status" }],
+      }).provisioning;
+    } catch {
+      threw = true;
+    }
+    check(
+      "a provisionedPlans entry with NO status is `unknown` — neither a thrown read nor the other entries' answer",
+      !threw && provisioning === "unknown",
+    );
+  }
+  check(
+    "a failed plan beside a successful one is `failed` — a success never masks a failure",
+    normalizeGraphServiceLifecycle({
+      id: ID,
+      assignedPlans: [],
+      provisionedPlans: [{ provisioningStatus: "Success" }, { provisioningStatus: "Error" }],
+    }).provisioning === "failed",
+  );
 }
 
 // ── 11. Fixture lookup is hostile-safe ───────────────────────────────────────

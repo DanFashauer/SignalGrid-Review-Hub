@@ -64,29 +64,43 @@ function cells(line) {
 }
 const unbold = (s) => s.replace(/\*\*/g, "").trim();
 
+/** Tables the matrix may carry that hold no controls. Any OTHER pipe line —
+ *  an unknown header, a row split from its table by a blank line, a renamed
+ *  Status/Where column — is UNCLAIMED and fails: a row the parser cannot place
+ *  is a row nobody gates (found in review round 1 of PR #1349). */
+const NON_CONTROL_TABLES = [["Short ref", "Framework"]];
+
 export function parseMatrix(text) {
   const lines = text.split("\n");
   const legend = new Set();
   const rows = [];
+  const unclaimed = [];
+  const malformed = [];
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/^\|/.test(lines[i])) continue;
+    if (!/^\s*\|/.test(lines[i])) continue;
     const head = cells(lines[i]).map(unbold);
-    if (!/^\|\s*-/.test(lines[i + 1] ?? "")) continue;
+    const isTable = /^\s*\|\s*:?-/.test(lines[i + 1] ?? "");
     const isLegend = head.length === 2 && head[0] === "Status" && head[1] === "Meaning";
     const sIdx = head.indexOf("Status");
     const wIdx = head.indexOf("Where");
     const isControls = head[0] === "Control" && sIdx > 0 && wIdx > 0;
-    if (!isLegend && !isControls) continue;
+    const isOther = NON_CONTROL_TABLES.some((h) => h.length === head.length && h.every((x, k) => x === head[k]));
+    if (!isTable || (!isLegend && !isControls && !isOther)) {
+      unclaimed.push({ line: i + 1, raw: lines[i] });
+      continue;
+    }
     let j = i + 2;
-    for (; j < lines.length && /^\|/.test(lines[j]); j += 1) {
+    for (; j < lines.length && /^\s*\|/.test(lines[j]); j += 1) {
       const c = cells(lines[j]);
+      // an escaped pipe or a dropped cell shifts every column after it — never guess
+      if (c.length !== head.length) { malformed.push({ line: j + 1, raw: lines[j], want: head.length, got: c.length }); continue; }
       if (isLegend) legend.add(unbold(c[0]));
-      else rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
+      else if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
     }
     i = j - 1;
   }
   const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(text);
-  return { legend, rows, defaultProof: closing ? closing[1] : null };
+  return { legend, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -165,12 +179,14 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { legend, rows, defaultProof } = parseMatrix(text);
+  const { legend, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
   if (legend.size === 0) structural.push("no Status legend table found");
   if (!legend.has(IMPLEMENTED)) structural.push(`legend does not define "${IMPLEMENTED}"`);
+  for (const u of unclaimed) structural.push(`line ${u.line} is a pipe row in no recognised table (Control|…|Status|Where, Status|Meaning, or ${NON_CONTROL_TABLES.map((h) => h.join("|")).join(", ")}) — it would go ungated\n      ${u.raw}`);
+  for (const m of malformed) structural.push(`line ${m.line} has ${m.got} cells, its table header has ${m.want} (escaped pipe or missing cell) — columns cannot be trusted\n      ${m.raw}`);
   for (const r of rows) {
     const why = [];
     if (!legend.has(r.status)) why.push(`status "${r.status}" is not in the Status legend (${[...legend].join(" | ")})`);
@@ -249,6 +265,11 @@ function selfTest() {
     ["fail: Implemented row citing a missing proof", plant("| Planted missing proof | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `pnpm run proof:no-such-proof` |"), 1],
     ["fail: Implemented row citing no path", plant("| Planted no path | ASVS 5.0 | Implemented (public core) | the core, somewhere |"), 1],
     ["fail: a KNOWN_FAILURES entry outlives its reason", real.replace("| **Implemented in THIS repo** |", "| Private-core (planned) |"), 1],
+    // review round 1 of PR #1349: rows the parser cannot place must fail, never vanish
+    ["fail: a blank line splits rows from their table", real.replace("\n| Deny-by-default RBAC", "\n\n| Deny-by-default RBAC"), 1],
+    ["fail: a controls table's Status column renamed", real.replace("| Control | Framework refs | Status | Where |", "| Control | Framework refs | State | Where |"), 1],
+    ["fail: an unrecognised table appended", `${real}\n| Control | Refs | Status | Evidence |\n| --- | --- | --- | --- |\n| Planted bogus | x | Bogus | \`nope.ts\` |\n`, 1],
+    ["fail: an escaped pipe shifts a row's columns", plant("| Planted a \\| b control | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];
   let ok = true;
@@ -258,7 +279,7 @@ function selfTest() {
       writeFileSync(f, text);
       const r = spawnSync(process.execPath, [SELF, "--doc", f], { cwd: ROOT, encoding: "utf8" });
       // a failure must QUOTE the offending row (or name the stale entry), never just exit 1
-      const quoted = want === 1 ? /FAIL {2}\S+:\d+\n {6}\|.*\|\n {6}- /.test(r.stderr) || /KNOWN_FAILURES entry ".+" no longer fails/.test(r.stderr) : true;
+      const quoted = want === 1 ? /FAIL {2}\S+:\d+\n {6}\|.*\|\n {6}- /.test(r.stderr) || /FAIL {2}line \d+ .*\n {6}\|/.test(r.stderr) || /KNOWN_FAILURES entry ".+" no longer fails/.test(r.stderr) : true;
       const pass = r.status === want && quoted;
       if (!pass) ok = false;
       console.log(`${pass ? "ok  " : "BAD "} self-test ${name} (exit ${r.status}, want ${want})${pass ? "" : `\n${r.stderr}`}`);

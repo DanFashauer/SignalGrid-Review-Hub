@@ -66,6 +66,7 @@
     "proof:emitter-discipline": "tsx ./src/emitter-discipline-proof.ts",
     "proof:enrollment-race": "tsx ./src/webauthn-enrollment-race-proof.ts",
     "proof:enterprise-auth": "tsx ./src/enterprise-auth-proof.ts",
+    "test:fixture-idp": "tsx ./src/fixture-idp-selftest.ts",
     "proof:entitlement-binding": "tsx ./src/entitlement-binding-proof.ts",
     "proof:event-contract": "tsx ./src/event-contract-proof.ts",
     "proof:evidence-adapter": "tsx ./src/evidence-adapter-proof.ts",

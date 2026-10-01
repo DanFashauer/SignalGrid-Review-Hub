@@ -9325,7 +9325,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "99, 100",
+   "line": "121",
    "claim": "Heading \"Access support\" with subtitle \"Worker session triage · relay guidance\" — asserts a support-desk triage capability over worker sessions.",
    "kind": "capability",
    "classification": "demo-only",
@@ -9334,7 +9334,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "105, 106-110",
+   "line": "127",
    "claim": "\"SIGNAL → GUIDANCE TO RELAY\" plus \"Tap a worker's session to see the signal, the call, and the guidance to relay. The worker never opens SignalGrid — their resolution happens inside their own app, invisibly.\"",
    "kind": "capability",
    "classification": "demo-only",
@@ -9407,7 +9407,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/AccessSupport.tsx",
-   "line": "146",
+   "line": "168",
    "claim": "Per-scenario status label \"Resolves on the worker's device\" vs \"Needs an operator\" — asserts the product classifies self-resolving versus operator-required outcomes.",
    "kind": "status",
    "classification": "demo-only",
@@ -9470,7 +9470,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "57, 62-67",
+   "line": "90",
    "claim": "\"Integration Health\" strip rendering vendor name, product name, a green/amber/red status dot and a latency figure per integration — asserts live vendor connection health.",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -9646,7 +9646,7 @@
    "claim": "\"Signal Types\" badge row per vendor — asserts which signal families each integration supplies.",
    "kind": "capability",
    "classification": "deferred",
-   "evidence": "Badges render arbitrary fixture signal types (artifacts/api-server/src/routes/integrations.ts:14 and siblings) via src/components/SignalBadge.tsx:7-15, 18-20. Only three signal kinds are launch (scripts/launch-profile.mjs:246-259); the rest are deferred (:262-301). Mitigation ABSENT on this page.",
+   "evidence": "Badges render arbitrary fixture signal types (artifacts/api-server/src/routes/integrations.ts:14 and siblings) via src/components/SignalBadge.tsx:5-10. Only three signal kinds are launch (scripts/launch-profile.mjs:246-259); the rest are deferred (:262-301). Mitigation ABSENT on this page.",
    "action": "rewrite"
   },
   {
@@ -9687,8 +9687,8 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/components/SignalBadge.tsx",
-   "line": "7-15, 18-20",
-   "claim": "Signal-family badges rendering IDENTITY, DEVICE POSTURE, SESSION CONTEXT, OPERATIONAL SIGNALS and a grey fallback for any other family.",
+   "line": "5-10",
+   "claim": "Signal-family badges rendering all six SignalType families (tones in src/lib/signal-tone.ts) and a dashed UNKNOWN badge for any other family.",
    "kind": "capability",
    "classification": "deferred",
    "evidence": "Three of the four named families are deferred signal kinds — identity (scripts/launch-profile.mjs:279), session_readiness (:293) and the operational cluster (task_exception :297, shift_context :294). Only device posture is launch (:248-250). Rendered on Signals.tsx:55 (mitigated) and Integrations.tsx:147 (NOT mitigated).",
@@ -10113,7 +10113,7 @@
    "claim": "\"`scripts/check-review-coverage.mjs` prints review\" — \"coverage beside every green preflight\"; \"nothing skips silently.\"",
    "kind": "availability",
    "classification": "launch",
-   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:552 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
+   "evidence": "Grounded: scripts/check-review-coverage.mjs exists and preflight runs it beside its self-test at scripts/preflight.mjs:568 (\"a green gate suite is not a reviewed codebase\"). \"A proof that refuses … exits 1 by name; nothing skips silently\": scripts/src/lib/db-guard.ts:19-25 (named REFUSING, exit 1); validate-sim-macos.sh:302 prints the skipped count and names the skipped gates above it.",
    "action": "keep",
    "source": "re-extraction 2026-09-06 against the README rebuilt 2026-09-01 (#370)"
   },

@@ -24,7 +24,7 @@ Task:
 7. Request review and report readiness.
 8. Do not merge unless explicitly allowed by the repository owner and the merge policy.
 
-Expected PR sections:
+Expected PR sections (archived list; `phase:summary-check` now checks the live `.github/pull_request_template.md` headings — Summary, What changed, Validation, Public-safety note, Remaining risks — and REFUSES to read this file):
 - Summary
 - What changed
 - Validation

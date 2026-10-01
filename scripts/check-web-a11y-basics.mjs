@@ -22,8 +22,9 @@
 //      tree's query defaults poll, or uses a hook or value a polling file
 //      exports — by name, by an `import { X as Y }` alias, or as the default
 //      import of a polling module (to a fixpoint). A component export (a
-//      PascalCase name) does not carry polling upward: it renders its own
-//      region. A default export the gate cannot classify is followed. A hook handed on without a visible call — a
+//      PascalCase name in a .tsx) does not carry polling upward: it renders its
+//      own region. Everything a .ts exports is followed, whatever its case, and
+//      a default export the gate cannot classify is followed. A hook handed on without a visible call — a
 //      re-export, `export *`, `const useY = useX`, `export default useX` —
 //      fails closed.
 //      Query defaults are read from every .ts/.tsx in the tree — the balanced
@@ -36,7 +37,8 @@
 //      App.tsx is scanned like any file once its construction is removed.
 //   2. ICON BUTTON. A `<Button … size="icon" …>`, or a raw `<button>` whose
 //      children render no text, must carry aria-label or aria-labelledby (a
-//      child text node such as an sr-only <span> also names it). Tags
+//      child text node such as an sr-only <span> also names it; whitespace —
+//      `{" "}`, `{"\u200b"}`, `&nbsp;`, `&#32;` — does not). Tags
 //      are parsed brace-aware; a tag the parser cannot close is a FAILURE,
 //      never a skip.
 //   3. REDUCED MOTION. Every web tree's src/index.css carries a
@@ -300,15 +302,21 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   for (const f of parsed) for (const why of opaqueHookExports(f.code)) failures.push(`${f.rel}: ${why} — the gate cannot follow it; failing closed`);
   const polls = new Set();
   const names = new Set();   // named exports of polling files
+  // A .ts file renders no JSX, so nothing it exports is a component: every
+  // default export of a polling .ts is followed, whatever its name.
+  const defaultCarries = (rel) => {
+    const code = parsed.find((x) => x.rel === rel).code;
+    return rel.endsWith(".ts") ? hasDefaultExport(code) : defaultIsHookOrValue(code);
+  };
   const usesPolling = (f) => {
     const own = exportedNames(f.code);
     const local = new Set([...names].filter((n) => !own.has(n)));
     for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*["']([^"']+)["']/g)) {
       const target = resolveImport(f.rel, m[3], rels);
-      if (m[1] && target && polls.has(target) && defaultIsHookOrValue(parsed.find((x) => x.rel === target).code)) local.add(m[1]);
+      if (m[1] && target && polls.has(target) && defaultCarries(target)) local.add(m[1]);
       for (const part of (m[2] ?? "").split(",").map((x) => x.trim()).filter(Boolean)) {
         const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
-        if (alias && (names.has(orig) || (orig === "default" && target && polls.has(target) && defaultIsHookOrValue(parsed.find((x) => x.rel === target).code)))) local.add(alias);
+        if (alias && (names.has(orig) || (orig === "default" && target && polls.has(target) && defaultCarries(target)))) local.add(alias);
       }
     }
     return [...local].some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "")));
@@ -321,9 +329,12 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\brefetch\w*\s*\(/.test(f.code);
       if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
-        // A component (PascalCase) renders its own live region; only hooks and
-        // values (options objects, fetchers) carry polling to the file using them.
-        for (const n of exportedNames(f.code)) if (/^[a-z_$]/.test(n)) names.add(n);
+        // A component renders its own live region, so it does not carry polling
+        // to the file rendering it. Only a PascalCase name (upper then lower
+        // case) in a .tsx counts as a component; every other export — hooks,
+        // values, SCREAMING_CASE options, and anything from a .ts — is followed.
+        const isTs = f.rel.endsWith(".ts");
+        for (const n of exportedNames(f.code)) if (isTs || !new RegExp(`^${PASCAL}$`).test(n)) names.add(n);
         changed = true;
       }
     }
@@ -357,8 +368,14 @@ function openingTag(src, index) {
 function buttonText(src, openEnd, tagName = "button") {
   const close = src.indexOf(`</${tagName}>`, openEnd);
   if (close < 0) return null;
-  // A whitespace-only string expression (`{" "}`, `{"\n"}`) renders no name.
-  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])(?:\s|\\[nrtfv])*\1\s*\}/g, "");
+  // A whitespace-only child renders no name: a string expression of spaces or
+  // escapes (`{" "}`, `{"\n"}`, `{"\u00a0"}`, `{"\u200b"}`) or a whitespace
+  // entity (`&nbsp;`, `&#32;`, `&#xA0;`).
+  const WS_ESC = String.raw`\\(?:[nrtfv]|u(?:0020|00a0|00A0|200b|200B|200c|200d|2009|202f|feff|FEFF)|x(?:20|a0|A0))`;
+  const WS_ENTITY = /&(?:nbsp|ensp|emsp|thinsp|zwsp|zwnj|zwj|#(?:32|160|8203|8194|8195|8201)|#x(?:20|a0|A0|200b|200B));/g;
+  let body = src.slice(openEnd + 1, close)
+    .replace(new RegExp(`\\{\\s*(["'\`])(?:\\s|${WS_ESC})*\\1\\s*\\}`, "g"), "")
+    .replace(WS_ENTITY, "");
   for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
     const tag = openingTag(body, i);
     if (tag === null) return null;
@@ -618,6 +635,9 @@ function selfTest() {
       checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><X />{" "}</Button>').length === 1],
     ["an escaped-newline {\"\\n\"} child does not name an icon button",
       checkIconButtons("x.tsx", '<Button size="icon" onClick={t}><X />{"\\n"}</Button>').length === 1],
+    ["whitespace entities and zero-width escapes do not name an icon button",
+      ['&nbsp;', '&#32;', '&#xA0;', '{"\\u200b"}', '{"\\u00a0"}'].every((c) => checkIconButtons("x.tsx", `<Button size="icon" onClick={t}><X />${c}</Button>`).length === 1) &&
+      checkIconButtons("x.tsx", '<button onClick={f}><X />&nbsp;</button>').length === 1],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -667,6 +687,12 @@ function selfTest() {
         checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", 'import opts from "../lib/feed";\nuseQuery({ ...opts }); return null;')], false).failures.length === 1)],
     ["a PascalCase default-exported component bound by name is not followed",
       checkLiveRegions([view("t/src/pages/Dash.tsx", "function Dash() { useQuery({ refetchInterval: 5 }); return <LiveRegion message=\"x\" />; }\nexport default Dash;"), view("t/src/App.tsx", 'import Dash from "./pages/Dash";\n<Dash />')], false).polling.length === 1],
+    ["UPPER and PascalCase named options exported from a .ts are followed",
+      ["export const POLL_OPTS = { refetchInterval: 5000 };|POLL_OPTS", "export const PollOpts = { refetchInterval: 5000 };|PollOpts", "const POLL = { refetchInterval: 5000 };\nexport { POLL };|POLL as P"].every((c) => { const [lib, imp] = c.split("|"); const local = imp.split(" as ").pop();
+        return checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", `import { ${imp} } from "../lib/feed";\nuseQuery({ ...${local} }); return null;`)], false).failures.length === 1; })],
+    ["a PascalCase default value or function from a .ts is followed",
+      ["const Poll = { refetchInterval: 5000 };\nexport default Poll;", "const Poll = { refetchInterval: 5000 };\nexport { Poll as default };", "export default function Feed() { return { refetchInterval: 5000 }; }"].every((lib) =>
+        checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", 'import opts from "../lib/feed";\nuseQuery({ ...opts }); return null;')], false).failures.length === 1)],
     ["a hook re-exported from another module fails closed",
       checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
     ["a hook bound to another name without a call fails closed",

@@ -20,6 +20,11 @@
 //     an ORDERED ARRAY (same length, same element at each position), so a
 //     duplicate entry fails even though it changes neither the missing nor the
 //     extra set.
+//   - Every `servers[]` entry carries its source and security label (DR-063):
+//     `upstream`, `reads`, `writes` and `network` are each a non-empty string. The
+//     failure names the server and the field. `sha` may be null (the in-tree server);
+//     `external[]` entries are not held to this (never probed, nothing measured to
+//     require).
 //   - Every server id named in `grants.lanes.*` or `grants.skills.*` exists in
 //     `servers[]` or `external[]`, and every lane/skill grant and every
 //     `grants.mentions` entry carries a non-empty `for`/`why`; every lane grant
@@ -122,6 +127,20 @@ export function check({ roster, indexSource, skillDocs, firstPartyDirs }) {
   // Once either required map is unusable, the rest of this function has nothing
   // honest to check it against — report just the shape failures above.
   if (problems.length) return problems;
+
+  // DR-063 — every servers[] entry carries its source and security label: where it
+  // comes from (`upstream`) and what it touches (`reads`, `writes`, `network`). A
+  // string, never null or empty: "unknown" is written down, not left blank. `sha`
+  // stays free (null for the in-tree server); external[] is NOT held to this — those
+  // entries were never probed under the by-use protocol, so they have no measured
+  // label to require.
+  r.servers.forEach((s, i) => {
+    for (const field of ["upstream", "reads", "writes", "network"]) {
+      if (typeof s?.[field] !== "string" || s[field].trim() === "") {
+        problems.push(`${ROSTER_PATH}: ${s?.id ?? `servers[${i}]`}: no ${field} — every server carries its source and security label (DR-063)`);
+      }
+    }
+  });
 
   const external = Array.isArray(r.external) ? r.external : [];
   const knownIds = new Set([...r.servers.map((s) => s.id), ...external.map((e) => e.id)]);
@@ -317,10 +336,12 @@ server.registerTool(
   async () => {},
 );
 `;
+  // The source + security label every servers[] entry carries (DR-063).
+  const label = { upstream: "u", reads: "r", writes: "w", network: "n" };
   const goodRoster = {
     servers: [
-      { id: "signalgrid-mcp", tools: 2, toolNames: ["alpha", "beta"], disposition: "adopted" },
-      { id: "context7", tools: 2, disposition: "adopted" },
+      { id: "signalgrid-mcp", tools: 2, toolNames: ["alpha", "beta"], disposition: "adopted", ...label },
+      { id: "context7", tools: 2, disposition: "adopted", ...label },
     ],
     external: [{ id: "firecrawl", decision: "adopted" }],
     grants: {
@@ -481,6 +502,21 @@ server.registerTool(
       },
     },
     'whose disposition is "totally-unknown"',
+  );
+
+  // DR-063 — every servers[] entry carries its source and security label.
+  {
+    const { network: _dropped, ...noNetwork } = goodRoster.servers[0];
+    expectFail(
+      "a server with no network label FAILS",
+      { roster: { ...goodRoster, servers: [noNetwork, goodRoster.servers[1]] } },
+      "signalgrid-mcp: no network",
+    );
+  }
+  expectFail(
+    "a server with an empty upstream FAILS",
+    { roster: { ...goodRoster, servers: [goodRoster.servers[0], { ...goodRoster.servers[1], upstream: "" }] } },
+    "context7: no upstream",
   );
 
   // D5

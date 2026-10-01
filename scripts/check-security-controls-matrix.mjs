@@ -194,7 +194,9 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
         for (const p of expandBraces(tok)) {
           const hit = resolve(p, lastDir);
           if (!hit) why.push(`cited path \`${p}\` does not exist (or is ambiguous)`);
-          else if (hit.includes("/")) lastDir = hit.slice(0, hit.lastIndexOf("/"));
+          // a bare sibling resolves beside the CITED directory, even when the cited file is missing
+          const at = (hit ?? p).includes("/") ? (hit ?? p) : null;
+          if (at) lastDir = at.slice(0, at.lastIndexOf("/"));
         }
       }
     }

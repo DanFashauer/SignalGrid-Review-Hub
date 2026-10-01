@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 97cef975c536; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 9a469e562e51; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 76,
-        "partial": 5,
-        "closed": 112
+        "open": 63,
+        "partial": 4,
+        "closed": 126
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -105,14 +105,6 @@
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: finance-fundraising→lane, agent-ops-economics→lane"
     },
     {
-      "rowId": "25",
-      "title": "Bound the CI jobs and wire the Mac lane's alarm",
-      "roles": [
-        "sre"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
-    },
-    {
       "rowId": "33",
       "title": "Lab telemetry: OTel Collector + Prometheus profile",
       "roles": [
@@ -145,14 +137,6 @@
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
     },
     {
-      "rowId": "164",
-      "title": "Five IGA vendors the competitive surface has never mentioned.",
-      "roles": [
-        "competitive-analyst"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: competitive-analyst→lane"
-    },
-    {
       "rowId": "171",
       "title": "",
       "roles": [
@@ -175,13 +159,13 @@
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 8,
+    "needsExecutorCount": 6,
     "unmeasuredCount": 0,
-    "openRows": 76
+    "openRows": 63
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-30T19:33:02.420Z",
-  "derivedAtCommit": "f079a7ee4d65f73238b375dffbcd98814b2da784",
+  "derivedAt": "2026-10-01T13:07:47.105Z",
+  "derivedAtCommit": "dc028cbf9be56edc971d1dd14c0319cce4406f72",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "7794bc9b31a6b8c3446c1dc1374241f4a1f386b0ea135639bd95dde7e47dca3c"
+  "decisionAddress": "cdfee5b9f834d8c9fbd2302ef229a75237921ed138dd06d4268d7dbc8f21b859"
 }

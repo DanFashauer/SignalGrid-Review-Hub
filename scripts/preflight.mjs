@@ -637,6 +637,7 @@ const STEPS = [
   // an unreachable server and a verdict-less 200. Needs the api-server build above.
   { name: "Proof: signalgrid CLI (read-only by default, fail-closed, dual output)", cmd: ["pnpm", "run", "proof:signalgrid-cli"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
+  { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight

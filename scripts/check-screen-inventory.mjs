@@ -214,8 +214,17 @@ export function urlProblem(value) {
  */
 export function renderedStep4(doc) {
   const md = new MarkdownIt({ html: true });
-  const tokens = md.parse(doc, {});
+  const env = {};
+  const tokens = md.parse(doc, env);
   const problems = [];
+  // A footnote DEFINITION (`[^t]: x`) never reaches an inline token: markdown-it reads
+  // it as a link reference definition and hides it, so the `[^` check below cannot
+  // see it. GitHub reads it as a footnote and swallows the lines after it into the
+  // footnote, which it then drops — the launch arguments vanish (round 12). Any such
+  // definition anywhere in the file is refused; markdown-it records every one in env.
+  const footnoteDefs = Object.keys(env.references ?? {}).filter((k) => k.startsWith("^"));
+  if (footnoteDefs.length)
+    problems.push(`the file defines footnote(s) ${footnoteDefs.map((k) => `[${k}]`).join(", ")} — GitHub would swallow the lines after a definition and drop them, so write them as text`);
   const headingText = (i) => tokens[i + 1]?.type === "inline" ? tokens[i + 1].content.trim() : "";
   const sections = tokens.flatMap((t, i) =>
     t.type === "heading_open" && t.tag === "h2" && /^The demo path\b/.test(headingText(i)) ? [i] : []);
@@ -596,6 +605,13 @@ function selfTest() {
     ...[["   x  \n   4\\. fake", "a line after a two-space hard break"], ["   x\n   Step 4. fake", "Step 4."], ["   \uff14. fake", "a full-width digit"],
       ["   4\u2024 fake", "a one-dot leader"], ["   \u248b fake", "a digit-full-stop character"], ["   \u0664. fake", "an Arabic-Indic digit"], ["   IV. fake", "a roman numeral"]].map(([line, what]) =>
       [`${what} that reads as a step fails (round 11)`, { ...base, doc: good.replace(STEP4, `${line.trimStart()}\n\n${STEP4}`) }, "reads as a numbered step"]),
+    // Round 12: a footnote definition line is invisible to markdown-it's inline tokens
+    // but swallows the following lines on GitHub.
+    ...[["[^t]: x", "a footnote definition"], ['[^t]: x "title"', "one with a title"], ["[^1]: x", "a numeric label"], ["[^T]:x", "no space"],
+      ["[^t]: http://127.0.0.1:8080", "a URL destination"]].map(([def, what]) =>
+      [`${what} swallowing the argument lines fails (round 12)`, { ...base, doc: good.replace(STEP4, `4. host app:\n\n   ${def}\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, "defines footnote"]),
+    ["the same argument lines without a definition pass (round 12 control)", { ...base, doc: good.replace(STEP4, `4. host app:\n\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, null],
+    ["a plain link reference definition passes (round 12)", { ...base, doc: `${good}\n\n[t]: x\n` }, null],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

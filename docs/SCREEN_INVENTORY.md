@@ -44,8 +44,10 @@ uses its own renderer, so the demo section may hold only what both show the same
 way: paragraphs, ordered lists, fenced blocks with no language (or `sh`, `bash`,
 `text`), and plain, bold, italic or code text. Anything else fails, as do footnotes,
 dollar-sign math, bare URLs outside code, and any line that reads as a step number
-without being a list item. The section and its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the
-steps must be numbered in order.
+without being a list item. Footnotes are refused anywhere in this file, including a
+definition line, which GitHub would let swallow the lines after it. The section and
+its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the steps
+must be numbered in order.
 
 The gate runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
 (`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file

@@ -23,12 +23,14 @@
 // written in a comment, in a string literal, and in a template literal's text.
 // On top of the syntax tree it runs a CONSTANT-CONDITION reachability pass:
 //   - `if (false)`, `while (false)`, `for (;false;)`, `false ? x : y`,
-//     `false && x`, `true || x`, `"x" ?? y` — the branch a constant condition
+//     `false && x`, `true || x`, `"x" ?? y`, and the `&&=`/`||=`/`??=`
+//     assignments — the branch a constant condition
 //     can never take is dead (constants: true/false, numbers and BigInts
 //     including a leading `-`/`+`, strings, null, undefined, `void x`, `!x`,
 //     parentheses, `as`/`<T>`/`satisfies` casts and `!`), and so is an optional
 //     call whose receiver chain has a constant null/undefined optional link
-//     (`null?.authorize(…)`, `(null as any)?.a.authorize(…)`);
+//     (`null?.authorize(…)`, `(null as any)?.a.authorize(…)`, through member,
+//     element and call links alike);
 //   - a statement after an unconditional `return`/`throw`/`break`/`continue`
 //     in the same block (or after an `if`/`try` every arm of which ends that
 //     way) is dead — except a function declaration, which hoists;
@@ -36,8 +38,10 @@
 //     depth — whose name appears nowhere else in its file is dead. Overload
 //     signatures, property keys (`{ f: 1 }`, `const { f: g } = …`), member
 //     names (`x.f`, class fields, methods, accessors, interface members), enum
-//     members, labels, imports and re-exports naming another module's `f`
-//     (`export { f } from`, `export * as f from`, `import { f as g } from`),
+//     members, labels, `import.meta`, imports and re-exports naming another
+//     module's `f` (`export { f } from`, `export * as f from`, `import { f as g }
+//     from`), a local export alias's exported name (`export { h as f }`), names
+//     in ambient `declare` code,
 //     type parameters, a merged `namespace f` and type positions (`typeof f`)
 //     are not references to it;
 //   - type-only positions (interfaces, type aliases, type literals) and ambient
@@ -55,7 +59,8 @@
 // through); code after a TOP-LEVEL `throw` is treated like code after a return,
 // but a hoisted function declared there still counts; a non-exported function
 // named only by itself (recursion), by another function nothing calls (a dead
-// chain), or by a shadowing local counts as referenced; a class METHOD nothing
+// chain), by code that is itself dead (`if (false) g()`), by a member access
+// on a merged namespace (`g.q`), or by a shadowing local counts as referenced; a class METHOD nothing
 // calls still counts (methods are reached through objects); and the match is
 // by name, so a local that shadows `authorize` with a do-nothing function is
 // still credited, as it was under the regex. A clean run means every credited
@@ -174,6 +179,8 @@ const enforced = new Set();
     ["if (-0n) / if (+0)", 'export function f(p: any) { if (-0n) authorize(p, "x:dead"); if (+0) authorize(p, "x:dead"); }', []],
     ["call in implements / interface extends is a type", 'export class A implements mix(authorize(p, "x:dead")) {}\nexport const B = class extends C implements mix(authorize(p, "x:dead")) {};\nexport interface I extends mix(authorize(p, "x:dead")) {}', []],
     ["(void 0)?.authorize short-circuits", 'export function f(p: any) { (void 0)?.authorize(p, "x:dead"); }', []],
+    ["constant &&= / ||= / ??=", 'export function f(p: any) { (undefined as any) &&= authorize(p, "x:dead"); (true as any) ||= authorize(p, "x:dead"); (0 as any) ??= authorize(p, "x:dead"); }', []],
+    ["optional link before a call / element link", 'export function f(p: any) { (null as any)?.a().authorize(p, "x:dead"); (null as any)?.[0].authorize(p, "x:dead"); }', []],
     ["optional link deeper in the receiver chain", 'export function f(p: any) { (null as any)?.a.authorize(p, "x:dead"); }', []],
     ["names that are not references to the function", [
       'function g1(p: any) { authorize(p, "x:dead"); }', 'function g2(p: any) { authorize(p, "x:dead"); }',
@@ -184,7 +191,9 @@ const enforced = new Set();
       'function g11(p: any) { authorize(p, "x:dead"); }', 'function g12(p: any) { authorize(p, "x:dead"); }',
       'function g13(p: any) { authorize(p, "x:dead"); }', 'function g14(p: any) { authorize(p, "x:dead"); }',
       'function g15(p: any) { authorize(p, "x:dead"); }', 'function g16(p: any) { authorize(p, "x:dead"); }',
-      'function g17(p: any) { authorize(p, "x:dead"); }',
+      'function g17(p: any) { authorize(p, "x:dead"); }', 'function g18(p: any) { authorize(p, "x:dead"); }',
+      'function g19(p: any) { authorize(p, "x:dead"); }', 'function meta(p: any) { authorize(p, "x:dead"); }',
+      'function h18() {}',
       'export const y = (o: any) => o.g1;',
       'export class C { g2 = 1; g3() {} get g4() { return 1; } set g5(v: any) {} }',
       'export interface I { g6: string; g7(): void }',
@@ -198,6 +207,9 @@ const enforced = new Set();
       'import { g15 as h15 } from "m3";',
       'export function tp<g16>(x: g16) { return x; }',
       'namespace g17 { export const q = 1; }',
+      'export { h18 as g18 };',
+      'declare module "m4" { export const v: typeof g19; const w = g19; }',
+      'export const u = import.meta;',
     ].join("\n"), []],
     ["real call", 'export function f(p: any) { authorize(p, "x:live"); }', ["x:live"]],
     ["real method call on a dotted principal", 'export class E { g(t: any) { const ctx = t; this.authorize(ctx.principal, "x:live"); } }', ["x:live"]],
@@ -211,6 +223,7 @@ const enforced = new Set();
     ["call after a try whose catch may fall through", 'export function f(p: any) { try { return 1; } catch { p = 0; } authorize(p, "x:live"); }', ["x:live"]],
     ["call after a try that may fall through but whose catch returns", 'export function f(p: any) { try { p(); } catch { return 1; } authorize(p, "x:live"); }', ["x:live"]],
     ["call after a labelled block left by break", 'export function f(p: any) { a: { break a; } authorize(p, "x:live"); }', ["x:live"]],
+    ["template / cast scope and a case-clause expression are live", 'export function f(p: any, x: any) { authorize(p, `x:live`); authorize(p, ("x:live" as const)); switch (x) { case authorize(p, "x:live"): break; } }', ["x:live", "x:live", "x:live"]],
     ["call in a class extends expression", 'declare function mix(x: any): any;\nexport class A extends mix(authorize(p, "x:live")) {}', ["x:live"]],
     ["call in an instantiation expression", 'export function f(p: any) { return make(authorize(p, "x:live"))<string>; }', ["x:live"]],
     ["template substitution is code", 'export const u = (p: any) => `${authorize(p, "x:live")}`;', ["x:live"]],
@@ -350,7 +363,8 @@ function isTypeOnly(n) {
     // and an interface's `extends` are types.
     const h = n.parent;
     if (!h || !ts.isHeritageClause(h)) return false; // instantiation expression
-    return !(h.token === ts.SyntaxKind.ExtendsKeyword && h.parent && ts.isClassLike(h.parent));
+    // (An interface never gets here — interfaces are skipped whole.)
+    return h.token !== ts.SyntaxKind.ExtendsKeyword;
   }
   return ts.isTypeNode(n) ||
     ts.isInterfaceDeclaration(n); // a type alias's body is itself a TypeNode
@@ -393,6 +407,9 @@ function liveAuthorizeCalls(sf) {
     if (ts.isEnumMember(p) && p.name === id) return true;
     if ((ts.isLabeledStatement(p) || ts.isBreakStatement(p) || ts.isContinueStatement(p)) && p.label === id) return true;
     if (ts.isExportSpecifier(p) && p.parent?.parent?.moduleSpecifier) return true;
+    // `export { h as g }`: the exported name `g` is not the local g.
+    if (ts.isExportSpecifier(p) && p.propertyName && p.name === id) return true;
+    if (ts.isMetaProperty(p) && p.name === id) return true; // import.meta
     // `export * as g from "m"` and `import { g as h } from "m"` name the
     // other module's g; a type parameter and a merged `namespace g` are
     // declarations, not calls.
@@ -404,7 +421,7 @@ function liveAuthorizeCalls(sf) {
   const counts = new Map();
   const countIds = (n) => {
     // A name in a type (`typeof g`) never calls anything.
-    if (isTypeOnly(n)) return;
+    if (isTypeOnly(n) || hasDeclare(n)) return; // ambient code never runs either
     if (ts.isIdentifier(n) && !notAReference(n)) counts.set(n.text, (counts.get(n.text) ?? 0) + 1);
     ts.forEachChild(n, countIds);
   };

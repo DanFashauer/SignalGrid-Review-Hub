@@ -9,6 +9,9 @@
 //     same key (the smoke's negative controls are not vacuous);
 //   - when the published JWKS key is not the signing key ("other"), the valid
 //     token is REFUSED — the property that turns the smoke red on key drift.
+import { spawn } from "node:child_process";
+import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
 import {
   createEnterpriseAuthenticator,
   type EnterpriseAuthConfig,
@@ -63,7 +66,7 @@ console.log("Fixture IdP proof");
   const reasons: Record<string, RegExp> = {
     "wrong-audience": /audience/i,
     "expired": /expired/i,
-    "unmapped-role": /role/i,
+    "unmapped-role": /no role claim value in \[ci-role-intruder\]/,
   };
   for (const kind of MINT_KINDS.filter((k: string) => k !== "valid")) {
     const out = await auth.authenticate(idp.mint(kind), NOW_MS);
@@ -82,6 +85,67 @@ console.log("Fixture IdP proof");
   // refuse the token without testing key drift at all.
   check("JWKS serving a different key REFUSES the otherwise-valid token, on the signature", !out.ok && /signature/i.test(out.reason));
 }
+
+// ── the SERVED process: env knob + HTTP handler, end to end ───────────────────
+// Everything above calls createFixtureIdp() in-process. The deploy-stack job
+// runs `serve`, which reads FIXTURE_IDP_JWKS_KEY and answers /mint and /jwks
+// over HTTP — a path no in-process check touches. Spawn it for real, fetch its
+// own /jwks and /mint, and verify through lib/enterprise-auth. Wall-clock time
+// is used here on purpose: the served IdP mints against the wall clock.
+const freePort = (): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address() as { port: number };
+      srv.close(() => resolve(port));
+    });
+  });
+
+async function withServedIdp<T>(jwksKey: string, fn: (issuer: string) => Promise<T>): Promise<T> {
+  const port = await freePort();
+  const issuer = `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, [fileURLToPath(new URL("../fixture-idp.mjs", import.meta.url)), "serve"], {
+    env: {
+      ...process.env,
+      FIXTURE_IDP_PORT: String(port),
+      FIXTURE_IDP_ISSUER: issuer,
+      FIXTURE_IDP_AUDIENCE: AUDIENCE,
+      FIXTURE_IDP_JWKS_KEY: jwksKey,
+    },
+    stdio: "ignore",
+  });
+  try {
+    let up = false;
+    for (let i = 0; i < 100 && !up; i += 1) {
+      try { up = (await fetch(`${issuer}/healthz`)).ok; } catch { await new Promise((r) => setTimeout(r, 100)); }
+    }
+    if (!up) throw new Error("served fixture IdP did not come up");
+    return await fn(issuer);
+  } finally {
+    child.kill();
+  }
+}
+
+async function servedOutcome(issuer: string, kind: string) {
+  const token = ((await (await fetch(`${issuer}/mint?kind=${kind}`)).json()) as { token: string }).token;
+  const served = createEnterpriseAuthenticator(
+    { ...config, issuer, jwksUri: `${issuer}/jwks` },
+    (uri: string) => fetch(uri),
+  );
+  return served.authenticate(token, Date.now());
+}
+
+await withServedIdp("signing", async (issuer) => {
+  const ok = await servedOutcome(issuer, "valid");
+  check("served (signing): /mint?kind=valid verifies against the served /jwks", ok.ok);
+  const expired = await servedOutcome(issuer, "expired");
+  check("served: /mint honours ?kind= (expired is refused as expired)", !expired.ok && /expired/i.test(expired.reason));
+});
+await withServedIdp("other", async (issuer) => {
+  const out = await servedOutcome(issuer, "valid");
+  check("served (FIXTURE_IDP_JWKS_KEY=other): the env knob reaches the server — valid token refused on the signature", !out.ok && /signature/i.test(out.reason));
+});
 
 console.log(`Fixture IdP proof: ${passed}/${passed + failures.length} checks passed`);
 if (failures.length) {

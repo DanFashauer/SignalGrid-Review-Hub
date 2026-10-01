@@ -518,6 +518,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:ot-posture",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
       // ot-connector.ts dropped 2026-09-03: same reason as access-governance's connector
@@ -528,6 +529,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:token-binding",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
@@ -568,10 +570,12 @@ export const TARGETS = [
   },
   {
     proof: "proof:carrier-reachability",
+    oneLine: true,
     files: ["lib/integrations/src/integrations/carrier/index.ts"],
   },
   {
     proof: "proof:credential-exposure",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
@@ -580,6 +584,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:data-protection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
       "lib/integrations/src/integrations/data-protection/evaluate.ts",
@@ -638,6 +643,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:identity-risk",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
@@ -1666,7 +1672,19 @@ export function shardTargets(all, index, count) {
   return bins[index].targets;
 }
 
+/** Flags this script understands. Anything else starting `--` is refused: `--help` or a
+ *  typo such as `--proof wrong` used to fall through to a FULL sweep of every target,
+ *  which mutates registered source files in place for the better part of an hour. */
+export function unknownArgs(argv) {
+  return argv.filter((a) => a.startsWith("-") && !a.startsWith("--proof=") && !a.startsWith("--shard="));
+}
+
 function main() {
+  const unknown = unknownArgs(process.argv.slice(2));
+  if (unknown.length > 0) {
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
+    process.exit(1);
+  }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;

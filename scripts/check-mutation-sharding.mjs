@@ -15,7 +15,7 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -121,6 +121,18 @@ const present = new Set(TARGETS.map((t) => t.proof));
 for (const p of PINNED_PROOFS) {
   check(`hand-registered safety-critical target present: ${p}`, present.has(p));
 }
+
+// ── Wave 5 (2026-10-01): six families joined the brace-less sweep ─────────────
+// Their registered files held no one-line `if (...) return` guard when they joined, so
+// joining added 0 mutations and 0 survivors — the opt-in is a ratchet for the NEXT
+// brace-less guard added there. Pin it so the flag cannot be dropped quietly.
+for (const p of ["ot-posture", "token-binding", "carrier-reachability", "credential-exposure", "data-protection", "identity-risk"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+
+// An unknown flag must be refused, not fall through to a full in-place sweep.
+check("unknown flag is refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 1);
+check("known flags are accepted (--proof=, --shard=)", unknownArgs(["--proof=proof:x", "--shard=0/4"]).length === 0);
 
 // Reported, not gated.
 const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);

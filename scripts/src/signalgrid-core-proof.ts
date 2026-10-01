@@ -3934,6 +3934,26 @@ const monotonicityTable: string[] = [];
     }
   }
 
+  // THE FOLD IS ORDER-INDEPENDENT AT THE FIELD LEVEL (review of the #1224 fix). Two
+  // readings at one instant resolve to the same field whichever arrives first —
+  // GOOD pairs included: [checked_in, checked_out] tied at severity 0 and kept the
+  // first to arrive, so the snapshot depended on array order even where the verdict
+  // did not. Every pair of every swept family, both arrival orders.
+  for (const f of MONO_FIELDS) {
+    const rest = healthy.filter((s) => s.category !== f.category);
+    const fieldOf = (a: Member, b: Member) =>
+      buildEvidence(identity, device, workflow, [...rest, f.reading(a, VALID_AT), f.reading(b, VALID_AT)])[f.field];
+    const split: string[] = [];
+    f.domain.members.forEach((a, i) => {
+      for (const b of f.domain.members.slice(i + 1)) {
+        const ab = fieldOf(a, b);
+        const ba = fieldOf(b, a);
+        if (ab !== ba) split.push(`[${String(a)}, ${String(b)}] → ${String(ab)} vs ${String(ba)}`);
+      }
+    });
+    check(`22 arrival order: every same-instant pair of ${f.field} resolves the same in both orders`, split.length === 0, split.join("; "));
+  }
+
   // A violation is a LOOSENING under corruption, in either dimension: critical
   // evidence that goes absent→present, or a verdict that goes less restrictive.
   interface Cell {

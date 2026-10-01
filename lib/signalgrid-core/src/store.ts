@@ -253,7 +253,8 @@ export class MemoryStore {
    * deliberately unscoped by tenant — and deliberately carrying no id, ref, subject
    * or tenant, only category names, counts and modes. Nothing here can identify a
    * device, a person or a customer, which is what lets an unscoped aggregate be
-   * served at all (the same rule /metrics already follows).
+   * served at all (the same rule /metrics already follows). `signalsHeld` counts
+   * readings HELD, so a fresh row `putSignal` keeps beside a not-fresh one counts.
    */
   signalInventory(): Array<{ category: SignalCategory; signalsHeld: number; modes: ConnectorMode[] }> {
     const byConnector = new Map<string, ConnectorMode>();

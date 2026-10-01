@@ -421,17 +421,18 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
  *    among them wins (finding F-1). Keeping only the first let a good peer
  *    arriving ahead of an accusing one erase the accusation.
  *
- * Severity: affirmative-good (0) < no answer (1) < anything else the family can
- * say (2 and up). "Anything else" is the accusing half of every family here, so a
- * bad value is never traded down to silence.
+ * Severity: affirmative-good (below 1) < no answer (1) < anything else the family
+ * can say (2 and up). "Anything else" is the accusing half of every family here,
+ * so a bad value is never traded down to silence.
  *
- * AMONG ACCUSING VALUES THE FAMILY'S `members` ORDER DECIDES (cloud review of
- * #1224). With one flat "accusing" level the first to ARRIVE kept the slot, so
- * [suspected, confirmed] resolved to suspected and [confirmed, suspected] to
- * confirmed — restrict or deny by array order, and adding a reading could loosen
- * the answer. `members` lists each family least to most severe, which makes every
- * fold here a max over a total order: order-independent by construction. The order
- * is a judgement, like `good`; the core proof holds it to every shipped rule set
+ * WITHIN EACH BAND THE FAMILY'S `members` ORDER DECIDES (cloud review of #1224).
+ * With one flat level per band the first to ARRIVE kept the slot: [suspected,
+ * confirmed] resolved to suspected and [confirmed, suspected] to confirmed —
+ * restrict or deny by array order — and [checked_in, checked_out] kept whichever
+ * came first in the snapshot. `members` lists each family least to most severe,
+ * so every fold here is a max over a total order and gives the same field value
+ * whatever the arrival order (the core proof sweeps every pair, both orders). The
+ * order is a judgement, like `good`; the proof holds it to every shipped rule set
  * (walking a family's accusing members in order never loosens the verdict).
  */
 function severityOf<T extends string | boolean>(
@@ -439,7 +440,8 @@ function severityOf<T extends string | boolean>(
   domain: { readonly members: readonly T[]; readonly good: readonly T[] },
 ): number {
   if (value === undefined) return 1;
-  return domain.good.includes(value) ? 0 : 2 + domain.members.indexOf(value);
+  const rank = domain.members.indexOf(value);
+  return domain.good.includes(value) ? rank / domain.members.length : 2 + rank;
 }
 
 function resolveWorst<T extends string | boolean>(

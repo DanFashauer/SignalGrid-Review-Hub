@@ -57,6 +57,12 @@ check("every normalized finding carries sourceSystem", normalized.every((f) => f
 // CVSS-band fallback: dev-medium has no severity label, only cvss 5.0 → medium.
 check("severity falls back to the CVSS band when the label is missing", normalizeFinding({ deviceId: "x", cvssScore: 5.0 }).severity === "medium");
 check("a 9.8 CVSS with no label normalizes to critical", normalizeFinding({ deviceId: "x", cvssScore: 9.8 }).severity === "critical");
+// Every CVSS band pinned, not only medium and critical (brace-less sweep, 2026-10-01):
+// with the `>= 7.0` band gone a 7.5 fell through to MEDIUM — a high CVE read one band
+// soft — and with the `> 0` band gone a 2.0 read as unknown instead of low.
+check("a 7.5 CVSS with no label normalizes to high, not medium", normalizeFinding({ deviceId: "x", cvssScore: 7.5 }).severity === "high");
+check("a 2.0 CVSS with no label normalizes to low", normalizeFinding({ deviceId: "x", cvssScore: 2.0 }).severity === "low");
+check("a 0 CVSS with no label stays unknown (no band claims it)", normalizeFinding({ deviceId: "x", cvssScore: 0 }).severity === "unknown");
 
 // Per-device posture aggregation.
 for (const name of deviceNames) {

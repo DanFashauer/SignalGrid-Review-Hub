@@ -8,7 +8,7 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over eight review rounds on PR #1349):
+// WHAT IS GATED (hardened over nine review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
@@ -18,7 +18,10 @@
 //      bare carriage returns, no repeated legend word (round 5). A Control
 //      name carries no legend word, and neither it nor a Where cell carries
 //      any of [ ] ! ~ \ < & (link, image, strikethrough, escape, HTML or
-//      entity syntax; round 8). No HTML block, code fence, or whitespace-only
+//      entity syntax; round 8). Both are allowlisted to printable ASCII plus
+//      the exact non-ASCII characters the matrix uses there (round 9) — the
+//      legend-word fold catches plain spellings; the allowlist catches every
+//      invisible or look-alike character a fold list could miss. No HTML block, code fence, or whitespace-only
 //      line that Markdown does not treat as blank (round 6).
 //      A Framework refs cell holds only [A-Za-z0-9 .;,()/+-] and no claim
 //      word; the Short ref table is pinned verbatim (round 7). The line
@@ -91,6 +94,12 @@ const EXPECTED_SHORT_REF = [
  *  (round 7). No brackets, so no link or image syntax can split a word; no
  *  emphasis, entity, markup, homoglyph or invisible character. */
 const CELL_MARKUP = /[[\]!~\\<&]/;
+/** Control names and Where cells are an ALLOWLIST, not a denylist (round 9):
+ *  printable ASCII plus the exact non-ASCII characters the real matrix uses in
+ *  that column. Any invisible character, combining mark, variation selector or
+ *  look-alike letter — the classes no fold list can ever enumerate — fails. */
+const CONTROL_NAME_CHARSET = /^[\x20-\x7E\u2192\u2264\u2014]*$/; // → ≤ —
+const WHERE_CHARSET = /^[\x20-\x7E\u2014\u00A7]*$/; // — §
 const CELL_MARKUP_LIST = "[ ] ! ~ \\ < &";
 const FRAMEWORK_REFS_CHARSET = /^[A-Za-z0-9 .;,()\/+-]+$/; // the matrix cannot be its own evidence
 /** Statuses whose cited paths must exist. Any status reading "implement…" gets
@@ -391,6 +400,8 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   // strikethrough, escape, HTML or entity syntax needs — any of them could split
   // a status word that still READS as one, or point cited evidence elsewhere.
   // The matrix uses none (round 8).
+  for (const c of controlCells) if (!CONTROL_NAME_CHARSET.test(c.cell)) structural.push(`line ${c.line}: Control name carries a character outside printable ASCII + → ≤ — (U+${[...c.cell].find((ch) => !CONTROL_NAME_CHARSET.test(ch)).codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}) — an invisible character or look-alike could disguise a status word\n      ${c.raw}`);
+  for (const r of rows) if (!WHERE_CHARSET.test(r.where)) structural.push(`line ${r.line}: Where cell carries a character outside printable ASCII + — § (U+${[...r.where].find((ch) => !WHERE_CHARSET.test(ch)).codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}) — an invisible character or look-alike could disguise a claim\n      ${r.raw}`);
   for (const c of controlCells) if (CELL_MARKUP.test(c.cell)) structural.push(`line ${c.line}: Control name carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a status word past any fold\n      ${c.raw}`);
   for (const r of rows) if (CELL_MARKUP.test(r.where)) structural.push(`line ${r.line}: Where cell carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a claim or re-point cited evidence\n      ${r.raw}`);
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
@@ -565,6 +576,11 @@ function selfTest() {
     ["fail: link text completing a legend word in a Control name", plant("| Implemented[ (public core)](/x) ZZ3 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: cited evidence re-linked to an external host", real.replace("| `lib/signalgrid-core/src/policy.ts` (`validatePolicyRules`)", "| [`lib/signalgrid-core/src/policy.ts`](https://evil.invalid) (`validatePolicyRules`)"), 1],
     ["fail: strikethrough in a Where cell", real.replace("| `lib/signalgrid-core/src/policy.ts` (`validatePolicyRules`)", "| `lib/signalgrid-core/src/policy.ts` ~~not actually~~ (`validatePolicyRules`)"), 1],
+    // round 9: invisible characters and look-alikes outside any fold list
+    ["fail: a combining grapheme joiner (U+034F) inside a legend word in a Control name", plant("| Imple\u034Fmented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: an Armenian look-alike (U+0578) in a legend word in a Control name", plant("| Impleme\u0578ted (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: a halfwidth filler (U+FFA0) inside a legend word in a Control name", plant("| Imple\uFFA0mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: an invisible character in a Private-core Where cell", plant("| Planted W9 | ASVS 5.0 | Private-core (planned) | Imple\u034Fmented (public core) |"), 1],
     ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     // round 7: link/image syntax splitting a claim; every claim word exercised
     ["fail: an empty link splitting a claim in Framework refs", plant("| Planted L | Imple[](/x)mented | Private-core (planned) | private repo |"), 1],

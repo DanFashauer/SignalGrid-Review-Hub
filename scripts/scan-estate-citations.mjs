@@ -121,7 +121,7 @@ export function locate(entry, { exists = existsSync, originUrl = gitOriginUrl, o
     const named = !got
       ? "nothing"
       : !got.hasOwner
-        ? `${got.key} (a local path, no owner)`
+        ? `${got.key} (no owner)`
         : onGitHub
           ? got.key
           : `${got.key} (on ${got.host}, ${got.depth} path segments)`;
@@ -208,6 +208,15 @@ function selfTest() {
     "evil.example:x/acme/Demo.git", // scp form with no user: not a shape the parser vouches for
     "evilhelper::https://github.com/acme/Demo", // remote-helper transport
     "x\ngit@github.com:acme/Demo", // a first line in front of the scp form
+    // …the spellings that SAY github.com but that git sends elsewhere (PR #1356 review):
+    "github.com:acme/Demo", // owner-less scp: ssh to host github.com, no user — not a shape the parser vouches for
+    "hg::https://github.com/acme/Demo", // remote helper in front of a URL
+    "evil.invalid:x@github.com:acme/Demo", // git splits scp at the FIRST colon: the host is evil.invalid
+    "hg::git@github.com:acme/Demo", // remote helper in front of the scp form
+    "https://evil.invalid#@github.com/acme/Demo", // `#` ends the authority: the host is evil.invalid
+    "https://evil.invalid?@github.com/acme/Demo", // `?` ends it too
+    "https://evil.invalid\\@github.com/acme/Demo", // …and so does a backslash
+    "https:///github.com/acme/Demo", // empty authority
   ];
   // …and the spellings of the genuine repository that MUST still locate, so a parser that
   // refuses everything cannot pass.

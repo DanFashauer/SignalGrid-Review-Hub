@@ -319,7 +319,7 @@ export function repoKey(root = ROOT) {
 
   const nameOnly = fromRemote?.key ?? basename;
   const source = fromRemote
-    ? "basename fallback (origin remote carries no owner — a local-path remote)"
+    ? "basename fallback (origin remote carries no owner — a local path, or a transport that names none)"
     : "basename fallback (no origin remote)";
   const alias = CROSS_REPO_NAME_ALIASES[nameOnly];
   return alias
@@ -829,19 +829,37 @@ function selfTest() {
   // PR #1356's refuter: `git remote set-url origin DanFashauer/SignalGrid-Review-Hub` stores a
   // bare relative path, which git resolves as a LOCAL DIRECTORY — and this parser read it as a
   // hosted owner/repo (it only called a path local when it began with / . or ~). Hosted means
-  // `scheme://` (not file:) or `user@host:path`; everything else is a path.
+  // `scheme://` (not file:) or `user@host:path`.
   checks.push([
-    "a remote that is neither scheme:// nor user@host:path is a LOCAL PATH however much it looks like owner/repo",
+    "a remote that git resolves as a DIRECTORY (no ':' before the first '/') is a LOCAL PATH however much it looks like owner/repo",
     [
       "DanFashauer/SignalGrid-Review-Hub", // bare relative path
       "mirrors/DanFashauer/SignalGrid-Review-Hub",
       "DanFashauer/SignalGrid-Review-Hub.git",
-      "evil.example:x/DanFashauer/SignalGrid-Review-Hub.git", // scp form with no user
-      "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
-      "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
     ].every((u) => {
       const k = repoKeyFromRemote(u);
       return k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false;
+    }),
+  ]);
+  // …but ONLY what git resolves as a directory degrades to the bare name. An owner-less scp
+  // (`host:owner/repo`) and a remote helper (`helper::url`) are ssh / helper transports to a
+  // HOST — real forks, not directories — and the bare name would hand them this repository's
+  // CROSS_REPO_NAME_ALIASES exemptions (the fail-open direction the alias table forbids). They
+  // keep their raw string as the key, which no alias matches.
+  const transports = [
+    "evil.example:x/DanFashauer/SignalGrid-Review-Hub", // scp form with no user
+    "github.com:someone-else/SignalGrid-Review-Hub", // a real hosted fork over ssh, no user
+    "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
+    "hg::https://github.com/someone-else/SignalGrid-Review-Hub", // a helper in front of a hosted fork
+    "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
+    "evil.invalid:x@github.com:DanFashauer/SignalGrid-Review-Hub", // scp splits at the FIRST colon
+    "https://evil.invalid#@github.com/DanFashauer/SignalGrid-Review-Hub", // `#` ends the authority
+  ];
+  checks.push([
+    `a transport that is not a directory and not a readable host names NO owner and NO alias-able name (${transports.length} spellings)`,
+    transports.every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.hasOwner === false && k.key === u.trim() && !CROSS_REPO_NAME_ALIASES[k.key];
     }),
   ]);
   checks.push([
@@ -895,6 +913,10 @@ function selfTest() {
     scans.stranger = scanRepo(tmpNamed);
     g("remote set-url origin /srv/mirrors/SignalGrid-Review-Hub");
     scans.localPath = scanRepo(tmpNamed);
+    g("remote set-url origin github.com:someone-else/SignalGrid-Review-Hub");
+    scans.scpFork = scanRepo(tmpNamed);
+    g("remote set-url origin hg::https://github.com/someone-else/SignalGrid-Review-Hub");
+    scans.helperFork = scanRepo(tmpNamed);
   } catch {
     // leave the map empty — the checks below then fail, which is the fail-closed direction
   } finally {
@@ -923,6 +945,12 @@ function selfTest() {
       scans.localPath.repo === SELF_KEY &&
       scans.localPath.exempted.length === 1 &&
       scans.localPath.missing.length === 0,
+  ]);
+  checks.push([
+    "…and a FORK over an owner-less ssh remote or a remote helper is NOT exempted either: the bare name never reaches the alias table",
+    [scans.scpFork, scans.helperFork].every(
+      (r) => !!r && r.repo !== SELF_KEY && !r.repoKeyAliasedFrom && r.exempted.length === 0 && r.missing.length === 1,
+    ),
   ]);
 
   const failed = checks.filter(([, ok]) => !ok);

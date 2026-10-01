@@ -13,12 +13,16 @@
  * scp-style ssh form (`git@host:owner/repo`), the `ssh://` form, an optional `.git` suffix
  * and a trailing slash.
  *
- * HOSTED means exactly two shapes: `scheme://…` (other than `file:`) and `user@host:path`.
- * EVERYTHING ELSE IS A LOCAL PATH — including a bare `owner/repo`, `mirrors/owner/repo`,
- * `owner/repo.git`, `host:path` with no user, and `helper::url`. Git resolves those as
- * directories (or transports this parser cannot vouch for), so they carry no identity,
- * however much they look like one. (This used to call a path local only when it began with
- * `/`, `.` or `~`, so `git remote set-url origin owner/repo` read as a hosted `owner/repo`.)
+ * HOSTED means exactly two shapes: `scheme://host/…` (other than `file:`; the authority
+ * is non-empty and holds none of `#`, `?`, `\` or whitespace, which git does not read as
+ * userinfo) and `user@host:path` (no `:` in `user`: git splits an scp form at the FIRST colon).
+ * Nothing else carries an identity, however much it looks like one. What git itself resolves
+ * as a directory — a bare `owner/repo`, `mirrors/owner/repo`, `owner/repo.git`, `file://…`,
+ * an absolute or `.`/`~` path: no `:` before the first `/` — is a LOCAL PATH and degrades to
+ * the bare name. Everything else (`host:path` with no user, `helper::url`, a spoofed host) is
+ * a transport this parser cannot vouch for: it keeps its RAW string as the key, so no name
+ * alias can ever match it. (This used to call a path local only when it began with `/`, `.`
+ * or `~`, so `git remote set-url origin owner/repo` read as a hosted `owner/repo`.)
  *
  * `hasOwner` is the load-bearing half. A hosted remote yields `owner/repo` and
  * `hasOwner: true` — a full identity. A LOCAL PATH origin (`/home/user/Repo`,
@@ -42,13 +46,22 @@ export function repoKeyFromRemote(url) {
 
   // `\s` is excluded from the scp prefix so a stray first line cannot hide in front of it.
   const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed)?.[1]?.toLowerCase();
-  const scp = /^[^/\s]+@([^/:\s]+):(\S+)$/.exec(trimmed);
-  const hosted = scp || (scheme && scheme !== "file");
+  // …and `:` is excluded from the user part because git splits the scp form at the FIRST
+  // colon: `evil.invalid:x@github.com:o/r` is host `evil.invalid`, not github.com.
+  const scp = /^[^/:\s]+@([^/:\s]+):(\S+)$/.exec(trimmed);
+  // `#`, `?` and `\` end the authority in a URL, so `https://evil.invalid#@github.com/o/r` is
+  // host `evil.invalid` — yet the userinfo strip below would read past them to github.com.
+  const authority = trimmed.split("/")[2] ?? "";
+  const hosted = scp || (scheme && scheme !== "file" && /^[^#?\\\s]+$/.test(authority));
 
   const segs = (scp ? scp[2] : trimmed.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "")).split("/").filter(Boolean);
   const name = segs[segs.length - 1];
   if (!name) return undefined;
-  if (!hosted) return { key: name, hasOwner: false };
+  if (!hosted) {
+    // Git's own rule: a URL with no `:` before the first `/` (or `file://`) is a directory.
+    const gitLocal = scheme === "file" || !/^[^/]*:/.test(trimmed);
+    return { key: gitLocal ? name : trimmed, hasOwner: false };
+  }
 
   // For a scheme URL the authority is segs[0]; drop it, then the segment immediately
   // before the name is the owner.

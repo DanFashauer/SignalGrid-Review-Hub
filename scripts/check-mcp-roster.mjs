@@ -210,16 +210,7 @@ function context7KeyValues(line, kind) {
     }
     return out;
   }
-  // YAML: read the line's KEY (quoted or plain) and test it whole, so path-style keys are seen
-  if (kind === "yaml") {
-    const kv = /^\s*(?:-\s+)?(?:\?\s+)?("(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)\s*:\s+(.*)$/.exec(line);
-    if (kv && CONTEXT7_KEY_RE.test(unquote(kv[1]).replace(/\\\//g, "/"))) {
-      let v = stripYamlProps(stripYamlComment(kv[2]).trim());
-      const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
-      out.push(q ? unquote(q[1]) : v.replace(/[\s,}\]]+$/, "").trim());
-    }
-    if (kv) return out;
-  }
+  if (kind === "yaml") return out; // YAML keys are read by context7YamlKeyScan, with multi-line context
   // a quoted key (any kind, path-style allowed) or a bare one; an override key may carry a selector
   const re = /(?:(["'])(?:[^"'\s]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1|(?:^|[\s{,?-])@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?)\s*[:=]\s*(.*)$/i;
   const m = re.exec(line);
@@ -355,11 +346,34 @@ export function context7UnitFindings(units, pin, runner) {
       if (rest.startsWith("@")) {
         const f = classify(shedMarkup(rest.slice(1)));
         if (f) out.push(f);
-      } else if (/^\s*npm:$/i.test(unit.slice(0, m.index)) && shedMarkup(rest) === "") out.push({ unpinned: "<none> (npm: alias)" });
+      } else if (/(?:^|[=:\s"'])npm:$/i.test(unit.slice(0, m.index)) && shedMarkup(rest) === "") out.push({ unpinned: "<none> (npm: alias)" });
       else if (!/^["']?\s*[:=]/.test(rest) && runner && shedMarkup(rest) === "") out.push({ bare: true });
     }
   }
   return out;
+}
+
+/** Pure: JSONC → JSON — `//` and block comments and trailing commas removed, never inside a string. Line breaks are kept. */
+export function stripJsonc(text) {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      const m = /^"(?:\\.|[^"\\])*"/.exec(text.slice(i));
+      const lit = m ? m[0] : text.slice(i);
+      out += lit;
+      i += lit.length - 1;
+    } else if (c === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+      out += "\n";
+    } else if (c === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      const body = text.slice(i, end < 0 ? text.length : end + 2);
+      out += body.replace(/[^\n]/g, "");
+      i += body.length - 1;
+    } else out += c;
+  }
+  return out.replace(/,(\s*[}\]])/g, "$1");
 }
 
 /**
@@ -371,7 +385,11 @@ export function context7JsonFindings(text, pin) {
   try {
     doc = JSON.parse(text);
   } catch {
-    return null; // JSONC, templates: the line reader takes over
+    try {
+      doc = JSON.parse(stripJsonc(text)); // JSONC: comments and trailing commas removed outside strings
+    } catch {
+      return null; // templates and other non-JSON: the line reader takes over
+    }
   }
   const out = [];
   const nameLine = (() => {
@@ -407,6 +425,58 @@ export function context7JsonFindings(text, pin) {
     }
   };
   walk(doc, false, false);
+  return out;
+}
+
+/**
+ * Pure: every YAML KEY naming the package — anywhere on a line (block or flow mapping, nested), with or without a
+ * path prefix (`foo>`, `**\/`, `parent/`) or a selector — and its value, taken from the same line, from the next
+ * more-indented line (a value on the line after its key, or a folded/literal block), or from an explicit
+ * `? key` / `: value` pair. Returns `{ i, value }` per key; each value must equal PINNED.
+ */
+export function context7YamlKeyScan(lines) {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const nextValueLine = (i, base) => {
+    let j = i + 1;
+    while (j < lines.length && (lines[j].trim() === "" || lines[j].trim().startsWith("#"))) j++;
+    return j < lines.length && indent(lines[j]) > base ? j : -1;
+  };
+  const oneScalar = (v, i, base) => {
+    v = stripYamlProps(v.trim());
+    if (/^[>|][+-]?\d*$/.test(v)) {
+      // a block scalar: its more-indented lines, folded
+      const parts = [];
+      for (let j = nextValueLine(i, base); j >= 0 && j < lines.length; j++) {
+        if (lines[j].trim() !== "" && indent(lines[j]) <= base) break;
+        parts.push(lines[j].trim());
+      }
+      return parts.filter(Boolean).join(" ");
+    }
+    const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
+    return q ? unquote(q[1]) : v.split(/\s*[,}\]]/)[0].trim();
+  };
+  const KEY = /(["']?)((?:[^\s"'{},[\]#]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':,{}[\]]*)?)\1\s*:(?=\s|$)/gi;
+  for (let i = 0; i < lines.length; i++) {
+    const l = stripYamlComment(lines[i]);
+    const ex = /^(\s*)\?\s+(.*)$/.exec(l);
+    if (ex && CONTEXT7_KEY_RE.test(unquote(ex[2].trim()).replace(/\\\//g, "/"))) {
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      const val = j < lines.length ? /^\s*:\s*(.*)$/.exec(stripYamlComment(lines[j])) : null;
+      out.push({ i, value: val ? oneScalar(val[1], j, indent(l)) : "" });
+      continue;
+    }
+    for (const m of l.matchAll(KEY)) {
+      if (!CONTEXT7_KEY_RE.test(m[2].replace(/\\\//g, "/"))) continue;
+      const after = l.slice(m.index + m[0].length).trim();
+      if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
+      else {
+        const j = nextValueLine(i, indent(l));
+        out.push({ i, value: j < 0 ? "" : oneScalar(stripYamlComment(lines[j]), j, indent(l)) });
+      }
+    }
+  }
   return out;
 }
 
@@ -501,6 +571,14 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
         }));
     if (json) swept += (text.match(/upstash\\?\/context7-mcp/gi) ?? []).length;
     if (kind === "yaml") {
+      const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
+      for (const { i, value } of context7YamlKeyScan(lines)) {
+        const f = classify(value);
+        if (!f) continue;
+        const u = units.find((x) => x.i === i);
+        if (u) u.findings.push(f);
+        else units.push({ i, findings: [f] });
+      }
       for (const { i, j } of yamlSpecContinuations(lines)) {
         const u = units.find((x) => x.i === i);
         if (u && u.findings.length) continue; // already named
@@ -1182,7 +1260,6 @@ server.registerTool(
     [`    "${NAME}": "${realPin}",`, "json", null, "the CORRECT package.json dependency (no false positive)"],
     [`      "build": "npm i ${SPEC}${realPin}, prebuilt dist; boots in under 1 s",`, "json", null, "the roster's build command string (shell-split; no false positive)"],
     [`  "args": ["-y", "--package=${SPEC}${realPin} || 5"]`, "json", "unpinned", "a JSON args element is ONE argv word"],
-    [`${NAME}: ${realPin} || 5`, "yaml", "unpinned", "a YAML catalog value with a union"],
     [`    "${NAME.replace("/", "\\/")}": "latest",`, "json", "unpinned", "an escaped-slash JSON dependency key"],
     [`  - --package=${SPEC}${realPin} || 5`, "yaml", "unpinned", "a YAML sequence item is ONE argv word"],
     [`  run: npx -y ${SPEC}${realPin} --flag`, "yaml", null, "a YAML run: command (shell-split; no false positive)"],
@@ -1253,6 +1330,23 @@ server.registerTool(
     ["w.yaml", `overrides:\n  "foo>${NAME}": ^5\n`, 2, true, "a pnpm `parent>pkg` override key (quoted)"],
     ["w.yaml", `overrides:\n  foo>${SPEC}${realPin}: ^5\n`, 2, true, "a pnpm `parent>pkg@sel` override key (unquoted)"],
     ["w.yaml", `resolutions:\n  "**/${NAME}": ^5\n`, 2, true, "a yarn `**/pkg` resolution key"],
+    // round 9: YAML keys are found anywhere on a line (flow mappings, nested) and take values from later lines
+    ["w.yaml", `${NAME}: ${realPin} || 5\n`, 1, true, "a YAML catalog value with a union"],
+    ["w.yaml", `c7flow: {"${NAME}": "^5"}\n`, 1, true, "a Context7 key inside a YAML flow mapping"],
+    ["w.yaml", `overrides: {"${NAME}": "latest"}\n`, 1, true, "a flow-mapping override to a tag"],
+    ["w.yaml", `- {"${NAME}": "^5"}\n`, 1, true, "a flow mapping as a sequence item"],
+    ["w.yaml", `pnpm: {overrides: {"${NAME}": "*"}}\n`, 1, true, "a nested flow mapping"],
+    ["w.yaml", `x: {foo>${NAME}: ^5}\n`, 1, true, "an unquoted path key inside a flow mapping"],
+    ["w.yaml", `resolutions: {"foo/${NAME}": "latest"}\n`, 1, true, "a yarn path key inside a flow mapping"],
+    ["w.yaml", `overrides:\n  foo>${NAME}:\n    ^5\n`, 2, true, "an unquoted path key with its value on the NEXT line"],
+    ["w.yaml", `resolutions:\n  foo/${NAME}:\n    latest\n`, 2, true, "a yarn path key with its value on the next line"],
+    ["w.yaml", `overrides:\n  ? foo>${NAME}\n  : ^5\n`, 2, true, "an explicit `? key` / `: value` path override"],
+    ["w.yaml", `deps: {"${NAME}": "${realPin}", other: 1}\n`, 1, false, "a flow mapping pinning the package correctly (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}:\n    ${realPin}\n`, 2, false, "a next-line override value that IS the pin (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}: >-\n    ${realPin}\n`, 2, false, "a folded-block override value that IS the pin (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}: >-\n    ^5\n`, 2, true, "a folded-block override value that is a range"],
+    ["s.sh", `C7=npm:${NAME}\n`, 1, true, "a versionless npm: alias after `NAME=`"],
+    ["s.sh", `export C7="npm:${NAME}"\n`, 1, true, "a versionless npm: alias in an `export`"],
     ["d.md", `say 'pinned ${SPEC}${realPin} today\n`, 1, false, "a lone, never-closed quote before a correct pin stays literal (no false positive)"],
     ["w.yaml", `deps: {"${NAME}": ${realPin}}\n`, 1, false, "a correct unquoted value closed by `}` in a YAML flow mapping (no false positive)"],
   ]) {
@@ -1274,7 +1368,13 @@ server.registerTool(
     const got = context7JsonFindings(body, realPin);
     checks.push([`[json parsed] ${what} → ${want ? "named" : "no finding"}`, got !== null && (want ? got.length >= 1 : got.length === 0)]);
   }
-  checks.push(["unparseable JSON (JSONC) falls back to the line reader", context7JsonFindings(`{ // c\n "a": 1 }`, realPin) === null]);
+  checks.push(["JSONC (comments, trailing comma) is parsed after stripJsonc", context7JsonFindings(`{ // c\n "a": 1, /* x */ }`, realPin)?.length === 0]);
+  checks.push([
+    "a JSONC key split from its colon, under a comment, is named",
+    (context7JsonFindings(`{\n // c\n "${SPEC}${realPin}"\n : "^5",\n}`, realPin) ?? []).length >= 1,
+  ]);
+  checks.push(["a `//` inside a JSON string is not a comment", JSON.parse(stripJsonc(`{"u": "https://x" /* c */} // c`)).u === "https://x"]);
+  checks.push(["unparseable non-JSON (a template) falls back to the line reader", context7JsonFindings(`{ "a": {{ x }} }`, realPin) === null]);
   checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);
   const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM
   checks.push([

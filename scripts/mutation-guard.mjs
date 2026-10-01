@@ -521,9 +521,9 @@ export const TARGETS = [
     oneLine: true,
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
-      // ot-connector.ts dropped 2026-09-03: same reason as access-governance's connector
-      // — defensive parsing the mutators do not express, 0 mutations. evaluate.ts carries
-      // the mutable guards.
+      // ot-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0 mutations, but with
+      // `oneLine` on it carries 4 (its brace-less `readableString` guards).
+      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
       "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
@@ -533,8 +533,9 @@ export const TARGETS = [
     files: [
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
-      // token-binding-connector.ts dropped 2026-09-03: same reason — defensive parsing the
-      // mutators do not express, 0 mutations. evaluate.ts carries the mutable guards.
+      // token-binding-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0
+      // mutations, but with `oneLine` on it carries 1.
+      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
     ],
   },
   {
@@ -571,7 +572,12 @@ export const TARGETS = [
   {
     proof: "proof:carrier-reachability",
     oneLine: true,
-    files: ["lib/integrations/src/integrations/carrier/index.ts"],
+    // reachability-connector.ts registered 2026-10-01: the proof drives the real connector, and
+    // its one-line decision guards (normalizeReachability) are what `oneLine` sweeps.
+    files: [
+      "lib/integrations/src/integrations/carrier/index.ts",
+      "lib/integrations/src/integrations/carrier/reachability-connector.ts",
+    ],
   },
   {
     proof: "proof:credential-exposure",
@@ -1672,11 +1678,13 @@ export function shardTargets(all, index, count) {
   return bins[index].targets;
 }
 
-/** Flags this script understands. Anything else starting `--` is refused: `--help` or a
- *  typo such as `--proof wrong` used to fall through to a FULL sweep of every target,
- *  which mutates registered source files in place for the better part of an hour. */
+/** Arguments this script understands: `--proof=<non-empty>` and `--shard=<non-empty>`, and
+ *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
+ *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
+ *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
+ *  mutates registered source files in place for the better part of an hour. */
 export function unknownArgs(argv) {
-  return argv.filter((a) => a.startsWith("-") && !a.startsWith("--proof=") && !a.startsWith("--shard="));
+  return argv.filter((a) => a !== "--" && !/^--(proof|shard)=.+/.test(a));
 }
 
 function main() {

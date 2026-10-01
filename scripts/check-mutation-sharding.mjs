@@ -130,9 +130,11 @@ for (const p of ["ot-posture", "token-binding", "carrier-reachability", "credent
   check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
 }
 
-// An unknown flag must be refused, not fall through to a full in-place sweep.
-check("unknown flag is refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 1);
-check("known flags are accepted (--proof=, --shard=)", unknownArgs(["--proof=proof:x", "--shard=0/4"]).length === 0);
+// An unknown argument must be refused, not fall through to a full in-place sweep.
+check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
+check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);
+check("an EMPTY --proof= / --shard= is refused (a falsy value used to select every target)", unknownArgs(["--proof="]).length === 1 && unknownArgs(["--shard="]).length === 1);
+check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--", "--proof=proof:x", "--shard=0/4"]).length === 0);
 
 // Reported, not gated.
 const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);

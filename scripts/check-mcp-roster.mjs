@@ -153,12 +153,20 @@ export function shellWords(s) {
   return words;
 }
 
-const shedMarkup = (v) =>
-  v
-    .replace(/(?:<\/[a-z][^>]*>)+$/i, "")
-    .replace(/\]\([^)]*\)$/, "")
-    .replace(/\*\*$/, "")
-    .replace(/[)\]}>.,;:!?]+$/, "");
+// Markup is shed until stable, so `**…@4.1.1**.` and `…@4.1.1|` (a table cell) read as the pin.
+const shedMarkup = (v) => {
+  for (let prev = null; prev !== v; ) {
+    prev = v;
+    v = v
+      .replace(/(?:<\/[a-z][^>]*>)+$/i, "")
+      .replace(/\]\([^)]*\)$/, "")
+      .replace(/\*\*$/, "")
+      .replace(/[)\]}>.,;:!?|]+$/, "");
+  }
+  return v;
+};
+// A value that IS a spec (`npm:@upstash/…@x`, `@upstash/…@x`) is one argv unit, never shell-split.
+const SPEC_VALUE_RE = /^(?:npm:)?@upstash\\?\/context7-mcp/i;
 
 /** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
 function lineUnits(line, kind) {
@@ -175,32 +183,37 @@ function lineUnits(line, kind) {
       const after = line.slice(m.index + m[0].length).trimStart();
       if (after.startsWith(":")) continue; // a key; dependency keys are handled by the caller
       const isValue = before.endsWith(":");
-      if (!isValue || /^(?:npm:)?@upstash\\?\/context7-mcp/i.test(v)) units.push(v);
+      if (!isValue || SPEC_VALUE_RE.test(v)) units.push(v);
       else units.push(...shellWords(v));
     }
     return units;
   }
   if (kind === "yaml") {
+    const bare = line.replace(/\s+#.*$/, "").trim();
+    if (SPEC_VALUE_RE.test(bare)) return [bare]; // a block-scalar continuation or bare item that IS a spec
     const item = /^\s*-\s+(?![^"'#]*:\s)(.*?)\s*(?:\s#.*)?$/.exec(line);
     if (item) return [item[1].replace(/^(["'])(.*)\1$/, "$2")];
     const kv = /^\s*(?:-\s+)?[^:#]+:\s+(.*?)\s*(?:\s#.*)?$/.exec(line);
     if (kv && kv[1].startsWith("[")) return kv[1].replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^(["'])(.*)\1$/, "$2"));
+    if (kv && SPEC_VALUE_RE.test(kv[1])) return [kv[1]]; // an unquoted `key: npm:@upstash/…@<range>` alias: the WHOLE value
     if (kv) return shellWords(kv[1]);
   }
   return shellWords(line);
 }
 
 /** Pure: findings for one line's Context7 install references, read as the units its file kind defines. */
-export function context7SpecFindings(line, pin, kind = "shell") {
+export function context7SpecFindings(line, pin, kind = "shell", before = "") {
   const out = [];
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
   const push = (f) => f && out.push(f);
-  // a key naming the package takes its WHOLE value (JSON, YAML, ini)
-  const dep = /@upstash\\?\/context7-mcp["']?\s*:\s*(.*)$/i.exec(line);
+  // a key naming the package takes its WHOLE value (JSON, YAML, TOML/ini `=`)
+  const dep = /@upstash\\?\/context7-mcp["']?\s*[:=]\s*(.*)$/i.exec(line);
   if (dep && !/^\/\//.test(dep[1])) {
-    push(classify(dep[1].replace(/\s+#.*$/, "").replace(/,\s*$/, "").trim().replace(/^(["'])(.*)\1$/, "$2")));
+    const v = dep[1].replace(/\s+#.*$/, "").replace(/[\s,}\]]+$/, "").trim();
+    push(classify(/^(["'])(.*)\1$/.test(v) ? v.slice(1, -1) : v));
   }
-  const runner = PACKAGE_RUNNER_RE.test(line);
+  // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
+  const runner = PACKAGE_RUNNER_RE.test(line) || /["']?command["']?\s*:\s*["']?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)\b/.test(before);
   for (const unit of lineUnits(line, kind)) {
     for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
       const rest = unit.slice(m.index + m[0].length);
@@ -253,10 +266,11 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   for (const [path, text] of Object.entries(files)) {
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
     if (!/context7/i.test(text)) continue;
-    text.split("\n").forEach((line, i) => {
+    const lines = text.split("\n");
+    lines.forEach((line, i) => {
       const seen = new Set();
       if (/upstash\\?\/context7-mcp/i.test(line)) swept++;
-      for (const f of context7SpecFindings(line, pin, context7FileKind(path))) {
+      for (const f of context7SpecFindings(line, pin, context7FileKind(path), lines.slice(Math.max(0, i - 6), i).join("\n"))) {
         if (f.stale) {
           seen.add(f.stale);
           problems.push(stale(path, i + 1, f.stale));
@@ -928,6 +942,24 @@ server.registerTool(
     [`  run: npx -y ${SPEC}${realPin} --flag`, "yaml", null, "a YAML run: command (shell-split; no false positive)"],
   ]) {
     const got = kind(line, k);
+    checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
+  }
+  // round 7: unquoted YAML aliases, block-scalar continuations, a runner on a preceding line, settle-until-stable markup
+  for (const [line, k, before, want, what] of [
+    [`  context7: npm:${SPEC}${realPin} || 5`, "yaml", "", "unpinned", "an UNQUOTED YAML npm: alias with a union (whole value)"],
+    [`  c7: npm:${SPEC}${realPin} - 5 # pinned`, "yaml", "", "unpinned", "an unquoted YAML alias hyphen range with a comment"],
+    [`    npm:${SPEC}${realPin} || 5`, "yaml", "  context7: >-", "unpinned", "a YAML block-scalar continuation that IS a spec"],
+    [`  context7: npm:${SPEC}${realPin}`, "yaml", "", null, "the CORRECT unquoted YAML alias (no false positive)"],
+    [`  foo: npx -y ${SPEC}${realPin} || 5`, "yaml", "", null, "a YAML command where `||` is a shell operator (no false positive)"],
+    [`    "args": ["-y", "${NAME}"]`, "json", `  "context7": {\n    "command": "npx",`, "bare", "a versionless args element under a `command: npx` on the line before"],
+    [`  - "${NAME}"`, "yaml", "  command: npx\n  args:", "bare", "a versionless YAML args item under `command: npx`"],
+    [`    "args": ["-y", "${NAME}"]`, "json", `  "other": {\n    "url": "x",`, null, "a bare name with no runner nearby (no false positive)"],
+    [`**${SPEC}${realPin}**.`, "shell", "", null, "bold then a sentence period (shed until stable; no false positive)"],
+    [`| x | ${SPEC}${realPin}|`, "shell", "", null, "a markdown table cell glued to a pipe (no false positive)"],
+    [`"dependencies": {"${NAME}": "${realPin}"}`, "json", "", null, "a one-line JSON dependency object (no false positive)"],
+    [`"${NAME}" = "^4"`, "shell", "", "unpinned", "a TOML/ini `=` dependency range"],
+  ]) {
+    const got = context7SpecFindings(line, realPin, k, before).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
     checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
   }
   checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);

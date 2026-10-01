@@ -118,7 +118,7 @@ const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
 // trailing ) ] } > . , ; : ! ?.
 const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
-  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/;
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
 // Installing Context7 from git or a URL bypasses the npm pin entirely.
 const CONTEXT7_GIT_SOURCE_RE =
   /(?:github:|gitlab:|bitbucket:|git\+[a-z]+:\/\/|git:\/\/|git@github\.com:)[^\s"'`]*upstash\/context7|codeload\.github\.com\/upstash\/context7|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
@@ -273,7 +273,7 @@ function lineUnits(line, kind) {
  * is joined to its key line, as a YAML reader would fold it. Shell/prose: a line whose quote is left open
  * after the package name is joined to the next line (comment markers stripped). JSON strings cannot span lines.
  */
-export function logicalLines(lines, kind) {
+export function logicalLines(lines, kind, path = "") {
   const out = [];
   const indent = (l) => /^\s*/.exec(l)[0].length;
   const openQuote = (t) => {
@@ -313,7 +313,20 @@ export function logicalLines(lines, kind) {
     if (cur) out.push(cur);
     return out.map(({ i, text }) => ({ i, text }));
   }
+  // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`
+  const cont = /\.(?:ps1|psm1)$/i.test(path) ? /(?<!`)`$/ : /\.(?:cmd|bat)$/i.test(path) ? /\^$/ : /(?<!\\)\\$/;
   for (let i = 0; i < lines.length; i++) {
+    if (kind !== "json" && cont.test(lines[i])) {
+      let j = i;
+      let text = lines[i].replace(cont, "");
+      while (cont.test(lines[j]) && j + 1 < lines.length) text += ` ${lines[++j].replace(cont, "").trim()}`;
+      // joined only when the command holds the package — elsewhere the lines stay as they were
+      if (/@upstash\\?\/context7-mcp/i.test(text)) {
+        out.push({ i, text });
+        i = j;
+        continue;
+      }
+    }
     const l = lines[i];
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
@@ -333,7 +346,7 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner =
     PACKAGE_RUNNER_RE.test(line) ||
-    /["']?command["']?\s*[:=]\s*["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/m.test(`${before}\n${after}`);
+    /["']?command["']?\s*[:=]\s*["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
@@ -413,18 +426,23 @@ export function context7JsonFindings(text, pin) {
   };
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: String(v).slice(0, 24) || "<empty>" });
   const RUNNER_CMD = /^(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?$/i;
+  const RUNNER_WORD_RE = /(?:^|[\s\\/"'])(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s]|$)/i;
   // a command is a runner if its first word is one, or if the WHOLE value is a path to one (`C:\Program Files\nodejs\npx.cmd`)
   const isRunnerCommand = (c) =>
     typeof c === "string" &&
-    (RUNNER_CMD.test(c.trim().split(/\s+/)[0].replace(/^.*[\\/]/, "")) || RUNNER_CMD.test(c.trim().replace(/^["']|["']$/g, "").replace(/^.*[\\/]/, "")));
+    (RUNNER_CMD.test(c.trim().split(/\s+/)[0].replace(/^.*[\\/]/, "")) ||
+      RUNNER_CMD.test(c.trim().replace(/^["']|["']$/g, "").replace(/^.*[\\/]/, "")) ||
+      // a runner path followed by flags (`/Users/John Smith/bin/npx -y`, `"C:\…\npx.cmd" -y`), or behind `env X=1`
+      RUNNER_WORD_RE.test(c));
   const walk = (node, inArray, runner) => {
     if (Array.isArray(node)) {
       // `"args": ["/c", "npx", "-y", "@…"]` (Windows `cmd /c`): a runner element makes the array a runner call
       const here = runner || node.some((v) => typeof v === "string" && (isRunnerCommand(v) || PACKAGE_RUNNER_RE.test(v)));
       for (const v of node) walk(v, true, here);
     } else if (node && typeof node === "object") {
-      // `command` as a string; an object command `{ path, args }` (Zed) is reached by the walk and read by its own `path`
-      const here = runner || isRunnerCommand(node.command) || isRunnerCommand(node.path);
+      // `command` as a string, or an object `{ path, args }` (Zed): read from the parent so `args` BESIDE it inherit the
+      // runner, and from the object itself (its own `path`) for `args` inside it
+      const here = runner || isRunnerCommand(node.command) || isRunnerCommand(node.command?.path) || isRunnerCommand(node.path);
       for (const [k, v] of Object.entries(node)) {
         if (CONTEXT7_KEY_RE.test(k)) {
           const val = typeof v === "string" ? v : v && typeof v === "object" && typeof v["."] === "string" ? v["."] : null;
@@ -580,14 +598,14 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   let swept = 0;
   for (const [path, text] of Object.entries(files)) {
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
-    if (!/context7/i.test(text) && !/\\u00/i.test(text)) continue;
-    const lines = text.split("\n");
+    if (!/context7/i.test(text) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
+    const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
     const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
     const json = kind === "json" ? context7JsonFindings(text, pin) : null;
     const units = json
       ? [...new Set(json.map((x) => x.line))].map((ln) => ({ i: ln - 1, findings: json.filter((x) => x.line === ln).map((x) => x.f) }))
-      : logicalLines(lines, kind).map(({ i, text: line }) => ({
+      : logicalLines(lines, kind, path).map(({ i, text: line }) => ({
           i,
           line,
           findings: context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n"), lines.slice(i + 1, i + 7).join("\n")),
@@ -1409,6 +1427,25 @@ server.registerTool(
     ["a.yml", `command: /Users/John Smith/bin/npx\nargs: ["-y", "${NAME}"]\n`, 2, true, "a YAML spaced runner path"],
     ["settings.json", `{"context_servers":{"c7":{"command":{"path":"npx","args":["-y","${SPEC}${realPin}"]}}}}`, 1, false, "the Zed config pinned (no false positive)"],
     ["s.sh", `npx -y ${SPEC}${realPin} \\\n  --stdio\n`, 1, false, "the pin followed by a continuation (no false positive)"],
+    // round 12: CRLF explicit keys, case-insensitive runners, runner paths with flags, continuation-split runner/name
+    ["a.yml", `? ${NAME}\r\n: latest\r\n`, 1, true, "a CRLF explicit `? key` / `: value` pair"],
+    ["a.yml", `? &a\r\n  ${NAME}\r\n: latest\r\n`, 1, true, "a CRLF props-only explicit key"],
+    ["a.yml", `? ${NAME}\r\n: ${realPin}\r\n`, 1, false, "a CRLF explicit key pinned (no false positive)"],
+    ["s.sh", `NPX -y ${NAME}\n`, 1, true, "an upper-case `NPX` runner"],
+    ["s.cmd", `NPX.CMD -y ${NAME}\n`, 1, true, "an upper-case `NPX.CMD` runner"],
+    ["a.yml", `command: Npx\nargs: ["-y", "${NAME}"]\n`, 2, true, "a mixed-case `command: Npx`"],
+    [".mcp.json", `{"command":"/Users/John Smith/bin/npx -y","args":["${NAME}"]}`, 1, true, "a spaced runner path plus flags in one command string"],
+    [".mcp.json", `{"command":"\\"C:\\\\Program Files\\\\nodejs\\\\npx.cmd\\" -y","args":["${NAME}"]}`, 1, true, "a quoted spaced runner path plus flags"],
+    [".mcp.json", `{"command":"env FOO=1 npx","args":["-y","${NAME}"]}`, 1, true, "a runner behind `env X=1`"],
+    ["settings.json", `{"command":{"path":"npx"},"args":["-y","${NAME}"]}`, 1, true, "args BESIDE an object-valued command"],
+    ["s.sh", `npx -y \\\n  ${NAME}\n`, 1, true, "a `\\` continuation splitting the runner from the name"],
+    ["Dockerfile", `RUN npx \\\n    -y ${NAME}\n`, 1, true, "a Dockerfile RUN split across a continuation"],
+    ["install.sh", `npx \\\n  --yes \\\n  ${NAME} \\\n  --api-key x\n`, 1, true, "a three-continuation install command"],
+    ["README.md", "\`\`\`bash\nnpx -y \\\n  " + NAME + "\n\`\`\`\n", 2, true, "a fenced README block split across a continuation"],
+    ["s.ps1", `npx -y \`\n  ${NAME}\n`, 1, true, "a PowerShell backtick continuation"],
+    ["s.cmd", `npx -y ^\n  ${NAME}\n`, 1, true, "a cmd `^` continuation"],
+    ["s.sh", `npx -y \\\n  ${SPEC}${realPin}\n`, 1, false, "the pin split across a continuation (no false positive)"],
+    ["d.md", `a line ending in a hard break\\\nthen ${NAME} in prose\n`, 2, false, "a markdown hard break without a runner stays prose (no false positive)"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
   }

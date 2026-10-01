@@ -35,7 +35,8 @@ Status disagrees with the launch profile, when a Placement disagrees with the
 route table, when the route table holds a `<Route>` shape the gate cannot read, or
 when demo step 4 stops giving any of the four launch arguments the shell needs with
 its exact value (the seeded refs, `sgk_demo_northwind_operator`, and an http(s) URL
-whose parsed host is loopback).
+written with a literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the
+host as written, so shorthand forms such as `127.1` do not count).
 It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
 (`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file
 would not be seen, and the other surfaces make no placement claim. The gate reads route

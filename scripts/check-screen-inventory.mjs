@@ -57,9 +57,14 @@ export const STEP4_FLAGS = {
   "-DemoBackendToken": "sgk_demo_northwind_operator",
   "-DemoBackendURL": null,
 };
-// Hostnames as WHATWG `new URL().hostname` reports them — the same host Swift's
-// URL(string:).host yields, which DemoMode.backendURL compares against.
+// The three hosts DemoMode.backendURL (native/ios/EnterpriseShell/Services/DemoMode.swift)
+// accepts. It compares the LITERAL host Swift's URL(string:) yields, lowercased; it does
+// not normalise. So the raw value must already be in this canonical form — round 5
+// showed `127.1`, `0x7f.1`, `2130706433`, `[0:0:0:0:0:0:0:1]`, a slash-less `http:127…`
+// and `127.0.0.1\@evil.com` all normalising to loopback under WHATWG while Swift's host
+// is the literal text, nil, or the foreign host.
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const CANONICAL_LOOPBACK_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/[^\s\\]*)?$/i;
 
 /** surface id → status, from the app-surfaces entry of the launch profile. */
 export function appSurfaceStatuses(surfaces = SURFACES) {
@@ -175,6 +180,9 @@ export function urlProblem(value) {
   if (u.protocol !== "http:" && u.protocol !== "https:") return `its scheme is ${u.protocol} (http or https only)`;
   if (u.username || u.password) return `it carries userinfo, so its real host is ${u.hostname}`;
   if (!LOOPBACK.has(u.hostname)) return `its host is ${u.hostname} (loopback only: localhost, 127.0.0.1, ::1)`;
+  // WHATWG agreed it is loopback; the shell compares the literal text, so require it.
+  if (!CANONICAL_LOOPBACK_URL.test(value))
+    return "it is not written as http(s)://localhost|127.0.0.1|[::1][:port][/path] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
   return null;
 }
 
@@ -216,13 +224,15 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   else {
     for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
       const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
-      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^\\s\`),;]+))?`, "g"))];
+      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^\\s\`]+))?`, "g"))];
       if (uses.length === 0) {
         errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);
         continue;
       }
       // EVERY use of the flag must carry the right value, so a second, wrong
-      // occurrence cannot hide behind a right one.
+      // occurrence cannot hide behind a right one. The value is the whole argument up
+      // to whitespace or the closing backtick of its code span — the shell receives
+      // all of it, so `,x`, `)x` or `;x` stays part of the value (round 5).
       for (const [, value] of uses) {
         if (!value) {
           errors.push(`${DOC}: demo step 4 names ${flag} with no value after it — write "${flag} ${want ?? "http://127.0.0.1:8080"}"`);
@@ -364,6 +374,18 @@ function selfTest() {
     ["[::1].evil.com fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://[::1].evil.com") }, "not a URL"],
     ["a lookalike identity fails (round 4)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliantX ") }, "gives -DemoBackendIdentity nurse.compliantX"],
     ["another tenant's token beside a mention of the right one fails (round 4)", { ...base, doc: good.replace("-DemoBackendToken sgk_demo_northwind_operator`", "-DemoBackendToken sgk_demo_acme_operator` (not sgk_demo_northwind_operator)") }, "gives -DemoBackendToken sgk_demo_acme_operator"],
+    // Round 5: WHATWG calls each of these loopback; the shell's literal host does not.
+    ...[["http:127.0.0.1:8080", "slash-less"], ["http://127.1:8080", "shorthand"], ["http://0177.0.0.1:8080", "octal"],
+      ["http://2130706433:8080", "integer"], ["http://0x7f.1:8080", "hex"], ["http://[0:0:0:0:0:0:0:1]:8080", "long-form IPv6"],
+      ["http://127.0.0.1\\@evil.com", "backslash"]].map(([url, kind]) =>
+      [`a ${kind} loopback URL fails (round 5)`, { ...base, doc: good.replace("http://127.0.0.1:8080", url) }, `-DemoBackendURL ${url} —`]),
+    // Round 5: the value is the whole argument, not the text before a comma or paren.
+    ["a URL value with ,@evil.com fails (round 5)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1,@evil.com") }, "-DemoBackendURL http://127.0.0.1,@evil.com"],
+    ["a token with ,x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator,x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator,x"],
+    ["a token with )x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator)x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator)x"],
+    ["an identity with ;x appended fails (round 5)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliant;x ") }, "gives -DemoBackendIdentity nurse.compliant;x"],
+    ["a loopback URL with a path still passes", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:8080/api") }, null],
+    ["an upper-case LOCALHOST URL passes (Swift lowercases the host)", { ...base, doc: good.replace("http://127.0.0.1:8080", "HTTP://LOCALHOST:8080") }, null],
     ["a second, wrong use of a flag fails even beside a right one (round 4)", { ...base, doc: good.replace(STEP4, `${STEP4}; or \`-DemoBackendURL https://api.example.com\``) }, "its host is api.example.com"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

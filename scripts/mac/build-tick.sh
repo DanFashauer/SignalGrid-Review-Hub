@@ -6,31 +6,44 @@
 #
 #   bash scripts/mac/build-tick.sh                   # one run, prints a one-line result
 #   bash scripts/mac/build-tick.sh --dry-run         # the task it would pick + the exact
-#                                                    # session command; runs nothing
+#                                                    # command of every stage; runs nothing
 #   bash scripts/mac/build-tick.sh --dry-run --state <file> [--remote <name|path>]
 #                                                    # the same, against a scratch state
 #                                                    # file / a scratch remote's heads
 #
 # WHY (owner, 2026-09-29: "Yes, build it — The brain builds its top task unattended and
 # opens PRs", then "Build it, I confirm"). Until this, nothing STARTED a ranked task in
-# docs/agent/objective-state.json without a person opening a session.
+# docs/agent/objective-state.json without a person opening a session. One Opus session per
+# row was the first form (2026-09-29); owner, 2026-10-01: run the cheaper model where the
+# work allows and keep Opus for judgment, so it is a STAGED pipeline (DR-047, DR-060).
 #
-# WHO DOES WHAT. The headless session only EDITS its worktree and runs local checks. It
-# starts with no git or GitHub credentials (no ssh agent, GIT_SSH_COMMAND=false, no git
-# global config so no credential helper, an empty gh config, no tokens) and with push,
-# commit, merge, gh and lane-mail commands deny-listed. THIS SCRIPT does every outward
-# act: it claims the row, commits the session's change, refuses a change that touches an
-# owner-reserved or forbidden path, runs preflight + breadth, and only on 0/0 pushes that
-# one branch and opens its PR. Nothing here merges. That is enforced by the environment,
-# the deny list and this script, not an OS boundary. Named escapes, all deliberate: a
-# `pnpm exec`/`node` one-liner that re-points git at ssh and the on-disk keys, or code
-# the session writes that this script's own preflight then runs WITH credentials
-# (DR-061 rule 4 accepts that risk).
+# WHO DOES WHAT. The model stages live in scripts/mac/build-tick-stages.mjs (stage table,
+# tool sets, scrubbed environment, verdict parsers, cost ledger):
+#   triage   sonnet, READ-ONLY by tool absence (Read, Grep, Glob): done / blocked / build,
+#            and the kind (mechanical | code | judgment). Runs BEFORE the claim;
+#   build    haiku (mechanical) | sonnet (code) | opus (judgment): edits its worktree only;
+#   review   opus, READ-ONLY: ship, fix (one pass) or reject;
+#   fix      at most one, on the build's own tier, then a second review.
+# A `done` triage needs no build at all: the helper writes one plan-row marker and opus
+# reviews it. No model session has git or GitHub credentials (no ssh agent,
+# GIT_SSH_COMMAND=false, no git global config so no credential helper, an empty gh config,
+# no tokens), and the build and fix stages have push, commit, merge, gh and lane-mail
+# commands deny-listed. The helper makes LOCAL commits only. THIS SCRIPT does every
+# outward act: it claims the row, refuses a change that touches an owner-reserved or
+# forbidden path, runs preflight + breadth, and only on 0/0 pushes that one branch and
+# opens its PR, whose body carries the reviews and a tiers-and-cost table. Nothing here
+# merges. That is enforced by the environment, the deny list and this script, not an OS
+# boundary. Named escapes, all deliberate: a `pnpm exec`/`node` one-liner that re-points git
+# at ssh and the on-disk keys, or code a session writes that this script's own preflight
+# then runs WITH credentials (DR-061 rule 4 accepts that risk).
 #
 # ONE RUN, in order:
 #   0. re-exec mainline's copy of this script (a real run never runs a branch copy);
 #   1. one run at a time (a lock under ~/Library/Caches, never $TMPDIR, whose value
 #      differs between launchd, a sandboxed shell and a plain one);
+#   1b. REFRESH, before any row: mainline's PR-refresh script (when mainline has it) brings
+#      ONE dirty mac/* PR up to date. It needs no model, so a paused tick still does it;
+#      a failure never stops the build. Then the pause check;
 #   2. fetch (four failures in a row raise a hand), read tasks[] from mainline's state;
 #   3. take the first row nobody has claimed: no remote head and no open PR names it
 #      ("row 12", "row-12", "rows 12", "row #12" in a head or title; "plan row 12" or
@@ -38,13 +51,16 @@
 #      skips a row — the safe direction;
 #   4. its OWN worktree <repo>.build, reset to origin/SignalGrid_Alpha every run;
 #   5. deps when the lockfile moved; tsx's darwin esbuild from a cache outside the repo;
-#   6. CLAIM: push the empty branch mac/build-row-<id>-<stamp> before the session, so the
-#      next run skips the row even if the session finds nothing to do (the cloud's
-#      forward-build cycle skips it only once its row reads mac/build-row-* heads too);
-#   7. the session, under a wall-clock cap, writing its commit message, PR title and
-#      body — or a hand — into a run directory OUTSIDE the worktree (--add-dir);
-#   8. commit, preflight + breadth, push + PR only on 0/0; anything else raises a hand
-#      and leaves the claim in place for a person.
+#   6. TRIAGE, before any claim. A broken session pauses the tick WITHOUT claiming (a broken
+#      session no longer burns a row); a blocked row raises a hand; otherwise CLAIM: push
+#      the empty branch mac/build-row-<id>-<stamp>, so the next run skips the row even if
+#      the pipeline finds nothing to do (the cloud's forward-build cycle skips it only once
+#      its row reads mac/build-row-* heads too);
+#   7. the pipeline (`build-tick-stages.mjs run`): build (or the marker), review, at most
+#      one fix, a second review. Its commit message, PR title and body, or a hand, go into
+#      a run directory OUTSIDE the worktree (--add-dir); its verdict is RUN_DIR/outcome.json;
+#   8. on `land`: refuse forbidden paths, preflight + breadth, push + PR only on 0/0.
+#      Anything else raises a hand and leaves the claim in place for a person.
 #
 # Stock macOS bash 3.2: guarded array expansion, here-strings, no mapfile, no ${var,,}.
 # =============================================================================
@@ -103,18 +119,18 @@ fi
 case "$0" in "$CACHE"/mainline.*) rm -f "$0" ;; esac
 REPO_ROOT="${SG_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
-# A broken session (logged out, usage limit, no Keychain under launchd) would otherwise
-# claim and burn one ranked row per run. The first such run pauses the tick instead.
-PAUSED="$CACHE/paused"
-if [ "$DRY" = "0" ] && [ -f "$PAUSED" ]; then
-  echo "build-tick: paused — $(head -c 300 "$PAUSED" | tr '\n' ' '); delete $PAUSED to resume"
-  exit 0
-fi
 
-MAX_TURNS=200
-SESSION_SECONDS=7200     # the session; preflight + breadth follow inside the 3 h slot's spirit
+# Wall-clock budgets. The per-stage caps live in build-tick-stages.mjs's stage table and
+# nowhere else; STAGES_SECONDS restates their worst case (900 triage + 7200 judgment build
+# + 3600 judgment fix + 2 x 1800 review = 15300), and the helper's --self-test fails if it
+# ever falls below the table. The hung-hand threshold is DERIVED from what a run can
+# legitimately take (a refresh, every model stage, this run's preflight and breadth, and an
+# hour of git/gh slack), not a guess.
 PREFLIGHT_SECONDS=5400
 BREADTH_SECONDS=3600
+REFRESH_SECONDS=$((PREFLIGHT_SECONDS + BREADTH_SECONDS + 1800))
+STAGES_SECONDS=15300
+HUNG_SECONDS=$((REFRESH_SECONDS + STAGES_SECONDS + PREFLIGHT_SECONDS + BREADTH_SECONDS + 3600))
 BUILD_WT="$(cd "$REPO_ROOT/.." && pwd)/$(basename "$REPO_ROOT").build"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_LOG=""
@@ -153,10 +169,11 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   _holder="$(cat "$LOCK/pid" 2>/dev/null || true)"
   _age=$(( $(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || date +%s) ))
   if { [ -n "$_holder" ] && kill -0 "$_holder" 2>/dev/null; } || { [ -z "$_holder" ] && [ "$_age" -lt 60 ]; }; then
-    # A live holder past 6 h is hung (a stalled install, fetch or gh call): say so once.
-    if [ "$_age" -gt 21600 ] && [ ! -e "$LOCK/hung-hand" ]; then
+    # A live holder past HUNG_SECONDS (longer than a full staged run can take) is hung (a
+    # stalled install, fetch or gh call): say so once.
+    if [ "$_age" -gt "$HUNG_SECONDS" ] && [ ! -e "$LOCK/hung-hand" ]; then
       : > "$LOCK/hung-hand"
-      raise_hand "a build tick (pid $_holder) has held $LOCK for $((_age / 3600)) h — it is hung; kill that pid and read the newest ~/Library/Logs/signalgrid/build-tick-*.log"
+      raise_hand "a build tick (pid $_holder) has held $LOCK for $((_age / 3600)) h (a full run fits in $((HUNG_SECONDS / 3600)) h) — it is hung; kill that pid and read the newest ~/Library/Logs/signalgrid/build-tick-*.log"
     fi
     say "result: skipped: another build tick (pid ${_holder:-starting}) holds $LOCK"
     exit 0
@@ -171,6 +188,38 @@ trap 'rm -f "$LOCK/pid" "$LOCK/hung-hand"; rmdir "$LOCK" 2>/dev/null' EXIT
 for _tool in git gh node pnpm npm claude perl; do
   command -v "$_tool" >/dev/null 2>&1 || fail "$_tool is not on PATH for launchd (edit PATH at the top of scripts/mac/build-tick.sh)"
 done
+
+# ── 1b. refresh one dirty mac/* PR, before any row ───────────────────────────
+# Mainline's own pr-refresh.mjs, never a branch copy, extracted to a fresh file with a .mjs
+# name (node treats an extensionless file as CommonJS). It may push ONE fast-forward merge
+# of origin/SignalGrid_Alpha onto ONE open mac/* PR head (never a mac/tick-* one), only after
+# preflight and breadth exit 0 on that head; that preflight runs the PR's code WITH
+# credentials (the registry row's writeScope says so). It needs no model, so a paused tick
+# still refreshes. A refresh failure NEVER stops the build.
+if [ "$DRY" = "1" ]; then
+  say "dry-run: would run mainline's scripts/mac/pr-refresh.mjs --max 1"
+elif git cat-file -e origin/SignalGrid_Alpha:scripts/mac/pr-refresh.mjs 2>/dev/null; then
+  _rd="$(mktemp -d "$CACHE/pr-refresh.XXXXXX")" || _rd=""
+  if [ -n "$_rd" ] && git show origin/SignalGrid_Alpha:scripts/mac/pr-refresh.mjs > "$_rd/pr-refresh.mjs" 2>/dev/null; then
+    SG_REPO_ROOT="$REPO_ROOT" node "$_rd/pr-refresh.mjs" --max 1 >> "$CACHE/pr-refresh.log" 2>&1
+    _rc=$?
+    say "pr-refresh exited $_rc (log $CACHE/pr-refresh.log)"
+  else
+    say "WARN could not extract mainline's pr-refresh.mjs — skipping the refresh"
+  fi
+  if [ -n "$_rd" ]; then rm -f "$_rd/pr-refresh.mjs"; rmdir "$_rd" 2>/dev/null || true; fi
+else
+  say "mainline has no scripts/mac/pr-refresh.mjs yet — skipping the refresh"
+fi
+
+# A broken session (logged out, usage limit, no Keychain under launchd) would otherwise
+# claim and burn one ranked row per run. The first such run pauses the tick instead (triage
+# pauses it BEFORE claiming, so the row is not burned either).
+PAUSED="$CACHE/paused"
+if [ "$DRY" = "0" ] && [ -f "$PAUSED" ]; then
+  echo "build-tick: paused — $(head -c 300 "$PAUSED" | tr '\n' ' '); delete $PAUSED to resume"
+  exit 0
+fi
 
 # ── 2. the ranked tasks, from mainline ───────────────────────────────────────
 # An asleep Mac is common and says nothing; four failures in a row (12 h) is not.
@@ -251,42 +300,23 @@ BRANCH="mac/build-row-$PICK_ID-$STAMP"
 RUN_DIR="$CACHE/runs/$STAMP"
 say "picked plan row $PICK_ID ('$PICK_TITLE') → $BRANCH"
 
-# ── the brief and the exact command ──────────────────────────────────────────
+# ── the dry-run: the exact command of every stage ───────────────────────────
+# The helper renders every brief for real (a broken one fails the dry-run), then prints one
+# line per stage with the brief shown as a placeholder. Read from the helper's OWN file, so
+# --dry-run shows the file in front of you; a real run uses the build worktree's, which is
+# origin/SignalGrid_Alpha's.
+TODAY="$(date -u +%Y-%m-%d)"
 if [ "$DRY" = "1" ]; then
-  BRIEF_SRC="$(cat "$REPO_ROOT/scripts/mac/build-tick-brief.md" 2>/dev/null)"
-else
-  BRIEF_SRC="$(git show origin/SignalGrid_Alpha:scripts/mac/build-tick-brief.md 2>/dev/null)"
-fi
-[ -n "$BRIEF_SRC" ] || fail "could not read scripts/mac/build-tick-brief.md"
-# Rendered in node, not ${var//…}: a title is free text and `&` is special in bash 5.2.
-BRIEF="$(printf '%s' "$BRIEF_SRC" | node -e 'const [id, title, branch, run, today] = process.argv.slice(1);
-  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => process.stdout.write(
-    s.split("{{ROW_ID}}").join(id).split("{{ROW_TITLE}}").join(title).split("{{BRANCH}}").join(branch).split("{{RUN_DIR}}").join(run).split("{{TODAY}}").join(today)));' \
-  "$PICK_ID" "$PICK_TITLE" "$BRANCH" "$RUN_DIR" "$(date -u +%Y-%m-%d)" 2>&1)" || fail "could not render the brief: $BRIEF"
-case "$BRIEF" in *"{{"*) fail "the brief still holds an unfilled {{placeholder}} after rendering" ;; esac
-EMPTY_GH="$CACHE/empty-gh-config"
-# The session's reach. Allow rules are not the boundary under the user's sandbox
-# auto-allow; deny rules still bind, and the scrubbed environment below is what makes a
-# push or a gh call fail even if a command slips through.
-SESSION_ENV=(env -u SSH_AUTH_SOCK -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN
-  GIT_SSH_COMMAND=false GIT_TERMINAL_PROMPT=0 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GH_CONFIG_DIR="$EMPTY_GH")
-CLAUDE_CMD=(claude -p "$BRIEF" --model opus --max-turns "$MAX_TURNS"
-  --permission-mode acceptEdits --permission-prompts none --strict-mcp-config --add-dir "$RUN_DIR"
-  --allowedTools Read Edit Write Grep Glob "Bash(git status*)" "Bash(git diff*)" "Bash(git log*)" "Bash(git show*)"
-    "Bash(pnpm *)" "Bash(node *)" "Bash(xcodebuild *)" "Bash(swift *)"
-  --disallowedTools "Bash(git push*)" "Bash(git commit*)" "Bash(git -C *)" "Bash(git remote*)" "Bash(git config*)"
-    "Bash(gh *)" "Bash(ssh*)" "Bash(curl*)" "Bash(wget*)" "Bash(node scripts/lane-deliver*)" "Bash(node scripts/mac/gh-pr*)"
-    "Bash(pnpm run lane:*)" "Bash(pnpm run hand:*)")
-if [ "$DRY" = "1" ]; then
-  say "dry-run: would claim $BRANCH, then run in $BUILD_WT under a ${SESSION_SECONDS}s cap:"
-  printf '%q ' ${SESSION_ENV+"${SESSION_ENV[@]}"} perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$SESSION_SECONDS" ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"}
-  printf '\n'
+  _cmds="$(node "$REPO_ROOT/scripts/mac/build-tick-stages.mjs" commands --row "$PICK_ID" --title "$PICK_TITLE" --branch "$BRANCH" --run-dir "$RUN_DIR" --today "$TODAY" 2>&1)" \
+    || fail "could not print the stage commands: $_cmds"
+  say "dry-run: would triage (read-only), then claim $BRANCH, then run the staged pipeline in $BUILD_WT; the stage commands:"
+  printf '%s\n' "$_cmds" | sed 's/^/dry-run: /'
   exit 0
 fi
 
 # ── 4. its own worktree, fresh every run ─────────────────────────────────────
 LOG_DIR="$HOME/Library/Logs/signalgrid"
-mkdir -p "$LOG_DIR" "$RUN_DIR" "$EMPTY_GH" || fail "cannot create $LOG_DIR / $RUN_DIR"
+mkdir -p "$LOG_DIR" "$RUN_DIR" || fail "cannot create $LOG_DIR / $RUN_DIR"
 RUN_LOG="$LOG_DIR/build-tick-$STAMP.log"
 say "picked plan row $PICK_ID ('$PICK_TITLE') → $BRANCH; log $RUN_LOG"
 git worktree prune >> "$RUN_LOG" 2>&1
@@ -323,41 +353,63 @@ if [ ! -x "$ESBUILD_BINARY_PATH" ]; then
 fi
 export ESBUILD_BINARY_PATH
 
-# ── 6. claim the row before any work ─────────────────────────────────────────
-git switch -q -c "$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not create $BRANCH in the build worktree"
-git push -q origin "HEAD:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not push the claim branch $BRANCH"
-say "claimed plan row $PICK_ID with $BRANCH (at mainline's tip)"
+# ── 6. triage, THEN the claim ────────────────────────────────────────────────
+# Triage is read-only and runs before the claim, so a broken session (logged out, usage limit,
+# no Keychain under launchd) pauses the tick WITHOUT burning a row. Everything below the
+# helper's stage table (tiers, caps, tool sets, scrubbed environment) is in the helper.
+[ -f scripts/mac/build-tick-stages.mjs ] || fail "origin/SignalGrid_Alpha has no scripts/mac/build-tick-stages.mjs — nothing to run the stages with"
+stages() {
+  _sub="$1"; shift
+  node scripts/mac/build-tick-stages.mjs "$_sub" --row "$PICK_ID" --title "$PICK_TITLE" --branch "$BRANCH" \
+    --run-dir "$RUN_DIR" --cache "$CACHE" --today "$TODAY" --stamp "$STAMP" "$@"
+}
+claim() {
+  git switch -q -c "$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not create $BRANCH in the build worktree"
+  git push -q origin "HEAD:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not push the claim branch $BRANCH"
+  say "claimed plan row $PICK_ID with $BRANCH (at mainline's tip)"
+}
+rm -f "$RUN_DIR/next" "$RUN_DIR/outcome.json"
+say "triage starting (read-only; tier and cap are the helper's stage table), no git/GitHub credentials"
+stages triage >> "$RUN_LOG" 2>&1 < /dev/null
+_next="$(head -1 "$RUN_DIR/next" 2>/dev/null)"
+[ -n "$_next" ] || fail "plan row $PICK_ID: triage wrote no $RUN_DIR/next — not claiming a row it could not read"
+_verb="${_next%% *}"
+_rest="${_next#"$_verb"}"; _rest="${_rest# }"
+case "$_verb" in
+  pause)
+    printf 'triage paused the build tick on %s (plan row %s): %s; log %s\n' "$STAMP" "$PICK_ID" "$_rest" "$RUN_LOG" > "$PAUSED"
+    fail "plan row $PICK_ID: $_rest. The build tick is PAUSED and NO claim was pushed, so the row is not burned: fix the cause, then delete $PAUSED" ;;
+  hand)
+    claim   # claimed first, so the row is not re-triaged every 3 h
+    fail "plan row $PICK_ID: triage: $_rest. Claim $BRANCH stays until a person deletes it" ;;
+  marker|build) claim ;;
+  *) fail "plan row $PICK_ID: triage wrote an unknown verdict: $_next" ;;
+esac
 
-# ── 7. the session ───────────────────────────────────────────────────────────
-say "session starting (opus, ${MAX_TURNS} turns, ${SESSION_SECONDS}s cap, no git/GitHub credentials)"
-# No `timeout` on macOS. alarm survives exec, so SIGALRM ends claude at the cap (142).
-# ponytail: a tool the session left running is orphaned, not killed — add a process
-# group if that bites.
-${SESSION_ENV+"${SESSION_ENV[@]}"} perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$SESSION_SECONDS" \
-  ${CLAUDE_CMD+"${CLAUDE_CMD[@]}"} >> "$RUN_LOG" 2>&1 < /dev/null
-SESSION_STATUS=$?
-say "session exited $SESSION_STATUS (142 = the ${SESSION_SECONDS}s cap)"
+# ── 7. the pipeline ──────────────────────────────────────────────────────────
+# `marker`: the helper writes one plan-row marker, commits it, opus reviews it. `build`: the
+# build stage on the tier its kind names, a review, at most one fix on the build's own tier,
+# a second review. Each stage logs its tier, turns, cost and exit into the run log; the
+# verdict is $RUN_DIR/outcome.json (land | hand | pause).
+say "pipeline starting: path $_verb${_rest:+ ($_rest)}"
+stages run --path "$_verb" --kind "${_rest:-none}" >> "$RUN_LOG" 2>&1 < /dev/null
+[ -s "$RUN_DIR/outcome.json" ] || fail "plan row $PICK_ID: the pipeline wrote no $RUN_DIR/outcome.json. Claim $BRANCH stays until a person deletes it"
+_oc="$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  process.stdout.write(`${o.outcome}\t${String(o.reason ?? "").replace(/\s+/g, " ")}`);' "$RUN_DIR/outcome.json" 2>&1)" \
+  || fail "plan row $PICK_ID: could not read $RUN_DIR/outcome.json: $_oc"
+IFS="$(printf '\t')" read -r OUTCOME REASON <<< "$_oc"
+say "pipeline outcome: $OUTCOME — $REASON"
 
-# ── 8. the outward half: commit, gate, push, PR ──────────────────────────────
-if [ -s "$RUN_DIR/hand.txt" ]; then
-  fail "plan row $PICK_ID: the session stopped and asked for a hand: $(head -c 600 "$RUN_DIR/hand.txt" | tr '\n' ' '). Claim $BRANCH stays until a person deletes it"
-fi
-if [ -z "$(git status --porcelain)" ]; then
-  # A non-zero exit other than the cap with nothing done is the session itself failing
-  # (logged out, usage limit, no Keychain under launchd): pause, so the next runs do not
-  # claim and burn the rows below this one.
-  if [ "$SESSION_STATUS" != "0" ] && [ "$SESSION_STATUS" != "142" ]; then
-    printf 'the headless session exited %s with no change and no hand on %s (plan row %s); log %s\n' "$SESSION_STATUS" "$STAMP" "$PICK_ID" "$RUN_LOG" > "$PAUSED"
-    fail "the headless claude session exited $SESSION_STATUS having done nothing (auth? usage limit? Keychain under launchd?). The build tick is PAUSED: fix the cause, delete $PAUSED, and delete the claim $BRANCH"
-  fi
-  fail "plan row $PICK_ID: the session (exit $SESSION_STATUS) changed nothing and left no hand.txt. Claim $BRANCH stays until a person deletes it"
-fi
-for _f in commit-msg.txt pr-title.txt pr-body.md; do
-  [ -s "$RUN_DIR/$_f" ] || fail "plan row $PICK_ID: the session (exit $SESSION_STATUS) left changes but no $RUN_DIR/$_f. The work is uncommitted in $BUILD_WT until the next run resets it"
-done
-printf '\nCo-Authored-By: Claude <noreply@anthropic.com>\nBuild-Tick: %s\n' "$STAMP" >> "$RUN_DIR/commit-msg.txt"
-{ git add -A && git commit -q -F "$RUN_DIR/commit-msg.txt"; } >> "$RUN_LOG" 2>&1 \
-  || fail "plan row $PICK_ID: could not commit the session's change on $BRANCH"
+# ── 8. the outward half: gate, push, PR ──────────────────────────────────────
+case "$OUTCOME" in
+  land) ;;
+  pause)
+    # The session itself is broken: pause, so the next runs do not claim and burn the rows below.
+    printf 'the staged pipeline paused the build tick on %s (plan row %s): %s; log %s\n' "$STAMP" "$PICK_ID" "$REASON" "$RUN_LOG" > "$PAUSED"
+    fail "plan row $PICK_ID: $REASON. The build tick is PAUSED: fix the cause, delete $PAUSED, and delete the claim $BRANCH" ;;
+  hand) fail "plan row $PICK_ID: $REASON. Claim $BRANCH stays until a person deletes it" ;;
+  *) fail "plan row $PICK_ID: the pipeline's outcome was '$OUTCOME', not land, hand or pause" ;;
+esac
 HEAD_SHA="$(git rev-parse HEAD)"
 # The brief forbids these paths; the script enforces it, and derives the landing class
 # from the diff rather than trusting the session's own "Owner decision needed:" line.
@@ -369,7 +421,7 @@ CLASS="$(node --input-type=module -e 'import { classifyDiff } from "./scripts/ch
   process.stdout.write(cats.has("OWNER_RESERVED") ? "OWNER_RESERVED" : cats.has("DECISION_PATH") ? "DECISION_PATH" : "SAFETY_MACHINERY");' "$CHANGED" 2>>"$RUN_LOG")"
 [ -n "$CLASS" ] || fail "plan row $PICK_ID: could not classify the change with check-owner-gated-surfaces.mjs — not pushing an unclassified change"
 if [ -n "$FORBIDDEN" ] || [ "$CLASS" = "OWNER_RESERVED" ]; then
-  fail "plan row $PICK_ID: the session's change touches paths the build tick may not land ($CLASS; $(tr '\n' ' ' <<< "$FORBIDDEN")). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
+  fail "plan row $PICK_ID: the change touches paths the build tick may not land ($CLASS; $(tr '\n' ' ' <<< "$FORBIDDEN")). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
 fi
 say "committed $HEAD_SHA ($CLASS); preflight then breadth"
 perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1
@@ -387,7 +439,9 @@ fi
 git push -q origin "HEAD:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "plan row $PICK_ID: gates green but the push of $BRANCH failed"
 { printf 'Landing class (derived from the diff by check-owner-gated-surfaces.mjs): **%s**\n\n' "$CLASS"
   cat "$RUN_DIR/pr-body.md"
-  printf '\n\n## Gates (run by scripts/mac/build-tick.sh on %s, after the session)\n\n- `node scripts/preflight.mjs` exit %s: %s\n- `pnpm run verify:breadth` exit %s: %s\n\nOpened by the unattended build tick (DR-061 rule 4). It never merges; a lane merges it, if at all, under DR-037 / DR-061 rule 1.\n' \
+  printf '\n\n'
+  cat "$RUN_DIR/pr-body-stages.md"
+  printf '\n\n## Gates (run by scripts/mac/build-tick.sh on %s, after the pipeline)\n\n- `node scripts/preflight.mjs` exit %s: %s\n- `pnpm run verify:breadth` exit %s: %s\n\nOpened by the unattended build tick (DR-061 rule 4). It never merges; a lane merges it, if at all, under DR-037 / DR-061 rule 1.\n' \
     "$HEAD_SHA" "$PF" "$PF_LINE" "$BR" "$BR_LINE"
 } > "$RUN_DIR/pr-body-final.md"
 node scripts/mac/gh-pr.mjs open --head "$BRANCH" --title "$(head -1 "$RUN_DIR/pr-title.txt")" --body-file "$RUN_DIR/pr-body-final.md" >> "$RUN_LOG" 2>&1 \

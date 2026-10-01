@@ -68,15 +68,25 @@ cloud's, the third is a sim request the tick runs.
 **What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
 Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
 
-**The build tick (DR-061, 2026-09-29).** The lane tick never builds. A second
-launchd job, `scripts/mac/build-tick.sh` (`bash scripts/mac/install-build-tick.sh`,
-every 3 hours), claims the objective loop's top `tasks[]` row that no remote
-branch or open PR names by pushing an empty `mac/build-row-<id>-<stamp>`, then
-starts ONE headless Claude session in its own `<repo>.build` worktree. The session
-only edits and runs local checks, with no git or GitHub credentials; the script
-commits, runs preflight and breadth, and only on 0/0 pushes the branch and opens
-the PR. Nothing in it merges; a stuck or red run raises a hand and keeps the claim
-for a person. Registry row: `mac-build-tick`.
+**The build tick (DR-061, 2026-09-29; staged tiers 2026-10-01).** The lane tick
+never builds. A second launchd job, `scripts/mac/build-tick.sh`
+(`bash scripts/mac/install-build-tick.sh`, every 3 hours), first refreshes ONE
+dirty `mac/*` PR with mainline's PR-refresh script, once it lands (no model; a
+failure never stops the build). It then takes the objective loop's top `tasks[]`
+row that no remote branch or open PR names and runs it as staged tiers
+(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet, read-only,
+decides done, blocked or build BEFORE the claim, so a broken session pauses the
+tick without burning a row; then the claim, an empty `mac/build-row-<id>-<stamp>`;
+then build on Haiku, Sonnet or Opus by the kind triage names, an Opus read-only
+review, at most one fix on the build's tier, and a second review. A row triage
+finds already done is a one-line plan marker with no build session. No session
+has git or GitHub credentials; the script commits, runs preflight and breadth, and
+only on 0/0 pushes the branch and opens the PR. Every PR body carries the reviews
+and a tiers-and-cost table (stage, tier asked, model that ran, turns, seconds, USD;
+`unknown`, never 0, when a figure is missing), and each stage appends a line to
+~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a stuck
+or red run raises a hand and keeps the claim for a person. Registry row:
+`mac-build-tick`.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 

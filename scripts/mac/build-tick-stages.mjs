@@ -915,6 +915,34 @@ function selfTestBody(root, ok) {
     ok("S10 build-tick.sh STAGES_SECONDS >= triage + judgment build + judgment fix + 2 reviews", n >= worstCaseStagesSeconds(), `${n} vs ${worstCaseStagesSeconds()}`);
   }
 
+  // The shell fixes no stub claude can reach, asserted on the shipped build-tick.sh text, and capped() run for real.
+  {
+    const sh = readFileSync(join(HERE, "build-tick.sh"), "utf8");
+    const pausedAt = sh.search(/\[ -f "\$PAUSED" \]/), refreshAt = sh.search(/capped "\$REFRESH_SECONDS"/);
+    ok("S4 the pause check comes BEFORE the PR refresh, and the refresh runs under capped (a group kill), not a bare alarm",
+      pausedAt > 0 && refreshAt > pausedAt && /capped "\$REFRESH_SECONDS" env [^\n]*pr-refresh\.mjs/.test(sh) && !/alarm shift[^\n]*"\$REFRESH_SECONDS"/.test(sh), `${pausedAt} / ${refreshAt}`);
+    const claimBody = /^claim\(\) \{([\s\S]*?)^\}/m.exec(sh)?.[1] ?? "";
+    ok("nit: claim() re-reads the branch and PR lists (load_inflight) and skips a taken row BEFORE it creates the claim branch",
+      claimBody.includes("load_inflight") && claimBody.indexOf("load_inflight") < claimBody.indexOf("in_flight \"$PICK_ID\"") && claimBody.indexOf("in_flight \"$PICK_ID\"") < claimBody.indexOf("git switch"), claimBody.slice(0, 200));
+    ok("nit: the dry-run only says it would run the refresh when mainline has pr-refresh.mjs (the cat-file test comes first)",
+      /if git cat-file -e origin\/SignalGrid_Alpha:scripts\/mac\/pr-refresh\.mjs[^\n]*; then\n\s*say "dry-run: would run mainline's/.test(sh));
+    const fn = /^capped\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0];
+    if (!fn) ok("S4 build-tick.sh defines capped()", false);
+    else {
+      const dir = join(root, "capped");
+      mkdirSync(dir, { recursive: true });
+      const pidFile = join(dir, "bg.pid");
+      const run = (cap, cmd) => spawnSync("/bin/bash", ["-c", `${fn}\ncapped ${cap} sh -c '${cmd}'`], { env: { ...process.env, P: pidFile }, encoding: "utf8", timeout: 60000 });
+      const r = run(1, `sleep 30 & echo $! > "$P"; wait`);
+      const bg = Number(readFileSync(pidFile, "utf8"));
+      let alive = true;
+      try { process.kill(bg, 0); } catch { alive = false; }
+      if (alive) process.kill(bg, "SIGKILL"); // this pid, by number: never by pattern
+      ok("S4 capped(): at the cap the whole process GROUP dies (the backgrounded grandchild too) and the exit is 142", r.status === 142 && !alive, `exit ${r.status}, grandchild alive ${alive}`);
+      ok("S4 capped(): a command that finishes passes its own exit status through", run(5, "exit 7").status === 7 && run(5, "true").status === 0);
+    }
+  }
+
   // Units: the briefs, the renderer, the marker writer, the cost table, the dry-run.
   for (const [stage, file] of Object.entries(BRIEFS)) {
     const text = readFileSync(join(HERE, file), "utf8");

@@ -401,6 +401,9 @@ export function grepMarkerChecks(text, label, readTarget) {
 // quoted string is still read as a comment. Carrying the state across lines was measured on
 // this tree and drifts on heredoc apostrophes (sg-brain-link.sh ends mid-quote, and the state
 // then misreads validate-sim-macos.sh from line 223): it would turn comments into code.
+// ponytail: two forms still misread a `#` and hide a hazard after it, as before this fix; neither
+// occurs under scripts/mac or validate-sim-macos.sh: an ANSI-C string holding `\'` (`$'it\'s # x' "${X[@]}"`,
+// the `\'` closes sq early) and a `#` after an escaped space (`a\ #b "${X[@]}"`). Upgrade: a real tokenizer.
 const shellCode = (text) =>
   text.split("\n").map((l) => {
     let sq = false;
@@ -441,17 +444,22 @@ export function bash32Problems(text, label) {
     if (strict) {
       // Quoted or not, standalone or embedded (`cmd ${A[@]}`, `"--x=${A[@]}"`, `"$X ${A[@]}"`):
       // 3.2 aborts on an EMPTY array in every one of them. `${#A[@]}` / `${!A[@]}` are safe
-      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before. NOT `${A:+`:
-      // it tests the FIRST element for non-empty, so A=("" x y) expands to nothing and the data is lost.
+      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before. NOT `:+`
+      // (measured on /bin/bash 3.2.57): `${A:+` tests the FIRST element, so A=("" x y) expands to
+      // nothing; `${A[@]:+` tests the whole expansion, so only a lone A=("") is dropped.
       for (const m of line.matchAll(/\$\{([A-Za-z_]\w*)\[[@*]\]\}/g)) {
         const before = line.slice(0, m.index).replace(/"$/, "");
         if (before.endsWith(`\${${m[1]}+`) || before.endsWith(`\${${m[1]}[@]+`)) continue;
-        const colon = before.endsWith(`\${${m[1]}:+`) || before.endsWith(`\${${m[1]}[@]:+`);
+        const colon = before.endsWith(`\${${m[1]}:+`)
+          ? `tests the first element for non-empty, so A=("" x y) expands to NOTHING and the data is lost`
+          : before.endsWith(`\${${m[1]}[@]:+`)
+            ? `tests whether the whole expansion is non-empty, so a lone empty element, A=(""), expands to NOTHING and is lost`
+            : "";
         problems.push({
           label,
           rule: "g",
           detail: colon
-            ? `line ${i + 1}: ${m[0]} behind \`:+\` — \`:+\` tests the first element for non-empty, so A=("" x y) expands to NOTHING and the data is lost; write \${${m[1]}+"${m[0]}"}`
+            ? `line ${i + 1}: ${m[0]} behind \`:+\` — \`:+\` ${colon}; write \${${m[1]}+"${m[0]}"}`
             : `line ${i + 1}: ${m[0]} under set -u — bash 3.2 aborts on an EMPTY array here ("unbound variable"); write \${${m[1]}+"${m[0]}"}`,
         });
       }
@@ -764,9 +772,16 @@ function selfTest() {
       const got = bash32Problems(`#!/usr/bin/env bash\n${body}\n`, "t").length;
       expect(`rule (g) planted: ${body}`, got === want, `expected ${want} problem(s), got ${got}`);
     }
-    const colonPlus = bash32Problems(`#!/usr/bin/env bash\nset -u; ${A}echo \${A:+"\${A[@]}"}\n`, "t")[0]?.detail ?? "";
-    expect("the :+ finding names data loss, not an abort", /first element/.test(colonPlus) && !/aborts/.test(colonPlus),
-      `a :+ guard fails for the wrong stated reason (${JSON.stringify(colonPlus)}): it does not abort, it drops A=("" x y)`);
+    // Each `:+` spelling states ITS OWN measured reason (bash 3.2.57): `${A:+` drops A=("" x y), `${A[@]:+` only a lone A=("").
+    const reason = (guard) => bash32Problems(`#!/usr/bin/env bash\nset -u; ${A}echo ${guard}\n`, "t")[0]?.detail ?? "";
+    const firstEl = reason('${A:+"${A[@]}"}');
+    expect("the ${A:+ finding names the first-element test and data loss, not an abort",
+      /first element/.test(firstEl) && /x y/.test(firstEl) && !/aborts/.test(firstEl),
+      `a \${A:+ guard fails for the wrong stated reason (${JSON.stringify(firstEl)})`);
+    const whole = reason('${A[@]:+"${A[@]}"}');
+    expect("the ${A[@]:+ finding names the whole-expansion test and the lone empty element, not the first element",
+      /whole expansion/.test(whole) && /A=\(""\)/.test(whole) && !/first element|x y|aborts/.test(whole),
+      `a \${A[@]:+ guard fails for the wrong stated reason (${JSON.stringify(whole)}): bash 3.2.57 keeps A=("" x y) whole there and loses only A=("")`);
     for (const [body, want] of H_CASES) {
       const got = darwinGuardProblems(`#!/usr/bin/env bash\n${body}`, "x.sh").length;
       expect(`rule (h) planted: ${JSON.stringify(body)}`, got === want, `expected ${want} problem(s), got ${got}`);

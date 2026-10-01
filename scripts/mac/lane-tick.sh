@@ -428,7 +428,7 @@ fi
 # Unread mail reaches RESULT through append_unread_state (check-lane-messages.mjs
 # --unread-summary), called by heartbeat below. A block here once grepped
 # `lane-message.mjs inbox` for '→ mac', an arrow that CLI never prints, so it could
-# not fire; scripts/check-sim-scripts-selfcheck.mjs rule (g) keeps it from returning.
+# not fire; scripts/check-sim-scripts-selfcheck.mjs rule (i) keeps it from returning.
 
 RESULT="$RESULT; objective: $LOOP_VERDICT"
 

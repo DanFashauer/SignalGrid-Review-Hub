@@ -188,13 +188,13 @@ function stripYamlComment(s) {
   }
   return s;
 }
-// a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own — an escaped line break (and the next
-// line's indent) disappears, `\x` is `x` — so a non-JSON escape never throws the gate
+// a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own (`\x` is `x`), so a non-JSON escape
+// never throws the gate. An escaped line break never reaches here: logicalLines has already spliced it.
 const unquoteDq = (v) => {
   try {
     return JSON.parse(v);
   } catch {
-    return v.slice(1, -1).replace(/\\\r?\n[ \t]*/g, "").replace(/\\(.)/g, "$1");
+    return v.slice(1, -1).replace(/\\(.)/g, "$1"); // an escaped line break was already joined by logicalLines
   }
 };
 const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/s.test(v) ? unquoteDq(v) : /^'.*'$/.test(v) ? v.slice(1, -1).replace(/''/g, "'") : v);
@@ -334,15 +334,19 @@ export function logicalLines(lines, kind, path = "") {
   }
   // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`. How the next line
   // is spliced on differs by reader, so each join the reader might make is read (CONTINUATION_JOINS).
+  const docker = /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path);
+  // a Dockerfile as BuildKit parses it: `# escape=\`` (a parser directive, before any instruction) makes the
+  // backtick the escape; whitespace may follow the escape; comment and empty lines inside a continuation are dropped
+  const dockerEscape = docker && lines.slice(0, lines.findIndex((l) => !/^\s*#/.test(l)) >>> 0).some((l) => /^\s*#\s*escape\s*=\s*`\s*$/i.test(l)) ? "`" : "\\";
   const [cont, modes] = /\.(?:ps1|psm1)$/i.test(path)
     ? [/(?<!`)`$/, ["space", "keep"]] // the escaped newline is whitespace; read glued too, fail-closed
     : /\.(?:cmd|bat)$/i.test(path)
       ? [/\^$/, ["keep"]] // `^` escapes the newline: the next line is appended as it stands
-      : /(?:^|\/)(?:GNU)?makefile$|\.mk$/i.test(path)
-        ? [/(?<!\\)\\$/, ["tab", "space"]] // make drops the recipe tail's leading tab, the shell then glues; a variable joins with a space
-        : /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path)
-        ? [/(?<!\\)\\$/, ["keep", "strip"]] // read with and without the next line's indentation, fail-closed
-        : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
+      : /(?:^|\/)(?:GNU)?makefile(?:\.(?:in|am))?$|\.(?:mk|make)$/i.test(path)
+        ? [/(?<!\\)\\$/, ["tab"]] // make drops the recipe tail's leading tab, then the shell glues
+        : docker
+          ? [new RegExp(`(?<!\\${dockerEscape})\\${dockerEscape}[ \t]*$`), ["keep", "strip"]] // with and without the next line's indent, fail-closed
+          : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
   if (kind === "json") return lines.map((text, i) => ({ i, text }));
   const physical = [];
   for (let i = 0; i < lines.length; i++) {
@@ -352,7 +356,7 @@ export function logicalLines(lines, kind, path = "") {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
     } else physical.push({ i, text: l });
   }
-  return joinContinuations(physical, cont, modes);
+  return joinContinuations(physical, cont, modes, docker ? (t) => /^\s*(?:#|$)/.test(t) : null);
 }
 
 /**
@@ -362,21 +366,27 @@ export function logicalLines(lines, kind, path = "") {
  * literal block's indent). One entry per mode is returned for a group that holds the package, so a pin or a name split
  * mid-token across the join is read as the shell would read it; a group without the package keeps its lines.
  */
-export function joinContinuations(entries, cont, modes) {
+export function joinContinuations(entries, cont, modes, skip = null) {
   const out = [];
   const NAME = /@upstash\\?\/context7-mcp/i;
   for (let k = 0; k < entries.length; k++) {
-    if (!cont.test(entries[k].text) || entries[k].quoteJoin || k + 1 >= entries.length) {
+    // a skipped line (a Dockerfile comment, such as `# escape=\``) never starts a group either
+    if (!cont.test(entries[k].text) || entries[k].quoteJoin || k + 1 >= entries.length || (skip && skip(entries[k].text))) {
       out.push({ i: entries[k].i, text: entries[k].text });
       continue;
     }
+    // the group's members; `skip` lines inside it (a Dockerfile's comment and empty lines) are dropped, not joined
+    const parts = [k];
     let j = k;
-    while (cont.test(entries[j].text) && j + 1 < entries.length) j++;
+    while (j + 1 < entries.length && cont.test(entries[parts[parts.length - 1]].text)) {
+      j++;
+      if (!(skip && skip(entries[j].text))) parts.push(j);
+    }
     const base = /^\s*/.exec(entries[k].text)[0].length;
     const joins = modes.map((mode) => {
       let text = entries[k].text.replace(cont, "");
-      for (let n = k + 1; n <= j; n++) {
-        const next = n < j ? entries[n].text.replace(cont, "") : entries[n].text;
+      for (const n of parts.slice(1)) {
+        const next = n !== parts[parts.length - 1] ? entries[n].text.replace(cont, "") : entries[n].text;
         const lead = /^\s*/.exec(next)[0].length;
         text +=
           mode === "space"
@@ -391,7 +401,8 @@ export function joinContinuations(entries, cont, modes) {
       }
       return text;
     });
-    if (!joins.some((t) => NAME.test(t))) {
+    // a quote beside the marker (`"@upstash/context7-"\` + `mcp`) is concatenated by the shell: test quote-free too
+    if (!joins.some((t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "")))) {
       out.push({ i: entries[k].i, text: entries[k].text });
       continue;
     }
@@ -669,7 +680,10 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
     // the prefilter reads the text as a shell would rebuild it too — continuations spliced, quotes and escapes removed —
     // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
-    const rebuilt = text.replace(/[\\`^]\r?\n[ \t]*/g, "").replace(/["'\\`^]/g, "");
+    // (a Dockerfile also drops comment and empty lines inside a continuation, and allows whitespace after the escape)
+    const rebuilt = text
+      .replace(/([\\`^])[ \t]*\r?\n(?:[ \t]*(?:#[^\n]*)?\r?\n)*[ \t]*/g, "")
+      .replace(/["'\\`^]/g, "");
     if (!/context7/i.test(text) && !/context7/i.test(rebuilt) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
@@ -1546,6 +1560,18 @@ server.registerTool(
     ["Makefile", `x:\n\tnpx -y ${SPEC}${realPin} \\\n\t--stdio\n`, 2, false, "a make recipe with the pin, then a spaced continuation (no false positive)"],
     ["w.yml", `steps:\n  - run: "npx -y @upstash/context7-\\\n      mcp@latest"\n`, 2, true, "a YAML double-quoted escaped line break inside the name"],
     ["w.yml", `a: "see C:\\path ${SPEC}${realPin}"\n`, 1, false, "a YAML double-quoted non-JSON escape does not throw (no false positive)"],
+    // round 15: Dockerfile continuations as BuildKit reads them; a quote beside the marker; more make file names
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n# note\nmcp@latest\n`, 1, true, "a Dockerfile comment line inside a continuation"],
+    ["Dockerfile", `RUN npx -y @upstash/cont\\\n# note\next7-mcp@latest\n`, 1, true, "a Dockerfile comment line inside a split of context7"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n\nmcp@latest\n`, 1, true, "a Dockerfile empty line inside a continuation"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\  \nmcp@latest\n`, 1, true, "a Dockerfile escape followed by whitespace"],
+    ["Dockerfile", "# escape=\`\nRUN npx -y " + SPEC + realPin + "\`\n0\n", 2, true, "a Dockerfile `# escape=\`` pin splice"],
+    ["Dockerfile", "# escape=\`\nRUN npx -y @upstash/cont\`\next7-mcp@latest\n", 2, true, "a Dockerfile `# escape=\`` split inside context7"],
+    ["Dockerfile", `RUN npx -y ${SPEC}${realPin} \\\n  # note\n  --stdio\n`, 1, false, "a Dockerfile comment inside a pinned continuation (no false positive)"],
+    ["s.sh", `npx -y "@upstash/context7-"\\\nmcp@latest\n`, 1, true, "a double-quoted part beside the continuation"],
+    ["s.sh", `npx -y '@upstash/cont'\\\next7-mcp@latest\n`, 1, true, "a single-quoted part inside context7 beside the continuation"],
+    ["Makefile.in", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a Makefile.in recipe split"],
+    ["foo.make", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a *.make recipe split"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

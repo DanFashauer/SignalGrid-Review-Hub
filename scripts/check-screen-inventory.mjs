@@ -209,7 +209,19 @@ export function renderedStep4(doc) {
   // Raw HTML is shown as a browser shows it: comments and tags removed, the text
   // between them kept, entities decoded. Dropping an html_block whole would hide
   // `<!-- x --> &#45;DemoBackendURL https://evil` — the text after the comment renders.
-  const visible = (html) => md.utils.unescapeAll(html.replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]*>/g, ""));
+  // A comment with no `-->` hides everything after it, so it is cut to the end; only a
+  // real tag (`<` + letter, or `</` + letter) is removed — `<-DemoBackendURL …>` is
+  // visible text in a browser and stays. Removal repeats until nothing changes, so a
+  // nested `<!<!---->--…` cannot leave a comment opener behind (CodeQL
+  // js/incomplete-multi-character-sanitization on this PR).
+  const visible = (html) => {
+    let text = html;
+    for (let prev = null; prev !== text; ) {
+      prev = text;
+      text = text.replace(/<!--[\s\S]*?(?:-->|$)/g, "").replace(/<\/?[A-Za-z][^>]*(?:>|$)/g, "");
+    }
+    return md.utils.unescapeAll(text);
+  };
   const open = tokens.findIndex((t) => t.type === "list_item_open" && t.info === "4");
   if (open < 0) return null;
   const parts = [];
@@ -460,6 +472,13 @@ function selfTest() {
     ["a double-backtick span with an inner backtick fails (round 7)", withProse("``-DemoBackendToken sgk_demo_northwind_operator`,x``"), "gives -DemoBackendToken sgk_demo_northwind_operator`,x"],
     ["a flag only inside an HTML comment does not count (round 7)", withArg("-DemoBackendToken", undefined, "<!-- -DemoBackendToken sgk_demo_northwind_operator -->"), "no longer names -DemoBackendToken"],
     ["an entity-encoded flag is read as rendered (round 7)", withProse("<!-- x --> &#45;DemoBackendURL https://api.example.com"), "its host is api.example.com"],
+    // CodeQL follow-up: comments and tags are stripped as a browser hides them.
+    ["a flag only after an unclosed <!-- does not count", withArg("-DemoBackendToken", undefined, "<!-- -DemoBackendToken sgk_demo_northwind_operator"), "no longer names -DemoBackendToken"],
+    // markdown-it does not treat `<!<!---->…` as HTML; it renders as literal text, so a
+    // reader sees the flag and the gate must count it (and check its value).
+    ["text after a malformed comment opener renders, so its flag counts", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_northwind_operator -->"), null],
+    ["…and its value is still checked", withArg("-DemoBackendToken", undefined, "<!<!---->-- -DemoBackendToken sgk_demo_acme_operator -->"), "gives -DemoBackendToken sgk_demo_acme_operator"],
+    ["`<-DemoBackendURL …>` is visible text and is checked", withProse("<p>x</p> <-DemoBackendURL https://api.example.com >"), "its host is api.example.com"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

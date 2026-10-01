@@ -40,7 +40,8 @@ host as written, so shorthand forms such as `127.1` do not count). Step 4 is che
 as it renders (markdown-it renders it, an HTML5 parser reads the text a browser
 shows), because that is the text an operator copies; keep the four arguments in
 their fenced block, one per line. Raw HTML and images anywhere in the demo section
-fail the gate, and the section and its step 4 must each appear once. It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
+fail the gate, and the section and its step 4 must each appear once. Step 4 is the
+item a reader sees as 4, so the steps must be numbered in order. It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
 (`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file
 would not be seen, and the other surfaces make no placement claim. The gate reads route
 elements, not reachability: a `<Route>` inside a branch that never renders (for example

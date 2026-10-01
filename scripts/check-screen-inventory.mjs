@@ -222,12 +222,29 @@ export function renderedStep4(doc) {
   if (sections.length === 0) return { text: null, problems: ["no \"## The demo path\" section"] };
   if (sections.length > 1) problems.push(`${sections.length} "## The demo path" sections — the demo path must be stated once`);
   const from = sections[0];
-  let to = tokens.findIndex((t, i) => i > from + 2 && t.type === "heading_open" && (t.tag === "h1" || t.tag === "h2"));
+  // Only a TOP-LEVEL h1/h2 ends the section (round 9): a heading nested in a list item
+  // or a blockquote renders inside step 4, so the text after it is still step 4.
+  let to = tokens.findIndex((t, i) => i > from + 2 && t.level === 0 && t.type === "heading_open" && (t.tag === "h1" || t.tag === "h2"));
   if (to < 0) to = tokens.length;
   const section = tokens.slice(from, to);
   if (section.some((t) => t.type === "html_block" || (t.type === "inline" && t.children.some((c) => c.type === "html_inline"))))
     problems.push("the demo path section contains raw HTML — the gate cannot know how every renderer shows it, so write it in markdown");
-  const items = section.flatMap((t, i) => t.type === "list_item_open" && t.info === "4" ? [i] : []);
+  // Step 4 is the item a reader SEES as 4 (round 9). A browser numbers <ol> items in
+  // order from the list's start, whatever marker the source wrote, so `1. 2. 3. 3. 4.`
+  // shows the second `3.` as step 4. Every ordered-list item's rendered number is
+  // computed, a marker that disagrees with it fails, and step 4 is chosen by it.
+  const items = [];
+  const lists = [];
+  for (const [i, t] of section.entries()) {
+    if (t.type === "ordered_list_open") lists.push({ next: Number(t.attrGet("start") ?? 1) });
+    else if (t.type === "bullet_list_open") lists.push(null);
+    else if (t.type === "ordered_list_close" || t.type === "bullet_list_close") lists.pop();
+    else if (t.type === "list_item_open" && lists.at(-1)) {
+      const shown = lists.at(-1).next++;
+      if (t.info !== String(shown)) problems.push(`a demo-path list item written "${t.info}." renders as ${shown} — number the steps in order`);
+      if (shown === 4) items.push(i);
+    }
+  }
   if (items.length === 0) return { text: null, problems: [...problems, "the demo path has no step numbered 4"] };
   if (items.length > 1) problems.push(`${items.length} list items numbered 4 in the demo path — step 4 must be stated once`);
   const open = items[0];
@@ -506,6 +523,14 @@ function selfTest() {
     ["a second demo-path section fails (round 8)", { ...base, doc: `${good}\n\n## The demo path again\n\n4. -DemoBackendURL https://evil.example.com\n` }, "sections"],
     ["a second item numbered 4 fails (round 8)", { ...base, doc: good.replace("5. audit", "5. audit\n\n   4. -DemoBackendURL http://127.0.0.1:8080") }, "numbered 4"],
     ["a 4. under a later h2 is not step 4 (round 8)", { ...base, doc: `${good}\n\n## Elsewhere\n\n4. unrelated\n` }, null],
+    // Round 9: a heading nested in step 4 does not end the section, and step 4 is the
+    // item a reader sees as 4, not the one whose source marker says 4.
+    ...[["   ## Note", "a nested h2"], ["   # Note", "a nested h1"], ["   Note\n   ====", "a nested setext heading"], ["   > ## Note", "a heading in a blockquote"]].map(([h, what]) =>
+      [`${what} in step 4 does not hide the text after it (round 9)`, withProse(`x\n\n${h}\n\n   Use -DemoBackendURL https://evil.example.com`), "its host is evil.example.com"]),
+    ["a heading carrying a wrong flag in step 4 is checked (round 9)", withProse("x\n\n   ## Use -DemoBackendDevice ipad-evil"), "gives -DemoBackendDevice ipad-evil"],
+    ["a repeated marker that renders as step 4 fails (round 9)", { ...base, doc: good.replace(STEP4, `4. -DemoBackendURL https://evil.example.com\n${STEP4}`) }, 'written "4." renders as 5'],
+    // `3. 3. 4.`: the second `3.` is what a reader sees as step 4, the real one shows as 5.
+    ["…and the item that renders as 4 is the one checked (round 9)", { ...base, doc: good.replace(STEP4, `3. intro\n3. -DemoBackendURL https://evil.example.com\n${STEP4}`) }, "its host is evil.example.com"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

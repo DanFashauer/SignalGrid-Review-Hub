@@ -76,23 +76,30 @@
 // data: a property/optional chain (never a `.length`/`.size` read), `String()` / `.toLowerCase()` /
 // `.trim()` / `Array.from()`, a destructured binding without a default, a prop that EVERY call site
 // it can see passes as a plain read, the first parameter of an array callback whose receiver is
-// itself such a read (`rows ?? []`, optionally filtered / sliced / sorted). A binding that is
-// assigned or mutated anywhere in its scope, a rest element, and a component with any reference
-// other than a JSX tag (an alias, a direct call, `createElement`, `memo(C)`, an `export`) are NOT
-// plain. FAIL-CLOSED: anything this analysis cannot show plain — a literal, a `??`/ternary default,
-// a helper / `useMemo` result, a destructuring or parameter default, a member read of another const,
-// a template with literal text, a defaulted or augmented array — earns no exemption. This is a
-// conservative HEURISTIC, not a proof: each rule exists because a fixture showed the shape it closes.
+// itself such a read (`rows ?? []`, optionally filtered / sliced / sorted). A binding stays plain only
+// if EVERY reference to it is a known READ-ONLY use (a WHITELIST, so write forms need no list): an
+// assignment / destructuring-assignment / `for…of|in` target, `++`, an argument to an unknown function,
+// `.bind`, `Array.prototype.push.call`, `Object.defineProperty`, an object/array literal member or a JSX
+// prop hands the value away and is an ESCAPE. A rest element, a component with any reference other than
+// a JSX tag (an alias, a direct call, `createElement`, `cloneElement`, `memo(C)`, an `export`), and a map
+// with an `undefined`/`null` entry (an absent key HITS it) earn no exemption. FAIL-CLOSED: anything this
+// analysis cannot show plain — a literal, a `??`/ternary default, a helper / `useMemo` result, a
+// destructuring or parameter default, a member read of another const, a template with literal text, a
+// defaulted or augmented array — earns no exemption. This is a conservative HEURISTIC, not a proof:
+// each rule exists because a fixture showed the shape it closes, and every clause is mutation-tested.
 //
 // KNOWN, DELIBERATE LIMITATIONS (a static, name-and-scope analysis; it can err in BOTH directions):
 //   - Cross-file: a child component, helper or class map IMPORTED from another file is not
 //     followed (no module resolver). An EXPORTED component's call sites in other files are
-//     unseen, so it is never treated as plain. A false NEGATIVE for imports; the widened doctrine
-//     review covers it.
+//     unseen, so it is never treated as plain. A component reached only through a wrapper
+//     (`const W = withX(C); <W …/>`) does not taint C's props. False NEGATIVES for imports and wrappers.
 //   - A callback parameter over query rows is recognised only as a plain KEY, not tracked as DATA:
 //     `rows.map((r) => <li className="…emerald">{r.name}</li>)` is missed, as is a class assembled
 //     from a prop (`text-${tone}-400`). False negatives. Data fields destructured OUT of `q.data`
 //     (`const { name } = q.data ?? {}`) are likewise not tracked (pre-existing).
+//   - Query data mutated IN PLACE through another path (`seed(q.data.rows)`) is not seen by the
+//     read-only whitelist, which judges a binding by its own references. A key that is a fixed
+//     string by construction (`d.toString()` over `q.data ?? {}`) is not recognised.
 //   - react-query `initialData` / `placeholderData` make `q.data` a literal while the real state is
 //     unknown; a presence guard and a plain-read key are both fooled (pre-existing, gate-wide).
 //     `Component.defaultProps` is not followed (ignored by React 19, which this repo pins).
@@ -100,7 +107,9 @@
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
 //   - Fail-closed OVER-FLAGS, never silent: a key that defaults to a NON-good entry
-//     (`T[s ?? "bad"] ?? T.d`), and a row transform that keeps every element (`.flatMap((x) => [x])`).
+//     (`T[s ?? "bad"] ?? T.d`); a row transform that keeps every element (`.flatMap((x) => [x])`);
+//     `rows[0]` / `rows.join()` / `.length` / `.size` keys; a query-derived value handed to an
+//     unknown method (`q.data.rows.reduce(…)`), which makes `q` itself non-plain.
 //   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
 //     resolved.
 //
@@ -894,6 +903,11 @@ function analyzeSourceFile(relPath, text) {
   // every site passes one (`s={q.data?.s}`); a literal, a defaulted expression, a spread or a
   // helper at ANY site means the receiving key can be a fixed entry.
   const siteCache = new Map();
+  let cloneSeen;
+  const cloneElementUsed = () => {
+    if (cloneSeen === undefined) { cloneSeen = false; const w = (n) => { if (cloneSeen) return; if (ts.isIdentifier(n) && n.text === "cloneElement") cloneSeen = true; else ts.forEachChild(n, w); }; w(sf); }
+    return cloneSeen;
+  };
   const callSitesOf = (fn) => {
     if (siteCache.has(fn)) return siteCache.get(fn);
     const info = { byProp: new Map(), spread: false, count: 0 };
@@ -919,6 +933,7 @@ function analyzeSourceFile(relPath, text) {
     // Any other reference to the component — an alias (`const D = C`), a direct call, `createElement`,
     // `memo(C)`, an array/object member, an `export` — is a call site this analysis cannot see.
     const comp = localComponents.find((k) => k.fn === fn);
+    if (cloneElementUsed()) info.unseen = true; // `cloneElement(<C s=…/>, { s: "ok" })` overrides props the tag shows
     const exported = (decl) => Boolean(decl.modifiers && decl.modifiers.some((m) => m.kind === K.ExportKeyword));
     const declNode = comp && (ts.isFunctionDeclaration(fn) ? fn : fn.parent && ts.isVariableDeclaration(fn.parent) ? fn.parent : (fn.parent && fn.parent.parent && ts.isVariableDeclaration(fn.parent.parent) ? fn.parent.parent : null));
     const stmt = declNode && (ts.isVariableDeclaration(declNode) ? declNode.parent?.parent : declNode);
@@ -944,41 +959,94 @@ function analyzeSourceFile(relPath, text) {
     const exprs = propName === null ? [...info.byProp.values()].flat() : (info.byProp.get(propName) ?? []);
     return exprs.every((x) => keyIsPlainData(x));
   };
-  // A binding that is ASSIGNED anywhere in its scope (`s ??= "ok"`, `k = "ok"`, `x++`), or whose
-  // value is MUTATED in place (`rows.push("ok")`, `d.s = "ok"`, `Object.assign(d, …)`), is no
-  // longer the plain read it was declared as.
-  const MUTATORS = new Set(["push", "unshift", "splice", "fill", "copyWithin", "set", "add", "pop", "shift"]);
-  const rootIdent = (e) => {
-    for (;;) {
-      e = unwrapExpr(e);
-      if (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) e = e.expression;
-      else break;
+  // ESCAPE ANALYSIS (a whitelist, not a blacklist of write forms). A binding stays a plain read of
+  // query data only if EVERY reference to it in its scope is a known READ-ONLY use: a property read,
+  // a call of a non-mutating method, a key position (`TONE[x]`), a comparison / `&&` / `??` operand,
+  // the source of an alias or destructure whose own uses are read-only, `String(x)`. Anything else —
+  // an assignment or destructuring-assignment target, a `for…of`/`for…in` target, `++`, an argument to
+  // an unknown function, `.bind`, `Array.prototype.push.call`, `Object.defineProperty`, an object/array
+  // literal member, a JSX prop — is an ESCAPE: the value may be rebound or mutated where this analysis
+  // cannot see, so it is not plain. Writes need no list; unknown uses fail closed.
+  // Is this literal (or one nested in it) the TARGET of a destructuring assignment / for-of|in?
+  const isAssignmentPattern = (lit) => {
+    let n = lit;
+    for (let p = n.parent; p; n = p, p = p.parent) {
+      if (ts.isArrayLiteralExpression(p) || ts.isObjectLiteralExpression(p) || ts.isPropertyAssignment(p) || ts.isSpreadAssignment(p) || ts.isSpreadElement(p) || ts.isShorthandPropertyAssignment(p)) continue;
+      if (ts.isBinaryExpression(p)) return p.left === n && p.operatorToken.kind >= K.FirstAssignment && p.operatorToken.kind <= K.LastAssignment;
+      if (ts.isForOfStatement(p) || ts.isForInStatement(p)) return p.initializer === n;
+      return false;
     }
-    return ts.isIdentifier(e) ? e : null;
+    return false;
   };
-  const isMutated = (name, scope) => {
-    let hit = false;
+  const boundNames = (name) => ts.isIdentifier(name) ? [name.text]
+    : name.elements.flatMap((el) => (ts.isOmittedExpression(el) ? [] : boundNames(el.name)));
+  const isReadOnlyUse = (id) => {
+    let n = id, derived = false; // `derived`: n is now a value READ OUT of the binding, not the binding itself
+    for (;;) {
+      const p = n.parent;
+      if (!p) return false;
+      if (ts.isParenthesizedExpression(p) || ts.isNonNullExpression(p) || ts.isAsExpression(p) || ts.isSatisfiesExpression(p) || ts.isTypeAssertionExpression(p)) { n = p; continue; }
+      if (ts.isPropertyAccessExpression(p) && p.expression === n) {
+        const call = p.parent;
+        if (ts.isCallExpression(call) && call.expression === p) return READ_METHODS.has(p.name.text);
+        n = p; derived = true; continue; // a property read: judge where the read value goes
+      }
+      if (ts.isElementAccessExpression(p)) { if (p.argumentExpression === n) return true; n = p; derived = true; continue; }
+      if (ts.isBinaryExpression(p)) {
+        const op = p.operatorToken.kind;
+        if (op >= K.FirstAssignment && op <= K.LastAssignment) return p.right === n && derived; // a target is a write; a derived value on the right is just read
+        if (op === K.QuestionQuestionToken || op === K.BarBarToken || op === K.AmpersandAmpersandToken) { n = p; continue; }
+        return true; // comparison / arithmetic: a read that goes nowhere
+      }
+      if (ts.isConditionalExpression(p)) { if (p.condition === n) return true; n = p; continue; }
+      if (ts.isPrefixUnaryExpression(p) || ts.isPostfixUnaryExpression(p)) return p.operator !== K.PlusPlusToken && p.operator !== K.MinusMinusToken;
+      if (ts.isTypeOfExpression(p) || ts.isTemplateSpan(p) || ts.isExpressionStatement(p)) return true;
+      if (ts.isIfStatement(p) && p.expression === n) return true;
+      if (ts.isForOfStatement(p) || ts.isForInStatement(p)) return p.expression === n;
+      if (ts.isVariableDeclaration(p) && p.initializer === n) {
+        if (derived) return true; // a value read OUT of the binding: the new name is judged on its own uses elsewhere
+        return boundNames(p.name).every((nm) => refsReadOnly(nm, scopeOf(p))); // an alias / destructured copy is judged on ITS uses
+      }
+      if (ts.isArrayLiteralExpression(p) || ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p) || ts.isSpreadAssignment(p) || ts.isSpreadElement(p)) {
+        let lit = p; while (lit.parent && (ts.isPropertyAssignment(lit) || ts.isSpreadAssignment(lit) || ts.isSpreadElement(lit) || ts.isShorthandPropertyAssignment(lit))) lit = lit.parent;
+        if (isAssignmentPattern(lit)) return false; // `[s] = …`, `({ s } = …)`, `for (s of …)`: a write
+        return derived || ts.isSpreadElement(p); // `{ a: q.data?.a }` carries a read; `{ d }` / `[d]` hands the binding itself away
+      }
+      if (ts.isJsxExpression(p)) return derived || ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent);
+      if (ts.isCallExpression(p) && p.arguments.includes(n)) {
+        const c = p.expression;
+        return derived || (ts.isIdentifier(c) && c.text === "String" && !findBinding(c)) ||
+          (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "Array" && c.name.text === "from" && !findBinding(c.expression));
+      }
+      return derived;
+    }
+  };
+  const readOnlyGuard = new Set();
+  const refsReadOnly = (name, scope) => {
+    const key = `${name}@${scope.pos}`;
+    if (readOnlyGuard.has(key)) return true; // a cycle of aliases adds no new use
+    readOnlyGuard.add(key);
+    let ok = true;
     const w = (n) => {
-      if (hit || !n) return;
-      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
-          rootIdent(n.left)?.text === name) { hit = true; return; }
-      if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
-          (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken) && rootIdent(n.operand)?.text === name) { hit = true; return; }
-      if (ts.isCallExpression(n)) {
-        const c = n.expression;
-        if (ts.isPropertyAccessExpression(c) && MUTATORS.has(c.name.text) && rootIdent(c.expression)?.text === name) { hit = true; return; }
-        if (ts.isPropertyAccessExpression(c) && c.name.text === "assign" && ts.isIdentifier(c.expression) && c.expression.text === "Object" &&
-            n.arguments[0] && rootIdent(n.arguments[0])?.text === name) { hit = true; return; }
+      if (!ok || !n) return;
+      if (ts.isIdentifier(n) && n.text === name && !isMemberName(n)) {
+        const par = n.parent;
+        const declName = (ts.isVariableDeclaration(par) || ts.isParameter(par) || ts.isFunctionDeclaration(par)) && par.name === n;
+        const bindingName = ts.isBindingElement(par) && (par.name === n || par.propertyName === n);
+        if (!declName && !bindingName && !isReadOnlyUse(n)) { ok = false; return; }
       }
       ts.forEachChild(n, w);
     };
     w(scope);
-    return hit;
+    readOnlyGuard.delete(key);
+    return ok;
   };
   // A numeric/size read is a FIXED value (0) over an empty default, not a data-derived key.
   const FIXED_VALUE_PROPS = new Set(["length", "size", "byteLength"]);
   const PLAIN_METHODS = new Set(["toLowerCase", "toUpperCase", "trim", "toString"]);
   const ROW_KEEPING = new Set(["filter", "slice", "sort", "reverse", "toSorted", "toReversed"]);
+  const READ_METHODS = new Set([...ROW_METHODS, ...ROW_KEEPING, ...PLAIN_METHODS, "concat", "join", "includes", "indexOf", "lastIndexOf",
+    "at", "findIndex", "findLast", "findLastIndex", "keys", "values", "entries", "get", "has", "flat", "from"]);
   const keyIsPlainData = (k, depth = 0) => {
     if (!k || depth > 8) return false; // also stops a cycle (`const a = b; const b = a`)
     const e = unwrapExpr(k);
@@ -987,7 +1055,7 @@ function analyzeSourceFile(relPath, text) {
       const b = findBinding(e);
       if (!b || b.kind === "opaque") return false;
       if (b.kind === "param") {
-        if (isMutated(e.text, b.node.parent)) return false;
+        if (!refsReadOnly(e.text, b.node.parent)) return false;
         if (b.node.parent && paramSitesPlain(b.node.parent, null)) return true;
         return isRowOfQueryData(b.node); // `(s) =>` of `data.rows.map(...)`: a row exists only when the data does
       }
@@ -995,12 +1063,12 @@ function analyzeSourceFile(relPath, text) {
         if (b.node.initializer) return false; // a destructuring / parameter default
         if (b.fromParam) {
           const fn = b.node.parent.parent.parent;
-          return !b.node.dotDotDotToken && !isMutated(e.text, fn) && paramSitesPlain(fn, propOf(b.node));
+          return !b.node.dotDotDotToken && refsReadOnly(e.text, fn) && paramSitesPlain(fn, propOf(b.node));
         }
-        if (FIXED_VALUE_PROPS.has(propOf(b.node)) || isMutated(e.text, b.scope)) return false;
+        if (FIXED_VALUE_PROPS.has(propOf(b.node)) || !refsReadOnly(e.text, b.scope)) return false;
         return Boolean(b.decl.initializer) && recur(b.decl.initializer);
       }
-      return !isMutated(e.text, b.scope) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+      return refsReadOnly(e.text, b.scope) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
     }
     if (ts.isPropertyAccessExpression(e)) return !FIXED_VALUE_PROPS.has(e.name.text) && recur(e.expression);
     if (ts.isCallExpression(e)) {
@@ -1020,6 +1088,8 @@ function analyzeSourceFile(relPath, text) {
     }
     return false;
   };
+  // `T[undefined]` is `T["undefined"]`: a map with such an entry is HIT by an absent key, so a fallback never runs.
+  const hasAbsentKeyEntry = (obj) => Boolean(obj) && ["undefined", "null"].some((k) => mapEntries(obj, k).length > 0);
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
@@ -1047,7 +1117,8 @@ function analyzeSourceFile(relPath, text) {
         if (es) {
           // A fallback protects only a lookup whose key is a provably plain read of data; a literal
           // or property key (`T.ok`, `T["ok"]`) is not one, so its entry is always walked.
-          if (!lookupHasSafeFallback(x)) for (const e of es) walk(e, use ?? x);
+          const obj = mapObjectOf(x.expression);
+          if (!(lookupHasSafeFallback(x) && !hasAbsentKeyEntry(obj))) for (const e of es) walk(e, use ?? x);
           return; // the map and the key are fully accounted for; do not re-walk them as plain nodes
         }
       }
@@ -1711,6 +1782,75 @@ const OK_R5 = [
   ["plain site with children", keyFx("", "", "", CHILD_N, `<C s={q.data?.s} ${N}>x</C>`)],
 ];
 
+// Round-6 review of #1370: the read-only-use whitelist (escape analysis) replaces a blacklist of write forms.
+const UNDEF_MAP = (key) => `const U = { ${key}: "text-emerald-400", default: "text-slate-400" };`;
+const ROWS = `const rows = q.data?.rows ?? [];`;
+const mapRows = (body, use = "TONE[r] ?? TONE.default") => keyFx("", body, "", "", `<>{rows.map((r) => <li className={${use}}>{q.data?.n}</li>)}</>`);
+const letS = (stmt) => keyFx("", `let s = q.data?.s; ${stmt}`, "TONE[s] ?? TONE.default");
+const dObj = (stmt) => keyFx("", `const d = q.data ?? {}; ${stmt}`, "TONE[d.s] ?? TONE.default");
+const BUG_R6 = [
+  ["destructuring assignment: ({ s } = …)", letS(`({ s } = { s: "ok" });`)],
+  ["array destructuring assignment: [s] = […]", letS(`[s] = ["ok"];`)],
+  ["renamed destructuring assignment: ({ a: s } = …)", letS(`({ a: s } = { a: "ok" });`)],
+  ["for…of target", letS(`for (s of ["ok"]) {}`)],
+  ["for…in target", letS(`for (s in { ok: 1 }) {}`)],
+  ["increment: s++", letS(`s++;`)],
+  ["parameter: destructuring assignment", keyFx("", "", "", `function C({ s, n }) { ({ s } = { s: "ok" }); return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, PLAIN_SITE)],
+  ["parameter: for…of target", keyFx("", "", "", `function C({ s, n }) { for (s of ["ok"]) {} return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, PLAIN_SITE)],
+  ["cloneElement overrides a plain site", keyFx("", "", "", CHILD_N, `{React.cloneElement(<C s={q.data?.s} ${N} />, { s: "ok" })}`)],
+  ["rows mutated through an alias", mapRows(`${ROWS} const a = rows; a.push("ok");`)],
+  ["rows handed to a function: seed(rows)", mapRows(`${ROWS} seed(rows);`)],
+  ["rows: Array.prototype.push.call(rows, …)", mapRows(`${ROWS} Array.prototype.push.call(rows, "ok");`)],
+  ["rows: a bound mutator", mapRows(`${ROWS} const add = rows.push.bind(rows); add("ok");`)],
+  ["rows.unshift", mapRows(`${ROWS} rows.unshift("ok");`)],
+  ["rows.splice", mapRows(`${ROWS} rows.splice(0, 0, "ok");`)],
+  ["rows[0] = …", mapRows(`${ROWS} rows[0] = "ok";`)],
+  ["d: Object.defineProperty", dObj(`Object.defineProperty(d, "s", { value: "ok" });`)],
+  ["d: Reflect.set", dObj(`Reflect.set(d, "s", "ok");`)],
+  ["d: Object.setPrototypeOf", dObj(`Object.setPrototypeOf(d, { s: "ok" });`)],
+  ["d written through a nested alias", dObj(`const o = { d }; o.d.s = "ok";`)],
+  ["d written by a destructuring assignment target", dObj(`({ x: d.s } = { x: "ok" });`)],
+  ["map with an `undefined` entry (bare key)", keyFx(UNDEF_MAP("undefined"), "", "U[q.data?.s] ?? U.default")],
+  ["map with an `undefined` entry (quoted key)", keyFx(UNDEF_MAP('"undefined"'), "", "U[q.data?.s] ?? U.default")],
+  ["map with a `null` entry", keyFx(UNDEF_MAP("null"), "", "U[q.data?.s] ?? U.default")],
+  ["map with an `undefined` entry via String()", keyFx(UNDEF_MAP("undefined"), "", "U[String(q.data?.s)] ?? U.default")],
+  ["numeric key: rows.size", numFx(ROWS, "NT[rows.size] ?? NT.default")],
+  ["rows default does not make an arbitrary receiver plain", mapRows(`const rows = seed() ?? [];`)],
+];
+const OK_R6 = [
+  ["a read value handed to a function does not escape q", keyFx("", `track(q.data?.s);`, "TONE[q.data?.s] ?? TONE.default")],
+  ["a read value carried in an object literal", keyFx("", `const meta = { s: q.data?.s };`, "TONE[q.data?.s] ?? TONE.default")],
+  ["a read value handed to a prop", keyFx("", "", "", CHILD_N, `<><C s={q.data?.s} ${N} /><i title={q.data?.s}>x</i></>`)],
+  ["rows only read: includes / join / length", mapRows(`${ROWS} const has = rows.includes("x"); const label = rows.join(",");`)],
+  ["rows aliased and the alias only read", mapRows(`${ROWS} const a = rows; const n = a.length;`)],
+  ["let that is never reassigned", keyFx("", `let s = q.data?.s;`, "TONE[s] ?? TONE.default")],
+];
+
+// Round-6 follow-up: one fixture per clause of the read-only-use whitelist.
+const rowsWith = (extraBody, jsxBefore = "") =>
+  keyFx("", `${ROWS} ${extraBody}`, "", "", `<>${jsxBefore}{rows.map((r) => <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>)}</>`);
+BUG_R6.push(
+  ["rows aliased by assignment: a = rows", rowsWith(`let a; a = rows; a.push("ok");`)],
+  ["rows flows through ||: a = rows || other", rowsWith(`const a = rows || other; a.push("ok");`)],
+  ["rows flows through a ternary", rowsWith(`const a = cond ? rows : []; a.push("ok");`)],
+  ["rows: destructured method then called", rowsWith(`const { pop } = rows; pop();`)],
+  ["rows handed to a JSX prop", rowsWith("", `<X data={rows} />`)],
+  ["rows returned from a closure", rowsWith(`const get = () => rows; get().push("ok");`)],
+  ["rows passed to a shadowed String", rowsWith(`function String(a) { a.push("ok"); return ""; } String(rows);`)],
+  ["reduce accumulator over Array.from(rows)", keyFx("", "", "", "", `<>{Array.from(q.data?.rows ?? []).reduce((acc) => <li className={TONE[acc] ?? TONE.default}>{q.data?.n}</li>, "ok")}</>`)],
+);
+OK_R6.push(
+  ["rows[0] read handed to a prop", rowsWith("", `<i title={rows[0]}>x</i>`)],
+  ["rows used in typeof / template / a bare statement", rowsWith("const t = typeof rows; const str = `${rows}`; rows;")],
+  ["rows tested in an if", rowsWith("if (rows) { track(1); }")],
+  ["a read value assigned to a declaration that escapes", keyFx("", `const x = q.data?.s; track(x);`, "TONE[q.data?.s] ?? TONE.default")],
+  ["rows copied by spread", rowsWith("const copy = [...rows];")],
+  ["rows rendered as a child", rowsWith("", "{rows}")],
+);
+
+BUG_R6.push(["String shadowed, argument is a derived read", keyFx(`function String(x) { return x ?? "ok"; }`, "", "TONE[String(q.data?.s)] ?? TONE.default")]);
+OK_R6.push(["rows used only as a ternary condition", rowsWith("const c = rows ? 1 : 2;")]);
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1928,6 +2068,18 @@ function selfTest() {
   for (const [label, src] of OK_R5) {
     const v = analyze(src, "R5OK.tsx");
     console.log(`  self-test R5-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-6 review of #1370.
+  for (const [label, src] of BUG_R6) {
+    const v = analyze(src, "R6.tsx");
+    console.log(`  self-test R6 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+  }
+  for (const [label, src] of OK_R6) {
+    const v = analyze(src, "R6OK.tsx");
+    console.log(`  self-test R6-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 

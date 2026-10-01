@@ -2425,17 +2425,21 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       alias, a same-file helper, a nested `TONE.a[status]` or a `...BASE` spread — is judged like an
       inline good class unless the lookup has an explicit `??`/`||` fallback AND a key the analysis
       can show is a plain read of query data. That key rule is a conservative heuristic, not a
-      proof, and is fail-closed: a literal, `??`/ternary default, helper or `useMemo` result,
-      destructuring or parameter default, `.length`/`.size` read, a binding assigned or mutated in
-      its scope, a rest element, a prop any visible call site defaults or spreads, a component
-      referenced other than as a JSX tag (alias, direct call, `createElement`, `memo`, `export`), or a
-      defaulted/augmented row array earns no exemption. Self-test pairs bug shapes with guarded
+      proof, and is fail-closed: a binding stays plain only if every reference to it is a known
+      read-only use (a whitelist, so no list of write forms is needed — assignment, destructuring
+      assignment, `for…of|in`, `++`, an argument to an unknown function, `.bind`, `Object.defineProperty`
+      and the like all escape); a literal, `??`/ternary default, helper or `useMemo` result,
+      destructuring or parameter default, `.length`/`.size` read, rest element, a prop any visible call
+      site defaults or spreads, a component referenced other than as a JSX tag (alias, direct call,
+      `createElement`, `cloneElement`, `memo`, `export`), a defaulted/augmented row array, or a map with
+      an `undefined`/`null` entry earns no exemption. Self-test pairs bug shapes with guarded
       twins; live tree still 0 findings; each clause of the key rule was mutation-tested by cp-aside
       (disable it, the self-test fails). Still not followed: a child component, helper or class map
       imported from another file (no module resolver); a callback parameter over query rows as DATA
       (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
-      `initialData`/`placeholderData`; `defaultProps`. Known over-flags: `T[s ?? "bad"] ?? T.d`,
-      `.flatMap((x) => [x])`. Row stays open for those.
+      a component reached only through a wrapper (`withX(C)`); query data mutated in place through
+      another path; `initialData`/`placeholderData`; `defaultProps`. Known over-flags: `T[s ?? "bad"]
+      ?? T.d`, `.flatMap((x) => [x])`, `rows[0]`/`.length`/`.size` keys. Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

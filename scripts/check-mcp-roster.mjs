@@ -76,11 +76,14 @@ export function deriveToolNames(indexSource) {
 //      package spec, and each `Context7 … <x.y.z>` phrase (case-insensitive, same
 //      line, ≤40 chars apart), must name PINNED. Nothing is typed in a list, so a
 //      new copy anywhere — a skill doc, .mcp.json, a new doc — is held on arrival.
-//      An UNPINNED spec (`@upstash/context7-mcp@latest`, any non-numeric tag) is
-//      a finding too. Binary and large files are swept as latin1, never skipped.
-//      It is a heuristic over wording: a version written BEFORE the word, on the
-//      next line, >40 chars away, two-component, or under another name ("ctx7")
-//      is not seen; an unrelated x.y.z close after "Context7" fails (closed).
+//      A spec's WHOLE token after `@` must equal PINNED: a tag (@latest), range
+//      (@^4.1.1, @~, @>=), wildcard (@*, @4.1.x), partial (@4, @4.0) or prerelease
+//      is a finding, and `npx … @upstash/context7-mcp` with no version is too.
+//      Binary and large files are swept as latin1, never skipped. The PHRASE half
+//      is a heuristic over wording: a version written BEFORE the word, on the next
+//      line, >40 chars away, two-component, or under another name ("ctx7") is not
+//      seen, nor a bare spec outside an `npx` line; an unrelated x.y.z close after
+//      "Context7" fails (closed).
 //      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
 //      what was true on a day, vendored upstream trees (third_party/ — their
 //      configs are upstream's, not our pin), and this gate, whose fixtures plant
@@ -89,8 +92,12 @@ export function deriveToolNames(indexSource) {
 //      reworded out of the sweep's shapes is a finding, not a pass. The roster's
 //      `packageVersion` has no "context7" on its line, so it is held structurally.
 export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
-const CONTEXT7_SPEC_RE = /@upstash\/context7-mcp@(\d+\.\d+\.\d+[^\s`"'),;]*)/g;
-const CONTEXT7_UNPINNED_RE = /@upstash\/context7-mcp@([A-Za-z][\w.-]*)/g;
+// The WHOLE token after `@` is held to PINNED exactly, so a range (^ ~ >=), a
+// wildcard (* 4.1.x), a partial (4, 4.0), a prerelease or a tag (latest) is a
+// finding. Trailing sentence punctuation is not part of the token.
+const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
+const CONTEXT7_BARE_NPX_RE = /\bnpx\b[^\n]*?@upstash\\?\/context7-mcp(?![@\w-])/g;
+const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
 const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
 export const CONTEXT7_PIN_HISTORY = [
   /^docs\/BUILD_BACKLOG\.md$/,
@@ -131,19 +138,28 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     if (!/context7/i.test(text)) continue;
     text.split("\n").forEach((line, i) => {
       const seen = new Set();
-      for (const re of [CONTEXT7_SPEC_RE, CONTEXT7_PHRASE_RE]) {
-        for (const m of line.matchAll(new RegExp(re.source, re.flags))) {
-          swept++;
-          if (m[1] !== pin && !seen.has(m[1])) {
-            seen.add(m[1]);
-            problems.push(stale(path, i + 1, m[1]));
-          }
-        }
-      }
-      for (const m of line.matchAll(new RegExp(CONTEXT7_UNPINNED_RE.source, CONTEXT7_UNPINNED_RE.flags))) {
+      for (const m of line.matchAll(new RegExp(CONTEXT7_SPEC_RE.source, CONTEXT7_SPEC_RE.flags))) {
         swept++;
-        problems.push(`${path}:${i + 1}: Context7 spec is UNPINNED (@${m[1]}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        const v = specToken(m[1]);
+        if (v === pin || seen.has(v)) continue;
+        seen.add(v);
+        problems.push(
+          /^\d+\.\d+\.\d+$/.test(v)
+            ? stale(path, i + 1, v)
+            : `${path}:${i + 1}: Context7 spec is UNPINNED (@${v}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`,
+        );
       }
+      for (const m of line.matchAll(new RegExp(CONTEXT7_PHRASE_RE.source, CONTEXT7_PHRASE_RE.flags))) {
+        swept++;
+        if (m[1] === pin || seen.has(m[1]) || [...seen].some((v) => v.startsWith(m[1]))) continue;
+        seen.add(m[1]);
+        problems.push(stale(path, i + 1, m[1]));
+      }
+      if (CONTEXT7_BARE_NPX_RE.test(line.replace(/\s+/g, " "))) {
+        swept++;
+        problems.push(`${path}:${i + 1}: Context7 is invoked via npx with NO version, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+      }
+      CONTEXT7_BARE_NPX_RE.lastIndex = 0;
     });
   }
 
@@ -170,8 +186,9 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     for (let i = from; i < to; i++) {
       for (const m of lines[i].matchAll(new RegExp(re.source, re.flags))) {
         seen++;
-        const msg = stale(path, i + 1, m[1]);
-        if (m[1] !== pin && !problems.includes(msg)) problems.push(msg);
+        const v = re === CONTEXT7_SPEC_RE ? specToken(m[1]) : m[1];
+        const msg = stale(path, i + 1, v);
+        if (v !== pin && !problems.some((p) => p.startsWith(`${path}:${i + 1}:`))) problems.push(msg);
       }
     }
     if (!seen) problems.push(`${path}: no Context7 pin copy matching ${re} — reworded or removed, so the gate can no longer hold it to PINNED ${pin}`);
@@ -699,6 +716,28 @@ server.registerTool(
     pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y ${SPEC}latest`)).some((p) =>
       p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@latest)`),
     ),
+  ]);
+  for (const tag of ["^4.1.1", "~4.1.1", ">=4.1.1", "*", "4.1.x", "4", "4.0", `${realPin}-rc.1`]) {
+    checks.push([
+      `a loose spec @${tag} (range, wildcard, partial or prerelease) is named`,
+      pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y ${SPEC}${tag}`)).some((p) =>
+        p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@${tag})`),
+      ),
+    ]);
+  }
+  checks.push([
+    "an npx invocation with NO version is named",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `run npx -y ${SPEC.slice(0, -1)} for docs`)).some((p) =>
+      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 is invoked via npx with NO version`),
+    ),
+  ]);
+  checks.push([
+    "the CORRECT pin ending a sentence (`…@<PINNED>.`) is not a false positive",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `Use ${SPEC}${realPin}.`)).length === 0,
+  ]);
+  checks.push([
+    "a capitalised-only `Context7 version <stale>` mention (case-insensitive prefilter) is named",
+    names(pinRun({ "docs/agent/cap-only.md": `Pinned: Context7 version ${OLD}\n` }), "docs/agent/cap-only.md", 1, OLD),
   ]);
   checks.push([
     "a stale spec in a file with a NUL byte (binary) is still named, not skipped",

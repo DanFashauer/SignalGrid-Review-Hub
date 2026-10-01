@@ -188,7 +188,16 @@ function stripYamlComment(s) {
   }
   return s;
 }
-const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/.test(v) ? JSON.parse(v) : /^'.*'$/.test(v) ? v.slice(1, -1).replace(/''/g, "'") : v);
+// a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own — an escaped line break (and the next
+// line's indent) disappears, `\x` is `x` — so a non-JSON escape never throws the gate
+const unquoteDq = (v) => {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v.slice(1, -1).replace(/\\\r?\n[ \t]*/g, "").replace(/\\(.)/g, "$1");
+  }
+};
+const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/s.test(v) ? unquoteDq(v) : /^'.*'$/.test(v) ? v.slice(1, -1).replace(/''/g, "'") : v);
 // YAML anchors (&a), aliases (*a) and tags (!!str, !t) before a value are not part of it
 const stripYamlProps = (v) => v.replace(/^(?:(?:[&*][^\s,{}[\]]+|!\S*)(?:\s+|$))+/, "");
 
@@ -306,7 +315,9 @@ export function logicalLines(lines, kind, path = "") {
           cur.text = cur.text.replace(/\s*[>|][+-]?\d*\s*$/, "");
           cur.block = true;
         }
-        cur.text += ` ${t.trim()}`;
+        // inside a double-quoted scalar an escaped line break vanishes with the next line's indent (YAML 1.2 §7.3.1)
+        if (openQuote(cur.text) && /(?<!\\)(?:\\\\)*\\$/.test(cur.text) && /"[^"]*$/.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
+        else cur.text += ` ${t.trim()}`;
         continue;
       }
       if (cur) out.push(cur);
@@ -327,7 +338,9 @@ export function logicalLines(lines, kind, path = "") {
     ? [/(?<!`)`$/, ["space", "keep"]] // the escaped newline is whitespace; read glued too, fail-closed
     : /\.(?:cmd|bat)$/i.test(path)
       ? [/\^$/, ["keep"]] // `^` escapes the newline: the next line is appended as it stands
-      : /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path)
+      : /(?:^|\/)(?:GNU)?makefile$|\.mk$/i.test(path)
+        ? [/(?<!\\)\\$/, ["tab", "space"]] // make drops the recipe tail's leading tab, the shell then glues; a variable joins with a space
+        : /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path)
         ? [/(?<!\\)\\$/, ["keep", "strip"]] // read with and without the next line's indentation, fail-closed
         : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
   if (kind === "json") return lines.map((text, i) => ({ i, text }));
@@ -345,7 +358,7 @@ export function logicalLines(lines, kind, path = "") {
 /**
  * Pure: entries `{ i, text }` with continuation groups joined. A group is spliced the way a reader would splice it —
  * `keep` appends the next line as it stands (bash: `\<newline>` is deleted, nothing inserted), `strip` drops its
- * leading whitespace, `space` puts one space between, `block` drops up to the group's first-line indentation (a YAML
+ * leading whitespace, `tab` drops one leading tab (a make recipe tail), `space` puts one space between, `block` drops up to the group's first-line indentation (a YAML
  * literal block's indent). One entry per mode is returned for a group that holds the package, so a pin or a name split
  * mid-token across the join is read as the shell would read it; a group without the package keeps its lines.
  */
@@ -366,7 +379,15 @@ export function joinContinuations(entries, cont, modes) {
         const next = n < j ? entries[n].text.replace(cont, "") : entries[n].text;
         const lead = /^\s*/.exec(next)[0].length;
         text +=
-          mode === "space" ? ` ${next.trim()}` : mode === "strip" ? next.trimStart() : mode === "block" ? next.slice(Math.min(lead, base)) : next;
+          mode === "space"
+            ? ` ${next.trim()}`
+            : mode === "strip"
+              ? next.trimStart()
+              : mode === "tab"
+                ? next.replace(/^\t/, "")
+                : mode === "block"
+                  ? next.slice(Math.min(lead, base))
+                  : next;
       }
       return text;
     });
@@ -374,7 +395,7 @@ export function joinContinuations(entries, cont, modes) {
       out.push({ i: entries[k].i, text: entries[k].text });
       continue;
     }
-    for (const text of new Set(joins)) out.push({ i: entries[k].i, text });
+    for (const text of joins) out.push({ i: entries[k].i, text }); // the same line named twice is de-duplicated in the sweep
     k = j;
   }
   return out;
@@ -646,7 +667,10 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   let swept = 0;
   for (const [path, text] of Object.entries(files)) {
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
-    if (!/context7/i.test(text) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
+    // the prefilter reads the text as a shell would rebuild it too — continuations spliced, quotes and escapes removed —
+    // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
+    const rebuilt = text.replace(/[\\`^]\r?\n[ \t]*/g, "").replace(/["'\\`^]/g, "");
+    if (!/context7/i.test(text) && !/context7/i.test(rebuilt) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
     const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
@@ -1509,6 +1533,19 @@ server.registerTool(
     ["Dockerfile", `RUN npx -y \\\n    ${SPEC}${realPin}\n`, 1, false, "a Dockerfile continuation holding the pin, read both ways (no false positive)"],
     [".mcp.json", `{"command":["npx","-y"],"args":["${NAME}"]}`, 1, true, "a command ARRAY with args beside it"],
     [".mcp.json", `{"command":{"program":"npx"},"args":["-y","${NAME}"]}`, 1, true, "an object command under `program`"],
+    // round 14: the prefilter reads the shell-rebuilt text; make recipe tails; YAML double-quoted escaped line breaks
+    ["s.sh", `npx -y @upstash/cont\\\next7-mcp@latest\n`, 1, true, "a split INSIDE the word context7 (the file never spells it whole)"],
+    ["s.sh", `npx -y @upstash/c\\\non\\\ntext7-mcp@latest\n`, 1, true, "a double continuation inside context7"],
+    ["s.sh", `npx -y @upstash/context''7-mcp@latest\n`, 1, true, "quote concatenation rebuilding context7"],
+    ["s.sh", `npx -y "@upstash/context"7-mcp@latest\n`, 1, true, "a double-quoted part rebuilding context7"],
+    ["s.sh", `npx -y @upstash/context\\7-mcp@latest\n`, 1, true, "a backslash escape inside context7"],
+    ["s.ps1", `npx -y @upstash/cont\`\next7-mcp@latest\n`, 1, true, "a PowerShell split inside context7"],
+    ["Makefile", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a make recipe name split with a tab-indented tail"],
+    ["Makefile", `x:\n\tnpx -y ${SPEC}${realPin}\\\n\t0\n`, 2, true, "a make recipe pin splice (make runs 4.1.10)"],
+    ["x.mk", `x:\n\tnpx -y @upstash/cont\\\n\text7-mcp@latest\n`, 2, true, "a .mk recipe split inside context7"],
+    ["Makefile", `x:\n\tnpx -y ${SPEC}${realPin} \\\n\t--stdio\n`, 2, false, "a make recipe with the pin, then a spaced continuation (no false positive)"],
+    ["w.yml", `steps:\n  - run: "npx -y @upstash/context7-\\\n      mcp@latest"\n`, 2, true, "a YAML double-quoted escaped line break inside the name"],
+    ["w.yml", `a: "see C:\\path ${SPEC}${realPin}"\n`, 1, false, "a YAML double-quoted non-JSON escape does not throw (no false positive)"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

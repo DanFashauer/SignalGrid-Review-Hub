@@ -7475,7 +7475,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "60",
+   "line": "71",
    "claim": "Metric tiles \"Total Decisions\", \"Allow Rate\", \"Restrict/Deny Rate\", \"Avg Latency\" as 24h figures",
    "kind": "count",
    "classification": "demo-only",
@@ -7484,7 +7484,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "70",
+   "line": "81",
    "claim": "\"Decision Volume\" stacked area chart of allow/stepUp/restrict/deny over 24h",
    "kind": "count",
    "classification": "demo-only",
@@ -7493,7 +7493,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "118",
+   "line": "129",
    "claim": "\"Recent decisions · /v1 core\" list linking to decision detail",
    "kind": "capability",
    "classification": "launch",
@@ -7502,7 +7502,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "151",
+   "line": "162",
    "claim": "Card \"Integration Health\" on the launch Overview screen",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7538,7 +7538,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "232",
+   "line": "243",
    "claim": "Card \"Stale / non-compliant\" listing anomalous/critical signals, with the empty state \"No stale or non-compliant signals\"",
    "kind": "status",
    "classification": "unsubstantiated",
@@ -7547,7 +7547,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "270",
+   "line": "281",
    "claim": "\"Shift Handoff\" / \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\"",
    "kind": "status",
    "classification": "demo-only",
@@ -7574,7 +7574,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "380",
+   "line": "391",
    "claim": "Card \"Connector health · launch families\"",
    "kind": "capability",
    "classification": "launch",
@@ -7583,7 +7583,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "366",
+   "line": "377",
    "claim": "Three launch families listed with what each reads: graph — \"Entra/Intune identity + device posture\"; device-management-health — \"management-plane health rollup\"; local-authority — \"offline local-authority grant state\"",
    "kind": "count",
    "classification": "launch",
@@ -7601,7 +7601,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "402",
+   "line": "413",
    "claim": "\"live read-only vendor reads — the connector refuses any non-GET by construction\"",
    "kind": "capability",
    "classification": "launch",
@@ -7720,7 +7720,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Audit.tsx",
-   "line": ":37, 40, 41",
+   "line": "57",
    "claim": "\"chain verified\" / \"CHAIN BROKEN\" badge plus \"{n} events, every digest recomputed on this request\" and \"— broken at seq {n}\"",
    "kind": "capability",
    "classification": "launch",
@@ -8710,7 +8710,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "49",
+   "line": "64",
    "claim": "Title-bar wordmark \"SIGNALGRID DESKTOP\" presented as a native desktop application window (macOS traffic-light controls rendered at :39-43).",
    "kind": "surface",
    "classification": "demo-only",
@@ -8719,7 +8719,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "50, 51",
+   "line": "65",
    "claim": "Persistent title-bar labels \"review build\" and \"FIXTURE DATA\".",
    "kind": "status",
    "classification": "demo-only",
@@ -8728,7 +8728,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "57, 58",
+   "line": "73",
    "claim": "Status indicator \"ENGINE · FIXTURE\" with a live pulsing dot.",
    "kind": "status",
    "classification": "demo-only",
@@ -8910,7 +8910,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
-   "line": "107",
+   "line": "124",
    "claim": "Card header \"Recent decisions (fixture)\".",
    "kind": "status",
    "classification": "demo-only",
@@ -8948,12 +8948,12 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",
-   "line": "38, 39",
+   "line": "46, 47",
    "claim": "Page heading \"Decisions\" with subtitle \"RUNTIME ACCESS DECISION LOG\" — asserts a log of real runtime access decisions.",
    "kind": "capability",
    "classification": "demo-only",
    "action": "rewrite",
-   "evidence": "Rows come from the fixture monitoring route, not the decision core: artifacts/api-server/src/routes/monitoring.ts:10-21 (\"read-only, deterministic **fixtures** … This is intentionally separate from the `/v1` product surface\") and the 24-row constant at :39-49. MITIGATION ABSENT on this page — unlike Dashboard.tsx:22, Signals.tsx:28 and Handoff.tsx:43, the Decisions heading carries no FIXTURE qualifier; only the global chrome at DesktopLayout.tsx:51, 176 applies. This is the page most likely to be read as production evidence."
+   "evidence": "Rows come from the fixture monitoring route, not the decision core: artifacts/api-server/src/routes/monitoring.ts:10-21 (\"read-only, deterministic **fixtures** … This is intentionally separate from the `/v1` product surface\") and the 24-row constant at :39-49. MITIGATION ABSENT on this page — unlike Dashboard.tsx:40, Signals.tsx:33 and Handoff.tsx:61, the Decisions heading carries no FIXTURE qualifier; only the global chrome at DesktopLayout.tsx:66, 139 applies. This is the page most likely to be read as production evidence."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Decisions.tsx",
@@ -9169,7 +9169,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Handoff.tsx",
-   "line": "42, 43",
+   "line": "60, 61",
    "claim": "Page heading \"Shift Handoff\" with subtitle \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\".",
    "kind": "status",
    "classification": "demo-only",
@@ -9425,7 +9425,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "32",
+   "line": "43",
    "claim": "Metric card \"Total Decisions\" rendering \"18.4k\" as a production decision volume.",
    "kind": "count",
    "classification": "unsubstantiated",
@@ -9443,7 +9443,7 @@
   },
   {
    "file": "artifacts/signalgrid-mobile-pwa/src/pages/Overview.tsx",
-   "line": "34",
+   "line": "45",
    "claim": "Metric card \"Restrict/Deny\" rendering \"7.7%\" as a production restrict/deny rate.",
    "kind": "count",
    "classification": "unsubstantiated",

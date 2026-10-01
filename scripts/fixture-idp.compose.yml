@@ -1,0 +1,40 @@
+# CI-ONLY overlay: a fixture OIDC identity provider on the compose network, so
+# the deploy-stack gateway smoke can present a SIGNED, MAPPED token to the
+# packaged api and require an allowed /v1 request (docs/COMPANY_BUILD_PLAN.md
+# row 28).
+#
+#   docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml up -d idp
+# (relative paths resolve against the FIRST -f file, i.e. the repo root)
+#
+# NEVER part of a production profile: docker-compose.prod.yml does not mention
+# it, and the fixture's /mint endpoint hands any caller a valid credential. The
+# key pair is generated at container start; nothing signed is committed.
+#
+# The api reaches it as http://idp:9000 (set OIDC_ISSUER / OIDC_JWKS_URI to
+# match — the workflow does); the runner reaches /mint on the loopback port.
+services:
+  idp:
+    image: docker.io/library/node:22-alpine
+    restart: "no"
+    environment:
+      FIXTURE_IDP_PORT: "9000"
+      FIXTURE_IDP_ISSUER: http://idp:9000
+      FIXTURE_IDP_AUDIENCE: signalgrid-ci
+      FIXTURE_IDP_TENANT: ci-tenant
+      FIXTURE_IDP_ROLE: ci-role
+      # "signing" (default) or "other" — see scripts/fixture-idp.mjs.
+      FIXTURE_IDP_JWKS_KEY: ${FIXTURE_IDP_JWKS_KEY:-signing}
+    volumes:
+      - ./scripts/fixture-idp.mjs:/app/fixture-idp.mjs:ro
+    command: ["node", "/app/fixture-idp.mjs", "serve"]
+    ports:
+      - "127.0.0.1:59000:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9000/healthz || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+  api:
+    depends_on:
+      idp:
+        condition: service_healthy

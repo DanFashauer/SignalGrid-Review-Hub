@@ -166,9 +166,12 @@ export function parseMatrix(text) {
   // raw-HTML tables render as rows no parser here sees; the matrix uses none (round 3)
   const htmlRows = [];
   lines.forEach((l, k) => { if (/<\/?\s*(table|thead|tbody|tr|td|th)\b/i.test(l)) htmlRows.push({ line: k + 1, raw: l }); });
-  // the matrix-wide binding must be VISIBLE text, not survive inside an HTML comment
-  const visible = text.replace(/<!--[\s\S]*?-->/g, "");
-  const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(visible);
+  // HTML comments hide text from the reader but not from a regex — the matrix-wide
+  // binding could survive only inside one. The matrix uses none, so ANY comment
+  // opener fails outright; stripping them instead is bypassable by nesting
+  // (CodeQL js/incomplete-multi-character-sanitization, round 3).
+  lines.forEach((l, k) => { if (l.includes("<!--")) htmlRows.push({ line: k + 1, raw: l, comment: true }); });
+  const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(text);
   return { legend, legendTables, dupHeaders, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
@@ -284,7 +287,9 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     structural.push(`Status legend meaning for "${w}" changed — it sets the claim every "${w}" row makes; update EXPECTED_MEANINGS in the same change\n      | **${w}** | ${legend.get(w)} |`);
   for (const d of dupHeaders) structural.push(`line ${d.line}: table header repeats column(s) ${d.dupes.map((x) => `"${x}"`).join(", ")} — a second column renders and goes ungated\n      ${d.raw}`);
   for (const t of trailing) structural.push(`line ${t.line} directly follows a table with no blank line, so it renders as a table row nobody gates\n      ${t.raw}`);
-  for (const h of htmlRows) structural.push(`line ${h.line} carries a raw-HTML table tag — an HTML row renders as a control row this gate cannot see\n      ${h.raw}`);
+  for (const h of htmlRows) structural.push(h.comment
+    ? `line ${h.line} opens an HTML comment — hidden text can carry what the reader never sees (the matrix uses none)\n      ${h.raw}`
+    : `line ${h.line} carries a raw-HTML table tag — an HTML row renders as a control row this gate cannot see\n      ${h.raw}`);
   const seen = new Map();
   for (const r of rows) { const k = controlKey(r.control); seen.set(k, [...(seen.get(k) ?? []), r.line]); }
   for (const [, at] of seen) if (at.length > 1) { const first = rows.find((r) => r.line === at[0]); structural.push(`Control "${first.control}" appears ${at.length} times (lines ${at.join(", ")}, compared case-, space-, entity- and zero-width-insensitively) — every control row must be unique\n      ${rows.find((r) => r.line === at[1]).raw}`); }

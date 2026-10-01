@@ -2828,7 +2828,7 @@ earlier — that is the loop working, not a reason to soften the record.
     platform-honesty failure mode — but it is still inaccurate.
 
 107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
-    has no legend, tooltip or axis.** — OPEN, web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds Legend and Tooltip to the PWA chart. Check: `pnpm run test:console`.
+    has no legend, tooltip or axis.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds Legend and Tooltip to the PWA chart. Check: `pnpm run test:console`.
     `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
     `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
     segment contrast = **1.0000:1** — no rendered boundary at all. A 40%-restrict /
@@ -2915,11 +2915,9 @@ earlier — that is the loop working, not a reason to soften the record.
     colour map from the enum keys so a new value fails typecheck instead of falling
     through to grey.
 
-115. **Web: the PWA presents fixture decisions with no fixture label.** — OPEN,
-    web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds FixtureLabel components. Check: `pnpm run test:console`.
+115. **Web: the PWA presents fixture decisions with no fixture label.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds FixtureLabel components. Check: `pnpm run test:console`.
 
-116. **Web: the PWA's support triage surface has no `deny` scenario.** — OPEN,
-    web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d expands AccessSupport to full four-verdict vocabulary. Check: `pnpm run test:console`.
+116. **Web: the PWA's support triage surface has no `deny` scenario.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d expands AccessSupport to full four-verdict vocabulary. Check: `pnpm run test:console`.
 
 117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
     OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06, batch Z, whose message names "phase-gate moved a string but not the exit code") — `scripts/src/phase-gate.ts` now sets a failing exit code whenever any blocking reason (unsafe path, affirmative unsafe claim, missing validation command) lands, not only on a RED lane, and `.github/workflows/phase-pr-evidence.yml` runs the file's own self-test, which plants an affirmative claim and asserts the real process exits 1, as a step before the gate; the docs-sanity mechanism this row's correction described is unchanged, only its line numbers moved. BLOCKING. INDEPENDENTLY VERIFIED before filing.
@@ -2960,7 +2958,7 @@ earlier — that is the loop working, not a reason to soften the record.
     one that can. That split is the defect — not an absence of enforcement.
 
 118. **The unsafe-claim classifier reads a DISCLAIMER as an affirmative claim.** —
-    OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 handles postposed negators. Check: `pnpm run proof:unsafe-claim`.
+    devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 handles postposed negators. Check: `pnpm run proof:unsafe-claim`.
 
 119. **Five copies of the no-vendor-call scanner; one drifted permissive, and its
     self-test tests the pattern that survived.** — OPEN, devex-tooling-engineer. FIX PROPOSED 2026-09-30 (branch claude/build-no-vendor-call-scanner-single, lands under DR-037): one shared scanner `scripts/src/lib/no-vendor-call.ts` (all nine patterns, the reason-scoped config-storage exemption, a recursive walk of every file) now backs `scripts/src/nac-proof.ts`, `scripts/src/uem-proof.ts`, `scripts/src/entitlement-binding-proof.ts`, `scripts/src/service-lifecycle-proof.ts` and `scripts/src/response-accountability-proof.ts`; each proof's non-vacuity check is the module's self-test, which plants one control PER PATTERN CLASS and requires the drifted six-pattern list to fail them; all five gained a `files.length > 0` floor. A SECOND permissive drift found while consolidating: `scripts/src/uem-proof.ts` still carried the whole-file `allowed(rel)` store.ts exemption nac had been fixed for, so a planted vendor `fetch` in `lib/integrations/src/integrations/uem/store.ts` printed green; it now uses the shared reason-scoped classifier and a planted call there fails the proof. After the brain's review the self-test also runs the REAL scan over a planted temp tree (so a skip rule that blinds the loop fails it), the Redis exemption is scoped per MODULE (`await import("redis"); require("axios")` on one `store.ts` line is an offender), a sixth inline scanner in `scripts/src/session-readiness-proof.ts` now uses the shared module, and the list gained `require("https")`/`from "https"`/`import("node:https")`, `http2`, `tls.connect`, `ky`, `globalThis.fetch` aliases, non-literal `import(`/`require(`, comment-prefixed code and a call split across lines. RE-MEASURED 2026-09-26 (still open, largely unchanged): `scripts/src/response-accountability-proof.ts` still carries six of the nine vendor-call patterns that `scripts/src/nac-proof.ts`, `scripts/src/uem-proof.ts`, `scripts/src/entitlement-binding-proof.ts` and `scripts/src/service-lifecycle-proof.ts` carry, and all five planted forms this row names still walk past it while the nine-pattern copies catch them; no shared module under scripts/src/lib exists; only the UEM proof gained a file-count floor and a two-pattern non-vacuity check (dc001f4e), the other four have neither.
@@ -2995,7 +2993,7 @@ earlier — that is the loop working, not a reason to soften the record.
     asserting a `handbook.md`-shaped link is picked up.
 
 121. **An unguarded `indexOf` slice can turn two targeted assertions into whole-file
-    greps.** — OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 guards slice helper. Check: `pnpm run proof:emit-gate`.
+    greps.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 guards slice helper. Check: `pnpm run proof:emit-gate`.
 
 122. **`proof:live-glpi` has never been executable from the path that invokes it.** —
     CLOSED 2026-09-06 (the root key exists and `pnpm run proof:live-glpi` resolves; note the proposed equality gate would fail on `proof:decision-palette`, a root-only alias — a subset rule is the right shape), devex-tooling-engineer. DONE (measured 2026-09-26): the root registration landed in 7a452662 (2026-08-25) and the closure note in 079c5a3e (2026-09-06), both on today's tree — `package.json` delegates proof:live-glpi into `scripts/package.json`, so the root invocation resolves; every scripts-side proof key is a subset of the root's today with proof:decision-palette the only root-only alias, matching the note; the proposed subset gate was never added. Registered only in `scripts/package.json`, never at
@@ -3621,17 +3619,16 @@ earlier — that is the loop working, not a reason to soften the record.
     distinguish git exit 1 from any other exit.
 
 145. **The grid proof's secret-scan regex cannot fire on the JSON it is given.** —
-    OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 walks parsed JSON. Check: `pnpm run proof:signalgrid-grid`.
+    devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 walks parsed JSON. Check: `pnpm run proof:signalgrid-grid`.
 
 146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
-    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds maven completeness guard. Check: `pnpm run sbom`.
+    one ecosystem with no completeness guard.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds maven completeness guard. Check: `pnpm run sbom`.
 
 147. **Three e2e specs abort external requests without asserting none were
-    attempted; the fourth documents exactly why that is wrong.** — OPEN,
-    devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds e2e allowlist helper. Check: `pnpm run test:e2e`.
+    attempted; the fourth documents exactly why that is wrong.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds e2e allowlist helper. Check: `pnpm run test:e2e`.
 
 148. **The e2e README states a test count 18 behind, in the section whose own lesson
-    is that hand-maintained test claims go stale.** — OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe removes hand-maintained test count. Check: `playwright test --list`.
+    is that hand-maintained test claims go stale.** — devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe removes hand-maintained test count. Check: `pnpm run test:e2e`.
 
 149. **1,700 lines and 239 assertions of the decision core's own proof are
     unreviewed.** — OPEN, devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open, larger than cited): `scripts/src/signalgrid-core-proof.ts` has grown past four thousand lines with more than three hundred static assertion call sites after the DR-043 rounds of 2026-09-23 and 2026-09-24, well beyond the cited size, and no tracked document records a full line-by-line read of it at this size — `docs/PROOF_COVERAGE_AUDIT.md` rates the gate at a per-gate summary level and disclaims anything added after 2026-08-03. The reader executed
@@ -3939,8 +3936,7 @@ earlier — that is the loop working, not a reason to soften the record.
     never reproduce passages, never cite ratings or "Customers' Choice" marks on a
     public surface, and do not re-add a copy.
 
-164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
-    competitive-analyst. DONE (measured 2026-10-01): PR #1264 merge facf6a10 adds IGA-adjacent briefs. Check: `pnpm run check:absence "Radiant Logic"`.
+164. **Five IGA vendors the competitive surface has never mentioned.** — competitive-analyst. DONE (measured 2026-10-01): PR #1264 merge facf6a10 adds IGA-adjacent briefs. Check: `grep -c "What SignalGrid does not do" docs/research/IGA_ADJACENCY.md`.
 
 165. **`tamperState` is an enum where the source material describes a graph.** —
     OPEN, product/principal-engineer. RE-MEASURED 2026-09-26 (still open, no derivation added): `docs/EVENT_CONTRACT.md` still defines the tamper state as the bare three-value enum with no derivation notion, `lib/event-contract/src/validate.ts` and `lib/event-contract/src/detect.ts` still only validate and consume that enum, and no commit in the repository's history has introduced a tamper-graph concept (corroborated by the absence check across four probes); the row's file count for the word has grown with the tree, which changes nothing. `docs/EVENT_CONTRACT.md` carries
@@ -3967,8 +3963,7 @@ earlier — that is the loop working, not a reason to soften the record.
     requests signed with HMAC" as present-tense guarantees; pinning is an env-var
     opt-in (`CERT_PINNING_ENABLED`), off unless set.
 
-167. **The Fleet tradeoff is decided but never written down.** — OPEN,
-    product/principal-engineer. DONE (measured 2026-10-01): PR #1263 merge 119347ba documents Fleet tradeoff. Check: `grep -c "tradeoff" native/ios/FLEET_MDM.md`.
+167. **The Fleet tradeoff is decided but never written down.** — product/principal-engineer. DONE (measured 2026-10-01): PR #1263 merge 119347ba documents Fleet tradeoff. Check: `grep -c "tradeoff" native/ios/FLEET_MDM.md`.
 
 168. **The palette gate cannot see a verdict painted with the WRONG ratified
     token.** — MITIGATED 2026-08-25 by option (a), devex-tooling-engineer. RE-MEASURED 2026-09-26 (still open — mitigated, not fixed): `scripts/check-verdict-tone-source.mjs` and `scripts/check-decision-palette.mjs` both pass today exactly as described, centralising every verdict-to-colour choice without validating it; `artifacts/signalgrid-desktop/src/pages/Dashboard.tsx` still routes through the shared tone helper; options (b) distinct rendered values and (c) a single colour registry remain unimplemented, so a wrong mapping in the total record would still pass; the falsification by restoring the ternary was not re-run in this pass. Row 151

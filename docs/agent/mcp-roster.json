@@ -273,7 +273,7 @@
       "offline": "not probed under this roster's by-use protocol (no stdio run with sockets denied); 22 mcp__signalgrid-macos__ tools were listed in a Mac session on 2026-10-01, matching 22 @mcp.tool(… READ_ONLY) decorators at the pinned sha",
       "disposition": "adopted",
       "reason": "first-party sibling; the Mac-native grid_collected path the signalgrid-evidence-toolchain and signalgrid-native skills name (SKILL.md 134 / 74); its code is also exercised by verify-all --require-mcp through the sibling's pytest, not through this registration",
-      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope, a departure from DR-060 rule 3's user scope that mac-kickoff.sh keeps; not yet tracked, for the coordinator; never .mcp.json)"
+      "config": "mac-kickoff.sh step 4/7: claude mcp add signalgrid-macos -- uv run --python 3.12 --with 'mcp[cli]<2' python <sibling>/server.py (the CLI's default scope, a departure from DR-060 rule 3's user scope that mac-kickoff.sh keeps; not yet a BUILD_BACKLOG row; never .mcp.json)"
     },
     {
       "id": "context7",

@@ -24,7 +24,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -413,6 +413,48 @@ async function main(): Promise<void> {
     const leaky = await cli(["connectors", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://operator:SECRETPW@127.0.0.1:${secretPort}/api` });
     check("userinfo in SIGNALGRID_BASE_URL is never echoed in an error",
       leaky.code !== 0 && !(leaky.stdout + leaky.stderr).includes("SECRETPW"));
+
+    // ── review round 3 on PR #1321 ──
+    // A symlink planted at `<session>.tmp` is never followed: not over an outside file,
+    // and not into the repository.
+    const victimDir = mkdtempSync(join(tmpdir(), "signalgrid-cli-victim-"));
+    const victim = join(victimDir, "victim.txt");
+    writeFileSync(victim, "VICTIM");
+    const s7 = join(sessionDir, "s7.json");
+    symlinkSync(victim, `${s7}.tmp`);
+    const clobber = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: s7 });
+    const s7Id = (parse(clobber.stdout)?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"];
+    check("a symlink planted at <session>.tmp is not followed: the outside file is untouched",
+      clobber.code === 0 && readFileSync(victim, "utf8") === "VICTIM");
+    check("…and the session lands as a regular file holding the decision",
+      existsSync(s7) && !lstatSync(s7).isSymbolicLink() && typeof s7Id === "string" && readFileSync(s7, "utf8").includes(s7Id));
+    const leak = join(repoRoot, "signalgrid-cli-tmpleak.json");
+    const s7b = join(sessionDir, "s7b.json");
+    symlinkSync(leak, `${s7b}.tmp`);
+    const intoRepo = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_CLI_SESSION: s7b });
+    check("a symlink at <session>.tmp pointing into the repository writes nothing there",
+      intoRepo.code === 0 && !existsSync(leak));
+    rmSync(victimDir, { recursive: true, force: true });
+
+    // A session path that is a directory is refused before anything is sent.
+    const dirSession = join(sessionDir, "a-directory");
+    mkdirSync(dirSession);
+    seen.length = 0;
+    const isDir = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_CLI_SESSION: dirSession });
+    check("a session path that is a directory exits 2 and sends no POST",
+      isDir.code === 2 && !seen.some((x) => x.startsWith("POST ")));
+
+    // A session write that fails AFTER the POST keeps the verdict and warns; it never
+    // hides a decision the server has recorded behind an error exit.
+    const s8 = join(sessionDir, "s8.json");
+    mkdirSync(`${s8}.tmp`);
+    seen.length = 0;
+    const late = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: s8 });
+    const lateJ = parse(late.stdout);
+    check("a session write that fails after the POST still reports the decision (exit 0, sessionWarning, stderr warning)",
+      late.code === 0 && seen.includes("POST /api/v1/decisions/evaluate") &&
+      typeof (lateJ?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"] === "string" &&
+      typeof lateJ?.["sessionWarning"] === "string" && /warning:/.test(late.stderr));
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

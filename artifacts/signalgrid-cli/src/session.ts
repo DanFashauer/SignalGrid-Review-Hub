@@ -15,7 +15,7 @@
  * fcntl to what Node offers portably), and the file itself is replaced by rename,
  * so a reader never sees half a session.
  */
-import { closeSync, existsSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError, EXIT, safeId, type Config } from "./client.js";
@@ -92,6 +92,15 @@ export function checkSessionWritable(path: string | null): void {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new CliError("session_invalid", `the directory for SIGNALGRID_CLI_SESSION (${dir}) does not exist; nothing was sent.`, EXIT.usage);
   }
+  try {
+    accessSync(dir, constants.W_OK);
+  } catch {
+    throw new CliError("session_invalid", `the directory for SIGNALGRID_CLI_SESSION (${dir}) is not writable; nothing was sent.`, EXIT.usage);
+  }
+  // A directory (or other non-file) AT the session path can never be replaced by a file.
+  if (existsSync(path) && !lstatSync(path).isFile() && !lstatSync(path).isSymbolicLink()) {
+    throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) is not a file; nothing was sent.`, EXIT.usage);
+  }
   if (existsSync(`${path}.lock`)) {
     throw new CliError("session_locked", `session ${path} is locked by another process (${path}.lock); nothing was sent.`, EXIT.usage);
   }
@@ -113,8 +122,19 @@ export function writeSession(path: string | null, cfg: Config, lastDecisionId: s
   }
   try {
     const data: SessionData = { version: 1, baseUrl: cfg.baseUrl, tenant: cfg.tenant, lastDecisionId: id };
+    // The temporary file is CREATED, never opened: a stale entry (or a symlink someone
+    // planted at this name) is removed, then the file is made with O_EXCL, which refuses
+    // to follow or reuse anything already there. Following a planted link would write
+    // outside the validated session path — into the repository, or over any file the
+    // operator can write (review round 3 on PR #1321).
     const tmp = `${path}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+    rmSync(tmp, { force: true });
+    const tfd = openSync(tmp, "wx", 0o600);
+    try {
+      writeSync(tfd, `${JSON.stringify(data, null, 2)}\n`);
+    } finally {
+      closeSync(tfd);
+    }
     renameSync(tmp, path);
   } finally {
     closeSync(fd);

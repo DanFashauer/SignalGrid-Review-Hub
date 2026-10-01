@@ -8,15 +8,17 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over two review rounds on PR #1349):
+// WHAT IS GATED (hardened over six review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
 //      split rows too, so an unplaced row fails rather than vanishing. Each row's
 //      cell count matches its header, and every table header is EXACT (no extra,
 //      renamed or re-cased column; round 4). No link reference definitions, no
-//      bare carriage returns, no repeated legend word, and no status-like claim
-//      outside a Status cell (round 5). The line
+//      bare carriage returns, no repeated legend word (round 5). A Framework
+//      refs / Short ref cell is plain ASCII with no claim word; a Control name
+//      carries no legend word. No HTML block, code fence, or whitespace-only
+//      line that Markdown does not treat as blank (round 6). The line
 //      after a table is blank (GFM would render it as a row). No raw-HTML table
 //      tags. Control names are unique as a reader sees them (case, whitespace,
 //      entities, zero-width characters folded). The legend's words AND meanings
@@ -136,6 +138,25 @@ export function controlKey(s) {
  *  negating it — places the reader never sees, or reads the opposite of. */
 const BINDING_PARAGRAPH = /^Everything marked \*\*Implemented \(public core\)\*\* runs in the deterministic, fixture-backed core in this public repository and is exercised by `pnpm run (proof:[\w:.-]+)`\. It demonstrates the \*shape\* of the controls — tenant isolation, deny-by-default RBAC, fail-closed evaluation, tamper-evident evidence and audit — over synthetic data\.$/;
 
+/** Blank the way CommonMark decides it: spaces and tabs only. JS trim() also
+ *  eats NBSP, U+3000 and form feed — lines GitHub keeps as content (round 6). */
+const isBlank = (l) => /^[ \t]*$/.test(l);
+
+/** Fold a cell for claim matching as a reader would read it: markup and
+ *  entities stripped, NFKC, invisible characters removed, common Cyrillic/Greek
+ *  look-alikes mapped to Latin, case and whitespace folded (round 6). */
+const CONFUSABLES = { "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ӏ": "l", "һ": "h", "ο": "o", "α": "a", "ε": "e", "ι": "i", "ν": "v", "ρ": "p", "τ": "t", "κ": "k", "μ": "m" };
+export function claimFold(s) {
+  return s.replace(/<[^>]*>/g, "")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&nbsp;/gi, " ").replace(/&[a-z][a-z0-9]*;/gi, "")
+    .normalize("NFKC")
+    .replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, "")
+    .toLowerCase().replace(/./gu, (ch) => CONFUSABLES[ch] ?? ch)
+    .replace(/\*\*|__|[*_`]/g, "").replace(/\s+/g, " ").trim();
+}
+
 export function parseMatrix(raw) {
   // CRLF is fine; a BARE carriage return is a line break to CommonMark but not to
   // a "\n" split, so a row could render as two rows the gate reads as one (round 5).
@@ -145,6 +166,16 @@ export function parseMatrix(raw) {
   lines.forEach((l, k) => { if (l.includes("\r")) bareCR.push({ line: k + 1, raw: l.replace(/\r/g, "\\r") }); });
   const legendDup = [];
   const claimCells = [];
+  const controlCells = [];
+  // lines GitHub reads as content (or as a hiding block) that this gate cannot see
+  // into: a whitespace-only line that is not CommonMark-blank, an HTML block
+  // start, a code fence. The matrix has none of these (round 6).
+  const opaque = [];
+  lines.forEach((l, k) => {
+    if (l.trim() === "" && !isBlank(l)) opaque.push({ line: k + 1, raw: JSON.stringify(l), why: "is whitespace-only but not blank to Markdown (NBSP, U+3000, form feed…) — GitHub keeps it as content" });
+    else if (/^ {0,3}</.test(l)) opaque.push({ line: k + 1, raw: l, why: "starts an HTML block — its content can be hidden or never rendered" });
+    else if (/^ {0,3}(`{3,}|~{3,})/.test(l)) opaque.push({ line: k + 1, raw: l, why: "opens a code fence — text inside renders as code, not as the claim it reads like" });
+  });
   const legend = new Map();
   const legendTables = [];
   const trailing = [];
@@ -174,12 +205,12 @@ export function parseMatrix(raw) {
       // the Map kept only the last one (round 5)
       if (isLegend) { if (legend.has(unbold(c[0]))) legendDup.push({ line: j + 1, raw: lines[j] }); legend.set(unbold(c[0]), c[1]); }
       else if (isOther) c.forEach((x) => claimCells.push({ line: j + 1, raw: lines[j], cell: x }));
-      else if (isControls) claimCells.push({ line: j + 1, raw: lines[j], cell: c[1] });
+      else if (isControls) { claimCells.push({ line: j + 1, raw: lines[j], cell: c[1] }); controlCells.push({ line: j + 1, raw: lines[j], cell: c[0] }); }
       if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
     }
     // GFM continues a table onto ANY non-blank line until a blank one, rendering it
     // as a (one-cell) row — so the line after a table must be blank (round 3).
-    if (j < lines.length && lines[j].trim() !== "") { claimed.add(j); trailing.push({ line: j + 1, raw: lines[j] }); }
+    if (j < lines.length && !isBlank(lines[j])) { claimed.add(j); trailing.push({ line: j + 1, raw: lines[j] }); }
     i = j - 1;
   }
   // GFM renders a row without a leading pipe, a pipe-less table, and a table in a
@@ -201,13 +232,13 @@ export function parseMatrix(raw) {
   // runs to the next blank line, and matches BINDING_PARAGRAPH exactly — once
   const bindings = [];
   lines.forEach((l, k) => {
-    if (!l.startsWith("Everything marked **Implemented (public core)**") || (k > 0 && lines[k - 1].trim() !== "")) return;
-    let e = k; while (e < lines.length && lines[e].trim() !== "") e += 1;
+    if (!l.startsWith("Everything marked **Implemented (public core)**") || (k > 0 && !isBlank(lines[k - 1]))) return;
+    let e = k; while (e < lines.length && !isBlank(lines[e])) e += 1;
     const m = BINDING_PARAGRAPH.exec(lines.slice(k, e).map((x) => x.trim()).join(" "));
     if (m) bindings.push(m[1]);
   });
   const closing = bindings.length === 1 ? [null, bindings[0]] : null;
-  return { bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
+  return { opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -310,7 +341,7 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
+  const { opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
@@ -324,7 +355,17 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   for (const d of legendDup) structural.push(`line ${d.line} repeats a Status legend word — both rows render, only the last would be checked\n      ${d.raw}`);
   // a status claim belongs in the Status cell, where it is gated — not in the
   // Framework refs cell or the Short ref table, where nothing checks it (round 5)
-  for (const c of claimCells) if (/implement|certif|attest|audited/i.test(controlKey(c.cell))) structural.push(`line ${c.line} carries a status-like claim ("${c.cell}") outside a Status cell, where no check reaches it\n      ${c.raw}`);
+  for (const o of opaque) structural.push(`line ${o.line} ${o.why}\n      ${o.raw}`);
+  // Framework refs cells and the Short ref table are plain ASCII in the real
+  // matrix; anything else there (entities, markup, homoglyphs, invisible
+  // characters) fails outright, and the folded text may not carry a claim
+  for (const c of claimCells) {
+    if (/[^\x20-\x7E]|&|</.test(c.cell)) structural.push(`line ${c.line}: a Framework refs / Short ref cell must be plain ASCII text, got "${c.cell}"\n      ${c.raw}`);
+    else if (/implement|certif|attest|audit|complian|accredit/.test(claimFold(c.cell))) structural.push(`line ${c.line} carries a status-like claim ("${c.cell}") outside a Status cell, where no check reaches it\n      ${c.raw}`);
+  }
+  // a Control name may not wear a legend status word either
+  for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
+    structural.push(`line ${c.line}: Control name carries the status word "${w}" outside the Status cell\n      ${c.raw}`);
   for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
   for (const t of trailing) structural.push(`line ${t.line} directly follows a table with no blank line, so it renders as a table row nobody gates\n      ${t.raw}`);
   for (const h of htmlRows) structural.push(h.comment
@@ -477,6 +518,17 @@ function selfTest() {
     ["fail: the binding only in a link title", real.replace(/is exercised by\n`pnpm run (proof:[\w:.-]+)`/, "is covered by\nthe core proof") + '\nSee [the proof](https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`").\n', 1],
     ["fail: a status claim in the Framework refs cell", plant("| Planted fw claim | **Implemented (public core)** | Private-core (planned) | private repo |"), 1],
     ["fail: a status claim in the Short ref table", real.replace("| **ASVS 5.0** |", "| **MFA** | **Implemented (public core)** — enforced in production |\n| **ASVS 5.0** |"), 1],
+    // round 6: CommonMark blank lines, opaque blocks, harder claim folding
+    ["fail: an NBSP line after a table, then a claim line", real.replace("\n\n---\n\n## 2. Authentication", "\n\u00A0\nMFA for every operator — Implemented (public core), SOC 2 certified\n\n---\n\n## 2. Authentication"), 1],
+    ["fail: a form-feed line after the legend", real.replace("cannot be responsibly automated away. |\n", "cannot be responsibly automated away. |\n\f\nImplemented (public core) also means SOC 2 audited\n"), 1],
+    ["fail: a retraction joined to the binding by an NBSP line", real.replace("over synthetic data.\n", "over synthetic data.\n\u00A0\nRetracted: none of the above is exercised by any proof.\n"), 1],
+    ["fail: the binding inside a details block", real.replace(/\nEverything marked \*\*Implemented/, "\n<details>\n\nEverything marked **Implemented").replace("over synthetic data.\n", "over synthetic data.\n\n</details>\n"), 1],
+    ["fail: the binding inside a code fence", real.replace(/\nEverything marked \*\*Implemented/, "\n```\n\nEverything marked **Implemented").replace("over synthetic data.\n", "over synthetic data.\n\n```\n"), 1],
+    ["fail: a soft-hyphenated claim in the Short ref table", real.replace("| **ASVS 5.0** |", "| **MFA** | Imple&shy;mented (public core) |\n| **ASVS 5.0** |"), 1],
+    ["fail: a homoglyph claim in a Framework refs cell", plant("| Planted fw2 | Impl\u0435mented (public core) | Private-core (planned) | private repo |"), 1],
+    // a look-alike the confusables map does not know (U+026A) — only the ASCII rule catches it
+    ["fail: an unmapped look-alike in a Short ref cell", real.replace("| **ASVS 5.0** |", "| **MFA** | \u026Amplemented (public core) |\n| **ASVS 5.0** |"), 1],
+    ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];
   let ok = true;

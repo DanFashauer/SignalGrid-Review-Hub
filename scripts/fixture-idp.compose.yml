@@ -3,7 +3,8 @@
 # packaged api and require an allowed /v1 request (docs/COMPANY_BUILD_PLAN.md
 # row 28).
 #
-#   docker compose -f docker-compose.prod.yml -f docker-compose.idp.yml up -d idp
+#   docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml up -d idp
+# (relative paths resolve against the FIRST -f file, i.e. the repo root)
 #
 # NEVER part of a production profile: docker-compose.prod.yml does not mention
 # it, and the fixture's /mint endpoint hands any caller a valid credential. The

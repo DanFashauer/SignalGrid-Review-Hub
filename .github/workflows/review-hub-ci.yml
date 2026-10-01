@@ -1665,7 +1665,7 @@ jobs:
         run: docker compose -f docker-compose.prod.yml exec -T db psql -U sg -d signalgrid -c "ALTER ROLE signalgrid_runtime WITH LOGIN PASSWORD 'ci-smoke'"
 
       - name: "Runbook step 3: recreate the api as the runtime role on the production default profile"
-        # The OIDC values point at the CI-ONLY fixture IdP (docker-compose.idp.yml
+        # The OIDC values point at the CI-ONLY fixture IdP (scripts/fixture-idp.compose.yml
         # overlay, scripts/fixture-idp.mjs) on the compose network, so a signed,
         # mapped token can verify against the packaged api. The overlay is CI
         # only; docker-compose.prod.yml defaults are unchanged. The tenant map
@@ -1678,7 +1678,7 @@ jobs:
           OIDC_JWKS_URI: http://idp:9000/jwks
           OIDC_TENANT_MAP: '{"ci-tenant":"tenant_northwind"}'
           OIDC_ROLE_MAP: '{"ci-role":"operator"}'
-        run: docker compose -f docker-compose.prod.yml -f docker-compose.idp.yml up -d --force-recreate idp api
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml up -d --force-recreate idp api
 
       - name: Wait for the gateway-profile API
         run: curl -sf --retry 60 --retry-delay 2 --retry-all-errors http://localhost:8080/api/healthz
@@ -1695,8 +1695,8 @@ jobs:
 
       - name: Stack logs (on failure)
         if: failure()
-        run: docker compose -f docker-compose.prod.yml -f docker-compose.idp.yml logs --no-color
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml logs --no-color
 
       - name: Teardown
         if: always()
-        run: docker compose -f docker-compose.prod.yml -f docker-compose.idp.yml down -v --remove-orphans
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml down -v --remove-orphans

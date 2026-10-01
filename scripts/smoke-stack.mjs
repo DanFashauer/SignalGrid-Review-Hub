@@ -60,7 +60,7 @@ async function main() {
     const ready = await fetch(`${API}/readyz`);
     check("readyz reports READY (200) — the gateway can reach its durable store", ready.status === 200);
     // THE POSITIVE PATH, on the packaged image. When the phase boots with the
-    // CI fixture IdP (docker-compose.idp.yml) SMOKE_IDP_URL points at its
+    // CI fixture IdP (scripts/fixture-idp.compose.yml) SMOKE_IDP_URL points at its
     // /mint endpoint's host. A token signed by the fixture's runtime key, with
     // claims the OIDC_*_MAP variables map, must complete an allowed /v1
     // request as the MAPPED tenant — and the same key must still be refused

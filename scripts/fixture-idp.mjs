@@ -15,7 +15,7 @@
 //     whose iss/aud/tid/roles the CI OIDC_* variables are set to accept.
 //
 // WHAT IT MUST NEVER BE. Part of any production profile. It is reachable only
-// through docker-compose.idp.yml (a CI overlay); docker-compose.prod.yml does
+// through scripts/fixture-idp.compose.yml (a CI overlay); docker-compose.prod.yml does
 // not mention it, and /mint hands anyone a valid credential by design.
 //
 // `FIXTURE_IDP_JWKS_KEY=other` serves a JWKS whose key (same kid) is NOT the

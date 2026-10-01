@@ -8,7 +8,7 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over nine review rounds on PR #1349):
+// WHAT IS GATED (hardened over ten review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
@@ -157,6 +157,7 @@ export function controlKey(s) {
     .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
     .normalize("NFKC")
     .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
+    .replace(/[*_`]/g, "") // emphasis and code-span markers render invisibly (round 10)
     .replace(/\s+/g, " ").trim().toLowerCase();
 }
 
@@ -402,6 +403,14 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   // The matrix uses none (round 8).
   for (const c of controlCells) if (!CONTROL_NAME_CHARSET.test(c.cell)) structural.push(`line ${c.line}: Control name carries a character outside printable ASCII + → ≤ — (U+${[...c.cell].find((ch) => !CONTROL_NAME_CHARSET.test(ch)).codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}) — an invisible character or look-alike could disguise a status word\n      ${c.raw}`);
   for (const r of rows) if (!WHERE_CHARSET.test(r.where)) structural.push(`line ${r.line}: Where cell carries a character outside printable ASCII + — § (U+${[...r.where].find((ch) => !WHERE_CHARSET.test(ch)).codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}) — an invisible character or look-alike could disguise a claim\n      ${r.raw}`);
+  // a code span that touches a letter, or holds only whitespace, splits a word
+  // into visual pieces the fold never sees whole (round 10); the matrix's code
+  // spans all stand apart as whole tokens
+  for (const c of controlCells) for (const m of c.cell.matchAll(/(`+)([^`]*?)\1/g)) {
+    const pre = c.cell[m.index - 1] ?? "", post = c.cell[m.index + m[0].length] ?? "";
+    if (/[A-Za-z0-9]/.test(pre) || /[A-Za-z0-9]/.test(post) || m[2].trim() === "")
+      structural.push(`line ${c.line}: Control name has a code span that touches a letter or holds only whitespace (${m[0]}) — it can split a word past the fold\n      ${c.raw}`);
+  }
   for (const c of controlCells) if (CELL_MARKUP.test(c.cell)) structural.push(`line ${c.line}: Control name carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a status word past any fold\n      ${c.raw}`);
   for (const r of rows) if (CELL_MARKUP.test(r.where)) structural.push(`line ${r.line}: Where cell carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a claim or re-point cited evidence\n      ${r.raw}`);
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
@@ -581,6 +590,11 @@ function selfTest() {
     ["fail: an Armenian look-alike (U+0578) in a legend word in a Control name", plant("| Impleme\u0578ted (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a halfwidth filler (U+FFA0) inside a legend word in a Control name", plant("| Imple\uFFA0mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: an invisible character in a Private-core Where cell", plant("| Planted W9 | ASVS 5.0 | Private-core (planned) | Imple\u034Fmented (public core) |"), 1],
+    // round 10: emphasis/code duplicates, code-span word splits
+    ["fail: a duplicate Control differing only by italics", real.replace("| PostgreSQL row-level security supplementing app-layer checks |", "| _PostgreSQL_ row-level security supplementing app-layer checks | ASVS 5.0 | Human-owned (planned) | private repo |\n| PostgreSQL row-level security supplementing app-layer checks |"), 1],
+    ["fail: a duplicate Control with its code-span backticks dropped", plant("| Cross-tenant access denied, not silently ignored (cross_tenant_denied, HTTP 403) | ASVS 5.0 | Human-owned (planned) | private repo |"), 1],
+    ["fail: a whitespace code span splitting a word in a Control name", plant("| Imple`` ``mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: a code span abutting letters in a Control name", plant("| `Imple`mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     // round 7: link/image syntax splitting a claim; every claim word exercised
     ["fail: an empty link splitting a claim in Framework refs", plant("| Planted L | Imple[](/x)mented | Private-core (planned) | private repo |"), 1],

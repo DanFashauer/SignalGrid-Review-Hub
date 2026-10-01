@@ -200,6 +200,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:link-usability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
@@ -229,6 +230,7 @@ export const TARGETS = [
     // registry guard's scoping is right for what it was written to cover; the honest
     // response is to register this by hand rather than widen a rule until it fits.
     proof: "proof:decision-continuity",
+    oneLine: true,
     files: ["lib/signalgrid-core/src/continuity.ts"],
   },
   {
@@ -241,6 +243,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:custody-beacon",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
       "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
@@ -342,6 +345,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:caep-events",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/caep-events/format.ts",
       // resolve.ts dropped 2026-09-03: a thin createEmitterResolver binding (0 mutable
@@ -610,6 +614,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:entitlement-binding",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/entitlement-binding/evaluate.ts",
       "lib/integrations/src/integrations/entitlement-binding/index.ts",
@@ -666,6 +671,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:network-nac",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/network-nac/evaluate.ts",
       "lib/integrations/src/integrations/network-nac/index.ts",
@@ -725,6 +731,24 @@ export const TARGETS = [
 // a probe, without a sweep. A registry checkable only by the thing that consumes it
 // is a registry nobody checks.
 export const ALLOWED = [
+  {
+    file: "lib/signalgrid-core/src/continuity.ts",
+    line: 'if (policy === "incomparable" || core === "incomparable") return "incomparable";',
+    reason:
+      "Redundant by effect: `compareNumbers` never returns \"incomparable\", and when `core` is incomparable none of the later branches can match (the equal test needs core === \"equal\"; both dominance tests need core in {greater, equal} or {less, equal}), so control falls through to the final `return \"incomparable\"` — the same answer (survived `if (false)` with proof:decision-continuity green, 2026-10-01). Kept as the early exit that states the rule; same shape as the access-governance redundant-by-effect precedent.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (CUSTODY_BEACON_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:custody-beacon green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/network-nac/evaluate.ts",
+    line: "if (segment === null) return false;",
+    reason:
+      "Unreachable through its callers: `includesSegment` is module-private and both call sites (`policy.expected`, `policy.restricted`) sit after `if (signal.segment === null)` returns SEGMENT_UNREPORTED_UNDER_POLICY, so `segment` is never null there (survived `if (false)` with proof:network-nac green, 2026-10-01). Kept on purpose — the function's own comment records that without a null-safe helper a reordering of the caller throws inside a decision path.",
+  },
   {
     file: "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
     line: 'if (typeof k === "symbol") return true;',

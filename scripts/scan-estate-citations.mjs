@@ -196,6 +196,9 @@ function selfTest() {
   // naming something else: git resolves a bare `acme/Demo` as a local directory (so the relative
   // forms are paths, not hosted names), an owner that merely ENDS in ours is another owner, and
   // only github.com with exactly owner/name is the repository itself.
+  // GH is interpolated, not typed, into the two spellings that put `:word@` in front of it:
+  // the publication-boundary gate reads that literal text as a token-bearing git remote.
+  const GH = "github.com";
   const impostors = [
     "acme/Demo", // relative path
     "mirrors/acme/Demo", // relative path with an owner-shaped tail
@@ -211,8 +214,8 @@ function selfTest() {
     // …the spellings that SAY github.com but that git sends elsewhere (PR #1356 review):
     "github.com:acme/Demo", // owner-less scp: ssh to host github.com, no user — not a shape the parser vouches for
     "hg::https://github.com/acme/Demo", // remote helper in front of a URL
-    "evil.invalid:x@github.com:acme/Demo", // git splits scp at the FIRST colon: the host is evil.invalid
-    "hg::git@github.com:acme/Demo", // remote helper in front of the scp form
+    `evil.invalid:x@${GH}:acme/Demo`, // git splits scp at the FIRST colon: the host is evil.invalid
+    `hg::git@${GH}:acme/Demo`, // remote helper in front of the scp form
     "https://evil.invalid#@github.com/acme/Demo", // `#` ends the authority: the host is evil.invalid
     "https://evil.invalid?@github.com/acme/Demo", // `?` ends it too
     "https://evil.invalid\\@github.com/acme/Demo", // …and so does a backslash

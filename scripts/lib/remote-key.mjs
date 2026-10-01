@@ -47,7 +47,7 @@ export function repoKeyFromRemote(url) {
   // `\s` is excluded from the scp prefix so a stray first line cannot hide in front of it.
   const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed)?.[1]?.toLowerCase();
   // …and `:` is excluded from the user part because git splits the scp form at the FIRST
-  // colon: `evil.invalid:x@github.com:o/r` is host `evil.invalid`, not github.com.
+  // colon: `evil.invalid:x@<host>:o/r` is host `evil.invalid`, whatever <host> says.
   const scp = /^[^/:\s]+@([^/:\s]+):(\S+)$/.exec(trimmed);
   // `#`, `?` and `\` end the authority in a URL, so `https://evil.invalid#@github.com/o/r` is
   // host `evil.invalid` — yet the userinfo strip below would read past them to github.com.

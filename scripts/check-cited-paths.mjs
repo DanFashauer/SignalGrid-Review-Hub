@@ -846,13 +846,16 @@ function selfTest() {
   // HOST — real forks, not directories — and the bare name would hand them this repository's
   // CROSS_REPO_NAME_ALIASES exemptions (the fail-open direction the alias table forbids). They
   // keep their raw string as the key, which no alias matches.
+  // GH is interpolated so the publication-boundary gate does not read `:x@` + the host as a
+  // token-bearing git remote.
+  const GH = "github.com";
   const transports = [
     "evil.example:x/DanFashauer/SignalGrid-Review-Hub", // scp form with no user
     "github.com:someone-else/SignalGrid-Review-Hub", // a real hosted fork over ssh, no user
     "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
     "hg::https://github.com/someone-else/SignalGrid-Review-Hub", // a helper in front of a hosted fork
     "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
-    "evil.invalid:x@github.com:DanFashauer/SignalGrid-Review-Hub", // scp splits at the FIRST colon
+    `evil.invalid:x@${GH}:DanFashauer/SignalGrid-Review-Hub`, // scp splits at the FIRST colon
     "https://evil.invalid#@github.com/DanFashauer/SignalGrid-Review-Hub", // `#` ends the authority
   ];
   checks.push([

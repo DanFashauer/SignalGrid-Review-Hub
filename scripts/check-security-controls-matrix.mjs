@@ -8,7 +8,7 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over ten review rounds on PR #1349):
+// WHAT IS GATED (hardened over eleven review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
@@ -279,15 +279,25 @@ const PATHISH = /^[\w.@{},/-]+$/;
 const FILEEXT = /\.(ts|tsx|mjs|cjs|js|json|md|ya?ml|swift|sql|sh)$/;
 
 /** Backticked tokens in a Where cell that name repo paths (not identifiers, not `/v1`). */
-export function citedPaths(where, { strict = false } = {}) {
+/** The only leading-slash tokens that are API routes, not paths: `/` and `/v1…`.
+ *  Every other leading-slash token is treated as a path, so the resolver's
+ *  absolute-path rejection fails it (round 11: `/etc/passwd` used to be skipped). */
+const API_ROUTE = /^\/(v1\b[\w/.{}:-]*)?$/;
+/** A GitHub Action ref (`owner/repo[/path]@vN`) — never a repo path. Accepted only
+ *  on Automated rows, and only when its first segment is NOT a top-level directory
+ *  of this repository (so `scripts/x.mjs@v2` is not mistaken for one; round 11). */
+const ACTION_REF = /^([A-Za-z0-9][A-Za-z0-9-]*)\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._/-]+)?@v\d+(\.\d+)*$/;
+
+export function citedPaths(where, { strict = false, actionRefs = false, topDirs = new Set() } = {}) {
   const out = [];
   const unparsed = [];
   for (const m of where.matchAll(/`([^`]+)`/g)) {
     const tok = m[1].replace(/:\d+$/, "");
     if (/^pnpm run /.test(tok) || /^proof:/.test(tok)) continue;
-    if (tok.startsWith("/")) continue; // an API route (`/v1`), not a path
+    if (API_ROUTE.test(tok)) continue;
     const looksLikePath = tok.includes("/") || FILEEXT.test(tok);
-    // a versioned action ref (`owner/action@v4`) is legitimate on an Automated row only
+    const ref = ACTION_REF.exec(tok);
+    if (actionRefs && ref && !topDirs.has(ref[1])) continue;
     if (!strict && /@v?\d/.test(tok)) continue;
     if (!PATHISH.test(tok) || /@v?\d/.test(tok)) { if (looksLikePath) unparsed.push(tok); continue; }
     if (looksLikePath || /^\.[\w-]+$/.test(tok)) out.push(tok);
@@ -371,6 +381,7 @@ function defaultReadPkg(root, name) {
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   const { shortRefRows, opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
+  const topDirs = new Set(tracked.filter((f) => f.includes("/")).map((f) => f.split("/")[0]));
   const fails = [];
   const structural = [];
   if (legendTables.length !== 1) structural.push(`expected exactly one Status legend table, found ${legendTables.length}${legendTables.length ? ` (lines ${legendTables.join(", ")})` : ""}`);
@@ -429,8 +440,11 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     const why = [];
     if (!EXPECTED_LEGEND.includes(r.status)) why.push(`status "${r.status}" is not in the Status legend (${LEGEND_LIST})`);
     if (PATH_CHECKED.has(r.status)) {
+      // strict, like Implemented rows: an unreadable path-like citation fails (round 11)
+      const auto = citedPaths(r.where, { strict: true, actionRefs: true, topDirs });
+      for (const u of auto.unparsed) why.push(`cited path-like token \`${u}\` cannot be parsed as a repo path — unreadable evidence is not evidence`);
       let lastDir = null;
-      for (const tok of citedPaths(r.where)) for (const p of expandBraces(tok)) {
+      for (const tok of auto.paths) for (const p of expandBraces(tok)) {
         const hit = resolve(p, lastDir);
         if (!hit) why.push(`cited path \`${p}\` is not a tracked repo path (or is ambiguous)`);
         const at = (hit ?? p).includes("/") ? (hit ?? p) : null;
@@ -595,6 +609,12 @@ function selfTest() {
     ["fail: a duplicate Control with its code-span backticks dropped", plant("| Cross-tenant access denied, not silently ignored (cross_tenant_denied, HTTP 403) | ASVS 5.0 | Human-owned (planned) | private repo |"), 1],
     ["fail: a whitespace code span splitting a word in a Control name", plant("| Imple`` ``mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a code span abutting letters in a Control name", plant("| `Imple`mented (public core) ZZ9 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    // round 11: leading-slash paths and Automated-row citations the parser skipped
+    ["fail: an absolute path beside a valid one on an Implemented row", plant("| Planted P13 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `/lib/signalgrid-core/src/no-such-file.ts` |"), 1],
+    ["fail: /etc/passwd beside a valid path on an Implemented row", plant("| Planted P14 | ASVS 5.0 | Implemented (public core) | `/etc/passwd`; `lib/signalgrid-core/src/policy.ts` |"), 1],
+    ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
+    ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
+    ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],
     ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     // round 7: link/image syntax splitting a claim; every claim word exercised
     ["fail: an empty link splitting a claim in Framework refs", plant("| Planted L | Imple[](/x)mented | Private-core (planned) | private repo |"), 1],

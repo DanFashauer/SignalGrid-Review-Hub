@@ -68,6 +68,52 @@ cloud's, the third is a sim request the tick runs.
 **What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
 Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
 
+**The build tick (DR-061, 2026-09-29; staged tiers 2026-10-01).** The lane tick
+never builds. A second launchd job, `scripts/mac/build-tick.sh`
+(`bash scripts/mac/install-build-tick.sh`, every 3 hours), does nothing at all
+while it is paused. Each run first pins mainline ONCE: it asks the real remote
+for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
+its own script, the build clone, the diff the reviewer reads, the changed-path and
+forbidden-path checks, the landing classifier, the is-ancestor check before the
+push) uses that sha, never a ref a session could repoint; a run that cannot ask
+the remote does nothing. Otherwise it first refreshes ONE dirty `mac/*` PR with
+mainline's PR-refresh script, once it lands (PR #1353, not on mainline yet; no
+model; under a wall-clock cap that kills the refresh's whole process group; a
+failure never stops the build;
+the owner's 2026-10-01 instruction covers re-merging mainline into his own open
+`mac/*` PR branches, never merging a PR). It then takes the objective loop's top
+`tasks[]` row that no remote branch or open PR names and runs it as staged tiers
+(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet,
+read-only, decides done, blocked or build BEFORE the claim. A broken triage
+session (a logged-out CLI, a usage limit, no Keychain: its envelope names an API
+error, or there is no envelope and the exit is not 0 or the time cap) pauses the
+tick before any claim is pushed, so that row stays unclaimed; a triage that only
+hit its turn or time cap raises a hand. The branch and PR lists are re-read right
+before the claim, so a row taken while triage ran is skipped. Then the claim, an
+empty `mac/build-row-<id>-<stamp>`; then build on Haiku, Sonnet or Opus by the
+kind triage names (Haiku, the `mechanical` kind, is writer reruns and doc-only
+edits: the helper writes its commit message, and its PR title and body after the
+last session from the final diff, and a diff outside `docs/**` and the sync
+manifest is a hand), an Opus read-only review, at most one fix on the build's
+tier, and a second review. The build area is its own clone (`<repo>.build`, made
+with `git clone --reference`, its config rewritten and its tree reset to the
+pinned sha every run), so a session shares no refs, config or hooks with the
+person's checkout. A session that breaks after the claim pauses the tick too (so
+does a helper that fails or writes no verdict), and that row's claim branch stays
+for a person; a build or fix session that edited and then capped or broke is
+never committed (broken pauses, capped hands). A row
+triage finds already done is a one-line plan marker with no build session. No
+session has git or GitHub credentials; the script commits, runs preflight and
+breadth, and only on 0/0, each gate's exact verdict line present and a sentinel
+naming the commit, pushes that sha (from a clean tree, with git hooks off; CI's
+frozen-lockfile install is the lockfile guard) and opens the PR. Every PR body
+carries the reviews and a tiers-and-cost table (stage, tier asked, model that
+ran, turns, seconds, USD at list price; a figure the CLI did not print is
+`unknown` on its row and counts as 0 in the total), and each stage appends a line
+to ~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a
+stuck or red run raises a hand and keeps the claim for a person. Registry row:
+`mac-build-tick`.
+
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 
 The owner's verdict on the loop below was "not working and causing delay". The

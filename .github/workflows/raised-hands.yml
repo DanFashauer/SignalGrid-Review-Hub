@@ -5,8 +5,9 @@ name: Raised hands
 # scripts/raised-hands.mjs — every hand an agent raised in
 # docs/agent/RAISED_HANDS.json, plus every stall nobody raised a hand for (mail
 # unread past 24h, sim requests pending past 48h, routine heartbeats past their
-# tolerance, PRs red or green-and-idle too long) — into ONE open issue labelled
-# `raised-hands`.
+# tolerance, PRs red or green-and-idle too long, the weekly Mac-lane run red,
+# objective-loop escalations only the owner can clear) — into ONE open issue
+# labelled `raised-hands`.
 #
 # The issue BODY is rewritten on every run (an edit sends no notification). A
 # COMMENT is posted only when a hand appears that was not on the last body, so the
@@ -39,6 +40,7 @@ permissions:
   issues: write
   pull-requests: read
   checks: read
+  actions: read # the weekly Mac-lane run's conclusion (mac-lane.yml)
 
 concurrency:
   group: raised-hands

@@ -2426,11 +2426,14 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       nested `TONE.a[status]` or a `...BASE` spread — is judged like an inline good class unless the
       lookup has an explicit `??`/`||` fallback AND a key that is provably a plain read of query
       data (fail-closed: a literal, `??`/ternary default, helper or `useMemo` result, destructuring or
-      parameter default, reassigned `let` or member read of another const earns no exemption). Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
+      parameter default, reassigned `let`, member read of another const, a prop any call site defaults
+      or spreads, or a defaulted/augmented row array earns no exemption). Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
       shape with a guarded twin; live tree still 0 findings; each mechanism falsified by cp-aside
       (disable it, only its own fixtures fail). Still not followed: a child component, helper or
       class map imported from another file (no module resolver); callback parameters over query
-      rows (`rows.map((r) => …)`); a class assembled from a prop. Row stays open for those.
+      rows (`rows.map((r) => …)`); a class assembled from a prop; data fields destructured out of
+      `q.data`. Known over-flag: a key that defaults to a non-good entry (`T[s ?? "bad"] ?? T.d`).
+      Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

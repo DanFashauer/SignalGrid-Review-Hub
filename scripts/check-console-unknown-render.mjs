@@ -74,11 +74,13 @@
 // helper, a nested `TONE.a[status]` or a `...BASE` spread. A map lookup is unknown-safe only
 // with an explicit `??`/`||` fallback AND a key that is PROVABLY a plain read of query data (a
 // property/optional chain, `String()`/`.toLowerCase()`/`.trim()`, a destructured binding without
-// a default, a tainted prop without a default, the first parameter of an array callback over
-// query data). FAIL-CLOSED: any key the analysis cannot prove plain — a literal, a `??`/ternary
-// default, a helper / `useMemo` result, a destructuring or parameter default, a reassigned `let`,
-// a member read of another const, a template with literal text — might select a fixed entry
-// whatever the data is, so the fallback does not protect it.
+// a default, a prop that EVERY same-file call site passes as a plain read, the first parameter of
+// an array callback whose receiver is itself a plain read — `rows ?? []`, optionally filtered /
+// sliced / sorted). FAIL-CLOSED: any key the analysis cannot prove plain — a literal, a
+// `??`/ternary default, a helper / `useMemo` result, a destructuring or parameter default, a
+// reassigned `let`, a member read of another const, a template with literal text, a prop that
+// any call site defaults or spreads, a defaulted or augmented row array — might select a fixed
+// entry whatever the data is, so the fallback does not protect it.
 //
 // KNOWN, DELIBERATE LIMITATIONS (this is a static, name-and-scope analysis; it can still err in
 // BOTH directions — it is not an exhaustive proof):
@@ -89,6 +91,9 @@
 //   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
+//   - Data fields destructured OUT of `q.data` (`const { name } = q.data ?? {}`) are not tracked as
+//     data variables (only `data` and the query-state fields are); `const name = q.data?.name` is.
+//     Pre-existing; a false NEGATIVE.
 //   - A key that defaults to a NON-good entry (`T[s ?? "bad"] ?? T.d`) is flagged although it cannot
 //     paint emerald — the price of the fail-closed key rule. A false POSITIVE, never silent.
 //   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
@@ -617,10 +622,10 @@ function analyzeSourceFile(relPath, text) {
   };
   {
     const reg = (n) => {
-      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n) });
+      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n), fn: n });
       if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer) {
         const fn = componentFn(n.initializer);
-        if (fn) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n) });
+        if (fn) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n), fn });
       }
       ts.forEachChild(n, reg);
     };
@@ -860,6 +865,7 @@ function analyzeSourceFile(relPath, text) {
       }
       if (!(ts.isBlock(c) || ts.isSourceFile(c))) continue;
       for (const st of c.statements) {
+        if (ts.isFunctionDeclaration(st) && st.name && st.name.text === id.text) return { kind: "opaque" };
         if (!ts.isVariableStatement(st)) continue;
         const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
         for (const d of st.declarationList.declarations) {
@@ -877,9 +883,45 @@ function analyzeSourceFile(relPath, text) {
     if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || fn.parameters[0] !== param || param.initializer) return false;
     const call = fn.parent;
     return Boolean(call) && ts.isCallExpression(call) && call.arguments.includes(fn) && ts.isPropertyAccessExpression(call.expression) &&
-      ROW_METHODS.has(call.expression.name.text) && referencesQueryData(call.expression.expression);
+      ROW_METHODS.has(call.expression.name.text) && keyIsPlainData(call.expression.expression);
+  };
+  // EVERY call site of a same-file component, per prop: a prop is a plain read of data only if
+  // every site passes one (`s={q.data?.s}`); a literal, a defaulted expression, a spread or a
+  // helper at ANY site means the receiving key can be a fixed entry.
+  const siteCache = new Map();
+  const callSitesOf = (fn) => {
+    if (siteCache.has(fn)) return siteCache.get(fn);
+    const info = { byProp: new Map(), spread: false, count: 0 };
+    const visit = (n) => {
+      const opening = ts.isJsxSelfClosingElement(n) ? n : ts.isJsxElement(n) ? n.openingElement : null;
+      if (opening && ts.isIdentifier(opening.tagName)) {
+        const comp = findComponent(opening.tagName);
+        if (comp && comp.fn === fn) {
+          info.count++;
+          for (const a of opening.attributes.properties) {
+            if (ts.isJsxSpreadAttribute(a)) { info.spread = true; continue; }
+            if (!ts.isJsxAttribute(a)) continue;
+            const ex = a.initializer ? (ts.isJsxExpression(a.initializer) ? a.initializer.expression : a.initializer) : null;
+            const nm = a.name.text;
+            if (!info.byProp.has(nm)) info.byProp.set(nm, []);
+            info.byProp.get(nm).push(ex);
+          }
+        }
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    siteCache.set(fn, info);
+    return info;
+  };
+  const paramSitesPlain = (fn, propName) => {
+    const info = callSitesOf(fn);
+    if (info.count === 0 || info.spread) return false;
+    const exprs = propName === null ? [...info.byProp.values()].flat() : (info.byProp.get(propName) ?? []);
+    return exprs.every((x) => keyIsPlainData(x));
   };
   const PLAIN_METHODS = new Set(["toLowerCase", "toUpperCase", "trim", "toString"]);
+  const ROW_KEEPING = new Set(["filter", "slice", "sort", "reverse", "toSorted", "toReversed"]);
   const keyIsPlainData = (k, seen = new Set(), depth = 0) => {
     if (!k || depth > 8) return false;
     const e = unwrapExpr(k);
@@ -889,12 +931,12 @@ function analyzeSourceFile(relPath, text) {
       if (!b || b.kind === "opaque" || seen.has(b.node ?? b.decl)) return false;
       seen.add(b.node ?? b.decl);
       if (b.kind === "param") {
-        if (taintedParams.has(b.node) && dataVars.has(e.text)) return true;
+        if (b.node.parent && paramSitesPlain(b.node.parent, null)) return true;
         return isRowOfQueryData(b.node); // `(s) =>` of `data.rows.map(...)`: a row exists only when the data does
       }
       if (b.kind === "el") {
         if (b.node.initializer) return false; // a destructuring / parameter default
-        if (b.fromParam) return taintedParams.has(b.node) && dataVars.has(e.text);
+        if (b.fromParam) return paramSitesPlain(b.node.parent.parent.parent, propOf(b.node));
         return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
       }
       return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
@@ -904,7 +946,9 @@ function analyzeSourceFile(relPath, text) {
       if (hookDecls.has(e)) return true;
       const c = e.expression;
       if (ts.isPropertyAccessExpression(c) && PLAIN_METHODS.has(c.name.text) && e.arguments.length === 0) return recur(c.expression);
-      if (ts.isIdentifier(c) && c.text === "String" && !findBinding(c) && e.arguments.length === 1) return recur(e.arguments[0]);
+      if (ts.isIdentifier(c) && c.text === "String" && !findBinding(c)) return recur(e.arguments[0]);
+      // filter/slice/sort/reverse keep a subset of the same elements: a plain receiver stays plain.
+      if (ts.isPropertyAccessExpression(c) && ROW_KEEPING.has(c.name.text)) return recur(c.expression);
       return false;
     }
     if (ts.isBinaryExpression(e) && (e.operatorToken.kind === K.QuestionQuestionToken || e.operatorToken.kind === K.BarBarToken)) {
@@ -1535,6 +1579,39 @@ export function Page() {
   ["child prop without a default", keyFx("", "", "", `function C({ s, n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, `<C s={q.data?.s} n={q.data?.n} />`)],
 ];
 
+// Round-4 review of #1370: a prop is plain only if EVERY call site passes a plain read, and a row
+// callback's receiver must itself be a plain read (a defaulted / augmented array is not).
+const CHILD_S = `function C({ s, n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`;
+const CHILD_PROPS = `function C(props) { return <b className={TONE[props.s] ?? TONE.default}>{props.n}</b>; }`;
+const N = "n={q.data?.n}";
+const rowsFx = (recv, use = "TONE[r] ?? TONE.default", pre = "") =>
+  keyFx(pre, "", "", "", `<>{${recv}.map((r) => <li className={${use}}>{q.data?.n}</li>)}</>`);
+const BUG_R4 = [
+  ["call site defaults the prop: s={q.data?.s ?? \"ok\"}", keyFx("", "", "", CHILD_S, `<C s={q.data?.s ?? "ok"} ${N} />`)],
+  ["a second call site passes a literal key", keyFx("", "", "", CHILD_S, `<><C s={q.data?.s} ${N} /><C s="ok" ${N} /></>`)],
+  ["props identifier, call site defaults", keyFx("", "", "", CHILD_PROPS, `<C s={q.data?.s ?? "ok"} ${N} />`)],
+  ["call site spreads an object", keyFx("", "", "", CHILD_S, `<C {...{ s: "ok", ...q.data }} ${N} />`)],
+  ["derived default passed as the prop", keyFx("", `const s = q.data?.s ?? "ok";`, "", CHILD_S, `<C s={s} ${N} />`)],
+  ["one site plain, another spreads a literal", keyFx("", "", "", CHILD_S, `<><C s={q.data?.s} ${N} /><C {...{ s: "ok" }} ${N} /></>`)],
+  ["param of a non-component function (no visible call sites)", keyFx("", `const render = (s) => <b className={TONE[s] ?? TONE.default}>{q.data?.n}</b>;`, "", "", `render(q.data?.s ?? "ok")`)],
+  ["second callback parameter (index) is not a row", keyFx("", "", "", "", `<>{(q.data?.rows ?? []).map((r, i) => <li className={TONE[i] ?? TONE.default}>{q.data?.n}</li>)}</>`)],
+  ["call site passes a helper result", keyFx(`function keyOf(x) { return x ?? "ok"; }`, "", "", CHILD_S, `<C s={keyOf(q.data?.s)} ${N} />`)],
+  ['rows defaulted: (q.data?.rows ?? ["ok"])', rowsFx(`(q.data?.rows ?? ["ok"])`)],
+  ['rows defaulted with ||: (q.data?.rows || ["ok"])', rowsFx(`(q.data?.rows || ["ok"])`)],
+  ['rows .concat(["ok"])', rowsFx(`(q.data?.rows ?? []).concat(["ok"])`)],
+  ['rows spread-appended: [...rows, "ok"]', rowsFx(`[...(q.data?.rows ?? []), "ok"]`)],
+  ['derived rows const defaulted', rowsFx("rows", "TONE[r] ?? TONE.default", `const rows = q.data?.rows ?? ["ok"];`).replace("  return <>", "  const rows = q.data?.rows ?? [\"ok\"];\n  return <>").replace(/^const rows[^\n]*\n/m, "")],
+  ['rows from useMemo', rowsFx("rows").replace("  return <>", "  const rows = useMemo(() => q.data?.rows ?? [\"ok\"], [q.data]);\n  return <>")],
+  ['rows of literal objects: [{ status: "ok" }]', rowsFx(`(q.data?.rows ?? [{ s: "ok" }])`, "TONE[r.s] ?? TONE.default")],
+  ["reduce accumulator is not a row", keyFx("", "", "", "", `<>{(q.data?.rows ?? []).reduce((acc) => <li className={TONE[acc] ?? TONE.default}>{q.data?.n}</li>, "ok")}</>`)],
+  ["String shadowed by a same-file function", keyFx(`function String(x) { return x ?? "ok"; }`, `const s = q.data?.s;`, "TONE[String(s)] ?? TONE.default")],
+];
+const OK_R4 = [
+  ["every call site passes a plain read", keyFx("", "", "", CHILD_S, `<><C s={q.data?.s} ${N} /><C s={q.data?.t} ${N} /></>`)],
+  ["rows filtered, then mapped", rowsFx(`(q.data?.rows ?? []).filter((x) => x.a)`, "TONE[r.s] ?? TONE.default")],
+  ["derived rows const, empty default", rowsFx("rows").replace("  return <>", "  const rows = q.data?.rows ?? [];\n  return <>")],
+];
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1729,6 +1806,18 @@ function selfTest() {
     const v = analyze(src, "R3KOK.tsx");
     console.log(`  self-test R3-OK key ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: key ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-4 review of #1370.
+  for (const [label, src] of BUG_R4) {
+    const v = analyze(src, "R4.tsx");
+    console.log(`  self-test R4 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+  }
+  for (const [label, src] of OK_R4) {
+    const v = analyze(src, "R4OK.tsx");
+    console.log(`  self-test R4-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 
   // Plant into a REAL component: drop the `s ?` presence guard on a metric with a static

@@ -97,62 +97,124 @@ export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
 // Known-site presence reads the token loosely; the SWEEP below is an allowlist.
 const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
 const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
-// Every occurrence of the package name is read as the ARGUMENT it sits in, the
-// way a shell or JSON reader would see it — not by scanning for terminator
-// characters. Quoted (`"…"`, `'…'`, `` `…` ``): the argument runs to the matching
-// quote, so `"…@4.1.1 x || 5"` is the value `4.1.1 x || 5`. Unquoted: it runs to
-// whitespace, `<` or a backtick, with adjoining quotes concatenated as a shell
-// would (`@4.1.1"0"` is `4.1.10`); only trailing sentence/markup punctuation is
-// shed. The value must then EQUAL PINNED — so an empty token, a tag, a range or
-// union, a wildcard, a partial, a prerelease or a concatenation all fail.
-const CONTEXT7_NAME_RE = /@upstash\\?\/context7-mcp(?![\w-])/gi;
+// Each line is TOKENIZED the way its reader would see it, then every token
+// naming the package must carry exactly PINNED. No terminator characters:
+//   * shell/prose (default): POSIX words — '…' literal, "…" with \-escapes,
+//     \x escaped, quotes glued to text concatenate (`@4.1.1' || 5'` is ONE word
+//     `…@4.1.1 || 5`). A backtick ends a word (markdown code). An unbalanced
+//     quote is a literal character (prose apostrophes).
+//   * .json: each string literal is decoded. An array element is ONE argv word;
+//     a value that is itself a spec (`npm:@upstash/…@x`) is one word; any other
+//     value is a command string, shell-split.
+//   * .yml/.yaml: a sequence item `- x` is ONE argv word; `key: value` is
+//     shell-split (a `run:` command), a flow list `[a, b]` is one word per item.
+// A key naming the package (`"@upstash/context7-mcp": "<v>"`, YAML
+// `@upstash/context7-mcp: <v>`) takes its WHOLE value. A word's value is shed
+// of trailing markup only: `**`, a markdown link `](…)`, closing HTML tags, and
+// trailing ) ] } > . , ; : ! ?.
+const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
-  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/;
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/;
 // Installing Context7 from git or a URL bypasses the npm pin entirely.
-const CONTEXT7_GIT_SOURCE_RE = /github:upstash\/context7\b|git\+https?:\/\/github\.com\/upstash\/context7\b|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
-const QUOTES = `"'\``;
+const CONTEXT7_GIT_SOURCE_RE =
+  /(?:github:|gitlab:|bitbucket:|git\+[a-z]+:\/\/|git:\/\/|git@github\.com:)[^\s"'`]*upstash\/context7|codeload\.github\.com\/upstash\/context7|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
+const CONTEXT7_SHORTHAND_RE = /(?:^|[\s"'=])upstash\/context7(?:-mcp)?(?:#\S*)?(?=$|[\s"'])/;
 
-/** Pure: the argument value after `@` at `at` (the index of that `@`), as a reader of `line` would see it. */
-function specArgument(line, at, opener) {
-  if (opener) {
-    const close = line.indexOf(opener, at + 1);
-    const value = line.slice(at + 1, close < 0 ? undefined : close);
-    const tail = close < 0 ? "" : line.slice(close + 1);
-    // a closing quote glued to more text is shell concatenation (`"…@4.1.1"0`)
-    return /^[^\s,\])}:;.<`]/.test(tail) ? value + /^\S*/.exec(tail)[0] : value;
+/** Pure: POSIX-ish shell words of `s` (quotes concatenate; an unbalanced quote is literal; a backtick splits). */
+export function shellWords(s) {
+  const words = [];
+  let cur = "";
+  let open = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (/\s/.test(c) || c === "`") {
+      if (open) words.push(cur);
+      cur = "";
+      open = false;
+    } else if (c === "'" && s.indexOf("'", i + 1) > i) {
+      const close = s.indexOf("'", i + 1);
+      cur += s.slice(i + 1, close);
+      i = close;
+      open = true;
+    } else if (c === '"' && /^"(?:\\.|[^"\\])*"/.test(s.slice(i))) {
+      const lit = /^"((?:\\.|[^"\\])*)"/.exec(s.slice(i));
+      cur += lit[1].replace(/\\(.)/g, "$1");
+      i += lit[0].length - 1;
+      open = true;
+    } else if (c === "\\" && i + 1 < s.length) {
+      cur += s[++i];
+      open = true;
+    } else {
+      cur += c;
+      open = true;
+    }
   }
-  const word = /^[^\s<`]*/.exec(line.slice(at + 1))[0];
-  // shed only a trailing run of closers/punctuation (an enclosing JSON quote, a
-  // sentence end); a quote INSIDE the word stays — it is shell concatenation.
-  const v = word.replace(/[)\]}"'.,;:!?]+$/, "");
-  return /\d\*+$/.test(v) ? v.replace(/\*+$/, "") : v; // markdown bold `**…@4.1.1**`; a lone `*` stays a wildcard
+  if (open) words.push(cur);
+  return words;
 }
 
-/** Pure: findings for one line's Context7 install references (spec arguments, dependencies, runners, git/URL sources). */
-export function context7SpecFindings(line, pin) {
+const shedMarkup = (v) =>
+  v
+    .replace(/(?:<\/[a-z][^>]*>)+$/i, "")
+    .replace(/\]\([^)]*\)$/, "")
+    .replace(/\*\*$/, "")
+    .replace(/[)\]}>.,;:!?]+$/, "");
+
+/** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
+function lineUnits(line, kind) {
+  if (kind === "json") {
+    const units = [];
+    for (const m of line.matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+      let v;
+      try {
+        v = JSON.parse(m[0]);
+      } catch {
+        v = m[1];
+      }
+      const before = line.slice(0, m.index).trimEnd();
+      const after = line.slice(m.index + m[0].length).trimStart();
+      if (after.startsWith(":")) continue; // a key; dependency keys are handled by the caller
+      const isValue = before.endsWith(":");
+      if (!isValue || /^(?:npm:)?@upstash\\?\/context7-mcp/i.test(v)) units.push(v);
+      else units.push(...shellWords(v));
+    }
+    return units;
+  }
+  if (kind === "yaml") {
+    const item = /^\s*-\s+(?![^"'#]*:\s)(.*?)\s*(?:\s#.*)?$/.exec(line);
+    if (item) return [item[1].replace(/^(["'])(.*)\1$/, "$2")];
+    const kv = /^\s*(?:-\s+)?[^:#]+:\s+(.*?)\s*(?:\s#.*)?$/.exec(line);
+    if (kv && kv[1].startsWith("[")) return kv[1].replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^(["'])(.*)\1$/, "$2"));
+    if (kv) return shellWords(kv[1]);
+  }
+  return shellWords(line);
+}
+
+/** Pure: findings for one line's Context7 install references, read as the units its file kind defines. */
+export function context7SpecFindings(line, pin, kind = "shell") {
   const out = [];
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
-  for (const m of line.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
-    const end = m.index + m[0].length;
-    const before = line[m.index - 1] ?? "";
-    const opener = QUOTES.includes(before) && before !== "" ? before : "";
-    if (line[end] === "@") {
-      const f = classify(specArgument(line, end, opener));
-      if (f) out.push(f);
-      continue;
-    }
-    // a dependency or config value: `"@upstash/context7-mcp": "<v>"` (JSON) or `@upstash/context7-mcp: <v>` (YAML)
-    const dep = /^["']?\s*:\s*["']?([^"'\s,}#]*)/.exec(line.slice(end));
-    if (dep) {
-      const f = classify(dep[1]);
-      if (f) out.push(f);
-      continue;
-    }
-    if (PACKAGE_RUNNER_RE.test(line.slice(0, m.index))) out.push({ bare: true });
+  const push = (f) => f && out.push(f);
+  // a key naming the package takes its WHOLE value (JSON, YAML, ini)
+  const dep = /@upstash\\?\/context7-mcp["']?\s*:\s*(.*)$/i.exec(line);
+  if (dep && !/^\/\//.test(dep[1])) {
+    push(classify(dep[1].replace(/\s+#.*$/, "").replace(/,\s*$/, "").trim().replace(/^(["'])(.*)\1$/, "$2")));
   }
-  if (CONTEXT7_GIT_SOURCE_RE.test(line)) out.push({ git: true });
+  const runner = PACKAGE_RUNNER_RE.test(line);
+  for (const unit of lineUnits(line, kind)) {
+    for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
+      const rest = unit.slice(m.index + m[0].length);
+      if (rest.startsWith("@")) push(classify(shedMarkup(rest.slice(1))));
+      else if (!rest.startsWith(":") && runner && shedMarkup(rest) === "") out.push({ bare: true });
+    }
+  }
+  if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
 }
+
+/** Pure: the tokenizing mode for a tracked path. */
+export const context7FileKind = (path) => (/\.jsonc?$/i.test(path) ? "json" : /\.ya?ml$/i.test(path) ? "yaml" : "shell");
+
 const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
 export const CONTEXT7_PIN_HISTORY = [
   /^docs\/BUILD_BACKLOG\.md$/,
@@ -194,7 +256,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     text.split("\n").forEach((line, i) => {
       const seen = new Set();
       if (/upstash\\?\/context7-mcp/i.test(line)) swept++;
-      for (const f of context7SpecFindings(line, pin)) {
+      for (const f of context7SpecFindings(line, pin, context7FileKind(path))) {
         if (f.stale) {
           seen.add(f.stale);
           problems.push(stale(path, i + 1, f.stale));
@@ -802,7 +864,7 @@ server.registerTool(
     ),
   ]);
   // Round-4 shapes, each checked on the pure per-line function: a finding of the right kind, or none.
-  const kind = (line) => context7SpecFindings(line, realPin).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
+  const kind = (line, k = "shell") => context7SpecFindings(line, realPin, k).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
   const NAME = SPEC.slice(0, -1);
   for (const [line, want, what] of [
     [`npx -y ${SPEC} --flag`, "unpinned", "an empty token after @ (npm reads it as *)"],
@@ -824,7 +886,7 @@ server.registerTool(
     [`npx -y "${SPEC}${realPin} x || 5"`, "unpinned", "a quoted union whose text after PINNED is not `||`"],
     [`npx -y "${SPEC}${realPin}*||5"`, "unpinned", "a quoted `*||` union glued to PINNED"],
     [`"args": ["-y", "${SPEC}${realPin} <5 || >=5"]`, "unpinned", "a union range in a JSON args list"],
-    [`npx -y ${SPEC}${realPin}"0"`, "unpinned", "shell concatenation onto PINNED (\"0\" makes another version)"],
+    [`npx -y ${SPEC}${realPin}"0"`, "stale", "shell concatenation onto PINNED (\"0\" makes 4.1.10)"],
     [`npx -y ${SPEC}${realPin}'||5'`, "unpinned", "a shell-quoted union glued to PINNED"],
     [`npx -y "${SPEC}${realPin}"0`, "stale", "text glued after the CLOSING quote (shell concatenation makes another version)"],
     [`"args": ["-y", "${SPEC}${realPin}"],`, null, "the CORRECT pin as a JSON argument (closing quote then `]`)"],
@@ -836,10 +898,39 @@ server.registerTool(
     [`deno run npm:${NAME}`, "bare", "a versionless deno run npm: call"],
     [`${NAME}: latest`, "unpinned", "a YAML value that is a tag"],
     [`npx -y ${SPEC}${realPin} - see below`, null, "an UNQUOTED pin followed by prose (the shell splits it; no false positive)"],
+    // round 6: lines are TOKENIZED as their reader would (shell words / JSON literals / YAML scalars)
+    [`npx -y ${SPEC}${realPin}' || 5'`, "unpinned", "a quote opening at the END of the word (one shell word `…@4.1.1 || 5`)"],
+    [`npx -y ${SPEC}${realPin}" - 5"`, "unpinned", "a double quote opening at the end of the word"],
+    [`npx -y "--package=${SPEC}${realPin} x || 5" context7-mcp`, "unpinned", "a quoted argument with a --package= prefix"],
+    [`deno run "npm:${SPEC}${realPin} || 5"`, "unpinned", "a quoted npm: argument"],
+    [`npx -y ${SPEC}"${realPin}"`, null, "a quoted version the shell yields as PINNED (no false positive)"],
+    [`[${SPEC}${realPin}](https://x)`, null, "a markdown link around the correct pin (no false positive)"],
+    [`npx -y upstash/context7`, "git", "a github shorthand install"],
+    [`npx -y git@github.com:upstash/context7.git`, "git", "an scp-style git install"],
+    [`npx -y https://codeload.github.com/upstash/context7/tar.gz/main`, "git", "a codeload tarball install"],
+    [`bun i ${NAME}`, "bare", "a versionless bun i call"],
+    [`npx -y ${SPEC}${realPin}*`, "unpinned", "a trailing single `*` (a range) is not shed as markdown"],
+    [`npx -y '${SPEC}${realPin}'`, null, "a single-quoted correct pin (quotes removed by the shell; no false positive)"],
+    [`the cloud's lane pins ${SPEC}${realPin} today`, null, "an unbalanced prose apostrophe stays literal (no false positive)"],
   ]) {
     const got = kind(line);
     checks.push([`${what} → ${want ?? "no finding"}`, want ? got.length === 1 && got[0] === want : got.length === 0]);
   }
+  for (const [line, k, want, what] of [
+    [`    "${NAME}": "${realPin} || 5",`, "json", "unpinned", "a package.json dependency range with whitespace"],
+    [`    "context7": "npm:${SPEC}${realPin} || 5",`, "json", "unpinned", "an npm: alias dependency with a union"],
+    [`    "${NAME}": "${realPin}",`, "json", null, "the CORRECT package.json dependency (no false positive)"],
+    [`      "build": "npm i ${SPEC}${realPin}, prebuilt dist; boots in under 1 s",`, "json", null, "the roster's build command string (shell-split; no false positive)"],
+    [`  "args": ["-y", "--package=${SPEC}${realPin} || 5"]`, "json", "unpinned", "a JSON args element is ONE argv word"],
+    [`${NAME}: ${realPin} || 5`, "yaml", "unpinned", "a YAML catalog value with a union"],
+    [`    "${NAME.replace("/", "\\/")}": "latest",`, "json", "unpinned", "an escaped-slash JSON dependency key"],
+    [`  - --package=${SPEC}${realPin} || 5`, "yaml", "unpinned", "a YAML sequence item is ONE argv word"],
+    [`  run: npx -y ${SPEC}${realPin} --flag`, "yaml", null, "a YAML run: command (shell-split; no false positive)"],
+  ]) {
+    const got = kind(line, k);
+    checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
+  }
+  checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);
   const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM
   checks.push([
     "a stale spec in a BOM-less UTF-16BE file is still named after decodeTracked",

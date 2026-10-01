@@ -370,6 +370,13 @@ function openingTag(src, index) {
   let depth = 0;
   for (let i = index + 1; i < src.length; i++) {
     const c = src[i];
+    // A quoted attribute value may hold `>` (`title="a>b"`): skip it whole.
+    if (depth === 0 && (c === '"' || c === "'") && src[i - 1] === "=") {
+      const q = src.indexOf(c, i + 1);
+      if (q < 0) return null;
+      i = q;
+      continue;
+    }
     if (c === "{") depth++;
     else if (c === "}") depth--;
     else if (c === ">" && depth === 0 && src[i - 1] !== "=") return src.slice(index, i);
@@ -385,7 +392,9 @@ function openingTag(src, index) {
 // Beyond \s: zero-width and joiner characters, C0 and C1 controls and DEL, the
 // soft hyphen, bidi and other format controls, invisible operators, variation
 // selectors and the blank glyphs (Braille blank, Hangul fillers, Khmer vowels).
-const INVISIBLE = /[\s\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFFA0\uFFF9-\uFFFC]/g;
+// Astral planes too (hence the `u` flag): shorthand and musical format
+// controls, the tag characters and the variation selector supplement.
+const INVISIBLE = /[\s\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFFA0\uFFF9-\uFFFC\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
 export const isBlank = (text) => text.replace(INVISIBLE, "") === "";
 
 /** Named HTML entities that are whitespace or invisible; any other name is left as text. */
@@ -441,7 +450,8 @@ function buttonText(src, openEnd, tagName = "button") {
 }
 
 /** Is this opening tag aria-hidden (any value but false)? */
-const ARIA_HIDDEN = (tag) => /\baria-hidden(?![\w-])/.test(tag) && !/\baria-hidden\s*=\s*(?:["']false["']|\{\s*false\s*\}|\{\s*["']false["']\s*\})/.test(tag);
+// `(?<![\w-])` so `data-aria-hidden` is not read as aria-hidden.
+const ARIA_HIDDEN = (tag) => /(?<![\w-])aria-hidden(?![\w-])/.test(tag) && !/(?<![\w-])aria-hidden\s*=\s*(?:["']false["']|\{\s*false\s*\}|\{\s*["']false["']\s*\})/.test(tag);
 
 /** Remove every aria-hidden element and its children; null if a tag cannot be closed. */
 function dropAriaHidden(body) {
@@ -758,7 +768,19 @@ function selfTest() {
       ['<span aria-hidden="true">×</span>', "<span aria-hidden>×</span>", "<span aria-hidden={true}>×</span>", '<span aria-hidden="true"><b>×</b></span>'].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
       checkIconButtons("x.tsx", '<button onClick={f}><svg aria-hidden="true" /><span className="sr-only">Close</span></button>').length === 0 &&
-      checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="false">Close</span></button>').length === 0],
+      ['aria-hidden="false"', "aria-hidden={false}", 'aria-hidden={"false"}', 'data-aria-hidden="true"'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><span ${a}>Close</span></button>`).length === 0)],
+    ["a same-name child inside an aria-hidden element does not close it early",
+      checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span>Y</span></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="true"><span>x</span></span>Close</button>').length === 0],
+    ["a `>` inside a quoted attribute does not end the tag",
+      checkIconButtons("x.tsx", '<button onClick={f}><span title="a>b" aria-hidden="true">×</span></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button onClick={f} title="a>b"><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button onClick={f} title="a>b">Close</button>').length === 0],
+    ["astral invisible characters do not name a button",
+      ["&#xE0100;", "&#x1D173;", "&#xE0001;", "&#x1BCA0;", "\\u{E0100}"].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c.startsWith("&") ? c : `{"${c}"}`}</button>`).length === 1) &&
+      checkIconButtons("x.tsx", '<button onClick={f}>&#x1F600;</button>').length === 0],
     ["DEL, C1 controls and invisible format characters do not name a button",
       ["&#x7F;", "&#x85;", "&shy;", "&#173;", "&lrm;", "&#x200E;", "&#x2800;", "&#x3164;", "&#x115F;", "&#x034F;", "&#xFE0F;", "&#x061C;", "&#xFFFC;", "&#x17B4;"].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c}</button>`).length === 1)],

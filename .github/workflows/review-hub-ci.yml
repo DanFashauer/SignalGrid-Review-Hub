@@ -1245,7 +1245,10 @@ jobs:
 
       - name: Shell lint (shellcheck)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # Wait for the dpkg lock instead of dying on it: the hosted runner's own
+          # apt process held /var/lib/dpkg/lock-frontend on two PR #1349 runs
+          # (exit 100 before the lint ran). The lint itself is unchanged.
+          sudo apt-get -o DPkg::Lock::Timeout=300 update -qq && sudo apt-get -o DPkg::Lock::Timeout=300 install -y -qq shellcheck
           node scripts/check-shell.mjs
 
       - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)

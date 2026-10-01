@@ -239,6 +239,10 @@ jobs:
       # workspace overrides). Static, so it catches that without a daemon.
       - name: "Container native base (a Dockerfile that cannot build is not a deploy path)"
         run: node scripts/check-container-native-base.mjs
+      - name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)"
+        run: node scripts/check-image-build-hardening.mjs
+      - name: "Image build hardening self-test (the gate must be able to fail)"
+        run: node scripts/check-image-build-hardening.mjs --self-test
       - name: "Publication boundary (public repo — nothing arrives unclassified)"
         run: node scripts/check-publication-boundary.mjs
       - name: API collection (a committed request must name a served route)
@@ -337,6 +341,14 @@ jobs:
         run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      - name: Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)
+        run: node scripts/check-connector-emulator-evidence.mjs --self-test
+      - name: "Connector-emulator evidence (the manifest asserts only what a step measured)"
+        run: node scripts/check-connector-emulator-evidence.mjs
+      - name: Scheduled-verification scope self-test (a hand-picked nightly gate must fail)
+        run: node scripts/check-scheduled-verification-scope.mjs --self-test
+      - name: "Scheduled-verification scope (the daily rot check runs preflight whole)"
+        run: node scripts/check-scheduled-verification-scope.mjs
       # Sibling of the gate above: that one asks whether the call was allowed and whether
       # it is bounded, this one asks whether it went out SIGNED.
       - name: Signing-unconditional self-test (the gate must be able to fail)
@@ -498,6 +510,10 @@ jobs:
         run: node scripts/check-sim-requests.mjs
       - name: Simulation request loop self-test (the gate can fail)
         run: node scripts/check-sim-requests.mjs --self-test
+      - name: Resource-scan binding (an intake row citing a scan file is backed by it)
+        run: node scripts/check-resource-scan-binding.mjs
+      - name: Resource-scan binding self-test (the gate can fail)
+        run: node scripts/check-resource-scan-binding.mjs --self-test
       - name: Known-false claims (a claim proven false once is not made twice)
         run: node scripts/check-known-false-claims.mjs
       - name: Known-false-claim self-test (the gate can fail)

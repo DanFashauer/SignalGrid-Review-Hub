@@ -5,7 +5,7 @@
   "routeComment": "The wire these vectors bind, as DATA \u2014 the gate (scripts/check-assist-wire-served.mjs) reads THIS field, not prose; DR-007 recorded the route as a declared gap until the spec served it; DR-023 closed that gap and the spec now serves it.",
   "requires": {
     "$comment": "Non-vacuity floor, asserted by each client's test before the cases run. Without it a client that returns DENY unconditionally passes every deny case and the suite proves nothing. KEPT CURRENT: check-assist-conformance.mjs fails when the file holds more than minCases + 4 cases, so a floor cannot lag far enough behind for a deleted vector to fail nothing.",
-    "minCases": 65,
+    "minCases": 75,
     "outcomesPresent": [
       "allow",
       "step_up",
@@ -567,6 +567,77 @@
       "expectExplanationContains": [
         "duplicate"
       ]
+    },
+    {
+      "id": "allow-ascii-whitespace-padded",
+      "why": "tab, CR, LF and form feed around an enum value are the ASCII formatting artefacts every client trims (is_ascii_whitespace); pins that the Unicode tightening below did not over-reach",
+      "status": 200,
+      "body": "{\"assist\":\"\\t\\r\\n\\fallow \\n\",\"decisionId\":\"dec_1\"}",
+      "expect": "allow",
+      "expectDecisionId": "dec_1"
+    },
+    {
+      "id": "allow-vertical-tab-padded",
+      "why": "U+000B is NOT ASCII whitespace by the shared definition (space, tab, LF, FF, CR); Kotlin's trim() and Swift's whitespacesAndNewlines both stripped it",
+      "status": 200,
+      "body": "{\"assist\":\"\\u000ballow\\u000b\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-nbsp-padded",
+      "why": "U+00A0 is not ASCII whitespace; Rust str::trim, Kotlin trim() and Swift whitespacesAndNewlines all stripped it and proceeded \u2014 only the ASCII trim is shared",
+      "status": 200,
+      "body": "{\"assist\":\"\u00a0allow\u00a0\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-ideographic-space-padded",
+      "why": "U+3000 is not ASCII whitespace; all three clients used to strip it and proceed",
+      "status": 200,
+      "body": "{\"assist\":\"\u3000allow\u3000\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-nel-padded",
+      "why": "U+0085 (NEL) was stripped by Rust and Swift but not Kotlin \u2014 the same body proceeded on two clients and denied on one",
+      "status": 200,
+      "body": "{\"assist\":\"\\u0085allow\\u0085\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-file-separator-padded",
+      "why": "U+001C was stripped by Kotlin's trim() only \u2014 the same body proceeded on Android and denied on Rust and Swift",
+      "status": 200,
+      "body": "{\"assist\":\"\\u001callow\\u001c\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-zwsp-padded",
+      "why": "U+200B is invisible but is not whitespace in any client; a zero-width-padded allow is not allow",
+      "status": 200,
+      "body": "{\"assist\":\"\u200ballow\u200b\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-cyrillic-a-homoglyph",
+      "why": "Cyrillic U+0430 renders as Latin a; a homoglyph is a different string, never close enough to allow",
+      "status": 200,
+      "body": "{\"assist\":\"\u0430llow\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "allow-fullwidth",
+      "why": "fullwidth letters fold to fullwidth lowercase under Unicode case mapping, never to ASCII; a client that normalised width (NFKC) would proceed",
+      "status": 200,
+      "body": "{\"assist\":\"\uff21\uff2c\uff2c\uff2f\uff37\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
+    },
+    {
+      "id": "restrict-dotted-capital-i",
+      "why": "U+0130 lowercases to i plus a combining dot under full Unicode mapping (Kotlin, Swift) and is untouched by Rust's ASCII fold; a non-ASCII capital is never the ASCII outcome",
+      "status": 200,
+      "body": "{\"assist\":\"RESTR\u0130CT\",\"decisionId\":\"dec_1\"}",
+      "expect": "deny"
     }
   ]
 }

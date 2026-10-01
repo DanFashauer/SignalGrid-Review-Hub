@@ -38,7 +38,7 @@
 //         text that script can actually print.
 //     (g) nothing bash 3.2 (stock macOS) cannot run — an unguarded `"${A[@]}"` under
 //         `set -u`, declare/local -A or -n, mapfile, `${v,,}`, `|&`, `&>>`, coproc, a
-//         negative subscript. The static rules (b), (d), (f) and (g) also run over
+//         negative subscript. The static rules (b), (d), (f), (g) and (i) also run over
 //         validate-sim-macos.sh; (h) does not, it is not a scripts/mac script.
 //     (h) a `uname -s` Darwin guard, AFTER any `--self-check` branch (rule (c) runs that
 //         on the Linux CI runner), unless named in DARWIN_EXEMPT with its reason.
@@ -57,13 +57,22 @@
 // GATED vs REPORTED, narrowly, because the opposite mistake is worse. Only
 // `^`-ANCHORED patterns are gated: anchoring is an explicit claim that the target
 // emits a line STARTING with that literal, and it is checkable. An UNANCHORED
-// pattern (`grep -c '→ mac'` against lane-message.mjs, which builds that text by
-// interpolation — `${m.id} → ${m.to}` — and is perfectly correct) is REPORTED as
-// not checked and never failed. A gate that flagged that honest line would be the
-// wrong gate. The search runs over the target's STRING AND TEMPLATE LITERALS only,
+// pattern against a target that builds its text by interpolation (`${m.id} → ${m.to}`)
+// is REPORTED as not checked and never failed: the literal scan cannot tell an
+// honest interpolated marker from a dead one, and a gate that punished the honest
+// kind would be the wrong gate. The search runs over the target's STRING AND TEMPLATE LITERALS only,
 // never its comments, because a comment mentioning the word is exactly what made
 // the original defect invisible; and a pattern carrying regex metacharacters is
 // REPORTED as not checked rather than guessed at.
+//
+//     (i) no grep over the stdout of a script whose output is formatted for a
+//         PERSON (HUMAN_ONLY_OUTPUT below), which names the machine-readable
+//         source to read instead. The defect: lane-tick.sh counted unread mail with
+//         `lane-message.mjs inbox | grep -c '→ mac'`. The arrow is built in
+//         auditLaneMessages' returned array; the inbox CLI never prints it
+//         (measured 2026-09-30: 0 matches with unread mail addressed to mac), so
+//         the block could never fire. Rule (f) could not see it — the pattern is
+//         unanchored — so the target itself is what is gated.
 //
 //   Over the scripts an operation actually NAMES (derived by importing
 //   SIM_OPERATIONS and reading its argv, never by re-listing them here):
@@ -457,6 +466,24 @@ export function darwinGuardProblems(text, name, exempt = DARWIN_EXEMPT) {
   return [];
 }
 
+// ── rule (i): no grep over a script whose output is for a person ──────────────
+/** Rule (i). Script → the machine-readable source a shell script must read instead. */
+const HUMAN_ONLY_OUTPUT = new Map([
+  ["scripts/lane-message.mjs", "`node scripts/check-lane-messages.mjs --unread-summary <lane>` (lane-tick.sh's append_unread_state)"],
+]);
+
+export function humanOutputGreps(text, label) {
+  return grepClaims(text)
+    .filter((c) => HUMAN_ONLY_OUTPUT.has(c.target))
+    .map((c) => ({
+      label,
+      rule: "i",
+      detail:
+        `line ${c.line}: greps '${c.pattern}' out of \`${c.target}\`, whose output is formatted for a person and can ` +
+        `change or never carry the marker — a count that can silently read 0 forever. Read ${HUMAN_ONLY_OUTPUT.get(c.target)}.`,
+    }));
+}
+
 // ── the checks ───────────────────────────────────────────────────────────────
 function staticChecks(absPath, label) {
   const problems = [];
@@ -473,6 +500,7 @@ function staticChecks(absPath, label) {
   problems.push(...grepRes.problems);
   GREP_NOT_CHECKED.push(...grepRes.notChecked);
   problems.push(...bash32Problems(text, label));
+  problems.push(...humanOutputGreps(text, label));
   return problems;
 }
 
@@ -532,7 +560,9 @@ const FIXTURES = {
   // rule (f)
   "grep-unprintable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  PENDING' || true)"\n`,
   "grep-printable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  READY' || true)"\n`,
-  "grep-unanchored.sh": `#!/usr/bin/env bash\nN="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
+  "grep-unanchored.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/notes.mjs 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
+  // rule (i): the dead lane-tick.sh line, verbatim
+  "grep-inbox.sh": `#!/usr/bin/env bash\nUNREAD="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
   "grep-missing-target.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/gone.mjs --plan | grep -c '^  READY')"\n`,
   "grep-two-step.sh": `#!/usr/bin/env bash\nOUT="$(node scripts/mac/planner.mjs --plan 2>/dev/null)"\nN="$(printf '%s' "$OUT" | grep -c '^  PENDING')"\n`,
   // rule (g): stock macOS bash 3.2
@@ -588,7 +618,7 @@ const GREP_TARGETS = {
     "for (const r of rows) console.log(`  READY ${r.id}`);",
     "",
   ].join("\n"),
-  "scripts/lane-message.mjs": "unread.push(`${m.id} \u2192 ${m.to}: ${m.subject}`);\n",
+  "scripts/mac/notes.mjs": "unread.push(`${m.id} \u2192 ${m.to}: ${m.subject}`);\n",
 };
 
 function selfTest() {
@@ -664,6 +694,12 @@ function selfTest() {
     expect("an UNANCHORED grep is reported, never failed",
       unanchored.problems.length === 0 && unanchored.notChecked.length === 1,
       `an honest interpolated marker was punished (the failure mode this gate must not have): ${JSON.stringify(unanchored)}`);
+    expect("SYNTHETIC VIOLATION: grepping the human-formatted lane inbox is rule (i)",
+      S("grep-inbox.sh").some((p) => p.rule === "i"),
+      "MISSED the dead lane-tick.sh unread-mail line (BUILD_BACKLOG finding #8)");
+    expect("rule (i) leaves a grep over any other target alone",
+      S("grep-unanchored.sh").every((p) => p.rule !== "g"),
+      "FALSE POSITIVE: rule (i) fired on a target not in HUMAN_ONLY_OUTPUT");
     expect("a grep against a script that does not exist is caught",
       F("grep-missing-target.sh").problems.some((p) => p.rule === "f"),
       "MISSED a grep whose target file is gone — the count would be 0 forever");
@@ -733,7 +769,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 if (process.argv.includes("--self-test")) {
-  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length + G32_CASES.length + H_CASES.length} planted shell fixtures and samples behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target; rule (g) on every listed bash-4-only pattern and every strict-mode and array spelling; rule (h) on a guarded, an unguarded, a non-exiting, an exempt and a guard-before-self-check script).`);
+  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length + G32_CASES.length + H_CASES.length} planted shell fixtures and samples behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target; rule (g) on every listed bash-4-only pattern and every strict-mode and array spelling; rule (h) on a guarded, an unguarded, a non-exiting, an exempt and a guard-before-self-check script; rule (i), a grep over the human-formatted lane inbox, in both directions).`);
   process.exit(0);
 }
 

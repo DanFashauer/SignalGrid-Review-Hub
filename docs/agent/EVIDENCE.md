@@ -4047,3 +4047,188 @@ Verdict:  holds, with corrections against earlier drafts of this entry: #1153's 
           are itemized in LOOP.md's LAST TOUCHED block, not repeated here. Every live GitHub/issue read above happened
           AFTER the close and is recorded, not re-runnable; every sha-bound claim is a local, immutable command against
           the frozen tree (or, for the wire-truth figure, against a worktree detached at that exact sha and then removed).
+
+## 2026-09-30 — "FIVE CODE LANDINGS UNDER DR-037 (#1295, #1237, #1305, #1277, #1312), ONE TICK LANDING (#1313) AND FOUR MAIL PRs closed the 12:30Z-~16:05Z window at #1310's merge (96338294); the Mac's land-5 ask was acked, and #1218 and #1252 landed at 16:22Z, just after the close"
+Command:  TZ=UTC git log --first-parent --format='%h %cd %s' --date=iso-local 10f78dc7..96338294 | grep -E 'Merge pull request #'
+Output:   ten merges, newest first: 96338294 16:06:25 #1310 "(steward, check run 109968956461)" / f1786167 16:06:19 #1312
+          "(steward, check run 109969353542)" / 1dc2f7d9 16:06:14 #1313 "(steward, check run 109969646817)" / 2fa150a3
+          14:52:30 #1306 "(steward, check run 109938166330)" / 3dee6a25 14:51:17 #1277 "(steward, check run 109935679941)" /
+          4a6a863c 14:27:08 #1305 "(steward, check run 109927316942)" / 3f91a9dd 13:59:59 #1304 "(steward, check run
+          109914242752)" / 3de208fe 13:47:23 #1237 "(steward, check run 109910058858)" / 35ac13c9 12:49:15 #1296 "(steward,
+          check run 109883771176)" / dde8c276 12:37:19 #1295 "(steward, check run 109882916391)". 10f78dc7 (12:26:31Z, a Mac
+          heartbeat) is the last first-parent commit before 12:30Z, so the range is exactly the window's landings; the other
+          12 first-parent commits in it are 11 Mac heartbeats and the Mac's 14:52Z mail send (0e311c2e).
+Command:  for n in 1295 1237 1305 1277 1312 1313 1300 1296 1304 1306 1310; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"\(.number) merged=\(.merged) sha=\(.merge_commit_sha[0:8]) head=\(.head.sha[0:8]) at=\(.merged_at)"'; done (tool read after the close; recorded, not re-runnable as live state)
+Output:   "1295 merged=true sha=dde8c276 head=08c8e31f at=2026-09-30T12:37:20Z" / "1237 ... sha=3de208fe head=556d4237
+          at=...13:47:24Z" / "1305 ... sha=4a6a863c head=c424eb29 at=...14:27:09Z" / "1277 ... sha=3dee6a25 head=3c47f44e
+          at=...14:51:17Z" / "1312 ... sha=f1786167 head=c755ca11 at=...16:06:20Z" / "1313 ... sha=1dc2f7d9 head=edd39667
+          at=...16:06:14Z" / "1300 merged=true sha=49d055f8 head=4b62b608 at=...16:06:16Z" / "1296 ... sha=35ac13c9" / "1304 ...
+          sha=3f91a9dd" / "1306 ... sha=2fa150a3" / "1310 ... sha=96338294 head=c34c2a4e at=...16:06:25Z".
+Command:  for id in 109882916391 109910058858 109927316942 109935679941 109969353542 109969646817 109883771176 109914242752 109938166330 109968956461; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) \(.conclusion) head=\(.head_sha[0:8])"'; done; for m in dde8c276 3de208fe 4a6a863c 3dee6a25 f1786167 1dc2f7d9 35ac13c9 3f91a9dd 2fa150a3 96338294; do echo "$m^2=$(git rev-parse --short=8 $m^2)"; done
+Output:   all ten "Typecheck, build, and proof scaffold success", heads 08c8e31f, 556d4237, c424eb29, 3c47f44e, c755ca11,
+          edd39667, b5c31517, 90b97f99, 47da7e82, c34c2a4e — each equal to its merge commit's second parent (the local rev-parse
+          prints the same ten, in the same order), so every gating check is bound to its merged head by head_sha.
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/commits/556d4237da9e5fd31ab2213d1799fd4726723aec/check-runs?check_name=Typecheck,%20build,%20and%20proof%20scaffold&filter=all" --jq '.check_runs[]|"\(.id) \(.conclusion) \(.started_at)"'; then each failed job's log grepped for 'last success|502 Bad Gateway'
+Output:   five attempts on #1237's one head: 109900760291 failure 13:08:41Z and 109902292865 failure 13:12:31Z ("✗ The mutation
+          sweep is not demonstrably alive — last success was 644.4h ago, over the 48h threshold." — the stale Actions listing
+          #1312 fixes); 109905365627 failure 13:20:05Z and 109907453934 failure 13:25:14Z ("GET …/actions/runs/36580204964/jobs
+          -> 502 Bad Gateway [… remaining=3968 …] — clears in 308s … not retried" and "[… remaining=4999 …] — clears in 3589s …
+          not retried" — the 5xx read as a rate limit that #1305 fixes); 109910058858 success 13:31:30Z (the landing's gate).
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/pulls?state=all&per_page=40&sort=created&direction=desc" --jq '.[]|"\(.number) \(.state) \(.created_at) \(.head.ref)"'; git merge-base --is-ancestor 4b62b6080a82df2d33f0bffa9b8a9fab19b89ec7 1dc2f7d9; echo $?
+Output:   the newest mac/tick-* PR is #1300 (created 12:42:46Z); #1301-#1313 are all claude/* or lane/* heads, so after #1295
+          (12:37:19Z) the tick cut one more branch (#1300, the -2 re-mint request) and then none. "0" — #1300's head is an
+          ancestor of #1313's merge, which is why #1300 reads merged. Still open: #1257, #1262 and 24 mac/tick-* PRs in
+          #1269-#1299 (the other seven numbers in that range are #1272 #1274 #1277 #1280 #1285 #1295 #1296).
+Command:  cat artifacts/lane-messages/mac-mac-5-safety-machinery-prs-are-green-clean-p.json artifacts/lane-messages/acks/mac-mac-5-safety-machinery-prs-are-green-clean-p.json (worktree at 96338294)
+Output:   sentAt "2026-09-30T14:52:09.188Z", subject "Mac: 5 SAFETY_MACHINERY PRs are green + clean, please land under DR-037; 3
+          conflicts being cleared" (#1216, #1218, #1225, #1252, #1256; #1248 after the Mac's conflict push; DECISION_PATH
+          #1219 #1220 #1224 #1251 #1255 wait on #1246). Ack ackedAt "2026-09-30T15:26:40.640Z", landed by c34c2a4e (#1310):
+          "Each PR is going through an independent review plus an adversarial refutation pass before it lands under DR-037,
+          one at a time with merge-tree re-checked between landings."
+Command:  for n in 1218 1252 1216 1225 1256 1309; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"\(.number) \(.state) merged=\(.merged) \(.merged_at)"'; done; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/109672057568 and /109767342465; each PR's issue comments since 14:50Z (tool reads after the close)
+Output:   "1218 closed merged=true 2026-09-30T16:22:40Z" (merge_commit_sha 29b97fef91d8eb8ebc2da6875614081cf1a5e335; check run
+          109672057568 success head c762ea87) and "1252 closed merged=true 2026-09-30T16:22:58Z" (859b0d947291dcee73d764e418ea02467ec6c0a4;
+          109767342465 success head 4b08a30c), each with a "Merged under DR-037 by the cloud lane … on the Mac lane's mail ask
+          of 2026-09-30 14:52Z" comment, #1218's reading "Independent review + adversarial refutation: ship, upheld." #1216
+          and #1225 open with "**Brain review: fix-needed** … (independent review, then an adversarial refutation that upheld
+          it …)" at 16:23:01Z / 16:23:03Z. #1256 open, no verdict comment. #1309 "**Brain review: owner-decision** on head
+          `61c1e547`" at 16:23:05Z: "the deletion of `lib/api-spec/product-openapi.json` matches the `lib/*` rule" on the
+          `--no-renames` diff form. All six reads postdate the ~16:05Z close.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments for 1277, 1280, 1272, 1274, 1265
+Output:   #1277 12:54:17Z "**Brain review: ship**" then 14:52:05Z "Merged under DR-037 at 3dee6a25…"; #1280 12:54:18Z
+          "**Brain review: fix-needed**" ("Row 91 is not built … Raise a hand … for the per-version test-binding decision …
+          Tier: DECISION_PATH, so the owner merges"), the PR body now carrying artifacts/raised-hands/2026-09-30-policytest-fixtures-are-pinned-per-policy-not-pe.json
+          on its branch; #1272 and #1274 15:43:35Z / 15:43:36Z "**Brain review, round 2: fix-needed**", answered by the
+          original workers at 16:04:30Z and 16:09:41Z (#1274's: "the remote was still at 710d8ed9 when I checked before
+          pushing, so there is no collision with the dispatched worker"); #1265 "Brain review (delta, head fe4282a3): …
+          fix-needed" at 10:38:59Z, before this window.
+Command:  mcp Claude_Code_Remote list_sessions (mine, limit 40; tool read after the close)
+Output:   "Build wave 2026-09-30 F2: fix PR #1272 …" created 15:43:37.977Z, updated 15:43:38.007Z, configured_model
+          claude-fable-5-1, ARCHIVED; "… F3: fix PR #1274 …" created 15:43:39.571Z, updated 15:43:39.602Z, claude-fable-5-1,
+          ARCHIVED — each archived ~30 ms after creation (lesson candidate a); the Opus F2/F3 re-spawns (15:44:51Z/15:44:52Z)
+          are ARCHIVED too, last updated 15:55Z (lesson candidate b: B16 and B17, the original workers, are the ones
+          answering). F1 (#1265) created 14:14:16Z; B23-B27 created 14:26:40Z-14:26:46Z; every B1-B27 and F1 session reads
+          configured_model claude-opus-5-5. B27 ("signalgrid CLI harness (DR-040)") had no PR among the 40 newest.
+Command:  mcp Claude_Code_Remote get_session session_01D3GJ2Fs8sVppPgzuJdnNLn (the coordinating session; tool read at 16:38Z)
+Output:   "configured_model":"claude-opus-4-8", session_context "model":"claude-fable-5-1", "last_served_model":"claude-fable-5-1",
+          "user_switched_model":"claude-fable-5-1" — the coordinator read Fable after a user model switch (read at 16:38Z, not at
+          15:43Z), consistent with create_session handing Fable to the first F2/F3 spawns (lesson candidate a).
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1195 --jq .body; git diff 40af18d1^1 40af18d1 -- artifacts/raised-hands; gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/comments/5899407214 --jq .body; git show 0aaf3d9f:docs/agent/LOOP.md | sed -n 78p
+Output:   #1195's body: "LOOP.md:78 is outside this batch's write scope and is corrected in the next record." Its owner hand
+          2026-09-28-1118-changes-decisionengine-swift-behaviour-clau asks for "(a) a decision record that authorises or refuses
+          the #1118 re-port …; a bare 'exception granted' reply does not authorise it", "(b) Pick the unsafe-allow repair shape",
+          "(c) Say whether #1121 … needs your decision too", and says "This supersedes the 'exception granted or revert' line in
+          docs/agent/LOOP.md, which the next record corrects." LOOP.md:78 at 0aaf3d9f is the "reply 'exception granted' or
+          'revert'" line (today's 2026-09-27 PREVIOUSLY entry). The owner's ruling, on #1118 (and #1121) at 2026-09-29T21:34Z:
+          "Grant exception (Recommended) — Swift port catches up to the TS engine. Unblocks #1118 and #1121."; #1246 (DR-061,
+          open) records it for #1118 and #1121. That line now says so.
+Command:  pnpm run loop:state   (worktree at 96338294, started 16:14Z)
+Output:   "Readiness (gates outreach) 0% = lowest of runbook 100% · launch-evidence 0% · end-to-end 100%" / "Review coverage 104
+          of 105 surfaces read, 0 partial, 1 not read" / "LOOP STATE date STATE (2026-09-30) within 0 day(s) of mainline's newest
+          commit" / "2 thing(s) need you." (exit 1) — the two failing seams are the shared container's 19 local attack-reproduction
+          branches (the open owner hand) and "claude/build-ci-rot-and-evidence-truth (+116)"; neither is this record's. The 0%
+          is the launch-evidence dimension waiting on the -2 re-mint request #1313 queued ("live evidence stays at its 04:23
+          -04:00 mint until then", #1313's body).
+Verdict:  holds, frozen at ~16:05Z except where marked. Ten PRs merged in the window on the first-parent chain 10f78dc7..96338294:
+          five code landings under DR-037 (#1295, #1237, #1305, #1277, #1312), one tick landing (#1313, carrying #1300), and
+          four mail PRs (#1296, #1304, #1306, #1310); each of the ten gating checks is bound to its merged head by head_sha.
+          #1237 took five gating attempts, and the two defects behind its four failures are the two ci-liveness fixes that
+          landed after it (#1305, #1312). The Mac tick cut no branch after #1300. After the close, and recorded on the
+          coordinator's instruction: #1218 and #1252 landed at 16:22Z on the Mac's ask; #1216 and #1225 are fix-needed; #1309 is
+          the owner's merge. The owner directive and the three HELD lesson candidates are in LOOP.md's LAST TOUCHED block, not
+          numbered in docs/agent/LESSONS.md (#1133 claims L23). Not verified here: the "Sonnet review + Opus refutation" tiers
+          (the PR comments say "independent review" and "adversarial refutation" without naming a model), the file-contention
+          holds (the coordinator's call, with no GitHub artifact), the 2h-timeout lesson (c), and B1-B22's individual PRs.
+
+## 2026-10-01 — "31 PR MERGES closed the 2026-09-30 17:35Z-2026-10-01 06:40Z window (twelve steward code landings, five Mac ticks, thirteen mail/heartbeat PRs and the prior record #1334); the forward-build routine now routes each bundle by model tier (DR-047) on the owner's 2026-10-01 ask"
+Command:  TZ=UTC git log --first-parent --format='%h %cd %s' --date=iso-local 6acabe8e..d4fd8a6f | grep -E 'Merge pull request #'
+Output:   31 merges, oldest first: f52e806f 17:43:14 #1274, e08b2d51 18:12:50 #1315, 3a59d864 18:36:28 #1324, 28a1b5d0
+          18:54:08 #1301, 6f2f1373 18:54:17 #1319, d761abf4 19:13:04 #1327, fc4e4427 19:28:46 #1325, f079a7ee 19:28:55 #1326,
+          ca8f3603 19:50:11 #1332, e30a5f4d 19:52:12 #1331, af70a1a6 19:57:04 #1334, c09705c2 20:43:03 #1303, c960416e
+          20:46:22 #1335, fd57b569 21:06:12 #1272, cc0f76c4 21:36:22 #1339, a2fce49e 21:41:19 #1318, c4faefea 22:24:17 #1317,
+          11844613 22:27:28 #1340, 7ff9093a 23:02:08 #1311, 67df1443 23:31:40 #1328, 29b61f82 23:40:59 #1341, 0847b506
+          00:07:07 #1236, 4830503e 00:30:38 #1343, c65c0403 00:33:45 #1342, 505167f6 00:50:41 #1344, e8806b7d 02:26:54 #1345,
+          8711bbef 02:38:34 #1346, 4c2fc1a9 02:58:39 #1329, 179c1b87 04:40:23 #1350, c71cf2c7 04:42:24 #1348, fb3a8cf2
+          06:31:08 #1355 — each subject reads "(steward, check run <id>)". 6acabe8e (17:29:12Z, a Mac heartbeat) is the
+          last first-parent commit before 17:35Z; the range holds 68 first-parent commits: the 31 merges, 36 Mac heartbeats
+          and the Mac's 18:09Z mail send b1d64a25. By kind: twelve code landings (#1274 #1301 #1319 #1303 #1272 #1318 #1317
+          #1311 #1328 #1236 #1329 #1348), five Mac ticks (#1315 #1325 #1326 #1331 #1342), thirteen mail/heartbeat PRs and
+          the prior record #1334.
+Command:  for each of the 31 merges: id from the subject's "check run <id>"; gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/<id> --jq '"\(.conclusion) \(.head_sha[0:8]) \(.name)"'; git rev-parse --short=8 <merge>^2 (tool reads 06:4xZ)
+Output:   all 31 "success … Typecheck, build, and proof scaffold", each head_sha equal to its merge's second parent — e.g.
+          #1328 110142369156 76144738, #1236 110150187949 0e2aeb90, #1329 110194513710 5c700ae8, #1348 110218392620
+          8c726438, #1342 110153406566 91d08925, #1344 110162164756 031c68f1, #1346 110190353734 c0b33101, #1350
+          110218074296 b9f1cb58, #1355 110244982299 bbc81cc7, #1274 109987231008 93092963, #1311 110132363117 7e6b4c06.
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/issues/<n>/comments?since=2026-09-30T17:35:00Z for #1321 #1329 #1333 #1265 #1330 #1337 #1338 #1348 #1347 #1349 #1308 #1352 #1280 #1309 #1353 #1354 (verdict headings only)
+Output:   wave 8 at 00:30:47Z-00:30:52Z: "Review round 3 — verdict: **fix-needed**" on #1321 #1329 #1333 #1330 and "Review
+          round 7" on #1265; #1337/#1338 "Review round 2 — verdict: **owner-decision**" at 00:47:07Z/00:47:09Z. Wave 9 at
+          02:25:22Z-02:26:45Z: #1329 "Review round 4 — verdict: **ship**" (head aff7489a), #1321 #1330 #1337 #1338
+          owner-decision, #1333 round 4 and #1265 round 8 fix-needed. Wave 10 at 04:07:16Z-04:07:23Z: #1348 "Review round 1 —
+          verdict: **ship**" (head c58c9c5f), fix-needed #1347 #1349 #1265 (round 9) #1308 (round 9) #1333 (round 5). Wave
+          11 at 05:19:16Z-05:19:21Z: the same five, all fix-needed. Wave 12 at 06:36:15Z-06:36:22Z: those five plus #1352
+          "Review round 1 — verdict: **fix-needed**" (head 2931616d). Earlier rounds 17:43Z-23:18Z on #1265 #1308 #1321 #1329
+          #1333 #1330 #1337 #1338; #1308's round 2 read "**ship**" at 20:38:24Z, then fix-needed from round 3 on a moved head.
+          #1280: round 2 owner-decision 00:23:07Z; round 3 fix-needed 01:40:58Z, answered 02:01:02Z "I measured the stall
+          on the pre-refresh tree, 239 commits behind Alpha" (the hand removed in cd0da141); round 4 02:19:10Z
+          "owner-decision (no defect; the owner merges)". #1309 00:15:27Z "Delta verdict … owner-decision unchanged". #1353
+          06:24:38Z "Cloud review round 1 — verdict: **fix-needed**" ("2 unresolved review threads (CodeQL TOCTOU alerts …)",
+          "phase-pr-evidence = failure", "The token scrub does not reach git-invoked hooks"); #1354 06:28:16Z fix-needed
+          ("phase-pr-evidence (failure)", "a DR-063 that does not exist anywhere yet").
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/<n>/commits for #1242 #1244 #1280 #1330; git fetch origin pull/1242/head; M=3a0504c9 (dec1fa8a^); diff the added lines of git diff <merge-base> 7e67df47 and of git diff $M^2 $M, each limited to scripts/src/vuln-scan-proof.ts; then the same for git diff c71cf2c7^1 c71cf2c7 against git diff $M^1 $M
+Output:   refresh commits on the owner PRs: #1242 7e67df47 (00:32:37Z) and dec1fa8a (05:21:16Z), #1244 ffb9c0d7 (00:51:57Z)
+          and 500bcad9 (04:44:23Z), #1330 cb61ba43 (05:02:36Z) — each "sync: regenerate live-sync manifest and surface
+          coverage after merging SignalGrid_Alpha" — and #1280 7535fd6b (01:10:20Z, a two-parent merge of Alpha). On
+          3a0504c9, #1242's side keeps 13 added lines, byte-identical to its own, 0 removed; #1348's
+          6 added lines come in byte-identical, 0 removed: a keep-both, not a rewrite.
+Command:  for s in 21142a56 6ef3ff36 6651af8f f8831a42 (#1351's heads): gh api …/commits/<sha>/check-runs?check_name=Typecheck,%20build,%20and%20proof%20scaffold; failing job logs grepped for '✗'; the same check-runs listing on #1352's head 2931616d; and its 05:44:14Z comment
+Output:   #1351: 110222099820 failure (Cited commands: a "proof:sbom" script "which no package.json defines" in
+          docs/COMPANY_BUILD_PLAN.md — lesson candidate (h)), 110237676097 failure and 110238917942
+          failure (each a cited-paths line citation into docs/COMPANY_BUILD_PLAN.md "cites past the end of a 4834-line
+          file"), 110242261976 success on f8831a42; the PR is still open. #1352: "Prod stack (Docker compose smoke)"
+          110229167929 failure, then 110236990592 success; "Typecheck, build, and proof scaffold" 110229168081 and
+          110236991422 success; the comment quotes "received unexpected HTTP status: 502 Bad Gateway" pulling node:22-alpine.
+Command:  mcp Claude_Code_Remote get_trigger trig_01XLv3hGCPob8qcEDsZJ2xM8; git show 179c1b87:artifacts/agent-heartbeats/forward-build-cycle.json; the same file at e8806b7d, 4830503e and fb3a8cf2
+Output:   "SignalGrid forward-build cycle", cron "10 */2 * * *", updated_at 2026-10-01T03:33:31Z, prompt: "keeping at most 8
+          workers in flight (at most 4 of them Opus)", "MECHANICAL → claude-haiku-4-5-20251001", "BUILD → claude-sonnet-5-5",
+          "JUDGMENT → claude-opus-5-5", "Sonnet reviews every PR. Opus refutes only a PR that would LAND under DR-037 or that
+          touches DECISION_PATH / lib/* core / api-server", "the heartbeat carries the counts". 179c1b87 (04:24:36Z): "04:10Z
+          fire (first with tiered routing per DR-047, owner ask 2026-10-01: pool 12→8, max 4 Opus …)", "REFILL (planner
+          Sonnet classified): B41 Haiku … B42 Sonnet … (facility-trust-graph found already joined 2026-09-12, replaced); B43
+          Sonnet", "IN FLIGHT H/S/O = 1/2/5". e8806b7d: "the session disk allowance filled (409M free) … plus two stale Swift
+          toolchain downloads (~5.7G); freed to ~8G by deleting node_modules/dist and the toolchains (no worktree removed,
+          L22)", "worker brief now carries a STALE-TREE RULE". 4830503e: "GitHub delivery gap a FOURTH time (a32d9aa7 on
+          #1330 at 22:58Z had no pull_request run) — recovered with workflow_dispatch at 00:01Z". fb3a8cf2 (06:15:27Z): "B42
+          (Sonnet, brace-less wave 4) STOPPED 04:25Z: its session's security classifier blocked …; not laundered",
+          "IN FLIGHT H/S/O = 0/3/5".
+Command:  mcp Claude_Code_Remote list_sessions (mine, limit 30; tool read 06:5xZ), titles matching B38-B43
+Output:   B38, B39, B40 (created 02:21:08Z-02:21:11Z) configured_model claude-opus-5-5; "B41 (haiku)" 04:23:56Z
+          claude-haiku-4-5-20251001; "B42 (sonnet)" and "B43 (sonnet)" 04:23:57Z/04:23:59Z claude-sonnet-5-5; "B41b (sonnet,
+          raised)" 06:04:37Z claude-sonnet-5-5 — each session_context model equal to its configured_model.
+Command:  gh api repos/DanFashauer/signalgrid-mcp/pulls/14 and /15; gh api "repos/DanFashauer/SignalGrid-Review-Hub/pulls?state=open&per_page=100" filtered to mac/tick-* heads
+Output:   signalgrid-mcp #14 merged 2026-10-01T04:36:23Z (343339c4); #15 open, mergeable_state "dirty" (head 8355b7d6) — so
+          the coordinator's "two green PRs (#14, #15) waiting" is one PR now, and it needs a refresh before a merge. 27 open
+          tick PRs: #1257 #1262 and 24 in #1269-#1299 (26), plus #1336.
+Command:  gh api "repos/DanFashauer/SignalGrid-Review-Hub/issues/1330/comments" — the round-4 verdict at 02:26:45Z
+Output:   "**Two pre-existing safety gaps, outside this PR's scope.** I ran both on the head and on the base lib files swapped
+          in; both behave the same on base": in lib/handoff-sim/src/simulate.ts each exception step composes the device's
+          signals "with only the CURRENT exception's signal", and "A credential-shaped taskRef or exceptionRef … makes
+          refuseCredentialMaterial throw, so the whole exception step is refused" — lesson candidate (k).
+Command:  TZ=UTC git log -1 --format='%h %cd %s' --date=iso-local da002df4; grep -n facility-trust-graph scripts/mutation-guard.mjs; the brace-less row in docs/BUILD_BACKLOG.md
+Output:   "da002df4 2026-09-12 05:51:57 +0000 Merge pull request #672 … guard(facility-trust-graph)", an ancestor of the tip;
+          the sweep entry names proof:facility-trust-graph; the backlog row still reads "Pending, by survivors measured
+          2026-09-11: facility-trust-graph 22".
+Command:  pnpm run loop:state   (worktree at d4fd8a6f, 06:4xZ)
+Output:   "Readiness (gates outreach)" — the figure loop:state reads at the tip, with launch-evidence its lowest dimension /
+          "Review coverage 104 of 105 surfaces read, 0 partial, 1 not read" / "Raised hands 9 open, 5 overdue (>3d)" / "1
+          thing(s) need you." (exit 1) — the one failing seam is the shared container's 19 local attack-reproduction
+          branches (the open owner hand), not this record's.
+Verdict:  holds, frozen at 06:40Z. 31 PRs merged on the first-parent chain 6acabe8e..d4fd8a6f, each gating check bound to
+          its merged head by head_sha; the four landings the brain's waves reviewed (#1328, #1236, #1329, #1348) went in
+          under DR-037 one at a time, two of them on a wave SHIP (#1329 wave 9, #1348 wave 10). The owner ask, the routine
+          change, the owner queue and the eleven HELD lesson candidates are in LOOP.md's LAST TOUCHED block, not numbered in
+          docs/agent/LESSONS.md (#1133 still claims L23). Not verified here, recorded on the coordinator's word: the 14
+          review-worktree count and the 06:28Z second disk sweep (after the last committed heartbeat), the land chains'
+          4-minute self-dispatch, lesson candidates (c), (d) and (j) (no committed artifact names them), and the reviewer
+          and refuter tiers on the waves before 05:19Z (those comments say "independent reviewer" and "adversarial refuter"
+          without naming a model). The eight steward code landings before #1328 are recorded from their merge subjects and
+          check runs only; this record does not restate their reviews.

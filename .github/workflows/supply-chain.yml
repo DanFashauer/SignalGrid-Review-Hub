@@ -174,7 +174,13 @@ jobs:
           # Evidence, not a frozen claim: the same image scans differently as
           # the database moves, so the db build date rides with the result.
           grype db update
-          grype sbom:image-sbom.cyclonedx.json -o json --file grype-report.json || true
+          # No --fail-on is set, so findings exit 0 and are REPORTED below. A
+          # non-zero status is grype itself failing (crash, unreadable SBOM or
+          # db): no scan ran, so the step fails rather than report over it.
+          # Guarded by scripts/check-image-build-hardening.mjs.
+          gs=0
+          grype sbom:image-sbom.cyclonedx.json -o json --file grype-report.json || gs=$?
+          if [ "$gs" -ne 0 ]; then echo "::error::grype exited $gs: the scanner failed, no scan ran"; exit 1; fi
           python3 - <<'PY'
           import json
           r = json.load(open("grype-report.json"))

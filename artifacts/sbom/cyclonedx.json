@@ -18,7 +18,7 @@
     "properties": [
       {
         "name": "signalgrid:ecosystems-covered",
-        "value": "npm (pnpm resolved tree); cargo (3 committed Cargo.lock files); maven (2 committed build.gradle.kts files); swift (both Package.swift surfaces read — zero external packages declared)"
+        "value": "npm (pnpm resolved tree); cargo (3 committed Cargo.lock files); maven (2 committed build.gradle.kts files — DIRECT declarations only, dependencies and plugins {} markers; transitives not resolved, no Gradle lockfile is committed); swift (both Package.swift surfaces read — zero external packages declared)"
       },
       {
         "name": "signalgrid:licence-sources",
@@ -7986,6 +7986,146 @@
         {
           "name": "signalgrid:licence-basis",
           "value": "POM <licenses> at https://dl.google.com/android/maven2/androidx/core/core-ktx/1.15.0/core-ktx-1.15.0.pom, recorded 2026-08-21 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "com.android.application:com.android.application.gradle.plugin",
+      "version": "8.7.3",
+      "bom-ref": "pkg:maven/com.android.application/com.android.application.gradle.plugin@8.7.3",
+      "purl": "pkg:maven/com.android.application/com.android.application.gradle.plugin@8.7.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:gradle-plugin-id",
+          "value": "com.android.application"
+        },
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "POM <licenses> at https://dl.google.com/android/maven2/com/android/application/com.android.application.gradle.plugin/8.7.3/com.android.application.gradle.plugin-8.7.3.pom, recorded 2026-09-30 (POM names it 'The Apache Software License, Version 2.0' — normalised to its SPDX id) (plugin marker for com.android.tools.build:gradle:8.7.3, whose POM names the same licence)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "org.jetbrains.kotlin.android:org.jetbrains.kotlin.android.gradle.plugin",
+      "version": "2.1.0",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin.android/org.jetbrains.kotlin.android.gradle.plugin@2.1.0",
+      "purl": "pkg:maven/org.jetbrains.kotlin.android/org.jetbrains.kotlin.android.gradle.plugin@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:gradle-plugin-id",
+          "value": "org.jetbrains.kotlin.android"
+        },
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/android/org.jetbrains.kotlin.android.gradle.plugin/2.1.0/org.jetbrains.kotlin.android.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.1.0/kotlin-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin",
+      "version": "2.1.0",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin.jvm/org.jetbrains.kotlin.jvm.gradle.plugin@2.1.0",
+      "purl": "pkg:maven/org.jetbrains.kotlin.jvm/org.jetbrains.kotlin.jvm.gradle.plugin@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:gradle-plugin-id",
+          "value": "org.jetbrains.kotlin.jvm"
+        },
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/jvm/org.jetbrains.kotlin.jvm.gradle.plugin/2.1.0/org.jetbrains.kotlin.jvm.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-gradle-plugin/2.1.0/kotlin-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin",
+      "version": "2.1.0",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin.plugin.compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin@2.1.0",
+      "purl": "pkg:maven/org.jetbrains.kotlin.plugin.compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:gradle-plugin-id",
+          "value": "org.jetbrains.kotlin.plugin.compose"
+        },
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/plugin/compose/org.jetbrains.kotlin.plugin.compose.gradle.plugin/2.1.0/org.jetbrains.kotlin.plugin.compose.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/compose-compiler-gradle-plugin/2.1.0/compose-compiler-gradle-plugin-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "org.jetbrains.kotlin.plugin.serialization:org.jetbrains.kotlin.plugin.serialization.gradle.plugin",
+      "version": "2.1.0",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin.plugin.serialization/org.jetbrains.kotlin.plugin.serialization.gradle.plugin@2.1.0",
+      "purl": "pkg:maven/org.jetbrains.kotlin.plugin.serialization/org.jetbrains.kotlin.plugin.serialization.gradle.plugin@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:gradle-plugin-id",
+          "value": "org.jetbrains.kotlin.plugin.serialization"
+        },
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "Gradle plugin marker https://plugins.gradle.org/m2/org/jetbrains/kotlin/plugin/serialization/org.jetbrains.kotlin.plugin.serialization.gradle.plugin/2.1.0/org.jetbrains.kotlin.plugin.serialization.gradle.plugin-2.1.0.pom resolves to org.jetbrains.kotlin:kotlin-serialization:2.1.0; POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-serialization/2.1.0/kotlin-serialization-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "org.jetbrains.kotlin:kotlin-test",
+      "version": "2.1.0",
+      "bom-ref": "pkg:maven/org.jetbrains.kotlin/kotlin-test@2.1.0",
+      "purl": "pkg:maven/org.jetbrains.kotlin/kotlin-test@2.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "signalgrid:licence-basis",
+          "value": "POM <licenses> at https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-test/2.1.0/kotlin-test-2.1.0.pom, recorded 2026-09-30 (POM names it 'The Apache License, Version 2.0' — normalised to its SPDX id)"
         }
       ]
     },

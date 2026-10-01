@@ -55,7 +55,8 @@
 // `str.replace(re, fn)`, and a `new Promise` executor.
 //
 // Round 3 (review of f52e806f): a callee behind a type-only wrapper (`make!()`,
-// `(make as any)()`, `(make satisfies X)()`, `(<any>make)()`, `new (E as any)()`),
+// `(make as any)()`, `(make satisfies X)()`, `(<any>make)()`, `new (E as any)()`,
+// and the instantiation expression `make<T>` — also evaluated when read directly),
 // a comma sequence (`(0, make)()`) or a conditional (`(c ? f : g)()`, both
 // branches, nested either way) is followed — as a callee, a tag, a `.call`/
 // `.apply` target, an `extends` base, and a synchronous iterator's callback.
@@ -77,8 +78,8 @@
 // function other than the synchronous ones listed above; and it treats every
 // branch as taken. `var` is not a TDZ binding and is not checked. A clean run
 // therefore means none of the FOLLOWED shapes reads a binding early — it is not
-// proof that no TDZ read exists at module load. A file the Program does not load, or that
-// does not parse, is reported as a problem, never counted clean.
+// proof that no TDZ read exists at module load. A file the Program does not
+// load, or that does not parse, is reported as a problem, never counted clean.
 //
 // SELF-TEST: both real defects must be detected from synthetic reconstructions —
 // the grid-proof one in its REAL top-level-loop shape — the CORRECTED order must
@@ -117,12 +118,16 @@ const isFunctionLike = (n) =>
   ts.isMethodDeclaration(n) || ts.isGetAccessorDeclaration(n) || ts.isSetAccessorDeclaration(n) ||
   ts.isConstructorDeclaration(n);
 // Wrappers that change nothing about WHAT runs: parentheses and the
-// type-only `x!`, `x as T`, `x satisfies T`, `<T>x`.
+// type-only `x!`, `x as T`, `x satisfies T`, `<T>x`, and the instantiation
+// expression `f<T>`.
 const unparen = (n) => {
   while (n && (ts.isParenthesizedExpression(n) || ts.isNonNullExpression(n) || ts.isAsExpression(n) ||
-    ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n))) n = n.expression;
+    ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) || ts.isExpressionWithTypeArguments(n))) n = n.expression;
   return n;
 };
+// A type node is never evaluated — except an instantiation expression `f<T>`,
+// which the compiler models as a type node but which evaluates `f` at runtime.
+const isTypeOnly = (n) => ts.isTypeNode(n) && !ts.isExpressionWithTypeArguments(n);
 // What a callee expression can evaluate to: `(0, f)` is f, and `c ? f : g` is
 // either — both are followed, as every branch is.
 const calleeTargets = (n) => {
@@ -299,7 +304,7 @@ function analyseSourceFile(sf, checker) {
   // `visited` stops recursion through mutually-calling functions per entry.
   const walk = (node, ctx) => {
     if (!node) return;
-    if (ts.isTypeNode(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+    if (isTypeOnly(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
         ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return;
     if (ts.isFunctionDeclaration(node)) return; // hoisted, runs only when called
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) { walkClass(node, ctx); return; }
@@ -395,7 +400,7 @@ function analyseSourceFile(sf, checker) {
         return;
       }
       if (ts.isIdentifier(node)) { walkTop(node, node); return; }
-      if (ts.isTypeNode(node) || ts.isFunctionDeclaration(node) || ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ||
+      if (isTypeOnly(node) || ts.isFunctionDeclaration(node) || ts.isImportDeclaration(node) || ts.isExportDeclaration(node) ||
           ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return;
       if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) {
         walkClass(node, { at: node.pos, entry: undefined, entryNode: node, via: undefined, visited: new Set() });
@@ -601,6 +606,16 @@ const SELF_TEST = [
   ["bare generator call (fail-closed false positive, stated)", L("export const it = gen();", "function* gen() { yield LIM; }", "const LIM = 1;"), true],
   ["comma on the FALSE side of a conditional", L("(Math.random() ? ok : (0, make))();", "function ok() {}", "function make() { return LIM; }", "const LIM = 1;"), true],
   ["the tag EXPRESSION itself is evaluated", L("const obj = {};", "obj[LIM]`x`;", "const LIM = 'k';"), true],
+  // Review of 1f887c7a: an instantiation expression `f<T>` is evaluated, not a
+  // type — each of these throws a ReferenceError under node.
+  ["direct read through `later<number>` at load", L("export const g = later<number>;", "const later = <T,>(x: T) => x;"), true],
+  ["`later<number>` read inside a followed function", L("f();", "function f() { return later<number>; }", "const later = <T,>(x: T) => x;"), true],
+  ["instantiation-expression callee `(make<string>)()`", L("export const v = (make<string>)();", "function make<T>() { return LIM; }", "const LIM = 1;"), true],
+  ["instantiation expression handed to a sync iterator", L("[1].map(check<number>);", "function check<T>(n: T) { return LIM; }", "const LIM = 1;"), true],
+  ["alias of an instantiation expression", L("const h = make<string>;", "h();", "function make<T>() { return LIM; }", "const LIM = 1;"), true],
+  ["instantiation-expression tag", L("(tag<string>)`x`;", "function tag<T>(s: any) { return LIM; }", "const LIM = 1;"), true],
+  ["`extends` a call through an instantiation expression", L("class A extends (mk<number>)() {}", "function mk<T>() { LIM; return Object; }", "const LIM = 1;"), true],
+  ["type arguments alone are not a read", L("export const v = make<Later>();", "function make<T>() { return 1; }", "class Later {}"), false],
   // Stated in SCOPE LIMIT: `||` is not a callee the gate follows. Change this row
   // and that sentence together.
   ["`||` callee is not followed (SCOPE LIMIT)", L("(Math.random() || make)();", "function make() { return LIM; }", "const LIM = 1;"), false],

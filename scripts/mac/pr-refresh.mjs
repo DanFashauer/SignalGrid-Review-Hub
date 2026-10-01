@@ -160,7 +160,8 @@ export function busyVerdict(dir, ref, remote = "origin") {
   for (const b of blocks) {
     if (b.branch !== `refs/heads/${ref}` || b.prunable) continue;
     const st = gitIn(b.worktree, ["--no-optional-locks", "status", "--porcelain"]);
-    const ahead = Number(gitIn(dir, ["rev-list", "--count", `${remote}/${ref}..refs/heads/${ref}`]).out.trim());
+    const count = gitIn(dir, ["rev-list", "--count", `${remote}/${ref}..refs/heads/${ref}`]);
+    const ahead = count.code === 0 ? Number(count.out.trim()) : NaN; // a failed count is unknown, and unknown is busy
     if (st.code !== 0 || st.out.trim() !== "" || ahead !== 0) {
       return { busy: true, worktree: b.worktree, reason: `busy: ${b.worktree} has uncommitted or unpushed work` };
     }
@@ -547,7 +548,7 @@ async function dryRun(a) {
       : cl.kind === "clean" ? "would merge cleanly, then regenerate" : `would resolve: ${cl.paths.join(", ")}`;
     console.log(`#${p.number} ${p.ref}  ${p.state}  ${busy.busy ? busy.reason : "busy: no"}  ${mem.skip ? `memory: skip (${mem.reason})` : "memory: none"}  ${verdict}`);
   }
-  console.log(`pr-refresh dry-run: ${c.rows.length} dirty/behind candidate(s); nothing was changed`);
+  console.log(`pr-refresh dry-run: ${c.rows.length} candidate(s) (dirty, behind, or mergeable_state not computed yet); nothing was changed`);
   return 0;
 }
 

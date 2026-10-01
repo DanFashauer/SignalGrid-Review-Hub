@@ -267,6 +267,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
       "lib/integrations/src/integrations/platform-sso/index.ts",
     ],
+    oneLine: true,
   },
   {
     // The last QUEUED allow-path proof. Registered on the argument that composition
@@ -275,6 +276,7 @@ export const TARGETS = [
     // be falsifiable.
     proof: "proof:pim-activation",
     files: ["lib/pim-activation/src/evaluate.ts", "lib/pim-activation/src/normalize.ts"],
+    oneLine: true,
   },
   {
     proof: "proof:passkey-assurance",
@@ -422,6 +424,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
       "lib/integrations/src/integrations/policy-binding/index.ts",
     ],
+    oneLine: true,
   },
 
   {
@@ -431,6 +434,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
       "lib/integrations/src/integrations/agent-behavior/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:agent-identity",
@@ -458,6 +462,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
       "lib/integrations/src/integrations/sso-session/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:access-governance",
@@ -707,6 +712,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/vuln-scan/index.ts",
       "lib/integrations/src/integrations/vuln-scan/vuln-connector.ts",
     ],
+    oneLine: true,
   },
 ];
 
@@ -719,6 +725,30 @@ export const TARGETS = [
 // a probe, without a sweep. A registry checkable only by the thing that consumes it
 // is a registry nobody checks.
 export const ALLOWED = [
+  {
+    file: "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (PLATFORM_SSO_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:platform-sso green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (POLICY_BINDING_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:policy-binding green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/pim-activation/src/normalize.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (PIM_ACTIVATION_REQUEST_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:pim-activation green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (AGENT_BEHAVIOR_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:agent-behavior green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
   {
     file: "lib/integrations/src/integrations/access-governance/evaluate.ts",
     line: 'if (observedMs === null || referenceMs === null) return "unknown";',

@@ -78,8 +78,9 @@ function stepProblems(step, spec) {
   let runIdx = -1;
   step.lines.forEach((l, k) => {
     if (k === 0) return;
-    if (indentOf(l) === keyInd && /^[A-Za-z_-]+:/.test(l.trim())) {
-      const key = l.trim().split(":")[0];
+    const km = l.trim().match(/^(["']?)([^"':]+?)\1\s*:(\s|$)/);
+    if (indentOf(l) === keyInd && km) {
+      const key = km[2].trim();
       keys.push(key);
       if (key === "run") runIdx = k;
     }
@@ -87,7 +88,7 @@ function stepProblems(step, spec) {
   for (const k of keys) if (!spec.keys.includes(k)) problems.push(`step has a forbidden key \`${k}\` (it can skip or soften the step)`);
   if (runIdx < 0) return [...problems, "step has no run block"];
   const first = step.lines[runIdx].trim();
-  if (!/^run:\s*[|>][-+]?$/.test(first)) return [...problems, "run must be a literal block (`run: |`)"];
+  if (!/^run:\s*\|[-+]?$/.test(first)) return [...problems, "run must be a literal block (`run: |`)"];
   const raw = [];
   for (let k = runIdx + 1; k < step.lines.length; k++) {
     if (indentOf(step.lines[k]) <= keyInd && step.lines[k].trim()) break;
@@ -107,23 +108,72 @@ function stepProblems(step, spec) {
   return problems;
 }
 
+/** The job holding the step must not be skippable or non-gating either. */
+function jobProblems(lines, stepStart) {
+  let h = stepStart;
+  while (h >= 0 && !/^ {2}[\w-]+:\s*$/.test(lines[h])) h--;
+  if (h < 0) return ["could not find the job holding the pinned step"];
+  let e = h + 1;
+  while (e < lines.length && !/^ {2}[\w-]+:\s*$/.test(lines[e])) e++;
+  const out = [];
+  for (let k = h + 1; k < e; k++) {
+    const km = lines[k].match(/^ {4}(["']?)([^\s"':][^"':]*?)\1\s*:(\s|$)/);
+    if (km && ["continue-on-error", "if"].includes(km[2].trim())) out.push(`the job holding the step sets \`${km[2].trim()}\` (it can skip or soften the lint)`);
+  }
+  return out;
+}
+
 /** Problems for one workflow file's text against one pinned spec. */
 export function verdictFor(yaml, spec) {
   const lines = yaml.split("\n");
   const steps = findSteps(lines, spec.name);
   if (steps.length === 0) return [`step "${spec.name}" not found in ${spec.file}`];
   if (steps.length > 1) return [`step "${spec.name}" appears ${steps.length} times in ${spec.file}; it must be unique`];
-  const problems = stepProblems(steps[0], spec).map((p) => `${spec.file}: ${p}`);
+  const problems = [...stepProblems(steps[0], spec), ...jobProblems(lines, steps[0].start)].map((p) => `${spec.file}: ${p}`);
   // No other command may install shellcheck.
   problems.push(...strayInstallsIn(yaml, spec.file, steps[0]));
   return problems;
 }
 
+/**
+ * Fold YAML multi-line scalars into one logical line each, because the shell receives them
+ * joined: a `key: >` folded block, and a plain `key: value` / `- value` scalar whose
+ * following lines are indented deeper. A `|` literal block keeps its lines separate.
+ * Returns [{ n, text }] where n is the 1-based first line.
+ */
+function yamlLogicalLines(lines) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const ind = indentOf(l);
+    const m = l.match(/^(\s*(?:-\s+)?(?:["']?[^"':#]+?["']?\s*:)?)\s*(.*)$/);
+    const val = m ? m[2] : l.trim();
+    const isBlockStart = /^[|>][-+]?\s*$/.test(val);
+    const folded = /^>[-+]?\s*$/.test(val);
+    const plain = val && !isBlockStart && !val.startsWith("#");
+    if (isBlockStart && !folded) { out.push({ n: i + 1, text: l }); continue; }
+    if (folded || plain) {
+      let j = i + 1;
+      const parts = [folded ? m[1] : l];
+      while (j < lines.length && (lines[j].trim() === "" ? folded : indentOf(lines[j]) > ind && !/^\s*-\s/.test(lines[j]) && (folded || !/^\s*[\w"'-][^:]*:\s/.test(lines[j])))) {
+        parts.push(lines[j].trim()); j++;
+      }
+      out.push({ n: i + 1, text: parts.join(" ") });
+      i = j - 1;
+      continue;
+    }
+    out.push({ n: i + 1, text: l });
+  }
+  return out;
+}
+
 /** Join `\` continuations: [{ n (1-based first line), text (comment-stripped) }]. */
-function joinedStatements(lines) {
+function joinedStatements(rawLines) {
   const out = [];
   let cur = null;
-  lines.forEach((l, i) => {
+  yamlLogicalLines(rawLines).forEach(({ n, text }) => {
+    const i = n - 1;
+    const l = text;
     const t = stripComment(l);
     if (cur) { cur.text += " " + t.replace(/\\$/, "").trim(); cur.open = t.endsWith("\\"); if (!cur.open) { out.push(cur); cur = null; } return; }
     if (t.endsWith("\\")) { cur = { n: i + 1, text: t.replace(/\\$/, "").trim(), open: true }; return; }
@@ -133,7 +183,7 @@ function joinedStatements(lines) {
   return out;
 }
 
-const APT_INSTALL = /\bapt(-get)?\b.*\binstall\b/;
+const APT_INSTALL = /\b(apt(-get)?|aptitude)\b.*\binstall\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
 
 /** apt installs outside `skip` (a pinned step's line range) that name shellcheck or hide the package list. */
 function strayInstallsIn(text, file, skip) {
@@ -212,6 +262,12 @@ function selfTest() {
     ["duplicate step", wrap(spec.name, good) + wrap(spec.name, good).split("\n").slice(3).join("\n")],
     ["continued install naming shellcheck in a new step", wrap(spec.name, good) + "      - name: other\n        run: |\n          sudo apt-get install -y -qq jq \\\n            shellcheck\n"],
     ["env-var indirection in a new step", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get install -y -qq $PKGS\n"],
+    ["quoted \"if\" key", wrap(spec.name, good, '        "if": false\n')],
+    ["quoted \"continue-on-error\" key", wrap(spec.name, good, '        "continue-on-error": true\n')],
+    ["spaced `if : false` key", wrap(spec.name, good, "        if : false\n")],
+    ["folded `run: >` pinned step", wrap(spec.name, good).replace("run: |", "run: >")],
+    ["job-level continue-on-error", wrap(spec.name, good).replace("  a:\n", "  a:\n    continue-on-error: true\n")],
+    ["job-level if", wrap(spec.name, good).replace("  a:\n", "  a:\n    if: false\n")],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -236,6 +292,11 @@ function selfTest() {
     ["composite action with a bare shellcheck install", "runs:\n  using: composite\n  steps:\n    - run: sudo apt-get install -y shellcheck\n      shell: bash\n", true],
     ["unpinned continued install", "      - run: |\n          sudo apt-get install -y -qq jq \\\n            shellcheck\n", true],
     ["unpinned $PKGS indirection", "      - run: sudo apt-get install -y $PKGS\n", true],
+    ["folded run: > install naming shellcheck", "      - run: >\n          sudo apt-get install -y -qq jq\n          shellcheck\n", true],
+    ["multi-line plain scalar install naming shellcheck", "      - run: sudo apt-get update -qq && sudo apt-get install -y -qq jq\n          shellcheck\n", true],
+    ["aptitude install shellcheck", "      - run: sudo aptitude install -y shellcheck\n", true],
+    ["snap install shellcheck", "      - run: sudo snap install shellcheck\n", true],
+    ["dpkg -i shellcheck.deb", "      - run: sudo dpkg -i shellcheck.deb\n", true],
     ["unrelated continued install is NOT flagged (desktop.yml's real shape)", "        run: |\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            patchelf\n", false],
   ];
   for (const [label, t, want] of strayCases) {

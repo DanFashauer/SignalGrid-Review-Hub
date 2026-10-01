@@ -2328,7 +2328,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       routers, cross-checked by `scripts/check-launch-profile.mjs`. A real
       (non-review) deployment must set that variable — a deployment-checklist
       item, not an in-code bypass. Lane: security-engineer.
-- [x] **`check-console-unknown-render` — the unknown-as-good-state gate for the
+- [ ] **`check-console-unknown-render` — the unknown-as-good-state gate for the
       console (G2 from the 2026-09-02 console fix batch). SPEC ONLY, deferred: a
       deterministic version could not be built at acceptable precision in the
       batch's time.** **DONE 2026-09-21 (cloud lane)** — built as `scripts/check-console-unknown-render.mjs`,
@@ -2412,7 +2412,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       cycle — each must pass); live tree still 0 findings. Falsified: against the old analyser
       the self-test misses every new bug shape.
       STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
-      carried into the child; object-map classes (`TONE[status]`) are not resolved. **DONE 2026-10-01** - PR #1274 merge f52e806f (per-query provenance + const-class resolution). Check: `node scripts/check-console-unknown-render.mjs`.
+      carried into the child; object-map classes (`TONE[status]`) are not resolved. **HALF DONE 2026-10-01** - PR #1274 merge f52e806f closed per-query provenance and const-class resolution; still OPEN: provenance across component props (`<Panel items={items} />`) and object-map classes (`TONE[status]`). Check: `node scripts/check-console-unknown-render.mjs`.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

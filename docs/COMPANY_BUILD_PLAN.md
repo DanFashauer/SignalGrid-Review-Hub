@@ -2828,7 +2828,7 @@ earlier — that is the loop working, not a reason to soften the record.
     platform-honesty failure mode — but it is still inaccurate.
 
 107. **Web: `restrict` and `deny` are the same pixel in the PWA's only chart, which
-    has no legend, tooltip or axis.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds Legend and Tooltip to the PWA chart. Check: `pnpm run test:console`.
+    has no legend, tooltip or axis.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds Legend and Tooltip to the PWA chart. Check: `node scripts/check-pwa-fixture-labels.mjs` and `node scripts/check-verdict-tone-source.mjs`.
     `Overview.tsx:47-48` paints `restrict` from `--chart-4` and `deny` from
     `--destructive`. Both resolve to `hsl(0 43 60.8)` = **#C67070**. Adjacent stacked
     segment contrast = **1.0000:1** — no rendered boundary at all. A 40%-restrict /
@@ -2915,9 +2915,9 @@ earlier — that is the loop working, not a reason to soften the record.
     colour map from the enum keys so a new value fails typecheck instead of falling
     through to grey.
 
-115. **Web: the PWA presents fixture decisions with no fixture label.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds FixtureLabel components. Check: `pnpm run test:console`.
+115. **Web: the PWA presents fixture decisions with no fixture label.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d adds FixtureLabel components. Check: `node scripts/check-pwa-fixture-labels.mjs` and `node scripts/check-verdict-tone-source.mjs`.
 
-116. **Web: the PWA's support triage surface has no `deny` scenario.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d expands AccessSupport to full four-verdict vocabulary. Check: `pnpm run test:console`.
+116. **Web: the PWA's support triage surface has no `deny` scenario.** — web-engineer. DONE (measured 2026-10-01): PR #1243 merge 5997190d expands AccessSupport to full four-verdict vocabulary. Check: `node scripts/check-pwa-fixture-labels.mjs` and `node scripts/check-verdict-tone-source.mjs`.
 
 117. **The unsafe-claim gate reports ASSERTED and exits 0 — it can never fail CI.** —
     OPEN, devex-tooling-engineer. DONE (measured 2026-09-26): PR #492 (049e3f8e, 2026-09-06, batch Z, whose message names "phase-gate moved a string but not the exit code") — `scripts/src/phase-gate.ts` now sets a failing exit code whenever any blocking reason (unsafe path, affirmative unsafe claim, missing validation command) lands, not only on a RED lane, and `.github/workflows/phase-pr-evidence.yml` runs the file's own self-test, which plants an affirmative claim and asserts the real process exits 1, as a step before the gate; the docs-sanity mechanism this row's correction described is unchanged, only its line numbers moved. BLOCKING. INDEPENDENTLY VERIFIED before filing.

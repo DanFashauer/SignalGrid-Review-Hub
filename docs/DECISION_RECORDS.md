@@ -4134,3 +4134,74 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 **What does not change.** DR-047's tiers and fallback rules (rule 1 assigns two stages DR-047 did not name and re-maps none), DR-054's raise-your-hand law, DR-056's objective loop, the verdict enum, the determinism invariant and the Decision Envelope.
 
 **Reversal / amendment.** The owner reverses this by reverting the pull request that carries it, with the reversal date added here. Amend rule 1 and the SKILL table together, as DR-047's own reversal clause requires of its rules and SKILL section. Making the 14-day report fatal is an amendment and needs a line here saying so.
+
+## DR-063 — The brain ecosystem: per-repo instructions, labeled ingestion, one MCP plane, per-repo triggers (owner-directed 2026-10-01)
+
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** Rules 2, 5 and 6 name steps only the owner can take. The three slices in rule 1 stand on their own: each strengthens a gate this repository already runs and none reaches another repository. Slice (a) is PR #1356 and slice (c) is PR #1354, each landing under DR-037 on its own; slice (b) rides in this pull request because its gate names this record. The owner answered the per-repository question for signalgrid-mcp on 2026-10-01 (rule 2) and approved this record and the `CLAUDE.md` line in his own words.
+
+**Context.** On 2026-10-01 the session asked the owner whether the other repositories should get "sub-brains". He answered by pasting a four-point summary of Cole Medin's video "You Built Your AI Second Brain. Now What? (Here's How to Evolve It)" (YouTube, 16:06, uploaded 2026-09-16, https://www.youtube.com/watch?v=mjQlZrteMIY). His pasted summary, verbatim:
+
+- *"Local Instructions (claude.md): Define the specific role, goals, and technical boundaries for the AI agent inside each repository folder."*
+- *"Ingestion Labeling: Tag data from each repository with clear source and security labels so your central brain can query it accurately without leaking context."*
+- *"MCP Integration: Connect each repo's local context to a unified Model Context Protocol server so your primary strategist agent can execute tasks across multiple codebases concurrently."*
+- *"Workflow Triggers: Set up automated background tasks (like issue fixing or pull request reviews) tied specifically to that repository's state."*
+
+The session recorded what he wants underneath it (a paraphrase, not his words): the company operated by scales of brains (Opus for judgment, cheaper tiers for building, bots for chores), fewer concurrent sessions, and model choice the system manages per stage.
+
+The source covers less than the summary does. It was read on 2026-10-01 from the video's description, chapter markers and the platform's own captions. Nobody watched it, took frames or transcribed it locally. The video describes one central team brain: a single table fed from chat, repositories and docs, a label on every row at ingestion, the database enforcing those labels on every read, and one remote MCP server with read tools and a per-person token. Against the summary:
+
+- **Labeling:** supported.
+- **MCP:** partly supported, as one central read-only server only.
+- **Per-repository instruction files:** not shown.
+- **Repository-tied triggers:** not shown.
+
+The last two are the owner's own additions, and this record decides them as his.
+
+**What the tree had on 2026-10-01 (`bd827bb0`).**
+
+- **Instructions.** This repository has `CLAUDE.md` and `AGENTS.md`. The signalgrid-mcp repository has neither. DEV (archived on GitHub) has a one-line placeholder `AGENTS.md`.
+- **Labels.** No source or security label existed on cross-repository data. `scripts/scan-estate-citations.mjs` hardcoded `/workspace/*` and reached 1 of 7 repositories on the Mac.
+- **MCP.** Two first-party MCP servers ran in Mac sessions:
+  - this repository's 16-tool server (`artifacts/mcp-server`), which is rostered;
+  - the sibling's 22-tool macOS posture server (registered as `signalgrid-macos` by `mac-kickoff.sh`), which had no entry in `docs/agent/mcp-roster.json`. Two skill grants credited its purpose to the 16-tool server instead.
+- **Triggers.** No workflow in this repository ran a model on an issue or pull-request event.
+
+**The question this settles.** Which of the four points SignalGrid adopts across its seven repositories, what lands now in this repository, what waits and for what, and which steps only the owner can take.
+
+**Decision.**
+
+1. **Adopted now, in this repository only.**
+   - (a) `scripts/scan-estate-citations.mjs` also looks for a repository beside this checkout when its `/workspace` path is absent.
+     - It scans a sibling only when that sibling's `origin` names the expected repository.
+     - It keeps every unreachable or unconfirmed repository NOT SCANNED, never counted clean.
+     - It reports an archived repository's broken citations without gating on them, the same way it already treats an upstream fork.
+     - Its `--self-test` runs in preflight and CI.
+   - (b) `docs/agent/mcp-roster.json` gains a `signalgrid-macos` entry, with a Mac lane grant, and the two skill grants move to the server they describe. `scripts/check-mcp-roster.mjs` fails any `servers[]` entry that lacks `upstream`, `reads`, `writes` or `network`. Those four fields are the source and security label for an MCP server, so no separate field is added.
+   - (c) The intake row in `docs/agent/RESOURCE_INTAKE.md`.
+2. **Per-repository instructions.** This repository's `CLAUDE.md` and `AGENTS.md` stand. A sibling gets its own `CLAUDE.md` only on the owner's go-ahead for that repository; no lane creates, edits or opens anything in another repository without it. DEV gets none while it is archived. *Given for signalgrid-mcp on 2026-10-01:* asked "What do you want?" for that repository, the owner chose *"Yes: instructions file + Mac-run reviews — I open a PR there adding CLAUDE.md (read-only tools, never writes to the OS). Reviews run on your Mac, no API key in GitHub. You still need to protect its main branch in GitHub settings."* So signalgrid-mcp gets a `CLAUDE.md` by pull request, its reviews run on the Mac (rule 5's recommendation, now chosen), and no API secret goes into GitHub. *Still owner-only:* branch protection on its `main` with the Mac check required.
+3. **Labels.** An MCP server's label is its roster entry. A repository's label is its `ESTATE` entry in `scripts/scan-estate-citations.mjs`: name, note, `upstreamFork`, `archived`. *Deferred:* a source tag on Neural Memory writes. *Trigger:* the first memory that one repository's session writes and another repository's session reads.
+4. **One MCP plane, not a new hub.** The plane is the roster: every server a lane can reach is an entry with its labels and its grants. Each repository's server stays in its own repository. *Deferred:* a cross-repository tool that lists tasks, opens a pull request or runs a gate. *Trigger:* a second repository has a machine-readable task source, meaning issues in use or a backlog file. Today only this repository has one (`docs/agent/objective-state.json`). A tool that opens a pull request or runs a gate writes, and no rostered first-party tool does either today, so that tool needs its own record before it is built.
+5. **Triggers.** No workflow in any repository runs a model on an issue or pull-request event until the owner chooses where reviews run and how they are paid for. *Owner-only prerequisites, by name:*
+   1. an `ANTHROPIC_API_KEY` repository secret, if he chooses a review Action;
+   2. branch protection on signalgrid-mcp's `main`, with its Mac check required;
+   3. his go-ahead for a `CLAUDE.md` and a review trigger in signalgrid-mcp;
+   4. whether DEV stays archived.
+
+   *Recommended:* reviews stay on the Mac, through the self-hosted runner and the on-demand review pass. Both repositories are public, and an Action brings the risk of exposing a secret to pull requests from forks.
+6. **Model scale.** DR-047's tiers govern every entry point that runs a model, triggered or not. Two such entry points do not follow them today. This record names them for the coordinator and changes neither:
+   - The on-demand review pass that lives outside this tree calls the model with no tier pinned.
+   - The build tick on the unmerged #1248 branch pinned Opus for implementation, which DR-047 rule 2 routes to Sonnet; the staged-tiers change on that branch (triage on Sonnet, build on the tier the task implies, review on Opus, a cost line per stage) moves it to the tiers.
+
+   Choosing the primary model stays the owner's (DR-047 rule 6).
+
+**What no gate can observe.** Gates in this tree cannot see GitHub settings: archive state, branch protection and secrets. The record of those settings is a dated read of the public API, quoted in the intake row. No gate here can see whether a lane wrote in another repository either; rule 2 rests on the lanes and on the owner's review.
+
+**What does not change.**
+
+- DR-020: a new platform, vertical or hardware still needs its own record, and `docs/PURPOSE.md` stays canonical.
+- DR-029 and DR-047 rule 7: no model and no added server enter the decision path.
+- DR-053: scan, then confirm, then choose.
+- DR-060 rule 3: a server arrives through intake, and the tracked `.mcp.json` names only `signalgrid-mcp`.
+- Claim discipline: the launch-claims gate, the launch profile and the publication boundary.
+
+**Reversal / amendment.** The owner reverses any part with one line in chat, or by reverting the pull request that carries this record, and the date is added here. When a deferred item's trigger fires, building it is an amendment and needs a line here saying so. A lane writing in another repository also needs such a line.

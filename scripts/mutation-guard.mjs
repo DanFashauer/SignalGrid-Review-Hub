@@ -46,7 +46,7 @@
 // source files already label them. An allowlist entry that stops matching is itself a
 // failure: it means the code moved and the justification was not revisited.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -1581,9 +1581,27 @@ export function journalDir(root = repoRoot) {
   return join(tmpdir(), `signalgrid-mutation-journal-${createHash("sha1").update(root).digest("hex").slice(0, 12)}`);
 }
 
+// The journal dir sits at a predictable path in a SHARED temp dir, and restore writes whatever
+// a journal says back into the tree — so a planted dir or journal would be an arbitrary-file
+// write. Fail closed: the dir must be a real directory (not a symlink), owned by this user,
+// with no group/other access, and every journalled path must stay inside the repo root.
+export function journalAssertSafeDir(dir) {
+  const st = lstatSync(dir);
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  if (st.isSymbolicLink() || !st.isDirectory() || (uid !== null && st.uid !== uid) || (process.platform !== "win32" && (st.mode & 0o077) !== 0)) {
+    throw new Error(`journal dir ${dir} is not a private directory owned by this user — refusing to read or write it`);
+  }
+}
+
+function journalInsideRoot(root, file) {
+  const abs = resolve(root, file);
+  return typeof file === "string" && abs.startsWith(resolve(root) + "/");
+}
+
 export function journalWrite(dir, pid, entries) {
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, `${pid}.json`), JSON.stringify({ pid, entries }));
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  journalAssertSafeDir(dir);
+  writeFileSync(join(dir, `${pid}.json`), JSON.stringify({ pid, entries }), { mode: 0o600 });
 }
 
 export function journalClear(dir, pid) {
@@ -1594,9 +1612,11 @@ export function journalClear(dir, pid) {
 export function journalRestore(dir, pid, root = repoRoot) {
   const path = join(dir, `${pid}.json`);
   if (!existsSync(path)) return [];
+  journalAssertSafeDir(dir);
   const restored = [];
   const { entries } = JSON.parse(readFileSync(path, "utf8"));
   for (const e of entries) {
+    if (!journalInsideRoot(root, e.file)) throw new Error(`journal entry ${JSON.stringify(e.file)} escapes the repo root — refusing to restore it`);
     const abs = join(root, e.file);
     let current = null;
     try { current = readFileSync(abs, "utf8"); } catch { /* missing → rewrite it */ }
@@ -1609,6 +1629,7 @@ export function journalRestore(dir, pid, root = repoRoot) {
 /** Journals left by a sweep that is no longer running, with the entries whose file differs. */
 export function journalStale(dir, root = repoRoot, isAlive = pidAlive) {
   if (!existsSync(dir)) return [];
+  journalAssertSafeDir(dir);
   const out = [];
   for (const name of readdirSync(dir)) {
     if (!/^\d+\.json$/.test(name)) continue;
@@ -1617,6 +1638,7 @@ export function journalStale(dir, root = repoRoot, isAlive = pidAlive) {
     let entries;
     try { entries = JSON.parse(readFileSync(join(dir, name), "utf8")).entries; } catch { entries = null; }
     // An unreadable journal is itself stale: fail closed, say so.
+    if (Array.isArray(entries) && !entries.every((e) => journalInsideRoot(root, e?.file) && typeof e.original === "string")) entries = null;
     if (!Array.isArray(entries)) { out.push({ pid, journal: join(dir, name), unreadable: true, differing: [] }); continue; }
     const differing = entries.filter((e) => {
       try { return readFileSync(join(root, e.file), "utf8") !== e.original; } catch { return true; }
@@ -1798,7 +1820,13 @@ async function main() {
   const jDir = journalDir();
   // Stale journals FIRST, before any other work: a registered file left mutated by a killed
   // sweep must be named, never swept over (its baseline would read "killed" UNMUTATED).
-  const stale = journalStale(jDir);
+  let stale;
+  try {
+    stale = journalStale(jDir);
+  } catch (err) {
+    console.error(`Mutation guard REFUSES to start: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
   if (stale.length > 0) {
     if (process.argv.includes("--restore-stale")) {
       for (const j of stale) {

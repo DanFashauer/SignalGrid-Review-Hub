@@ -15,7 +15,7 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, classifyRun } from "./mutation-guard.mjs";
@@ -171,6 +171,13 @@ check("proof:carrier-reachability keeps its decision ladder registered: evaluate
     check("journalRestore is idempotent and leaves no journal behind", journalRestore(jdir, 4242, root).length === 0 && journalStale(jdir, root, () => false).length === 0);
     writeFileSync(join(jdir, "7.json"), "{not json");
     check("an unreadable journal is stale (fail closed), not ignored", journalStale(jdir, root, () => false).some((j) => j.unreadable));
+    let outsideRefused = false;
+    journalWrite(jdir, 9, [{ file: "../escape.txt", original: "x" }]);
+    try { journalRestore(jdir, 9, root); } catch { outsideRefused = true; }
+    check("a journal entry that escapes the repo root is refused, never written", outsideRefused && journalStale(jdir, root, () => false).some((j) => j.pid === 9 && j.unreadable));
+    journalClear(jdir, 9);
+    const loose = mkdtempSync(join(tmpdir(), "mg-journal-loose-"));
+    try { chmodSync(loose, 0o755); let refused = false; try { journalWrite(loose, 1, []); } catch { refused = true; } check("a journal dir open to group/other is refused (insecure temp dir)", refused); } finally { rmSync(loose, { recursive: true, force: true }); }
     journalClear(jdir, 7); journalWrite(jdir, 8, [{ file, original }]); journalClear(jdir, 8);
     check("journalClear removes the journal", journalStale(jdir, root, () => false).length === 0);
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(jdir, { recursive: true, force: true }); }

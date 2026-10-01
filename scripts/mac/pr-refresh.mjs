@@ -45,7 +45,9 @@
 //   inventory, the lockfile), the fall-only ratchets, source ledgers, artifacts/live-evidence/**,
 //   artifacts/sim-results/**, docs/agent/objective-state.json and every owner-held file.
 //   mac/tick-* PRs are excluded by design: their conflicts are Mac-minted results that are never
-//   allowlisted, so refreshing them would only raise hands.
+//   allowlisted, so refreshing them would only raise hands. So are STACKED PRs (base is not
+//   SignalGrid_Alpha): GitHub's "dirty" is measured against the parent branch, so merging mainline
+//   into one would fill its diff with unrelated files and answer a conflict that is not mainline's.
 //
 // KNOWN GAPS (stated, not hidden)
 //   - NOT in preflight or CI in this pass. Editing scripts/preflight.mjs moves its own
@@ -110,6 +112,17 @@ function run(cmd, args, o = {}) {
 }
 const gitIn = (dir, args, o) => run("git", ["-C", dir, ...args], o);
 
+// The env PR code runs under (writers, installs, gates, preflight): API tokens stay out. This is an
+// environment scrub only — gh's keychain login and git's credential helper are still reachable.
+const PR_SECRETS = ["ANTHROPIC_API_KEY", "GH_TOKEN", "GITHUB_TOKEN"];
+export const prEnv = (env) => { const e = { ...env }; for (const k of PR_SECRETS) delete e[k]; return e; };
+
+// Every `checkout -f` / `clean` below trusts that `dir` is its own worktree, not a folder inside an enclosing checkout.
+const isOwnWorktree = (dir) => {
+  const r = gitIn(dir, ["rev-parse", "--show-toplevel"]);
+  try { return r.code === 0 && realpathSync(r.out.trim()) === realpathSync(dir); } catch { return false; }
+};
+
 // ── pure pieces (each has a self-test case) ─────────────────────────────────────────
 export function parseArgs(argv) {
   const a = { max: 1, pr: null, dryRun: false, selfTest: false };
@@ -126,10 +139,10 @@ export function parseArgs(argv) {
   return a;
 }
 
-/** mac/* branches of this repo, ready for review, oldest PR first. mac/tick-* (lane-tick evidence PRs) never. */
+/** mac/* branches of this repo aimed at mainline, ready for review, oldest PR first. mac/tick-* (lane-tick evidence PRs) and stacked PRs (base is another branch) never. */
 export function filterCandidates(prs, onlyPr = null) {
   return prs
-    .filter((p) => /^mac\//.test(p.ref) && !/^mac\/tick-/.test(p.ref) && p.headRepo && p.headRepo === p.baseRepo && p.draft === false)
+    .filter((p) => /^mac\//.test(p.ref) && !/^mac\/tick-/.test(p.ref) && p.baseRef === MAIN && p.headRepo && p.headRepo === p.baseRepo && p.draft === false)
     .filter((p) => onlyPr === null || p.number === onlyPr)
     .sort((a, b) => a.number - b.number);
 }
@@ -236,6 +249,12 @@ export function takeLock(cache) {
   return { ok: false, holder: null };
 }
 
+/** The re-exec'd child does the work, so the lock must name the child: if only the parent is killed, a pid of the dead parent would let the next run clean the worktree under a live child. */
+export function adoptLock(cache) {
+  try { mkdirSync(join(cache, "lock"), { recursive: true }); writeFileSync(join(cache, "lock", "pid"), String(process.pid)); } catch { /* the parent's lock still stands */ }
+  return { ok: true, release() {} };
+}
+
 const loadState = (cache) => { try { return JSON.parse(readFileSync(join(cache, "state.json"), "utf8")); } catch { return {}; } };
 const saveState = (cache, st) => { mkdirSync(cache, { recursive: true }); writeFileSync(join(cache, "state.json"), `${JSON.stringify(st, null, 2)}\n`); };
 
@@ -277,7 +296,7 @@ export async function refreshOne(o) {
   const logPath = join(runDir, `${tag}.log`);
   const note = (s) => appendFileSync(logPath, `${s}\n`);
   const git = (args) => { const r = gitIn(wt, args); note(`$ git ${args.join(" ")} -> ${r.code}\n${r.out}${r.err}`); return r; };
-  const env = { ...process.env };
+  const env = prEnv(process.env);
   let OLD = null;
   let MAIN_SHA = null;
   let touched = false; // the worktree has been checked out onto this PR
@@ -307,6 +326,8 @@ export async function refreshOne(o) {
     } catch (e) { note(`hand failed: ${e.message}`); }
     return result(outcome, reason);
   };
+
+  if (!isOwnWorktree(wt)) return result("skipped", `${wt} is not its own git worktree; nothing was checked out or cleaned there`);
 
   // Fresh refs first, so the memory check, the busy guard and the preview all see the same heads.
   const f = git(["fetch", "-q", remote, `+refs/heads/${ref}:refs/remotes/${remote}/${ref}`, `+refs/heads/${mainBranch}:refs/remotes/${remote}/${mainBranch}`]);
@@ -396,11 +417,12 @@ export async function refreshOne(o) {
   const HEAD = git(["rev-parse", "HEAD"]).out.trim();
   if (HEAD === OLD) {
     neutral();
+    reached = false; // nothing was refreshed: this PR must not use up a --max slot
     return result("skipped", `the branch already contains ${mainRef} @ ${MAIN8} and its derived files are current`);
   }
 
   // 5. deps (a failure here is infrastructure, not a verdict on the PR: red)
-  const d = o.deps(wt, logPath);
+  const d = o.deps(wt, logPath, env);
   if (!d.ok) return stop("red", d.reason ?? "dependency install failed");
   Object.assign(env, d.env ?? {});
 
@@ -430,8 +452,16 @@ export async function refreshOne(o) {
     return stop("red", why, tail(readFileSync(pf !== 0 ? pfLog : brLog, "utf8"), 20));
   }
 
-  // 9. push — never --force, never --no-verify; a non-fast-forward means someone pushed meanwhile
-  const p = git(["push", remote, `HEAD:refs/heads/${ref}`]);
+  // 9. push — never --force, never --no-verify. The branch must still be at OLD: a plain push would recreate
+  // one that was merged or deleted during the gates (the repo deletes merged branches), and a moved head
+  // means someone pushed meanwhile. Pushing the sha verify() approved, not the symbolic HEAD.
+  // ponytail: ls-remote then push leaves a window of milliseconds; --force-with-lease would close it, but force flags are banned here.
+  const lr = git(["ls-remote", "--exit-code", remote, `refs/heads/${ref}`]);
+  if (lr.code !== 0 || lr.out.split("\t")[0].trim() !== OLD) {
+    neutral();
+    return result("raced", lr.code === 2 ? "the PR branch was deleted while the gates ran; nothing recreated" : lr.code !== 0 ? `could not read ${remote}/${ref} before pushing: ${tail(lr.err, 2)}` : "the PR head moved while the gates ran; the next run retries");
+  }
+  const p = git(["push", remote, `${HEAD}:refs/heads/${ref}`]);
   if (p.code !== 0) {
     const text = `${p.err}${p.out}`;
     if (/non-fast-forward|\[rejected\]|fetch first/i.test(text)) {
@@ -466,7 +496,7 @@ function ghText(args, cwd) {
 /** Eligible PRs plus each one's mergeable_state. Per-PR GET because the list endpoint omits it. */
 function candidateRows(cwd, onlyPr) {
   const listed = ghText(["api", "--paginate", "repos/{owner}/{repo}/pulls?state=open&per_page=100", "--jq",
-    ".[] | {number, ref: .head.ref, headRepo: .head.repo.full_name, baseRepo: .base.repo.full_name, draft}"], cwd)
+    ".[] | {number, ref: .head.ref, baseRef: .base.ref, headRepo: .head.repo.full_name, baseRepo: .base.repo.full_name, draft}"], cwd)
     .split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const eligible = filterCandidates(listed, onlyPr);
   const detail = (number) => JSON.parse(ghText(["api", `repos/{owner}/{repo}/pulls/${number}`, "--jq", "{state: .mergeable_state, mergeable}"], cwd));
@@ -506,14 +536,14 @@ const laneHand = () => (h) => {
 };
 
 // Same recipe as the build tick: pnpm install when the lockfile moved, and tsx's darwin esbuild from a cache outside the repo.
-function ensureDeps(wt, logPath) {
+function ensureDeps(wt, logPath, env) {
   const say = (s) => appendFileSync(logPath, `${s}\n`);
   const lock = join(wt, "pnpm-lock.yaml");
   const sha = existsSync(lock) ? createHash("sha256").update(readFileSync(lock)).digest("hex") : "";
   const stamp = join(wt, "node_modules/.sg-installed-lock-sha");
   const have = existsSync(stamp) ? readFileSync(stamp, "utf8") : null;
   if (!sha || have !== sha) {
-    const r = runCapture(["pnpm", "install", "--frozen-lockfile"], wt, process.env, logPath, 1_800_000);
+    const r = runCapture(["pnpm", "install", "--frozen-lockfile"], wt, env, logPath, 1_800_000);
     if (r.code !== 0) return { ok: false, reason: "pnpm install --frozen-lockfile failed" };
     mkdirSync(join(wt, "node_modules"), { recursive: true });
     writeFileSync(stamp, sha);
@@ -526,7 +556,7 @@ function ensureDeps(wt, logPath) {
   const dir = join(homedir(), "Library/Caches/signalgrid", `esbuild-${ver}`);
   const bin = join(dir, "node_modules", pkg, "bin/esbuild");
   if (!existsSync(bin)) {
-    runCapture(["npm", "install", "-q", "--prefix", dir, "--no-save", "--no-package-lock", `${pkg}@${ver}`], wt, process.env, logPath, 600_000);
+    runCapture(["npm", "install", "-q", "--prefix", dir, "--no-save", "--no-package-lock", `${pkg}@${ver}`], wt, env, logPath, 600_000);
     if (!existsSync(bin)) return { ok: false, reason: `could not fetch ${pkg}@${ver} into ${dir}` };
   }
   return { ok: true, env: { ESBUILD_BINARY_PATH: bin } };
@@ -542,7 +572,7 @@ async function dryRun(a) {
   try { c = candidateRows(REPO, a.pr); } catch (e) { console.error(`pr-refresh: ${e.message}`); return 1; }
   const state = loadState(CACHE);
   const mainSha = gitIn(REPO, ["rev-parse", `origin/${MAIN}`]).out.trim();
-  console.log(`pr-refresh dry-run: ${c.open} open PRs, ${c.eligible} eligible (mac/*, not mac/tick-*, same repo, not draft), mainline ${mainSha.slice(0, 8)}`);
+  console.log(`pr-refresh dry-run: ${c.open} open PRs, ${c.eligible} eligible (mac/*, not mac/tick-*, based on ${MAIN}, same repo, not draft), mainline ${mainSha.slice(0, 8)}`);
   for (const p of c.rows) {
     if (p.unknown) { console.log(`#${p.number} ${p.ref}  mergeable_state unknown — skipped this run`); continue; }
     const head = gitIn(REPO, ["rev-parse", `origin/${p.ref}`]).out.trim();
@@ -600,7 +630,7 @@ async function realRun(a) {
   const home = homedir();
   process.env.PATH = [process.env.PATH, "/opt/homebrew/bin", "/usr/local/bin", `${home}/.local/bin`, `${home}/Library/pnpm`].filter(Boolean).join(":");
   const inherited = process.env.SG_PR_REFRESH_LOCKED === "1";
-  const lock = inherited ? { ok: true, release() {} } : takeLock(CACHE);
+  const lock = inherited ? adoptLock(CACHE) : takeLock(CACHE);
   if (!lock.ok) { console.log(`pr-refresh: skipped: another refresh (pid ${lock.holder ?? "?"}) holds the lock`); return 0; }
   try {
     if (process.env.SG_PR_REFRESH_MAINLINE === "1") return await childRun(a);
@@ -615,6 +645,7 @@ async function realRun(a) {
       const add = gitIn(REPO, ["worktree", "add", "-q", "--detach", REFRESH_WT, `origin/${MAIN}`]);
       if (add.code !== 0) { console.error(`pr-refresh: could not create ${REFRESH_WT}: ${tail(add.err, 3)}`); return 1; }
     }
+    if (!isOwnWorktree(REFRESH_WT)) { console.error(`pr-refresh: ${REFRESH_WT} is not its own git worktree; refusing to check out or clean it`); return 1; }
     const reset = gitIn(REFRESH_WT, ["checkout", "-q", "-f", "--detach", `origin/${MAIN}`]);
     if (reset.code !== 0 || gitIn(REFRESH_WT, ["clean", "-fdq"]).code !== 0) { console.error(`pr-refresh: could not reset ${REFRESH_WT}: ${tail(reset.err, 3)}`); return 1; }
     const child = spawnSync(process.execPath, [join(REFRESH_WT, SELF_REL), ...process.argv.slice(2)], {
@@ -922,12 +953,13 @@ async function selfTest() {
       wtClean(fx);
     });
 
-    await check("T13 candidate filter: mac/* only, never mac/tick-*, same-repo, non-draft, --pr narrows", async () => {
-      const mk = (number, ref, over = {}) => ({ number, ref, headRepo: "o/r", baseRepo: "o/r", draft: false, ...over });
-      const list = [mk(1, "mac/a"), mk(2, "mac/tick-20260930"), mk(3, "cloud/x"), mk(4, "mac/fork", { headRepo: "f/r" }), mk(5, "mac/draft", { draft: true }), mk(6, "mac/b")];
-      eq(filterCandidates(list).map((p) => p.number).join(","), "1,6", "kept");
+    await check("T13 candidate filter: mac/* only, never mac/tick-*, same-repo, non-draft, based on mainline, --pr narrows", async () => {
+      const mk = (number, ref, over = {}) => ({ number, ref, baseRef: MAIN, headRepo: "o/r", baseRepo: "o/r", draft: false, ...over });
+      const list = [mk(1, "mac/a"), mk(2, "mac/tick-20260930"), mk(3, "cloud/x"), mk(4, "mac/fork", { headRepo: "f/r" }), mk(5, "mac/draft", { draft: true }), mk(6, "mac/b"), mk(7, "mac/c", { baseRef: "mac/a" })];
+      eq(filterCandidates(list).map((p) => p.number).join(","), "1,6", "kept (7 is stacked on mac/a)");
       eq(filterCandidates(list, 6).map((p) => p.number).join(","), "6", "--pr 6");
       eq(filterCandidates(list, 2).length, 0, "--pr cannot resurrect a tick PR");
+      eq(filterCandidates(list, 7).length, 0, "--pr cannot resurrect a stacked PR");
     });
 
     await check("T14 flags: unknown flag and bad values are errors; the known ones parse", async () => {
@@ -972,6 +1004,82 @@ async function selfTest() {
       eq(remoteHead(fx, "mac/l"), old, "remote moved");
       wtClean(fx);
     });
+
+    await check("T17 the PR branch is deleted while the gates run: raced, the branch is NOT recreated, no comment, no hand, no state", async () => {
+      const fx = fixture();
+      pr(fx, "mac/z", { [A1]: "coverage pr\n" });
+      mainline(fx, { [A1]: "coverage main\n" });
+      const deleter = stub(`require("child_process").execFileSync("git",["--git-dir",${JSON.stringify(fx.bare)},"update-ref","-d","refs/heads/mac/z"])`);
+      const { opts, calls } = optsFor(fx, "mac/z", 17, { breadth: deleter });
+      const r = await refreshOne(opts);
+      eq(r.outcome, "raced", `outcome (${r.reason})`);
+      yes(r.reason.includes("deleted"), `reason should say the branch was deleted: ${r.reason}`);
+      yes(gcode(fx.bare, ["rev-parse", "-q", "--verify", "refs/heads/mac/z"]) !== 0, "the deleted PR branch was recreated on the remote");
+      eq(calls.hands.length + calls.comments.length, 0, "a deleted branch must not comment or raise a hand");
+      eq(opts.state["17"], undefined, "a deleted branch must not be remembered");
+      wtClean(fx);
+    });
+
+    await check("T18 a branch that already holds mainline and current derived files is skipped and does NOT use a --max slot", async () => {
+      const fx = fixture();
+      pr(fx, "mac/m", { "src/b.txt": "pr work\n" });
+      mainline(fx, { "src/c.txt": "main work\n" });
+      g(fx.work, ["checkout", "-q", "mac/m"]);
+      g(fx.work, ["merge", "-q", "--no-edit", "-m", "mainline in", `origin/${MAIN}`]);
+      g(fx.work, ["push", "-q", "origin", "mac/m"]);
+      g(fx.work, ["checkout", "-q", MAIN]);
+      const old = remoteHead(fx, "mac/m");
+      const { opts, calls } = optsFor(fx, "mac/m", 18, { writers: [WRITE_NOTHING, WRITE_NOTHING, WRITE_NOTHING] });
+      const r = await refreshOne(opts);
+      eq(r.outcome, "skipped", `outcome (${r.reason})`);
+      eq(r.reached, false, "an up-to-date branch must not count toward --max");
+      eq(remoteHead(fx, "mac/m"), old, "remote moved");
+      eq(calls.hands.length + calls.comments.length, 0, "a skip must not comment or raise a hand");
+      wtClean(fx);
+    });
+
+    await check("T19 hygiene: tokens never reach PR code; a folder inside another checkout is not a refresh worktree; the lock is adopted by the child's pid", async () => {
+      const e = prEnv({ GH_TOKEN: "x", GITHUB_TOKEN: "y", ANTHROPIC_API_KEY: "z", PATH: "/bin" });
+      eq(JSON.stringify(e), '{"PATH":"/bin"}', "prEnv kept only the non-secret");
+      const fx = fixture();
+      pr(fx, "mac/n", { [A1]: "coverage pr\n" });
+      mainline(fx, { [A1]: "coverage main\n" });
+      const old = remoteHead(fx, "mac/n");
+      const inside = join(fx.work, "not-a-worktree");
+      mkdirSync(inside);
+      const r = await refreshOne(optsFor(fx, "mac/n", 19, { worktree: inside }).opts);
+      eq(r.outcome, "skipped", `outcome (${r.reason})`);
+      yes(r.reason.includes("not its own git worktree"), `reason: ${r.reason}`);
+      eq(remoteHead(fx, "mac/n"), old, "remote moved");
+      eq(g(fx.work, ["rev-parse", "--abbrev-ref", "HEAD"]), MAIN, "the enclosing checkout was switched");
+      const cache = join(root, "adoptcache");
+      mkdirSync(join(cache, "lock"), { recursive: true });
+      writeFileSync(join(cache, "lock", "pid"), "999999");
+      adoptLock(cache);
+      eq(readFileSync(join(cache, "lock", "pid"), "utf8"), String(process.pid), "the lock should name the process doing the work");
+    });
+
+    await check("T20 tokens are scrubbed from every env PR code runs under: writers, quick gates, preflight, breadth and the dependency install", async () => {
+      const fx = fixture();
+      pr(fx, "mac/o", { [A1]: "coverage pr\n" });
+      mainline(fx, { [A1]: "coverage main\n" });
+      const had = { GH_TOKEN: process.env.GH_TOKEN, GITHUB_TOKEN: process.env.GITHUB_TOKEN };
+      process.env.GH_TOKEN = "secret";
+      process.env.GITHUB_TOKEN = "secret";
+      try {
+        const noToken = stub("process.exit(process.env.GH_TOKEN || process.env.GITHUB_TOKEN ? 1 : 0)");
+        let depsEnv = null;
+        const { opts } = optsFor(fx, "mac/o", 20, {
+          writers: [WRITE_MANIFEST, noToken, WRITE_COVERAGE], quickGates: [noToken], preflight: noToken, breadth: noToken,
+          deps: (_wt, _log, env) => { depsEnv = env; return { ok: true, env: {} }; },
+        });
+        const r = await refreshOne(opts);
+        eq(r.outcome, "refreshed", `a stage still saw a token (${r.reason})`);
+        yes(depsEnv && !("GH_TOKEN" in depsEnv) && !("GITHUB_TOKEN" in depsEnv), "deps was handed an env that still holds a token");
+      } finally {
+        for (const [k, v] of Object.entries(had)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      }
+    });
   } finally {
     Object.keys(process.env).forEach((k) => { if (!(k in savedEnv)) delete process.env[k]; });
     Object.assign(process.env, savedEnv);
@@ -985,6 +1093,7 @@ async function selfTest() {
 }
 
 async function main() {
+  for (const k of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[k]; // every git call here names its own directory
   const a = parseArgs(process.argv.slice(2));
   if (a.error) { console.error(`pr-refresh: ${a.error}\nusage: pr-refresh.mjs [--max N] [--pr N] | --dry-run [--pr N] | --self-test`); return 2; }
   if (a.selfTest) return selfTest();

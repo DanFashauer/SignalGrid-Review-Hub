@@ -151,9 +151,18 @@ async function oidcPositivePath(idpUrl) {
     const body = ctx.status === 200 ? await ctx.json() : null;
     check(`oidc positive: the token resolves to the mapped tenant ${expectedTenant}`, body?.tenant?.id === expectedTenant);
   }
-  for (const kind of ["wrong-audience", "expired", "unmapped-role"]) {
+  // Each control must be refused FOR ITS OWN REASON. A bare 401 is satisfied by
+  // any broken token (a fixture that mints a malformed or wrongly signed
+  // "expired" token would pass), so the gateway's message is pinned per kind.
+  const refusals = {
+    "wrong-audience": /audience mismatch/,
+    "expired": /token has expired/,
+    "unmapped-role": /no role claim value in \[ci-role-intruder\] maps to a known role/,
+  };
+  for (const [kind, reason] of Object.entries(refusals)) {
     const res = await evaluateWith(await mintToken(idpUrl, kind));
-    check(`oidc negative control: a ${kind} token signed by the same key is REFUSED (401)`, res.status === 401);
+    const message = res.status === 401 ? String((await res.json().catch(() => ({}))).message ?? "") : "";
+    check(`oidc negative control: a ${kind} token signed by the same key is REFUSED (401) for its own reason`, res.status === 401 && reason.test(message));
   }
 }
 

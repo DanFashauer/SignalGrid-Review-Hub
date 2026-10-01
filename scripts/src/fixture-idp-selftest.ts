@@ -58,10 +58,18 @@ console.log("Fixture IdP proof");
     "valid token maps to tenant_northwind / operator",
     valid.ok && valid.principal.tenantId === "tenant_northwind" && valid.principal.role === "operator",
   );
+  // Refused for the RIGHT reason: a token that fails for some other cause
+  // (bad signature, malformed claims) must not satisfy a negative control.
+  const reasons: Record<string, RegExp> = {
+    "wrong-audience": /audience/i,
+    "expired": /expired/i,
+    "unmapped-role": /role/i,
+  };
   for (const kind of MINT_KINDS.filter((k: string) => k !== "valid")) {
     const out = await auth.authenticate(idp.mint(kind), NOW_MS);
-    check(`${kind} token is refused by the same key`, !out.ok);
+    check(`${kind} token is refused by the same key, for its own reason`, !out.ok && reasons[kind].test(out.reason));
   }
+  check("every non-valid mint kind has a pinned reason", MINT_KINDS.filter((k: string) => k !== "valid").every((k: string) => k in reasons));
   check("discovery document names the issuer and the jwks_uri", idp.discovery.issuer === ISSUER && idp.discovery.jwks_uri === `${ISSUER}/jwks`);
   let threw = false;
   try { idp.mint("not-a-kind"); } catch { threw = true; }

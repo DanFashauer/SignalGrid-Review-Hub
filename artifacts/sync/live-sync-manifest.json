@@ -1,6 +1,6 @@
 {
   "manifestVersion": 90,
-  "fingerprint": "2d38ebd22ba2f78b3bd042d5b5cafb89485100407597f897adbb3612f09bf87b",
+  "fingerprint": "9a469e562e5157c8d9da844028b2c092ad79713cd6124dbc38bbb11c08ee3c9c",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -107,7 +107,7 @@
     "proofCounts": {
       "access-governance": 84,
       "adaptive-proposals": 48,
-      "agent-behavior": 54,
+      "agent-behavior": 56,
       "agent-identity": 152,
       "app-update": 170,
       "benchmark-selection": 104,
@@ -130,7 +130,7 @@
       "estate-core": 13,
       "evidence-coverage": 30,
       "factory-flows": 16,
-      "handoff-sim": 68,
+      "handoff-sim": 59,
       "iac": 72,
       "link-usability": 167,
       "live-idp": 31,
@@ -144,7 +144,7 @@
       "ot-posture": 46,
       "pacs-access": 109,
       "passkey-assurance": 116,
-      "pim-activation": 51,
+      "pim-activation": 53,
       "platform-sso": 65,
       "policy-binding": 59,
       "posture-allow": 189,
@@ -160,7 +160,7 @@
       "session-readiness": 64,
       "shift-context": 67,
       "sse-egress": 52,
-      "sso-session": 97,
+      "sso-session": 98,
       "task-exception": 205,
       "token-binding": 61,
       "uem": 80,

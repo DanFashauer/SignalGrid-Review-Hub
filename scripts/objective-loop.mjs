@@ -40,13 +40,17 @@
 //
 // PARKING A ROW THE LOOP CANNOT BUILD (the AWAITING marker):
 //   · a plan row only the owner or a lab can unblock carries, in its STATUS SLOT — the first sentence after
-//     the role/size clause on the row's head line ("17. **Title** — roles, days. <marker>") —
+//     the role/size clause of the row's HEAD PARAGRAPH ("17. **Title** — roles, days. <marker>"; the plan
+//     is hard-wrapped, so the title and the slot often continue on an indented second line, which the read
+//     joins) —
 //       AWAITING OWNER (<blocker>, YYYY-MM-DD)     or     BLOCKED ON LAB (<blocker>, YYYY-MM-DD)
 //     upper-case, the blocker in the parentheses (no nested parentheses), the date the blocker was last
 //     checked. ONLY the slot counts: the same words in history ("no longer AWAITING OWNER", "was … until"),
 //     negated, naming another row, or in a later paragraph describe a blocker, they do not assert one. A
 //     marker with no date or an empty blocker is not a marker; a quoted or code-span marker is being
 //     discussed, not asserted (statusText's rule). Anything the slot does not read plainly is NOT parked.
+//     WRITER CONTRACT: put the marker IN the slot (right after the role/size clause's full stop), never
+//     appended to the end of the line, and prove the edit with `rowAwaiting(newRow.text) !== null`.
 //   · a marker dated 0–14 days back (MEASURE_WINDOW_DAYS) PARKS the row: it goes to awaiting[], is never
 //     ranked, and raises its OWN `awaiting-owner-row-<id>` escalation (one per parked row, so a row parked
 //     after the first mail is a new id and is mailed, and each row keeps its own `since`). Checked BEFORE
@@ -146,16 +150,20 @@ export function rowMeasuredAt(text) {
   const dates = [...statusText(text ?? "").matchAll(/re-?measured\s+(\d{4}-\d{2}-\d{2})/gi)].map((m) => m[1]);
   return dates.length > 0 ? dates.sort().pop() : null;
 }
-/** The row's STATUS SLOT: head line, title, " — ", the role/size clause (no full stop inside), a full stop, then
- *  the marker `AWAITING OWNER (<blocker>, YYYY-MM-DD)` or `BLOCKED ON LAB (<blocker>, YYYY-MM-DD)`. The slot is
- *  where every real row carries it. Anywhere else the words DESCRIBE a blocker ("no longer AWAITING OWNER",
- *  "was … until", "NOT", another row's marker, a later paragraph) and parking on them hides buildable work. */
-const AWAITING_SLOT = /^\d[\w-]*\.\s+\*\*.+?\*\*\s+—\s+[^.]*\.\s+(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/;
+/** A row's HEAD PARAGRAPH (up to the first blank line) joined onto one line. The plan is hard-wrapped: most open rows
+ *  wrap their bold title, so the " — role" clause and the status slot start on an indented second line. */
+const headParagraph = (text) => (text ?? "").split(/\n\s*\n/)[0].replace(/\s*\n\s*/g, " ");
+/** The row's STATUS SLOT: head paragraph, title (the first bold span), " — ", the role/size clause (no full stop
+ *  inside), a full stop, then the marker `AWAITING OWNER (<blocker>, YYYY-MM-DD)` or `BLOCKED ON LAB (<blocker>,
+ *  YYYY-MM-DD)`. The slot is where every real row carries it. Anywhere else the words DESCRIBE a blocker ("no
+ *  longer AWAITING OWNER", "was … until", "NOT", another row's marker, a later paragraph) and parking on them hides
+ *  buildable work. */
+const AWAITING_SLOT = /^\d[\w-]*\.\s+\*\*(?:(?!\*\*).)+\*\*\s+—\s+[^.]*\.\s+(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/;
 /** The marker in a row's status slot, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
  *  blocker, markedAt} or null. A marker outside the slot, with no date or with an empty blocker is not a marker:
  *  unknown tightens to "not parked" (the row stays visible and ranked). Pure. */
 export function rowAwaiting(text) {
-  const m = AWAITING_SLOT.exec(statusText((text ?? "").split("\n")[0]));
+  const m = AWAITING_SLOT.exec(statusText(headParagraph(text)));
   return m && m[2].trim() !== "" ? { kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker: m[2].trim(), markedAt: m[3] } : null;
 }
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
@@ -254,7 +262,7 @@ export function evaluate({ objective, probes }) {
 /** Parse one ranked-queue row into { id, title, roles[] } — head line first, whole text as fallback. Pure. */
 export function parseQueueRow(row, roleIds) {
   const head = (row.text ?? "").split("\n")[0];
-  const title = (head.match(/^\d[\w-]*\.\s+\*\*(.+?)\*\*/) || [, ""])[1].trim();
+  const title = (headParagraph(row.text).match(/^\d[\w-]*\.\s+\*\*(.+?)\*\*/) || [, ""])[1].trim(); // a wrapped title ends on line 2
   const inHead = roleIds.filter((id) => roleNameRe(id).test(head));
   const positioned = (inHead.length > 0 ? inHead : roleIds.filter((id) => roleNameRe(id).test(row.text ?? "")))
     .map((id) => ({ id, at: (inHead.length > 0 ? head : row.text).search(roleNameRe(id)) }))
@@ -741,11 +749,19 @@ function selfTest() {
   ].every((m) => ranked9(rk([slot(m)]))));
   t("awaiting: a negated marker is not a marker — NOT AWAITING OWNER leaves the row ranked", ["NOT AWAITING OWNER (#9, 2026-09-22).", "Row 9 is NOT BLOCKED ON LAB (Keycloak lab, 2026-09-22)."].every((m) => ranked9(rk([slot(m)]))));
   t("awaiting: ANOTHER row's marker named in this row's prose does not park this row", ["Row 18 is AWAITING OWNER (#1118, 2026-09-22).", "Unlike row 18, which is AWAITING OWNER (#1118, 2026-09-22), this one is buildable."].every((m) => ranked9(rk([slot(m)]))));
-  t("awaiting: a marker in a LATER paragraph (a continuation line) does not park the row", [
+  t("awaiting: a marker in a LATER paragraph or a bullet (not the slot) does not park the row", [
     { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n\nAWAITING OWNER (#9, 2026-09-22)` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.\n\nAWAITING OWNER (#9, 2026-09-22)${stamped}` },
     { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n    - AWAITING OWNER (#9, 2026-09-22)` },
-    { id: "9", text: `9. **Parked** — web-engineer, days.\nAWAITING OWNER (#9, 2026-09-22)${stamped}` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.\n    - AWAITING OWNER (#9, 2026-09-22)${stamped}` },
   ].every((row) => ranked9(rk([row]))));
+  // The plan is hard-wrapped: the head paragraph is several physical lines, and the slot is wherever the role clause ends.
+  const wrapped = (tail) => ({ id: "9", text: `9. **iOS: \`AppWorkflows.swift\` is missing the scoped step-up release the TS planner\n    has, so one gesture releases every held action.** — OPEN, web-engineer. ${tail}${stamped}\n    Body prose on a later line.` });
+  const wrappedPark = rk([wrapped("AWAITING OWNER (#1121 ruling, 2026-09-22).")]);
+  t("awaiting: a row whose bold title WRAPS onto a second line parks from the slot there (row 101's shape), and its escalation names the whole title", (wrappedPark.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "owner" && x.blocker === "#1121 ruling" && x.title.startsWith("iOS:") && x.title.endsWith("every held action.")) && !wrappedPark.tasks.some((x) => x.rowId === "9") && (wrappedPark.escalations.find((e) => e.id === "awaiting-owner-row-9")?.asks ?? "").includes("every held action."));
+  t("awaiting: the slot may begin the SECOND physical line of an unwrapped title (the role clause ends line 1)", (rk([{ id: "9", text: `9. **Parked** — web-engineer, days.\n    AWAITING OWNER (#9, 2026-09-22)${stamped}` }]).awaiting ?? []).some((x) => x.rowId === "9"));
+  t("awaiting: a wrapped-title row is not parked by history, negation or a later-line marker either (control: the same shape parks above)", ["It is no longer AWAITING OWNER (#9, 2026-09-22).", "NOT AWAITING OWNER (#9, 2026-09-22).", "Row 18 is AWAITING OWNER (#1118, 2026-09-22)."].every((m) => ranked9(rk([wrapped(m)]))) && ranked9(rk([{ ...wrapped(""), text: `${wrapped("").text}\n    AWAITING OWNER (#9, 2026-09-22)` }])));
+  t("awaiting: a wrapped title keeps a title in the ranked tasks too (it was \"\" for every wrapped row)", rk([wrapped("")]).tasks.some((x) => x.rowId === "9" && x.title.startsWith("iOS:")));
   t("awaiting: a marker later on the head line (not in the status slot) does not park the row", ranked9(rk([{ id: "9", text: `9. **Parked** — web-engineer, days.${stamped} Body prose. AWAITING OWNER (#9, 2026-09-22)` }])));
   const realShape = rk([{ id: "17", text: "17. **Run the three shifts** — itsm-ops-domain, web-engineer, days. BLOCKED ON LAB (ITSM lab for the seven vendor adapters; shift-context live source, 2026-09-22). RE-MEASURED 2026-09-26 (still open): the offline half landed. Also: more." }]);
   t("awaiting: the real plan shape (many roles, marker first, a long RE-MEASURED paragraph after it) parks", (realShape.awaiting ?? []).some((x) => x.rowId === "17" && x.kind === "lab" && x.blocker === "ITSM lab for the seven vendor adapters; shift-context live source") && realShape.tasks.length === 0);

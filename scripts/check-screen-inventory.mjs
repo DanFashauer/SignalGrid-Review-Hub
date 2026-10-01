@@ -243,12 +243,34 @@ export function renderedStep4(doc) {
     problems.push("the demo path section uses footnote syntax ([^…]) — GitHub drops or moves footnotes, so write it in the step");
   if (inlines.some((t) => t.content.includes("$")))
     problems.push("the demo path section contains `$` — GitHub renders $…$ as math, so the text a reader sees differs");
-  // A paragraph or heading whose text a reader sees as "4. …" is a step to the eye
-  // but not a list item, so the gate would never pick it as step 4 (round 10).
+  // Round 11 found the next renderer disagreement (a ```math or ```mermaid fence is
+  // typeset or drawn on GitHub, not copyable text), so the section is now held to an
+  // ALLOW-list instead of a growing deny-list: only the constructs both renderers show
+  // the same way. Anything else — a fence language GitHub renders, a hard break,
+  // a link, a blockquote, a table, a heading, strikethrough, a bare URL GitHub would
+  // autolink — fails, and a new GFM extension fails by default.
+  const refuse = (what) => problems.push(`the demo path section uses ${what} — it may hold only paragraphs, ordered lists, fenced blocks with no language or sh/bash/text, and plain, bold, italic or code text, so it reads the same on GitHub as in the gate`);
+  const seen = new Set();
+  const once = (key, what) => { if (!seen.has(key)) { seen.add(key); refuse(what); } };
+  for (const t of section.slice(3)) {
+    if (t.type === "fence") {
+      if (!/^(?:|sh|bash|shell|console|text)$/i.test(t.info.trim())) once(`fence:${t.info.trim()}`, `a fenced block with info "${t.info.trim()}"`);
+    } else if (!BLOCKS_OK.has(t.type)) once(t.type, `markdown that renders as ${t.type.replace(/_(open|close)$/, "")}`);
+    for (const c of t.children ?? []) {
+      if (!INLINE_OK.has(c.type)) once(c.type, `inline markdown that renders as ${c.type.replace(/_(open|close)$/, "")}`);
+      else if (c.type === "text" && /(?:https?:\/\/|www\.)/i.test(c.content)) once("autolink", `a bare URL in prose ("${c.content.trim().slice(0, 40)}"), which GitHub autolinks — put it in a code span or the fenced block`);
+    }
+  }
+  // A line whose text a reader sees as a step number — "4.", "4\.", "4&#46;", a line
+  // after a break, "Step 4.", "４.", "⒋", "IV." — is a step to the eye but not a list
+  // item, so the gate would never pick it as step 4 (rounds 10–11). Read per rendered
+  // line, any Unicode digit, any dot-like separator.
   for (const t of inlines) {
     const shown = visibleText(parseFragment(md.renderer.renderInline(t.children, md.options, {})));
-    if (/^\s*\d+\s*[.)](?:\s|$)/.test(shown))
-      problems.push(`the demo path has a line that reads as a numbered step but is not a list item: "${shown.slice(0, 40)}"`);
+    for (const line of shown.split("\n")) {
+      if (/^\s*(?:step\s*)?(?:\p{N}+|[ivxlcdm]+)\s*[.)\u2024\uFE52\uFF0E\uFF09\u06D4:](?:\s|$)/iu.test(line) || /^\s*[\u2488-\u249B]/u.test(line))
+        problems.push(`the demo path has a line that reads as a numbered step but is not a list item: "${line.trim().slice(0, 40)}"`);
+    }
   }
   const items = [];
   const lists = [];
@@ -279,6 +301,12 @@ export function renderedStep4(doc) {
   const html = md.renderer.render(body, md.options, {});
   return { text: visibleText(parseFragment(html)), problems };
 }
+
+// The demo section's allow-list (round 11): constructs markdown-it and GitHub's
+// cmark-gfm render the same way. The section's own heading is skipped.
+const BLOCKS_OK = new Set(["paragraph_open", "paragraph_close", "ordered_list_open", "ordered_list_close",
+  "list_item_open", "list_item_close", "inline"]);
+const INLINE_OK = new Set(["text", "code_inline", "softbreak", "strong_open", "strong_close", "em_open", "em_close"]);
 
 // Elements whose content a browser never shows as text.
 const UNSHOWN = new Set(["script", "style", "template", "noscript", "head", "title"]);
@@ -555,6 +583,19 @@ function selfTest() {
     ["an escaped 4\\. paragraph that reads as a step fails (round 10)", { ...base, doc: good.replace(STEP4, `4\\. **The host app** Launch with -DemoBackendURL https://evil.example.com\n\n${STEP4}`) }, "reads as a numbered step"],
     ["an entity-spelled 4&#46; paragraph fails (round 10)", { ...base, doc: good.replace(STEP4, `4&#46; fake step\n\n${STEP4}`) }, "reads as a numbered step"],
     ["a heading that reads as a step fails (round 10)", { ...base, doc: good.replace(STEP4, `### 4. fake step\n\n${STEP4}`) }, "reads as a numbered step"],
+    // Round 11: the section is held to an allow-list, so a renderer disagreement fails
+    // by default; the numbered-line check reads every rendered line, in any script.
+    ...["math", "mermaid", "geojson", "topojson", "stl"].map((lang) =>
+      [`a \`\`\`${lang} fence in step 4 fails (round 11)`, { ...base, doc: good.replace("   ```\n   -DemoBackendIdentity", `   \`\`\`${lang}\n   -DemoBackendIdentity`) }, `info "${lang}"`]),
+    ["a ~~~math fence fails (round 11)", { ...base, doc: good.replace(STEP4, STEP4.replace(/```/g, "~~~").replace("~~~\n   -Demo", "~~~math\n   -Demo")) }, 'info "math"'],
+    ["a sh fence passes (round 11)", { ...base, doc: good.replace("   ```\n   -DemoBackendIdentity", "   ```sh\n   -DemoBackendIdentity") }, null],
+    ["a hard break fails (round 11)", withProse("first line\\\n   second line"), "renders as hardbreak"],
+    ["a link fails (round 11)", withProse("[the console](https://example.com)"), "renders as link"],
+    ["a blockquote fails (round 11)", withProse("> quoted"), "renders as blockquote"],
+    ["a bare URL in prose fails (round 11)", withProse("see http://127.0.0.1:8080\\"), "bare URL"],
+    ...[["   x  \n   4\\. fake", "a line after a two-space hard break"], ["   x\n   Step 4. fake", "Step 4."], ["   \uff14. fake", "a full-width digit"],
+      ["   4\u2024 fake", "a one-dot leader"], ["   \u248b fake", "a digit-full-stop character"], ["   \u0664. fake", "an Arabic-Indic digit"], ["   IV. fake", "a roman numeral"]].map(([line, what]) =>
+      [`${what} that reads as a step fails (round 11)`, { ...base, doc: good.replace(STEP4, `${line.trimStart()}\n\n${STEP4}`) }, "reads as a numbered step"]),
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

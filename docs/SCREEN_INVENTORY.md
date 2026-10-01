@@ -39,10 +39,12 @@ written with a literal `localhost`, `127.0.0.1` or `[::1]` host — the shell co
 host as written, so shorthand forms such as `127.1` do not count). Step 4 is checked
 as it renders (markdown-it renders it, an HTML5 parser reads the text a browser
 shows), because that is the text an operator copies; keep the four arguments in
-their fenced block, one per line. Raw HTML and images anywhere in the demo section
-fail the gate, and so do footnotes, `$` math and any line that starts like a numbered
-step without being a list item, because GitHub renders those differently. The section
-and its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the
+their fenced block, one per line. The gate renders with markdown-it while GitHub
+uses its own renderer, so the demo section may hold only what both show the same
+way: paragraphs, ordered lists, fenced blocks with no language (or `sh`, `bash`,
+`text`), and plain, bold, italic or code text. Anything else fails, as do footnotes,
+dollar-sign math, bare URLs outside code, and any line that reads as a step number
+without being a list item. The section and its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the
 steps must be numbered in order.
 
 The gate runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table

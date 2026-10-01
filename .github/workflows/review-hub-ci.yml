@@ -476,6 +476,9 @@ jobs:
         run: node scripts/check-ci-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
+      # Plan row 49's residual: the assessor-facing matrix's status column had no drift gate.
+      - name: "Security controls matrix (every status in the legend; every Implemented row's paths + proof exist)"
+        run: node scripts/check-security-controls-matrix.mjs
 
       # The declared product edge must match the real one, in BOTH directions. The
       # omission direction is the freeze: a new connector family, signal kind, API

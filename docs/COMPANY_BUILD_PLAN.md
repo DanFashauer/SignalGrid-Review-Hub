@@ -845,7 +845,7 @@ earlier — that is the loop working, not a reason to soften the record.
     planted phrases verbatim tripped the widened gate, which is the gate
     working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
     none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
-    column still has no drift gate (days).
+    column still has no drift gate (days). FIX PROPOSED 2026-10-01 (branch claude/build-controls-matrix-status-gate, lands under DR-037): new `scripts/check-security-controls-matrix.mjs` (preflight in `scripts/preflight.mjs`, CI in `.github/workflows/review-hub-ci.yml`, `pnpm run check:security-controls-matrix`) fails any matrix status outside the doc's own Status legend, and any "Implemented (public core)" row whose cited path is missing or whose proof (its own, else the closing note's matrix-wide binding) is not a package.json script resolving to an existing source; self-tested with planted rows. The matrix itself is untouched (owner-gated): two rows already fail on a non-legend status ("Implemented in THIS repo", "Partially implemented in THIS repo") and are held as declared KNOWN_FAILURES, quoted every run, stale entries failing — owner decides the status word.
 50. **Operability claims without live evidence** — sre (the CI-bound half) + mac-lane-steward (live evidence is mintable only on the Mac). ONE THIRD DONE 2026-08-23.
     The CI-bound half is closed and gated; the other two remain open.
     **DONE — the nine unbounded jobs.** The row's figure was exactly right: 32

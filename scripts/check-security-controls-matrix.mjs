@@ -14,7 +14,9 @@
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
 //      split rows too, so an unplaced row fails rather than vanishing. Each row's
 //      cell count matches its header, and every table header is EXACT (no extra,
-//      renamed or re-cased column; round 4). No link reference definitions. The line
+//      renamed or re-cased column; round 4). No link reference definitions, no
+//      bare carriage returns, no repeated legend word, and no status-like claim
+//      outside a Status cell (round 5). The line
 //      after a table is blank (GFM would render it as a row). No raw-HTML table
 //      tags. Control names are unique as a reader sees them (case, whitespace,
 //      entities, zero-width characters folded). The legend's words AND meanings
@@ -128,8 +130,21 @@ export function controlKey(s) {
     .replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-export function parseMatrix(text) {
+/** The closing note's matrix-wide binding, pinned as a whole paragraph
+ *  (round 5). A loose regex over raw text also matched it inside a list-item
+ *  link definition, a link title, a hidden HTML element, or after visible words
+ *  negating it — places the reader never sees, or reads the opposite of. */
+const BINDING_PARAGRAPH = /^Everything marked \*\*Implemented \(public core\)\*\* runs in the deterministic, fixture-backed core in this public repository and is exercised by `pnpm run (proof:[\w:.-]+)`\. It demonstrates the \*shape\* of the controls — tenant isolation, deny-by-default RBAC, fail-closed evaluation, tamper-evident evidence and audit — over synthetic data\.$/;
+
+export function parseMatrix(raw) {
+  // CRLF is fine; a BARE carriage return is a line break to CommonMark but not to
+  // a "\n" split, so a row could render as two rows the gate reads as one (round 5).
+  const text = raw.replace(/\r\n/g, "\n");
   const lines = text.split("\n");
+  const bareCR = [];
+  lines.forEach((l, k) => { if (l.includes("\r")) bareCR.push({ line: k + 1, raw: l.replace(/\r/g, "\\r") }); });
+  const legendDup = [];
+  const claimCells = [];
   const legend = new Map();
   const legendTables = [];
   const trailing = [];
@@ -155,8 +170,12 @@ export function parseMatrix(text) {
       const c = cells(lines[j]);
       // an escaped pipe or a dropped cell shifts every column after it — never guess
       if (c.length !== head.length) { malformed.push({ line: j + 1, raw: lines[j], want: head.length, got: c.length }); continue; }
-      if (isLegend) legend.set(unbold(c[0]), c[1]);
-      else if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
+      // a repeated legend word would let an earlier, inflated meaning render while
+      // the Map kept only the last one (round 5)
+      if (isLegend) { if (legend.has(unbold(c[0]))) legendDup.push({ line: j + 1, raw: lines[j] }); legend.set(unbold(c[0]), c[1]); }
+      else if (isOther) c.forEach((x) => claimCells.push({ line: j + 1, raw: lines[j], cell: x }));
+      else if (isControls) claimCells.push({ line: j + 1, raw: lines[j], cell: c[1] });
+      if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
     }
     // GFM continues a table onto ANY non-blank line until a blank one, rendering it
     // as a (one-cell) row — so the line after a table must be blank (round 3).
@@ -178,8 +197,17 @@ export function parseMatrix(text) {
   // a link reference definition (`[label]: url "title"`) never renders either (round 4)
   const linkDefs = [];
   lines.forEach((l, k) => { if (/^ {0,3}(>\s*)*\[[^\]]+\]:/.test(l)) linkDefs.push({ line: k + 1, raw: l }); });
-  const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(text);
-  return { legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
+  // the binding is a paragraph of its own: starts at column 0 after a blank line,
+  // runs to the next blank line, and matches BINDING_PARAGRAPH exactly — once
+  const bindings = [];
+  lines.forEach((l, k) => {
+    if (!l.startsWith("Everything marked **Implemented (public core)**") || (k > 0 && lines[k - 1].trim() !== "")) return;
+    let e = k; while (e < lines.length && lines[e].trim() !== "") e += 1;
+    const m = BINDING_PARAGRAPH.exec(lines.slice(k, e).map((x) => x.trim()).join(" "));
+    if (m) bindings.push(m[1]);
+  });
+  const closing = bindings.length === 1 ? [null, bindings[0]] : null;
+  return { bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -282,7 +310,7 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
+  const { bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
@@ -292,6 +320,11 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     structural.push(`Status legend is [${legendWords.join(" | ")}], expected exactly [${LEGEND_LIST}] — a legend change must update this gate's checks in the same change`);
   for (const [w, m] of EXPECTED_MEANINGS) if (legend.has(w) && legend.get(w) !== m)
     structural.push(`Status legend meaning for "${w}" changed — it sets the claim every "${w}" row makes; update EXPECTED_MEANINGS in the same change\n      | **${w}** | ${legend.get(w)} |`);
+  for (const b of bareCR) structural.push(`line ${b.line} contains a bare carriage return — Markdown breaks the line there, so it renders as rows this gate reads as one\n      ${b.raw}`);
+  for (const d of legendDup) structural.push(`line ${d.line} repeats a Status legend word — both rows render, only the last would be checked\n      ${d.raw}`);
+  // a status claim belongs in the Status cell, where it is gated — not in the
+  // Framework refs cell or the Short ref table, where nothing checks it (round 5)
+  for (const c of claimCells) if (/implement|certif|attest|audited/i.test(controlKey(c.cell))) structural.push(`line ${c.line} carries a status-like claim ("${c.cell}") outside a Status cell, where no check reaches it\n      ${c.raw}`);
   for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
   for (const t of trailing) structural.push(`line ${t.line} directly follows a table with no blank line, so it renders as a table row nobody gates\n      ${t.raw}`);
   for (const h of htmlRows) structural.push(h.comment
@@ -428,13 +461,22 @@ function selfTest() {
     ["fail: a duplicated Status column (cells on every row)", addColumn(real, "Status"), 1],
     ["fail: an extra re-cased status column", addColumn(real, "status"), 1],
     ["fail: an extra column with a new name", addColumn(real, "Assurance"), 1],
-    ["fail: the binding only in a link reference definition", real.replace(/is exercised by\s+`pnpm run (proof:[\w:.-]+)`/, "is covered by the core proof") + '\n[sg]: https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`"\n', 1],
+    ["fail: the binding only in a link reference definition", real.replace(/is exercised by\n`pnpm run (proof:[\w:.-]+)`/, "is covered by\nthe core proof") + '\n[sg]: https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`"\n', 1],
     ["fail: a non-blank line straight after a table", real.replace("\n\n---\n\n## 2. Authentication", "\nPlanted trailing row\n\n---\n\n## 2. Authentication"), 1],
     ["fail: a duplicate Control hidden by an NBSP", plant("| Real authentication provider,\u00A0sessions, MFA/step-up assurance | x | Private-core (planned) | private repo |"), 1],
     ["fail: a legend meaning inflated", real.replace("verified by the core proof. |", "independently audited (SOC 2 Type II). |"), 1],
     ["fail: an unparseable path citation beside a valid one", plant("| Planted unparsed | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `lib/no such dir/x.ts` |"), 1],
     ["fail: the matrix cited as its own evidence", plant("| Planted circular | ASVS 5.0 | Implemented (public core) | `docs/SECURITY_CONTROLS_MATRIX.md` |"), 1],
     ["fail: the binding survives only in an HTML comment", real.replace(/is exercised by\s+`pnpm run (proof:[\w:.-]+)`/, "is exercised by the core proof <!-- is exercised by `pnpm run $1` -->"), 1],
+    // round 5: bare CR, duplicate legend word, the binding paragraph pinned, claims outside Status
+    ["pass: a CRLF copy of the real doc", real.replace(/\n/g, "\r\n"), 0],
+    ["fail: a bare carriage return splits a row", plant("| Planted A\r| Bogus control | Private-core (planned) | Implemented (public core) |"), 1],
+    ["fail: a duplicated legend word with an inflated meaning", real.replace("| **Implemented (public core)** | Enforced", "| **Implemented (public core)** | Independently audited (SOC 2 Type II). |\n| **Implemented (public core)** | Enforced"), 1],
+    ["fail: the binding negated in visible text", real.replace("runs in the deterministic,", "is NOT yet verified; it runs in the deterministic,"), 1],
+    ["fail: the binding only in a list-item link definition", real.replace(/is exercised by\n`pnpm run (proof:[\w:.-]+)`/, "is covered by\nthe core proof") + '\n- [sg]: https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`"\n', 1],
+    ["fail: the binding only in a link title", real.replace(/is exercised by\n`pnpm run (proof:[\w:.-]+)`/, "is covered by\nthe core proof") + '\nSee [the proof](https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`").\n', 1],
+    ["fail: a status claim in the Framework refs cell", plant("| Planted fw claim | **Implemented (public core)** | Private-core (planned) | private repo |"), 1],
+    ["fail: a status claim in the Short ref table", real.replace("| **ASVS 5.0** |", "| **MFA** | **Implemented (public core)** — enforced in production |\n| **ASVS 5.0** |"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];
   let ok = true;

@@ -13,14 +13,18 @@
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
 //      split rows too, so an unplaced row fails rather than vanishing. Each row's
-//      cell count matches its header. Control names are unique. The legend is
-//      pinned to exactly EXPECTED_LEGEND.
+//      cell count matches its header, and no header repeats a column. The line
+//      after a table is blank (GFM would render it as a row). No raw-HTML table
+//      tags. Control names are unique as a reader sees them (case, whitespace,
+//      entities, zero-width characters folded). The legend's words AND meanings
+//      are pinned to EXPECTED_LEGEND / EXPECTED_MEANINGS.
 //   1. The Status cell (bold markers stripped) is a legend word.
 //   2. A row whose status reads "implement…" (the legend's Implemented word or
 //      any other) must:
-//      a. cite at least one repo path, every one a TRACKED file or a tracked
-//         directory two or more segments deep — no `..`, no absolute path, no
-//         untracked file (`lib/x/{a,b}.ts` braces expand; `path:NN` suffixes are
+//      a. cite at least one repo path, every one a TRACKED and present file or
+//         a tracked directory two or more segments deep — no `..`, no absolute
+//         path, no untracked file, not the matrix itself; a path-like citation
+//         the parser cannot read fails rather than being skipped (`lib/x/{a,b}.ts` braces expand; `path:NN` suffixes are
 //         stripped; a bare `file.ts` resolves beside the cell's previous path,
 //         else to the ONE tracked file of that basename);
 //      b. be bound to a proof script that exists in package.json `scripts` and
@@ -56,6 +60,15 @@ const ROW_FLOOR = 40; // the parser must find the real rows; fewer means it brok
  *  legend now fails until this list — and the checks each word gets — are
  *  updated in the same change. */
 const EXPECTED_LEGEND = [IMPLEMENTED, "Automated (CI bot)", "Private-core (planned)", "Human-owned (planned)"];
+/** …and each word's Meaning, verbatim (review round 3): one edit to a meaning
+ *  would otherwise raise the claim every row of that status makes. */
+const EXPECTED_MEANINGS = new Map([
+  [IMPLEMENTED, "Enforced today in the deterministic, fixture-backed `lib/signalgrid-core` and verified by the core proof."],
+  ["Automated (CI bot)", "Owned by CI automation and GitHub-native scanning rather than by product code at runtime."],
+  ["Private-core (planned)", "Belongs to the protected private production repository (real providers, real secrets, durable persistence); intentionally absent from this public repo."],
+  ["Human-owned (planned)", "A program/governance control that authorized humans must own and approve; it cannot be responsibly automated away."],
+]);
+const DOC_SELF = "docs/SECURITY_CONTROLS_MATRIX.md"; // the matrix cannot be its own evidence
 /** Statuses whose cited paths must exist. Any status reading "implement…" gets
  *  the FULL Implemented check (paths + proof), legend word or not. */
 const IMPLEMENTED_LIKE = /implement/i;
@@ -95,10 +108,24 @@ const unbold = (s) => s.replace(/\*\*/g, "").trim();
  *  is a row nobody gates (found in review round 1 of PR #1349). */
 const NON_CONTROL_TABLES = [["Short ref", "Framework"]];
 
+/** Control names compared as a reader sees them: NFKC, entities decoded,
+ *  zero-width characters and bold stripped, whitespace folded, case folded. */
+export function controlKey(s) {
+  return unbold(s)
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
+    .replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 export function parseMatrix(text) {
   const lines = text.split("\n");
-  const legend = new Set();
+  const legend = new Map();
   const legendTables = [];
+  const dupHeaders = [];
+  const trailing = [];
   const rows = [];
   const unclaimed = [];
   const malformed = [];
@@ -114,6 +141,9 @@ export function parseMatrix(text) {
     const isOther = NON_CONTROL_TABLES.some((h) => h.length === head.length && h.every((x, k) => x === head[k]));
     if (!isTable || (!isLegend && !isControls && !isOther)) continue; // left unclaimed: fails below
     claimed.add(i).add(i + 1);
+    // a second Status (or any repeated) column renders and would go ungated — round 3
+    const dupes = head.filter((h, k) => head.indexOf(h) !== k);
+    if (dupes.length) dupHeaders.push({ line: i + 1, raw: lines[i], dupes });
     if (isLegend) legendTables.push(i + 1);
     let j = i + 2;
     for (; j < lines.length && /^\s*\|/.test(lines[j]); j += 1) {
@@ -121,17 +151,25 @@ export function parseMatrix(text) {
       const c = cells(lines[j]);
       // an escaped pipe or a dropped cell shifts every column after it — never guess
       if (c.length !== head.length) { malformed.push({ line: j + 1, raw: lines[j], want: head.length, got: c.length }); continue; }
-      if (isLegend) legend.add(unbold(c[0]));
+      if (isLegend) legend.set(unbold(c[0]), c[1]);
       else if (isControls) rows.push({ line: j + 1, raw: lines[j], control: c[0], status: unbold(c[sIdx] ?? ""), where: c[wIdx] ?? "" });
     }
+    // GFM continues a table onto ANY non-blank line until a blank one, rendering it
+    // as a (one-cell) row — so the line after a table must be blank (round 3).
+    if (j < lines.length && lines[j].trim() !== "") { claimed.add(j); trailing.push({ line: j + 1, raw: lines[j] }); }
     i = j - 1;
   }
   // GFM renders a row without a leading pipe, a pipe-less table, and a table in a
   // blockquote. So EVERY line carrying an unescaped pipe must sit in a recognised
   // table, or it is a row nobody gates (review round 2 of PR #1349).
   lines.forEach((l, k) => { if (!claimed.has(k) && /(^|[^\\])\|/.test(l)) unclaimed.push({ line: k + 1, raw: l }); });
-  const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(text);
-  return { legend, legendTables, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
+  // raw-HTML tables render as rows no parser here sees; the matrix uses none (round 3)
+  const htmlRows = [];
+  lines.forEach((l, k) => { if (/<\/?\s*(table|thead|tbody|tr|td|th)\b/i.test(l)) htmlRows.push({ line: k + 1, raw: l }); });
+  // the matrix-wide binding must be VISIBLE text, not survive inside an HTML comment
+  const visible = text.replace(/<!--[\s\S]*?-->/g, "");
+  const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(visible);
+  return { legend, legendTables, dupHeaders, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -144,16 +182,21 @@ const PATHISH = /^[\w.@{},/-]+$/;
 const FILEEXT = /\.(ts|tsx|mjs|cjs|js|json|md|ya?ml|swift|sql|sh)$/;
 
 /** Backticked tokens in a Where cell that name repo paths (not identifiers, not `/v1`). */
-export function citedPaths(where) {
+export function citedPaths(where, { strict = false } = {}) {
   const out = [];
+  const unparsed = [];
   for (const m of where.matchAll(/`([^`]+)`/g)) {
     const tok = m[1].replace(/:\d+$/, "");
     if (/^pnpm run /.test(tok) || /^proof:/.test(tok)) continue;
-    if (!PATHISH.test(tok) || tok.startsWith("/")) continue;
-    if (/@v?\d/.test(tok)) continue; // a versioned action/package ref (`owner/action@v4`), not a repo path
-    if (tok.includes("/") || FILEEXT.test(tok) || /^\.[\w-]+$/.test(tok)) out.push(tok);
+    if (tok.startsWith("/")) continue; // an API route (`/v1`), not a path
+    const looksLikePath = tok.includes("/") || FILEEXT.test(tok);
+    // a versioned action ref (`owner/action@v4`) is legitimate on an Automated row only
+    if (!strict && /@v?\d/.test(tok)) continue;
+    if (!PATHISH.test(tok) || /@v?\d/.test(tok)) { if (looksLikePath) unparsed.push(tok); continue; }
+    if (looksLikePath || /^\.[\w-]+$/.test(tok)) out.push(tok);
   }
-  return out;
+  // an Implemented row's citation the parser cannot read is a failure, never a skip (round 3)
+  return strict ? { paths: out, unparsed } : out;
 }
 
 export function citedProofs(where) {
@@ -179,8 +222,9 @@ function resolver(root, tracked) {
   const inRepo = (p) => {
     const segs = p.split("/");
     if (p.startsWith("/") || segs.some((x) => x === "" || x === "." || x === "..")) return null;
-    if (files.has(p)) return p;
-    return dirs.has(p) && segs.length >= 2 ? p : null;
+    if (p === DOC_SELF) return null; // circular: the matrix is not evidence for itself
+    if (files.has(p)) return existsSync(join(root, p)) ? p : null; // tracked AND present
+    return dirs.has(p) && segs.length >= 2 && existsSync(join(root, p)) ? p : null;
   };
   return (tok, lastDir) => {
     const t = tok.replace(/\/$/, "").replace(/^\.\/(?=.)/, "");
@@ -228,17 +272,22 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { legend, legendTables, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
+  const { legend, legendTables, dupHeaders, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
   if (legendTables.length !== 1) structural.push(`expected exactly one Status legend table, found ${legendTables.length}${legendTables.length ? ` (lines ${legendTables.join(", ")})` : ""}`);
-  const legendWords = [...legend];
+  const legendWords = [...legend.keys()];
   if (legendWords.length !== EXPECTED_LEGEND.length || !EXPECTED_LEGEND.every((w) => legend.has(w)))
     structural.push(`Status legend is [${legendWords.join(" | ")}], expected exactly [${LEGEND_LIST}] — a legend change must update this gate's checks in the same change`);
+  for (const [w, m] of EXPECTED_MEANINGS) if (legend.has(w) && legend.get(w) !== m)
+    structural.push(`Status legend meaning for "${w}" changed — it sets the claim every "${w}" row makes; update EXPECTED_MEANINGS in the same change\n      | **${w}** | ${legend.get(w)} |`);
+  for (const d of dupHeaders) structural.push(`line ${d.line}: table header repeats column(s) ${d.dupes.map((x) => `"${x}"`).join(", ")} — a second column renders and goes ungated\n      ${d.raw}`);
+  for (const t of trailing) structural.push(`line ${t.line} directly follows a table with no blank line, so it renders as a table row nobody gates\n      ${t.raw}`);
+  for (const h of htmlRows) structural.push(`line ${h.line} carries a raw-HTML table tag — an HTML row renders as a control row this gate cannot see\n      ${h.raw}`);
   const seen = new Map();
-  for (const r of rows) seen.set(r.control, [...(seen.get(r.control) ?? []), r.line]);
-  for (const [control, at] of seen) if (at.length > 1) structural.push(`Control "${control}" appears ${at.length} times (lines ${at.join(", ")}) — every control row must be unique\n      ${rows.find((r) => r.line === at[1]).raw}`);
+  for (const r of rows) { const k = controlKey(r.control); seen.set(k, [...(seen.get(k) ?? []), r.line]); }
+  for (const [, at] of seen) if (at.length > 1) { const first = rows.find((r) => r.line === at[0]); structural.push(`Control "${first.control}" appears ${at.length} times (lines ${at.join(", ")}, compared case-, space-, entity- and zero-width-insensitively) — every control row must be unique\n      ${rows.find((r) => r.line === at[1]).raw}`); }
   for (const u of unclaimed) structural.push(`line ${u.line} is a pipe row in no recognised table (Control|…|Status|Where, Status|Meaning, or ${NON_CONTROL_TABLES.map((h) => h.join("|")).join(", ")}) — it would go ungated\n      ${u.raw}`);
   for (const m of malformed) structural.push(`line ${m.line} has ${m.got} cells, its table header has ${m.want} (escaped pipe or missing cell) — columns cannot be trusted\n      ${m.raw}`);
   for (const r of rows) {
@@ -254,6 +303,8 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
       }
     }
     if (IMPLEMENTED_LIKE.test(r.status)) {
+      const { unparsed } = citedPaths(r.where, { strict: true });
+      for (const u of unparsed) why.push(`cited path-like token \`${u}\` cannot be parsed as a repo path — unreadable evidence is not evidence`);
       const own = citedProofs(r.where);
       const proofs = own.length ? own : defaultProof ? [defaultProof] : [];
       if (proofs.length === 0) why.push("no proof bound: the row cites none and the closing note's matrix-wide `pnpm run proof:*` binding is missing");
@@ -266,7 +317,7 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
       }
       // A row's own cited proof counts as its repo-path citation: the proof's
       // source file is the thing in the tree that verifies the control.
-      const paths = citedPaths(r.where);
+      const { paths } = citedPaths(r.where, { strict: true });
       if (paths.length === 0 && ownSources === 0) why.push("cites no repo path (and no proof of its own whose source file exists)");
       let lastDir = null;
       for (const tok of paths) {
@@ -348,6 +399,15 @@ function selfTest() {
     ["fail: a table row without its leading pipe", real.replace("\n| PostgreSQL row-level security", "\nPostgreSQL row-level security").replace("| Private-core (planned) | Private production repo (durable persistence layer) |", "| Bogus | Private production repo (durable persistence layer) |"), 1],
     ["fail: a controls table inside a blockquote", `${real}\n> | Control | Framework refs | Status | Where |\n> | --- | --- | --- | --- |\n> | Planted quoted | x | Bogus | \`nope.ts\` |\n`, 1],
     ["fail: an Automated row citing a missing workflow", real.replace("`.github/workflows/codeql.yml`", "`.github/workflows/no-such.yml`"), 1],
+    // review round 3 of PR #1349: every shape that RENDERS as a row is gated
+    ["fail: a raw-HTML table row", `${real}\n<table><tr><th>Control</th><th>Status</th><th>Where</th></tr><tr><td>Planted html</td><td>Implemented (public core)</td><td><code>lib/no/such.ts</code></td></tr></table>\n`, 1],
+    ["fail: a duplicated Status column", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where | Status |\n| ------- | -------------- | ------ | ----- | ------ |"), 1],
+    ["fail: a non-blank line straight after a table", real.replace("\n\n---\n\n## 2. Authentication", "\nPlanted trailing row\n\n---\n\n## 2. Authentication"), 1],
+    ["fail: a duplicate Control hidden by an NBSP", plant("| Real authentication provider,\u00A0sessions, MFA/step-up assurance | x | Private-core (planned) | private repo |"), 1],
+    ["fail: a legend meaning inflated", real.replace("verified by the core proof. |", "independently audited (SOC 2 Type II). |"), 1],
+    ["fail: an unparseable path citation beside a valid one", plant("| Planted unparsed | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `lib/no such dir/x.ts` |"), 1],
+    ["fail: the matrix cited as its own evidence", plant("| Planted circular | ASVS 5.0 | Implemented (public core) | `docs/SECURITY_CONTROLS_MATRIX.md` |"), 1],
+    ["fail: the binding survives only in an HTML comment", real.replace(/is exercised by\s+`pnpm run (proof:[\w:.-]+)`/, "is exercised by the core proof <!-- is exercised by `pnpm run $1` -->"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];
   let ok = true;
@@ -357,7 +417,7 @@ function selfTest() {
       writeFileSync(f, text);
       const r = spawnSync(process.execPath, [SELF, "--doc", f], { cwd: ROOT, encoding: "utf8" });
       // a failure must QUOTE the offending row (or name the stale entry), never just exit 1
-      const quoted = want === 1 ? /FAIL {2}.*\n {6}\S.*\|/.test(r.stderr) || /KNOWN_FAILURES entry ".+" no longer fails/.test(r.stderr) || /FAIL {2}(Status legend is|expected exactly one Status legend)/.test(r.stderr) : true;
+      const quoted = want === 1 ? /FAIL {2}.*\n {6}\S/.test(r.stderr) || /KNOWN_FAILURES entry ".+" no longer fails/.test(r.stderr) || /FAIL {2}(Status legend is|expected exactly one Status legend)/.test(r.stderr) : true;
       const pass = r.status === want && quoted;
       if (!pass) ok = false;
       console.log(`${pass ? "ok  " : "BAD "} self-test ${name} (exit ${r.status}, want ${want})${pass ? "" : `\n${r.stderr}`}`);

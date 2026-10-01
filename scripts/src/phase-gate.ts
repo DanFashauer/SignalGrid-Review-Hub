@@ -3,15 +3,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { classifyScanOutput, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
+import { classifyScanOutput, RED_FILE_PATTERN, tallyClaims, UNSAFE_CLAIM_SOURCE } from "./unsafe-claim-classifier";
 
 // Kept as a RegExp for the grep call below. The source string now lives in the
 // classifier so the pattern and the negation-awareness that interprets it cannot drift.
 const unsafeClaimPattern = new RegExp(UNSAFE_CLAIM_SOURCE, "i");
 const unsafeClaimScanCommand =
   'git grep -nE "SignalGrid is production-ready|SignalGrid replaces|SignalGrid is an Imprivata partner|SignalGrid is MFi certified|autonomous production remediation|replaces ServiceNow|replaces PagerDuty|replaces CrowdStrike|replaces Defender|replaces ControlUp|Imprivata partner|MFi certified|replaces Jamf|replaces Intune|replaces Apple Configurator|replaces GroundControl" -- README.md docs artifacts/signalgrid-review/src || true';
-const redFilePattern =
-  /(^|\/)\.env($|\.)|(^|\/)secrets?\/|(^|\/)credentials?\/|(^|\/)credential-store\/|(^|\/)credentials?(?:\.env|\.secret|\.json$|[-_](?:secret|store|token|key|prod|production))|(^|\/)(?:tenant|customer|phi|pii)(?:\.|-|_|\/)/i;
+const redFilePattern = RED_FILE_PATTERN;
 const workflowPattern = /^\.github\/workflows\//;
 const scriptPattern = /^scripts\//;
 const proofPattern = /(^|\/)proof|fixtures?\/|scenario/i;

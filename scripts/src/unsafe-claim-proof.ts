@@ -124,6 +124,21 @@ const cls = (text: string, file = "docs/SOME_DOC.md") => classifyClaim(file, 1, 
     cls("SignalGrid replaces no-code tooling across the estate.") === "affirmative");
   check("the trailing-negation case still holds after the postposed widening",
     cls("SignalGrid is production-ready and needs no configuration.") === "affirmative");
+  // Adversarial review of plan row 118 (2026-09-30): a postposed negator that opens
+  // an exception or an intensifier ASSERTS a replacement. All five were cleared as
+  // disclaimers until the lookahead exclusions and POSTPOSED_EXCEPTION landed.
+  for (const line of [
+    "SignalGrid replaces not only Jamf but Intune too.",
+    "SignalGrid replaces no one but Jamf.",
+    "SignalGrid replaces nothing short of your whole MDM stack.",
+    "SignalGrid replaces no system of record except Jamf and Intune.",
+    "SignalGrid replaces not one but three tools.",
+    "SignalGrid replaces no other tool in the estate.",
+    "SignalGrid replaces nothing more than your MDM.",
+    "SignalGrid replaces no more than three tools.",
+  ]) {
+    check(`a postposed negator that opens an exception stays affirmative: ${line}`, cls(line) === "affirmative");
+  }
 }
 
 // ── 4. THE NAMED EXEMPTIONS ──────────────────────────────────────────────────

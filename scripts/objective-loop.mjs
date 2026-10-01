@@ -109,6 +109,15 @@ export const STALLED_TOP_DAYS = 7;
  *  against the tree recently is an UNKNOWN input, and unknown tightens — ranked from nothing, named. */
 export const MEASURE_WINDOW_DAYS = 14;
 export const REQUEST_PREFIX = "objective-loop-";
+/** The first id in `base`, `base-2`, `base-3`, … that `taken(id)` does not claim. A day-keyed id
+ *  whose request already has a result is DONE; re-writing it only moves `requestedAt`, the runner
+ *  skips an id that already has a result, and the tick cut a branch every five minutes (2026-09-30,
+ *  PRs #1269–#1284). A second decay on the same day gets the next free id instead. */
+export function nextFreeRequestId(base, taken) {
+  if (!taken(base)) return base;
+  for (let n = 2; n < 1000; n++) if (!taken(`${base}-${n}`)) return `${base}-${n}`;
+  throw new Error(`no free request id under ${base}`);
+}
 export const VERDICTS = Object.freeze(["broken", "escalate", "replan", "goal_met"]);
 
 const sha256 = (s) => createHash("sha256").update(s).digest("hex");
@@ -479,6 +488,15 @@ function requestAlreadyQueued(criterionId) {
   return null;
 }
 
+/** An id is taken when a request or a result for it exists locally, on mainline, or on any
+ *  unmerged mac/tick-* head. Only reached after requestAlreadyQueued() found nothing OUTSTANDING,
+ *  so a taken id here is a completed one. */
+function requestIdTaken(id) {
+  if (existsSync(join(ROOT, REQ_DIR_REL, `${id}.json`)) || existsSync(join(ROOT, RES_DIR_REL, `${id}.json`))) return true;
+  const refs = ["origin/SignalGrid_Alpha", ...git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/mac/tick-*"]).out.split("\n").filter(Boolean)];
+  return refs.some((ref) => git(["cat-file", "-e", `${ref}:${REQ_DIR_REL}/${id}.json`]).status === 0 || git(["cat-file", "-e", `${ref}:${RES_DIR_REL}/${id}.json`]).status === 0);
+}
+
 function emit(state, { write, deliver }) {
   const prior = (() => { try { return JSON.parse(readFileSync(join(ROOT, STATE_REL), "utf8")); } catch { return null; } })();
   const stamp = (() => { try { return JSON.parse(readFileSync(join(ROOT, STAMP_REL), "utf8")); } catch { return null; } })();
@@ -497,6 +515,7 @@ function emit(state, { write, deliver }) {
     for (const q of state.queue) {
       const where = requestAlreadyQueued(q.criterionId);
       if (where) { q.queuedAs = where; lines.push(`request ${q.id} already queued (${where}) — not re-queued`); continue; }
+      q.id = nextFreeRequestId(q.id, requestIdTaken);
       const rel = `${REQ_DIR_REL}/${q.id}.json`;
       mkdirSync(join(ROOT, REQ_DIR_REL), { recursive: true });
       writeFileSync(join(ROOT, rel), JSON.stringify({
@@ -627,6 +646,10 @@ function selfTest() {
   const r1 = rank({ rows, openIds: plan.open, roster, roleIds, evaluation: e1, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
   const r2 = rank({ rows, openIds: plan.open, roster, roleIds, evaluation: e1, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
   t("determinism: rank() is identical across two calls", canonical(r1) === canonical(r2));
+  // (a2) a same-day second decay never re-writes a completed request (the 2026-09-30 five-minute tick branches)
+  t("request id: an untaken day id is used as-is", nextFreeRequestId("objective-loop-evidence-fresh-2026-09-30", () => false) === "objective-loop-evidence-fresh-2026-09-30");
+  t("request id: a day id that already has a result gets -2, never itself", nextFreeRequestId("objective-loop-evidence-fresh-2026-09-30", (id) => id === "objective-loop-evidence-fresh-2026-09-30") === "objective-loop-evidence-fresh-2026-09-30-2");
+  t("request id: -2 taken too → -3", nextFreeRequestId("x", (id) => id === "x" || id === "x-2") === "x-3");
 
   // (b) saturation is NOT goal-met; the owner's attestation is
   t("saturation: every machine criterion met + owner unattested → escalate, never goal_met", e1.verdict === "escalate" && e1.unmet.includes("owner-real-in-hand"));

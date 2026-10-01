@@ -131,7 +131,8 @@ export function shellWords(s) {
       if (open) words.push(cur);
       cur = "";
       open = false;
-    } else if (c === "'" && s.indexOf("'", i + 1) > i) {
+    } else if (c === "'" && s.indexOf("'", i + 1) > i && !(/\w/.test(s[i - 1] ?? "") && /\w/.test(s[i + 1] ?? ""))) {
+      // (an apostrophe between two letters — `cloud's` — is prose, not a shell quote)
       const close = s.indexOf("'", i + 1);
       cur += s.slice(i + 1, close);
       i = close;
@@ -169,6 +170,66 @@ const shedMarkup = (v) => {
 const SPEC_VALUE_RE = /^(?:npm:)?@upstash\\?\/context7-mcp/i;
 
 /** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
+/** Pure: `s` with a YAML ` # comment` removed — only outside quotes. */
+function stripYamlComment(s) {
+  let q = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      if (c === "\\" && q === '"') i++;
+      else if (c === q) q = "";
+    } else if (c === '"' || c === "'") q = c;
+    else if (c === "#" && (i === 0 || /\s/.test(s[i - 1]))) return s.slice(0, i).trimEnd();
+  }
+  return s;
+}
+const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/.test(v) ? JSON.parse(v) : /^'.*'$/.test(v) ? v.slice(1, -1).replace(/''/g, "'") : v);
+// YAML anchors (&a), aliases (*a) and tags (!!str, !t) before a value are not part of it
+const stripYamlProps = (v) => v.replace(/^(?:(?:[&*][^\s,{}[\]]+|!\S*)\s+)+/, "");
+
+/** Pure: the values of `@upstash/context7-mcp[@selector]` KEYS on a line (dependency and override keys), each to be held to PINNED. */
+function context7KeyValues(line, kind) {
+  const out = [];
+  if (kind === "json") {
+    for (const m of line.matchAll(/"((?:\\.|[^"\\])*)"\s*:\s*("(?:\\.|[^"\\])*"|[^,}\]\s{["]+)?/g)) {
+      let key;
+      try {
+        key = JSON.parse(`"${m[1]}"`);
+      } catch {
+        key = m[1];
+      }
+      if (/^@upstash\/context7-mcp(?:@\S*)?$/i.test(key)) out.push(m[2] === undefined ? "" : unquote(m[2]));
+    }
+    return out;
+  }
+  // a quoted key (any kind) or, in YAML/TOML/ini, an unquoted one; an override key may carry a selector
+  const re =
+    kind === "yaml"
+      ? /(?:^|[\s{,?-])(["']?)@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1\s*[:=]\s*(.*)$/i
+      : /(?:(["'])@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1|@upstash\\?\/context7-mcp)\s*[:=]\s*(.*)$/i;
+  const m = re.exec(line);
+  if (m && !/^\/\//.test(m[2])) {
+    let v = stripYamlProps(stripYamlComment(m[2]).trim());
+    const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
+    v = q ? unquote(q[1]) : v.replace(/[\s,}\]]+$/, "").trim();
+    out.push(v);
+  }
+  return out;
+}
+
+/** Pure: a YAML value as units — a spec value is ONE word, a flow mapping/list one word per entry, else shell-split. */
+function yamlValueUnits(raw) {
+  const v = stripYamlProps(stripYamlComment(raw).trim());
+  if (v.startsWith("{") || v.startsWith("[")) {
+    return v
+      .replace(/^[{[]|[}\]]$/g, "")
+      .split(/,(?=(?:[^"']|"[^"]*"|'[^']*')*$)/)
+      .map((e) => unquote(stripYamlProps(e.replace(/^\s*(?:"[^"]*"|'[^']*'|[^:"']+):\s+/, "").trim())));
+  }
+  const u = unquote(v);
+  return SPEC_VALUE_RE.test(u) ? [u] : shellWords(v);
+}
+
 function lineUnits(line, kind) {
   if (kind === "json") {
     const units = [];
@@ -181,7 +242,7 @@ function lineUnits(line, kind) {
       }
       const before = line.slice(0, m.index).trimEnd();
       const after = line.slice(m.index + m[0].length).trimStart();
-      if (after.startsWith(":")) continue; // a key; dependency keys are handled by the caller
+      if (after.startsWith(":")) continue; // a key; dependency keys are handled by context7KeyValues
       const isValue = before.endsWith(":");
       if (!isValue || SPEC_VALUE_RE.test(v)) units.push(v);
       else units.push(...shellWords(v));
@@ -189,36 +250,85 @@ function lineUnits(line, kind) {
     return units;
   }
   if (kind === "yaml") {
-    const bare = line.replace(/\s+#.*$/, "").trim();
-    if (SPEC_VALUE_RE.test(bare)) return [bare]; // a block-scalar continuation or bare item that IS a spec
-    const item = /^\s*-\s+(?![^"'#]*:\s)(.*?)\s*(?:\s#.*)?$/.exec(line);
-    if (item) return [item[1].replace(/^(["'])(.*)\1$/, "$2")];
-    const kv = /^\s*(?:-\s+)?[^:#]+:\s+(.*?)\s*(?:\s#.*)?$/.exec(line);
-    if (kv && kv[1].startsWith("[")) return kv[1].replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^(["'])(.*)\1$/, "$2"));
-    if (kv && SPEC_VALUE_RE.test(kv[1])) return [kv[1]]; // an unquoted `key: npm:@upstash/…@<range>` alias: the WHOLE value
-    if (kv) return shellWords(kv[1]);
+    const bare = stripYamlProps(stripYamlComment(line).trim());
+    if (SPEC_VALUE_RE.test(unquote(bare))) return [unquote(bare)]; // a continuation or bare item that IS a spec
+    const item = /^\s*-\s+(?!(?:"[^"]*"|'[^']*'|[^"'#:])*:\s)(.*)$/.exec(line);
+    if (item) return [unquote(stripYamlProps(stripYamlComment(item[1]).trim()))];
+    const kv = /^\s*(?:-\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)?\s*:\s+(.*)$/.exec(line); // incl. an explicit `: value`
+    if (kv) return yamlValueUnits(kv[1]);
   }
   return shellWords(line);
 }
 
-/** Pure: findings for one line's Context7 install references, read as the units its file kind defines. */
+/**
+ * Pure: physical lines joined into LOGICAL lines, each `{ i, text }` with `i` its first line.
+ * YAML: a block scalar (`key: >-` / `|`), an unclosed quote, or a more-indented plain-scalar continuation
+ * is joined to its key line, as a YAML reader would fold it. Shell/prose: a line whose quote is left open
+ * after the package name is joined to the next line (comment markers stripped). JSON strings cannot span lines.
+ */
+export function logicalLines(lines, kind) {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const openQuote = (t) => {
+    let q = "";
+    for (let k = 0; k < t.length; k++) {
+      const c = t[k];
+      if (q) {
+        if (c === "\\" && q === '"') k++;
+        else if (c === q) q = "";
+      } else if ((c === '"' || c === "'") && !(c === "'" && /\w/.test(t[k - 1] ?? "") && /\w/.test(t[k + 1] ?? ""))) q = c;
+    }
+    return q !== "";
+  };
+  if (kind === "yaml") {
+    let cur = null;
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      const t = stripYamlComment(l);
+      const isEntry = /^\s*(?:-(?:\s|$)|#|\?\s|:\s|(?:"[^"]*"|'[^']*'|[^\s#"'][^#]*?):(?:\s|$))/.test(l);
+      if (
+        cur &&
+        l.trim() !== "" &&
+        indent(l) > cur.indent &&
+        (cur.block || openQuote(cur.text) || (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text)))
+      ) {
+        if (cur.block === "pending") {
+          cur.text = cur.text.replace(/\s*[>|][+-]?\d*\s*$/, "");
+          cur.block = true;
+        }
+        cur.text += ` ${t.trim()}`;
+        continue;
+      }
+      if (cur) out.push(cur);
+      cur = { i, text: t, indent: indent(l), block: /:\s+(?:[&!]\S+\s+)*[>|][+-]?\d*\s*$/.test(t) ? "pending" : false };
+    }
+    if (cur) out.push(cur);
+    return out.map(({ i, text }) => ({ i, text }));
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const at = l.search(/@upstash\\?\/context7-mcp/i);
+    if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
+      out.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}` });
+    } else out.push({ i, text: l });
+  }
+  return out;
+}
+
+/** Pure: findings for one (logical) line's Context7 install references, read as the units its file kind defines. */
 export function context7SpecFindings(line, pin, kind = "shell", before = "") {
   const out = [];
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
   const push = (f) => f && out.push(f);
-  // a key naming the package takes its WHOLE value (JSON, YAML, TOML/ini `=`)
-  const dep = /@upstash\\?\/context7-mcp["']?\s*[:=]\s*(.*)$/i.exec(line);
-  if (dep && !/^\/\//.test(dep[1])) {
-    const v = dep[1].replace(/\s+#.*$/, "").replace(/[\s,}\]]+$/, "").trim();
-    push(classify(/^(["'])(.*)\1$/.test(v) ? v.slice(1, -1) : v));
-  }
+  // a key naming the package — with or without an override selector — takes its WHOLE value
+  for (const v of context7KeyValues(line, kind)) push(classify(v));
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner = PACKAGE_RUNNER_RE.test(line) || /["']?command["']?\s*:\s*["']?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)\b/.test(before);
   for (const unit of lineUnits(line, kind)) {
     for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
       const rest = unit.slice(m.index + m[0].length);
       if (rest.startsWith("@")) push(classify(shedMarkup(rest.slice(1))));
-      else if (!rest.startsWith(":") && runner && shedMarkup(rest) === "") out.push({ bare: true });
+      else if (!/^["']?\s*[:=]/.test(rest) && runner && shedMarkup(rest) === "") out.push({ bare: true });
     }
   }
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
@@ -267,10 +377,13 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
     if (!/context7/i.test(text)) continue;
     const lines = text.split("\n");
-    lines.forEach((line, i) => {
-      const seen = new Set();
+    const kind = context7FileKind(path);
+    const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
+    for (const { i, text: line } of logicalLines(lines, kind)) {
       if (/upstash\\?\/context7-mcp/i.test(line)) swept++;
-      for (const f of context7SpecFindings(line, pin, context7FileKind(path), lines.slice(Math.max(0, i - 6), i).join("\n"))) {
+      const seen = new Set();
+      seenAt.set(i, seen);
+      for (const f of context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n"))) {
         if (f.stale) {
           seen.add(f.stale);
           problems.push(stale(path, i + 1, f.stale));
@@ -283,6 +396,9 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
           problems.push(`${path}:${i + 1}: Context7 is invoked via a package runner with NO version, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
         }
       }
+    }
+    lines.forEach((line, i) => {
+      const seen = seenAt.get(i) ?? new Set();
       for (const m of line.matchAll(new RegExp(CONTEXT7_PHRASE_RE.source, CONTEXT7_PHRASE_RE.flags))) {
         swept++;
         if (m[1] === pin || seen.has(m[1]) || [...seen].some((v) => v.startsWith(m[1]))) continue;
@@ -961,6 +1077,37 @@ server.registerTool(
   ]) {
     const got = context7SpecFindings(line, realPin, k, before).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
     checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
+  }
+  // round 7b: values that SPAN lines (logical-line joining), override keys with a selector, exotic YAML spellings —
+  // driven through the whole sweep on synthetic files, so the joiner and the key reader are both exercised
+  const sweep = (path, body) => checkContext7Pin({ installerSource: realInstaller, files: { [path]: body }, copies: [] });
+  const flags = (path, body, line) => sweep(path, body).some((p) => p.startsWith(`${path}:${line}: `));
+  for (const [path, body, line, want, what] of [
+    ["w.yaml", `x:\n    c7: npm:${SPEC}${realPin}\n      || 5\n`, 2, true, "a YAML plain scalar continued on the next line"],
+    ["w.yaml", `x:\n    c7: "npm:${SPEC}${realPin}\n      || 5"\n`, 2, true, "a YAML double-quoted scalar over two lines"],
+    ["w.yaml", `x:\n    c7: >-\n      npm:${SPEC}${realPin}\n      || 5\n`, 2, true, "a YAML folded block with the range on its second line"],
+    ["w.yaml", `x:\n    c7: "npm:${SPEC}${realPin}\n      - 5"\n`, 2, true, "an open double quote whose continuation looks like a `- ` entry (hyphen range)"],
+    ["w.yaml", `x:\n    c7: >-\n      npm:${SPEC}${realPin}\n      - 5\n`, 2, true, "a folded block whose continuation looks like a `- ` entry (hyphen range)"],
+    ["s.mjs", `// npx -y "${SPEC}${realPin}\n// || 5"\n`, 1, true, "a shell quote left open after the package, closed on the next (comment) line"],
+    ["package.json", `{\n  "pnpm": {"overrides": {"${SPEC}${realPin}": "^5"}}\n}\n`, 2, true, "a pnpm override key with a selector redirecting to a range"],
+    ["package.json", `{\n  "overrides": {"${SPEC}4": "latest"}\n}\n`, 2, true, "an npm override key `@4` redirecting to a tag"],
+    ["w.yaml", `overridesX:\n  "${SPEC}${realPin}": ^5\n`, 2, true, "a YAML override key with a selector"],
+    ["w.yaml", `x: {c7: npm:${SPEC}${realPin} || 5}\n`, 1, true, "an alias range inside a YAML flow mapping"],
+    ["w.yaml", `c7: &a npm:${SPEC}${realPin} || 5\n`, 1, true, "an alias range after a YAML anchor"],
+    ["w.yaml", `c7: !!str npm:${SPEC}${realPin} || 5\n`, 1, true, "an alias range after a YAML tag"],
+    ["w.yaml", `  "a:b": npm:${SPEC}${realPin} || 5\n`, 1, true, "a quoted YAML key containing `:`"],
+    ["w.yaml", `? c7\n: npm:${SPEC}${realPin} || 5\n`, 2, true, "a YAML explicit key `? / :`"],
+    ["package.json", `{"\\u0040upstash/context7-mcp": "^4"}\n`, 1, true, "a unicode-escaped JSON dependency key"],
+    ["w.yaml", `  "@upstash\\/context7-mcp": latest\n`, 1, true, "a YAML double-quoted key with an escaped slash"],
+    ["w.yaml", `  c7: "npm:${SPEC}${realPin} - 5 # c"\n`, 1, true, "a `#` INSIDE a quoted YAML value is not a comment"],
+    ["w.yaml", `x:\n    c7: npm:${SPEC}${realPin}\n    other: 1\n`, 2, false, "a correct alias followed by a sibling key (no join; no false positive)"],
+    ["w.yaml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo done\n`, 2, false, "a literal-block command whose next line is another command (no false positive)"],
+    ["package.json", `{\n  "pnpm": {"overrides": {"${SPEC}4": "${realPin}"}}\n}\n`, 2, false, "an override key redirecting TO the pin (no false positive)"],
+    ["d.md", `the cloud's pin is ${SPEC}${realPin} and Dan's too\n`, 1, false, "two prose apostrophes around a correct pin (no false positive)"],
+    ["d.md", `say 'pinned ${SPEC}${realPin} today\n`, 1, false, "a lone, never-closed quote before a correct pin stays literal (no false positive)"],
+    ["w.yaml", `deps: {"${NAME}": ${realPin}}\n`, 1, false, "a correct unquoted value closed by `}` in a YAML flow mapping (no false positive)"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
   }
   checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);
   const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM

@@ -9870,9 +9870,9 @@
     {
       "type": "library",
       "name": "@ioredis/commands",
-      "version": "1.10.0",
-      "bom-ref": "pkg:npm/%40ioredis/commands@1.10.0",
-      "purl": "pkg:npm/%40ioredis/commands@1.10.0",
+      "version": "2.0.0",
+      "bom-ref": "pkg:npm/%40ioredis/commands@2.0.0",
+      "purl": "pkg:npm/%40ioredis/commands@2.0.0",
       "licenses": [
         {
           "license": {
@@ -15322,9 +15322,9 @@
     {
       "type": "library",
       "name": "ioredis",
-      "version": "5.11.1",
-      "bom-ref": "pkg:npm/ioredis@5.11.1",
-      "purl": "pkg:npm/ioredis@5.11.1",
+      "version": "6.0.0",
+      "bom-ref": "pkg:npm/ioredis@6.0.0",
+      "purl": "pkg:npm/ioredis@6.0.0",
       "licenses": [
         {
           "license": {
@@ -18056,20 +18056,6 @@
       "version": "1.2.0",
       "bom-ref": "pkg:npm/redis-errors@1.2.0",
       "purl": "pkg:npm/redis-errors@1.2.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "redis-parser",
-      "version": "3.0.0",
-      "bom-ref": "pkg:npm/redis-parser@3.0.0",
-      "purl": "pkg:npm/redis-parser@3.0.0",
       "licenses": [
         {
           "license": {

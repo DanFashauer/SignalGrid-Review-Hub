@@ -20,18 +20,28 @@
 // identical in a summary and mean completely different things.
 //
 // WHERE A CHECKOUT IS LOOKED FOR. The declared path first (the cloud lane's /workspace,
-// unchanged). Failing that, the folder of the same name BESIDE this checkout — and a
-// sibling counts only when its `origin` remote names the expected repository, because a
-// folder of the right name that is some other repository (or a plain directory nested
-// inside one, where `git rev-parse --is-inside-work-tree` is true and `origin` is the
-// parent's) would otherwise be scanned and counted clean. A checkout that cannot be found
-// or cannot prove its identity is still NOT SCANNED, never clean. The estate stays
-// DECLARED, not discovered: there is no directory walk and no override variable.
+// unchanged, taken as declared). Failing that, the folder of the same name BESIDE this
+// checkout — and a sibling counts only when its `origin` remote is exactly OWNER/<expected
+// name> (owner AND name, case-insensitively), because a folder of the right name that is
+// some other repository (a clone of someone else's same-named repo, or a plain directory
+// nested inside one, where `git rev-parse --is-inside-work-tree` is true and `origin` is the
+// parent's) would otherwise be scanned and counted clean. A SIBLING that cannot prove its
+// identity, or a checkout that cannot be found, is NOT SCANNED — never clean. The estate
+// stays DECLARED, not discovered: there is no directory walk and no override variable.
+// "Beside this checkout" from a linked worktree is `.claude/worktrees/`, so run it from the
+// main checkout.
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { repoKeyFromRemote, scanRepo } from "./check-cited-paths.mjs";
+
+// Guarded on being the entry point: importing `locate` or `tally` must not scan the estate.
+const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const SELF_TEST = isEntry && process.argv.includes("--self-test");
+// check-cited-paths.mjs runs `git ls-files` when it LOADS (via lib/skill-plane.mjs). The
+// self-test needs none of it — `locate` and `tally` take their disk and git as arguments —
+// so it is not loaded for the self-test, which then runs with git off PATH.
+const { repoKeyFromRemote, scanRepo } = SELF_TEST ? {} : await import("./check-cited-paths.mjs");
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -62,18 +72,28 @@ export const ESTATE = [
   },
 ];
 
-// The repository name `origin` points at, or undefined when there is no origin / git
-// cannot read the directory. Undefined fails closed in `locate`.
+// Every sibling must be this owner's: a same-named clone of someone else's repository is
+// not the repository being counted. Declared, like the estate (the same owner as the
+// SELF_KEY in check-cited-paths.mjs); an owner change fails closed — every sibling reads
+// NOT SCANNED until this is updated.
+const OWNER = "DanFashauer";
+
+const expectedName = (entry) => entry.sibling ?? basename(entry.path);
+
+// What `origin` points at, as repoKeyFromRemote reports it ({ key, hasOwner }), or
+// undefined when there is no origin / git cannot read the directory. Undefined fails
+// closed in `locate`.
 function gitOriginName(dir) {
+  let url;
   try {
-    const url = execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], {
+    url = execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
-    return repoKeyFromRemote(url)?.key.split("/").pop();
   } catch {
     return undefined;
   }
+  return repoKeyFromRemote(url);
 }
 
 /**
@@ -81,16 +101,19 @@ function gitOriginName(dir) {
  * `{ reason }` when it must be reported NOT SCANNED.
  *
  * The declared path wins untouched. Otherwise the sibling folder is used only when its
- * origin remote names the expected repository (case-insensitive: GitHub names are).
+ * origin remote names `owner/<expected>` — owner and name, case-insensitive (GitHub's are).
+ * A local-path origin reads as a bare name, never `owner/name`, so it proves nothing.
  */
-export function locate(entry, { exists = existsSync, originName = gitOriginName } = {}) {
+export function locate(entry, { exists = existsSync, originName = gitOriginName, owner = OWNER } = {}) {
   if (exists(entry.path)) return { path: entry.path };
-  const expected = entry.sibling ?? basename(entry.path);
+  const expected = expectedName(entry);
+  const want = `${owner}/${expected}`;
   const sib = resolve(SELF_ROOT, "..", expected);
   if (!exists(sib)) return { reason: `no checkout at ${entry.path} or ${sib}` };
   const got = originName(sib);
-  if (!got || got.toLowerCase() !== expected.toLowerCase()) {
-    return { reason: `${sib}: origin names ${got ?? "nothing"}, not ${expected}` };
+  if (got?.key.toLowerCase() !== want.toLowerCase()) {
+    const named = got ? `${got.key}${got.hasOwner ? "" : " (a local path, no owner)"}` : "nothing";
+    return { reason: `${sib}: origin names ${named}, not ${want}` };
   }
   return { path: sib };
 }
@@ -139,31 +162,47 @@ function selfTest() {
   const only = (p) => (q) => q === p;
   const dev = ESTATE.find((e) => e.name === "dev");
   const row = (over) => ({ name: "x", status: "BROKEN", missing: [{ doc: "d", path: "p" }], ...over });
+  // What `origin` reads as: repoKeyFromRemote's shape. `owner: "acme"` is injected so the cases
+  // do not lean on the declared OWNER, except the one that proves the default is wired.
+  const origin = (key) => () => ({ key, hasOwner: true });
+  const opts = (exists, originName) => ({ exists, originName, owner: "acme" });
 
-  const a = locate(entry, { exists: only(entry.path), originName: throwsIfCalled });
-  const b = locate(entry, { exists: only(sib), originName: () => "demo" });
-  const c = locate(entry, { exists: () => false, originName: throwsIfCalled });
-  const d = locate(entry, { exists: only(sib), originName: () => "SignalGrid-Review-Hub" });
-  const d2 = locate(entry, { exists: only(sib), originName: () => "Demo.mint" });
-  const e = locate(entry, { exists: only(sib), originName: () => undefined });
+  const a = locate(entry, opts(only(entry.path), throwsIfCalled));
+  const b = locate(entry, opts(only(sib), origin("ACME/demo")));
+  const c = locate(entry, opts(() => false, throwsIfCalled));
+  const d = locate(entry, opts(only(sib), origin("acme/SignalGrid-Review-Hub")));
+  const d2 = locate(entry, opts(only(sib), origin("acme/Demo.mint")));
+  const d3 = locate(entry, opts(only(sib), origin("someone-else/Demo")));
+  const d4 = locate(entry, opts(only(sib), () => ({ key: "Demo", hasOwner: false })));
+  const e = locate(entry, opts(only(sib), () => undefined));
   const devSib = resolve(SELF_ROOT, "..", "DEV");
-  const f = locate(dev, { exists: only(devSib), originName: () => "DEV" });
+  const f = locate(dev, opts(only(devSib), origin("acme/DEV")));
+  const g = locate(entry, { exists: only(sib), originName: origin(`${OWNER}/Demo`) });
   const notClean = tally([{ name: "nope", status: "NOT_SCANNED", reason: "r" }]);
   const mixed = tally([{ name: "ok", status: "CLEAN", missing: [] }, { name: "nope", status: "NOT_SCANNED", reason: "r" }]);
 
   const checks = [
     ["(i) declared path present → the declared path, and git is never consulted", a.path === entry.path && !a.reason],
-    ["(ii) declared absent, sibling present, origin matches (case-insensitively) → the sibling", b.path === sib && !b.reason],
+    ["(ii) declared absent, sibling present, origin is owner/name (case-insensitively) → the sibling", b.path === sib && !b.reason],
     [
       "(iii) both absent → a reason naming both places, no path (NOT SCANNED), and git is never consulted",
       !c.path && c.reason.includes(entry.path) && c.reason.includes(sib),
     ],
     [
       "(iv) sibling present but origin names another repo (a clone of something else, or a plain dir nested in another checkout) → NOT SCANNED",
-      !d.path && d.reason.includes("origin names SignalGrid-Review-Hub, not Demo"),
+      !d.path && d.reason.includes("origin names acme/SignalGrid-Review-Hub, not acme/Demo"),
     ],
     ["(iv) …and a near-miss name (Demo.mint) is not a match — the name must be exact", !d2.path && !!d2.reason],
+    [
+      "(iv) …and the right NAME under another OWNER (someone-else/Demo) is not a match — the owner must be ours",
+      !d3.path && d3.reason.includes("origin names someone-else/Demo, not acme/Demo"),
+    ],
+    [
+      "(iv) …and a local-path origin (no owner) proves nothing → NOT SCANNED",
+      !d4.path && d4.reason.includes("no owner"),
+    ],
     ["(v) sibling present with no origin → NOT SCANNED, never scanned on faith", !e.path && e.reason.includes("origin names nothing")],
+    ["(ii) …with no owner injected, the declared OWNER is the one required", g.path === sib],
     [
       "(ix) dev is declared with its real folder name DEV and as archived, with the premise dated in its note",
       dev?.sibling === "DEV" && dev.archived === true && /archived: true.*2026-10-01/.test(dev.note) && f.path === devSib,
@@ -246,7 +285,7 @@ function main() {
   }
 
   for (const r of scanned) {
-    if (r.scannedPath && r.scannedPath !== r.path) console.log(`\n  note: ${r.name} — scanned beside this checkout at ${r.scannedPath} (its origin names the expected repository)`);
+    if (r.scannedPath && r.scannedPath !== r.path) console.log(`\n  note: ${r.name} — scanned beside this checkout at ${r.scannedPath} (its origin names ${OWNER}/${expectedName(r)})`);
     if (r.intakeDocs > 0) console.log(`\n  note: ${r.name} — ${r.intakeDocs} pasted/intake document(s) skipped (not this owner's claims)`);
     for (const e of r.exempted ?? []) console.log(`  note: ${r.name} — ${e.doc} exempt, ${e.count} path(s) describing ${e.reason}`);
   }
@@ -254,7 +293,7 @@ function main() {
   if (unscanned.length > 0) {
     console.log(`\n  NOT SCANNED — reported, never counted clean:`);
     for (const r of unscanned) console.log(`    · ${r.name} — ${r.reason}`);
-    console.log(`    Clone them under /workspace or beside this checkout and re-run; silence about a repo is not a pass.`);
+    console.log(`    Clone them under /workspace or beside the main checkout (not a linked worktree: that looks beside itself) and re-run; silence about a repo is not a pass.`);
   }
 
   console.log(
@@ -272,10 +311,8 @@ function main() {
   process.exit(exitCode);
 }
 
-// Guarded on being the entry point, like check-cited-paths.mjs: importing `locate` or
-// `tally` must not scan the estate as a side effect. The self-test runs BEFORE any scan.
-const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// The self-test runs BEFORE any scan; `isEntry` is computed at the top of the file.
 if (isEntry) {
-  if (process.argv.includes("--self-test")) process.exit(selfTest());
+  if (SELF_TEST) process.exit(selfTest());
   main();
 }

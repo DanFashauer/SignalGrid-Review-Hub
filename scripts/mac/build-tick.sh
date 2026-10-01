@@ -143,6 +143,8 @@ STAGES_SECONDS=15300
 HUNG_SECONDS=$((REFRESH_SECONDS + STAGES_SECONDS + PREFLIGHT_SECONDS + BREADTH_SECONDS + 3600))
 BUILD_WT="$(cd "$REPO_ROOT/.." && pwd)/$(basename "$REPO_ROOT").build"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+# Mainline's copy of the landing classifier, extracted from git at classify time (step 8) and removed at exit.
+CLASSIFIER="$CACHE/classify-$STAMP.mjs"
 RUN_LOG=""
 say() {
   printf 'build-tick %s  %s\n' "$STAMP" "$1"
@@ -193,7 +195,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   mkdir "$LOCK" 2>/dev/null || { say "result: skipped: could not take $LOCK"; exit 0; }
 fi
 printf '%s' "$$" > "$LOCK/pid"
-trap 'rm -f "$LOCK/pid" "$LOCK/hung-hand"; rmdir "$LOCK" 2>/dev/null' EXIT
+trap 'rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"; rmdir "$LOCK" 2>/dev/null' EXIT
 
 for _tool in git gh node pnpm npm claude perl; do
   command -v "$_tool" >/dev/null 2>&1 || fail "$_tool is not on PATH for launchd (edit PATH at the top of scripts/mac/build-tick.sh)"
@@ -214,8 +216,8 @@ fi
 # Run a command under a wall-clock cap that kills its WHOLE PROCESS GROUP. perl forks the command into its own
 # group; at the cap it TERMs the group, waits up to 5 s, KILLs it and exits 142. Otherwise it exits with the
 # command's own status (128 + signal if the command was killed). A plain `alarm` + `exec` only ends the
-# launcher: pr-refresh.mjs re-execs itself in a child, and that child (with its preflight and breadth) would
-# outlive the cap.
+# launcher: pr-refresh.mjs re-execs itself in a child, and preflight and breadth spawn children of their own;
+# those would outlive the cap. Used for the refresh (1b), preflight and breadth (8).
 capped() {
   _cap="$1"; shift
   perl -e '
@@ -474,22 +476,39 @@ HEAD_SHA="$(git rev-parse HEAD)"
 # from the diff rather than trusting the session's own "Owner decision needed:" line.
 CHANGED="$(git diff --name-only origin/SignalGrid_Alpha...HEAD)"
 # CLAUDE.md, AGENTS.md, .claude/ and .githooks/ are forbidden at ANY depth (a nested copy steers a later session too).
-FORBIDDEN_RE='(^|/)(CLAUDE|AGENTS)\.md$|(^|/)\.claude/|(^|/)\.githooks/|^(docs/DECISION_RECORDS\.md|docs/agent/(objective\.json|LOOP\.md|launch-claims-)|docs/(LAUNCH_PROFILE|PUBLICATION_BOUNDARY)\.md|scripts/(launch-profile|check-launch-profile|check-launch-claims|publication-boundary|check-publication-boundary)|native/ios/EnterpriseShell/Services/(DecisionEngine|AppWorkflows)\.swift)'
+# So is the classifier itself (check-owner-gated-surfaces): a session that edits it is hand-back, not a landing.
+FORBIDDEN_RE='(^|/)(CLAUDE|AGENTS)\.md$|(^|/)\.claude/|(^|/)\.githooks/|^(docs/DECISION_RECORDS\.md|docs/agent/(objective\.json|LOOP\.md|launch-claims-)|docs/(LAUNCH_PROFILE|PUBLICATION_BOUNDARY)\.md|scripts/(launch-profile|check-launch-profile|check-launch-claims|publication-boundary|check-publication-boundary|check-owner-gated-surfaces)|native/ios/EnterpriseShell/Services/(DecisionEngine|AppWorkflows)\.swift)'
 FORBIDDEN="$(grep -E "$FORBIDDEN_RE" <<< "$CHANGED")"
-CLASS="$(node --input-type=module -e 'import { classifyDiff } from "./scripts/check-owner-gated-surfaces.mjs";
-  const files = process.argv[1].split("\n").filter(Boolean);
-  const cats = new Set(classifyDiff(files).matched.map((m) => m.category));
-  process.stdout.write(cats.has("OWNER_RESERVED") ? "OWNER_RESERVED" : cats.has("DECISION_PATH") ? "DECISION_PATH" : "SAFETY_MACHINERY");' "$CHANGED" 2>>"$RUN_LOG")"
-[ -n "$CLASS" ] || fail "plan row $PICK_ID: could not classify the change with check-owner-gated-surfaces.mjs — not pushing an unclassified change"
-if [ -n "$FORBIDDEN" ] || [ "$CLASS" = "OWNER_RESERVED" ]; then
-  fail "plan row $PICK_ID: the change touches paths the build tick may not land ($CLASS; $(tr '\n' ' ' <<< "$FORBIDDEN")). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
+# The class comes from MAINLINE's classifier, extracted from git into the cache, never the build worktree's copy: the
+# session had write access there and could re-classify its own owner-reserved change as SAFETY_MACHINERY. The file
+# imports only node: builtins, so one file is enough. The path goes in by env, never argv[1]: the classifier's
+# main-module guard would otherwise run its CLI and print its manifest into the answer. Prints the class, or fails.
+classify_change() {
+  git -C "$REPO_ROOT" show origin/SignalGrid_Alpha:scripts/check-owner-gated-surfaces.mjs > "$CLASSIFIER" 2>>"${RUN_LOG:-/dev/null}" && [ -s "$CLASSIFIER" ] || return 1
+  SG_CLASSIFIER="$CLASSIFIER" node --input-type=module -e 'import { pathToFileURL } from "node:url";
+    const { classifyDiff } = await import(pathToFileURL(process.env.SG_CLASSIFIER).href);
+    const files = process.argv[1].split("\n").filter(Boolean);
+    const cats = new Set(classifyDiff(files).matched.map((m) => m.category));
+    process.stdout.write(cats.has("OWNER_RESERVED") ? "OWNER_RESERVED" : cats.has("DECISION_PATH") ? "DECISION_PATH" : "SAFETY_MACHINERY");' "$1" 2>>"${RUN_LOG:-/dev/null}"
+}
+if [ -n "$FORBIDDEN" ]; then
+  fail "plan row $PICK_ID: the change touches paths the build tick may not land ($(tr '\n' ' ' <<< "$FORBIDDEN")). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
+fi
+CLASS="$(classify_change "$CHANGED")"
+rm -f "$CLASSIFIER"
+case "$CLASS" in
+  OWNER_RESERVED|DECISION_PATH|SAFETY_MACHINERY) ;;
+  *) fail "plan row $PICK_ID: could not classify the change with mainline's check-owner-gated-surfaces.mjs — not pushing an unclassified change" ;;
+esac
+if [ "$CLASS" = "OWNER_RESERVED" ]; then
+  fail "plan row $PICK_ID: the change touches owner-reserved paths the build tick may not land ($CLASS). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
 fi
 say "committed $HEAD_SHA ($CLASS); preflight then breadth"
-perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1
+capped "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1
 PF=$?
 BR=1
 if [ "$PF" = "0" ]; then
-  perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$BREADTH_SECONDS" pnpm run verify:breadth > "$RUN_DIR/breadth.log" 2>&1
+  capped "$BREADTH_SECONDS" pnpm run verify:breadth > "$RUN_DIR/breadth.log" 2>&1
   BR=$?
 fi
 PF_LINE="$(grep -E 'Preflight (PASSED|FAILED)' "$RUN_DIR/preflight.log" | tail -1)"

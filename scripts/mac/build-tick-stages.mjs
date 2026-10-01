@@ -870,8 +870,8 @@ function selfTestBody(root, ok) {
     const sh = readFileSync(join(HERE, "build-tick.sh"), "utf8");
     const re = /^FORBIDDEN_RE='(.*)'$/m.exec(sh)?.[1];
     const hits = (paths) => paths.map((p) => (re ? spawnSync("grep", ["-E", re], { input: `${p}\n`, encoding: "utf8" }).status === 0 : null));
-    ok("S1 build-tick.sh holds FORBIDDEN_RE and it forbids a nested CLAUDE.md / AGENTS.md, a nested .claude/ and .githooks/, and the root ones",
-      !!re && hits(["CLAUDE.md", "docs/CLAUDE.md", "native/ios/CLAUDE.md", "AGENTS.md", "pkg/AGENTS.md", ".claude/settings.json", "artifacts/x/.claude/hooks/a.sh", ".githooks/pre-push", "docs/DECISION_RECORDS.md"]).every((h) => h === true), re);
+    ok("S1 build-tick.sh holds FORBIDDEN_RE and it forbids a nested CLAUDE.md / AGENTS.md, a nested .claude/ and .githooks/, the root ones, and the landing classifier itself (a diff touching it hands back)",
+      !!re && hits(["CLAUDE.md", "docs/CLAUDE.md", "native/ios/CLAUDE.md", "AGENTS.md", "pkg/AGENTS.md", ".claude/settings.json", "artifacts/x/.claude/hooks/a.sh", ".githooks/pre-push", "docs/DECISION_RECORDS.md", "scripts/check-owner-gated-surfaces.mjs"]).every((h) => h === true), re);
     ok("S1 FORBIDDEN_RE leaves ordinary paths alone (anchored, not a substring match)",
       !!re && hits(["docs/MYCLAUDE.md", "src/a.ts", "docs/not.claude/x", "docs/CLAUDE.md.bak"]).every((h) => h === false), re);
   }
@@ -926,6 +926,35 @@ function selfTestBody(root, ok) {
       claimBody.includes("load_inflight") && claimBody.indexOf("load_inflight") < claimBody.indexOf("in_flight \"$PICK_ID\"") && claimBody.indexOf("in_flight \"$PICK_ID\"") < claimBody.indexOf("git switch"), claimBody.slice(0, 200));
     ok("nit: the dry-run only says it would run the refresh when mainline has pr-refresh.mjs (the cat-file test comes first)",
       /if git cat-file -e origin\/SignalGrid_Alpha:scripts\/mac\/pr-refresh\.mjs[^\n]*; then\n\s*say "dry-run: would run mainline's/.test(sh));
+    ok("S4 preflight and breadth run under capped (a group kill), and no bare `alarm shift` + exec launcher is left anywhere",
+      /^capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs > /m.test(sh) && /^\s*capped "\$BREADTH_SECONDS" pnpm run verify:breadth > /m.test(sh) && !/alarm shift/.test(sh));
+    ok("S4 the EXIT trap that releases the lock also removes the extracted classifier (one trap: a second would replace the first)",
+      (sh.match(/^trap /gm) ?? []).length === 1 && /^trap '[^\n]*"\$CLASSIFIER"[^\n]*rmdir "\$LOCK"[^\n]*' EXIT$/m.test(sh));
+    const classifyFn = /^classify_change\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0];
+    ok("S4 build-tick.sh classifies from mainline's copy extracted by git show into $CLASSIFIER and never imports a worktree path",
+      !!classifyFn && /git -C "\$REPO_ROOT" show origin\/SignalGrid_Alpha:scripts\/check-owner-gated-surfaces\.mjs > "\$CLASSIFIER"/.test(classifyFn)
+        && /import\(pathToFileURL\(process\.env\.SG_CLASSIFIER\)/.test(classifyFn) && !/\.\/scripts\/check-owner-gated-surfaces/.test(sh) && /^case "\$CLASS" in\n\s*OWNER_RESERVED\|DECISION_PATH\|SAFETY_MACHINERY\) ;;/m.test(sh), classifyFn?.slice(0, 160));
+    if (classifyFn) { // run it for real: mainline's classifier says OWNER_RESERVED, the worktree's tampered copy says otherwise
+      const s = scenario();
+      mkdirSync(join(s.repo, "scripts"), { recursive: true });
+      copyFileSync(join(HERE, "../check-owner-gated-surfaces.mjs"), join(s.repo, "scripts/check-owner-gated-surfaces.mjs"));
+      s.git("add", "-A"); s.git("commit", "-q", "-m", "classifier"); s.git("update-ref", "refs/remotes/origin/SignalGrid_Alpha", "HEAD");
+      const tampered = 'export function classifyDiff() { return { tier: "owner-gated", matched: [{ category: "SAFETY_MACHINERY" }] }; }\n';
+      writeFileSync(join(s.repo, "scripts/check-owner-gated-surfaces.mjs"), tampered);
+      const out = join(s.cache, "classify-T.mjs");
+      mkdirSync(s.cache, { recursive: true });
+      const classify = (repo, files) => spawnSync("/bin/bash", ["-c", `${classifyFn}\nREPO_ROOT="$1" CLASSIFIER="$2" classify_change "$3"`, "bash", repo, out, files], { cwd: s.repo, encoding: "utf8" });
+      const r = classify(s.repo, "docs/LAUNCH_PROFILE.md\nlib/a.ts");
+      ok("S4 classify_change reads mainline's classifier from git, not the tampered worktree copy (OWNER_RESERVED, and only the token on stdout)",
+        r.status === 0 && r.stdout === "OWNER_RESERVED" && readFileSync(join(s.repo, "scripts/check-owner-gated-surfaces.mjs"), "utf8") === tampered, `${r.status} ${JSON.stringify(r.stdout)} ${r.stderr}`);
+      ok("S4 classify_change: a decision-path change reads DECISION_PATH, a scripts/ change SAFETY_MACHINERY, from the same cached copy",
+        classify(s.repo, "lib/signalgrid-core/src/x.ts").stdout === "DECISION_PATH" && classify(s.repo, "scripts/mac/x.sh").stdout === "SAFETY_MACHINERY");
+      const empty = join(root, "no-mainline-classifier");
+      mkdirSync(empty);
+      spawnSync("git", ["init", "-q"], { cwd: empty });
+      const none = classify(empty, "docs/LAUNCH_PROFILE.md");
+      ok("S4 classify_change fails closed when mainline has no classifier: non-zero, no class on stdout", none.status !== 0 && none.stdout === "", `${none.status} ${JSON.stringify(none.stdout)}`);
+    }
     const fn = /^capped\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0];
     if (!fn) ok("S4 build-tick.sh defines capped()", false);
     else {
@@ -954,7 +983,10 @@ function selfTestBody(root, ok) {
     try { render("build-tick-triage.md", { ROW_ID: "7" }); } catch { refused = true; }
     ok("render refuses a stage whose brief keeps a {{placeholder}}", refused);
     ok("render breaks up a {{ inside a value (a title cannot forge a placeholder)",
-      render("build-tick-fix.md", { ROW_ID: "7", ROW_TITLE: "{{RUN_DIR}}", BRANCH: "b", RUN_DIR: "/r", TODAY, FINDINGS: "{{x}}" }).includes("{ {RUN_DIR}}"));
+      render("build-tick-fix.md", { ROW_ID: "7", ROW_TITLE: "{{RUN_DIR}}", BRANCH: "b", RUN_DIR: "/r", TODAY, FINDINGS: "{{x}}", KIND: "code" }).includes("{ {RUN_DIR}}"));
+    const fixBrief = render("build-tick-fix.md", { ROW_ID: "7", ROW_TITLE: "t", BRANCH: "b", RUN_DIR: "/r", TODAY, FINDINGS: "f", KIND: "mechanical" });
+    ok("the fix brief names the build's KIND on line 2 and states the mechanical docs-only limit (a Haiku fix is told it)",
+      fixBrief.split("\n")[1] === "KIND: mechanical" && /KIND mechanical[^\n]*ONLY docs\/\*\*[^\n]*live-sync-manifest\.json/.test(fixBrief), fixBrief.slice(0, 80));
   }
   {
     const out = applyMarker(PLAN, "7", `DONE (re-measured ${TODAY})`, "a.ts:1\n  and   more");

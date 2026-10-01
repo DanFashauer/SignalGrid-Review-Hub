@@ -225,6 +225,19 @@ for (const field of ["registration", "credential_type", "attestation", "attestat
   check(`per-field integrity — an unparseable "${field}" alone makes the report malformed`,
     oneBad.reportIntegrity === "malformed");
 }
+// The prototype scan's two brace-less guards, each ISOLATED (the mutation sweep
+// reaches them via `oneLine: true`; each check fails when its guard alone is removed).
+// A RECOGNIZED key inherited from the prototype is an assertion read by nobody —
+// value reads are own-only — so the scan must count it, not wave it through as known.
+const { attestation: _attHoisted, ...grantSansAttestation } = GRANT;
+check("a RECOGNIZED key inherited from the prototype is an unrecognized envelope → malformed",
+  normalizeReport("kp", Object.assign(Object.create({ attestation: "verified" }), grantSansAttestation) as PasskeyReportRaw).reportIntegrity === "malformed");
+// A chain deeper than the scan's bound is one we could not establish the shape of.
+// Every level is EMPTY, so only the depth bound (not a key on some level) can refuse it.
+let deepEmpty: object = {};
+for (let i = 0; i < 100; i += 1) deepEmpty = Object.create(deepEmpty);
+check("a report behind a 100-deep EMPTY prototype chain is malformed — the walk is bounded, not trusted",
+  normalizeReport("deep", Object.assign(Object.create(deepEmpty), GRANT) as PasskeyReportRaw).reportIntegrity === "malformed");
 // The throwing-key path: a Proxy whose ownKeys throws must fail closed inside the
 // prototype scan rather than propagating an untyped error out of the normalizer.
 let scanThrew = false;

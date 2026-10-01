@@ -214,17 +214,8 @@ export function urlProblem(value) {
  */
 export function renderedStep4(doc) {
   const md = new MarkdownIt({ html: true });
-  const env = {};
-  const tokens = md.parse(doc, env);
+  const tokens = md.parse(doc, {});
   const problems = [];
-  // A footnote DEFINITION (`[^t]: x`) never reaches an inline token: markdown-it reads
-  // it as a link reference definition and hides it, so the `[^` check below cannot
-  // see it. GitHub reads it as a footnote and swallows the lines after it into the
-  // footnote, which it then drops — the launch arguments vanish (round 12). Any such
-  // definition anywhere in the file is refused; markdown-it records every one in env.
-  const footnoteDefs = Object.keys(env.references ?? {}).filter((k) => k.startsWith("^"));
-  if (footnoteDefs.length)
-    problems.push(`the file defines footnote(s) ${footnoteDefs.map((k) => `[${k}]`).join(", ")} — GitHub would swallow the lines after a definition and drop them, so write them as text`);
   const headingText = (i) => tokens[i + 1]?.type === "inline" ? tokens[i + 1].content.trim() : "";
   const sections = tokens.flatMap((t, i) =>
     t.type === "heading_open" && t.tag === "h2" && /^The demo path\b/.test(headingText(i)) ? [i] : []);
@@ -311,6 +302,79 @@ export function renderedStep4(doc) {
   return { text: visibleText(parseFragment(html)), problems };
 }
 
+// A footnote definition opener as GitHub's cmark-gfm reads one — `[^label]:` at the
+// start of a line, after any indentation, blockquote `>` or list markers. cmark-gfm's
+// own scanner wants a label with no space and no `]`; this matches any label, so it
+// refuses a superset of what GitHub treats as a definition.
+const FOOTNOTE_DEF_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*\[\^[^\]\n]*\]:/;
+// A paragraph or heading whose inline text opens with `[label]:` is a link reference
+// definition markdown-it REJECTED (an accepted one never reaches an inline token). cmark-gfm
+// does not validate the destination, so it hides the same text.
+const REJECTED_REF_DEF = /^\[(?:[^\]\\]|\\.)+\]:/;
+
+/**
+ * Reference and footnote definitions are refused anywhere in this file (round 13).
+ *
+ * Round 12 read markdown-it's env.references, but markdown-it records a definition only
+ * when its destination validates: `[^t]: javascript:x`, `data:`, `vbscript:`, `file:`, an
+ * unclosed `<` or an empty body never reach it. cmark-gfm takes every one of them as a
+ * footnote and swallows the lines after it — the whole inventory table, or every row after
+ * the definition. So footnote definitions are found by SHAPE on the raw source, every line,
+ * fenced blocks included (a definition in a fence is inert on GitHub, but the file has no
+ * reason to hold one, and refusing it needs no proof that markdown-it and cmark-gfm agree
+ * on where every fence ends). Without a definition a `[^t]` reference renders as plain text
+ * on GitHub, so no footnote can render. Link reference definitions are refused too: an
+ * accepted one is hidden by both renderers but serves nothing here, and a rejected one is
+ * text to the gate and hidden on GitHub.
+ */
+export function definitionProblems(doc) {
+  const problems = [];
+  const lines = doc.split("\n");
+  for (const [i, line] of lines.entries())
+    if (FOOTNOTE_DEF_LINE.test(line))
+      problems.push(`line ${i + 1} is a footnote definition ("${line.trim().slice(0, 40)}") — GitHub would swallow the lines after it, so write it as text`);
+  const env = {};
+  const tokens = new MarkdownIt({ html: true }).parse(doc, env);
+  const accepted = Object.keys(env.references ?? {}).filter((k) => !k.startsWith("^")); // a `^` one is a line above
+  if (accepted.length)
+    problems.push(`the file defines link reference(s) ${accepted.map((k) => `[${k}]`).join(", ")} — write the link inline`);
+  for (const t of tokens)
+    if (t.type === "inline" && REJECTED_REF_DEF.test(t.content) && !FOOTNOTE_DEF_LINE.test(t.content))
+      problems.push(`line ${t.map[0] + 1} reads as a link reference definition ("${t.content.slice(0, 40)}") — GitHub hides it, the gate shows it, so write it as text`);
+  return problems;
+}
+
+/**
+ * The page files the inventory table SHOWS when rendered: the File cell of every body row
+ * of every table between the begin/end markers, in order. parseRows reads source lines
+ * that start with `|`; a blank line, a comment or any other line between two rows ends the
+ * rendered table, so the rows after it are listed in the source and shown as text on
+ * GitHub (round 13: "45 page files listed" while GitHub showed 2). The two must agree.
+ */
+export function renderedInventory(doc) {
+  const b = doc.indexOf(BEGIN);
+  const e = doc.indexOf(END);
+  if (b < 0 || e < 0 || e < b) return { tables: 0, files: [] };
+  const lineOf = (offset) => doc.slice(0, offset).split("\n").length - 1;
+  const [from, to] = [lineOf(b), lineOf(e)];
+  const tokens = new MarkdownIt({ html: true }).parse(doc, {});
+  let tables = 0;
+  const files = [];
+  let inBody = false;
+  let cell = 0;
+  for (const [i, t] of tokens.entries()) {
+    if (t.type === "table_open" && t.map[0] > from && t.map[0] < to) tables += 1;
+    else if (t.type === "tbody_open") inBody = t.map[0] > from && t.map[0] < to;
+    else if (t.type === "tbody_close") inBody = false;
+    else if (inBody && t.type === "tr_open") cell = 0;
+    else if (inBody && t.type === "td_open" && ++cell === 2) {
+      const file = /^`([^`]+)`$/.exec(tokens[i + 1]?.content.trim() ?? "")?.[1];
+      if (file) files.push(file);
+    }
+  }
+  return { tables, files };
+}
+
 // The demo section's allow-list (round 11): constructs markdown-it and GitHub's
 // cmark-gfm render the same way. The section's own heading is skipped.
 const BLOCKS_OK = new Set(["paragraph_open", "paragraph_close", "ordered_list_open", "ordered_list_close",
@@ -353,6 +417,12 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   const errors = unparsedRoutes.map((u) => `${ADMIN_ROUTES}: ${u} — teach scripts/check-screen-inventory.mjs the shape or rewrite the route`);
   const rows = parseRows(doc);
   if (!rows) return [`${DOC} has no ${BEGIN} … ${END} block`];
+  for (const p of definitionProblems(doc)) errors.push(`${DOC}: ${p}`);
+  const shown = renderedInventory(doc);
+  if (shown.tables !== 1)
+    errors.push(`${DOC}: the inventory block renders ${shown.tables} tables — it must be one table, every row adjacent`);
+  if (shown.files.join("\n") !== rows.map((r) => r.file).join("\n"))
+    errors.push(`${DOC}: the inventory table renders ${shown.files.length} page rows but ${rows.length} are listed in the source — a line between two rows ends the table, and the rows after it render as text`);
   const vm = /launch profile v(\d+)/i.exec(doc);
   if (!vm) errors.push(`${DOC} does not name the launch-profile version it was checked against ("launch profile vN")`);
   else if (Number(vm[1]) !== profileVersion)
@@ -486,6 +556,7 @@ function selfTest() {
     STEP4,
     "5. audit",
   ].join("\n");
+  const INV_ROW = row("signalgrid-app", pageFiles[2], "launch", "launch route");
   const base = { doc: good, pageFiles, statuses, placements, unparsedRoutes: unparsed, profileVersion: 7 };
   const withArg = (flag, value, prose = "") => ({ ...base, doc: good.replace(STEP4, step4({ ...ARGS, [flag]: value }, prose)) });
   const withProse = (prose) => ({ ...base, doc: good.replace(STEP4, step4(ARGS, prose)) });
@@ -609,9 +680,26 @@ function selfTest() {
     // but swallows the following lines on GitHub.
     ...[["[^t]: x", "a footnote definition"], ['[^t]: x "title"', "one with a title"], ["[^1]: x", "a numeric label"], ["[^T]:x", "no space"],
       ["[^t]: http://127.0.0.1:8080", "a URL destination"]].map(([def, what]) =>
-      [`${what} swallowing the argument lines fails (round 12)`, { ...base, doc: good.replace(STEP4, `4. host app:\n\n   ${def}\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, "defines footnote"]),
+      [`${what} swallowing the argument lines fails (round 12)`, { ...base, doc: good.replace(STEP4, `4. host app:\n\n   ${def}\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, "is a footnote definition"]),
     ["the same argument lines without a definition pass (round 12 control)", { ...base, doc: good.replace(STEP4, `4. host app:\n\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, null],
-    ["a plain link reference definition passes (round 12)", { ...base, doc: `${good}\n\n[t]: x\n` }, null],
+    // Round 13: markdown-it records a definition only when its destination validates, so
+    // definitions are found by shape on the raw source, and the rows the table RENDERS
+    // must be the rows the source lists.
+    ...["[^t]: javascript:x", "[^t]: data:text/html,x", "[^t]: vbscript:x", "[^t]: file:///etc", "[^t]: JAVASCRIPT:x",
+      '[^t]: javascript:x "title"', "[^t]: <", "[^t]: <javascript:x>", "[^t]:", "> [^t]: javascript:x", "   [^t]: javascript:x",
+      "- [^t]: javascript:x", "1. > [^t]: javascript:x"].map((def) =>
+      [`an unrecorded footnote definition "${def}" after the begin marker fails (round 13)`, { ...base, doc: good.replace(BEGIN, `${BEGIN}\n${def}`) }, "is a footnote definition"]),
+    ["an unrecorded footnote definition between two rows fails (round 13)", { ...base, doc: good.replace(INV_ROW, `[^t]: javascript:x\n${INV_ROW}`) }, "is a footnote definition"],
+    ["a footnote rendered outside the demo section fails (round 13)", { ...base, doc: good.replace(END, `${END}\n\nSee[^t] here.\n\n[^t]: javascript:x\n    more\n`) }, "is a footnote definition"],
+    ["a footnote definition before the demo heading fails (round 13)", { ...base, doc: good.replace("## The demo path", "[^t]: javascript:x\n\n## The demo path") }, "is a footnote definition"],
+    ["a footnote definition inside a fenced block fails too (round 13)", { ...base, doc: good.replace(END, `${END}\n\n\`\`\`\n[^t]: x\n\`\`\`\n`) }, "is a footnote definition"],
+    ["a [^t] reference with no definition passes outside the demo section (round 13)", { ...base, doc: good.replace(END, `${END}\n\nSee[^t] here.\n`) }, null],
+    ["a link reference definition fails (round 13)", { ...base, doc: `${good}\n\n[t]: x\n` }, "defines link reference"],
+    ["a link reference definition markdown-it rejects fails (round 13)", { ...base, doc: `${good}\n\n[t]: javascript:x\n` }, "reads as a link reference definition"],
+    ["a rejected multi-line-label definition is not step-4 text (round 13)", withArg("-DemoBackendIdentity", undefined, "[x -DemoBackendIdentity nurse.compliant\n   ]: javascript:x"), "reads as a link reference definition"],
+    ["a blank line between two rows fails (round 13)", { ...base, doc: good.replace(INV_ROW, `\n${INV_ROW}`) }, "renders 2 page rows but 5"],
+    ["a comment between two rows fails (round 13)", { ...base, doc: good.replace(INV_ROW, `<!-- x -->\n${INV_ROW}`) }, "renders 2 page rows but 5"],
+    ["a second table in the inventory block fails (round 13)", { ...base, doc: good.replace(INV_ROW, `\n| Surface | File | Status | Placement | Shows |\n| --- | --- | --- | --- | --- |\n${INV_ROW}`) }, "renders 2 tables"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

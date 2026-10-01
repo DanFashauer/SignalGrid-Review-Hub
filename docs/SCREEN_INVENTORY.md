@@ -44,8 +44,12 @@ uses its own renderer, so the demo section may hold only what both show the same
 way: paragraphs, ordered lists, fenced blocks with no language (or `sh`, `bash`,
 `text`), and plain, bold, italic or code text. Anything else fails, as do footnotes,
 dollar-sign math, bare URLs outside code, and any line that reads as a step number
-without being a list item. Footnotes are refused anywhere in this file, including a
-definition line, which GitHub would let swallow the lines after it. The section and
+without being a list item. Anywhere in this file, fenced blocks included, the gate
+refuses any line shaped like a footnote definition (`[^label]:` after any indentation,
+`>` or list marker), whatever follows it: GitHub would let one swallow the lines after
+it, the inventory table included. With no definition, a `[^…]` reference renders as
+plain text, so no footnote renders. Link reference definitions are refused too, and the
+table must render as one table showing every row the source lists. The section and
 its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the steps
 must be numbered in order.
 

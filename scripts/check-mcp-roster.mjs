@@ -49,7 +49,7 @@
 //
 // Fail-closed: an unparseable roster, or one missing `servers`/`grants`, is
 // itself a finding — a broken roster is silence dressed as a green gate.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readlinkSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -82,8 +82,9 @@ export function deriveToolNames(indexSource) {
 //      Binary and large files are swept as latin1, never skipped. The PHRASE half
 //      is a heuristic over wording: a version written BEFORE the word, on the next
 //      line, >40 chars away, two-component, or under another name ("ctx7") is not
-//      seen, nor a bare spec outside an `npx` line; an unrelated x.y.z close after
-//      "Context7" fails (closed).
+//      seen; an unrelated x.y.z close after "Context7" fails (closed). A bare spec
+//      with no `@version` is a finding only on a package-runner line (npx, dlx,
+//      bunx, npm exec/i/install, pnpm add, yarn add) or as a package.json key.
 //      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
 //      what was true on a day, vendored upstream trees (third_party/ — their
 //      configs are upstream's, not our pin), and this gate, whose fixtures plant
@@ -92,12 +93,42 @@ export function deriveToolNames(indexSource) {
 //      reworded out of the sweep's shapes is a finding, not a pass. The roster's
 //      `packageVersion` has no "context7" on its line, so it is held structurally.
 export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
-// The WHOLE token after `@` is held to PINNED exactly, so a range (^ ~ >=), a
-// wildcard (* 4.1.x), a partial (4, 4.0), a prerelease or a tag (latest) is a
-// finding. Trailing sentence punctuation is not part of the token.
+// Known-site presence reads the token loosely; the SWEEP below is an allowlist.
 const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
-const CONTEXT7_BARE_NPX_RE = /\bnpx\b[^\n]*?@upstash\\?\/context7-mcp(?![@\w-])/g;
 const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
+// Every occurrence of the package name. What follows it must be EXACTLY
+// `@<PINNED>` and then a terminator from a closed set — so an empty token (`@`,
+// npm reads it as `*`), a quoted tag (`@'latest'`), a whitespace range
+// (`@4.1.1 - 9.9.9`, `@4.1.1 || ^5`), a range, wildcard, partial, prerelease or
+// tag all fail by construction, not by being listed.
+const CONTEXT7_NAME_RE = /@upstash\\?\/context7-mcp(?![\w-])/gi;
+const PIN_TERMINATOR_RE = /^(?:[.:!?]*(?:$|\s(?!\s*(?:-\s|\|\|)))|[`"')\],;*<])/;
+const PACKAGE_RUNNER_RE = /\b(?:npx|dlx|bunx|npm\s+(?:exec|i|install|add)|pnpm\s+(?:add|i|install)|yarn\s+(?:add|dlx))\b/;
+
+/** Pure: findings for one line's `@upstash/context7-mcp` occurrences (an allowlist on what follows). */
+export function context7SpecFindings(line, pin) {
+  const out = [];
+  for (const m of line.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
+    const rest = line.slice(m.index + m[0].length);
+    if (rest.startsWith("@")) {
+      const after = rest.slice(1);
+      if (after.startsWith(pin) && PIN_TERMINATOR_RE.test(after.slice(pin.length))) continue;
+      const tok = specToken(/^[^\s`"'(),;\]<*]*/.exec(after)[0]);
+      const clean = /^\d+\.\d+\.\d+$/.test(tok) && PIN_TERMINATOR_RE.test(after.slice(after.indexOf(tok) + tok.length));
+      const raw = /^\S{0,24}/.exec(after)[0];
+      const shown = raw === pin || raw === `"${pin}` ? after.slice(0, 24).split(/["`]/)[0].trimEnd() : raw;
+      out.push(clean ? { stale: tok } : { unpinned: shown || "<empty>" });
+      continue;
+    }
+    const dep = /^"\s*:\s*"([^"]*)"/.exec(rest); // package.json `"@upstash/context7-mcp": "<range>"`
+    if (dep) {
+      if (dep[1] !== pin) out.push(/^\d+\.\d+\.\d+$/.test(dep[1]) ? { stale: dep[1] } : { unpinned: dep[1] || "<empty>" });
+      continue;
+    }
+    if (PACKAGE_RUNNER_RE.test(line.slice(0, m.index))) out.push({ bare: true });
+  }
+  return out;
+}
 const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
 export const CONTEXT7_PIN_HISTORY = [
   /^docs\/BUILD_BACKLOG\.md$/,
@@ -138,16 +169,17 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     if (!/context7/i.test(text)) continue;
     text.split("\n").forEach((line, i) => {
       const seen = new Set();
-      for (const m of line.matchAll(new RegExp(CONTEXT7_SPEC_RE.source, CONTEXT7_SPEC_RE.flags))) {
-        swept++;
-        const v = specToken(m[1]);
-        if (v === pin || seen.has(v)) continue;
-        seen.add(v);
-        problems.push(
-          /^\d+\.\d+\.\d+$/.test(v)
-            ? stale(path, i + 1, v)
-            : `${path}:${i + 1}: Context7 spec is UNPINNED (@${v}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`,
-        );
+      if (/upstash\\?\/context7-mcp/i.test(line)) swept++;
+      for (const f of context7SpecFindings(line, pin)) {
+        if (f.stale) {
+          seen.add(f.stale);
+          problems.push(stale(path, i + 1, f.stale));
+        } else if (f.unpinned) {
+          seen.add(f.unpinned);
+          problems.push(`${path}:${i + 1}: Context7 spec is UNPINNED (@${f.unpinned}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        } else {
+          problems.push(`${path}:${i + 1}: Context7 is invoked via a package runner with NO version, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        }
       }
       for (const m of line.matchAll(new RegExp(CONTEXT7_PHRASE_RE.source, CONTEXT7_PHRASE_RE.flags))) {
         swept++;
@@ -155,11 +187,6 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
         seen.add(m[1]);
         problems.push(stale(path, i + 1, m[1]));
       }
-      if (CONTEXT7_BARE_NPX_RE.test(line.replace(/\s+/g, " "))) {
-        swept++;
-        problems.push(`${path}:${i + 1}: Context7 is invoked via npx with NO version, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
-      }
-      CONTEXT7_BARE_NPX_RE.lastIndex = 0;
     });
   }
 
@@ -197,26 +224,44 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   return problems;
 }
 
-/** Pure: one tracked file's bytes as sweepable text — utf8, or latin1 when binary (a NUL byte); never null. */
+/**
+ * Pure: one tracked file's bytes as sweepable text; never null. UTF-8 when there
+ * is no NUL byte. Otherwise (binary or UTF-16) BOTH a latin1 reading and a
+ * UTF-16LE reading (BE byte-swapped first when its BOM says so) are joined, so an
+ * ASCII spec is found whichever encoding wrote it.
+ */
 export function decodeTracked(buf) {
-  return buf.toString(buf.includes(0) ? "latin1" : "utf8");
+  if (!buf.includes(0)) return buf.toString("utf8");
+  const be = buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff;
+  const even = Buffer.from(buf.subarray(0, buf.length - (buf.length % 2)));
+  const le = be ? even.swap16() : even;
+  return `${buf.toString("latin1")}\n${le.toString("utf16le")}`;
 }
 
-/** The sweep's universe: every tracked file, decoded by decodeTracked; none skipped. */
+/**
+ * The sweep's universe: every tracked path. A symlink (git mode 120000) is held
+ * by the link text git tracks, never followed (a link to a FIFO cannot hang the
+ * gate); a gitlink (160000) has no content here. A path deleted in the worktree
+ * is not a copy; any OTHER read error is returned in `unreadable` — reported,
+ * never silently skipped.
+ */
 function loadContext7PinFiles() {
   const files = {};
-  const listed = execSync("git ls-files -z", { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
-  for (const path of listed) {
+  const unreadable = [];
+  const entries = execSync("git ls-files -s -z", { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
+  for (const entry of entries) {
+    const tab = entry.indexOf("\t");
+    const mode = entry.slice(0, 6);
+    const path = entry.slice(tab + 1);
+    if (mode === "160000") continue;
     const abs = resolve(repo, path);
-    let buf;
     try {
-      buf = readFileSync(abs); // one read, then judge the bytes read (no stat-then-read race)
-    } catch {
-      continue; // a tracked file deleted in the worktree is not a copy
+      files[path] = mode === "120000" ? readlinkSync(abs, "utf8") : decodeTracked(readFileSync(abs));
+    } catch (e) {
+      if (e?.code !== "ENOENT") unreadable.push(`${path}: unreadable (${e?.code ?? e}) — its Context7 pin copies cannot be checked`);
     }
-    files[path] = decodeTracked(buf);
   }
-  return files;
+  return { files, unreadable };
 }
 
 /** Pure: the mcp__<server>__ prefixes (lowercased) named in a chunk of markdown. */
@@ -676,7 +721,7 @@ server.registerTool(
 
   // Context7 pin parity, against the REAL tracked tree. Stale versions are built
   // at run time so this file never carries a literal stale pin of its own.
-  const pinFiles = loadContext7PinFiles();
+  const { files: pinFiles, unreadable: pinUnreadable } = loadContext7PinFiles();
   const realInstaller = pinFiles[CONTEXT7_INSTALLER] ?? "";
   const realPin = deriveContext7Pin(realInstaller);
   const OLD = ["4", "0", "4"].join(".");
@@ -685,7 +730,7 @@ server.registerTool(
   const appendTo = (path, line) => ({ [path]: `${pinFiles[path] ?? ""}\n${line}\n` });
   const lineCount = (path) => (pinFiles[path] ?? "").split("\n").length + 1;
   const names = (problems, path, line, v) => problems.some((p) => p.startsWith(`${path}:${line}: Context7 pin copy says ${v},`));
-  checks.push(["the committed tree holds every Context7 pin copy at PINNED", realPin !== null && pinRun().length === 0]);
+  checks.push(["the committed tree holds every Context7 pin copy at PINNED, every tracked path read", realPin !== null && pinRun().length === 0 && pinUnreadable.length === 0]);
 
   const bumped = realInstaller.replace(/(export const PINNED = "@upstash\/context7-mcp@)[^"]+"/, '$19.9.9"');
   const stale = pinRun({}, bumped);
@@ -728,8 +773,36 @@ server.registerTool(
   checks.push([
     "an npx invocation with NO version is named",
     pinRun(appendTo("docs/CI_AND_VALIDATION.md", `run npx -y ${SPEC.slice(0, -1)} for docs`)).some((p) =>
-      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 is invoked via npx with NO version`),
+      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 is invoked via a package runner with NO version`),
     ),
+  ]);
+  // Round-4 shapes, each checked on the pure per-line function: a finding of the right kind, or none.
+  const kind = (line) => context7SpecFindings(line, realPin).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : "bare"));
+  const NAME = SPEC.slice(0, -1);
+  for (const [line, want, what] of [
+    [`npx -y ${SPEC} --flag`, "unpinned", "an empty token after @ (npm reads it as *)"],
+    [`"args": ["-y", "${SPEC}"]`, "unpinned", "an empty token in a JSON args list"],
+    [`npx -y "${SPEC}${realPin} - 9.9.9"`, "unpinned", "a quoted hyphen range starting at PINNED"],
+    [`npx -y "${SPEC}${realPin} || ^5"`, "unpinned", "a quoted || union starting at PINNED"],
+    [`npx ${SPEC}'latest'`, "unpinned", "a shell-quoted tag"],
+    [`"${NAME}": "latest"`, "unpinned", "a package.json dependency on a tag"],
+    [`"${NAME}": "^${realPin}"`, "unpinned", "a package.json range at PINNED"],
+    [`"${NAME}": "${OLD}"`, "stale", "a package.json dependency on a stale version"],
+    [`pnpm dlx ${NAME}`, "bare", "a versionless pnpm dlx call"],
+    [`bunx ${NAME}`, "bare", "a versionless bunx call"],
+    [`npm exec -- ${NAME}`, "bare", "a versionless npm exec call"],
+    [`{"args":["-y","${SPEC.replace("/", "\\/")}latest"]}`, "unpinned", "the escaped-slash JSON form with a tag"],
+    [`**${SPEC}${realPin}**`, null, "the CORRECT pin in markdown bold (no false positive)"],
+    [`<code>${SPEC}${realPin}</code>`, null, "the CORRECT pin in an HTML tag (no false positive)"],
+    [`"packageName": "${NAME}",`, null, "the roster's bare packageName (not a runner, not a dependency)"],
+  ]) {
+    const got = kind(line);
+    checks.push([`${what} → ${want ?? "no finding"}`, want ? got.length === 1 && got[0] === want : got.length === 0]);
+  }
+  const utf16 = Buffer.from(`\ufeffnpx -y ${SPEC}${OLD}\n`, "utf16le");
+  checks.push([
+    "a stale spec in a UTF-16LE file (BOM, NULs) is still named after decodeTracked",
+    pinRun({ "docs/agent/utf16.md": decodeTracked(utf16) }).some((p) => p.startsWith("docs/agent/utf16.md:") && p.includes(`says ${OLD},`)),
   ]);
   checks.push([
     "the CORRECT pin ending a sentence (`…@<PINNED>.`) is not a false positive",
@@ -790,9 +863,10 @@ function main() {
     roster = rosterText; // let check() report the parse failure uniformly
   }
 
-  const pinFiles = loadContext7PinFiles();
+  const { files: pinFiles, unreadable: pinUnreadable } = loadContext7PinFiles();
   const problems = [
     ...check({ roster, indexSource, skillDocs, firstPartyDirs }),
+    ...pinUnreadable,
     ...checkContext7Pin({ installerSource: pinFiles[CONTEXT7_INSTALLER], files: pinFiles }),
   ];
   if (problems.length) {

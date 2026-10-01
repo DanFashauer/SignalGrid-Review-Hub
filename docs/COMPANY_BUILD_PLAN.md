@@ -2448,6 +2448,11 @@ earlier — that is the loop working, not a reason to soften the record.
     clock-tolerance boundary and cross-tenant denial) both executed clean. No
     secret, plaintext-password comparison or unparameterised query exists on this
     surface; logging carries IDs only, never tokens or key material.
+    CORRECTION 2026-10-01 (PR #1220): the "no sibling of the original NaN
+    fail-open family remains" sentence above was false. `verifyJwtRs256` accepted an
+    expired token when `nowMs` or `clockToleranceSec` was NaN (and, for the
+    tolerance, Infinity or any large finite value). Fixed at the library boundary
+    in #1220; the sentence is left as written so the miss stays visible.
 
 83. **An OLDER, more permissive reading from a second connector silently erases a
     newer one — and the outcome flips deny to allow.** — FIXED 2026-08-25,

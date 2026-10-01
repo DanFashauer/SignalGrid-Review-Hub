@@ -24,7 +24,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants as fsConstants, existsSync, fstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -111,6 +111,20 @@ function cli(args: string[], env: Record<string, string>): Promise<Run> {
     const timer = setTimeout(() => child.kill(), 30_000);
     child.on("close", (code) => { clearTimeout(timer); resolveRun({ code: code ?? -1, stdout, stderr }); });
   });
+}
+/** The file's text if `path` is a regular file (not a link), else null — from ONE open handle. */
+function readRegularFileNoFollow(path: string): string | null {
+  let fd: number;
+  try {
+    fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  } catch {
+    return null;
+  }
+  try {
+    return fstatSync(fd).isFile() ? readFileSync(fd, "utf8") : null;
+  } finally {
+    closeSync(fd);
+  }
 }
 function parse(stdout: string): Record<string, unknown> | null {
   try { return JSON.parse(stdout) as Record<string, unknown>; } catch { return null; }
@@ -426,8 +440,11 @@ async function main(): Promise<void> {
     const s7Id = (parse(clobber.stdout)?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"];
     check("a symlink planted at <session>.tmp is not followed: the outside file is untouched",
       clobber.code === 0 && readFileSync(victim, "utf8") === "VICTIM");
+    // One handle, opened without following a link: the type check and the read are on the
+    // same open file, so nothing can be swapped in between them.
+    const s7Text = readRegularFileNoFollow(s7);
     check("…and the session lands as a regular file holding the decision",
-      existsSync(s7) && !lstatSync(s7).isSymbolicLink() && typeof s7Id === "string" && readFileSync(s7, "utf8").includes(s7Id));
+      typeof s7Id === "string" && s7Text !== null && s7Text.includes(s7Id));
     const leak = join(repoRoot, "signalgrid-cli-tmpleak.json");
     const s7b = join(sessionDir, "s7b.json");
     symlinkSync(leak, `${s7b}.tmp`);

@@ -27,7 +27,7 @@
 // `derivedFrom` field. This file never trusts a count the profile states about
 // itself — a self-reported total is the fossil class this repo keeps finding.
 
-import { readdirSync, readFileSync, existsSync, statSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, statSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
@@ -304,6 +304,13 @@ function conditionMet(cond, root = repoRoot) {
   const REAL_DIR = "artifacts/api-server/src/routes";
   const emptyRoot = mkdtempSync(join(tmpdir(), "launch-profile-dir-"));
   mkdirSync(join(emptyRoot, "empty"));
+  // Fixtures that pin the rule itself, not just reachability: every needle in ONE
+  // file, comments do not count, only .ts files are read, and `root` is honoured.
+  mkdirSync(join(emptyRoot, "split"));
+  writeFileSync(join(emptyRoot, "split", "a.ts"), "export const alpha = 1;\n");
+  writeFileSync(join(emptyRoot, "split", "b.ts"), "export const beta = 2;\n");
+  writeFileSync(join(emptyRoot, "split", "c.ts"), "// gamma\n/* delta */\nexport {};\n");
+  writeFileSync(join(emptyRoot, "split", "d.md"), "epsilon\n");
   const cases = [
     [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["Router"] }), true, "real directory, real needle"],
     [conditionMet({ dir: REAL_DIR, anyFileContainsAll: ["\u0000no-such-needle\u0000"] }), false, "real directory, absent needle"],
@@ -313,6 +320,12 @@ function conditionMet(cond, root = repoRoot) {
     [conditionMet({ dir: `${REAL_DIR}/v1.ts`, anyFileContainsAll: ["Router"] }), false, "a file named as the directory"],
     [conditionMet({ dir: "no/such/dir-for-self-test", anyFileContainsAll: ["Router"] }), false, "missing directory"],
     [conditionMet({ dir: "empty", anyFileContainsAll: ["Router"] }, emptyRoot), false, "empty directory"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["alpha"] }, emptyRoot), true, "fixture directory under the given root"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["alpha", "beta"] }, emptyRoot), false, "needles split across two files"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["gamma"] }, emptyRoot), false, "needle only in a // comment"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["delta"] }, emptyRoot), false, "needle only in a /* */ comment"],
+    [conditionMet({ dir: "split", anyFileContainsAll: ["epsilon"] }, emptyRoot), false, "needle only in a non-.ts file"],
+    [conditionMet({ dir: "split", anyFileContainsAll: "alpha" }, emptyRoot), false, "needles given as a string, not a list"],
   ];
   rmSync(emptyRoot, { recursive: true, force: true });
   const wrong = cases.filter(([r, want]) => r.met !== want);
@@ -323,7 +336,7 @@ function conditionMet(cond, root = repoRoot) {
         "\n  A closedWhen dir condition cannot be trusted until the evaluator reads these correctly.",
     );
   }
-  console.log(`  dir-condition self-test: ${cases.length}/${cases.length} (real dir MET; missing, empty, not-a-dir and every vacuous needle list NOT MET)`);
+  console.log(`  dir-condition self-test: ${cases.length}/${cases.length} (real dir MET; missing, empty, not-a-dir, vacuous needles, split needles, comment-only, non-.ts NOT MET)`);
 }
 
 for (const gap of GAPS) {

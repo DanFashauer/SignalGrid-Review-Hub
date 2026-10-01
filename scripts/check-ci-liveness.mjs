@@ -198,6 +198,11 @@ const headerOf = (headers, k) =>
 export function rateLimitWaitMs(headers, nowMs) {
   const retryAfter = Number(headerOf(headers, "retry-after"));
   if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
+  // GitHub stamps x-ratelimit-reset (the end of the hourly window) on EVERY response,
+  // a 502 included. It means "wait until then" only when the quota is spent; read
+  // otherwise, every transient 5xx became "clears in ~3600s, not retried" (2026-09-30,
+  // PR #1237: 502 with remaining=4999 failed the gating job twice).
+  if (headerOf(headers, "x-ratelimit-remaining") !== "0") return null;
   const reset = Number(headerOf(headers, "x-ratelimit-reset"));
   if (Number.isFinite(reset) && reset > 0) return Math.max(0, reset * 1000 - nowMs);
   return null;
@@ -384,6 +389,14 @@ async function api(path) {
     await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
     if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
   });
+  await t("a 502 carrying a FULL quota's reset header is retried on the backoff, not failed as a rate limit", async () => {
+    const h = new Map([["x-ratelimit-remaining", "4999"], ["x-ratelimit-reset", String(T0 / 1000 + 3600)]]); h.get = Map.prototype.get.bind(h);
+    const c = counting([{ ok: false, status: 502, statusText: "Bad Gateway", headers: h }, ok({ recovered: 1 })]);
+    const r = recordingWait();
+    const got = await apiWith(c.f, "/x", { wait: r.wait, now: () => T0 });
+    if (!got.recovered || c.calls() !== 2) throw new Error(`calls=${c.calls()}`);
+    if (r.waits[0] !== API_BACKOFF_MS[0]) throw new Error(`waited ${JSON.stringify(r.waits)}, expected [${API_BACKOFF_MS[0]}]`);
+  });
   await t("describeRateLimit: no headers, no note", () => {
     if (describeRateLimit(null) !== "" || describeRateLimit(new Map()) !== "") throw new Error("note on nothing");
   });
@@ -496,6 +509,44 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
   }
 }
 
+// Self-test for the stale-listing confirmation — a fake API, no network.
+{
+  const NOW = Date.parse("2026-09-30T14:30:00Z");
+  const jobsFor = (at) => ({ jobs: [{ name: `${SWEEP_JOB_PREFIX} (0)`, conclusion: "success", completed_at: at }] });
+  const fake = (primaryRuns, confirmRuns) => {
+    const calls = [];
+    const f = async (path) => {
+      calls.push(path);
+      const m = path.match(/\/runs\/(\d+)\/jobs/);
+      if (m) return jobsFor(m[1] === "1" ? "2026-09-03T16:50:00Z" : "2026-09-29T14:20:00Z");
+      return { workflow_runs: path.includes("created=") ? confirmRuns : primaryRuns };
+    };
+    return { f, calls };
+  };
+  const stale = [{ id: 1, created_at: "2026-09-03T16:38:00Z" }];
+  const fresh = [{ id: 2, created_at: "2026-09-29T14:06:00Z" }];
+  const run = async (p, c) => {
+    const fk = fake(p, c);
+    const got = await resolveSweep(fk.f, { nowMs: NOW, staleAfterHours: 48, log: () => {} });
+    return { iso: got?.iso ?? null, listings: fk.calls.filter((x) => !x.includes("/jobs")).length };
+  };
+  const cases = [
+    ["a STALE first listing is confirmed against a second, which carries the fresh success", await run(stale, fresh), { iso: "2026-09-29T14:20:00Z", listings: 2 }],
+    ["a fresh first listing is never re-queried", await run(fresh, stale), { iso: "2026-09-29T14:20:00Z", listings: 1 }],
+    ["an EMPTY second listing leaves the red verdict standing", await run(stale, []), { iso: "2026-09-03T16:50:00Z", listings: 2 }],
+    ["an equally stale second listing leaves the red verdict standing", await run(stale, stale), { iso: "2026-09-03T16:50:00Z", listings: 2 }],
+    ["the confirming query is a DIFFERENT URL, carrying the created>= window", listingPath({ sinceIso: "2026-09-28T14:30:00Z" }).endsWith("&created=%3E%3D2026-09-28T14%3A30%3A00Z") && listingPath() !== listingPath({ sinceIso: "x" }), true],
+  ];
+  const bad = cases.filter(([, got, want]) => JSON.stringify(got) !== JSON.stringify(want));
+  if (bad.length > 0) {
+    console.error(
+      "✗ SELF-TEST FAILED — the stale-listing confirmation no longer behaves as required:\n" +
+        bad.map(([name, got]) => `    · ${name}: got ${JSON.stringify(got)}`).join("\n"),
+    );
+    process.exit(1);
+  }
+}
+
 /**
  * WHY THIS RETURNS A SHAPE AND NOT `null` (fixed 2026-09-14, from a live false red).
  *
@@ -526,10 +577,42 @@ export function latestSweepSuccessInRun(jobs, prefix = SWEEP_JOB_PREFIX) {
  * and nothing to read back. That silence is what made the live failure take an API
  * cross-check to diagnose instead of a glance at the log.
  */
-async function lastSweepSuccess() {
-  const runs = await api(
-    `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`,
-  );
+export function listingPath({ sinceIso } = {}) {
+  const base = `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=${RUNS_TO_INSPECT}&status=completed`;
+  return sinceIso ? `${base}&created=${encodeURIComponent(`>=${sinceIso}`)}` : base;
+}
+
+/**
+ * A STALE LISTING IS NOT A DARK SWEEP (2026-09-30). The runs listing came back frozen
+ * at 2026-09-03 on PR #1237 (twice), heartbeat #1306 and tick #1300, reading "last
+ * success 644h ago", while the same query from outside CI returned the 2026-09-29
+ * success at index 0. A re-run passed each time. So a red verdict is confirmed ONCE
+ * against a differently-shaped query (a `created>=` window, a different cache key)
+ * before it fails the build. Only a sweep success read from the jobs API on the
+ * second listing can overturn it; an empty or equally stale second listing leaves
+ * the first verdict standing. Fail-closed is unchanged: nothing here turns a red
+ * into a pass without positive evidence.
+ */
+export async function resolveSweep(apiFn, { nowMs, staleAfterHours, log = console.log }) {
+  const first = await lastSweepSuccess(apiFn, listingPath(), log);
+  const firstVerdict = evaluateLiveness({
+    lastSuccessIso: first?.status === "found" ? first.iso : null,
+    nowMs,
+    staleAfterHours,
+  });
+  if (firstVerdict.ok || first?.status === "could-not-look") return first;
+  const sinceIso = new Date(nowMs - staleAfterHours * 3_600_000).toISOString().slice(0, 19) + "Z";
+  log(`  · confirming a red verdict against a second listing (created >= ${sinceIso})`);
+  const second = await lastSweepSuccess(apiFn, listingPath({ sinceIso }), log);
+  if (second?.status === "found" && evaluateLiveness({ lastSuccessIso: second.iso, nowMs, staleAfterHours }).ok) {
+    log("  · the first listing was STALE; the second carries a fresh sweep success");
+    return second;
+  }
+  return first;
+}
+
+async function lastSweepSuccess(apiFn = api, path = listingPath(), log = console.log) {
+  const runs = await apiFn(path);
   // WHAT THE WINDOW ACTUALLY CONTAINED. This line exists because on 2026-09-17 the
   // gate returned OPPOSITE verdicts on the identical commit 19704f65 — attempt 1
   // said the sweep had been dark 291h, attempt 2 passed, nothing pushed between
@@ -548,7 +631,7 @@ async function lastSweepSuccess() {
   // for a reason its own output cannot express is a gate nobody can repair.
   const list = runs.workflow_runs ?? [];
   let runsWithSweep = 0;
-  console.log(
+  log(
     `  window: ${list.length} completed run(s) of ${WORKFLOW_FILE} — ` +
       (list.length === 0
         ? "EMPTY (the API returned no runs at all)"
@@ -556,11 +639,11 @@ async function lastSweepSuccess() {
   );
 
   for (const run of list) {
-    const jobs = await api(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
+    const jobs = await apiFn(`/repos/${REPO}/actions/runs/${run.id}/jobs?per_page=30`);
     const sweep = latestSweepSuccessInRun(jobs.jobs);
     // One line per INSPECTED run — including the ones carrying no sweep job, which
     // is precisely the case a red verdict most needs evidence for.
-    console.log(
+    log(
       `  · run ${run.id} (${String(run.created_at ?? "").slice(0, 16)}Z): ` +
         (sweep.present ? `${sweep.succeeded}/${sweep.total} sweep shard(s) succeeded` : "no sweep job in this run"),
     );
@@ -619,7 +702,7 @@ console.log("CI liveness — a sweep that stops running must fail a build, not g
 
 let found;
 try {
-  found = await lastSweepSuccess();
+  found = await resolveSweep(api, { nowMs: Date.now(), staleAfterHours: STALE_AFTER_HOURS });
 } catch (err) {
   const msg = `could not reach the GitHub Actions API: ${err.message}`;
   if (IN_CI) {

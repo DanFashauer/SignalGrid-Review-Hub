@@ -13,6 +13,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uncoveredLines } from "./lib/ci-jobs.mjs";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
+import { classifyStep } from "./lib/preflight-verdict.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const quick = process.argv.includes("--quick");
@@ -298,6 +299,10 @@ const STEPS = [
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
   { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  // Plan row 59 + backlog "grype || true": the corepack pnpm fetch is retried and
+  // pinned, the CVE-closing corepack-cache strip stays, grype cannot swallow a crash.
+  { name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs"] },
+  { name: "Image build hardening self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs", "--self-test"] },
   { name: "Publication boundary (nothing reaches a public repo unclassified)", cmd: ["node", "scripts/check-publication-boundary.mjs"] },
   { name: "API collection (a committed request must name a served route)", cmd: ["node", "scripts/check-api-collection.mjs"] },
   { name: "Deployment runbook (the documented path must be the real one)", cmd: ["node", "scripts/check-deployment-runbook.mjs"] },
@@ -306,6 +311,8 @@ const STEPS = [
   { name: "Decision palette self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-decision-palette.mjs", "--self-test"] },
   { name: "Verdict tone source (a verdict may not pick its own colour inline)", cmd: ["node", "scripts/check-verdict-tone-source.mjs"] },
   { name: "Verdict tone source self-test (the gate can actually fail)", cmd: ["node", "scripts/check-verdict-tone-source.mjs", "--self-test"] },
+  { name: "PWA fixture labels (control-plane data on the PWA says it is a fixture)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs"] },
+  { name: "PWA fixture labels self-test (the gate can actually fail)", cmd: ["node", "scripts/check-pwa-fixture-labels.mjs", "--self-test"] },
   { name: "Decision palette (one palette, every tree, AA everywhere)", cmd: ["node", "scripts/check-decision-palette.mjs"] },
   { name: "Reason codes self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-reason-codes.mjs", "--self-test"] },
   { name: "Reason codes (the engine's vocabulary is the catalog's and the contract's)", cmd: ["node", "scripts/check-reason-codes.mjs"] },
@@ -421,6 +428,15 @@ const STEPS = [
   { name: "Launch-proof bindings (every launch item names real, per-push proofs)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Plan row 172: the connector-emulator smoke's evidence manifest used to TYPE six
+  // public-safety properties; it now emits this script's measurement, and this gate
+  // fails if the workflow ever types one again or a property stops holding.
+  { name: "Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs", "--self-test"] },
+  { name: "Connector-emulator evidence (the manifest asserts only what a step measured)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs"] },
+  // Plan row 171: the daily rot check (scheduled-verification.yml) runs THIS file whole
+  // instead of a hand-picked tenth of it; the gate fails if a named gate grows back there.
+  { name: "Scheduled-verification scope self-test (a hand-picked nightly gate must fail)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs", "--self-test"] },
+  { name: "Scheduled-verification scope (the daily rot check runs preflight whole)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs"] },
   // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was
   // allowed and whether it is bounded; this asks whether it went out SIGNED. `if (secret)
   // { sign }` skipped the signature on an absent secret and reported 'sent' — a guard with
@@ -516,6 +532,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Resource-scan binding (an intake row citing a scan file is backed by it)", cmd: ["node", "scripts/check-resource-scan-binding.mjs"] },
+  { name: "Resource-scan binding self-test (the gate can actually fail)", cmd: ["node", "scripts/check-resource-scan-binding.mjs", "--self-test"] },
   { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
   { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
   { name: "Memory freshness (an aging 'as of' claim is named; stale is reported, registry rot is fatal)", cmd: ["node", "scripts/check-memory-freshness.mjs"] },
@@ -598,7 +616,7 @@ const STEPS = [
   { name: "API integration test (boots the server)", cmd: ["pnpm", "run", "test:api"] },
   // The review console's own node:test suite (policy-test-set status, facility-graph layout);
   // the test-execution gate refused these files while nothing reached them.
-  { name: "Console unit tests (policyTests, facilityGraphLayout, outcomeTone)", cmd: ["pnpm", "run", "test:console"] },
+  { name: "Console + PWA unit tests (policyTests, facilityGraphLayout, outcomeTone, signal-tone)", cmd: ["pnpm", "run", "test:console"] },
   // The MCP server's own node:test suite (wire-visible tool/resource contract +
   // read-only annotations, incl. the not-read-only bruno_collection_run). It sat
   // executed by no lane until 2026-09-02; wired here and in CI beside the
@@ -706,8 +724,11 @@ const STEPS = [
   },
   // Mirrors the supply-chain job's "SBOM is committed and up to date" gate:
   // regenerate the CycloneDX SBOM and fail if it drifted (e.g. a new dependency
-  // was added but the committed SBOM wasn't regenerated).
-  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
+  // was added but the committed SBOM wasn't regenerated). `git ls-files --error-unmatch`
+  // FIRST, like the sync steps above and supply-chain.yml: `git diff --exit-code <path>`
+  // is silent for an untracked path. check-preflight-ci-parity.mjs enforces this for every
+  // such step (unguardedDiffSteps).
+  { name: "CycloneDX SBOM committed in sync", cmd: ["bash", "-c", "git ls-files --error-unmatch artifacts/sbom/cyclonedx.json >/dev/null && pnpm run sbom && git diff --exit-code -- artifacts/sbom/cyclonedx.json"] },
   { name: "Licence policy self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-licence-policy.mjs", "--self-test"] },
   { name: "Licence policy (every component's licence resolves to a declared class)", cmd: ["node", "scripts/check-licence-policy.mjs"] },
   // BUILD_BACKLOG.md: "Vendor-doc drift is unwatched". Decided: a report-only
@@ -727,12 +748,17 @@ const STEPS = [
   // Actions API, so without ANY GITHUB_TOKEN it prints SKIPPED and preflight classifies that
   // as a self-skip, never a pass. GH_TOKEN is blanked so a gh-CLI token in a dev shell
   // cannot turn the step into a live run the GITHUB_TOKEN classification does not expect.
+  // With the token set it still exits 0 on BOTH report-only outcomes, so neither is a bare
+  // "ok" (scripts/lib/preflight-verdict.mjs): `REPORTED — could not read …` is UNVERIFIED,
+  // and a line matching `surface` is a REPORTED finding, printed with the verdict. Declaring
+  // `surface` is what opts a step in — a step without one (the self-tests) is never UNVERIFIED.
   { name: "Mainline workflow red streaks self-test (the verdict and its own-error paths must be able to fail)", cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs", "--self-test"] },
   {
     name: "Mainline workflow red streaks (report-only — names every non-gating workflow red 3+ runs in a row; own errors REPORTED here, fatal only in CI)",
     cmd: ["node", "scripts/check-mainline-workflow-streaks.mjs"],
     selfSkipsWithout: "GITHUB_TOKEN",
     env: { GH_TOKEN: "" },
+    surface: /red streak\(s\) of \d+\+ .* REPORTED, not fatal/,
   },
 ];
 
@@ -764,30 +790,47 @@ for (const step of STEPS) {
     env: { ...process.env, ...(step.env ?? {}) },
   });
   const combined = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  // A proof that SELF-SKIPS prints one line and exits 0. Exit 0 is not evidence:
-  // nothing it claims to prove was executed. Classify it rather than tick it.
-  if (r.status === 0 && step.selfSkipsWithout && !process.env[step.selfSkipsWithout]) {
-    if (!/\bSKIPPED\b/.test(combined)) {
-      // The declaration and the behaviour disagree. Either the proof stopped
-      // self-skipping (drop the marker) or it ran a real path with no database,
-      // which is worse. Fail rather than guess — an unexplained exit 0 from a gate
-      // declared unable to run here is exactly the unearned green this classifies.
-      console.log("FAILED");
-      console.error(
-        `\n─── ${step.name} ───\n` +
-          `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
-          `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
-      );
-      failed = step.name;
-      break;
-    }
+  // Exit 0 is not evidence. A proof that SELF-SKIPS prints one line and exits 0; a report-only
+  // check that could not read its input, or found something it does not fail on, exits 0
+  // too. Classify each rather than tick it (scripts/lib/preflight-verdict.mjs).
+  const c = classifyStep({
+    status: r.status,
+    combined,
+    selfSkipsWithout: step.selfSkipsWithout,
+    envSet: Boolean(step.selfSkipsWithout && process.env[step.selfSkipsWithout]),
+    surface: step.surface,
+  });
+  if (c.verdict === "skipped-env") {
     console.log(`SELF-SKIPPED (${step.selfSkipsWithout} unset — not run, not passed)`);
     results.push({ name: step.name, status: "skipped-db", env: step.selfSkipsWithout });
     continue;
   }
-  if (r.status === 0) {
+  if (c.verdict === "unverified") {
+    console.log(`NOT VERIFIED — ${c.line}`);
+    results.push({ name: step.name, status: "unverified", line: c.line });
+    continue;
+  }
+  if (c.verdict === "reported") {
+    console.log(`ok — REPORTED: ${c.line}`);
+    results.push({ name: step.name, status: "reported", line: c.line });
+    continue;
+  }
+  if (c.verdict === "ok") {
     console.log("ok");
     results.push({ name: step.name, status: "ok" });
+  } else if (r.status === 0) {
+    // The declaration and the behaviour disagree: it exited 0 with its input unset and no
+    // SKIPPED. Either the proof stopped self-skipping (drop the marker) or it ran a real
+    // path with no database, which is worse. Fail rather than guess — an unexplained exit 0
+    // from a gate declared unable to run here is exactly the unearned green this classifies.
+    console.log("FAILED");
+    console.error(
+      `\n─── ${step.name} ───\n` +
+        `declared selfSkipsWithout: "${step.selfSkipsWithout}" (unset here) but exited 0 without printing SKIPPED.\n` +
+        `Either the proof no longer self-skips — remove the marker — or it ran without the input it needs.\n`,
+    );
+    failed = step.name;
+    break;
   } else {
     console.log("FAILED");
     // Surface the tail of the failing output so the cause is visible inline.
@@ -800,11 +843,13 @@ for (const step of STEPS) {
 
 console.log("\n── preflight summary ──");
 for (const r of results) {
-  const mark = r.status === "ok" ? "✓" : "–";
+  const mark = r.status === "ok" || r.status === "reported" ? "✓" : "–";
   const note =
     r.status === "skipped" ? " (skipped)"
     : r.status === "unavailable" ? " (UNAVAILABLE on this platform — not run, not passed)"
     : r.status === "skipped-db" ? ` (SELF-SKIPPED — ${r.env} unset; not run, not passed)`
+    : r.status === "unverified" ? ` (NOT VERIFIED — ${r.line})`
+    : r.status === "reported" ? ` (REPORTED — ${r.line})`
     : "";
   console.log(`  ${mark} ${r.name}${note}`);
 }
@@ -839,7 +884,20 @@ const unavailable = results.filter((r) => r.status === "unavailable");
 // that decides for itself that it cannot run, says SKIPPED, and exits 0. It was
 // indistinguishable from a pass in every line preflight printed.
 const selfSkipped = results.filter((r) => r.status === "skipped-db");
+// Fourth and fifth: a report-only check that exits 0 having read nothing (`unverified`), or
+// having found something it does not fail on (`reported`). Both used to print a bare "ok".
+const unverified = results.filter((r) => r.status === "unverified");
+const reported = results.filter((r) => r.status === "reported");
 console.log(`\nPreflight PASSED${quick ? " (quick — heavy builds skipped)" : ""} — everything it runs is green.`);
+if (unverified.length > 0) {
+  console.log(`\n  ${unverified.length} step(s) exited 0 WITHOUT verifying what they check — they could not read their input:`);
+  for (const r of unverified) console.log(`    · ${r.name}\n        ${r.line}`);
+  console.log("    Nothing they check was verified by this run. CI fails these on their own error.");
+}
+if (reported.length > 0) {
+  console.log(`\n  ${reported.length} step(s) REPORTED a finding and exited 0 — report-only, not a clean result:`);
+  for (const r of reported) console.log(`    · ${r.name}\n        ${r.line}`);
+}
 if (selfSkipped.length > 0) {
   // WITH the verdict, for the same reason as the block below: the caveat has to be
   // where the decision to push is made, not in a comment nobody opens.

@@ -16,7 +16,12 @@
 //     canonical lines: guarded install (`command -v` test, then `apt-get -o
 //     DPkg::Lock::Timeout=N` on BOTH update and install, N >= 60), a fail-closed
 //     re-check ending in `exit 1`, `shellcheck --version`, and (CI lint step) the lint;
-//   · NO other line in any .github/workflows/*.yml may apt/apt-get-install shellcheck.
+//   · NO other apt/apt-get install, in any .github/workflows/*.yml or composite action
+//     (.github/actions/**), may name shellcheck or hide its package list behind a `$`
+//     variable. Backslash-continued commands are joined before the scan, so a package
+//     list split across lines is still seen.
+// KNOWN LIMIT: a workflow that calls a script which itself installs shellcheck is not
+// followed (the script is not workflow text); the pinned steps are the supported path.
 // A missing or unparseable step FAILS.
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -109,27 +114,60 @@ export function verdictFor(yaml, spec) {
   if (steps.length === 0) return [`step "${spec.name}" not found in ${spec.file}`];
   if (steps.length > 1) return [`step "${spec.name}" appears ${steps.length} times in ${spec.file}; it must be unique`];
   const problems = stepProblems(steps[0], spec).map((p) => `${spec.file}: ${p}`);
-  // No other line may install shellcheck.
-  lines.forEach((l, i) => {
-    if (i >= steps[0].start && i < steps[0].end) return;
-    const c = stripComment(l);
-    if (/\bapt(-get)?\b.*\bshellcheck\b/.test(c) || /\bshellcheck\b.*\bapt(-get)?\b.*install/.test(c)) {
-      problems.push(`${spec.file}:${i + 1}: a shellcheck install outside the pinned step: \`${c}\``);
-    }
-  });
+  // No other command may install shellcheck.
+  problems.push(...strayInstallsIn(yaml, spec.file, steps[0]));
   return problems;
 }
 
-/** Any workflow file NOT pinned must not install shellcheck at all. */
+/** Join `\` continuations: [{ n (1-based first line), text (comment-stripped) }]. */
+function joinedStatements(lines) {
+  const out = [];
+  let cur = null;
+  lines.forEach((l, i) => {
+    const t = stripComment(l);
+    if (cur) { cur.text += " " + t.replace(/\\$/, "").trim(); cur.open = t.endsWith("\\"); if (!cur.open) { out.push(cur); cur = null; } return; }
+    if (t.endsWith("\\")) { cur = { n: i + 1, text: t.replace(/\\$/, "").trim(), open: true }; return; }
+    if (t) out.push({ n: i + 1, text: t });
+  });
+  if (cur) out.push(cur);
+  return out;
+}
+
+const APT_INSTALL = /\bapt(-get)?\b.*\binstall\b/;
+
+/** apt installs outside `skip` (a pinned step's line range) that name shellcheck or hide the package list. */
+function strayInstallsIn(text, file, skip) {
+  const lines = text.split("\n");
+  const out = [];
+  for (const st of joinedStatements(lines)) {
+    if (skip && st.n - 1 >= skip.start && st.n - 1 < skip.end) continue;
+    if (APT_INSTALL.test(st.text) && (/\bshellcheck\b/.test(st.text) || /\$/.test(st.text))) {
+      out.push(`${file}:${st.n}: an unpinned apt install that names shellcheck or hides its package list behind a variable: \`${st.text}\``);
+    }
+  }
+  return out;
+}
+
+function listFiles(dir, readDir, rel = "") {
+  const out = [];
+  for (const e of readDir(join(dir, rel), { withFileTypes: true })) {
+    const r = join(rel, e.name);
+    if (e.isDirectory()) out.push(...listFiles(dir, readDir, r));
+    else if (/\.ya?ml$/.test(e.name)) out.push(r);
+  }
+  return out;
+}
+
+/** Every workflow file and composite action NOT pinned. */
 function strayInstalls(dir, readFile, pinnedFiles) {
   const out = [];
-  for (const f of readdirSync(join(dir, ".github/workflows")).filter((x) => /\.ya?ml$/.test(x))) {
-    const rel = `.github/workflows/${f}`;
+  const files = [];
+  for (const base of [".github/workflows", ".github/actions"]) {
+    try { files.push(...listFiles(dir, readdirSync, base)); } catch { /* no such directory */ }
+  }
+  for (const rel of files) {
     if (pinnedFiles.includes(rel)) continue;
-    readFile(rel).split("\n").forEach((l, i) => {
-      const c = stripComment(l);
-      if (/\bapt(-get)?\b.*\bshellcheck\b/.test(c)) out.push(`${rel}:${i + 1}: an unpinned shellcheck install: \`${c}\``);
-    });
+    out.push(...strayInstallsIn(readFile(rel), rel, null));
   }
   return out;
 }
@@ -172,6 +210,8 @@ function selfTest() {
     ["shell: sh {0}", wrap(spec.name, good, "        shell: sh {0}\n")],
     ["missing step", "jobs: {}\n"],
     ["duplicate step", wrap(spec.name, good) + wrap(spec.name, good).split("\n").slice(3).join("\n")],
+    ["continued install naming shellcheck in a new step", wrap(spec.name, good) + "      - name: other\n        run: |\n          sudo apt-get install -y -qq jq \\\n            shellcheck\n"],
+    ["env-var indirection in a new step", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get install -y -qq $PKGS\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -190,8 +230,19 @@ function selfTest() {
   const sGood = good.replace("\nnode scripts/check-shell.mjs", "");
   if (verdictFor(wrap(s2.name, sGood, "        timeout-minutes: 5\n"), s2).length !== 0) { console.error("✗ self-test: scheduled canonical shape FAILED"); bad++; }
   if (verdictFor(wrap(s2.name, "sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck", "        timeout-minutes: 5\n"), s2).length === 0) { console.error("✗ self-test: scheduled bare shape PASSED"); bad++; }
+  // Unpinned files (workflows and composite actions) go through strayInstallsIn directly.
+  const stray = (t) => strayInstallsIn(t, "x.yml", null).length > 0;
+  const strayCases = [
+    ["composite action with a bare shellcheck install", "runs:\n  using: composite\n  steps:\n    - run: sudo apt-get install -y shellcheck\n      shell: bash\n", true],
+    ["unpinned continued install", "      - run: |\n          sudo apt-get install -y -qq jq \\\n            shellcheck\n", true],
+    ["unpinned $PKGS indirection", "      - run: sudo apt-get install -y $PKGS\n", true],
+    ["unrelated continued install is NOT flagged (desktop.yml's real shape)", "        run: |\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            patchelf\n", false],
+  ];
+  for (const [label, t, want] of strayCases) {
+    if (stray(t) !== want) { console.error(`✗ self-test: stray-install case wrong: ${label}`); bad++; }
+  }
   if (bad) process.exit(1);
-  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail`);
+  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install cases behave`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

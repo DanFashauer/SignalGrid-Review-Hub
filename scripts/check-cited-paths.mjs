@@ -25,6 +25,11 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { repoKeyFromRemote } from "./lib/remote-key.mjs";
+
+// Re-exported: the parser lives in lib/remote-key.mjs (pure, loadable without git);
+// scan-estate-citations and this file's self-test reach it through here as before.
+export { repoKeyFromRemote };
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -293,46 +298,6 @@ export function citationsIn(text, pattern) {
 /** Pure: which citations do not resolve, given an existence oracle. */
 export function missingIn(text, exists, pattern) {
   return citationsIn(text, pattern).filter((p) => !exists(p));
-}
-
-/**
- * Pure: the identity a remote URL implies, as `{ key, hasOwner }`. Handles the https
- * form (`https://host/owner/repo`), the scp-style ssh form (`git@host:owner/repo`), the
- * `ssh://` form, an optional `.git` suffix and a trailing slash.
- *
- * `hasOwner` is the load-bearing half. A hosted remote yields `owner/repo` and
- * `hasOwner: true` — a full identity. A LOCAL PATH origin (`/home/user/Repo`,
- * `file:///srv/git/Repo`, `../Repo`) has no owner in any meaningful sense: every
- * segment before the last is a filesystem accident of that machine, so the key
- * degrades to the name alone and `hasOwner: false` tells the caller to LABEL it as a
- * basename fallback rather than claim an identity it did not read.
- *
- * Returns undefined for anything it cannot read, so the caller falls back rather than
- * inventing a key.
- */
-export function repoKeyFromRemote(url) {
-  if (typeof url !== "string") return undefined;
-  const trimmed = url.trim().replace(/\/+$/, "").replace(/\.git$/, "");
-  if (!trimmed) return undefined;
-
-  // A hosted remote — the only shape that carries an owner. Anything with a scheme that
-  // is not `file:`, or the scp-style `user@host:owner/repo`, is hosted.
-  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed)?.[1]?.toLowerCase();
-  const scp = /^[^/]+@[^/:]+:(.+)$/.exec(trimmed);
-  const isLocalPath =
-    scheme === "file" || (!scheme && !scp && (trimmed.startsWith("/") || trimmed.startsWith(".") || trimmed.startsWith("~")));
-
-  const segs = (scp ? scp[1] : trimmed.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "")).split("/").filter(Boolean);
-  const name = segs[segs.length - 1];
-  if (!name) return undefined;
-
-  // For a hosted URL the host is segs[0] when there was a scheme; drop it, then the
-  // segment immediately before the name is the owner.
-  const path = scheme && !scp ? segs.slice(1) : segs;
-  const owner = path.length >= 2 ? path[path.length - 2] : undefined;
-
-  if (isLocalPath || !owner) return { key: name, hasOwner: false };
-  return { key: `${owner}/${name}`, hasOwner: true };
 }
 
 /**
@@ -859,6 +824,43 @@ function selfTest() {
       const b = repoKeyFromRemote("file:///srv/git/SignalGrid-Review-Hub.git");
       const c = repoKeyFromRemote("../SignalGrid-Review-Hub");
       return [a, b, c].every((k) => k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false);
+    })(),
+  ]);
+  // PR #1356's refuter: `git remote set-url origin DanFashauer/SignalGrid-Review-Hub` stores a
+  // bare relative path, which git resolves as a LOCAL DIRECTORY — and this parser read it as a
+  // hosted owner/repo (it only called a path local when it began with / . or ~). Hosted means
+  // `scheme://` (not file:) or `user@host:path`; everything else is a path.
+  checks.push([
+    "a remote that is neither scheme:// nor user@host:path is a LOCAL PATH however much it looks like owner/repo",
+    [
+      "DanFashauer/SignalGrid-Review-Hub", // bare relative path
+      "mirrors/DanFashauer/SignalGrid-Review-Hub",
+      "DanFashauer/SignalGrid-Review-Hub.git",
+      "evil.example:x/DanFashauer/SignalGrid-Review-Hub.git", // scp form with no user
+      "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
+      "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
+    ].every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false;
+    }),
+  ]);
+  checks.push([
+    "a hosted remote also reports its host and path depth, so a caller can demand github.com/owner/name exactly",
+    (() => {
+      const at = (u) => {
+        const k = repoKeyFromRemote(u);
+        return `${k?.hasOwner}|${k?.host}|${k?.depth}`;
+      };
+      return (
+        at("https://github.com/DanFashauer/X") === "true|github.com|2" &&
+        at("git@github.com:DanFashauer/X.git") === "true|github.com|2" &&
+        at("ssh://git@GitHub.com:22/DanFashauer/X") === "true|github.com|2" &&
+        at("https://user@github.com:443/DanFashauer/X/") === "true|github.com|2" &&
+        at("https://gitlab.com/DanFashauer/X") === "true|gitlab.com|2" &&
+        at("https://github.com/evil/DanFashauer/X") === "true|github.com|3" &&
+        // the cloud sandbox's proxy origin keeps its owner/repo key (only the estate locator is stricter)
+        at("http://local_proxy@127.0.0.1:41234/git/DanFashauer/X") === "true|127.0.0.1|3"
+      );
     })(),
   ]);
   checks.push([

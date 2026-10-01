@@ -21,10 +21,12 @@
 //
 // WHERE A CHECKOUT IS LOOKED FOR. The declared path first (the cloud lane's /workspace,
 // unchanged, taken as declared). Failing that, the folder of the same name BESIDE this
-// checkout — and a sibling counts only when its `origin` remote is exactly OWNER/<expected
-// name> (owner AND name, case-insensitively), because a folder of the right name that is
-// some other repository (a clone of someone else's same-named repo, or a plain directory
-// nested inside one, where `git rev-parse --is-inside-work-tree` is true and `origin` is the
+// checkout — and a sibling counts only when its `origin` remote is exactly
+// github.com/OWNER/<expected name> (host github.com, two path segments, owner AND name
+// equal case-insensitively; a local path — a relative `owner/name` included — proves
+// nothing), because a folder of the right name that is some other repository (a clone of
+// someone else's same-named repo, or a plain directory nested inside one, where
+// `git rev-parse --is-inside-work-tree` is true and `origin` is the
 // parent's) would otherwise be scanned and counted clean. A SIBLING that cannot prove its
 // identity, or a checkout that cannot be found, is NOT SCANNED — never clean. The estate
 // stays DECLARED, not discovered: there is no directory walk and no override variable.
@@ -34,14 +36,16 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { repoKeyFromRemote } from "./lib/remote-key.mjs";
 
 // Guarded on being the entry point: importing `locate` or `tally` must not scan the estate.
 const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const SELF_TEST = isEntry && process.argv.includes("--self-test");
 // check-cited-paths.mjs runs `git ls-files` when it LOADS (via lib/skill-plane.mjs). The
-// self-test needs none of it — `locate` and `tally` take their disk and git as arguments —
-// so it is not loaded for the self-test, which then runs with git off PATH.
-const { repoKeyFromRemote, scanRepo } = SELF_TEST ? {} : await import("./check-cited-paths.mjs");
+// self-test needs none of it — `locate` and `tally` take their disk and git as arguments, and
+// the origin parser is the git-free lib/remote-key.mjs — so it is not loaded for the
+// self-test, which then runs with git off PATH.
+const { scanRepo } = SELF_TEST ? {} : await import("./check-cited-paths.mjs");
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -80,20 +84,18 @@ const OWNER = "DanFashauer";
 
 const expectedName = (entry) => entry.sibling ?? basename(entry.path);
 
-// What `origin` points at, as repoKeyFromRemote reports it ({ key, hasOwner }), or
-// undefined when there is no origin / git cannot read the directory. Undefined fails
-// closed in `locate`.
-function gitOriginName(dir) {
-  let url;
+// The raw `origin` URL, or undefined when there is no origin / git cannot read the
+// directory. Raw on purpose: `locate` parses it with repoKeyFromRemote, so the self-test
+// feeds it URL strings and exercises the real parser. Undefined fails closed in `locate`.
+function gitOriginUrl(dir) {
   try {
-    url = execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], {
+    return execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
   } catch {
     return undefined;
   }
-  return repoKeyFromRemote(url);
 }
 
 /**
@@ -101,19 +103,29 @@ function gitOriginName(dir) {
  * `{ reason }` when it must be reported NOT SCANNED.
  *
  * The declared path wins untouched. Otherwise the sibling folder is used only when its
- * origin remote names `owner/<expected>` — owner and name, case-insensitive (GitHub's are).
- * A local-path origin reads as a bare name, never `owner/name`, so it proves nothing.
+ * origin remote is `github.com/owner/<expected>`: host github.com, exactly two path
+ * segments, owner and name equal case-insensitively (GitHub's are). Anything else proves
+ * nothing — a local path (a bare or relative `owner/name` included: git resolves it as a
+ * directory, and repoKeyFromRemote reads it as a bare name), another host, a deeper path,
+ * or an owner that merely ends in ours.
  */
-export function locate(entry, { exists = existsSync, originName = gitOriginName, owner = OWNER } = {}) {
+export function locate(entry, { exists = existsSync, originUrl = gitOriginUrl, owner = OWNER } = {}) {
   if (exists(entry.path)) return { path: entry.path };
   const expected = expectedName(entry);
   const want = `${owner}/${expected}`;
   const sib = resolve(SELF_ROOT, "..", expected);
   if (!exists(sib)) return { reason: `no checkout at ${entry.path} or ${sib}` };
-  const got = originName(sib);
-  if (got?.key.toLowerCase() !== want.toLowerCase()) {
-    const named = got ? `${got.key}${got.hasOwner ? "" : " (a local path, no owner)"}` : "nothing";
-    return { reason: `${sib}: origin names ${named}, not ${want}` };
+  const got = repoKeyFromRemote(originUrl(sib));
+  const onGitHub = got?.hasOwner && got.host === "github.com" && got.depth === 2;
+  if (!onGitHub || got.key.toLowerCase() !== want.toLowerCase()) {
+    const named = !got
+      ? "nothing"
+      : !got.hasOwner
+        ? `${got.key} (a local path, no owner)`
+        : onGitHub
+          ? got.key
+          : `${got.key} (on ${got.host}, ${got.depth} path segments)`;
+    return { reason: `${sib}: origin names ${named}, not github.com/${want}` };
   }
   return { path: sib };
 }
@@ -162,22 +174,56 @@ function selfTest() {
   const only = (p) => (q) => q === p;
   const dev = ESTATE.find((e) => e.name === "dev");
   const row = (over) => ({ name: "x", status: "BROKEN", missing: [{ doc: "d", path: "p" }], ...over });
-  // What `origin` reads as: repoKeyFromRemote's shape. `owner: "acme"` is injected so the cases
+  // `origin` is the RAW URL string: `locate` parses it with the real repoKeyFromRemote, so a
+  // case that is wrong in the parser is wrong here. `owner: "acme"` is injected so the cases
   // do not lean on the declared OWNER, except the one that proves the default is wired.
-  const origin = (key) => () => ({ key, hasOwner: true });
-  const opts = (exists, originName) => ({ exists, originName, owner: "acme" });
+  const url = (u) => () => u;
+  const opts = (exists, originUrl) => ({ exists, originUrl, owner: "acme" });
+  const reads = (u) => locate(entry, opts(only(sib), url(u)));
 
   const a = locate(entry, opts(only(entry.path), throwsIfCalled));
-  const b = locate(entry, opts(only(sib), origin("ACME/demo")));
+  const b = reads("https://github.com/ACME/demo");
   const c = locate(entry, opts(() => false, throwsIfCalled));
-  const d = locate(entry, opts(only(sib), origin("acme/SignalGrid-Review-Hub")));
-  const d2 = locate(entry, opts(only(sib), origin("acme/Demo.mint")));
-  const d3 = locate(entry, opts(only(sib), origin("someone-else/Demo")));
-  const d4 = locate(entry, opts(only(sib), () => ({ key: "Demo", hasOwner: false })));
+  const d = reads("https://github.com/acme/SignalGrid-Review-Hub");
+  const d2 = reads("https://github.com/acme/Demo.mint");
+  const d3 = reads("https://github.com/someone-else/Demo");
+  const d4 = reads("/srv/git/acme/Demo");
   const e = locate(entry, opts(only(sib), () => undefined));
   const devSib = resolve(SELF_ROOT, "..", "DEV");
-  const f = locate(dev, opts(only(devSib), origin("acme/DEV")));
-  const g = locate(entry, { exists: only(sib), originName: origin(`${OWNER}/Demo`) });
+  const f = locate(dev, opts(only(devSib), url("https://github.com/acme/DEV")));
+  const g = locate(entry, { exists: only(sib), originUrl: url(`https://github.com/${OWNER}/Demo`) });
+  // Origins that must NEVER prove identity. Each is a way an origin can SPELL acme/Demo while
+  // naming something else: git resolves a bare `acme/Demo` as a local directory (so the relative
+  // forms are paths, not hosted names), an owner that merely ENDS in ours is another owner, and
+  // only github.com with exactly owner/name is the repository itself.
+  const impostors = [
+    "acme/Demo", // relative path
+    "mirrors/acme/Demo", // relative path with an owner-shaped tail
+    "acme/Demo.git", // relative path, .git suffix
+    "xacme/Demo", // relative path whose first segment ends in the owner
+    "https://github.com/xacme/Demo", // owner that ends in ours
+    "https://gitlab.com/acme/Demo", // not GitHub
+    "git@gitlab.com:acme/Demo.git", // not GitHub, scp form
+    "https://github.com/evil/acme/Demo", // deeper than owner/name
+    "evil.example:x/acme/Demo.git", // scp form with no user: not a shape the parser vouches for
+    "evilhelper::https://github.com/acme/Demo", // remote-helper transport
+    "x\ngit@github.com:acme/Demo", // a first line in front of the scp form
+  ];
+  // …and the spellings of the genuine repository that MUST still locate, so a parser that
+  // refuses everything cannot pass.
+  const genuine = [
+    "https://github.com/acme/Demo",
+    "https://github.com/acme/Demo.git",
+    "https://github.com/acme/Demo/",
+    "https://user@github.com/acme/Demo",
+    "https://github.com/ACME/DEMO",
+    "git@github.com:acme/Demo.git",
+    "ssh://git@github.com/acme/Demo",
+    "https://github.com/acme/Demo\n", // what `git remote get-url` prints
+  ];
+  const wronglyScanned = impostors.filter((u) => reads(u).path);
+  const wronglyRefused = genuine.filter((u) => !reads(u).path);
+  const listed = (us) => (us.length ? ` — WRONG: ${us.map((u) => JSON.stringify(u)).join(", ")}` : "");
   const notClean = tally([{ name: "nope", status: "NOT_SCANNED", reason: "r" }]);
   const mixed = tally([{ name: "ok", status: "CLEAN", missing: [] }, { name: "nope", status: "NOT_SCANNED", reason: "r" }]);
 
@@ -190,16 +236,24 @@ function selfTest() {
     ],
     [
       "(iv) sibling present but origin names another repo (a clone of something else, or a plain dir nested in another checkout) → NOT SCANNED",
-      !d.path && d.reason.includes("origin names acme/SignalGrid-Review-Hub, not acme/Demo"),
+      !d.path && d.reason.includes("origin names acme/SignalGrid-Review-Hub, not github.com/acme/Demo"),
     ],
     ["(iv) …and a near-miss name (Demo.mint) is not a match — the name must be exact", !d2.path && !!d2.reason],
     [
       "(iv) …and the right NAME under another OWNER (someone-else/Demo) is not a match — the owner must be ours",
-      !d3.path && d3.reason.includes("origin names someone-else/Demo, not acme/Demo"),
+      !d3.path && d3.reason.includes("origin names someone-else/Demo, not github.com/acme/Demo"),
     ],
     [
       "(iv) …and a local-path origin (no owner) proves nothing → NOT SCANNED",
       !d4.path && d4.reason.includes("no owner"),
+    ],
+    [
+      `(iv) …and every impostor spelling of acme/Demo (${impostors.length}: relative paths, an owner that ends in ours, a non-GitHub host, a deeper path, owner-less scp, a remote helper, a stray first line) → NOT SCANNED${listed(wronglyScanned)}`,
+      wronglyScanned.length === 0,
+    ],
+    [
+      `(ii) …and every genuine spelling of github.com/acme/Demo (${genuine.length}: https, .git, slash, userinfo, case, scp, ssh://, trailing newline) still locates${listed(wronglyRefused)}`,
+      wronglyRefused.length === 0,
     ],
     ["(v) sibling present with no origin → NOT SCANNED, never scanned on faith", !e.path && e.reason.includes("origin names nothing")],
     ["(ii) …with no owner injected, the declared OWNER is the one required", g.path === sib],

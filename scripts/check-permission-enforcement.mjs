@@ -36,8 +36,10 @@
 //     depth — whose name appears nowhere else in its file is dead. Overload
 //     signatures, property keys (`{ f: 1 }`, `const { f: g } = …`), member
 //     names (`x.f`, class fields, methods, accessors, interface members), enum
-//     members, labels, re-exports from another module and type positions
-//     (`typeof f`) are not references to it;
+//     members, labels, imports and re-exports naming another module's `f`
+//     (`export { f } from`, `export * as f from`, `import { f as g } from`),
+//     type parameters, a merged `namespace f` and type positions (`typeof f`)
+//     are not references to it;
 //   - type-only positions (interfaces, type aliases, type literals) and ambient
 //     `declare` code never run, so a call written there credits nothing.
 // The security review's planted shape — `export function neverCalled(p) { if
@@ -62,8 +64,10 @@
 // STRICTER THAN THE REGEX, deliberately: a call through an alias
 // (`const a = authorize`), an element access (`o["authorize"](…)`), a comma
 // callee, or a computed scope credits nothing. No real site uses those shapes.
-// A call inside `implements` (a type position) also credits nothing; a call in
-// a class `extends` expression or an instantiation expression DOES count.
+// A call inside `implements` or an interface's `extends` (type positions) also
+// credits nothing, and a parameter named `undefined` is read as the constant;
+// a call in a class `extends` expression or an instantiation expression DOES
+// count.
 //
 // FAIL CLOSED: a file the Program does not load, or that does not parse,
 // credits NOTHING and is listed — never counted as enforcing.
@@ -168,6 +172,8 @@ const enforced = new Set();
     ["nested function expression nothing calls", 'export function k(p: any) { const f = function () { authorize(p, "x:dead"); }; return 1; }', []],
     ["template, <T>, ! and satisfies constants", 'export function f(p: any) { if (``) authorize(p, "x:dead"); if (<any>false) authorize(p, "x:dead"); if (false!) authorize(p, "x:dead"); if ((false satisfies boolean)) authorize(p, "x:dead"); }', []],
     ["if (-0n) / if (+0)", 'export function f(p: any) { if (-0n) authorize(p, "x:dead"); if (+0) authorize(p, "x:dead"); }', []],
+    ["call in implements / interface extends is a type", 'export class A implements mix(authorize(p, "x:dead")) {}\nexport const B = class extends C implements mix(authorize(p, "x:dead")) {};\nexport interface I extends mix(authorize(p, "x:dead")) {}', []],
+    ["(void 0)?.authorize short-circuits", 'export function f(p: any) { (void 0)?.authorize(p, "x:dead"); }', []],
     ["optional link deeper in the receiver chain", 'export function f(p: any) { (null as any)?.a.authorize(p, "x:dead"); }', []],
     ["names that are not references to the function", [
       'function g1(p: any) { authorize(p, "x:dead"); }', 'function g2(p: any) { authorize(p, "x:dead"); }',
@@ -176,6 +182,9 @@ const enforced = new Set();
       'function g7(p: any) { authorize(p, "x:dead"); }', 'function g8(p: any) { authorize(p, "x:dead"); }',
       'function g9(p: any) { authorize(p, "x:dead"); }', 'function g10(p: any) { authorize(p, "x:dead"); }',
       'function g11(p: any) { authorize(p, "x:dead"); }', 'function g12(p: any) { authorize(p, "x:dead"); }',
+      'function g13(p: any) { authorize(p, "x:dead"); }', 'function g14(p: any) { authorize(p, "x:dead"); }',
+      'function g15(p: any) { authorize(p, "x:dead"); }', 'function g16(p: any) { authorize(p, "x:dead"); }',
+      'function g17(p: any) { authorize(p, "x:dead"); }',
       'export const y = (o: any) => o.g1;',
       'export class C { g2 = 1; g3() {} get g4() { return 1; } set g5(v: any) {} }',
       'export interface I { g6: string; g7(): void }',
@@ -184,6 +193,11 @@ const enforced = new Set();
       'export function lab() { g10: for (;;) { break g10; } }',
       'export { g11 } from "m";',
       'export type T = typeof g12;',
+      'export function lab2() { g13: for (;;) { continue g13; } }',
+      'export * as g14 from "m2";',
+      'import { g15 as h15 } from "m3";',
+      'export function tp<g16>(x: g16) { return x; }',
+      'namespace g17 { export const q = 1; }',
     ].join("\n"), []],
     ["real call", 'export function f(p: any) { authorize(p, "x:live"); }', ["x:live"]],
     ["real method call on a dotted principal", 'export class E { g(t: any) { const ctx = t; this.authorize(ctx.principal, "x:live"); } }', ["x:live"]],
@@ -195,6 +209,8 @@ const enforced = new Set();
     ["shorthand property is a reference", 'function g(p: any) { authorize(p, "x:live"); }\nexport const o = { g };', ["x:live"]],
     ["optional call on a real receiver", 'export function f(p: any, a: any) { a?.authorize(p, "x:live"); }', ["x:live"]],
     ["call after a try whose catch may fall through", 'export function f(p: any) { try { return 1; } catch { p = 0; } authorize(p, "x:live"); }', ["x:live"]],
+    ["call after a try that may fall through but whose catch returns", 'export function f(p: any) { try { p(); } catch { return 1; } authorize(p, "x:live"); }', ["x:live"]],
+    ["call after a labelled block left by break", 'export function f(p: any) { a: { break a; } authorize(p, "x:live"); }', ["x:live"]],
     ["call in a class extends expression", 'declare function mix(x: any): any;\nexport class A extends mix(authorize(p, "x:live")) {}', ["x:live"]],
     ["call in an instantiation expression", 'export function f(p: any) { return make(authorize(p, "x:live"))<string>; }', ["x:live"]],
     ["template substitution is code", 'export const u = (p: any) => `${authorize(p, "x:live")}`;', ["x:live"]],
@@ -329,7 +345,14 @@ function terminates(st) {
 // holds a RUNTIME expression — a class `extends` clause, or an instantiation
 // expression `make(x)<T>` — so it is not skipped (its type arguments are).
 function isTypeOnly(n) {
-  return (ts.isTypeNode(n) && !ts.isExpressionWithTypeArguments(n)) ||
+  if (ts.isExpressionWithTypeArguments(n)) {
+    // Only a CLASS `extends` clause evaluates its expression; `implements`
+    // and an interface's `extends` are types.
+    const h = n.parent;
+    if (!h || !ts.isHeritageClause(h)) return false; // instantiation expression
+    return !(h.token === ts.SyntaxKind.ExtendsKeyword && h.parent && ts.isClassLike(h.parent));
+  }
+  return ts.isTypeNode(n) ||
     ts.isInterfaceDeclaration(n); // a type alias's body is itself a TypeNode
 }
 
@@ -370,6 +393,12 @@ function liveAuthorizeCalls(sf) {
     if (ts.isEnumMember(p) && p.name === id) return true;
     if ((ts.isLabeledStatement(p) || ts.isBreakStatement(p) || ts.isContinueStatement(p)) && p.label === id) return true;
     if (ts.isExportSpecifier(p) && p.parent?.parent?.moduleSpecifier) return true;
+    // `export * as g from "m"` and `import { g as h } from "m"` name the
+    // other module's g; a type parameter and a merged `namespace g` are
+    // declarations, not calls.
+    if (ts.isNamespaceExport(p) && p.name === id) return true;
+    if (ts.isImportSpecifier(p) && p.propertyName === id) return true;
+    if ((ts.isTypeParameterDeclaration(p) || ts.isModuleDeclaration(p)) && p.name === id) return true;
     return false;
   };
   const counts = new Map();

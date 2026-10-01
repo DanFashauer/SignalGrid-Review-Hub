@@ -36,8 +36,10 @@ route table, when the route table holds a `<Route>` shape the gate cannot read, 
 when demo step 4 stops giving any of the four launch arguments the shell needs with
 its exact value (the seeded refs, `sgk_demo_northwind_operator`, and an http(s) URL
 written with a literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the
-host as written, so shorthand forms such as `127.1` do not count).
-It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
+host as written, so shorthand forms such as `127.1` do not count). Step 4 is checked
+as it renders (markdown-it: HTML comments dropped, entities decoded, code spans
+flattened), because that is the text an operator copies; keep the four arguments in
+their fenced block, one per line. It runs in `scripts/preflight.mjs` and in CI. Only the admin console's route table
 (`artifacts/signalgrid-app/src/App.tsx`) is parsed; a router added in another file
 would not be seen, and the other surfaces make no placement claim. The gate reads route
 elements, not reachability: a `<Route>` inside a branch that never renders (for example
@@ -122,22 +124,30 @@ SignalGrid.
    from Sessions: outcome, matched rules, reason codes, the re-verified evidence
    snapshot, and every signal with its source and freshness.
 4. **The host app** (`ios:EnterpriseShell`, its `HostAppViewController`). Now the
-   worker's side. The same seeded refs are handed to the host app
-   (`-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`,
-   `-DemoBackendURL http://127.0.0.1:8080` — the same local api-server, on whatever port
-   it was started with; the shell accepts only a loopback host (`localhost`,
-   `127.0.0.1`, `::1`) and ignores any other — and
-   `-DemoBackendToken sgk_demo_northwind_operator` — the same public fixture key the console uses
+   worker's side. Launch the shell with exactly these four arguments:
+
+   ```
+   -DemoBackendIdentity nurse.compliant
+   -DemoBackendDevice ipad-ward-01
+   -DemoBackendURL http://127.0.0.1:8080
+   -DemoBackendToken sgk_demo_northwind_operator
+   ```
+
+   The identity and device are the refs the console preset used. The URL is the same
+   local api-server, on whatever port it was started with; the shell compares the
+   host as written and accepts only `localhost`, `127.0.0.1` or `::1`, ignoring any
+   other. The token is the same public fixture key the console uses
    (`artifacts/signalgrid-app/src/lib/v1.ts`), so both sides act in the northwind
-   tenant that owns these seeded refs; another tenant's `sgk_demo_*` key would put the
-   decision in a different tenant's ledger). All four are needed: without a loopback URL
-   and a non-empty token `DecisionServiceProvider.resolve` (`native/ios/EnterpriseShell/Services/DecisionService.swift`)
-   picks the on-device engine and the shell never calls the api-server. The investor sees the
-   host app's own screens: an ordinary action runs with no friction; a sensitive
-   action is held, the phone's own Face ID prompt appears, then the app's own
-   confirmation dialog, then the action applies. No SignalGrid screen appears on the
-   phone. `-DemoAssistAuto` walks these states unattended for a room;
-   `-DemoAssistDecline` shows the fail-closed "nothing fires" ending.
+   tenant that owns these refs; another tenant's `sgk_demo_*` key would put the
+   decision in a different tenant's ledger. All four are needed: without a loopback
+   URL and a non-empty token `DecisionServiceProvider.resolve`
+   (`native/ios/EnterpriseShell/Services/DecisionService.swift`) picks the on-device
+   engine and the shell never calls the api-server. The investor sees the host app's
+   own screens: an ordinary action runs with no friction; a sensitive action is held,
+   the phone's own Face ID prompt appears, then the app's own confirmation dialog,
+   then the action applies. No SignalGrid screen appears on the phone.
+   `-DemoAssistAuto` walks these states unattended for a room; `-DemoAssistDecline`
+   shows the fail-closed "nothing fires" ending.
 5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). When step 4 reached
    the api-server, the host app's decision is in the ledger and the audit chain
    recomputes its digests. If it is not there, the shell decided on-device (no token,

@@ -38,6 +38,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import MarkdownIt from "markdown-it";
 import ts from "typescript";
 import { LAUNCH_PROFILE_VERSION, SURFACES } from "./launch-profile.mjs";
 
@@ -187,6 +188,51 @@ export function urlProblem(value) {
   return null;
 }
 
+/**
+ * The TEXT of demo step 4 as a reader sees and copies it — not its markdown source.
+ *
+ * Rounds 4–7 of review were all one gap: the gate read raw markdown while an operator
+ * copies the rendered page. An HTML comment satisfied the check and rendered nothing;
+ * `&#45;` rendered as `-`; a backtick that OPENS a span was read as one that closes
+ * it; a double-backtick span's inner backtick ended the value early. So the step is
+ * rendered by markdown-it (the same renderer the repo already installs) and the
+ * checks run on what comes out: HTML dropped, entities decoded, code spans and
+ * fenced blocks flattened to their literal text.
+ *
+ * Returns null when the demo section has no ordered-list item numbered 4.
+ */
+export function renderedStep4(doc) {
+  const start = doc.search(/^## The demo path/m);
+  if (start < 0) return null;
+  const md = new MarkdownIt({ html: true });
+  const tokens = md.parse(doc.slice(start), {});
+  // Raw HTML is shown as a browser shows it: comments and tags removed, the text
+  // between them kept, entities decoded. Dropping an html_block whole would hide
+  // `<!-- x --> &#45;DemoBackendURL https://evil` — the text after the comment renders.
+  const visible = (html) => md.utils.unescapeAll(html.replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]*>/g, ""));
+  const open = tokens.findIndex((t) => t.type === "list_item_open" && t.info === "4");
+  if (open < 0) return null;
+  const parts = [];
+  for (let i = open + 1, depth = 0; i < tokens.length; i += 1) {
+    const t = tokens[i];
+    if (t.type === "list_item_open") depth += 1;
+    if (t.type === "list_item_close") {
+      if (depth === 0) break;
+      depth -= 1;
+    }
+    if (t.type === "fence" || t.type === "code_block") parts.push(t.content);
+    if (t.type === "html_block") parts.push(visible(t.content));
+    if (t.type === "inline") {
+      parts.push(t.children.map((c) =>
+        c.type === "text" || c.type === "code_inline" ? c.content
+          : c.type === "softbreak" || c.type === "hardbreak" ? "\n"
+          : c.type === "html_inline" ? visible(c.content)
+          : "").join(""));
+    }
+  }
+  return parts.join("\n");
+}
+
 /** Rows of the inventory table: [{ surface, file, status, placement, shows, line }]. */
 export function parseRows(doc) {
   const b = doc.indexOf(BEGIN);
@@ -219,34 +265,23 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   // DemoMode.backendURL returns nil for any host that is not loopback; the refs must be
   // the seeded ones or the decision is fail-closed), so every one is gated, and every
   // URL step 4 gives must be loopback.
-  const demo = doc.slice(Math.max(0, doc.search(/^## The demo path/m)));
-  const step4 = /^4\. [\s\S]*?(?=^5\. )/m.exec(demo)?.[0] ?? "";
+  const step4 = renderedStep4(doc);
   if (!step4) errors.push(`${DOC}: demo path step 4 not found`);
   else {
     for (const [flag, want] of Object.entries(STEP4_FLAGS)) {
       const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
-      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]*\\n?[ \\t]*([^ \\t\\n\`]+))?`, "g"))];
+      const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]+([^ \\t\\n]+))?`, "g"))];
       if (uses.length === 0) {
         errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);
         continue;
       }
-      // EVERY use of the flag must carry the right value, so a second, wrong
-      // occurrence cannot hide behind a right one. The value is the whole argument up
-      // to ASCII space, tab or newline — what the shell splits arguments on; a Unicode
-      // space (NBSP, U+FEFF, U+2028, …) is part of the argument (round 6) — or up to
-      // the closing backtick of its code span. `,x`, `)x` and `;x` stay part of it
-      // (round 5). A code span closed mid-token (`value`x) renders and copies as a
-      // different token, so text touching the closing backtick is refused (round 6).
-      for (const use of uses) {
-        const value = use[1];
-        let after = use.index + use[0].length;
-        if (value && step4[after] === "`") {
-          while (step4[after] === "`") after += 1;
-          if (after < step4.length && !/[ \t\n,;)]/.test(step4[after])) {
-            errors.push(`${DOC}: demo step 4 closes ${flag}'s code span mid-token ("${value}\`${step4.slice(after, after + 8)}…") — the rendered and copied value would differ from the one checked`);
-            continue;
-          }
-        }
+      // EVERY use of the flag in the rendered text must carry the right value, so a
+      // second, wrong occurrence cannot hide behind a right one. The value is the
+      // whole argument up to ASCII space, tab or newline — what the shell splits
+      // arguments on. A Unicode space (round 6), `,x` / `)x` / `;x` (round 5) and any
+      // text a code span boundary used to hide (round 7) stay part of it, because the
+      // rendered text has no code-span boundaries left to hide behind.
+      for (const [, value] of uses) {
         if (!value) {
           errors.push(`${DOC}: demo step 4 names ${flag} with no value after it — write "${flag} ${want ?? "http://127.0.0.1:8080"}"`);
         } else if (want !== null && value !== want) {
@@ -326,7 +361,17 @@ function selfTest() {
     "artifacts/signalgrid-web/src/pages/Home.tsx",
   ];
   const row = (s, f, st, p, sh = "a screen") => `| ${s} | \`${f}\` | ${st} | ${p} | ${sh} |`;
-  const STEP4 = "4. host app: `-DemoBackendIdentity nurse.compliant -DemoBackendDevice ipad-ward-01`, `-DemoBackendURL http://127.0.0.1:8080` and `-DemoBackendToken sgk_demo_northwind_operator`";
+  // Step 4 as the real doc writes it: the four launch arguments in a fenced block,
+  // one per line, inside list item 4.
+  const ARGS = {
+    "-DemoBackendIdentity": "nurse.compliant",
+    "-DemoBackendDevice": "ipad-ward-01",
+    "-DemoBackendURL": "http://127.0.0.1:8080",
+    "-DemoBackendToken": "sgk_demo_northwind_operator",
+  };
+  const fence = (args) => ["   ```", ...Object.entries(args).filter(([, v]) => v !== undefined).map(([f, v]) => `   ${f}${v === "" ? "" : ` ${v}`}`), "   ```"].join("\n");
+  const step4 = (args = ARGS, prose = "") => `4. host app:\n\n${fence(args)}\n${prose ? `\n   ${prose}\n` : ""}`;
+  const STEP4 = step4();
   const good = [
     "Checked against launch profile v7.",
     BEGIN,
@@ -343,6 +388,8 @@ function selfTest() {
     "5. audit",
   ].join("\n");
   const base = { doc: good, pageFiles, statuses, placements, unparsedRoutes: unparsed, profileVersion: 7 };
+  const withArg = (flag, value, prose = "") => ({ ...base, doc: good.replace(STEP4, step4({ ...ARGS, [flag]: value }, prose)) });
+  const withProse = (prose) => ({ ...base, doc: good.replace(STEP4, step4(ARGS, prose)) });
   // Swap one route line of the fixture; optionally edit the doc too. Returns check() input.
   const SESSIONS = ROUTES[1].trim();
   const FLEET = ROUTES[2].trim();
@@ -374,42 +421,46 @@ function selfTest() {
     ["an App.tsx that does not parse fails", routeCase("export function Router() {", "export function Router( {"), "does not parse"],
     ["an empty shows column fails", { ...base, doc: good.replace("| — | a screen |", "| — |  |") }, "empty"],
     ["a placeholder shows column (TBD) fails", { ...base, doc: good.replace("| — | a screen |", "| — | TBD |") }, "placeholder"],
-    ...Object.entries(STEP4_FLAGS).map(([flag, value]) =>
-      [`demo step 4 without ${flag} fails (round 3)`, { ...base, doc: good.replace(STEP4, STEP4.replace(`${flag} ${value ?? "http://127.0.0.1:8080"}`, "")) }, `no longer names ${flag}`]),
-    ["demo step 4 with a non-loopback URL fails (round 3)", { ...base, doc: good.replace("http://127.0.0.1:8080", "https://api.example.com") }, "loopback only"],
-    ["demo step 4 with a flag but no value fails", { ...base, doc: good.replace(" http://127.0.0.1:8080`", "`") }, "no value after it"],
-    ["demo step 4 with localhost passes", { ...base, doc: good.replace("127.0.0.1", "localhost") }, null],
-    ["demo step 4 with [::1] passes", { ...base, doc: good.replace("127.0.0.1", "[::1]") }, null],
-    // Round 4: each of these read as loopback to the old host regex.
-    ["port + userinfo before a foreign host fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:8080@api.example.com") }, "userinfo"],
-    ["localhost:pw@ before a foreign host fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://localhost:pw@api.example.com") }, "userinfo"],
-    ["a non-http scheme fails even with a loopback URL in the prose (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080`", "ftp://evil.com` (never http://127.0.0.1:8080)") }, "scheme is ftp:"],
-    ["[::1].evil.com fails (round 4)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://[::1].evil.com") }, "not a URL"],
-    ["a lookalike identity fails (round 4)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliantX ") }, "gives -DemoBackendIdentity nurse.compliantX"],
-    ["another tenant's token beside a mention of the right one fails (round 4)", { ...base, doc: good.replace("-DemoBackendToken sgk_demo_northwind_operator`", "-DemoBackendToken sgk_demo_acme_operator` (not sgk_demo_northwind_operator)") }, "gives -DemoBackendToken sgk_demo_acme_operator"],
+    // Demo step 4 — read as rendered text. `withArg` edits one line of the fenced block;
+    // `withProse` adds a paragraph to the same list item.
+    ...Object.keys(ARGS).map((flag) =>
+      [`demo step 4 without ${flag} fails (round 3)`, withArg(flag, undefined), `no longer names ${flag}`]),
+    ["demo step 4 with a non-loopback URL fails (round 3)", withArg("-DemoBackendURL", "https://api.example.com"), "loopback only"],
+    ["demo step 4 with a flag but no value fails", withArg("-DemoBackendURL", ""), "no value after it"],
+    ...["http://localhost:8080", "http://[::1]:8080", "http://127.0.0.1:8080/api", "HTTP://LOCALHOST:8080"].map((url) =>
+      [`demo step 4 with ${url} passes`, withArg("-DemoBackendURL", url), null]),
+    // Round 4.
+    ["port + userinfo before a foreign host fails (round 4)", withArg("-DemoBackendURL", "http://127.0.0.1:8080@api.example.com"), "userinfo"],
+    ["localhost:pw@ before a foreign host fails (round 4)", withArg("-DemoBackendURL", "http://localhost:pw@api.example.com"), "userinfo"],
+    ["a non-http scheme fails even with a loopback URL in the prose (round 4)", withArg("-DemoBackendURL", "ftp://evil.com", "(never http://127.0.0.1:8080)"), "scheme is ftp:"],
+    ["[::1].evil.com fails (round 4)", withArg("-DemoBackendURL", "http://[::1].evil.com"), "not a URL"],
+    ["a lookalike identity fails (round 4)", withArg("-DemoBackendIdentity", "nurse.compliantX"), "gives -DemoBackendIdentity nurse.compliantX"],
+    ["another tenant's token beside a mention of the right one fails (round 4)", withArg("-DemoBackendToken", "sgk_demo_acme_operator", "(not sgk_demo_northwind_operator)"), "gives -DemoBackendToken sgk_demo_acme_operator"],
+    ["a second, wrong use of a flag fails even beside a right one (round 4)", withProse("or `-DemoBackendURL https://api.example.com`"), "its host is api.example.com"],
     // Round 5: WHATWG calls each of these loopback; the shell's literal host does not.
     ...[["http:127.0.0.1:8080", "slash-less"], ["http://127.1:8080", "shorthand"], ["http://0177.0.0.1:8080", "octal"],
       ["http://2130706433:8080", "integer"], ["http://0x7f.1:8080", "hex"], ["http://[0:0:0:0:0:0:0:1]:8080", "long-form IPv6"],
-      ["http://127.0.0.1\\@evil.com", "backslash"]].map(([url, kind]) =>
-      [`a ${kind} loopback URL fails (round 5)`, { ...base, doc: good.replace("http://127.0.0.1:8080", url) }, `-DemoBackendURL ${url} —`]),
-    // Round 5: the value is the whole argument, not the text before a comma or paren.
-    ["a URL value with ,@evil.com fails (round 5)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1,@evil.com") }, "-DemoBackendURL http://127.0.0.1,@evil.com"],
-    ["a token with ,x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator,x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator,x"],
-    ["a token with )x appended fails (round 5)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator)x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator)x"],
-    ["an identity with ;x appended fails (round 5)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliant;x ") }, "gives -DemoBackendIdentity nurse.compliant;x"],
-    // Round 6: a Unicode space is part of the shell argument, so it must be part of the checked value.
+      ["http://127.0.0.1\\@evil.com", "backslash"], ["http://127.0.0.1,@evil.com", "comma-userinfo"]].map(([url, kind]) =>
+      [`a ${kind} loopback URL fails (round 5)`, withArg("-DemoBackendURL", url), `-DemoBackendURL ${url} —`]),
+    ...[",x", ")x", ";x"].map((tail) =>
+      [`a token with ${tail} appended fails (round 5)`, withArg("-DemoBackendToken", `sgk_demo_northwind_operator${tail}`), `gives -DemoBackendToken sgk_demo_northwind_operator${tail}`]),
+    ["an identity with ;x appended fails (round 5)", withArg("-DemoBackendIdentity", "nurse.compliant;x"), "gives -DemoBackendIdentity nurse.compliant;x"],
+    // Round 6: a Unicode space is part of the shell argument; port 0 serves nothing.
     ...[["\u00a0", "NBSP"], ["\ufeff", "U+FEFF"], ["\u2028", "U+2028"], ["\u3000", "U+3000"]].map(([ch, name]) =>
-      [`a URL with ${name} inside fails (round 6)`, { ...base, doc: good.replace("http://127.0.0.1:8080", `http://127.0.0.1${ch}@evil.com`) }, "-DemoBackendURL http://127.0.0.1"]),
-    ["a token with NBSP+x appended fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator\u00a0x`") }, "gives -DemoBackendToken sgk_demo_northwind_operator\u00a0x"],
-    ["an identity with U+202F+x appended fails (round 6)", { ...base, doc: good.replace("nurse.compliant ", "nurse.compliant\u202fx ") }, "gives -DemoBackendIdentity nurse.compliant\u202fx"],
-    ["a code span closed mid-token fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator`x") }, "closes -DemoBackendToken's code span mid-token"],
-    ["a doubled backtick closed mid-token fails (round 6)", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator``x") }, "closes -DemoBackendToken's code span mid-token"],
-    ["a code span followed by a comma still passes", { ...base, doc: good.replace("sgk_demo_northwind_operator`", "sgk_demo_northwind_operator`, then") }, null],
-    ["port 0 fails (round 6)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:0") }, "its port is 0"],
-    ["port 00 fails (round 6)", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:00") }, "its port is 0"],
-    ["a loopback URL with a path still passes", { ...base, doc: good.replace("http://127.0.0.1:8080", "http://127.0.0.1:8080/api") }, null],
-    ["an upper-case LOCALHOST URL passes (Swift lowercases the host)", { ...base, doc: good.replace("http://127.0.0.1:8080", "HTTP://LOCALHOST:8080") }, null],
-    ["a second, wrong use of a flag fails even beside a right one (round 4)", { ...base, doc: good.replace(STEP4, `${STEP4}; or \`-DemoBackendURL https://api.example.com\``) }, "its host is api.example.com"],
+      [`a URL with ${name} inside fails (round 6)`, withArg("-DemoBackendURL", `http://127.0.0.1${ch}@evil.com`), "-DemoBackendURL http://127.0.0.1"]),
+    ["a token with NBSP+x appended fails (round 6)", withArg("-DemoBackendToken", "sgk_demo_northwind_operator\u00a0x"), "gives -DemoBackendToken sgk_demo_northwind_operator\u00a0x"],
+    ["an identity with U+202F+x appended fails (round 6)", withArg("-DemoBackendIdentity", "nurse.compliant\u202fx"), "gives -DemoBackendIdentity nurse.compliant\u202fx"],
+    ["a code span closed mid-token fails (round 6)", withProse("-DemoBackendToken `sgk_demo_northwind_operator`x"), "gives -DemoBackendToken sgk_demo_northwind_operatorx"],
+    ["port 0 fails (round 6)", withArg("-DemoBackendURL", "http://127.0.0.1:0"), "its port is 0"],
+    ["port 00 fails (round 6)", withArg("-DemoBackendURL", "http://127.0.0.1:00"), "its port is 0"],
+    // Round 7: the gate reads what renders, so markdown cannot make the source and the
+    // copied text disagree.
+    ["a backtick that OPENS a span before ,@evil.com fails (round 7)", withProse("-DemoBackendURL http://127.0.0.1`,@evil.com`"), "-DemoBackendURL http://127.0.0.1,@evil.com —"],
+    ["a token with an opened `,x` span fails (round 7)", withProse("-DemoBackendToken sgk_demo_northwind_operator`,x`"), "gives -DemoBackendToken sgk_demo_northwind_operator,x"],
+    ["a double-backtick span with an inner backtick fails (round 7)", withProse("``-DemoBackendToken sgk_demo_northwind_operator`,x``"), "gives -DemoBackendToken sgk_demo_northwind_operator`,x"],
+    ["a flag only inside an HTML comment does not count (round 7)", withArg("-DemoBackendToken", undefined, "<!-- -DemoBackendToken sgk_demo_northwind_operator -->"), "no longer names -DemoBackendToken"],
+    ["an entity-encoded flag is read as rendered (round 7)", withProse("<!-- x --> &#45;DemoBackendURL https://api.example.com"), "its host is api.example.com"],
+    ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],
     ["a duplicated row fails", { ...base, doc: good.replace(END, `${row("signalgrid-web", pageFiles[4], "demo_only", "—")}\n${END}`) }, "listed 2 times"],

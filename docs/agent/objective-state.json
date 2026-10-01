@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "headline": 0,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 0,
-        "reason": "0/20 bound proofs/steps current — evidence covers manifest 97cef975c536, tree is 6090e700f634; refresh on the Mac; launch items fully current 0/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 9a469e562e51; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 76,
-        "partial": 5,
-        "closed": 112
+        "open": 63,
+        "partial": 4,
+        "closed": 126
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -50,8 +50,6 @@
     }
   ],
   "unmet": [
-    "readiness-floor",
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -107,14 +105,6 @@
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: finance-fundraising→lane, agent-ops-economics→lane"
     },
     {
-      "rowId": "25",
-      "title": "Bound the CI jobs and wire the Mac lane's alarm",
-      "roles": [
-        "sre"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
-    },
-    {
       "rowId": "33",
       "title": "Lab telemetry: OTel Collector + Prometheus profile",
       "roles": [
@@ -147,14 +137,6 @@
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
     },
     {
-      "rowId": "164",
-      "title": "Five IGA vendors the competitive surface has never mentioned.",
-      "roles": [
-        "competitive-analyst"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: competitive-analyst→lane"
-    },
-    {
       "rowId": "171",
       "title": "",
       "roles": [
@@ -166,38 +148,24 @@
   "unmeasured": [],
   "escalations": [
     {
-      "id": "readiness-floor-no-clearing-op",
-      "clears": "mac",
-      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
-      "since": "2026-10-01T00:01:37.580Z"
-    },
-    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-01",
-      "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 8,
+    "needsExecutorCount": 6,
     "unmeasuredCount": 0,
-    "openRows": 76
+    "openRows": 63
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-01T00:01:37.580Z",
-  "derivedAtCommit": "95098d2f87d74ee56084f232fa238ff3cd7f2283",
+  "derivedAt": "2026-10-01T13:07:47.105Z",
+  "derivedAtCommit": "dc028cbf9be56edc971d1dd14c0319cce4406f72",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "fd25aec01c603dd77c6b777747daa5cfa1a88db6b4aeae311d25b7c9f9b6e068"
+  "decisionAddress": "cdfee5b9f834d8c9fbd2302ef229a75237921ed138dd06d4268d7dbc8f21b859"
 }

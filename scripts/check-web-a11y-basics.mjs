@@ -37,11 +37,13 @@
 //      App.tsx is scanned like any file once its construction is removed.
 //   2. ICON BUTTON. A `<Button … size="icon" …>`, or a raw `<button>` whose
 //      children render no text, must carry aria-label or aria-labelledby (a
-//      child text node such as an sr-only <span> also names it). A child that
-//      renders nothing does not: every numeric character reference and the
-//      whitespace named ones are decoded, every escape in a string child is
-//      decoded, fragments are removed, and the result must hold something other
-//      than whitespace, zero-width or control characters. Tags
+//      child text node such as an sr-only <span> also names it). A label or
+//      child that names nothing does not: an empty or blank aria-label is no
+//      label, aria-hidden subtrees are left out, every numeric character
+//      reference and the whitespace named ones are decoded, every escape in a
+//      string child is decoded, fragments are removed, and the result must hold
+//      something other than whitespace, controls (C0, DEL, C1) or invisible
+//      format characters (zero-width, bidi, soft hyphen, blank glyphs). Tags
 //      are parsed brace-aware; a tag the parser cannot close is a FAILURE,
 //      never a skip.
 //   3. REDUCED MOTION. Every web tree's src/index.css carries a
@@ -380,7 +382,10 @@ function openingTag(src, index) {
  * JS whitespace (`\s` covers U+00A0, U+2000–U+200A, U+3000, U+FEFF …), the
  * zero-width and joiner characters `\s` misses, and C0 controls.
  */
-const INVISIBLE = /[\s\u200B-\u200D\u2060\u180E\u0000-\u001F]/g;
+// Beyond \s: zero-width and joiner characters, C0 and C1 controls and DEL, the
+// soft hyphen, bidi and other format controls, invisible operators, variation
+// selectors and the blank glyphs (Braille blank, Hangul fillers, Khmer vowels).
+const INVISIBLE = /[\s\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFFA0\uFFF9-\uFFFC]/g;
 export const isBlank = (text) => text.replace(INVISIBLE, "") === "";
 
 /** Named HTML entities that are whitespace or invisible; any other name is left as text. */
@@ -389,7 +394,8 @@ const NAMED_WS = {
   numsp: "\u2007", puncsp: "\u2008", thinsp: "\u2009", ThinSpace: "\u2009", hairsp: "\u200A", VeryThinSpace: "\u200A",
   MediumSpace: "\u205F", ThickSpace: "\u205F\u200A", ZeroWidthSpace: "\u200B", NegativeVeryThinSpace: "\u200B",
   NegativeThinSpace: "\u200B", NegativeMediumSpace: "\u200B", NegativeThickSpace: "\u200B", zwnj: "\u200C", zwj: "\u200D",
-  NoBreak: "\u2060", Tab: "\t", NewLine: "\n",
+  NoBreak: "\u2060", Tab: "\t", NewLine: "\n", shy: "\u00AD", lrm: "\u200E", rlm: "\u200F",
+  InvisibleTimes: "\u2062", it: "\u2062", InvisibleComma: "\u2063", ic: "\u2063", ApplyFunction: "\u2061", af: "\u2061",
 };
 const codePoint = (n) => (Number.isInteger(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "\uFFFD");
 
@@ -414,9 +420,16 @@ export function decodeEscapes(text) {
  * nothing, and character references decoded. Test the result with isBlank.
  */
 function buttonText(src, openEnd, tagName = "button") {
-  const close = src.indexOf(`</${tagName}>`, openEnd);
-  if (close < 0) return null;
-  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\}/g, (m, _q, inner) =>
+  // The closer may carry whitespace before its `>` (`</button >`).
+  const closeRe = new RegExp(`</${tagName}\\s*>`, "g");
+  closeRe.lastIndex = openEnd;
+  const cm = closeRe.exec(src);
+  if (!cm) return null;
+  let body = src.slice(openEnd + 1, cm.index);
+  // An aria-hidden subtree is left out of the accessible name: drop it whole.
+  body = dropAriaHidden(body);
+  if (body === null) return null;
+  body = body.replace(/\{\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\}/g, (m, _q, inner) =>
     isBlank(decodeEscapes(inner)) ? "" : m);
   // `<>` and `</>` (fragments) are tags too: openingTag on `<>` returns "<".
   for (let i = body.search(/<[A-Za-z/>]/); i >= 0; i = body.search(/<[A-Za-z/>]/)) {
@@ -425,6 +438,49 @@ function buttonText(src, openEnd, tagName = "button") {
     body = body.slice(0, i) + body.slice(i + tag.length + 1);
   }
   return decodeEntities(body);
+}
+
+/** Is this opening tag aria-hidden (any value but false)? */
+const ARIA_HIDDEN = (tag) => /\baria-hidden(?![\w-])/.test(tag) && !/\baria-hidden\s*=\s*(?:["']false["']|\{\s*false\s*\}|\{\s*["']false["']\s*\})/.test(tag);
+
+/** Remove every aria-hidden element and its children; null if a tag cannot be closed. */
+function dropAriaHidden(body) {
+  for (let from = 0; ; ) {
+    const i = body.slice(from).search(/<[A-Za-z]/);
+    if (i < 0) return body;
+    const at = from + i;
+    const tag = openingTag(body, at);
+    if (tag === null) return null;
+    if (!ARIA_HIDDEN(tag)) { from = at + 1; continue; }
+    const end = at + tag.length + 1;
+    if (tag.trimEnd().endsWith("/")) { body = body.slice(0, at) + body.slice(end); from = at; continue; }
+    const name = tag.match(/^<([A-Za-z][\w.:-]*)/)[1];
+    const re = new RegExp(`<(/?)${escapeRegExp(name)}(?=[\\s/>])`, "g");
+    re.lastIndex = end;
+    let depth = 1, close = -1, mm;
+    while ((mm = re.exec(body))) {
+      const t = openingTag(body, mm.index);
+      if (t === null) return null;
+      if (mm[1]) { if (--depth === 0) { close = mm.index + t.length + 1; break; } }
+      else if (!t.trimEnd().endsWith("/")) depth++;
+    }
+    if (close < 0) return null;
+    body = body.slice(0, at) + body.slice(close);
+    from = at;
+  }
+}
+
+/**
+ * Does the opening tag carry a label that names something? `aria-label=""`,
+ * `aria-label=" "` or `aria-label={""}` names nothing; any other expression may.
+ */
+export function hasNonBlankLabel(tag) {
+  for (const m of tag.matchAll(/\baria-label(?:ledby)?\s*=\s*(?:(["'])([\s\S]*?)\1|\{\s*(["'`])((?:\\[\s\S]|(?!\3)[^\\])*)\3\s*\}|\{)/g)) {
+    if (m[1] !== undefined) { if (!isBlank(decodeEntities(m[2]))) return true; }
+    else if (m[3] !== undefined) { if (!isBlank(decodeEscapes(m[4]))) return true; }
+    else return true; // an expression the gate cannot evaluate
+  }
+  return false;
 }
 
 /** Rule 2 over one file. Returns failure strings. */
@@ -440,7 +496,7 @@ export function checkIconButtons(rel, raw) {
     const line = src.slice(0, r.index).split("\n").length;
     const tag = openingTag(src, r.index);
     if (tag === null) { failures.push(`${rel}:${line}: <button> tag could not be parsed — failing closed`); continue; }
-    if (/\baria-label(ledby)?=/.test(tag) || tag.trimEnd().endsWith("/")) continue;
+    if (hasNonBlankLabel(tag) || tag.trimEnd().endsWith("/")) continue;
     const text = buttonText(src, r.index + tag.length);
     if (text === null) { failures.push(`${rel}:${line}: <button> body could not be parsed — failing closed`); continue; }
     if (isBlank(text)) failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
@@ -452,8 +508,8 @@ export function checkIconButtons(rel, raw) {
     const tag = openingTag(src, m.index);
     if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
     // A child text node (an sr-only <span>) names the button as well as aria-label does.
-    const named = /\baria-label(ledby)?=/.test(tag) || (!tag.trimEnd().endsWith("/") && !isBlank(buttonText(src, m.index + tag.length, "Button") ?? ""));
-    if (/\bsize=["{]\s*["']?icon["']?/.test(tag) && !named) {
+    const named = hasNonBlankLabel(tag) || (!tag.trimEnd().endsWith("/") && !isBlank(buttonText(src, m.index + tag.length, "Button") ?? ""));
+    if (/\bsize=["{]\s*["'`]?icon["'`]?/.test(tag) && !named) {
       failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
   }
@@ -694,6 +750,22 @@ function selfTest() {
       checkIconButtons("x.tsx", '<Button size="icon" onClick={f}><><svg/></></Button>').length === 1],
     ["a visible entity or string child still names a button",
       checkIconButtons("x.tsx", '<button onClick={f}><svg/>&amp; more</button>').length === 0 && checkIconButtons("x.tsx", '<button onClick={f}><svg/>{"Save"}</button>').length === 0],
+    ["an empty or blank aria-label does not name a button",
+      ['aria-label=""', 'aria-label=" "', 'aria-label={""}', "aria-label={` `}", 'aria-label="&nbsp;"', 'aria-labelledby=""'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
+      ['aria-label="Close"', "aria-label={t('close')}", 'aria-labelledby="close-label"'].every((a) => checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
+    ["text inside an aria-hidden child does not name a button",
+      ['<span aria-hidden="true">×</span>', "<span aria-hidden>×</span>", "<span aria-hidden={true}>×</span>", '<span aria-hidden="true"><b>×</b></span>'].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
+      checkIconButtons("x.tsx", '<button onClick={f}><svg aria-hidden="true" /><span className="sr-only">Close</span></button>').length === 0 &&
+      checkIconButtons("x.tsx", '<button onClick={f}><span aria-hidden="false">Close</span></button>').length === 0],
+    ["DEL, C1 controls and invisible format characters do not name a button",
+      ["&#x7F;", "&#x85;", "&shy;", "&#173;", "&lrm;", "&#x200E;", "&#x2800;", "&#x3164;", "&#x115F;", "&#x034F;", "&#xFE0F;", "&#x061C;", "&#xFFFC;", "&#x17B4;"].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c}</button>`).length === 1)],
+    ["a closer written `</button >` does not borrow the next button's text",
+      checkIconButtons("x.tsx", '<button onClick={a}><svg/></button >\n<button onClick={b}>Save</button>').length === 1],
+    ["a template-literal icon size is still an icon button",
+      checkIconButtons("x.tsx", "<Button size={`icon`}><X /></Button>").length === 1],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -751,6 +823,8 @@ function selfTest() {
         checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", 'import opts from "../lib/feed";\nuseQuery({ ...opts }); return null;')], false).failures.length === 1)],
     ["a namespace import of a polling .ts default is followed",
       checkLiveRegions([view("t/src/lib/feed.ts", "const Poll = { refetchInterval: 5000 };\nexport default Poll;"), view("t/src/pages/P.tsx", 'import * as F from "../lib/feed";\nuseQuery({ ...F.default }); return null;')], false).failures.length === 1],
+    ["a default bound beside a namespace (`import D, * as F`) is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "const Poll = { refetchInterval: 5000 };\nexport default Poll;"), view("t/src/pages/P.tsx", 'import D, * as F from "../lib/feed";\nuseQuery({ ...D }); return null;')], false).failures.length === 1],
     ["a hook re-exported from another module fails closed",
       checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
     ["a hook bound to another name without a call fails closed",

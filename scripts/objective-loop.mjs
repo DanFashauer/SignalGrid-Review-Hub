@@ -49,8 +49,10 @@
 //     negated, naming another row, or in a later paragraph describe a blocker, they do not assert one. A
 //     marker with no date or an empty blocker is not a marker; a quoted or code-span marker is being
 //     discussed, not asserted (statusText's rule). Anything the slot does not read plainly is NOT parked.
-//     WRITER CONTRACT: put the marker IN the slot (right after the role/size clause's full stop), never
-//     appended to the end of the line, and prove the edit with `rowAwaiting(newRow.text) !== null`.
+//     WRITER CONTRACT: put the marker IN the slot — right after the first full stop that follows the title's
+//     " — " (the role/size clause; a few rows open with a bare status word there) — never appended to the end
+//     of the line, and prove the edit with `rowAwaiting(newRow.text) !== null`. The slot may sit on a later
+//     physical line than the title, so edit the line that holds that full stop.
 //   · a marker dated 0–14 days back (MEASURE_WINDOW_DAYS) PARKS the row: it goes to awaiting[], is never
 //     ranked, and raises its OWN `awaiting-owner-row-<id>` escalation (one per parked row, so a row parked
 //     after the first mail is a new id and is mailed, and each row keeps its own `since`). Checked BEFORE

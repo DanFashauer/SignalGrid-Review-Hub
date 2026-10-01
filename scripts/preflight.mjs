@@ -430,6 +430,15 @@ const STEPS = [
   { name: "Launch-proof bindings (every launch item names real, per-push proofs)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Plan row 172: the connector-emulator smoke's evidence manifest used to TYPE six
+  // public-safety properties; it now emits this script's measurement, and this gate
+  // fails if the workflow ever types one again or a property stops holding.
+  { name: "Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs", "--self-test"] },
+  { name: "Connector-emulator evidence (the manifest asserts only what a step measured)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs"] },
+  // Plan row 171: the daily rot check (scheduled-verification.yml) runs THIS file whole
+  // instead of a hand-picked tenth of it; the gate fails if a named gate grows back there.
+  { name: "Scheduled-verification scope self-test (a hand-picked nightly gate must fail)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs", "--self-test"] },
+  { name: "Scheduled-verification scope (the daily rot check runs preflight whole)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs"] },
   // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was
   // allowed and whether it is bounded; this asks whether it went out SIGNED. `if (secret)
   // { sign }` skipped the signature on an absent secret and reported 'sent' — a guard with

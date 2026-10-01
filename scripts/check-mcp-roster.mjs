@@ -97,6 +97,10 @@ export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
 // Known-site presence reads the token loosely; the SWEEP below is an allowlist.
 const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
 const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
+// A .json file is first PARSED (JSON.parse) and walked (context7JsonFindings): keys, values and command/args
+// context come from the data. Only unparseable JSON (JSONC) falls back to the line reader below. A YAML value
+// that IS a spec and continues onto a more-indented line is REFUSED (yamlSpecContinuations): no YAML parser is
+// a dependency here, so a shape this gate cannot fold fails closed instead of passing.
 // Each line is TOKENIZED the way its reader would see it, then every token
 // naming the package must carry exactly PINNED. No terminator characters:
 //   * shell/prose (default): POSIX words — '…' literal, "…" with \-escapes,
@@ -188,6 +192,10 @@ const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/.test(v) ? JSON.parse(v) : /^'.*'$/
 const stripYamlProps = (v) => v.replace(/^(?:(?:[&*][^\s,{}[\]]+|!\S*)\s+)+/, "");
 
 /** Pure: the values of `@upstash/context7-mcp[@selector]` KEYS on a line (dependency and override keys), each to be held to PINNED. */
+// A key naming the package: the package itself, an override selector (`@x/y@4`), or a path-style
+// override/resolution key whose LAST segment is the package (pnpm `parent>pkg`, yarn `**/pkg`, `parent/pkg`).
+export const CONTEXT7_KEY_RE = /(?:^|[>/])@upstash\/context7-mcp(?:@\S*)?$/i;
+
 function context7KeyValues(line, kind) {
   const out = [];
   if (kind === "json") {
@@ -198,15 +206,22 @@ function context7KeyValues(line, kind) {
       } catch {
         key = m[1];
       }
-      if (/^@upstash\/context7-mcp(?:@\S*)?$/i.test(key)) out.push(m[2] === undefined ? "" : unquote(m[2]));
+      if (CONTEXT7_KEY_RE.test(key)) out.push(m[2] === undefined ? "" : unquote(m[2]));
     }
     return out;
   }
-  // a quoted key (any kind) or, in YAML/TOML/ini, an unquoted one; an override key may carry a selector
-  const re =
-    kind === "yaml"
-      ? /(?:^|[\s{,?-])(["']?)@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1\s*[:=]\s*(.*)$/i
-      : /(?:(["'])@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1|@upstash\\?\/context7-mcp)\s*[:=]\s*(.*)$/i;
+  // YAML: read the line's KEY (quoted or plain) and test it whole, so path-style keys are seen
+  if (kind === "yaml") {
+    const kv = /^\s*(?:-\s+)?(?:\?\s+)?("(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)\s*:\s+(.*)$/.exec(line);
+    if (kv && CONTEXT7_KEY_RE.test(unquote(kv[1]).replace(/\\\//g, "/"))) {
+      let v = stripYamlProps(stripYamlComment(kv[2]).trim());
+      const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
+      out.push(q ? unquote(q[1]) : v.replace(/[\s,}\]]+$/, "").trim());
+    }
+    if (kv) return out;
+  }
+  // a quoted key (any kind, path-style allowed) or a bare one; an override key may carry a selector
+  const re = /(?:(["'])(?:[^"'\s]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1|(?:^|[\s{,?-])@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?)\s*[:=]\s*(.*)$/i;
   const m = re.exec(line);
   if (m && !/^\/\//.test(m[2])) {
     let v = stripYamlProps(stripYamlComment(m[2]).trim());
@@ -300,7 +315,8 @@ export function logicalLines(lines, kind) {
         continue;
       }
       if (cur) out.push(cur);
-      cur = { i, text: t, indent: indent(l), block: /:\s+(?:[&!]\S+\s+)*[>|][+-]?\d*\s*$/.test(t) ? "pending" : false };
+      // only a FOLDED `>` block joins into one value; a literal `|` block keeps its lines (commands) separate
+      cur = { i, text: t, indent: indent(l), block: /:\s+(?:[&!]\S+\s+)*>[+-]?\d*\s*$/.test(t) ? "pending" : false };
     }
     if (cur) out.push(cur);
     return out.map(({ i, text }) => ({ i, text }));
@@ -324,14 +340,110 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "") {
   for (const v of context7KeyValues(line, kind)) push(classify(v));
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner = PACKAGE_RUNNER_RE.test(line) || /["']?command["']?\s*:\s*["']?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)\b/.test(before);
-  for (const unit of lineUnits(line, kind)) {
+  out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
+  if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
+  return out;
+}
+
+/** Pure: findings for argv-like units. An `npm:` alias with no version installs latest, so it is unpinned with or without a runner. */
+export function context7UnitFindings(units, pin, runner) {
+  const out = [];
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
+  for (const unit of units) {
     for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
       const rest = unit.slice(m.index + m[0].length);
-      if (rest.startsWith("@")) push(classify(shedMarkup(rest.slice(1))));
+      if (rest.startsWith("@")) {
+        const f = classify(shedMarkup(rest.slice(1)));
+        if (f) out.push(f);
+      } else if (/^\s*npm:$/i.test(unit.slice(0, m.index)) && shedMarkup(rest) === "") out.push({ unpinned: "<none> (npm: alias)" });
       else if (!/^["']?\s*[:=]/.test(rest) && runner && shedMarkup(rest) === "") out.push({ bare: true });
     }
   }
-  if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
+  return out;
+}
+
+/**
+ * Pure: findings for a whole PARSED JSON document — keys, values and `command`/`args` context come from the
+ * data, not from lines. `lineOf(needle)` maps a finding back to a line of the source. Null when `text` is not JSON.
+ */
+export function context7JsonFindings(text, pin) {
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return null; // JSONC, templates: the line reader takes over
+  }
+  const out = [];
+  const nameLine = (() => {
+    const at = text.search(/context7-mcp|upstash\\?\/context7/i);
+    return at < 0 ? 1 : text.slice(0, at).split("\n").length;
+  })();
+  const lineOf = (needle) => {
+    const at = needle ? text.indexOf(needle) : -1;
+    return at < 0 ? nameLine : text.slice(0, at).split("\n").length;
+  };
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: String(v).slice(0, 24) || "<empty>" });
+  const RUNNER_CMD = /^(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe)?$/i;
+  const walk = (node, inArray, runner) => {
+    if (Array.isArray(node)) {
+      for (const v of node) walk(v, true, runner);
+    } else if (node && typeof node === "object") {
+      const cmd = typeof node.command === "string" ? node.command.trim().split(/\s+/)[0].replace(/^.*[\\/]/, "") : "";
+      const here = runner || RUNNER_CMD.test(cmd);
+      for (const [k, v] of Object.entries(node)) {
+        if (CONTEXT7_KEY_RE.test(k)) {
+          const val = typeof v === "string" ? v : v && typeof v === "object" && typeof v["."] === "string" ? v["."] : null;
+          const f = val === null ? null : classify(val);
+          if (f) out.push({ line: lineOf(JSON.stringify(k).slice(1, -1)), f });
+          if (typeof v !== "string") walk(v, false, here);
+        } else walk(v, false, here);
+      }
+    } else if (typeof node === "string" && /context7/i.test(node)) {
+      const units = inArray || SPEC_VALUE_RE.test(node) ? [node] : shellWords(node);
+      const line = lineOf(JSON.stringify(node).slice(1, -1));
+      for (const f of context7UnitFindings(units, pin, runner || PACKAGE_RUNNER_RE.test(node))) out.push({ line, f });
+      if (CONTEXT7_GIT_SOURCE_RE.test(node) || ((runner || PACKAGE_RUNNER_RE.test(node)) && CONTEXT7_SHORTHAND_RE.test(` ${node} `)))
+        out.push({ line, f: { git: true } });
+    }
+  };
+  walk(doc, false, false);
+  return out;
+}
+
+/**
+ * Pure: FAIL-CLOSED for YAML values that ARE a Context7 spec but continue onto a more-indented line (a plain
+ * or folded scalar, a next-line value, a bare `-` item). This parser-free gate cannot fold every YAML shape the
+ * way a YAML reader does, so it refuses them: the pinned spec must be written whole on one line. Literal `|`
+ * blocks are separate lines (commands) and are not refused. Returns `{ i, j }` (spec line, continuation line).
+ */
+export function yamlSpecContinuations(lines) {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const blank = (l) => l.trim() === "" || l.trim().startsWith("#");
+  for (let i = 0; i < lines.length; i++) {
+    const l = stripYamlComment(lines[i]);
+    const kv = /^\s*(?:-\s+)?(?:\?\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)\s*:\s+(.*)$/.exec(l);
+    const item = /^\s*-\s+(.*)$/.exec(l);
+    const value = stripYamlProps((kv ? kv[1] : item ? item[1] : l).trim()).replace(/^["']/, "");
+    if (!SPEC_VALUE_RE.test(value)) continue;
+    let base = indent(l);
+    if (!kv && !item) {
+      // a value on its own line: its owner is the nearest less-indented line above
+      let o = i - 1;
+      while (o >= 0 && (blank(lines[o]) || indent(lines[o]) >= indent(l))) o--;
+      // inside a literal `|` block the lines are separate (a script) — unless the spec is the block's FIRST line,
+      // where the block is the value itself
+      if (o >= 0 && /(?::\s*|^\s*)(?:[&!]\S+\s+)*\|[+-]?\d*\s*$/.test(stripYamlComment(lines[o]))) {
+        let p = i - 1;
+        while (p > o && blank(lines[p])) p--;
+        if (p !== o) continue;
+      }
+      base = o >= 0 ? indent(lines[o]) : 0;
+    }
+    let j = i + 1;
+    while (j < lines.length && blank(lines[j])) j++;
+    if (j < lines.length && indent(lines[j]) > base) out.push({ i, j });
+  }
   return out;
 }
 
@@ -379,11 +491,29 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     const lines = text.split("\n");
     const kind = context7FileKind(path);
     const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
-    for (const { i, text: line } of logicalLines(lines, kind)) {
-      if (/upstash\\?\/context7-mcp/i.test(line)) swept++;
+    const json = kind === "json" ? context7JsonFindings(text, pin) : null;
+    const units = json
+      ? [...new Set(json.map((x) => x.line))].map((ln) => ({ i: ln - 1, findings: json.filter((x) => x.line === ln).map((x) => x.f) }))
+      : logicalLines(lines, kind).map(({ i, text: line }) => ({
+          i,
+          line,
+          findings: context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n")),
+        }));
+    if (json) swept += (text.match(/upstash\\?\/context7-mcp/gi) ?? []).length;
+    if (kind === "yaml") {
+      for (const { i, j } of yamlSpecContinuations(lines)) {
+        const u = units.find((x) => x.i === i);
+        if (u && u.findings.length) continue; // already named
+        problems.push(
+          `${path}:${i + 1}: Context7 spec value continues on line ${j + 1} (a multi-line YAML value this gate cannot fold) — write the pinned spec whole on one line (PINNED ${pin})`,
+        );
+      }
+    }
+    for (const { i, line, findings } of units) {
+      if (line !== undefined && /upstash\\?\/context7-mcp/i.test(line)) swept++;
       const seen = new Set();
       seenAt.set(i, seen);
-      for (const f of context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n"))) {
+      for (const f of findings) {
         if (f.stale) {
           seen.add(f.stale);
           problems.push(stale(path, i + 1, f.stale));
@@ -1025,7 +1155,7 @@ server.registerTool(
     [`"upstream": "https://github.com/upstash/context7",`, null, "the roster's upstream repo URL (not an install source)"],
     [`bun x ${NAME}`, "bare", "a versionless bun x call"],
     [`pnpm exec ${NAME}`, "bare", "a versionless pnpm exec call"],
-    [`deno run npm:${NAME}`, "bare", "a versionless deno run npm: call"],
+    [`deno run npm:${NAME}`, "unpinned", "a versionless deno run npm: call (an npm: alias with no version)"],
     [`${NAME}: latest`, "unpinned", "a YAML value that is a tag"],
     [`npx -y ${SPEC}${realPin} - see below`, null, "an UNQUOTED pin followed by prose (the shell splits it; no false positive)"],
     // round 6: lines are TOKENIZED as their reader would (shell words / JSON literals / YAML scalars)
@@ -1104,11 +1234,47 @@ server.registerTool(
     ["w.yaml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo done\n`, 2, false, "a literal-block command whose next line is another command (no false positive)"],
     ["package.json", `{\n  "pnpm": {"overrides": {"${SPEC}4": "${realPin}"}}\n}\n`, 2, false, "an override key redirecting TO the pin (no false positive)"],
     ["d.md", `the cloud's pin is ${SPEC}${realPin} and Dan's too\n`, 1, false, "two prose apostrophes around a correct pin (no false positive)"],
+    // round 8: YAML spec values that continue on more-indented lines are REFUSED (fail closed, whatever follows)
+    ["w.yaml", `c7:\n  npm:${SPEC}${realPin}\n  || 5\n`, 2, true, "a YAML spec value starting on the line AFTER its key, continued"],
+    ["w.yaml", `c7: npm:${SPEC}${realPin}\n    - 5\n`, 1, true, "a plain spec scalar continued by a `- `-looking line"],
+    ["w.yaml", `- npm:${SPEC}${realPin}\n    - 5\n`, 1, true, "a sequence-item spec continued by a `- `-looking line"],
+    ["w.yaml", `c7: npm:${SPEC}${realPin}\n\n    || 5\n`, 1, true, "a blank line between a spec value and its continuation"],
+    ["w.yaml", `c7:\n  >-\n  npm:${SPEC}${realPin}\n  || 5\n`, 3, true, "`>-` on its own line below the key"],
+    ["w.yaml", `args:\n  -\n    npm:${SPEC}${realPin}\n    || 5\n`, 3, true, "a bare `-` item with the spec on the next lines"],
+    ["w.yaml", `deps:\n  c7:\n    npm:${SPEC}${realPin}\n    || 5\n`, 3, true, "a nested next-line spec value, continued"],
+    ["w.yaml", `c7:\n  npm:${SPEC}${realPin}\nother: 1\n`, 2, false, "a next-line spec value followed by a sibling key (no false positive)"],
+    ["w.yaml", `args:\n  - -y\n  - "${SPEC}${realPin}"\n  - --flag\n`, 3, false, "a spec item followed by sibling items (no false positive)"],
+    ["w.yaml", `script: |\n  echo start\n  npm:${SPEC}${realPin}\n  echo next\n`, 3, false, "a spec line in the MIDDLE of a literal `|` script (separate lines; no false positive)"],
+    ["w.yaml", `run: |\n  npx -y ${SPEC}${realPin}\n  echo next\n`, 2, false, "a literal `|` script whose first line runs the pin (no false positive)"],
+    ["w.yaml", `c7: |\n  npm:${SPEC}${realPin}\n  || 5\n`, 2, true, "a literal `|` block whose FIRST line is the spec, continued (the block is the value)"],
+    ["w.yaml", `run: >\n  npx -y ${SPEC}${realPin}\n  --flag\n`, 2, false, "a folded COMMAND continued by more args (not a spec value; no false positive)"],
+    ["w.yaml", `c7: npm:${NAME}\n`, 1, true, "a versionless YAML npm: alias (installs latest)"],
+    // round 8: path-style override/resolution keys
+    ["w.yaml", `overrides:\n  "foo>${NAME}": ^5\n`, 2, true, "a pnpm `parent>pkg` override key (quoted)"],
+    ["w.yaml", `overrides:\n  foo>${SPEC}${realPin}: ^5\n`, 2, true, "a pnpm `parent>pkg@sel` override key (unquoted)"],
+    ["w.yaml", `resolutions:\n  "**/${NAME}": ^5\n`, 2, true, "a yarn `**/pkg` resolution key"],
     ["d.md", `say 'pinned ${SPEC}${realPin} today\n`, 1, false, "a lone, never-closed quote before a correct pin stays literal (no false positive)"],
     ["w.yaml", `deps: {"${NAME}": ${realPin}}\n`, 1, false, "a correct unquoted value closed by `}` in a YAML flow mapping (no false positive)"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
   }
+  // round 8: JSON is PARSED (JSON.parse) and walked — keys split from colons, path keys, command/args context
+  for (const [body, want, what] of [
+    [`{"pnpm":{"overrides":{"foo>${NAME}":"^5"}}}`, true, "a pnpm `parent>pkg` override (JSON)"],
+    [`{"pnpm":{"overrides":{"foo@1>${NAME}":"latest"}}}`, true, "a pnpm `parent@1>pkg` override to a tag"],
+    [`{"resolutions":{"**/${NAME}":"^5"}}`, true, "a yarn `**/pkg` resolution"],
+    [`{"resolutions":{"foo/${NAME}":"^5"}}`, true, "a yarn `parent/pkg` resolution"],
+    [`{\n "overrides": {\n  "${SPEC}${realPin}"\n  : "^5"\n }\n}`, true, "an override key split from its colon"],
+    [`{"overrides":{"${NAME}":{".":"^5"}}}`, true, "an npm nested override `{\".\": range}`"],
+    [`{"dependencies":{"x":"npm:${NAME}"}}`, true, "a versionless JSON npm: alias"],
+    [`{"mcpServers":{"c7":{"command":"npx","args":["-y","${NAME}"]}}}`, true, "a one-line MCP config: command npx + bare args element"],
+    [`{"mcpServers":{"c7":{"command":"npx","args":["-y","${SPEC}${realPin}"]}}}`, false, "the same MCP config pinned (no false positive)"],
+    [`{"pnpm":{"overrides":{"foo>${NAME}":"${realPin}"}}}`, false, "a path override redirecting TO the pin (no false positive)"],
+  ]) {
+    const got = context7JsonFindings(body, realPin);
+    checks.push([`[json parsed] ${what} → ${want ? "named" : "no finding"}`, got !== null && (want ? got.length >= 1 : got.length === 0)]);
+  }
+  checks.push(["unparseable JSON (JSONC) falls back to the line reader", context7JsonFindings(`{ // c\n "a": 1 }`, realPin) === null]);
   checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);
   const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM
   checks.push([

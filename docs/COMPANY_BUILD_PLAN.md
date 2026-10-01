@@ -3624,7 +3624,7 @@ earlier — that is the loop working, not a reason to soften the record.
     OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1241 merge 4151fd45 walks parsed JSON. Check: `pnpm run proof:signalgrid-grid`.
 
 146. **The SBOM's maven half collects direct quoted coordinates only, and it is the
-    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds maven completeness guard. Check: `pnpm run proof:sbom`.
+    one ecosystem with no completeness guard.** — OPEN, devex-tooling-engineer. DONE (measured 2026-10-01): PR #1237 merge 3de208fe adds maven completeness guard. Check: `pnpm run sbom`.
 
 147. **Three e2e specs abort external requests without asserting none were
     attempted; the fourth documents exactly why that is wrong.** — OPEN,

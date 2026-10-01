@@ -401,9 +401,11 @@ export function grepMarkerChecks(text, label, readTarget) {
 // quoted string is still read as a comment. Carrying the state across lines was measured on
 // this tree and drifts on heredoc apostrophes (sg-brain-link.sh ends mid-quote, and the state
 // then misreads validate-sim-macos.sh from line 223): it would turn comments into code.
-// ponytail: two forms still misread a `#` and hide a hazard after it, as before this fix; neither
+// ponytail: three forms still misread a `#` and hide a hazard after it, as before this fix; none
 // occurs under scripts/mac or validate-sim-macos.sh: an ANSI-C string holding `\'` (`$'it\'s # x' "${X[@]}"`,
-// the `\'` closes sq early) and a `#` after an escaped space (`a\ #b "${X[@]}"`). Upgrade: a real tokenizer.
+// the `\'` closes sq early), a `#` after an escaped space (`a\ #b "${X[@]}"`), and a quoted string
+// nested in a command substitution (`echo "$(echo "a # b")" "${X[@]}"`: the inner `"` reads as
+// closing the outer string). Upgrade: a real tokenizer.
 const shellCode = (text) =>
   text.split("\n").map((l) => {
     let sq = false;
@@ -444,7 +446,8 @@ export function bash32Problems(text, label) {
     if (strict) {
       // Quoted or not, standalone or embedded (`cmd ${A[@]}`, `"--x=${A[@]}"`, `"$X ${A[@]}"`):
       // 3.2 aborts on an EMPTY array in every one of them. `${#A[@]}` / `${!A[@]}` are safe
-      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before. NOT `:+`
+      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before (CLAUDE.md
+      // prescribes `${A+`; it tests element 0, so only `${A[@]+` keeps a sparse A[1]=x). NOT `:+`
       // (measured on /bin/bash 3.2.57): `${A:+` tests the FIRST element, so A=("" x y) expands to
       // nothing; `${A[@]:+` tests the whole expansion, so only a lone A=("") is dropped.
       for (const m of line.matchAll(/\$\{([A-Za-z_]\w*)\[[@*]\]\}/g)) {
@@ -739,7 +742,7 @@ function selfTest() {
       S("grep-inbox.sh").some((p) => p.rule === "i"),
       "MISSED the dead lane-tick.sh unread-mail line (BUILD_BACKLOG finding #8)");
     expect("rule (i) leaves a grep over any other target alone",
-      S("grep-unanchored.sh").every((p) => p.rule !== "g"),
+      S("grep-unanchored.sh").every((p) => p.rule !== "i"),
       "FALSE POSITIVE: rule (i) fired on a target not in HUMAN_ONLY_OUTPUT");
     expect("a grep against a script that does not exist is caught",
       F("grep-missing-target.sh").problems.some((p) => p.rule === "f"),

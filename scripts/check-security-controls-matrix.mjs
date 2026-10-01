@@ -278,11 +278,12 @@ function expandBraces(p) {
 const PATHISH = /^[\w.@{},/-]+$/;
 const FILEEXT = /\.(ts|tsx|mjs|cjs|js|json|md|ya?ml|swift|sql|sh)$/;
 
-/** Backticked tokens in a Where cell that name repo paths (not identifiers, not `/v1`). */
-/** The only leading-slash tokens that are API routes, not paths: `/` and `/v1…`.
- *  Every other leading-slash token is treated as a path, so the resolver's
- *  absolute-path rejection fails it (round 11: `/etc/passwd` used to be skipped). */
-const API_ROUTE = /^\/(v1\b[\w/.{}:-]*)?$/;
+/** Backticked tokens in a Where cell that name repo paths (not identifiers, not `/` or `/v1`). */
+/** The only leading-slash tokens exempt as API routes, not paths: exactly `/` and
+ *  `/v1` (the only two the matrix cites). Every other leading-slash token — `/v1-lib/…`,
+ *  `/v1/lib/…`, `/v1/../…`, `/v1.ts` included — is treated as a path, so the resolver's
+ *  absolute-path rejection fails it (round 11: `/etc/passwd`; round 13: the `/v1\b…` shape). */
+const API_ROUTE = /^\/(v1)?$/;
 /** A GitHub Action ref (`owner/repo[/path]@vN`) — never a repo path. Accepted only
  *  on Automated rows, and only when its first segment is NOT a top-level directory
  *  of this repository (so `scripts/x.mjs@v2` is not mistaken for one; round 11). */
@@ -612,6 +613,11 @@ function selfTest() {
     // round 11: leading-slash paths and Automated-row citations the parser skipped
     ["fail: an absolute path beside a valid one on an Implemented row", plant("| Planted P13 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `/lib/signalgrid-core/src/no-such-file.ts` |"), 1],
     ["fail: /etc/passwd beside a valid path on an Implemented row", plant("| Planted P14 | ASVS 5.0 | Implemented (public core) | `/etc/passwd`; `lib/signalgrid-core/src/policy.ts` |"), 1],
+    // round 13: only the exact tokens `/` and `/v1` are exempt — no `/v1`-prefixed path
+    ...["/v1-lib/signalgrid-core/src/no-such-file.ts", "/v1/lib/signalgrid-core/src/no-such-file.ts", "/v1/../../etc/passwd", "/v1.ts", "/v1:/etc/passwd"].map((t, i) =>
+      [`fail: ${t} beside a valid path on an Implemented row`, plant(`| Planted V${i} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`${t}\` |`), 1]),
+    ["fail: a /v1-prefixed path on an Automated row", plant("| Planted A4 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `/v1-scripts/no-such-gate.mjs` |"), 1],
+    ["pass: the exact route tokens `/` and `/v1` beside a valid path", plant("| Planted V9 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `/`; `/v1` |"), 0],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

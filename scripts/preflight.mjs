@@ -111,6 +111,10 @@ const STEPS = [
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.
   { name: "MCP roster self-test (a drifted tool count, a ghost grant and an ungranted mcp__ call must fail)", cmd: ["node", "scripts/check-mcp-roster.mjs", "--self-test"] },
   { name: "MCP roster (per-lane and per-skill grants; signalgrid-mcp tool count derived from the server source)", cmd: ["node", "scripts/check-mcp-roster.mjs"] },
+  // `pnpm run scan:estate` itself stays out of preflight and CI (CI has one checkout); only
+  // its locator and tally are proved here, with disk and git injected, so the proof is the
+  // same on a Mac with siblings and on a runner with none.
+  { name: "Estate scan self-test (an unreachable or misidentified sibling must read NOT SCANNED; only an archived repo's breaks are report-only)", cmd: ["node", "scripts/scan-estate-citations.mjs", "--self-test"] },
   // Row 17's live-check ledger: every live check, its dimensions and the code it verified;
   // the coverage counts are derived here, and check-derived-doc-figures holds the plan to them.
   { name: "Wire-truth ledger self-test (an unknown dimension, an undeclared bound symbol and an uncited live record must fail)", cmd: ["node", "scripts/check-wire-truth-ledger.mjs", "--self-test"] },

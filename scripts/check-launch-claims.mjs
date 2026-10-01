@@ -1159,9 +1159,11 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     // whole file keeps warning about. Deleting the `files.push` must fail here.
     audienceDocs.every((d) => files.includes(d.file)) &&
     // THE RETIRED-LABEL DOC SCAN (DR-054 sweep #7). A bare `catch { continue }` there
-    // skipped an EACCES doc exactly like a deleted one and the gate then passed over
-    // text it never read. EACCES must be recorded; ENOENT must stay a silent skip; and
-    // the live loop must call the reader (pinned lexically, needle built from pieces).
+    // skipped an EACCES doc exactly like a deleted one, so that loop concluded clean over
+    // text it never read; only the later, unguarded docs-ceiling read happened to crash
+    // on the same file. This makes the loop refuse by name instead of relying on that
+    // crash. EACCES must be recorded; ENOENT must stay a silent skip; and the live loop
+    // must call the reader (pinned lexically, needle built from pieces).
     (() => {
       const thrower = (code) => () => { throw Object.assign(new Error(`${code}: synthetic`), { code }); };
       const denied = [];

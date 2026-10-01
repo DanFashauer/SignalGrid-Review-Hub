@@ -32,6 +32,13 @@ export interface FetchLikeResponse {
   json: () => Promise<unknown>;
 }
 
+/**
+ * The injected fetch MUST settle on its own (a timeout or abort signal). The cache
+ * single-flights it: every concurrent `get()` joins ONE shared promise, and the
+ * cache has no timer of its own (its clock is injected), so a fetch that never
+ * settles stalls every caller. api-server's `defaultJwksFetch` carries
+ * `AbortSignal.timeout(5000)`, which also aborts the body read.
+ */
 export type JwksFetch = (uri: string) => Promise<FetchLikeResponse>;
 
 export interface JwksCache {

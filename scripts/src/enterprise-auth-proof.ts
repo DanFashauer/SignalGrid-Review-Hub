@@ -18,7 +18,7 @@ import {
 } from "node:crypto";
 import {
   createEnterpriseAuthenticator,
-  createJwksCache, verifyJwtRs256,
+  createJwksCache, loadEnterpriseAuthConfig, verifyJwtRs256,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -345,6 +345,59 @@ if (!accepted.ok) {
     // a throw is the defect; warmKids stays empty
   }
   check("a JWKS cache fed a null element serves the real key on a warm kid lookup", warmKids.includes(KID));
+}
+
+// ── NON-FINITE VERIFIER INPUTS FAIL CLOSED ───────────────────────────────────
+//
+// `now > exp * 1000 + tolMs` is false when `now` or `tolMs` is NaN (and for an
+// Infinity tolerance, since `exp + Infinity` never lapses), so a correctly signed,
+// EXPIRED token was accepted. Config parsing and the provider guard both today;
+// only a direct caller reaches it, which is why it is called directly here.
+{
+  const base = { jwks, issuer: ISSUER, audience: AUDIENCE, nowMs: NOW_MS, clockToleranceSec: 60 };
+  const outcome = (token: string, over: Partial<typeof base>): boolean | "threw" => {
+    try {
+      return verifyJwtRs256(token, { ...base, ...over }).ok;
+    } catch {
+      return "threw";
+    }
+  };
+  const expiredToken = signRs256({
+    header: validParts().header,
+    payload: { ...validParts().payload, exp: secBase - 120, nbf: secBase - 300, iat: secBase - 300 },
+  });
+  check("control: the signed, expired token is refused with finite inputs", outcome(expiredToken, {}) === false);
+  check("an expired token is refused when clockToleranceSec is NaN", outcome(expiredToken, { clockToleranceSec: NaN }) === false);
+  check("an expired token is refused when clockToleranceSec is Infinity", outcome(expiredToken, { clockToleranceSec: Infinity }) === false);
+  check("an expired token is refused when nowMs is NaN", outcome(expiredToken, { nowMs: NaN }) === false);
+  check("a valid token is refused when nowMs is NaN — no clock, no verdict", outcome(validToken, { nowMs: NaN }) === false);
+  check("a valid token is refused when nowMs is missing (a JS caller)", outcome(validToken, { nowMs: undefined as unknown as number }) === false);
+  check("a valid token still verifies with finite inputs", outcome(validToken, {}) === true);
+  check("a valid token still verifies with clockToleranceSec omitted (default applies)", outcome(validToken, { clockToleranceSec: undefined }) === true);
+}
+
+// ── OIDC_CLOCK_TOLERANCE_SEC IS BOUNDED ──────────────────────────────────────
+//
+// The knob is skew allowance, not token lifetime: `1000000000` kept a token alive
+// 31 years past its exp. Over the cap the config is `invalid`, which the server
+// answers by refusing to boot (context.ts) — the rule for a bad security knob.
+{
+  const toleranceFor = (raw?: string): number | "invalid" | "disabled" => {
+    const result = loadEnterpriseAuthConfig({
+      OIDC_ISSUER: ISSUER,
+      OIDC_AUDIENCE: AUDIENCE,
+      OIDC_JWKS_URI: config.jwksUri,
+      OIDC_TENANT_MAP: JSON.stringify({ "contoso-tenant-guid": "tenant_northwind" }),
+      OIDC_ROLE_MAP: JSON.stringify({ "SignalGrid.Operator": "operator" }),
+      ...(raw === undefined ? {} : { OIDC_CLOCK_TOLERANCE_SEC: raw }),
+    });
+    return result.status === "enabled" ? result.config.clockToleranceSec : result.status;
+  };
+  check("an unset OIDC_CLOCK_TOLERANCE_SEC is 60", toleranceFor() === 60);
+  check("a blank OIDC_CLOCK_TOLERANCE_SEC is 60, not zero", toleranceFor("  ") === 60);
+  check("OIDC_CLOCK_TOLERANCE_SEC at the 300s cap is accepted", toleranceFor("300") === 300);
+  check("OIDC_CLOCK_TOLERANCE_SEC=301 is refused as invalid", toleranceFor("301") === "invalid");
+  check("OIDC_CLOCK_TOLERANCE_SEC=1000000000 is refused as invalid", toleranceFor("1000000000") === "invalid");
 }
 
 // ── JWKS SINGLE-FLIGHT AND FAILURE BACKOFF ───────────────────────────────────

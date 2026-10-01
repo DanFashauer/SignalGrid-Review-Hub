@@ -129,6 +129,13 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   if (typeof token !== "string") {
     return fail("token is not a string");
   }
+  // A NaN/Infinity clock or tolerance turns every `exp`/`nbf`/`iat` comparison
+  // below false, so an EXPIRED token would verify. Bad inputs refuse whatever
+  // the token is, before any key material is touched.
+  const toleranceSec = opts.clockToleranceSec ?? 60;
+  if (!Number.isFinite(opts.nowMs) || !Number.isFinite(toleranceSec)) {
+    return fail("verifier clock inputs (nowMs, clockToleranceSec) must be finite numbers");
+  }
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => p.length === 0)) {
     return fail("token is not a well-formed JWS (expected 3 non-empty segments)");
@@ -185,7 +192,7 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   }
 
   // Signature is valid — now enforce the registered claims. Still fail-closed.
-  const tolMs = Math.max(0, (opts.clockToleranceSec ?? 60)) * 1000;
+  const tolMs = Math.max(0, toleranceSec) * 1000;
   const now = opts.nowMs;
 
   if (typeof claims.exp !== "number") {

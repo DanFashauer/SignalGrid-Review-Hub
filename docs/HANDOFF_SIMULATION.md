@@ -73,7 +73,10 @@ moves held→active, the exception entry is removed via the real
   first was still unresolved. Now each release clears one hold, and the task
   moves held→active only when no other carried entry still holds it — a sibling
   that is resolved and verified but not yet released still holds it. The ledger
-  maps are null-prototype, so a ref such as `constructor` is just a ref.
+  maps are null-prototype, so a ref such as `constructor` is just a ref, and a
+  released hold leaves the task's list. An exception that names no task (possible
+  only from an untyped script) is still composed and carried, so the device and the
+  ceiling rise; only the hold is skipped.
 - **One evidence record proves one fix.** The same cycle-count ref verified two
   independent exceptions — evidence replay. An evidence ref already recorded as
   another exception's verification refuses (`verification_evidence_reused`), and
@@ -122,7 +125,7 @@ between shared iPads. Nothing is wrong with the work; one device is stale.
 
 ## What the proof checks
 
-Proved by `pnpm run proof:handoff-sim` (67 checks) —
+Proved by `pnpm run proof:handoff-sim` (68 checks) —
 `scripts/src/handoff-sim-proof.ts`, fully offline and deterministic. It replays
 both scenarios above and asserts, among others:
 
@@ -134,7 +137,7 @@ both scenarios above and asserts, among others:
   (`task_not_held`, `exception_unresolved`, `verification_missing`,
   `verification_not_independent`, `device_not_trusted_for_release`, plus the
   underlying door's `unknown_exception_ref` and the script-shape
-  `step_before_assemble` and `task_ref_missing`) — and **no refusal message echoes any
+  `step_before_assemble`) — and **no refusal message echoes any
   caller-supplied ref**, asserted on the thrown messages themselves;
 - trace invariants over both scenarios: `contextVersion` monotone (strict
   exactly at applied context-changing steps), the active+held task union

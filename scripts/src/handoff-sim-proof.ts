@@ -291,19 +291,60 @@ check("releasing one hold while a sibling is resolved + verified but NOT release
   bothVerified.work.heldTaskRefs.includes("task-0200") && !bothVerified.work.activeTaskRefs.includes("task-0200") &&
   bothVerified.work.unresolvedExceptionRefs.includes(SIBLING) && !bothVerified.work.unresolvedExceptionRefs.includes(CTRL_ENTRY_TWIN));
 
-// An exception naming no task (past the type system: a JSON script) is refused, and
-// nothing is held — it once put `null` into heldTaskRefs and later activeTaskRefs.
-const noTask = [undefined, "", "   ", null].map((ref) => runHandoffScript({
+// An exception naming no task (past the type system: a JSON script) still COUNTS:
+// its signal is composed and its entry carried, so assurance rises; only the hold is
+// skipped. Review round 3 showed the refusal this replaced dropped a restrict-grade
+// bypass report and let a resolved+verified release go through on that device.
+const bypassRaw: TaskExceptionReportRaw = {
+  exceptionKind: "procedure_bypassed",
+  exceptionState: "active",
+  taskState: "in_process",
+  taskSystemReachable: true,
+  sourceExceptionCode: "BYPASS",
+};
+const NT_ENTRY = "INVENTORY_EXCEPTION_ACTIVE:exc-nt-1";
+const noTask = [undefined, "", "   ", null, 107].map((ref) => runHandoffScript({
   scriptRef: "script-no-task",
   steps: [
-    { kind: "assemble", inputs: pickerInputs() },
-    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },
-    { kind: "exception", taskRef: ref as never, exceptionRef: "exc-no-task", raw: wrongAisleRaw },
+    { kind: "assemble", inputs: pickerInputs() },                                                  // 0
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },                  // 1
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-nt-1", raw: wrongAisleRaw },     // 2
+    { kind: "resolve", exceptionRef: NT_ENTRY, resolutionRef: "wms-adj-nt-1" },                    // 3
+    { kind: "verify", exceptionRef: NT_ENTRY, verificationEvidenceRef: "cyclecount-nt-1" },        // 4
+    { kind: "exception", taskRef: ref as never, exceptionRef: "exc-nt-byp", raw: bypassRaw },      // 5: names no task
+    { kind: "release", taskRef: "task-0107", exceptionRef: NT_ENTRY },                             // 6
   ],
-}).trace.entries[2]);
-check("an exception whose taskRef is missing, empty, blank or null → refused `task_ref_missing`, and nothing is held",
-  noTask.every((e) => e.status === "refused" && e.refusalCode === "task_ref_missing" && e.work?.heldTaskRefs.length === 0));
-const noTaskCode = noTask[0].refusalCode;
+}).trace.entries);
+check("an exception naming no task (missing, empty, blank, null, numeric) is still composed and carried — the device goes restrict-grade, nothing new is held, and the next release on that device is refused `device_not_trusted_for_release`",
+  noTask.every((t) =>
+    t[5].status === "applied" && t[5].decision?.deviceAction === "restrict" &&
+    t[5].exception?.taskHeld === false &&
+    t[5].work?.unresolvedExceptionRefs.some((e) => e.endsWith(":exc-nt-byp")) === true &&
+    JSON.stringify(t[5].work?.heldTaskRefs) === JSON.stringify(["task-0107"]) &&
+    t[6].status === "refused" && t[6].refusalCode === "device_not_trusted_for_release" &&
+    t[6].work?.heldTaskRefs.includes("task-0107") === true));
+
+// A released hold leaves the simulator's holds list. Review round 3: a stale entry
+// let a release aimed at task-0107 clear exc-b after exc-b was re-raised on task-0108,
+// orphaning task-0108's hold.
+const EB = "INVENTORY_EXCEPTION_ACTIVE:exc-stale-b";
+const stale = runHandoffScript({
+  scriptRef: "script-stale-hold",
+  steps: [
+    { kind: "assemble", inputs: pickerInputs() },                                                  // 0
+    { kind: "handoff", deviceRef: "handheld-A", deviceSignals: healthyHandheld },                  // 1
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-stale-b", raw: wrongAisleRaw },  // 2
+    { kind: "resolve", exceptionRef: EB, resolutionRef: "wms-adj-stale-b" },                       // 3
+    { kind: "verify", exceptionRef: EB, verificationEvidenceRef: "cyclecount-stale-b" },           // 4
+    { kind: "release", taskRef: "task-0107", exceptionRef: EB },                                   // 5: applied
+    { kind: "exception", taskRef: "task-0108", exceptionRef: "exc-stale-b", raw: wrongAisleRaw },  // 6: b again, on 0108
+    { kind: "exception", taskRef: "task-0107", exceptionRef: "exc-stale-x", raw: wrongAisleRaw },  // 7
+    { kind: "release", taskRef: "task-0107", exceptionRef: EB },                                   // 8: names 0107's OLD hold
+  ],
+}).trace.entries;
+check("a released hold is pruned: naming it again on its old task (after it is re-raised on ANOTHER task) → refused `exception_does_not_hold_task`, and the other task's hold still carries it",
+  stale[5].status === "applied" && stale[8].status === "refused" && stale[8].refusalCode === "exception_does_not_hold_task" &&
+  stale[8].work?.unresolvedExceptionRefs.includes(EB) === true && stale[8].work?.heldTaskRefs.includes("task-0108") === true);
 
 // ── HEALTHCARE SCENARIO: three shared iPads, work identical, trust re-earned ──
 
@@ -597,7 +638,6 @@ const refusalsExercised = new Set<string>([
   ...(orphan.trace.entries[0].refusalCode ? [orphan.trace.entries[0].refusalCode] : []),
   ...refusalCodes,
   ...refusalsFromHardening,
-  ...(noTaskCode ? [noTaskCode] : ["MISSING"]),
 ]);
 // Derived from the package's own exported code list, never restated: the previous
 // hand-copy claimed "every" while two codes it asserted elsewhere were missing from

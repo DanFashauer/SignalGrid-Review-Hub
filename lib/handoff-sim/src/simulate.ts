@@ -112,14 +112,12 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
         }
         case "exception": {
           const current = context as PortableWorkContext;
-          // A hold needs a task to hold. Past the type system (a JSON script) an
-          // absent or empty taskRef was applied and `null` became a held task.
-          if (typeof step.taskRef !== "string" || step.taskRef.trim().length === 0) {
-            throw new HandoffSimError(
-              "task_ref_missing",
-              "cannot apply this exception: it names no task — a hold is recorded against a task, never against nothing.",
-            );
-          }
+          // Past the type system (a JSON script) an exception can name no task.
+          // The REPORT still counts: its signal is composed and its entry carried,
+          // so the device and ceiling rise exactly as base did. Only the hold is
+          // skipped — there is no task to hold. (Refusing the whole step dropped a
+          // restrict-grade report and let a later release through: review round 3.)
+          const taskless = typeof step.taskRef !== "string" || step.taskRef.trim().length === 0;
           // The REAL chain, end to end: hardened normalize → fail-safe evaluate →
           // unified-ladder adapter. The simulator invents no verdict of its own.
           const normalized = normalizeReport(deviceRef ?? UNATTRIBUTED_DEVICE, step.raw);
@@ -143,15 +141,17 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
           refuseCredentialMaterial(step.exceptionRef, "exception.exceptionRef");
           const base = copy(current);
           if (holds) {
-            base.work.activeTaskRefs = base.work.activeTaskRefs.filter((r) => r !== step.taskRef);
-            if (!base.work.heldTaskRefs.includes(step.taskRef)) base.work.heldTaskRefs.push(step.taskRef);
             if (!base.work.unresolvedExceptionRefs.includes(carriedEntry)) {
               base.work.unresolvedExceptionRefs.push(carriedEntry);
             }
-            // Appended, never assigned: a second hold on the same task must not
-            // erase the first (release frees the task only when none is left).
-            const taskHolds = (holdsMap[step.taskRef] ??= []);
-            if (!taskHolds.includes(carriedEntry)) taskHolds.push(carriedEntry);
+            if (!taskless) {
+              base.work.activeTaskRefs = base.work.activeTaskRefs.filter((r) => r !== step.taskRef);
+              if (!base.work.heldTaskRefs.includes(step.taskRef)) base.work.heldTaskRefs.push(step.taskRef);
+              // Appended, never assigned: a second hold on the same task must not
+              // erase the first (release frees the task only when none is left).
+              const taskHolds = (holdsMap[step.taskRef] ??= []);
+              if (!taskHolds.includes(carriedEntry)) taskHolds.push(carriedEntry);
+            }
           }
           const result = reevaluateForDevice(base, [...deviceSignals, signal]);
           context = result.nextContext;
@@ -167,7 +167,7 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
             reasonCode: verdict.reasonCode,
             recommendedAction: signal.action,
             carriedEntry,
-            taskHeld: holds,
+            taskHeld: holds && !taskless,
           };
           break;
         }
@@ -187,6 +187,11 @@ export function runHandoffScript(script: HandoffScript): HandoffRunResult {
             verifications,
             currentDeviceDecision: lastDecision,
           });
+          // A released hold leaves the task's list: a stale entry must not let a
+          // later release on THIS task clear the same exception re-raised on another.
+          if (holdsMap[step.taskRef]) {
+            holdsMap[step.taskRef] = holdsMap[step.taskRef].filter((e) => e !== step.exceptionRef);
+          }
           break;
         }
         default:

@@ -423,14 +423,10 @@ elif [ "$PENDING" != "0" ] && [ "$DRY" = "0" ]; then
   RESULT="acted: ran $PENDING sim request(s); no new result files (see the run log)"
 fi
 
-# The inbox is PRINTED so the log shows what a person still owes — it is not
-# acked here, because a machine reading a message is not the addressee reading it.
-UNREAD="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '→ mac' || true)"
-UNREAD="${UNREAD:-0}"
-if [ "$UNREAD" != "0" ]; then
-  say "$UNREAD message(s) addressed to mac still unread — a person acks them: pnpm run lane:inbox"
-  RESULT="$RESULT; $UNREAD cloud→mac message(s) unread (need a person)"
-fi
+# Unread mail reaches RESULT through append_unread_state (check-lane-messages.mjs
+# --unread-summary), called by heartbeat below. A block here once grepped
+# `lane-message.mjs inbox` for '→ mac', an arrow that CLI never prints, so it could
+# not fire; scripts/check-sim-scripts-selfcheck.mjs rule (g) keeps it from returning.
 
 RESULT="$RESULT; objective: $LOOP_VERDICT"
 

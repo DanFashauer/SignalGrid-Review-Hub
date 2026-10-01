@@ -233,6 +233,23 @@ export function renderedStep4(doc) {
   // order from the list's start, whatever marker the source wrote, so `1. 2. 3. 3. 4.`
   // shows the second `3.` as step 4. Every ordered-list item's rendered number is
   // computed, a marker that disagrees with it fails, and step 4 is chosen by it.
+  // GitHub renders with cmark-gfm, markdown-it does not (round 10). Where the two
+  // disagree on plain markdown, the gate cannot know what a reader sees, so the
+  // syntax is refused: a footnote definition is step text to markdown-it but dropped
+  // or moved to the page foot by GitHub, and `$…$` is math on GitHub. Checked on the
+  // inline source, before any rendering, so no escape or entity spelling hides it.
+  const inlines = section.filter((t) => t.type === "inline");
+  if (inlines.some((t) => t.content.includes("[^")))
+    problems.push("the demo path section uses footnote syntax ([^…]) — GitHub drops or moves footnotes, so write it in the step");
+  if (inlines.some((t) => t.content.includes("$")))
+    problems.push("the demo path section contains `$` — GitHub renders $…$ as math, so the text a reader sees differs");
+  // A paragraph or heading whose text a reader sees as "4. …" is a step to the eye
+  // but not a list item, so the gate would never pick it as step 4 (round 10).
+  for (const t of inlines) {
+    const shown = visibleText(parseFragment(md.renderer.renderInline(t.children, md.options, {})));
+    if (/^\s*\d+\s*[.)](?:\s|$)/.test(shown))
+      problems.push(`the demo path has a line that reads as a numbered step but is not a list item: "${shown.slice(0, 40)}"`);
+  }
   const items = [];
   const lists = [];
   for (const [i, t] of section.entries()) {
@@ -531,6 +548,13 @@ function selfTest() {
     ["a repeated marker that renders as step 4 fails (round 9)", { ...base, doc: good.replace(STEP4, `4. -DemoBackendURL https://evil.example.com\n${STEP4}`) }, 'written "4." renders as 5'],
     // `3. 3. 4.`: the second `3.` is what a reader sees as step 4, the real one shows as 5.
     ["…and the item that renders as 4 is the one checked (round 9)", { ...base, doc: good.replace(STEP4, `3. intro\n3. -DemoBackendURL https://evil.example.com\n${STEP4}`) }, "its host is evil.example.com"],
+    // Round 10: syntax GitHub renders differently from markdown-it is refused.
+    ["a footnote definition carrying a flag fails (round 10)", withArg("-DemoBackendToken", undefined, "[^t]: -DemoBackendToken sgk_demo_northwind_operator"), "footnote syntax"],
+    ["a referenced footnote fails (round 10)", withProse("See the token[^t].\n\n   [^t]: -DemoBackendToken sgk_demo_northwind_operator"), "footnote syntax"],
+    ["$ math in the demo section fails (round 10)", withProse("$-DemoBackendDevice ipad-ward-01$"), "contains `$`"],
+    ["an escaped 4\\. paragraph that reads as a step fails (round 10)", { ...base, doc: good.replace(STEP4, `4\\. **The host app** Launch with -DemoBackendURL https://evil.example.com\n\n${STEP4}`) }, "reads as a numbered step"],
+    ["an entity-spelled 4&#46; paragraph fails (round 10)", { ...base, doc: good.replace(STEP4, `4&#46; fake step\n\n${STEP4}`) }, "reads as a numbered step"],
+    ["a heading that reads as a step fails (round 10)", { ...base, doc: good.replace(STEP4, `### 4. fake step\n\n${STEP4}`) }, "reads as a numbered step"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

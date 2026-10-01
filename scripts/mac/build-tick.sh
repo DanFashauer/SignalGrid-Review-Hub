@@ -289,11 +289,14 @@ prepare_clone() {
 # only the new name and hide the deletion of CLAUDE.md or a hook behind it. Fails (non-zero) if the sha is not a commit.
 changed_since_base() { sgit diff --name-only --no-renames "$MAINLINE_SHA...HEAD"; }
 
-# The push, by sha: HEAD must still be the commit the gates ran on, the tree clean (what the gates saw is what is
-# pushed), and the pinned mainline an ancestor of it. Prints the reason on stdout and returns non-zero if not.
+# The push, by sha: HEAD must still be the commit the gates ran on, no TRACKED file changed since (what the gates tested
+# is what is pushed), and the pinned mainline an ancestor of it. Before the gates the tree had to be fully clean (untracked
+# included), so the gates ran on exactly the committed content; afterwards only tracked files are compared, because a gate
+# may leave a cache that is not gitignored (.hypothesis/, .pytest_cache/) and a push by sha can never carry an untracked file.
+# Prints the reason on stdout and returns non-zero if not.
 push_branch() {
   [ "$(sgit rev-parse HEAD)" = "$HEAD_SHA" ] || { echo "HEAD is no longer $HEAD_SHA (it moved while the gates ran)"; return 1; }
-  [ -z "$(sgit status --porcelain)" ] || { echo "the tree is dirty after the gates, so what they saw is not what would be pushed: $(sgit status --porcelain | head -5 | tr '\n' ' ')"; return 1; }
+  [ -z "$(sgit status --porcelain --untracked-files=no)" ] || { echo "the tree is dirty after the gates (a tracked file changed), so what they tested is not what would be pushed: $(sgit status --porcelain --untracked-files=no | head -5 | tr '\n' ' ')"; return 1; }
   sgit merge-base --is-ancestor "$MAINLINE_SHA" "$HEAD_SHA" || { echo "$HEAD_SHA does not descend from the pinned mainline $MAINLINE_SHA"; return 1; }
   sgit push -q "$ORIGIN_URL" "$HEAD_SHA:refs/heads/$BRANCH"
 }

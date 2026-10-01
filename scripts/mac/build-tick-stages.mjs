@@ -1374,10 +1374,14 @@ function shellTests(root, ok) {
       r.status === 0 && remote("mac/ok") === head && !existsSync(marker), `${r.status} ${r.stdout} ${r.stderr}`);
     r = push(base, "mac/moved");
     ok("B-1 push_branch refuses when HEAD is not the sha the gates ran on (HEAD moved while preflight ran)", r.status !== 0 && /HEAD/.test(r.stdout) && spawnSync("git", ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/moved"]).status !== 0, `${r.status} ${r.stdout}`);
-    writeFileSync(join(wt, "gate-output.txt"), "left by a gate\n");
+    writeFileSync(join(wt, "a.txt"), "a gate rewrote a tracked file\n");
     r = push(head, "mac/dirty");
-    ok("B-1 push_branch refuses a dirty tree (what the gates saw is not what would be pushed)", r.status !== 0 && /dirty/.test(r.stdout) && spawnSync("git", ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/dirty"]).status !== 0, `${r.status} ${r.stdout}`);
-    rmSync(join(wt, "gate-output.txt"));
+    ok("B-1 push_branch refuses when a TRACKED file changed after the gates (what they tested is not what would be pushed)", r.status !== 0 && /dirty/.test(r.stdout) && spawnSync("git", ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/dirty"]).status !== 0, `${r.status} ${r.stdout}`);
+    G(wt, "checkout", "-q", "--", "a.txt");
+    writeFileSync(join(wt, ".hypothesis-cache"), "a cache a gate left, not gitignored\n");
+    r = push(head, "mac/untracked");
+    ok("B-1 ...but an UNTRACKED gate cache (.hypothesis/, .pytest_cache/ are not gitignored) does not block the push of the gated sha", r.status === 0 && remote("mac/untracked") === head, `${r.status} ${r.stdout} ${r.stderr}`);
+    rmSync(join(wt, ".hypothesis-cache"));
     const sibling = G(wt, "commit-tree", "-m", "not an ancestor", "-p", base, `${base}^{tree}`);
     r = push(head, "mac/orphan", sibling);
     ok("B-1 push_branch refuses when the pinned mainline sha is not an ancestor of HEAD", r.status !== 0 && /descend/.test(r.stdout), `${r.status} ${r.stdout}`);
@@ -1505,7 +1509,7 @@ function shellTests(root, ok) {
     mkdirSync(join(seed, "docs/agent"), { recursive: true });
     for (const f of ["build-tick.sh", "build-tick-stages.mjs", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(seed, "scripts/mac", f));
     for (const f of ["check-backlog-ownership.mjs", "check-owner-gated-surfaces.mjs"]) copyFileSync(join(HERE, "..", f), join(seed, "scripts", f));
-    writeFileSync(join(seed, "scripts/preflight.mjs"), `import { writeFileSync } from "node:fs";\nif (process.env.SG_E2E_DIRTY) writeFileSync("gate-output.txt", "left by a gate\\n");\nconsole.log(process.env.SG_E2E_PFQUICK ? "\\nPreflight PASSED (quick — heavy builds skipped) — everything it runs is green." : "\\nPreflight PASSED — everything it runs is green.");\n`);
+    writeFileSync(join(seed, "scripts/preflight.mjs"), `import { writeFileSync } from "node:fs";\nif (process.env.SG_E2E_DIRTY === "tracked") writeFileSync("docs/COMPANY_BUILD_PLAN.md", "a gate rewrote a tracked file\\n");\nif (process.env.SG_E2E_DIRTY === "untracked") writeFileSync("gate-output.txt", "a cache a gate left\\n");\nconsole.log(process.env.SG_E2E_PFQUICK ? "\\nPreflight PASSED (quick — heavy builds skipped) — everything it runs is green." : "\\nPreflight PASSED — everything it runs is green.");\n`);
     writeFileSync(join(seed, "scripts/mac/gh-pr.mjs"), `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(prlog)}, process.argv.slice(2).join(" ") + "\\n");\n`);
     writeFileSync(join(seed, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(handlog)}, readFileSync(process.argv[3], "utf8") + "\\n");\n`);
     writeFileSync(join(seed, "docs/COMPANY_BUILD_PLAN.md"), PLAN);
@@ -1551,9 +1555,12 @@ function shellTests(root, ok) {
 
     // S-4 end to end: a dirty tree after the gates, and a quick-mode preflight, each stop the push.
     freeRow();
-    r = runTick({ SG_E2E_DIRTY: "1" });
+    r = runTick({ SG_E2E_DIRTY: "tracked" });
     br = remoteBranches();
-    ok("E2E S-4 a gate that leaves a file in the tree -> the push is refused (what it tested is not what would be pushed); only the claim exists", r.status === 1 && /tree is dirty after the gates/.test(r.stdout) && br.length === 1 && br[0].split(" ")[1] === mainline, `${r.status}\n${r.stdout}\n${br.join("|")}`);
+    ok("E2E S-4 a gate that rewrites a TRACKED file -> the push is refused (what it tested is not what would be pushed); only the claim exists", r.status === 1 && /tree is dirty after the gates/.test(r.stdout) && br.length === 1 && br[0].split(" ")[1] === mainline, `${r.status}\n${r.stdout}\n${br.join("|")}`);
+    freeRow();
+    r = runTick({ SG_E2E_DIRTY: "untracked" });
+    ok("E2E S-4 ...a gate that only leaves an UNTRACKED cache does not block the landing (the pre-gate check already demanded a fully clean tree)", r.status === 0 && /result: acted/.test(r.stdout), `${r.status}\n${r.stdout}`);
     freeRow();
     r = runTick({ SG_E2E_PFQUICK: "1" });
     br = remoteBranches();

@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "met",
+      "state": "unmet",
       "measured": {
-        "headline": 100,
+        "headline": 0,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "met",
+      "state": "unmet",
       "measured": {
-        "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 9a469e562e51; launch items fully current 28/28"
+        "pct": 0,
+        "reason": "0/20 bound proofs/steps current — evidence covers manifest 9a469e562e51, tree is 67cae1d526eb; refresh on the Mac; launch items fully current 0/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -50,6 +50,8 @@
     }
   ],
   "unmet": [
+    "readiness-floor",
+    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -148,13 +150,27 @@
   "unmeasured": [],
   "escalations": [
     {
+      "id": "readiness-floor-no-clearing-op",
+      "clears": "mac",
+      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
+      "since": "2026-10-01T13:48:48.721Z"
+    },
+    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [],
+  "queue": [
+    {
+      "criterionId": "evidence-fresh",
+      "op": "evidence",
+      "clears": "artifacts/live-evidence/mac-run.json",
+      "id": "objective-loop-evidence-fresh-2026-10-01",
+      "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
+    }
+  ],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
@@ -164,8 +180,8 @@
     "openRows": 63
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-01T13:07:47.105Z",
-  "derivedAtCommit": "dc028cbf9be56edc971d1dd14c0319cce4406f72",
+  "derivedAt": "2026-10-01T13:48:48.721Z",
+  "derivedAtCommit": "8fd6f6e58afd5e99df4097f41fd120253fa8fbcc",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "cdfee5b9f834d8c9fbd2302ef229a75237921ed138dd06d4268d7dbc8f21b859"
+  "decisionAddress": "c63dbf5aa4a39357fb2e9fc173be6145f3d55fe73906c11ba5bf2a04dc8e555f"
 }

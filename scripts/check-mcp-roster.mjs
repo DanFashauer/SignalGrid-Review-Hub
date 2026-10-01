@@ -131,7 +131,8 @@ export function shellWords(s) {
   let open = false;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (/\s/.test(c) || c === "`") {
+    if (/\s/.test(c) || c === "`" || /[;&|<>]/.test(c)) {
+      // whitespace, a backtick (markdown code) and an unquoted shell operator (; & | < >) all end a word
       if (open) words.push(cur);
       cur = "";
       open = false;
@@ -323,24 +324,31 @@ export function logicalLines(lines, kind) {
 }
 
 /** Pure: findings for one (logical) line's Context7 install references, read as the units its file kind defines. */
-export function context7SpecFindings(line, pin, kind = "shell", before = "") {
+export function context7SpecFindings(line, pin, kind = "shell", before = "", after = "") {
   const out = [];
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
   const push = (f) => f && out.push(f);
   // a key naming the package — with or without an override selector — takes its WHOLE value
   for (const v of context7KeyValues(line, kind)) push(classify(v));
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
-  const runner = PACKAGE_RUNNER_RE.test(line) || /["']?command["']?\s*:\s*["']?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)\b/.test(before);
+  const runner =
+    PACKAGE_RUNNER_RE.test(line) || /["']?command["']?\s*[:=]\s*["']?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)\b/.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
 }
 
 /** Pure: findings for argv-like units. An `npm:` alias with no version installs latest, so it is unpinned with or without a runner. */
-export function context7UnitFindings(units, pin, runner) {
+export function context7UnitFindings(units, pin, runner, depth = 0) {
   const out = [];
   const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
   for (const unit of units) {
+    // a unit that is itself a command (`sh -c "npx npm:pkg foo"`, a JSON `-c` argument): read its own words too
+    // (a unit that IS a spec, or a `--flag=<spec>` argument, is one argv word and is read whole below)
+    if (depth < 2 && /[\s;&|<>]/.test(unit) && /context7-mcp/i.test(unit) && !SPEC_VALUE_RE.test(unit) && !/^--?[\w-]+=/.test(unit)) {
+      out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
+      continue;
+    }
     for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
       const rest = unit.slice(m.index + m[0].length);
       if (rest.startsWith("@")) {
@@ -404,7 +412,9 @@ export function context7JsonFindings(text, pin) {
   const RUNNER_CMD = /^(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe)?$/i;
   const walk = (node, inArray, runner) => {
     if (Array.isArray(node)) {
-      for (const v of node) walk(v, true, runner);
+      // `"args": ["/c", "npx", "-y", "@…"]` (Windows `cmd /c`): a runner element makes the array a runner call
+      const here = runner || node.some((v) => typeof v === "string" && (RUNNER_CMD.test(v.trim().replace(/^.*[\\/]/, "")) || PACKAGE_RUNNER_RE.test(v)));
+      for (const v of node) walk(v, true, here);
     } else if (node && typeof node === "object") {
       const cmd = typeof node.command === "string" ? node.command.trim().split(/\s+/)[0].replace(/^.*[\\/]/, "") : "";
       const here = runner || RUNNER_CMD.test(cmd);
@@ -459,11 +469,17 @@ export function context7YamlKeyScan(lines) {
   const KEY = /(["']?)((?:[^\s"'{},[\]#]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':,{}[\]]*)?)\1\s*:(?=\s|$)/gi;
   for (let i = 0; i < lines.length; i++) {
     const l = stripYamlComment(lines[i]);
-    const ex = /^(\s*)\?\s+(.*)$/.exec(l);
-    if (ex && CONTEXT7_KEY_RE.test(unquote(ex[2].trim()).replace(/\\\//g, "/"))) {
+    const ex = /^(\s*(?:-\s+)*)\?(?:\s+(.*))?$/.exec(l);
+    let exKey = ex ? stripYamlProps((ex[2] ?? "").trim()) : "";
+    if (ex && (exKey === "" || /^[>|][+-]?\d*$/.test(exKey))) {
+      // `?` alone, or `? |` / `? >`: the key is on the next more-indented line(s)
+      const k = nextValueLine(i, indent(l));
+      exKey = k < 0 ? "" : stripYamlProps(stripYamlComment(lines[k]).trim());
+    }
+    if (ex && CONTEXT7_KEY_RE.test(unquote(exKey).replace(/\\\//g, "/"))) {
       let j = i + 1;
-      while (j < lines.length && lines[j].trim() === "") j++;
-      const val = j < lines.length ? /^\s*:\s*(.*)$/.exec(stripYamlComment(lines[j])) : null;
+      while (j < lines.length && !/^\s*(?:-\s+)*:(?:\s|$)/.test(lines[j]) && (lines[j].trim() === "" || indent(lines[j]) > indent(l))) j++;
+      const val = j < lines.length ? /^\s*(?:-\s+)*:\s*(.*)$/.exec(stripYamlComment(lines[j])) : null;
       out.push({ i, value: val ? oneScalar(val[1], j, indent(l)) : "" });
       continue;
     }
@@ -557,7 +573,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   let swept = 0;
   for (const [path, text] of Object.entries(files)) {
     if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
-    if (!/context7/i.test(text)) continue;
+    if (!/context7/i.test(text) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split("\n");
     const kind = context7FileKind(path);
     const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
@@ -567,7 +583,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
       : logicalLines(lines, kind).map(({ i, text: line }) => ({
           i,
           line,
-          findings: context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n")),
+          findings: context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n"), lines.slice(i + 1, i + 7).join("\n")),
         }));
     if (json) swept += (text.match(/upstash\\?\/context7-mcp/gi) ?? []).length;
     if (kind === "yaml") {
@@ -1190,7 +1206,7 @@ server.registerTool(
   for (const tag of ["^4.1.1", "~4.1.1", ">=4.1.1", "*", "4.1.x", "4", "4.0", `${realPin}-rc.1`]) {
     checks.push([
       `a loose spec @${tag} (range, wildcard, partial or prerelease) is named`,
-      pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y ${SPEC}${tag}`)).some((p) =>
+      pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y "${SPEC}${tag}"`)).some((p) =>
         p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@${tag})`),
       ),
     ]);
@@ -1347,6 +1363,25 @@ server.registerTool(
     ["w.yaml", `overrides:\n  foo>${NAME}: >-\n    ^5\n`, 2, true, "a folded-block override value that is a range"],
     ["s.sh", `C7=npm:${NAME}\n`, 1, true, "a versionless npm: alias after `NAME=`"],
     ["s.sh", `export C7="npm:${NAME}"\n`, 1, true, "a versionless npm: alias in an `export`"],
+    // round 10: commands inside quoted strings, shell operators, prefixed/next-line explicit keys, runner context
+    ["s.sh", `bash -c "npx npm:${NAME} foo"\n`, 1, true, "a versionless npm: alias inside a quoted `bash -c` command"],
+    ["s.sh", `npx -y npm:${NAME}&&echo\n`, 1, true, "a versionless alias glued to a shell operator"],
+    ["s.sh", `npx -y ${NAME}|cat\n`, 1, true, "a bare spec glued to a pipe"],
+    ["c.json", `{"command":"bash","args":["-c","npx npm:${NAME} foo"]}`, 1, true, "a JSON `-c` argument holding a versionless command"],
+    ["a.yml", `command: "npx npm:${NAME} foo"\n`, 1, true, "a YAML quoted command holding a versionless alias"],
+    ["x.ts", `execSync("npx -y ${NAME} --stdio")\n`, 1, true, "a source-code string holding a versionless runner call"],
+    ["a.yml", `- ? ${NAME}\n  : latest\n`, 1, true, "an explicit key behind a `- ` marker"],
+    ["a.yml", `? &k ${NAME}\n: latest\n`, 1, true, "an explicit key behind an anchor"],
+    ["a.yml", `?\n  ${NAME}\n: latest\n`, 1, true, "an explicit key on the line after a bare `?`"],
+    ["a.yml", `? |\n  ${NAME}\n: latest\n`, 1, true, "an explicit block-scalar key"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"cmd","args":["/c","npx","-y","${NAME}"]}}}`, 1, true, "a Windows `cmd /c npx` MCP config, versionless"],
+    ["config.toml", `[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "${NAME}"]\n`, 3, true, "a TOML `command = \"npx\"` with a versionless args element"],
+    ["README.md", `"args": ["-y", "${NAME}"],\n"command": "npx"\n`, 1, true, "args BEFORE command (runner within six lines after)"],
+    ["c.json", `{"@upstash/\\u0063ontext7-mcp":"latest"}`, 1, true, "a JSON file spelling the name only through a \\u escape (not skipped by the prefilter)"],
+    ["s.sh", `bash -c "npx -y ${SPEC}${realPin} --stdio"\n`, 1, false, "a quoted command running the pin (no false positive)"],
+    ["s.sh", `npx -y ${SPEC}${realPin} && echo ok\n`, 1, false, "the pin followed by a shell operator (no false positive)"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"cmd","args":["/c","npx","-y","${SPEC}${realPin}"]}}}`, 1, false, "the Windows MCP config pinned (no false positive)"],
+    ["a.yml", `- ? ${NAME}\n  : ${realPin}\n`, 1, false, "a prefixed explicit key pinned (no false positive)"],
     ["d.md", `say 'pinned ${SPEC}${realPin} today\n`, 1, false, "a lone, never-closed quote before a correct pin stays literal (no false positive)"],
     ["w.yaml", `deps: {"${NAME}": ${realPin}}\n`, 1, false, "a correct unquoted value closed by `}` in a YAML flow mapping (no false positive)"],
   ]) {

@@ -142,16 +142,14 @@ const BINDING_PARAGRAPH = /^Everything marked \*\*Implemented \(public core\)\*\
  *  eats NBSP, U+3000 and form feed — lines GitHub keeps as content (round 6). */
 const isBlank = (l) => /^[ \t]*$/.test(l);
 
-/** Fold a cell for claim matching as a reader would read it: markup and
- *  entities stripped, NFKC, invisible characters removed, common Cyrillic/Greek
+/** Fold a cell for claim matching as a reader would read it. Markup and
+ *  entities are never stripped — a cell carrying "<" or "&" fails outright
+ *  instead, because regex stripping is bypassable (CodeQL js/incomplete-multi-
+ *  character-sanitization). NFKC, invisible characters removed, common Cyrillic/Greek
  *  look-alikes mapped to Latin, case and whitespace folded (round 6). */
 const CONFUSABLES = { "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ӏ": "l", "һ": "h", "ο": "o", "α": "a", "ε": "e", "ι": "i", "ν": "v", "ρ": "p", "τ": "t", "κ": "k", "μ": "m" };
 export function claimFold(s) {
-  return s.replace(/<[^>]*>/g, "")
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&nbsp;/gi, " ").replace(/&[a-z][a-z0-9]*;/gi, "")
-    .normalize("NFKC")
+  return s.normalize("NFKC")
     .replace(/[\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, "")
     .toLowerCase().replace(/./gu, (ch) => CONFUSABLES[ch] ?? ch)
     .replace(/\*\*|__|[*_`]/g, "").replace(/\s+/g, " ").trim();
@@ -364,6 +362,7 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     else if (/implement|certif|attest|audit|complian|accredit/.test(claimFold(c.cell))) structural.push(`line ${c.line} carries a status-like claim ("${c.cell}") outside a Status cell, where no check reaches it\n      ${c.raw}`);
   }
   // a Control name may not wear a legend status word either
+  for (const c of controlCells) if (/[<&]/.test(c.cell)) structural.push(`line ${c.line}: Control name carries markup or an entity ("<" / "&") — either could disguise a status word past any fold\n      ${c.raw}`);
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
     structural.push(`line ${c.line}: Control name carries the status word "${w}" outside the Status cell\n      ${c.raw}`);
   for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
@@ -528,6 +527,8 @@ function selfTest() {
     ["fail: a homoglyph claim in a Framework refs cell", plant("| Planted fw2 | Impl\u0435mented (public core) | Private-core (planned) | private repo |"), 1],
     // a look-alike the confusables map does not know (U+026A) — only the ASCII rule catches it
     ["fail: an unmapped look-alike in a Short ref cell", real.replace("| **ASVS 5.0** |", "| **MFA** | \u026Amplemented (public core) |\n| **ASVS 5.0** |"), 1],
+    ["fail: a legend word split by markup in a Control name", plant("| Imple<b></b>mented (public core) MFA | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: a legend word hidden by an entity in a Control name", plant("| Imple&shy;mented (public core) MFA | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a legend word in a Control name", plant("| **Implemented (public core)** MFA everywhere | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: matrix-wide proof binding deleted", real.replace(/is exercised by\s+`pnpm run proof:[\w:.-]+`/, "is exercised by the core proof"), 1],
   ];

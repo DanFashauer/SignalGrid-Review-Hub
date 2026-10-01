@@ -23,7 +23,7 @@ import type {
   WebhookEndpoint,
   Workflow,
 } from "./types";
-import { constantTimeEquals, parseInstant } from "./util";
+import { constantTimeEquals, deterministicId, parseInstant } from "./util";
 
 // Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
 // `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
@@ -308,6 +308,32 @@ export class MemoryStore {
       const previousAt = parseInstant(previous.observedAt);
       if (Number.isFinite(incomingAt) && Number.isFinite(previousAt) && incomingAt < previousAt) return;
     }
+    // A NOT-FRESH READING MAY ACCUSE BUT CANNOT VOUCH (row 2519) — and the evidence
+    // fold cannot enforce that if the store has already overwritten the fresh row
+    // (cloud review of #1224: one dock syncing confirmed@14:55Z, then none@2099,
+    // stored only the "none", and a deny became a step-up). So the newest FRESH
+    // reading this id has held is kept beside a not-fresh one, under a derived id,
+    // and `groupLatest` folds the two worst-wins. Keeping it INSTEAD would drop a
+    // not-fresh accusation. A fresh reading at least as new, or a retraction,
+    // retires it.
+    const keptId = deterministicId("sig_fresh", signal.id);
+    const kept = this.signals.get(keptId);
+    if (signal.value !== null && signal.freshness !== "fresh") {
+      if (
+        previous?.freshness === "fresh" &&
+        previous.value !== null &&
+        (!kept || parseInstant(previous.observedAt) > parseInstant(kept.observedAt))
+      ) {
+        this.setSignalRow({ ...previous, id: keptId });
+      }
+    } else if (kept && (signal.value === null || !(parseInstant(kept.observedAt) > parseInstant(signal.observedAt)))) {
+      this.signals.delete(keptId);
+      this.signalsBySubject.get(subjectKey(kept.tenantId, kept.subjectType, kept.subjectId))?.delete(keptId);
+    }
+    this.setSignalRow(signal);
+  }
+
+  private setSignalRow(signal: NormalizedSignal): void {
     this.signals.set(signal.id, signal);
     const key = subjectKey(signal.tenantId, signal.subjectType, signal.subjectId);
     let bucket = this.signalsBySubject.get(key);

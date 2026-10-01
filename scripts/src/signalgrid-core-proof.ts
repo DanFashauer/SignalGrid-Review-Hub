@@ -2164,6 +2164,81 @@ for (const [fromRow, fromSignal, want, why] of [
     afterFutureEvaluation.outcome === "deny" && afterFutureEvaluation.reasonCodes.includes("TAMPER_CONFIRMED"),
     `${afterFutureEvaluation.outcome} [${afterFutureEvaluation.reasonCodes.join(", ")}]`,
   );
+
+  // (2519, cloud review of #1224) The worst-wins fold must not depend on ARRIVAL
+  // order, and adding a not-fresh reading must never loosen it. `suspected` and
+  // `confirmed` both scored "accusing" and the first to arrive kept the slot, so
+  // [suspected, confirmed, 2099 none] restricted and [confirmed, suspected, 2099
+  // none] denied. Confirmed must outrank suspected whichever arrives first, whichever
+  // is newer, and at one instant.
+  const tamperAt = (value: "suspected" | "confirmed", observedAt: string, freshness: Freshness, connectorId: string) =>
+    sig(`t_${value}`, "tamper_state", value, observedAt, freshness, connectorId);
+  const future = sig("t_future", "tamper_state", "none", "2099-01-01T00:00:00Z", "unknown", "conn_c");
+  const s1400 = tamperAt("suspected", "2026-07-13T14:00:00Z", "stale", "conn_a");
+  const c1430 = tamperAt("confirmed", "2026-07-13T14:30:00Z", "stale", "conn_b");
+  const c1400 = tamperAt("confirmed", "2026-07-13T14:00:00Z", "stale", "conn_b");
+  const s1430 = tamperAt("suspected", "2026-07-13T14:30:00Z", "stale", "conn_a");
+  const sTie = tamperAt("suspected", "2026-07-13T14:30:00Z", "fresh", "conn_a");
+  const cTie = tamperAt("confirmed", "2026-07-13T14:30:00Z", "fresh", "conn_b");
+  for (const [label, readings] of [
+    ["stale suspected@14:00, stale confirmed@14:30, 2099 none", [s1400, c1430, future]],
+    ["stale confirmed@14:30, stale suspected@14:00, 2099 none", [c1430, s1400, future]],
+    ["stale confirmed@14:00, stale suspected@14:30 (suspected NEWER), 2099 none", [c1400, s1430, future]],
+    ["stale suspected@14:30 (suspected NEWER), stale confirmed@14:00, 2099 none", [s1430, c1400, future]],
+    ["same-instant fresh suspected then confirmed", [sTie, cTie]],
+    ["same-instant fresh confirmed then suspected", [cTie, sTie]],
+  ] as const) {
+    const evidence = buildEvidence(identity, device, workflow, [...healthy, ...readings]);
+    const evaluation = evaluatePolicy(v1, evidence);
+    check(
+      `2519: confirmed outranks suspected in the worst-wins fold (${label}) — SHARED_DEVICE_RULES_V1 denies with TAMPER_CONFIRMED`,
+      evidence.tamperState === "confirmed" &&
+        evaluation.outcome === "deny" &&
+        evaluation.reasonCodes.includes("TAMPER_CONFIRMED"),
+      `tamperState=${String(evidence.tamperState)} ${evaluation.outcome} [${evaluation.reasonCodes.join(", ")}]`,
+    );
+  }
+
+  // (2519 on ONE connector, cloud review of #1224) The store re-puts one dock's
+  // tamper row under one id, so a later not-fresh "none" OVERWROTE the fresh
+  // "confirmed" before `groupLatest` ever saw both — 15:00 confirmed@14:55Z then
+  // 15:05 none@2099 stored only the "none", and the deny became a step-up.
+  const verdictOf = (rows: NormalizedSignal[]) => evaluatePolicy(v1, buildEvidence(identity, device, workflow, [...healthy, ...rows]));
+  const show = (rows: NormalizedSignal[]) => rows.map((s) => `${String(s.value)}@${s.observedAt}/${s.freshness}`).join(",");
+  const singleDock = storedTamperRows([
+    { now: "2026-07-13T15:00:00.000Z", records: [{ tamperState: "confirmed", observedAt: "2026-07-13T14:55:00Z" }] },
+    { now: "2026-07-13T15:05:00.000Z", records: [{ tamperState: "none", observedAt: "2099-01-01T00:00:00Z" }] },
+  ]);
+  const singleDockVerdict = verdictOf(singleDock);
+  check(
+    "2519 single connector: a later 2099 'none' cannot erase the fresh 'confirmed' it lands on — SHARED_DEVICE_RULES_V1 still denies with TAMPER_CONFIRMED",
+    singleDockVerdict.outcome === "deny" && singleDockVerdict.reasonCodes.includes("TAMPER_CONFIRMED"),
+    `stored ${show(singleDock)} → ${singleDockVerdict.outcome} [${singleDockVerdict.reasonCodes.join(", ")}]`,
+  );
+  // Guard, the other direction: a not-fresh ACCUSATION landing on a fresh "none"
+  // still accuses. "Keep the fresh row instead" would have allowed here.
+  const singleDockReverse = storedTamperRows([
+    { now: "2026-07-13T15:00:00.000Z", records: [{ tamperState: "none", observedAt: "2026-07-13T14:55:00Z" }] },
+    { now: "2026-07-13T15:05:00.000Z", records: [{ tamperState: "confirmed", observedAt: "2099-01-01T00:00:00Z" }] },
+  ]);
+  const singleDockReverseVerdict = verdictOf(singleDockReverse);
+  check(
+    "2519 single connector guard: a later 2099 'confirmed' over a fresh 'none' still denies with TAMPER_CONFIRMED",
+    singleDockReverseVerdict.outcome === "deny" && singleDockReverseVerdict.reasonCodes.includes("TAMPER_CONFIRMED"),
+    `stored ${show(singleDockReverse)} → ${singleDockReverseVerdict.outcome} [${singleDockReverseVerdict.reasonCodes.join(", ")}]`,
+  );
+  // Control: a newer FRESH record still clears it, and leaves ONE row behind — the
+  // kept fresh row is retired, not left to ride in every listing forever.
+  const singleDockCleared = storedTamperRows([
+    { now: "2026-07-13T15:00:00.000Z", records: [{ tamperState: "confirmed", observedAt: "2026-07-13T14:55:00Z" }] },
+    { now: "2026-07-13T15:05:00.000Z", records: [{ tamperState: "none", observedAt: "2099-01-01T00:00:00Z" }] },
+    { now: "2026-07-13T15:10:00.000Z", records: [{ tamperState: "none", observedAt: "2026-07-13T15:08:00Z" }] },
+  ]);
+  check(
+    "2519 single connector control: a newer FRESH 'none' clears the tamper and the store holds exactly that one row",
+    show(singleDockCleared) === "none@2026-07-13T15:08:00Z/fresh",
+    `stored ${show(singleDockCleared)}`,
+  );
 }
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
@@ -3831,6 +3906,33 @@ const monotonicityTable: string[] = [];
       OUTCOME_RANK.step_up < OUTCOME_RANK.restrict &&
       OUTCOME_RANK.restrict < OUTCOME_RANK.deny,
   );
+
+  // THE ACCUSING RANK NEVER LOOSENS A SHIPPED VERDICT (cloud review of #1224).
+  // `resolveWorst` breaks a tie between two accusing readings by the order of the
+  // family's `members` — least to most severe — so that order is a judgement, and
+  // this is what holds it: walking each family's non-good members in declared
+  // order, the verdict on every shipped rule set never gets LESS restrictive. The
+  // freshness rows are folded by FRESHNESS_SEVERITY, not by `resolveWorst`.
+  for (const [ruleSet, rules] of [
+    ["SHARED_DEVICE_RULES_V1", SHARED_DEVICE_RULES_V1],
+    ["SHARED_DEVICE_RULES_V2", SHARED_DEVICE_RULES_V2],
+  ] as const) {
+    for (const f of MONO_FIELDS) {
+      if (f.domain === EVIDENCE_VALUE_DOMAINS.freshness) continue;
+      const rest = healthy.filter((s) => s.category !== f.category);
+      const walk = f.domain.members
+        .filter((m) => !f.domain.good.includes(m))
+        .map((m) => ({
+          m,
+          outcome: evaluatePolicy({ ...monoV1, rules }, buildEvidence(identity, device, workflow, [...rest, f.reading(m, VALID_AT)])).outcome,
+        }));
+      check(
+        `22 accusing rank: ${f.field}'s non-good members in declared order never LOOSEN ${ruleSet}`,
+        walk.every((step, i) => i === 0 || OUTCOME_RANK[step.outcome] >= OUTCOME_RANK[walk[i - 1].outcome]),
+        walk.map((step) => `${String(step.m)}:${step.outcome}`).join(" → "),
+      );
+    }
+  }
 
   // A violation is a LOOSENING under corruption, in either dimension: critical
   // evidence that goes absent→present, or a verdict that goes less restrictive.

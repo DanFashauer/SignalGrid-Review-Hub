@@ -67,6 +67,14 @@ export type VerifyResult =
 const SUPPORTED_ALG = "RS256";
 
 /**
+ * The most clock skew, in seconds, any caller may ask the verifier to forgive. It is
+ * skew allowance, not token lifetime: 1e9 would accept a token 31 years past `exp`.
+ * Enforced HERE, at the library boundary, and by config.ts for the env knob (which
+ * imports this, so there is one number).
+ */
+export const MAX_CLOCK_TOLERANCE_SEC = 300;
+
+/**
  * Read the `kid` out of a token's header WITHOUT verifying anything.
  *
  * This is deliberately unverified input and is safe for exactly one purpose:
@@ -129,12 +137,13 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   if (typeof token !== "string") {
     return fail("token is not a string");
   }
-  // A NaN/Infinity clock or tolerance turns every `exp`/`nbf`/`iat` comparison
-  // below false, so an EXPIRED token would verify. Bad inputs refuse whatever
+  // A NaN clock or tolerance (or a tolerance that is, or overflows to, Infinity)
+  // makes the `exp` comparison below false, so an EXPIRED token would verify; an
+  // unbounded finite tolerance does the same in effect. Bad inputs refuse whatever
   // the token is, before any key material is touched.
   const toleranceSec = opts.clockToleranceSec ?? 60;
-  if (!Number.isFinite(opts.nowMs) || !Number.isFinite(toleranceSec)) {
-    return fail("verifier clock inputs (nowMs, clockToleranceSec) must be finite numbers");
+  if (!Number.isFinite(opts.nowMs) || !Number.isFinite(toleranceSec) || toleranceSec > MAX_CLOCK_TOLERANCE_SEC) {
+    return fail(`verifier clock inputs refused: nowMs and clockToleranceSec must be finite, clockToleranceSec at most ${MAX_CLOCK_TOLERANCE_SEC}`);
   }
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => p.length === 0)) {

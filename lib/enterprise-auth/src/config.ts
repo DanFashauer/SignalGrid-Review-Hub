@@ -1,5 +1,6 @@
 import type { Role } from "@workspace/signalgrid-core";
 import type { ClaimMapping } from "./claims";
+import { MAX_CLOCK_TOLERANCE_SEC } from "./jwt";
 
 /**
  * Enterprise (OIDC) auth is GATED OFF by default. It turns on only when the
@@ -27,9 +28,6 @@ export interface EnterpriseAuthConfig {
 }
 
 const VALID_ROLES: readonly Role[] = ["owner", "admin", "operator", "auditor", "connector"];
-
-/** OIDC_CLOCK_TOLERANCE_SEC is skew allowance, not token lifetime: 1e9 would accept a token 31 years past `exp`. */
-const MAX_CLOCK_TOLERANCE_SEC = 300;
 
 export type ConfigResult =
   | { status: "disabled" }

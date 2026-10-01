@@ -18,7 +18,7 @@ import {
 } from "node:crypto";
 import {
   createEnterpriseAuthenticator,
-  createJwksCache, loadEnterpriseAuthConfig, verifyJwtRs256,
+  createJwksCache, loadEnterpriseAuthConfig, verifyJwtRs256, MAX_CLOCK_TOLERANCE_SEC,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -349,10 +349,12 @@ if (!accepted.ok) {
 
 // ── NON-FINITE VERIFIER INPUTS FAIL CLOSED ───────────────────────────────────
 //
-// `now > exp * 1000 + tolMs` is false when `now` or `tolMs` is NaN (and for an
-// Infinity tolerance, since `exp + Infinity` never lapses), so a correctly signed,
-// EXPIRED token was accepted. Config parsing and the provider guard both today;
-// only a direct caller reaches it, which is why it is called directly here.
+// `now > exp * 1000 + tolMs` is false when `now` or `tolMs` is NaN, and never
+// true for a tolerance that is Infinity or so large it overflows to Infinity
+// (Number.MAX_VALUE * 1000), so a correctly signed, EXPIRED token was accepted.
+// Today config parsing keeps clockToleranceSec finite and capped, and context.ts
+// passes Date.now(), so only a direct caller of verifyJwtRs256 or authenticate()
+// reaches it, which is why it is called directly here.
 {
   const base = { jwks, issuer: ISSUER, audience: AUDIENCE, nowMs: NOW_MS, clockToleranceSec: 60 };
   const outcome = (token: string, over: Partial<typeof base>): boolean | "threw" => {
@@ -369,6 +371,12 @@ if (!accepted.ok) {
   check("control: the signed, expired token is refused with finite inputs", outcome(expiredToken, {}) === false);
   check("an expired token is refused when clockToleranceSec is NaN", outcome(expiredToken, { clockToleranceSec: NaN }) === false);
   check("an expired token is refused when clockToleranceSec is Infinity", outcome(expiredToken, { clockToleranceSec: Infinity }) === false);
+  check("an expired token is refused when clockToleranceSec is Number.MAX_VALUE (finite, overflows to Infinity in ms)", outcome(expiredToken, { clockToleranceSec: Number.MAX_VALUE }) === false);
+  check("an expired token is refused when clockToleranceSec is 1e9 (31 years of skew)", outcome(expiredToken, { clockToleranceSec: 1e9 }) === false);
+  check("an expired token is refused when clockToleranceSec is 301 (one past the cap)", outcome(expiredToken, { clockToleranceSec: 301 }) === false);
+  check("a token 120s past exp still verifies at the 300s cap itself", outcome(expiredToken, { clockToleranceSec: 300 }) === true);
+  check("a valid token still verifies with clockToleranceSec 0", outcome(validToken, { clockToleranceSec: 0 }) === true);
+  check("the library cap is 300s, the same bound config.ts enforces", MAX_CLOCK_TOLERANCE_SEC === 300);
   check("an expired token is refused when nowMs is NaN", outcome(expiredToken, { nowMs: NaN }) === false);
   check("a valid token is refused when nowMs is NaN — no clock, no verdict", outcome(validToken, { nowMs: NaN }) === false);
   check("a valid token is refused when nowMs is missing (a JS caller)", outcome(validToken, { nowMs: undefined as unknown as number }) === false);
@@ -398,6 +406,7 @@ if (!accepted.ok) {
   check("OIDC_CLOCK_TOLERANCE_SEC at the 300s cap is accepted", toleranceFor("300") === 300);
   check("OIDC_CLOCK_TOLERANCE_SEC=301 is refused as invalid", toleranceFor("301") === "invalid");
   check("OIDC_CLOCK_TOLERANCE_SEC=1000000000 is refused as invalid", toleranceFor("1000000000") === "invalid");
+  check("OIDC_CLOCK_TOLERANCE_SEC=Infinity is not finite, so it falls back to 60 (tighter than asked, never looser)", toleranceFor("Infinity") === 60);
 }
 
 // ── JWKS SINGLE-FLIGHT AND FAILURE BACKOFF ───────────────────────────────────

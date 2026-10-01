@@ -2919,6 +2919,13 @@ async function run() {
     const demoRefreshExit = await exitOf(demoRefresh);
     check("estate refresh: the knob set while SIGNALGRID_CORE is not estate refuses at boot (never a silent no-op loop)",
       demoRefreshExit !== "still-running" && demoRefreshExit !== 0);
+
+    // The estate-core proof exercises singleFlightTick alone (a proof importing core.ts
+    // fails typecheck with TS6059), so the wiring is pinned here, by source text: the
+    // interval's tick must be BUILT from it and the timer must call that tick.
+    const coreSrc = await readFile(new URL("../src/lib/core.ts", import.meta.url), "utf8");
+    check("estate refresh: the served loop builds its tick from singleFlightTick and the timer calls it (an unguarded loop lets an older read land last)",
+      /const tick = singleFlightTick\(/.test(coreSrc) && /setInterval\(\(\) => \{\s*void tick\(\);/.test(coreSrc));
   }
 
   // ── every spawned server binds its OWN port ──────────────────────────────

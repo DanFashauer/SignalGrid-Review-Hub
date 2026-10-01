@@ -71,10 +71,19 @@ jobs:
           pnpm run proof:signalgrid-simulator
           pnpm run proof:signalgrid-grid
           pnpm run proof:microsoft-graph-sandbox
+      # The public-safety properties are MEASURED, not typed (plan row 172). They used
+      # to be six string literals in the manifest below, re-emitted on every run beside
+      # a run id and a sha with nothing checking any of them. This step scans the proof's
+      # import closure, its fixture inputs and the proof output, and writes one entry per
+      # property naming the check that produced it; it fails the job if one does not hold.
+      # `scripts/check-connector-emulator-evidence.mjs` (preflight + CI) fails if this
+      # workflow ever types a property itself again.
+      - name: Measure public-safety properties
+        run: node scripts/check-connector-emulator-evidence.mjs --results artifacts/connector-emulator/results.json --emit artifacts/connector-emulator/public-safety.json
       - name: Generate smoke evidence manifest
         run: |
           node <<'NODE'
-          const { mkdirSync, writeFileSync } = require('node:fs');
+          const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
           const manifest = {
             workflowName: process.env.GITHUB_WORKFLOW,
             runId: process.env.GITHUB_RUN_ID,
@@ -89,14 +98,7 @@ jobs:
               process.env.SELECTED_SCENARIO_GROUP === 'all'
                 ? 'pnpm run proof:connector-emulator'
                 : `SCENARIO_GROUP=${process.env.SELECTED_SCENARIO_GROUP} pnpm run proof:connector-emulator`,
-            publicSafety: [
-              'synthetic fixtures only',
-              'no live vendor calls',
-              'no secrets',
-              'no tenant IDs',
-              'no customer data',
-              'no PHI/PII',
-            ],
+            publicSafety: JSON.parse(readFileSync('artifacts/connector-emulator/public-safety.json', 'utf8')),
           };
           mkdirSync('artifacts/connector-emulator', { recursive: true });
           writeFileSync(

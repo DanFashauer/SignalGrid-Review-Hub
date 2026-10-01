@@ -155,7 +155,7 @@ Fail-safe by construction, matched to the plant-floor stakes:
 - a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
 - an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
 
-Proven fully offline by `pnpm run proof:ot-posture` (46 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:ot-posture` (47 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Factory-floor workflows — automating the plant (built, fixture-backed)
 

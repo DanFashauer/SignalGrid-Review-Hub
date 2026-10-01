@@ -70,22 +70,34 @@ Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running
 
 **The build tick (DR-061, 2026-09-29; staged tiers 2026-10-01).** The lane tick
 never builds. A second launchd job, `scripts/mac/build-tick.sh`
-(`bash scripts/mac/install-build-tick.sh`, every 3 hours), first refreshes ONE
-dirty `mac/*` PR with mainline's PR-refresh script, once it lands (no model; a
-failure never stops the build). It then takes the objective loop's top `tasks[]`
-row that no remote branch or open PR names and runs it as staged tiers
-(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet, read-only,
-decides done, blocked or build BEFORE the claim, so a broken session pauses the
-tick without burning a row; then the claim, an empty `mac/build-row-<id>-<stamp>`;
-then build on Haiku, Sonnet or Opus by the kind triage names, an Opus read-only
-review, at most one fix on the build's tier, and a second review. A row triage
-finds already done is a one-line plan marker with no build session. No session
-has git or GitHub credentials; the script commits, runs preflight and breadth, and
-only on 0/0 pushes the branch and opens the PR. Every PR body carries the reviews
-and a tiers-and-cost table (stage, tier asked, model that ran, turns, seconds, USD;
-`unknown`, never 0, when a figure is missing), and each stage appends a line to
-~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a stuck
-or red run raises a hand and keeps the claim for a person. Registry row:
+(`bash scripts/mac/install-build-tick.sh`, every 3 hours), does nothing at all
+while it is paused. Otherwise it first refreshes ONE dirty `mac/*` PR with
+mainline's PR-refresh script, once it lands (no model; under a wall-clock cap
+that kills the refresh's whole process group; a failure never stops the build;
+the owner's 2026-10-01 instruction covers re-merging mainline into his own open
+`mac/*` PR branches, never merging a PR). It then takes the objective loop's top
+`tasks[]` row that no remote branch or open PR names and runs it as staged tiers
+(`scripts/mac/build-tick-stages.mjs`; DR-047, DR-060): triage on Sonnet,
+read-only, decides done, blocked or build BEFORE the claim. A broken triage
+session (a logged-out CLI, a usage limit, no Keychain: its envelope names an API
+error, or there is no envelope and the exit is not 0 or the time cap) pauses the
+tick before any claim is pushed, so that row stays unclaimed; a triage that only
+hit its turn or time cap raises a hand. The branch and PR lists are re-read right
+before the claim, so a row taken while triage ran is skipped. Then the claim, an
+empty `mac/build-row-<id>-<stamp>`; then build on Haiku, Sonnet or Opus by the
+kind triage names (Haiku, the `mechanical` kind, is writer reruns and doc-only
+edits: the helper writes its commit message and PR body, and a diff outside
+`docs/**` and the sync manifest is a hand), an Opus read-only review, at most one
+fix on the build's tier, and a second review. A session that breaks after the
+claim pauses the tick too, and that row's claim branch stays for a person. A row
+triage finds already done is a one-line plan marker with no build session. No
+session has git or GitHub credentials; the script commits, runs preflight and
+breadth, and only on 0/0 pushes the branch and opens the PR. Every PR body
+carries the reviews and a tiers-and-cost table (stage, tier asked, model that
+ran, turns, seconds, USD at list price; a figure the CLI did not print is
+`unknown` on its row and counts as 0 in the total), and each stage appends a line
+to ~/Library/Caches/signalgrid/build-tick/ledger.jsonl. Nothing in it merges; a
+stuck or red run raises a hand and keeps the claim for a person. Registry row:
 `mac-build-tick`.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)

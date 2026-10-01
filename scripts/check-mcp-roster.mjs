@@ -297,7 +297,10 @@ export function logicalLines(lines, kind, path = "") {
         cur &&
         l.trim() !== "" &&
         indent(l) > cur.indent &&
-        (cur.block || openQuote(cur.text) || (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text)))
+        (cur.block ||
+          openQuote(cur.text) ||
+          // a literal `|` block's lines stay separate (each is a command); only plain scalars continue
+          (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text) && !/:\s+(?:[&!]\S+\s+)*\|[+-]?\d*\s*$/.test(cur.text)))
       ) {
         if (cur.block === "pending") {
           cur.text = cur.text.replace(/\s*[>|][+-]?\d*\s*$/, "");
@@ -311,27 +314,68 @@ export function logicalLines(lines, kind, path = "") {
       cur = { i, text: t, indent: indent(l), block: /:\s+(?:[&!]\S+\s+)*>[+-]?\d*\s*$/.test(t) ? "pending" : false };
     }
     if (cur) out.push(cur);
-    return out.map(({ i, text }) => ({ i, text }));
+    // a `\` continuation inside a literal `|` script: YAML strips the block's indentation, the shell then glues
+    return joinContinuations(
+      out.map(({ i, text }) => ({ i, text })),
+      /(?<!\\)\\$/,
+      ["block"],
+    );
   }
-  // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`
-  const cont = /\.(?:ps1|psm1)$/i.test(path) ? /(?<!`)`$/ : /\.(?:cmd|bat)$/i.test(path) ? /\^$/ : /(?<!\\)\\$/;
+  // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`. How the next line
+  // is spliced on differs by reader, so each join the reader might make is read (CONTINUATION_JOINS).
+  const [cont, modes] = /\.(?:ps1|psm1)$/i.test(path)
+    ? [/(?<!`)`$/, ["space", "keep"]] // the escaped newline is whitespace; read glued too, fail-closed
+    : /\.(?:cmd|bat)$/i.test(path)
+      ? [/\^$/, ["keep"]] // `^` escapes the newline: the next line is appended as it stands
+      : /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path)
+        ? [/(?<!\\)\\$/, ["keep", "strip"]] // read with and without the next line's indentation, fail-closed
+        : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
+  if (kind === "json") return lines.map((text, i) => ({ i, text }));
+  const physical = [];
   for (let i = 0; i < lines.length; i++) {
-    if (kind !== "json" && cont.test(lines[i])) {
-      let j = i;
-      let text = lines[i].replace(cont, "");
-      while (cont.test(lines[j]) && j + 1 < lines.length) text += ` ${lines[++j].replace(cont, "").trim()}`;
-      // joined only when the command holds the package — elsewhere the lines stay as they were
-      if (/@upstash\\?\/context7-mcp/i.test(text)) {
-        out.push({ i, text });
-        i = j;
-        continue;
-      }
-    }
     const l = lines[i];
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
-      out.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}` });
-    } else out.push({ i, text: l });
+      physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
+    } else physical.push({ i, text: l });
+  }
+  return joinContinuations(physical, cont, modes);
+}
+
+/**
+ * Pure: entries `{ i, text }` with continuation groups joined. A group is spliced the way a reader would splice it —
+ * `keep` appends the next line as it stands (bash: `\<newline>` is deleted, nothing inserted), `strip` drops its
+ * leading whitespace, `space` puts one space between, `block` drops up to the group's first-line indentation (a YAML
+ * literal block's indent). One entry per mode is returned for a group that holds the package, so a pin or a name split
+ * mid-token across the join is read as the shell would read it; a group without the package keeps its lines.
+ */
+export function joinContinuations(entries, cont, modes) {
+  const out = [];
+  const NAME = /@upstash\\?\/context7-mcp/i;
+  for (let k = 0; k < entries.length; k++) {
+    if (!cont.test(entries[k].text) || entries[k].quoteJoin || k + 1 >= entries.length) {
+      out.push({ i: entries[k].i, text: entries[k].text });
+      continue;
+    }
+    let j = k;
+    while (cont.test(entries[j].text) && j + 1 < entries.length) j++;
+    const base = /^\s*/.exec(entries[k].text)[0].length;
+    const joins = modes.map((mode) => {
+      let text = entries[k].text.replace(cont, "");
+      for (let n = k + 1; n <= j; n++) {
+        const next = n < j ? entries[n].text.replace(cont, "") : entries[n].text;
+        const lead = /^\s*/.exec(next)[0].length;
+        text +=
+          mode === "space" ? ` ${next.trim()}` : mode === "strip" ? next.trimStart() : mode === "block" ? next.slice(Math.min(lead, base)) : next;
+      }
+      return text;
+    });
+    if (!joins.some((t) => NAME.test(t))) {
+      out.push({ i: entries[k].i, text: entries[k].text });
+      continue;
+    }
+    for (const text of new Set(joins)) out.push({ i: entries[k].i, text });
+    k = j;
   }
   return out;
 }
@@ -442,7 +486,11 @@ export function context7JsonFindings(text, pin) {
     } else if (node && typeof node === "object") {
       // `command` as a string, or an object `{ path, args }` (Zed): read from the parent so `args` BESIDE it inherit the
       // runner, and from the object itself (its own `path`) for `args` inside it
-      const here = runner || isRunnerCommand(node.command) || isRunnerCommand(node.command?.path) || isRunnerCommand(node.path);
+      const here = runner || isRunnerCommand(node.command) ||
+        isRunnerCommand(node.command?.path) ||
+        // the program under another key (`cmd`, `program`), or a command ARRAY whose first word is the runner
+        [node.command?.cmd, node.command?.program, node.path, node.cmd, node.program].some(isRunnerCommand) ||
+        (Array.isArray(node.command) && isRunnerCommand(node.command[0]));
       for (const [k, v] of Object.entries(node)) {
         if (CONTEXT7_KEY_RE.test(k)) {
           const val = typeof v === "string" ? v : v && typeof v === "object" && typeof v["."] === "string" ? v["."] : null;
@@ -688,7 +736,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     if (!seen) problems.push(`${path}: no Context7 pin copy matching ${re} — reworded or removed, so the gate can no longer hold it to PINNED ${pin}`);
   }
   if (!swept) problems.push(`the Context7 pin sweep matched nothing across ${Object.keys(files).length} tracked file(s) — a sweep that sees nothing is not a pass`);
-  return problems;
+  return [...new Set(problems)]; // a continuation read two ways can name the same line twice
 }
 
 /**
@@ -1446,9 +1494,30 @@ server.registerTool(
     ["s.cmd", `npx -y ^\n  ${NAME}\n`, 1, true, "a cmd `^` continuation"],
     ["s.sh", `npx -y \\\n  ${SPEC}${realPin}\n`, 1, false, "the pin split across a continuation (no false positive)"],
     ["d.md", `a line ending in a hard break\\\nthen ${NAME} in prose\n`, 2, false, "a markdown hard break without a runner stays prose (no false positive)"],
+    // round 13: a continuation splices the next line on with NOTHING between (bash), so a pin or a name split mid-token
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\n0\n`, 1, true, "a pin spliced across a continuation (`@4.1.1\\` + `0` runs 4.1.10)"],
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\n-beta.1\n`, 1, true, "a prerelease tail spliced onto the pin"],
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\r\n0\r\n`, 1, true, "a CRLF pin splice"],
+    ["s.sh", `npx -y @upstash/context7-\\\nmcp@latest\n`, 1, true, "a package name split mid-token across a continuation"],
+    ["s.sh", `npx -y @\\\nupstash/context7-mcp\n`, 1, true, "a name split right after the scope's `@`"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n    mcp@latest\n`, 1, true, "a Dockerfile name split with an indented tail"],
+    ["s.cmd", `npx -y @upstash/context7-^\nmcp@latest\n`, 1, true, "a cmd `^` name split"],
+    ["s.ps1", `npx -y ${SPEC}${realPin}\`\n0\n`, 1, true, "a PowerShell pin splice (read glued too, fail-closed)"],
+    ["README.md", "\`\`\`sh\nnpx -y @upstash/context7-\\\nmcp@latest\n\`\`\`\n", 2, true, "a fenced README name split"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y @upstash/context7-\\\n      mcp@latest\n`, 3, true, "a YAML literal-block name split"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${SPEC}${realPin}\n`, 3, false, "a YAML literal-block continuation holding the pin (no false positive)"],
+    ["Dockerfile", `RUN npx -y \\\n    ${SPEC}${realPin}\n`, 1, false, "a Dockerfile continuation holding the pin, read both ways (no false positive)"],
+    [".mcp.json", `{"command":["npx","-y"],"args":["${NAME}"]}`, 1, true, "a command ARRAY with args beside it"],
+    [".mcp.json", `{"command":{"program":"npx"},"args":["-y","${NAME}"]}`, 1, true, "an object command under `program`"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
   }
+  checks.push([
+    "a continuation read two ways names its line ONCE (problems are de-duplicated)",
+    sweep("Dockerfile", `RUN npx -y \\\n    ${NAME}@latest\n`).length === 1,
+  ]);
   // round 8: JSON is PARSED (JSON.parse) and walked — keys split from colons, path keys, command/args context
   for (const [body, want, what] of [
     [`{"pnpm":{"overrides":{"foo>${NAME}":"^5"}}}`, true, "a pnpm `parent>pkg` override (JSON)"],

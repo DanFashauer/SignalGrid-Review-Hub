@@ -2420,20 +2420,22 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       proves present taints the child's receiving parameter (destructured, renamed, rest, `props`
       identifier, `{...spread}`, `children`; a whole query object under any prop name; a good-state
       class handed down as a prop), so the child's render is judged with the parent's query origins.
-      Components resolve by declaring scope (and through `memo`/`forwardRef`), so same-named
-      components never share a taint. Object-map classes resolve too: `className={TONE[status]}`
-      over a same-file const map — reached directly, through a const alias, a same-file helper, a
-      nested `TONE.a[status]` or a `...BASE` spread — is judged like an inline good class unless the
-      lookup has an explicit `??`/`||` fallback AND a key that is provably a plain read of query
-      data (fail-closed: a literal, `??`/ternary default, helper or `useMemo` result, destructuring or
-      parameter default, reassigned `let`, member read of another const, a prop any call site defaults
-      or spreads, or a defaulted/augmented row array earns no exemption). Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
-      shape with a guarded twin; live tree still 0 findings; each mechanism falsified by cp-aside
-      (disable it, only its own fixtures fail). Still not followed: a child component, helper or
-      class map imported from another file (no module resolver); callback parameters over query
-      rows (`rows.map((r) => …)`); a class assembled from a prop; data fields destructured out of
-      `q.data`. Known over-flag: a key that defaults to a non-good entry (`T[s ?? "bad"] ?? T.d`).
-      Row stays open for those.
+      Components resolve by declaring scope (and through `memo`/`forwardRef`). Object-map classes
+      resolve too: `className={TONE[status]}` over a same-file const map — directly, through a const
+      alias, a same-file helper, a nested `TONE.a[status]` or a `...BASE` spread — is judged like an
+      inline good class unless the lookup has an explicit `??`/`||` fallback AND a key the analysis
+      can show is a plain read of query data. That key rule is a conservative heuristic, not a
+      proof, and is fail-closed: a literal, `??`/ternary default, helper or `useMemo` result,
+      destructuring or parameter default, `.length`/`.size` read, a binding assigned or mutated in
+      its scope, a rest element, a prop any visible call site defaults or spreads, a component
+      referenced other than as a JSX tag (alias, direct call, `createElement`, `memo`, `export`), or a
+      defaulted/augmented row array earns no exemption. Self-test pairs bug shapes with guarded
+      twins; live tree still 0 findings; each clause of the key rule was mutation-tested by cp-aside
+      (disable it, the self-test fails). Still not followed: a child component, helper or class map
+      imported from another file (no module resolver); a callback parameter over query rows as DATA
+      (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
+      `initialData`/`placeholderData`; `defaultProps`. Known over-flags: `T[s ?? "bad"] ?? T.d`,
+      `.flatMap((x) => [x])`. Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

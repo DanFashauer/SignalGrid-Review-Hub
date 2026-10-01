@@ -72,30 +72,35 @@
 // passed under any prop name (`query={q}`, `{...q}`); a good-state class handed down as a prop
 // (`tone="…emerald"`, `tone={TONE[s]}`); a map reached through a const alias, a same-file
 // helper, a nested `TONE.a[status]` or a `...BASE` spread. A map lookup is unknown-safe only
-// with an explicit `??`/`||` fallback AND a key that is PROVABLY a plain read of query data (a
-// property/optional chain, `String()`/`.toLowerCase()`/`.trim()`, a destructured binding without
-// a default, a prop that EVERY same-file call site passes as a plain read, the first parameter of
-// an array callback whose receiver is itself a plain read — `rows ?? []`, optionally filtered /
-// sliced / sorted). FAIL-CLOSED: any key the analysis cannot prove plain — a literal, a
-// `??`/ternary default, a helper / `useMemo` result, a destructuring or parameter default, a
-// reassigned `let`, a member read of another const, a template with literal text, a prop that
-// any call site defaults or spreads, a defaulted or augmented row array — might select a fixed
-// entry whatever the data is, so the fallback does not protect it.
+// with an explicit `??`/`||` fallback AND a key this analysis can show is a plain read of query
+// data: a property/optional chain (never a `.length`/`.size` read), `String()` / `.toLowerCase()` /
+// `.trim()` / `Array.from()`, a destructured binding without a default, a prop that EVERY call site
+// it can see passes as a plain read, the first parameter of an array callback whose receiver is
+// itself such a read (`rows ?? []`, optionally filtered / sliced / sorted). A binding that is
+// assigned or mutated anywhere in its scope, a rest element, and a component with any reference
+// other than a JSX tag (an alias, a direct call, `createElement`, `memo(C)`, an `export`) are NOT
+// plain. FAIL-CLOSED: anything this analysis cannot show plain — a literal, a `??`/ternary default,
+// a helper / `useMemo` result, a destructuring or parameter default, a member read of another const,
+// a template with literal text, a defaulted or augmented array — earns no exemption. This is a
+// conservative HEURISTIC, not a proof: each rule exists because a fixture showed the shape it closes.
 //
-// KNOWN, DELIBERATE LIMITATIONS (this is a static, name-and-scope analysis; it can still err in
-// BOTH directions — it is not an exhaustive proof):
+// KNOWN, DELIBERATE LIMITATIONS (a static, name-and-scope analysis; it can err in BOTH directions):
 //   - Cross-file: a child component, helper or class map IMPORTED from another file is not
-//     followed (no module resolver here). A false NEGATIVE; the widened doctrine review covers it.
-//   - A callback parameter over query rows (`rows.map((r) => <li className="…emerald">…`) is not
-//     tracked, nor is a class assembled from a prop (`text-${tone}-400`). False negatives.
+//     followed (no module resolver). An EXPORTED component's call sites in other files are
+//     unseen, so it is never treated as plain. A false NEGATIVE for imports; the widened doctrine
+//     review covers it.
+//   - A callback parameter over query rows is recognised only as a plain KEY, not tracked as DATA:
+//     `rows.map((r) => <li className="…emerald">{r.name}</li>)` is missed, as is a class assembled
+//     from a prop (`text-${tone}-400`). False negatives. Data fields destructured OUT of `q.data`
+//     (`const { name } = q.data ?? {}`) are likewise not tracked (pre-existing).
+//   - react-query `initialData` / `placeholderData` make `q.data` a literal while the real state is
+//     unknown; a presence guard and a plain-read key are both fooled (pre-existing, gate-wide).
+//     `Component.defaultProps` is not followed (ignored by React 19, which this repo pins).
 //   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
-//   - Data fields destructured OUT of `q.data` (`const { name } = q.data ?? {}`) are not tracked as
-//     data variables (only `data` and the query-state fields are); `const name = q.data?.name` is.
-//     Pre-existing; a false NEGATIVE.
-//   - A key that defaults to a NON-good entry (`T[s ?? "bad"] ?? T.d`) is flagged although it cannot
-//     paint emerald — the price of the fail-closed key rule. A false POSITIVE, never silent.
+//   - Fail-closed OVER-FLAGS, never silent: a key that defaults to a NON-good entry
+//     (`T[s ?? "bad"] ?? T.d`), and a row transform that keeps every element (`.flatMap((x) => [x])`).
 //   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
 //     resolved.
 //
@@ -869,8 +874,8 @@ function analyzeSourceFile(relPath, text) {
         if (!ts.isVariableStatement(st)) continue;
         const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
         for (const d of st.declarationList.declarations) {
-          if (ts.isIdentifier(d.name) && d.name.text === id.text) return { kind: "var", decl: d, isConst };
-          if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return { kind: "el", node: el, decl: d, isConst };
+          if (ts.isIdentifier(d.name) && d.name.text === id.text) return { kind: "var", decl: d, isConst, scope: c };
+          if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return { kind: "el", node: el, decl: d, isConst, scope: c };
           if (ts.isArrayBindingPattern(d.name) && d.name.elements.some((el) => !ts.isOmittedExpression(el) && ts.isIdentifier(el.name) && el.name.text === id.text)) return { kind: "opaque" };
         }
       }
@@ -882,7 +887,7 @@ function analyzeSourceFile(relPath, text) {
     const fn = param.parent;
     if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || fn.parameters[0] !== param || param.initializer) return false;
     const call = fn.parent;
-    return Boolean(call) && ts.isCallExpression(call) && call.arguments.includes(fn) && ts.isPropertyAccessExpression(call.expression) &&
+    return Boolean(call) && ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression) &&
       ROW_METHODS.has(call.expression.name.text) && keyIsPlainData(call.expression.expression);
   };
   // EVERY call site of a same-file component, per prop: a prop is a plain read of data only if
@@ -911,43 +916,100 @@ function analyzeSourceFile(relPath, text) {
       ts.forEachChild(n, visit);
     };
     visit(sf);
+    // Any other reference to the component — an alias (`const D = C`), a direct call, `createElement`,
+    // `memo(C)`, an array/object member, an `export` — is a call site this analysis cannot see.
+    const comp = localComponents.find((k) => k.fn === fn);
+    const exported = (decl) => Boolean(decl.modifiers && decl.modifiers.some((m) => m.kind === K.ExportKeyword));
+    const declNode = comp && (ts.isFunctionDeclaration(fn) ? fn : fn.parent && ts.isVariableDeclaration(fn.parent) ? fn.parent : (fn.parent && fn.parent.parent && ts.isVariableDeclaration(fn.parent.parent) ? fn.parent.parent : null));
+    const stmt = declNode && (ts.isVariableDeclaration(declNode) ? declNode.parent?.parent : declNode);
+    if (!comp || !stmt || exported(stmt)) info.unseen = true;
+    else {
+      const scan = (n) => {
+        if (ts.isIdentifier(n) && n.text === comp.name) {
+          const par = n.parent;
+          const isDecl = (ts.isFunctionDeclaration(par) || ts.isVariableDeclaration(par)) && par.name === n;
+          const isTag = (ts.isJsxOpeningElement(par) || ts.isJsxSelfClosingElement(par) || ts.isJsxClosingElement(par)) && par.tagName === n;
+          if (!isDecl && !isTag) info.unseen = true;
+        }
+        ts.forEachChild(n, scan);
+      };
+      scan(sf);
+    }
     siteCache.set(fn, info);
     return info;
   };
   const paramSitesPlain = (fn, propName) => {
     const info = callSitesOf(fn);
-    if (info.count === 0 || info.spread) return false;
+    if (info.spread || info.unseen) return false;
     const exprs = propName === null ? [...info.byProp.values()].flat() : (info.byProp.get(propName) ?? []);
     return exprs.every((x) => keyIsPlainData(x));
   };
+  // A binding that is ASSIGNED anywhere in its scope (`s ??= "ok"`, `k = "ok"`, `x++`), or whose
+  // value is MUTATED in place (`rows.push("ok")`, `d.s = "ok"`, `Object.assign(d, …)`), is no
+  // longer the plain read it was declared as.
+  const MUTATORS = new Set(["push", "unshift", "splice", "fill", "copyWithin", "set", "add", "pop", "shift"]);
+  const rootIdent = (e) => {
+    for (;;) {
+      e = unwrapExpr(e);
+      if (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) e = e.expression;
+      else break;
+    }
+    return ts.isIdentifier(e) ? e : null;
+  };
+  const isMutated = (name, scope) => {
+    let hit = false;
+    const w = (n) => {
+      if (hit || !n) return;
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
+          rootIdent(n.left)?.text === name) { hit = true; return; }
+      if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
+          (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken) && rootIdent(n.operand)?.text === name) { hit = true; return; }
+      if (ts.isCallExpression(n)) {
+        const c = n.expression;
+        if (ts.isPropertyAccessExpression(c) && MUTATORS.has(c.name.text) && rootIdent(c.expression)?.text === name) { hit = true; return; }
+        if (ts.isPropertyAccessExpression(c) && c.name.text === "assign" && ts.isIdentifier(c.expression) && c.expression.text === "Object" &&
+            n.arguments[0] && rootIdent(n.arguments[0])?.text === name) { hit = true; return; }
+      }
+      ts.forEachChild(n, w);
+    };
+    w(scope);
+    return hit;
+  };
+  // A numeric/size read is a FIXED value (0) over an empty default, not a data-derived key.
+  const FIXED_VALUE_PROPS = new Set(["length", "size", "byteLength"]);
   const PLAIN_METHODS = new Set(["toLowerCase", "toUpperCase", "trim", "toString"]);
   const ROW_KEEPING = new Set(["filter", "slice", "sort", "reverse", "toSorted", "toReversed"]);
-  const keyIsPlainData = (k, seen = new Set(), depth = 0) => {
-    if (!k || depth > 8) return false;
+  const keyIsPlainData = (k, depth = 0) => {
+    if (!k || depth > 8) return false; // also stops a cycle (`const a = b; const b = a`)
     const e = unwrapExpr(k);
-    const recur = (x) => keyIsPlainData(x, seen, depth + 1);
+    const recur = (x) => keyIsPlainData(x, depth + 1);
     if (ts.isIdentifier(e)) {
       const b = findBinding(e);
-      if (!b || b.kind === "opaque" || seen.has(b.node ?? b.decl)) return false;
-      seen.add(b.node ?? b.decl);
+      if (!b || b.kind === "opaque") return false;
       if (b.kind === "param") {
+        if (isMutated(e.text, b.node.parent)) return false;
         if (b.node.parent && paramSitesPlain(b.node.parent, null)) return true;
         return isRowOfQueryData(b.node); // `(s) =>` of `data.rows.map(...)`: a row exists only when the data does
       }
       if (b.kind === "el") {
         if (b.node.initializer) return false; // a destructuring / parameter default
-        if (b.fromParam) return paramSitesPlain(b.node.parent.parent.parent, propOf(b.node));
-        return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+        if (b.fromParam) {
+          const fn = b.node.parent.parent.parent;
+          return !b.node.dotDotDotToken && !isMutated(e.text, fn) && paramSitesPlain(fn, propOf(b.node));
+        }
+        if (FIXED_VALUE_PROPS.has(propOf(b.node)) || isMutated(e.text, b.scope)) return false;
+        return Boolean(b.decl.initializer) && recur(b.decl.initializer);
       }
-      return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+      return !isMutated(e.text, b.scope) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
     }
-    if (ts.isPropertyAccessExpression(e)) return recur(e.expression);
+    if (ts.isPropertyAccessExpression(e)) return !FIXED_VALUE_PROPS.has(e.name.text) && recur(e.expression);
     if (ts.isCallExpression(e)) {
       if (hookDecls.has(e)) return true;
       const c = e.expression;
-      if (ts.isPropertyAccessExpression(c) && PLAIN_METHODS.has(c.name.text) && e.arguments.length === 0) return recur(c.expression);
+      if (ts.isPropertyAccessExpression(c) && PLAIN_METHODS.has(c.name.text)) return recur(c.expression);
       if (ts.isIdentifier(c) && c.text === "String" && !findBinding(c)) return recur(e.arguments[0]);
-      // filter/slice/sort/reverse keep a subset of the same elements: a plain receiver stays plain.
+      // `Array.from(rows)`, and filter/slice/sort/reverse, keep a subset of the same elements.
+      if (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "Array" && c.name.text === "from" && !findBinding(c.expression)) return recur(e.arguments[0]);
       if (ts.isPropertyAccessExpression(c) && ROW_KEEPING.has(c.name.text)) return recur(c.expression);
       return false;
     }
@@ -1612,6 +1674,43 @@ const OK_R4 = [
   ["derived rows const, empty default", rowsFx("rows").replace("  return <>", "  const rows = q.data?.rows ?? [];\n  return <>")],
 ];
 
+// Round-5 review of #1370: fixed-value reads, call sites the JSX scan cannot see, assigned or
+// mutated bindings, rest elements — and one fixture per clause a reviewer's mutant survived.
+const NUMTONE = `const NT = { 0: "text-emerald-400", default: "text-slate-400" };`;
+const numFx = (body, use) => keyFx(NUMTONE, body, use);
+const CHILD_N = `function C({ s, n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`;
+const PLAIN_SITE = `<C s={q.data?.s} ${N} />`;
+const BUG_R5 = [
+  ["numeric key: rows.length over an empty default", numFx(`const rows = q.data?.rows ?? [];`, "NT[rows.length] ?? NT.default")],
+  ["numeric key: String(rows.length)", numFx(`const rows = q.data?.rows ?? [];`, "NT[String(rows.length)] ?? NT.default")],
+  ["numeric key: destructured { length }", numFx(`const rows = q.data?.rows ?? []; const { length } = rows;`, "NT[length] ?? NT.default")],
+  ["numeric key: (q.data?.rows ?? []).length inline", numFx("", "NT[(q.data?.rows ?? []).length] ?? NT.default")],
+  ["second site through an alias: const D = C", keyFx("", "", "", `${CHILD_N}\nconst D = C;`, `<>${PLAIN_SITE}<D s="ok" ${N} /></>`)],
+  ["second site is a direct call: C({ s: \"ok\" })", keyFx("", "", "", CHILD_N, `<>${PLAIN_SITE}{C({ s: "ok", n: q.data?.n })}</>`)],
+  ["second site is createElement(C, …)", keyFx("", "", "", CHILD_N, `<>${PLAIN_SITE}{React.createElement(C, { s: "ok", n: q.data?.n })}</>`)],
+  ["component is exported (sites in other files are unseen)", keyFx("", "", "", `export ${CHILD_N}`, PLAIN_SITE)],
+  ["component handed to memo(C)", keyFx("", "", "", `${CHILD_N}\nconst M = React.memo(C);`, `<>${PLAIN_SITE}<M s="ok" ${N} /></>`)],
+  ["empty default mutated: rows.push(\"ok\")", rowsFx("rows", "TONE[r] ?? TONE.default").replace("  return <>", "  const rows = q.data?.rows ?? [];\n  if (!rows.length) rows.push(\"ok\");\n  return <>")],
+  ["empty default mutated: d.s ??= \"ok\"", keyFx("", `const d = q.data ?? {}; d.s ??= "ok";`, "TONE[d.s] ?? TONE.default")],
+  ["empty default mutated: Object.assign(d, …)", keyFx("", `const d = q.data ?? {}; Object.assign(d, { s: "ok" });`, "TONE[d.s] ?? TONE.default")],
+  ["parameter reassigned: s ??= \"ok\"", keyFx("", "", "", `function C({ s, n }) { s ??= "ok"; return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, PLAIN_SITE)],
+  ["callback parameter reassigned: r = r || \"ok\"", keyFx("", "", "", "", `<>{(q.data?.rows ?? []).map((r) => { r = r || "ok"; return <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>; })}</>`)],
+  ["let reassigned after a destructure", keyFx("", `let { k } = q.data ?? {}; k ||= "ok";`, "TONE[k] ?? TONE.default")],
+  ["rest element in a component parameter", keyFx("", "", "", `function C({ n, ...rest }) { return <b className={TONE[rest.s] ?? TONE.default}>{n}</b>; }`, `<C s="ok" ${N} />`)],
+  ["object default is not empty: q.data ?? { s: \"ok\" }", keyFx("", `const d = q.data ?? { s: "ok" };`, "TONE[d.s] ?? TONE.default")],
+  ["array-destructured key is unprovable", keyFx("", `const [k] = q.data?.keys ?? [];`, "TONE[k] ?? TONE.default")],
+  ["cyclic const keys terminate and flag", keyFx(`const A = B;\nconst B = A;`, "", "TONE[A] ?? TONE.default")],
+  ["lookup is the RIGHT operand of ??: x ?? TONE[s]", keyFx("", `const s = q.data?.s;`, "q.data?.k ?? TONE[s]")],
+  ["second site WITH children passes a literal", keyFx("", "", "", CHILD_N, `<>${PLAIN_SITE}<C s="ok" ${N}>x</C></>`)],
+];
+const OK_R5 = [
+  ["|| fallback over a plain key", keyFx("", `const s = q.data?.s;`, "TONE[s] || TONE.default")],
+  ["Array.from over a plain rows array", rowsFx(`Array.from(q.data?.rows ?? [])`, "TONE[r.s] ?? TONE.default")],
+  ["rows that are only read, never mutated", rowsFx("rows", "TONE[r] ?? TONE.default").replace("  return <>", "  const rows = q.data?.rows ?? [];\n  const n = rows.length;\n  return <>")],
+  ["another component's literal site does not taint this one", keyFx("", "", "", `${CHILD_N}\nfunction E({ s }) { return <i>{s}</i>; }`, `<>${PLAIN_SITE}<E s="ok" /></>`)],
+  ["plain site with children", keyFx("", "", "", CHILD_N, `<C s={q.data?.s} ${N}>x</C>`)],
+];
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1817,6 +1916,18 @@ function selfTest() {
   for (const [label, src] of OK_R4) {
     const v = analyze(src, "R4OK.tsx");
     console.log(`  self-test R4-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-5 review of #1370.
+  for (const [label, src] of BUG_R5) {
+    const v = analyze(src, "R5.tsx");
+    console.log(`  self-test R5 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+  }
+  for (const [label, src] of OK_R5) {
+    const v = analyze(src, "R5OK.tsx");
+    console.log(`  self-test R5-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 

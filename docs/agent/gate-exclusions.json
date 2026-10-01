@@ -221,6 +221,12 @@
       "date": "2026-09-30"
     },
     {
+      "path": "scripts/check-sim-scripts-selfcheck.mjs",
+      "symbol": "DARWIN_EXEMPT",
+      "reason": "Names the scripts/mac scripts that rule (h) does not require a `uname -s` Darwin guard in (today only free-test-port.sh, which preflight's 'Reap orphaned api-servers' step runs on Linux CI); the gate fails if a named script no longer exists, so a stale exemption cannot re-permit the gap.",
+      "date": "2026-10-01"
+    },
+    {
       "path": "scripts/check-surface-ownership.mjs",
       "symbol": "EXCLUSIONS",
       "reason": "Generated records (sim results, live evidence, lane mail, heartbeats, raised hands, run history) need no reader; each rule still names the accountable roster role and fails if it does not resolve.",

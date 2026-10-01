@@ -50,7 +50,10 @@ refuses any line shaped like a footnote definition (`[^label]:` after any indent
 it, the inventory table included. With no definition, a `[^…]` reference renders as
 plain text, so no footnote renders. Link reference definitions are refused too, as is a
 carriage return that is not part of a CRLF line ending, which GitHub reads as a line
-break. Between the begin and end markers the block may hold only the header row, the
+break, and any line that starts with `<` (after any indentation, `>` or list marker)
+other than the two inventory markers: GitHub and the gate's renderer disagree on which
+tags open an HTML block, and an open one hides every line after it up to the next blank,
+the inventory table included. Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
 because GitHub may end the table at one while the gate's renderer continues it. The
 table must render as one table showing every row the source lists. The section and

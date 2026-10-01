@@ -307,6 +307,8 @@ export function renderedStep4(doc) {
 // own scanner wants a label with no space and no `]`; this matches any label, so it
 // refuses a superset of what GitHub treats as a definition.
 const FOOTNOTE_DEF_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*\[\^[^\]\n]*\]:/;
+// A line that starts with `<` after any indentation, blockquote `>` or list markers.
+const HTML_START_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*</;
 // A paragraph or heading whose inline text opens with `[label]:` is a link reference
 // definition markdown-it REJECTED (an accepted one never reaches an inline token). cmark-gfm
 // does not validate the destination, so it hides the same text.
@@ -336,12 +338,21 @@ export function definitionProblems(doc) {
   if (cr >= 0)
     problems.push(`line ${doc.slice(0, cr).split(/\r\n|\r|\n/).length} holds a carriage return that is not part of a CRLF — GitHub ends the line there, so write a real line break or remove it`);
   const lines = doc.split(/\r\n|\r|\n/);
-  for (const [i, line] of lines.entries())
+  for (const [i, line] of lines.entries()) {
     if (FOOTNOTE_DEF_LINE.test(line))
       problems.push(`line ${i + 1} is a footnote definition ("${line.trim().slice(0, 40)}") — GitHub would swallow the lines after it, so write it as text`);
+    // cmark-gfm and markdown-it keep different lists of the tag names that open an HTML
+    // block (`<source` opens one on GitHub and is a paragraph to markdown-it 14), and an
+    // open HTML block swallows every line up to the next blank — the inventory table
+    // included (round 15). No line may start with `<` except the two markers themselves.
+    else if (HTML_START_LINE.test(line) && line !== BEGIN && line !== END)
+      problems.push(`line ${i + 1} starts with "<" ("${line.trim().slice(0, 40)}") — GitHub may open an HTML block there and hide the lines after it, so write it as text or in a code span`);
+  }
   const env = {};
   const tokens = new MarkdownIt({ html: true }).parse(doc, env);
-  const accepted = Object.keys(env.references ?? {}).filter((k) => !k.startsWith("^")); // a `^` one is a line above
+  // Every accepted key, `^` ones included: `[\n^x]: url` is a link definition whose label
+  // only LOOKS like a footnote's, and no single line of it matches the shape scan (round 15).
+  const accepted = Object.keys(env.references ?? {});
   if (accepted.length)
     problems.push(`the file defines link reference(s) ${accepted.map((k) => `[${k}]`).join(", ")} — write the link inline`);
   for (const t of tokens)
@@ -756,6 +767,11 @@ function selfTest() {
     ["text after the begin marker on its line fails (round 14)", { ...base, doc: good.replace(BEGIN, `${BEGIN} x`) }, "text after"],
     ["a missing delimiter row fails (round 14)", { ...base, doc: good.replace("| --- | --- | --- | --- | --- |\n", "") }, "must be the delimiter row"],
     ["an end marker not on its own line fails (round 14)", { ...base, doc: good.replace(`\n${END}`, END) }, "must start its own line"],
+    // Round 15: tag names that open an HTML block differ between the two renderers.
+    ...["<source", "<source x y", "</source", "<SOURCE", "   <source", "> <source", "- <source"].map((x) =>
+      [`a ${JSON.stringify(x)} line before the inventory fails (round 15)`, { ...base, doc: good.replace(BEGIN, `${x}\n${BEGIN}`) }, 'starts with "<"']),
+    ["a \"<source\" line after the inventory fails (round 15)", { ...base, doc: good.replace(END, `${END}\n<source\n`) }, 'starts with "<"'],
+    ["a link definition whose label starts with ^ on its second line fails (round 15)", { ...base, doc: `${good}\n\n[\n^x]: http://a\n` }, "defines link reference"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

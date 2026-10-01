@@ -70,6 +70,12 @@ check("a 9.8 CVSS with no label normalizes to critical", normalizeFinding({ devi
     nan.severity === "unknown" && inf.severity === "critical" && ninf.severity === "unknown");
   check("...while a finite CVSS still passes through unchanged", normalizeFinding({ deviceId: "x", cvssScore: 9.8 }).cvssScore === 9.8);
 }
+// Every CVSS band pinned, not only medium and critical (brace-less sweep, 2026-10-01):
+// with the `>= 7.0` band gone a 7.5 fell through to MEDIUM — a high CVE read one band
+// soft — and with the `> 0` band gone a 2.0 read as unknown instead of low.
+check("a 7.5 CVSS with no label normalizes to high, not medium", normalizeFinding({ deviceId: "x", cvssScore: 7.5 }).severity === "high");
+check("a 2.0 CVSS with no label normalizes to low", normalizeFinding({ deviceId: "x", cvssScore: 2.0 }).severity === "low");
+check("a 0 CVSS with no label stays unknown (no band claims it)", normalizeFinding({ deviceId: "x", cvssScore: 0 }).severity === "unknown");
 
 // Per-device posture aggregation.
 for (const name of deviceNames) {

@@ -1,6 +1,6 @@
 {
   "manifestVersion": 90,
-  "fingerprint": "1e0c1f699535f86a5160e7f39e362d8bbcc4dd38fb811418f42c763611a236e7",
+  "fingerprint": "9a469e562e5157c8d9da844028b2c092ad79713cd6124dbc38bbb11c08ee3c9c",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -107,7 +107,7 @@
     "proofCounts": {
       "access-governance": 84,
       "adaptive-proposals": 48,
-      "agent-behavior": 54,
+      "agent-behavior": 56,
       "agent-identity": 152,
       "app-update": 170,
       "benchmark-selection": 104,
@@ -123,7 +123,7 @@
       "decision-continuity": 76,
       "device-attestation": 154,
       "device-management-health": 207,
-      "device-resolver": 17,
+      "device-resolver": 14,
       "dual-control": 78,
       "emitter-discipline": 100,
       "entitlement-binding": 62,
@@ -144,7 +144,7 @@
       "ot-posture": 46,
       "pacs-access": 109,
       "passkey-assurance": 116,
-      "pim-activation": 51,
+      "pim-activation": 53,
       "platform-sso": 65,
       "policy-binding": 59,
       "posture-allow": 189,
@@ -160,13 +160,13 @@
       "session-readiness": 64,
       "shift-context": 67,
       "sse-egress": 52,
-      "sso-session": 97,
+      "sso-session": 98,
       "task-exception": 205,
       "token-binding": 61,
       "uem": 80,
       "unsafe-claim": 58,
       "verdict-attestation": 98,
-      "webhooks": 246,
+      "webhooks": 243,
       "work-context": 58
     },
     "mcpTools": [

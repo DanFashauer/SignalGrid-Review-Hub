@@ -66,9 +66,21 @@
 // const object literal; a lookup is unknown-safe only with an explicit non-good fallback
 // (`?? TONE.default`, `?? "text-muted"`) — otherwise it is judged like an inline good class.
 //
-// KNOWN, DELIBERATE LIMITATION (conservative — it UNDER-flags, never over-flags): provenance
-// and maps are followed only WITHIN one file. A child component or class map imported from
-// another file is not resolved (no module resolver here); the widened doctrine review covers it.
+// Same-file shapes followed: arrow/function/`memo`/`forwardRef` components resolved by lexical
+// scope (two same-named components in different scopes never share a taint), a destructured,
+// renamed, rest, `props` or `{...spread}` parameter, `children`, a map reached through a const
+// alias, a same-file helper (`toneFor(status)`), a nested map (`TONE.a[status]`) and a
+// `...BASE` spread map.
+//
+// KNOWN, DELIBERATE LIMITATIONS (this is a static, name-and-scope analysis; it can still err in
+// BOTH directions — it is not an exhaustive proof):
+//   - Cross-file: a child component, helper or class map IMPORTED from another file is not
+//     followed (no module resolver here). A false NEGATIVE; the widened doctrine review covers it.
+//   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
+//     taint is keyed by parameter name within the file — a possible false POSITIVE, never
+//     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
+//   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
+//     resolved.
 //
 // `--self-test` plants bug shapes (each must flag), gated shapes (must not), and a PLANT
 // into a real component — so the check can itself fail and can pass.
@@ -520,7 +532,7 @@ function analyzeSourceFile(relPath, text) {
     while (cur && !ts.isSourceFile(cur)) {
       if (ts.isFunctionDeclaration(cur) || ts.isFunctionExpression(cur) || ts.isArrowFunction(cur) || ts.isMethodDeclaration(cur)) {
         for (const p of cur.parameters) {
-          if (ts.isIdentifier(p.name) && p.name.text === name) return true;
+          if (ts.isIdentifier(p.name) && p.name.text === name && !taintedParams.has(p)) return true;
           if (ts.isObjectBindingPattern(p.name)) {
             for (const el of p.name.elements) { if (ts.isIdentifier(el.name) && el.name.text === name && !taintedParams.has(el)) return true; }
           }
@@ -580,32 +592,64 @@ function analyzeSourceFile(relPath, text) {
   // it were inline — its own guard (`if (!items) return …`) handles it, its absence is the bug.
   // A call site that IS guarded (`q.data ? <Panel items={items} /> : null`) taints nothing.
   // Components defined in another file are not followed (no module resolver here).
-  const localComponents = new Map(); // name -> parameters
+  // A component is registered with its DECLARING scope, and a call site resolves the nearest
+  // enclosing scope that declares that name — two same-named components in different scopes
+  // never share a taint. `memo(…)` / `forwardRef(…)` wrappers are unwrapped.
+  const localComponents = []; // { name, params, scope }
+  const scopeOf = (n) => { let c = n.parent; while (c && !ts.isBlock(c) && !ts.isSourceFile(c)) c = c.parent; return c; };
+  const componentFn = (init) => {
+    let e = init;
+    while (e && ts.isCallExpression(e) && (callName(e) === "memo" || callName(e) === "forwardRef") && e.arguments[0]) e = e.arguments[0];
+    return e && (ts.isArrowFunction(e) || ts.isFunctionExpression(e)) ? e : null;
+  };
   {
     const reg = (n) => {
-      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.set(n.name.text, n.parameters);
-      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer &&
-          (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) localComponents.set(n.name.text, n.initializer.parameters);
+      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n) });
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer) {
+        const fn = componentFn(n.initializer);
+        if (fn) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n) });
+      }
       ts.forEachChild(n, reg);
     };
     reg(sf);
   }
+  const findComponent = (tag) => {
+    for (let c = tag.parent; c; c = c.parent) {
+      if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
+      const hit = localComponents.find((k) => k.name === tag.text && k.scope === c);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  // Taint the receiving parameter. `propName === null` (a `{...p}` spread) taints every
+  // binding of the first parameter; a rest element is tainted too; a plain `props` identifier
+  // is tainted whole (so `props.items` reads as data).
+  const taintParam = (param, propName, origins) => {
+    let changed = false;
+    const mark = (node, localName) => {
+      if (addOrigins(dataVars, localName, origins)) changed = true;
+      if (!taintedParams.has(node)) { taintedParams.add(node); changed = true; }
+    };
+    if (ts.isIdentifier(param.name)) mark(param, param.name.text);
+    else if (ts.isObjectBindingPattern(param.name)) {
+      for (const el of param.name.elements) {
+        if (!ts.isIdentifier(el.name)) continue;
+        if (propName === null || el.dotDotDotToken || propOf(el) === propName) mark(el, el.name.text);
+      }
+    }
+    return changed;
+  };
   const propagateProps = () => {
     let changed = false;
+    const pass = (tag, propName, expr) => {
+      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
+      // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
+      if (comp && comp.params[0] && expr && elementHasUnguardedDataRender(expr) && taintParam(comp.params[0], propName, originsIn(expr))) changed = true;
+    };
     const visit = (n) => {
-      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer) && n.initializer.expression) {
-        const tag = n.parent.parent.tagName; // JsxAttributes -> element opening/self-closing
-        const params = tag && ts.isIdentifier(tag) ? localComponents.get(tag.text) : undefined;
-        const expr = n.initializer.expression;
-        // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
-        if (params && params[0] && ts.isObjectBindingPattern(params[0].name) && elementHasUnguardedDataRender(expr)) {
-          for (const el of params[0].name.elements) {
-            if (propOf(el) !== n.name.text || !ts.isIdentifier(el.name)) continue;
-            if (addOrigins(dataVars, el.name.text, originsIn(expr))) changed = true;
-            if (!taintedParams.has(el)) { taintedParams.add(el); changed = true; }
-          }
-        }
-      }
+      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) pass(n.parent.parent.tagName, n.name.text, n.initializer.expression);
+      if (ts.isJsxSpreadAttribute(n)) pass(n.parent.parent.tagName, null, n.expression);
+      if (ts.isJsxElement(n)) for (const ch of n.children) if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
       ts.forEachChild(n, visit);
     };
     visit(sf);
@@ -627,7 +671,8 @@ function analyzeSourceFile(relPath, text) {
     if (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
         ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) return RESOLVABLE_INIT(n.expression);
     return ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n) ||
-      ts.isCallExpression(n) || ts.isConditionalExpression(n) || ts.isBinaryExpression(n) || ts.isIdentifier(n);
+      ts.isCallExpression(n) || ts.isConditionalExpression(n) || ts.isBinaryExpression(n) || ts.isIdentifier(n) ||
+      ts.isElementAccessExpression(n) || ts.isPropertyAccessExpression(n);
   };
   // Does this scope bind `name` as something OTHER than a const we can resolve — a
   // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
@@ -664,8 +709,8 @@ function analyzeSourceFile(relPath, text) {
   // `TONE` is a same-file `const` object literal (optionally `as const`/`satisfies`) holding a
   // good-state class: a literal key (`TONE.ok`, `TONE["ok"]`) resolves to that one entry; a
   // dynamic key may select ANY entry. The lookup is unknown-safe only when it carries an explicit
-  // fallback that is not itself good-state — `TONE[status] ?? TONE.default`, `?? "text-muted"` —
-  // so a value the map does not cover cannot land on a good class. Anything else is judged like
+  // fallback — `TONE[status] ?? TONE.default`, `?? "text-muted"`. The fallback operand is itself
+  // walked, so a good-state fallback (`?? TONE.ok`, `|| "…emerald"`) is flagged on its own. Anything else is judged like
   // an inline good class (flagged on unguarded query data). A map that is not a same-file const
   // object literal (imported, a parameter, `let`) is not resolved.
   const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
@@ -674,29 +719,68 @@ function analyzeSourceFile(relPath, text) {
     const init = resolveConstInit(id, (n) => n && ts.isObjectLiteralExpression(unwrapExpr(n)));
     return init ? unwrapExpr(init) : null;
   };
-  const mapEntries = (obj, keyNode) => {
-    const lit = keyNode && ts.isStringLiteralLike(keyNode) ? keyNode.text : null;
-    return obj.properties.filter((p) => ts.isPropertyAssignment(p) && (lit === null ||
-      ((ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === lit))).map((p) => p.initializer);
+  // The object literal an expression denotes: a same-file const map, or a nested entry of one
+  // (`TONE.a`, `TONE["a"]`).
+  const mapObjectOf = (e, depth = 0) => {
+    if (!e || depth > 6) return null;
+    e = unwrapExpr(e);
+    if (ts.isIdentifier(e)) return mapObject(e);
+    const lit = ts.isPropertyAccessExpression(e) ? e.name.text
+      : ts.isElementAccessExpression(e) && e.argumentExpression && ts.isStringLiteralLike(e.argumentExpression) ? e.argumentExpression.text : null;
+    if (lit === null) return null;
+    const base = mapObjectOf(e.expression, depth + 1);
+    if (!base) return null;
+    for (const v of mapEntries(base, lit, depth + 1)) {
+      const u = unwrapExpr(v);
+      if (ts.isObjectLiteralExpression(u)) return u;
+      if (ts.isIdentifier(u)) { const o = mapObject(u); if (o) return o; }
+    }
+    return null;
   };
-  const hasGoodClass = (n) => {
-    let hit = false;
-    const w = (x, seen) => {
-      if (hit || !x) return;
-      if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) { hit = true; return; }
-      if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((t) => GOOD_CLASS.test(t.literal.text)))) { hit = true; return; }
-      if (ts.isIdentifier(x) && !isMemberName(x)) { const i = resolveConstInit(x); if (i && !seen.has(i)) { seen.add(i); w(i, seen); } }
-      if (ts.isElementAccessExpression(x) && ts.isIdentifier(x.expression)) { const o = mapObject(x.expression); if (o) for (const e of mapEntries(o, x.argumentExpression)) w(e, seen); }
-      if (ts.isPropertyAccessExpression(x) && ts.isIdentifier(x.expression)) { const o = mapObject(x.expression); if (o) for (const e of mapEntries(o, ts.factory.createStringLiteral(x.name.text))) w(e, seen); }
-      ts.forEachChild(x, (c) => w(c, seen));
+  // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key; a
+  // `...BASE` spread of another same-file map contributes its entries.
+  const mapEntries = (obj, lit, depth = 0) => {
+    const out = [];
+    for (const p of obj.properties) {
+      if (ts.isSpreadAssignment(p)) {
+        const o = depth < 6 ? mapObjectOf(p.expression, depth + 1) : null;
+        if (o) out.push(...mapEntries(o, lit, depth + 1));
+      } else if (ts.isPropertyAssignment(p) && (lit === null ||
+        ((ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === lit))) out.push(p.initializer);
+    }
+    return out;
+  };
+  const lookupEntries = (x) => { // x: ElementAccess | PropertyAccess over a resolvable map, else null
+    const obj = mapObjectOf(x.expression);
+    if (!obj) return null;
+    if (ts.isPropertyAccessExpression(x)) return mapEntries(obj, x.name.text);
+    return mapEntries(obj, x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression) ? x.argumentExpression.text : null);
+  };
+  const localFns = new Map(); // name -> function node (declaration or const arrow/function expression)
+  {
+    const reg = (n) => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) localFns.set(n.name.text, n);
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer &&
+          (ts.isArrowFunction(n.initializer) || ts.isFunctionExpression(n.initializer))) localFns.set(n.name.text, n.initializer);
+      ts.forEachChild(n, reg);
     };
-    w(n, new Set());
-    return hit;
+    reg(sf);
+  }
+  const returnExprs = (fn) => {
+    if (!ts.isBlock(fn.body)) return [fn.body];
+    const out = [];
+    const v = (n) => {
+      if (ts.isReturnStatement(n)) { if (n.expression) out.push(n.expression); return; }
+      if (ts.isFunctionLike(n)) return;
+      ts.forEachChild(n, v);
+    };
+    v(fn.body);
+    return out;
   };
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
-      (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) && !hasGoodClass(p.right);
+      (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken);
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -712,11 +796,22 @@ function analyzeSourceFile(relPath, text) {
         const init = resolveConstInit(x);
         if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
       }
-      if (ts.isElementAccessExpression(x) && ts.isIdentifier(x.expression)) {
-        const obj = mapObject(x.expression);
-        if (obj) {
-          if (!lookupHasSafeFallback(x)) for (const e of mapEntries(obj, x.argumentExpression)) walk(e, use ?? x);
+      if (ts.isElementAccessExpression(x) || ts.isPropertyAccessExpression(x)) {
+        const es = lookupEntries(x);
+        if (es) {
+          // Only a DYNAMIC key can miss; a literal key names its entry, so no fallback is needed.
+          const dynamic = ts.isElementAccessExpression(x) && !(x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression));
+          if (!(dynamic && lookupHasSafeFallback(x))) for (const e of es) walk(e, use ?? x);
           return; // the map and the key are fully accounted for; do not re-walk them as plain nodes
+        }
+      }
+      // A same-file helper — `className={toneFor(status)}` — is read through its return values.
+      if (ts.isCallExpression(x) && ts.isIdentifier(x.expression) && localFns.has(x.expression.text)) {
+        const fn = localFns.get(x.expression.text);
+        if (!resolving.has(fn)) {
+          resolving.add(fn);
+          for (const r of returnExprs(fn)) walk(r, use ?? x);
+          resolving.delete(fn);
         }
       }
       ts.forEachChild(x, (c) => walk(c, use));
@@ -1174,6 +1269,61 @@ const OK_MAP_FALLBACK = mapFixture("TONE[status] ?? TONE.default");
 const OK_MAP_LITFALLBACK = mapFixture(`TONE[status] ?? "text-slate-400"`);
 const OK_MAP_STATICKEY = mapFixture("TONE.bad");
 
+// Round-1 review of #1370: same-file shapes that passed silently, the fallback rule, and the
+// same-name component collision. Each bug flags; each twin passes.
+const propsFixture = (child, call, extra = "") => `
+import { useQuery } from "@tanstack/react-query";
+${extra}
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items ?? [];
+  const p = { items };
+  return ${call};
+}
+${child}`;
+const EMERALD_ITEMS = `<span className="text-emerald-400">{items.length} rows</span>`;
+const BUG_PROPS_IDENT = propsFixture(`function Panel(props) { return <span className="text-emerald-400">{props.items.length} rows</span>; }`, "<Panel items={items} />");
+const BUG_PROPS_SPREAD = propsFixture(`function Panel({ items }) { return ${EMERALD_ITEMS}; }`, "<Panel {...p} />");
+const BUG_PROPS_MEMO = propsFixture(`const Panel = React.memo(function Panel({ items }) { return ${EMERALD_ITEMS}; });`, "<Panel items={items} />");
+const BUG_PROPS_FWDREF = propsFixture(`const Panel = forwardRef(({ items }, ref) => ${EMERALD_ITEMS});`, "<Panel items={items} />");
+const BUG_PROPS_RENAMED = propsFixture(`function Panel({ items: list }) { return <span className="text-emerald-400">{list.length} rows</span>; }`, "<Panel items={items} />");
+const BUG_PROPS_CHILDREN = propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "<Panel>{items.length}</Panel>");
+const OK_PROPS_IDENT_GUARD = propsFixture(`function Panel(props) { if (!props.items) return null; return <span className="text-emerald-400">{props.items.length} rows</span>; }`, "<Panel items={items} />");
+const OK_PROPS_CHILDREN_GUARD = propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "q.data ? <Panel>{items.length}</Panel> : null");
+// Two same-named components in different scopes must not share a taint.
+const collisionFixture = (topEmerald) => `
+import { useQuery } from "@tanstack/react-query";
+function Row({ items }) { return <span className="${topEmerald ? "text-emerald-400" : "text-slate-400"}">{items.length}</span>; }
+export function Static() { return <Row items={[1]} />; }
+export function Other() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items ?? [];
+  const Row = ({ items }) => <span className="${topEmerald ? "text-slate-400" : "text-emerald-400"}">{items.length}</span>;
+  return <Row items={items} />;
+}`;
+const BUG_COLLIDE_REAL = collisionFixture(false); // the LOCAL Row is emerald and is the one fed query data → flag
+const OK_COLLIDE_STATIC = collisionFixture(true); // only the top-level Row is emerald, and it is fed a static [1] → clean
+const mapShape = (pre, use) => `
+import { useQuery } from "@tanstack/react-query";
+${pre}
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const rows = q.data?.rows ?? [];
+  const status = q.data?.status;
+  return <span className={${use}}>{rows.length} rows</span>;
+}`;
+const TONE = `const TONE = { ok: "text-emerald-400", default: "text-slate-400" };`;
+const BUG_MAP_ALIAS = mapShape(TONE, "cls").replace("const status", "const cls = TONE[status];\n  const status").replace("const cls = TONE[status];\n  const status = q.data?.status;", "const status = q.data?.status;\n  const cls = TONE[status];");
+const BUG_MAP_HELPER = mapShape(`${TONE}\nfunction toneFor(s) { return TONE[s]; }`, "toneFor(status)");
+const BUG_MAP_NESTED = mapShape(`const TONE = { a: { ok: "text-emerald-400" } };`, "TONE.a[status]");
+const BUG_MAP_SPREAD = mapShape(`const BASE = { ok: "text-emerald-400" };\nconst TONE = { ...BASE, bad: "text-red-400" };`, "TONE[status]");
+const BUG_MAP_FB_PROP = mapShape(TONE, "TONE[status] ?? TONE.ok");
+const BUG_MAP_FB_ELEM = mapShape(TONE, `TONE[status] ?? TONE["ok"]`);
+const BUG_MAP_FB_LIT = mapShape(TONE, `TONE[status] || "text-emerald-400"`);
+const OK_MAP_ALIAS_GUARD = mapShape(TONE, "q.data ? cls : undefined").replace("  return <span", "  const cls = TONE[status];\n  return <span");
+const OK_MAP_HELPER_GUARD = mapShape(`${TONE}\nfunction toneFor(s) { return TONE[s]; }`, "q.data ? toneFor(status) : undefined");
+const OK_MAP_NESTED_FALLBACK = mapShape(`const TONE = { a: { ok: "text-emerald-400" }, d: "text-slate-400" };`, "TONE.a[status] ?? TONE.d");
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1289,6 +1439,40 @@ function selfTest() {
   ]) {
     const v = analyze(src, "REMAINDEROK.tsx");
     console.log(`  self-test REMAINDER-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-1 review of #1370.
+  for (const [label, src] of [
+    ["PROPS identifier (props.items)", BUG_PROPS_IDENT],
+    ["PROPS {...spread}", BUG_PROPS_SPREAD],
+    ["PROPS React.memo wrapper", BUG_PROPS_MEMO],
+    ["PROPS forwardRef wrapper", BUG_PROPS_FWDREF],
+    ["PROPS renamed destructure ({ items: list })", BUG_PROPS_RENAMED],
+    ["PROPS children", BUG_PROPS_CHILDREN],
+    ["COLLISION (the local Row fed query data is the emerald one)", BUG_COLLIDE_REAL],
+    ["MAP through a const alias", BUG_MAP_ALIAS],
+    ["MAP through a same-file helper", BUG_MAP_HELPER],
+    ["MAP nested (TONE.a[status])", BUG_MAP_NESTED],
+    ["MAP spread (...BASE)", BUG_MAP_SPREAD],
+    ["MAP fallback is good-state: ?? TONE.ok", BUG_MAP_FB_PROP],
+    ['MAP fallback is good-state: ?? TONE["ok"]', BUG_MAP_FB_ELEM],
+    ['MAP fallback is good-state: || "…emerald"', BUG_MAP_FB_LIT],
+  ]) {
+    const v = analyze(src, "R1.tsx");
+    console.log(`  self-test R1 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+  }
+  for (const [label, src] of [
+    ["PROPS identifier, guarded in the child", OK_PROPS_IDENT_GUARD],
+    ["PROPS children, guarded at the call site", OK_PROPS_CHILDREN_GUARD],
+    ["COLLISION (only the top-level, static-fed Row is emerald)", OK_COLLIDE_STATIC],
+    ["MAP alias under a data guard", OK_MAP_ALIAS_GUARD],
+    ["MAP helper under a data guard", OK_MAP_HELPER_GUARD],
+    ["MAP nested with a non-good fallback", OK_MAP_NESTED_FALLBACK],
+  ]) {
+    const v = analyze(src, "R1OK.tsx");
+    console.log(`  self-test R1-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 

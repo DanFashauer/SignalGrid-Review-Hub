@@ -2421,7 +2421,13 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       query origins — and resolves OBJECT-MAP CLASSES: `className={TONE[status]}` over a same-file
       const object literal is judged like an inline good class unless the lookup carries an
       explicit non-good fallback (`?? TONE.default`, `?? "text-muted"`). JSX attribute names and
-      object-literal keys no longer read as references to a tracked name. Self-test adds two bug
+      object-literal keys no longer read as references to a tracked name. Round-1 review
+      (#1370) hardening, 2026-10-01: components resolve by declaring scope (two same-named
+      components never share a taint) and through `memo`/`forwardRef`; a `props` identifier,
+      `{...spread}`, rest, renamed destructure and `children` are followed; a map reached through a
+      const alias, a same-file helper, a nested `TONE.a[status]` or a `...BASE` spread resolves;
+      the header now states the remaining limits (cross-file; whole-parameter taint) instead of
+      "never over-flags". Self-test adds two bug
       fixtures (props, map — each must flag) and five guarded twins (child-guarded, call-site-
       guarded, `?? TONE.default`, `?? "literal"`, literal non-good key — each must pass); live
       tree still 0 findings. Still not followed: a child component or class map imported from

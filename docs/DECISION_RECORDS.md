@@ -4137,7 +4137,7 @@ from the review-hub-ci.yml step and its `CI_WARN_ONLY` entry.
 
 ## DR-063 — The brain ecosystem: per-repo instructions, labeled ingestion, one MCP plane, per-repo triggers (owner-directed 2026-10-01)
 
-**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** Rules 2, 5 and 6 name steps only the owner can take. The three slices in rule 1 stand on their own: each strengthens a gate this repository already runs and none reaches another repository. Slice (a) is PR #1356 and slice (c) is PR #1354, each landing under DR-037 on its own; slice (b) rides in this pull request because its gate names this record. The owner answered the per-repository question for signalgrid-mcp on 2026-10-01 (rule 2) and approved this record and the `CLAUDE.md` line in his own words.
+**Status: PROPOSED — takes effect when the owner merges the pull request that carries it.** Rules 2, 5 and 6 name steps only the owner can take. The three slices in rule 1 stand on their own: each strengthens a gate this repository already runs and none reaches another repository. Slice (a) is open PR #1356 (a fix for a relative-path origin reading as clean is in flight) and slice (c) is open PR #1354; each lands under DR-037 on its own, and this record is merged after them. Slice (b) rides in this pull request because its gate names this record. The owner answered the per-repository question for signalgrid-mcp on 2026-10-01 (rule 2) and approved this record and the `CLAUDE.md` line in his own words.
 
 **Context.** On 2026-10-01 the session asked the owner whether the other repositories should get "sub-brains". He answered by pasting a four-point summary of Cole Medin's video "You Built Your AI Second Brain. Now What? (Here's How to Evolve It)" (YouTube, 16:06, uploaded 2026-09-16, https://www.youtube.com/watch?v=mjQlZrteMIY). His pasted summary, verbatim:
 
@@ -4170,7 +4170,7 @@ The last two are the owner's own additions, and this record decides them as his.
 
 **Decision.**
 
-1. **Adopted now, in this repository only.**
+1. **Adopted in this repository only — as the three pull requests above, not as landed fact until each merges.**
    - (a) `scripts/scan-estate-citations.mjs` also looks for a repository beside this checkout when its `/workspace` path is absent.
      - It scans a sibling only when that sibling's `origin` names the expected repository.
      - It keeps every unreachable or unconfirmed repository NOT SCANNED, never counted clean.
@@ -4185,12 +4185,12 @@ The last two are the owner's own additions, and this record decides them as his.
    - A review workflow using the Claude GitHub App runs in this repository and in signalgrid-mcp. The token it needs is created by the owner through `/install-github-app`, once per repository; no lane ever creates, reads or moves that secret.
    - The workflow runs only on `pull_request` and `@claude` mentions from the repository owner or members, never on `pull_request_target` with fork code checked out — both repositories are public, and that shape is how a secret reaches a stranger's pull request.
    - The Mac keeps every check that needs real hardware: the macOS job, `verify.sh`, the live evidence mint.
-   - The App's access does not change who merges: DR-037, DR-061 and rule 1 of this record still govern, and a lane still never merges its own work.
+   - The App's access does not change who merges. DR-037 stands as written: the cloud lane merges the green product PRs it opened, under its five conditions. DR-061 (#1246, pending the owner's merge) governs DECISION_PATH merges once in force. The Mac lane does not merge its own work. This record amends neither.
 
    *Still owner-only, by name:* the token per repository (above); branch protection on signalgrid-mcp's `main` with its Mac check required; whether DEV stays archived (recommended: yes).
 6. **Model scale.** DR-047's tiers govern every entry point that runs a model, triggered or not. Two such entry points do not follow them today. This record names them for the coordinator and changes neither:
    - The on-demand review pass that lives outside this tree calls the model with no tier pinned.
-   - The build tick on the unmerged #1248 branch pinned Opus for implementation, which DR-047 rule 2 routes to Sonnet; the staged-tiers change on that branch (triage on Sonnet, build on the tier the task implies, review on Opus, a cost line per stage) moves it to the tiers.
+   - The build tick on the unmerged #1248 branch pinned Opus for implementation at `70459c1a`, which DR-047 rule 2 routes to Sonnet; the staged-tiers change pushed to that branch at `694d255a` on 2026-10-01 (triage on Sonnet, build on the tier the task implies, review on Opus, a cost line per stage) moves it to the tiers.
 
    Choosing the primary model stays the owner's (DR-047 rule 6).
 

@@ -201,9 +201,13 @@ if [ "$DRY" = "1" ]; then
 elif git cat-file -e origin/SignalGrid_Alpha:scripts/mac/pr-refresh.mjs 2>/dev/null; then
   _rd="$(mktemp -d "$CACHE/pr-refresh.XXXXXX")" || _rd=""
   if [ -n "$_rd" ] && git show origin/SignalGrid_Alpha:scripts/mac/pr-refresh.mjs > "$_rd/pr-refresh.mjs" 2>/dev/null; then
-    SG_REPO_ROOT="$REPO_ROOT" node "$_rd/pr-refresh.mjs" --max 1 >> "$CACHE/pr-refresh.log" 2>&1
+    # Under a wall-clock cap (REFRESH_SECONDS, the budget HUNG_SECONDS counts): its own preflight
+    # and breadth have none, and a hung refresh would hold the lock and starve every later tick.
+    # ponytail: alarm ends node, not a gate it spawned; add a process group if that bites.
+    SG_REPO_ROOT="$REPO_ROOT" perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$REFRESH_SECONDS" \
+      node "$_rd/pr-refresh.mjs" --max 1 >> "$CACHE/pr-refresh.log" 2>&1
     _rc=$?
-    say "pr-refresh exited $_rc (log $CACHE/pr-refresh.log)"
+    say "pr-refresh exited $_rc (142 = the ${REFRESH_SECONDS}s cap; log $CACHE/pr-refresh.log)"
   else
     say "WARN could not extract mainline's pr-refresh.mjs — skipping the refresh"
   fi
@@ -396,7 +400,7 @@ stages run --path "$_verb" --kind "${_rest:-none}" >> "$RUN_LOG" 2>&1 < /dev/nul
 [ -s "$RUN_DIR/outcome.json" ] || fail "plan row $PICK_ID: the pipeline wrote no $RUN_DIR/outcome.json. Claim $BRANCH stays until a person deletes it"
 _oc="$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   process.stdout.write(`${o.outcome}\t${String(o.reason ?? "").replace(/\s+/g, " ")}`);' "$RUN_DIR/outcome.json" 2>&1)" \
-  || fail "plan row $PICK_ID: could not read $RUN_DIR/outcome.json: $_oc"
+  || fail "plan row $PICK_ID: could not read $RUN_DIR/outcome.json: $(printf '%s' "$_oc" | head -c 300 | tr '\n' ' ')"
 IFS="$(printf '\t')" read -r OUTCOME REASON <<< "$_oc"
 say "pipeline outcome: $OUTCOME — $REASON"
 

@@ -334,10 +334,18 @@ export function logicalLines(lines, kind, path = "") {
   }
   // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`. How the next line
   // is spliced on differs by reader, so each join the reader might make is read (CONTINUATION_JOINS).
-  const docker = /(?:^|\/)Dockerfile[^/]*$|\.dockerfile$/i.test(path);
+  const docker = /(?:^|\/)(?:Dockerfile|Containerfile)[^/]*$|\.(?:dockerfile|containerfile)$/i.test(path);
   // a Dockerfile as BuildKit parses it: `# escape=\`` (a parser directive, before any instruction) makes the
   // backtick the escape; whitespace may follow the escape; comment and empty lines inside a continuation are dropped
-  const dockerEscape = docker && lines.slice(0, lines.findIndex((l) => !/^\s*#/.test(l)) >>> 0).some((l) => /^\s*#\s*escape\s*=\s*`\s*$/i.test(l)) ? "`" : "\\";
+  // directives are read only while every line so far IS one (`syntax`, `escape`, `check`): an ordinary comment, an
+  // unknown key, an empty line or an instruction ends them, and a later `# escape=` is a plain comment
+  const directives = [];
+  for (const [n, l] of lines.entries()) {
+    const d = /^#\s*(syntax|escape|check)\s*=\s*(\S*)\s*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
+    if (!d) break;
+    directives.push(d);
+  }
+  const dockerEscape = docker && directives.some((d) => /^escape$/i.test(d[1]) && d[2] === "`") ? "`" : "\\";
   const [cont, modes] = /\.(?:ps1|psm1)$/i.test(path)
     ? [/(?<!`)`$/, ["space", "keep"]] // the escaped newline is whitespace; read glued too, fail-closed
     : /\.(?:cmd|bat)$/i.test(path)
@@ -348,9 +356,11 @@ export function logicalLines(lines, kind, path = "") {
           ? [new RegExp(`(?<!\\${dockerEscape})\\${dockerEscape}[ \t]*$`), ["keep", "strip"]] // with and without the next line's indent, fail-closed
           : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
   if (kind === "json") return lines.map((text, i) => ({ i, text }));
+  const ps1 = /\.(?:ps1|psm1)$/i.test(path);
   const physical = [];
   for (let i = 0; i < lines.length; i++) {
-    const l = lines[i];
+    // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
+    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : lines[i];
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
@@ -402,7 +412,8 @@ export function joinContinuations(entries, cont, modes, skip = null) {
       return text;
     });
     // a quote beside the marker (`"@upstash/context7-"\` + `mcp`) is concatenated by the shell: test quote-free too
-    if (!joins.some((t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "")))) {
+    // and with escapes dropped (`context7\-\` + `mcp`): the shell removes both before the word is formed
+    if (!joins.some((t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "").replace(/\\(.)/g, "$1")))) {
       out.push({ i: entries[k].i, text: entries[k].text });
       continue;
     }
@@ -1572,6 +1583,15 @@ server.registerTool(
     ["s.sh", `npx -y '@upstash/cont'\\\next7-mcp@latest\n`, 1, true, "a single-quoted part inside context7 beside the continuation"],
     ["Makefile.in", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a Makefile.in recipe split"],
     ["foo.make", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a *.make recipe split"],
+    // round 16: directives end at the first non-directive line; escapes beside a split name; PowerShell escapes; Containerfile
+    ["Dockerfile", "# hello\n# escape=\`\nRUN npx -y @upstash/context7-\\\nmcp@latest\n", 3, true, "an `# escape=` after an ordinary comment is a plain comment"],
+    ["Dockerfile", "# foo=bar\n# escape=\`\nRUN npx -y @upstash/cont\\\next7-mcp@latest\n", 3, true, "an unknown directive ends directive parsing"],
+    ["Dockerfile", "# syntax=docker/dockerfile:1\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "`# escape=` after `# syntax=` still holds"],
+    ["Dockerfile", "\uFEFF# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a BOM before the directive"],
+    ["s.sh", `npx -y @upstash/context7\\-\\\nmcp@latest\n`, 1, true, "a backslash escape beside the continuation"],
+    ["s.sh", `npx -y @upstash/context7-\\\nm\\cp@latest\n`, 1, true, "a backslash escape in the tail of a split name"],
+    ["s.ps1", "npx -y @upstash/context7\`-\`\nmcp@latest\n", 1, true, "a PowerShell backtick escape beside the continuation"],
+    ["Containerfile", `RUN npx -y @upstash/context7-\\\n# n\nmcp@latest\n`, 1, true, "a Containerfile read as a Dockerfile"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

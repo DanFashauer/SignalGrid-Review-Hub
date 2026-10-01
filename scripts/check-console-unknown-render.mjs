@@ -72,8 +72,13 @@
 // passed under any prop name (`query={q}`, `{...q}`); a good-state class handed down as a prop
 // (`tone="…emerald"`, `tone={TONE[s]}`); a map reached through a const alias, a same-file
 // helper, a nested `TONE.a[status]` or a `...BASE` spread. A map lookup is unknown-safe only
-// with an explicit fallback (`??`/`||`) AND a key that cannot itself default to a fixed entry
-// (`s ?? "ok"`, a const key, a ternary) — a key that defaults never reaches the fallback.
+// with an explicit `??`/`||` fallback AND a key that is PROVABLY a plain read of query data (a
+// property/optional chain, `String()`/`.toLowerCase()`/`.trim()`, a destructured binding without
+// a default, a tainted prop without a default, the first parameter of an array callback over
+// query data). FAIL-CLOSED: any key the analysis cannot prove plain — a literal, a `??`/ternary
+// default, a helper / `useMemo` result, a destructuring or parameter default, a reassigned `let`,
+// a member read of another const, a template with literal text — might select a fixed entry
+// whatever the data is, so the fallback does not protect it.
 //
 // KNOWN, DELIBERATE LIMITATIONS (this is a static, name-and-scope analysis; it can still err in
 // BOTH directions — it is not an exhaustive proof):
@@ -84,6 +89,8 @@
 //   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
+//   - A key that defaults to a NON-good entry (`T[s ?? "bad"] ?? T.d`) is flagged although it cannot
+//     paint emerald — the price of the fail-closed key rule. A false POSITIVE, never silent.
 //   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
 //     resolved.
 //
@@ -197,6 +204,7 @@ function analyzeSourceFile(relPath, text) {
   const errorVars = new Map();         // error flags specifically
   const loadingVars = new Map();       // loading/pending/fetching flags specifically
   let usesQueryHook = false;
+  const hookDecls = new Set();       // the query-hook CALL nodes (their results are query state, not a default)
   const addOrigins = (map, name, origins) => {
     let set = map.get(name);
     if (!set) { set = new Set(); map.set(name, set); }
@@ -241,7 +249,7 @@ function analyzeSourceFile(relPath, text) {
       const fields = decl.name.elements.map(propOf).filter(Boolean);
       const hasQueryField = fields.some((p) => QUERY_DESTRUCTURE.has(p));
       if (!(family || hasQueryField)) return;
-      usesQueryHook = true;
+      usesQueryHook = true; hookDecls.add(decl.initializer);
       const origin = [decl.pos];
       for (const el of decl.name.elements) {
         const prop = propOf(el);
@@ -251,12 +259,12 @@ function analyzeSourceFile(relPath, text) {
         else if (QUERY_DESTRUCTURE.has(prop)) noteStatusLocal(prop, local, origin);
       }
     } else if (ts.isIdentifier(decl.name) && family) {
-      usesQueryHook = true;
+      usesQueryHook = true; hookDecls.add(decl.initializer);
       addOrigins(queryObjVars, decl.name.text, [decl.pos]);
     } else if (ts.isArrayBindingPattern(decl.name) && family) {
       // `const [q] = useQueries(...)` — each element is a query-result object, and each is
       // its own origin. (Codex P2.)
-      usesQueryHook = true;
+      usesQueryHook = true; hookDecls.add(decl.initializer);
       for (const el of decl.name.elements) {
         if (ts.isBindingElement(el) && ts.isIdentifier(el.name)) addOrigins(queryObjVars, el.name.text, [el.pos]);
       }
@@ -835,37 +843,82 @@ function analyzeSourceFile(relPath, text) {
     v(fn.body);
     return out;
   };
-  // A key that can DEFAULT to a fixed entry (`s ?? "ok"`, `s ? s : "ok"`, a const key, a literal
-  // part in a template) never reaches the fallback when the data is unknown — it selects that
-  // entry. Such a lookup is not protected by a fallback, whatever the fallback is.
-  const keyCanDefault = (k) => {
-    let hit = false;
-    const w = (n, seen) => {
-      if (hit || !n) return;
-      if (ts.isConditionalExpression(n) || ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) ||
-          (ts.isBinaryExpression(n) && [K.QuestionQuestionToken, K.BarBarToken, K.AmpersandAmpersandToken].includes(n.operatorToken.kind))) { hit = true; return; }
-      if (ts.isTemplateExpression(n) && (n.head.text || n.templateSpans.some((t) => t.literal.text))) { hit = true; return; }
-      if (ts.isIdentifier(n) && !isMemberName(n)) {
-        // Follow only a const that IS a fixed key (a string, an alias, a defaulting expression) —
-        // not an arbitrary initializer such as `q.data?.status`, whose own strings are unrelated.
-        const i = resolveConstInit(n);
-        const u = i && unwrapExpr(i);
-        if (u && !seen.has(i) && (ts.isStringLiteralLike(u) || ts.isNoSubstitutionTemplateLiteral(u) || ts.isTemplateExpression(u) ||
-            ts.isIdentifier(u) || ts.isConditionalExpression(u) ||
-            (ts.isBinaryExpression(u) && [K.QuestionQuestionToken, K.BarBarToken, K.AmpersandAmpersandToken].includes(u.operatorToken.kind)))) {
-          seen.add(i); w(i, seen);
+  // FAIL-CLOSED key rule. A fallback protects a lookup only if the KEY is provably a plain read
+  // of query data — then unknown data yields an absent key and the fallback is what renders. Any
+  // key this analysis cannot prove plain (a literal, a `??`/ternary default, a helper or `useMemo`
+  // result, a destructuring or parameter default, a reassigned `let`, a member read of another
+  // const, a callback parameter) might select a fixed entry, so the fallback does not protect it
+  // and the lookup is judged like an inline good class. Over-flags a key that defaults to a
+  // NON-good entry (`T[s ?? "bad"]`) — a finding the author reads and exempts with `// unknown-ok:`.
+  const findBinding = (id) => {
+    for (let c = id.parent; c; c = c.parent) {
+      if (ts.isFunctionLike(c) && c.parameters) {
+        for (const p of c.parameters) {
+          if (ts.isIdentifier(p.name) && p.name.text === id.text) return { kind: "param", node: p };
+          if (ts.isObjectBindingPattern(p.name)) for (const el of p.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return { kind: "el", node: el, fromParam: true };
         }
       }
-      ts.forEachChild(n, (c) => w(c, seen));
-    };
-    w(k, new Set());
-    return hit;
+      if (!(ts.isBlock(c) || ts.isSourceFile(c))) continue;
+      for (const st of c.statements) {
+        if (!ts.isVariableStatement(st)) continue;
+        const isConst = Boolean(st.declarationList.flags & ts.NodeFlags.Const);
+        for (const d of st.declarationList.declarations) {
+          if (ts.isIdentifier(d.name) && d.name.text === id.text) return { kind: "var", decl: d, isConst };
+          if (ts.isObjectBindingPattern(d.name)) for (const el of d.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return { kind: "el", node: el, decl: d, isConst };
+          if (ts.isArrayBindingPattern(d.name) && d.name.elements.some((el) => !ts.isOmittedExpression(el) && ts.isIdentifier(el.name) && el.name.text === id.text)) return { kind: "opaque" };
+        }
+      }
+    }
+    return null;
+  };
+  const ROW_METHODS = new Set(["map", "filter", "forEach", "flatMap", "find", "some", "every", "findLast", "sort"]);
+  const isRowOfQueryData = (param) => {
+    const fn = param.parent;
+    if (!fn || !(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) || fn.parameters[0] !== param || param.initializer) return false;
+    const call = fn.parent;
+    return Boolean(call) && ts.isCallExpression(call) && call.arguments.includes(fn) && ts.isPropertyAccessExpression(call.expression) &&
+      ROW_METHODS.has(call.expression.name.text) && referencesQueryData(call.expression.expression);
+  };
+  const PLAIN_METHODS = new Set(["toLowerCase", "toUpperCase", "trim", "toString"]);
+  const keyIsPlainData = (k, seen = new Set(), depth = 0) => {
+    if (!k || depth > 8) return false;
+    const e = unwrapExpr(k);
+    const recur = (x) => keyIsPlainData(x, seen, depth + 1);
+    if (ts.isIdentifier(e)) {
+      const b = findBinding(e);
+      if (!b || b.kind === "opaque" || seen.has(b.node ?? b.decl)) return false;
+      seen.add(b.node ?? b.decl);
+      if (b.kind === "param") {
+        if (taintedParams.has(b.node) && dataVars.has(e.text)) return true;
+        return isRowOfQueryData(b.node); // `(s) =>` of `data.rows.map(...)`: a row exists only when the data does
+      }
+      if (b.kind === "el") {
+        if (b.node.initializer) return false; // a destructuring / parameter default
+        if (b.fromParam) return taintedParams.has(b.node) && dataVars.has(e.text);
+        return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+      }
+      return b.isConst && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+    }
+    if (ts.isPropertyAccessExpression(e)) return recur(e.expression);
+    if (ts.isCallExpression(e)) {
+      if (hookDecls.has(e)) return true;
+      const c = e.expression;
+      if (ts.isPropertyAccessExpression(c) && PLAIN_METHODS.has(c.name.text) && e.arguments.length === 0) return recur(c.expression);
+      if (ts.isIdentifier(c) && c.text === "String" && !findBinding(c) && e.arguments.length === 1) return recur(e.arguments[0]);
+      return false;
+    }
+    if (ts.isBinaryExpression(e) && (e.operatorToken.kind === K.QuestionQuestionToken || e.operatorToken.kind === K.BarBarToken)) {
+      const r = unwrapExpr(e.right); // `q.data ?? {}` / `?? []` supplies an empty container, not a key
+      const empty = (ts.isObjectLiteralExpression(r) && r.properties.length === 0) || (ts.isArrayLiteralExpression(r) && r.elements.length === 0);
+      return empty && recur(e.left);
+    }
+    return false;
   };
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
       (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) &&
-      !keyCanDefault(lookup.argumentExpression);
+      keyIsPlainData(lookup.argumentExpression);
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -886,9 +939,9 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isElementAccessExpression(x) || ts.isPropertyAccessExpression(x)) {
         const es = lookupEntries(x);
         if (es) {
-          // Only a DYNAMIC key can miss; a literal key names its entry, so no fallback is needed.
-          const dynamic = ts.isElementAccessExpression(x) && !(x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression));
-          if (!(dynamic && lookupHasSafeFallback(x))) for (const e of es) walk(e, use ?? x);
+          // A fallback protects only a lookup whose key is a provably plain read of data; a literal
+          // or property key (`T.ok`, `T["ok"]`) is not one, so its entry is always walked.
+          if (!lookupHasSafeFallback(x)) for (const e of es) walk(e, use ?? x);
           return; // the map and the key are fully accounted for; do not re-walk them as plain nodes
         }
       }
@@ -1435,6 +1488,53 @@ const BUG_QOBJ_SPREAD = propsFixture(`function Row({ data }) { return <b classNa
 const OK_QOBJ_CALLGUARD = propsFixture(`function Row({ query }) { return <b className="text-emerald-400">{query.data?.n}</b>; }`, "q.data ? <Row query={q} /> : null");
 const OK_QOBJ_CHILDGUARD = propsFixture(`function Row({ query }) { return query.data ? <b className="text-emerald-400">{query.data.n}</b> : null; }`, "<Row query={q} />");
 
+// Round-3 review of #1370: the key rule is fail-closed — only a provably plain read of query data
+// earns the fallback exemption. Every shape below can select a fixed entry whatever the data is.
+const keyFx = (pre, body, use, tail = "", ret = `<span className={${use}}>{q.data?.n}</span>`) => `
+import { useQuery } from "@tanstack/react-query";
+${TONE}
+${pre}
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  ${body}
+  return ${ret};
+}
+${tail}`;
+const FALLBACK = "TONE[k] ?? TONE.default";
+const BUG_R3 = [
+  ["destructuring default", keyFx("", `const { k = "ok" } = q.data ?? {};`, FALLBACK)],
+  ["function helper", keyFx(`function keyOf(s) { return s ?? "ok"; }`, `const s = q.data?.s;`, "TONE[keyOf(s)] ?? TONE.default")],
+  ["arrow helper", keyFx(`const keyOf = (s) => s || "ok";`, `const s = q.data?.s;`, "TONE[keyOf(s)] ?? TONE.default")],
+  ["switch helper", keyFx(`function keyOf(s) { switch (s) { case "bad": return "bad"; default: return "ok"; } }`, `const s = q.data?.s;`, "TONE[keyOf(s)] ?? TONE.default")],
+  ["let reassigned", keyFx("", `let k = q.data?.s; if (!k) k = "ok";`, FALLBACK)],
+  ["useMemo result", keyFx("", `const k = useMemo(() => q.data?.s ?? "ok", [q.data]);`, FALLBACK)],
+  ["child prop default", keyFx("", "", "", `function C({ s = "ok", n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, `<C s={q.data?.s} n={q.data?.n} />`)],
+  ["Object.keys(T)[0]", keyFx("", "", "TONE[Object.keys(TONE)[0]] ?? TONE.default")],
+  ["const array element", keyFx(`const ORDER = ["ok", "bad"];`, "", "TONE[ORDER[0]] ?? TONE.default")],
+  ["const object member", keyFx(`const KEYS = { a: "ok" };`, "", "TONE[KEYS.a] ?? TONE.default")],
+  ["template with literal text", keyFx("", `const s = q.data?.s;`, "TONE[`o${s}`] ?? TONE.default")],
+  ["callback parameter with a default", keyFx("", "", "", "", `<>{(q.data?.rows ?? []).map((r = { s: "ok" }) => <i className={TONE[r.s] ?? TONE.default}>{q.data?.n}</i>)}</>`)],
+  ["callback over a NON-query array", keyFx("", "", "", "", `<>{[1, 2].map((r) => <i className={TONE[r.s] ?? TONE.default}>{q.data?.n}</i>)}</>`)],
+];
+const OK_R3 = [
+  ["plain read of data", keyFx("", `const k = q.data?.s;`, FALLBACK)],
+  ["plain read, inline q.data?.s", keyFx("", "", "TONE[q.data?.s] ?? TONE.default")],
+  ["plain read, .toLowerCase()", keyFx("", `const s = q.data?.s;`, "TONE[s?.toLowerCase()] ?? TONE.default")],
+  ["plain read, String()", keyFx("", `const s = q.data?.s;`, "TONE[String(s)] ?? TONE.default")],
+  ["plain read, as-cast", keyFx("", `const s = q.data?.s;`, "TONE[s as string] ?? TONE.default")],
+  ["destructured without a default", keyFx("", `const { k } = q.data ?? {};`, FALLBACK)],
+  ["destructured from the hook itself", `
+import { useQuery } from "@tanstack/react-query";
+${TONE}
+export function Page() {
+  const { data } = useQuery({ queryKey: ["a"], queryFn: fa });
+  return <span className={TONE[data?.s] ?? TONE.default}>{data?.n}</span>;
+}`],
+  ["callback over query rows", keyFx("", "", "", "", `<>{(q.data?.rows ?? []).map((r) => <i className={TONE[r.s] ?? TONE.default}>{q.data?.n}</i>)}</>`)],
+  ["child props identifier, no default", keyFx("", "", "", `function C(props) { return <b className={TONE[props.s] ?? TONE.default}>{props.n}</b>; }`, `<C s={q.data?.s} n={q.data?.n} />`)],
+  ["child prop without a default", keyFx("", "", "", `function C({ s, n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`, `<C s={q.data?.s} n={q.data?.n} />`)],
+];
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1617,6 +1717,18 @@ function selfTest() {
     const v = analyze(src, "R2OK.tsx");
     console.log(`  self-test R2-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-3 review of #1370.
+  for (const [label, src] of BUG_R3) {
+    const v = analyze(src, "R3K.tsx");
+    console.log(`  self-test R3 key ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: key ${label}`); }
+  }
+  for (const [label, src] of OK_R3) {
+    const v = analyze(src, "R3KOK.tsx");
+    console.log(`  self-test R3-OK key ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: key ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 
   // Plant into a REAL component: drop the `s ?` presence guard on a metric with a static

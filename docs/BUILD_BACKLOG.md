@@ -2424,8 +2424,9 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       components never share a taint. Object-map classes resolve too: `className={TONE[status]}`
       over a same-file const map — reached directly, through a const alias, a same-file helper, a
       nested `TONE.a[status]` or a `...BASE` spread — is judged like an inline good class unless the
-      lookup has an explicit `??`/`||` fallback AND a key that cannot itself default to a fixed
-      entry. Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
+      lookup has an explicit `??`/`||` fallback AND a key that is provably a plain read of query
+      data (fail-closed: a literal, `??`/ternary default, helper or `useMemo` result, destructuring or
+      parameter default, reassigned `let` or member read of another const earns no exemption). Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
       shape with a guarded twin; live tree still 0 findings; each mechanism falsified by cp-aside
       (disable it, only its own fixtures fail). Still not followed: a child component, helper or
       class map imported from another file (no module resolver); callback parameters over query

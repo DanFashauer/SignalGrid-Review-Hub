@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 90,
-  "fingerprint": "9a469e562e5157c8d9da844028b2c092ad79713cd6124dbc38bbb11c08ee3c9c",
+  "manifestVersion": 91,
+  "fingerprint": "a2f4620c81f7752077eb89da7d3f89544ef31f359986cf83a6ed34e21538dd5c",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -130,7 +130,7 @@
       "estate-core": 13,
       "evidence-coverage": 30,
       "factory-flows": 16,
-      "handoff-sim": 59,
+      "handoff-sim": 68,
       "iac": 72,
       "link-usability": 167,
       "live-idp": 31,

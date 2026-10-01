@@ -1678,13 +1678,16 @@ export function shardTargets(all, index, count) {
   return bins[index].targets;
 }
 
-/** Arguments this script understands: `--proof=<non-empty>` and `--shard=<non-empty>`, and
+/** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
  *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
  *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
  *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
  *  mutates registered source files in place for the better part of an hour. */
 export function unknownArgs(argv) {
-  return argv.filter((a) => a !== "--" && !/^--(proof|shard)=.+/.test(a));
+  // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
+  // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
+  // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
+  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
 }
 
 function main() {

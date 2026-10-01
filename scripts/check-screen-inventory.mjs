@@ -329,7 +329,13 @@ const REJECTED_REF_DEF = /^\[(?:[^\]\\]|\\.)+\]:/;
  */
 export function definitionProblems(doc) {
   const problems = [];
-  const lines = doc.split("\n");
+  // cmark-gfm and markdown-it both end a line at a lone CR; a scan that splits on LF only
+  // reads `a\r[^t]: x` as one harmless line (round 14). A lone CR is refused outright, and
+  // the scan splits on every line ending. CRLF files render the same in both and pass.
+  const cr = doc.search(/\r(?!\n)/);
+  if (cr >= 0)
+    problems.push(`line ${doc.slice(0, cr).split(/\r\n|\r|\n/).length} holds a carriage return that is not part of a CRLF — GitHub ends the line there, so write a real line break or remove it`);
+  const lines = doc.split(/\r\n|\r|\n/);
   for (const [i, line] of lines.entries())
     if (FOOTNOTE_DEF_LINE.test(line))
       problems.push(`line ${i + 1} is a footnote definition ("${line.trim().slice(0, 40)}") — GitHub would swallow the lines after it, so write it as text`);
@@ -341,6 +347,39 @@ export function definitionProblems(doc) {
   for (const t of tokens)
     if (t.type === "inline" && REJECTED_REF_DEF.test(t.content) && !FOOTNOTE_DEF_LINE.test(t.content))
       problems.push(`line ${t.map[0] + 1} reads as a link reference definition ("${t.content.slice(0, 40)}") — GitHub hides it, the gate shows it, so write it as text`);
+  return problems;
+}
+
+const HEADER_ROW = /^\|\s*Surface\s*\|\s*File\s*\|\s*Status\s*\|\s*Placement\s*\|\s*Shows\s*\|$/;
+const DELIMITER_ROW = /^\|(?:\s*:?-{3,}:?\s*\|){5}$/;
+
+/**
+ * The inventory block must be exactly: the begin marker, the header row, the delimiter
+ * row, page rows, the end marker — nothing else on any line (round 14). markdown-it and
+ * cmark-gfm disagree on where a table ends at a line that is not a row: a line holding
+ * only `|` (or ` |`, `|\t`) is an empty row to markdown-it but ends the table on GitHub,
+ * which then shows every row after it as text while both parsers here count it as listed.
+ * Any other line (prose, a blank, a comment) would at best add a junk row. Allowing only
+ * well-formed page rows leaves no line whose meaning the two renderers could disagree on.
+ */
+export function blockProblems(doc) {
+  const b = doc.indexOf(BEGIN);
+  const e = doc.indexOf(END);
+  if (b < 0 || e < 0 || e < b) return [];
+  const startLine = doc.slice(0, b).split(/\r\n|\r|\n/).length;
+  const lines = doc.slice(b + BEGIN.length, e).split(/\r\n|\r|\n/);
+  const problems = [];
+  const at = (i) => `line ${startLine + i}`;
+  if (lines[0].trim() !== "") problems.push(`${at(0)}: text after ${BEGIN} on the same line`);
+  if (lines.at(-1) !== "") problems.push(`${END} must start its own line`);
+  const body = lines.slice(1, -1);
+  if (!HEADER_ROW.test(body[0] ?? "")) problems.push(`${at(1)}: the line after ${BEGIN} must be the header row "| Surface | File | Status | Placement | Shows |"`);
+  if (!DELIMITER_ROW.test(body[1] ?? "")) problems.push(`${at(2)}: the line after the header must be the delimiter row "| --- | --- | --- | --- | --- |"`);
+  for (const [i, line] of body.slice(2).entries()) {
+    const cells = line.startsWith("|") && line.endsWith("|") ? line.split("|").slice(1, -1) : [];
+    if (cells.length !== 5 || !/^`[^`]+`$/.test(cells[1].trim()))
+      problems.push(`${at(i + 3)}: "${line.slice(0, 40)}" is not a page row (| surface | \`file\` | status | placement | shows |) — every line between the header and ${END} must be one, or GitHub may end the table there`);
+  }
   return problems;
 }
 
@@ -418,6 +457,7 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   const rows = parseRows(doc);
   if (!rows) return [`${DOC} has no ${BEGIN} … ${END} block`];
   for (const p of definitionProblems(doc)) errors.push(`${DOC}: ${p}`);
+  for (const p of blockProblems(doc)) errors.push(`${DOC}: ${p}`);
   const shown = renderedInventory(doc);
   if (shown.tables !== 1)
     errors.push(`${DOC}: the inventory block renders ${shown.tables} tables — it must be one table, every row adjacent`);
@@ -700,6 +740,22 @@ function selfTest() {
     ["a blank line between two rows fails (round 13)", { ...base, doc: good.replace(INV_ROW, `\n${INV_ROW}`) }, "renders 2 page rows but 5"],
     ["a comment between two rows fails (round 13)", { ...base, doc: good.replace(INV_ROW, `<!-- x -->\n${INV_ROW}`) }, "renders 2 page rows but 5"],
     ["a second table in the inventory block fails (round 13)", { ...base, doc: good.replace(INV_ROW, `\n| Surface | File | Status | Placement | Shows |\n| --- | --- | --- | --- | --- |\n${INV_ROW}`) }, "renders 2 tables"],
+    // Round 14: a lone CR is a line end to both renderers, and the inventory block may hold
+    // only page rows, so no line can end GitHub's table where markdown-it continues it.
+    ...[["a\r[^t]: javascript:x\r", "after the begin marker"], ["\r[^t]: x", "CR-led after the begin marker"]].map(([x, where]) =>
+      [`a lone-CR footnote definition ${where} fails (round 14)`, { ...base, doc: good.replace(BEGIN, `${BEGIN}\n${x}`) }, "carriage return"]),
+    ["a lone-CR footnote definition appended to a row fails (round 14)", { ...base, doc: good.replace(INV_ROW, `${INV_ROW}\r[^t]: x`) }, "carriage return"],
+    ["a lone-CR footnote outside the inventory fails (round 14)", { ...base, doc: good.replace(END, `${END}\n\nSee[^t] here.\r[^t]: real note\n`) }, "carriage return"],
+    ["a lone-CR link reference definition fails (round 14)", { ...base, doc: `${good}\n\na\r[t]: javascript:x\n` }, "carriage return"],
+    ["a whole-file CRLF doc passes (round 14)", { ...base, doc: good.replace(/\n/g, "\r\n") }, null],
+    ...["|", " |", "|  ", "|\t"].map((line) =>
+      [`a ${JSON.stringify(line)} line between two rows fails (round 14)`, { ...base, doc: good.replace(INV_ROW, `${line}\n${INV_ROW}`) }, "is not a page row"]),
+    ["a \"|\" line right after the delimiter fails (round 14)", { ...base, doc: good.replace("| --- | --- | --- | --- | --- |\n", "| --- | --- | --- | --- | --- |\n|\n") }, "is not a page row"],
+    ["a text line between two rows fails (round 14)", { ...base, doc: good.replace(INV_ROW, `hello\n${INV_ROW}`) }, "is not a page row"],
+    ["a missing header row fails (round 14)", { ...base, doc: good.replace("| Surface | File | Status | Placement | Shows |\n", "") }, "must be the header row"],
+    ["text after the begin marker on its line fails (round 14)", { ...base, doc: good.replace(BEGIN, `${BEGIN} x`) }, "text after"],
+    ["a missing delimiter row fails (round 14)", { ...base, doc: good.replace("| --- | --- | --- | --- | --- |\n", "") }, "must be the delimiter row"],
+    ["an end marker not on its own line fails (round 14)", { ...base, doc: good.replace(`\n${END}`, END) }, "must start its own line"],
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

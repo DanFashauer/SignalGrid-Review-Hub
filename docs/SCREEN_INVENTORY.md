@@ -48,7 +48,11 @@ without being a list item. Anywhere in this file, fenced blocks included, the ga
 refuses any line shaped like a footnote definition (`[^label]:` after any indentation,
 `>` or list marker), whatever follows it: GitHub would let one swallow the lines after
 it, the inventory table included. With no definition, a `[^…]` reference renders as
-plain text, so no footnote renders. Link reference definitions are refused too, and the
+plain text, so no footnote renders. Link reference definitions are refused too, as is a
+carriage return that is not part of a CRLF line ending, which GitHub reads as a line
+break. Between the begin and end markers the block may hold only the header row, the
+delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
+because GitHub may end the table at one while the gate's renderer continues it. The
 table must render as one table showing every row the source lists. The section and
 its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the steps
 must be numbered in order.

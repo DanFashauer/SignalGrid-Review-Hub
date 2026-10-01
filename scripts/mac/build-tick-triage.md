@@ -14,7 +14,7 @@ Answer with ONE of three statuses:
 - "build": there is buildable work left. Leave marker and evidence as empty strings.
 
 Always set kind, even for done and blocked (use "code" if unsure). kind picks the model that builds the row, and it is deliberately narrow:
-- "mechanical": ONLY rerunning one of the repo's own writers (a `--write` flag, or a generate-* / gen-* script), or a doc-only wording or figure edit. No code, no test, no proof, no gate logic.
+- "mechanical": ONLY rerunning one of the repo's own writers (a `--write` flag, or a generate-* / gen-* script) whose output lands under docs/ or in artifacts/sync/live-sync-manifest.json, or a doc-only edit that needs no judgment (a figure a writer prints, a moved path in a citation). It runs on Haiku, which writes no test, never writes its own commit message or PR body, and may touch ONLY docs/** (never a *-ratchet.json) and that manifest: the script hands back any other diff. No code, no test, no proof, no gate logic. A `--write` on a ratchet file moves a gate baseline, so it is "code". A doc-wording edit that needs judgment (what a claim should say, what a decision means, a fact you would have to verify) is NOT mechanical: pick "code" (Sonnet) or "judgment".
 - "code": a change to code, a test, a proof or a gate.
 - "judgment": DECISION_PATH code (lib/signalgrid-core, lib/signalgrid-simulator, anything scripts/check-owner-gated-surfaces.mjs calls DECISION_PATH), security, a choice between designs, or ANY doubt. When two kinds fit, pick the higher one.
 

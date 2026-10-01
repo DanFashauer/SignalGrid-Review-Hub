@@ -83,8 +83,9 @@ export function deriveToolNames(indexSource) {
 //      is a heuristic over wording: a version written BEFORE the word, on the next
 //      line, >40 chars away, two-component, or under another name ("ctx7") is not
 //      seen; an unrelated x.y.z close after "Context7" fails (closed). A bare spec
-//      with no `@version` is a finding only on a package-runner line (npx, dlx,
-//      bunx, npm exec/i/install, pnpm add, yarn add) or as a package.json key.
+//      with no `@version` is a finding on a package-runner line (PACKAGE_RUNNER_RE)
+//      or as a JSON/YAML key; a git or URL install source is always a finding. A
+//      bare spec split across lines (`"args": ["-y",` ⏎ `"@upstash/…"]`) is not seen.
 //      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
 //      what was true on a day, vendored upstream trees (third_party/ — their
 //      configs are upstream's, not our pin), and this gate, whose fixtures plant
@@ -96,37 +97,60 @@ export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
 // Known-site presence reads the token loosely; the SWEEP below is an allowlist.
 const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
 const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
-// Every occurrence of the package name. What follows it must be EXACTLY
-// `@<PINNED>` and then a terminator from a closed set — so an empty token (`@`,
-// npm reads it as `*`), a quoted tag (`@'latest'`), a whitespace range
-// (`@4.1.1 - 9.9.9`, `@4.1.1 || ^5`), a range, wildcard, partial, prerelease or
-// tag all fail by construction, not by being listed.
+// Every occurrence of the package name is read as the ARGUMENT it sits in, the
+// way a shell or JSON reader would see it — not by scanning for terminator
+// characters. Quoted (`"…"`, `'…'`, `` `…` ``): the argument runs to the matching
+// quote, so `"…@4.1.1 x || 5"` is the value `4.1.1 x || 5`. Unquoted: it runs to
+// whitespace, `<` or a backtick, with adjoining quotes concatenated as a shell
+// would (`@4.1.1"0"` is `4.1.10`); only trailing sentence/markup punctuation is
+// shed. The value must then EQUAL PINNED — so an empty token, a tag, a range or
+// union, a wildcard, a partial, a prerelease or a concatenation all fail.
 const CONTEXT7_NAME_RE = /@upstash\\?\/context7-mcp(?![\w-])/gi;
-const PIN_TERMINATOR_RE = /^(?:[.:!?]*(?:$|\s(?!\s*(?:-\s|\|\|)))|[`"')\],;*<])/;
-const PACKAGE_RUNNER_RE = /\b(?:npx|dlx|bunx|npm\s+(?:exec|i|install|add)|pnpm\s+(?:add|i|install)|yarn\s+(?:add|dlx))\b/;
+const PACKAGE_RUNNER_RE =
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/;
+// Installing Context7 from git or a URL bypasses the npm pin entirely.
+const CONTEXT7_GIT_SOURCE_RE = /github:upstash\/context7\b|git\+https?:\/\/github\.com\/upstash\/context7\b|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
+const QUOTES = `"'\``;
 
-/** Pure: findings for one line's `@upstash/context7-mcp` occurrences (an allowlist on what follows). */
+/** Pure: the argument value after `@` at `at` (the index of that `@`), as a reader of `line` would see it. */
+function specArgument(line, at, opener) {
+  if (opener) {
+    const close = line.indexOf(opener, at + 1);
+    const value = line.slice(at + 1, close < 0 ? undefined : close);
+    const tail = close < 0 ? "" : line.slice(close + 1);
+    // a closing quote glued to more text is shell concatenation (`"…@4.1.1"0`)
+    return /^[^\s,\])}:;.<`]/.test(tail) ? value + /^\S*/.exec(tail)[0] : value;
+  }
+  const word = /^[^\s<`]*/.exec(line.slice(at + 1))[0];
+  // shed only a trailing run of closers/punctuation (an enclosing JSON quote, a
+  // sentence end); a quote INSIDE the word stays — it is shell concatenation.
+  const v = word.replace(/[)\]}"'.,;:!?]+$/, "");
+  return /\d\*+$/.test(v) ? v.replace(/\*+$/, "") : v; // markdown bold `**…@4.1.1**`; a lone `*` stays a wildcard
+}
+
+/** Pure: findings for one line's Context7 install references (spec arguments, dependencies, runners, git/URL sources). */
 export function context7SpecFindings(line, pin) {
   const out = [];
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
   for (const m of line.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
-    const rest = line.slice(m.index + m[0].length);
-    if (rest.startsWith("@")) {
-      const after = rest.slice(1);
-      if (after.startsWith(pin) && PIN_TERMINATOR_RE.test(after.slice(pin.length))) continue;
-      const tok = specToken(/^[^\s`"'(),;\]<*]*/.exec(after)[0]);
-      const clean = /^\d+\.\d+\.\d+$/.test(tok) && PIN_TERMINATOR_RE.test(after.slice(after.indexOf(tok) + tok.length));
-      const raw = /^\S{0,24}/.exec(after)[0];
-      const shown = raw === pin || raw === `"${pin}` ? after.slice(0, 24).split(/["`]/)[0].trimEnd() : raw;
-      out.push(clean ? { stale: tok } : { unpinned: shown || "<empty>" });
+    const end = m.index + m[0].length;
+    const before = line[m.index - 1] ?? "";
+    const opener = QUOTES.includes(before) && before !== "" ? before : "";
+    if (line[end] === "@") {
+      const f = classify(specArgument(line, end, opener));
+      if (f) out.push(f);
       continue;
     }
-    const dep = /^"\s*:\s*"([^"]*)"/.exec(rest); // package.json `"@upstash/context7-mcp": "<range>"`
+    // a dependency or config value: `"@upstash/context7-mcp": "<v>"` (JSON) or `@upstash/context7-mcp: <v>` (YAML)
+    const dep = /^["']?\s*:\s*["']?([^"'\s,}#]*)/.exec(line.slice(end));
     if (dep) {
-      if (dep[1] !== pin) out.push(/^\d+\.\d+\.\d+$/.test(dep[1]) ? { stale: dep[1] } : { unpinned: dep[1] || "<empty>" });
+      const f = classify(dep[1]);
+      if (f) out.push(f);
       continue;
     }
     if (PACKAGE_RUNNER_RE.test(line.slice(0, m.index))) out.push({ bare: true });
   }
+  if (CONTEXT7_GIT_SOURCE_RE.test(line)) out.push({ git: true });
   return out;
 }
 const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
@@ -174,6 +198,8 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
         if (f.stale) {
           seen.add(f.stale);
           problems.push(stale(path, i + 1, f.stale));
+        } else if (f.git) {
+          problems.push(`${path}:${i + 1}: Context7 is installed from a git/URL source, not the npm package pinned at ${pin} (${CONTEXT7_INSTALLER})`);
         } else if (f.unpinned) {
           seen.add(f.unpinned);
           problems.push(`${path}:${i + 1}: Context7 spec is UNPINNED (@${f.unpinned}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
@@ -226,16 +252,15 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
 
 /**
  * Pure: one tracked file's bytes as sweepable text; never null. UTF-8 when there
- * is no NUL byte. Otherwise (binary or UTF-16) BOTH a latin1 reading and a
- * UTF-16LE reading (BE byte-swapped first when its BOM says so) are joined, so an
+ * is no NUL byte. Otherwise (binary or UTF-16) a latin1 reading, a UTF-16LE
+ * reading and a byte-swapped (UTF-16BE) reading are joined — BOM or not — so an
  * ASCII spec is found whichever encoding wrote it.
  */
 export function decodeTracked(buf) {
   if (!buf.includes(0)) return buf.toString("utf8");
-  const be = buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff;
-  const even = Buffer.from(buf.subarray(0, buf.length - (buf.length % 2)));
-  const le = be ? even.swap16() : even;
-  return `${buf.toString("latin1")}\n${le.toString("utf16le")}`;
+  const even = buf.subarray(0, buf.length - (buf.length % 2));
+  const swapped = Buffer.from(even).swap16();
+  return `${buf.toString("latin1")}\n${even.toString("utf16le")}\n${swapped.toString("utf16le")}`;
 }
 
 /**
@@ -777,7 +802,7 @@ server.registerTool(
     ),
   ]);
   // Round-4 shapes, each checked on the pure per-line function: a finding of the right kind, or none.
-  const kind = (line) => context7SpecFindings(line, realPin).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : "bare"));
+  const kind = (line) => context7SpecFindings(line, realPin).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
   const NAME = SPEC.slice(0, -1);
   for (const [line, want, what] of [
     [`npx -y ${SPEC} --flag`, "unpinned", "an empty token after @ (npm reads it as *)"],
@@ -795,10 +820,31 @@ server.registerTool(
     [`**${SPEC}${realPin}**`, null, "the CORRECT pin in markdown bold (no false positive)"],
     [`<code>${SPEC}${realPin}</code>`, null, "the CORRECT pin in an HTML tag (no false positive)"],
     [`"packageName": "${NAME}",`, null, "the roster's bare packageName (not a runner, not a dependency)"],
+    // round 5: the spec is read as its shell/JSON ARGUMENT, not by terminator characters
+    [`npx -y "${SPEC}${realPin} x || 5"`, "unpinned", "a quoted union whose text after PINNED is not `||`"],
+    [`npx -y "${SPEC}${realPin}*||5"`, "unpinned", "a quoted `*||` union glued to PINNED"],
+    [`"args": ["-y", "${SPEC}${realPin} <5 || >=5"]`, "unpinned", "a union range in a JSON args list"],
+    [`npx -y ${SPEC}${realPin}"0"`, "unpinned", "shell concatenation onto PINNED (\"0\" makes another version)"],
+    [`npx -y ${SPEC}${realPin}'||5'`, "unpinned", "a shell-quoted union glued to PINNED"],
+    [`npx -y "${SPEC}${realPin}"0`, "stale", "text glued after the CLOSING quote (shell concatenation makes another version)"],
+    [`"args": ["-y", "${SPEC}${realPin}"],`, null, "the CORRECT pin as a JSON argument (closing quote then `]`)"],
+    [`npx -y github:upstash/context7#main`, "git", "a github: install source"],
+    [`npx -y https://github.com/upstash/context7/tarball/main`, "git", "a tarball URL install source"],
+    [`"upstream": "https://github.com/upstash/context7",`, null, "the roster's upstream repo URL (not an install source)"],
+    [`bun x ${NAME}`, "bare", "a versionless bun x call"],
+    [`pnpm exec ${NAME}`, "bare", "a versionless pnpm exec call"],
+    [`deno run npm:${NAME}`, "bare", "a versionless deno run npm: call"],
+    [`${NAME}: latest`, "unpinned", "a YAML value that is a tag"],
+    [`npx -y ${SPEC}${realPin} - see below`, null, "an UNQUOTED pin followed by prose (the shell splits it; no false positive)"],
   ]) {
     const got = kind(line);
     checks.push([`${what} → ${want ?? "no finding"}`, want ? got.length === 1 && got[0] === want : got.length === 0]);
   }
+  const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM
+  checks.push([
+    "a stale spec in a BOM-less UTF-16BE file is still named after decodeTracked",
+    pinRun({ "docs/agent/utf16be.md": decodeTracked(be16) }).some((p) => p.startsWith("docs/agent/utf16be.md:") && p.includes(`says ${OLD},`)),
+  ]);
   const utf16 = Buffer.from(`\ufeffnpx -y ${SPEC}${OLD}\n`, "utf16le");
   checks.push([
     "a stale spec in a UTF-16LE file (BOM, NULs) is still named after decodeTracked",

@@ -381,9 +381,11 @@ export function liveSelfSkipping(repoRoot = repo, read = readFileSync) {
   const unreadable = [];
   for (const [name, relPath] of files) {
     let text;
-    // proofScriptFiles already dropped absent paths, so ENOENT is only a race. Any
-    // other error is a PRESENT proof never read — skipping it left the proof off this
-    // roster, i.e. read as "never self-skips" (DR-054 sweep #7). Fail closed.
+    // proofScriptFiles already dropped what existsSync calls absent, so ENOENT here is a
+    // race (existsSync is also false for an ELOOP symlink, which therefore never reaches
+    // this loop — pre-existing, a BUILD_BACKLOG follow-up). Any other error is a PRESENT
+    // proof never read — skipping it left the proof off this roster, i.e. read as "never
+    // self-skips" (DR-054 sweep #7). Fail closed.
     try { text = read(resolve(repoRoot, relPath), "utf8"); }
     catch (e) { if (e.code !== "ENOENT") unreadable.push(`${relPath}: ${e.message}`); continue; }
     const env = selfSkipEnv(text);
@@ -775,10 +777,21 @@ function selfTest() {
   checks.push(["liveSelfSkipping: exactly ONE unreadable proof script (EACCES) still THROWS", throws(() => liveSelfSkipping(repo, oneBad("EACCES")))]);
   checks.push(["liveSelfSkipping: an EISDIR proof script THROWS too — every non-ENOENT code, not only EACCES", throws(() => liveSelfSkipping(repo, oneBad("EISDIR")))]);
   checks.push(["liveSelfSkipping: an unreadable proof LATER in the roster (not the first read) still THROWS", throws(() => liveSelfSkipping(repo, oneBad("EACCES", 2)))]);
+  // The LAST read, after the self-skipping proofs have filled the map: a record that only
+  // fires while the map is empty (or only early in the loop) goes red here.
+  const rosterSize = proofScriptFiles(
+    repo,
+    JSON.parse(readFileSync(join(repo, "package.json"), "utf8")).scripts ?? {},
+    JSON.parse(readFileSync(join(repo, "scripts/package.json"), "utf8")).scripts ?? {},
+  ).size;
+  checks.push(["liveSelfSkipping: the LAST proof read unreadable (map already holding self-skippers) still THROWS", rosterSize > 1 && throws(() => liveSelfSkipping(repo, oneBad("EACCES", rosterSize - 1)))]);
   checks.push(["liveSelfSkipping: an ENOENT proof script (raced away) is skipped, not fatal", liveSelfSkipping(repo, thrower("ENOENT")).size === 0]);
   checks.push(["workspacePackageDirs: an EACCES package root THROWS, never an empty map", throws(() => workspacePackageDirs(repo, thrower("EACCES")))]);
   checks.push(["workspacePackageDirs: an EIO (non-EACCES) error on a package root THROWS too", throws(() => workspacePackageDirs(repo, thrower("EIO")))]);
   checks.push(["workspacePackageDirs: an ENOENT package root is skipped (empty map, no throw)", workspacePackageDirs(repo, thrower("ENOENT")).size === 0]);
+  // Only the SECOND root failing, with ENOTDIR (artifacts/ replaced by a file): the throw
+  // must not depend on which root fails, nor allowlist ENOTDIR.
+  checks.push(["workspacePackageDirs: artifacts/ alone failing with ENOTDIR THROWS", throws(() => workspacePackageDirs(repo, (p, o) => (p.endsWith("artifacts") ? thrower("ENOTDIR")() : readdirSync(p, o))))]);
   const livePkgDirs = workspacePackageDirs(repo);
   checks.push(["workspacePackageDirs: LIVE — @workspace/signalgrid-core resolves to lib/signalgrid-core", livePkgDirs.get("@workspace/signalgrid-core") === "lib/signalgrid-core"]);
   const liveFiles = proofScriptFiles(

@@ -37,8 +37,11 @@
 //      App.tsx is scanned like any file once its construction is removed.
 //   2. ICON BUTTON. A `<Button … size="icon" …>`, or a raw `<button>` whose
 //      children render no text, must carry aria-label or aria-labelledby (a
-//      child text node such as an sr-only <span> also names it; whitespace —
-//      `{" "}`, `{"\u200b"}`, `&nbsp;`, `&#32;` — does not). Tags
+//      child text node such as an sr-only <span> also names it). A child that
+//      renders nothing does not: every numeric character reference and the
+//      whitespace named ones are decoded, every escape in a string child is
+//      decoded, fragments are removed, and the result must hold something other
+//      than whitespace, zero-width or control characters. Tags
 //      are parsed brace-aware; a tag the parser cannot close is a FAILURE,
 //      never a skip.
 //   3. REDUCED MOTION. Every web tree's src/index.css carries a
@@ -311,6 +314,14 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   const usesPolling = (f) => {
     const own = exportedNames(f.code);
     const local = new Set([...names].filter((n) => !own.has(n)));
+    // `import * as NS from "./polling"`: NS.default carries a followable default.
+    for (const m of f.code.matchAll(/import\s+(?:([A-Za-z_$][\w$]*)\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']([^"']+)["']/g)) {
+      const target = resolveImport(f.rel, m[3], rels);
+      if (target && polls.has(target)) {
+        if (defaultCarries(target)) local.add(`${m[2]}.default`);
+        if (m[1] && defaultCarries(target)) local.add(m[1]);
+      }
+    }
     for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*["']([^"']+)["']/g)) {
       const target = resolveImport(f.rel, m[3], rels);
       if (m[1] && target && polls.has(target) && defaultCarries(target)) local.add(m[1]);
@@ -364,24 +375,56 @@ function openingTag(src, index) {
   return null;
 }
 
-/** Text a raw `<button>` renders: its children with every JSX tag removed. */
+/**
+ * Characters that render nothing a screen reader can name a button by: every
+ * JS whitespace (`\s` covers U+00A0, U+2000–U+200A, U+3000, U+FEFF …), the
+ * zero-width and joiner characters `\s` misses, and C0 controls.
+ */
+const INVISIBLE = /[\s\u200B-\u200D\u2060\u180E\u0000-\u001F]/g;
+export const isBlank = (text) => text.replace(INVISIBLE, "") === "";
+
+/** Named HTML entities that are whitespace or invisible; any other name is left as text. */
+const NAMED_WS = {
+  nbsp: "\u00A0", NonBreakingSpace: "\u00A0", ensp: "\u2002", emsp: "\u2003", emsp13: "\u2004", emsp14: "\u2005",
+  numsp: "\u2007", puncsp: "\u2008", thinsp: "\u2009", ThinSpace: "\u2009", hairsp: "\u200A", VeryThinSpace: "\u200A",
+  MediumSpace: "\u205F", ThickSpace: "\u205F\u200A", ZeroWidthSpace: "\u200B", NegativeVeryThinSpace: "\u200B",
+  NegativeThinSpace: "\u200B", NegativeMediumSpace: "\u200B", NegativeThickSpace: "\u200B", zwnj: "\u200C", zwj: "\u200D",
+  NoBreak: "\u2060", Tab: "\t", NewLine: "\n",
+};
+const codePoint = (n) => (Number.isInteger(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "\uFFFD");
+
+/** Decode every numeric character reference and the whitespace named ones. */
+export function decodeEntities(text) {
+  return text
+    .replace(/&#(\d+);/g, (_, d) => codePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => codePoint(parseInt(h, 16)))
+    .replace(/&([A-Za-z][A-Za-z0-9]*);/g, (m, n) => NAMED_WS[n] ?? m);
+}
+
+/** Decode the escapes of a JS string literal's body. */
+export function decodeEscapes(text) {
+  const simple = { n: "\n", r: "\r", t: "\t", f: "\f", v: "\v", b: "\b", 0: "\0" };
+  return text.replace(/\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([\s\S]))/g, (_, cp, u4, x2, ch) =>
+    cp ? codePoint(parseInt(cp, 16)) : u4 ? codePoint(parseInt(u4, 16)) : x2 ? codePoint(parseInt(x2, 16)) : (simple[ch] ?? ch));
+}
+
+/**
+ * Text a raw `<button>` renders: its children with every JSX tag and fragment
+ * removed, string-literal children decoded and dropped when they render
+ * nothing, and character references decoded. Test the result with isBlank.
+ */
 function buttonText(src, openEnd, tagName = "button") {
   const close = src.indexOf(`</${tagName}>`, openEnd);
   if (close < 0) return null;
-  // A whitespace-only child renders no name: a string expression of spaces or
-  // escapes (`{" "}`, `{"\n"}`, `{"\u00a0"}`, `{"\u200b"}`) or a whitespace
-  // entity (`&nbsp;`, `&#32;`, `&#xA0;`).
-  const WS_ESC = String.raw`\\(?:[nrtfv]|u(?:0020|00a0|00A0|200b|200B|200c|200d|2009|202f|feff|FEFF)|x(?:20|a0|A0))`;
-  const WS_ENTITY = /&(?:nbsp|ensp|emsp|thinsp|zwsp|zwnj|zwj|#(?:32|160|8203|8194|8195|8201)|#x(?:20|a0|A0|200b|200B));/g;
-  let body = src.slice(openEnd + 1, close)
-    .replace(new RegExp(`\\{\\s*(["'\`])(?:\\s|${WS_ESC})*\\1\\s*\\}`, "g"), "")
-    .replace(WS_ENTITY, "");
-  for (let i = body.search(/<[A-Za-z/]/); i >= 0; i = body.search(/<[A-Za-z/]/)) {
+  let body = src.slice(openEnd + 1, close).replace(/\{\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\}/g, (m, _q, inner) =>
+    isBlank(decodeEscapes(inner)) ? "" : m);
+  // `<>` and `</>` (fragments) are tags too: openingTag on `<>` returns "<".
+  for (let i = body.search(/<[A-Za-z/>]/); i >= 0; i = body.search(/<[A-Za-z/>]/)) {
     const tag = openingTag(body, i);
     if (tag === null) return null;
     body = body.slice(0, i) + body.slice(i + tag.length + 1);
   }
-  return body;
+  return decodeEntities(body);
 }
 
 /** Rule 2 over one file. Returns failure strings. */
@@ -400,7 +443,7 @@ export function checkIconButtons(rel, raw) {
     if (/\baria-label(ledby)?=/.test(tag) || tag.trimEnd().endsWith("/")) continue;
     const text = buttonText(src, r.index + tag.length);
     if (text === null) { failures.push(`${rel}:${line}: <button> body could not be parsed — failing closed`); continue; }
-    if (text.trim() === "") failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+    if (isBlank(text)) failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
   }
   const re = /<Button\b/g;
   let m;
@@ -409,7 +452,7 @@ export function checkIconButtons(rel, raw) {
     const tag = openingTag(src, m.index);
     if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
     // A child text node (an sr-only <span>) names the button as well as aria-label does.
-    const named = /\baria-label(ledby)?=/.test(tag) || (!tag.trimEnd().endsWith("/") && (buttonText(src, m.index + tag.length, "Button") ?? "").trim() !== "");
+    const named = /\baria-label(ledby)?=/.test(tag) || (!tag.trimEnd().endsWith("/") && !isBlank(buttonText(src, m.index + tag.length, "Button") ?? ""));
     if (/\bsize=["{]\s*["']?icon["']?/.test(tag) && !named) {
       failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
@@ -638,6 +681,19 @@ function selfTest() {
     ["whitespace entities and zero-width escapes do not name an icon button",
       ['&nbsp;', '&#32;', '&#xA0;', '{"\\u200b"}', '{"\\u00a0"}'].every((c) => checkIconButtons("x.tsx", `<Button size="icon" onClick={t}><X />${c}</Button>`).length === 1) &&
       checkIconButtons("x.tsx", '<button onClick={f}><X />&nbsp;</button>').length === 1],
+    ["any numeric or whitespace-named entity is decoded and does not name a button",
+      ["&#9;", "&#10;", "&#x2003;", "&#x00A0;", "&NonBreakingSpace;", "&ZeroWidthSpace;"].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" onClick={f}><X />${c}</Button>`).length === 1)],
+    ["any whitespace escape in a string child is decoded and does not name a button",
+      ['{"\\u0009"}', '{"\\x09"}', '{"\\u{200B}"}', '{"\\u2003"}', "{`\\t`}", '{"\u200B"}', '{"\u200C"}'].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c}</button>`).length === 1)],
+    ["a literal zero-width character as JSX text does not name a button",
+      ["\u200B", "\u200C", "\u2060"].every((c) => checkIconButtons("x.tsx", `<button onClick={f}><X />${c}</button>`).length === 1)],
+    ["an icon wrapped in a fragment is not text",
+      checkIconButtons("x.tsx", "<button onClick={f}><><svg/></></button>").length === 1 &&
+      checkIconButtons("x.tsx", '<Button size="icon" onClick={f}><><svg/></></Button>').length === 1],
+    ["a visible entity or string child still names a button",
+      checkIconButtons("x.tsx", '<button onClick={f}><svg/>&amp; more</button>').length === 0 && checkIconButtons("x.tsx", '<button onClick={f}><svg/>{"Save"}</button>').length === 0],
     ["text button without size=icon passes",
       checkIconButtons("x.tsx", '<Button onClick={() => go()}>Save</Button>').length === 0],
     ["unclosable <Button tag fails closed",
@@ -693,6 +749,8 @@ function selfTest() {
     ["a PascalCase default value or function from a .ts is followed",
       ["const Poll = { refetchInterval: 5000 };\nexport default Poll;", "const Poll = { refetchInterval: 5000 };\nexport { Poll as default };", "export default function Feed() { return { refetchInterval: 5000 }; }"].every((lib) =>
         checkLiveRegions([view("t/src/lib/feed.ts", lib), view("t/src/pages/P.tsx", 'import opts from "../lib/feed";\nuseQuery({ ...opts }); return null;')], false).failures.length === 1)],
+    ["a namespace import of a polling .ts default is followed",
+      checkLiveRegions([view("t/src/lib/feed.ts", "const Poll = { refetchInterval: 5000 };\nexport default Poll;"), view("t/src/pages/P.tsx", 'import * as F from "../lib/feed";\nuseQuery({ ...F.default }); return null;')], false).failures.length === 1],
     ["a hook re-exported from another module fails closed",
       checkLiveRegions([view("t/src/lib/feed.ts", 'export { useListPolicies as useFeed } from "@workspace/api-client-react";')], false).failures.length === 1],
     ["a hook bound to another name without a call fails closed",

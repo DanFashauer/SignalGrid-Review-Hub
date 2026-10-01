@@ -49,10 +49,11 @@
 //   node scripts/check-preflight-ci-parity.mjs --self-test
 //   node scripts/check-preflight-ci-parity.mjs --list-self-skipping-proofs
 
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MIRRORED, NOT_A_GATE, classifyCiJobs } from "./lib/ci-jobs.mjs";
+import { MIRRORED, NOT_A_GATE, classifyCiJobs, enumerateCiJobs, readCiWorkflows } from "./lib/ci-jobs.mjs";
 import { classifyStep } from "./lib/preflight-verdict.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -478,6 +479,25 @@ function selfTest() {
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",
     gatesIn('  {\n    name: "X",\n    cmd: ["node", "scripts/x.mjs"],\n    selfSkipsWithout: "GITHUB_TOKEN",\n    env: { GH_TOKEN: "" },\n    surface: /red streak\\(s\\) of \\d+\\+ .* REPORTED, not fatal/,\n  },').join() === "scripts/x.mjs",
   ]);
+
+  // The CI job enumeration (scripts/lib/ci-jobs.mjs), on a temp workflow dir. A
+  // workflow whose FIRST line is `jobs:` was dropped silently by indexOf("\njobs:").
+  const wfDir = mkdtempSync(join(tmpdir(), "ci-parity-selftest-"));
+  try {
+    writeFileSync(join(wfDir, "first-line.yml"), "jobs:\n  lead:\n    name: Lead job\n    runs-on: ubuntu-latest\n");
+    writeFileSync(join(wfDir, "usual.yml"), "name: U\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n");
+    const wf = readCiWorkflows(wfDir);
+    checks.push(["a workflow whose first line is `jobs:` still enumerates its job id", wf.jobs.some((j) => j.id === "first-line.yml:lead")]);
+    checks.push(["workflow files parsed equals the readdir count", wf.parsed.length === wf.files.length && wf.files.length === 2]);
+    // Fail closed: a workflow file with no top-level `jobs:` must make enumeration THROW,
+    // never drop out of the count (the silent `continue` this replaced).
+    writeFileSync(join(wfDir, "no-jobs.yml"), "name: N\non: push\n");
+    let threw = false;
+    try { enumerateCiJobs(wfDir); } catch (e) { threw = /no-jobs\.yml/.test(String(e?.message)); }
+    checks.push(["a workflow file with no parsable `jobs:` makes enumerateCiJobs() throw, naming the file", threw]);
+  } finally {
+    rmSync(wfDir, { recursive: true, force: true });
+  }
 
   const failed = checks.filter(([, k]) => !k);
   for (const [n, k] of checks) console.log(`  ${k ? "ok" : "FAIL"} — self-test: ${n}`);

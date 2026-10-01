@@ -42,9 +42,11 @@
 //         resolves to a source file: the row's own `proof:*` citation(s), else
 //         the closing note's matrix-wide binding ("Everything marked Implemented
 //         (public core) ... is exercised by `pnpm run proof:<x>`"). If that
-//         sentence is gone, every row leaning on it fails (fail-closed).
+//         sentence is gone, every row leaning on it fails (fail-closed). A
+//         `pnpm …`/`proof:…` citation must be exactly `(pnpm run )?proof:<name>`
+//         or `pnpm install --frozen-lockfile`; any other shape fails.
 //   3. An "Automated (CI bot)" row's cited paths must be tracked too (it need
-//      not cite one: several live in GitHub settings).
+//      not cite one: several live in GitHub settings), under the same parser.
 //
 // KNOWN FAILURES. The matrix is an owner-gated surface (compliance docs in
 // scripts/check-owner-gated-surfaces.mjs); this gate does not edit it. Rows the
@@ -289,12 +291,23 @@ const API_ROUTE = /^\/(v1)?$/;
  *  of this repository (so `scripts/x.mjs@v2` is not mistaken for one; round 11). */
 const ACTION_REF = /^([A-Za-z0-9][A-Za-z0-9-]*)\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._/-]+)?@v\d+(\.\d+)*$/;
 
+/** The exact shape citedProofs reads; a `pnpm …`/`proof:…` token in any other shape fails. */
+const PROOF_CITE = /^(pnpm run )?proof:[\w:.-]+$/;
+/** Non-proof commands the matrix cites verbatim (no evidence weight, never resolved). */
+const COMMAND_CITES = new Set(["pnpm install --frozen-lockfile"]);
+
 export function citedPaths(where, { strict = false, actionRefs = false, topDirs = new Set() } = {}) {
   const out = [];
   const unparsed = [];
   for (const m of where.matchAll(/`([^`]+)`/g)) {
+    // a command citation is either a proof citedProofs reads (and checks), or the
+    // one install command the matrix cites; any other shape is unreadable evidence
+    // and fails, never a skip (round 14: `proof:no/such` fell back to the binding)
+    if (/^(pnpm\s|proof:)/.test(m[1])) {
+      if (!PROOF_CITE.test(m[1]) && !COMMAND_CITES.has(m[1])) unparsed.push(m[1]);
+      continue;
+    }
     const tok = m[1].replace(/:\d+$/, "");
-    if (/^pnpm run /.test(tok) || /^proof:/.test(tok)) continue;
     if (API_ROUTE.test(tok)) continue;
     const looksLikePath = tok.includes("/") || FILEEXT.test(tok);
     const ref = ACTION_REF.exec(tok);
@@ -618,6 +631,12 @@ function selfTest() {
       [`fail: ${t} beside a valid path on an Implemented row`, plant(`| Planted V${i} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`${t}\` |`), 1]),
     ["fail: a /v1-prefixed path on an Automated row", plant("| Planted A4 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `/v1-scripts/no-such-gate.mjs` |"), 1],
     ["pass: the exact route tokens `/` and `/v1` beside a valid path", plant("| Planted V9 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `/`; `/v1` |"), 0],
+    // round 14: a proof/command citation in any shape citedProofs cannot read fails
+    ...["pnpm run proof:no-such-proof -- --x", "pnpm run proof:no/such", "pnpm  run proof:no-such", "proof:lib/no-such.ts", "proof:/etc/passwd", "pnpm run lib/no-such.ts", "pnpm run no-such-script"].map((t, i) =>
+      [`fail: malformed proof citation ${t} beside a valid path on an Implemented row`, plant(`| Planted Q${i} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`${t}\` |`), 1]),
+    ["fail: a malformed proof beside a valid own proof on an Implemented row", plant("| Planted Q8 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `pnpm run proof:signalgrid-core`; `proof:no/such` |"), 1],
+    ["fail: a malformed proof citation on an Automated row", plant("| Planted A5 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `proof:lib/no-such.ts` |"), 1],
+    ["pass: a well-formed own proof beside a valid path", plant("| Planted Q9 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `pnpm run proof:signalgrid-core` |"), 0],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

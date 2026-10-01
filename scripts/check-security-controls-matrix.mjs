@@ -13,7 +13,8 @@
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
 //      split rows too, so an unplaced row fails rather than vanishing. Each row's
-//      cell count matches its header, and no header repeats a column. The line
+//      cell count matches its header, and every table header is EXACT (no extra,
+//      renamed or re-cased column; round 4). No link reference definitions. The line
 //      after a table is blank (GFM would render it as a row). No raw-HTML table
 //      tags. Control names are unique as a reader sees them (case, whitespace,
 //      entities, zero-width characters folded). The legend's words AND meanings
@@ -107,6 +108,13 @@ const unbold = (s) => s.replace(/\*\*/g, "").trim();
  *  Status/Where column — is UNCLAIMED and fails: a row the parser cannot place
  *  is a row nobody gates (found in review round 1 of PR #1349). */
 const NON_CONTROL_TABLES = [["Short ref", "Framework"]];
+/** Every recognised table's header, EXACTLY (raw cells — no bold, case or
+ *  whitespace folding). An extra, renamed or re-cased column ("status",
+ *  "Status (legacy)", "Assurance", a homoglyph) renders and would carry a claim
+ *  nobody gates, so any other header leaves the table unclaimed (round 4). */
+const CONTROLS_HEADER = ["Control", "Framework refs", "Status", "Where"];
+const LEGEND_HEADER = ["Status", "Meaning"];
+const sameHeader = (raw, want) => raw.length === want.length && want.every((x, k) => x === raw[k]);
 
 /** Control names compared as a reader sees them: NFKC, entities decoded,
  *  zero-width characters and bold stripped, whitespace folded, case folded. */
@@ -124,7 +132,6 @@ export function parseMatrix(text) {
   const lines = text.split("\n");
   const legend = new Map();
   const legendTables = [];
-  const dupHeaders = [];
   const trailing = [];
   const rows = [];
   const unclaimed = [];
@@ -132,18 +139,15 @@ export function parseMatrix(text) {
   const claimed = new Set();
   for (let i = 0; i < lines.length; i += 1) {
     if (!/^\s*\|/.test(lines[i])) continue;
-    const head = cells(lines[i]).map(unbold);
+    const head = cells(lines[i]);
     const isTable = /^\s*\|\s*:?-/.test(lines[i + 1] ?? "");
-    const isLegend = head.length === 2 && head[0] === "Status" && head[1] === "Meaning";
-    const sIdx = head.indexOf("Status");
-    const wIdx = head.indexOf("Where");
-    const isControls = head[0] === "Control" && sIdx > 0 && wIdx > 0;
-    const isOther = NON_CONTROL_TABLES.some((h) => h.length === head.length && h.every((x, k) => x === head[k]));
+    const isLegend = sameHeader(head, LEGEND_HEADER);
+    const isControls = sameHeader(head, CONTROLS_HEADER);
+    const isOther = NON_CONTROL_TABLES.some((h) => sameHeader(head, h));
+    const sIdx = CONTROLS_HEADER.indexOf("Status");
+    const wIdx = CONTROLS_HEADER.indexOf("Where");
     if (!isTable || (!isLegend && !isControls && !isOther)) continue; // left unclaimed: fails below
     claimed.add(i).add(i + 1);
-    // a second Status (or any repeated) column renders and would go ungated — round 3
-    const dupes = head.filter((h, k) => head.indexOf(h) !== k);
-    if (dupes.length) dupHeaders.push({ line: i + 1, raw: lines[i], dupes });
     if (isLegend) legendTables.push(i + 1);
     let j = i + 2;
     for (; j < lines.length && /^\s*\|/.test(lines[j]); j += 1) {
@@ -171,8 +175,11 @@ export function parseMatrix(text) {
   // opener fails outright; stripping them instead is bypassable by nesting
   // (CodeQL js/incomplete-multi-character-sanitization, round 3).
   lines.forEach((l, k) => { if (l.includes("<!--")) htmlRows.push({ line: k + 1, raw: l, comment: true }); });
+  // a link reference definition (`[label]: url "title"`) never renders either (round 4)
+  const linkDefs = [];
+  lines.forEach((l, k) => { if (/^ {0,3}(>\s*)*\[[^\]]+\]:/.test(l)) linkDefs.push({ line: k + 1, raw: l }); });
   const closing = /Everything marked \*\*Implemented \(public core\)\*\*[\s\S]{0,400}?is exercised by\s+`pnpm run (proof:[\w:.-]+)`/.exec(text);
-  return { legend, legendTables, dupHeaders, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
+  return { legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof: closing ? closing[1] : null };
 }
 
 function expandBraces(p) {
@@ -275,7 +282,7 @@ function defaultReadPkg(root, name) {
 }
 
 export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
-  const { legend, legendTables, dupHeaders, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
+  const { legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked);
   const fails = [];
   const structural = [];
@@ -285,7 +292,7 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     structural.push(`Status legend is [${legendWords.join(" | ")}], expected exactly [${LEGEND_LIST}] — a legend change must update this gate's checks in the same change`);
   for (const [w, m] of EXPECTED_MEANINGS) if (legend.has(w) && legend.get(w) !== m)
     structural.push(`Status legend meaning for "${w}" changed — it sets the claim every "${w}" row makes; update EXPECTED_MEANINGS in the same change\n      | **${w}** | ${legend.get(w)} |`);
-  for (const d of dupHeaders) structural.push(`line ${d.line}: table header repeats column(s) ${d.dupes.map((x) => `"${x}"`).join(", ")} — a second column renders and goes ungated\n      ${d.raw}`);
+  for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
   for (const t of trailing) structural.push(`line ${t.line} directly follows a table with no blank line, so it renders as a table row nobody gates\n      ${t.raw}`);
   for (const h of htmlRows) structural.push(h.comment
     ? `line ${h.line} opens an HTML comment — hidden text can carry what the reader never sees (the matrix uses none)\n      ${h.raw}`
@@ -372,6 +379,16 @@ function run(docPath) {
   return bad === 0 ? 0 : 1;
 }
 
+/** Add a column to the FIRST controls table: header, separator and every row. */
+function addColumn(text, name) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => l.startsWith("| Control | Framework refs | Status | Where |"));
+  lines[h] = `${lines[h]} ${name} |`;
+  lines[h + 1] = `${lines[h + 1]} --- |`;
+  for (let j = h + 2; lines[j]?.startsWith("|"); j += 1) lines[j] = `${lines[j]} Implemented (public core) |`;
+  return lines.join("\n");
+}
+
 function selfTest() {
   const real = readFileSync(join(ROOT, DOC), "utf8");
   const dir = mkdtempSync(join(tmpdir(), "sg-matrix-"));
@@ -406,7 +423,12 @@ function selfTest() {
     ["fail: an Automated row citing a missing workflow", real.replace("`.github/workflows/codeql.yml`", "`.github/workflows/no-such.yml`"), 1],
     // review round 3 of PR #1349: every shape that RENDERS as a row is gated
     ["fail: a raw-HTML table row", `${real}\n<table><tr><th>Control</th><th>Status</th><th>Where</th></tr><tr><td>Planted html</td><td>Implemented (public core)</td><td><code>lib/no/such.ts</code></td></tr></table>\n`, 1],
-    ["fail: a duplicated Status column", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where | Status |\n| ------- | -------------- | ------ | ----- | ------ |"), 1],
+    // round 4: the column is added to EVERY row, so the header check — not the cell
+    // count — is what must catch it
+    ["fail: a duplicated Status column (cells on every row)", addColumn(real, "Status"), 1],
+    ["fail: an extra re-cased status column", addColumn(real, "status"), 1],
+    ["fail: an extra column with a new name", addColumn(real, "Assurance"), 1],
+    ["fail: the binding only in a link reference definition", real.replace(/is exercised by\s+`pnpm run (proof:[\w:.-]+)`/, "is covered by the core proof") + '\n[sg]: https://example.invalid "Everything marked **Implemented (public core)** is exercised by `pnpm run proof:signalgrid-core`"\n', 1],
     ["fail: a non-blank line straight after a table", real.replace("\n\n---\n\n## 2. Authentication", "\nPlanted trailing row\n\n---\n\n## 2. Authentication"), 1],
     ["fail: a duplicate Control hidden by an NBSP", plant("| Real authentication provider,\u00A0sessions, MFA/step-up assurance | x | Private-core (planned) | private repo |"), 1],
     ["fail: a legend meaning inflated", real.replace("verified by the core proof. |", "independently audited (SOC 2 Type II). |"), 1],

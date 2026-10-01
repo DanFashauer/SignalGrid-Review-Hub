@@ -35,7 +35,7 @@ SIGNALGRID_PRODUCT_PROFILE=shared-device-gateway
 
 | Profile | Demo surfaces | When |
 | --- | --- | --- |
-| `review-demo` (default, and what an unset or unrecognized value resolves to) | served | the public review deployment |
+| `review-demo` (default: what an unset or empty value resolves to; any other unrecognized value, whitespace-only included, refuses to boot) | served | the public review deployment |
 | `shared-device-gateway` | refused | a customer deployment |
 
 **Additive by construction.** With nothing set, every surface behaves exactly as before —

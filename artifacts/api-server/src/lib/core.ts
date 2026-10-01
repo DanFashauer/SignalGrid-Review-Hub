@@ -1,4 +1,4 @@
-import { CoreError, SignalGridCore, type Clock, type EstateSpec } from "@workspace/signalgrid-core";
+import { CoreError, SignalGridCore, singleFlightTick, type Clock, type EstateSpec } from "@workspace/signalgrid-core";
 import { resolveGraphPostureConnector, toEstateSubjects, type GraphPostureConnector } from "@workspace/integrations/graph";
 import { readSecret, outboundSecret, secretInventory } from "@workspace/secrets";
 import { logger } from "./logger";
@@ -107,15 +107,17 @@ function estateSpecFromEnv(): Omit<EstateSpec, "subjects" | "connector"> {
  * before this knob existed. Anything else must be a positive integer and REFUSES AT
  * BOOT otherwise — a deploy that believed it was refreshing hourly and was not is the
  * silent failure this whole file is written against. A floor of 30s keeps a typo
- * (`5` meant as minutes) from hammering the source.
+ * (`5` meant as minutes) from hammering the source. A ceiling of 2147483s
+ * (floor((2^31-1)/1000), about 24.8 days) exists because `setInterval` clamps any
+ * larger delay to 1 ms — a "monthly" value would otherwise hammer it hardest of all.
  */
 export function estateRefreshSecondsFromEnv(env: NodeJS.ProcessEnv = process.env): number | undefined {
   const raw = env["SIGNALGRID_ESTATE_REFRESH_SECONDS"];
   if (raw === undefined || raw.trim() === "") return undefined;
   const text = raw.trim();
-  if (!/^\d+$/.test(text) || Number(text) < 30) {
+  if (!/^\d+$/.test(text) || Number(text) < 30 || Number(text) > 2147483) {
     throw new Error(
-      `SIGNALGRID_ESTATE_REFRESH_SECONDS must be an integer of at least 30 seconds, got "${raw}" — ` +
+      `SIGNALGRID_ESTATE_REFRESH_SECONDS must be an integer between 30 and 2147483 seconds (about 24.8 days), got "${raw}" — ` +
         "refusing to start rather than running with a refresh interval nobody meant.",
     );
   }
@@ -235,8 +237,10 @@ if (estateRefreshSeconds !== undefined && (core.isDemo() || built.estate === nul
 }
 if (estateRefreshSeconds !== undefined && built.estate !== null) {
   const read = built.estate;
-  const timer = setInterval(() => {
-    void (async () => {
+  // Single-flight: a tick that fires while the previous read is still running is
+  // SKIPPED, not queued, so a slow older read can never land after a newer one.
+  const tick = singleFlightTick(
+    async () => {
       try {
         const signals = await read.connector.fetchPosture(read.clock.now().toISOString());
         const mapped = toEstateSubjects(signals);
@@ -263,7 +267,11 @@ if (estateRefreshSeconds !== undefined && built.estate !== null) {
           "estate core: posture refresh FAILED; the last good posture still decides and no sync run was recorded",
         );
       }
-    })();
+    },
+    () => logger.warn("estate core: previous posture refresh still running; tick skipped"),
+  );
+  const timer = setInterval(() => {
+    void tick();
   }, estateRefreshSeconds * 1000);
   // The loop must never be the reason a process refuses to exit.
   timer.unref();

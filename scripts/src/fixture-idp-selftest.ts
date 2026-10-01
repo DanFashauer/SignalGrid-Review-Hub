@@ -78,7 +78,9 @@ console.log("Fixture IdP proof");
 {
   const { idp, auth } = authFor("other");
   const out = await auth.authenticate(idp.mint("valid"), NOW_MS);
-  check("JWKS serving a different key REFUSES the otherwise-valid token", !out.ok);
+  // The reason matters: a kid miss ("no JWKS key matches kid") would also
+  // refuse the token without testing key drift at all.
+  check("JWKS serving a different key REFUSES the otherwise-valid token, on the signature", !out.ok && /signature/i.test(out.reason));
 }
 
 console.log(`Fixture IdP proof: ${passed}/${passed + failures.length} checks passed`);

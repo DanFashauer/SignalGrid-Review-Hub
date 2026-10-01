@@ -15,7 +15,7 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -121,6 +121,31 @@ const present = new Set(TARGETS.map((t) => t.proof));
 for (const p of PINNED_PROOFS) {
   check(`hand-registered safety-critical target present: ${p}`, present.has(p));
 }
+
+// ── Wave 5 (2026-10-01): six families joined the brace-less sweep ─────────────
+// Their registered files held no one-line `if (...) return` guard when they joined, so
+// joining added 0 mutations and 0 survivors — the opt-in is a ratchet for the NEXT
+// brace-less guard added there. Pin it so the flag cannot be dropped quietly.
+for (const p of ["ot-posture", "token-binding", "carrier-reachability", "credential-exposure", "data-protection", "identity-risk"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+
+// The three connector files round-1 review found unswept must STAY registered: the proofs pin their
+// guards, but only the registration makes the sweep notice if a pin is ever lost.
+for (const [proof, file] of [
+  ["proof:carrier-reachability", "lib/integrations/src/integrations/carrier/reachability-connector.ts"],
+  ["proof:ot-posture", "lib/integrations/src/integrations/ot-posture/ot-connector.ts"],
+  ["proof:token-binding", "lib/integrations/src/integrations/token-binding/token-binding-connector.ts"],
+]) {
+  check(`${proof} keeps its connector registered: ${file.split("/").pop()}`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+
+// An unknown argument must be refused, not fall through to a full in-place sweep.
+check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
+check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);
+check("an EMPTY --proof= / --shard= is refused (a falsy value used to select every target)", unknownArgs(["--proof="]).length === 1 && unknownArgs(["--shard="]).length === 1);
+check("a malformed value is refused: --proof==, --proof==x, --proof=a=b, --shard=1/4/9, --shard==1/4, --shard=a/b", ["--proof==", "--proof==proof:x", "--proof=a=b", "--shard=1/4/9", "--shard==1/4", "--shard=a/b"].every((a) => unknownArgs([a]).length === 1));
+check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--", "--proof=proof:x", "--shard=0/4"]).length === 0);
 
 // Reported, not gated.
 const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);

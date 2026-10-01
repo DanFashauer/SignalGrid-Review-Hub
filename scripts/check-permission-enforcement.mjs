@@ -24,23 +24,41 @@
 // On top of the syntax tree it runs a CONSTANT-CONDITION reachability pass:
 //   - `if (false)`, `while (false)`, `for (;false;)`, `false ? x : y`,
 //     `false && x`, `true || x`, `"x" ?? y` — the branch a constant condition
-//     can never take is dead (constants: true/false, numbers, strings, null,
-//     undefined, `void x`, `!x`, parentheses and `as` casts);
+//     can never take is dead (constants: true/false, numbers and BigInts
+//     including a leading `-`/`+`, strings, null, undefined, `void x`, `!x`,
+//     parentheses and `as` casts), and so is an optional call on a constant
+//     null/undefined receiver (`null?.authorize(…)`);
 //   - a statement after an unconditional `return`/`throw`/`break`/`continue`
 //     in the same block (or after an `if`/`try` every arm of which ends that
 //     way) is dead — except a function declaration, which hoists;
-//   - a module-private function (a non-exported `function f` or
-//     `const f = () => …`) whose name appears nowhere else in its file is dead.
+//   - a non-exported function — `function f` or `const f = () => …`, at ANY
+//     depth — whose name appears nowhere else in its file is dead. Overload
+//     signatures, property keys (`{ f: 1 }`) and member names (`x.f`) are not
+//     references to it;
+//   - type-only positions (interfaces, type aliases, type literals) and ambient
+//     `declare` code never run, so a call written there credits nothing.
 // The security review's planted shape — `export function neverCalled(p) { if
 // (false) { authorize(p, "widget:delete"); } }` — is now a self-test control.
 //
 // SCOPE LIMIT, stated rather than pretended away. This is reachability WITHIN
 // one file. It has no import graph, so an EXPORTED function nothing imports
 // still counts; it treats every non-constant condition as both-ways possible;
-// it does not follow loops/switches for termination; and a module-private
-// function named only by itself (recursion) or by a shadowing local counts as
-// referenced. A clean run means every credited call is a real, syntactically
-// live call — not that a request path reaches it.
+// "constant" means a literal written at the condition, so `const D = false;
+// if (D)`, `1 === 2`, `(true, false)` and a `switch` on a literal still count
+// both ways; it does not follow loops or switches for termination (a
+// `while (true) { return; }` or a switch whose every arm returns falls
+// through); code after a TOP-LEVEL `throw` is treated like code after a return,
+// but a hoisted function declared there still counts; a non-exported function
+// named only by itself (recursion), by another function nothing calls (a dead
+// chain), or by a shadowing local counts as referenced; a class METHOD nothing
+// calls still counts (methods are reached through objects); and the match is
+// by name, so a local that shadows `authorize` with a do-nothing function is
+// still credited, as it was under the regex. A clean run means every credited
+// call is a real, syntactically live call — not that a request path reaches it.
+//
+// STRICTER THAN THE REGEX, deliberately: a call through an alias
+// (`const a = authorize`), an element access (`o["authorize"](…)`), a comma
+// callee, or a computed scope credits nothing. No real site uses those shapes.
 //
 // FAIL CLOSED: a file the Program does not load, or that does not parse,
 // credits NOTHING and is listed — never counted as enforcing.
@@ -119,11 +137,31 @@ const enforced = new Set();
     ["after throw", 'export function f(p: any) { throw new Error(p); authorize(p, "x:dead"); }', []],
     ["after an if whose arms both return", 'export function f(p: any, c: boolean) { if (c) { return 1; } else { throw 2; } authorize(p, "x:dead"); }', []],
     ["module-private function nothing names", 'function orphan(p: any) { authorize(p, "x:dead"); }\nconst orphan2 = (p: any) => { authorize(p, "x:dead"); };\nexport const y = 1;', []],
+    // One control per remaining dead shape the header claims, so turning any
+    // one of them off fails the self-test (review round 1 of #1347: seven
+    // claimed shapes could be switched off with the gate still green).
+    ["constant ??", 'export function f(p: any) { "a" ?? authorize(p, "x:dead"); 0 ?? authorize(p, "x:dead"); }', []],
+    ["after try { return } finally {}", 'export function f(p: any) { try { return 1; } finally { p = 0; } authorize(p, "x:dead"); }', []],
+    ["after try { return } catch { throw }", 'export function f(p: any) { try { return 1; } catch { throw p; } authorize(p, "x:dead"); }', []],
+    ["after break / continue", 'export function f(p: any) { for (;;) { break; authorize(p, "x:dead"); } while (p) { continue; authorize(p, "x:dead"); } }', []],
+    ["if (null)", 'export function f(p: any) { if (null) authorize(p, "x:dead"); }', []],
+    ["if (undefined)", 'export function f(p: any) { if (undefined) authorize(p, "x:dead"); }', []],
+    ["if (void 0)", 'export function f(p: any) { if (void 0) authorize(p, "x:dead"); }', []],
+    ['if ("")', 'export function f(p: any) { if ("") authorize(p, "x:dead"); }', []],
+    ["if (-0) / if (0n)", 'export function f(p: any) { if (-0) authorize(p, "x:dead"); if (0n) authorize(p, "x:dead"); }', []],
+    ["nested function nothing calls", 'export function f(p: any) { function inner() { authorize(p, "x:dead"); } const inner2 = () => authorize(p, "x:dead"); return p; }', []],
+    ["overload signature is not a call", 'function g(p: string): void;\nfunction g(p: any) { authorize(p, "x:dead"); }\nexport const y = { g: 1 };', []],
+    ["optional call on a null receiver", 'export function f(p: any) { (null as any)?.authorize(p, "x:dead"); undefined?.authorize(p, "x:dead"); }', []],
+    ["type-only and ambient positions", 'export interface I { [authorize(p, "x:dead")]: string }\nexport type T = { [authorize(p, "x:dead")]: string };\ndeclare module "m" { export const v = authorize(p, "x:dead"); }', []],
     ["real call", 'export function f(p: any) { authorize(p, "x:live"); }', ["x:live"]],
     ["real method call on a dotted principal", 'export class E { g(t: any) { const ctx = t; this.authorize(ctx.principal, "x:live"); } }', ["x:live"]],
     ["live arm of a non-constant if", 'export function f(p: any, c: boolean) { if (c) { return 1; } authorize(p, "x:live"); }', ["x:live"]],
     ["hoisted function after return, called above", 'export function f(p: any) { return g(p); function g(q: any) { authorize(q, "x:live"); } }', ["x:live"]],
     ["private function the file calls", 'function h(p: any) { authorize(p, "x:live"); }\nexport const k = (p: any) => h(p);', ["x:live"]],
+    ["call after a try that may fall through", 'export function f(p: any, c: boolean) { try { if (c) return 1; } catch { p = 0; } authorize(p, "x:live"); }', ["x:live"]],
+    ["nested function the file calls", 'export function f(p: any) { function inner() { authorize(p, "x:live"); } inner(); }', ["x:live"]],
+    ["shorthand property is a reference", 'function g(p: any) { authorize(p, "x:live"); }\nexport const o = { g };', ["x:live"]],
+    ["optional call on a real receiver", 'export function f(p: any, a: any) { a?.authorize(p, "x:live"); }', ["x:live"]],
     ["template substitution is code", 'export const u = (p: any) => `${authorize(p, "x:live")}`;', ["x:live"]],
   ];
   const failedControls = [];
@@ -211,11 +249,15 @@ function constTruth(n) {
     case ts.SyntaxKind.TrueKeyword: return true;
     case ts.SyntaxKind.FalseKeyword: case ts.SyntaxKind.NullKeyword: return false;
     case ts.SyntaxKind.NumericLiteral: return Number(n.text) !== 0;
+    case ts.SyntaxKind.BigIntLiteral: return BigInt(n.text.slice(0, -1)) !== 0n;
     case ts.SyntaxKind.StringLiteral: case ts.SyntaxKind.NoSubstitutionTemplateLiteral: return n.text.length > 0;
     case ts.SyntaxKind.VoidExpression: return false;
     case ts.SyntaxKind.Identifier: return n.text === "undefined" ? false : undefined;
     case ts.SyntaxKind.PrefixUnaryExpression:
       if (n.operator === ts.SyntaxKind.ExclamationToken) { const t = constTruth(n.operand); return t === undefined ? undefined : !t; }
+      // `-0`, `+0`, `-0n`: the sign never changes truthiness of a literal.
+      if ((n.operator === ts.SyntaxKind.MinusToken || n.operator === ts.SyntaxKind.PlusToken) &&
+        (ts.isNumericLiteral(unwrap(n.operand)) || ts.isBigIntLiteral(unwrap(n.operand)))) return constTruth(n.operand);
       return undefined;
     default: return undefined;
   }
@@ -248,25 +290,45 @@ function terminates(st) {
   return false;
 }
 
+function hasDeclare(n) {
+  return (ts.canHaveModifiers(n) ? ts.getModifiers(n) ?? [] : []).some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
+}
+
 function isExported(n) {
   return (ts.canHaveModifiers(n) ? ts.getModifiers(n) ?? [] : []).some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
 }
 
 function liveAuthorizeCalls(sf) {
-  // Module-private functions whose name appears nowhere else in the file.
-  const deadFns = new Set();
+  // Non-exported functions, at any depth, whose name appears nowhere else in
+  // the file. A name in a position that is not a reference to the function —
+  // an overload signature, a property key, a member name after a dot — is not
+  // counted, so it cannot make a dead function look called.
+  const notAReference = (id) => {
+    const p = id.parent;
+    if (ts.isFunctionDeclaration(p) && p.name === id && !p.body) return true;
+    if ((ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p) || ts.isPropertySignature(p) ||
+      ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isGetAccessorDeclaration(p) ||
+      ts.isSetAccessorDeclaration(p)) && p.name === id) return true;
+    if (ts.isPropertyAccessExpression(p) && p.name === id) return true;
+    return false;
+  };
   const counts = new Map();
-  const countIds = (n) => { if (ts.isIdentifier(n)) counts.set(n.text, (counts.get(n.text) ?? 0) + 1); ts.forEachChild(n, countIds); };
+  const countIds = (n) => {
+    if (ts.isIdentifier(n) && !notAReference(n)) counts.set(n.text, (counts.get(n.text) ?? 0) + 1);
+    ts.forEachChild(n, countIds);
+  };
   countIds(sf);
-  for (const st of sf.statements) {
-    if (ts.isFunctionDeclaration(st) && st.name && st.body && !isExported(st) && counts.get(st.name.text) === 1) deadFns.add(st);
-    if (ts.isVariableStatement(st) && !isExported(st)) {
-      for (const d of st.declarationList.declarations) {
-        const init = unwrap(d.initializer);
-        if (ts.isIdentifier(d.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) && counts.get(d.name.text) === 1) deadFns.add(init);
-      }
+  const deadFns = new Set();
+  const findDead = (n) => {
+    if (ts.isFunctionDeclaration(n) && n.name && n.body && !isExported(n) && counts.get(n.name.text) === 1) deadFns.add(n);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && counts.get(n.name.text) === 1) {
+      const init = unwrap(n.initializer);
+      const st = n.parent?.parent;
+      if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) && !(st && ts.isVariableStatement(st) && isExported(st))) deadFns.add(init);
     }
-  }
+    ts.forEachChild(n, findDead);
+  };
+  findDead(sf);
 
   const calls = [];
   const visitStatements = (stmts, live) => {
@@ -280,6 +342,9 @@ function liveAuthorizeCalls(sf) {
   };
   const visit = (n, live) => {
     if (!n) return;
+    // Type-only and ambient code never runs: nothing written there is a demand.
+    if (ts.isTypeNode(n) || ts.isInterfaceDeclaration(n) || ts.isTypeAliasDeclaration(n) ||
+      hasDeclare(n)) return;
     if (deadFns.has(n)) live = false;
     if (ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n)) return visitStatements(n.statements, live);
     if (ts.isCaseClause(n)) { visit(n.expression, live); return visitStatements(n.statements, live); }
@@ -323,8 +388,10 @@ function liveAuthorizeCalls(sf) {
     }
     if (live && ts.isCallExpression(n)) {
       const callee = unwrap(n.expression);
+      // `null?.authorize(…)` short-circuits and never calls anything.
       const named = (ts.isIdentifier(callee) && callee.text === "authorize") ||
-        (ts.isPropertyAccessExpression(callee) && callee.name.text === "authorize");
+        (ts.isPropertyAccessExpression(callee) && callee.name.text === "authorize" &&
+          !(callee.questionDotToken && constNullish(callee.expression) === true));
       const scope = n.arguments[1] && unwrap(n.arguments[1]);
       if (named && n.arguments.length >= 2 && scope && (ts.isStringLiteral(scope) || ts.isNoSubstitutionTemplateLiteral(scope)) &&
         /^[a-z]+:[a-z]+$/.test(scope.text)) {

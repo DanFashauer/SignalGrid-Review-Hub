@@ -2414,24 +2414,21 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
       carried into the child; object-map classes (`TONE[status]`) are not resolved. **HALF DONE 2026-10-01** - PR #1274 merge f52e806f closed per-query provenance and const-class resolution; still OPEN: provenance across component props (`<Panel items={items} />`) and object-map classes (`TONE[status]`). Check: `node scripts/check-console-unknown-render.mjs`.
       FIX PROPOSED 2026-10-01 (branch claude/build-console-unknown-render-props-maps, lands under DR-037 after the brain's review):
-      `scripts/check-console-unknown-render.mjs` now follows PROPS PROVENANCE within a file — a
-      same-file `<Panel items={items} />` taints the child's matching destructured parameter when
-      the call site passes query data no guard there proves present (a self-gated prop such as
-      `s ? String(s.n) : "-"` taints nothing), so the child's render is judged with the parent's
-      query origins — and resolves OBJECT-MAP CLASSES: `className={TONE[status]}` over a same-file
-      const object literal is judged like an inline good class unless the lookup carries an
-      explicit non-good fallback (`?? TONE.default`, `?? "text-muted"`). JSX attribute names and
-      object-literal keys no longer read as references to a tracked name. Round-1 review
-      (#1370) hardening, 2026-10-01: components resolve by declaring scope (two same-named
-      components never share a taint) and through `memo`/`forwardRef`; a `props` identifier,
-      `{...spread}`, rest, renamed destructure and `children` are followed; a map reached through a
-      const alias, a same-file helper, a nested `TONE.a[status]` or a `...BASE` spread resolves;
-      the header now states the remaining limits (cross-file; whole-parameter taint) instead of
-      "never over-flags". Self-test adds two bug
-      fixtures (props, map — each must flag) and five guarded twins (child-guarded, call-site-
-      guarded, `?? TONE.default`, `?? "literal"`, literal non-good key — each must pass); live
-      tree still 0 findings. Still not followed: a child component or class map imported from
-      another file (no module resolver). Row stays open for that cross-file remainder.
+      `scripts/check-console-unknown-render.mjs` now follows data provenance through same-file
+      component props — a `<Panel items={items} />` call site that passes query data no guard there
+      proves present taints the child's receiving parameter (destructured, renamed, rest, `props`
+      identifier, `{...spread}`, `children`; a whole query object under any prop name; a good-state
+      class handed down as a prop), so the child's render is judged with the parent's query origins.
+      Components resolve by declaring scope (and through `memo`/`forwardRef`), so same-named
+      components never share a taint. Object-map classes resolve too: `className={TONE[status]}`
+      over a same-file const map — reached directly, through a const alias, a same-file helper, a
+      nested `TONE.a[status]` or a `...BASE` spread — is judged like an inline good class unless the
+      lookup has an explicit `??`/`||` fallback AND a key that cannot itself default to a fixed
+      entry. Self-test (`node scripts/check-console-unknown-render.mjs --self-test`) pairs each bug
+      shape with a guarded twin; live tree still 0 findings; each mechanism falsified by cp-aside
+      (disable it, only its own fixtures fail). Still not followed: a child component, helper or
+      class map imported from another file (no module resolver); callback parameters over query
+      rows (`rows.map((r) => …)`); a class assembled from a prop. Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

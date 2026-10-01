@@ -67,15 +67,20 @@
 // (`?? TONE.default`, `?? "text-muted"`) — otherwise it is judged like an inline good class.
 //
 // Same-file shapes followed: arrow/function/`memo`/`forwardRef` components resolved by lexical
-// scope (two same-named components in different scopes never share a taint), a destructured,
-// renamed, rest, `props` or `{...spread}` parameter, `children`, a map reached through a const
-// alias, a same-file helper (`toneFor(status)`), a nested map (`TONE.a[status]`) and a
-// `...BASE` spread map.
+// scope (two same-named components in different scopes never share a taint); a destructured,
+// renamed, rest, `props`-identifier or `{...spread}` parameter; `children`; a whole query object
+// passed under any prop name (`query={q}`, `{...q}`); a good-state class handed down as a prop
+// (`tone="…emerald"`, `tone={TONE[s]}`); a map reached through a const alias, a same-file
+// helper, a nested `TONE.a[status]` or a `...BASE` spread. A map lookup is unknown-safe only
+// with an explicit fallback (`??`/`||`) AND a key that cannot itself default to a fixed entry
+// (`s ?? "ok"`, a const key, a ternary) — a key that defaults never reaches the fallback.
 //
 // KNOWN, DELIBERATE LIMITATIONS (this is a static, name-and-scope analysis; it can still err in
 // BOTH directions — it is not an exhaustive proof):
 //   - Cross-file: a child component, helper or class map IMPORTED from another file is not
 //     followed (no module resolver here). A false NEGATIVE; the widened doctrine review covers it.
+//   - A callback parameter over query rows (`rows.map((r) => <li className="…emerald">…`) is not
+//     tracked, nor is a class assembled from a prop (`text-${tone}-400`). False negatives.
 //   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
@@ -624,6 +629,39 @@ function analyzeSourceFile(relPath, text) {
   // Taint the receiving parameter. `propName === null` (a `{...p}` spread) taints every
   // binding of the first parameter; a rest element is tainted too; a plain `props` identifier
   // is tainted whole (so `props.items` reads as data).
+  // A good-state CLASS handed to a same-file child through a prop (`<Pill tone="…emerald" n={…}/>`
+  // with `className={tone}` in the child): the child binding is recorded with the class strings
+  // the call site passes, and resolved where the child uses it as a class.
+  var goodParams = new Map(); // binding element | parameter -> [{ node }]
+  const bindingOfParam = (id) => {
+    for (let c = id.parent; c; c = c.parent) {
+      if (!(ts.isFunctionLike(c) && c.parameters)) continue;
+      for (const p of c.parameters) {
+        if (ts.isIdentifier(p.name) && p.name.text === id.text) return p;
+        if (ts.isObjectBindingPattern(p.name)) for (const el of p.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return el;
+      }
+    }
+    return null;
+  };
+  const passQueryObject = (param, propName, origins) => {
+    // The whole query object arrives (`query={q}` / `{...q}`): the receiving binding IS a query result.
+    let changed = false;
+    const mark = (node, local, prop) => {
+      if (prop === "data") changed = addOrigins(dataVars, local, origins) || changed;
+      else if (prop && QUERY_DESTRUCTURE.has(prop)) changed = noteStatusLocal(prop, local, origins) || changed;
+      else changed = addOrigins(queryObjVars, local, origins) || changed;
+      if (!taintedParams.has(node)) { taintedParams.add(node); changed = true; }
+    };
+    if (ts.isIdentifier(param.name)) mark(param, param.name.text, null);
+    else if (ts.isObjectBindingPattern(param.name)) {
+      for (const el of param.name.elements) {
+        if (!ts.isIdentifier(el.name)) continue;
+        if (propName === null) { if (QUERY_DESTRUCTURE.has(propOf(el))) mark(el, el.name.text, propOf(el)); }
+        else if (propOf(el) === propName) mark(el, el.name.text, null);
+      }
+    }
+    return changed;
+  };
   const taintParam = (param, propName, origins) => {
     let changed = false;
     const mark = (node, localName) => {
@@ -646,7 +684,29 @@ function analyzeSourceFile(relPath, text) {
       // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
       if (comp && comp.params[0] && expr && elementHasUnguardedDataRender(expr) && taintParam(comp.params[0], propName, originsIn(expr))) changed = true;
     };
+    const passQuery = (tag, propName, expr) => {
+      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
+      const e = expr && unwrapExpr(expr);
+      if (comp && comp.params[0] && e && ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)) &&
+          passQueryObject(comp.params[0], propName, originsIn(e))) changed = true;
+    };
+    const passClass = (tag, propName, attr) => {
+      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
+      const param = comp && comp.params[0];
+      if (!param || !ts.isObjectBindingPattern(param.name)) return;
+      const found = goodClassStringNodes(attr);
+      if (found.length === 0) return;
+      for (const el of param.name.elements) {
+        if (!ts.isIdentifier(el.name) || propOf(el) !== propName) continue;
+        const have = goodParams.get(el) ?? [];
+        for (const f of found) if (!have.some((h) => h.node === f.node)) { have.push({ node: f.node }); changed = true; }
+        goodParams.set(el, have);
+      }
+    };
     const visit = (n) => {
+      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer) passClass(n.parent.parent.tagName, n.name.text, n);
+      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) passQuery(n.parent.parent.tagName, n.name.text, n.initializer.expression);
+      if (ts.isJsxSpreadAttribute(n)) passQuery(n.parent.parent.tagName, null, n.expression);
       if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) pass(n.parent.parent.tagName, n.name.text, n.initializer.expression);
       if (ts.isJsxSpreadAttribute(n)) pass(n.parent.parent.tagName, null, n.expression);
       if (ts.isJsxElement(n)) for (const ch of n.children) if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
@@ -655,8 +715,6 @@ function analyzeSourceFile(relPath, text) {
     visit(sf);
     return changed;
   };
-  for (let i = 0; i < 8 && propagateProps(); i++) deriveFixpoint();
-
   // CONST-CLASS RESOLUTION (backlog "two conservative false-negatives", P2-5). A class
   // string hoisted into a `const` — a literal, a template literal, a `clsx`/`cn` call, or a
   // ternary of those — is resolved to its initializer through lexical scope (the nearest
@@ -777,10 +835,37 @@ function analyzeSourceFile(relPath, text) {
     v(fn.body);
     return out;
   };
+  // A key that can DEFAULT to a fixed entry (`s ?? "ok"`, `s ? s : "ok"`, a const key, a literal
+  // part in a template) never reaches the fallback when the data is unknown — it selects that
+  // entry. Such a lookup is not protected by a fallback, whatever the fallback is.
+  const keyCanDefault = (k) => {
+    let hit = false;
+    const w = (n, seen) => {
+      if (hit || !n) return;
+      if (ts.isConditionalExpression(n) || ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) ||
+          (ts.isBinaryExpression(n) && [K.QuestionQuestionToken, K.BarBarToken, K.AmpersandAmpersandToken].includes(n.operatorToken.kind))) { hit = true; return; }
+      if (ts.isTemplateExpression(n) && (n.head.text || n.templateSpans.some((t) => t.literal.text))) { hit = true; return; }
+      if (ts.isIdentifier(n) && !isMemberName(n)) {
+        // Follow only a const that IS a fixed key (a string, an alias, a defaulting expression) —
+        // not an arbitrary initializer such as `q.data?.status`, whose own strings are unrelated.
+        const i = resolveConstInit(n);
+        const u = i && unwrapExpr(i);
+        if (u && !seen.has(i) && (ts.isStringLiteralLike(u) || ts.isNoSubstitutionTemplateLiteral(u) || ts.isTemplateExpression(u) ||
+            ts.isIdentifier(u) || ts.isConditionalExpression(u) ||
+            (ts.isBinaryExpression(u) && [K.QuestionQuestionToken, K.BarBarToken, K.AmpersandAmpersandToken].includes(u.operatorToken.kind)))) {
+          seen.add(i); w(i, seen);
+        }
+      }
+      ts.forEachChild(n, (c) => w(c, seen));
+    };
+    w(k, new Set());
+    return hit;
+  };
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
-      (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken);
+      (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) &&
+      !keyCanDefault(lookup.argumentExpression);
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -795,6 +880,8 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isIdentifier(x) && !isMemberName(x)) {
         const init = resolveConstInit(x);
         if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
+        const gp = !init && goodParams && goodParams.get(bindingOfParam(x));
+        if (gp) for (const g of gp) found.push({ node: g.node, use: use ?? x });
       }
       if (ts.isElementAccessExpression(x) || ts.isPropertyAccessExpression(x)) {
         const es = lookupEntries(x);
@@ -819,6 +906,7 @@ function analyzeSourceFile(relPath, text) {
     walk(attr, undefined);
     return found;
   };
+  for (let i = 0; i < 8 && propagateProps(); i++) deriveFixpoint();
   const enclosingJsxElement = (node) => {
     let cur = node;
     while (cur && !ts.isSourceFile(cur)) { if (ts.isJsxElement(cur) || ts.isJsxSelfClosingElement(cur) || ts.isJsxFragment(cur)) return cur; cur = cur.parent; }
@@ -1324,6 +1412,29 @@ const OK_MAP_ALIAS_GUARD = mapShape(TONE, "q.data ? cls : undefined").replace(" 
 const OK_MAP_HELPER_GUARD = mapShape(`${TONE}\nfunction toneFor(s) { return TONE[s]; }`, "q.data ? toneFor(status) : undefined");
 const OK_MAP_NESTED_FALLBACK = mapShape(`const TONE = { a: { ok: "text-emerald-400" }, d: "text-slate-400" };`, "TONE.a[status] ?? TONE.d");
 
+// Round-2 review of #1370: a key that defaults to a good entry, an operator that is not a
+// fallback, a literal key, a good class or a whole query object handed down through a prop.
+const DEFAULT_KEY = `const DEFAULT_KEY = "ok";`;
+const BUG_KEY_NULLISH = mapShape(TONE, `TONE[status ?? "ok"] ?? TONE.default`);
+const BUG_KEY_OR = mapShape(TONE, `TONE[status || "ok"] ?? "text-slate-400"`);
+const BUG_KEY_CONST = mapShape(`${TONE}\n${DEFAULT_KEY}`, `TONE[status ?? DEFAULT_KEY] ?? TONE.default`);
+const BUG_KEY_CONSTONLY = mapShape(`${TONE}\nconst KEY = "ok";`, "TONE[KEY] ?? TONE.default");
+const BUG_KEY_TERNARY = mapShape(TONE, `TONE[status ? status : "ok"] ?? TONE.default`);
+const BUG_MAP_PLUS = mapShape(TONE, `TONE[status] + " font-bold"`);
+const BUG_MAP_LITKEY_ELEM = mapShape(TONE, `TONE["ok"] ?? "text-slate-400"`);
+const BUG_MAP_LITKEY_PROP = mapShape(TONE, `TONE.ok || "text-slate-400"`);
+const OK_KEY_PLAIN = mapShape(TONE, "TONE[status?.toLowerCase()] ?? TONE.default");
+const PILL = `function Pill({ tone, n }) { return <span className={tone}>{n}</span>; }`;
+const BUG_PROP_CLASS = propsFixture(PILL, `<Pill tone="text-emerald-400" n={items.length} />`);
+const BUG_PROP_CLASS_MAP = propsFixture(PILL, `<Pill tone={TONE[q.data?.status]} n={items.length} />`, TONE);
+const OK_PROP_CLASS_GUARD = propsFixture(PILL, `q.data ? <Pill tone="text-emerald-400" n={items.length} /> : null`);
+const OK_PROP_CLASS_STATIC = propsFixture(PILL, `<Pill tone="text-emerald-400" n="static" />`);
+const BUG_QOBJ = propsFixture(`function Row({ query }) { return <b className="text-emerald-400">{query.data?.n}</b>; }`, "<Row query={q} />");
+const BUG_QOBJ_DESTRUCT = propsFixture(`function Row({ query }) { const { data } = query; return <b className="text-emerald-400">{data?.n}</b>; }`, "<Row query={q} />");
+const BUG_QOBJ_SPREAD = propsFixture(`function Row({ data }) { return <b className="text-emerald-400">{data?.n}</b>; }`, "<Row {...q} />");
+const OK_QOBJ_CALLGUARD = propsFixture(`function Row({ query }) { return <b className="text-emerald-400">{query.data?.n}</b>; }`, "q.data ? <Row query={q} /> : null");
+const OK_QOBJ_CHILDGUARD = propsFixture(`function Row({ query }) { return query.data ? <b className="text-emerald-400">{query.data.n}</b> : null; }`, "<Row query={q} />");
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -1473,6 +1584,38 @@ function selfTest() {
   ]) {
     const v = analyze(src, "R1OK.tsx");
     console.log(`  self-test R1-OK ${label} → ${v.length} violation(s)`);
+    if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
+  }
+
+  // Round-2 review of #1370.
+  for (const [label, src] of [
+    ['KEY defaults to the good entry: T[s ?? "ok"] ?? T.default', BUG_KEY_NULLISH],
+    ['KEY defaults to the good entry: T[s || "ok"] ?? "slate"', BUG_KEY_OR],
+    ["KEY defaults through a const: T[s ?? DEFAULT_KEY] ?? T.default", BUG_KEY_CONST],
+    ["KEY is a const fixed key: T[KEY] ?? T.default", BUG_KEY_CONSTONLY],
+    ['KEY defaults through a ternary: T[s ? s : "ok"] ?? T.default', BUG_KEY_TERNARY],
+    ['operator is not a fallback: T[s] + " font-bold"', BUG_MAP_PLUS],
+    ['literal key is not skipped: T["ok"] ?? "slate"', BUG_MAP_LITKEY_ELEM],
+    ['literal key is not skipped: T.ok || "slate"', BUG_MAP_LITKEY_PROP],
+    ["good class through a prop (tone=)", BUG_PROP_CLASS],
+    ["good class from a map through a prop (tone={T[s]})", BUG_PROP_CLASS_MAP],
+    ["whole query object through a prop (query={q})", BUG_QOBJ],
+    ["whole query object, destructured in the child", BUG_QOBJ_DESTRUCT],
+    ["whole query object spread ({...q}) into ({ data })", BUG_QOBJ_SPREAD],
+  ]) {
+    const v = analyze(src, "R2.tsx");
+    console.log(`  self-test R2 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+  }
+  for (const [label, src] of [
+    ["plain key with a fallback: T[s?.toLowerCase()] ?? T.default", OK_KEY_PLAIN],
+    ["good class through a prop, call site guarded", OK_PROP_CLASS_GUARD],
+    ["good class through a prop, child renders no data", OK_PROP_CLASS_STATIC],
+    ["query object passed under a call-site guard", OK_QOBJ_CALLGUARD],
+    ["query object guarded in the child", OK_QOBJ_CHILDGUARD],
+  ]) {
+    const v = analyze(src, "R2OK.tsx");
+    console.log(`  self-test R2-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
 

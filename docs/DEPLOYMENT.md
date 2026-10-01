@@ -386,24 +386,31 @@ the migrate until the last old pod is replaced, an old-image process runs
 against a runtime role that no longer holds `UPDATE` on `decisions` and
 `evidence_snapshots`: the old image checks for that `UPDATE` and its upsert
 needs it, so its `/readyz` answers 503 and every route that writes a decision
-fails. The other order is no better (the new image on an un-migrated database
-is the 503 described above), so replace the old pods promptly, or stop them
-before migrating if failed decision writes are not acceptable.
+fails. An old pod that restarts inside the window fails its startup check, so
+it fails decision reads too. The other order is no better (the new image on an
+un-migrated database is the 503 described above), so replace the old pods
+promptly, or stop them before migrating if failed decision writes are not
+acceptable.
 
 Rollbacks: rolling the API image back is safe against the same schema **and the
 same runtime grants**. The grants moved with that release, so rolling the image
-back to one from before it, with the database left migrated, fails exactly like
-the window above: `/readyz` 503 and failing decision writes until the runtime
-role holds `UPDATE` on those two tables again. Roll back in the reverse order
-of the upgrade, grants first and image second: run the previous release's
-`pnpm run db:migrate` with the admin credential (its role split re-grants
-`SELECT, INSERT, UPDATE` on both tables; the immutability release added no
-schema version, so this is a grants change, not a restore), then roll the
-image. The new image refuses those grants, so never leave the two out of step. Rolling back **past a
-migration** is a restore, not a downgrade — migrations have no down path by
-design, and `db:migrate` refuses a database from the future. Use `pnpm run
-db:restore` with the pre-upgrade backup (`docs/BACKUP_AND_RESTORE.md`); the
-restore re-applies the privilege posture itself.
+back to one from before it, with the database left migrated, fails every
+rolled-back pod: each is a fresh process, so `/readyz` answers 503 and every
+route that reads or writes decisions answers 500 until the runtime role holds
+`UPDATE` on those two tables again. Roll back in the same order as the upgrade,
+database first and image second: run the previous release's `pnpm run
+db:migrate` with the admin credential (its role split re-grants `SELECT,
+INSERT, UPDATE` on both tables; the immutability release added no schema
+version, so this is a grants change, not a restore), then roll the image. That
+order leaves a window of its own: until the last new-image pod is replaced, a
+new pod already running answers `/readyz` 503 but still serves decisions, and
+a new pod that restarts fails every decision route, so roll the image promptly.
+
+Rolling back **past a migration** is a restore, not a downgrade — migrations
+have no down path by design, and `db:migrate` refuses a database from the
+future. Use `pnpm run db:restore` with the pre-upgrade backup
+(`docs/BACKUP_AND_RESTORE.md`); the restore re-applies the privilege posture
+itself.
 
 ## What this deployment decides about
 

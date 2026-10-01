@@ -810,7 +810,7 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               (82/84). Clean run 82/82, up from 73/73. typecheck, review:invariants and
               check-decision-port-parity all green. BLOCKED on one line: preflight fails at the doc
               line-count gate because the branch itself invalidates a figure -
-              docs/COMPANY_BUILD_PLAN.md:4871 says decisionEngine.ts (336) and the branch makes the
+              docs/COMPANY_BUILD_PLAN.md:4743 says decisionEngine.ts (336) and the branch makes the
               file 361 (mainline measured 336). Two ungated figures also go stale:
               VALIDATION_EVIDENCE.md:33 says '11 scenarios / 51 assertions ... the scenario count
               still holds' (now 13 / 82) and PROOF_COVERAGE_AUDIT.md:25,:68 say '11 scenarios x 22

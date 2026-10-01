@@ -32,16 +32,17 @@
 # reviews it. No model session has git or GitHub credentials (no ssh agent,
 # GIT_SSH_COMMAND=false, no git global config so no credential helper, an empty gh config,
 # no tokens), and the build and fix stages have these commands deny-listed (BUILD_DENY in the
-# helper): git push, commit, merge, fetch, reset, stash, update-ref, symbolic-ref, remote, config,
+# helper): git push, commit, merge, fetch, reset, stash, update-ref, symbolic-ref, replace, remote, config,
 # git -c / -C and every other `git --option`, gh, ssh, curl, wget, lane-deliver, gh-pr and the
 # lane:/hand: scripts. The helper makes LOCAL commits only. THIS SCRIPT does every
 # outward act: it claims the row, refuses a change that touches an owner-reserved or
 # forbidden path, runs preflight + breadth, and only on 0/0 pushes that one branch and
 # opens its PR, whose body carries the reviews and a tiers-and-cost table. Nothing here
 # merges. That is enforced by the environment, the deny list and this script, not an OS
-# boundary. Named escapes, all deliberate: a `pnpm exec`/`node` one-liner that re-points git
-# at ssh and the on-disk keys, a file a session writes straight into its clone's .git
-# (config: core.sshCommand, url.*.insteadOf), or code a session writes that this script's own
+# boundary. Named escapes, all deliberate: a `pnpm exec`/`node` one-liner, or an env-prefixed git
+# (the deny list matches by prefix), that re-points git at ssh and the on-disk keys, a file a
+# session writes straight into its clone's .git (config: core.sshCommand, url.*.insteadOf;
+# refs/replace/; info/grafts), or code a session writes that this script's own
 # preflight then runs WITH credentials (DR-061 rule 4 accepts that risk).
 #
 # ONE BASE, PINNED. A session shares its clone's refs, and `git update-ref` is not the only way to
@@ -67,8 +68,14 @@
 #      ("row 12", "row-12", "rows 12", "row #12" in a head or title; "plan row 12" or
 #      "row-12" in a body; a range like "rows 17-18" names only 17). A false match only
 #      skips a row — the safe direction;
-#   4. its OWN CLONE <repo>.build (`git clone --reference`, its own .git: a session cannot touch
-#      the person's refs, config, stash or hooks), config reset and checked out detached at the
+#   4. its OWN CLONE <repo>.build (`git clone --reference`, its own .git: a session's git COMMANDS
+#      cannot touch the person's refs, config, stash or hooks; the escapes named above still reach
+#      the CLONE's .git, and `git replace` is on the deny list but that list is not the control).
+#      The control is reset_clone_meta: the clone's config, info/exclude, info/attributes, replace refs
+#      (loose and packed) and info/grafts are rewritten or deleted at run start, after EACH writing
+#      session (the helper does it itself, before it reads or commits anything) and again before the post-session
+#      git reads and before the push, and every git here runs with GIT_NO_REPLACE_OBJECTS=1 and a
+#      GIT_GRAFT_FILE that points at nothing. The clone is checked out detached at the
 #      pinned sha every run. Every git call after a session may have written the clone runs with
 #      hooks off (sgit) and the push goes to the origin URL read before any session;
 #   5. deps when the lockfile moved; tsx's darwin esbuild from a cache outside the repo;
@@ -135,6 +142,17 @@ PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nvm/current
 export PATH
 CACHE="$HOME/Library/Caches/signalgrid/build-tick"
 mkdir -p "$CACHE" || { echo "cannot create $CACHE" >&2; exit 1; }
+# Git reads the REAL objects, in this script, the helper, a session's own git and the gates (all inherit these). git-replace(1): a
+# replacement ref is honoured by every command except reachability traversal (prune, pack transfer, fsck), so a session that plants
+# one (`git replace`, or a file under .git/refs/replace/) makes diff, merge-base, status and checkout see a substitute while `push`
+# sends the real object, and CHANGED, FORBIDDEN_RE, the classifier, the review diff and the clean-tree check are all fooled.
+# GIT_NO_REPLACE_OBJECTS does NOT cover info/grafts (measured on git 2.54: a graft still cut the history, and git honours grafts
+# until it removes them); GIT_GRAFT_FILE does, and at a path that does not exist it is silent, where an empty file prints
+# a deprecation hint on every git call. reset_clone_meta also deletes the planted files themselves.
+NOGRAFTS="$CACHE/no-grafts"
+rm -f "$NOGRAFTS"
+export GIT_NO_REPLACE_OBJECTS=1
+export GIT_GRAFT_FILE="$NOGRAFTS"
 REPO_ROOT="${SG_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_LOG=""
@@ -254,6 +272,31 @@ printf '%s' "$REPO_SLUG" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' || REPO_
 # (the repo's local pre-push hook is the one thing this deliberately does not run).
 sgit() { git -c core.hooksPath="$NOHOOKS" -c core.fsmonitor=false "$@"; }
 
+# The clone's control files put back to what this script wrote, and every channel that makes git show a substitute for the real
+# history cleared. A session can write all of it straight into .git (Bash is not a `git` command, so the deny list never sees it):
+# .git/config (url.*.pushInsteadOf redirects the credentialed push; commit.gpgsign + gpg.program, a filter or textconv driver run a
+# command at the helper's commit or diff), info/exclude and info/attributes (hide files from the clean-tree check), refs/replace/
+# (loose, and its entries in packed-refs) and info/grafts (a substituted history). rm -rf, not -f: a planted directory or symlink
+# is removed too, and the symlink itself rather than its target. Idempotent; run at run start, after the pipeline (before any git
+# read of the result) and again right before the push. The helper has its own copy of this for the writing stage it just ran.
+reset_clone_meta() {
+  _g="$BUILD_WT/.git"
+  _cfg="$_g/config"
+  rm -rf "$_cfg" "$_g/refs/replace" "$_g/info/grafts" "$NOGRAFTS" || return 1
+  if [ -f "$_g/packed-refs" ]; then
+    # a peeled line (^sha) belongs to the ref line above it: drop it with that ref
+    awk '/^\^/ { if (!skip) print; next } { skip = ($2 ~ /^refs\/replace\//); if (!skip) print }' "$_g/packed-refs" > "$_g/packed-refs.sg-new" \
+      && mv -f "$_g/packed-refs.sg-new" "$_g/packed-refs" || return 1
+  fi
+  git config --file "$_cfg" core.repositoryformatversion 0 \
+    && git config --file "$_cfg" core.filemode true \
+    && git config --file "$_cfg" core.bare false \
+    && git config --file "$_cfg" core.logallrefupdates true \
+    && git config --file "$_cfg" remote.origin.url "$ORIGIN_URL" \
+    && git config --file "$_cfg" remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' || return 1
+  mkdir -p "$_g/info" && : > "$_g/info/exclude" && : > "$_g/info/attributes" || return 1
+}
+
 # The build clone, ready for this run: created on the first run (`git clone --reference` the person's
 # repo, so the objects are borrowed and only new ones cross the network), its config rewritten from
 # scratch EVERY run, then fetched to the pinned sha and reset to it. The first form of this tick used
@@ -268,16 +311,7 @@ prepare_clone() {
     git clone -q --reference "$REPO_ROOT" --no-checkout "$ORIGIN_URL" "$BUILD_WT" || return 1
     _fresh=1
   fi
-  # What a dead session left in the clone's own control files: replaced, not trusted.
-  _cfg="$BUILD_WT/.git/config"
-  rm -f "$_cfg"
-  git config --file "$_cfg" core.repositoryformatversion 0 \
-    && git config --file "$_cfg" core.filemode true \
-    && git config --file "$_cfg" core.bare false \
-    && git config --file "$_cfg" core.logallrefupdates true \
-    && git config --file "$_cfg" remote.origin.url "$ORIGIN_URL" \
-    && git config --file "$_cfg" remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' || return 1
-  mkdir -p "$BUILD_WT/.git/info" && : > "$BUILD_WT/.git/info/exclude" && : > "$BUILD_WT/.git/info/attributes" || return 1
+  reset_clone_meta || return 1 # what a dead session left in the clone's own control files: replaced, not trusted
   PREP_LEFT=0
   if [ "$_fresh" = "0" ]; then PREP_LEFT="$(sgit -C "$BUILD_WT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"; fi
   sgit -C "$BUILD_WT" fetch -q "$ORIGIN_URL" "$MAINLINE_SHA" || return 1
@@ -621,6 +655,8 @@ case "$OUTCOME" in
   hand) fail "plan row $PICK_ID: $REASON. Claim $BRANCH stays until a person deletes it" ;;
   *) pause_tick "plan row $PICK_ID: the pipeline's outcome was '$OUTCOME', not land, hand or pause" "the claim $BRANCH stays; delete it too" ;;
 esac
+# Before the first git read of what the sessions left: the clone's config, exclude, attributes, replace refs and grafts are theirs to have written.
+reset_clone_meta >> "$RUN_LOG" 2>&1 || fail "plan row $PICK_ID: could not reset the build clone's control files after the pipeline, so nothing it left can be trusted (see $RUN_LOG)"
 HEAD_SHA="$(sgit rev-parse HEAD)" && [ -n "$HEAD_SHA" ] || fail "plan row $PICK_ID: could not read the build clone's HEAD"
 sgit merge-base --is-ancestor "$MAINLINE_SHA" "$HEAD_SHA" || fail "plan row $PICK_ID: the commit $HEAD_SHA does not descend from the pinned mainline $MAINLINE_SHA — not landing a rewritten history"
 [ -z "$(sgit status --porcelain)" ] || fail "plan row $PICK_ID: the tree is not clean after the pipeline's last commit $HEAD_SHA, so the gates would not be testing what is pushed"
@@ -672,6 +708,9 @@ BR_LINE="$(grep -E 'Breadth lane (PASSED|FAILED)' "$RUN_DIR/breadth.log" 2>/dev/
 if [ "$PF" != "0" ] || [ "$BR" != "0" ] || ! gate_green "$RUN_DIR/preflight.log" PREFLIGHT "$PF_VERDICT" || ! gate_green "$RUN_DIR/breadth.log" BREADTH "$BR_VERDICT"; then
   fail "plan row $PICK_ID: gates not green on $HEAD_SHA (preflight exit $PF: ${PF_LINE:-no verdict line}; breadth exit $BR: ${BR_LINE:-not run}; a green gate needs exit 0, its exact full verdict line and a sentinel naming $HEAD_SHA). Nothing pushed past the claim; the commit stays on the local branch $BRANCH (the next run resets only the clone). Logs: $RUN_DIR"
 fi
+# The gates ran for up to hours with the clone's .git writable (and run the session's own code): once more, so a url.*.pushInsteadOf or
+# credential helper written into its config meanwhile cannot redirect or capture the push, which goes to the literal origin URL.
+reset_clone_meta >> "$RUN_LOG" 2>&1 || fail "plan row $PICK_ID: gates green but the build clone's control files could not be reset before the push of $BRANCH (see $RUN_LOG)"
 _why="$(push_branch 2>&1)" || fail "plan row $PICK_ID: gates green but the push of $BRANCH was refused or failed: $_why"
 { printf 'Landing class (derived from the diff by check-owner-gated-surfaces.mjs): **%s**\n\n' "$CLASS"
   cat "$RUN_DIR/pr-body.md"

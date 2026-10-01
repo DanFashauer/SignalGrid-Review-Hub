@@ -58,7 +58,9 @@ because GitHub drops it before reading the first line and the gate does not, nor
 `---` line, which GitHub reads as YAML front matter and renders outside markdown.
 Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
-because GitHub may end the table at one while the gate's renderer continues it. The
+because GitHub may end the table at one while the gate's renderer continues it. A page
+row may not contain `<` at all, even in a code span, because raw HTML in a cell such as
+an end-of-table tag passes through to the browser and ends the table there. The
 table must render as one table showing every row the source lists. The section and
 its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the steps
 must be numbered in order.

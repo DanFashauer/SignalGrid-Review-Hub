@@ -343,7 +343,7 @@ export function definitionProblems(doc) {
   // `---` or `...`) before cmark-gfm runs and shows it as a YAML table or an "Error in
   // user YAML" box; the gate and markdown-it read the same `---` as a thematic break. So a
   // file opened with `---` could show the inventory as raw YAML on GitHub (round 17).
-  if (/^---[ \t]*(?:\r\n|\r|\n|$)/.test(doc))
+  if (/^---[ \t\f\v]*(?:\r\n|\r|\n|$)/.test(doc))
     problems.push("the file's first line is `---`, which GitHub reads as the start of YAML front matter and renders outside markdown — start the file with its heading");
   const cr = doc.search(/\r(?!\n)/);
   if (cr >= 0)
@@ -401,6 +401,12 @@ export function blockProblems(doc) {
     const cells = line.startsWith("|") && line.endsWith("|") ? line.split("|").slice(1, -1) : [];
     if (cells.length !== 5 || !/^`[^`]+`$/.test(cells[1].trim()))
       problems.push(`${at(i + 3)}: "${line.slice(0, 40)}" is not a page row (| surface | \`file\` | status | placement | shows |) — every line between the header and ${END} must be one, or GitHub may end the table there`);
+    // Raw HTML inside a cell passes through cmark-gfm untouched, and a browser's HTML5
+    // parser then obeys it: one `</table>` in a cell ends the table there, and every row
+    // after it shows as run-on text while both parsers here still count it (round 18).
+    // A page row may hold no `<` at all, in code spans included; write it as text.
+    else if (line.includes("<"))
+      problems.push(`${at(i + 3)}: a page row contains "<" — raw HTML in a cell can end the table in the browser, so describe the screen without it`);
   }
   return problems;
 }
@@ -790,6 +796,10 @@ function selfTest() {
     ...[["---\n", "---"], ["--- \n", "--- with a trailing space"], ["---\r\n", "--- in a CRLF file"], ["---", "--- alone"]].map(([x, what]) =>
       [`a first line of ${what} fails (round 17)`, { ...base, doc: `${x}${x.endsWith("\n") ? "" : "\n"}${good}` }, "YAML front matter"]),
     ["a --- thematic break later in the file passes (round 17)", { ...base, doc: good.replace(BEGIN, `\n---\n\n${BEGIN}`) }, null],
+    ["a first line of --- then a form feed fails (round 18)", { ...base, doc: `---\f\n${good}` }, "YAML front matter"],
+    // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
+    ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
+      [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],

@@ -366,9 +366,26 @@ export function definitionProblems(doc) {
   const accepted = Object.keys(env.references ?? {});
   if (accepted.length)
     problems.push(`the file defines link reference(s) ${accepted.map((k) => `[${k}]`).join(", ")} — write the link inline`);
-  for (const t of tokens)
+  // markdown-it gives an inline token inside a table cell no line map, so the line is the
+  // nearest enclosing block's (round 19: a `[ref]:` row crashed the gate on `t.map[0]`).
+  let line = 0;
+  for (const t of tokens) {
+    if (t.map) line = t.map[0] + 1;
     if (t.type === "inline" && REJECTED_REF_DEF.test(t.content) && !FOOTNOTE_DEF_LINE.test(t.content))
-      problems.push(`line ${t.map[0] + 1} reads as a link reference definition ("${t.content.slice(0, 40)}") — GitHub hides it, the gate shows it, so write it as text`);
+      problems.push(`line ${line} reads as a link reference definition ("${t.content.slice(0, 40)}") — GitHub hides it, the gate shows it, so write it as text`);
+    // Raw HTML anywhere outside code (round 19). Rounds 2, 3 and 5 each closed one place
+    // a tag could hide or cut the inventory — a line start, line 1 after a BOM, a table
+    // cell — and each time the next placement over was open: a `<select>`, `<details>`,
+    // `<noscript>`, `<template>` or `<table>` mid-line in prose swallows or hides the
+    // table once a browser parses the page. So no `<` may appear anywhere in the rendered
+    // text: only inside a code span or a fenced/indented code block, or as one of the two
+    // inventory markers. An entity (`&lt;`) or an escape (`\<`) is refused too, because
+    // the check reads what markdown-it decodes, and that over-refusal is fail-closed. An
+    // HTML block needs no check here: it starts a line, and the line scan above refuses that.
+    for (const c of t.type === "inline" ? t.children : [])
+      if (c.type !== "code_inline" && c.content.includes("<"))
+        problems.push(`line ${line} has "<" outside a code span ("${c.content.trim().slice(0, 40)}") — raw HTML in prose can hide or cut the inventory in the browser, so put it in backticks or reword it`);
+  }
   return problems;
 }
 
@@ -797,6 +814,12 @@ function selfTest() {
       [`a first line of ${what} fails (round 17)`, { ...base, doc: `${x}${x.endsWith("\n") ? "" : "\n"}${good}` }, "YAML front matter"]),
     ["a --- thematic break later in the file passes (round 17)", { ...base, doc: good.replace(BEGIN, `\n---\n\n${BEGIN}`) }, null],
     ["a first line of --- then a form feed fails (round 18)", { ...base, doc: `---\f\n${good}` }, "YAML front matter"],
+    // Round 19: raw HTML mid-line in prose, anywhere in the file.
+    ...["<select>", '<select name="a">', "<details>", "<noscript>", "<template>", "<table>", "&lt;b&gt;"].map((x) =>
+      [`prose holding ${x} mid-line fails (round 19)`, { ...base, doc: good.replace("Checked against launch profile v7.", `Checked against launch profile v7. ${x}`) }, 'outside a code span']),
+    ["a heading holding <select> mid-line fails (round 19)", { ...base, doc: good.replace(BEGIN, `## Inventory <select>\n\n${BEGIN}`) }, "outside a code span"],
+    ["a < inside a code span in prose passes (round 19)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7. See `<Route>`.") }, null],
+    ["a [ref]: line between two rows is reported, not a crash (round 19)", { ...base, doc: good.replace(INV_ROW, `[ref]: http://example.com\n${INV_ROW}`) }, "is not a page row"],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

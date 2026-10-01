@@ -468,13 +468,20 @@ function candidateRows(cwd, onlyPr) {
   const listed = ghText(["api", "--paginate", "repos/{owner}/{repo}/pulls?state=open&per_page=100", "--jq",
     ".[] | {number, ref: .head.ref, headRepo: .head.repo.full_name, baseRepo: .base.repo.full_name, draft}"], cwd)
     .split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const rows = [];
-  for (const p of filterCandidates(listed, onlyPr)) {
-    const d = JSON.parse(ghText(["api", `repos/{owner}/{repo}/pulls/${p.number}`, "--jq", "{state: .mergeable_state, mergeable}"], cwd));
-    const unknown = d.mergeable === null || d.state === "unknown";
-    if (unknown || d.state === "dirty" || d.state === "behind") rows.push({ ...p, state: d.state, unknown });
+  const eligible = filterCandidates(listed, onlyPr);
+  const detail = (number) => JSON.parse(ghText(["api", `repos/{owner}/{repo}/pulls/${number}`, "--jq", "{state: .mergeable_state, mergeable}"], cwd));
+  const isUnknown = (d) => d.mergeable === null || d.state === "unknown";
+  let got = eligible.map((p) => ({ p, d: detail(p.number) }));
+  if (got.some((x) => isUnknown(x.d))) {
+    // GitHub computes mergeability lazily after mainline moves (the lane tick moves it every 5 minutes):
+    // the first GET only starts the computation. One re-poll of the unknown ones, then they are skipped this run.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000);
+    got = got.map((x) => (isUnknown(x.d) ? { p: x.p, d: detail(x.p.number) } : x));
   }
-  return { open: listed.length, eligible: filterCandidates(listed, onlyPr).length, rows };
+  const rows = got
+    .filter((x) => isUnknown(x.d) || x.d.state === "dirty" || x.d.state === "behind")
+    .map((x) => ({ ...x.p, state: x.d.state, unknown: isUnknown(x.d) }));
+  return { open: listed.length, eligible: eligible.length, rows };
 }
 
 const ghComment = (cwd) => (num, body) => {

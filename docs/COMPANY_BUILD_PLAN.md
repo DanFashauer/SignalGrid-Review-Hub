@@ -3940,7 +3940,7 @@ earlier — that is the loop working, not a reason to soften the record.
     public surface, and do not re-add a copy.
 
 164. **Five IGA vendors the competitive surface has never mentioned.** — OPEN,
-    competitive-analyst. DONE (measured 2026-10-01): PR #1264 merge facf6a10 adds IGA-adjacent briefs. Check: `node scripts/check:absence "Radiant Logic"`.
+    competitive-analyst. DONE (measured 2026-10-01): PR #1264 merge facf6a10 adds IGA-adjacent briefs. Check: `pnpm run check:absence "Radiant Logic"`.
 
 165. **`tamperState` is an enum where the source material describes a graph.** —
     OPEN, product/principal-engineer. RE-MEASURED 2026-09-26 (still open, no derivation added): `docs/EVENT_CONTRACT.md` still defines the tamper state as the bare three-value enum with no derivation notion, `lib/event-contract/src/validate.ts` and `lib/event-contract/src/detect.ts` still only validate and consume that enum, and no commit in the repository's history has introduced a tamper-graph concept (corroborated by the absence check across four probes); the row's file count for the word has grown with the tree, which changes nothing. `docs/EVENT_CONTRACT.md` carries

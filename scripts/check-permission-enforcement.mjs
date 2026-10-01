@@ -26,15 +26,18 @@
 //     `false && x`, `true || x`, `"x" ?? y` — the branch a constant condition
 //     can never take is dead (constants: true/false, numbers and BigInts
 //     including a leading `-`/`+`, strings, null, undefined, `void x`, `!x`,
-//     parentheses and `as` casts), and so is an optional call on a constant
-//     null/undefined receiver (`null?.authorize(…)`);
+//     parentheses, `as`/`<T>`/`satisfies` casts and `!`), and so is an optional
+//     call whose receiver chain has a constant null/undefined optional link
+//     (`null?.authorize(…)`, `(null as any)?.a.authorize(…)`);
 //   - a statement after an unconditional `return`/`throw`/`break`/`continue`
 //     in the same block (or after an `if`/`try` every arm of which ends that
 //     way) is dead — except a function declaration, which hoists;
 //   - a non-exported function — `function f` or `const f = () => …`, at ANY
 //     depth — whose name appears nowhere else in its file is dead. Overload
-//     signatures, property keys (`{ f: 1 }`) and member names (`x.f`) are not
-//     references to it;
+//     signatures, property keys (`{ f: 1 }`, `const { f: g } = …`), member
+//     names (`x.f`, class fields, methods, accessors, interface members), enum
+//     members, labels, re-exports from another module and type positions
+//     (`typeof f`) are not references to it;
 //   - type-only positions (interfaces, type aliases, type literals) and ambient
 //     `declare` code never run, so a call written there credits nothing.
 // The security review's planted shape — `export function neverCalled(p) { if
@@ -59,6 +62,8 @@
 // STRICTER THAN THE REGEX, deliberately: a call through an alias
 // (`const a = authorize`), an element access (`o["authorize"](…)`), a comma
 // callee, or a computed scope credits nothing. No real site uses those shapes.
+// A call inside `implements` (a type position) also credits nothing; a call in
+// a class `extends` expression or an instantiation expression DOES count.
 //
 // FAIL CLOSED: a file the Program does not load, or that does not parse,
 // credits NOTHING and is listed — never counted as enforcing.
@@ -153,6 +158,33 @@ const enforced = new Set();
     ["overload signature is not a call", 'function g(p: string): void;\nfunction g(p: any) { authorize(p, "x:dead"); }\nexport const y = { g: 1 };', []],
     ["optional call on a null receiver", 'export function f(p: any) { (null as any)?.authorize(p, "x:dead"); undefined?.authorize(p, "x:dead"); }', []],
     ["type-only and ambient positions", 'export interface I { [authorize(p, "x:dead")]: string }\nexport type T = { [authorize(p, "x:dead")]: string };\ndeclare module "m" { export const v = authorize(p, "x:dead"); }', []],
+    // Review round 2 of #1347: one control per remaining unpinned arm.
+    ["after try { p() } finally { return }", 'export function f(p: any) { try { p(); } finally { return 1; } authorize(p, "x:dead"); }', []],
+    ["true ? live : dead", 'export function f(p: any) { return true ? 1 : authorize(p, "x:dead"); }', []],
+    ["for (;false; <incrementor>)", 'export function f(p: any) { for (;false; authorize(p, "x:dead")) {} }', []],
+    ["after return in a case / default clause", 'export function f(p: any, x: number) { switch (x) { case 1: return; authorize(p, "x:dead"); default: return; authorize(p, "x:dead"); } }', []],
+    ["after throw in a namespace block", 'export namespace N { throw 1; export const v = authorize(p, "x:dead"); }', []],
+    ["after if (true) return / if (undefined) {} else throw", 'export function f(p: any) { if (true) return; authorize(p, "x:dead"); }\nexport function g(p: any) { if (undefined) {} else { throw 1; } authorize(p, "x:dead"); }', []],
+    ["nested function expression nothing calls", 'export function k(p: any) { const f = function () { authorize(p, "x:dead"); }; return 1; }', []],
+    ["template, <T>, ! and satisfies constants", 'export function f(p: any) { if (``) authorize(p, "x:dead"); if (<any>false) authorize(p, "x:dead"); if (false!) authorize(p, "x:dead"); if ((false satisfies boolean)) authorize(p, "x:dead"); }', []],
+    ["if (-0n) / if (+0)", 'export function f(p: any) { if (-0n) authorize(p, "x:dead"); if (+0) authorize(p, "x:dead"); }', []],
+    ["optional link deeper in the receiver chain", 'export function f(p: any) { (null as any)?.a.authorize(p, "x:dead"); }', []],
+    ["names that are not references to the function", [
+      'function g1(p: any) { authorize(p, "x:dead"); }', 'function g2(p: any) { authorize(p, "x:dead"); }',
+      'function g3(p: any) { authorize(p, "x:dead"); }', 'function g4(p: any) { authorize(p, "x:dead"); }',
+      'function g5(p: any) { authorize(p, "x:dead"); }', 'function g6(p: any) { authorize(p, "x:dead"); }',
+      'function g7(p: any) { authorize(p, "x:dead"); }', 'function g8(p: any) { authorize(p, "x:dead"); }',
+      'function g9(p: any) { authorize(p, "x:dead"); }', 'function g10(p: any) { authorize(p, "x:dead"); }',
+      'function g11(p: any) { authorize(p, "x:dead"); }', 'function g12(p: any) { authorize(p, "x:dead"); }',
+      'export const y = (o: any) => o.g1;',
+      'export class C { g2 = 1; g3() {} get g4() { return 1; } set g5(v: any) {} }',
+      'export interface I { g6: string; g7(): void }',
+      'export const { g8: h } = {} as any;',
+      'export enum E { g9 }',
+      'export function lab() { g10: for (;;) { break g10; } }',
+      'export { g11 } from "m";',
+      'export type T = typeof g12;',
+    ].join("\n"), []],
     ["real call", 'export function f(p: any) { authorize(p, "x:live"); }', ["x:live"]],
     ["real method call on a dotted principal", 'export class E { g(t: any) { const ctx = t; this.authorize(ctx.principal, "x:live"); } }', ["x:live"]],
     ["live arm of a non-constant if", 'export function f(p: any, c: boolean) { if (c) { return 1; } authorize(p, "x:live"); }', ["x:live"]],
@@ -162,6 +194,9 @@ const enforced = new Set();
     ["nested function the file calls", 'export function f(p: any) { function inner() { authorize(p, "x:live"); } inner(); }', ["x:live"]],
     ["shorthand property is a reference", 'function g(p: any) { authorize(p, "x:live"); }\nexport const o = { g };', ["x:live"]],
     ["optional call on a real receiver", 'export function f(p: any, a: any) { a?.authorize(p, "x:live"); }', ["x:live"]],
+    ["call after a try whose catch may fall through", 'export function f(p: any) { try { return 1; } catch { p = 0; } authorize(p, "x:live"); }', ["x:live"]],
+    ["call in a class extends expression", 'declare function mix(x: any): any;\nexport class A extends mix(authorize(p, "x:live")) {}', ["x:live"]],
+    ["call in an instantiation expression", 'export function f(p: any) { return make(authorize(p, "x:live"))<string>; }', ["x:live"]],
     ["template substitution is code", 'export const u = (p: any) => `${authorize(p, "x:live")}`;', ["x:live"]],
   ];
   const failedControls = [];
@@ -290,6 +325,24 @@ function terminates(st) {
   return false;
 }
 
+// A type-only position. ExpressionWithTypeArguments is a TypeNode kind but
+// holds a RUNTIME expression — a class `extends` clause, or an instantiation
+// expression `make(x)<T>` — so it is not skipped (its type arguments are).
+function isTypeOnly(n) {
+  return (ts.isTypeNode(n) && !ts.isExpressionWithTypeArguments(n)) ||
+    ts.isInterfaceDeclaration(n); // a type alias's body is itself a TypeNode
+}
+
+// Does evaluating this receiver chain short-circuit (or throw) before the call?
+// `null?.authorize()` short-circuits, and so does `(null as any)?.a.authorize()`
+// — any optional link on a constant null/undefined base stops the whole chain.
+function shortCircuits(e) {
+  for (e = unwrap(e); e && (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e) || ts.isCallExpression(e)); e = unwrap(e.expression)) {
+    if (e.questionDotToken && constNullish(e.expression) === true) return true;
+  }
+  return false;
+}
+
 function hasDeclare(n) {
   return (ts.canHaveModifiers(n) ? ts.getModifiers(n) ?? [] : []).some((m) => m.kind === ts.SyntaxKind.DeclareKeyword);
 }
@@ -306,14 +359,23 @@ function liveAuthorizeCalls(sf) {
   const notAReference = (id) => {
     const p = id.parent;
     if (ts.isFunctionDeclaration(p) && p.name === id && !p.body) return true;
-    if ((ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p) || ts.isPropertySignature(p) ||
-      ts.isMethodDeclaration(p) || ts.isMethodSignature(p) || ts.isGetAccessorDeclaration(p) ||
-      ts.isSetAccessorDeclaration(p)) && p.name === id) return true;
+    // (Interface and type-literal members never get here: countIds skips
+    // type-only positions entirely.)
+    if ((ts.isPropertyAssignment(p) || ts.isPropertyDeclaration(p) || ts.isMethodDeclaration(p) ||
+      ts.isGetAccessorDeclaration(p) || ts.isSetAccessorDeclaration(p)) && p.name === id) return true;
     if (ts.isPropertyAccessExpression(p) && p.name === id) return true;
+    // `const { g: h } = …`, `enum E { g }`, a label, and a re-export FROM
+    // another module (`export { g } from "m"`) all name something else.
+    if (ts.isBindingElement(p) && p.propertyName === id) return true;
+    if (ts.isEnumMember(p) && p.name === id) return true;
+    if ((ts.isLabeledStatement(p) || ts.isBreakStatement(p) || ts.isContinueStatement(p)) && p.label === id) return true;
+    if (ts.isExportSpecifier(p) && p.parent?.parent?.moduleSpecifier) return true;
     return false;
   };
   const counts = new Map();
   const countIds = (n) => {
+    // A name in a type (`typeof g`) never calls anything.
+    if (isTypeOnly(n)) return;
     if (ts.isIdentifier(n) && !notAReference(n)) counts.set(n.text, (counts.get(n.text) ?? 0) + 1);
     ts.forEachChild(n, countIds);
   };
@@ -343,8 +405,7 @@ function liveAuthorizeCalls(sf) {
   const visit = (n, live) => {
     if (!n) return;
     // Type-only and ambient code never runs: nothing written there is a demand.
-    if (ts.isTypeNode(n) || ts.isInterfaceDeclaration(n) || ts.isTypeAliasDeclaration(n) ||
-      hasDeclare(n)) return;
+    if (isTypeOnly(n) || hasDeclare(n)) return;
     if (deadFns.has(n)) live = false;
     if (ts.isSourceFile(n) || ts.isBlock(n) || ts.isModuleBlock(n)) return visitStatements(n.statements, live);
     if (ts.isCaseClause(n)) { visit(n.expression, live); return visitStatements(n.statements, live); }
@@ -388,10 +449,8 @@ function liveAuthorizeCalls(sf) {
     }
     if (live && ts.isCallExpression(n)) {
       const callee = unwrap(n.expression);
-      // `null?.authorize(…)` short-circuits and never calls anything.
       const named = (ts.isIdentifier(callee) && callee.text === "authorize") ||
-        (ts.isPropertyAccessExpression(callee) && callee.name.text === "authorize" &&
-          !(callee.questionDotToken && constNullish(callee.expression) === true));
+        (ts.isPropertyAccessExpression(callee) && callee.name.text === "authorize" && !shortCircuits(callee));
       const scope = n.arguments[1] && unwrap(n.arguments[1]);
       if (named && n.arguments.length >= 2 && scope && (ts.isStringLiteral(scope) || ts.isNoSubstitutionTemplateLiteral(scope)) &&
         /^[a-z]+:[a-z]+$/.test(scope.text)) {

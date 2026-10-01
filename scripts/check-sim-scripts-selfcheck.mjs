@@ -394,8 +394,26 @@ export function grepMarkerChecks(text, label, readTarget) {
 // CLAUDE.md states the array idiom and run-everything.sh still shipped without it,
 // because prose does not generalise. A comment is a `#` at line start or after
 // whitespace — NOT the `#` in `${#A[@]}` or `$#`, which a bare /#.*$/ strip would read
-// as one and then stop looking at the rest of the line.
-const shellCode = (text) => text.split("\n").map((l) => l.replace(/(^|\s)#.*$/, "$1"));
+// as one and then stop looking at the rest of the line. Nor is a `#` inside quotes
+// (`echo "note #1 ${A[@]}"`, `echo "step #1"; set -u`): stripping from it hid the hazard behind
+// it, and a `set -u` on the same line, so isStrict read the whole file as non-strict.
+// ponytail: quote state is tracked PER LINE, so a `#` on a continuation line of a multi-line
+// quoted string is still read as a comment. Carrying the state across lines was measured on
+// this tree and drifts on heredoc apostrophes (sg-brain-link.sh ends mid-quote, and the state
+// then misreads validate-sim-macos.sh from line 223): it would turn comments into code.
+const shellCode = (text) =>
+  text.split("\n").map((l) => {
+    let sq = false;
+    let dq = false;
+    for (let i = 0; i < l.length; i += 1) {
+      const c = l[i];
+      if (c === "\\" && !sq) i += 1;
+      else if (c === "'" && !dq) sq = !sq;
+      else if (c === '"' && !sq) dq = !dq;
+      else if (c === "#" && !sq && !dq && (i === 0 || /\s/.test(l[i - 1]))) return l.slice(0, i);
+    }
+    return l;
+  });
 
 // Strict mode is a `set` whose flags carry `u` in ANY group (`set -e -u`, `set -eE -o pipefail -u`)
 // or `-o nounset`; arguments after a bare `--` are positionals, not flags.
@@ -423,11 +441,19 @@ export function bash32Problems(text, label) {
     if (strict) {
       // Quoted or not, standalone or embedded (`cmd ${A[@]}`, `"--x=${A[@]}"`, `"$X ${A[@]}"`):
       // 3.2 aborts on an EMPTY array in every one of them. `${#A[@]}` / `${!A[@]}` are safe
-      // and the name class skips them. A guard is `${A+` / `${A:+` / `${A[@]+`, one `"` before.
+      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before. NOT `${A:+`:
+      // it tests the FIRST element for non-empty, so A=("" x y) expands to nothing and the data is lost.
       for (const m of line.matchAll(/\$\{([A-Za-z_]\w*)\[[@*]\]\}/g)) {
         const before = line.slice(0, m.index).replace(/"$/, "");
-        if (before.endsWith(`\${${m[1]}+`) || before.endsWith(`\${${m[1]}:+`) || before.endsWith(`\${${m[1]}[@]+`)) continue;
-        problems.push({ label, rule: "g", detail: `line ${i + 1}: ${m[0]} under set -u — bash 3.2 aborts on an EMPTY array here ("unbound variable"); write \${${m[1]}+"${m[0]}"}` });
+        if (before.endsWith(`\${${m[1]}+`) || before.endsWith(`\${${m[1]}[@]+`)) continue;
+        const colon = before.endsWith(`\${${m[1]}:+`) || before.endsWith(`\${${m[1]}[@]:+`);
+        problems.push({
+          label,
+          rule: "g",
+          detail: colon
+            ? `line ${i + 1}: ${m[0]} behind \`:+\` — \`:+\` tests the first element for non-empty, so A=("" x y) expands to NOTHING and the data is lost; write \${${m[1]}+"${m[0]}"}`
+            : `line ${i + 1}: ${m[0]} under set -u — bash 3.2 aborts on an EMPTY array here ("unbound variable"); write \${${m[1]}+"${m[0]}"}`,
+        });
       }
     }
     for (const [re, what] of BASH4_ONLY) {
@@ -599,8 +625,15 @@ export const G32_CASES = [
   [`set -u; ${A}echo "$X \${A[@]}"`, 1], [`set -u; ${A}echo "\${A[*]}"`, 1],
   [`set -e -o pipefail; ${A}echo "\${A[@]}"`, 0], [`set +u; ${A}echo "\${A[@]}"`, 0],
   [`set -- a -u; ${A}echo "\${A[@]}"`, 0],
-  [`set -u; ${A}echo \${A+"\${A[@]}"}`, 0], [`set -u; ${A}echo \${A:+"\${A[@]}"}`, 0],
-  [`set -u; ${A}echo \${A[@]+"\${A[@]}"}`, 0],
+  [`set -u; ${A}echo \${A+"\${A[@]}"}`, 0], [`set -u; ${A}echo \${A[@]+"\${A[@]}"}`, 0],
+  // `:+` is NOT a guard: it tests the first element for non-EMPTY, so A=("" x y) expands to nothing.
+  [`set -u; ${A}echo \${A:+"\${A[@]}"}`, 1], [`set -u; ${A}echo \${A[@]:+"\${A[@]}"}`, 1],
+  // A `#` inside quotes is text, not a comment: it must not hide the hazard after it, nor the
+  // `set -u` on its line. The last case is the refuter's: with `set -u` stripped, the whole file read as non-strict.
+  [`set -u; ${A}echo "note #1 \${A[@]}"`, 1], [`set -u; ${A}echo 'note #1' "\${A[@]}"`, 1],
+  [`set -u; ${A}echo \\# "\${A[@]}"`, 1], [`echo "step #1"; set -u\n${A}echo "\${A[@]}"`, 1],
+  // …while a real comment, trailing or after quoted text, still is one.
+  [`set -u # strict\n${A}echo "\${A[@]}"`, 1], [`set -u; A=(x); echo "ok" # "\${A[@]}"`, 0],
 ];
 export const H_CASES = [
   ['[ "$(uname -s)" = "Darwin" ] && echo mac\n', 1],
@@ -731,6 +764,9 @@ function selfTest() {
       const got = bash32Problems(`#!/usr/bin/env bash\n${body}\n`, "t").length;
       expect(`rule (g) planted: ${body}`, got === want, `expected ${want} problem(s), got ${got}`);
     }
+    const colonPlus = bash32Problems(`#!/usr/bin/env bash\nset -u; ${A}echo \${A:+"\${A[@]}"}\n`, "t")[0]?.detail ?? "";
+    expect("the :+ finding names data loss, not an abort", /first element/.test(colonPlus) && !/aborts/.test(colonPlus),
+      `a :+ guard fails for the wrong stated reason (${JSON.stringify(colonPlus)}): it does not abort, it drops A=("" x y)`);
     for (const [body, want] of H_CASES) {
       const got = darwinGuardProblems(`#!/usr/bin/env bash\n${body}`, "x.sh").length;
       expect(`rule (h) planted: ${JSON.stringify(body)}`, got === want, `expected ${want} problem(s), got ${got}`);

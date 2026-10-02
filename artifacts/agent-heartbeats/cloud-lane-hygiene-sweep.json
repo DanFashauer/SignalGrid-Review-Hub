@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-30T09:50:07.082Z",
-  "result": "keepalive (heartbeat 23.8h old): freed 60 scratchpad files + 1 pnpm package (~0.2G) | 4.0G free of 252G; no docker daemon"
+  "firedAt": "2026-10-02T09:47:57.394Z",
+  "result": "09:40Z sweep (run 09:4xZ): free 661M before; deleted 281 scratchpad top-level files older than 24h and 1791 task-output files older than 24h (find -delete; never the repo tree, no worktree removed), pruned tool-results older than 3h, pnpm store prune removed 1 package, no /var/lib/docker on this box; free 698M after (freed 37M this sweep; 913M of finished-wave subagent transcripts older than 3h were reclaimed at 09:06Z by the brain, journals kept). Delivered as the 20h keepalive (previous hygiene heartbeat 2026-10-01T09:42:36Z). Free space stays under 1GB after every step this lane may take: the reclaimable bulk is 260 finished detached review worktrees (~11G, the open owner hand) whose removal the auto-mode classifier denied today; the owner can clear it with one settings permission or by removing them from a Mac session. Not escalated separately - it rides the owner reply."
 }

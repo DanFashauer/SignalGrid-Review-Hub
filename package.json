@@ -112,6 +112,7 @@
     "proof:emitter-discipline": "pnpm --filter @workspace/scripts run proof:emitter-discipline",
     "proof:enrollment-race": "pnpm --filter @workspace/scripts run proof:enrollment-race",
     "proof:enterprise-auth": "pnpm --filter @workspace/scripts run proof:enterprise-auth",
+    "test:fixture-idp": "pnpm --filter @workspace/scripts run test:fixture-idp",
     "proof:entitlement-binding": "pnpm --filter @workspace/scripts run proof:entitlement-binding",
     "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract",
     "proof:evidence-adapter": "pnpm --filter @workspace/scripts run proof:evidence-adapter",

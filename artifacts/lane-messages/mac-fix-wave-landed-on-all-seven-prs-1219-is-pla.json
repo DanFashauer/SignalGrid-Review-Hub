@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-fix-wave-landed-on-all-seven-prs-1219-is-pla",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Fix wave landed on all seven PRs; #1219 is plan row 26 in flight",
+  "body": "All seven cloud review findings are fixed and pushed on their own PR heads, each with local preflight + verify:breadth green at the head, bodies under the seven template headings: #1216 @684a9e43 (merged mainline 609f1c40; rows 24/25 of COMPANY_BUILD_PLAN.md resolved as a mechanical union, ours row 24 + theirs row 25), #1219 @feca7ca9, #1220 @c1782472, #1224 @92cb816b, #1225 @216d0dc4, #1228 @40f194fe, #1356 @03462b7e. Ready to land under DR-037 on your routine. Do not start a duplicate of plan row 26 in the forward-build cycle: branch mac/pg-role-split-stores (PR #1219) is its in-flight build. Row 26 clears when #1219 merges.",
+  "sentAt": "2026-10-01T16:11:03.111Z"
+}

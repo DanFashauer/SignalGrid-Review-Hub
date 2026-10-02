@@ -21,6 +21,7 @@ import {
   normalizeSession,
   resolveCarrierReachabilityConnector,
   type CarrierSessionRaw,
+  type CarrierTransport,
   type CellularBackchannel,
   type ReachabilitySignal,
   type ReachabilityVerdict,
@@ -286,6 +287,52 @@ try {
 check("a bad token surfaces a typed auth_failed error", authErr?.code === "auth_failed" && authErr.status === 401);
 const goodHealth = await connector.healthCheck();
 check("health check reports healthy with a valid token", goodHealth.healthy === true && goodHealth.status === 200);
+
+// ── brace-less guards in the connector (wave 5, 2026-10-01) ───────────────────
+// `oneLine` mutation sweep: each of these `if (...) return/throw` guards survived being
+// replaced by `if (false)` because no check exercised it.
+const sessionAt = (raw: Partial<CarrierSessionRaw>) =>
+  normalizeSession({ deviceId: "dev-x", ...raw } as CarrierSessionRaw, "2026-01-01T00:00:00.000Z");
+check(
+  "a live data session is `online` even when the sessionState string says offline (the data flag wins)",
+  sessionAt({ dataConnected: true, sessionState: "offline" }).cellularReachability === "online" &&
+    sessionAt({ dataConnected: false, sessionState: "offline" }).cellularReachability === "offline",
+);
+check(
+  "with no data session and no state, SMS-capable is `idle` and not-SMS-capable is `unknown`",
+  sessionAt({ smsCapable: true }).cellularReachability === "idle" &&
+    sessionAt({ smsCapable: false }).cellularReachability === "unknown" &&
+    sessionAt({}).cellularReachability === "unknown",
+);
+const jsonTransport =
+  (bodyFor: (n: number) => unknown): CarrierTransport => {
+    let n = 0;
+    return async () => {
+      const body = bodyFor(n);
+      n += 1;
+      return { status: 200, ok: true, json: async () => body };
+    };
+  };
+const readCode = async (c: CarrierReachabilityConnector): Promise<string> => {
+  try {
+    await c.listSessions();
+    return "no-error";
+  } catch (err) {
+    return err instanceof CarrierConnectorError ? err.code : "other-error";
+  }
+};
+check(
+  "a collection whose `value` is not an array is refused as bad_response (a string would otherwise spread into characters)",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL }, jsonTransport(() => ({ value: "abc" }))))) === "bad_response",
+);
+check(
+  "an endless next-page cursor hits the cap and is refused as incomplete_read, never returned as a short list",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit: 2 }, jsonTransport(() => ({ value: [], nextPageToken: "more" }))))) === "incomplete_read",
+);
+check(
+  "NON-VACUITY: a final page with no cursor reads cleanly",
+  (await readCode(new CarrierReachabilityConnector({ accessToken: "t", baseUrl: BASE_URL, pageLimit: 2 }, jsonTransport(() => ({ value: [] }))))) === "no-error",
+);
 
 // ── gating: live vendor calls off unless explicitly enabled ────────────────────
 check("dev tier resolves to fixture mode", resolveCarrierReachabilityConnector({ SIGNALGRID_TIER: "dev" }).mode === "fixture");

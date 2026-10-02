@@ -232,7 +232,7 @@
     },
     "M-1": {
       "outcome": "landed",
-      "where": "docs/BUILD_BACKLOG.md (gate row for the drift class, gate-and-proof-engineer, planted-defect proof required)"
+      "where": "docs/BUILD_BACKLOG.md (gate row for the drift class, devex-tooling-engineer, planted-defect proof required)"
     },
     "M-2": {
       "outcome": "owner",

@@ -336,7 +336,9 @@ function newerCommitCount(branch, declaredAt, mainline, cwd) {
   try {
     const out = execFileSync("git", ["log", "--format=%ct", `${mainline}..${branch}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
     const at = Date.parse(declaredAt) / 1000;
-    return out.split("\n").filter(Boolean).filter((t) => Number(t) > at).length;
+    if (!Number.isFinite(at)) return null;
+    // An unparseable commit time counts as newer: unknown tightens the answer.
+    return out.split("\n").filter(Boolean).filter((t) => !(Number.isFinite(Number(t)) && Number(t) <= at)).length;
   } catch { return null; }
 }
 

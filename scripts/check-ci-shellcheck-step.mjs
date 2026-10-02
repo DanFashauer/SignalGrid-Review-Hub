@@ -246,6 +246,16 @@ export function strayInstalls(dir, readFile, pinnedFiles, files = listYaml(dir))
   return out;
 }
 
+/** The whole check for a repo root: the walk floor, both pinned steps, and every other workflow/action. */
+export function checkRepo(root) {
+  const read = (rel) => readFileSync(join(root, rel), "utf8");
+  const files = listYaml(root);
+  const pinned = PINNED.flatMap((spec) => {
+    try { return verdictFor(read(spec.file), spec); } catch (e) { return [`${spec.file}: cannot be read (${e.code ?? e.message})`]; }
+  });
+  return [...floorProblems(files), ...pinned, ...strayInstalls(root, read, PINNED.map((p) => p.file), files)];
+}
+
 const wrap = (name, run, extra = "") =>
   `jobs:\n  a:\n    steps:\n      - name: ${name}\n${extra}        run: |\n${run.split("\n").map((l) => "          " + l).join("\n")}\n      - name: next\n        run: "true"\n`;
 
@@ -445,6 +455,15 @@ function selfTest() {
   if (floorProblems(fakeFiles(FILE_FLOOR - 1, ".github/workflows")).length === 0) { console.error("✗ self-test: a walk one file under the floor PASSED"); bad++; }
   if (floorProblems(fakeFiles(FILE_FLOOR, "elsewhere")).length === 0) { console.error("✗ self-test: a walk with no workflows PASSED"); bad++; }
   if (floorProblems(fakeFiles(FILE_FLOOR, ".github/workflows")).length !== 0) { console.error("✗ self-test: a plausible walk FAILED the floor"); bad++; }
+  // checkRepo on a repo that has no workflows: the floor and the missing pinned files must FAIL it.
+  const bare = mkdtempSync(join(tmpdir(), "shellcheck-gate-bare-"));
+  try {
+    const got = checkRepo(bare);
+    if (!got.some((p) => /below the floor/.test(p))) { console.error("✗ self-test: checkRepo on an empty repo did not report the walk floor:", got); bad++; }
+    if (!got.some((p) => /cannot be read/.test(p))) { console.error("✗ self-test: checkRepo on an empty repo did not report the missing pinned files:", got); bad++; }
+  } finally {
+    rmSync(bare, { recursive: true, force: true });
+  }
   // strayInstalls driven through a real directory: the repo-wide walk and the non-pinned grammar.
   const tmp = mkdtempSync(join(tmpdir(), "shellcheck-gate-"));
   try {
@@ -495,13 +514,7 @@ function selfTest() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--self-test")) selfTest();
   else {
-    const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
-    const files = listYaml(ROOT);
-    const problems = [
-      ...floorProblems(files),
-      ...PINNED.flatMap((spec) => verdictFor(read(spec.file), spec)),
-      ...strayInstalls(ROOT, read, PINNED.map((p) => p.file), files),
-    ];
+    const problems = checkRepo(ROOT);
     if (problems.length) {
       for (const p of problems) console.error(`✗ ${p}`);
       process.exit(1);

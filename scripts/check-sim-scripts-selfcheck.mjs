@@ -36,6 +36,12 @@
 //         $HOME / $TMPDIR — so `$ROOT/$OUT` passes and `$OUT` alone does not.
 //     (f) a LINE-ANCHORED grep against another repo script's stdout must anchor at
 //         text that script can actually print.
+//     (g) nothing bash 3.2 (stock macOS) cannot run — an unguarded `"${A[@]}"` under
+//         `set -u`, declare/local -A or -n, mapfile, `${v,,}`, `|&`, `&>>`, coproc, a
+//         negative subscript. The static rules (b), (d), (f), (g) and (i) also run over
+//         validate-sim-macos.sh; (h) does not, it is not a scripts/mac script.
+//     (h) a `uname -s` Darwin guard, AFTER any `--self-check` branch (rule (c) runs that
+//         on the Linux CI runner), unless named in DARWIN_EXEMPT with its reason.
 //
 // RULE (f), and the defect it was written for. `scripts/mac/lane-tick.sh` — the
 // unattended 5-minute tick — counted the cloud lane's queued work with
@@ -59,7 +65,7 @@
 // the original defect invisible; and a pattern carrying regex metacharacters is
 // REPORTED as not checked rather than guessed at.
 //
-//     (g) no grep over the stdout of a script whose output is formatted for a
+//     (i) no grep over the stdout of a script whose output is formatted for a
 //         PERSON (HUMAN_ONLY_OUTPUT below), which names the machine-readable
 //         source to read instead. The defect: lane-tick.sh counted unread mail with
 //         `lane-message.mjs inbox | grep -c '→ mac'`. The arrow is built in
@@ -98,9 +104,8 @@
 // set without the mode, and the cap can only be lowered. It is a ceiling that only
 // moves down — the honest word for the "floor" this was asked for.
 //
-// SELF-TEST: nine planted shell fixtures in a temp dir, driving the real checks in
-// both directions, including the ratchet. A gate that has never failed proves
-// nothing.
+// SELF-TEST: planted shell fixtures in a temp dir, driving the real checks in both
+// directions, including the ratchet. A gate that has never failed proves nothing.
 
 import { chmodSync, closeSync, fstatSync, mkdtempSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -211,12 +216,13 @@ function badSubshellRedirects(text) {
  * does not exist. The flag counts only where it meets a positional parameter or
  * stands as a `case` pattern; comments are stripped first.
  */
+function isSelfCheckBranch(raw) {
+  const line = raw.replace(/#.*$/, "");
+  if (!line.includes("--self-check")) return false;
+  return /\$\{?[0-9@*]/.test(line) || /(^|\|)\s*(?:"|')?--self-check(?:"|')?\s*\)/.test(line);
+}
 function declaresSelfCheck(text) {
-  return text.split("\n").some((raw) => {
-    const line = raw.replace(/#.*$/, "");
-    if (!line.includes("--self-check")) return false;
-    return /\$\{?[0-9@*]/.test(line) || /(^|\|)\s*(?:"|')?--self-check(?:"|')?\s*\)/.test(line);
-  });
+  return text.split("\n").some(isSelfCheckBranch);
 }
 
 /**
@@ -384,7 +390,121 @@ export function grepMarkerChecks(text, label, readTarget) {
   return { problems, notChecked };
 }
 
-/** Rule (g). Script → the machine-readable source a shell script must read instead. */
+// ── rule (g): stock macOS ships bash 3.2 ─────────────────────────────────────
+// CLAUDE.md states the array idiom and run-everything.sh still shipped without it,
+// because prose does not generalise. A comment is a `#` at line start or after
+// whitespace — NOT the `#` in `${#A[@]}` or `$#`, which a bare /#.*$/ strip would read
+// as one and then stop looking at the rest of the line. Nor is a `#` inside quotes
+// (`echo "note #1 ${A[@]}"`, `echo "step #1"; set -u`): stripping from it hid the hazard behind
+// it, and a `set -u` on the same line, so isStrict read the whole file as non-strict.
+// ponytail: quote state is tracked PER LINE, so a `#` on a continuation line of a multi-line
+// quoted string is still read as a comment. Carrying the state across lines was measured on
+// this tree and drifts on heredoc apostrophes (sg-brain-link.sh ends mid-quote, and the state
+// then misreads validate-sim-macos.sh from line 223): it would turn comments into code.
+// ponytail: three forms still misread a `#` and hide a hazard after it, as before this fix; none
+// occurs under scripts/mac or validate-sim-macos.sh: an ANSI-C string holding `\'` (`$'it\'s # x' "${X[@]}"`,
+// the `\'` closes sq early), a `#` after an escaped space (`a\ #b "${X[@]}"`), and a quoted string
+// nested in a command substitution (`echo "$(echo "a # b")" "${X[@]}"`: the inner `"` reads as
+// closing the outer string). Upgrade: a real tokenizer.
+const shellCode = (text) =>
+  text.split("\n").map((l) => {
+    let sq = false;
+    let dq = false;
+    for (let i = 0; i < l.length; i += 1) {
+      const c = l[i];
+      if (c === "\\" && !sq) i += 1;
+      else if (c === "'" && !dq) sq = !sq;
+      else if (c === '"' && !sq) dq = !dq;
+      else if (c === "#" && !sq && !dq && (i === 0 || /\s/.test(l[i - 1]))) return l.slice(0, i);
+    }
+    return l;
+  });
+
+// Strict mode is a `set` whose flags carry `u` in ANY group (`set -e -u`, `set -eE -o pipefail -u`)
+// or `-o nounset`; arguments after a bare `--` are positionals, not flags.
+const NOUNSET_FLAGS = /(?:^|\s)-[A-Za-z]*u|(?:^|\s)-[A-Za-z]*o\s+nounset/;
+const isStrict = (line) =>
+  [...line.matchAll(/(?:^|[\s;&|(])set\s+([^;&|)]*)/g)].some((m) => NOUNSET_FLAGS.test(m[1].split(/(?:^|\s)--(?:\s|$)/)[0]));
+// Bash 4+ only; each one is a syntax or runtime error under 3.2.
+const BASH4_ONLY = [
+  [/\b(?:declare|local|typeset)\s+-[A-Za-z]*A/, "an associative array (declare -A)"],
+  [/\b(?:declare|local|typeset)\s+-[A-Za-z]*n/, "a nameref (declare -n)"],
+  [/\b(?:mapfile|readarray)\b/, "mapfile/readarray"],
+  [/\$\{\w+(?:\[[^\]]*\])?[,^]{1,2}[^}]*\}/, "case modification (${v,,} / ${v^^})"],
+  [/(?<!\|)\|&/, "|& (pipe stderr)"],
+  [/&>>/, "&>> (append both streams)"],
+  [/\bcoproc\b/, "coproc"],
+  [/\$\{[!#]?\w+\[\s*-[\d$]|(?:^|[\s;&|(])\w+\[\s*-\d[^\]]*\]=/, "a negative array subscript"],
+];
+
+/** Rule (g): constructs bash 3.2 cannot run. */
+export function bash32Problems(text, label) {
+  const problems = [];
+  const code = shellCode(text);
+  const strict = code.some(isStrict);
+  code.forEach((line, i) => {
+    if (strict) {
+      // Quoted or not, standalone or embedded (`cmd ${A[@]}`, `"--x=${A[@]}"`, `"$X ${A[@]}"`):
+      // 3.2 aborts on an EMPTY array in every one of them. `${#A[@]}` / `${!A[@]}` are safe
+      // and the name class skips them. A guard is `${A+` / `${A[@]+`, one `"` before (CLAUDE.md
+      // prescribes `${A+`; it tests element 0, so only `${A[@]+` keeps a sparse A[1]=x). NOT `:+`
+      // (measured on /bin/bash 3.2.57): `${A:+` tests the FIRST element, so A=("" x y) expands to
+      // nothing; `${A[@]:+` tests the whole expansion, so only a lone A=("") is dropped.
+      for (const m of line.matchAll(/\$\{([A-Za-z_]\w*)\[[@*]\]\}/g)) {
+        const before = line.slice(0, m.index).replace(/"$/, "");
+        if (before.endsWith(`\${${m[1]}+`) || before.endsWith(`\${${m[1]}[@]+`)) continue;
+        const colon = before.endsWith(`\${${m[1]}:+`)
+          ? `tests the first element for non-empty, so A=("" x y) expands to NOTHING and the data is lost`
+          : before.endsWith(`\${${m[1]}[@]:+`)
+            ? `tests whether the whole expansion is non-empty, so a lone empty element, A=(""), expands to NOTHING and is lost`
+            : "";
+        problems.push({
+          label,
+          rule: "g",
+          detail: colon
+            ? `line ${i + 1}: ${m[0]} behind \`:+\` — \`:+\` ${colon}; write \${${m[1]}+"${m[0]}"}`
+            : `line ${i + 1}: ${m[0]} under set -u — bash 3.2 aborts on an EMPTY array here ("unbound variable"); write \${${m[1]}+"${m[0]}"}`,
+        });
+      }
+    }
+    for (const [re, what] of BASH4_ONLY) {
+      if (re.test(line)) problems.push({ label, rule: "g", detail: `line ${i + 1}: ${what} — bash 4+ only, and stock macOS runs 3.2` });
+    }
+  });
+  return problems;
+}
+
+// ── rule (h): a scripts/mac script must refuse a non-Darwin host ─────────────
+// Keyed by basename; a name that no longer exists is a stale exemption.
+export const DARWIN_EXEMPT = new Map([["free-test-port.sh", "preflight's 'Reap orphaned api-servers' step runs it on Linux CI"]]);
+
+/**
+ * Rule (h). The guard is a non-comment line naming `uname -s` and `Darwin` with an `exit`
+ * on it or within the next three lines (`fail ...; exit 2` blocks count); a bare
+ * `$(uname)` or a test that never exits does not. Its POSITION beyond the self-check
+ * ordering is not checked (a `uname -s` test inside an uncalled function would pass). The
+ * self-check branch is the first line isSelfCheckBranch reads, which a usage echo naming
+ * `$0 [--self-check]` can be; rule (c) on the Linux runner is the backstop. Where the script has a
+ * --self-check branch the guard must come AFTER it: rule (c) runs that branch on the
+ * Linux CI runner, and a guard ahead of it exits 1 there — invisible on the Mac.
+ */
+export function darwinGuardProblems(text, name, exempt = DARWIN_EXEMPT) {
+  if (exempt.has(name)) return [];
+  const label = `scripts/mac/${name}`;
+  const code = shellCode(text);
+  const guard = code.findIndex((l, i) => /\buname\s+-s\b/.test(l) && /\bDarwin\b/.test(l) && code.slice(i, i + 4).some((x) => /\bexit\b/.test(x)));
+  if (guard < 0) {
+    return [{ label, rule: "h", detail: `no \`uname -s\` Darwin guard that exits, so on another host it half-executes instead of refusing. Add: if [ "$(uname -s)" != "Darwin" ]; then echo "${name}: macOS only" >&2; exit 1; fi — or name it in DARWIN_EXEMPT with the reason it must run elsewhere.` }];
+  }
+  const selfCheck = text.split("\n").findIndex(isSelfCheckBranch);
+  if (selfCheck >= 0 && guard < selfCheck) {
+    return [{ label, rule: "h", detail: `the Darwin guard (line ${guard + 1}) comes BEFORE the --self-check branch (line ${selfCheck + 1}); rule (c) runs --self-check on the Linux CI runner, where the guard would exit 1. Move it after the branch.` }];
+  }
+  return [];
+}
+
+// ── rule (i): no grep over a script whose output is for a person ──────────────
+/** Rule (i). Script → the machine-readable source a shell script must read instead. */
 const HUMAN_ONLY_OUTPUT = new Map([
   ["scripts/lane-message.mjs", "`node scripts/check-lane-messages.mjs --unread-summary <lane>` (lane-tick.sh's append_unread_state)"],
 ]);
@@ -394,7 +514,7 @@ export function humanOutputGreps(text, label) {
     .filter((c) => HUMAN_ONLY_OUTPUT.has(c.target))
     .map((c) => ({
       label,
-      rule: "g",
+      rule: "i",
       detail:
         `line ${c.line}: greps '${c.pattern}' out of \`${c.target}\`, whose output is formatted for a person and can ` +
         `change or never carry the marker — a count that can silently read 0 forever. Read ${HUMAN_ONLY_OUTPUT.get(c.target)}.`,
@@ -416,6 +536,7 @@ function staticChecks(absPath, label) {
   });
   problems.push(...grepRes.problems);
   GREP_NOT_CHECKED.push(...grepRes.notChecked);
+  problems.push(...bash32Problems(text, label));
   problems.push(...humanOutputGreps(text, label));
   return problems;
 }
@@ -477,11 +598,60 @@ const FIXTURES = {
   "grep-unprintable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  PENDING' || true)"\n`,
   "grep-printable.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/planner.mjs --plan 2>/dev/null | grep -c '^  READY' || true)"\n`,
   "grep-unanchored.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/notes.mjs 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
-  // rule (g): the dead lane-tick.sh line, verbatim
+  // rule (i): the dead lane-tick.sh line, verbatim
   "grep-inbox.sh": `#!/usr/bin/env bash\nUNREAD="$(node scripts/lane-message.mjs inbox 2>/dev/null | grep -c '\u2192 mac' || true)"\n`,
   "grep-missing-target.sh": `#!/usr/bin/env bash\nN="$(node scripts/mac/gone.mjs --plan | grep -c '^  READY')"\n`,
   "grep-two-step.sh": `#!/usr/bin/env bash\nOUT="$(node scripts/mac/planner.mjs --plan 2>/dev/null)"\nN="$(printf '%s' "$OUT" | grep -c '^  PENDING')"\n`,
+  // rule (g): stock macOS bash 3.2
+  "b32-unguarded-array.sh": `#!/usr/bin/env bash\nset -euo pipefail; A=(); echo "\${A[@]}"\n`,
+  "b32-guarded-array.sh": `#!/usr/bin/env bash\nset -u; A=(); echo \${A+"\${A[@]}"}\n`,
+  "b32-array-no-nounset.sh": `#!/usr/bin/env bash\nA=(); echo "\${A[@]}"\n`,
+  "b32-assoc.sh": `#!/usr/bin/env bash\ndeclare -A m\n`,
+  "b32-mapfile.sh": `#!/usr/bin/env bash\nmapfile -t x < f\n`,
+  "b32-lowercase.sh": `#!/usr/bin/env bash\nv=A; echo \${v,,}\n`,
+  "b32-comment-only.sh": `#!/usr/bin/env bash\nset -u\n# bash 3.2: no mapfile, no \${v,,}, no declare -A, and "\${A[@]}" needs the guard\nA=(x); echo \${#A[@]} \${A+"\${A[@]}"} # trailing mapfile note\n`,
+  "b32-after-hash.sh": `#!/usr/bin/env bash\nset -u\nA=(x); echo \${#A[@]} "\${A[@]}"\n`,
+  // rule (h): a Darwin guard, and where it sits
+  "dw-unguarded.sh": `#!/usr/bin/env bash\nset -eu\necho hi\n`,
+  "dw-guarded.sh": `#!/usr/bin/env bash\nset -eu\nif [ "$(uname -s)" != "Darwin" ]; then echo "dw-guarded: macOS only" >&2; exit 1; fi\necho hi\n`,
+  "dw-guard-not-s.sh": `#!/usr/bin/env bash\nf() { [ "$(uname)" = "Darwin" ]; }\necho hi\n`,
+  "dw-guard-before-selfcheck.sh": `#!/usr/bin/env bash\nif [ "$(uname -s)" != "Darwin" ]; then exit 1; fi\nif [ "\${1:-}" = "--self-check" ]; then exit 0; fi\n`,
+  "dw-guard-after-selfcheck.sh": `#!/usr/bin/env bash\nif [ "\${1:-}" = "--self-check" ]; then exit 0; fi\nif [ "$(uname -s)" != "Darwin" ]; then exit 1; fi\n`,
+  "free-test-port.sh": `#!/usr/bin/env bash\necho "runs on Linux CI"\n`,
 };
+
+// Rule (g) and (h), one planted sample per pattern: [body, expected problem count]. Every
+// BASH4_ONLY entry and every strict-mode / array spelling is here, so deleting or breaking
+// one entry turns --self-test red instead of leaving it green on the few that had a file.
+const A = 'A=(); ';
+export const G32_CASES = [
+  ["declare -A m", 1], ["local -A m", 1], ["typeset -A m", 1], ["declare -n r=x", 1], ["local -n r=x", 1],
+  ["mapfile -t x < f", 1], ["readarray -t x < f", 1], ["v=A; echo ${v,,}", 1], ["v=A; echo ${v^^}", 1],
+  ["a | b |& tee log", 1], ["cmd|& tee log", 1], ["cmd |&tee log", 1], ["cmd &>> log", 1],
+  ["coproc X { cat; }", 1], ["echo ${A[-1]}", 1], ["A[-1]=x", 1],
+  ["false || true; echo ${#A[@]}", 0],
+  [`set -e -u; ${A}echo "\${A[@]}"`, 1], [`set -eE -o pipefail -u; ${A}echo "\${A[@]}"`, 1],
+  [`set -o nounset; ${A}echo "\${A[@]}"`, 1], [`set -eo nounset; ${A}echo "\${A[@]}"`, 1],
+  [`set -u; ${A}cmd \${A[@]}`, 1], [`set -u; ${A}cmd "--x=\${A[@]}"`, 1],
+  [`set -u; ${A}echo "$X \${A[@]}"`, 1], [`set -u; ${A}echo "\${A[*]}"`, 1],
+  [`set -e -o pipefail; ${A}echo "\${A[@]}"`, 0], [`set +u; ${A}echo "\${A[@]}"`, 0],
+  [`set -- a -u; ${A}echo "\${A[@]}"`, 0],
+  [`set -u; ${A}echo \${A+"\${A[@]}"}`, 0], [`set -u; ${A}echo \${A[@]+"\${A[@]}"}`, 0],
+  // `:+` is NOT a guard: it tests the first element for non-EMPTY, so A=("" x y) expands to nothing.
+  [`set -u; ${A}echo \${A:+"\${A[@]}"}`, 1], [`set -u; ${A}echo \${A[@]:+"\${A[@]}"}`, 1],
+  // A `#` inside quotes is text, not a comment: it must not hide the hazard after it, nor the
+  // `set -u` on its line. The last case is the refuter's: with `set -u` stripped, the whole file read as non-strict.
+  [`set -u; ${A}echo "note #1 \${A[@]}"`, 1], [`set -u; ${A}echo 'note #1' "\${A[@]}"`, 1],
+  [`set -u; ${A}echo \\# "\${A[@]}"`, 1], [`echo "step #1"; set -u\n${A}echo "\${A[@]}"`, 1],
+  // …while a real comment, trailing or after quoted text, still is one.
+  [`set -u # strict\n${A}echo "\${A[@]}"`, 1], [`set -u; A=(x); echo "ok" # "\${A[@]}"`, 0],
+];
+export const H_CASES = [
+  ['[ "$(uname -s)" = "Darwin" ] && echo mac\n', 1],
+  ['echo "needs uname -s == Darwin"\n', 1],
+  ['[ "$(uname -s)" = "Darwin" ] || exit 1\n', 0],
+  ['if [ "$(uname -s)" != "Darwin" ]; then\n  fail "mac only"\n  exit 2\nfi\n', 0],
+];
 
 // The two fake targets rule (f)'s self-test reads. `planner.mjs` MENTIONS PENDING in
 // a comment and PRINTS READY in a template literal — the exact asymmetry that made
@@ -568,12 +738,12 @@ function selfTest() {
     expect("an UNANCHORED grep is reported, never failed",
       unanchored.problems.length === 0 && unanchored.notChecked.length === 1,
       `an honest interpolated marker was punished (the failure mode this gate must not have): ${JSON.stringify(unanchored)}`);
-    expect("SYNTHETIC VIOLATION: grepping the human-formatted lane inbox is rule (g)",
-      S("grep-inbox.sh").some((p) => p.rule === "g"),
+    expect("SYNTHETIC VIOLATION: grepping the human-formatted lane inbox is rule (i)",
+      S("grep-inbox.sh").some((p) => p.rule === "i"),
       "MISSED the dead lane-tick.sh unread-mail line (BUILD_BACKLOG finding #8)");
-    expect("rule (g) leaves a grep over any other target alone",
-      S("grep-unanchored.sh").every((p) => p.rule !== "g"),
-      "FALSE POSITIVE: rule (g) fired on a target not in HUMAN_ONLY_OUTPUT");
+    expect("rule (i) leaves a grep over any other target alone",
+      S("grep-unanchored.sh").every((p) => p.rule !== "i"),
+      "FALSE POSITIVE: rule (i) fired on a target not in HUMAN_ONLY_OUTPUT");
     expect("a grep against a script that does not exist is caught",
       F("grep-missing-target.sh").problems.some((p) => p.rule === "f"),
       "MISSED a grep whose target file is gone — the count would be 0 forever");
@@ -585,6 +755,50 @@ function selfTest() {
     expect("grepClaims finds nothing in a script with no node|grep pipeline",
       grepClaims(readFileSync(join(dir, "case-selfcheck.sh"), "utf8")).length === 0,
       "grepClaims over-matched");
+
+    // ── rule (g): what bash 3.2 cannot run ───────────────────────────────────
+    const G = (n) => S(n).filter((p) => p.rule === "g");
+    expect("SYNTHETIC VIOLATION: an unguarded \"${A[@]}\" under set -u is caught", G("b32-unguarded-array.sh").length === 1,
+      `MISSED the run-everything.sh defect: ${JSON.stringify(G("b32-unguarded-array.sh"))}`);
+    expect("the guarded ${A+\"${A[@]}\"} spelling passes", G("b32-guarded-array.sh").length === 0,
+      `FALSE POSITIVE on the idiom CLAUDE.md prescribes: ${JSON.stringify(G("b32-guarded-array.sh"))}`);
+    expect("an array expansion without nounset is not a hazard", G("b32-array-no-nounset.sh").length === 0, "FALSE POSITIVE - only set -u makes an empty array unbound");
+    expect("declare -A is caught", G("b32-assoc.sh").length === 1, "MISSED an associative array");
+    expect("mapfile is caught", G("b32-mapfile.sh").length === 1, "MISSED mapfile");
+    expect("${v,,} is caught", G("b32-lowercase.sh").length === 1, "MISSED case modification");
+    expect("a ${#A[@]} earlier on the line does not blind the scan", G("b32-after-hash.sh").length === 1,
+      "the # in ${#A[@]} was read as a comment start, hiding the hazard after it");
+    expect("comments and ${#A[@]} are not scanned as code", G("b32-comment-only.sh").length === 0,
+      `FALSE POSITIVE on prose or a length expansion: ${JSON.stringify(G("b32-comment-only.sh"))}`);
+
+    for (const [body, want] of G32_CASES) {
+      const got = bash32Problems(`#!/usr/bin/env bash\n${body}\n`, "t").length;
+      expect(`rule (g) planted: ${body}`, got === want, `expected ${want} problem(s), got ${got}`);
+    }
+    // Each `:+` spelling states ITS OWN measured reason (bash 3.2.57): `${A:+` drops A=("" x y), `${A[@]:+` only a lone A=("").
+    const reason = (guard) => bash32Problems(`#!/usr/bin/env bash\nset -u; ${A}echo ${guard}\n`, "t")[0]?.detail ?? "";
+    const firstEl = reason('${A:+"${A[@]}"}');
+    expect("the ${A:+ finding names the first-element test and data loss, not an abort",
+      /first element/.test(firstEl) && /x y/.test(firstEl) && !/aborts/.test(firstEl),
+      `a \${A:+ guard fails for the wrong stated reason (${JSON.stringify(firstEl)})`);
+    const whole = reason('${A[@]:+"${A[@]}"}');
+    expect("the ${A[@]:+ finding names the whole-expansion test and the lone empty element, not the first element",
+      /whole expansion/.test(whole) && /A=\(""\)/.test(whole) && !/first element|x y|aborts/.test(whole),
+      `a \${A[@]:+ guard fails for the wrong stated reason (${JSON.stringify(whole)}): bash 3.2.57 keeps A=("" x y) whole there and loses only A=("")`);
+    for (const [body, want] of H_CASES) {
+      const got = darwinGuardProblems(`#!/usr/bin/env bash\n${body}`, "x.sh").length;
+      expect(`rule (h) planted: ${JSON.stringify(body)}`, got === want, `expected ${want} problem(s), got ${got}`);
+    }
+
+    // ── rule (h): the Darwin guard ───────────────────────────────────────────
+    const H = (n) => darwinGuardProblems(readFileSync(join(dir, n), "utf8"), n);
+    expect("SYNTHETIC VIOLATION: a scripts/mac script with no uname -s guard is caught", H("dw-unguarded.sh").length === 1, "MISSED an unguarded Mac script");
+    expect("a script with the guard passes", H("dw-guarded.sh").length === 0, `FALSE POSITIVE: ${JSON.stringify(H("dw-guarded.sh"))}`);
+    expect("a bare $(uname) comparison is not the guard", H("dw-guard-not-s.sh").length === 1, "a function-local Darwin test satisfied the top-level guard");
+    expect("an exempt name passes without a guard", H("free-test-port.sh").length === 0, "the exemption map is not consulted");
+    expect("a guard BEFORE the --self-check branch is caught", H("dw-guard-before-selfcheck.sh").length === 1,
+      "rule (c) runs --self-check on the Linux CI runner; a guard ahead of it exits 1 there and only CI would see it");
+    expect("a guard AFTER the --self-check branch passes", H("dw-guard-after-selfcheck.sh").length === 0, `FALSE POSITIVE: ${JSON.stringify(H("dw-guard-after-selfcheck.sh"))}`);
 
     // The derivation itself, driven on a fixture allowlist.
     const derived = referencedMacScripts({
@@ -609,7 +823,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 if (process.argv.includes("--self-test")) {
-  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length} planted shell fixtures behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target — and rule (g), a grep over the human-formatted lane inbox, in both directions).`);
+  console.log(`PASS  self-test — ${Object.keys(FIXTURES).length + G32_CASES.length + H_CASES.length} planted shell fixtures and samples behave in both directions (syntax, subshell redirect rooted and unrooted, executable bit, a passing and a failing --self-check, a self-check that dirties the tree and one that scratches under mktemp -d, a legacy script, the ratchet, the argv derivation, and rule (f) in all four directions — an anchored marker the target cannot print, one it can, an unanchored marker that must NOT be punished, and a missing target; rule (g) on every listed bash-4-only pattern and every strict-mode and array spelling; rule (h) on a guarded, an unguarded, a non-exiting, an exempt and a guard-before-self-check script; rule (i), a grep over the human-formatted lane inbox, in both directions).`);
   process.exit(0);
 }
 
@@ -635,7 +849,15 @@ console.log(`  DERIVED from SIM_OPERATIONS (${opCount} operations): ${referenced
   [...referenced].map(([p, keys]) => `${p} (${keys.join(", ")})`).join("; "));
 
 const problems = [];
-for (const f of allMac) problems.push(...staticChecks(join(MAC_DIR, f), `scripts/mac/${f}`));
+for (const f of allMac) {
+  problems.push(...staticChecks(join(MAC_DIR, f), `scripts/mac/${f}`));
+  problems.push(...darwinGuardProblems(readFileSync(join(MAC_DIR, f), "utf8"), f));
+}
+// The harness the Mac lane runs sits outside scripts/mac/ but gets the same static rules.
+problems.push(...staticChecks(resolve(repo, "validate-sim-macos.sh"), "validate-sim-macos.sh"));
+for (const [name, reason] of DARWIN_EXEMPT) {
+  if (!allMac.includes(name)) problems.push({ label: `DARWIN_EXEMPT ${name}`, rule: "h", detail: `exempt (${reason}) but scripts/mac/${name} does not exist — a stale exemption re-permits the gap it was granted for` });
+}
 
 const notSelfChecking = [];
 for (const [rel, keys] of referenced) {
@@ -668,10 +890,10 @@ console.log(`\n  GREP MARKERS NOT CHECKED (${GREP_NOT_CHECKED.length} — REPORT
 for (const n of GREP_NOT_CHECKED) console.log(`    \u00b7 ${n}`);
 if (GREP_NOT_CHECKED.length === 0) console.log("    (none)");
 
-console.log(`\nsim-scripts-selfcheck: ${allMac.length} script(s) checked statically, ${referenced.size} referenced, ${problems.length} problem(s); self-test green`);
+console.log(`\nsim-scripts-selfcheck: ${allMac.length} scripts/mac script(s) + validate-sim-macos.sh checked statically, ${referenced.size} referenced, ${problems.length} problem(s); self-test green`);
 if (problems.length > 0) {
   for (const p of problems) console.error(`\n  x [rule ${p.rule}] ${p.label}\n      ${p.detail}`);
   console.error("\nsim-script self-check gate FAILED. The cloud lane queues these by name and the Mac lane runs them days\nlater; a script that cannot start is discovered by a human who already sat down to run it.");
   process.exit(1);
 }
-console.log("sim-script self-check gate passed — every queueable Mac script exists, parses, is executable, and roots its subshell redirects.");
+console.log("sim-script self-check gate passed — every queueable Mac script exists, parses, is executable, roots its subshell redirects, has no unguarded \"${A[@]}\" under set -u and none of rule (g)'s listed bash-4-only constructs, and carries a uname -s Darwin guard that exits (or a DARWIN_EXEMPT reason).");

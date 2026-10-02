@@ -341,7 +341,8 @@ export function logicalLines(lines, kind, path = "") {
   // unknown key, an empty line or an instruction ends them, and a later `# escape=` is a plain comment
   const directives = [];
   for (const [n, l] of lines.entries()) {
-    const d = /^#\s*(syntax|escape|check)\s*=\s*(\S*)\s*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
+    // BuildKit strips leading whitespace and reads a non-empty value that may hold spaces (`check=skip=all; error=true`)
+    const d = /^\s*#\s*(syntax|escape|check)\s*=\s*(.+?)\s*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
     if (!d) break;
     directives.push(d);
   }
@@ -353,7 +354,12 @@ export function logicalLines(lines, kind, path = "") {
       : /(?:^|\/)(?:GNU)?makefile(?:\.(?:in|am))?$|\.(?:mk|make)$/i.test(path)
         ? [/(?<!\\)\\$/, ["tab"]] // make drops the recipe tail's leading tab, then the shell glues
         : docker
-          ? [new RegExp(`(?<!\\${dockerEscape})\\${dockerEscape}[ \t]*$`), ["keep", "strip"]] // with and without the next line's indent, fail-closed
+          ? [
+              // under `# escape=\`` a heredoc body (`RUN <<EOF`) still reaches the shell raw, where `\` continues: read
+              // both markers in that file, fail-closed, rather than track heredoc bounds
+              dockerEscape === "`" ? /(?<!`)`[ \t]*$|(?<!\\)\\[ \t]*$/ : /(?<!\\)\\[ \t]*$/,
+              ["keep", "strip"],
+            ] // with and without the next line's indent, fail-closed
           : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
   if (kind === "json") return lines.map((text, i) => ({ i, text }));
   const ps1 = /\.(?:ps1|psm1)$/i.test(path);
@@ -1592,6 +1598,12 @@ server.registerTool(
     ["s.sh", `npx -y @upstash/context7-\\\nm\\cp@latest\n`, 1, true, "a backslash escape in the tail of a split name"],
     ["s.ps1", "npx -y @upstash/context7\`-\`\nmcp@latest\n", 1, true, "a PowerShell backtick escape beside the continuation"],
     ["Containerfile", `RUN npx -y @upstash/context7-\\\n# n\nmcp@latest\n`, 1, true, "a Containerfile read as a Dockerfile"],
+    // round 17: BuildKit's directive grammar (indent, spaced values, empty value); heredoc bodies under a backtick escape
+    ["Dockerfile", "  # escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "an indented `# escape=` directive"],
+    ["Dockerfile", "# check=skip=all; error=true\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "a directive value with a space keeps the scan going"],
+    ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\\\nmcp@latest\n", 3, true, "an empty `# check=` ends directive parsing"],
+    ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y @upstash/context7-\\\nmcp@latest\nEOF\n", 3, true, "a `\\` split inside a heredoc under `# escape=\`` "],
+    ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y " + SPEC + realPin + " \\\n  --stdio\nEOF\n", 3, false, "a pinned heredoc continuation under `# escape=\`` (no false positive)"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

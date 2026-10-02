@@ -69,6 +69,7 @@ export const NOT_WATCHED = new Map([
   [".github/workflows/mac-runner-harness.yml", "workflow_call / workflow_dispatch only"],
   [".github/workflows/phase-pr-evidence.yml", "pull_request / workflow_dispatch only: no mainline runs"],
   [".github/workflows/pr-triage.yml", "pull_request_target only: no mainline runs"],
+  [".github/workflows/claude.yml", "issue_comment / pull_request_review(_comment) / issues only, and only when the owner writes @claude: whoever wrote the mention reads the answer in the thread; no push or schedule runs on mainline (DR-063 GitHub-App trigger, 2026-10-02)"],
 ]);
 
 /** The workflow files that actually exist, as classificationProblems expects to see them. */

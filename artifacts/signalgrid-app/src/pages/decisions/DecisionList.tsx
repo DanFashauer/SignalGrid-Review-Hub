@@ -9,6 +9,7 @@ import { formatDate } from "@/lib/format";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { listDecisionsV1, type V1DecisionRecord, type V1Outcome } from "@/lib/v1";
+import { LiveRegion } from "@/components/LiveRegion";
 
 function exportCSV(decisions: V1DecisionRecord[]) {
   if (!decisions.length) return;
@@ -42,6 +43,12 @@ export function DecisionList() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <LiveRegion
+        message={
+          decisions ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied.` : ""
+        }
+        alert={error && !decisions ? "Decision ledger could not be read." : ""}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Decisions</h1>

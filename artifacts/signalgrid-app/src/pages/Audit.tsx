@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { getAuditV1 } from "@/lib/v1";
+import { LiveRegion } from "@/components/LiveRegion";
 
 /**
  * The tamper-evident audit ledger from `/v1/audit` — the record a regulated
@@ -17,6 +18,16 @@ export function Audit() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <LiveRegion
+        message={data?.chain.valid ? `${data.events.length} audit events. Hash chain intact.` : ""}
+        alert={
+          error && !data
+            ? "Audit ledger could not be read; chain unverified."
+            : data && !data.chain.valid
+              ? `Hash chain broken at sequence ${data.chain.brokenAtSeq}.`
+              : ""
+        }
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Audit</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">

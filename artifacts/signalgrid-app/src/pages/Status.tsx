@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getContextV1, getMetricsV1, listDecisionsV1 } from "@/lib/v1";
+import { LiveRegion } from "@/components/LiveRegion";
 
 /**
  * The Limited-GA assurance status page (launch wireframe screen 6): the honest
@@ -21,6 +22,14 @@ export function Status() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
+      <LiveRegion
+        message={
+          metrics.data
+            ? `${metrics.data.totalDecisions} decisions: ${metrics.data.byOutcome.deny} denied, ${metrics.data.byOutcome.restrict} restricted, ${metrics.data.pendingReview} pending review.`
+            : ""
+        }
+        alert={metrics.error && !metrics.data ? "Decision metrics could not be read." : ""}
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Deployment assurance</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">

@@ -72,13 +72,21 @@ const PRIORITY_FILTERS = [
 ] as const;
 type PriorityFilter = (typeof PRIORITY_FILTERS)[number];
 
+// A JS `behavior: "smooth"` ignores the stylesheet's reduced-motion override,
+// so the preference is read here; where it cannot be read, motion is treated as
+// reduced. Plan row 76; held by scripts/check-web-a11y-basics.mjs.
+function prefersReducedMotion(): boolean {
+  if (typeof window.matchMedia !== "function") return true;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 function scrollTo(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
 
   const headerOffset = 88;
   const top = window.scrollY + el.getBoundingClientRect().top - headerOffset;
-  window.scrollTo({ top, behavior: "smooth" });
+  window.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });
   history.replaceState(null, "", `#${id}`);
 }
 
@@ -280,6 +288,8 @@ export default function ReviewDashboard() {
           <button
             className="md:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
             onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <rect

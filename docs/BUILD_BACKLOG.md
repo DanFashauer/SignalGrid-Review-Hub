@@ -1216,6 +1216,30 @@ item 6(v)), every row reads the workstation.
       `ASSIGNMENT_NOT_ENFORCED_LOCALLY`, and a grep of `lib/` for a user-rights write call stays
       empty. Lane: endpoint-uem-domain.
 
+**Added 2026-10-02 under DR-055 (the owner's puck-token note and ARC kiosk photo)** — one more
+hardware-free row, filed from the fail-closed review of the note, not built: the requirements are
+the hypothesis page's *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
+section, and the two open owner questions are the raised hand
+`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`.
+
+- [ ] **Puck 16 — proof vectors for the credential attach and re-bind path: a reset, unbound or unreadable puck never yields `allow`, and a re-bind or revoke needs two authorizers.**
+      The change: a fixture-backed proof with three vectors, registered so `validate-sim-macos.sh`
+      and preflight pick it up. (a) A puck whose IdP binding is absent, wiped or unreadable is
+      `unknown` → at least `step_up`, never `allow` and never "already enrolled" (the stance
+      `lib/signalgrid-core/src/attach.ts:14`–`:18` already takes for an unknown attach state).
+      (b) A puck registered inside a freshly re-bound window never loosens the answer. (c) A
+      re-bind or revoke request carrying one authorizer, or a single super-admin credential, is
+      `SecondAuthorizerRequired`, never `Granted`: `lib/dual-control/src/types.ts:33` holds only
+      `break_glass | privileged_config | bulk_data | unknown`, so this needs a new elevated-action
+      class beside them, with `unknown` staying the fail-safe. First task: read `attach.ts` and
+      its proof before wiring (the filing review read the dual-control types, not `attach.ts`),
+      and wait for the owner's answer on who the "super admin" is before fixing the authorizer
+      roles. **Fail-closed:** unknown raises, a missing second authorizer refuses.
+      **Deterministic:** fixtures only, no clock. The check that fails without it: the one-authorizer
+      re-bind fixture must be refused, and a wiped-puck fixture must not reach `allow`. Decision-core
+      behaviour (a new class in `lib/dual-control`), so its PR carries a proposal record.
+      Lane: iam-domain.
+
 - [x] **Both findings from the "status reported rather than measured" sweep — FIXED.**
       The sweep that produced the `itsm` tri-state health fix turned up two more instances of the
       same class. Both are now closed and both are pinned.

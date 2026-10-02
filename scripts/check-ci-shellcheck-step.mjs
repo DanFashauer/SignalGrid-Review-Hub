@@ -33,7 +33,8 @@
 // KNOWN LIMIT: a workflow that calls a script which itself installs shellcheck is not
 // followed (the script is not workflow text); the pinned steps are the supported path.
 // A missing or unparseable step FAILS.
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,7 +63,19 @@ export const PINNED = [
 ];
 
 const indentOf = (l) => l.match(/^\s*/)[0].length;
-const stripComment = (l) => l.replace(/\s+#.*$/, "").trim();
+/** Drop a trailing `# comment`, but only where the `#` is outside quotes and starts a word. */
+function stripComment(l) {
+  let q = null;
+  for (let i = 0; i < l.length; i++) {
+    const c = l[i];
+    if (q) { if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") { q = c; continue; }
+    if (c === "#" && (i === 0 || /\s/.test(l[i - 1]))) return l.slice(0, i).trim();
+  }
+  return l.trim();
+}
+/** Column where a mapping key starts: the dash column + 2 for `- key:`, else the indent. */
+const keyColumn = (l) => (/^\s*-\s+/.test(l) ? l.match(/^\s*-\s+/)[0].length : indentOf(l));
 
 /** Every step named `name`: { start, end (exclusive), lines }. */
 function findSteps(lines, name) {
@@ -129,8 +142,8 @@ export function unsupportedYaml(text) {
   lines.forEach((l, i) => {
     if (!l.trim() || l.trim().startsWith("#")) return;
     if (blk >= 0) { if (indentOf(l) > blk) return; blk = -1; }
-    const t = l.replace(/\s+#.*$/, "").trim();
-    if (/^(\s*)(?:-\s+)?[A-Za-z0-9_.-]+:\s*[|>][-+0-9]*\s*(#.*)?$/.test(l)) { blk = indentOf(l); return; }
+    const t = stripComment(l);
+    if (/^(\s*)(?:-\s+)?[A-Za-z0-9_.-]+:\s*[|>][-+0-9]*\s*(#.*)?$/.test(l)) { blk = keyColumn(l); return; }
     const key = t.match(/^(?:-\s+)?([A-Za-z0-9_.-]+):(?:\s+(.*))?$/);
     const item = !key && /^-\s+\S/.test(t) && !/^-\s+["'][^"']*["']\s*:/.test(t);
     if (!key && !item && t !== "-") { out.push(`line ${i + 1}: unsupported YAML shape \`${t.slice(0, 60)}\` (explicit/quoted key, or a multi-line scalar)`); return; }
@@ -138,7 +151,7 @@ export function unsupportedYaml(text) {
     if (/^[&*!]/.test(val)) out.push(`line ${i + 1}: anchors, aliases and tags are not supported: \`${val.slice(0, 40)}\``);
     const q = val[0];
     if ((q === '"' || q === "'") && !(val.length > 1 && val.endsWith(q) && !val.endsWith("\\" + q))) out.push(`line ${i + 1}: a multi-line quoted scalar is not supported`);
-    if (q === '"' && key?.[1] === "run" && /\\[xuU0-7]/.test(val)) out.push(`line ${i + 1}: a double-quoted \`run:\` scalar with a \\x/\\u/octal escape is not supported`);
+    if (/\\(x[0-9A-Fa-f]{2}|u00[0-9A-Fa-f]{2}|U0000[0-9A-Fa-f]{2}|[0-7]{1,3})/.test(t)) out.push(`line ${i + 1}: an ASCII escape (\\x, \\u00, octal) can hide a package name and is not supported`);
   });
   return out;
 }
@@ -190,7 +203,7 @@ function yamlLogicalLines(lines) {
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    const ind = indentOf(l);
+    const ind = keyColumn(l);
     const m = l.match(/^(\s*(?:-\s+)?(?:["']?[^"':#]+?["']?\s*:)?)\s*(.*)$/);
     const val = m ? m[2] : l.trim();
     const isBlockStart = /^[|>][-+]?\s*$/.test(val);
@@ -228,7 +241,7 @@ function joinedStatements(rawLines) {
   return out;
 }
 
-const APT_INSTALL = /\b(apt(-get)?|aptitude|nala)\b.*\b(re)?install\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
+const APT_INSTALL = /\b(apt(-get)?|aptitude|nala)\b.*\b(re)?(install|satisfy)\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
 
 /** apt installs outside `skip` (a pinned step's line range) that name shellcheck or hide the package list. */
 function strayInstallsIn(text, file, skip) {
@@ -256,7 +269,7 @@ function listFiles(dir, readDir, rel = "") {
 /** Every workflow file and every composite action anywhere in the repo, NOT pinned. */
 function strayInstalls(dir, readFile, pinnedFiles) {
   const out = [];
-  const skip = new Set(["node_modules", ".git", "third_party", "dist"]);
+  const skip = new Set(["node_modules", ".git"]);
   const walk = (rel) => {
     const found = [];
     for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
@@ -332,6 +345,12 @@ function selfTest() {
     ["workflow-level defaults.run.shell", "defaults:\n  run:\n    shell: true {0}\n" + wrap(spec.name, good)],
     ["BASH_ENV neutralising the step", wrap(spec.name, good).replace("  a:\n", "  a:\n    env:\n      BASH_ENV: ./exit0.sh\n")],
     ["job-level container", wrap(spec.name, good).replace("  a:\n", "  a:\n    container: alpine\n")],
+    ["block-scalar name then multi-line plain run", wrap(spec.name, good) + "      - name: |\n          x\n        run:\n          sudo apt-get install -y -qq jq\n          shellcheck\n"],
+    ["`- run: |` first key then multi-line env value", wrap(spec.name, good) + "      - run: |\n          echo hi\n        name: planted\n        env:\n          X: apt-get install -y -qq jq\n          shellcheck\n"],
+    ["`#` inside quotes before the install", wrap(spec.name, good) + "      - name: p\n        run: |\n          printf '%s\\n' \"step #1\"; apt-get install -y -qq shellcheck\n"],
+    ["flow-mapping step with an escaped package name", wrap(spec.name, good) + "      - {name: x, run: \"sudo apt-get install -y shell\\x63heck\"}\n"],
+    ["escaped package name in an env value", wrap(spec.name, good) + "      - name: p\n        env:\n          X: \"apt-get install -y -qq shell\\x63heck\"\n        run: ${{ env.X }}\n"],
+    ["apt-get satisfy shellcheck", wrap(spec.name, good) + "      - name: p\n        run: apt-get satisfy -y shellcheck\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -361,6 +380,7 @@ function selfTest() {
     ["aptitude install shellcheck", "      - run: sudo aptitude install -y shellcheck\n", true],
     ["snap install shellcheck", "      - run: sudo snap install shellcheck\n", true],
     ["dpkg -i shellcheck.deb", "      - run: sudo dpkg -i shellcheck.deb\n", true],
+    ["`#` inside a word is not a comment", "      - run: echo a#b && apt-get install -y -qq shellcheck\n", true],
     ["same-indent backslash continuation naming shellcheck", "      - run: |\n          sudo apt-get install -y -qq jq \\\n          shellcheck\n", true],
     ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
     ["apt-get reinstall shellcheck", "      - run: sudo apt-get reinstall shellcheck\n", true],
@@ -369,8 +389,43 @@ function selfTest() {
   for (const [label, t, want] of strayCases) {
     if (stray(t) !== want) { console.error(`✗ self-test: stray-install case wrong: ${label}`); bad++; }
   }
+  // unsupportedYaml driven directly: every construct it claims to reject, and a clean document.
+  const grammarCases = [
+    ["multi-line double-quoted scalar", "      - run: \"sudo apt-get install -y jq\n          shellcheck\"\n", true],
+    ["anchor", "      - run: &x echo hi\n", true],
+    ["alias", "      - run: *x\n", true],
+    ["tag", "      - run: !!str echo hi\n", true],
+    ["explicit key", "      ? if\n      : false\n", true],
+    ["multi-line double-quoted scalar whose continuation looks like a key", "      - run: \"echo hi\n          more: stuff\"\n", true],
+    ["multi-line single-quoted scalar whose continuation looks like a key", "      - run: 'echo hi\n          more: stuff'\n", true],
+    ["a clean document", "jobs:\n  a:\n    steps:\n      - name: x\n        run: |\n          echo hi # a comment\n", false],
+  ];
+  for (const [label, t, want] of grammarCases) {
+    if ((unsupportedYaml(t).length > 0) !== want) { console.error(`✗ self-test: grammar case wrong: ${label}`); bad++; }
+  }
+  // strayInstalls driven through a real directory: the repo-wide walk and the non-pinned grammar.
+  const tmp = mkdtempSync(join(tmpdir(), "shellcheck-gate-"));
+  try {
+    const put = (rel, text) => { mkdirSync(dirname(join(tmp, rel)), { recursive: true }); writeFileSync(join(tmp, rel), text); };
+    const scan = () => strayInstalls(tmp, (rel) => readFileSync(join(tmp, rel), "utf8"), []);
+    put(".github/workflows/ok.yml", "jobs:\n  a:\n    steps:\n      - run: echo hi\n");
+    if (scan().length !== 0) { console.error("✗ self-test: a clean tree was flagged:", scan()); bad++; }
+    put(".github/workflows/zz.yml", "jobs:\n  a:\n    steps:\n      - run: echo hi\n          && more\n");
+    if (scan().length === 0) { console.error("✗ self-test: an unsupported scalar in an unpinned workflow PASSED"); bad++; }
+    rmSync(join(tmp, ".github/workflows/zz.yml"));
+    put(".github/workflows/zz.yml", "jobs:\n  a:\n    steps:\n      - run: echo \"see #1234\" && apt-get install -y -qq shellcheck\n");
+    if (scan().length === 0) { console.error("✗ self-test: an install after a quoted # in an unpinned workflow PASSED"); bad++; }
+    rmSync(join(tmp, ".github/workflows/zz.yml"));
+    put("ci/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
+    if (scan().length === 0) { console.error("✗ self-test: a composite action outside .github PASSED"); bad++; }
+    rmSync(join(tmp, "ci"), { recursive: true });
+    put("third_party/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
+    if (scan().length === 0) { console.error("✗ self-test: a composite action under third_party PASSED"); bad++; }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
   if (bad) process.exit(1);
-  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install cases behave`);
+  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install, ${grammarCases.length} grammar and 5 repo-walk cases behave`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

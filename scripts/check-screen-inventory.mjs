@@ -318,6 +318,33 @@ const HTML_START_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*</;
 const REJECTED_REF_DEF = /^\[(?:[^\]\\]|\\.)+\]:/;
 
 /**
+ * True when a raw source line holds `<` (or an entity or escape that renders as one)
+ * anywhere but inside a code span the two renderers are certain to agree on: opened by
+ * ONE unescaped backtick and closed by the next lone backtick on the same line, with no
+ * `|` inside (a table splits cells on `|` before it reads code spans). Round 21: the
+ * markdown-it check below exempts whatever markdown-it calls code, and markdown-it calls
+ * an 81-backtick run code where cmark-gfm (MAXBACKTICKS 80) calls it text, so a tag
+ * between two such runs was live HTML on GitHub. This scan reads the raw line instead.
+ */
+export function rawLtOutsideSimpleCode(line) {
+  const safe = [];
+  for (let j = 0; j < line.length; ) {
+    if (line[j] !== "`") { j += 1; continue; }
+    let run = 1;
+    while (line[j + run] === "`") run += 1;
+    if (run === 1 && line[j - 1] !== "\\") {
+      let k = j + 1;
+      while (k < line.length && !(line[k] === "`" && line[k - 1] !== "`" && line[k + 1] !== "`")) k += 1;
+      if (k < line.length && !line.slice(j, k).includes("|")) { safe.push([j, k]); j = k + 1; continue; }
+    }
+    j += run;
+  }
+  const inSafe = (x) => safe.some(([a, b]) => x > a && x < b);
+  for (const m of line.matchAll(/<|&(?:lt|#0*60|#x0*3c)|\\</gi)) if (!inSafe(m.index)) return true;
+  return false;
+}
+
+/**
  * Reference and footnote definitions are refused anywhere in this file (round 13).
  *
  * Round 12 read markdown-it's env.references, but markdown-it records a definition only
@@ -361,6 +388,8 @@ export function definitionProblems(doc) {
     // included (round 15). No line may start with `<` except the two markers themselves.
     else if (HTML_START_LINE.test(line) && line !== BEGIN && line !== END)
       problems.push(`line ${i + 1} starts with "<" ("${line.trim().slice(0, 40)}") — GitHub may open an HTML block there and hide the lines after it, so write it as text or in a code span`);
+    else if (line !== BEGIN && line !== END && rawLtOutsideSimpleCode(line))
+      problems.push(`line ${i + 1} has "<" outside a one-backtick code span on one line ("${line.trim().slice(0, 40)}") — the renderers disagree on longer code spans, so write it as \`<…>\` or reword it`);
   }
   const env = {};
   const tokens = new MarkdownIt({ html: true }).parse(doc, env);
@@ -370,6 +399,12 @@ export function definitionProblems(doc) {
   // raw and a `<select>` swallowed the inventory (round 20). This file nests 4 deep; any
   // block past MAX_DEPTH is refused, which also covers every depth markdown-it would skip,
   // since the opening tokens of each level below the limit are still emitted.
+  // One table in the file, the inventory (round 21): markdown-it ends a table early once
+  // it has auto-filled 65536 empty cells while cmark-gfm keeps going, so the lines after
+  // a big enough table are text to the gate and table cells on GitHub.
+  const tables = tokens.filter((t) => t.type === "table_open").length;
+  if (tables > 1)
+    problems.push(`the file holds ${tables} tables — only the inventory may be a table, because the renderers disagree on where a large one ends`);
   const deepest = tokens.reduce((d, t) => Math.max(d, t.level), 0);
   if (deepest > MAX_DEPTH)
     problems.push(`the file nests blocks ${deepest} deep (limit ${MAX_DEPTH}) — past markdown-it's nesting limit it stops reading what GitHub still renders, so flatten the quotes or lists`);
@@ -396,8 +431,9 @@ export function definitionProblems(doc) {
     // HTML block needs no check here: it starts a line, and the line scan above refuses that.
     // The line of the `<` itself, not of the paragraph it sits in: the source offset of
     // the first `<`, entity or escape for one, in the inline token's own text.
-    const at = t.type === "inline" ? t.content.search(/<|&lt|&#0*60|&#x0*3c|\\</i) : -1;
-    const ltLine = at < 0 ? line : line + t.content.slice(0, at).split("\n").length - 1;
+    // (skipping a `<` that sits in a one-backtick code span, round 21).
+    const offset = t.type === "inline" ? t.content.split("\n").findIndex((l) => rawLtOutsideSimpleCode(l)) : -1;
+    const ltLine = offset < 0 ? line : line + offset;
     for (const c of t.type === "inline" ? t.children : [])
       if (c.type !== "code_inline" && c.content.includes("<"))
         problems.push(`line ${ltLine} has "<" outside a code span ("${c.content.trim().slice(0, 40)}") — raw HTML in prose can hide or cut the inventory in the browser, so put it in backticks or reword it`);
@@ -841,7 +877,19 @@ function selfTest() {
       [`a ${d}-deep blockquote holding <select> fails (round 20)`, { ...base, doc: good.replace(BEGIN, `${">".repeat(d)} x <select> y\n\n${BEGIN}`) }, "nests blocks"]),
     ["a 17-deep blockquote fails (round 20)", { ...base, doc: good.replace(BEGIN, `${">".repeat(17)} plain text\n\n${BEGIN}`) }, "nests blocks"],
     ["a 3-deep blockquote passes (round 20)", { ...base, doc: good.replace(BEGIN, `>>> plain text\n\n${BEGIN}`) }, null],
-    ["the < refusal names the line the < is on, not the paragraph's first line (round 20)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7.\nsecond line\nthird <select> line") }, "line 3 has"],
+    ["the < refusal names the line the < is on, not the paragraph's first line (round 20)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7.\nsecond line\nthird <select> line") }, 'line 3 has "<" outside a code span ('],
+    // Round 21: a code span only counts as code when every renderer agrees it is one.
+    ...[["<details>", 81], ["<select name=a>", 81], ["<details>", 2]].map(([tag, n]) =>
+      [`a ${tag} between two ${n}-backtick runs fails (round 21)`, { ...base, doc: good.replace(BEGIN, `x ${"`".repeat(n)} ${tag} ${"`".repeat(n)} y\n\n${BEGIN}`) }, "one-backtick code span"]),
+    ["an escaped backtick does not open a code span around <b> (round 21)", { ...base, doc: good.replace(BEGIN, "x \\`<b>` y\n\n" + BEGIN) }, "one-backtick code span"],
+    ["a code span split by a pipe does not shelter <b> (round 21)", { ...base, doc: good.replace(BEGIN, "x `a | <b>` y\n\n" + BEGIN) }, "one-backtick code span"],
+    ["a < in a fenced block line fails too (round 21)", { ...base, doc: good.replace(BEGIN, "```\nx <b> y\n```\n\n" + BEGIN) }, "one-backtick code span"],
+    ["a one-backtick `<Route>` on one line passes (round 21)", { ...base, doc: good.replace(BEGIN, "See `<Route>` and `<` here.\n\n" + BEGIN) }, null],
+    ["a second table anywhere in the file fails (round 21)", { ...base, doc: good.replace(BEGIN, "| a | b |\n|---|---|\n| x | y |\n\n" + BEGIN) }, "holds 2 tables"],
+    ["the < refusal skips a code-span < when naming the line (round 21)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7. See `<Route>`.\nsecond <select> line") }, 'line 2 has "<" outside a code span ('],
+    // A code span opened on the line before closes early here, so <b> is raw on GitHub; the
+    // per-line raw scan pairs this line's backticks wrongly and misses it, markdown-it does not.
+    ["a tag after a code span that opened on the previous line fails (round 21)", { ...base, doc: good.replace(BEGIN, "text `foo\nbar` <b> `x`\n\n" + BEGIN) }, 'outside a code span ('],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

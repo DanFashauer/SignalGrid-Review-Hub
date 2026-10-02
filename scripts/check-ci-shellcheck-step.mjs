@@ -464,6 +464,18 @@ function selfTest() {
   } finally {
     rmSync(bare, { recursive: true, force: true });
   }
+  // checkRepo on a realistically sized repo with one bare install hidden among benign workflows.
+  const sized = mkdtempSync(join(tmpdir(), "shellcheck-gate-sized-"));
+  try {
+    mkdirSync(join(sized, ".github/workflows"), { recursive: true });
+    for (let i = 0; i < FILE_FLOOR; i++) writeFileSync(join(sized, `.github/workflows/w${i}.yml`), "jobs:\n  a:\n    steps:\n      - run: echo hi\n");
+    writeFileSync(join(sized, ".github/workflows/bare.yml"), "jobs:\n  a:\n    steps:\n      - run: sudo apt-get install -y -qq shellcheck\n");
+    const got = checkRepo(sized);
+    if (!got.some((p) => /bare\.yml.*unpinned apt install/.test(p))) { console.error("✗ self-test: checkRepo missed a bare install in a sized repo:", got); bad++; }
+    if (got.some((p) => /below the floor/.test(p))) { console.error("✗ self-test: checkRepo reported the floor on a sized repo:", got); bad++; }
+  } finally {
+    rmSync(sized, { recursive: true, force: true });
+  }
   // strayInstalls driven through a real directory: the repo-wide walk and the non-pinned grammar.
   const tmp = mkdtempSync(join(tmpdir(), "shellcheck-gate-"));
   try {

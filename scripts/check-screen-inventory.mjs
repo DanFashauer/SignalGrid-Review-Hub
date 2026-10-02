@@ -333,13 +333,15 @@ export function rawLtOutsideSimpleCode(line) {
     if (line[j] !== "`") { j += 1; continue; }
     let run = 1;
     while (line[j + run] === "`") run += 1;
-    // The opening backtick must start its word (line start, whitespace or `(`) and that word
+    // The opening backtick must start its word (line start, space, tab or `(`) and that word
     // must not be a URL: GitHub's autolink extension runs a `http://`, `ftp://` or `www.`
     // link up to the next space and takes a touching backtick with it, so the tag after
     // it is raw HTML on GitHub while markdown-it, with linkify off, reads a code span
     // (round 22). Every code span in this file opens after a space, `(` or line start.
-    const word = line.slice(0, j).split(/\s/).pop();
-    if (run === 1 && (j === 0 || /[\s(]/.test(line[j - 1])) && !/:\/\/|www\./i.test(word)) {
+    // ASCII space and tab only (round 23): cmark-gfm ends an autolink at ASCII whitespace
+    // alone, so an NBSP, U+2029, U+3000, VT or FF is still part of the URL to GitHub.
+    const word = line.slice(0, j).split(/[ \t]/).pop();
+    if (run === 1 && (j === 0 || /[ \t(]/.test(line[j - 1])) && !/:\/\/|www\./i.test(word)) {
       let k = j + 1;
       while (k < line.length && !(line[k] === "`" && line[k - 1] !== "`" && line[k + 1] !== "`")) k += 1;
       if (k < line.length && !line.slice(j, k).includes("|")) { safe.push([j, k]); j = k + 1; continue; }
@@ -902,6 +904,11 @@ function selfTest() {
       [`a backtick touching ${pre} does not shelter <details> (round 22)`, { ...base, doc: good.replace(BEGIN, `see ${pre}\`<details>\` y\n\n${BEGIN}`) }, "one-backtick code span"]),
     ["a code span opening after a word character does not shelter <b> (round 22)", { ...base, doc: good.replace(BEGIN, "x y`<b>` z\n\n" + BEGIN) }, "one-backtick code span"],
     ["a code span after a URL and a space still passes (round 22)", { ...base, doc: good.replace(BEGIN, "see http://a.b/ `<b>` and (`<c>`) y\n\n" + BEGIN) }, null],
+    // Round 23: only ASCII space and tab end a GitHub autolink.
+    ...[["NBSP", "\u00a0"], ["U+2029", "\u2029"], ["U+3000", "\u3000"], ["VT", "\v"], ["FF", "\f"], ["U+202F", "\u202f"]].map(([name, ch]) =>
+      [`a URL then ${name} then a backtick does not shelter <details> (round 23)`, { ...base, doc: good.replace(BEGIN, `see http://a.b/${ch}\`<details>\` y\n\n${BEGIN}`) }, "one-backtick code span"]),
+    ["a URL then NBSP then ( then a code span does not shelter <details> (round 23)", { ...base, doc: good.replace(BEGIN, "see http://a.b/\u00a0(`<details>` y\n\n" + BEGIN) }, "one-backtick code span"],
+    ["a URL then a tab then a code span still passes (round 23)", { ...base, doc: good.replace(BEGIN, "see http://a.b/\t`<b>` y\n\n" + BEGIN) }, null],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

@@ -15,7 +15,7 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, relative, resolve } from "node:path";
@@ -273,7 +273,21 @@ function killIfSame(r, startOf, kill) {
   const blind = killIfSame({ pid: 7, start: "" }, () => "", () => { killed += 100; });
   check("killIfSame: the same process is killed; a reused pid (different start time) and an unreadable start are NOT", same === true && reused === false && blind === false && killed === 1);
 }
-function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
+// What the gate does when IT is signalled (SIGINT/SIGTERM/SIGHUP) while the e2e block has the tree: kill its
+// sweeps (the SIGKILLed sweep's journal sits in the gate's scratch dir, which nothing else reads), put the target
+// back to HEAD's bytes, drop its lock, and exit. Each step is isolated so one failing cannot skip the restore.
+function gateShutdown({ killSweeps, restoreTarget, clearLock, cleanup, exit }, code) {
+  for (const step of [killSweeps, restoreTarget, clearLock, cleanup]) { try { step(); } catch { /* never skip the next step */ } }
+  exit(code);
+}
+{
+  const order = [];
+  const steps = { killSweeps: () => { order.push("kill"); throw new Error("boom"); }, restoreTarget: () => order.push("restore"), clearLock: () => order.push("clear"), cleanup: () => order.push("cleanup"), exit: (c) => order.push(`exit${c}`) };
+  gateShutdown(steps, 143);
+  check("gateShutdown: kills sweeps, restores the target, clears the lock, cleans up, exits — and a failing step never skips the restore", order.join(",") === "kill,restore,clear,cleanup,exit143");
+}
+function e2ePrecondition({ lockDir, headBytes, workBytes, isRegular = true, isAlive }) {
+  if (isRegular !== true) return false; // a symlink or other non-regular file passes a bytes comparison but is not the file git tracks
   // The bytes the gate will treat as "the original" are HEAD's, and the working file must equal them NOW.
   if (lockDir === null || !Buffer.isBuffer(headBytes) || !Buffer.isBuffer(workBytes) || !headBytes.equals(workBytes)) return false;
   if (journalLive(lockDir, isAlive).length > 0) return false;
@@ -313,6 +327,12 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
   } finally { process.env.PATH = oldPath; rmSync(bin, { recursive: true, force: true }); }
 }
 
+// KNOWN CEILINGS of this block (also in docs/BUILD_BACKLOG.md): the lock is per TMPDIR (a gate and a sweep under
+// different TMPDIRs share none — the HEAD-bytes precondition is their only protection); a commit that touches the
+// target while the gate runs leaves the working file differing from the NEW HEAD (the gate restores the bytes HEAD
+// had at its start; it goes red and the content is in git); a SIGKILL of the gate leaves its marker journal, which the
+// next start refuses over and `--restore-stale` applies; originals are restored as UTF-8 text (all registered files
+// round-trip; invalid UTF-8 would not) and a CRLF registered file yields 0 mutations (pre-existing).
 // ── END TO END: the real signal path, through the real sweep ──────────────────────────────────
 // The helpers above are pure. The defect this PR exists for lives in main(): the signal handlers,
 // the journal-BEFORE-write ordering, the async process-group runner, the lock marker and the startup
@@ -325,12 +345,8 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
 // real dead sweep's journal in the shared temp dir (an earlier version `rm -r`'d it — the recovery
 // record). It never matches processes by name: it records the sweep's own descendants by pid. The
 // target's bytes are saved and written back in `finally`, so a regression cannot leave the tree dirty.
-{
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repo = resolve(here, "..");
-  const guard = join(here, "mutation-guard.mjs");
+async function runE2e({ repo, guard, target, check, signalProc = process, afterLock = null }) {
   const PROOF = "proof:carrier-reachability";
-  const target = join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts");
   // "The original" is what HEAD says, as BYTES — never what the working tree holds at this instant (that
   // could be a live sweep's mutant). The precondition then requires the working file to equal it.
   const headBytes = (() => { const r = spawnSync("git", ["show", `HEAD:${relative(repo, target)}`], { cwd: repo, maxBuffer: 64 * 1024 * 1024 }); return r.status === 0 && Buffer.isBuffer(r.stdout) ? r.stdout : null; })();
@@ -346,16 +362,36 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
   const lockDir = (() => { try { return journalDir(repo); } catch { return null; } })();
   let lockHeld = false;
   let preconditionOk = false;
+  let installed = 0;
+  const kids = new Set();
+  const live = [];
+  const restoreTarget = () => { if (shouldRestoreTarget(lockHeld, readFileSync(target), headBytes)) writeFileSync(target, headBytes); };
+  const clearLock = () => { if (lockHeld) journalClear(lockDir, process.pid); };
+  const handlers = [];
   try {
-    preconditionOk = e2ePrecondition({ lockDir, headBytes, workBytes: readFileSync(target) });
-    if (preconditionOk) { journalWrite(lockDir, process.pid, []); lockHeld = true; }
+    preconditionOk = e2ePrecondition({ lockDir, headBytes, workBytes: readFileSync(target), isRegular: lstatSync(target).isFile() });
+    if (preconditionOk) {
+      // The lock marker also JOURNALS the target with HEAD's bytes, so even a SIGKILL of the gate leaves a record
+      // `--restore-stale` can act on (the sweeps' own journals live in this gate's scratch dir, which nothing else reads).
+      journalWrite(lockDir, process.pid, [{ file: relative(repo, target), original: headBytes.toString("utf8") }]);
+      lockHeld = true;
+      for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
+        const h = () => gateShutdown({
+          killSweeps: () => { for (const c of kids) { for (const r of record(descendants(c.pid))) live.push(r); try { c.kill("SIGKILL"); } catch { /* gone */ } } for (const r of live) killRecorded(r, true); },
+          restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), exit: (c) => signalProc.exit(c),
+        }, code);
+        signalProc.on(sig, h); handlers.push([sig, h]);
+      }
+      installed = signalProc.listenerCount("SIGTERM");
+    }
   } catch { preconditionOk = false; }
   const startSweep = (args = []) => {
     const child = spawn("node", [guard, `--proof=${PROOF}`, ...args], { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { out += d; });
-    const exited = new Promise((r) => child.on("close", (code, signal) => r({ code, signal, out })));
+    kids.add(child);
+    const exited = new Promise((r) => child.on("close", (code, signal) => { kids.delete(child); r({ code, signal, out }); }));
     return { child, exited, output: () => out };
   };
   const waitFor = async (fn, limitMs) => { for (let t = 0; t < limitMs; t += 50) { if (fn()) return true; await sleep(50); } return false; };
@@ -389,9 +425,11 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
     if (existsSync("/proc/self")) { try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch { return true; } }
     try { process.kill(pid, 0); return false; } catch { return true; }
   };
-  const live = [];
   try {
-    if (!preconditionOk) {
+    if (afterLock) {
+      // test hook: instead of the sweeps, run `afterLock` WHILE the lock and handlers are held (throwaway-repo tests only)
+      if (preconditionOk) await afterLock({ lockDir });
+    } else if (!preconditionOk) {
       check("end-to-end signal test: precondition (target identical to HEAD; no live sweep or gate; no unrecovered journal) — refused to run and touched nothing", false);
     } else {
       // 1. SIGTERM mid-mutation, with a second sweep refused meanwhile
@@ -438,11 +476,66 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
     }
   } finally {
     // Cleanup never throws past the summary line, and never writes unless this gate took the lock.
-    try { if (shouldRestoreTarget(lockHeld, readFileSync(target), headBytes)) writeFileSync(target, headBytes); } catch { /* reported by the checks */ }
+    for (const [sig, h] of handlers) signalProc.removeListener(sig, h);
+    try { restoreTarget(); } catch { /* reported by the checks */ }
     for (const r of live) { try { if (!isDead(r.pid)) killRecorded(r, false); } catch { /* gone */ } }
-    try { if (lockHeld) journalClear(lockDir, process.pid); } catch { /* a leftover marker is a dead-pid empty journal: cleared by the next start */ }
+    try { clearLock(); } catch (err) { console.error(`  note: could not remove the gate's lock marker (${err instanceof Error ? err.message : String(err)}); it is a dead-pid journal and the next sweep start clears it`); }
     try { rmSync(scratch, { recursive: true, force: true }); } catch { /* scratch only */ }
   }
+  return { preconditionOk, installed };
+}
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const repo = resolve(here, "..");
+  await runE2e({ repo, guard: join(here, "mutation-guard.mjs"), target: join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts"), check });
+}
+
+// ── The e2e call sites, exercised in a THROWAWAY git repo (no sweep is run: the block stops after taking the lock) ──
+// These pin what the helper tests cannot: where `original` comes from, who may write the target back, that the
+// gate is signal-safe, and that a non-regular file is refused.
+{
+  const sh = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+  const mkRepo = () => {
+    const r = mkdtempSync(join(tmpdir(), "mg-throwaway-"));
+    sh(r, "init", "-q"); sh(r, "config", "user.email", "t@example.invalid"); sh(r, "config", "user.name", "t");
+    mkdirSync(join(r, "lib")); writeFileSync(join(r, "lib/t.ts"), "HEAD bytes\n"); sh(r, "add", "-A"); sh(r, "commit", "-q", "-m", "c");
+    return r;
+  };
+  const results = [];
+  const quiet = () => {};
+  const repos = [];
+  try {
+    // (a) a target with an uncommitted edit: refused, byte-identical afterwards, no handlers installed
+    const dirty = mkRepo(); repos.push(dirty);
+    writeFileSync(join(dirty, "lib/t.ts"), "DEV EDIT, uncommitted\n");
+    const fakeA = Object.assign(new EventEmitter(), { exit() {} });
+    const ra = await runE2e({ repo: dirty, guard: "/nonexistent", target: join(dirty, "lib/t.ts"), check: quiet, signalProc: fakeA, afterLock: async () => {} });
+    results.push(["e2e call site: a target with an uncommitted edit is REFUSED, and the edit survives byte-for-byte (original comes from HEAD, the refused path never writes)",
+      ra.preconditionOk === false && readFileSync(join(dirty, "lib/t.ts"), "utf8") === "DEV EDIT, uncommitted\n" && fakeA.listenerCount("SIGTERM") === 0]);
+    // (b) a symlink to byte-identical content: refused
+    const link = mkRepo(); repos.push(link);
+    writeFileSync(join(link, "same.bin"), "HEAD bytes\n");
+    rmSync(join(link, "lib/t.ts")); symlinkSync(join(link, "same.bin"), join(link, "lib/t.ts"));
+    const rb = await runE2e({ repo: link, guard: "/nonexistent", target: join(link, "lib/t.ts"), check: quiet, signalProc: new EventEmitter(), afterLock: async () => {} });
+    results.push(["e2e call site: a target replaced by a symlink to identical bytes is REFUSED (not a regular file)", rb.preconditionOk === false]);
+    // (c) clean target: the lock marker journals HEAD's bytes; a mutant + SIGTERM while locked is restored from HEAD, exit 143, lock dropped
+    const clean = mkRepo(); repos.push(clean);
+    const tgt = join(clean, "lib/t.ts");
+    let exitedWith = null; let markerJournalsHead = false; let restoredAfterSignal = false; let lockGone = false;
+    const fakeC = Object.assign(new EventEmitter(), { exit(c) { exitedWith = c; } });
+    const rc = await runE2e({ repo: clean, guard: "/nonexistent", target: tgt, check: quiet, signalProc: fakeC, afterLock: async ({ lockDir }) => {
+      const marker = JSON.parse(readFileSync(join(lockDir, `${process.pid}.json`), "utf8"));
+      markerJournalsHead = marker.entries.length === 1 && marker.entries[0].original === "HEAD bytes\n" && marker.entries[0].file === "lib/t.ts";
+      writeFileSync(tgt, "MUTANT\n");               // a sweep's mutation, left on disk
+      fakeC.emit("SIGTERM");                          // the gate is signalled in the window
+      restoredAfterSignal = readFileSync(tgt, "utf8") === "HEAD bytes\n";
+      lockGone = !existsSync(join(lockDir, `${process.pid}.json`));
+    } });
+    results.push(["e2e call site: the gate's lock marker JOURNALS the target with HEAD's bytes (a SIGKILLed gate leaves a record --restore-stale can use)", markerJournalsHead]);
+    results.push(["e2e call site: SIGTERM to the gate while it holds a mutant restores the target from HEAD, drops the lock and exits 143", rc.preconditionOk === true && restoredAfterSignal && lockGone && exitedWith === 143]);
+    results.push(["e2e call site: SIGINT/SIGTERM/SIGHUP handlers are installed once the lock is held, and removed afterwards (no leak)", rc.installed >= 1 && fakeC.listenerCount("SIGTERM") === 0]);
+  } finally { for (const r of repos) { try { rmSync(r, { recursive: true, force: true }); } catch { /* scratch */ } } }
+  for (const [name, ok] of results) check(name, ok);
 }
 
 check("classifyRun: pass → survivor, fail/no summary → killed, timeout → hung",

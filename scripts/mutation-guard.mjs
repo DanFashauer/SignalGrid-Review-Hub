@@ -1578,6 +1578,9 @@ function killGroup(child) {
  * catchable signal can kill its whole tree before the restore; a group-wide SIGKILL of the guard
  * therefore leaves the proof child running as an orphan (the journal + next-start refusal still
  * protect the tree), and a proof's own `setsid`/detached grandchild escapes the group kill.
+ * Also: the lock is per TMPDIR (two sweeps under different TMPDIRs share none; the second fails closed at its
+ * baseline); the startup lock is check-then-write, not atomic; originals are restored as UTF-8 text (invalid
+ * UTF-8 would not round-trip — all registered files do); a CRLF registered file yields 0 mutations.
  */
 export function installRestore({ jDir, pid, proc = process, getChild = () => null, root = repoRoot }) {
   let reported = false;

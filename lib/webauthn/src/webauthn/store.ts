@@ -6,7 +6,7 @@
 // throws (fails closed) rather than degrading to a racy GET+DEL. Managed Redis
 // (AWS/GCP/Azure/Upstash) is 6.2+/7.x, so this holds by default.
 
-import { randomUUID } from 'node:crypto';
+import { createHash, createPublicKey, randomUUID } from 'node:crypto';
 import type { WebAuthnUser, WebAuthnCredential, WebAuthnChallenge, StepUpSession } from './types';
 
 const USER_PREFIX = 'webauthn:user:';
@@ -43,8 +43,103 @@ async function getRedisClient() {
   return client;
 }
 
+/**
+ * REVOCATION TOMBSTONES (PR #1240 review, plan row 82). `removeCredential` used to
+ * delete a credential and leave no trace of it, so the duplicate check in
+ * `addCredential` had nothing to find: an enrolment ceremony minted before a revocation
+ * (options carry `excludeCredentials: []`) and completed after it re-presented the
+ * revoked authenticator and got `stored: true` — the revoked credential live again. The
+ * lock could not help; the two calls ran one after the other, not at the same time.
+ *
+ * Every removal now tombstones the credential, in the SAME fenced write that removes it
+ * (Redis: one Lua script; memory: no await between), and `addCredential` refuses a
+ * tombstoned credential by THROWING `CredentialRevokedError`. Two members per removal:
+ *   - `id:<credentialId>` — the id that was revoked;
+ *   - `key:<fingerprint>` — the KEY that was revoked. With `none` attestation nothing
+ *     signs the credential id (it is whatever the client writes into authData), so an
+ *     id-only tombstone let the revoked key back in under a fresh id and release a
+ *     step-up with the revoked authenticator (adversarial review, reproduced). The
+ *     fingerprint is of the key's SPKI DER, so a respelled JWK is the same key.
+ * Durable, no TTL, and deliberately NOT deleted with the user record: a tombstone that
+ * vanished when the last credential went would reopen the gap for exactly the identity
+ * that had just been fully revoked.
+ *
+ * Its own namespace, `webauthn:revoked:<userId>`. It first lived at
+ * `webauthn:user:<userId>:revoked` — which is ALSO the record key of the identity
+ * "<identityRef>:revoked" (identityRef is caller text): enrolling that identity made the
+ * victim's revocation fail on WRONGTYPE after deleting the record, with no tombstone
+ * written (adversarial review, reproduced; Lua does not roll back).
+ *
+ * REDIS DEPLOYMENT REQUIREMENT (beyond >= 6.2 above): a tombstone that silently vanishes
+ * reads as "not revoked". Run the credential store with `maxmemory-policy noeviction`
+ * (or a `volatile-*` policy — tombstones carry no TTL, so those never pick them) and with
+ * persistence on; an `allkeys-*` policy or a restart without persistence reopens gap 1.
+ *
+ * Scope: per identity, and only credentials that were actually removed — a revoke that
+ * removed nothing records nothing. A conforming authenticator mints a new key pair and
+ * credential id on every registration, so re-enrolling the same device is accepted; what
+ * is refused is the revoked credential. (This is option B of two; the PR that added it
+ * sets out the other — invalidating outstanding enrolment ceremonies on revoke — for the
+ * owner to choose between.)
+ */
+const REVOKED_PREFIX = 'webauthn:revoked:';
+
+/** Canonical fingerprint of a stored public key: SHA-256 of its SPKI DER, so the same key
+ *  reads the same however its JWK was spelled (member order, padding). A value that does
+ *  not import as a key is fingerprinted by its exact string — it can never verify an
+ *  assertion, so an exact match is all it needs. Synchronous: the in-memory writers must
+ *  not await between their read and their write. */
+function keyFingerprint(publicKey: string): string {
+  try {
+    const { jwk } = JSON.parse(publicKey) as { jwk: Record<string, string> }; // the VerifiableKey shape (verify.ts)
+    const der = createPublicKey({ key: jwk, format: 'jwk' }).export({ type: 'spki', format: 'der' });
+    return `spki:${createHash('sha256').update(der).digest('base64url')}`;
+  } catch {
+    return `raw:${createHash('sha256').update(publicKey).digest('base64url')}`;
+  }
+}
+
+/** The two tombstone members for one credential — see REVOKED_PREFIX. */
+function tombstoneMembers(credential: Pick<WebAuthnCredential, 'id' | 'publicKey'>): [string, string] {
+  return [`id:${credential.id}`, `key:${keyFingerprint(credential.publicKey)}`];
+}
+
+/**
+ * Take `credentialId` out of `user` — AND every other credential on the identity that
+ * carries the same KEY — and return the tombstone members for all of them, or null when
+ * the id is not enrolled. Mutates `user.credentials`.
+ *
+ * Revoking a credential revokes its key (review round 1, MEDIUM, reproduced on both
+ * stores). `addCredential` dedupes by id, so one key can sit on an identity under two ids
+ * (with `none` attestation, just by presenting it twice). Removing only the named id
+ * tombstoned the key but left its twin enrolled, and a step-up signed by the revoked key
+ * under the twin was released. Synchronous: the in-memory writer must not await between
+ * its read and its write.
+ */
+function takeRevokedKey(user: WebAuthnUser, credentialId: string): string[] | null {
+  const named = user.credentials.find((c) => c.id === credentialId);
+  if (!named) return null;
+  const revokedKey = keyFingerprint(named.publicKey);
+  const revoked = user.credentials.filter((c) => c.id === credentialId || keyFingerprint(c.publicKey) === revokedKey);
+  user.credentials = user.credentials.filter((c) => !revoked.includes(c));
+  return [...new Set(revoked.flatMap((c) => tombstoneMembers(c)))];
+}
+
+/** Thrown by `addCredential` for a credential (id or key) this identity revoked. A throw, not
+ *  `{ stored: false }`: that shape already means "already enrolled, kept", and a caller
+ *  reading only `stored` would report a refused revival as a successful re-enrolment. */
+export class CredentialRevokedError extends Error {
+  readonly credentialId: string;
+  constructor(credentialId: string) {
+    super('WebAuthn credential (its id or its public key) was revoked for this identity; a revoked credential cannot be re-enrolled');
+    this.name = 'CredentialRevokedError';
+    this.credentialId = credentialId;
+  }
+}
+
 // In-memory fallback
 const inMemoryUsers: Map<string, WebAuthnUser> = new Map();
+const inMemoryRevoked: Map<string, Set<string>> = new Map();
 const inMemoryChallenges: Map<string, { challenge: WebAuthnChallenge; userId?: string }> = new Map();
 const inMemoryStepUps: Map<string, StepUpSession> = new Map();
 
@@ -180,9 +275,20 @@ const RELEASE_LOCK_LUA =
  */
 const FENCED_SET_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('set', KEYS[2], ARGV[2]); return 1 else return 0 end";
-/** Same fence as `FENCED_SET_LUA`, for the delete-on-last-credential path. */
-const FENCED_DEL_LUA =
-  "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('del', KEYS[2]); return 1 else return 0 end";
+/** The revocation write: same fence as `FENCED_SET_LUA`, and in the SAME script it adds
+ *  every tombstone member (ARGV[4..]) to the tombstone set (KEYS[3]) and removes the
+ *  credentials (SET the remaining record, or DEL it when none remain — ARGV[2] =
+ *  'set' | 'del', ARGV[3] = the record). A lost lock writes neither half.
+ *  THE TOMBSTONE GOES FIRST: Lua does not roll back, and SADD is the one step that can
+ *  fail on the data (a wrong-typed key), so a failure there aborts before the removal —
+ *  the revocation errors with the credential still enrolled, which is truthful — rather
+ *  than removing it and leaving no tombstone (the order this script first had). */
+const FENCED_REVOKE_LUA =
+  "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+  "local members = {} for i = 4, #ARGV do members[#members + 1] = ARGV[i] end; " +
+  "redis.call('sadd', KEYS[3], unpack(members)); " +
+  "if ARGV[2] == 'del' then redis.call('del', KEYS[2]) else redis.call('set', KEYS[2], ARGV[3]) end; " +
+  "return 1 else return 0 end";
 
 type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
 
@@ -192,7 +298,9 @@ type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
  *  fail-closed refusal ("lock lost; not reporting a write that did not happen"). */
 interface LockFence {
   set(value: string): Promise<boolean>;
-  del(): Promise<boolean>;
+  /** Tombstone `members` and remove the credential — writing `remaining`, or deleting
+   *  the record when it is null — in one fenced script (`FENCED_REVOKE_LUA`). */
+  revoke(members: string[], remaining: string | null): Promise<boolean>;
 }
 
 /**
@@ -231,8 +339,11 @@ async function withUserLock<T>(
       const result = await redis.eval(FENCED_SET_LUA, 2, lockKey, key, lockToken, value);
       return result === 1;
     },
-    async del(): Promise<boolean> {
-      const result = await redis.eval(FENCED_DEL_LUA, 2, lockKey, key, lockToken);
+    async revoke(members: string[], remaining: string | null): Promise<boolean> {
+      const result = await redis.eval(
+        FENCED_REVOKE_LUA, 3, lockKey, key, `${REVOKED_PREFIX}${userId}`,
+        lockToken, remaining === null ? 'del' : 'set', remaining ?? '', ...members,
+      );
       return result === 1;
     },
   };
@@ -262,13 +373,20 @@ async function withUserLock<T>(
 }
 
 /** Returns `stored: false` when a credential with this id was already enrolled and
- *  the existing record was kept unchanged — the caller must not report a store. */
+ *  the existing record was kept unchanged — the caller must not report a store.
+ *  THROWS `CredentialRevokedError` when this identity revoked this credential's id or
+ *  key (see `REVOKED_PREFIX`); checked under the lock the revocation writes under. */
 export async function addCredential(userId: string, credential: WebAuthnCredential): Promise<{ stored: boolean }> {
   if (redisConfigured()) {
     return withUserLock(
       userId,
       "WebAuthn credential enrollment could not acquire the per-user lock; not reporting an enrollment that was not persisted",
       async (redis, key, fence) => {
+        // A failed read here propagates (no enrolment), never reads as "not revoked".
+        const hits = await redis.smismember(`${REVOKED_PREFIX}${userId}`, ...tombstoneMembers(credential));
+        if (hits.some((hit) => hit === 1)) {
+          throw new CredentialRevokedError(credential.id);
+        }
         const data = await redis.get(key);
         const user: WebAuthnUser = data
           ? (JSON.parse(data) as WebAuthnUser)
@@ -300,6 +418,10 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
   // between the read and the mutation, so it cannot interleave — the same guarantee
   // advanceCredentialCounter and getAndDeleteChallenge rely on in this mode. (The old
   // code awaited getUser() here, which opened exactly the interleave it needed to avoid.)
+  const revokedHere = inMemoryRevoked.get(userId);
+  if (revokedHere && tombstoneMembers(credential).some((m) => revokedHere.has(m))) {
+    throw new CredentialRevokedError(credential.id);
+  }
   const existing = inMemoryUsers.get(userId);
   if (existing) {
     const stored = !existing.credentials.some((c) => c.id === credential.id);
@@ -316,8 +438,10 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
 }
 
 /**
- * Remove one credential from a user's enrollment record ATOMICALLY; the record itself
- * is deleted when its last credential goes.
+ * Remove one credential from a user's enrollment record ATOMICALLY — together with any
+ * other id on the identity carrying the same key (see `takeRevokedKey`); the record itself
+ * is deleted when its last credential goes. Every removed id, and the key, is tombstoned
+ * in the same write, so no later enrolment can bring them back (see `REVOKED_PREFIX`).
  *
  * Returns `false` when there was nothing to remove — no such user, or no such
  * credential on that user. That is the fail-closed answer for a revoke caller: it never
@@ -346,32 +470,24 @@ export async function removeCredential(userId: string, credentialId: string): Pr
           return false;
         }
         const user = JSON.parse(data) as WebAuthnUser;
-        const index = user.credentials.findIndex((c) => c.id === credentialId);
-        if (index === -1) {
+        const members = takeRevokedKey(user, credentialId);
+        if (members === null) {
           inMemoryUsers.set(userId, user);
           return false;
         }
-        user.credentials.splice(index, 1);
-        // Both branches are fenced against OUR lock token (FENCED_DEL_LUA / FENCED_SET_LUA):
-        // a failure — including a lease that expired or was deleted mid-section — throws
-        // rather than reporting `true` over a write that never landed.
-        if (user.credentials.length === 0) {
-          const removed = await fence.del();
-          if (!removed) {
-            throw new Error(
-              "WebAuthn credential revocation: lock lost; not reporting a write that did not happen",
-            );
-          }
-          inMemoryUsers.delete(userId);
-          return true;
-        }
-        const wrote = await fence.set(JSON.stringify(user));
+        // One fenced script (FENCED_REVOKE_LUA) tombstones every id and the key and removes
+        // the credentials — deleting the record when none remain. A failure, including a
+        // lease that expired or was deleted mid-section, throws rather than reporting
+        // `true` over a write that never landed.
+        const last = user.credentials.length === 0;
+        const wrote = await fence.revoke(members, last ? null : JSON.stringify(user));
         if (!wrote) {
           throw new Error(
             "WebAuthn credential revocation: lock lost; not reporting a write that did not happen",
           );
         }
-        inMemoryUsers.set(userId, user);
+        if (last) inMemoryUsers.delete(userId);
+        else inMemoryUsers.set(userId, user);
         return true;
       },
     );
@@ -380,15 +496,57 @@ export async function removeCredential(userId: string, credentialId: string): Pr
   // No Redis configured: single-process in-memory mode, NO await from read to write.
   const user = inMemoryUsers.get(userId);
   if (!user) return false;
-  const index = user.credentials.findIndex((c) => c.id === credentialId);
-  if (index === -1) return false;
-  user.credentials.splice(index, 1);
+  const members = takeRevokedKey(user, credentialId);
+  if (members === null) return false;
+  const tombstones = inMemoryRevoked.get(userId) ?? new Set<string>();
+  for (const member of members) tombstones.add(member);
+  inMemoryRevoked.set(userId, tombstones);
   if (user.credentials.length === 0) {
     inMemoryUsers.delete(userId);
   } else {
     inMemoryUsers.set(userId, user);
   }
   return true;
+}
+
+/**
+ * Re-read ONE credential immediately before a step-up is released, under the per-user
+ * lock every writer of the record takes (PR #1240 review, plan row 82).
+ *
+ * `verifyAuthentication` reads the credential early — before the signature check — and
+ * only touched the store again through `advanceCredentialCounter`, which runs only when
+ * the signature counter increases. An always-zero-counter authenticator (every platform
+ * passkey) therefore never re-checked revocation: a revocation that committed after the
+ * early read still released the step-up. This is the last store read before release,
+ * and the release's linearisation point: a revocation that committed before it refuses
+ * the release, one that commits after it is after the release.
+ *
+ * True only when the credential is still enrolled on this identity with the SAME public
+ * key the assertion was verified against. Failing to take the lock, or to read, THROWS —
+ * an unreadable record is never read as "still enrolled".
+ */
+export async function confirmCredentialEnrolled(
+  userId: string,
+  credentialId: string,
+  publicKey: string,
+): Promise<boolean> {
+  if (redisConfigured()) {
+    return withUserLock(
+      userId,
+      "WebAuthn step-up release could not acquire the per-user lock; not releasing over a credential it could not re-read",
+      async (redis, key) => {
+        const data = await redis.get(key);
+        if (!data) return false;
+        const user = JSON.parse(data) as WebAuthnUser;
+        return user.credentials.some((c) => c.id === credentialId && c.publicKey === publicKey);
+      },
+    );
+  }
+
+  // No Redis configured: the in-memory writers have no await between read and write, so
+  // this synchronous read is already ordered against every one of them.
+  const user = inMemoryUsers.get(userId);
+  return (user?.credentials ?? []).some((c) => c.id === credentialId && c.publicKey === publicKey);
 }
 
 export async function getCredentialsForUser(userId: string): Promise<WebAuthnCredential[]> {

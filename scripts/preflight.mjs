@@ -634,6 +634,7 @@ const STEPS = [
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
+  { name: "Proof: webauthn-revocation (a revoked credential stays revoked; re-read before release)", cmd: ["pnpm", "run", "proof:webauthn-revocation"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight
   // stays deterministic and needs no Postgres, and an operator who HAS a database

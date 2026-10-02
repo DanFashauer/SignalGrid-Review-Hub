@@ -25,6 +25,8 @@ export type AuditEventType =
   | "telemetry.sync.completed_with_errors"
   | "telemetry.sync.failed"
   | "security.webauthn.registered"
+  // A registration refused at the store (today: a revoked credential, by id or key, re-presented).
+  | "security.webauthn.registration.refused"
   | "security.webauthn.step_up.success"
   | "security.webauthn.step_up.failure"
   // Phase 5: SIEM events

@@ -1,0 +1,289 @@
+{
+  "source": "keycloak",
+  "capturedFrom": "http://127.0.0.1:8480",
+  "keycloakVersion": "26.4.7",
+  "realm": "sg-access-gov",
+  "provenance": {
+    "proof": "proof:live-keycloak-access-governance",
+    "kind": "wire-vs-fixture",
+    "note": "The fixture is the documented-default admin-API shapes committed BEFORE the first live run. A later fixture correction does not rewrite a recorded first-run divergence. No ids, timestamps or tokens are recorded."
+  },
+  "seedRoute": [
+    "DELETE /admin/realms/sg-access-gov",
+    "POST /admin/realms {realm, enabled}",
+    "POST /roles (ward-nurse, pharmacy-admin)",
+    "POST /groups (ward-a, it-helpdesk)",
+    "POST /groups/{it-helpdesk}/role-mappings/clients/{realm-management} [manage-users]",
+    "POST /users {username, enabled, groups: [paths]} (one per persona)",
+    "POST /users/{id}/role-mappings/realm [direct roles]",
+    "default roles NOT seeded: Keycloak assigns them itself, which is what is under test"
+  ],
+  "personas": [
+    {
+      "username": "ag-nurse",
+      "fixture": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "in_scope",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "unverified",
+          "GOVERNANCE_STATE_UNKNOWN",
+          "step_up"
+        ]
+      },
+      "wire": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "over_privileged",
+          "OVER_PRIVILEGED",
+          "step_up"
+        ]
+      }
+    },
+    {
+      "username": "ag-nurse-extra",
+      "fixture": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:pharmacy-admin",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "over_privileged",
+          "OVER_PRIVILEGED",
+          "step_up"
+        ]
+      },
+      "wire": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:pharmacy-admin",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "over_privileged",
+          "OVER_PRIVILEGED",
+          "step_up"
+        ]
+      }
+    },
+    {
+      "username": "ag-group-admin",
+      "fixture": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "client:realm-management:manage-users",
+          "group:/it-helpdesk",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "over_privileged",
+          "OVER_PRIVILEGED",
+          "step_up"
+        ]
+      },
+      "wire": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "client:realm-management:manage-users",
+          "group:/it-helpdesk",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "over_privileged",
+          "OVER_PRIVILEGED",
+          "step_up"
+        ]
+      }
+    },
+    {
+      "username": "ag-leaver",
+      "fixture": {
+        "account": "disabled",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "in_scope",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "disabled_active",
+          "ACCOUNT_DISABLED_ACTIVE",
+          "escalate"
+        ]
+      },
+      "wire": {
+        "account": "disabled",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "over_privileged",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "disabled_active",
+          "ACCOUNT_DISABLED_ACTIVE",
+          "escalate"
+        ]
+      }
+    },
+    {
+      "username": "ag-missing",
+      "fixture": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization"
+        ],
+        "scope": "out_of_scope",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "unscoped",
+          "ENTITLEMENT_OUT_OF_SCOPE",
+          "restrict"
+        ]
+      },
+      "wire": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "group:/ward-a",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization"
+        ],
+        "scope": "out_of_scope",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "unscoped",
+          "ENTITLEMENT_OUT_OF_SCOPE",
+          "restrict"
+        ]
+      }
+    },
+    {
+      "username": "ag-undeclared",
+      "fixture": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:view-profile",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "unknown",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "unverified",
+          "GOVERNANCE_STATE_UNKNOWN",
+          "step_up"
+        ]
+      },
+      "wire": {
+        "account": "active",
+        "entitlements": [
+          "client:account:manage-account",
+          "client:account:manage-account-links",
+          "client:account:view-profile",
+          "realm:default-roles-sg-access-gov",
+          "realm:offline_access",
+          "realm:uma_authorization",
+          "realm:ward-nurse"
+        ],
+        "scope": "unknown",
+        "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
+        "verdict": [
+          "unverified",
+          "GOVERNANCE_STATE_UNKNOWN",
+          "step_up"
+        ]
+      }
+    }
+  ],
+  "divergences": [
+    "divergence: ag-nurse.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
+    "divergence: ag-nurse.scope fixture=in_scope wire=over_privileged",
+    "divergence: ag-nurse.verdict fixture=unverified/GOVERNANCE_STATE_UNKNOWN/step_up wire=over_privileged/OVER_PRIVILEGED/step_up",
+    "divergence: ag-nurse-extra.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
+    "divergence: ag-group-admin.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
+    "divergence: ag-leaver.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
+    "divergence: ag-leaver.scope fixture=in_scope wire=over_privileged",
+    "divergence: ag-missing.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
+    "divergence: ag-undeclared.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]"
+  ],
+  "verdictLine": "wire-vs-fixture: DIVERGED on 9 axes — ag-nurse.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]"
+}

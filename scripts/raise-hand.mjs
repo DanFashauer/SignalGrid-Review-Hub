@@ -89,13 +89,18 @@ async function raise() {
   // DR-054's fourth field: who can unblock it. check-raised-hands.mjs (preflight + CI) rejects a hand
   // whose whoCanUnblock is empty or not a role / owner / lane, so a writer that let one through would
   // turn mainline red on the merge. Refuse here, with the same predicate.
-  const { whoIsValid, rosterRoleIds } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "check-raised-hands.mjs")).href);
+  const { whoIsValid, rosterRoleIds, coverProblem } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "check-raised-hands.mjs")).href);
   if (!whoIsValid(val("--who"), rosterRoleIds())) {
-    console.error(`raise-hand: --who "${val("--who") ?? ""}" must be owner, "mac lane", "cloud lane", "the other lane" or an org-roster role id (docs/agent/org-roster.json) — DR-054 needs WHO can unblock it.`);
+    console.error(`raise-hand: --who "${val("--who") ?? ""}" must be owner, "mac lane", "cloud lane", "the other lane", tool:<name> or an org-roster role id (docs/agent/org-roster.json) — DR-054 needs WHO can unblock it.`);
     process.exit(2);
   }
-  const badCover = argv.flatMap((a, i) => (a === "--covers" ? [argv[i + 1]] : [])).find((c) => !/^[a-z-]+:.+/.test(String(c ?? "")));
-  if (badCover !== undefined) { console.error(`raise-hand: --covers "${badCover}" must look like kind:<id> (mail:<message-id>, sim:<id>, heartbeat:<routine>, …).`); process.exit(2); }
+  // Same predicate as the schema: a cover the stale-hand rule can never match (a typo'd kind, a trailing
+  // space, `--covers` as the last argument) is refused here instead of turning CI red after the merge.
+  for (const [i, a] of argv.entries()) {
+    if (a !== "--covers") continue;
+    const why = coverProblem(argv[i + 1]);
+    if (why) { console.error(`raise-hand: --covers ${why}`); process.exit(2); }
+  }
   ensureLedger();
   const raisedAt = new Date().toISOString();
   const id = val("--id") ?? `${raisedAt.slice(0, 10)}-${slug(blocked)}`;

@@ -81,7 +81,8 @@ const H = 3_600_000;
 export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
-export const SOFT_LIMIT_H = { mail: 24, sim: 48, heartbeat: null /* the routine's own cadenceToleranceHours */, "pr-red": 24, "pr-idle": 48, "executor-gap": 48, "objective-owner": 48, "mac-lane-red": 1 };
+export { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs"; // in a leaf module so check-raised-hands.mjs can validate `covers` without importing this file (a cycle deadlocks its top-level await)
+import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
 export const HARD_MULTIPLE = 3;
 /** Every auto-hand kind, plus the two routes every explicit hand falls into. Each needs a responder. */
 export const AUTO_KINDS = Object.keys(SOFT_LIMIT_H);
@@ -256,7 +257,7 @@ export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ ki
  *  MEASURED this run and is no longer stuck makes the hand stale (fatal); a kind this run could not
  *  measure (PR checks without --github, an unwitnessed objective state) is reported, never failed;
  *  a hand covering nothing auto is an owner-only decision and exempt. */
-export function staleHands(open, autos, measured = AUTO_KINDS) {
+export function staleHands(open, autos, measured = AUTO_KINDS, toleranceH = () => null) {
   const fatal = [], unknown = [], unmeasured = [], exempt = [];
   for (const h of open) {
     const covers = Array.isArray(h.covers) ? h.covers.filter((c) => typeof c === "string") : [];
@@ -270,8 +271,8 @@ export function staleHands(open, autos, measured = AUTO_KINDS) {
       if (!measured.includes(kind)) { unmeasured.push(`${h.id} covers ${c} (kind not measured on this run)`); continue; }
       // A hand younger than its stall's soft limit cannot be judged stale: the stall only enters the
       // auto list past that limit, so an early hand on a real stall would otherwise fail the moment
-      // it is raised. (heartbeat's limit is per-routine and unknown here; it has no grace.)
-      if (Number.isFinite(h.ageH) && h.ageH <= (SOFT_LIMIT_H[kind] ?? 0)) continue;
+      // it is raised. A heartbeat's limit is its routine's own cadenceToleranceHours (toleranceH).
+      if (Number.isFinite(h.ageH) && h.ageH <= (SOFT_LIMIT_H[kind] ?? toleranceH(c) ?? 0)) continue;
       fatal.push(`hand ${h.id} covers ${c}, whose stall is no longer measured — the hand is stale. Clear it: pnpm run hand:clear -- ${h.id} "<what unblocked it>"`);
     }
   }
@@ -290,7 +291,9 @@ export function openTip(cwd = repo, ref = TIP_REF) {
   const wt = git(cwd, ["worktree", "add", "--detach", "--force", root, ref]);
   if (wt.status !== 0) { rmSync(root, { recursive: true, force: true }); throw new TipMissing(`could not check out ${ref}: ${wt.stderr.trim()}`); }
   const date = git(cwd, ["log", "-1", "--format=%cI", ref]).stdout.trim();
-  return { root, sha: sha.stdout.trim(), ref, date, close() { git(cwd, ["worktree", "remove", "--force", root]); rmSync(root, { recursive: true, force: true }); git(cwd, ["worktree", "prune"]); } };
+  // No `git worktree prune`: this runs from read-only commands (`pnpm run hands`, the session-start hook),
+  // and prune drops the registration of any OTHER worktree whose directory is momentarily absent (L22).
+  return { root, sha: sha.stdout.trim(), ref, date, close() { git(cwd, ["worktree", "remove", "--force", root]); rmSync(root, { recursive: true, force: true }); } };
 }
 
 /** Pure: the --check verdict. `problems` are integrity (always fatal); `stalls` are
@@ -646,6 +649,33 @@ async function selfTest() {
     g2("checkout", "-q", "--detach", staleTip); // the branch tree predates the hand
     r = main2();
     checks.push(["e2e: a stall covered by a hand that only the TIP carries is covered (no 'raise a duplicate')", r.status === 0 && !r.stderr.includes("NO hand raised")]);
+    // heartbeat grace: the routine's own tolerance (3h here), not zero
+    g2("checkout", "-q", "--detach", g2("rev-parse", "refs/remotes/origin/SignalGrid_Alpha"));
+    rmSync(join(e2e, LEDGER_DIR, "zz-tipcover.json"), { force: true }); hb(1); commit("tip2: fresh heartbeat, no hands"); g2("update-ref", "refs/remotes/origin/SignalGrid_Alpha", g2("rev-parse", "HEAD"));
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-early.json"), handBody("zz-early", { raisedAt: new Date(Date.now() - 1 * H).toISOString(), covers: ["heartbeat:x-tick"] }));
+    checks.push(["e2e: a hand raised 1h ago covering a heartbeat whose tolerance is 3h is NOT stale yet (rc 0)", main2().status === 0]);
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-early.json"), handBody("zz-early", { raisedAt: new Date(Date.now() - 5 * H).toISOString(), covers: ["heartbeat:x-tick"] }));
+    checks.push(["e2e: …and the same hand raised 5h ago (past the tolerance) IS stale (rc 1)", main2().status === 1]);
+    rmSync(join(e2e, LEDGER_DIR, "zz-early.json"));
+    // kinds this run does not measure (no --github): a pr-red cover is NOT stale
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-pr.json"), handBody("zz-pr", { covers: ["pr-red:9"] }));
+    r = main2();
+    checks.push(["e2e: a pr-red cover on a run without --github is NOT CHECKED, never failed (rc 0)", r.status === 0 && r.stdout.includes("NOT CHECKED")]);
+    rmSync(join(e2e, LEDGER_DIR, "zz-pr.json"));
+    // a stale hand that only the tip carries: reported, never fatal on a branch that cannot clear it
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-tipstale.json"), handBody("zz-tipstale", { covers: ["heartbeat:x-tick"] }));
+    commit("tip3: a stale hand lands on mainline"); g2("update-ref", "refs/remotes/origin/SignalGrid_Alpha", g2("rev-parse", "HEAD"));
+    g2("checkout", "-q", "--detach", g2("rev-parse", "HEAD~1")); // the branch tree lacks it
+    r = main2();
+    checks.push(["e2e: a stale hand only MAINLINE carries is REPORTED, not fatal, on a branch that cannot clear it (rc 0)", r.status === 0 && r.stdout.includes("a hand only mainline carries")]);
+    // the same hand open on the branch but RESOLVED at the tip: resolved wins (no 'clear it again')
+    g2("checkout", "-q", "--detach", g2("rev-parse", "refs/remotes/origin/SignalGrid_Alpha"));
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-tipstale.json"), handBody("zz-tipstale", { status: "resolved", resolvedAt: new Date().toISOString(), resolution: "cleared", covers: ["heartbeat:x-tick"] }));
+    commit("tip4: that hand is resolved on mainline"); g2("update-ref", "refs/remotes/origin/SignalGrid_Alpha", g2("rev-parse", "HEAD"));
+    writeFileSync(join(e2e, LEDGER_DIR, "zz-tipstale.json"), handBody("zz-tipstale", { covers: ["heartbeat:x-tick"] })); // the branch's older, OPEN copy
+    r = main2();
+    checks.push(["e2e: a hand open on the branch but RESOLVED at the tip is not stale (resolved anywhere wins; rc 0)", r.status === 0 && !r.stderr.includes("hand:clear")]);
+    checks.push(["e2e: the output prints the tip commit's date", /committed \d{4}-\d\d-\d\dT/.test(r.stdout)]);
   } finally { rmSync(e2e, { recursive: true, force: true }); }
 
   const failed = checks.filter(([, ok]) => !ok);
@@ -683,10 +713,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // otherwise report its stall as "NO hand raised" and be told to raise a duplicate. The branch's
   // copy of a hand wins (it may have cleared it); the schema audit still reads the branch only.
   const branchIds = new Set(records.map((r) => r.id ?? r.__file));
-  const allHands = [...records, ...tipRecords.filter((r) => !r.__unreadable && !branchIds.has(r.id))];
+  const tipById = new Map(tipRecords.filter((r) => !r.__unreadable).map((r) => [r.id, r]));
+  // ...except a hand mainline has already RESOLVED: the branch's open copy is just behind, and telling its
+  // worker to hand:clear it again would conflict on resolvedAt. Resolved anywhere wins.
+  const allHands = [...records.map((r) => (tipById.get(r.id)?.status === "resolved" ? tipById.get(r.id) : r)), ...tipRecords.filter((r) => !r.__unreadable && !branchIds.has(r.id))];
   const measuredKinds = [...AUTO_KINDS.filter((k) => !["pr-red", "pr-idle", "mac-lane-red", "executor-gap", "objective-owner"].includes(k)),
     ...(github ? ["pr-red", "pr-idle", "mac-lane-red"] : []), ...(inputs.objective?.witnessed ? ["executor-gap", "objective-owner"] : [])];
   const view = evaluate(allHands, autoHands(inputs), Date.now(), (h) => routeHand(h, roleIds), measuredKinds);
+  // A stale hand FAILS for the hands this branch carries (it can clear them); a stale hand only mainline
+  // carries is REPORTED — a branch cannot clear it (hand:clear exits 2 there), and failing every branch
+  // for a file none of them contain would make one stale hand on Alpha turn every PR red.
+  const tolerance = (c) => (inputs.routines ?? []).find((r) => `heartbeat:${r.id}` === c)?.cadenceToleranceHours ?? null;
+  const stale = staleHands(view.open.filter((h) => branchIds.has(h.id)), view.auto, measuredKinds, tolerance);
+  const staleTip = staleHands(view.open.filter((h) => !branchIds.has(h.id)), view.auto, measuredKinds, tolerance);
   if (!argv.includes("--markdown")) console.log(`Stalls measured at ${tip.ref} @ ${tip.sha.slice(0, 8)}, committed ${tip.date || "(date unknown)"} (the local ref: only as fresh as its last fetch; this branch's own tree is not read for stalls)\n`);
   if (argv.includes("--markdown")) {
     console.log(render(view, { markdown: true, prsChecked: github }));
@@ -696,10 +735,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   console.log(render(view, { prsChecked: github }));
   for (const s of view.staleCovers) console.log(`  · REPORTED: ${s}`);
-  for (const u of view.stale.unmeasured) console.log(`  · NOT CHECKED: ${u}`);
-  if (view.stale.exempt.length) console.log(`  · EXEMPT from the stale-hand rule (cover no auto-stall — owner or lane decisions, not measurable): ${view.stale.exempt.join(", ")}`);
+  for (const u of [...stale.unmeasured, ...staleTip.unmeasured]) console.log(`  · NOT CHECKED: ${u}`);
+  for (const f of [...staleTip.fatal, ...staleTip.unknown]) console.log(`  · REPORTED (a hand only mainline carries; it is cleared there, merge Alpha): ${f}`);
+  const exempt = [...stale.exempt, ...staleTip.exempt];
+  if (exempt.length) console.log(`  · EXEMPT from the stale-hand rule (cover no auto-stall — owner or lane decisions, not measurable): ${exempt.join(", ")}`);
   if (argv.includes("--check")) {
-    const { code, fatal, warned } = checkOutcome([...problems, ...view.stale.unknown], [...view.fatal, ...view.stale.fatal], { warn: argv.includes("--warn") });
+    const { code, fatal, warned } = checkOutcome([...problems, ...stale.unknown], [...view.fatal, ...stale.fatal], { warn: argv.includes("--warn") });
     for (const w of warned) console.log(`  WARN (would fail locally): ${w}`);
     if (code !== 0) {
       console.error(`\nRaised hands check FAILED: ${fatal.length} problem(s).`);

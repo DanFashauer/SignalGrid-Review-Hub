@@ -55,6 +55,7 @@ const gitFeed = (cwd, args, input, env) => {
   try { return execFileSync("git", args, { cwd, encoding: "utf8", input, env, stdio: ["pipe", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim(); } catch { return ""; }
 };
 const MAINLINE = "origin/SignalGrid_Alpha";
+const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
 // Bounded walk of mainline history for the landed checks: an unbounded walk is a check
 // nobody waits for, and a check nobody waits for gets switched off. Exhausting the bound
 // without a match returns FALSE — reported, never cleared.
@@ -300,7 +301,6 @@ function isOnHubBySha(branch) {
 }
 
 // ── Declared scratch branches ───────────────────────────────────────────────
-const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
 
 // Pure parse + validate. Every entry needs name/reason/origin/declaredAt/declaredBy; names are
 // exact (no wildcard, regex or glob characters); declaredAt must parse. Anything else invalidates
@@ -312,10 +312,11 @@ function validateScratchDeclaration(text) {
   const seen = new Set();
   for (const [i, e] of arr.entries()) {
     if (!e || typeof e !== "object") return { ok: false, error: `entry ${i} is not an object` };
-    for (const k of ["name", "reason", "origin", "declaredAt", "declaredBy"]) {
+    for (const k of ["name", "reason", "origin", "declaredAt", "declaredBy", "tip"]) {
       if (typeof e[k] !== "string" || !e[k].trim()) return { ok: false, error: `entry ${i} (${e.name ?? "?"}) is missing ${k}` };
     }
     if (!/^[A-Za-z0-9._\/-]+$/.test(e.name)) return { ok: false, error: `entry ${i} name "${e.name}" is not a plain branch name (wildcards/regex refused)` };
+    if (!/^[0-9a-f]{40}$/.test(e.tip)) return { ok: false, error: `entry ${i} (${e.name}) tip is not a full 40-char commit sha` };
     if (!Number.isFinite(Date.parse(e.declaredAt))) return { ok: false, error: `entry ${i} (${e.name}) declaredAt does not parse` };
     if (seen.has(e.name)) return { ok: false, error: `duplicate name ${e.name}` };
     seen.add(e.name);
@@ -323,10 +324,20 @@ function validateScratchDeclaration(text) {
   return { ok: true, entries: arr };
 }
 
-function loadScratchDeclaration(path) {
-  if (!existsSync(path)) return { exists: false, ok: true, entries: [] };
-  try { return { exists: true, ...validateScratchDeclaration(readFileSync(path, "utf8")) }; }
-  catch (e) { return { exists: true, ok: false, error: `unreadable: ${e.message}` }; }
+// The declaration is read from MAINLINE, never the working tree: a branch cannot declare itself
+// scratch by editing the file it is checked out with. null = absent or unreadable on mainline,
+// which means nothing is declared (git cannot tell the two apart, and both tighten the answer).
+function readMainlineDeclaration(mainline, cwd) {
+  try {
+    return execFileSync("git", ["show", `${mainline}:${SCRATCH_FILE}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch { return null; }
+}
+
+// The local tip of exactly refs/heads/<name>; null when git cannot resolve it.
+function localTip(name, cwd) {
+  try {
+    return execFileSync("git", ["rev-parse", "--verify", "-q", `refs/heads/${name}^{commit}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null;
+  } catch { return null; }
 }
 
 // Commits on `branch` not on mainline whose committer time is after declaredAt. null = git could
@@ -342,15 +353,35 @@ function newerCommitCount(branch, declaredAt, mainline, cwd) {
   } catch { return null; }
 }
 
-// Pure: which declared names are excluded, which are reopened by newer work, which are stale.
-function classifyScratch(entries, localBranches, newerFn) {
+// Pure: which declared names are excluded, which are reopened, which are stale. A branch is
+// excluded only while its local tip IS the declared tip and no commit on it postdates declaredAt;
+// a name alone excludes nothing.
+function classifyScratch(entries, localBranches, tipOf, newerFn) {
   const excluded = [], reopened = [], stale = [];
   for (const e of entries) {
     if (!localBranches.includes(e.name)) { stale.push(e.name); continue; }
-    const n = newerFn(e.name, e.declaredAt);
-    if (n === 0) excluded.push(e.name); else reopened.push(e.name);
+    if (tipOf(e.name) !== e.tip) { reopened.push(e.name); continue; }
+    if (newerFn(e.name, e.declaredAt) === 0) excluded.push(e.name); else reopened.push(e.name);
   }
   return { excluded, reopened, stale };
+}
+
+// The whole evaluation from git: mainline text -> validation -> classification.
+function evaluateScratch(mainline, cwd, localBranches) {
+  const none = { exists: false, ok: true, excluded: [], reopened: [], stale: [] };
+  const text = readMainlineDeclaration(mainline, cwd);
+  if (text === null) return none;
+  const v = validateScratchDeclaration(text);
+  if (!v.ok) return { ...none, exists: true, ok: false, error: v.error };
+  return {
+    ...none, exists: true,
+    ...classifyScratch(v.entries, localBranches, (b) => localTip(b, cwd), (b, at) => newerCommitCount(b, at, mainline, cwd)),
+  };
+}
+
+// Pure: the branches still to be reported as unpushed after every exclusion.
+function unpushedCandidates(localBranches, hubBranches, ephemeral, scratchExcluded) {
+  return localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b) && !scratchExcluded.includes(b));
 }
 
 function branchesInAgentWorktrees() {
@@ -397,17 +428,14 @@ if (hubBranches.length) {
   // DECLARED SCRATCH (owner-directed 2026-10-02): exact names in docs/agent/local-scratch-branches.json,
   // each with a reason. Fail-closed: an invalid file excludes nothing and fails the seam; a declared
   // branch with a commit newer than its declaredAt is work again. Reported on its own line, never silent.
-  const scratchDecl = loadScratchDeclaration(resolve(repo, SCRATCH_FILE));
-  const scratch = scratchDecl.ok
-    ? classifyScratch(scratchDecl.entries, localBranches, (b, at) => newerCommitCount(b, at, MAINLINE, repo))
-    : { excluded: [], reopened: [], stale: [] };
-  const noRemote = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b) && !scratch.excluded.includes(b));
-  if (scratchDecl.exists) {
-    if (!scratchDecl.ok) {
-      add("fail", "Declared scratch branches", `${SCRATCH_FILE} is INVALID (${scratchDecl.error}) — nothing excluded; fix the file`);
+  const scratch = evaluateScratch(MAINLINE, repo, localBranches);
+  const noRemote = unpushedCandidates(localBranches, hubBranches, ephemeral, scratch.excluded);
+  if (scratch.exists) {
+    if (!scratch.ok) {
+      add("fail", "Declared scratch branches", `${SCRATCH_FILE} on mainline is INVALID (${scratch.error}) — nothing excluded; fix the file`);
     } else {
       const bits = [`declared scratch (${scratch.excluded.length}): ${scratch.excluded.join(", ") || "none"} — not counted`];
-      if (scratch.reopened.length) bits.push(`${scratch.reopened.length} declared but carry commits newer than declaredAt, counted as work: ${scratch.reopened.join(", ")}`);
+      if (scratch.reopened.length) bits.push(`${scratch.reopened.length} declared but tip moved or carries commits newer than declaredAt, counted as work: ${scratch.reopened.join(", ")}`);
       if (scratch.stale.length) bits.push(`${scratch.stale.length} stale declaration(s), no such local branch: ${scratch.stale.join(", ")}`);
       add(scratch.reopened.length ? "warn" : "ok", "Declared scratch branches", bits.join("; "), false);
     }
@@ -738,29 +766,57 @@ function selfTest() {
     check("STATE within a week reads fresh", stateFreshness("2026-09-20", "2026-09-22T10:00:00-04:00").kind === "fresh");
     check("an unparseable STATE date reads no-date, never fresh", stateFreshness("not-a-date", "2026-09-22T10:00:00-04:00").kind === "no-date");
     check("an unfetched remote reads no-remote, never fresh", stateFreshness("2026-09-20", "").kind === "no-remote");
-    // DECLARED SCRATCH: (a) declared -> excluded and reported, (b) undeclared -> counted,
-    // (c) invalid file -> invalid, (d) declared branch with a commit newer than declaredAt -> counted.
-    const decl = (name, at) => ({ name, reason: "r", origin: "DR-050 gate-falsification reproduction", declaredBy: "t", declaredAt: at });
+    // DECLARED SCRATCH. The declaration is read from a MAINLINE ref, never the working tree; a branch is
+    // excluded only while its tip equals the declared tip. Each case below fails when its guard is removed.
+    const SF = SCRATCH_FILE;
+    const decl = (name, at, tip) => ({ name, tip, reason: "r", origin: "DR-050 gate-falsification reproduction", declaredBy: "t", declaredAt: at });
     const rawNow = Number(g("log", "-1", "--format=%ct", "same"));
-    const before = new Date((rawNow + 3600) * 1000).toISOString(), after = new Date((rawNow - 3600) * 1000).toISOString();
+    const futureAt = new Date((rawNow + 3600) * 1000).toISOString(), pastAt = new Date((rawNow - 3600) * 1000).toISOString();
+    const mkMainline = (name, text) => { // a throwaway "mainline" ref whose tree carries (or lacks) the declaration
+      sh("checkout", "-q", "-b", name, "main");
+      if (text !== null) { execFileSync("mkdir", ["-p", join(work, "docs/agent")]); put(SF, text); sh("add", "-A"); sh("commit", "-q", "-m", name); }
+    };
     sh("checkout", "-q", "-b", "scratch-ok", "main"); put("s.txt", "x\n"); sh("add", "-A"); sh("commit", "-q", "-m", "scratch work");
+    const tipOk = g("rev-parse", "scratch-ok");
     sh("checkout", "-q", "-b", "undeclared", "main"); put("u.txt", "x\n"); sh("add", "-A"); sh("commit", "-q", "-m", "undeclared work");
     const local = ["scratch-ok", "undeclared", "main"];
+    const tipOf = (b) => localTip(b, work);
     const newer = (b, at) => newerCommitCount(b, at, M, work);
-    const cA = classifyScratch([decl("scratch-ok", before), decl("ghost", before)], local, newer);
-    check("a declared branch is excluded (a)", cA.excluded.includes("scratch-ok") && !cA.excluded.includes("undeclared"));
+    const cA = classifyScratch([decl("scratch-ok", futureAt, tipOk), decl("ghost", futureAt, tipOk)], local, tipOf, newer);
+    check("a declared branch at its declared tip is excluded (a)", cA.excluded.includes("scratch-ok") && !cA.excluded.includes("undeclared"));
     check("a declared name with no local branch is reported stale, not fatal (a-stale)", cA.stale.join() === "ghost");
-    check("an undeclared branch is never excluded (b)", !classifyScratch([decl("scratch-ok", before)], local, newer).excluded.includes("undeclared"));
-    const good = JSON.stringify([decl("scratch-ok", before)]);
-    check("a complete declaration validates", validateScratchDeclaration(good).ok === true);
-    check("a declaration entry missing reason is INVALID (c)", validateScratchDeclaration(JSON.stringify([{ ...decl("scratch-ok", before), reason: "" }])).ok === false);
-    check("a declaration entry missing origin is INVALID (c2)", validateScratchDeclaration(JSON.stringify([{ ...decl("scratch-ok", before), origin: undefined }])).ok === false);
-    check("a wildcard name is refused (c3)", validateScratchDeclaration(JSON.stringify([decl("attack-*", before)])).ok === false);
-    check("a regex-shaped name is refused (c4)", validateScratchDeclaration(JSON.stringify([decl("^scratch.*$", before)])).ok === false);
+    check("an undeclared branch is never excluded (b)", !classifyScratch([decl("scratch-ok", futureAt, tipOk)], local, tipOf, newer).excluded.includes("undeclared"));
+    const cT = classifyScratch([decl("scratch-ok", futureAt, "0".repeat(40))], local, tipOf, newer);
+    check("a declared name whose local tip is NOT the declared tip is counted as work (tip)", cT.reopened.join() === "scratch-ok" && cT.excluded.length === 0);
+    const cD = classifyScratch([decl("scratch-ok", pastAt, tipOk)], local, tipOf, newer);
+    check("a declared branch at its tip with a commit newer than declaredAt is counted again (d)", cD.reopened.join() === "scratch-ok" && cD.excluded.length === 0);
+    check("a git failure reads as new work, never as clean (d-fail)", newerCommitCount("no-such-branch", futureAt, M, work) === null && classifyScratch([decl("scratch-ok", futureAt, tipOk)], local, tipOf, () => null).excluded.length === 0);
+    check("an unresolvable local tip never equals a declared tip", localTip("no-such-branch", work) === null && classifyScratch([decl("scratch-ok", futureAt, tipOk)], local, () => null, () => 0).excluded.length === 0);
+    // validation (c): every shape the file must refuse
+    const good = [decl("scratch-ok", futureAt, tipOk)];
+    const bad = (mut) => validateScratchDeclaration(JSON.stringify([{ ...good[0], ...mut }])).ok === false;
+    check("a complete declaration validates", validateScratchDeclaration(JSON.stringify(good)).ok === true);
+    check("an entry missing reason is INVALID (c)", bad({ reason: "" }));
+    check("an entry missing origin is INVALID (c2)", bad({ origin: undefined }));
+    check("an entry missing tip is INVALID (c-tip)", bad({ tip: undefined }));
+    check("a tip that is not a full 40-char sha is INVALID (c-tip2)", bad({ tip: "abc123" }));
+    check("a wildcard name is refused (c3)", bad({ name: "attack-*" }));
+    check("a regex-shaped name is refused (c4)", bad({ name: "^scratch.*$" }));
+    check("a duplicate name is INVALID (c-dup)", validateScratchDeclaration(JSON.stringify([good[0], good[0]])).ok === false);
     check("a non-JSON declaration is INVALID (c5)", validateScratchDeclaration("{nope").ok === false);
-    const cD = classifyScratch([decl("scratch-ok", after)], local, newer);
-    check("a declared branch with a commit newer than declaredAt is counted again (d)", cD.reopened.join() === "scratch-ok" && cD.excluded.length === 0);
-    check("a git failure reads as new work, never as clean (d-fail)", newerCommitCount("no-such-branch", before, M, work) === null && classifyScratch([decl("scratch-ok", before)], local, () => null).excluded.length === 0);
+    // the file is read from MAINLINE: present, absent, invalid, and a working-tree plant that must be ignored
+    mkMainline("decl-ok", JSON.stringify(good));
+    mkMainline("decl-bad", JSON.stringify([{ ...good[0], reason: "" }]));
+    mkMainline("decl-none", null);
+    execFileSync("mkdir", ["-p", join(work, "docs/agent")]); put(SF, JSON.stringify(good)); // untracked plant on decl-none's working tree
+    const eOk = evaluateScratch("decl-ok", work, local), eBad = evaluateScratch("decl-bad", work, local), eNone = evaluateScratch("decl-none", work, local);
+    check("a declaration on mainline excludes the declared branch end to end (m-ok)", eOk.ok && eOk.excluded.join() === "scratch-ok");
+    check("an invalid declaration on mainline is INVALID and excludes nothing (m-bad)", eBad.exists && !eBad.ok && eBad.excluded.length === 0);
+    check("a declaration present only in the WORKING TREE is ignored (m-wt)", !eNone.exists && eNone.excluded.length === 0);
+    check("a mainline ref git cannot resolve declares nothing (m-absent)", evaluateScratch("no-such-ref", work, local).exists === false);
+    // wiring: the exclusion must actually remove the branch from the unpushed list
+    check("an excluded branch drops out of the unpushed list; an undeclared one stays (w)", unpushedCandidates(["scratch-ok", "undeclared"], [], [], ["scratch-ok"]).join() === "undeclared");
+    check("with nothing excluded both stay on the unpushed list (w2)", unpushedCandidates(["scratch-ok", "undeclared"], [], [], []).join() === "scratch-ok,undeclared");
   } catch (e) {
     check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
   } finally {

@@ -116,6 +116,8 @@ const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
 // `@upstash/context7-mcp: <v>`) takes its WHOLE value. A word's value is shed
 // of trailing markup only: `**`, a markdown link `](…)`, closing HTML tags, and
 // trailing ) ] } > . , ; : ! ?.
+// Go's unicode.IsSpace, which BuildKit trims with: JS `\s` adds U+FEFF and lacks U+0085, so neither is used for Dockerfiles
+const GO_SPACE = "[\\t\\n\\v\\f\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]";
 const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
   /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
@@ -343,7 +345,9 @@ export function logicalLines(lines, kind, path = "") {
   for (const [n, l] of lines.entries()) {
     // BuildKit strips leading whitespace and reads a non-empty value that may hold spaces (`check=skip=all; error=true`)
     // Go's unicode.IsSpace includes U+0085 (NEL), which JS `\s` does not; Go's `.` also matches `\r`, U+2028 and U+2029
-    const d = /^[\s\u0085]*#[\s\u0085]*(syntax|escape|check)[\s\u0085]*=[\s\u0085]*([\s\S]+?)[\s\u0085]*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
+    const d = new RegExp(`^${GO_SPACE}*#${GO_SPACE}*(syntax|escape|check)${GO_SPACE}*=${GO_SPACE}*([\\s\\S]+?)${GO_SPACE}*$`, "i").exec(
+      n === 0 ? l.replace(/^\uFEFF/, "") : l,
+    );
     if (!d) break;
     directives.push(d);
   }
@@ -368,13 +372,15 @@ export function logicalLines(lines, kind, path = "") {
   for (let i = 0; i < lines.length; i++) {
     // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
     // a Dockerfile line is trimmed of every trailing `\r` (BuildKit's trimNewline), so `\\\r\r\n` still continues
-    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : docker ? lines[i].replace(/\r+$/, "") : lines[i];
+    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
     } else physical.push({ i, text: l });
   }
-  return joinContinuations(physical, cont, modes, docker ? (t) => /^[\s\u0085]*(?:#|$)/.test(t) : null);
+  // a U+FEFF-led `#` line is NOT a comment to BuildKit (and bash runs it): only Go's whitespace may lead a skipped line
+  const skipRe = new RegExp(`^${GO_SPACE}*(?:#|$)`);
+  return joinContinuations(physical, cont, modes, docker ? (t) => skipRe.test(t) : null);
 }
 
 /**
@@ -701,7 +707,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
     // (a Dockerfile also drops comment and empty lines inside a continuation, and allows whitespace after the escape)
     const rebuilt = text
-      .replace(/([\\`^])[ \t]*\r*\n(?:[ \t\u0085]*(?:#[^\n]*)?\r*\n)*[ \t]*/g, "")
+      .replace(new RegExp(`([\\\\\`^])[ \\t]*\\r*\\n(?:${GO_SPACE.replace("\\n", "")}*(?:#[^\\n]*)?\\r*\\n)*[ \\t]*`, "g"), "")
       .replace(/["'\\`^]/g, "");
     if (!/context7/i.test(text) && !/context7/i.test(rebuilt) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
@@ -1613,6 +1619,14 @@ server.registerTool(
     ["Dockerfile", "# check=skip=a\rb\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "a directive value holding a CR"],
     ["Dockerfile", "RUN npx -y @upstash/context7-\\\r\r\nmcp@latest\n", 1, true, "a continuation ending in a doubled CR"],
     ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\nRUN npx -y " + SPEC + realPin + "\n", 3, false, "an empty `# check=` ends parsing, so the backtick stays literal (no false positive)"],
+    // round 19: Go's whitespace set (not JS \s) for the prefilter, the skip test and the directive; prefilter fixes pinned
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\u00A0# n\next7-mcp@latest\n", 1, true, "a split inside context7 across an NBSP-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\v\next7-mcp@latest\n", 1, true, "a split inside context7 across a VT-only line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\r# n\next7-mcp@latest\n", 1, true, "a split inside context7 across a CR-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\u0085# n\next7-mcp@latest\n", 1, true, "a split inside context7 across a NEL-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\r\r\next7-mcp@latest\n", 1, true, "a split inside context7 across a doubled-CR line end"],
+    ["Dockerfile", "#\u0085escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a NEL between `#` and the directive key"],
+    ["Dockerfile", "RUN npx -y " + SPEC + realPin + " --help \\\n\uFEFF#x; npx -y @upstash/context7-mcp@latest\n", 1, true, "a U+FEFF-led `#` line is not a comment (BuildKit keeps it, bash runs it)"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

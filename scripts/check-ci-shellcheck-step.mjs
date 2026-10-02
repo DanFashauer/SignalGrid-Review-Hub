@@ -207,19 +207,8 @@ export function verdictFor(yaml, spec) {
   return [...new Set(problems)].map((p) => `${spec.file}: ${p}`);
 }
 
-function listFiles(dir, readDir, rel = "") {
-  const out = [];
-  for (const e of readDir(join(dir, rel), { withFileTypes: true })) {
-    const r = join(rel, e.name);
-    if (e.isDirectory()) out.push(...listFiles(dir, readDir, r));
-    else if (/\.ya?ml$/.test(e.name)) out.push(r);
-  }
-  return out;
-}
-
-/** Every workflow file and every composite action anywhere in the repo, NOT pinned. */
-export function strayInstalls(dir, readFile, pinnedFiles) {
-  const out = [];
+/** Every YAML file under `dir`, relative, skipping node_modules and .git. */
+export function listYaml(dir) {
   const skip = new Set(["node_modules", ".git"]);
   const walk = (rel) => {
     const found = [];
@@ -230,7 +219,25 @@ export function strayInstalls(dir, readFile, pinnedFiles) {
     }
     return found;
   };
-  for (const rel of walk("")) {
+  return walk("");
+}
+
+// A walk that finds nothing must not read as "nothing installs shellcheck": if the repo walk finds
+// fewer YAML files than this the walk is wrong (or the workflows vanished), and the gate FAILS.
+const FILE_FLOOR = 20;
+const WORKFLOW_FLOOR = 10;
+export function floorProblems(files) {
+  const out = [];
+  if (files.length < FILE_FLOOR) out.push(`the repo walk found only ${files.length} YAML file(s), below the floor of ${FILE_FLOOR}; the walk is wrong or the repo shrank`);
+  const workflows = files.filter((f) => f.startsWith(".github/workflows/")).length;
+  if (workflows < WORKFLOW_FLOOR) out.push(`the repo walk found only ${workflows} workflow file(s), below the floor of ${WORKFLOW_FLOOR}`);
+  return out;
+}
+
+/** Every workflow file and every composite action anywhere in the repo, NOT pinned. */
+export function strayInstalls(dir, readFile, pinnedFiles, files = listYaml(dir)) {
+  const out = [];
+  for (const rel of files) {
     if (pinnedFiles.includes(rel)) continue;
     const text = readFile(rel);
     const ours = rel.startsWith(".github/") || /^\s*(runs|jobs):/m.test(normEol(text));
@@ -432,6 +439,12 @@ function selfTest() {
   for (const [label, t, want] of grammarCases) {
     if ((unsupportedYaml(t).length > 0) !== want) { console.error(`✗ self-test: parse case wrong: ${label}`); bad++; }
   }
+  // The floor: an empty or tiny walk must FAIL, a plausible one must pass.
+  const fakeFiles = (n, dir) => Array.from({ length: n }, (_, i) => `${dir}/f${i}.yml`);
+  if (floorProblems([]).length === 0) { console.error("✗ self-test: an empty repo walk PASSED the floor"); bad++; }
+  if (floorProblems(fakeFiles(FILE_FLOOR - 1, ".github/workflows")).length === 0) { console.error("✗ self-test: a walk one file under the floor PASSED"); bad++; }
+  if (floorProblems(fakeFiles(FILE_FLOOR, "elsewhere")).length === 0) { console.error("✗ self-test: a walk with no workflows PASSED"); bad++; }
+  if (floorProblems(fakeFiles(FILE_FLOOR, ".github/workflows")).length !== 0) { console.error("✗ self-test: a plausible walk FAILED the floor"); bad++; }
   // strayInstalls driven through a real directory: the repo-wide walk and the non-pinned grammar.
   const tmp = mkdtempSync(join(tmpdir(), "shellcheck-gate-"));
   try {
@@ -483,9 +496,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes("--self-test")) selfTest();
   else {
     const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
+    const files = listYaml(ROOT);
     const problems = [
+      ...floorProblems(files),
       ...PINNED.flatMap((spec) => verdictFor(read(spec.file), spec)),
-      ...strayInstalls(ROOT, read, PINNED.map((p) => p.file)),
+      ...strayInstalls(ROOT, read, PINNED.map((p) => p.file), files),
     ];
     if (problems.length) {
       for (const p of problems) console.error(`✗ ${p}`);

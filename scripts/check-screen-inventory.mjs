@@ -394,8 +394,22 @@ export function definitionProblems(doc) {
   const ctl = doc.search(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
   if (ctl >= 0)
     problems.push(`line ${doc.slice(0, ctl).split(/\r\n|\r|\n/).length} holds control character U+${doc.charCodeAt(ctl).toString(16).toUpperCase().padStart(4, "0")} — the two renderers disagree on where such a character splits a table row, so remove it`);
+  // markdown-it trims a table row with JS trim(), which strips NBSP, U+3000, U+2028 and
+  // the other Unicode spaces; cmark-gfm skips ASCII whitespace only. So `a |` + NBSP over
+  // `-|-` was a paragraph to the gate and a two-column table on GitHub (round 25). No
+  // space character outside ASCII is accepted anywhere; write a plain space.
+  const uws = doc.search(/[\u0085\u00a0\u1680\u180e\u2000-\u200b\u2028\u2029\u202f\u205f\u2060\u3000\ufeff]/);
+  if (uws >= 0)
+    problems.push(`line ${doc.slice(0, uws).split(/\r\n|\r|\n/).length} holds the non-ASCII space U+${doc.charCodeAt(uws).toString(16).toUpperCase().padStart(4, "0")} — the two renderers disagree on where it ends a table cell, so write a plain space`);
   const lines = doc.split(/\r\n|\r|\n/);
   for (const [i, line] of lines.entries()) {
+    // An unmatched run of two or more backticks anywhere in a paragraph changes which
+    // single backticks cmark-gfm pairs, while the per-line scan and markdown-it pair them
+    // as code, so a tag the gate thinks is sheltered is raw on GitHub (round 25). The only
+    // run allowed is a fence line: ``` on its own, optionally followed by a letters-only
+    // language, which opens or closes a fenced block in both renderers.
+    if (/``/.test(line) && !/^ {0,3}```[A-Za-z]*$/.test(line))
+      problems.push(`line ${i + 1} holds a run of two or more backticks — GitHub may pair the code spans around it differently, so use one-backtick code spans (a code fence line must be \`\`\` alone or followed only by a language name)`);
     if (FOOTNOTE_DEF_LINE.test(line))
       problems.push(`line ${i + 1} is a footnote definition ("${line.trim().slice(0, 40)}") — GitHub would swallow the lines after it, so write it as text`);
     // cmark-gfm and markdown-it keep different lists of the tag names that open an HTML
@@ -921,6 +935,16 @@ function selfTest() {
       [`a ${JSON.stringify(d)} delimiter row that steals a code span fails (round 24)`, { ...base, doc: good.replace(BEGIN, `a | b\n${d}\n\`p |\`e \`</table><details>\` z\n\n${BEGIN}`) }, "holds control character U+000"]),
     ["a header row that steals a code span over an FF delimiter fails (round 24)", { ...base, doc: good.replace(BEGIN, "`p |`e `</table><details>` z\n-\f| -\n\n" + BEGIN) }, "holds control character U+000C"],
     ["a NUL in prose fails (round 24)", { ...base, doc: good.replace(END, `${END}\n\nx\u0000y\n`) }, "holds control character U+0000"],
+    // Round 25: markdown-it trims a table row with JS trim(); cmark-gfm skips ASCII only.
+    ...[["NBSP", "\u00a0", "00A0"], ["U+3000", "\u3000", "3000"], ["U+2028", "\u2028", "2028"], ["U+202F", "\u202f", "202F"]].map(([name, ch, hex]) =>
+      [`a header row ending in ${name} that steals a code span fails (round 25)`, { ...base, doc: good.replace(BEGIN, `a |${ch}\n-|-\n\`p |\`e \`</table><details>\` z\n\n${BEGIN}`) }, `non-ASCII space U+${hex}`]),
+    ["a header row starting with NBSP that steals a code span fails (round 25)", { ...base, doc: good.replace(BEGIN, "\u00a0| a\n-|-\n`p |`e `</table><details>` z\n\n" + BEGIN) }, "non-ASCII space U+00A0"],
+    // Round 25: an unmatched run of two or more backticks re-pairs the spans after it on GitHub.
+    ...["``", "```", "````"].map((run) =>
+      [`an unmatched ${run} run before two code spans fails (round 25)`, { ...base, doc: good.replace(BEGIN, `x ${run} \`a\` \`<details>\` y\n\n${BEGIN}`) }, "run of two or more backticks"]),
+    ["an unmatched `` run two lines above the spans fails (round 25)", { ...base, doc: good.replace(BEGIN, "x ``\ny\n`a` `<details>` z\n\n" + BEGIN) }, "run of two or more backticks"],
+    ["a four-backtick fence line fails (round 25)", { ...base, doc: good.replace(END, `${END}\n\n\`\`\`\`\ncode\n\`\`\`\`\n`) }, "run of two or more backticks"],
+    ["a ``` fence outside the demo section still passes (round 25)", { ...base, doc: good.replace(END, `${END}\n\n\`\`\`text\ncode\n\`\`\`\n`) }, null],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

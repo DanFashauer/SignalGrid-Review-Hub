@@ -60,6 +60,12 @@ No line may hold an ASCII control character other than a tab: GitHub reads a for
 or vertical tab as a space in a table's delimiter row and the gate's renderer does not,
 so GitHub could build a table the gate never counted and split a code span across its
 cells.
+Nor may it hold a space character outside ASCII (a no-break space, an ideographic space,
+a line or paragraph separator and the like): the gate's renderer trims those off a table
+row and GitHub does not, so the two can count a table's columns differently. A run of
+two or more backticks is allowed only as a code fence line (three backticks alone, or
+followed by a language name): an unmatched longer run elsewhere in a paragraph changes
+which single backticks GitHub pairs into code spans.
 Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
 because GitHub may end the table at one while the gate's renderer continues it. A page

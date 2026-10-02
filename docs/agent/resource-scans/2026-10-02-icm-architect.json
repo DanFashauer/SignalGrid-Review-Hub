@@ -1,5 +1,5 @@
 {
-  "$comment": "Stage outputs of tool-evaluation-by-use §5b for the 2026-10-02 ICM Architect intake: A proposal (Opus-tier trial runs), B one confirm per roster perspective (Sonnet tier), C the cloud lane's decision. Trial outputs were scratch-only and are not committed; the numbers below are the runs' own, and per M-1/finding 3 they are samples, not repo facts.",
+  "$comment": "Stage outputs of tool-evaluation-by-use §5b for the 2026-10-02 ICM Architect intake: A proposal (Opus-tier trial runs), B one confirm per roster perspective (Sonnet tier), C the cloud lane's decision. Trial outputs were scratch-only and are not committed; the numbers below are the runs' own, and per the nondeterminism finding they are samples, not repo facts.",
   "date": "2026-10-02",
   "resources": [
     {
@@ -12,7 +12,7 @@
       "pin": "e16cafe6a664dcf6d787a726b452adba77d913f4",
       "pinDate": "2026-08-25",
       "publishedVersion": "none (no tag, no package)",
-      "paper": "arXiv:2603.16021 (Van Clief & McDermott), cited by the skill, not read for this intake"
+      "paper": "cited by the skill (arXiv:2603.16021), not read for this intake"
     }
   ],
   "proposals": [
@@ -70,7 +70,7 @@
         },
         {
           "check": "headline claim 'every folder becomes an agent'",
-          "result": "FALSE under the skill's own text, both runs: SKILL.md:8 'One agent… replaces a multi-agent framework', :10 'One librarian — one model'. Folders get a CONTEXT.md contract read by one agent."
+          "result": "FALSE under the skill's own text, both runs: SKILL.md:8 and :10 describe a single-agent design. Folders get a CONTEXT.md contract read by one agent."
         },
         {
           "check": "headline claim 'AGENTS.md just says read CLAUDE.md'",
@@ -82,7 +82,7 @@
           "id": "T-1",
           "title": "Owner decision: APPEND (not replace) two lines to AGENTS.md pointing non-Claude CLIs at CLAUDE.md",
           "evidence": "AGENTS.md has no reference to CLAUDE.md and no fail-closed content (grep); .claude/skills/stack-reference/ai-cli.md:3-7 says AGENTS.md exists for CLIs that never read CLAUDE.md",
-          "change": "append at the end of AGENTS.md so five line-number citations (AGENTS.md:19 in 4 files, L28 in 1) are not shifted",
+          "change": "append at the end of AGENTS.md; an end-of-file append shifts no existing line number (the five line-number citations of AGENTS.md were already stale, see M-2)",
           "owner": "owner (agent-platform change)",
           "risk": "low; keeps docs/PURPOSE.md anchor"
         },
@@ -210,7 +210,7 @@
           "reason": "every collision measured comes from installing it"
         }
       ],
-      "missing": "M-2: before the AGENTS.md append, find the files citing it by line number and confirm they still hold — done by the coordinator (5 citations: AGENTS.md:19 in adapters/types.ts, aruba-clearpass.ts, cisco-ise.ts, check-connector-discipline.mjs; L28 in oauth-consent/evaluate.ts; an append at the end shifts none)"
+      "missing": "M-2: before the AGENTS.md append, find the files citing it by line number and check whether they are valid — done by the coordinator after review round 1 found the first pass only proved an append shifts nothing (5 citations: AGENTS.md:19 in adapters/types.ts, aruba-clearpass.ts, cisco-ise.ts, check-connector-discipline.mjs; L28 in oauth-consent/evaluate.ts; an append at the end shifts none)"
     }
   ],
   "decision": {
@@ -236,7 +236,7 @@
     },
     "M-2": {
       "outcome": "owner",
-      "where": "folded into T-1: append at the end of AGENTS.md; the five line-number citations stay valid"
+      "where": "folded into T-1: append at the end of AGENTS.md; an end-of-file append shifts none of the five line-number citations, which were already stale (AGENTS.md:19 and :28 do not hold the quoted text; it is at :37 and :46)"
     }
   }
 }

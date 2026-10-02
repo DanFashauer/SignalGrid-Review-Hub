@@ -69,7 +69,7 @@ interface Persona {
 }
 const PERSONAS: Persona[] = [
   { username: "ag-nurse", enabled: true, roles: ["ward-nurse"], groups: ["/ward-a"], expected: NURSE_SET,
-    wantAccount: "active", wantScope: "in_scope", want: ["unverified", "GOVERNANCE_STATE_UNKNOWN", "step_up"] },
+    wantAccount: "active", wantScope: "unknown", want: ["unverified", "GOVERNANCE_STATE_UNKNOWN", "step_up"] },
   { username: "ag-nurse-extra", enabled: true, roles: ["ward-nurse", "pharmacy-admin"], groups: ["/ward-a"], expected: NURSE_SET,
     wantAccount: "active", wantScope: "over_privileged", want: ["over_privileged", "OVER_PRIVILEGED", "step_up"] },
   // /it-helpdesk carries realm-management:manage-users, so that role reaches the
@@ -78,7 +78,7 @@ const PERSONAS: Persona[] = [
     expected: [...NURSE_SET, "group:/it-helpdesk"].sort(),
     wantAccount: "active", wantScope: "over_privileged", want: ["over_privileged", "OVER_PRIVILEGED", "step_up"] },
   { username: "ag-leaver", enabled: false, roles: ["ward-nurse"], groups: ["/ward-a"], expected: NURSE_SET,
-    wantAccount: "disabled", wantScope: "in_scope", want: ["disabled_active", "ACCOUNT_DISABLED_ACTIVE", "escalate"] },
+    wantAccount: "disabled", wantScope: "unknown", want: ["disabled_active", "ACCOUNT_DISABLED_ACTIVE", "escalate"] },
   { username: "ag-missing", enabled: true, roles: [], groups: ["/ward-a"], expected: NURSE_SET,
     wantAccount: "active", wantScope: "out_of_scope", want: ["unscoped", "ENTITLEMENT_OUT_OF_SCOPE", "restrict"] },
   { username: "ag-undeclared", enabled: true, roles: ["ward-nurse"], groups: [], expected: undefined,
@@ -108,7 +108,8 @@ function namesOf(list: unknown, key: string): string[] | null {
 }
 
 /** Pure mapper: admin-API shapes -> a raw access-governance report. Anything that is
- *  not a clean answer is UNKNOWN, never in_scope. Axes Keycloak cannot know are
+ *  not a clean answer is UNKNOWN, and so is a clean one: this source NEVER emits in_scope
+ *  (see the scope rule below). Axes Keycloak cannot know are
  *  written as explicit unknowns; observedAt is absent (no sync instant exists, and
  *  createdTimestamp is not one). No clock is read. */
 export function reportFromAdmin(resp: AdminResp, expected: readonly string[] | undefined): AccessGovernanceReportRaw {
@@ -135,7 +136,9 @@ export function reportFromAdmin(resp: AdminResp, expected: readonly string[] | u
   if (actual && expected !== undefined) {
     missing = expected.filter((e) => !actual.includes(e)).sort();
     extra = actual.filter((a) => !expected.includes(a)).sort();
-    scope = missing.length > 0 ? "out_of_scope" : extra.length > 0 ? "over_privileged" : "in_scope";
+    // never in_scope: a client list is unprovably complete under fine-grained admin filtering, so
+    // "nothing extra" is not proof of "nothing hidden"; the tightening grades rest on SEEN roles.
+    scope = missing.length > 0 ? "out_of_scope" : extra.length > 0 ? "over_privileged" : "unknown";
   }
   return {
     account: { status },
@@ -181,9 +184,10 @@ function makeKeycloakAdminTransport(
     const realmComposite = await get(`/users/${id}/role-mappings/realm/composite`);
     const clients = await get("/clients");
     let clientComposite: unknown = undefined;
-    // A token that sees only some clients gets 200 with a FILTERED list, not 403: every
-    // realm has the built-in account + realm-management clients, so a list missing either
-    // is a partial read and clientComposite stays undefined (the mapper grades unknown).
+    // A token that sees only some clients gets 200 with a FILTERED list, not 403. A list holding
+    // both built-ins proves nothing (the mapper never grades in_scope for that reason), but every
+    // realm has the built-in account + realm-management clients, so a list missing either is a
+    // broken answer and clientComposite stays undefined (the mapper grades unknown).
     const ids = Array.isArray(clients) ? (clients as Record<string, unknown>[]).map((c) => c?.clientId) : [];
     if (Array.isArray(clients) && ids.includes("account") && ids.includes("realm-management")) {
       // null-prototype: a client named "__proto__" must be an own key, not a prototype swap
@@ -318,8 +322,8 @@ async function offline(): Promise<Map<string, Graded>> {
   check("O1 ag-group-admin: extra names exactly the group-inherited role", same(extraOf(ga), [MANAGE_USERS]), `extra=${extraOf(ga).join(",")}`);
   const direct = { ...RECORDED["ag-group-admin"], clientComposite: DEFAULT_CLIENT } as AdminResp;
   const dRaw = reportFromAdmin(direct, expectedFor("ag-group-admin"));
-  check("O1 non-vacuity: without the group-inherited role the same user grades in_scope",
-    normalizeReport("x", dRaw).entitlementScope === "in_scope");
+  check("O1 non-vacuity: without the group-inherited role the same user has no extra entitlement and grades unknown (never in_scope)",
+    extraOf({ raw: dRaw } as Graded).length === 0 && normalizeReport("x", dRaw).entitlementScope === "unknown");
 
   check("O2 every persona: unreported axes are unknown/null", PERSONAS.every((p) => (g.get(p.username) as Graded).unreported === UNREPORTED));
 
@@ -338,10 +342,11 @@ async function offline(): Promise<Map<string, Graded>> {
   const nurse = RECORDED["ag-nurse"] as AdminResp;
   const planted = {
     ...reportFromAdmin(nurse, NURSE_SET),
+    entitlement: { scope: "in_scope", entitlements: NURSE_SET, missing: [], extra: [] },
     certification: { state: "certified" }, sod: { conflict: false }, privilege: { mode: "none", sessionMonitored: null },
   };
   const pv = evaluateAccessGovernancePosture(normalizeReport("ag-nurse", planted, "keycloak-bridge"));
-  check("O5 non-vacuity: same in_scope report with the unreported axes planted DOES evaluate authorized/none",
+  check("O5 non-vacuity: the same report with scope in_scope and the unreported axes planted DOES evaluate authorized/none",
     pv.posture === "authorized" && pv.recommendedAction === "none", tripleOf(pv).join(" / "));
 
   check("O6 enabled missing -> account unknown", normalizeReport("x", reportFromAdmin({ ...nurse, user: {} }, NURSE_SET)).accountStatus === "unknown");
@@ -393,13 +398,48 @@ async function offline(): Promise<Map<string, Graded>> {
     ["a list without realm-management", [{ id: "cid-account", clientId: "account" }]],
     ["a list without account", [{ id: "cid-realm-management", clientId: "realm-management" }]],
   ] as const) {
-    for (const who of ["ag-nurse", "ag-group-admin"]) {
+    for (const who of ["ag-nurse", "ag-nurse-extra", "ag-group-admin"]) {
       const c = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
         makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, (p) => (p.endsWith("/clients") ? list : undefined))));
       const post = await c.fetchPosture(who);
       check(`O6 /clients filtered to ${label} (${who}) -> scope unknown, never in_scope/over_privileged`,
         post.entitlementScope === "unknown", `scope=${post.entitlementScope}`);
     }
+  }
+
+  // O6c NO input shape reads in_scope. Keycloak's admin API cannot prove a client list COMPLETE
+  // (a fine-grained admin token lists exactly account + realm-management and nothing else, and
+  // /admin/serverinfo answers 200 for any admin role, so it proves nothing: measured on 26.4.7), and in_scope is the
+  // one loosening verdict, so this bridge never emits it. The tightening grades stay: they rest
+  // on roles that were SEEN.
+  {
+    const builtIns = [{ id: "cid-account", clientId: "account" }, { id: "cid-realm-management", clientId: "realm-management" }];
+    const withApp = [...builtIns, { id: "cid-pharmacy-app", clientId: "pharmacy-app" }];
+    const shapes: [string, (p: string) => unknown][] = [
+      ["every client listed (account, realm-management, pharmacy-app)", (p) => (p.endsWith("/clients") ? withApp : undefined)],
+      ["only the two built-ins listed (what a fine-grained token sees)", (p) => (p.endsWith("/clients") ? builtIns : undefined)],
+      ["the default stub (account, realm-management, broker)", () => undefined],
+    ];
+    for (const [label, override] of shapes) {
+      for (const p of PERSONAS) {
+        const c = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
+          makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, override)));
+        const post = await c.fetchPosture(p.username);
+        check(`O6c ${label}: ${p.username} never in_scope (got ${post.entitlementScope})`, post.entitlementScope !== "in_scope");
+      }
+    }
+    check("O6c the mapper itself: an exact match of the declared set grades unknown, not in_scope",
+      normalizeReport("x", reportFromAdmin(RECORDED["ag-nurse"] as AdminResp, NURSE_SET)).entitlementScope === "unknown");
+    // tightening controls, unchanged: a SEEN role beyond the declared set -> over_privileged
+    const seen = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
+      makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, (p) => {
+        if (p.endsWith("/clients")) return withApp;
+        if (p.endsWith("/role-mappings/clients/cid-pharmacy-app/composite")) return R("dispense");
+        return undefined;
+      })));
+    const sp = await seen.fetchPosture("ag-nurse");
+    check("O6c control: a third client holding a role (pharmacy-app: dispense) -> over_privileged",
+      sp.entitlementScope === "over_privileged", `scope=${sp.entitlementScope}`);
   }
 
   // O8 L5's predicate is not vacuous: it holds with the group role, fails without it, and
@@ -576,6 +616,8 @@ async function live(base: string, adminUser: string, adminPass: string, fixture:
   const wnu = wire.get("ag-nurse") as Graded;
   check("L5 (fail-open guard) ag-group-admin's wire extra exceeds ag-nurse's by exactly the group-inherited manage-users (group expansion is real)",
     groupExpansionHolds(extraOf(wga), extraOf(wnu)), `admin extra=[${extraOf(wga).join(",")}] nurse extra=[${extraOf(wnu).join(",")}]`);
+  check("L8 (fail-open guard) no persona graded in_scope on the wire (this source cannot prove a client list complete)",
+    all.every((g) => g.scope !== "in_scope"), all.map((g) => g.scope).join(","));
 
   // L6 — wire vs fixture, axis by axis. A difference is a FINDING, not a failure.
   const divergences: string[] = [];

@@ -10,9 +10,12 @@
 // top level (`git show HEAD:<ledger>`), never from the working tree, so the
 // line numbers always match the history `git log -L` walks. A ledger that is
 // not a readable UTF-8 text file with rows at HEAD (missing, a directory, a
-// symlink, a submodule, binary or UTF-16, a Git LFS pointer, empty) is a NOT
-// MEASURED line, never silently zero. A ledger with uncommitted edits gets a
-// NOTE saying HEAD's copy was measured and the edit was not. The exit code is
+// symlink, a submodule, binary, UTF-16 or another encoding, a Git LFS pointer,
+// a lone-CR line break, merge-conflict markers, no rows in its own grammar, or
+// more than a quarter smaller than before its last change) is a NOT MEASURED
+// line, never silently zero. CEILING: a cut smaller than a quarter cannot be
+// told from a deliberate deletion. A ledger with uncommitted edits, or flagged
+// assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
 // 0 in every case, NOT MEASURED included: report-only is the contract this
 // row was dispatched with (making NOT MEASURED fatal is the owner's call).
 //
@@ -248,10 +251,27 @@ export function readLedger(cwd, file) {
   const raw = execFileSync("git", ["show", `HEAD:${file}`], { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   // UTF-16 puts a NUL beside every ASCII character, so this catches it with or without a BOM.
   if (raw.includes(0)) return { why: "holds a NUL byte (binary or UTF-16), not UTF-8 text" };
-  const text = raw.toString("utf8").replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/[\r\u2028\u2029]/g, " ");
-  if (text.startsWith("version https://git-lfs")) return { why: "is a Git LFS pointer, not the ledger" };
-  const rows = parseRows(text).length + (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length;
-  if (rows === 0) return { why: "has no rows (empty or truncated)" };
+  let decoded;
+  try { decoded = new TextDecoder("utf-8", { fatal: true }).decode(raw); } catch { return { why: "is not valid UTF-8 (a single-byte encoding such as cp1252?)" }; }
+  if (decoded.startsWith("version https://git-lfs")) return { why: "is a Git LFS pointer, not the ledger" };
+  // A lone CR is a line break to a Markdown renderer but not to git, so it could
+  // join two rows into one line; refuse rather than guess which.
+  if (/\r(?!\n)/.test(decoded)) return { why: "holds a lone CR line break, which git and Markdown count differently" };
+  if (/^(?:<{7}|>{7}) /m.test(decoded)) return { why: "holds unresolved merge-conflict markers" };
+  const text = decoded.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/[\u2028\u2029]/g, " ");
+  // Rows in the ledger's OWN grammar: a backlog's checkboxes do not make a plan readable, nor the reverse.
+  const rows = file === LEDGERS[1] ? (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(text).length;
+  if (rows === 0) return { why: "has no rows in its own grammar (empty, cut before its first row, or its section heading renamed)" };
+  // A ledger cut mid-file still has rows. Compare with the copy before its most
+  // recent change: across both ledgers' histories the largest real one-change
+  // shrink is about 3%, so losing more than a quarter of the bytes is refused.
+  // CEILING: a smaller cut cannot be told from a deliberate deletion.
+  let prev = 0, last = "";
+  try {
+    last = git(cwd, ["log", "-1", "--first-parent", "--format=%H", "HEAD", "--", file]);
+    prev = last ? Number(git(cwd, ["cat-file", "-s", `${last}^1:${file}`])) : 0;
+  } catch { prev = 0; /* no earlier copy: nothing to compare */ }
+  if (prev > 0 && raw.length < prev * 0.75) return { why: `shrank from ${prev} to ${raw.length} bytes in its last change ${last.slice(0, 8)} (more than a quarter gone: truncated?)` };
   return { text };
 }
 
@@ -267,10 +287,20 @@ export function measure(where, ledgers = LEDGERS, opts = {}) {
   return results;
 }
 
-/** Ledgers whose working-tree copy differs from HEAD: HEAD is what was measured, and the report says so. */
+/**
+ * Ledgers whose working-tree copy differs from HEAD, or that git is told not to
+ * look at (assume-unchanged, skip-worktree): HEAD is what was measured, and the
+ * report says so.
+ */
 export function uncommittedLedgers(where, ledgers = LEDGERS) {
   const cwd = git(where, ["rev-parse", "--show-toplevel"]);
-  return ledgers.filter((f) => { try { return git(cwd, ["status", "--porcelain", "--", f]) !== ""; } catch { return true; } });
+  return ledgers.filter((f) => {
+    try {
+      const tag = git(cwd, ["ls-files", "-v", "--", f]).charAt(0);
+      if (tag === "S" || (tag >= "a" && tag <= "z")) return true;
+      return git(cwd, ["status", "--porcelain", "--", f]) !== "";
+    } catch { return true; }
+  });
 }
 
 /** --rest: compare the PR's head.ref with the annotation's branch. Unreachable = still unknown. */
@@ -287,7 +317,7 @@ function restBranch(cwd) {
 }
 
 function report(results, dirty = []) {
-  for (const f of dirty) console.log(`  NOTE   ${f} has uncommitted changes; HEAD's copy was measured, the working-tree edit was NOT — commit it to have it read`);
+  for (const f of dirty) console.log(`  NOTE   ${f} has uncommitted changes (or is flagged assume-unchanged/skip-worktree); HEAD's copy was measured, the working-tree edit was NOT — commit it to have it read`);
   const by = (s) => results.filter((r) => r.status === s);
   const note = (r) => (r.branchEvidence === "match" ? "branch verified" : "branch unverified offline");
   for (const r of by("STALE")) {
@@ -421,13 +451,15 @@ function selfTest() {
       gs("init", "-q", "-b", "main");
       mkdirSync(join(d, "docs"), { recursive: true });
       writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n");
-      shape(join(d, plan), d);
+      const then = shape(join(d, plan), d);
       gs("add", "-A"); gs("commit", "-qm", "shape");
+      if (typeof then === "function") { then(join(d, plan), d, gs); gs("add", "-A"); gs("commit", "-qm", "then"); }
       const r = measure(d).find((x) => x.file === plan);
       return r ? `${r.status}: ${r.why ?? ""}` : "(no entry)";
     } finally { rmSync(d, { recursive: true, force: true }); }
   };
   const planText = "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/x, lands under DR-037): `scripts/a.mjs`.\n";
+  const bigPlan = "## Global backlog\n\n" + Array.from({ length: 40 }, (_, i) => `${i + 1}. **Row ${i + 1}.** — OPEN, qa. Some body text for row ${i + 1}.\n`).join("");
   const shapes = [
     // Each shape must be refused for ITS reason, so every guard is load-bearing on its own.
     ["a directory", /not a regular file/, (f) => { mkdirSync(f); writeFileSync(join(f, "x.md"), planText); }],
@@ -438,11 +470,37 @@ function selfTest() {
     ["a Git LFS pointer", /LFS pointer/, (f) => writeFileSync(f, "version https://git-lfs.github.com/spec/v1\noid sha256:00\nsize 1\n")],
     ["an empty file", /no rows/, (f) => writeFileSync(f, "")],
     ["a file truncated before its first row", /no rows/, (f) => writeFileSync(f, "## Global backlog\n\n")],
+    ["cp1252 (a curly quote as byte 0x93)", /not valid UTF-8/, (f) => writeFileSync(f, Buffer.concat([Buffer.from(planText), Buffer.from([0x93, 0x44, 0x4f, 0x4e, 0x45, 0x94, 0x0a])]))],
+    ["two rows joined by a lone CR", /lone CR/, (f) => writeFileSync(f, planText + "\r2. **Row 2.** — DONE.\n")],
+    ["a file holding merge-conflict markers", /merge-conflict/, (f) => writeFileSync(f, "<<<<<<< HEAD\n" + planText + "=======\n" + planText + ">>>>>>> other\n")],
+    ["a renamed section heading plus a stray checkbox", /no rows in its own grammar/, (f) => writeFileSync(f, planText.replace("Global backlog", "Global Backlog") + "- [ ] item\n")],
+    ["a file cut mid-file with rows left", /shrank from/, (f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.slice(0, 400)); }],
   ];
   for (const [name, why, shape] of shapes) {
     let st = "";
     try { st = shapeOf(shape); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push([`a plan ledger committed as ${name} is NOT MEASURED (${why.source})`, st.startsWith("NO-LEDGER: ") && why.test(st)]);
+  }
+  // A deliberate small deletion (one row of forty) is still measured, not refused.
+  {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.replace("40. **Row 40.** — OPEN, qa. Some body text for row 40.\n", "")); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a deliberate one-row deletion is still measured (the shrink check is not a hair trigger)", !st.startsWith("NO-LEDGER")]);
+  }
+  // A ledger git is told to ignore (assume-unchanged) and then edited still gets the NOTE.
+  {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-au-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs"));
+      writeFileSync(join(d, plan), planText); writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n");
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      gs("update-index", "--assume-unchanged", plan); writeFileSync(join(d, plan), planText + "junk\n");
+      gs("update-index", "--skip-worktree", backlog);
+      checks.push(["an assume-unchanged or skip-worktree ledger is named in a NOTE", JSON.stringify(uncommittedLedgers(d)) === JSON.stringify([plan, backlog])]);
+    } catch (e) {
+      checks.push([`assume-unchanged fixture ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
   }
   // CRLF endings and a stray U+2028 inside a box line: rows and closure still read right.
   {
@@ -472,7 +530,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 32;
+  return failed === 0 && checks.length === 39;
 }
 
 let isMain = false;

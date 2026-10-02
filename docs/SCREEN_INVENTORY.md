@@ -56,6 +56,10 @@ tags open an HTML block, and an open one hides every line after it up to the nex
 the inventory table included. The file may not start with a byte-order mark either,
 because GitHub drops it before reading the first line and the gate does not, nor with a
 `---` line, which GitHub reads as YAML front matter and renders outside markdown.
+No line may hold an ASCII control character other than a tab: GitHub reads a form feed
+or vertical tab as a space in a table's delimiter row and the gate's renderer does not,
+so GitHub could build a table the gate never counted and split a code span across its
+cells.
 Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
 because GitHub may end the table at one while the gate's renderer continues it. A page

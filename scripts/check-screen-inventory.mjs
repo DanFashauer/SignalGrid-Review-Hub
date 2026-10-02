@@ -387,6 +387,13 @@ export function definitionProblems(doc) {
   const cr = doc.search(/\r(?!\n)/);
   if (cr >= 0)
     problems.push(`line ${doc.slice(0, cr).split(/\r\n|\r|\n/).length} holds a carriage return that is not part of a CRLF — GitHub ends the line there, so write a real line break or remove it`);
+  // cmark-gfm accepts a form feed or vertical tab as space in a table delimiter row
+  // (`-\f| -`) and markdown-it 14 does not, so GitHub built a second table the one-table
+  // count never saw, and its cell split unpaired a code span both scans called code
+  // (round 24). No ASCII control other than tab and the line endings is accepted anywhere.
+  const ctl = doc.search(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/);
+  if (ctl >= 0)
+    problems.push(`line ${doc.slice(0, ctl).split(/\r\n|\r|\n/).length} holds control character U+${doc.charCodeAt(ctl).toString(16).toUpperCase().padStart(4, "0")} — the two renderers disagree on where such a character splits a table row, so remove it`);
   const lines = doc.split(/\r\n|\r|\n/);
   for (const [i, line] of lines.entries()) {
     if (FOOTNOTE_DEF_LINE.test(line))
@@ -909,6 +916,11 @@ function selfTest() {
       [`a URL then ${name} then a backtick does not shelter <details> (round 23)`, { ...base, doc: good.replace(BEGIN, `see http://a.b/${ch}\`<details>\` y\n\n${BEGIN}`) }, "one-backtick code span"]),
     ["a URL then NBSP then ( then a code span does not shelter <details> (round 23)", { ...base, doc: good.replace(BEGIN, "see http://a.b/\u00a0(`<details>` y\n\n" + BEGIN) }, "one-backtick code span"],
     ["a URL then a tab then a code span still passes (round 23)", { ...base, doc: good.replace(BEGIN, "see http://a.b/\t`<b>` y\n\n" + BEGIN) }, null],
+    // Round 24: cmark-gfm reads FF and VT as space in a delimiter row; markdown-it does not.
+    ...["-\f| -", "-|-\f", "-\v| -", "-|-\v"].map((d) =>
+      [`a ${JSON.stringify(d)} delimiter row that steals a code span fails (round 24)`, { ...base, doc: good.replace(BEGIN, `a | b\n${d}\n\`p |\`e \`</table><details>\` z\n\n${BEGIN}`) }, "holds control character U+000"]),
+    ["a header row that steals a code span over an FF delimiter fails (round 24)", { ...base, doc: good.replace(BEGIN, "`p |`e `</table><details>` z\n-\f| -\n\n" + BEGIN) }, "holds control character U+000C"],
+    ["a NUL in prose fails (round 24)", { ...base, doc: good.replace(END, `${END}\n\nx\u0000y\n`) }, "holds control character U+0000"],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

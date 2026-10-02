@@ -1,16 +1,33 @@
 # claude.yml — the GitHub-side trigger of the brain (DR-063: triggers = the Claude
 # GitHub App + the Mac). When the OWNER writes `@claude` in a comment, review or issue,
 # Claude Code runs on GitHub's runner in this checkout — it reads CLAUDE.md, AGENTS.md
-# and the skills plane like any other lane — and answers in a comment or pushes a branch.
+# and the skills plane like any other lane — and answers in the thread or pushes a
+# branch for a fix.
 #
-# Shape the owner chose on 2026-10-02 ("Full workflow"): the job runs only for the
-# owner's own account (this is a public repository — a stranger's `@claude` never starts
-# a runner); the checkout is writable so Claude can push a fix branch, but it never
-# merges (DR-037 landing conditions still govern every merge); every run is bounded by
-# --max-turns. The Claude GitHub App (installed by the owner on every DanFashauer
-# repository) is the GitHub identity; the model side authenticates with the owner's
-# subscription through CLAUDE_CODE_OAUTH_TOKEN, a repository secret the OWNER mints with
-# `claude setup-token` — a lane may never materialize that credential.
+# Shape the owner chose on 2026-10-02 ("Full workflow"), as reviewed (Opus, same day):
+# - The job runs only for the owner's own account: this is a public repository, and a
+#   stranger's `@claude` never starts a runner (job-level `if`). The action also
+#   requires a human actor with write access, so automation posting as the owner that
+#   happens to contain the phrase is the one accepted cost (a run that exits at the
+#   trigger check costs runner minutes, nothing else).
+# - Only the owner's own comments reach the prompt (`include_comments_by_actor`): a
+#   stranger's comment on a thread the owner tags is never read as instructions.
+# - Claude's writes (a fix branch, its comments) go through the Claude GitHub App's own
+#   installation token, which the action mints itself; the WORKFLOW token below is
+#   therefore read-only on contents and holds only what the action's helpers need.
+# - "Never merges" rests on the action's tool allowlist at this pin (no `gh`, pushes
+#   only `origin <ref>`), not on permissions — keep `claude_args` free of Bash/`gh`
+#   grants, and DR-037 still governs every merge. Branch protection on mainline is the
+#   owner's hardening on top.
+# - Every run is bounded by --max-turns. The action is pinned to the v1 commit; it
+#   installs the Claude Code CLI by pinned VERSION at run time, so the code that runs is
+#   version-pinned, not content-pinned.
+# - The model side authenticates with the owner's subscription through
+#   CLAUDE_CODE_OAUTH_TOKEN, a repository secret the OWNER mints with
+#   `claude setup-token` — a lane may never materialize that credential. Until the
+#   secret exists, a mention starts a run that posts its tracking comment, installs the
+#   CLI, then fails the environment check and edits that comment with the error: visible,
+#   and nothing is pushed.
 #
 # Owner-gated surface (SAFETY_MACHINERY, scripts/check-owner-gated-surfaces.mjs): the
 # owner lands changes to this file. Tier: Opus (DR-047 — a mention is a judgment call).
@@ -38,14 +55,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
+      contents: read # Claude's own pushes use the App token; this token only checks out
+      pull-requests: write # fallback for the action's buffered review comments
+      issues: write # same, on issues
+      id-token: write # exchanged for the Claude App installation token
       actions: read # Claude reads CI results on PRs
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 1
 
@@ -54,6 +71,7 @@ jobs:
         uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          include_comments_by_actor: DanFashauer
           claude_args: |
             --model claude-opus-5-5
             --max-turns 50

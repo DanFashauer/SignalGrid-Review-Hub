@@ -18,7 +18,7 @@
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { spawn, spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -254,6 +254,11 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
 // When may the end-to-end block touch the real tree? Only when the target is byte-identical to HEAD, no
 // sweep or other gate run is LIVE (journalLive — the gate's own lock is a marker journal too), and no
 // dead sweep left a journal behind (the target may already be mutated).
+// The gate may write the target back only if IT took the lock (so it mutated nothing otherwise) and the
+// file really differs from HEAD's bytes. A refused gate must never write: the file may be a live sweep's mutant.
+function shouldRestoreTarget(lockHeld, current, original) {
+  return lockHeld === true && Buffer.isBuffer(current) && Buffer.isBuffer(original) && !current.equals(original);
+}
 // Kill a recorded process only if it is still the SAME process (pid + start time) — a pid reused since
 // we recorded it belongs to someone else.
 function killIfSame(r, startOf, kill) {
@@ -268,8 +273,9 @@ function killIfSame(r, startOf, kill) {
   const blind = killIfSame({ pid: 7, start: "" }, () => "", () => { killed += 100; });
   check("killIfSame: the same process is killed; a reused pid (different start time) and an unreadable start are NOT", same === true && reused === false && blind === false && killed === 1);
 }
-function e2ePrecondition({ lockDir, gitClean, isAlive }) {
-  if (!gitClean || lockDir === null) return false;
+function e2ePrecondition({ lockDir, headBytes, workBytes, isAlive }) {
+  // The bytes the gate will treat as "the original" are HEAD's, and the working file must equal them NOW.
+  if (lockDir === null || !Buffer.isBuffer(headBytes) || !Buffer.isBuffer(workBytes) || !headBytes.equals(workBytes)) return false;
   if (journalLive(lockDir, isAlive).length > 0) return false;
   return journalStale(lockDir, undefined, isAlive).every((j) => !j.unreadable && j.differing.length === 0);
 }
@@ -279,13 +285,17 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
   try {
     writeFileSync(join(root, "g.ts"), "orig");
     const dead = () => false; const alive = () => true;
-    check("e2e precondition: clean target, nothing live, nothing stale → may run", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: dead }) === true);
-    check("e2e precondition: a target that differs from HEAD → refuses (never records mutated bytes as the original)", e2ePrecondition({ lockDir: dir, gitClean: false, isAlive: dead }) === false);
+    const H = Buffer.from("head bytes");
+    check("e2e precondition: clean target, nothing live, nothing stale → may run", e2ePrecondition({ lockDir: dir, headBytes: H, workBytes: H, isAlive: dead }) === true);
+    check("e2e precondition: a target that differs from HEAD → refuses (never records mutated bytes as the original)", e2ePrecondition({ lockDir: dir, headBytes: H, workBytes: Buffer.from("a live sweep's mutant"), isAlive: dead }) === false);
     journalWrite(dir, 4242, []);
-    check("e2e precondition: a LIVE sweep or gate (its lock marker) → refuses", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: alive }) === false);
+    check("e2e precondition: a LIVE sweep or gate (its lock marker) → refuses", e2ePrecondition({ lockDir: dir, headBytes: H, workBytes: H, isAlive: alive }) === false);
     journalClear(dir, 4242);
     journalWrite(dir, 4243, [{ file: "../x", original: "y" }]);
-    check("e2e precondition: an unrecovered / unreadable dead-sweep journal → refuses", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: dead }) === false);
+    check("e2e precondition: an unrecovered / unreadable dead-sweep journal → refuses", e2ePrecondition({ lockDir: dir, headBytes: H, workBytes: H, isAlive: dead }) === false);
+    const O = Buffer.from("orig"); const M = Buffer.from("mutant");
+    check("a REFUSED gate never writes the target back (it may hold a live sweep's mutant); one that took the lock restores only a real difference",
+      shouldRestoreTarget(false, M, O) === false && shouldRestoreTarget(true, M, O) === true && shouldRestoreTarget(true, O, O) === false);
     check("a live run of THIS gate counts as a live sweep (it holds the same lock)", sweepAlive(process.pid, -1, () => "node scripts/check-mutation-sharding.mjs") === true);
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
 }
@@ -321,9 +331,12 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
   const guard = join(here, "mutation-guard.mjs");
   const PROOF = "proof:carrier-reachability";
   const target = join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts");
-  const original = readFileSync(target, "utf8");
+  // "The original" is what HEAD says, as BYTES — never what the working tree holds at this instant (that
+  // could be a live sweep's mutant). The precondition then requires the working file to equal it.
+  const headBytes = (() => { const r = spawnSync("git", ["show", `HEAD:${relative(repo, target)}`], { cwd: repo, maxBuffer: 64 * 1024 * 1024 }); return r.status === 0 && Buffer.isBuffer(r.stdout) ? r.stdout : null; })();
+  const original = headBytes === null ? null : headBytes.toString("utf8");
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const scratch = mkdtempSync(join(tmpdir(), "mg-e2e-"));
+  const scratch = mkdtempSync(join(resolve(tmpdir()), "mg-e2e-")); // absolute: a relative TMPDIR would resolve per child cwd
   const env = { ...process.env, TMPDIR: scratch };
   const jdir = journalDir(repo, scratch);
   // This block mutates the REAL tree, so it takes the same lock a real sweep takes — in the SHARED journal
@@ -331,11 +344,10 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
   // the target is byte-identical to HEAD, no sweep or gate is live, and no dead sweep left a journal
   // (the target may already be mutated: its current bytes must never be recorded as "the original").
   const lockDir = (() => { try { return journalDir(repo); } catch { return null; } })();
-  const gitClean = spawnSync("git", ["diff", "--quiet", "HEAD", "--", target], { cwd: repo }).status === 0;
   let lockHeld = false;
   let preconditionOk = false;
   try {
-    preconditionOk = e2ePrecondition({ lockDir, gitClean });
+    preconditionOk = e2ePrecondition({ lockDir, headBytes, workBytes: readFileSync(target) });
     if (preconditionOk) { journalWrite(lockDir, process.pid, []); lockHeld = true; }
   } catch { preconditionOk = false; }
   const startSweep = (args = []) => {
@@ -348,6 +360,18 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
   };
   const waitFor = async (fn, limitMs) => { for (let t = 0; t < limitMs; t += 50) { if (fn()) return true; await sleep(50); } return false; };
   const dirty = () => readFileSync(target, "utf8") !== original;
+  const probe = () => {
+    // With the gate holding its lock, a sweep started in the SAME TMPDIR must be refused. Without the marker it
+    // would run in the real tree: it is started, given a bounded time to refuse, and SIGTERMed if it does not.
+    const child = spawn("node", [guard, `--proof=${PROOF}`], { cwd: repo, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { out += d; });
+    return new Promise((r) => {
+      const t = setTimeout(() => { child.kill("SIGTERM"); }, 20000);
+      child.on("close", (code) => { clearTimeout(t); r({ code, out }); });
+    });
+  };
   const journalFiles = () => (existsSync(jdir) ? readdirSync(jdir).filter((n) => /^\d+\.json$/.test(n)) : []);
   const descendants = (pid) => {
     const r = spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" });
@@ -371,6 +395,9 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
       check("end-to-end signal test: precondition (target identical to HEAD; no live sweep or gate; no unrecovered journal) — refused to run and touched nothing", false);
     } else {
       // 1. SIGTERM mid-mutation, with a second sweep refused meanwhile
+      const held = await probe();
+      check("e2e: while the GATE holds its lock, a real sweep in the same temp dir is REFUSED (exit 1, 'another mutation sweep is running')",
+        held.code === 1 && /another mutation sweep is running/.test(held.out));
       const a = startSweep();
       const marker = await waitFor(() => journalFiles().length > 0, 90000);
       // The marker must exist while the target is still CLEAN (the baseline phase), or a second sweep started
@@ -410,10 +437,11 @@ function e2ePrecondition({ lockDir, gitClean, isAlive }) {
       check("e2e: --restore-stale with NOTHING stale also exits 0 without sweeping (it used to fall through into a full sweep)", e.status === 0 && /no stale journal/.test(e.stdout) && !/every registered guard is falsifiable|── proof:/.test(e.stdout));
     }
   } finally {
-    if (readFileSync(target, "utf8") !== original) writeFileSync(target, original);
-    for (const r of live) { if (!isDead(r.pid)) killRecorded(r, false); }
-    if (lockHeld) journalClear(lockDir, process.pid);
-    rmSync(scratch, { recursive: true, force: true });
+    // Cleanup never throws past the summary line, and never writes unless this gate took the lock.
+    try { if (shouldRestoreTarget(lockHeld, readFileSync(target), headBytes)) writeFileSync(target, headBytes); } catch { /* reported by the checks */ }
+    for (const r of live) { try { if (!isDead(r.pid)) killRecorded(r, false); } catch { /* gone */ } }
+    try { if (lockHeld) journalClear(lockDir, process.pid); } catch { /* a leftover marker is a dead-pid empty journal: cleared by the next start */ }
+    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* scratch only */ }
   }
 }
 

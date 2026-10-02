@@ -2445,6 +2445,18 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       passes both skill gates. No registry, no telemetry, no live tenant. Done = the
       api-server suite green with every assertion, the CLI's own proof registered in
       preflight and CI, and this box ticked. Lane: devex-tooling-engineer.
+      **FIX PROPOSED 2026-09-30 (branch claude/build-signalgrid-cli-harness, owner merges):**
+      `artifacts/signalgrid-cli/src/cli.ts` (the five subcommands `decide`, `explain`,
+      `signals`, `audit`, `connectors`, dual human/`--json` output, a `skill` generator),
+      `artifacts/signalgrid-cli/src/client.ts` (config from `SIGNALGRID_BASE_URL` /
+      `SIGNALGRID_TENANT` / `SIGNALGRID_TOKEN` only, tenant confirmed against `/v1/context`,
+      fail-closed exit codes), `artifacts/signalgrid-cli/src/session.ts` (optional session
+      outside the tree, O_EXCL lock, never the token) and `artifacts/signalgrid-cli/src/bin.ts`;
+      `decide` and `connectors sync` send nothing without `--allow-write` (exit 4). The generated
+      skill is `.claude/skills/cli-anything/signalgrid-cli/SKILL.md`. Proof `scripts/src/signalgrid-cli-proof.ts`
+      (`pnpm run proof:signalgrid-cli`) boots the api-server on an OS-assigned port behind a
+      recording proxy and is registered in `scripts/preflight.mjs` and
+      `.github/workflows/review-hub-ci.yml`. Box left unticked until the owner merges.
 
 - [ ] **Security roster row 82: two of its three items landed (cloud lane, 2026-09-12); the revoke route stays open — `security-engineer`.** (1) LOCK: `removeCredential` now runs under the same per-user `SET NX PX` lock as `addCredential`, through one `withUserLock` helper (`lib/webauthn/src/webauthn/store.ts:187`, `:227`, `:294`); its in-memory branch has no await between read and write (`:327`), where the old code awaited the client factory between the splice and the user delete; and a failed Redis `DEL` now propagates instead of returning `true` over a key the store still held. Proven: `proof:enrollment-race` gained a 516-interleaving in-memory sweep and a revocation-racing-twelve-enrolments Redis race; on the unfixed store 9/11 (43 interleavings deleted the user together with its new credential; the Redis race lost `cred-100`), on the fixed store 11/11 — outputs in `docs/agent/EVIDENCE.md`. (3) `hasValidStepUpSession` (`lib/webauthn/src/stepUpStore.ts:261`): its `return false` is NOT a fail-open — it can never say `true` about a session that does not exist, so a caller must require a fresh step-up — but its docstring claimed a check the function has never performed; it now says NOT IMPLEMENTED and the function is `@deprecated`; nothing calls it (`git grep hasValidStepUpSession` → the definition only); deleting the module is DR-024's open owner cut. STILL OPEN: (2) the attestation `'none'` assumption in `lib/webauthn/src/webauthn/verify.ts` wants its comment (`lib/webauthn/src/webauthn/verify.ts:398`; the roster's `:348` is stale), and the revoke ROUTE (the row above, "Credential revocation has storage but no semantics") — the lock is live the day that route is wired.
       **PARTIALLY DONE 2026-09-18** — the revoke route landed (see "Credential

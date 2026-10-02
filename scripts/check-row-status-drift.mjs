@@ -16,8 +16,11 @@
 // last 50 changes, or with history that cannot be read) is a NOT MEASURED
 // line, never silently zero. CEILINGS (see readLedger): a cut under a quarter
 // cannot be told from a deliberate deletion, any cut over a quarter reads clean
-// again after 49 further changes to that ledger, and a rename plus a cut in one
-// commit has no earlier copy to compare. A ledger with uncommitted edits, or flagged
+// again after 49 further changes to that ledger, a rename plus a cut in one
+// commit has no earlier copy to compare, a cut REPLACED by as many new rows of
+// the same size reads as an edit (both marks hold), and the marks follow the
+// first-parent line only, so content that only ever existed on a merged side
+// branch never raises them. A ledger with uncommitted edits, or flagged
 // assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
 // 0 in every case, NOT MEASURED included: report-only is the contract this
 // row was dispatched with (making NOT MEASURED fatal is the owner's call).
@@ -281,7 +284,10 @@ export function readLedger(cwd, file) {
   // deliberate deletion; ANY cut over a quarter, accidental or deliberate,
   // reads clean again once it has aged out of the window (49 further changes
   // to that ledger — about a week on the plan ledger at its 2026-10 rate); a
-  // rename and a cut in one commit has no earlier copy under the new path.
+  // rename and a cut in one commit has no earlier copy under the new path; a cut
+  // replaced by as many new rows of the same size passes both marks; and the
+  // walk is first-parent, so a size reached only on a merged side branch never
+  // counts.
   const rowsOf = (t) => (file === LEDGERS[1] ? (t.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(t).length);
   let shas = [];
   try {
@@ -492,6 +498,14 @@ function selfTest() {
   };
   const planText = "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/x, lands under DR-037): `scripts/a.mjs`.\n";
   const bigPlan = "## Global backlog\n\n" + Array.from({ length: 40 }, (_, i) => `${i + 1}. **Row ${i + 1}.** — OPEN, qa. Some body text for row ${i + 1}.\n`).join("");
+  // Rows with body lines, so bytes and rows can be cut independently of each other.
+  const tallRows = Array.from({ length: 40 }, (_, i) => [`${i + 1}. **Row ${i + 1}.** — OPEN, qa.`, `    First body line for row ${i + 1}, with a few more words in it.`, `    Second body line for row ${i + 1}, also carrying some words.`]);
+  const tallPlan = (rows) => "## Global backlog\n\n" + rows.map((r) => r.join("\n") + "\n").join("");
+  const tallFull = tallPlan(tallRows);
+  // Keep every row, drop body lines from the end until the file is at most `frac` of its size.
+  const bytesTo = (frac) => { const rows = tallRows.map((r) => [...r]); let t = tallPlan(rows); for (let i = rows.length - 1; i >= 0 && t.length > tallFull.length * frac; i--) { while (rows[i].length > 1 && t.length > tallFull.length * frac) { rows[i].pop(); t = tallPlan(rows); } } return t; };
+  // Keep the first `keep` rows and pad with prose back to the full size.
+  const rowsTo = (keep) => { const t = tallPlan(tallRows.slice(0, keep)) + "\nNotes. "; return t + "p".repeat(Math.max(0, tallFull.length - t.length)); };
   const shapes = [
     // Each shape must be refused for ITS reason, so every guard is load-bearing on its own.
     ["a directory", /not a regular file/, (f) => { mkdirSync(f); writeFileSync(join(f, "x.md"), planText); }],
@@ -531,6 +545,23 @@ function selfTest() {
         writeFileSync(g, bigPlan + "\n");
       };
     }],
+    ["a cut that keeps every row heading but drops the bodies", /bytes against a high-water mark/, (f) => {
+      writeFileSync(f, tallFull);
+      return (g) => writeFileSync(g, tallPlan(tallRows.map((r) => [r[0]])));
+    }],
+    ["a 30% byte cut with every row kept (pins the byte threshold)", /bytes against a high-water mark/, (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, bytesTo(0.7)); }],
+    ["a 30% row cut padded back to full size (pins the row threshold)", /rows against a high-water mark/, (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, rowsTo(28)); }],
+    ["a history that cannot be walked (a commit object missing mid-history)", /history could not be walked/, (f) => {
+      writeFileSync(f, bigPlan);
+      return [
+        (g) => writeFileSync(g, bigPlan + "\n"),
+        (g, gs) => {
+          const mid = gs("rev-parse", "HEAD~1").trim();
+          rmSync(join(dirname(dirname(g)), ".git", "objects", mid.slice(0, 2), mid.slice(2)));
+          writeFileSync(g, bigPlan + "\n\n");
+        },
+      ];
+    }],
     ["three cuts in a row, each under a quarter", /high-water mark/, (f) => {
       writeFileSync(f, bigPlan);
       const keep = (g) => { const t = readFileSync(g, "utf8"); writeFileSync(g, t.slice(0, Math.floor(t.length * 0.8))); };
@@ -547,6 +578,15 @@ function selfTest() {
     let st = "";
     try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.replace("40. **Row 40.** — OPEN, qa. Some body text for row 40.\n", "")); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push(["a deliberate one-row deletion is still measured (the shrink check is not a hair trigger)", !st.startsWith("NO-LEDGER")]);
+  }
+  // Under a quarter is NOT refused: the 75% floor is exact on both marks.
+  for (const [name, shape] of [
+    ["a 22% byte cut with every row kept is still measured (byte floor not tighter than 75%)", (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, bytesTo(0.78)); }],
+    ["a 20% row cut padded back to full size is still measured (row floor not tighter than 75%)", (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, rowsTo(32)); }],
+  ]) {
+    let st = "";
+    try { st = shapeOf(shape); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push([name, !st.startsWith("NO-LEDGER") && !st.startsWith("threw")]);
   }
   // The window is exactly 50 changes: a cut followed by 49 further edits has aged out and is measured.
   {
@@ -597,7 +637,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 46;
+  return failed === 0 && checks.length === 52;
 }
 
 let isMain = false;

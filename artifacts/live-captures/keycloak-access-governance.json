@@ -32,7 +32,7 @@
           "realm:uma_authorization",
           "realm:ward-nurse"
         ],
-        "scope": "in_scope",
+        "scope": "unknown",
         "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
         "verdict": [
           "unverified",
@@ -164,7 +164,7 @@
           "realm:uma_authorization",
           "realm:ward-nurse"
         ],
-        "scope": "in_scope",
+        "scope": "unknown",
         "unreported": "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null",
         "verdict": [
           "disabled_active",
@@ -276,12 +276,12 @@
   ],
   "divergences": [
     "divergence: ag-nurse.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
-    "divergence: ag-nurse.scope fixture=in_scope wire=over_privileged",
+    "divergence: ag-nurse.scope fixture=unknown wire=over_privileged",
     "divergence: ag-nurse.verdict fixture=unverified/GOVERNANCE_STATE_UNKNOWN/step_up wire=over_privileged/OVER_PRIVILEGED/step_up",
     "divergence: ag-nurse-extra.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
     "divergence: ag-group-admin.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
     "divergence: ag-leaver.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
-    "divergence: ag-leaver.scope fixture=in_scope wire=over_privileged",
+    "divergence: ag-leaver.scope fixture=unknown wire=over_privileged",
     "divergence: ag-missing.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]",
     "divergence: ag-undeclared.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]"
   ],

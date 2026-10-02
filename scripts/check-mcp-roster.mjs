@@ -320,9 +320,9 @@ export function logicalLines(lines, kind, path = "") {
       const t = scalar >= 0 || (cur && openQuote(cur.text)) ? l : stripYamlComment(l);
       // a header after its key (`run: |2-`, the indent indicator before or after the chomp sign), or alone on the
       // line after the key (`run:` / `run: &a` + `|`): either way the more-indented lines after it are content
-      if (scalar < 0 && /(?::|^\s*-)\s+(?:[&!]\S+\s+)*[|>](?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) scalar = indent(l);
+      if (scalar < 0 && /(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*[|>](?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) scalar = indent(l);
       else if (scalar < 0 && keyIndent >= 0 && /^\s*(?:[&!]\S+\s+)*[|>](?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) scalar = keyIndent;
-      if (l.trim() !== "") keyIndent = indent(l);
+      if (l.trim() !== "" && (scalar >= 0 || !/^\s*#/.test(l))) keyIndent = indent(l); // a comment line is not the key
       const isEntry = /^\s*(?:-(?:\s|$)|#|\?\s|:\s|(?:"[^"]*"|'[^']*'|[^\s#"'][^#]*?):(?:\s|$))/.test(l);
       if (
         cur &&
@@ -331,26 +331,38 @@ export function logicalLines(lines, kind, path = "") {
         (cur.block ||
           openQuote(cur.text) ||
           // a literal `|` block's lines stay separate (each is a command); only plain scalars continue
-          (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text) && !/:\s+(?:[&!]\S+\s+)*\|(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(cur.text)))
+          (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text) && !/(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*\|(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(cur.text)))
       ) {
         if (cur.block === "pending") {
           cur.text = cur.text.replace(/\s*[>|](?:[+-][1-9]?|[1-9][+-]?)?\s*$/, "");
           cur.block = true;
+          cur.bIndent = indent(l); // the folded block's content indent
+          cur.lastMore = false;
+        }
+        if (cur.block === true) {
+          // a folded `>` block folds a line break to a space, EXCEPT one next to a more-indented line, which is kept:
+          // there a trailing `\` is a shell continuation (`cont\` + `ext7` runs context7), so it is spliced
+          const more = indent(l) > cur.bIndent;
+          if ((more || cur.lastMore) && /(?<=(?:^|[^\\])(?:\\\\)*)\\$/.test(cur.text)) cur.text = cur.text.slice(0, -1) + l.slice(cur.bIndent);
+          else cur.text += ` ${t.trim()}`;
+          cur.lastMore = more;
+          continue;
         }
         // inside a double-quoted scalar an escaped line break vanishes with the next line's indent (YAML 1.2 §7.3.1)
         if (openQuote(cur.text) && /(?<!\\)(?:\\\\)*\\$/.test(cur.text) && /"[^"]*$/.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
         else cur.text += ` ${t.trim()}`;
+        if (!cur.block && /^\s*(?:[&!]\S+\s+)*>(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) cur.block = "pending"; // `run:` + `>` alone on the next line
         continue;
       }
       if (cur) out.push(cur);
       // only a FOLDED `>` block joins into one value; a literal `|` block keeps its lines (commands) separate
-      cur = { i, text: t, indent: indent(l), block: /:\s+(?:[&!]\S+\s+)*>(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t) ? "pending" : false };
+      cur = { i, text: t, indent: indent(l), block: /(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*>(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t) ? "pending" : false };
     }
     if (cur) out.push(cur);
     // a `\` continuation inside a literal `|` script: YAML strips the block's indentation, the shell then glues
     return joinContinuations(
       out.map(({ i, text }) => ({ i, text })),
-      /(?<!\\)\\$/,
+      /(?<=(?:^|[^\\])(?:\\\\)*)\\$/, // an odd run of backslashes continues
       ["block"],
     );
   }
@@ -377,15 +389,15 @@ export function logicalLines(lines, kind, path = "") {
     : /\.(?:cmd|bat)$/i.test(path)
       ? [/\^$/, ["keep"]] // `^` escapes the newline: the next line is appended as it stands
       : /(?:^|\/)(?:GNU)?makefile(?:\.(?:in|am))?$|\.(?:mk|make)$/i.test(path)
-        ? [/(?<!\\)\\$/, ["tab"]] // make drops the recipe tail's leading tab, then the shell glues
+        ? [/(?<=(?:^|[^\\])(?:\\\\)*)\\$/, ["tab"]] // make drops the recipe tail's leading tab, then the shell glues
         : docker
           ? [
               // under `# escape=\`` a heredoc body (`RUN <<EOF`) still reaches the shell raw, where `\` continues: read
               // both markers in that file, fail-closed, rather than track heredoc bounds
-              dockerEscape === "`" ? /(?<!`)`[ \t]*$|(?<!\\)\\[ \t]*$/ : /(?<!\\)\\[ \t]*$/,
+              dockerEscape === "`" ? /`[ \t]*$|\\[ \t]*$/ : /\\[ \t]*$/, // BuildKit: `\<escape>[ \t]*$`, no look-behind
               ["keep", "strip"],
             ] // with and without the next line's indent, fail-closed
-          : [/(?<!\\)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
+          : [/(?<=(?:^|[^\\])(?:\\\\)*)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
   if (kind === "json") return lines.map((text, i) => ({ i, text }));
   const ps1 = /\.(?:ps1|psm1)$/i.test(path);
   const physical = [];
@@ -494,7 +506,8 @@ export function context7UnitFindings(units, pin, runner, depth = 0) {
   for (const unit of units) {
     // a unit that is itself a command (`sh -c "npx npm:pkg foo"`, a JSON `-c` argument): read its own words too
     // (a unit that IS a spec, or a `--flag=<spec>` argument, is one argv word and is read whole below)
-    if (depth < 2 && /[\s;&|<>]/.test(unit) && /context7-mcp/i.test(unit) && !SPEC_VALUE_RE.test(unit) && !/^--?[\w-]+=/.test(unit)) {
+    // (a decoded command string may spell the name only once the shell drops quotes and escapes: `cont\\ext7`, `cont''ext7`)
+    if (depth < 2 && /[\s;&|<>]/.test(unit) && /context7-mcp/i.test(unit.replace(/["'\\]/g, "")) && !SPEC_VALUE_RE.test(unit) && !/^--?[\w-]+=/.test(unit)) {
       out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
       continue;
     }
@@ -590,7 +603,8 @@ export function context7JsonFindings(text, pin) {
           if (typeof v !== "string") walk(v, false, here);
         } else walk(v, false, here);
       }
-    } else if (typeof node === "string" && /context7/i.test(spliceDecoded(node))) {
+    } else if (typeof node === "string" && /context7/i.test(spliceDecoded(node).replace(/["'\\]/g, ""))) {
+      // the name may appear only once the shell running the value drops quotes and escapes (`cont\\ext7`, `cont''ext7`)
       const raw = node;
       node = spliceDecoded(node); // a backslash-newline inside the value is spliced as the shell running it would
       const units = inArray || SPEC_VALUE_RE.test(node) ? [node] : shellWords(node);
@@ -1732,6 +1746,36 @@ server.registerTool(
   ]) {
     checks.push([`[sweep ${path}] ${what} → named UNPINNED (@latest)`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
   }
+  // round 23: a folded `>` line break kept beside a more-indented line; quotes and escapes inside a decoded string; an
+  // odd backslash run before a `#` heredoc line; a header after a deeper comment; nested `- - |` and `? |` headers
+  const S23 = (n) => ["echo a\\", "#x; npx -y @upstash/cont\\", "ext7-mcp@latest"].map((l) => " ".repeat(n) + l).join("\n");
+  for (const [path, body, what] of [
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run: >\n          echo a\n            npx -y @upstash/cont\\\n          ext7-mcp@latest\n", "a folded `>` line break kept beside a more-indented line (its `\\` continues)"],
+    [".gitlab-ci.yml", "a:\n  script:\n    - >\n      echo a\n        npx -y @upstash/cont\\\n      ext7-mcp@latest\n", "a folded `- >` sequence item with a more-indented line"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont\\ext7-mcp@latest" } }), "a JSON value splitting the name with a stray backslash"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont''ext7-mcp@latest" } }), "a JSON value splitting the name with empty quotes"],
+    ["package.json", JSON.stringify({ scripts: { a: 'npx -y @upstash/con"te"xt7-mcp@latest' } }), "a JSON value quoting part of the name"],
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run: \"npx -y @upstash/cont\\\\\\\n          ext7-mcp@latest\"\n", "a YAML double-quoted `cont\\\\` + escaped line break (decodes to `cont\\ext7`)"],
+    ["Dockerfile", "FROM x\nRUN <<EOF\necho a\\\\\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\nEOF\n", "an odd backslash run before a `#` heredoc line"],
+    [".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run:\n                # pick\n          |\n${S23(12)}\n`, "a `|` alone on its line after a comment indented deeper than it"],
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run:\n          >\n          echo a\n            npx -y @upstash/cont\\\n          ext7-mcp@latest\n", "a folded `>` alone on the line after its key"],
+    [".gitlab-ci.yml", `a:\n  script:\n    - - |\n${S23(8)}\n`, "a nested `- - |` sequence block scalar"],
+    ["a.yml", `? |\n${S23(2)}\n: x\n`, "an explicit-key `? |` block scalar"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named UNPINNED (@latest)`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
+  }
+  checks.push([
+    "[sweep a.yml] a folded `>` block at one indent folds `\\` + break to `\\ ` (a name holding a space) → no finding",
+    sweep(".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run: >\n${S23(10)}\n      - run: npx -y ${SPEC}${realPin}\n`).length === 0,
+  ]);
+  checks.push([
+    "[sweep s.sh] an odd backslash run continues: the runner on the line before makes the bare name a runner call",
+    sweep("s.sh", `npx -y a\\\\\\\n @upstash/context7-mcp\n`).some((p) => /with NO version/.test(p)),
+  ]);
+  checks.push([
+    "[sweep s.sh] an even backslash run is literal, not a continuation → no finding",
+    sweep("s.sh", `npx -y @upstash/cont\\\\\next7-mcp@latest\nnpx -y ${SPEC}${realPin}\n`).length === 0,
+  ]);
   checks.push([
     "[sweep a.json] a pinned JSON value split by a backslash-newline → no finding",
     sweep("a.json", JSON.stringify({ a: `npx -y ${SPEC}${realPin} \\\n--stdio` })).length === 0,

@@ -122,7 +122,13 @@ const norm = (t) => t.replace(/\s+/g, " ");
 const SYNC_DEPTH = 8;
 // The legacy graft file (.git/info/grafts, or GIT_GRAFT_FILE) does the same and
 // is not covered by that switch, so it is pointed at an empty file.
-const GIT_ENV = { ...process.env, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" };
+// An inherited GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE / GIT_COMMON_DIR would point git at a
+// different repository than the one being measured, so they are dropped: git finds the
+// repository from the working directory, as a person running the command would expect.
+const REPO_POINTERS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"];
+const GIT_ENV = Object.fromEntries(
+  Object.entries({ ...process.env, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" }).filter(([k]) => !REPO_POINTERS.includes(k)),
+);
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, env: GIT_ENV, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -390,7 +396,8 @@ function report(results, dirty = []) {
 
 function selfTest() {
   const dir = mkdtempSync(join(tmpdir(), "row-drift-"));
-  const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z" };
+  // Fixtures drop the inherited repository pointers too, so an inherited GIT_DIR can never make them commit into another repository.
+  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPO_POINTERS.includes(k))), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z" };
   const g = (...args) => execFileSync("git", args, { cwd: dir, env, encoding: "utf8" }).trim();
   const gAs = (who, ...args) => execFileSync("git", args, { cwd: dir, env: { ...env, GIT_COMMITTER_NAME: who[0], GIT_COMMITTER_EMAIL: who[1] }, encoding: "utf8" }).trim();
   const [plan, backlog] = LEDGERS;
@@ -680,10 +687,25 @@ function selfTest() {
       }
       gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", `Merge branch '${prev}'`, prev);
       const r = measure(d).find((x) => x.row === "row 1");
-      checks.push([`a PR landing nested under ${depth} merges reads ${expect}`, r?.status === expect && (expect !== "STALE" || r.pr === 5)]);
+      checks.push([`a PR landing nested under ${depth} merges reads ${expect}`, r?.status === expect && (expect === "STALE" ? r.pr === 5 : /nested under more than 8 non-PR merges/.test(r.why ?? ""))]);
     } catch (e) {
       checks.push([`depth-${depth} fixture ran (${String(e.message).split("\n")[0]})`, false]);
     } finally { rmSync(d, { recursive: true, force: true }); }
+  }
+  // An inherited GIT_DIR naming a clean repository cannot make a cut repository read clean.
+  {
+    const cut = mkdtempSync(join(tmpdir(), "row-drift-cut-")), clean = mkdtempSync(join(tmpdir(), "row-drift-clean-"));
+    const gIn = (d, ...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    try {
+      for (const d of [cut, clean]) { gIn(d, "init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); }
+      writeFileSync(join(cut, plan), bigPlan); gIn(cut, "add", "-A"); gIn(cut, "commit", "-qm", "full");
+      writeFileSync(join(cut, plan), bigPlan.slice(0, 400)); gIn(cut, "add", "-A"); gIn(cut, "commit", "-qm", "cut");
+      writeFileSync(join(clean, plan), bigPlan); gIn(clean, "add", "-A"); gIn(clean, "commit", "-qm", "full");
+      out = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: cut, env: { ...process.env, GIT_DIR: join(clean, ".git"), GIT_WORK_TREE: clean }, encoding: "utf8" });
+    } catch (e) { out = `threw: ${String(e.message).split("\n")[0]}`; }
+    finally { rmSync(cut, { recursive: true, force: true }); rmSync(clean, { recursive: true, force: true }); }
+    checks.push(["an inherited GIT_DIR/GIT_WORK_TREE naming another repository does not redirect the measurement", /COMPANY_BUILD_PLAN\.md — is \d+ bytes against a high-water mark/.test(out)]);
   }
   // Two ways a landing cannot be traced, each NOT MEASURED with its own reason.
   {
@@ -805,7 +827,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 69;
+  return failed === 0 && checks.length === 70;
 }
 
 let isMain = false;

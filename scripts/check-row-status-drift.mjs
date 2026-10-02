@@ -122,16 +122,26 @@ const norm = (t) => t.replace(/\s+/g, " ");
 const SYNC_DEPTH = 8;
 // The legacy graft file (.git/info/grafts, or GIT_GRAFT_FILE) does the same and
 // is not covered by that switch, so it is pointed at an empty file.
-// An inherited GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE / GIT_COMMON_DIR would point git at a
-// different repository than the one being measured, so they are dropped: git finds the
-// repository from the working directory, as a person running the command would expect.
-const REPO_POINTERS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"];
-const GIT_ENV = Object.fromEntries(
-  Object.entries({ ...process.env, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" }).filter(([k]) => !REPO_POINTERS.includes(k)),
-);
+// An inherited repository pointer would make git read a different repository, index or object
+// store than the one being measured (an alternate object store can even substitute a blob), so
+// all of them are dropped: git finds the repository from the working directory.
+export const REPO_POINTERS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
+export function gitEnvFrom(ambient) {
+  return Object.fromEntries(
+    Object.entries({ ...ambient, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" }).filter(([k]) => !REPO_POINTERS.includes(k)),
+  );
+}
+const GIT_ENV = gitEnvFrom(process.env);
+// Config, from any scope (system, global, repository, or passed through the environment), that
+// changes the output this script parses is overridden on every call: colour codes hide the "+"
+// of an added line, a non-UTF-8 log encoding rewrites "#" in a merge subject, and a signature
+// check adds lines. Config scopes themselves are left alone (CI relies on safe.directory).
+// CEILING: a config key outside this list that reshapes `git log` output is not neutralised.
+// (color.diff=never also beats a color.ui=always from any scope, so color.ui needs no override.)
+export const GIT_C = ["-c", "color.diff=never", "-c", "i18n.logOutputEncoding=UTF-8", "-c", "log.showSignature=false"];
 
 function git(cwd, args) {
-  return execFileSync("git", args, { cwd, env: GIT_ENV, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  return execFileSync("git", [...GIT_C, ...args], { cwd, env: GIT_ENV, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
 /** Plan-row closure exactly as check-backlog-evidence.mjs reads it (same imports, same order). */
@@ -276,7 +286,7 @@ export function readLedger(cwd, file) {
   if (!entry) return { why: "not present at HEAD" };
   const mode = entry.split(/\s/)[0];
   if (mode !== "100644" && mode !== "100755") return { why: `not a regular file at HEAD (git mode ${mode})` };
-  const raw = execFileSync("git", ["show", `HEAD:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  const raw = execFileSync("git", [...GIT_C, "show", `HEAD:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   // UTF-16 puts a NUL beside every ASCII character, so this catches it with or without a BOM.
   if (raw.includes(0)) return { why: "holds a NUL byte (binary or UTF-16), not UTF-8 text" };
   let decoded;
@@ -318,7 +328,7 @@ export function readLedger(cwd, file) {
   let highBytes = 0, highRows = 0, atBytes = "", atRows = "";
   for (const h of shas) {
     let body;
-    try { body = execFileSync("git", ["show", `${h}:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }); }
+    try { body = execFileSync("git", [...GIT_C, "show", `${h}:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }); }
     catch {
       // Deleted at that commit is a real state, not an unreadable one.
       let gone = false;
@@ -702,10 +712,42 @@ function selfTest() {
       writeFileSync(join(cut, plan), bigPlan); gIn(cut, "add", "-A"); gIn(cut, "commit", "-qm", "full");
       writeFileSync(join(cut, plan), bigPlan.slice(0, 400)); gIn(cut, "add", "-A"); gIn(cut, "commit", "-qm", "cut");
       writeFileSync(join(clean, plan), bigPlan); gIn(clean, "add", "-A"); gIn(clean, "commit", "-qm", "full");
-      out = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: cut, env: { ...process.env, GIT_DIR: join(clean, ".git"), GIT_WORK_TREE: clean }, encoding: "utf8" });
+      const ambient = {
+        ...process.env, GIT_DIR: join(clean, ".git"), GIT_WORK_TREE: clean, GIT_INDEX_FILE: join(clean, ".git", "index"),
+        GIT_COMMON_DIR: join(clean, ".git"), GIT_OBJECT_DIRECTORY: join(clean, ".git", "objects"), GIT_ALTERNATE_OBJECT_DIRECTORIES: join(clean, ".git", "objects"),
+      };
+      out = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: cut, env: ambient, encoding: "utf8" });
     } catch (e) { out = `threw: ${String(e.message).split("\n")[0]}`; }
     finally { rmSync(cut, { recursive: true, force: true }); rmSync(clean, { recursive: true, force: true }); }
-    checks.push(["an inherited GIT_DIR/GIT_WORK_TREE naming another repository does not redirect the measurement", /COMPANY_BUILD_PLAN\.md — is \d+ bytes against a high-water mark/.test(out)]);
+    checks.push(["inherited repository pointers naming another repository do not redirect the measurement", /COMPANY_BUILD_PLAN\.md — is \d+ bytes against a high-water mark/.test(out) && !/NOTE /.test(out)]);
+  }
+  // Every pointer is dropped and the history switches are set, whatever the ambient environment holds.
+  {
+    const ambient = Object.fromEntries(REPO_POINTERS.map((k) => [k, "/nowhere"]));
+    const e = gitEnvFrom({ ...ambient, GIT_GRAFT_FILE: "/some/grafts", GIT_NO_REPLACE_OBJECTS: "" });
+    const expected = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
+    checks.push(["all six repository pointers are dropped and replace refs and grafts are switched off",
+      expected.every((k) => REPO_POINTERS.includes(k) && !(k in e)) && e.GIT_NO_REPLACE_OBJECTS === "1" && e.GIT_GRAFT_FILE === "/dev/null"]);
+  }
+  // Repository config that reshapes git's output cannot hide a landing: each overridden key, one repository each.
+  for (const [key, value] of [["color.ui", "always"], ["color.diff", "always"], ["i18n.logOutputEncoding", "UTF-7"], ["log.showSignature", "true"]]) {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-config-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n");
+      writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); writeFileSync(join(d, "scripts/a.mjs"), "0\n");
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      gs("checkout", "-qb", "claude/cfg");
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/cfg, x): `scripts/a.mjs`.\n");
+      writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "fix");
+      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5: cfg", "claude/cfg");
+      gs("config", key, value);
+      const r = measure(d).find((x) => x.row === "row 1");
+      checks.push([`repository config ${key}=${value} does not hide a PR landing`, r?.status === "STALE" && r.pr === 5]);
+    } catch (e) {
+      checks.push([`config ${key} fixture ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
   }
   // Two ways a landing cannot be traced, each NOT MEASURED with its own reason.
   {
@@ -827,7 +869,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 70;
+  return failed === 0 && checks.length === 75;
 }
 
 let isMain = false;

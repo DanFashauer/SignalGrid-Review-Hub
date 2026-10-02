@@ -168,6 +168,49 @@ async function revocationRedis() {
     `success=${disguisedEnrol.success} error=${disguisedEnrol.error}`,
   );
 
+  // 1b' — the same key enrolled under two ids (review round 1, MEDIUM): revoking one id
+  // revokes the key, so the twin goes in the same fenced write.
+  const twinUser = "t_proof:revocation-redis-twin";
+  await resetIdentity(twinUser);
+  const keyHolder = newAuthenticator(false);
+  const twin = sameKeyNewId(keyHolder);
+  await enrol(twinUser, keyHolder, tenant);
+  check("redis: twin — the same key enrols under a second id", (await enrol(twinUser, twin, tenant)).success === true);
+  check("redis: twin — revoking the first id reports the removal", (await webauthnStore.removeCredential(twinUser, keyHolder.id)) === true);
+  check(
+    "redis: twin — the second id carrying the same key is gone too",
+    !(await webauthnStore.getCredentialsForUser(twinUser)).some((c) => c.id === twin.id),
+  );
+  check("redis: twin — …and a step-up signed by the revoked key under it is not released", (await stepUp(twinUser, twin, tenant)).success === false);
+  check(
+    "redis: twin — both ids are tombstoned",
+    (await rawRedis((r) => r.smismember(tombstoneKey(twinUser), `id:${keyHolder.id}`, `id:${twin.id}`))).every((hit) => hit === 1),
+  );
+  await resetIdentity(twinUser);
+
+  // 1b'' — THE TOMBSTONE GOES FIRST (review round 1, LOW: the ordering FENCED_REVOKE_LUA's
+  // comment claims had no test). Lua does not roll back, and SADD is the step that can
+  // fail on the data. Plant a wrong-typed value at the tombstone key directly: the revoke
+  // must THROW with the credential still enrolled — never remove it and leave no tombstone.
+  const orderUser = "t_proof:revocation-redis-order";
+  await resetIdentity(orderUser);
+  const orderDevice = newAuthenticator(false);
+  await enrol(orderUser, orderDevice, tenant);
+  await rawRedis((r) => r.set(tombstoneKey(orderUser), "not-a-set"));
+  let orderRevoke: unknown;
+  try {
+    orderRevoke = await webauthnStore.removeCredential(orderUser, orderDevice.id);
+  } catch (err) {
+    orderRevoke = err;
+  }
+  check("redis: a revocation whose tombstone write fails THROWS (not a reported removal)", orderRevoke instanceof Error, String(orderRevoke));
+  check(
+    "redis: …and removes nothing — the credential is still enrolled, truthfully unrevoked",
+    (await webauthnStore.getCredentialsForUser(orderUser)).some((c) => c.id === orderDevice.id),
+  );
+  await rawRedis((r) => r.del(tombstoneKey(orderUser)));
+  await resetIdentity(orderUser);
+
   // 1c — KEY NAMESPACE. identityRef is caller text and userId is `${tenant}:${identityRef}`,
   // so a tombstone stored at `webauthn:user:<userId>:revoked` was ALSO the record key of
   // the identity "<identityRef>:revoked". Enrolling that identity made the victim's

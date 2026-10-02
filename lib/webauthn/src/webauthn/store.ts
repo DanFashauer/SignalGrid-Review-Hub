@@ -104,6 +104,27 @@ function tombstoneMembers(credential: Pick<WebAuthnCredential, 'id' | 'publicKey
   return [`id:${credential.id}`, `key:${keyFingerprint(credential.publicKey)}`];
 }
 
+/**
+ * Take `credentialId` out of `user` — AND every other credential on the identity that
+ * carries the same KEY — and return the tombstone members for all of them, or null when
+ * the id is not enrolled. Mutates `user.credentials`.
+ *
+ * Revoking a credential revokes its key (review round 1, MEDIUM, reproduced on both
+ * stores). `addCredential` dedupes by id, so one key can sit on an identity under two ids
+ * (with `none` attestation, just by presenting it twice). Removing only the named id
+ * tombstoned the key but left its twin enrolled, and a step-up signed by the revoked key
+ * under the twin was released. Synchronous: the in-memory writer must not await between
+ * its read and its write.
+ */
+function takeRevokedKey(user: WebAuthnUser, credentialId: string): string[] | null {
+  const named = user.credentials.find((c) => c.id === credentialId);
+  if (!named) return null;
+  const revokedKey = keyFingerprint(named.publicKey);
+  const revoked = user.credentials.filter((c) => c.id === credentialId || keyFingerprint(c.publicKey) === revokedKey);
+  user.credentials = user.credentials.filter((c) => !revoked.includes(c));
+  return [...new Set(revoked.flatMap((c) => tombstoneMembers(c)))];
+}
+
 /** Thrown by `addCredential` for a credential (id or key) this identity revoked. A throw, not
  *  `{ stored: false }`: that shape already means "already enrolled, kept", and a caller
  *  reading only `stored` would report a refused revival as a successful re-enrolment. */
@@ -255,17 +276,18 @@ const RELEASE_LOCK_LUA =
 const FENCED_SET_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then redis.call('set', KEYS[2], ARGV[2]); return 1 else return 0 end";
 /** The revocation write: same fence as `FENCED_SET_LUA`, and in the SAME script it adds
- *  both tombstone members (ARGV[2], ARGV[3]) to the tombstone set (KEYS[3]) and removes
- *  the credential (SET the remaining record, or DEL it when the last credential goes —
- *  ARGV[4] = 'set' | 'del', ARGV[5] = the record). A lost lock writes neither half.
+ *  every tombstone member (ARGV[4..]) to the tombstone set (KEYS[3]) and removes the
+ *  credentials (SET the remaining record, or DEL it when none remain — ARGV[2] =
+ *  'set' | 'del', ARGV[3] = the record). A lost lock writes neither half.
  *  THE TOMBSTONE GOES FIRST: Lua does not roll back, and SADD is the one step that can
  *  fail on the data (a wrong-typed key), so a failure there aborts before the removal —
  *  the revocation errors with the credential still enrolled, which is truthful — rather
  *  than removing it and leaving no tombstone (the order this script first had). */
 const FENCED_REVOKE_LUA =
   "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-  "redis.call('sadd', KEYS[3], ARGV[2], ARGV[3]); " +
-  "if ARGV[4] == 'del' then redis.call('del', KEYS[2]) else redis.call('set', KEYS[2], ARGV[5]) end; " +
+  "local members = {} for i = 4, #ARGV do members[#members + 1] = ARGV[i] end; " +
+  "redis.call('sadd', KEYS[3], unpack(members)); " +
+  "if ARGV[2] == 'del' then redis.call('del', KEYS[2]) else redis.call('set', KEYS[2], ARGV[3]) end; " +
   "return 1 else return 0 end";
 
 type RedisClient = NonNullable<Awaited<ReturnType<typeof getRedisClient>>>;
@@ -278,7 +300,7 @@ interface LockFence {
   set(value: string): Promise<boolean>;
   /** Tombstone `members` and remove the credential — writing `remaining`, or deleting
    *  the record when it is null — in one fenced script (`FENCED_REVOKE_LUA`). */
-  revoke(members: [string, string], remaining: string | null): Promise<boolean>;
+  revoke(members: string[], remaining: string | null): Promise<boolean>;
 }
 
 /**
@@ -317,10 +339,10 @@ async function withUserLock<T>(
       const result = await redis.eval(FENCED_SET_LUA, 2, lockKey, key, lockToken, value);
       return result === 1;
     },
-    async revoke(members: [string, string], remaining: string | null): Promise<boolean> {
+    async revoke(members: string[], remaining: string | null): Promise<boolean> {
       const result = await redis.eval(
         FENCED_REVOKE_LUA, 3, lockKey, key, `${REVOKED_PREFIX}${userId}`,
-        lockToken, members[0], members[1], remaining === null ? 'del' : 'set', remaining ?? '',
+        lockToken, remaining === null ? 'del' : 'set', remaining ?? '', ...members,
       );
       return result === 1;
     },
@@ -416,9 +438,10 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
 }
 
 /**
- * Remove one credential from a user's enrollment record ATOMICALLY; the record itself
- * is deleted when its last credential goes. The removed id is tombstoned in the same
- * write, id and key, so no later enrolment can bring it back (see `REVOKED_PREFIX`).
+ * Remove one credential from a user's enrollment record ATOMICALLY — together with any
+ * other id on the identity carrying the same key (see `takeRevokedKey`); the record itself
+ * is deleted when its last credential goes. Every removed id, and the key, is tombstoned
+ * in the same write, so no later enrolment can bring them back (see `REVOKED_PREFIX`).
  *
  * Returns `false` when there was nothing to remove — no such user, or no such
  * credential on that user. That is the fail-closed answer for a revoke caller: it never
@@ -447,18 +470,17 @@ export async function removeCredential(userId: string, credentialId: string): Pr
           return false;
         }
         const user = JSON.parse(data) as WebAuthnUser;
-        const index = user.credentials.findIndex((c) => c.id === credentialId);
-        if (index === -1) {
+        const members = takeRevokedKey(user, credentialId);
+        if (members === null) {
           inMemoryUsers.set(userId, user);
           return false;
         }
-        const [removed] = user.credentials.splice(index, 1);
-        // One fenced script (FENCED_REVOKE_LUA) tombstones the id and key and removes the
-        // credential — deleting the record when it was the last. A failure, including a
+        // One fenced script (FENCED_REVOKE_LUA) tombstones every id and the key and removes
+        // the credentials — deleting the record when none remain. A failure, including a
         // lease that expired or was deleted mid-section, throws rather than reporting
         // `true` over a write that never landed.
         const last = user.credentials.length === 0;
-        const wrote = await fence.revoke(tombstoneMembers(removed), last ? null : JSON.stringify(user));
+        const wrote = await fence.revoke(members, last ? null : JSON.stringify(user));
         if (!wrote) {
           throw new Error(
             "WebAuthn credential revocation: lock lost; not reporting a write that did not happen",
@@ -474,11 +496,10 @@ export async function removeCredential(userId: string, credentialId: string): Pr
   // No Redis configured: single-process in-memory mode, NO await from read to write.
   const user = inMemoryUsers.get(userId);
   if (!user) return false;
-  const index = user.credentials.findIndex((c) => c.id === credentialId);
-  if (index === -1) return false;
-  const [removed] = user.credentials.splice(index, 1);
+  const members = takeRevokedKey(user, credentialId);
+  if (members === null) return false;
   const tombstones = inMemoryRevoked.get(userId) ?? new Set<string>();
-  for (const member of tombstoneMembers(removed)) tombstones.add(member);
+  for (const member of members) tombstones.add(member);
   inMemoryRevoked.set(userId, tombstones);
   if (user.credentials.length === 0) {
     inMemoryUsers.delete(userId);

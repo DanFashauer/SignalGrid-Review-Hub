@@ -167,6 +167,24 @@ async function gapOneRevivalByEnrolment() {
     String(storeRefusal),
   );
 
+  // THE SAME KEY UNDER TWO IDS (review round 1, MEDIUM). `addCredential` dedupes by id,
+  // so one key can sit on an identity under two ids — with `none` attestation, by
+  // presenting it twice. Revoking one id used to tombstone the key but leave its twin
+  // enrolled, and a step-up signed by the revoked key under the twin was released.
+  // Revoking a credential revokes its KEY: every id on the identity carrying it goes.
+  const twinUser = "t_proof:revocation-gap1-twin";
+  const keyHolder = newAuthenticator(false);
+  const twin = sameKeyNewId(keyHolder);
+  check("twin: the key enrols under its first id", (await enrol(twinUser, keyHolder)).success === true);
+  check("twin: …and again under a second id (dedupe is by id)", (await enrol(twinUser, twin)).success === true);
+  check("twin: revoking the FIRST id reports the removal", (await webauthnStore.removeCredential(twinUser, keyHolder.id)) === true);
+  check(
+    "twin: the SECOND id carrying the same key is gone too",
+    !(await enrolledIds(twinUser)).includes(twin.id),
+    `enrolled: [${(await enrolledIds(twinUser)).join(", ")}]`,
+  );
+  check("twin: …and a step-up signed by the revoked key under the second id is not released", (await stepUp(twinUser, twin)).success === false);
+
   // Scope of the tombstone: only a credential that was actually removed is recorded.
   // A revoke that removed nothing (`false`) must not pre-block an id, or the answer
   // `revoked: false` would be a lie in the other direction.

@@ -1305,6 +1305,19 @@ async function run() {
       token: KEYS.operator, body: { identityRef: revokeIdentity, credentialId },
     });
     check("revoking an already-revoked credential id → 200 with revoked:false", revokeAgain.status === 200 && revokeAgain.json?.revoked === false);
+
+    // A revoked credential stays revoked (PR #1314): the SAME authenticator, brought back
+    // through a fresh enrolment ceremony, is refused — and the identity stays unenrolled.
+    const reOpts = await req("POST", "/v1/step-up/enroll/options", { token: KEYS.operator, body: { identityRef: revokeIdentity } });
+    const reEnrol = await req("POST", "/v1/step-up/enroll/verify", {
+      token: KEYS.operator,
+      body: { identityRef: revokeIdentity, challengeId: reOpts.json?.challengeId, response: authenticator.registration(reOpts.json?.publicKey?.challenge) },
+    });
+    check("re-enrolling a revoked credential through a fresh ceremony → 403 (it does not come back)", reEnrol.status === 403);
+    const challengeAfterReEnrol = await req("POST", "/v1/step-up/challenge", {
+      token: KEYS.operator, body: { identityRef: revokeIdentity, integrationId: "bcma", deviceRef: suDevice, actionKey: "controlled.administer" },
+    });
+    check("…and the identity is still unenrolled: a step-up challenge → 409", challengeAfterReEnrol.status === 409);
   }
 
   // The evaluate route must NEVER release from a request flag, even enrolled.

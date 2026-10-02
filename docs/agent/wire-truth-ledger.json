@@ -133,6 +133,20 @@
         { "path": "lib/integrations/src/integrations/link-usability/types.ts", "symbol": "LinkProgress", "dimension": "link-usability" },
         { "path": "lib/integrations/src/integrations/sse-egress/types.ts", "symbol": "SseEgressReportRaw", "dimension": "sse-egress" }
       ]
+    },
+    {
+      "id": "live-keycloak-access-governance",
+      "product": "Keycloak 26.4.7 (start-dev, realm sg-access-gov seeded per-user by the proof)",
+      "dimensions": ["access-governance"],
+      "evidence": ["scripts/src/live-keycloak-access-governance-proof.ts", "artifacts/live-captures/keycloak-access-governance.json"],
+      "date": "2026-10-02",
+      "divergenceFound": true,
+      "divergenceRecord": { "path": "artifacts/live-captures/keycloak-access-governance.json", "quote": "wire-vs-fixture: DIVERGED on 9 axes — ag-nurse.entitlements wire-only=[client:account:manage-account-links] fixture-only=[]" },
+      "boundTo": [
+        { "path": "lib/integrations/src/integrations/access-governance/evaluate.ts", "symbol": "evaluateAccessGovernancePosture", "dimension": "access-governance" },
+        { "path": "lib/integrations/src/integrations/access-governance/access-governance-connector.ts", "symbol": "normalizeReport", "dimension": "access-governance" },
+        { "path": "lib/integrations/src/integrations/access-governance/types.ts", "symbol": "AccessGovernanceReportRaw", "dimension": "access-governance" }
+      ]
     }
   ]
 }

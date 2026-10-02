@@ -275,6 +275,13 @@ if [ "$SIM_ONLY" != "--sim-only" ]; then
       skip "$p" "needs a live Keycloak (KEYCLOAK_URL); see docs/KEYCLOAK_LIVE_INTEGRATION.md"
       continue
     fi
+    # proof:live-keycloak-access-governance SEEDS and reads its own realm, so it needs the
+    # lab's admin login as well as the URL — a host with only KEYCLOAK_URL set (for the
+    # DPoP proof) must skip it, not fail it.
+    if [ "$p" = "proof:live-keycloak-access-governance" ] && { [ -z "${KEYCLOAK_URL:-}" ] || [ -z "${KEYCLOAK_ADMIN_USER:-}" ] || [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; }; then
+      skip "$p" "needs a live Keycloak + admin env; run ./scripts/run-live-lanes.sh --only keycloak"
+      continue
+    fi
     # proof:live-glpi joined after this guard block was written and never got its
     # row: with GLPI_URL unset the proof defaults to 127.0.0.1:8430 and exits 1
     # when nothing answers — which failed the hosted-runner rehearsal (Mac lane

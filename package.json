@@ -155,6 +155,7 @@
     "proof:live-fleet-workflow": "pnpm --filter @workspace/scripts run proof:live-fleet-workflow",
     "proof:live-idp": "pnpm --filter @workspace/scripts run proof:live-idp",
     "proof:live-keycloak": "pnpm --filter @workspace/scripts run proof:live-keycloak",
+    "proof:live-keycloak-access-governance": "pnpm --filter @workspace/scripts run proof:live-keycloak-access-governance",
     "proof:live-location": "pnpm --filter @workspace/scripts run proof:live-location",
     "proof:local-authority": "pnpm --filter @workspace/scripts run proof:local-authority",
     "proof:location-services": "pnpm --filter @workspace/scripts run proof:location-services",

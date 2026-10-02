@@ -64,7 +64,7 @@
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -286,7 +286,7 @@ const git = (cwd, args) => spawnSync("git", args, { cwd, encoding: "utf8" });
 export function openTip(cwd = repo, ref = TIP_REF) {
   const sha = git(cwd, ["rev-parse", "--verify", "-q", `${ref}^{commit}`]);
   if (sha.status !== 0) throw new TipMissing(`${ref} does not exist in this checkout — stalls cannot be measured, and an unknown stall state never reads as "no stall". Fetch it: git fetch origin SignalGrid_Alpha`);
-  const root = mkdtempSync(join(tmpdir(), "raised-hands-tip-"));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), "raised-hands-tip-"));
   const wt = git(cwd, ["worktree", "add", "--detach", "--force", root, ref]);
   if (wt.status !== 0) { rmSync(root, { recursive: true, force: true }); throw new TipMissing(`could not check out ${ref}: ${wt.stderr.trim()}`); }
   const date = git(cwd, ["log", "-1", "--format=%cI", ref]).stdout.trim();
@@ -575,7 +575,7 @@ async function selfTest() {
 
   // (c) stalls are measured at the tip, not the branch tree
   const plant = async (workHb, tipHb) => {
-    const dir = mkdtempSync(join(tmpdir(), "rh-plant-"));
+    const dir = mkdtempSync(join(realpathSync(tmpdir()), "rh-plant-"));
     const hbPath = "artifacts/agent-heartbeats/x.json";
     const g = (...a) => { const r = git(dir, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r; };
     try {
@@ -595,14 +595,14 @@ async function selfTest() {
   };
   checks.push(["a STALE heartbeat in the branch tree with a FRESH one at the tip raises NO hand", (await plant(ago(20), ago(1))) === 0]);
   checks.push(["…the inverse (fresh in the branch tree, stale at the tip) raises a hand", (await plant(ago(1), ago(20))) === 1]);
-  const bare = mkdtempSync(join(tmpdir(), "rh-bare-"));
+  const bare = mkdtempSync(join(realpathSync(tmpdir()), "rh-bare-"));
   try { git(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
   finally { rmSync(bare, { recursive: true, force: true }); }
 
   // main() end to end: a temp git repo holding a copy of the scripts, run as the real CLI. The cases
   // above call openTip/evaluate directly and never see main's wiring (the TipMissing exit, the tip root,
   // the stale rule reaching checkOutcome, the printed source line).
-  const e2e = mkdtempSync(join(tmpdir(), "rh-e2e-"));
+  const e2e = mkdtempSync(join(realpathSync(tmpdir()), "rh-e2e-"));
   try {
     const g2 = (...a) => { const r = git(e2e, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
     g2("init", "-q"); g2("config", "user.email", "t@t"); g2("config", "user.name", "t");

@@ -32,7 +32,7 @@
 // dropped. --json / --tick-summary stay report-only (loop:state and the mac tick fold them
 // in so a raised hand is never lost); --self-test is a gate too (the routing must work).
 
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -215,7 +215,7 @@ function selfTest() {
   t("an unreadable ledger file counts as a gap, never dropped", s.gaps >= 1);
   // main(): the bare run must EXIT 1 on a planted bad hand and 0 on a good one (a self-test of
   // validateHand alone cannot see main's wiring). Runs a copy of this script in a temp tree.
-  const tmp = mkdtempSync(join(tmpdir(), "crh-main-"));
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), "crh-main-"));
   try {
     mkdirSync(join(tmp, "scripts"), { recursive: true }); mkdirSync(join(tmp, "docs/agent"), { recursive: true }); mkdirSync(join(tmp, "artifacts/raised-hands"), { recursive: true });
     copyFileSync(fileURLToPath(import.meta.url), join(tmp, "scripts/check-raised-hands.mjs"));

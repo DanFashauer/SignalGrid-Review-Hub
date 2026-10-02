@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-awaiting-owner-row-18-needs-o",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: awaiting-owner-row-18 — needs owner",
+  "body": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1118 and #1121, golden-rule-1 ruling on the DecisionEngine.swift and AppWorkflows.swift re-port), checked 2026-09-29. Clear the blocker, or remove its marker once cleared\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ 9fbb6a38c9fd6fc4b6c90d3a2b65f8b9c4d4be94. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-10-01T16:58:11.089Z"
+}

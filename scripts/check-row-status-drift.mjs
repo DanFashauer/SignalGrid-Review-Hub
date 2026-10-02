@@ -12,9 +12,10 @@
 // not a readable UTF-8 text file with rows at HEAD (missing, a directory, a
 // symlink, a submodule, binary, UTF-16 or another encoding, a Git LFS pointer,
 // a lone-CR line break, merge-conflict markers, no rows in its own grammar, or
-// more than a quarter smaller than before its last change) is a NOT MEASURED
-// line, never silently zero. CEILING: a cut smaller than a quarter cannot be
-// told from a deliberate deletion. A ledger with uncommitted edits, or flagged
+// more than a quarter below its high-water mark over its last 50 changes) is
+// a NOT MEASURED line, never silently zero. CEILING: a cut under a quarter of
+// that mark cannot be told from a deliberate deletion, and a deliberate cut
+// over a quarter reads NOT MEASURED until it ages out of the 50-change window. A ledger with uncommitted edits, or flagged
 // assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
 // 0 in every case, NOT MEASURED included: report-only is the contract this
 // row was dispatched with (making NOT MEASURED fatal is the owner's call).
@@ -95,6 +96,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, marks, parseRows, statusText } from "./check-backlog-ownership.mjs";
 
 export const LEDGERS = ["docs/COMPANY_BUILD_PLAN.md", "docs/BUILD_BACKLOG.md"];
+const HIGH_WATER_WINDOW = 50;
 
 // Whitespace-tolerant: a hard-wrapped annotation is still an annotation.
 const ANNOTATION = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})\s+\(branch\s+([A-Za-z0-9._/-]+)/g;
@@ -262,16 +264,22 @@ export function readLedger(cwd, file) {
   // Rows in the ledger's OWN grammar: a backlog's checkboxes do not make a plan readable, nor the reverse.
   const rows = file === LEDGERS[1] ? (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(text).length;
   if (rows === 0) return { why: "has no rows in its own grammar (empty, cut before its first row, or its section heading renamed)" };
-  // A ledger cut mid-file still has rows. Compare with the copy before its most
-  // recent change: across both ledgers' histories the largest real one-change
-  // shrink is about 3%, so losing more than a quarter of the bytes is refused.
-  // CEILING: a smaller cut cannot be told from a deliberate deletion.
-  let prev = 0, last = "";
+  // A ledger cut mid-file still has rows. Compare with a HIGH-WATER MARK: the
+  // largest size this ledger reached over its last HIGH_WATER_WINDOW changes on
+  // the first-parent line. Comparing with the previous copy only was not enough:
+  // one later edit, or a routine sync-merge, made the cut copy the baseline, and
+  // cuts each under the floor added up unseen. Across both ledgers' histories a
+  // real copy never fell below about 95% of that mark, so under 75% is refused.
+  // CEILING: a cut under a quarter of the mark cannot be told from a deliberate
+  // deletion, and a deliberate cut over a quarter reads NOT MEASURED until it
+  // ages out of the window.
+  let high = 0, at = "";
   try {
-    last = git(cwd, ["log", "-1", "--first-parent", "--format=%H", "HEAD", "--", file]);
-    prev = last ? Number(git(cwd, ["cat-file", "-s", `${last}^1:${file}`])) : 0;
-  } catch { prev = 0; /* no earlier copy: nothing to compare */ }
-  if (prev > 0 && raw.length < prev * 0.75) return { why: `shrank from ${prev} to ${raw.length} bytes in its last change ${last.slice(0, 8)} (more than a quarter gone: truncated?)` };
+    const shas = git(cwd, ["log", "--first-parent", `-${HIGH_WATER_WINDOW}`, "--format=%H", "HEAD", "--", file]).split("\n").filter(Boolean);
+    const sizes = execFileSync("git", ["cat-file", "--batch-check=%(objectsize)"], { cwd, input: shas.map((h) => `${h}:${file}`).join("\n") + "\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim().split("\n");
+    sizes.forEach((sz, i) => { const n = Number(sz); if (Number.isFinite(n) && n > high) { high = n; at = shas[i]; } });
+  } catch { high = 0; /* no history to compare: nothing to refuse on */ }
+  if (high > 0 && raw.length < high * 0.75) return { why: `is ${raw.length} bytes against a high-water mark of ${high} at ${at.slice(0, 8)} within its last ${HIGH_WATER_WINDOW} changes (more than a quarter gone: truncated?)` };
   return { text };
 }
 
@@ -453,7 +461,7 @@ function selfTest() {
       writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n");
       const then = shape(join(d, plan), d);
       gs("add", "-A"); gs("commit", "-qm", "shape");
-      if (typeof then === "function") { then(join(d, plan), d, gs); gs("add", "-A"); gs("commit", "-qm", "then"); }
+      for (const step of typeof then === "function" ? [then] : then ?? []) { step(join(d, plan), gs); gs("add", "-A"); gs("commit", "-q", "--allow-empty", "-m", "then"); }
       const r = measure(d).find((x) => x.file === plan);
       return r ? `${r.status}: ${r.why ?? ""}` : "(no entry)";
     } finally { rmSync(d, { recursive: true, force: true }); }
@@ -474,7 +482,20 @@ function selfTest() {
     ["two rows joined by a lone CR", /lone CR/, (f) => writeFileSync(f, planText + "\r2. **Row 2.** — DONE.\n")],
     ["a file holding merge-conflict markers", /merge-conflict/, (f) => writeFileSync(f, "<<<<<<< HEAD\n" + planText + "=======\n" + planText + ">>>>>>> other\n")],
     ["a renamed section heading plus a stray checkbox", /no rows in its own grammar/, (f) => writeFileSync(f, planText.replace("Global backlog", "Global Backlog") + "- [ ] item\n")],
-    ["a file cut mid-file with rows left", /shrank from/, (f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.slice(0, 400)); }],
+    ["a file cut mid-file with rows left", /high-water mark/, (f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.slice(0, 400)); }],
+    ["a cut followed by a small edit to the same ledger", /high-water mark/, (f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), (g) => writeFileSync(g, bigPlan.slice(0, 400) + "\n")]; }],
+    ["a cut followed by a sync-merge that also edits the ledger", /high-water mark/, (f) => {
+      writeFileSync(f, bigPlan);
+      return [
+        (g, gs) => { gs("checkout", "-qb", "side"); writeFileSync(g, bigPlan.replace("Some body text for row 1.", "Edited body text for row 1.")); gs("commit", "-qam", "side edit"); gs("checkout", "-q", "main"); writeFileSync(g, bigPlan.slice(0, 600)); },
+        (g, gs) => gs("merge", "-q", "--no-edit", "side"),
+      ];
+    }],
+    ["three cuts in a row, each under a quarter", /high-water mark/, (f) => {
+      writeFileSync(f, bigPlan);
+      const keep = (g) => { const t = readFileSync(g, "utf8"); writeFileSync(g, t.slice(0, Math.floor(t.length * 0.8))); };
+      return [keep, keep, keep];
+    }],
   ];
   for (const [name, why, shape] of shapes) {
     let st = "";
@@ -530,7 +551,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 39;
+  return failed === 0 && checks.length === 42;
 }
 
 let isMain = false;

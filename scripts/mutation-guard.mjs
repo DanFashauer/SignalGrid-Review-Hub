@@ -46,7 +46,7 @@
 // source files already label them. An allowlist entry that stops matching is itself a
 // failure: it means the code moved and the justification was not revisited.
 
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -1569,6 +1569,36 @@ function killGroup(child) {
   try { process.kill(-child.pid, "SIGKILL"); } catch { try { child.kill("SIGKILL"); } catch { /* already gone */ } }
 }
 
+/**
+ * Restore the journalled originals on exit and on SIGINT/SIGTERM/SIGHUP. `proc` is injectable so
+ * the gate can drive the real handlers deterministically, without a process. A FAILED restore is
+ * reported as one (and once): the tree may still hold a deliberately broken guard.
+ *
+ * KNOWN LIMITS, stated where the code is: the proof runs DETACHED (its own process group) so a
+ * catchable signal can kill its whole tree before the restore; a group-wide SIGKILL of the guard
+ * therefore leaves the proof child running as an orphan (the journal + next-start refusal still
+ * protect the tree), and a proof's own `setsid`/detached grandchild escapes the group kill.
+ */
+export function installRestore({ jDir, pid, proc = process, getChild = () => null, root = repoRoot }) {
+  let reported = false;
+  const restoreAll = () => { try { journalRestore(jDir, pid, root); return null; } catch (err) { return err; } };
+  const failed = (err) => `RESTORE FAILED (${err instanceof Error ? err.message : String(err)}) — a registered source file may still be MUTATED: check \`git status\`, then run \`node scripts/mutation-guard.mjs --restore-stale\``;
+  proc.on("exit", () => {
+    const err = restoreAll();
+    if (err && !reported) { console.error(`\nMutation guard: ${failed(err)}`); proc.exitCode = 1; }
+  });
+  for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
+    proc.on(sig, () => {
+      const child = getChild();
+      if (child) killGroup(child); // the proof must not outlive the restore
+      const err = restoreAll();
+      reported = true;
+      console.error(err ? `\nMutation guard interrupted by ${sig} — ${failed(err)}` : `\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
+      proc.exit(err ? 1 : code);
+    });
+  }
+}
+
 // ── in-place mutation journal ─────────────────────────────────────────────────
 // The sweep rewrites registered SOURCE files (deliberately broken security guards) in the
 // working tree. Before the first write it records {path, original bytes} in a journal under
@@ -1577,14 +1607,15 @@ function killGroup(child) {
 // and the NEXT startup refuses to sweep over a file whose bytes differ from the journal's
 // original, naming the entry; `--restore-stale` applies it.
 
-export function journalDir(root = repoRoot) {
-  const base = resolve(tmpdir());
-  // A journal inside the tree is an untracked file in the tree — it would stamp every sim
-  // result as minted from a dirty tree, and a SIGKILL would leave it beside the mutated file.
-  if (base === resolve(root) || base.startsWith(resolve(root) + "/")) {
+export function journalDir(root = repoRoot, tmp = tmpdir()) {
+  // realpath, not a lexical resolve(): a TMPDIR that is a symlink INTO the tree would otherwise
+  // bypass the check and leave the journal as an untracked file beside the mutated source.
+  const base = realpathSync(resolve(tmp));
+  const real = realpathSync(resolve(root));
+  if (base === real || base.startsWith(real + "/")) {
     throw new Error(`the OS temp dir ${base} is inside the repo root — the mutation journal must live outside the tree; set TMPDIR elsewhere`);
   }
-  return join(base, `signalgrid-mutation-journal-${createHash("sha1").update(root).digest("hex").slice(0, 12)}`);
+  return join(base, `signalgrid-mutation-journal-${createHash("sha1").update(real).digest("hex").slice(0, 12)}`);
 }
 
 // The journal dir sits at a predictable path in a SHARED temp dir, and restore writes whatever
@@ -1666,9 +1697,9 @@ function pidAlive(pid) {
  * must actually be a mutation-guard. Where it cannot (no /proc), say "not a live sweep":
  * fail closed — the journal is then treated as stale and refused, never silently skipped.
  */
-export function sweepAlive(pid) {
-  if (pid === process.pid || !pidAlive(pid)) return false;
-  try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("mutation-guard"); } catch { return false; }
+export function sweepAlive(pid, self = process.pid, readCmd = (p) => readFileSync(`/proc/${p}/cmdline`, "utf8")) {
+  if (pid === self || !pidAlive(pid)) return false;
+  try { return readCmd(pid).includes("mutation-guard"); } catch { return false; }
 }
 
 /** Journals owned by a sweep that is running right now (two sweeps must not share the tree). */
@@ -1866,6 +1897,10 @@ async function main() {
     console.log(`cleared stale journal ${j.journal} (pid ${j.pid}) — every file already matches its original.`);
   }
   stale = stale.filter((x) => x.unreadable || x.differing.length > 0);
+  if (process.argv.includes("--restore-stale") && stale.length === 0) {
+    console.log("no stale journal to restore.");
+    process.exit(0);
+  }
   if (stale.length > 0) {
     if (process.argv.includes("--restore-stale")) {
       for (const j of stale) {
@@ -1895,6 +1930,16 @@ async function main() {
       process.exit(1);
     }
   }
+  // From HERE this process owns the tree: an (empty) journal is the lock a second sweep sees —
+  // written BEFORE the baseline, so a second start is refused during it too — and the restore
+  // handlers (which also remove the marker on every exit path) are installed.
+  try {
+    journalWrite(jDir, process.pid, []);
+  } catch (err) {
+    console.error(`Mutation guard REFUSES to start: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+  installRestore({ jDir, pid: process.pid, getChild: () => activeChild });
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
@@ -1967,24 +2012,7 @@ async function main() {
   const zeroMutation = [];
   const baselineFailures = [];
 
-  // Restore on any exit path a handler can run on. Registered AFTER the stale-journal check
-  // (never restore over another sweep's journal) and only once the sweep proper starts.
   const myPid = process.pid;
-  // Returns the error if the restore FAILED — a failed restore must never be reported as one.
-  const restoreAll = () => { try { journalRestore(jDir, myPid); return null; } catch (err) { return err; } };
-  const restoreFailed = (err) => `RESTORE FAILED (${err instanceof Error ? err.message : String(err)}) — a registered source file may still be MUTATED: check \`git status\`, then run \`node scripts/mutation-guard.mjs --restore-stale\``;
-  process.on("exit", () => {
-    const err = restoreAll();
-    if (err) { console.error(`\nMutation guard: ${restoreFailed(err)}`); process.exitCode = 1; }
-  });
-  for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
-    process.on(sig, () => {
-      if (activeChild) killGroup(activeChild); // the proof must not outlive the restore
-      const err = restoreAll();
-      console.error(err ? `\nMutation guard interrupted by ${sig} — ${restoreFailed(err)}` : `\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
-      process.exit(err ? 1 : code);
-    });
-  }
 
   for (const target of targets) {
     console.log(`── ${target.proof}`);
@@ -2029,7 +2057,7 @@ async function main() {
           // ALWAYS restore, including on an unexpected throw. A mutation left on disk would
           // be catastrophic — it is a deliberately broken security guard.
           writeFileSync(mutation.abs, mutation.original);
-          journalClear(jDir, myPid);
+          journalWrite(jDir, myPid, []); // back to the bare lock marker; removed on exit
         }
         if (verdict === "killed") {
           killed += 1;

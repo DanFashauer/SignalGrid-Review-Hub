@@ -15,13 +15,14 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, classifyRun } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, installRestore, classifyRun } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -199,23 +200,67 @@ check("proof:carrier-reachability keeps its decision ladder registered: evaluate
     check("a journal whose sweep IS alive blocks a second sweep (journalLive)", journalLive(jdir, () => true).length === 1);
   } finally { rmSync(jdir, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }); }
 }
+check("the own-pid rule holds on its own (not masked by the cmdline test): own pid never counts, a live mutation-guard pid does",
+  sweepAlive(process.pid, process.pid, () => "node mutation-guard.mjs") === false
+  && sweepAlive(process.pid, -1, () => "node mutation-guard.mjs") === true
+  && sweepAlive(process.pid, -1, () => "node something-else.mjs") === false);
 {
-  const saved = process.env.TMPDIR;
-  const inside = join(dirname(fileURLToPath(import.meta.url)), "..", "scratch-tmp-never-created");
-  process.env.TMPDIR = inside;
-  let refused = false;
-  try { journalDir(); } catch { refused = true; } finally { if (saved === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved; }
-  check("a TMPDIR inside the repo root is refused (the journal must never be an untracked file in the tree)", refused);
+  const here0 = dirname(fileURLToPath(import.meta.url));
+  const repo0 = resolve(here0, "..");
+  const scratch = mkdtempSync(join(tmpdir(), "mg-jdir-"));
+  try {
+    let direct = false; let viaLink = false;
+    try { journalDir(repo0, here0); } catch { direct = true; }
+    symlinkSync(here0, join(scratch, "link"));
+    try { journalDir(repo0, join(scratch, "link")); } catch { viaLink = true; }
+    check("a TMPDIR inside the repo root is refused — including a SYMLINK that points into it (realpath, not a lexical path)", direct && viaLink);
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+}
+
+// The real handlers, driven deterministically through an injected process (no child process involved).
+{
+  const root = mkdtempSync(join(tmpdir(), "mg-restore-root-"));
+  const jdir = mkdtempSync(join(tmpdir(), "mg-restore-dir-"));
+  const origErr = console.error;
+  const logged = [];
+  console.error = (m) => { logged.push(String(m)); };
+  try {
+    const mutate = (pid) => { writeFileSync(join(root, "g.ts"), "mutated"); journalWrite(jdir, pid, [{ file: "g.ts", original: "orig" }]); };
+    // exit-time restore
+    let proc = Object.assign(new EventEmitter(), { exitCode: 0, exit() {} });
+    installRestore({ jDir: jdir, pid: 11, proc, root });
+    mutate(11); proc.emit("exit");
+    check("the EXIT handler restores a still-journalled mutation (exit-time restore)", readFileSync(join(root, "g.ts"), "utf8") === "orig" && !existsSync(join(jdir, "11.json")));
+    // signal restore + exit code
+    let exited = null;
+    proc = Object.assign(new EventEmitter(), { exitCode: 0, exit(c) { exited = c; } });
+    installRestore({ jDir: jdir, pid: 12, proc, root });
+    mutate(12); proc.emit("SIGTERM");
+    check("the SIGTERM handler restores and exits 143", readFileSync(join(root, "g.ts"), "utf8") === "orig" && exited === 143);
+    // a FAILED restore is reported as failed, exit 1, once
+    exited = null; logged.length = 0;
+    proc = Object.assign(new EventEmitter(), { exitCode: 0, exit(c) { exited = c; } });
+    installRestore({ jDir: jdir, pid: 13, proc, root });
+    mutate(13); chmodSync(jdir, 0o755);
+    proc.emit("SIGTERM"); proc.emit("exit");
+    chmodSync(jdir, 0o700);
+    check("a FAILED restore says RESTORE FAILED (once), exits 1, and leaves the file as it was — never reports success",
+      exited === 1 && readFileSync(join(root, "g.ts"), "utf8") === "mutated" && logged.filter((m) => /RESTORE FAILED/.test(m)).length === 1 && !logged.some((m) => /restored from the journal/.test(m)));
+  } finally { console.error = origErr; rmSync(root, { recursive: true, force: true }); rmSync(jdir, { recursive: true, force: true }); }
 }
 
 // ── END TO END: the real signal path, through the real sweep ──────────────────────────────────
 // The helpers above are pure. The defect this PR exists for lives in main(): the signal handlers,
-// the journal-BEFORE-write ordering, the async process-group runner and the startup stale check.
-// Deleting any of those leaves every helper test green, so this drives a LIVE sweep: start it, wait
-// until a mutation is on disk, SIGTERM it, and assert the registered file is byte-identical, the
-// journal is gone and the proof child died. Then SIGKILL one (no handler can run) and assert the
-// NEXT start refuses naming the file, and `--restore-stale` restores it. The target file's bytes are
-// saved here and written back in `finally`, so a regression in the guard cannot leave the tree dirty.
+// the journal-BEFORE-write ordering, the async process-group runner, the lock marker and the startup
+// stale check. So this drives a LIVE sweep: start it, wait until a mutation is on disk, start a SECOND
+// sweep (must be refused), SIGTERM the first, and assert the registered file is byte-identical, the
+// journal is gone and the proof's whole process tree died. Then SIGKILL one (no handler can run) and
+// assert the NEXT start refuses naming the file, and `--restore-stale` restores it.
+//
+// ISOLATION: every sweep here runs with a PRIVATE TMPDIR, so this block can neither see nor delete a
+// real dead sweep's journal in the shared temp dir (an earlier version `rm -r`'d it — the recovery
+// record). It never matches processes by name: it records the sweep's own descendants by pid. The
+// target's bytes are saved and written back in `finally`, so a regression cannot leave the tree dirty.
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const repo = resolve(here, "..");
@@ -223,60 +268,82 @@ check("proof:carrier-reachability keeps its decision ladder registered: evaluate
   const PROOF = "proof:carrier-reachability";
   const target = join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts");
   const original = readFileSync(target, "utf8");
-  const jdir = journalDir();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const startSweep = (args) => {
-    const child = spawn("node", [guard, `--proof=${PROOF}`, ...args], { cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
+  const scratch = mkdtempSync(join(tmpdir(), "mg-e2e-"));
+  const env = { ...process.env, TMPDIR: scratch };
+  const jdir = journalDir(repo, scratch);
+  // A REAL dead sweep's journal in the shared temp dir means the target may already be mutated: refuse
+  // to run (and touch nothing) rather than record mutated bytes as the original.
+  let preconditionOk = readFileSync(target, "utf8") === original;
+  try { preconditionOk = preconditionOk && journalStale(journalDir(repo)).every((j) => !j.unreadable && j.differing.length === 0); } catch { preconditionOk = false; }
+  const startSweep = (args = []) => {
+    const child = spawn("node", [guard, `--proof=${PROOF}`, ...args], { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { out += d; });
     const exited = new Promise((r) => child.on("close", (code, signal) => r({ code, signal, out })));
-    return { child, exited, output: () => out };
+    return { child, exited };
   };
-  const waitDirty = async (limitMs) => {
-    for (let t = 0; t < limitMs; t += 50) {
-      if (readFileSync(target, "utf8") !== original) return true;
-      await sleep(50);
-    }
-    return false;
+  const waitFor = async (fn, limitMs) => { for (let t = 0; t < limitMs; t += 50) { if (fn()) return true; await sleep(50); } return false; };
+  const dirty = () => readFileSync(target, "utf8") !== original;
+  const journalFiles = () => (existsSync(jdir) ? readdirSync(jdir).filter((n) => /^\d+\.json$/.test(n)) : []);
+  const descendants = (pid) => {
+    const r = spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" });
+    const kids = (r.stdout ?? "").split("\n").map((x) => Number.parseInt(x, 10)).filter(Number.isFinite);
+    return kids.flatMap((k) => [k, ...descendants(k)]);
   };
-  const proofChildren = () => spawnSync("pgrep", ["-f", `pnpm run ${PROOF}`], { encoding: "utf8" });
+  const isDead = (pid) => {
+    try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch (e) { return e?.code === "ENOENT" ? true : (() => { try { process.kill(pid, 0); return false; } catch { return true; } })(); }
+  };
+  const live = [];
   try {
-    if (readFileSync(target, "utf8") !== original || (existsSync(jdir) && readdirSync(jdir).length > 0)) {
-      check("end-to-end signal test: precondition (clean target, empty journal dir) — skipped a dirty tree rather than guess", false);
+    if (!preconditionOk) {
+      check("end-to-end signal test: precondition (clean target; no unrecovered journal from a real dead sweep) — refused to run and touched nothing", false);
     } else {
-      // 1. SIGTERM mid-mutation
-      const a = startSweep([]);
-      const dirtied = await waitDirty(90000);
-      check("e2e: a live sweep put a mutation on disk (journal-before-write: journal exists while the file is dirty)",
-        dirtied && existsSync(jdir) && readdirSync(jdir).some((n) => /^\d+\.json$/.test(n)));
+      // 1. SIGTERM mid-mutation, with a second sweep refused meanwhile
+      const a = startSweep();
+      const marker = await waitFor(() => journalFiles().length > 0, 90000);
+      // The marker must exist while the target is still CLEAN (the baseline phase), or a second sweep started
+      // during the baseline is not refused. Without the marker the journal appears only with the first mutation.
+      check("e2e: a started sweep holds the lock during its BASELINE (journal present while the target is still clean)", marker && !dirty());
+      const second = startSweep();
+      const rs = await second.exited;
+      check("e2e: a SECOND sweep is refused while one is running (exit 1, 'another mutation sweep is running')", rs.code === 1 && /another mutation sweep is running/.test(rs.out));
+      const dirtied = await waitFor(dirty, 90000);
+      check("e2e: the first sweep put a mutation on disk with its journal beside it (journal-before-write)", dirtied && journalFiles().length > 0);
+      const tree = descendants(a.child.pid); live.push(...tree);
+      check("e2e: the proof's process tree is observable before the signal (pnpm run … children exist)", tree.length > 0);
+      const direct = spawnSync("pgrep", ["-P", String(a.child.pid)], { encoding: "utf8" }).stdout.split("\n").map((x) => Number.parseInt(x, 10)).filter(Number.isFinite);
+      const leads = (pid) => Number.parseInt(spawnSync("ps", ["-o", "pgid=", "-p", String(pid)], { encoding: "utf8" }).stdout, 10) === pid;
+      check("e2e: the proof runs in its OWN process group (detached), so one group kill reaches its whole tree", direct.length > 0 && direct.every(leads));
       a.child.kill("SIGTERM");
       const ra = await a.exited;
       check(`e2e: SIGTERM mid-run exits 143 and restores the registered file byte-for-byte (exit ${ra.code})`,
-        ra.code === 143 && readFileSync(target, "utf8") === original && /restored from the journal/.test(ra.out));
-      check("e2e: no journal is left behind after SIGTERM", !existsSync(jdir) || readdirSync(jdir).length === 0);
-      await sleep(500);
-      check("e2e: the proof child died with the sweep (no orphan `pnpm run` left running)", proofChildren().status !== 0);
+        ra.code === 143 && !dirty() && /restored from the journal/.test(ra.out));
+      check("e2e: no journal (not even the lock marker) is left behind after SIGTERM", journalFiles().length === 0);
+      await sleep(300);
+      check("e2e: the proof's WHOLE process tree died with the sweep (no orphan left running)", tree.every(isDead));
 
       // 2. SIGKILL: no handler can run. The next start must refuse, name the file, and --restore-stale must fix it.
-      const b = startSweep([]);
-      const dirtied2 = await waitDirty(90000);
+      const b = startSweep();
+      const dirtied2 = await waitFor(dirty, 90000);
+      const tree2 = descendants(b.child.pid); live.push(...tree2);
       b.child.kill("SIGKILL");
       await b.exited;
-      await sleep(300);
-      spawnSync("pkill", ["-f", `pnpm run ${PROOF}`]);
-      check("e2e: SIGKILL leaves the file mutated (no handler can run) — the case the startup check exists for",
-        dirtied2 && readFileSync(target, "utf8") !== original);
-      const c = spawnSync("node", [guard, `--proof=${PROOF}`], { cwd: repo, encoding: "utf8" });
+      for (const pid of tree2) { try { process.kill(-pid, "SIGKILL"); } catch { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } }
+      check("e2e: SIGKILL leaves the file mutated (no handler can run) — the case the startup check exists for", dirtied2 && dirty());
+      const c = spawnSync("node", [guard, `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
       check("e2e: the next start REFUSES (exit 1) naming the registered file the journal explains",
         c.status === 1 && /REFUSES to start/.test(c.stderr) && /evaluate\.ts differs from the original recorded in journal/.test(c.stderr));
-      const d = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, encoding: "utf8" });
-      check("e2e: --restore-stale restores the file, exits 0 and does NOT run a sweep",
-        d.status === 0 && readFileSync(target, "utf8") === original && !/every registered guard is falsifiable/.test(d.stdout));
+      const d = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
+      check("e2e: --restore-stale restores the file, exits 0 and does NOT run a sweep", d.status === 0 && !dirty() && !/every registered guard is falsifiable/.test(d.stdout));
+      const e = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
+      check("e2e: --restore-stale with NOTHING stale also exits 0 without sweeping (it used to fall through into a full sweep)", e.status === 0 && /no stale journal/.test(e.stdout));
     }
   } finally {
     if (readFileSync(target, "utf8") !== original) writeFileSync(target, original);
-    if (existsSync(jdir)) rmSync(jdir, { recursive: true, force: true });
+    for (const pid of live) { if (!isDead(pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } }
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 

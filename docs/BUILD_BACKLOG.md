@@ -2436,11 +2436,12 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       redeclaration or shadowing parameter of the name, a direct `eval` in scope, `sort()`/`reverse()`
       results written through, or a map with an `undefined`/`null`/`""`/`"[object Object]"` entry (an
       absent key HITS it) earns no exemption. Self-test pairs bug shapes with guarded
-      twins; live tree still 0 findings. Mutation testing: 867 AST-generated mutants over the analyzer
-      helpers (every `&&`/`||` operand, negation, `if` condition, ternary arm, boolean return and
-      comparison), 651 killed by `--self-test`, 216 survive — dropped `ts.is*` type guards, null/cache
-      guards, unreachable branches and provenance-plumbing bookkeeping; the safety-direction survivors
-      found were each given a fixture. Not claimed exhaustive. Still not followed: a child component, helper or class map
+      twins; live tree still 0 findings. Mutation testing (AST-generated over the analyzer helpers: every `&&`/`||` operand,
+      negation, `if` condition, ternary arm, boolean return and comparison): 902 mutants, 678 killed by
+      `--self-test` (75.2%), 224 survive — 55 are dropped `ts.is*` type guards; the rest are null/cache
+      guards, unreachable branches and provenance-plumbing bookkeeping. Differential check: a 560-case
+      corpus (the write-form matrix re-run in arrow/hook/`useEffect`/nested-`if` code shapes; 524 valid
+      cases) was run against every survivor, and none flips a flagged case to clean. Not claimed exhaustive. Still not followed: a child component, helper or class map
       imported from another file (no module resolver); a callback parameter over query rows as DATA
       (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
       a component reached only through a wrapper (`withX(C)`); query data mutated in place through

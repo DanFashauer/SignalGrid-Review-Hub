@@ -86,7 +86,10 @@
 // analysis cannot show plain — a literal, a `??`/ternary default, a helper / `useMemo` result, a
 // destructuring or parameter default, a member read of another const, a template with literal text, a
 // defaulted or augmented array — earns no exemption. This is a conservative HEURISTIC, not a proof:
-// each rule exists because a fixture showed the shape it closes, and every clause is mutation-tested.
+// each rule exists because a fixture showed the shape it closes. The self-test carries a write-form matrix
+// (every write form × a scalar / parameter / container / object binding, each flagged; each read-only
+// twin clean). Mutation testing is NOT exhaustive: a generated mutant set leaves survivors that no
+// known shape distinguishes (see docs/BUILD_BACKLOG.md for the exact figures).
 //
 // KNOWN, DELIBERATE LIMITATIONS (a static, name-and-scope analysis; it can err in BOTH directions):
 //   - Cross-file: a child component, helper or class map IMPORTED from another file is not
@@ -98,7 +101,8 @@
 //     from a prop (`text-${tone}-400`). False negatives. Data fields destructured OUT of `q.data`
 //     (`const { name } = q.data ?? {}`) are likewise not tracked (pre-existing).
 //   - Query data mutated IN PLACE through another path (`seed(q.data.rows)`) is not seen by the
-//     read-only whitelist, which judges a binding by its own references. A key that is a fixed
+//     read-only whitelist, which judges a binding by its own references. The `arguments` object aliases
+//     a callback's array as a 3rd parameter does and is not followed (a rest parameter is). A key that is a fixed
 //     string by construction (`d.toString()` over `q.data ?? {}`) is not recognised. Global state is
 //     not modelled: `Object.prototype.s = "ok"`, `globalThis.String = …`, a `Proxy`-wrapped or
 //     `new Map(…)` class map (only a same-file const object LITERAL is resolved). A key whose
@@ -114,8 +118,10 @@
 //     `var` / `function` redeclaration, is treated as a rebinding of the binding (the analysis keys
 //     bindings by name within a scope, not by full lexical resolution); a key that defaults to a NON-good entry
 //     (`T[s ?? "bad"] ?? T.d`); a row transform that keeps every element (`.flatMap((x) => [x])`);
-//     `rows[0]` / `rows.join()` / `.length` / `.size` keys; a query-derived value handed to an
-//     unknown method (`q.data.rows.reduce(…)`), which makes `q` itself non-plain.
+//     `rows[0]` / `rows.join()` / `.length` / `.size` / `.at()` / `.with()` keys; an array as a KEY
+//     (`TONE[rows.slice()]`, `Array.from(rows)` — `String([])` is ""); `[...rows].reverse()[0]`,
+//     `structuredClone(rows)`; a query-derived value handed to an unknown method
+//     (`q.data.rows.reduce(…)`), which makes `q` itself non-plain.
 //   - A map with a computed/dynamic entry list, or a helper that returns a parameter, is not
 //     resolved.
 //
@@ -806,9 +812,12 @@ function analyzeSourceFile(relPath, text) {
   // object literal (imported, a parameter, `let`) is not resolved.
   const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
     ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
-  const mapObject = (id) => {
-    const init = resolveConstInit(id, (n) => n && ts.isObjectLiteralExpression(unwrapExpr(n)));
-    return init ? unwrapExpr(init) : null;
+  const mapObject = (id, depth = 0) => {
+    if (depth > 6) return null;
+    const init = resolveConstInit(id, (n) => n && (ts.isObjectLiteralExpression(unwrapExpr(n)) || ts.isIdentifier(unwrapExpr(n))));
+    if (!init) return null;
+    const u = unwrapExpr(init);
+    return ts.isIdentifier(u) ? mapObject(u, depth + 1) : u; // `const T = T0;` follows the alias
   };
   // The object literal an expression denotes: a same-file const map, or a nested entry of one
   // (`TONE.a`, `TONE["a"]`).
@@ -816,6 +825,7 @@ function analyzeSourceFile(relPath, text) {
     if (!e || depth > 6) return null;
     e = unwrapExpr(e);
     if (ts.isIdentifier(e)) return mapObject(e);
+    if (ts.isObjectLiteralExpression(e)) return e; // `...{ undefined: "…" }`
     const lit = ts.isPropertyAccessExpression(e) ? e.name.text
       : ts.isElementAccessExpression(e) && e.argumentExpression && ts.isStringLiteralLike(e.argumentExpression) ? e.argumentExpression.text : null;
     if (lit === null) return null;
@@ -860,11 +870,56 @@ function analyzeSourceFile(relPath, text) {
     }
     return out;
   };
+  const rootIdent = (e) => { // `T.a.b[k]` -> the identifier `T`
+    for (;;) {
+      e = unwrapExpr(e);
+      if (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) e = e.expression;
+      else break;
+    }
+    return ts.isIdentifier(e) ? e : null;
+  };
+  // A map WRITTEN after its declaration — `T.default = "…"`, `T[k] = "…"`, `Object.assign(T, {…})`,
+  // `Object.defineProperty(T, k, { value })`, `Reflect.set(T, k, v)` — carries entries the literal does not show.
+  // Name-based over the whole file (the map and any alias of it); a key it cannot read matches every lookup.
+  const mutationCache = new Map();
+  const mapMutations = (names) => {
+    const key = [...names].sort().join("|");
+    if (mutationCache.has(key)) return mutationCache.get(key);
+    const out = []; // { node, key } — key null = unreadable
+    const rootIs = (e) => { const r = rootIdent(e); return Boolean(r) && names.has(r.text); };
+    const keyOf = (left) => (ts.isPropertyAccessExpression(left) ? left.name.text
+      : ts.isElementAccessExpression(left) && ts.isStringLiteralLike(left.argumentExpression) ? left.argumentExpression.text : null);
+    const w = (n) => {
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
+          (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left)) out.push({ node: n.right, key: keyOf(n.left) });
+      if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
+        const obj = n.expression.expression, m = n.expression.name.text;
+        if (ts.isIdentifier(obj) && obj.text === "Object" && (m === "assign" || m === "defineProperty") && n.arguments[0] && rootIs(n.arguments[0]))
+          for (const a of n.arguments.slice(1)) out.push({ node: a, key: null });
+        if (ts.isIdentifier(obj) && obj.text === "Reflect" && m === "set" && n.arguments[0] && rootIs(n.arguments[0]))
+          out.push({ node: n.arguments[2] ?? n, key: n.arguments[1] && ts.isStringLiteralLike(n.arguments[1]) ? n.arguments[1].text : null });
+      }
+      ts.forEachChild(n, w);
+    };
+    w(sf);
+    mutationCache.set(key, out);
+    return out;
+  };
+  const mapNamesOf = (x) => { // the map's names: the one used here and the declaration it resolves to
+    const names = new Set();
+    const root = rootIdent(x.expression);
+    if (root) names.add(root.text);
+    const obj = mapObjectOf(x.expression);
+    for (let c = obj && obj.parent; c; c = c.parent) { if (ts.isVariableDeclaration(c) && ts.isIdentifier(c.name)) { names.add(c.name.text); break; } if (ts.isBlock(c) || ts.isSourceFile(c)) break; }
+    return names;
+  };
   const lookupEntries = (x) => { // x: ElementAccess | PropertyAccess over a resolvable map, else null
     const obj = mapObjectOf(x.expression);
     if (!obj) return null;
-    if (ts.isPropertyAccessExpression(x)) return mapEntries(obj, x.name.text);
-    return mapEntries(obj, x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression) ? x.argumentExpression.text : null);
+    const lit = ts.isPropertyAccessExpression(x) ? x.name.text
+      : x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression) ? x.argumentExpression.text : null;
+    const extra = mapMutations(mapNamesOf(x)).filter((m) => lit === null || m.key === null || m.key === lit).map((m) => m.node);
+    return [...mapEntries(obj, lit), ...extra];
   };
   const localFns = new Map(); // name -> function node (declaration or const arrow/function expression)
   {
@@ -1017,7 +1072,7 @@ function analyzeSourceFile(relPath, text) {
         if (ts.isCallExpression(call) && call.expression === p) {
           if (!READ_METHODS.has(p.name.text)) return false;
           // a callback with a 3rd parameter (`(x, i, arr) =>`) is handed the container itself
-          if (call.arguments.some((a) => ts.isFunctionLike(a) && a.parameters.length >= 3)) return false;
+          if (call.arguments.some((a) => ts.isFunctionLike(a) && (a.parameters.length >= 3 || a.parameters.some((q) => q.dotDotDotToken)))) return false;
           if (RETURNS_RECEIVER.has(p.name.text)) { n = call; continue; } // sort()/reverse() return the receiver: judge the result
           return true;
         }
@@ -1103,10 +1158,10 @@ function analyzeSourceFile(relPath, text) {
   const RETURNS_RECEIVER = new Set(["sort", "reverse"]);
   const READ_METHODS = new Set([...ROW_METHODS, ...ROW_KEEPING, ...PLAIN_METHODS, "concat", "join", "includes", "indexOf", "lastIndexOf",
     "at", "findIndex", "findLast", "findLastIndex", "keys", "values", "entries", "get", "has", "flat", "from"]);
-  const keyIsPlainData = (k, depth = 0) => {
+  const keyIsPlainData = (k, depth = 0, asKey = false) => {
     if (!k || depth > 8) return false; // also stops a cycle (`const a = b; const b = a`)
     const e = unwrapExpr(k);
-    const recur = (x) => keyIsPlainData(x, depth + 1);
+    const recur = (x) => keyIsPlainData(x, depth + 1, asKey);
     if (ts.isIdentifier(e)) {
       const b = findBinding(e);
       if (!b || b.kind === "opaque") return false;
@@ -1133,8 +1188,9 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isPropertyAccessExpression(c) && PLAIN_METHODS.has(c.name.text)) return recur(c.expression);
       if (ts.isIdentifier(c) && c.text === "String" && !findBinding(c)) return recur(e.arguments[0]);
       // `Array.from(rows)`, and filter/slice/sort/reverse, keep a subset of the same elements.
-      if (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "Array" && c.name.text === "from" && !findBinding(c.expression)) return recur(e.arguments[0]);
-      if (ts.isPropertyAccessExpression(c) && ROW_KEEPING.has(c.name.text)) return recur(c.expression);
+      // an ARRAY as a KEY coerces to its joined elements (`String([])` is ""), so these stay plain only as row receivers
+      if (ts.isPropertyAccessExpression(c) && ts.isIdentifier(c.expression) && c.expression.text === "Array" && c.name.text === "from" && !findBinding(c.expression)) return !asKey && recur(e.arguments[0]);
+      if (ts.isPropertyAccessExpression(c) && ROW_KEEPING.has(c.name.text)) return !asKey && recur(c.expression);
       return false;
     }
     if (ts.isBinaryExpression(e) && (e.operatorToken.kind === K.QuestionQuestionToken || e.operatorToken.kind === K.BarBarToken)) {
@@ -1146,12 +1202,21 @@ function analyzeSourceFile(relPath, text) {
   };
   // `T[undefined]` is `T["undefined"]`: a map with such an entry is HIT by an absent key, so a fallback never runs.
   // An absent key coerces to "undefined"/"null"; `String([])` is "" and `String({})` is "[object Object]".
-  const hasAbsentKeyEntry = (obj) => Boolean(obj) && ["undefined", "null", "", "[object Object]"].some((k) => mapEntries(obj, k).length > 0);
+  const ABSENT_KEYS = new Set(["undefined", "null", "", "[object object]"]);
+  const mapKeyNames = (obj, depth = 0) => obj.properties.flatMap((p) => {
+    if (ts.isSpreadAssignment(p)) { const o = depth < 6 ? mapObjectOf(p.expression, depth + 1) : null; return o ? mapKeyNames(o, depth + 1) : [null]; }
+    return [ts.isShorthandPropertyAssignment(p) ? p.name.text : p.name ? memberKey(p.name) : null];
+  });
+  // `String(undefined)` is "undefined"; `.toUpperCase()` / `.toLowerCase()` of it, `String([])` ("") and `String({})`
+  // ("[object Object]") are keys an ABSENT read can produce: a map with such an entry is hit, so no fallback runs.
+  const hasAbsentKeyEntry = (obj, x) => Boolean(obj) &&
+    (mapKeyNames(obj).some((k) => k === null || ABSENT_KEYS.has(k.toLowerCase())) ||
+     (x ? mapMutations(mapNamesOf(x)).some((m) => m.key === null || ABSENT_KEYS.has(m.key.toLowerCase())) : false));
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
       (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) &&
-      keyIsPlainData(lookup.argumentExpression);
+      keyIsPlainData(lookup.argumentExpression, 0, true);
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -1175,7 +1240,7 @@ function analyzeSourceFile(relPath, text) {
           // A fallback protects only a lookup whose key is a provably plain read of data; a literal
           // or property key (`T.ok`, `T["ok"]`) is not one, so its entry is always walked.
           const obj = mapObjectOf(x.expression);
-          if (!(lookupHasSafeFallback(x) && !hasAbsentKeyEntry(obj))) for (const e of es) walk(e, use ?? x);
+          if (!(lookupHasSafeFallback(x) && !hasAbsentKeyEntry(obj, x))) for (const e of es) walk(e, use ?? x);
           return; // the map and the key are fully accounted for; do not re-walk them as plain nodes
         }
       }
@@ -2008,6 +2073,76 @@ OK_R6.push(
   ["arrow-const component with a plain site", keyFx("", "", "", `const C = ({ s, n }) => <b className={TONE[s] ?? TONE.default}>{n}</b>;`, PLAIN_SITE)],
 );
 
+// Round-8: a WRITE-FORM MATRIX. Each form below, written against each kind of binding (a scalar, a
+// component parameter, a container, an object), must flag; each READ-ONLY twin must not. This exercises
+// every clause of the read-only-use whitelist from many angles instead of one hand-picked shape.
+const MX_PAGE = (body, ret, tail = "") => `
+import { useQuery } from "@tanstack/react-query";
+${TONE}
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  ${body}
+  return ${ret};
+}
+${tail}`;
+const MX_SC = (f) => MX_PAGE(`let s = q.data?.s; ${f("s")}`, `<span className={TONE[s] ?? TONE.default}>{q.data?.n}</span>`);
+const MX_PA = (f) => MX_PAGE("", `<C s={q.data?.s} n={q.data?.n} />`, `function C({ s, n }) { ${f("s")} return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`);
+const MX_RW = (f) => MX_PAGE(`const rows = q.data?.rows ?? []; ${f("rows")}`, `<>{rows.map((r) => <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>)}</>`);
+const MX_OB = (f) => MX_PAGE(`const d = q.data ?? {}; ${f("d")}`, `<span className={TONE[d.s] ?? TONE.default}>{q.data?.n}</span>`);
+const MX_SCALAR_W = ['X = "ok";','X ||= "ok";','X ??= "ok";','X &&= "ok";','X += "";','X -= 1;','X++;','X--;','++X;','--X;','({ X } = { X: "ok" });','({ a: X } = { a: "ok" });','[X] = ["ok"];','[, X] = [0, "ok"];','[...X] = ["ok"];','({ ...X } = {});','[[X]] = [["ok"]];','({ a: { b: X } } = { a: { b: "ok" } });','for (X of ["ok"]) {}','for (X in { ok: 1 }) {}','(X) = "ok";','(X as any) = "ok";','X! = "ok";','X = (0, "ok");','{ var X = "ok"; }','for (var X = "ok"; ;) { break; }','try {} catch (X) { X = "ok"; }','function X() {}','eval("X = \'ok\'");'];
+const MX_ROWS_W = ['R.push("ok");','R.unshift("ok");','R.splice(0, 0, "ok");','R.fill("ok");','R.copyWithin(0, 1);','R.pop();','R.shift();','R.sort().push("ok");','R.reverse().fill("ok");','R.sort().sort().push("ok");','R.sort((a, b) => 0).reverse().push("ok");','(R.sort()).push("ok");','R.sort()!.push("ok");','R?.sort().push("ok");','(R.sort() as any).push("ok");','const t = R.sort(); t.push("ok");','const t = R.sort(); seed(t);','const t = R.sort(); const u = t; u.push("ok");','R[0] = "ok";','R["push"]("ok");','const m = "push"; R[m]("ok");','R?.["push"]("ok");','R.length = 0;','(0, R).push("ok");','R.push`ok`;','seed(R);','const a = R; a.push("ok");','let a; a = R; a.push("ok");','const a = ok && R; a.push("ok");','const a = R ?? other; a.push("ok");','const a = R || other; a.push("ok");','const a = cond ? R : []; a.push("ok");','Object.assign(R, ["ok"]);','Array.prototype.push.call(R, "ok");','Array.prototype.push.apply(R, ["ok"]);','[].push.apply(R, ["ok"]);','const add = R.push.bind(R); add("ok");','const { push } = R; push.call(R, "ok");','const { pop } = R; pop();','Object.defineProperty(R, "0", { value: "ok" });','Reflect.set(R, 0, "ok");','Object.setPrototypeOf(R, ["ok"]);','const o = { R }; o.R.push("ok");','R.forEach((x, i, arr) => { arr.push("ok"); });','R.forEach((...a) => { a[2].push("ok"); });','R.map((x, i, arr) => { arr[i] = "ok"; return x; });','R.filter((x, i, arr) => arr.push("ok"));','eval("R.push(\'ok\')");','new Function("r", "r.push(\'ok\')")(R);','Function("r", "r.push(\'ok\')")(R);','R.sort().splice(0, 0, "ok");','R.reverse()[0] = "ok";','seed(R.sort());','const c = R; seed(c);','Promise.resolve(R).then((a) => a.push("ok"));','R.reduce((acc, x, i, arr) => arr.push("ok"), 0);'];
+const MX_OBJ_W = ['D.s = "ok";','D.s ??= "ok";','D.s ||= "ok";','D.s++;','D.s--;','++D.s;','D["s"]++;','(D.s)++;','D.s!++;','(D.s) = "ok";','D.s! = "ok";','D["s"] = "ok";','Object.assign(D, { s: "ok" });','Object.defineProperty(D, "s", { value: "ok" });','Reflect.set(D, "s", "ok");','Object.setPrototypeOf(D, { s: "ok" });','const o = { D }; o.D.s = "ok";','({ x: D.s } = { x: "ok" });','[D.s] = ["ok"];','[[D.s]] = [["ok"]];','({ ...D.s } = {});','[...D.s] = ["ok"];','for (D.s of ["ok"]) {}','for (D.s in { ok: 1 }) {}','for ([D.s] of [["ok"]]) {}','const a = D; a.s = "ok";','seed(D);'];
+const MX_ROWS_R = ['R.includes("x");','R.join(",");','R.indexOf("x");','R.lastIndexOf("x");','R.at(0);','R.findIndex((x) => x);','R.keys();','R.values();','R.entries();','R.concat(["x"]);','R.map((x) => x);','R.filter((x) => x);','R.slice();','R.flat();','R.some((x) => x);','R.every((x) => x);','R.find((x) => x);','R.forEach((x, i) => track(x, i));','R.sort();','R.reverse();','R.sort((a, b) => 0);','R.length;','R[0];','typeof R;','`${R}`;','R ? 1 : 2;','!R;','R && 1;','"a" in R;','R instanceof Array;','for (const x of R) { track(x); }','for (const k in R) { track(k); }','const copy = [...R];','const copy = Array.from(R);','const { length } = R;','const first = R[0]; track(first);','track(R[0]);','track(R.length);','const l = R.length; track(l);','if (R) { track(1); }','const a = R; const n = a.length;','R.map((x) => x).push("ok");','R.slice().push("ok");','R.concat([]).push("ok");','R.filter(Boolean).push("ok");','const c = [...R]; c.push("ok");'];
+const MX_CH = `function C({ s, n }) { return <b className={TONE[s] ?? TONE.default}>{n}</b>; }`;
+const MX_PS = `<C s={q.data?.s} n={q.data?.n} />`;
+const MX_COMP = [
+  ["alias", `${MX_CH}\nconst D2 = C;`, `<>${MX_PS}<D2 s="ok" n={q.data?.n} /></>`],
+  ["direct call", MX_CH, `<>${MX_PS}{C({ s: "ok", n: q.data?.n })}</>`],
+  ["createElement", MX_CH, `<>${MX_PS}{React.createElement(C, { s: "ok", n: q.data?.n })}</>`],
+  ["cloneElement", MX_CH, `{React.cloneElement(${MX_PS}, { s: "ok" })}`],
+  ["memo(C)", `${MX_CH}\nconst M = React.memo(C);`, `<>${MX_PS}<M s="ok" n={q.data?.n} /></>`],
+  ["export { C }", `${MX_CH}\nexport { C };`, MX_PS],
+  ["export default C", `${MX_CH}\nexport default C;`, MX_PS],
+  ["export function", `export ${MX_CH}`, MX_PS],
+  ["array of components", `${MX_CH}\nconst Cs = [C];`, `<>${MX_PS}{Cs.map((X) => <X s="ok" n={q.data?.n} />)}</>`],
+  ["component handed to a prop", MX_CH, `<><Host As={C} />${MX_PS}</>`],
+  ["member tag", `${MX_CH}\nconst NS = { C };`, `<>${MX_PS}<NS.C s="ok" n={q.data?.n} /></>`],
+  ["literal at a second site", MX_CH, `<>${MX_PS}<C s="ok" n={q.data?.n} /></>`],
+  ["spread at a second site", MX_CH, `<>${MX_PS}<C {...{ s: "ok" }} n={q.data?.n} /></>`],
+];
+const MX_CASES = [];
+for (const f of MX_SCALAR_W) MX_CASES.push(["scalar: " + f, true, MX_SC((x) => f.replaceAll("X", x))]);
+MX_CASES.push(["scalar(var): var s redeclared", true, MX_PAGE(`var s = q.data?.s; var s = "ok";`, `<span className={TONE[s] ?? TONE.default}>{q.data?.n}</span>`)]);
+for (const f of MX_SCALAR_W.filter((f) => !/var X|function X|catch/.test(f))) MX_CASES.push(["param: " + f, true, MX_PA((x) => f.replaceAll("X", x))]);
+for (const f of MX_ROWS_W) MX_CASES.push(["rows: " + f, true, MX_RW((x) => f.replaceAll("R", x))]);
+for (const f of MX_OBJ_W) MX_CASES.push(["obj: " + f, true, MX_OB((x) => f.replaceAll("D", x))]);
+for (const [l, tail, ret] of MX_COMP) MX_CASES.push(["component: " + l, true, MX_PAGE("", ret, tail)]);
+for (const f of MX_ROWS_R) MX_CASES.push(["rows-read: " + f, false, MX_RW((x) => f.replaceAll("R", x))]);
+for (const f of ['const x = D.s;', 'track(D.s);', 'D.s === "x";', '`${D.s}`;', 'const { s } = D;', 'D.s?.length;']) MX_CASES.push(["obj-read: " + f, false, MX_OB((x) => f.replaceAll("D", x))]);
+for (const f of ['const a = X;', 'X.length;', 'typeof X;', 'X === "x";', '`${X}`;', 'X ? 1 : 2;']) MX_CASES.push(["scalar-read: " + f, false, MX_SC((x) => f.replaceAll("X", x))]);
+
+// Round-8: map aliasing / mutation / case-transformed absent keys.
+const mkMap = (pre, use, body = "") => keyFx(pre, body, use);
+const EMER = "text-emerald-400";
+BUG_R6.push(
+  ["map reached through a const alias of the MAP: T.ok", mkMap(`const T0 = { ok: "${EMER}" }; const T = T0;`, "T.ok")],
+  ["map alias, dynamic key", mkMap(`const T0 = { ok: "${EMER}", bad: "text-red-400" }; const T = T0;`, "T[q.data?.s]")],
+  ["map mutated after its declaration: T.default = …", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map mutated: T.undefined = …", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map mutated: Object.assign(T, …)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map mutated through an unreadable key: T[k] = …", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T[keyFn()] = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["spread of an inline literal carrying an undefined entry", mkMap(`const T = { ...{ undefined: "${EMER}" }, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["case-transformed absent key: String(s).toUpperCase()", mkMap(`const U = { UNDEFINED: "${EMER}", ok: "text-red-400", default: "text-slate-400" };`, "U[String(q.data?.s).toUpperCase()] ?? U.default")],
+  ["case-transformed absent key: [object object]", mkMap(`const E = { "[object object]": "${EMER}", default: "text-slate-400" };`, "E[String(d).toLowerCase()] ?? E.default", `const d = q.data ?? {};`)],
+  ["case-transformed absent key: d.toString().toUpperCase()", mkMap(`const E = { "[OBJECT OBJECT]": "${EMER}", default: "text-slate-400" };`, "E[d.toString().toUpperCase()] ?? E.default", `const d = q.data ?? {};`)],
+  ["array-valued key: Array.from(String(s))", mkMap(`const U = { "u,n,d,e,f,i,n,e,d": "${EMER}", default: "text-slate-400" };`, "U[Array.from(String(q.data?.s))] ?? U.default")],
+);
+OK_R6.push(
+  ["map alias whose entries are not good-state", mkMap(`const T0 = { calm: "text-slate-400", default: "text-slate-400" }; const T = T0;`, "T[q.data?.s] ?? T.default")],
+  ["map mutated with a non-good entry", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
+  ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
+);
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -2239,6 +2374,13 @@ function selfTest() {
     console.log(`  self-test R6-OK ${label} → ${v.length} violation(s)`);
     if (v.length !== 0) { ok = false; console.error(`  FAIL — false positive: ${label}`); for (const x of v) console.error(`    L${x.line} ${x.kind} ${x.snippet}`); }
   }
+
+  // Round-8 write-form matrix.
+  for (const [label, expectFlag, src] of MX_CASES) {
+    const flagged = analyze(src, "MX.tsx").some((x) => x.kind === "good-class-on-unguarded-data");
+    if (flagged !== expectFlag) { ok = false; console.error(`  FAIL — matrix ${expectFlag ? "missed" : "false positive"}: ${label}`); }
+  }
+  console.log(`  self-test MATRIX ${MX_CASES.length} cases (${MX_CASES.filter((c) => c[1]).length} must flag, ${MX_CASES.filter((c) => !c[1]).length} must not)`);
 
   // Plant into a REAL component: drop the `s ?` presence guard on a metric with a static
   // emerald accent, and confirm the gate fires; the unmutated file must stay clean.

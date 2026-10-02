@@ -377,7 +377,7 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
       lockHeld = true;
       for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
         const h = () => gateShutdown({
-          killSweeps: () => { for (const c of kids) { for (const r of record(descendants(c.pid))) live.push(r); try { c.kill("SIGKILL"); } catch { /* gone */ } } for (const r of live) killRecorded(r, true); },
+          killSweeps: killKids,
           restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), exit: (c) => signalProc.exit(c),
         }, code);
         signalProc.on(sig, h); handlers.push([sig, h]);
@@ -390,24 +390,28 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { out += d; });
-    kids.add(child);
-    const exited = new Promise((r) => child.on("close", (code, signal) => { kids.delete(child); r({ code, signal, out }); }));
+    track(child);
+    const exited = new Promise((r) => child.on("close", (code, signal) => r({ code, signal, out })));
     return { child, exited, output: () => out };
   };
   const waitFor = async (fn, limitMs) => { for (let t = 0; t < limitMs; t += 50) { if (fn()) return true; await sleep(50); } return false; };
   const dirty = () => readFileSync(target, "utf8") !== original;
-  const probe = () => {
+  const track = (child) => { kids.add(child); child.on("close", () => kids.delete(child)); return child; };
+  const startProbe = () => {
     // With the gate holding its lock, a sweep started in the SAME TMPDIR must be refused. Without the marker it
-    // would run in the real tree: it is started, given a bounded time to refuse, and SIGTERMed if it does not.
-    const child = spawn("node", [guard, `--proof=${PROOF}`], { cwd: repo, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    // would run in the real tree: it is started (and TRACKED, so a signal to the gate kills it too), given a bounded
+    // time to refuse, and SIGTERMed if it does not.
+    const child = track(spawn("node", [guard, `--proof=${PROOF}`], { cwd: repo, env: process.env, stdio: ["ignore", "pipe", "pipe"] }));
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { out += d; });
-    return new Promise((r) => {
+    const done = new Promise((r) => {
       const t = setTimeout(() => { child.kill("SIGTERM"); }, 20000);
       child.on("close", (code) => { clearTimeout(t); r({ code, out }); });
     });
+    return { child, done };
   };
+  const probe = () => startProbe().done;
   const journalFiles = () => (existsSync(jdir) ? readdirSync(jdir).filter((n) => /^\d+\.json$/.test(n)) : []);
   const descendants = (pid) => {
     const r = spawnSync("pgrep", ["-P", String(pid)], { encoding: "utf8" });
@@ -420,6 +424,15 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
   const killRecorded = (r, group) => {
     killIfSame(r, startOf, (pid) => { try { process.kill(group ? -pid : pid, "SIGKILL"); } catch { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } });
   };
+  // Kill every sweep this gate started (and their recorded descendants), then WAIT (bounded) until they are dead —
+  // the target is restored right after, and a sweep still mid-write could otherwise land a mutant after the restore.
+  function killKids() {
+    const pids = [];
+    for (const c of kids) { for (const r of record(descendants(c.pid))) live.push(r); pids.push(c.pid); try { c.kill("SIGKILL"); } catch { /* gone */ } }
+    for (const r of live) killRecorded(r, true);
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline && !pids.every(isDead)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
   const isDead = (pid) => {
     // /proc where it exists (a zombie counts as dead); kill(0) elsewhere. ENOENT under /proc means dead ONLY if /proc exists.
     if (existsSync("/proc/self")) { try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch { return true; } }
@@ -428,7 +441,7 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
   try {
     if (afterLock) {
       // test hook: instead of the sweeps, run `afterLock` WHILE the lock and handlers are held (throwaway-repo tests only)
-      if (preconditionOk) await afterLock({ lockDir });
+      if (preconditionOk) await afterLock({ lockDir, startProbe, track });
     } else if (!preconditionOk) {
       check("end-to-end signal test: precondition (target identical to HEAD; no live sweep or gate; no unrecovered journal) — refused to run and touched nothing", false);
     } else {
@@ -474,13 +487,20 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
       const e = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
       check("e2e: --restore-stale with NOTHING stale also exits 0 without sweeping (it used to fall through into a full sweep)", e.status === 0 && /no stale journal/.test(e.stdout) && !/every registered guard is falsifiable|── proof:/.test(e.stdout));
     }
+  } catch (err) {
+    // An unexpected error (a registered file deleted mid-gate, say) is a NAMED failure, never a crash without a summary.
+    check(`e2e: unexpected error — ${err instanceof Error ? err.message : String(err)}`, false);
   } finally {
     // Cleanup never throws past the summary line, and never writes unless this gate took the lock.
-    for (const [sig, h] of handlers) signalProc.removeListener(sig, h);
+    try { killKids(); } catch { /* gone */ }
     try { restoreTarget(); } catch { /* reported by the checks */ }
     for (const r of live) { try { if (!isDead(r.pid)) killRecorded(r, false); } catch { /* gone */ } }
     try { clearLock(); } catch (err) { console.error(`  note: could not remove the gate's lock marker (${err instanceof Error ? err.message : String(err)}); it is a dead-pid journal and the next sweep start clears it`); }
     try { rmSync(scratch, { recursive: true, force: true }); } catch { /* scratch only */ }
+    // Keep the handlers until the event loop has turned twice: a signal that arrived during the synchronous tail is
+    // only DISPATCHED on the next turn, and with the listener already gone it was silently dropped (exit 0, "pass").
+    await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
+    for (const [sig, h] of handlers) signalProc.removeListener(sig, h);
   }
   return { preconditionOk, installed };
 }
@@ -534,7 +554,35 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
     results.push(["e2e call site: the gate's lock marker JOURNALS the target with HEAD's bytes (a SIGKILLed gate leaves a record --restore-stale can use)", markerJournalsHead]);
     results.push(["e2e call site: SIGTERM to the gate while it holds a mutant restores the target from HEAD, drops the lock and exits 143", rc.preconditionOk === true && restoredAfterSignal && lockGone && exitedWith === 143]);
     results.push(["e2e call site: SIGINT/SIGTERM/SIGHUP handlers are installed once the lock is held, and removed afterwards (no leak)", rc.installed >= 1 && fakeC.listenerCount("SIGTERM") === 0]);
-  } finally { for (const r of repos) { try { rmSync(r, { recursive: true, force: true }); } catch { /* scratch */ } } }
+    // (d) the gate's PROBE sweep is tracked: a SIGTERM to the gate while the probe runs kills it, and waits for it to be dead
+    const probeRepo = mkRepo(); repos.push(probeRepo);
+    const stub = join(probeRepo, "stub-guard.mjs");
+    writeFileSync(stub, "setTimeout(() => {}, 60000);\n");
+    const isDeadPid = (pid) => { try { if (/^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8"))) return true; } catch { return true; } try { process.kill(pid, 0); return false; } catch { return true; } };
+    let probePid = null; let probeDeadAtReturn = false; let exitedD = null;
+    const fakeD = Object.assign(new EventEmitter(), { exit(c) { exitedD = c; } });
+    await runE2e({ repo: probeRepo, guard: stub, target: join(probeRepo, "lib/t.ts"), check: quiet, signalProc: fakeD, afterLock: async ({ startProbe }) => {
+      const { child } = startProbe(); probePid = child.pid;
+      await new Promise((r) => setTimeout(r, 400));
+      fakeD.emit("SIGTERM");
+      probeDeadAtReturn = isDeadPid(probePid);
+    } });
+    results.push(["e2e call site: a SIGTERM to the gate while its PROBE sweep runs kills the probe (it is tracked) and waits for it to be dead before the restore", probePid !== null && probeDeadAtReturn && exitedD === 143]);
+    // (e) an unexpected error inside the block: a NAMED failure (no crash), tracked sweeps killed, the target restored from HEAD
+    const errRepo = mkRepo(); repos.push(errRepo);
+    const seen = []; let sleeperPid = null;
+    await runE2e({ repo: errRepo, guard: "/nonexistent", target: join(errRepo, "lib/t.ts"), check: (n, ok) => seen.push([n, ok]), signalProc: new EventEmitter(), afterLock: async ({ track }) => {
+      writeFileSync(join(errRepo, "lib/t.ts"), "MUTANT\n");
+      const sl = track(spawn("node", ["-e", "setTimeout(() => {}, 60000)"], { stdio: "ignore" })); sleeperPid = sl.pid;
+      await new Promise((r) => setTimeout(r, 300));
+      throw new Error("registered file vanished");
+    } });
+    await new Promise((r) => setTimeout(r, 100));
+    results.push(["e2e call site: an unexpected error is a NAMED failed check (not a crash without a summary), kills the gate's sweeps, and restores the target from HEAD",
+      seen.some(([n, ok]) => /unexpected error — registered file vanished/.test(n) && ok === false) && sleeperPid !== null && isDeadPid(sleeperPid) && readFileSync(join(errRepo, "lib/t.ts"), "utf8") === "HEAD bytes\n"]);
+  } finally {
+    for (const r of repos) { try { rmSync(journalDir(r), { recursive: true, force: true }); } catch { /* none */ } try { rmSync(r, { recursive: true, force: true }); } catch { /* scratch */ } }
+  }
   for (const [name, ok] of results) check(name, ok);
 }
 

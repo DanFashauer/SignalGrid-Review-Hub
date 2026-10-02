@@ -61,8 +61,11 @@ delimiter row and page rows, one per line: no blank, text, comment or bare `|` l
 because GitHub may end the table at one while the gate's renderer continues it. A page
 row may not contain `<` at all, even in a code span, because raw HTML in a cell such as
 an end-of-table tag passes through to the browser and ends the table there. Anywhere
-else in the file, `<` may appear only inside a code span or a code block: a tag in prose,
-mid-line included, can hide, collapse or cut the table once a browser parses the page. The
+else in the file, `<` may appear only inside a code span or mid-line in a code block (no
+line may start with one, code blocks included), and an entity or escape that renders as
+`<` counts too: a tag in prose, mid-line included, can hide, collapse or cut the table
+once a browser parses the page. Blocks may nest at most 16 deep, because past its own
+nesting limit the gate's renderer stops reading what GitHub still shows. The
 table must render as one table showing every row the source lists. The section and
 its step 4 must each appear once. Step 4 is the item a reader sees as 4, so the steps
 must be numbered in order.

@@ -307,6 +307,9 @@ export function renderedStep4(doc) {
 // own scanner wants a label with no space and no `]`; this matches any label, so it
 // refuses a superset of what GitHub treats as a definition.
 const FOOTNOTE_DEF_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*\[\^[^\]\n]*\]:/;
+// Deepest block nesting allowed; the file itself nests 4 deep. Far below markdown-it's
+// maxNesting (100), past which it silently stops tokenizing (round 20).
+const MAX_DEPTH = 16;
 // A line that starts with `<` after any indentation, blockquote `>` or list markers.
 const HTML_START_LINE = /^[ \t>]*(?:(?:[-*+]|\d{1,9}[.)])[ \t>]+)*</;
 // A paragraph or heading whose inline text opens with `[label]:` is a link reference
@@ -361,6 +364,15 @@ export function definitionProblems(doc) {
   }
   const env = {};
   const tokens = new MarkdownIt({ html: true }).parse(doc, env);
+  // markdown-it stops tokenizing a block once it is nested maxNesting (100) deep, and
+  // drops what is inside it without a word; cmark-gfm has no such limit. So a tag in a
+  // 100-deep blockquote was never read by the `<` check below, while GitHub emitted it
+  // raw and a `<select>` swallowed the inventory (round 20). This file nests 4 deep; any
+  // block past MAX_DEPTH is refused, which also covers every depth markdown-it would skip,
+  // since the opening tokens of each level below the limit are still emitted.
+  const deepest = tokens.reduce((d, t) => Math.max(d, t.level), 0);
+  if (deepest > MAX_DEPTH)
+    problems.push(`the file nests blocks ${deepest} deep (limit ${MAX_DEPTH}) — past markdown-it's nesting limit it stops reading what GitHub still renders, so flatten the quotes or lists`);
   // Every accepted key, `^` ones included: `[\n^x]: url` is a link definition whose label
   // only LOOKS like a footnote's, and no single line of it matches the shape scan (round 15).
   const accepted = Object.keys(env.references ?? {});
@@ -382,9 +394,13 @@ export function definitionProblems(doc) {
     // inventory markers. An entity (`&lt;`) or an escape (`\<`) is refused too, because
     // the check reads what markdown-it decodes, and that over-refusal is fail-closed. An
     // HTML block needs no check here: it starts a line, and the line scan above refuses that.
+    // The line of the `<` itself, not of the paragraph it sits in: the source offset of
+    // the first `<`, entity or escape for one, in the inline token's own text.
+    const at = t.type === "inline" ? t.content.search(/<|&lt|&#0*60|&#x0*3c|\\</i) : -1;
+    const ltLine = at < 0 ? line : line + t.content.slice(0, at).split("\n").length - 1;
     for (const c of t.type === "inline" ? t.children : [])
       if (c.type !== "code_inline" && c.content.includes("<"))
-        problems.push(`line ${line} has "<" outside a code span ("${c.content.trim().slice(0, 40)}") — raw HTML in prose can hide or cut the inventory in the browser, so put it in backticks or reword it`);
+        problems.push(`line ${ltLine} has "<" outside a code span ("${c.content.trim().slice(0, 40)}") — raw HTML in prose can hide or cut the inventory in the browser, so put it in backticks or reword it`);
   }
   return problems;
 }
@@ -820,6 +836,12 @@ function selfTest() {
     ["a heading holding <select> mid-line fails (round 19)", { ...base, doc: good.replace(BEGIN, `## Inventory <select>\n\n${BEGIN}`) }, "outside a code span"],
     ["a < inside a code span in prose passes (round 19)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7. See `<Route>`.") }, null],
     ["a [ref]: line between two rows is reported, not a crash (round 19)", { ...base, doc: good.replace(INV_ROW, `[ref]: http://example.com\n${INV_ROW}`) }, "is not a page row"],
+    // Round 20: past markdown-it's nesting limit, nothing inside a block is read.
+    ...[100, 120].map((d) =>
+      [`a ${d}-deep blockquote holding <select> fails (round 20)`, { ...base, doc: good.replace(BEGIN, `${">".repeat(d)} x <select> y\n\n${BEGIN}`) }, "nests blocks"]),
+    ["a 17-deep blockquote fails (round 20)", { ...base, doc: good.replace(BEGIN, `${">".repeat(17)} plain text\n\n${BEGIN}`) }, "nests blocks"],
+    ["a 3-deep blockquote passes (round 20)", { ...base, doc: good.replace(BEGIN, `>>> plain text\n\n${BEGIN}`) }, null],
+    ["the < refusal names the line the < is on, not the paragraph's first line (round 20)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked against launch profile v7.\nsecond line\nthird <select> line") }, "line 3 has"],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

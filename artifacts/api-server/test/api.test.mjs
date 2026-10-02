@@ -1030,6 +1030,15 @@ async function run() {
     check("approval is simulated only", approve.json?.action?.status === "approved_simulated");
   }
 
+  // Plan row 27, retired 2026-10-02: WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN was parsed and
+  // read by nothing, while approve above is simulated and deferred from launch. A dead
+  // knob named "FOR_ADMIN" reads as a control that does not exist, so it must stay
+  // deleted until approve executes a real change (then enforce it, do not resurrect it).
+  for (const rel of ["../../../lib/webauthn/src/webauthn/types.ts", "../../../docker-compose.prod.yml"]) {
+    const src = await readFile(new URL(rel, import.meta.url), "utf8");
+    check(`the unenforced admin step-up flag is absent from ${rel.split("/").pop()}`, !/requireStepUpForAdmin|REQUIRE_STEP_UP_FOR_ADMIN/.test(src));
+  }
+
   // ── RBAC + cross-tenant isolation ───────────────────────────────────────
   const auditorEval = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.auditor,

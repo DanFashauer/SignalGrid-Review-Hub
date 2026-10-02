@@ -116,7 +116,6 @@ services:
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-}
       WEBAUTHN_RP_NAME: ${WEBAUTHN_RP_NAME:-}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-}
-      WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN: ${WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN:-}
       SIGNALGRID_ENROLLMENT_SECRET: ${SIGNALGRID_ENROLLMENT_SECRET:-}
       # Key-only on purpose: Compose passes a bare key through ONLY when the host sets it.
       # `${METRICS_TOKEN:-}` handed the server an EMPTY string, and since 2026-09-06 a blank

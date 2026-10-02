@@ -59,7 +59,12 @@
 //      passes; it cites nothing the gate resolves, and the row still needs a
 //      real Where path. A digit-led extension (`x.7z`, `x.1`) is likewise read
 //      as a version-like word, so `v1.2` passes. A dotted identifier
-//      (`object.id`) fails, safe side.
+//      (`object.id`) fails, safe side, and so does a sentence-final period
+//      straight after a span ("via `/v1`." fails): any backtick touching a dot
+//      fails. A file name continued in plain text after a span with no dot
+//      touching a backtick (the span `no-such` then "-x.ts") is un-backticked
+//      prose, like a plain no-such.ts, and is not read (the un-backticked-
+//      citation ceiling).
 //
 // KNOWN FAILURES. The matrix is an owner-gated surface (compliance docs in
 // scripts/check-owner-gated-surfaces.mjs); this gate does not edit it. Rows the
@@ -713,7 +718,7 @@ function selfTest() {
     ["fail: a double-backtick span hiding proof: on an Automated row", plant("| Planted M3 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; ``x` pnpm run proof:nosuch`` |"), 1],
     ["fail: an unclosed backtick on an Implemented row", plant("| Planted M4 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `proof:zzz |"), 1],
     // round 17: citations in a Control name
-    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts", "Planted C8 `npm run test`", "Planted D0 `foo.ts`", "Planted D1 `scripts/foo`", "Planted D2 in `no-such-file.ts:12`", "Planted D3 in `no-such-gate.mjs#L1`", "Planted D4 in `no-such-file.py`", "Planted D5 in `no-such-file.TS`", "Planted D6 pro**of**:zzz", "Planted D7 _proof_:zzz", "Planted D8 `proof`:zzz", "Planted E0 in `no-such.ts:12:5`", "Planted E1 in `no-such.ts@v2`", "Planted E2 in `no-such.ts,`", "Planted E3 in `no-such.ts `", "Planted E4 in `no-such.ts:L12`", "Planted E5 in `.env`", "Planted E6 `object.id`", "Planted E7 `no-such`.ts", "Planted F0 in `a`.`ts`", "Planted F1 no-such.`ts`", "Planted F2 `no-such`.TS", "Planted F3 `no-such`*.ts*", "Planted F4 `no-such`.**ts**", "Planted F5 *no-such*.`ts`", "Planted F6 `x`*.*`ts`"].flatMap((ctl) => [
+    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts", "Planted C8 `npm run test`", "Planted D0 `foo.ts`", "Planted D1 `scripts/foo`", "Planted D2 in `no-such-file.ts:12`", "Planted D3 in `no-such-gate.mjs#L1`", "Planted D4 in `no-such-file.py`", "Planted D5 in `no-such-file.TS`", "Planted D6 pro**of**:zzz", "Planted D7 _proof_:zzz", "Planted D8 `proof`:zzz", "Planted E0 in `no-such.ts:12:5`", "Planted E1 in `no-such.ts@v2`", "Planted E2 in `no-such.ts,`", "Planted E3 in `no-such.ts `", "Planted E4 in `no-such.ts:L12`", "Planted E5 in `.env`", "Planted E6 `object.id`", "Planted E7 `no-such`.ts", "Planted F0 in `a`.`ts`", "Planted F1 no-such.`ts`", "Planted F2 `no-such`.TS", "Planted F3 `no-such`*.ts*", "Planted F4 `no-such`.**ts**", "Planted F5 *no-such*.`ts`", "Planted F6 `x`*.*`ts`", "Planted F7 `no-such`_.ts_", "Planted F8 `no-such`.__ts__"].flatMap((ctl) => [
       [`fail: Control name ${ctl} on an Implemented row`, plant(`| ${ctl} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\` |`), 1],
       [`fail: Control name ${ctl} on an Automated row`, plant(`| ${ctl} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\` |`), 1]]),
     ["pass (documented ceiling): a digit-led extension in a Control span reads as a version-like word", plant("| Planted F9 `no-such.7z` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],

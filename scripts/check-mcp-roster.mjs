@@ -196,12 +196,13 @@ function stripYamlComment(s) {
 // a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own (`\x` is `x`), so a non-JSON escape
 // never throws the gate. An escaped line break never reaches here: logicalLines has already spliced it. A decoded
 // `\` + `\n` pair is a backslash-newline the shell splices (`cont\\\next7` runs context7): spliced here too.
+const YAML_ESCAPES = { 0: "\0", a: "\x07", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r", e: "\x1b", N: "\x85", _: "\xa0", L: "\u2028", P: "\u2029" };
 const unquoteDq = (v) => {
   let d;
   try {
     d = JSON.parse(v);
   } catch {
-    d = v.slice(1, -1).replace(/\\(.)/g, (_, c) => (c === "n" ? "\n" : c)); // an escaped line break was already joined
+    d = v.slice(1, -1).replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g, (_, c) => YAML_ESCAPES[c] ?? (c.length > 1 ? String.fromCodePoint(parseInt(c.slice(1), 16)) : c));
   }
   return spliceDecoded(d);
 };
@@ -309,6 +310,19 @@ export function logicalLines(lines, kind, path = "") {
     return q !== "";
   };
   if (kind === "yaml") {
+    // a block header: `|`/`>` with an indent indicator before or after the chomp sign, after props (`&a`, `!!str`, a
+    // bare `!`), behind a key `:`, one or more `- `/`? ` entries (`- - |`), or a document start (`--- |`)
+    const HDR = "[|>](?:[+-]?([1-9])[+-]?|[+-])?";
+    const PROPS = "(?:[&!]\\S*\\s+)*";
+    const PRE = "(?::|^\\s*(?:[-?]\\s+)*[-?]|^\\s*---)";
+    const headerRe = (c) => new RegExp(`${PRE}\\s+${PROPS}${HDR.replace("[|>]", c)}\\s*$`);
+    const ANY_HDR = headerRe("[|>]");
+    const LITERAL_HDR = headerRe("\\|");
+    const FOLDED_HDR = headerRe(">");
+    const ALONE_HDR = new RegExp(`^\\s*${PROPS}${HDR}\\s*$`);
+    const ALONE_FOLDED = new RegExp(`^\\s*${PROPS}${HDR.replace("[|>]", ">")}\\s*$`);
+    const ODD_BS = /(?<=(?:^|[^\\])(?:\\\\)*)\\$/;
+    const plainJoinable = (text) => /(?::\s+\S|^\s*-\s+\S)/.test(text) && !LITERAL_HDR.test(text);
     let cur = null;
     let scalar = -1; // the indent of the key that opened a `|`/`>` block scalar; its more-indented lines are content
     let keyIndent = -1; // the indent of the last non-blank line: a header alone on its line (`run:` + `|`) belongs to it
@@ -320,9 +334,15 @@ export function logicalLines(lines, kind, path = "") {
       const t = scalar >= 0 || (cur && openQuote(cur.text)) ? l : stripYamlComment(l);
       // a header after its key (`run: |2-`, the indent indicator before or after the chomp sign), or alone on the
       // line after the key (`run:` / `run: &a` + `|`): either way the more-indented lines after it are content
-      if (scalar < 0 && /(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*[|>](?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) scalar = indent(l);
-      else if (scalar < 0 && keyIndent >= 0 && /^\s*(?:[&!]\S+\s+)*[|>](?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) scalar = keyIndent;
+      if (scalar < 0 && ANY_HDR.test(t)) scalar = indent(l);
+      else if (scalar < 0 && keyIndent >= 0 && ALONE_HDR.test(t)) scalar = keyIndent;
       if (l.trim() !== "" && (scalar >= 0 || !/^\s*#/.test(l))) keyIndent = indent(l); // a comment line is not the key
+      // a blank line inside a multi-line scalar (folded, quoted or plain) is a KEPT line break, not the scalar's end:
+      // `cont\` + blank + `ext7` reaches the shell as a backslash-newline, so the next line is spliced on
+      if (cur && l.trim() === "" && (cur.block === true || (scalar < 0 && (openQuote(cur.text) || plainJoinable(cur.text))))) {
+        cur.blank = true;
+        continue;
+      }
       const isEntry = /^\s*(?:-(?:\s|$)|#|\?\s|:\s|(?:"[^"]*"|'[^']*'|[^\s#"'][^#]*?):(?:\s|$))/.test(l);
       if (
         cur &&
@@ -331,38 +351,49 @@ export function logicalLines(lines, kind, path = "") {
         (cur.block ||
           openQuote(cur.text) ||
           // a literal `|` block's lines stay separate (each is a command); only plain scalars continue
-          (!isEntry && /(?::\s+\S|^\s*-\s+\S)/.test(cur.text) && !/(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*\|(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(cur.text)))
+          (!isEntry && plainJoinable(cur.text)))
       ) {
         if (cur.block === "pending") {
-          cur.text = cur.text.replace(/\s*[>|](?:[+-][1-9]?|[1-9][+-]?)?\s*$/, "");
+          // the folded block's content indent: the header's indent indicator counted from its key, else the first line's
+          const d = ANY_HDR.exec(cur.text)?.[1] ?? ALONE_HDR.exec(cur.text.replace(/^.*?:\s+/, ""))?.[1];
+          cur.bIndent = d ? /^\s*(?:[-?]\s+)*/.exec(cur.text)[0].length + Number(d) : indent(l);
+          cur.text = cur.text.replace(new RegExp(`\\s*${HDR}\\s*$`), "");
           cur.block = true;
-          cur.bIndent = indent(l); // the folded block's content indent
           cur.lastMore = false;
+          cur.blank = false;
         }
         if (cur.block === true) {
           // a folded `>` block folds a line break to a space, EXCEPT one next to a more-indented line, which is kept:
           // there a trailing `\` is a shell continuation (`cont\` + `ext7` runs context7), so it is spliced
+          // (and one after a blank line, which YAML keeps as the break itself)
           const more = indent(l) > cur.bIndent;
-          if ((more || cur.lastMore) && /(?<=(?:^|[^\\])(?:\\\\)*)\\$/.test(cur.text)) cur.text = cur.text.slice(0, -1) + l.slice(cur.bIndent);
+          if ((more || cur.lastMore || cur.blank) && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + l.slice(Math.min(cur.bIndent, indent(l)));
           else cur.text += ` ${t.trim()}`;
           cur.lastMore = more;
+          cur.blank = false;
           continue;
         }
+        const dq = openQuote(cur.text) && /"[^"]*$/.test(cur.text);
+        // after a blank line the break is kept: in a double-quoted scalar it is written as an `\n` escape (decoded,
+        // then a `\`-newline is spliced); in a plain or single-quoted one a trailing `\` is spliced as the shell would
+        if (cur.blank && dq) cur.text += `\\n${t.trim()}`;
+        else if (cur.blank && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
         // inside a double-quoted scalar an escaped line break vanishes with the next line's indent (YAML 1.2 §7.3.1)
-        if (openQuote(cur.text) && /(?<!\\)(?:\\\\)*\\$/.test(cur.text) && /"[^"]*$/.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
+        else if (dq && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
         else cur.text += ` ${t.trim()}`;
-        if (!cur.block && /^\s*(?:[&!]\S+\s+)*>(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t)) cur.block = "pending"; // `run:` + `>` alone on the next line
+        cur.blank = false;
+        if (!cur.block && ALONE_FOLDED.test(t)) cur.block = "pending"; // `run:` + `>` alone on the next line
         continue;
       }
       if (cur) out.push(cur);
       // only a FOLDED `>` block joins into one value; a literal `|` block keeps its lines (commands) separate
-      cur = { i, text: t, indent: indent(l), block: /(?::|^\s*(?:[-?]\s+)*[-?])\s+(?:[&!]\S+\s+)*>(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(t) ? "pending" : false };
+      cur = { i, text: t, indent: indent(l), block: FOLDED_HDR.test(t) ? "pending" : false };
     }
     if (cur) out.push(cur);
     // a `\` continuation inside a literal `|` script: YAML strips the block's indentation, the shell then glues
     return joinContinuations(
       out.map(({ i, text }) => ({ i, text })),
-      /(?<=(?:^|[^\\])(?:\\\\)*)\\$/, // an odd run of backslashes continues
+      ODD_BS, // an odd run of backslashes continues
       ["block"],
     );
   }
@@ -511,12 +542,15 @@ export function context7UnitFindings(units, pin, runner, depth = 0) {
       out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
       continue;
     }
-    for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
-      const rest = unit.slice(m.index + m[0].length);
+    // a quoted letter inside the word (`con't'ext7`, `cont""ext7`) is concatenated by the shell, but `shellWords` keeps
+    // a quote between two letters as a prose apostrophe: a word naming the package only once quotes go is read without them
+    const word = new RegExp(CONTEXT7_NAME_RE.source, "i").test(unit) ? unit : unit.replace(/["']/g, "");
+    for (const m of word.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
+      const rest = word.slice(m.index + m[0].length);
       if (rest.startsWith("@")) {
         const f = classify(shedMarkup(rest.slice(1)));
         if (f) out.push(f);
-      } else if (/(?:^|[=:\s"'])npm:$/i.test(unit.slice(0, m.index))) out.push({ unpinned: "<none> (npm: alias)" });
+      } else if (/(?:^|[=:\s"'])npm:$/i.test(word.slice(0, m.index))) out.push({ unpinned: "<none> (npm: alias)" });
       // in a runner context the name is versionless whenever `@<version>` does not follow it at once — whatever does
       // follow (a `\` continuation, `$(…)`, `${VAR}`, more text) cannot pin it
       else if (!/^["']?\s*[:=]/.test(rest) && runner) out.push({ bare: true });
@@ -760,10 +794,13 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     // a shell keeps a `#`-led line after `\<newline>` (glued, not a comment), so it is also rebuilt with them kept
     const rebuilt = [
       new RegExp(`([\\\\\`^])[ \\t]*\\r*\\n(?:${GO_SPACE.replace("\\n", "")}*(?:#[^\\n]*)?\\r*\\n)*[ \\t]*`, "g"),
-      /([\\`^])[ \t]*\r*\n[ \t]*/g,
+      // (blank lines between are kept breaks in a YAML scalar, where a `\` before one still splices: spanned too)
+      /([\\`^])[ \t]*\r*\n(?:[ \t]*\r*\n)*[ \t]*/g,
       // and a backslash-newline written as escapes inside a JSON string or a YAML double-quoted scalar (`cont\\\next7`)
       /\\\\\\(?:r\\)?n/g,
     ].map((re) => text.replace(re, "").replace(/["'\\`^]/g, ""));
+    // and a YAML double-quoted hex or unicode escape (`cont\x65xt7`), decoded
+    rebuilt.push(text.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g, (_, a, b, c) => String.fromCodePoint(parseInt(a ?? b ?? c, 16))));
     if (!/context7/i.test(text) && !rebuilt.some((r) => /context7/i.test(r)) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
@@ -1764,6 +1801,41 @@ server.registerTool(
   ]) {
     checks.push([`[sweep ${path}] ${what} → named UNPINNED (@latest)`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
   }
+  // round 24: a blank line is a kept break in folded, plain and quoted scalars; an explicit indent indicator; `--- |`
+  // and a bare `!` tag; YAML hex escapes; a quoted letter inside the name; the YAML-block odd backslash run
+  const W24 = (body) => `jobs:\n  a:\n    steps:\n${body}`;
+  for (const [path, body, what, re] of [
+    [".github/workflows/a.yml", W24("      - run: >\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n"), "a folded `>` block with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24("      - run: >\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n").replace(/\n/g, "\r\n"), "the same in CRLF"],
+    [".github/workflows/a.yml", W24("      - run: >2\n              npx -y @upstash/cont\\\n          ext7-mcp@latest\n"), "a `>2` block whose first line is deeper than its content indent"],
+    ["a.yml", `--- |\n${S23(2)}\n`, "a document-level `--- |` block"],
+    [".github/workflows/a.yml", W24(`      - run: ! |\n${S23(10)}\n`), "a block behind a bare `!` tag"],
+    [".gitlab-ci.yml", `a:\n  script:\n    - ! |\n${S23(6)}\n`, "a `- ! |` sequence block"],
+    [".github/workflows/a.yml", W24("      - run: npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n"), "a plain scalar with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24("      - run: 'npx -y @upstash/cont\\\n\n          ext7-mcp@latest'\n"), "a single-quoted scalar with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\\\\n\n          ext7-mcp@latest"\n'), "a double-quoted scalar with a blank line after `cont\\\\`"],
+    [".github/workflows/a.yml", W24("      - run: 'echo a\\\n\n          #x; npx -y @upstash/cont\\\n\n          ext7-mcp@latest'\n"), "a single-quoted `#`-led split across blank lines"],
+    [".github/workflows/a.yml", W24('      - run: "echo a\\\\\n\n          #x; npx -y @upstash/cont\\\\\n\n          ext7-mcp@latest"\n'), "a double-quoted `#`-led split across blank lines"],
+    [".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\x65xt7-mcp@latest"\n'), "a YAML double-quoted `\\x65` escape inside the name"],
+    [".github/workflows/a.yml", W24("      - run: |\n          npx -y a\\\\\\\n           @upstash/context7-mcp\n"), "an odd backslash run in a `|` block carrying the runner (NO version)", /with NO version/],
+    ["s.sh", "npx -y @upstash/con't'ext7-mcp@latest\n", "a quoted letter inside the name in sh"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont'e'xt7-mcp@latest" } }), "a quoted letter inside the name in a JSON script"],
+    [".github/workflows/a.yml", W24("      - run: npx -y @upstash/co'n'text7-mcp@latest\n"), "a quoted letter inside the name in a YAML plain value"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  checks.push([
+    "[sweep a.yml] a blank line inside a literal `|` block ends the command (`cont\\` + blank + `ext7` is not a name) → no finding",
+    sweep(".github/workflows/a.yml", W24(`      - run: |\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n      - run: npx -y ${SPEC}${realPin}\n`)).length === 0,
+  ]);
+  checks.push([
+    "[sweep a.yml] a pinned name through a `\\x65` escape → no finding",
+    sweep(".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\x65xt7-mcp@' + realPin + '"\n' + `      - run: npx -y ${SPEC}${realPin}\n`)).length === 0,
+  ]);
+  checks.push([
+    "[sweep README.md] prose apostrophes beside a pinned name → no finding",
+    sweep("README.md", `Don't run ${SPEC}${realPin} twice; it's fine.\n`).length === 0,
+  ]);
   checks.push([
     "[sweep a.yml] a folded `>` block at one indent folds `\\` + break to `\\ ` (a name holding a space) → no finding",
     sweep(".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run: >\n${S23(10)}\n      - run: npx -y ${SPEC}${realPin}\n`).length === 0,

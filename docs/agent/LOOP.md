@@ -56,13 +56,12 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-01 (Mac lane) - THE BRAIN BUILDS ITSELF CHEAPER: CHORE BOT, MODEL TIERS, LIVE DEMO, DR-062/063; MERGES ARE THE OWNER'S OR THE CLOUD'S.
-              Owner (verbatim): 'Just get the merges done whatever it needs I'll approve' and the four-point brain-ecosystem
-              paste (Cole Medin video). The auto-mode classifier refuses the Mac merging its OWN PRs by any route (self-approval,
-              incl. asking the cloud) - the cloud lands SAFETY under DR-037 on its routine, DECISION_PATH after #1246; the owner
-              taps the OWNER_RESERVED records. Owner merges owed: #1246 (DR-061), #1322 (DR-062 company scope + fully automatic
-              incl. source-system changes), #1357 (DR-063 ecosystem: per-repo CLAUDE.md, labels = roster entry, one MCP plane,
-              triggers = Claude GitHub App + Mac, both chosen), signalgrid-mcp #15 #16 (#14 merged by the Mac on his word).
+LAST_TOUCHED: 2026-10-02 (cloud lane) - DOCS: restamp landed rows round 4 (PR #1372, merge cd5dd4d1).
+              Work: updated docs/COMPANY_BUILD_PLAN.md (rows 43 61 92 106 108 111 114 119 143 144 153 171 172) and
+              docs/BUILD_BACKLOG.md (rows 2486 2495 2505 2559) with PR citations and commit SHAs for fixes landed on
+              SignalGrid_Alpha. Rows 43/61 marked HALF DONE (PR landed partial work); rest DONE. Validation: simulator
+              GREEN (4/4), preflight GREEN (shell-lint env issue only). Owner approved and merged immediately. No commits
+              pushed this session (work already merged). Next: continue regular build/execution cycle.
               BUILT + PUSHED, each test-first with Opus adversarial review and local preflight+breadth 0/0 at its head:
               #1323 live demo (one command - the demo:live script on that branch - real core + real cascade on a phone-reachable page, proof:demo-live 108/108,
               replay, whole-story verdict); #1353 pr-refresh (no-model chore bot: re-merges dirty mac/* PRs, derived-file-only

@@ -18,7 +18,8 @@
 // cannot be told from a deliberate deletion, any cut over a quarter reads clean
 // again after 49 further changes to that ledger, a rename plus a cut in one
 // commit has no earlier copy to compare, a cut REPLACED by as many new rows of
-// the same size reads as an edit (both marks hold), and the marks follow the
+// the same size — or the same lines re-ended with CRLF, whose extra bytes offset
+// the cut — reads as an edit (both marks hold), and the marks follow the
 // first-parent line only, so content that only ever existed on a merged side
 // branch never raises them. A ledger with uncommitted edits, or flagged
 // assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
@@ -114,8 +115,12 @@ const SYNC_INTO = /into (?:origin\/)?(claude\/[A-Za-z0-9._/-]+)$/;
 const CITED_PATH = /[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z0-9]+/g;
 const norm = (t) => t.replace(/\s+/g, " ");
 
+// Replace refs are local and rewrite history as git reports it (a `git replace
+// --graft` can hide the high-water copy); the detector reads the history as committed.
+const GIT_ENV = { ...process.env, GIT_NO_REPLACE_OBJECTS: "1" };
+
 function git(cwd, args) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
+  return execFileSync("git", args, { cwd, env: GIT_ENV, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
 /** Plan-row closure exactly as check-backlog-evidence.mjs reads it (same imports, same order). */
@@ -227,9 +232,9 @@ function branchEvidence(cwd, a, l) {
  */
 export function classify(cwd, a, opts = {}) {
   const intro = introOf(cwd, a);
-  if (!intro) return { ...a, status: "NO-HISTORY" };
+  if (!intro) return { ...a, status: "NO-HISTORY", why: "no commit in this row's line history adds the annotation (added by a merge commit's own edit?)" };
   const l = landingOf(cwd, intro, "HEAD");
-  if (!l) return { ...a, status: "NO-HISTORY", intro };
+  if (!l) return { ...a, status: "NO-HISTORY", intro, why: `its adding commit ${intro.slice(0, 8)} reaches the tip by no first-parent or second-parent path (an octopus merge?)` };
   if (!l.pr) return { ...a, status: "NOT-VIA-PR", intro, land: l.land };
   const changed = new Set(git(cwd, ["diff", "--name-only", `${l.land}^1`, l.land]).split("\n"));
   const hit = a.cited.filter((p) => changed.has(p));
@@ -255,7 +260,7 @@ export function readLedger(cwd, file) {
   if (!entry) return { why: "not present at HEAD" };
   const mode = entry.split(/\s/)[0];
   if (mode !== "100644" && mode !== "100755") return { why: `not a regular file at HEAD (git mode ${mode})` };
-  const raw = execFileSync("git", ["show", `HEAD:${file}`], { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  const raw = execFileSync("git", ["show", `HEAD:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
   // UTF-16 puts a NUL beside every ASCII character, so this catches it with or without a BOM.
   if (raw.includes(0)) return { why: "holds a NUL byte (binary or UTF-16), not UTF-8 text" };
   let decoded;
@@ -297,7 +302,7 @@ export function readLedger(cwd, file) {
   let highBytes = 0, highRows = 0, atBytes = "", atRows = "";
   for (const h of shas) {
     let body;
-    try { body = execFileSync("git", ["show", `${h}:${file}`], { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }); }
+    try { body = execFileSync("git", ["show", `${h}:${file}`], { cwd, env: GIT_ENV, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }); }
     catch {
       // Deleted at that commit is a real state, not an unreadable one.
       let gone = false;
@@ -367,7 +372,7 @@ function report(results, dirty = []) {
     console.log(`  READ   ${r.file}:${r.line} ${r.row} — annotation landed via PR #${r.pr} at ${r.land.slice(0, 8)}, but ${why}; read by hand`);
   }
   for (const r of by("NO-LEDGER")) console.log(`  ?      ${r.file} — ${r.why}; NOT MEASURED (a ledger nobody could read is never a clean result)`);
-  for (const r of by("NO-HISTORY")) console.log(`  ?      ${r.file}:${r.line} ${r.row} — no adding commit in this row's line history; NOT MEASURED`);
+  for (const r of by("NO-HISTORY")) console.log(`  ?      ${r.file}:${r.line} ${r.row} — ${r.why}; NOT MEASURED`);
   const s = by("STALE"), u = by("LANDED-UNCORROBORATED").length, n = by("NOT-VIA-PR").length, h = by("NO-HISTORY").length + by("NO-LEDGER").length, c = by("CLOSED-RESIDUE").length;
   const rows = new Set(s.map((r) => `${r.file}|${r.row}`)).size;
   console.log(`REPORTED: ${results.filter((r) => r.status !== "NO-LEDGER").length} FIX PROPOSED annotation(s) — ${s.length} stale (claim already landed via a PR) across ${rows} open row(s), ${u} landed-uncorroborated, ${c} closed-row residue, ${n} not landed via a PR, ${h} not measured. A stale annotation needs restamping; its row may still have work left. Never fatal (plan row 170).`);
@@ -597,6 +602,45 @@ function selfTest() {
     try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.replace("40. **Row 40.** — OPEN, qa. Some body text for row 40.\n", "")); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push(["a deliberate one-row deletion is still measured (the shrink check is not a hair trigger)", !st.startsWith("NO-LEDGER")]);
   }
+  // A ledger deleted in one commit and restored in full in the next is measured: deletion is a real state, not an unreadable copy.
+  {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return [(g) => rmSync(g), (g) => writeFileSync(g, bigPlan)]; }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a ledger deleted then restored in full is measured, not refused as unreadable", !st.startsWith("NO-LEDGER") && !st.startsWith("threw")]);
+  }
+  // A `git replace --graft` that hides the high-water copy is ignored: history is read as committed.
+  {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), (g, gs) => gs("replace", "--graft", "HEAD")]; }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a graft replace ref cannot hide the high-water copy", /^NO-LEDGER: .*high-water mark/.test(st)]);
+  }
+  // Two ways a landing cannot be traced, each NOT MEASURED with its own reason.
+  {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-landing-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n2. **Row 2.** — OPEN, qa.\n");
+      writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); writeFileSync(join(d, "scripts/a.mjs"), "0\n");
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      // Row 1: the annotation is written by the merge commit itself (an evil merge), so no commit in the line history adds it.
+      gs("checkout", "-qb", "side"); writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "side");
+      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "--no-commit", "side");
+      writeFileSync(join(d, plan), readFileSync(join(d, plan), "utf8").replace("1. **Row 1.** — OPEN, qa.", "1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/evil, x): `scripts/a.mjs`."));
+      gs("add", "-A"); gs("commit", "-qm", "Merge pull request #5: side");
+      // Row 2: landed by an octopus merge, through its third parent.
+      gs("checkout", "-qb", "b1"); writeFileSync(join(d, "scripts/b1.mjs"), "b\n"); gs("add", "-A"); gs("commit", "-qm", "b1");
+      gs("checkout", "-q", "main"); gs("checkout", "-qb", "claude/oct");
+      writeFileSync(join(d, plan), readFileSync(join(d, plan), "utf8").replace("2. **Row 2.** — OPEN, qa.", "2. **Row 2.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/oct, x): `scripts/a.mjs`."));
+      writeFileSync(join(d, "scripts/a.mjs"), "2\n"); gs("commit", "-qam", "oct");
+      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", "Merge branches b1 and claude/oct", "b1", "claude/oct");
+      const r = Object.fromEntries(measure(d).map((x) => [x.row, x]));
+      checks.push(["an annotation written only by a merge commit's own edit is NOT MEASURED (no adding commit)", r["row 1"]?.status === "NO-HISTORY" && /no commit in this row's line history/.test(r["row 1"]?.why ?? "")]);
+      checks.push(["an annotation landed through an octopus merge's third parent is NOT MEASURED (no traceable landing)", r["row 2"]?.status === "NO-HISTORY" && /octopus/.test(r["row 2"]?.why ?? "")]);
+    } catch (e) {
+      checks.push([`landing fixtures ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  }
   // The backlog's row mark (checkboxes, its own grammar): 40 boxes cut to 28 and padded back with prose.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-backlog-"));
@@ -690,7 +734,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 60;
+  return failed === 0 && checks.length === 64;
 }
 
 let isMain = false;

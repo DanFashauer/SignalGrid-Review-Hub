@@ -117,6 +117,7 @@ const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
 // of trailing markup only: `**`, a markdown link `](…)`, closing HTML tags, and
 // trailing ) ] } > . , ; : ! ?.
 // Go's unicode.IsSpace, which BuildKit trims with: JS `\s` adds U+FEFF and lacks U+0085, so neither is used for Dockerfiles
+export const GO_SPACE_CHARS = "\t\n\v\f\r \u0085\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000";
 const GO_SPACE = "[\\t\\n\\v\\f\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]";
 const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
@@ -401,10 +402,14 @@ export function joinContinuations(entries, cont, modes, skip = null) {
     }
     // the group's members; `skip` lines inside it (a Dockerfile's comment and empty lines) are dropped, not joined
     const parts = [k];
+    const skipped = [];
     let j = k;
     while (j + 1 < entries.length && cont.test(entries[parts[parts.length - 1]].text)) {
       j++;
       if (!(skip && skip(entries[j].text))) parts.push(j);
+      // a skipped line is ALSO read on its own: inside a `RUN <<EOF` heredoc it is not a Dockerfile comment, and the shell
+      // may glue it onto the line before and run it (`--help\` + `#x; npx …@latest`); bounds are not tracked, so fail closed
+      else skipped.push(j);
     }
     const base = /^\s*/.exec(entries[k].text)[0].length;
     const joins = modes.map((mode) => {
@@ -432,6 +437,7 @@ export function joinContinuations(entries, cont, modes, skip = null) {
       continue;
     }
     for (const text of joins) out.push({ i: entries[k].i, text }); // the same line named twice is de-duplicated in the sweep
+    for (const n of skipped) out.push({ i: entries[n].i, text: entries[n].text });
     k = j;
   }
   return out;
@@ -1632,6 +1638,31 @@ server.registerTool(
   ]) {
     checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
   }
+  // every Go unicode.IsSpace member leads a skipped line (a split inside context7 is read); a non-member does not
+  for (const ch of GO_SPACE_CHARS.replace("\n", "")) {
+    const body = `RUN npx -y @upstash/cont\\\n${ch}# n\next7-mcp@latest\n`;
+    checks.push([`[go-space U+${ch.codePointAt(0).toString(16).padStart(4, "0")}] a split inside context7 across a line led by it is named`, flags("Dockerfile", body, 1)]);
+  }
+  checks.push(["GO_SPACE matches exactly GO_SPACE_CHARS", [...GO_SPACE_CHARS].every((c) => new RegExp(GO_SPACE).test(c)) && !["\uFEFF", "\u180E", "\u200B", "x"].some((c) => new RegExp(GO_SPACE).test(c))]);
+  for (const ch of ["\uFEFF", "\u180E", "\u200B"]) {
+    const body = `RUN npx -y ${SPEC}${realPin} --help \\\n${ch}#x; npx -y ${NAME}@latest\n`;
+    checks.push([`[not go-space U+${ch.codePointAt(0).toString(16).padStart(4, "0")}] a line led by it is not a comment, so its command is named`, sweep("Dockerfile", body).length >= 1]);
+  }
+  checks.push([
+    "a `#` line inside a RUN heredoc continuation is also read on its own (the shell glues and runs it)",
+    sweep("Dockerfile", `RUN <<EOF\nnpx -y ${SPEC}${realPin} --help\\\n#x; npx -y ${NAME}@latest\nEOF\n`).length >= 1,
+  ]);
+  checks.push([
+    "joinContinuations joins across a skipped line and still emits the skipped line on its own",
+    JSON.stringify(
+      joinContinuations(
+        [{ i: 0, text: "npx @upstash/cont\\" }, { i: 1, text: "# c" }, { i: 2, text: "ext7-mcp" }, { i: 3, text: "# outside" }],
+        /\\$/,
+        ["keep"],
+        (t) => /^\s*#/.test(t),
+      ),
+    ) === JSON.stringify([{ i: 0, text: "npx @upstash/context7-mcp" }, { i: 1, text: "# c" }, { i: 3, text: "# outside" }]),
+  ]);
   checks.push([
     "a continuation read two ways names its line ONCE (problems are de-duplicated)",
     sweep("Dockerfile", `RUN npx -y \\\n    ${NAME}@latest\n`).length === 1,

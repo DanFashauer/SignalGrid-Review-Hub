@@ -182,7 +182,8 @@ function makeKeycloakAdminTransport(
     const clients = await get("/clients");
     let clientComposite: unknown = undefined;
     if (Array.isArray(clients)) {
-      const acc: Record<string, unknown> = {};
+      // null-prototype: a client named "__proto__" must be an own key, not a prototype swap
+      const acc: Record<string, unknown> = Object.create(null);
       for (const c of clients as Record<string, unknown>[]) {
         if (typeof c?.id !== "string" || typeof c.clientId !== "string") throw new AccessGovernanceConnectorError("bad_response", "a client without id/clientId", 200);
         const roles = await get(`/users/${id}/role-mappings/clients/${encodeURIComponent(c.id)}/composite`);
@@ -292,6 +293,11 @@ async function gradeAll(base: string, fetchFn: typeof fetch): Promise<Map<string
 }
 const entOf = (g: Graded): string[] => (((g.raw.entitlement as { entitlements?: unknown } | undefined)?.entitlements as string[] | undefined) ?? []);
 const extraOf = (g: Graded): string[] => (((g.raw.entitlement as { extra?: unknown } | undefined)?.extra as string[] | undefined) ?? []);
+/** Group expansion is real iff the group member's extra entitlements exceed a no-group
+ *  persona's by EXACTLY the group-inherited role. A delta, not a bare scope, because
+ *  Keycloak's own default roles drift and over-privilege EVERY persona on the wire. */
+const groupExpansionHolds = (groupMemberExtra: readonly string[], baselineExtra: readonly string[]): boolean =>
+  same(groupMemberExtra.filter((e) => !baselineExtra.includes(e)).sort(), [MANAGE_USERS]);
 const UNREPORTED = "certification=unknown sod=null privilege=unknown/null lifecycle=unknown observedAt=null";
 
 // ── OFFLINE ──────────────────────────────────────────────────────────────────
@@ -360,6 +366,53 @@ async function offline(): Promise<Map<string, Graded>> {
     check("O6 a 401 -> auth_failed", err2 instanceof AccessGovernanceConnectorError && err2.code === "auth_failed");
   }
 
+  // O6 a client NAMED __proto__ must not drop its roles (a plain-object accumulator
+  // swaps the prototype instead of adding a key: over_privileged read as in_scope).
+  for (const [label, clientId] of [["control 'evil'", "evil"], ["'__proto__'", "__proto__"]] as const) {
+    const cid = `cid-${clientId}`;
+    const c = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
+      makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, (p) => {
+        if (p.endsWith("/clients")) return [{ id: "cid-account", clientId: "account" }, { id: cid, clientId }];
+        if (p.endsWith(`/role-mappings/clients/${cid}/composite`)) return R("super-admin");
+        return undefined;
+      })));
+    const post = await c.fetchPosture("ag-nurse");
+    check(`O6 a client named ${label} with a role -> over_privileged, never in_scope`,
+      post.entitlementScope === "over_privileged", `scope=${post.entitlementScope}`);
+  }
+
+  // O8 L5's predicate is not vacuous: it holds with the group role, fails without it, and
+  // fails when a default role drifts onto BOTH personas (the shape the live wire has).
+  const drift = "client:account:manage-account-links";
+  check("O8 group-expansion delta holds when only manage-users is added", groupExpansionHolds([drift, MANAGE_USERS], [drift]));
+  check("O8 group-expansion delta FAILS when the group role is dropped (default drift on both)", !groupExpansionHolds([drift], [drift]));
+  check("O8 group-expansion delta FAILS when more than the group role is added", !groupExpansionHolds([drift, MANAGE_USERS, "realm:x"], [drift]));
+
+  // O9 the live half fails closed by NAME and sends no credential off-loopback.
+  {
+    let calls = 0;
+    const spy = (async () => { calls += 1; return new Response("{}", { status: 200 }); }) as typeof fetch;
+    const off = await reachKeycloak("http://some-host:8080", "u", "p", spy);
+    check("O9 a non-loopback KEYCLOAK_URL is refused BEFORE any request (no credential sent)", "error" in off && /non-loopback/.test(off.error) && calls === 0, `calls=${calls}`);
+    for (const h of ["http://127.0.0.1:1", "http://localhost:1", "http://[::1]:1"]) {
+      let n = 0;
+      const dead = (async () => { n += 1; throw new TypeError("fetch failed"); }) as typeof fetch;
+      const r = await reachKeycloak(h, "u", "p", dead);
+      check(`O9 loopback ${h}: a dead lab -> named error, not a crash`, "error" in r && r.error === "fetch failed" && n === 1);
+    }
+    const bad = await reachKeycloak("http://127.0.0.1:1", "u", "p", (async () => new Response("{}", { status: 401 })) as typeof fetch);
+    check("O9 wrong password -> named error", "error" in bad && /admin token request failed \(401\)/.test(bad.error));
+    const noVer = await reachKeycloak("http://127.0.0.1:1", "u", "p",
+      (async (u: unknown) => (String(u).includes("/token") ? new Response(JSON.stringify({ access_token: "t" })) : new Response("{}"))) as typeof fetch);
+    check("O9 serverinfo without a version -> named error", "error" in noVer && /no version/.test(noVer.error));
+  }
+
+  // O10 the seed's path guard admits REALM and its subpaths, not a sibling sharing the prefix.
+  check("O10 seed path guard: realm, subpath and create allowed",
+    seedPathAllowed(`/admin/realms/${REALM}`) && seedPathAllowed(`/admin/realms/${REALM}/users`) && seedPathAllowed("/admin/realms"));
+  check("O10 seed path guard: sibling realm refused",
+    !seedPathAllowed(`/admin/realms/${REALM}-prod`) && !seedPathAllowed(`/admin/realms/${REALM}2/users`) && !seedPathAllowed("/admin/realms/master"));
+
   const timed = evaluateAccessGovernancePosture(normalizeReport("ag-nurse", planted, "keycloak-bridge"),
     { maxGovernanceReadAgeSeconds: 3600, referenceTime: "2026-01-01T00:00:00Z" });
   check("O7 a posed recency bound on a bridge report stays step_up+ and flags governance_read_time (no time invented)",
@@ -379,8 +432,21 @@ const SEED_ROUTE = [
   "default roles NOT seeded: Keycloak assigns them itself, which is what is under test",
 ];
 
-async function adminToken(base: string, adminUser: string, adminPass: string): Promise<string> {
-  const res = await fetch(`${base}/realms/master/protocol/openid-connect/token`, {
+/** Loopback only, BEFORE any credentialed request: the admin password goes over plain HTTP. */
+function assertLoopback(base: string, what: string): void {
+  const host = new URL(base).hostname;
+  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(host)) {
+    throw new Error(`${what} refuses a non-loopback host (${host}); the lab admin credentials go over plain HTTP`);
+  }
+}
+
+/** The one realm the seed may touch (besides creating it): REALM itself or a path UNDER it,
+ *  never a sibling that merely shares the prefix (sg-access-gov-prod). */
+const seedPathAllowed = (path: string): boolean =>
+  path === "/admin/realms" || path === `/admin/realms/${REALM}` || path.startsWith(`/admin/realms/${REALM}/`);
+
+async function adminToken(base: string, adminUser: string, adminPass: string, fetchFn: typeof fetch = fetch): Promise<string> {
+  const res = await fetchFn(`${base}/realms/master/protocol/openid-connect/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: "admin-cli", grant_type: "password", username: adminUser, password: adminPass }),
@@ -391,14 +457,26 @@ async function adminToken(base: string, adminUser: string, adminPass: string): P
   return j.access_token;
 }
 
-async function seedLabRealm(base: string, adminUser: string, adminPass: string): Promise<void> {
-  const host = new URL(base).hostname;
-  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(host)) {
-    throw new Error(`seedLabRealm refuses a non-loopback host (${host}); it deletes and recreates a realm`);
+/** Loopback check, then token + serverinfo. Returns the version, or the NAMED reason it
+ *  could not (dead port, wrong password, non-loopback host) so L1 fails by name. */
+async function reachKeycloak(base: string, adminUser: string, adminPass: string, fetchFn: typeof fetch = fetch): Promise<{ version: string } | { error: string }> {
+  try {
+    assertLoopback(base, "the live half");
+    const token = await adminToken(base, adminUser, adminPass, fetchFn);
+    const res = await fetchFn(`${base}/admin/serverinfo`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+    const info = (await res.json().catch(() => ({}))) as { systemInfo?: { version?: unknown } };
+    const v = info.systemInfo?.version;
+    return typeof v === "string" && v !== "" ? { version: v } : { error: `no version in /admin/serverinfo (${res.status})` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+async function seedLabRealm(base: string, adminUser: string, adminPass: string): Promise<void> {
+  assertLoopback(base, "seedLabRealm");
   const w = async (method: string, path: string, body?: unknown, okStatuses: number[] = []): Promise<Response> => {
     // the only realm this function may touch (besides creating it) is REALM
-    if (!(path === "/admin/realms" || path.startsWith(`/admin/realms/${REALM}`))) throw new Error(`seed refused path ${path}`);
+    if (!seedPathAllowed(path)) throw new Error(`seed refused path ${path}`);
     const res = await fetch(base + path, {
       method,
       headers: { authorization: `Bearer ${await adminToken(base, adminUser, adminPass)}`, "content-type": "application/json" },
@@ -434,11 +512,9 @@ async function seedLabRealm(base: string, adminUser: string, adminPass: string):
 async function live(base: string, adminUser: string, adminPass: string, fixture: Map<string, Graded>): Promise<boolean> {
   console.log(`-- live: ${base}`);
   const before = failures.length;
-  const info = (await (await fetch(`${base}/admin/serverinfo`, {
-    headers: { authorization: `Bearer ${await adminToken(base, adminUser, adminPass)}` },
-  })).json().catch(() => ({}))) as { systemInfo?: { version?: unknown } };
-  const version = typeof info.systemInfo?.version === "string" ? info.systemInfo.version : "";
-  check("L1 reached a live Keycloak (serverinfo version read)", version !== "", "no version in /admin/serverinfo");
+  const reached = await reachKeycloak(base, adminUser, adminPass);
+  const version = "version" in reached ? reached.version : "";
+  check("L1 reached a live Keycloak (serverinfo version read)", version !== "", "error" in reached ? reached.error : "");
   if (version === "") return false;
 
   await seedLabRealm(base, adminUser, adminPass);
@@ -473,10 +549,12 @@ async function live(base: string, adminUser: string, adminPass: string, fixture:
   const all = [...wire.values()];
   const unk = all.filter((g) => g.unreported === UNREPORTED).length;
   const authz = all.filter((g) => g.verdict.posture === "authorized").length;
-  console.log(`  unreported axes on the wire: 4 of 4 stayed unknown for ${unk}/${all.length} personas; ${authz} graded authorized`);
+  console.log(`  unreported fields on the wire: all ${UNREPORTED.split(" ").length} stayed unknown for ${unk}/${all.length} personas; ${authz} graded authorized`);
   check("L4 (fail-open guard) unreported axes unknown on the wire for every persona, none graded authorized", unk === all.length && authz === 0);
   const wga = wire.get("ag-group-admin") as Graded;
-  check("L5 (fail-open guard) ag-group-admin is NOT in_scope on the wire (group expansion is real)", wga.scope !== "in_scope", `scope=${wga.scope}`);
+  const wnu = wire.get("ag-nurse") as Graded;
+  check("L5 (fail-open guard) ag-group-admin's wire extra exceeds ag-nurse's by exactly the group-inherited manage-users (group expansion is real)",
+    groupExpansionHolds(extraOf(wga), extraOf(wnu)), `admin extra=[${extraOf(wga).join(",")}] nurse extra=[${extraOf(wnu).join(",")}]`);
 
   // L6 — wire vs fixture, axis by axis. A difference is a FINDING, not a failure.
   const divergences: string[] = [];

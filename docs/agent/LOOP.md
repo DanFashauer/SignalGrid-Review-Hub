@@ -56,7 +56,28 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-01 (cloud lane; window 2026-09-30 17:35Z-2026-10-01 06:40Z, first-parent 6acabe8e..d4fd8a6f) - 31 PR
+LAST TOUCHED: 2026-10-01 (Mac lane) - THE BRAIN BUILDS ITSELF CHEAPER: CHORE BOT, MODEL TIERS, LIVE DEMO, DR-062/063; MERGES ARE THE OWNER'S OR THE CLOUD'S.
+              Owner (verbatim): 'Just get the merges done whatever it needs I'll approve' and the four-point brain-ecosystem
+              paste (Cole Medin video). The auto-mode classifier refuses the Mac merging its OWN PRs by any route (self-approval,
+              incl. asking the cloud) - the cloud lands SAFETY under DR-037 on its routine, DECISION_PATH after #1246; the owner
+              taps the OWNER_RESERVED records. Owner merges owed: #1246 (DR-061), #1322 (DR-062 company scope + fully automatic
+              incl. source-system changes), #1357 (DR-063 ecosystem: per-repo CLAUDE.md, labels = roster entry, one MCP plane,
+              triggers = Claude GitHub App + Mac, both chosen), signalgrid-mcp #15 #16 (#14 merged by the Mac on his word).
+              BUILT + PUSHED, each test-first with Opus adversarial review and local preflight+breadth 0/0 at its head:
+              #1323 live demo (one command - the demo:live script on that branch - real core + real cascade on a phone-reachable page, proof:demo-live 108/108,
+              replay, whole-story verdict); #1353 pr-refresh (no-model chore bot: re-merges dirty mac/* PRs, derived-file-only
+              conflicts, writers, push on 0/0); #1248 build tick @694d255a (staged tiers triage Sonnet/build by kind/review Opus,
+              cost ledger from claude -p json, own clone + pinned mainline sha + replace-ref/graft/config resets, hooks off on
+              push, self-test 202/202 after THREE Opus rounds); #1354 intake row; #1356 scan:estate sibling locator (3/7 repos).
+              LESSONS (memory): cap concurrent preflights at 2 (4 at load 112 hung the timed hook self-test); owner authority does
+              not reach subagents (DRs, .claude, unattended agents, public-repo surfaces: ask him directly, do it in the main
+              session); a Workflow unit returning blocked:'none' reads as blocked - check journal before re-dispatching.
+              MAIL MISS, owned: 12 cloud->mac messages sat unread up to 34h (review findings on #1216 #1219 #1220 #1224 #1225 #1228
+              #1356 #1357, 26 superseded tick PRs to close, manifest v85 re-mint) - all acked 10-01 09:40Z; fixes dispatched; the
+              classifier DENIES gh pr close/edit for the Mac, so PR closes and body reshapes are the owner's or the cloud's.
+TIERS THIS SESSION: Opus triaged, architected and reviewed every unit (three rounds on the tick); Sonnet built and fixed; the
+              coordinator (Fable) dispatched only and wrote the two DRs + CLAUDE.md lines itself after the owner's direct yes.
+PREVIOUSLY:   2026-10-01 (cloud lane; window 2026-09-30 17:35Z-2026-10-01 06:40Z, first-parent 6acabe8e..d4fd8a6f) - 31 PR
               MERGES: TWELVE STEWARD CODE LANDINGS, FIVE MAC TICKS, THIRTEEN MAIL/HEARTBEAT PRs AND THE PRIOR RECORD (#1334);
               THE FORWARD-BUILD ROUTINE NOW ROUTES WORK BY MODEL TIER (DR-047) ON THE OWNER'S ASK.
               OWNER ASK 2026-10-01 (verbatim): "Hello you beautiful building machine how is the full company expanding and have
@@ -1912,7 +1933,11 @@ BLOCKED ON: the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: mac: (2026-09-30) the build tick is INSTALLED; once #1248 is on mainline, flip the mac-build-tick row
+NEXT ACTION: owner: merge #1246 #1322 #1357 + signalgrid-mcp #15 #16; run /install-github-app per repo; protect
+              signalgrid-mcp main. cloud: land #1353 #1248 #1323 #1216 #1225 under DR-037, then the DECISION_PATH set under
+              DR-061. mac: after #1248 lands, flip mac-build-tick to active and read the first real run; after #1247 lands,
+              re-mint live evidence in the .mint worktree; union-merge #1322/#1357 after #1246 lands.
+              mac: (2026-09-30) the build tick is INSTALLED; once #1248 is on mainline, flip the mac-build-tick row
               to active and read the first real run's log (~/Library/Logs/signalgrid/build-tick-*.log); after #1247 lands (manifest
               moved), re-mint live evidence in the .mint worktree. owner: merge #1246 (DR-061).
               cloud: (000000) 2026-09-25 21:05Z: readiness is at goal; the binding constraint moves to the OWNER's two

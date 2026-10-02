@@ -155,7 +155,7 @@ Fail-safe by construction, matched to the plant-floor stakes:
 - a **stale gateway** (we're blind to the device) or any **unreadable** control → `step_up` (never trust silence);
 - an unrecognized value normalizes to the safe `unknown`; a device **no gateway sees** is a blind spot, never `secure`.
 
-Proven fully offline by `pnpm run proof:ot-posture` (46 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
+Proven fully offline by `pnpm run proof:ot-posture` (47 checks, no plant access, no network). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. SignalGrid changes no device setting — every signal is read-only, and this is not a vendor partnership or certification claim.
 
 ## Factory-floor workflows — automating the plant (built, fixture-backed)
 
@@ -518,7 +518,7 @@ in one place.
   same raw-identifier tripwire as the gateway projector (an email-shaped subject refuses);
   `iat`/`event_timestamp` come from SUPPLIED instants and `jti` from an upstream decision id —
   no clock, no randomness. The fabric's reason codes travel as `reason_admin`, so the auditable
-  why crosses with the event. `proof:caep-events` (17 checks).
+  why crosses with the event. `proof:caep-events` (18 checks).
 
 - **Benchmark selection** ([BENCHMARK_SELECTION.md](BENCHMARK_SELECTION.md)) — a baseline answer is
   meaningless without the question that produced it. `BaselineState` records `aligned` and nothing
@@ -727,7 +727,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   by *nothing*: reverting the fix left this proof passing at the identical count. The
   dead parameters are removed so the echo is unrepresentable rather than merely absent,
   and the reads-from-the-response property is now asserted for both vendors.
-- **`proof:entitlement-binding` (62 checks)** — whether a grant is *reviewable*, not
+- **`proof:entitlement-binding` (63 checks)** — whether a grant is *reviewable*, not
   merely correct. Includes a **1,200-state sweep** with the clean path pinned to
   *exactly 18*, plus coherence checks that reject a report contradicting itself.
 - **`proof:service-lifecycle` (86 checks)** — whether the *service* plane still agrees

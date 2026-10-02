@@ -28,10 +28,18 @@
 //   · A pinned file may not set `defaults:` (workflow or job level) or `BASH_ENV`, which could
 //     turn the lint into a no-op without touching the step.
 // THREAT MODEL: this is a tripwire against accidental and lazy regressions of the lock race, not
-// a sandbox against deliberate obfuscation (shell word-splitting tricks, a variable holding the
-// command name). Those are out of scope.
-// KNOWN LIMIT: a workflow that calls a script which itself installs shellcheck is not
-// followed (the script is not workflow text); the pinned steps are the supported path.
+// a sandbox against deliberate obfuscation. Out of scope, and NOT detected:
+//   · a quote-obfuscated name (`shell""check`, `sh"ell"check`) or one assembled in code
+//     (`'shell' + 'check'` in an actions/github-script body);
+//   · a command or a package list held in a variable or an env value (`${{ env.X }}`,
+//     `$PKGS`) when no single line both runs apt and names shellcheck;
+//   · a package list read from a file (`xargs -a pkgs.txt apt-get install`);
+//   · a workflow that calls a script which itself installs shellcheck (the script is not
+//     workflow text); the pinned steps are the supported path;
+//   · apt calls that do NOT install shellcheck (`apt-get install -y jq`, desktop.yml's
+//     libwebkit2gtk list): whether the lock-wait shape applies to EVERY apt call is the
+//     owner's scope decision, not this gate's.
+// Line endings are normalised (CRLF/CR -> LF) before any scan.
 // A missing or unparseable step FAILS.
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -137,7 +145,7 @@ function stepProblems(step, spec) {
  */
 export function unsupportedYaml(text) {
   const out = [];
-  const lines = text.split("\n");
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
   let blk = -1;
   lines.forEach((l, i) => {
     if (!l.trim() || l.trim().startsWith("#")) return;
@@ -152,6 +160,8 @@ export function unsupportedYaml(text) {
     const q = val[0];
     if ((q === '"' || q === "'") && !(val.length > 1 && val.endsWith(q) && !val.endsWith("\\" + q))) out.push(`line ${i + 1}: a multi-line quoted scalar is not supported`);
     if (/\\(x[0-9A-Fa-f]{2}|u00[0-9A-Fa-f]{2}|U0000[0-9A-Fa-f]{2}|[0-7]{1,3})/.test(t)) out.push(`line ${i + 1}: an ASCII escape (\\x, \\u00, octal) can hide a package name and is not supported`);
+    // \n, \t, \r ... in a double-quoted value (or a flow mapping) decode to whitespace the scanner never sees.
+    if ((val[0] === '"' || /[{,]\s*[\w-]+:\s*"/.test(t)) && /\\[0abtnvfre ]/.test(t)) out.push(`line ${i + 1}: a whitespace/control escape (\\n, \\t, \\r ...) in a double-quoted value is not supported`);
   });
   return out;
 }
@@ -226,7 +236,7 @@ function yamlLogicalLines(lines) {
     if (folded || plain) {
       let j = i + 1;
       const parts = [folded ? m[1] : l];
-      while (j < lines.length && (lines[j].trim() === "" ? folded : indentOf(lines[j]) > kc && !/^\s*-\s/.test(lines[j]) && (folded || !/^\s*[\w"'-][^:]*:\s/.test(lines[j])))) {
+      while (j < lines.length && (lines[j].trim() === "" ? folded : folded ? indentOf(lines[j]) > kc : indentOf(lines[j]) > kc && !/^\s*-\s/.test(lines[j]) && !/^\s*[\w"'-][^:]*:\s/.test(lines[j]))) {
         parts.push(lines[j].trim()); j++;
       }
       // A folded block reaches the shell as one line; scan it whole, comments included.
@@ -239,18 +249,29 @@ function yamlLogicalLines(lines) {
   return out;
 }
 
-/** Join `\` continuations: [{ n (1-based first line), text }]. Raw (shell) lines keep their `#`s. */
+/**
+ * Join `\` continuations: [{ n (1-based first line), text, glued }]. `text` joins with a space; `glued`
+ * joins the way bash does (backslash-newline removed, nothing inserted), so `shell\` + `check` is seen.
+ * Raw (shell) lines keep their `#`s.
+ */
 function joinedStatements(rawLines) {
   const out = [];
   let cur = null;
+  const push = (st) => out.push({ n: st.n, text: st.text, glued: st.glued });
   yamlLogicalLines(rawLines).forEach(({ n, text, raw }) => {
     const i = n - 1;
     const t = raw ? text.trim() : stripComment(text);
-    if (cur) { cur.text += " " + t.replace(/\\$/, "").trim(); cur.open = t.endsWith("\\"); if (!cur.open) { out.push(cur); cur = null; } return; }
-    if (t.endsWith("\\")) { cur = { n: i + 1, text: t.replace(/\\$/, "").trim(), open: true }; return; }
-    if (t) out.push({ n: i + 1, text: t });
+    if (cur) {
+      cur.text += " " + t.replace(/\\$/, "").trim();
+      cur.glued += t.replace(/\\$/, "").trim();
+      cur.open = t.endsWith("\\");
+      if (!cur.open) { push(cur); cur = null; }
+      return;
+    }
+    if (t.endsWith("\\")) { const base = t.replace(/\\$/, "").trim(); cur = { n: i + 1, text: base, glued: base, open: true }; return; }
+    if (t) push({ n: i + 1, text: t, glued: t });
   });
-  if (cur) out.push(cur);
+  if (cur) push(cur);
   return out;
 }
 
@@ -258,12 +279,15 @@ const APT_INSTALL = /\b(apt(-get)?|aptitude|nala)\b.*\b(re)?(install|satisfy)\b|
 
 /** apt installs outside `skip` (a pinned step's line range) that name shellcheck or hide the package list. */
 function strayInstallsIn(text, file, skip) {
-  const lines = text.split("\n");
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const out = [];
   for (const st of joinedStatements(lines)) {
     if (skip && st.n - 1 >= skip.start && st.n - 1 < skip.end) continue;
-    if (APT_INSTALL.test(st.text) && (/\bshellcheck\b/.test(st.text) || /\$/.test(st.text))) {
-      out.push(`${file}:${st.n}: an unpinned apt install that names shellcheck or hides its package list behind a variable: \`${st.text}\``);
+    for (const text of new Set([st.text, st.glued])) {
+      if (APT_INSTALL.test(text) && (/\bshellcheck\b/.test(text) || /\$/.test(text))) {
+        out.push(`${file}:${st.n}: an unpinned apt install that names shellcheck or hides its package list behind a variable: \`${text}\``);
+        break;
+      }
     }
   }
   return out;
@@ -295,7 +319,7 @@ function strayInstalls(dir, readFile, pinnedFiles) {
   for (const rel of walk("")) {
     if (pinnedFiles.includes(rel)) continue;
     const text = readFile(rel);
-    if (rel.startsWith(".github/")) out.push(...unsupportedYaml(text).map((p) => `${rel}: ${p}`));
+    if (rel.startsWith(".github/") || /^\s*(runs|jobs):/m.test(text)) out.push(...unsupportedYaml(text).map((p) => `${rel}: ${p}`));
     out.push(...strayInstallsIn(text, rel, null));
   }
   return out;
@@ -375,9 +399,21 @@ function selfTest() {
     ["folded block: escaped quote then # then install", wrap(spec.name, good) + "      - name: x\n        run: >\n          echo \"a\\\" #b\"; apt-get install -y -qq shellcheck\n"],
     ["multi-line double-quoted string closing with # and an install", wrap(spec.name, good) + "      - name: x\n        run: |\n          echo \"line one\n          see #42\"; apt-get install -y -qq shellcheck\n"],
     ["multi-line single-quoted string closing with # and an install", wrap(spec.name, good) + "      - name: x\n        run: |\n          jq '.a\n          # c'; apt-get install -y -qq shellcheck\n"],
+    ["CRLF file: trailing # on a `then` line above an indented install", (wrap(spec.name, good) + "      - name: x\n        run: |\n          if true; then # refresh tools\n            apt-get install -y -qq shellcheck\n          fi\n").replace(/\n/g, "\r\n")],
+    ["CRLF file: `# refresh` on an update line above the install", (wrap(spec.name, good) + "      - name: x\n        run: |\n          apt-get update -qq # refresh\n          apt-get install -y -qq shellcheck\n").replace(/\n/g, "\r\n")],
+    ["`\\n` escape before the install in a double-quoted run", wrap(spec.name, good) + "      - name: x\n        run: \"echo hi\\napt-get install -y -qq shellcheck\"\n"],
+    ["`\\n` escape before the install in a flow mapping", wrap(spec.name, good) + "      - {name: x, run: \"echo hi\\napt-get install -y -qq shellcheck\"}\n"],
+    ["`\\t` escape splitting the install words", wrap(spec.name, good) + "      - name: x\n        run: \"apt-get install -y -qq\\tshellcheck\"\n"],
+    ["folded block with a `- ` content line before an indented install", wrap(spec.name, good) + "      - name: x\n        run: >\n          echo start\n          - x # c\n              apt-get install -y -qq shellcheck\n"],
+    ["package name split mid-word by a backslash-newline", wrap(spec.name, good) + "      - name: x\n        run: |\n          apt-get install -y -qq shell\\\n          check\n"],
+    ["blank line inside a literal block before a commented `then`", wrap(spec.name, good) + "      - name: x\n        run: |\n          echo hi\n\n          if true; then # c\n            apt-get install -y -qq shellcheck\n          fi\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
+  if (verdictFor(wrap(spec.name, good).replace(/\n/g, "\r\n"), spec).length !== 0) {
+    console.error("✗ self-test: the canonical shape with CRLF line endings FAILED:", verdictFor(wrap(spec.name, good).replace(/\n/g, "\r\n"), spec));
+    bad++;
+  }
   if (verdictFor(wrap(spec.name, good), spec).length !== 0) {
     console.error("✗ self-test: the canonical shape FAILED:", verdictFor(wrap(spec.name, good), spec));
     bad++;
@@ -426,6 +462,7 @@ function selfTest() {
     ["multi-line single-quoted scalar whose continuation looks like a key", "      - run: 'echo hi\n          more: stuff'\n", true],
     ["unicode ASCII escape in a double-quoted value", `      - run: "echo ${BS}u0063"\n`, true],
     ["octal escape in a double-quoted value", `      - run: "echo ${BS}143"\n`, true],
+    ["a clean CRLF document with a commented block opener", "jobs:\n  a:\n    steps:\n      - name: x\n        run: | # c\n          echo hi: stuff\n".replace(/\n/g, "\r\n"), false],
     ["a clean document", "jobs:\n  a:\n    steps:\n      - name: x\n        run: |\n          echo hi # a comment\n", false],
   ];
   for (const [label, t, want] of grammarCases) {
@@ -447,13 +484,20 @@ function selfTest() {
     put("ci/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
     if (scan().length === 0) { console.error("✗ self-test: a composite action outside .github PASSED"); bad++; }
     rmSync(join(tmp, "ci"), { recursive: true });
+    put("ci/sc/action.yml", `runs:\n  using: composite\n  steps:\n    - run: "apt-get install -y -qq shell${BS}x63heck"\n      shell: bash\n`);
+    if (scan().length === 0) { console.error("✗ self-test: an escaped package name in a composite action outside .github PASSED"); bad++; }
+    rmSync(join(tmp, "ci"), { recursive: true });
+    put(".github/workflows/crlf.yml", "jobs:\n  a:\n    steps:\n      - run: |\n          if true; then # c\n            apt-get install -y -qq shellcheck\n          fi\n".replace(/\n/g, "\r\n"));
+    if (scan().length === 0) { console.error("✗ self-test: a CRLF workflow with a commented `then` PASSED"); bad++; }
+    rmSync(join(tmp, ".github/workflows/crlf.yml"));
+
     put("third_party/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
     if (scan().length === 0) { console.error("✗ self-test: a composite action under third_party PASSED"); bad++; }
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
   if (bad) process.exit(1);
-  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install, ${grammarCases.length} grammar and 5 repo-walk cases behave`);
+  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install, ${grammarCases.length} grammar and 7 repo-walk cases behave`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

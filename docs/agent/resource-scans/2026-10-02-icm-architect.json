@@ -1,0 +1,242 @@
+{
+  "$comment": "Stage outputs of tool-evaluation-by-use §5b for the 2026-10-02 ICM Architect intake: A proposal (Opus-tier trial runs), B one confirm per roster perspective (Sonnet tier), C the cloud lane's decision. Trial outputs were scratch-only and are not committed; the numbers below are the runs' own, and per M-1/finding 3 they are samples, not repo facts.",
+  "date": "2026-10-02",
+  "resources": [
+    {
+      "name": "ICM Architect",
+      "upstream": "https://github.com/RinDig/icm-architect",
+      "author": "Jake Van Clief (copyright line in LICENSE; commit author 'JV')",
+      "licence": "MIT",
+      "form": "pure-markdown Claude skill (SKILL.md + 4 references + 8 templates; no scripts, no hooks, no network call)",
+      "defaultBranch": "main",
+      "pin": "e16cafe6a664dcf6d787a726b452adba77d913f4",
+      "pinDate": "2026-08-25",
+      "publishedVersion": "none (no tag, no package)",
+      "paper": "arXiv:2603.16021 (Van Clief & McDermott), cited by the skill, not read for this intake"
+    }
+  ],
+  "proposals": [
+    {
+      "what": "icm-architect run as its own runtime against two byte-identical read-only copies (3209 files: CLAUDE.md, AGENTS.md, docs/, .claude/, lib/, scripts/, artifacts/; tree hash 168fd6d1bf7c7455 before and after) with the instruction 'ICM this folder', Restructure mode, stopped at the skill's own step-5 approval gate.",
+      "alreadyHere": "A root routing entry file exists (CLAUDE.md, 269 lines; docs/INDEX.md first-hour table; signalgrid-master routing). AGENTS.md exists but is a 97-line standalone instruction file, not the owner's one-line pointer; neither file names the other (grep on origin/SignalGrid_Alpha). The 2026-09-19 row already absorbed ICM as a method (ICM-1..ICM-5).",
+      "trials": [
+        {
+          "run": "A",
+          "wallSeconds": 613,
+          "toolCalls": 43,
+          "outputs": {
+            "CLAUDE.md": "49 lines",
+            "AGENTS.md": "1-line pointer",
+            "newFilesProposed": 21,
+            "filesMoved": 0,
+            "roles": {
+              "catalog": 10,
+              "contract": 176,
+              "factory": 2465,
+              "product": 560,
+              "dead": 0
+            }
+          }
+        },
+        {
+          "run": "B",
+          "wallSeconds": 623,
+          "toolCalls": 48,
+          "outputs": {
+            "CLAUDE.md": "57 lines",
+            "AGENTS.md": "1-line pointer naming PURPOSE.md",
+            "newFilesProposed": 43,
+            "filesMoved": 0,
+            "roles": {
+              "catalog": 15,
+              "contract": 162,
+              "factory": 2475,
+              "product": 559,
+              "dead": 0
+            }
+          }
+        },
+        {
+          "check": "determinism",
+          "result": "FAIL: same source, same copy hash, two runs differ in every count above and in the text of CLAUDE.md and AGENTS.md"
+        },
+        {
+          "check": "offline",
+          "result": "The skill itself contains no network instruction (grep of all 14 files: only README links). Sockets could NOT be shim-denied: the runs are LLM sessions whose inference is the network. Recorded as: no network need in the skill's text, offline not independently measured."
+        },
+        {
+          "check": "sandbox",
+          "result": "copy tree hash identical before/after both runs; skill clone git status clean; throwaway worktree clean; nothing written inside the checkout"
+        },
+        {
+          "check": "headline claim 'every folder becomes an agent'",
+          "result": "FALSE under the skill's own text, both runs: SKILL.md:8 'One agent… replaces a multi-agent framework', :10 'One librarian — one model'. Folders get a CONTEXT.md contract read by one agent."
+        },
+        {
+          "check": "headline claim 'AGENTS.md just says read CLAUDE.md'",
+          "result": "PARTLY: core.md allows a pointer OR a generated copy. In this repo a bare pointer fails scripts/check-product-framing.mjs:111,190-197 (needs a PURPOSE.md reference); both runs added one."
+        }
+      ],
+      "tasks": [
+        {
+          "id": "T-1",
+          "title": "Owner decision: APPEND (not replace) two lines to AGENTS.md pointing non-Claude CLIs at CLAUDE.md",
+          "evidence": "AGENTS.md has no reference to CLAUDE.md and no fail-closed content (grep); .claude/skills/stack-reference/ai-cli.md:3-7 says AGENTS.md exists for CLIs that never read CLAUDE.md",
+          "change": "append at the end of AGENTS.md so five line-number citations (AGENTS.md:19 in 4 files, L28 in 1) are not shifted",
+          "owner": "owner (agent-platform change)",
+          "risk": "low; keeps docs/PURPOSE.md anchor"
+        },
+        {
+          "id": "T-2",
+          "title": "Reject regenerating CLAUDE.md as a routing table with a docs/agent/rules shelf, and reject a CONTEXT.md per folder",
+          "evidence": "scripts/check-agent-raise-hand.mjs:111 and :63-64; scripts/check-product-framing.mjs:111; runs disagree 49 vs 57 lines; CONTEXT.md in .claude/agents|commands becomes an agent|slash command",
+          "change": "none",
+          "owner": "cloud lane",
+          "risk": "n/a"
+        },
+        {
+          "id": "T-3",
+          "title": "File the existing AGENTS.md vs CLAUDE.md/DR-037 drift as a backlog row",
+          "evidence": "AGENTS.md:84 'Do not merge your own PR' vs .claude/skills/landing-under-dr-037/SKILL.md:8; AGENTS.md:63 'PORT=3000 BASE_PATH=/ pnpm run build' vs CLAUDE.md 'Toolchain wrinkle' (web build native only on linux-x64)",
+          "change": "docs/BUILD_BACKLOG.md row",
+          "owner": "cloud lane files; owner picks the winning text",
+          "risk": "low"
+        },
+        {
+          "id": "T-4",
+          "title": "Adopted by reference only: intake row with pin and licence; never installed into .claude/skills; greenfield Build mode only, never in a lane that self-lands",
+          "evidence": "pure markdown, MIT; skill invariant 6 (nothing moves until a person has read the output) conflicts with DR-037 self-landing",
+          "change": "docs/agent/RESOURCE_INTAKE.md row",
+          "owner": "cloud lane",
+          "risk": "none"
+        },
+        {
+          "id": "M-1",
+          "title": "(raised in confirm) a lexical gate for the AGENTS.md-versus-CLAUDE.md contradiction class",
+          "evidence": "confirm votes of agent-platform-steward and fail-closed-auditor; the two live drifts in T-3",
+          "change": "backlog row; gate-and-proof-engineer builds it with a planted-defect proof",
+          "owner": "gate-and-proof-engineer",
+          "risk": "medium: lexical, flags some scoped differences"
+        },
+        {
+          "id": "M-2",
+          "title": "(raised in confirm) pre-edit check of line-number citations of AGENTS.md before any append",
+          "evidence": "git grep on origin/SignalGrid_Alpha: AGENTS.md:19 in four files, L28 in one",
+          "change": "append at the end only",
+          "owner": "coordinator (done)",
+          "risk": "none"
+        }
+      ],
+      "model": "opus (trial runs A and B); coordinator wrote the task list"
+    }
+  ],
+  "confirms": [
+    {
+      "perspective": "agent-platform-steward",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "T-1",
+          "verdict": "confirm",
+          "reason": "additive; AGENTS.md:5 carries the PURPOSE.md anchor; agent-platform change so the owner merges"
+        },
+        {
+          "id": "T-2",
+          "verdict": "confirm",
+          "reason": "check-agent-raise-hand.mjs:111 fails if CLAUDE.md loses the DR-054 literal; runs not reproducible (21 vs 43 files)"
+        },
+        {
+          "id": "T-3",
+          "verdict": "amend",
+          "reason": "both drifts real; the merge line is a policy contradiction, the build line needs a platform qualifier not removal; owner decides which text wins"
+        },
+        {
+          "id": "T-4",
+          "verdict": "confirm",
+          "reason": "installing makes a standing instruction for every session; nothing needs VENDORED.md while not installed"
+        }
+      ],
+      "missing": "A drift check between AGENTS.md and CLAUDE.md (each references the other; AGENTS.md lacks strings DR-037 supersedes) — filed as M-1"
+    },
+    {
+      "perspective": "fail-closed-auditor",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "T-1",
+          "verdict": "amend",
+          "reason": "point, do not copy rules (AGENTS.md:5 'do not paraphrase'); add 'where they differ the stricter wins' so the unresolved drift resolves tighter"
+        },
+        {
+          "id": "T-2",
+          "verdict": "confirm",
+          "reason": "a shelf turns loaded-by-default into loaded-if-followed, which loosens the answer when the agent does not look"
+        },
+        {
+          "id": "T-3",
+          "verdict": "confirm",
+          "reason": "row must quote both lines; today it resolves to 'may self-merge' for Claude and 'may not' for Codex"
+        },
+        {
+          "id": "T-4",
+          "verdict": "confirm",
+          "reason": "row must say the output is a sample not a measurement and that ICM figures are never repo facts; 'outside the tree' includes 'never in a lane that self-lands'"
+        }
+      ],
+      "missing": "M-1: gate for the AGENTS.md/CLAUDE.md contradiction class — lexical on a short topic list (merge, build, push) with a named-winner registry; must be shown failing on a planted contradiction before trusted; gate-and-proof-engineer writes it"
+    },
+    {
+      "perspective": "gate-and-proof-engineer",
+      "model": "sonnet",
+      "votes": [
+        {
+          "id": "T-1",
+          "verdict": "amend",
+          "reason": "anchor passes (check-product-framing.mjs:190-197); append at the END; run check-product-framing after the edit since AGENTS.md is in MUST_ANCHOR (:111)"
+        },
+        {
+          "id": "T-2",
+          "verdict": "confirm",
+          "reason": "DR-054 literal and PURPOSE anchor gates; 28 'golden rule N' and 125 CLAIM_INVENTORY citations"
+        },
+        {
+          "id": "T-3",
+          "verdict": "confirm",
+          "reason": "backlog row now, gate later: a drift gate must be derived not hand-listed and needs a planted-defect proof"
+        },
+        {
+          "id": "T-4",
+          "verdict": "confirm",
+          "reason": "every collision measured comes from installing it"
+        }
+      ],
+      "missing": "M-2: before the AGENTS.md append, find the files citing it by line number and confirm they still hold — done by the coordinator (5 citations: AGENTS.md:19 in adapters/types.ts, aruba-clearpass.ts, cisco-ise.ts, check-connector-discipline.mjs; L28 in oauth-consent/evaluate.ts; an append at the end shifts none)"
+    }
+  ],
+  "decision": {
+    "T-1": {
+      "outcome": "owner",
+      "where": "PR body, section 'Owner decision needed' carries the exact appended diff; not applied (AGENTS.md is an agent-platform surface)"
+    },
+    "T-2": {
+      "outcome": "rejected",
+      "where": "scripts/check-agent-raise-hand.mjs:111 and scripts/check-product-framing.mjs:111 would fail; two runs not reproducible"
+    },
+    "T-3": {
+      "outcome": "landed",
+      "where": "docs/BUILD_BACKLOG.md (AGENTS.md vs CLAUDE.md/DR-037 drift row, owner picks the winning text)"
+    },
+    "T-4": {
+      "outcome": "landed",
+      "where": "docs/agent/RESOURCE_INTAKE.md (2026-10-02 row: pin, MIT, adopted-by-reference, nondeterminism stated)"
+    },
+    "M-1": {
+      "outcome": "landed",
+      "where": "docs/BUILD_BACKLOG.md (gate row for the drift class, gate-and-proof-engineer, planted-defect proof required)"
+    },
+    "M-2": {
+      "outcome": "owner",
+      "where": "folded into T-1: append at the end of AGENTS.md; the five line-number citations stay valid"
+    }
+  }
+}

@@ -265,7 +265,8 @@ export function readLedger(cwd, file) {
   // join two rows into one line; refuse rather than guess which.
   if (/\r(?!\n)/.test(decoded)) return { why: "holds a lone CR line break, which git and Markdown count differently" };
   if (/^(?:<{7}|>{7}) /m.test(decoded)) return { why: "holds unresolved merge-conflict markers" };
-  const text = decoded.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/[\u2028\u2029]/g, " ");
+  // TextDecoder already drops a leading BOM (ignoreBOM is false by default).
+  const text = decoded.replace(/\r\n/g, "\n").replace(/[\u2028\u2029]/g, " ");
   // Rows in the ledger's OWN grammar: a backlog's checkboxes do not make a plan readable, nor the reverse.
   const rows = file === LEDGERS[1] ? (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(text).length;
   if (rows === 0) return { why: "has no rows in its own grammar (empty, cut before its first row, or its section heading renamed)" };
@@ -389,7 +390,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -425,6 +426,10 @@ function selfTest() {
       edit(plan, row(12), row(12) + ann("claude/fix-l", "scripts/b.mjs"));
       edit(plan, row(13), row(13) + " See `scripts/a.mjs`."); write("scripts/a.mjs", "12\n");
     });
+    // 14: an annotation citing only the ledger itself, landed by a docs-only PR — READ (a ledger never corroborates itself).
+    pr("claude/self-cite", 20, () => edit(plan, row(14), row(14) + " FIX PROPOSED 2026-10-01 (branch claude/self-cite, lands under DR-037): see `docs/COMPANY_BUILD_PLAN.md`."));
+    // 15: the only cited path sits past the 2000-character span cap — READ.
+    pr("claude/far-cite", 21, () => { edit(plan, row(15), row(15) + ann("claude/far-cite", "no/path") + " " + "word ".repeat(450) + "`scripts/a.mjs`."); write("scripts/a.mjs", "15\n"); });
     // Plain box: a non-bold open box under a ticked bold one, landed — STALE, not the ticked box's residue.
     pr("claude/fix-m", 19, () => { edit(backlog, "Plain open box — open.", "Plain open box — open." + ann("claude/fix-m", "scripts/c.mjs")); write("scripts/c.mjs", "m\n"); });
     // 10: the worker's branch merged mainline in (a sync merge) before its PR landed — STALE via the PR.
@@ -462,7 +467,20 @@ function selfTest() {
     checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 5", "row 7"])]);
     const sig = (rs) => JSON.stringify(rs.map((r) => [r.file, r.row, r.status, r.pr ?? null]));
     const missing = measure(dir, [plan, "docs/RENAMED_LEDGER.md"]);
-    checks.push(["a ledger missing at HEAD is NOT MEASURED, never skipped", missing.some((r) => r.file === "docs/RENAMED_LEDGER.md" && r.status === "NO-LEDGER")]);
+    checks.push(["a ledger missing at HEAD is NOT MEASURED, never skipped", missing.some((r) => r.file === "docs/RENAMED_LEDGER.md" && r.status === "NO-LEDGER" && /not present at HEAD/.test(r.why))]);
+    checks.push(["an annotation citing only the ledger itself is READ, not STALE", is("row 14", "LANDED-UNCORROBORATED", (r) => r.pr === 20)]);
+    checks.push(["a cited path past the 2000-character span cap does not corroborate — READ", is("row 15", "LANDED-UNCORROBORATED", (r) => r.pr === 21)]);
+    // A shallow clone (CI's checkout) is NOT MEASURED, never a clean count.
+    {
+      const shallowDir = mkdtempSync(join(tmpdir(), "row-drift-shallow-"));
+      let out = "";
+      try {
+        execFileSync("git", ["clone", "-q", "--depth", "1", `file://${dir}`, shallowDir], { env, stdio: ["ignore", "pipe", "pipe"] });
+        out = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: shallowDir, encoding: "utf8" });
+      } catch (e) { out = `threw: ${String(e.message).split("\n")[0]}`; }
+      finally { rmSync(shallowDir, { recursive: true, force: true }); }
+      checks.push(["the CLI in a depth-1 clone prints NOT MEASURED, not a count", /^REPORTED: NOT MEASURED — shallow/m.test(out)]);
+    }
     checks.push(["measured from a subdirectory, the result is identical", sig(measure(join(dir, "scripts"))) === sig(Object.values(res))]);
     write(plan, "inserted line\n" + read(plan));
     checks.push(["an uncommitted ledger edit does not shift the measurement (HEAD is read)", sig(measure(dir)) === sig(Object.values(res))]);
@@ -579,7 +597,42 @@ function selfTest() {
     try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.replace("40. **Row 40.** — OPEN, qa. Some body text for row 40.\n", "")); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push(["a deliberate one-row deletion is still measured (the shrink check is not a hair trigger)", !st.startsWith("NO-LEDGER")]);
   }
-  // Under a quarter is NOT refused: the 75% floor is exact on both marks.
+  // The backlog's row mark (checkboxes, its own grammar): 40 boxes cut to 28 and padded back with prose.
+  {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-backlog-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs"));
+      const boxes = (n) => Array.from({ length: n }, (_, i) => `- [ ] **Box ${i + 1}** — open, with some body words.\n`).join("");
+      const full = boxes(40);
+      writeFileSync(join(d, plan), planText); writeFileSync(join(d, backlog), full);
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      const cut = boxes(28) + "\nNotes. ";
+      writeFileSync(join(d, backlog), cut + "p".repeat(Math.max(0, full.length - cut.length)));
+      gs("add", "-A"); gs("commit", "-qm", "cut");
+      const r = measure(d).find((x) => x.file === backlog);
+      checks.push(["a backlog cut to 28 of 40 boxes and padded back is NOT MEASURED (the backlog's own row mark)", r?.status === "NO-LEDGER" && /rows against a high-water mark/.test(r?.why ?? "")]);
+    } catch (e) {
+      checks.push([`backlog row-mark fixture ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  }
+  // The exact boundary: refused below 75% of a mark, measured at 75% or more (a strict "<").
+  // Sizes in BYTES, as the detector measures them (the em-dashes are multi-byte).
+  const exactBytes = (n) => { const t = tallPlan(tallRows.map((r) => [r[0]])) + "\nNotes. "; return t + "p".repeat(n - Buffer.byteLength(t)); };
+  // A base whose size is a multiple of 4 bytes, so 75% of it is a whole byte and "<" differs from "<=".
+  const exactBase = tallFull + "x".repeat((4 - (Buffer.byteLength(tallFull) % 4)) % 4);
+  const floorBytes = Buffer.byteLength(exactBase) * 0.75;
+  for (const [name, expectRefused, body] of [
+    ["exactly 75% of the byte mark (every row kept) is measured", false, () => exactBytes(floorBytes)],
+    ["one byte under 75% of the byte mark is refused", true, () => exactBytes(floorBytes - 1)],
+    ["exactly 30 of 40 rows (75% of the row mark) is measured", false, () => rowsTo(30)],
+    ["29 of 40 rows is refused", true, () => rowsTo(29)],
+  ]) {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, exactBase); return (g) => writeFileSync(g, body()); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push([name, expectRefused ? /^NO-LEDGER: .*high-water mark/.test(st) : !st.startsWith("NO-LEDGER") && !st.startsWith("threw")]);
+  }
+  // Under a quarter is NOT refused (companions to the 30% cuts above).
   for (const [name, shape] of [
     ["a 22% byte cut with every row kept is still measured (byte floor not tighter than 75%)", (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, bytesTo(0.78)); }],
     ["a 20% row cut padded back to full size is still measured (row floor not tighter than 75%)", (f) => { writeFileSync(f, tallFull); return (g) => writeFileSync(g, rowsTo(32)); }],
@@ -637,7 +690,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 52;
+  return failed === 0 && checks.length === 60;
 }
 
 let isMain = false;

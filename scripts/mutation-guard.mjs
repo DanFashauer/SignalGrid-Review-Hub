@@ -1692,9 +1692,12 @@ function pidAlive(pid) {
 /** The command line of `pid`: /proc where it exists, `ps` elsewhere (macOS has no /proc). Throws if neither can say. */
 export function processCommand(pid, procRoot = "/proc") {
   try { return readFileSync(`${procRoot}/${pid}/cmdline`, "utf8"); } catch { /* fall through to ps */ }
-  const r = spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" });
-  if (r.error || r.status !== 0 || r.stdout.trim() === "") throw new Error(`cannot read the command line of pid ${pid}`);
-  return r.stdout;
+  // `pid=` first so the output is self-checking: a ps that prints anything else (a header, an
+  // unknown format) is UNREADABLE, not "some other process" — which the caller counts as live.
+  const r = spawnSync("ps", ["-o", "pid=", "-o", "command=", "-p", String(pid)], { encoding: "utf8" });
+  const m = r.error || r.status !== 0 ? null : r.stdout.trim().match(new RegExp(`^${pid}\\s+(\\S.*)$`, "s"));
+  if (!m) throw new Error(`cannot read the command line of pid ${pid}`);
+  return m[1];
 }
 
 /**
@@ -1707,7 +1710,8 @@ export function processCommand(pid, procRoot = "/proc") {
  */
 export function sweepAlive(pid, self = process.pid, readCmd = processCommand) {
   if (pid === self || !pidAlive(pid)) return false;
-  try { return readCmd(pid).includes("mutation-guard"); } catch { return true; }
+  // A live sweep, or a live run of the sharding gate (which holds the same lock while it mutates the tree).
+  try { const c = readCmd(pid); return c.includes("mutation-guard") || c.includes("check-mutation-sharding"); } catch { return true; }
 }
 
 /** Journals owned by a sweep that is running right now (two sweeps must not share the tree). */

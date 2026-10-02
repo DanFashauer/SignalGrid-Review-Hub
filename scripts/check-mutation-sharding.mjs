@@ -251,6 +251,58 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
   } finally { console.error = origErr; rmSync(root, { recursive: true, force: true }); rmSync(jdir, { recursive: true, force: true }); }
 }
 
+// When may the end-to-end block touch the real tree? Only when the target is byte-identical to HEAD, no
+// sweep or other gate run is LIVE (journalLive — the gate's own lock is a marker journal too), and no
+// dead sweep left a journal behind (the target may already be mutated).
+// Kill a recorded process only if it is still the SAME process (pid + start time) — a pid reused since
+// we recorded it belongs to someone else.
+function killIfSame(r, startOf, kill) {
+  if (r.start === "" || startOf(r.pid) !== r.start) return false;
+  kill(r.pid);
+  return true;
+}
+{
+  let killed = 0;
+  const same = killIfSame({ pid: 7, start: "Mon Oct  2 05:00:00 2026" }, () => "Mon Oct  2 05:00:00 2026", () => { killed += 1; });
+  const reused = killIfSame({ pid: 7, start: "Mon Oct  2 05:00:00 2026" }, () => "Mon Oct  2 06:30:00 2026", () => { killed += 10; });
+  const blind = killIfSame({ pid: 7, start: "" }, () => "", () => { killed += 100; });
+  check("killIfSame: the same process is killed; a reused pid (different start time) and an unreadable start are NOT", same === true && reused === false && blind === false && killed === 1);
+}
+function e2ePrecondition({ lockDir, gitClean, isAlive }) {
+  if (!gitClean || lockDir === null) return false;
+  if (journalLive(lockDir, isAlive).length > 0) return false;
+  return journalStale(lockDir, undefined, isAlive).every((j) => !j.unreadable && j.differing.length === 0);
+}
+{
+  const root = mkdtempSync(join(tmpdir(), "mg-pre-root-"));
+  const dir = mkdtempSync(join(tmpdir(), "mg-pre-dir-"));
+  try {
+    writeFileSync(join(root, "g.ts"), "orig");
+    const dead = () => false; const alive = () => true;
+    check("e2e precondition: clean target, nothing live, nothing stale → may run", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: dead }) === true);
+    check("e2e precondition: a target that differs from HEAD → refuses (never records mutated bytes as the original)", e2ePrecondition({ lockDir: dir, gitClean: false, isAlive: dead }) === false);
+    journalWrite(dir, 4242, []);
+    check("e2e precondition: a LIVE sweep or gate (its lock marker) → refuses", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: alive }) === false);
+    journalClear(dir, 4242);
+    journalWrite(dir, 4243, [{ file: "../x", original: "y" }]);
+    check("e2e precondition: an unrecovered / unreadable dead-sweep journal → refuses", e2ePrecondition({ lockDir: dir, gitClean: true, isAlive: dead }) === false);
+    check("a live run of THIS gate counts as a live sweep (it holds the same lock)", sweepAlive(process.pid, -1, () => "node scripts/check-mutation-sharding.mjs") === true);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+}
+{
+  // A ps that prints something unrecognised must read as UNREADABLE (→ live), never as "some other process" (→ stale, lock cleared).
+  const bin = mkdtempSync(join(tmpdir(), "mg-fakeps-"));
+  const oldPath = process.env.PATH;
+  try {
+    writeFileSync(join(bin, "ps"), "#!/bin/sh\necho '  PID TTY garbage-format'\n", { mode: 0o755 });
+    process.env.PATH = `${bin}:${oldPath}`;
+    let threw = false;
+    try { processCommand(process.pid, "/nonexistent-proc-root"); } catch { threw = true; }
+    check("a ps printing an unrecognised format is UNREADABLE (processCommand throws), so the sweep counts as live", threw
+      && sweepAlive(process.pid, -1, (p) => processCommand(p, "/nonexistent-proc-root")) === true);
+  } finally { process.env.PATH = oldPath; rmSync(bin, { recursive: true, force: true }); }
+}
+
 // ── END TO END: the real signal path, through the real sweep ──────────────────────────────────
 // The helpers above are pure. The defect this PR exists for lives in main(): the signal handlers,
 // the journal-BEFORE-write ordering, the async process-group runner, the lock marker and the startup
@@ -274,17 +326,25 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
   const scratch = mkdtempSync(join(tmpdir(), "mg-e2e-"));
   const env = { ...process.env, TMPDIR: scratch };
   const jdir = journalDir(repo, scratch);
-  // A REAL dead sweep's journal in the shared temp dir means the target may already be mutated: refuse
-  // to run (and touch nothing) rather than record mutated bytes as the original.
-  let preconditionOk = readFileSync(target, "utf8") === original;
-  try { preconditionOk = preconditionOk && journalStale(journalDir(repo)).every((j) => !j.unreadable && j.differing.length === 0); } catch { preconditionOk = false; }
+  // This block mutates the REAL tree, so it takes the same lock a real sweep takes — in the SHARED journal
+  // dir, where a real sweep (or another gate run) would see it — and refuses, touching nothing, unless
+  // the target is byte-identical to HEAD, no sweep or gate is live, and no dead sweep left a journal
+  // (the target may already be mutated: its current bytes must never be recorded as "the original").
+  const lockDir = (() => { try { return journalDir(repo); } catch { return null; } })();
+  const gitClean = spawnSync("git", ["diff", "--quiet", "HEAD", "--", target], { cwd: repo }).status === 0;
+  let lockHeld = false;
+  let preconditionOk = false;
+  try {
+    preconditionOk = e2ePrecondition({ lockDir, gitClean });
+    if (preconditionOk) { journalWrite(lockDir, process.pid, []); lockHeld = true; }
+  } catch { preconditionOk = false; }
   const startSweep = (args = []) => {
     const child = spawn("node", [guard, `--proof=${PROOF}`, ...args], { cwd: repo, env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", (d) => { out += d; });
     const exited = new Promise((r) => child.on("close", (code, signal) => r({ code, signal, out })));
-    return { child, exited };
+    return { child, exited, output: () => out };
   };
   const waitFor = async (fn, limitMs) => { for (let t = 0; t < limitMs; t += 50) { if (fn()) return true; await sleep(50); } return false; };
   const dirty = () => readFileSync(target, "utf8") !== original;
@@ -294,6 +354,12 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
     const kids = (r.stdout ?? "").split("\n").map((x) => Number.parseInt(x, 10)).filter(Number.isFinite);
     return kids.flatMap((k) => [k, ...descendants(k)]);
   };
+  const startOf = (pid) => (spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" }).stdout ?? "").trim();
+  const record = (pids) => pids.map((pid) => ({ pid, start: startOf(pid) }));
+  // Kill only the SAME process we recorded (pid + start time): a pid reused meanwhile is not ours to kill.
+  const killRecorded = (r, group) => {
+    killIfSame(r, startOf, (pid) => { try { process.kill(group ? -pid : pid, "SIGKILL"); } catch { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } });
+  };
   const isDead = (pid) => {
     // /proc where it exists (a zombie counts as dead); kill(0) elsewhere. ENOENT under /proc means dead ONLY if /proc exists.
     if (existsSync("/proc/self")) { try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch { return true; } }
@@ -302,7 +368,7 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
   const live = [];
   try {
     if (!preconditionOk) {
-      check("end-to-end signal test: precondition (clean target; no unrecovered journal from a real dead sweep) — refused to run and touched nothing", false);
+      check("end-to-end signal test: precondition (target identical to HEAD; no live sweep or gate; no unrecovered journal) — refused to run and touched nothing", false);
     } else {
       // 1. SIGTERM mid-mutation, with a second sweep refused meanwhile
       const a = startSweep();
@@ -314,8 +380,8 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
       const rs = await second.exited;
       check("e2e: a SECOND sweep is refused while one is running (exit 1, 'another mutation sweep is running')", rs.code === 1 && /another mutation sweep is running/.test(rs.out));
       const dirtied = await waitFor(dirty, 90000);
-      check("e2e: the first sweep put a mutation on disk with its journal beside it (journal-before-write)", dirtied && journalFiles().length > 0);
-      const tree = descendants(a.child.pid); live.push(...tree);
+      check(`e2e: the first sweep put a mutation on disk with its journal beside it (journal-before-write)${dirtied ? "" : ` [sweep output: ${a.output().slice(-300).replace(/\s+/g, " ")}]`}`, dirtied && journalFiles().length > 0);
+      const tree = descendants(a.child.pid); live.push(...record(tree));
       check("e2e: the proof's process tree is observable before the signal (pnpm run … children exist)", tree.length > 0);
       const direct = spawnSync("pgrep", ["-P", String(a.child.pid)], { encoding: "utf8" }).stdout.split("\n").map((x) => Number.parseInt(x, 10)).filter(Number.isFinite);
       const leads = (pid) => Number.parseInt(spawnSync("ps", ["-o", "pgid=", "-p", String(pid)], { encoding: "utf8" }).stdout, 10) === pid;
@@ -330,10 +396,10 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
       // 2. SIGKILL: no handler can run. The next start must refuse, name the file, and --restore-stale must fix it.
       const b = startSweep();
       const dirtied2 = await waitFor(dirty, 90000);
-      const tree2 = descendants(b.child.pid); live.push(...tree2);
+      const tree2 = record(descendants(b.child.pid)); live.push(...tree2);
       b.child.kill("SIGKILL");
       await b.exited;
-      for (const pid of tree2) { try { process.kill(-pid, "SIGKILL"); } catch { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } }
+      for (const r of tree2) killRecorded(r, true);
       check("e2e: SIGKILL leaves the file mutated (no handler can run) — the case the startup check exists for", dirtied2 && dirty());
       const c = spawnSync("node", [guard, `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
       check("e2e: the next start REFUSES (exit 1) naming the registered file the journal explains",
@@ -341,11 +407,12 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
       const d = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
       check("e2e: --restore-stale restores the file, exits 0 and does NOT run a sweep", d.status === 0 && !dirty() && !/every registered guard is falsifiable/.test(d.stdout));
       const e = spawnSync("node", [guard, "--restore-stale", `--proof=${PROOF}`], { cwd: repo, env, encoding: "utf8" });
-      check("e2e: --restore-stale with NOTHING stale also exits 0 without sweeping (it used to fall through into a full sweep)", e.status === 0 && /no stale journal/.test(e.stdout));
+      check("e2e: --restore-stale with NOTHING stale also exits 0 without sweeping (it used to fall through into a full sweep)", e.status === 0 && /no stale journal/.test(e.stdout) && !/every registered guard is falsifiable|── proof:/.test(e.stdout));
     }
   } finally {
     if (readFileSync(target, "utf8") !== original) writeFileSync(target, original);
-    for (const pid of live) { if (!isDead(pid)) { try { process.kill(pid, "SIGKILL"); } catch { /* gone */ } } }
+    for (const r of live) { if (!isDead(r.pid)) killRecorded(r, false); }
+    if (lockHeld) journalClear(lockDir, process.pid);
     rmSync(scratch, { recursive: true, force: true });
   }
 }

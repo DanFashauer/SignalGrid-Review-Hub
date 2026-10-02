@@ -66,6 +66,9 @@ row and GitHub does not, so the two can count a table's columns differently. A r
 two or more backticks is allowed only as a code fence line (three backticks alone, or
 followed by a language name): an unmatched longer run elsewhere in a paragraph changes
 which single backticks GitHub pairs into code spans.
+A line that follows a blockquote line must itself start with `>` or be blank: GitHub
+can read an unquoted (lazy) continuation line as a table header and the gate's renderer
+does not.
 Between the begin and end markers the block may hold only the header row, the
 delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
 because GitHub may end the table at one while the gate's renderer continues it. A page

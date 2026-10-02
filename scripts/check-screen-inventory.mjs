@@ -368,6 +368,8 @@ export function rawLtOutsideSimpleCode(line) {
  * accepted one is hidden by both renderers but serves nothing here, and a rejected one is
  * text to the gate and hidden on GitHub.
  */
+const QUOTE_LINE = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)*>/;
+
 export function definitionProblems(doc) {
   const problems = [];
   // cmark-gfm and markdown-it both end a line at a lone CR; a scan that splits on LF only
@@ -403,6 +405,13 @@ export function definitionProblems(doc) {
     problems.push(`line ${doc.slice(0, uws).split(/\r\n|\r|\n/).length} holds the non-ASCII space U+${doc.charCodeAt(uws).toString(16).toUpperCase().padStart(4, "0")} — the two renderers disagree on where it ends a table cell, so write a plain space`);
   const lines = doc.split(/\r\n|\r|\n/);
   for (const [i, line] of lines.entries()) {
+    // A line that continues a blockquote paragraph without its own `>` is a lazy
+    // continuation. markdown-it never checks a lazy line for a table header, while
+    // cmark-gfm takes it as one against a following `> -|-` row and splits cells there,
+    // unpairing a code span both scans call code (round 26). Every line after a quoted
+    // line is quoted too, or blank.
+    if (i > 0 && QUOTE_LINE.test(lines[i - 1]) && !QUOTE_LINE.test(line) && line.trim() !== "")
+      problems.push(`line ${i + 1} continues the blockquote on line ${i} without a ">" — GitHub may read it as a table header there, so start it with ">" or put a blank line before it`);
     // An unmatched run of two or more backticks anywhere in a paragraph changes which
     // single backticks cmark-gfm pairs, while the per-line scan and markdown-it pair them
     // as code, so a tag the gate thinks is sheltered is raw on GitHub (round 25). The only
@@ -945,6 +954,10 @@ function selfTest() {
     ["an unmatched `` run two lines above the spans fails (round 25)", { ...base, doc: good.replace(BEGIN, "x ``\ny\n`a` `<details>` z\n\n" + BEGIN) }, "run of two or more backticks"],
     ["a four-backtick fence line fails (round 25)", { ...base, doc: good.replace(END, `${END}\n\n\`\`\`\`\ncode\n\`\`\`\`\n`) }, "run of two or more backticks"],
     ["a ``` fence outside the demo section still passes (round 25)", { ...base, doc: good.replace(END, `${END}\n\n\`\`\`text\ncode\n\`\`\`\n`) }, null],
+    // Round 26: a lazy continuation line inside a blockquote is a table header to GitHub only.
+    ...[["> x\na | b\n> -|-\n> `p |`e `</table><select>` z", "a quote"], ["> > x\na | b\n> > -|-\n> > `p |`e `</table><select>` z", "a nested quote"], ["- > x\n  a | b\n  > -|-\n  > `p |`e `</table><select>` z", "a quote in a list item"]].map(([x, where]) =>
+      [`a lazy table header in ${where} fails (round 26)`, { ...base, doc: good.replace(BEGIN, `${x}\n\n${BEGIN}`) }, "continues the blockquote on line"]),
+    ["a quote followed by quoted lines and a blank line still passes (round 26)", { ...base, doc: good.replace(END, `${END}\n\n> x\n> y\n\nz\n`) }, null],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

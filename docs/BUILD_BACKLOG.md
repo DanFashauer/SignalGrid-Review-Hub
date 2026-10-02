@@ -2441,7 +2441,11 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       `--self-test` (75.2%), 224 survive — 55 are dropped `ts.is*` type guards; the rest are null/cache
       guards, unreachable branches and provenance-plumbing bookkeeping. Differential check: a 560-case
       corpus (the write-form matrix re-run in arrow/hook/`useEffect`/nested-`if` code shapes; 524 valid
-      cases) was run against every survivor, and none flips a flagged case to clean. Not claimed exhaustive. Still not followed: a child component, helper or class map
+      cases) was run against every survivor, and none flips a flagged case to clean on THAT corpus. Round 9: the review's
+      independent corpus found 11-16 survivors that flip a flagged case to clean, so NOT every clause is pinned by a fixture; the
+      clauses it named (map write through an alias / `T!` / `Reflect.set` / `Object.defineProperty`, the `String` and ROW_KEEPING
+      key-rule arms) now each have a fixture, and a map's writes are a WHITELIST (any non-read reference to the map flags the
+      lookup) instead of a list of write forms. Remaining unpinned survivors are not enumerated here. Not claimed exhaustive. Still not followed: a child component, helper or class map
       imported from another file (no module resolver); a callback parameter over query rows as DATA
       (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
       a component reached only through a wrapper (`withX(C)`); query data mutated in place through

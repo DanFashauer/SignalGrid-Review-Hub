@@ -107,7 +107,12 @@
 //     not modelled: `Object.prototype.s = "ok"`, `globalThis.String = …`, a `Proxy`-wrapped or
 //     `new Map(…)` class map (only a same-file const object LITERAL is resolved). A key whose
 //     map entry is a getter/method is resolved by its body; a computed key it cannot read is
-//     treated as matching every lookup.
+//     treated as matching every lookup. A class static-field map, a map returned by a helper
+//     (`const T = makeMap()`) and a `let` map are not resolved. A map's WRITES are a whitelist:
+//     any reference to its name (or an alias in the same file) that is not a plain read — `T.x`,
+//     `T[k]`, `...T`, `k in T`, `Object.keys/values/entries(T)`, `const { a } = T` — is an
+//     unreadable possibly-good entry, so the lookup is flagged (fail-closed over-flag: passing
+//     the map to ANY function, even a read-only one, flags it).
 //   - react-query `initialData` / `placeholderData` make `q.data` a literal while the real state is
 //     unknown; a presence guard and a plain-read key are both fooled (pre-existing, gate-wide).
 //     `Component.defaultProps` is not followed (ignored by React 19, which this repo pins).
@@ -882,26 +887,79 @@ function analyzeSourceFile(relPath, text) {
   // `Object.defineProperty(T, k, { value })`, `Reflect.set(T, k, v)` — carries entries the literal does not show.
   // Name-based over the whole file (the map and any alias of it); a key it cannot read matches every lookup.
   const mutationCache = new Map();
+  const escapedMapRefs = new Set(); // a reference that may write the map: stands for an unreadable, possibly good-state entry
   const mapMutations = (names) => {
     const key = [...names].sort().join("|");
     if (mutationCache.has(key)) return mutationCache.get(key);
     const out = []; // { node, key } — key null = unreadable
+    const handled = new Set(); // roots of the writes read precisely above
     const rootIs = (e) => { const r = rootIdent(e); return Boolean(r) && names.has(r.text); };
-    const keyOf = (left) => (ts.isPropertyAccessExpression(left) ? left.name.text
+    const keyOf0 = (left) => (ts.isPropertyAccessExpression(left) ? left.name.text
       : ts.isElementAccessExpression(left) && ts.isStringLiteralLike(left.argumentExpression) ? left.argumentExpression.text : null);
+    const keyOf = (left) => { const k = keyOf0(left); return k === "__proto__" ? null : k; }; // `__proto__` swaps the whole entry set
     const w = (n) => {
       if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
-          (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left)) out.push({ node: n.right, key: keyOf(n.left) });
+          (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left)) { handled.add(rootIdent(n.left)); out.push({ node: n.right, key: keyOf(n.left) }); }
       if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
         const obj = n.expression.expression, m = n.expression.name.text;
-        if (ts.isIdentifier(obj) && obj.text === "Object" && (m === "assign" || m === "defineProperty") && n.arguments[0] && rootIs(n.arguments[0]))
+        if (ts.isIdentifier(obj) && obj.text === "Object" && (m === "assign" || m === "defineProperty") && n.arguments[0] && rootIs(n.arguments[0])) {
+          handled.add(rootIdent(n.arguments[0]));
           for (const a of n.arguments.slice(1)) out.push({ node: a, key: null });
-        if (ts.isIdentifier(obj) && obj.text === "Reflect" && m === "set" && n.arguments[0] && rootIs(n.arguments[0]))
+        }
+        if (ts.isIdentifier(obj) && obj.text === "Reflect" && m === "set" && n.arguments[0] && rootIs(n.arguments[0])) {
+          handled.add(rootIdent(n.arguments[0]));
           out.push({ node: n.arguments[2] ?? n, key: n.arguments[1] && ts.isStringLiteralLike(n.arguments[1]) ? n.arguments[1].text : null });
+        }
       }
       ts.forEachChild(n, w);
     };
     w(sf);
+    // WHITELIST: every other reference to the map's name must be a plain read — `T.x` / `T[k]` read, `...T`,
+    // `k in T`, `Object.keys/values/entries(T)`, `const { a } = T`. Anything else (passed to a function, stored,
+    // returned, an assignment/delete/update target, `(0, T)`, `Object["assign"](T)`, `Object.defineProperties(T)`,
+    // `Reflect.defineProperty(T)`, `__proto__`) may write entries this file cannot see: an unreadable entry that
+    // matches every lookup.
+    const isRead = (id) => {
+      let c = id, par = c.parent;
+      while (par && (ts.isParenthesizedExpression(par) && par.expression === c ? false : (ts.isNonNullExpression(par) || ts.isAsExpression(par) || ts.isSatisfiesExpression(par)) && par.expression === c)) { c = par; par = c.parent; }
+      if (!par) return false;
+      if (ts.isSpreadAssignment(par) && par.expression === c) return true;
+      if (ts.isBinaryExpression(par) && par.operatorToken.kind === K.InKeyword && par.right === c) return true;
+      if (ts.isVariableDeclaration(par) && par.initializer === c) return ts.isObjectBindingPattern(par.name);
+      if (ts.isCallExpression(par) && par.arguments[0] === c && ts.isPropertyAccessExpression(par.expression) &&
+          ts.isIdentifier(par.expression.expression) && par.expression.expression.text === "Object" &&
+          ["keys", "values", "entries"].includes(par.expression.name.text)) return true;
+      if ((ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) && par.expression === c) {
+        if (ts.isPropertyAccessExpression(par) && par.name.text === "__proto__") return false;
+        let t = par;
+        for (;;) {
+          const q = t.parent;
+          if (!q) return true;
+          if ((ts.isPropertyAccessExpression(q) || ts.isElementAccessExpression(q)) && q.expression === t) { t = q; continue; }
+          if (ts.isNonNullExpression(q) || ts.isAsExpression(q) || ts.isSatisfiesExpression(q) || ts.isParenthesizedExpression(q)) { t = q; continue; }
+          if (ts.isBinaryExpression(q) && q.left === t && q.operatorToken.kind >= K.FirstAssignment && q.operatorToken.kind <= K.LastAssignment) return false;
+          if ((ts.isPrefixUnaryExpression(q) || ts.isPostfixUnaryExpression(q)) && (q.operator === K.PlusPlusToken || q.operator === K.MinusMinusToken)) return false;
+          if (ts.isDeleteExpression(q)) return false;
+          if (ts.isCallExpression(q) && q.expression === t) return false; // a method call on an entry / the map
+          if (ts.isArrayLiteralExpression(q) || ts.isPropertyAssignment(q) && q.name === t) return false;
+          if ((ts.isForInStatement(q) || ts.isForOfStatement(q)) && q.initializer === t) return false;
+          if (ts.isObjectLiteralExpression(q) || ts.isShorthandPropertyAssignment(q)) return false;
+          return true;
+        }
+      }
+      return false;
+    };
+    const isAliasInit = (id) => ts.isVariableDeclaration(id.parent) && id.parent.initializer === id && ts.isIdentifier(id.parent.name) &&
+      Boolean(id.parent.parent.flags & ts.NodeFlags.Const) && names.has(id.parent.name.text);
+    const declNameOf = (id) => ts.isVariableDeclaration(id.parent) && id.parent.name === id;
+    const isNameSlot = (id) => (ts.isPropertyAccessExpression(id.parent) && id.parent.name === id) ||
+      (ts.isPropertyAssignment(id.parent) && id.parent.name === id) || ts.isJsxAttribute(id.parent) ||
+      ts.isTypeQueryNode(id.parent) || ts.isTypeReferenceNode(id.parent) || ts.isBindingElement(id.parent) && id.parent.propertyName === id;
+    const refs = (n) => {
+      if (ts.isIdentifier(n) && names.has(n.text) && !declNameOf(n) && !isNameSlot(n) && !handled.has(n) && !isAliasInit(n) && !isRead(n)) { escapedMapRefs.add(n); out.push({ node: n, key: null }); }
+      ts.forEachChild(n, refs);
+    };
+    refs(sf);
     mutationCache.set(key, out);
     return out;
   };
@@ -1228,6 +1286,7 @@ function analyzeSourceFile(relPath, text) {
       if (!x) return;
       if ((ts.isStringLiteralLike(x) || ts.isNoSubstitutionTemplateLiteral(x)) && GOOD_CLASS.test(x.text)) found.push({ node: x, use: use ?? x });
       if (ts.isTemplateExpression(x) && (GOOD_CLASS.test(x.head.text) || x.templateSpans.some((s) => GOOD_CLASS.test(s.literal.text)))) found.push({ node: x, use: use ?? x });
+      if (escapedMapRefs.has(x)) { found.push({ node: x, use: use ?? x }); return; }
       if (ts.isIdentifier(x) && !isMemberName(x)) {
         const init = resolveConstInit(x);
         if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
@@ -2136,10 +2195,32 @@ BUG_R6.push(
   ["case-transformed absent key: [object object]", mkMap(`const E = { "[object object]": "${EMER}", default: "text-slate-400" };`, "E[String(d).toLowerCase()] ?? E.default", `const d = q.data ?? {};`)],
   ["case-transformed absent key: d.toString().toUpperCase()", mkMap(`const E = { "[OBJECT OBJECT]": "${EMER}", default: "text-slate-400" };`, "E[d.toString().toUpperCase()] ?? E.default", `const d = q.data ?? {};`)],
   ["array-valued key: Array.from(String(s))", mkMap(`const U = { "u,n,d,e,f,i,n,e,d": "${EMER}", default: "text-slate-400" };`, "U[Array.from(String(q.data?.s))] ?? U.default")],
+  ["map write: Reflect.set(T, \"undefined\", \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Reflect.set(T, "undefined", "${EMER}");`, "T[q.data?.s] ?? T.default")],
+  ["map write: Object.defineProperty(T, \"undefined\", { value })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.defineProperty(T, "undefined", { value: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write through a non-null assertion: T!.undefined = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T!.undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map write through an alias: A.undefined = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const A = T; A.undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map write: Object.assign((0, T), \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign((0, T), { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: Object[\"assign\"](T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object["assign"](T, { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: const { assign } = Object; assign(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const { assign } = Object; assign(T, { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: Object.defineProperties(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.defineProperties(T, { undefined: { value: "${EMER}" } });`, "T[q.data?.s] ?? T.default")],
+  ["map write: Reflect.defineProperty(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Reflect.defineProperty(T, "undefined", { value: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: Object.setPrototypeOf(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.setPrototypeOf(T, { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
+  ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
+  ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map written through a destructuring-assignment target", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; [T.undefined] = ["${EMER}"];`, "T[q.data?.s] ?? T.default")],
+  ["map written through a for\u2026of target", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; for (T.undefined of ["${EMER}"]) {}`, "T[q.data?.s] ?? T.default")],
+  ["map written in a finally block", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; try { init(); } finally { T.undefined = "${EMER}"; }`, "T[q.data?.s] ?? T.default")],
+  ["map written in a class static block", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; class Seed { static { T.undefined = "${EMER}"; } }`, "T[q.data?.s] ?? T.default")],
+  ["array key through .slice is not a plain key", mkMap(`const E2 = { "": "${EMER}", default: "text-slate-400" };`, "E2[rows.slice(0)] ?? E2.default", ROWS)],
+  ["array key through .filter is not a plain key", mkMap(`const E2 = { "": "${EMER}", default: "text-slate-400" };`, "E2[rows.filter(Boolean)] ?? E2.default", ROWS)],
+  ["String shadowed: key rule", mkMap(`const String = (v) => [v]; const T = { "": "${EMER}", default: "text-slate-400" };`, "T[String(q.data?.s)] ?? T.default")],
 );
 OK_R6.push(
   ["map alias whose entries are not good-state", mkMap(`const T0 = { calm: "text-slate-400", default: "text-slate-400" }; const T = T0;`, "T[q.data?.s] ?? T.default")],
   ["map mutated with a non-good entry", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
+  ["map only read: Object.keys(T), `k in T`, spread, destructure", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const names = Object.keys(T); const has = "ok" in T; const C = { ...T }; const { ok } = T;`, "T[q.data?.s] ?? T.default")],
+  ["map read through a non-null assertion", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" };`, "T![q.data?.s] ?? T!.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 

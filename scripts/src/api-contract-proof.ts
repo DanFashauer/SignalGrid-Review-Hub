@@ -70,6 +70,23 @@ const DOCUMENTS: readonly ContractDocument[] = [
 ];
 
 /**
+ * THE SPEC-DIRECTORY REGISTRY. Every OpenAPI-shaped file in lib/api-spec must be a
+ * document above. A third, `product-openapi.json`, sat there from 2026-08-03 to
+ * 2026-09-30 describing ten paths (eight never served) against a server that does
+ * not exist — in the directory REPO_LAYOUT.md calls "The OpenAPI contract", read by
+ * no gate. It now lives at docs/archive/product-openapi.json; this check is what
+ * stops the next one appearing ungoverned. Pure, so the self-test can watch it fail.
+ */
+export function ungovernedSpecs(files: readonly string[], documents: readonly ContractDocument[] = DOCUMENTS): string[] {
+  const governed = new Set(documents.map((d) => d.spec.split("/").pop()!));
+  return files
+    .filter((f) => !/(^|\/)node_modules\//.test(f))
+    .filter((f) => /\.(ya?ml|json)$/i.test(f) && f !== "package.json" && !/^tsconfig.*\.json$/i.test(f))
+    .filter((f) => !governed.has(f))
+    .sort();
+}
+
+/**
  * Route files that are deliberately in NO document, each with the reason. The
  * registry check below fails on a route file that is neither here nor in a
  * document, so a new router cannot appear ungoverned by omission.
@@ -191,6 +208,13 @@ function selfTest(): number {
     [...specOnly].some((e) => !served.has(e)),
   ]);
   checks.push([
+    "a third spec in lib/api-spec IS ungoverned (the orphan product-openapi.json), and the two documents plus package.json are not",
+    ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "orval.config.ts", "product-openapi.json"]).join() === "product-openapi.json" &&
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "package.json", "tsconfig.json", "orval.config.ts"]).length === 0 &&
+      // nested and upper-case spellings are specs too; the package's own node_modules is not
+      ungovernedSpecs(["openapi.yaml", "v1-openapi.yaml", "legacy/Old.JSON", "X.YAML", "node_modules/x/openapi.json"]).join() === "X.YAML,legacy/Old.JSON",
+  ]);
+  checks.push([
     "every document names at least one route file, and every UNDOCUMENTED_BY_DESIGN entry carries a reason",
     DOCUMENTS.every((d) => d.routeFiles.length > 0 && d.prefixes.length > 0) &&
       [...UNDOCUMENTED_BY_DESIGN.values()].every((r) => r.length > 20),
@@ -223,6 +247,17 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  // Recursive: a spec one directory down is still in the contract directory.
+  const strays = ungovernedSpecs(
+    (await readdir(resolve(root, "lib/api-spec"), { recursive: true })).map((f) => String(f).split("\\").join("/")),
+  );
+  if (strays.length > 0) {
+    for (const f of strays) console.error(`- lib/api-spec/${f} is a spec in the contract directory that no DOCUMENTS entry governs — add it above, or archive it under docs/archive/`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Spec files in lib/api-spec: every one governed (${DOCUMENTS.map((d) => d.spec.split("/").pop()).join(", ")})`);
 
   let failed = false;
   for (const doc of DOCUMENTS) {

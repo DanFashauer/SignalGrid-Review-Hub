@@ -2244,13 +2244,17 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       extend the contract proof to hold `openapi.yaml` against the monitoring/
       integrations/health routers. `docs/REPO_LAYOUT.md` should stop calling this
       client "bindings for the /v1 API" — it binds the fixture monitoring surface.
-- [ ] **Orphan third spec `lib/api-spec/product-openapi.json` describes an API that
+- [ ] **Orphan third spec `product-openapi.json` (in `lib/api-spec/` until 2026-09-30) describes an API that
       does not exist. 2026-09-01 (contract-drift sweep, MEDIUM).** Ten paths
       (`/api/v1/session/start`, `/api/v1/location/report`, `/api/v1/devices` …),
       eight unserved, servers `api.signalgrid.local`, committed 2026-08-03, referenced
       by nothing, validated by no gate, sitting in the directory `REPO_LAYOUT.md`
       calls "The OpenAPI contract". Anyone importing it builds against phantom
       routes. Fix: delete it, or move under `docs/archive/` with a header. Lane: api-contract-architect.
+      FIX PROPOSED 2026-09-30 (branch claude/build-fossil-figures-orphan-spec, owner merges):
+      `git mv` to `docs/archive/product-openapi.json` with an `x-archived` header key
+      saying it is not a contract and naming the two served specs; `scripts/src/api-contract-proof.ts`
+      now fails on any OpenAPI-shaped file in `lib/api-spec/` that no DOCUMENTS entry governs.
 - [x] **SDK docs say "append `/v1/authorize` to the base URL"; the server serves it
       at `/api/v1/authorize`. 2026-09-01 (contract-drift sweep, MEDIUM, latent).**
       `GateEndpoint.kt` and `endpoint.rs` trim a trailing slash "so callers can
@@ -2321,6 +2325,12 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       but a fossil risk on a hand-maintained census. Either derive the numbers
       or mark the doc as a fixed dated snapshot so a reader stops treating them
       as current measurements. Lane: docs-writer.
+      FIX PROPOSED 2026-09-30 (branch claude/build-fossil-figures-orphan-spec, owner merges):
+      marked as a snapshot rather than derived — `docs/PRODUCT_COMPLETION_PLAN.md` carries a
+      dated point-in-time banner above §1 (census taken 2026-08-10) naming
+      `node scripts/check-preflight-ci-parity.mjs`, `pnpm run proof:launch-profile` and
+      `node scripts/check-status-figures.mjs` for the live figures; `scripts/check-status-figures.mjs`
+      fails if the banner, its date or the command goes missing.
 - [ ] Default `review-demo` profile mounts sim + control-plane routes
       unauthenticated. 2026-09-01 (security/adversarial scan, attack-surface
       review): informational, not a code defect — `POST /api/sim/room-entry`

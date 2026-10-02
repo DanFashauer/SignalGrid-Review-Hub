@@ -25,6 +25,11 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { repoKeyFromRemote } from "./lib/remote-key.mjs";
+
+// Re-exported: the parser lives in lib/remote-key.mjs (pure, loadable without git);
+// scan-estate-citations and this file's self-test reach it through here as before.
+export { repoKeyFromRemote };
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -296,46 +301,6 @@ export function missingIn(text, exists, pattern) {
 }
 
 /**
- * Pure: the identity a remote URL implies, as `{ key, hasOwner }`. Handles the https
- * form (`https://host/owner/repo`), the scp-style ssh form (`git@host:owner/repo`), the
- * `ssh://` form, an optional `.git` suffix and a trailing slash.
- *
- * `hasOwner` is the load-bearing half. A hosted remote yields `owner/repo` and
- * `hasOwner: true` — a full identity. A LOCAL PATH origin (`/home/user/Repo`,
- * `file:///srv/git/Repo`, `../Repo`) has no owner in any meaningful sense: every
- * segment before the last is a filesystem accident of that machine, so the key
- * degrades to the name alone and `hasOwner: false` tells the caller to LABEL it as a
- * basename fallback rather than claim an identity it did not read.
- *
- * Returns undefined for anything it cannot read, so the caller falls back rather than
- * inventing a key.
- */
-export function repoKeyFromRemote(url) {
-  if (typeof url !== "string") return undefined;
-  const trimmed = url.trim().replace(/\/+$/, "").replace(/\.git$/, "");
-  if (!trimmed) return undefined;
-
-  // A hosted remote — the only shape that carries an owner. Anything with a scheme that
-  // is not `file:`, or the scp-style `user@host:owner/repo`, is hosted.
-  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(trimmed)?.[1]?.toLowerCase();
-  const scp = /^[^/]+@[^/:]+:(.+)$/.exec(trimmed);
-  const isLocalPath =
-    scheme === "file" || (!scheme && !scp && (trimmed.startsWith("/") || trimmed.startsWith(".") || trimmed.startsWith("~")));
-
-  const segs = (scp ? scp[1] : trimmed.replace(/^[A-Za-z][A-Za-z0-9+.-]*:\/\//, "")).split("/").filter(Boolean);
-  const name = segs[segs.length - 1];
-  if (!name) return undefined;
-
-  // For a hosted URL the host is segs[0] when there was a scheme; drop it, then the
-  // segment immediately before the name is the owner.
-  const path = scheme && !scp ? segs.slice(1) : segs;
-  const owner = path.length >= 2 ? path[path.length - 2] : undefined;
-
-  if (isLocalPath || !owner) return { key: name, hasOwner: false };
-  return { key: `${owner}/${name}`, hasOwner: true };
-}
-
-/**
  * The exemption key for a checkout, and where it came from. A hosted origin remote is
  * the repository's identity (`owner/repo`); a local-path origin and a checkout with no
  * remote at all both degrade to a NAME, and both are LABELLED as a basename fallback so
@@ -354,7 +319,7 @@ export function repoKey(root = ROOT) {
 
   const nameOnly = fromRemote?.key ?? basename;
   const source = fromRemote
-    ? "basename fallback (origin remote carries no owner — a local-path remote)"
+    ? "basename fallback (origin remote carries no owner — a local path, or a transport that names none)"
     : "basename fallback (no origin remote)";
   const alias = CROSS_REPO_NAME_ALIASES[nameOnly];
   return alias
@@ -861,6 +826,64 @@ function selfTest() {
       return [a, b, c].every((k) => k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false);
     })(),
   ]);
+  // PR #1356's refuter: `git remote set-url origin DanFashauer/SignalGrid-Review-Hub` stores a
+  // bare relative path, which git resolves as a LOCAL DIRECTORY — and this parser read it as a
+  // hosted owner/repo (it only called a path local when it began with / . or ~). Hosted means
+  // `scheme://` (not file:) or `user@host:path`.
+  checks.push([
+    "a remote that git resolves as a DIRECTORY (no ':' before the first '/') is a LOCAL PATH however much it looks like owner/repo",
+    [
+      "DanFashauer/SignalGrid-Review-Hub", // bare relative path
+      "mirrors/DanFashauer/SignalGrid-Review-Hub",
+      "DanFashauer/SignalGrid-Review-Hub.git",
+    ].every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.key === "SignalGrid-Review-Hub" && k.hasOwner === false;
+    }),
+  ]);
+  // …but ONLY what git resolves as a directory degrades to the bare name. An owner-less scp
+  // (`host:owner/repo`) and a remote helper (`helper::url`) are ssh / helper transports to a
+  // HOST — real forks, not directories — and the bare name would hand them this repository's
+  // CROSS_REPO_NAME_ALIASES exemptions (the fail-open direction the alias table forbids). They
+  // keep their raw string as the key, which no alias matches.
+  // GH is interpolated so the publication-boundary gate does not read `:x@` + the host as a
+  // token-bearing git remote.
+  const GH = "github.com";
+  const transports = [
+    "evil.example:x/DanFashauer/SignalGrid-Review-Hub", // scp form with no user
+    "github.com:someone-else/SignalGrid-Review-Hub", // a real hosted fork over ssh, no user
+    "evilhelper::https://github.com/DanFashauer/SignalGrid-Review-Hub", // remote-helper transport
+    "hg::https://github.com/someone-else/SignalGrid-Review-Hub", // a helper in front of a hosted fork
+    "x\ngit@github.com:DanFashauer/SignalGrid-Review-Hub", // a stray first line before the scp form
+    `evil.invalid:x@${GH}:DanFashauer/SignalGrid-Review-Hub`, // scp splits at the FIRST colon
+    "https://evil.invalid#@github.com/DanFashauer/SignalGrid-Review-Hub", // `#` ends the authority
+  ];
+  checks.push([
+    `a transport that is not a directory and not a readable host names NO owner and NO alias-able name (${transports.length} spellings)`,
+    transports.every((u) => {
+      const k = repoKeyFromRemote(u);
+      return k?.hasOwner === false && k.key === u.trim() && !CROSS_REPO_NAME_ALIASES[k.key];
+    }),
+  ]);
+  checks.push([
+    "a hosted remote also reports its host and path depth, so a caller can demand github.com/owner/name exactly",
+    (() => {
+      const at = (u) => {
+        const k = repoKeyFromRemote(u);
+        return `${k?.hasOwner}|${k?.host}|${k?.depth}`;
+      };
+      return (
+        at("https://github.com/DanFashauer/X") === "true|github.com|2" &&
+        at("git@github.com:DanFashauer/X.git") === "true|github.com|2" &&
+        at("ssh://git@GitHub.com:22/DanFashauer/X") === "true|github.com|2" &&
+        at("https://user@github.com:443/DanFashauer/X/") === "true|github.com|2" &&
+        at("https://gitlab.com/DanFashauer/X") === "true|gitlab.com|2" &&
+        at("https://github.com/evil/DanFashauer/X") === "true|github.com|3" &&
+        // the cloud sandbox's proxy origin keeps its owner/repo key (only the estate locator is stricter)
+        at("http://local_proxy@127.0.0.1:41234/git/DanFashauer/X") === "true|127.0.0.1|3"
+      );
+    })(),
+  ]);
   checks.push([
     "…and an unreadable/absent remote yields undefined so the caller can fall back, never a wrong key",
     repoKeyFromRemote("") === undefined && repoKeyFromRemote(undefined) === undefined,
@@ -893,6 +916,10 @@ function selfTest() {
     scans.stranger = scanRepo(tmpNamed);
     g("remote set-url origin /srv/mirrors/SignalGrid-Review-Hub");
     scans.localPath = scanRepo(tmpNamed);
+    g("remote set-url origin github.com:someone-else/SignalGrid-Review-Hub");
+    scans.scpFork = scanRepo(tmpNamed);
+    g("remote set-url origin hg::https://github.com/someone-else/SignalGrid-Review-Hub");
+    scans.helperFork = scanRepo(tmpNamed);
   } catch {
     // leave the map empty — the checks below then fail, which is the fail-closed direction
   } finally {
@@ -921,6 +948,12 @@ function selfTest() {
       scans.localPath.repo === SELF_KEY &&
       scans.localPath.exempted.length === 1 &&
       scans.localPath.missing.length === 0,
+  ]);
+  checks.push([
+    "…and a FORK over an owner-less ssh remote or a remote helper is NOT exempted either: the bare name never reaches the alias table",
+    [scans.scpFork, scans.helperFork].every(
+      (r) => !!r && r.repo !== SELF_KEY && !r.repoKeyAliasedFrom && r.exempted.length === 0 && r.missing.length === 1,
+    ),
   ]);
 
   const failed = checks.filter(([, ok]) => !ok);

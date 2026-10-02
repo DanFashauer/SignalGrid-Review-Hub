@@ -338,13 +338,22 @@ if wanted keycloak; then
         curl -s -X POST "$K/admin/realms/master/clients/$CID/protocol-mappers/models" -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' \
           -d '{"name":"roles-claim","protocol":"openid-connect","protocolMapper":"oidc-hardcoded-claim-mapper","config":{"claim.name":"roles","claim.value":"service","jsonType.label":"String","access.token.claim":"true"}}' >/dev/null 2>&1
         export KEYCLOAK_URL=$K
+        # the lab's own bootstrap admin (the literals passed to the container above);
+        # proof:live-keycloak-access-governance seeds and reads its own realm with them
+        export KEYCLOAK_ADMIN_USER=admin KEYCLOAK_ADMIN_PASSWORD=admin
       fi
     fi
   fi
   if [ -n "${KEYCLOAK_URL:-}" ]; then
     if $PNPM run proof:live-keycloak >/tmp/live_keycloak.log 2>&1; then ok "proof:live-keycloak"; else bad "proof:live-keycloak" /tmp/live_keycloak.log; fi
+    if [ -n "${KEYCLOAK_ADMIN_USER:-}" ] && [ -n "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
+      if $PNPM run proof:live-keycloak-access-governance >/tmp/live_keycloak_ag.log 2>&1; then ok "proof:live-keycloak-access-governance"; else bad "proof:live-keycloak-access-governance" /tmp/live_keycloak_ag.log; fi
+    else
+      skip "proof:live-keycloak-access-governance" "needs KEYCLOAK_ADMIN_USER + KEYCLOAK_ADMIN_PASSWORD with the live Keycloak"
+    fi
   else
     skip "proof:live-keycloak" "could not stand up Keycloak (see docs/KEYCLOAK_LIVE_INTEGRATION.md)"
+    skip "proof:live-keycloak-access-governance" "could not stand up Keycloak (see docs/KEYCLOAK_LIVE_INTEGRATION.md)"
   fi
 fi
 

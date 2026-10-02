@@ -108,6 +108,7 @@
     "proof:live-fleet-workflow": "tsx ./src/live-fleet-workflow-proof.ts",
     "proof:live-idp": "tsx ./src/live-idp-proof.ts",
     "proof:live-keycloak": "tsx ./src/live-keycloak-proof.ts",
+    "proof:live-keycloak-access-governance": "tsx ./src/live-keycloak-access-governance-proof.ts",
     "proof:live-location": "tsx ./src/live-location-proof.ts",
     "proof:local-authority": "tsx ./src/local-authority-proof.ts",
     "proof:location-services": "tsx ./src/location-services-proof.ts",

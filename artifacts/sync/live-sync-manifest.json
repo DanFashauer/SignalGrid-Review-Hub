@@ -1,6 +1,6 @@
 {
   "manifestVersion": 92,
-  "fingerprint": "623917d18ef39541c8e492b6776e27d3b8b122f63817346e7990187c1c55d494",
+  "fingerprint": "5b15a30021249c127727287c4e3d3ed58a209817b52c47e35d89f6321ba773bc",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -125,7 +125,7 @@
       "device-management-health": 207,
       "device-resolver": 14,
       "dual-control": 78,
-      "emitter-discipline": 101,
+      "emitter-discipline": 100,
       "entitlement-binding": 63,
       "estate-core": 13,
       "evidence-coverage": 30,
@@ -141,7 +141,7 @@
       "nac": 46,
       "network-nac": 64,
       "oauth-consent": 74,
-      "ot-posture": 46,
+      "ot-posture": 47,
       "pacs-access": 109,
       "passkey-assurance": 116,
       "pim-activation": 53,

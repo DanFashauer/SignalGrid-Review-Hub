@@ -24,11 +24,18 @@
 //     the canonical lines: a guarded install (`command -v` test, then `apt-get -o
 //     DPkg::Lock::Timeout=N` on BOTH update and install, N >= 60), a fail-closed re-check ending
 //     in `exit 1`, `shellcheck --version`, and (CI lint step) the lint;
-//   · NO other decoded string in any workflow or composite action may run apt/apt-get/aptitude/
-//     nala/snap/dpkg to install a package while naming shellcheck or hiding the package list
-//     behind a `$` variable. Backslash-newline, and a trailing `|` or `&&`, continue a statement;
-//     comments are NOT stripped before matching, so a `#` cannot hide an install;
-//   · a pinned file may not set a workflow-level `defaults:` or any `BASH_ENV` key;
+//   · NO other decoded string in any workflow or composite action may run an apt/apt-get/aptitude/
+//     nala/snap/dpkg install ANYWHERE while naming shellcheck ANYWHERE (statement structure is not
+//     parsed: heredocs, quotes spanning lines, pipes, `|&`, subshells, backticks, blank lines and
+//     comments all stay inside one string), nor hide the package list behind a `$` variable on an
+//     apt-install line, nor hand shellcheck to an apt-flavoured `uses:` action. Backslash-newline is
+//     removed before matching, so `shell\` + `check` is seen. The price is a false positive for a
+//     script that installs ANOTHER package and also mentions shellcheck: split it or use the pinned step;
+//   · the pinned run may not contain a `${{ }}` expression (GitHub expands it before bash, even inside a
+//     comment), and the job holding a pinned step may not NEED a job that sets `if` (a skipped
+//     dependency skips the job, and a skipped required check reads as passing);
+//   · a pinned file may not set a workflow-level `defaults:`, a `BASH_ENV` key, or mention BASH_ENV in any
+//     string (`echo BASH_ENV=... >> $GITHUB_ENV`);
 //   · YAML that does not parse, has a duplicate key, more than one document, an anchor, an alias
 //     or a tag FAILS (fail closed; an alias needs an anchor, so it is covered by that).
 //
@@ -36,6 +43,8 @@
 // a sandbox against deliberate obfuscation. Out of scope, and NOT detected:
 //   · a quote-obfuscated name (`shell""check`, `sh"ell"check`) or one assembled in code
 //     (`'shell' + 'check'` in an actions/github-script body);
+//   · a package named by an apt regular expression (`apt-get install 'shellchec.'`), or installed by an
+//     action whose `uses:` does not contain "apt";
 //   · a command or package list split across two strings (`${{ env.X }} ${{ env.P }}`) when no
 //     single decoded string both runs apt and names shellcheck or a `$` variable;
 //   · a package list read from a file (`xargs -a pkgs.txt apt-get install`) or built on ANOTHER
@@ -127,50 +136,51 @@ function* keysOf(v) {
   else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { yield k; yield* keysOf(x); }
 }
 
-/** Statements of a decoded shell string: backslash-newline and a trailing `|` / `&&` continue one. */
-function shellStatements(s) {
-  const out = [];
-  let cur = null;
-  const ends = (x) => x.endsWith("\\") || /(&&|\|)$/.test(x);
-  for (const line of s.split("\n")) {
-    const t = line.trim();
-    if (cur && t.startsWith("#")) continue; // a comment line inside a continued statement
-    const body = t.replace(/\\$/, "");
-    const continues = ends(t) || ends(stripComment(t));
-    if (cur) {
-      cur.text += " " + body.trim();
-      cur.glued += body.trimStart(); // bash glues across a backslash-newline: `shell\` + `check`
-      if (!continues) { out.push(cur); cur = null; }
-    } else if (continues) cur = { text: body.trim(), glued: body };
-    else if (t) out.push({ text: t, glued: t });
+function* objects(v) {
+  if (v && typeof v === "object") {
+    yield v;
+    for (const x of Object.values(v)) yield* objects(x);
   }
-  if (cur) out.push(cur);
-  return out;
 }
 
-/** Installs of shellcheck (or of a `$`-hidden list) in any decoded string except the `exclude`d paths. */
+/** What bash sees of a decoded string once backslash-newline is removed (`shell\` + `check` is one word). */
+const glue = (s) => s.replace(/\\\n/g, "");
+
+/**
+ * Installs of shellcheck in any decoded string except the `exclude`d paths. Statement structure is NOT
+ * parsed (heredocs, quotes spanning lines, pipes, subshells, backticks ...): a string that runs an apt
+ * install ANYWHERE and names shellcheck ANYWHERE is flagged, as is an apt-install line that hides its
+ * package list behind a `$` variable, and an apt-flavoured `uses:` action that is given shellcheck.
+ */
 export function strayInstallsIn(text, file, exclude = new Set(), lenient = false) {
   const { doc, problems } = load(text);
-  if (lenient && problems.length) return []; // a non-workflow YAML we cannot trust: not ours to judge
-  const out = problems.map((p) => `${file}: ${p}`);
-  for (const [s, path] of strings(doc.toJS())) {
+  if (lenient && doc.errors.length) return []; // a non-workflow YAML that does not parse: not ours to judge
+  const out = lenient ? [] : problems.map((p) => `${file}: ${p}`);
+  const js = doc.toJS();
+  for (const [s, path] of strings(js)) {
     if (exclude?.has(path.join("/"))) continue;
-    for (const st of shellStatements(s)) {
-      for (const x of new Set([st.text, st.glued])) {
-        if (APT_INSTALL.test(x) && (/\bshellcheck\b/.test(x) || /\$/.test(x))) {
-          out.push(`${file}: an unpinned apt install that names shellcheck or hides its package list behind a variable: \`${x}\``);
-          break;
-        }
+    for (const v of new Set([s, glue(s)])) {
+      if (APT_INSTALL.test(v) && /\bshellcheck\b/.test(v)) {
+        out.push(`${file}: a string that runs an apt install and names shellcheck: \`${v.replace(/\n/g, " ").slice(0, 120)}\``);
+        break;
       }
     }
+    for (const line of s.replace(/\\\n/g, " ").split("\n")) {
+      if (APT_INSTALL.test(line) && /\$/.test(line)) out.push(`${file}: an apt install that hides its package list behind a variable: \`${line.trim().slice(0, 120)}\``);
+    }
   }
-  return out;
+  for (const o of objects(js)) {
+    if (typeof o.uses !== "string" || !/apt/i.test(o.uses)) continue;
+    for (const [v] of strings(o)) if (/\bshellcheck\b/.test(v) && v !== o.uses) out.push(`${file}: an apt-flavoured action (\`${o.uses}\`) is given shellcheck`);
+  }
+  return [...new Set(out)];
 }
 
 function stepProblems(step, spec) {
   const problems = [];
   for (const k of Object.keys(step)) if (!spec.keys.includes(k)) problems.push(`step has a forbidden key \`${k}\` (it can skip or soften the step)`);
   if (typeof step.run !== "string") return [...problems, "step has no string `run`"];
+  if (step.run.includes("${{")) problems.push("the pinned run contains a `${{ }}` expression (GitHub expands it before bash, even inside a comment)");
   const body = step.run.split("\n").map(stripComment).filter(Boolean);
   if (body.length !== spec.body.length) {
     problems.push(`run body has ${body.length} command line(s), expected ${spec.body.length}: ${JSON.stringify(body)}`);
@@ -191,6 +201,7 @@ export function verdictFor(yaml, spec) {
   const problems = [...parse];
   if (js && typeof js === "object" && !Array.isArray(js) && "defaults" in js) problems.push("workflow-level `defaults:` can change the shell of every step");
   for (const k of keysOf(js)) if (k === "BASH_ENV") problems.push("BASH_ENV can neutralise a step");
+  for (const [v] of strings(js)) if (/BASH_ENV/.test(v)) problems.push("a string mentions BASH_ENV (`echo BASH_ENV=... >> $GITHUB_ENV` can neutralise a step)");
   const found = [];
   for (const [job, jobObj] of Object.entries(js?.jobs ?? {})) {
     for (const [i, st] of (Array.isArray(jobObj?.steps) ? jobObj.steps : []).entries()) {
@@ -201,6 +212,17 @@ export function verdictFor(yaml, spec) {
   if (found.length > 1) return [...problems, `step "${spec.name}" appears ${found.length} times; it must be unique`].map((p) => `${spec.file}: ${p}`);
   const { job, jobObj, i, st } = found[0];
   for (const k of JOB_KNOBS) if (k in jobObj) problems.push(`the job holding the step sets \`${k}\` (it can skip or soften the lint)`);
+  // A skipped dependency skips the holding job, and a skipped required check reads as passing.
+  const needsOf = (j) => { const n = js.jobs?.[j]?.needs; return Array.isArray(n) ? n : typeof n === "string" ? [n] : []; };
+  const seen = new Set();
+  const stack = [...needsOf(job)];
+  while (stack.length) {
+    const j = stack.pop();
+    if (seen.has(j)) continue;
+    seen.add(j);
+    if (js.jobs?.[j] && "if" in js.jobs[j]) problems.push(`the job holding the step needs \`${j}\`, which sets \`if\` (a skipped dependency skips this job)`);
+    stack.push(...needsOf(j));
+  }
   problems.push(...stepProblems(st, spec));
   const exclude = new Set([`jobs/${job}/steps/${i}/run`]);
   problems.push(...strayInstallsIn(yaml, spec.file, exclude).map((p) => p.replace(`${spec.file}: `, "")));
@@ -240,7 +262,10 @@ export function strayInstalls(dir, readFile, pinnedFiles, files = listYaml(dir))
   for (const rel of files) {
     if (pinnedFiles.includes(rel)) continue;
     const text = readFile(rel);
-    const ours = rel.startsWith(".github/") || /^\s*(runs|jobs):/m.test(normEol(text));
+    const { doc } = load(text);
+    const js = doc.errors.length ? null : doc.toJS();
+    // ours: under .github, a `runs:`/`jobs:` line in the text (so an unparseable one is still recognised), or those keys once parsed (quoted or spaced spellings)
+    const ours = rel.startsWith(".github/") || /^\s*(runs|jobs):/m.test(normEol(text)) || (js && typeof js === "object" && !Array.isArray(js) && ("runs" in js || "jobs" in js));
     out.push(...strayInstallsIn(text, rel, new Set(), !ours));
   }
   return out;
@@ -260,6 +285,8 @@ const wrap = (name, run, extra = "") =>
   `jobs:\n  a:\n    steps:\n      - name: ${name}\n${extra}        run: |\n${run.split("\n").map((l) => "          " + l).join("\n")}\n      - name: next\n        run: "true"\n`;
 
 function selfTest() {
+  let walkChecks = 0; // repo-walk, floor and checkRepo assertions (counted, not typed)
+  const expect = (ok, ...msg) => { walkChecks++; if (!ok) { console.error(...msg); bad++; } };
   const BS = String.fromCharCode(92);
   const spec = PINNED[0];
   const good = [
@@ -287,6 +314,10 @@ function selfTest() {
     ["version only in a comment", good.replace("shellcheck --version", "true # shellcheck --version")],
     ["set +e before the lint", good.replace("shellcheck --version", "set +e\nshellcheck --version")],
     ["fail-closed block behind `&&` instead of `||` (exits when shellcheck IS present)", good.replace(" || { echo", " && { echo")],
+    ["bare `apt-get update` on its own line (the timeout only on the install)", good.replace("  sudo apt-get -o DPkg::Lock::Timeout=180 update -qq", "  sudo apt-get update -qq")],
+    ["`fi` replaced by another command", good.replace("\nfi\n", "\necho done\n")],
+    ["the lint replaced by `node -e 0`", good.replace("node scripts/check-shell.mjs", "node -e 0")],
+    ["a `${{ }}` expression in a comment that injects a line", good.replace("shellcheck --version", "shellcheck --version # ${{ fromJSON('\"\\nexit 0\"') }}")],
     ["lint line removed", good.replace("\nnode scripts/check-shell.mjs", "")],
     ["dpkg -i bypass", good.replace(/ {2}sudo apt-get.*install.*/, "  dpkg -i /tmp/shellcheck.deb")],
   ];
@@ -374,6 +405,9 @@ function selfTest() {
     ["pinned step with no `run`", `jobs:\n  a:\n    steps:\n      - name: ${spec.name}\n`],
     ["pinned step whose `run` is a list", `jobs:\n  a:\n    steps:\n      - name: ${spec.name}\n        run: [a, b]\n`],
     ["a benign step with the pinned name next to the real one", wrap(spec.name, good) + `      - name: ${spec.name}\n        run: echo hi\n`],
+    ["the holding job needs a job that has `if`", wrap(spec.name, good).replace("jobs:\n", "jobs:\n  zz:\n    if: false\n    steps:\n      - run: \"true\"\n").replace("  a:\n    steps:", "  a:\n    needs: [zz]\n    steps:")],
+    ["the holding job needs a job that needs a job that has `if`", wrap(spec.name, good).replace("jobs:\n", "jobs:\n  zz:\n    if: false\n    steps:\n      - run: \"true\"\n  yy:\n    needs: zz\n    steps:\n      - run: \"true\"\n").replace("  a:\n    steps:", "  a:\n    needs: [yy]\n    steps:")],
+    ["BASH_ENV written through $GITHUB_ENV", wrap(spec.name, good) + "      - name: x\n        run: echo BASH_ENV=./x >> $GITHUB_ENV\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -418,6 +452,27 @@ function selfTest() {
     ["an escaped backslash in a quoted name is NOT an install", "      - name: \"a \\\\ b\"\n", false],
     ["a pipe the comment-stripper would miss (escaped quote, then ` #`)", "      - run: |\n          printf \"a\\\" #b\" shellcheck |\n            xargs apt-get install -y -qq\n", true],
     ["three lines, spaces before each backslash: `shell check` stays two words", "      - run: |\n          apt-get install -y \\\n          shell \\\n          check\n", false],
+    ["apt install fed from a backtick substitution spanning lines", "      - run: |\n          apt-get install -y -qq `\n          echo shellcheck\n          `\n", true],
+    ["apt install fed from a process substitution spanning lines", "      - run: |\n          xargs apt-get install -y -qq < <(\n            echo shellcheck\n          )\n", true],
+    ["a brace group piped to xargs", "      - run: |\n          {\n            echo shellcheck\n          } | xargs apt-get install -y -qq\n", true],
+    ["a subshell piped to xargs", "      - run: |\n          (\n            echo shellcheck\n          ) | xargs apt-get install -y -qq\n", true],
+    ["a for loop piped to xargs", "      - run: |\n          for p in jq shellcheck; do\n            echo \"$p\"\n          done | xargs apt-get install -y -qq\n", true],
+    ["an if block piped to xargs", "      - run: |\n          if true; then\n            echo shellcheck\n          fi | xargs apt-get install -y -qq\n", true],
+    ["a multi-line here-string", "      - run: |\n          xargs apt-get install -y -qq <<< \"\n          shellcheck\"\n", true],
+    ["a heredoc fed to xargs", "      - run: |\n          xargs apt-get install -y -qq <<EOF\n          shellcheck\n          EOF\n", true],
+    ["a heredoc piped into xargs", "      - run: |\n          cat <<EOF | xargs apt-get install -y -qq\n          shellcheck\n          EOF\n", true],
+    ["a multi-line double-quoted shell string", "      - run: |\n          apt-get install -y -qq -o Dummy=\"x\n          \" shellcheck\n", true],
+    ["a multi-line single-quoted shell string", "      - run: |\n          apt-get install -y -qq -o Dummy='x\n          ' shellcheck\n", true],
+    ["a `|&` pipe", "      - run: |\n          printf '%s\\n' shellcheck |&\n            xargs apt-get install -y -qq\n", true],
+    ["a blank line after a trailing pipe", "      - run: |\n          printf '%s\\n' shellcheck |\n\n            xargs apt-get install -y -qq\n", true],
+    ["an escaped quote before a comment after the pipe", "      - run: |\n          echo shellcheck | tr -d \\\" | # strip quotes\n            xargs apt-get install -y -qq\n", true],
+    ["an apt-flavoured action given shellcheck", "      - uses: awalsh128/cache-apt-pkgs-action@v1\n        with:\n          packages: shellcheck\n", true],
+    ["an apt-flavoured action given another package is NOT flagged", "      - uses: awalsh128/cache-apt-pkgs-action@v1\n        with:\n          packages: jq\n", false],
+    ["a script that only RUNS shellcheck is NOT flagged", "      - run: shellcheck --version\n", false],
+    ["an install of another package, with shellcheck named in a different string of the step, is NOT flagged", "      - name: shellcheck is mentioned here\n        run: apt-get install -y jq\n", false],
+    ["an indented continuation line after a backslash is a SECOND word", "      - run: |\n          apt-get install -y -qq shell\\\n            check\n", false],
+    ["a `$` package list on a backslash-continued line", "      - run: |\n          apt-get install -y -qq \\\n            $PKGS\n", true],
+    ["a non-apt action given a path named shellcheck is NOT flagged", "      - uses: actions/checkout@v4\n        with:\n          path: shellcheck\n", false],
     ["a space before the backslash keeps `shell check` as two words", "      - run: |\n          apt-get install -y -qq shell \\\n          check\n", false],
     ["same-indent backslash continuation naming shellcheck", "      - run: |\n          sudo apt-get install -y -qq jq \\\n          shellcheck\n", true],
     ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
@@ -451,16 +506,16 @@ function selfTest() {
   }
   // The floor: an empty or tiny walk must FAIL, a plausible one must pass.
   const fakeFiles = (n, dir) => Array.from({ length: n }, (_, i) => `${dir}/f${i}.yml`);
-  if (floorProblems([]).length === 0) { console.error("✗ self-test: an empty repo walk PASSED the floor"); bad++; }
-  if (floorProblems(fakeFiles(FILE_FLOOR - 1, ".github/workflows")).length === 0) { console.error("✗ self-test: a walk one file under the floor PASSED"); bad++; }
-  if (floorProblems(fakeFiles(FILE_FLOOR, "elsewhere")).length === 0) { console.error("✗ self-test: a walk with no workflows PASSED"); bad++; }
-  if (floorProblems(fakeFiles(FILE_FLOOR, ".github/workflows")).length !== 0) { console.error("✗ self-test: a plausible walk FAILED the floor"); bad++; }
+  expect(!(floorProblems([]).length === 0), "✗ self-test: an empty repo walk PASSED the floor");
+  expect(!(floorProblems(fakeFiles(FILE_FLOOR - 1, ".github/workflows")).length === 0), "✗ self-test: a walk one file under the floor PASSED");
+  expect(!(floorProblems(fakeFiles(FILE_FLOOR, "elsewhere")).length === 0), "✗ self-test: a walk with no workflows PASSED");
+  expect(!(floorProblems(fakeFiles(FILE_FLOOR, ".github/workflows")).length !== 0), "✗ self-test: a plausible walk FAILED the floor");
   // checkRepo on a repo that has no workflows: the floor and the missing pinned files must FAIL it.
   const bare = mkdtempSync(join(tmpdir(), "shellcheck-gate-bare-"));
   try {
     const got = checkRepo(bare);
-    if (!got.some((p) => /below the floor/.test(p))) { console.error("✗ self-test: checkRepo on an empty repo did not report the walk floor:", got); bad++; }
-    if (!got.some((p) => /cannot be read/.test(p))) { console.error("✗ self-test: checkRepo on an empty repo did not report the missing pinned files:", got); bad++; }
+    expect(!(!got.some((p) => /below the floor/.test(p))), "✗ self-test: checkRepo on an empty repo did not report the walk floor:", got);
+    expect(!(!got.some((p) => /cannot be read/.test(p))), "✗ self-test: checkRepo on an empty repo did not report the missing pinned files:", got);
   } finally {
     rmSync(bare, { recursive: true, force: true });
   }
@@ -471,8 +526,8 @@ function selfTest() {
     for (let i = 0; i < FILE_FLOOR; i++) writeFileSync(join(sized, `.github/workflows/w${i}.yml`), "jobs:\n  a:\n    steps:\n      - run: echo hi\n");
     writeFileSync(join(sized, ".github/workflows/bare.yml"), "jobs:\n  a:\n    steps:\n      - run: sudo apt-get install -y -qq shellcheck\n");
     const got = checkRepo(sized);
-    if (!got.some((p) => /bare\.yml.*unpinned apt install/.test(p))) { console.error("✗ self-test: checkRepo missed a bare install in a sized repo:", got); bad++; }
-    if (got.some((p) => /below the floor/.test(p))) { console.error("✗ self-test: checkRepo reported the floor on a sized repo:", got); bad++; }
+    expect(!(!got.some((p) => /bare\.yml.*apt install/.test(p))), "✗ self-test: checkRepo missed a bare install in a sized repo:", got);
+    expect(!(got.some((p) => /below the floor/.test(p))), "✗ self-test: checkRepo reported the floor on a sized repo:", got);
   } finally {
     rmSync(sized, { recursive: true, force: true });
   }
@@ -482,45 +537,57 @@ function selfTest() {
     const put = (rel, text) => { mkdirSync(dirname(join(tmp, rel)), { recursive: true }); writeFileSync(join(tmp, rel), text); };
     const scan = () => strayInstalls(tmp, (rel) => readFileSync(join(tmp, rel), "utf8"), []);
     put(".github/workflows/ok.yml", "jobs:\n  a:\n    steps:\n      - run: echo hi\n");
-    if (scan().length !== 0) { console.error("✗ self-test: a clean tree was flagged:", scan()); bad++; }
+    expect(!(scan().length !== 0), "✗ self-test: a clean tree was flagged:", scan());
     put(".github/workflows/zz.yml", "jobs:\n  a:\n    steps:\n      - run: &x echo hi\n");
-    if (scan().length === 0) { console.error("✗ self-test: an anchor in an unpinned workflow PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: an anchor in an unpinned workflow PASSED");
     rmSync(join(tmp, ".github/workflows/zz.yml"));
     put(".github/workflows/zz.yml", "jobs:\n  a:\n    steps:\n      - run: |\n          echo \"see #1234\" && apt-get install -y -qq shellcheck\n");
-    if (scan().length === 0) { console.error("✗ self-test: an install after a quoted # in an unpinned workflow PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: an install after a quoted # in an unpinned workflow PASSED");
     rmSync(join(tmp, ".github/workflows/zz.yml"));
     put("ci/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
-    if (scan().length === 0) { console.error("✗ self-test: a composite action outside .github PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: a composite action outside .github PASSED");
     rmSync(join(tmp, "ci"), { recursive: true });
     put("ci/sc/action.yml", `runs:\n  using: composite\n  steps:\n    - run: "apt-get install -y -qq shell${BS}x63heck"\n      shell: bash\n`);
-    if (scan().length === 0) { console.error("✗ self-test: an escaped package name in a composite action outside .github PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: an escaped package name in a composite action outside .github PASSED");
     rmSync(join(tmp, "ci"), { recursive: true });
     put(".github/workflows/crlf.yml", "jobs:\n  a:\n    steps:\n      - run: |\n          if true; then # c\n            apt-get install -y -qq shellcheck\n          fi\n".replace(/\n/g, "\r\n"));
-    if (scan().length === 0) { console.error("✗ self-test: a CRLF workflow with a commented `then` PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: a CRLF workflow with a commented `then` PASSED");
     rmSync(join(tmp, ".github/workflows/crlf.yml"));
     put(".github/workflows/cr.yml", "jobs:\n  a:\n    steps:\n      - run: |\n          if true; then # c\n            apt-get install -y -qq shellcheck\n          fi\n".replace(/\n/g, "\r"));
-    if (scan().length === 0) { console.error("✗ self-test: a lone-CR workflow with a commented `then` PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: a lone-CR workflow with a commented `then` PASSED");
     rmSync(join(tmp, ".github/workflows/cr.yml"));
     put(".github/workflows/bad.yml", "name: [unclosed\n");
-    if (scan().length === 0) { console.error("✗ self-test: an unparseable file under .github PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: an unparseable file under .github PASSED");
     rmSync(join(tmp, ".github/workflows/bad.yml"));
+    put("docs/anchors.yml", "a: &x 1\nb: *x\n");
+    expect(!(scan().length !== 0), "✗ self-test: a non-workflow YAML with anchors was judged:", scan());
+    rmSync(join(tmp, "docs"), { recursive: true });
+    put("ci/c/action.yml", `"runs":\n  using: composite\n  steps: []\nx: &a 1\n`);
+    expect(!(scan().length === 0), "✗ self-test: a composite action with a quoted `runs` key and an anchor (no install) was not judged strictly");
+    rmSync(join(tmp, "ci"), { recursive: true });
+    put("ci/a/action.yml", `"runs":\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\nx: &a 1\n`);
+    expect(!(scan().length === 0), "✗ self-test: a composite action with a quoted `runs` key and an anchor PASSED");
+    rmSync(join(tmp, "ci"), { recursive: true });
+    put("ci/b/other.yml", "steps:\n  - run: apt-get install -y shellcheck\nx: &a 1\n");
+    expect(!(scan().length === 0), "✗ self-test: a non-workflow YAML with an anchor and a shellcheck install PASSED");
+    rmSync(join(tmp, "ci"), { recursive: true });
     put("ci/bad.yml", "jobs:\n  a: [unclosed\n");
-    if (scan().length === 0) { console.error("✗ self-test: an unparseable `jobs:` file outside .github PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: an unparseable `jobs:` file outside .github PASSED");
     rmSync(join(tmp, "ci"), { recursive: true });
     put("docs/other.yml", "a: [unclosed\n");
-    if (scan().length !== 0) { console.error("✗ self-test: an unparseable non-workflow YAML was judged:", scan()); bad++; }
+    expect(!(scan().length !== 0), "✗ self-test: an unparseable non-workflow YAML was judged:", scan());
     rmSync(join(tmp, "docs"), { recursive: true });
     put("ci/frag/jobs.yml", `jobs:\n  a:\n    steps:\n      - run: "echo hi${BS}napt-get install -y -qq shellcheck"\n`);
-    if (scan().length === 0) { console.error("✗ self-test: a `jobs:` file outside .github with a \\n escape PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: a `jobs:` file outside .github with a \\n escape PASSED");
     rmSync(join(tmp, "ci"), { recursive: true });
 
     put("third_party/sc/action.yml", "runs:\n  using: composite\n  steps:\n    - run: apt-get install -y shellcheck\n      shell: bash\n");
-    if (scan().length === 0) { console.error("✗ self-test: a composite action under third_party PASSED"); bad++; }
+    expect(!(scan().length === 0), "✗ self-test: a composite action under third_party PASSED");
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
   if (bad) process.exit(1);
-  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install, ${grammarCases.length} parse and 12 repo-walk cases behave`);
+  console.log(`✓ check-ci-shellcheck-step self-test: canonical passes; ${variants.length + extras.length + 1} broken shapes all fail; ${strayCases.length} unpinned-install, ${grammarCases.length} parse and ${walkChecks} repo-walk/floor/checkRepo checks behave`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -99,14 +99,20 @@
 //     (`const { name } = q.data ?? {}`) are likewise not tracked (pre-existing).
 //   - Query data mutated IN PLACE through another path (`seed(q.data.rows)`) is not seen by the
 //     read-only whitelist, which judges a binding by its own references. A key that is a fixed
-//     string by construction (`d.toString()` over `q.data ?? {}`) is not recognised.
+//     string by construction (`d.toString()` over `q.data ?? {}`) is not recognised. Global state is
+//     not modelled: `Object.prototype.s = "ok"`, `globalThis.String = …`, a `Proxy`-wrapped or
+//     `new Map(…)` class map (only a same-file const object LITERAL is resolved). A key whose
+//     map entry is a getter/method is resolved by its body; a computed key it cannot read is
+//     treated as matching every lookup.
 //   - react-query `initialData` / `placeholderData` make `q.data` a literal while the real state is
 //     unknown; a presence guard and a plain-read key are both fooled (pre-existing, gate-wide).
 //     `Component.defaultProps` is not followed (ignored by React 19, which this repo pins).
 //   - A tainted `props` identifier or `{...spread}` taints the whole parameter, not one prop, and
 //     taint is keyed by parameter name within the file — a possible false POSITIVE, never
 //     silent: it surfaces as a finding the author can read and exempt with `// unknown-ok:`.
-//   - Fail-closed OVER-FLAGS, never silent: a key that defaults to a NON-good entry
+//   - Fail-closed OVER-FLAGS, never silent: a shadowing parameter or `catch (s)` of the same name, or a
+//     `var` / `function` redeclaration, is treated as a rebinding of the binding (the analysis keys
+//     bindings by name within a scope, not by full lexical resolution); a key that defaults to a NON-good entry
 //     (`T[s ?? "bad"] ?? T.d`); a row transform that keeps every element (`.flatMap((x) => [x])`);
 //     `rows[0]` / `rows.join()` / `.length` / `.size` keys; a query-derived value handed to an
 //     unknown method (`q.data.rows.reduce(…)`), which makes `q` itself non-plain.
@@ -824,14 +830,33 @@ function analyzeSourceFile(relPath, text) {
   };
   // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key; a
   // `...BASE` spread of another same-file map contributes its entries.
+  // The text of a member's key: `ok`, `"ok"`, `[K]` of a const string; null = a key this cannot read.
+  const memberKey = (name) => {
+    if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+    if (ts.isComputedPropertyName(name)) {
+      const e = unwrapExpr(name.expression);
+      if (ts.isStringLiteralLike(e) || ts.isNumericLiteral(e)) return e.text;
+      if (ts.isIdentifier(e)) { const i = resolveConstInit(e); const u = i && unwrapExpr(i); if (u && ts.isStringLiteralLike(u)) return u.text; }
+    }
+    return null;
+  };
+  // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key. A shorthand
+  // entry reads its const; a method / getter contributes its body; a computed key this cannot read
+  // MAY match any key, so it is included; a `...BASE` spread of another same-file map contributes its entries.
   const mapEntries = (obj, lit, depth = 0) => {
     const out = [];
     for (const p of obj.properties) {
       if (ts.isSpreadAssignment(p)) {
         const o = depth < 6 ? mapObjectOf(p.expression, depth + 1) : null;
         if (o) out.push(...mapEntries(o, lit, depth + 1));
-      } else if (ts.isPropertyAssignment(p) && (lit === null ||
-        ((ts.isIdentifier(p.name) || ts.isStringLiteralLike(p.name)) && p.name.text === lit))) out.push(p.initializer);
+        continue;
+      }
+      if (!p.name && !ts.isShorthandPropertyAssignment(p)) continue;
+      const key = ts.isShorthandPropertyAssignment(p) ? p.name.text : memberKey(p.name);
+      if (!(lit === null || key === null || key === lit)) continue;
+      if (ts.isPropertyAssignment(p)) out.push(p.initializer);
+      else if (ts.isShorthandPropertyAssignment(p)) out.push(p.name);
+      else out.push(p); // a method / getter / setter: its body is walked for class strings
     }
     return out;
   };
@@ -980,22 +1005,35 @@ function analyzeSourceFile(relPath, text) {
   };
   const boundNames = (name) => ts.isIdentifier(name) ? [name.text]
     : name.elements.flatMap((el) => (ts.isOmittedExpression(el) ? [] : boundNames(el.name)));
-  const isReadOnlyUse = (id) => {
-    let n = id, derived = false; // `derived`: n is now a value READ OUT of the binding, not the binding itself
+  const isReadOnlyUse = (id, derivedStart = false) => {
+    let n = id, derived = derivedStart; // `derived`: n is now a value READ OUT of the binding, not the binding itself
     for (;;) {
       const p = n.parent;
       if (!p) return false;
       if (ts.isParenthesizedExpression(p) || ts.isNonNullExpression(p) || ts.isAsExpression(p) || ts.isSatisfiesExpression(p) || ts.isTypeAssertionExpression(p)) { n = p; continue; }
       if (ts.isPropertyAccessExpression(p) && p.expression === n) {
         const call = p.parent;
-        if (ts.isCallExpression(call) && call.expression === p) return READ_METHODS.has(p.name.text);
+        if (ts.isTaggedTemplateExpression(call) && call.tag === p) return false; // rows.push`ok`
+        if (ts.isCallExpression(call) && call.expression === p) {
+          if (!READ_METHODS.has(p.name.text)) return false;
+          // a callback with a 3rd parameter (`(x, i, arr) =>`) is handed the container itself
+          if (call.arguments.some((a) => ts.isFunctionLike(a) && a.parameters.length >= 3)) return false;
+          if (RETURNS_RECEIVER.has(p.name.text)) { n = call; continue; } // sort()/reverse() return the receiver: judge the result
+          return true;
+        }
         n = p; derived = true; continue; // a property read: judge where the read value goes
       }
-      if (ts.isElementAccessExpression(p)) { if (p.argumentExpression === n) return true; n = p; derived = true; continue; }
+      if (ts.isElementAccessExpression(p)) {
+        if (p.argumentExpression === n) return true;
+        const call = p.parent;
+        if ((ts.isCallExpression(call) && call.expression === p) || (ts.isTaggedTemplateExpression(call) && call.tag === p)) return false; // rows["push"](…), rows[m](…)
+        n = p; derived = true; continue;
+      }
       if (ts.isBinaryExpression(p)) {
         const op = p.operatorToken.kind;
         if (op >= K.FirstAssignment && op <= K.LastAssignment) return p.right === n && derived; // a target is a write; a derived value on the right is just read
         if (op === K.QuestionQuestionToken || op === K.BarBarToken || op === K.AmpersandAmpersandToken) { n = p; continue; }
+        if (op === K.CommaToken) { if (p.right === n) { n = p; continue; } return true; } // `(0, rows).push(…)`: the right operand is the value
         return true; // comparison / arithmetic: a read that goes nowhere
       }
       if (ts.isConditionalExpression(p)) { if (p.condition === n) return true; n = p; continue; }
@@ -1005,7 +1043,8 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isForOfStatement(p) || ts.isForInStatement(p)) return p.expression === n;
       if (ts.isVariableDeclaration(p) && p.initializer === n) {
         if (derived) return true; // a value read OUT of the binding: the new name is judged on its own uses elsewhere
-        return boundNames(p.name).every((nm) => refsReadOnly(nm, scopeOf(p))); // an alias / destructured copy is judged on ITS uses
+        // an alias is judged on ITS uses; names destructured OUT of the binding are values read from it (derived)
+        return ts.isIdentifier(p.name) ? refsReadOnly(p.name.text, scopeOf(p), p) : boundNames(p.name).every((nm) => refsReadOnly(nm, scopeOf(p), p, true));
       }
       if (ts.isArrayLiteralExpression(p) || ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p) || ts.isSpreadAssignment(p) || ts.isSpreadElement(p)) {
         let lit = p; while (lit.parent && (ts.isPropertyAssignment(lit) || ts.isSpreadAssignment(lit) || ts.isSpreadElement(lit) || ts.isShorthandPropertyAssignment(lit))) lit = lit.parent;
@@ -1013,6 +1052,7 @@ function analyzeSourceFile(relPath, text) {
         return derived || ts.isSpreadElement(p); // `{ a: q.data?.a }` carries a read; `{ d }` / `[d]` hands the binding itself away
       }
       if (ts.isJsxExpression(p)) return derived || ts.isJsxElement(p.parent) || ts.isJsxFragment(p.parent);
+      if (ts.isCallExpression(p) && p.expression === n) return false; // calling the binding, or a method pulled out of it: `pop()`
       if (ts.isCallExpression(p) && p.arguments.includes(n)) {
         const c = p.expression;
         return derived || (ts.isIdentifier(c) && c.text === "String" && !findBinding(c)) ||
@@ -1022,18 +1062,33 @@ function analyzeSourceFile(relPath, text) {
     }
   };
   const readOnlyGuard = new Set();
-  const refsReadOnly = (name, scope) => {
+  // The declaration that introduced the binding being judged (a VariableDeclaration, Parameter or BindingElement).
+  const isOwnDecl = (idNode, owner) => {
+    for (let c = idNode.parent; c; c = c.parent) {
+      if (c === owner) return true;
+      if (ts.isBindingElement(c) || ts.isObjectBindingPattern(c) || ts.isArrayBindingPattern(c)) continue;
+      return false;
+    }
+    return false;
+  };
+  const refsReadOnly = (name, scope, owner, derivedStart = false) => {
     const key = `${name}@${scope.pos}`;
     if (readOnlyGuard.has(key)) return true; // a cycle of aliases adds no new use
     readOnlyGuard.add(key);
     let ok = true;
     const w = (n) => {
       if (!ok || !n) return;
+      // direct eval can write any binding in reach
+      if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === "eval") { ok = false; return; }
       if (ts.isIdentifier(n) && n.text === name && !isMemberName(n)) {
         const par = n.parent;
-        const declName = (ts.isVariableDeclaration(par) || ts.isParameter(par) || ts.isFunctionDeclaration(par)) && par.name === n;
-        const bindingName = ts.isBindingElement(par) && (par.name === n || par.propertyName === n);
-        if (!declName && !bindingName && !isReadOnlyUse(n)) { ok = false; return; }
+        const decl = ((ts.isVariableDeclaration(par) || ts.isParameter(par) || ts.isFunctionDeclaration(par)) && par.name === n) ||
+          (ts.isBindingElement(par) && (par.name === n || par.propertyName === n));
+        if (decl) {
+          // the binding's own declaration is not a use; ANY OTHER declaration of the name (a `var`
+          // redeclaration, `function s(){}`, a shadowing parameter or `catch (s)`) is a write or a rebinding
+          if (!(owner && isOwnDecl(n, owner))) { ok = false; return; }
+        } else if (!isReadOnlyUse(n, derivedStart)) { ok = false; return; }
       }
       ts.forEachChild(n, w);
     };
@@ -1045,6 +1100,7 @@ function analyzeSourceFile(relPath, text) {
   const FIXED_VALUE_PROPS = new Set(["length", "size", "byteLength"]);
   const PLAIN_METHODS = new Set(["toLowerCase", "toUpperCase", "trim", "toString"]);
   const ROW_KEEPING = new Set(["filter", "slice", "sort", "reverse", "toSorted", "toReversed"]);
+  const RETURNS_RECEIVER = new Set(["sort", "reverse"]);
   const READ_METHODS = new Set([...ROW_METHODS, ...ROW_KEEPING, ...PLAIN_METHODS, "concat", "join", "includes", "indexOf", "lastIndexOf",
     "at", "findIndex", "findLast", "findLastIndex", "keys", "values", "entries", "get", "has", "flat", "from"]);
   const keyIsPlainData = (k, depth = 0) => {
@@ -1055,7 +1111,7 @@ function analyzeSourceFile(relPath, text) {
       const b = findBinding(e);
       if (!b || b.kind === "opaque") return false;
       if (b.kind === "param") {
-        if (!refsReadOnly(e.text, b.node.parent)) return false;
+        if (!refsReadOnly(e.text, b.node.parent, b.node)) return false;
         if (b.node.parent && paramSitesPlain(b.node.parent, null)) return true;
         return isRowOfQueryData(b.node); // `(s) =>` of `data.rows.map(...)`: a row exists only when the data does
       }
@@ -1063,12 +1119,12 @@ function analyzeSourceFile(relPath, text) {
         if (b.node.initializer) return false; // a destructuring / parameter default
         if (b.fromParam) {
           const fn = b.node.parent.parent.parent;
-          return !b.node.dotDotDotToken && refsReadOnly(e.text, fn) && paramSitesPlain(fn, propOf(b.node));
+          return !b.node.dotDotDotToken && refsReadOnly(e.text, fn, b.node) && paramSitesPlain(fn, propOf(b.node));
         }
-        if (FIXED_VALUE_PROPS.has(propOf(b.node)) || !refsReadOnly(e.text, b.scope)) return false;
+        if (FIXED_VALUE_PROPS.has(propOf(b.node)) || !refsReadOnly(e.text, b.scope, b.node)) return false;
         return Boolean(b.decl.initializer) && recur(b.decl.initializer);
       }
-      return refsReadOnly(e.text, b.scope) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
+      return refsReadOnly(e.text, b.scope, b.decl) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
     }
     if (ts.isPropertyAccessExpression(e)) return !FIXED_VALUE_PROPS.has(e.name.text) && recur(e.expression);
     if (ts.isCallExpression(e)) {
@@ -1089,7 +1145,8 @@ function analyzeSourceFile(relPath, text) {
     return false;
   };
   // `T[undefined]` is `T["undefined"]`: a map with such an entry is HIT by an absent key, so a fallback never runs.
-  const hasAbsentKeyEntry = (obj) => Boolean(obj) && ["undefined", "null"].some((k) => mapEntries(obj, k).length > 0);
+  // An absent key coerces to "undefined"/"null"; `String([])` is "" and `String({})` is "[object Object]".
+  const hasAbsentKeyEntry = (obj) => Boolean(obj) && ["undefined", "null", "", "[object Object]"].some((k) => mapEntries(obj, k).length > 0);
   const lookupHasSafeFallback = (lookup) => {
     const p = lookup.parent;
     return p && ts.isBinaryExpression(p) && p.left === lookup &&
@@ -1850,6 +1907,106 @@ OK_R6.push(
 
 BUG_R6.push(["String shadowed, argument is a derived read", keyFx(`function String(x) { return x ?? "ok"; }`, "", "TONE[String(q.data?.s)] ?? TONE.default")]);
 OK_R6.push(["rows used only as a ternary condition", rowsWith("const c = rows ? 1 : 2;")]);
+
+// Round-7 review of #1370.
+const mapKeyFx = (pre, use, body = "") => keyFx(pre, body, use);
+const GET_MAP = (member) => `const G = { bad: "text-red-400", ${member}, default: "text-slate-400" };`;
+BUG_R6.push(
+  ["rows.sort().push(…): sort returns the receiver", rowsWith(`rows.sort().push("ok");`)],
+  ["rows.reverse().fill(…)", rowsWith(`rows.reverse().fill("ok");`)],
+  ["const t = rows.sort(); t.push(…)", rowsWith(`const t = rows.sort(); t.push("ok");`)],
+  ["rows.reverse()[0] = …", rowsWith(`rows.reverse()[0] = "ok";`)],
+  ["seed(rows.sort())", rowsWith(`seed(rows.sort());`)],
+  ["rows.sort().splice(…)", rowsWith(`rows.sort().splice(0, 0, "ok");`)],
+  ["rows[\"push\"](…): element-access call", rowsWith(`rows["push"]("ok");`)],
+  ["rows[m](…): computed method name", rowsWith(`const m = "push"; rows[m]("ok");`)],
+  ["(0, rows).push(…): comma operand", rowsWith(`(0, rows).push("ok");`)],
+  ["tagged template call: rows.push`ok`", rowsWith("rows.push`ok`;")],
+  ["callback third parameter aliases the container", rowsWith(`rows.forEach((x, i, arr) => { arr.push("ok"); });`)],
+  ["var redeclared with an initializer", keyFx("", `var s = q.data?.s; var s = "ok";`, "TONE[s] ?? TONE.default")],
+  ["var redeclared in a nested block", keyFx("", `var s = q.data?.s; { var s = "ok"; }`, "TONE[s] ?? TONE.default")],
+  ["function declaration redeclares the name", keyFx("", `var s = q.data?.s; function s() {}`, "TONE[s] ?? TONE.default")],
+  ["for (var s = …) redeclares", keyFx("", `var s = q.data?.s; for (var s = "ok"; ;) { break; }`, "TONE[s] ?? TONE.default")],
+  ["shadowing catch (s) is treated as a rebinding (fail-closed over-flag)", keyFx("", `let s = q.data?.s; try {} catch (s) { s = "ok"; }`, "TONE[s] ?? TONE.default")],
+  ["direct eval can write any binding", rowsWith(`eval("rows.push('ok')");`)],
+  ["direct eval on a scalar", keyFx("", `let s = q.data?.s; eval("s = 'ok'");`, "TONE[s] ?? TONE.default")],
+  ["shorthand map entry: T.ok", mapKeyFx(`const ok = "text-emerald-400"; const T = { ok, bad: "text-red-400" };`, "T.ok")],
+  ["shorthand map entry, dynamic key", mapKeyFx(`const ok = "text-emerald-400"; const T = { ok, bad: "text-red-400" };`, "T[q.data?.s]")],
+  ["method map entry: T.ok()", mapKeyFx(`const T = { ok() { return "text-emerald-400"; } };`, "T.ok()")],
+  ["getter map entry: T.ok", mapKeyFx(`const T = { get ok() { return "text-emerald-400"; } };`, "T.ok")],
+  ["computed-key map entry with an unreadable key", mapKeyFx(`const T = { [keyFn()]: "text-emerald-400" };`, "T.ok")],
+  ["getter fallback entry is good-state", mapKeyFx(GET_MAP(`get default() { return "text-emerald-400"; }`).replace(', default: "text-slate-400"', ""), "G[q.data?.s] ?? G.default")],
+  ["getter named undefined", mapKeyFx(`const U = { get undefined() { return "text-emerald-400"; }, default: "text-slate-400" };`, "U[q.data?.s] ?? U.default")],
+  ["computed `[\"undefined\"]` entry", mapKeyFx(`const U = { ["undefined"]: "text-emerald-400", default: "text-slate-400" };`, "U[q.data?.s] ?? U.default")],
+  ["map entry \"\" is hit by String([])", mapKeyFx(`const E2 = { "": "text-emerald-400", default: "text-slate-400" };`, "E2[rows] ?? E2.default", ROWS)],
+  ["map entry \"[object Object]\" is hit by String({})", mapKeyFx(`const E3 = { "[object Object]": "text-emerald-400", default: "text-slate-400" };`, "E3[d] ?? E3.default", `const d = q.data ?? {};`)],
+  ["Array shadowed: key rule", mapKeyFx(`const Array = { from: () => "ok" };`, "TONE[Array.from(q.data?.s)] ?? TONE.default")],
+  ["Array shadowed: read-only whitelist", rowsWith(`const Array = { from: (x) => x }; Array.from(rows).push("ok");`)],
+  ["s-- decrements the binding", keyFx("", `let s = q.data?.s; s--;`, "TONE[s] ?? TONE.default")],
+  ["parenthesised target: (d.s) = …", dObj(`(d.s) = "ok";`)],
+  ["non-null target: d.s! = …", dObj(`d.s! = "ok";`)],
+  ["literal array filtered: ['ok'].filter(…)", keyFx("", "", "", "", `<>{["ok"].filter(() => true).map((r) => <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>)}</>`)],
+  ["literal array sliced as a key", keyFx("", "", "TONE[[\"ok\"].slice(0)] ?? TONE.default")],
+  ["literal string .toLowerCase() as a key", keyFx("", "", "TONE[\"ok\".toLowerCase()] ?? TONE.default")],
+  ["literal string .trim() as a key", keyFx("", "", "TONE[\"ok\".trim()] ?? TONE.default")],
+  ["Array.from over a literal array", keyFx("", "", "", "", `<>{Array.from(["ok"]).map((r) => <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>)}</>`)],
+  ["nested array destructuring assignment [[s]] = …", keyFx("", `let s = q.data?.s; [[s]] = [["ok"]];`, "TONE[s] ?? TONE.default")],
+  ["for ([d.s] of …) assignment target", dObj(`for ([d.s] of [["ok"]]) {}`)],
+  ["[d.s] = … assignment target", dObj(`[d.s] = ["ok"];`)],
+);
+OK_R6.push(
+  ["rows.sort() / reverse() whose results are not used to write", rowsWith(`rows.sort(); rows.reverse(); const top = rows.sort((a, b) => 0);`)],
+  ["callback with two parameters", rowsWith(`rows.forEach((x, i) => { track(x, i); });`)],
+  ["comma operand evaluated and discarded", rowsWith(`const c = (rows, 1);`)],
+  ["element-access read: rows[\"x\"]", rowsWith(`const first = rows["x"];`)],
+  ["a map with a readable shorthand entry that is not good-state", mapKeyFx(`const calm = "text-slate-400"; const T = { calm, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+);
+
+// Round-7 follow-up: survivors of the AST-generated mutants that change the safety direction.
+BUG_R6.push(
+  ["(rows as any).push(…): a type assertion is unwrapped", rowsWith(`(rows as any).push("ok");`)],
+  ["(rows satisfies any[]).push(…)", rowsWith(`(rows satisfies any[]).push("ok");`)],
+  ["rows[\"push\"]`ok`: tagged element access", rowsWith("rows[\"push\"]`ok`;")],
+  ["value flows through &&: a = ok && rows", rowsWith(`const a = ok && rows; a.push("ok");`)],
+  ["value flows through ??: a = rows ?? other", rowsWith(`const a = rows ?? other; a.push("ok");`)],
+  ["prefix decrement: --s", keyFx("", `let s = q.data?.s; --s;`, "TONE[s] ?? TONE.default")],
+  ["prefix increment: ++s", keyFx("", `let s = q.data?.s; ++s;`, "TONE[s] ?? TONE.default")],
+  ["nested assignment pattern: ({ a: { b: d.s } } = …)", dObj(`({ a: { b: d.s } } = { a: { b: "ok" } });`)],
+  ["array of object assignment pattern: [{ x: d.s }] = …", dObj(`[{ x: d.s }] = [{ x: "ok" }];`)],
+  ["object rest target: ({ ...d.s } = …)", dObj(`({ ...d.s } = { z: 1 });`)],
+  ["array rest target: [...d.s] = …", dObj(`[...d.s] = ["ok"];`)],
+  ["for (d.s of …) with a property target", dObj(`for (d.s of ["ok"]) {}`)],
+  ["for (d.s in …) with a property target", dObj(`for (d.s in { ok: 1 }) {}`)],
+);
+OK_R6.push(
+  ["map() returns a NEW array: pushing to it is not a write to rows", rowsWith(`rows.map((x) => x).push("ok");`)],
+  ["a derived rows[0] passed to a function", rowsWith(`track(rows[0]);`)],
+  ["rows on the right of `in` / instanceof", rowsWith(`const has = "a" in rows; const isArr = rows instanceof Array;`)],
+  ["a derived value assigned to a variable", keyFx("", `let v; v = q.data?.s;`, "TONE[q.data?.s] ?? TONE.default")],
+  ["a condition result handed to a function", rowsWith(`track(rows ? 1 : 2);`)],
+  ["!rows", rowsWith(`const empty = !rows;`)],
+  ["for…of / for…in over rows", rowsWith(`for (const x of rows) { track(x); } for (const k in rows) { track(k); }`)],
+);
+
+// Round-7 follow-up 2: more safety-direction survivors of the generated mutants.
+BUG_R6.push(
+  ["key is an unbound identifier", keyFx("", "", "TONE[globalKey] ?? TONE.default")],
+  ["destructured from a non-plain source: const { k } = seed()", keyFx("", `const { k } = seed();`, "TONE[k] ?? TONE.default")],
+  ["helper called with a derived argument: keyOf(q.data?.s)", keyFx(`function keyOf(x) { return x ?? "ok"; }`, "", "TONE[keyOf(q.data?.s)] ?? TONE.default")],
+  ["another receiver's .from(…): Foo.from(q.data?.s)", keyFx("", "", "TONE[Foo.from(q.data?.s)] ?? TONE.default")],
+  ["Array.of(…) is not Array.from(…)", keyFx("", "", "TONE[Array.of(q.data?.s)] ?? TONE.default")],
+  ["array-pattern key with a hole: const [, k] = …", keyFx("", `const [, k] = q.data?.keys ?? [];`, "TONE[k] ?? TONE.default")],
+  ["nested map reached by a string-literal key: T[\"a\"][status]", mapKeyFx(`const T = { a: { ok: "text-emerald-400" }, d: "text-slate-400" };`, `T["a"][q.data?.s]`)],
+  ["exported const component: sites in other files are unseen", keyFx("", "", "", `export const C = ({ s, n }) => <b className={TONE[s] ?? TONE.default}>{n}</b>;`, PLAIN_SITE)],
+  ["map entry through a resolvable computed key", mapKeyFx(`const K = "ok"; const T = { [K]: "text-emerald-400" };`, "T.ok")],
+);
+OK_R6.push(
+  ["Array.from(rows) is a read", rowsWith(`const copy = Array.from(rows);`)],
+  ["row receiver defaulted with ||: (q.data?.rows || [])", keyFx("", "", "", "", `<>{(q.data?.rows || []).map((r) => <li className={TONE[r] ?? TONE.default}>{q.data?.n}</li>)}</>`)],
+  ["destructured alias of rows only read: const { length } = rows", rowsWith(`const { length } = rows; track(length);`)],
+  ["computed key that does not name the entry", mapKeyFx(`const K = "bad"; const T = { [K]: "text-emerald-400" };`, "T.ok")],
+  ["arrow-const component with a plain site", keyFx("", "", "", `const C = ({ s, n }) => <b className={TONE[s] ?? TONE.default}>{n}</b>;`, PLAIN_SITE)],
+);
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {

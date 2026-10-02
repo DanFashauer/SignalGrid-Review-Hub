@@ -2432,14 +2432,20 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       and the like all escape); a literal, `??`/ternary default, helper or `useMemo` result,
       destructuring or parameter default, `.length`/`.size` read, rest element, a prop any visible call
       site defaults or spreads, a component referenced other than as a JSX tag (alias, direct call,
-      `createElement`, `cloneElement`, `memo`, `export`), a defaulted/augmented row array, or a map with
-      an `undefined`/`null` entry earns no exemption. Self-test pairs bug shapes with guarded
-      twins; live tree still 0 findings; each clause of the key rule was mutation-tested by cp-aside
-      (disable it, the self-test fails). Still not followed: a child component, helper or class map
+      `createElement`, `cloneElement`, `memo`, `export`), a defaulted/augmented row array, a `var`/function
+      redeclaration or shadowing parameter of the name, a direct `eval` in scope, `sort()`/`reverse()`
+      results written through, or a map with an `undefined`/`null`/`""`/`"[object Object]"` entry (an
+      absent key HITS it) earns no exemption. Self-test pairs bug shapes with guarded
+      twins; live tree still 0 findings. Mutation testing: 867 AST-generated mutants over the analyzer
+      helpers (every `&&`/`||` operand, negation, `if` condition, ternary arm, boolean return and
+      comparison), 651 killed by `--self-test`, 216 survive — dropped `ts.is*` type guards, null/cache
+      guards, unreachable branches and provenance-plumbing bookkeeping; the safety-direction survivors
+      found were each given a fixture. Not claimed exhaustive. Still not followed: a child component, helper or class map
       imported from another file (no module resolver); a callback parameter over query rows as DATA
       (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
       a component reached only through a wrapper (`withX(C)`); query data mutated in place through
-      another path; `initialData`/`placeholderData`; `defaultProps`. Known over-flags: `T[s ?? "bad"]
+      another path; `initialData`/`placeholderData`; `defaultProps`; global state (`Object.prototype`, `Proxy`/`new Map`
+      class maps). Known over-flags: `T[s ?? "bad"]
       ?? T.d`, `.flatMap((x) => [x])`, `rows[0]`/`.length`/`.size` keys. Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**

@@ -216,5 +216,5 @@ block; a stage run on the wrong tier is a lesson here.
 - **lane:** cloud
 - **incident:** The 19 DR-050 gate-falsification reproductions (L22) kept failing `loop:state`'s "Local work not on the Review Hub" seam, and the Stop hook runs `loop:state`, so every cloud-brain turn was blocked. Pushing them would publish deliberately broken gates and deletion is denied by the session guards.
 - **evidence:** `scripts/loop-state.mjs` (`validateScratchDeclaration`, `classifyScratch`, `newerCommitCount`), `docs/agent/local-scratch-branches.json`; owner direction 2026-10-02.
-- **landing:** `loop-state.mjs --self-test` (already in preflight and CI) now fails if a declared branch is not excluded, an undeclared one is, a declaration missing a field or using a wildcard validates, or a declared branch with a commit newer than its `declaredAt` stays excluded. An invalid file fails the seam and excludes nothing.
+- **landing:** `scripts/loop-state.mjs --self-test` (already in preflight and CI) now fails if a declared branch is not excluded, an undeclared one is, a declaration missing a field or using a wildcard validates, or a declared branch with a commit newer than its `declaredAt` stays excluded. An invalid file fails the seam and excludes nothing.
 - **status:** landed

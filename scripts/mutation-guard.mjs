@@ -1578,7 +1578,13 @@ function killGroup(child) {
 // original, naming the entry; `--restore-stale` applies it.
 
 export function journalDir(root = repoRoot) {
-  return join(tmpdir(), `signalgrid-mutation-journal-${createHash("sha1").update(root).digest("hex").slice(0, 12)}`);
+  const base = resolve(tmpdir());
+  // A journal inside the tree is an untracked file in the tree — it would stamp every sim
+  // result as minted from a dirty tree, and a SIGKILL would leave it beside the mutated file.
+  if (base === resolve(root) || base.startsWith(resolve(root) + "/")) {
+    throw new Error(`the OS temp dir ${base} is inside the repo root — the mutation journal must live outside the tree; set TMPDIR elsewhere`);
+  }
+  return join(base, `signalgrid-mutation-journal-${createHash("sha1").update(root).digest("hex").slice(0, 12)}`);
 }
 
 // The journal dir sits at a predictable path in a SHARED temp dir, and restore writes whatever
@@ -1627,7 +1633,7 @@ export function journalRestore(dir, pid, root = repoRoot) {
 }
 
 /** Journals left by a sweep that is no longer running, with the entries whose file differs. */
-export function journalStale(dir, root = repoRoot, isAlive = pidAlive) {
+export function journalStale(dir, root = repoRoot, isAlive = sweepAlive) {
   if (!existsSync(dir)) return [];
   journalAssertSafeDir(dir);
   const out = [];
@@ -1650,6 +1656,26 @@ export function journalStale(dir, root = repoRoot, isAlive = pidAlive) {
 
 function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (err) { return err?.code === "EPERM"; }
+}
+
+/**
+ * Is `pid` a LIVE mutation sweep? Liveness of the bare pid is not enough: a pid is reused (in a
+ * container the sweep is routinely pid 1), so a dead sweep's journal would read "alive" and be
+ * skipped — or, when the new sweep got the same pid, overwritten and deleted with the mutated
+ * file left in the tree. Our own pid never counts; and where the process can be inspected it
+ * must actually be a mutation-guard. Where it cannot (no /proc), say "not a live sweep":
+ * fail closed — the journal is then treated as stale and refused, never silently skipped.
+ */
+export function sweepAlive(pid) {
+  if (pid === process.pid || !pidAlive(pid)) return false;
+  try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").includes("mutation-guard"); } catch { return false; }
+}
+
+/** Journals owned by a sweep that is running right now (two sweeps must not share the tree). */
+export function journalLive(dir, isAlive = sweepAlive) {
+  if (!existsSync(dir)) return [];
+  journalAssertSafeDir(dir);
+  return readdirSync(dir).filter((n) => /^\d+\.json$/.test(n)).map((n) => Number.parseInt(n, 10)).filter((pid) => isAlive(pid));
 }
 
 /**
@@ -1817,19 +1843,38 @@ async function main() {
     console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
     process.exit(1);
   }
-  const jDir = journalDir();
+  let jDir;
+  let stale;
   // Stale journals FIRST, before any other work: a registered file left mutated by a killed
   // sweep must be named, never swept over (its baseline would read "killed" UNMUTATED).
-  let stale;
   try {
+    jDir = journalDir();
+    const live = journalLive(jDir);
+    if (live.length > 0) {
+      console.error(`Mutation guard REFUSES to start: another mutation sweep is running (pid ${live.join(", ")}). Two sweeps share one working tree; wait for it or stop it.`);
+      process.exit(1);
+    }
     stale = journalStale(jDir);
   } catch (err) {
     console.error(`Mutation guard REFUSES to start: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
+  // A stale journal whose files all still match their originals explains nothing and blocks
+  // nothing: clear it and say so.
+  for (const j of stale.filter((x) => !x.unreadable && x.differing.length === 0)) {
+    journalClear(jDir, j.pid);
+    console.log(`cleared stale journal ${j.journal} (pid ${j.pid}) — every file already matches its original.`);
+  }
+  stale = stale.filter((x) => x.unreadable || x.differing.length > 0);
   if (stale.length > 0) {
     if (process.argv.includes("--restore-stale")) {
       for (const j of stale) {
+        if (j.unreadable) {
+          // Nothing restorable and nothing to write: an unreadable or root-escaping journal is only discarded.
+          journalClear(jDir, j.pid);
+          console.log(`discarded unreadable or root-escaping journal ${j.journal} (pid ${j.pid}) — nothing was restored from it; check \`git status\`.`);
+          continue;
+        }
         try {
           const restored = journalRestore(jDir, j.pid);
           console.log(`restored ${restored.length} file(s) from stale journal ${j.journal}: ${restored.join(", ") || "(already clean)"}`);
@@ -1838,14 +1883,15 @@ async function main() {
           process.exit(1);
         }
       }
+      console.log("Stale journal(s) handled. Re-run the sweep.");
+      process.exit(0);
     } else {
       console.error("Mutation guard REFUSES to start: a previous sweep died without restoring its source files.");
       for (const j of stale) {
-        if (j.unreadable) console.error(`  journal ${j.journal} is unreadable — cannot say which file it covers.`);
+        if (j.unreadable) console.error(`  journal ${j.journal} is unreadable or names a path outside the repo — cannot say which file it covers.`);
         for (const f of j.differing) console.error(`  ${f} differs from the original recorded in journal ${j.journal} (pid ${j.pid}) — that entry explains it.`);
-        if (!j.unreadable && j.differing.length === 0) console.error(`  journal ${j.journal} (pid ${j.pid}) is stale but every file already matches its original.`);
       }
-      console.error("Review `git diff`, then run `node scripts/mutation-guard.mjs --restore-stale` to write the journalled originals back (or delete the journal if the files are intended).");
+      console.error("Review `git diff`, then run `node scripts/mutation-guard.mjs --restore-stale` to write the journalled originals back (an unreadable journal is only discarded).");
       process.exit(1);
     }
   }
@@ -1924,14 +1970,19 @@ async function main() {
   // Restore on any exit path a handler can run on. Registered AFTER the stale-journal check
   // (never restore over another sweep's journal) and only once the sweep proper starts.
   const myPid = process.pid;
-  const restoreAll = () => { try { journalRestore(jDir, myPid); } catch { /* best effort at exit */ } };
-  process.on("exit", restoreAll);
+  // Returns the error if the restore FAILED — a failed restore must never be reported as one.
+  const restoreAll = () => { try { journalRestore(jDir, myPid); return null; } catch (err) { return err; } };
+  const restoreFailed = (err) => `RESTORE FAILED (${err instanceof Error ? err.message : String(err)}) — a registered source file may still be MUTATED: check \`git status\`, then run \`node scripts/mutation-guard.mjs --restore-stale\``;
+  process.on("exit", () => {
+    const err = restoreAll();
+    if (err) { console.error(`\nMutation guard: ${restoreFailed(err)}`); process.exitCode = 1; }
+  });
   for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
     process.on(sig, () => {
       if (activeChild) killGroup(activeChild); // the proof must not outlive the restore
-      restoreAll();
-      console.error(`\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
-      process.exit(code);
+      const err = restoreAll();
+      console.error(err ? `\nMutation guard interrupted by ${sig} — ${restoreFailed(err)}` : `\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
+      process.exit(err ? 1 : code);
     });
   }
 

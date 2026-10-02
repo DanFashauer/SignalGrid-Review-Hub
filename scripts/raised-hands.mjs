@@ -49,10 +49,23 @@
 // OWN integrity (an unreadable hand, a route naming a missing agent or skill, a sim
 // gate that printed nothing) still exits 1. Local preflight runs without --warn.
 //
+// STALLS ARE MEASURED AT ORIGIN'S TIP (DR-054, B54b). The heartbeat, mailbox, sim-request and
+// objective files are read from a throwaway checkout of origin/SignalGrid_Alpha, never from the
+// branch tree: a branch 239 commits behind mainline carries 14h-old heartbeat files, and a worker
+// on it raised a false "mac-lane-tick silent 14.4h" hand. The output says which source it read.
+// When that ref does not exist the run FAILS CLOSED (exit 1): an unknown stall state never reads
+// as "no stall". CI fetches the ref before this runs.
+//
+// A STALE HAND IS A FAILURE. A hand that `covers` an auto-stall (mail:/sim:/heartbeat:/…) that is
+// no longer measured as stuck fails --check with the exact `hand:clear` command, instead of
+// merging silently and staying open until someone clears it by hand. A hand that covers no auto
+// stall (an owner-only decision) is exempt, and the output says so.
+//
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -216,7 +229,7 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
 }
 
 /** The whole picture: open raised hands (with OVERDUE) + auto hands (with covered/uncovered). */
-export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ kind: "gap" })) {
+export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ kind: "gap" }), measured = AUTO_KINDS) {
   const open = records.filter((h) => !h.__unreadable && h.status !== "resolved").map((h) => {
     const ageH = age(h.raisedAt, nowMs);
     const { group, label } = groupOf(h, route(h));
@@ -226,6 +239,7 @@ export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ ki
   const auto = autos.map((a) => ({ ...a, covered: covered.has(a.id), hard: a.ageH > a.softH * HARD_MULTIPLE }));
   const fatal = auto.filter((a) => a.hard && !a.covered).map((a) => `${a.id}: ${a.what} — ${fmtAge(a.ageH)}, past the ${a.softH * HARD_MULTIPLE}h limit and NO hand raised. Act, or: pnpm run hand:raise -- --who ${a.clears === "owner" ? "owner" : `"${a.clears} lane"`} --covers ${a.id} --doing "…" --blocked "…" --need "…"`);
   const staleCovers = [...covered].filter((c) => !autos.some((a) => a.id === c)).map((c) => `a hand covers ${c}, which is no longer stuck — clear that hand`);
+  const stale = staleHands(open, autos, measured);
   // THE MONITOR ON HAND-RAISING ITSELF (owner, 2026-09-23: "build something that
   // monitors the raise your hand function"). Two numbers: how much stuck work the
   // system had to find because no agent said so, and how many lane hands nobody
@@ -235,7 +249,39 @@ export function evaluate(records, autos, nowMs = Date.now(), route = () => ({ ki
     agentRaised: open.length,
     untaken: open.filter((h) => h.group !== "owner" && !h.takenBy && h.ageH > UNTAKEN_LIMIT_H).map((h) => h.id),
   };
-  return { open, auto, fatal, staleCovers, health };
+  return { open, auto, fatal, staleCovers, stale, health };
+}
+
+/** Pure: split the open hands by what their `covers` point at. A cover whose auto-stall kind was
+ *  MEASURED this run and is no longer stuck makes the hand stale (fatal); a kind this run could not
+ *  measure (PR checks without --github, an unwitnessed objective state) is reported, never failed;
+ *  a hand covering nothing auto is an owner-only decision and exempt. */
+export function staleHands(open, autos, measured = AUTO_KINDS) {
+  const fatal = [], unmeasured = [], exempt = [];
+  for (const h of open) {
+    const auto = (h.covers ?? []).filter((c) => AUTO_KINDS.includes(String(c).split(":")[0]));
+    if (auto.length === 0) { exempt.push(h.id); continue; }
+    for (const c of auto) {
+      if (autos.some((a) => a.id === c)) continue;
+      if (!measured.includes(c.split(":")[0])) { unmeasured.push(`${h.id} covers ${c} (kind not measured on this run)`); continue; }
+      fatal.push(`hand ${h.id} covers ${c}, whose stall is no longer measured — the hand is stale. Clear it: pnpm run hand:clear -- ${h.id} "<what unblocked it>"`);
+    }
+  }
+  return { fatal, unmeasured, exempt };
+}
+
+// ── the tip: stalls are measured from origin/SignalGrid_Alpha, not the branch tree ──────────
+export const TIP_REF = "origin/SignalGrid_Alpha";
+export class TipMissing extends Error {}
+const git = (cwd, args) => spawnSync("git", args, { cwd, encoding: "utf8" });
+/** A throwaway detached checkout of the tip. Throws TipMissing (fail closed) when the ref is absent. */
+export function openTip(cwd = repo, ref = TIP_REF) {
+  const sha = git(cwd, ["rev-parse", "--verify", "-q", `${ref}^{commit}`]);
+  if (sha.status !== 0) throw new TipMissing(`${ref} does not exist in this checkout — stalls cannot be measured, and an unknown stall state never reads as "no stall". Fetch it: git fetch origin SignalGrid_Alpha`);
+  const root = mkdtempSync(join(tmpdir(), "raised-hands-tip-"));
+  const wt = git(cwd, ["worktree", "add", "--detach", "--force", root, ref]);
+  if (wt.status !== 0) { rmSync(root, { recursive: true, force: true }); throw new TipMissing(`could not check out ${ref}: ${wt.stderr.trim()}`); }
+  return { root, sha: sha.stdout.trim(), ref, close() { git(cwd, ["worktree", "remove", "--force", root]); rmSync(root, { recursive: true, force: true }); git(cwd, ["worktree", "prune"]); } };
 }
 
 /** Pure: the --check verdict. `problems` are integrity (always fatal); `stalls` are
@@ -274,13 +320,14 @@ export function render({ open, auto }, { markdown = false, prsChecked = false } 
 }
 
 // ── loaders (the real tree) ──────────────────────────────────────────────────
-async function loadInputs({ github = false } = {}) {
+async function loadInputs({ github = false, root = repo } = {}) {
+  process.env.SIGNALGRID_LANE_REPO = root; // lane-message.mjs reads the mailbox from here, at import
   const { loadMessages, loadAcks } = await import(pathToFileURL(join(repo, "scripts/lane-message.mjs")).href);
   const { load: loadRoutines } = await import(pathToFileURL(join(repo, "scripts/check-scheduled-routines.mjs")).href);
-  const { registry, heartbeats } = loadRoutines(repo);
+  const { registry, heartbeats } = loadRoutines(root);
   // Sim pending is read from the gate's own output so "pending" means exactly what
   // the sim-request gate says it means — one definition, not two.
-  const sim = spawnSync("node", [join(repo, "scripts/check-sim-requests.mjs")], { cwd: repo, encoding: "utf8" });
+  const sim = spawnSync("node", [join(root, "scripts/check-sim-requests.mjs")], { cwd: root, encoding: "utf8" });
   const simPending = [];
   // A sim gate that printed nothing is not a sim loop with nothing pending: say so,
   // aged as unknown (never fresh), so the stuck list cannot go quiet by crashing.
@@ -298,7 +345,7 @@ async function loadInputs({ github = false } = {}) {
   // malformed is NOT a stall here — `objective-loop.mjs --check` (preflight + CI) owns that.
   let objective = null;
   try {
-    const state = JSON.parse(readFileSync(join(repo, "docs/agent/objective-state.json"), "utf8"));
+    const state = JSON.parse(readFileSync(join(root, "docs/agent/objective-state.json"), "utf8"));
     const { readVerdict } = await import(pathToFileURL(join(repo, "scripts/objective-loop.mjs")).href);
     const hbRaw = heartbeats["artifacts/agent-heartbeats/mac-lane-tick.json"];
     let heartbeat = null;
@@ -368,7 +415,7 @@ async function loadPrs(api) {
 }
 
 // ── self-test ────────────────────────────────────────────────────────────────
-function selfTest() {
+async function selfTest() {
   const T = Date.parse("2026-09-23T12:00:00Z");
   const ago = (h) => new Date(T - h * H).toISOString();
   const checks = [];
@@ -497,6 +544,47 @@ function selfTest() {
   // routing: the new kinds are REQUIRED, so a detector cannot ship without an answerer
   for (const k of ["objective-owner", "mac-lane-red"]) checks.push([`${k} is a REQUIRED route — a routing table without it is fatal`, REQUIRED_ROUTES.includes(k) && auditRouting({ routes: Object.fromEntries(REQUIRED_ROUTES.filter((r) => r !== k).map((r) => [r, { responder: { owner: true }, action: "a" }])) }, allExist).some((p) => p.includes(`"${k}"`))]);
 
+  // (b) a stale hand: covers an auto-stall that is no longer measured -> fatal, with the clear command
+  const openOf = (hs, autos) => evaluate(hs, autos, T, route);
+  e = openOf([hand({ covers: ["mail:gone"] })], []);
+  checks.push(["a hand covering a stall that no longer exists is FATAL, with the exact clear command", e.stale.fatal.length === 1 && e.stale.fatal[0].includes('pnpm run hand:clear -- h1 "<what unblocked it>"') && checkOutcome([], [], {}).code === 0 && checkOutcome(e.stale.fatal, []).code === 1]);
+  e = openOf([hand({ whoCanUnblock: "mac lane", covers: ["mail:m1"] })], autoHands({ messages: [msg(80)] }, T));
+  checks.push(["…a hand covering a LIVE stall is not stale", e.stale.fatal.length === 0]);
+  e = openOf([hand()], []);
+  checks.push(["…an owner-decision hand (covers nothing auto) is exempt, and listed as exempt", e.stale.fatal.length === 0 && e.stale.exempt.join() === "h1"]);
+  e = openOf([hand({ covers: ["decision:x"] })], []);
+  checks.push(["…a cover whose kind is not an auto-stall kind is exempt too", e.stale.fatal.length === 0 && e.stale.exempt.length === 1]);
+  e = evaluate([hand({ covers: ["pr-red:9"] })], [], T, route, ["mail", "sim", "heartbeat"]);
+  checks.push(["…a cover of a kind this run did not measure (PRs without --github) is reported, never failed", e.stale.fatal.length === 0 && e.stale.unmeasured.length === 1]);
+  e = openOf([hand({ status: "resolved", resolvedAt: ago(0), resolution: "r", covers: ["mail:gone"] })], []);
+  checks.push(["…a RESOLVED hand is not stale (it is already cleared)", e.stale.fatal.length === 0]);
+
+  // (c) stalls are measured at the tip, not the branch tree
+  const plant = async (workHb, tipHb) => {
+    const dir = mkdtempSync(join(tmpdir(), "rh-plant-"));
+    const hbPath = "artifacts/agent-heartbeats/x.json";
+    const g = (...a) => { const r = git(dir, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r; };
+    try {
+      g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+      mkdirSync(join(dir, "docs/agent"), { recursive: true }); mkdirSync(join(dir, "artifacts/agent-heartbeats"), { recursive: true });
+      writeFileSync(join(dir, "docs/agent/scheduled-routines.json"), JSON.stringify({ routines: [{ id: "x-tick", status: "active", heartbeatPath: hbPath, cadenceToleranceHours: 3 }] }));
+      writeFileSync(join(dir, hbPath), JSON.stringify({ firedAt: tipHb }));
+      g("add", "-A"); g("commit", "-qm", "tip"); g("update-ref", "refs/remotes/origin/SignalGrid_Alpha", "HEAD");
+      writeFileSync(join(dir, hbPath), JSON.stringify({ firedAt: workHb })); // the branch tree's copy, uncommitted
+      const tip = openTip(dir);
+      try {
+        const { load } = await import(pathToFileURL(join(repo, "scripts/check-scheduled-routines.mjs")).href);
+        const { registry, heartbeats } = load(tip.root);
+        return autoHands({ routines: registry.routines, heartbeats }, T).length;
+      } finally { tip.close(); }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+  checks.push(["a STALE heartbeat in the branch tree with a FRESH one at the tip raises NO hand", (await plant(ago(20), ago(1))) === 0]);
+  checks.push(["…the inverse (fresh in the branch tree, stale at the tip) raises a hand", (await plant(ago(1), ago(20))) === 1]);
+  const bare = mkdtempSync(join(tmpdir(), "rh-bare-"));
+  try { git(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
+  finally { rmSync(bare, { recursive: true, force: true }); }
+
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -506,7 +594,7 @@ function selfTest() {
 // ── main ─────────────────────────────────────────────────────────────────────
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const argv = process.argv.slice(2);
-  if (argv.includes("--self-test")) process.exit(selfTest());
+  if (argv.includes("--self-test")) process.exit(await selfTest());
   const records = loadLedger();
   const exists = (kind, name) => existsSync(join(repo, kind === "agent" ? `.claude/agents/${name}.md` : `.claude/skills/${name}/SKILL.md`));
   const routingPath = join(repo, ROUTING_FILE);
@@ -520,7 +608,19 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { routeHand } = await import(pathToFileURL(join(repo, "scripts/check-raised-hands.mjs")).href);
   let roleIds = new Set();
   try { const r = JSON.parse(readFileSync(join(repo, "docs/agent/org-roster.json"), "utf8")); roleIds = new Set((Array.isArray(r) ? r : r.roles ?? []).map((x) => x.id)); } catch { /* an unreadable roster routes every domain hand to GAP — loud, never quiet */ }
-  const view = evaluate(records, autoHands(await loadInputs({ github })), Date.now(), (h) => routeHand(h, roleIds));
+  let tip;
+  try { tip = openTip(); } catch (e) {
+    if (!(e instanceof TipMissing)) throw e;
+    console.error(`Raised hands FAILED CLOSED: ${e.message}`);
+    process.exit(1);
+  }
+  let inputs;
+  try { inputs = await loadInputs({ github, root: tip.root }); } finally { tip.close(); }
+  const measuredKinds = [...AUTO_KINDS.filter((k) => !["pr-red", "pr-idle", "mac-lane-red", "executor-gap", "objective-owner"].includes(k)),
+    ...(github ? ["pr-red", "pr-idle", "mac-lane-red"] : []), ...(inputs.objective?.witnessed ? ["executor-gap", "objective-owner"] : [])];
+  const view = evaluate(records, autoHands(inputs), Date.now(), (h) => routeHand(h, roleIds), measuredKinds);
+  const staleProblems = view.stale.fatal;
+  if (!argv.includes("--markdown")) console.log(`Stalls measured at ${tip.ref} @ ${tip.sha.slice(0, 8)} (the mainline tip; this branch's own tree is not read for stalls)\n`);
   if (argv.includes("--markdown")) {
     console.log(render(view, { markdown: true, prsChecked: github }));
     const ids = [...view.open.map((h) => h.id), ...view.auto.filter((a) => !a.covered).map((a) => a.id)].sort();
@@ -529,8 +629,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   }
   console.log(render(view, { prsChecked: github }));
   for (const s of view.staleCovers) console.log(`  · REPORTED: ${s}`);
+  for (const u of view.stale.unmeasured) console.log(`  · NOT CHECKED: ${u}`);
+  if (view.stale.exempt.length) console.log(`  · EXEMPT from the stale-hand rule (cover no auto-stall — owner-only decisions, not measurable): ${view.stale.exempt.join(", ")}`);
   if (argv.includes("--check")) {
-    const { code, fatal, warned } = checkOutcome(problems, view.fatal, { warn: argv.includes("--warn") });
+    const { code, fatal, warned } = checkOutcome([...problems, ...staleProblems], view.fatal, { warn: argv.includes("--warn") });
     for (const w of warned) console.log(`  WARN (would fail locally): ${w}`);
     if (code !== 0) {
       console.error(`\nRaised hands check FAILED: ${fatal.length} problem(s).`);

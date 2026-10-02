@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // check-raised-hands — the MONITOR for DR-054's "raise your hand" function.
 //
-//   node scripts/check-raised-hands.mjs             human report (open raised hands, routed owners, gaps)
+//   node scripts/check-raised-hands.mjs             VALIDATES every hand against the schema (exit 1 naming file + field), then the human report
 //   node scripts/check-raised-hands.mjs --json      machine-readable (loop:state + the mac tick read this)
 //   node scripts/check-raised-hands.mjs --self-test prove the routing + gap detection can fail
 //
@@ -25,9 +25,12 @@
 //      The blocker-dispatcher agent (.claude/agents/blocker-dispatcher.md) then routes it
 //      or specs the new agent/skill to create. A gap is reported the loudest.
 //
-// REPORT, not a build gate: it exits 0 on any state (an open blocker is not a code defect
-// that should block a push). loop:state and the mac tick fold its output in so a raised
-// hand is never lost, and its --self-test IS a preflight/CI gate (the routing must work).
+// An open blocker is NOT a build failure, but a MALFORMED hand is: the bare run validates
+// every hand's shape (validateHand) and exits 1 naming the file and the field, and that run is
+// a preflight/CI gate. Before this, a hand with a bogus whoCanUnblock, no need, status
+// "maybe" or an id that disagreed with its filename exited 0 and was routed to a GAP or
+// dropped. --json / --tick-summary stay report-only (loop:state and the mac tick fold them
+// in so a raised hand is never lost); --self-test is a gate too (the routing must work).
 
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -95,6 +98,37 @@ export function routeHand(hand, roleIds) {
   return { owner: null, kind: "gap", reason: `domain "${domain || "(none)"}" matches no role and no explicit unblocker` };
 }
 
+export const HAND_STATUSES = ["open", "resolved"];
+export const HAND_REQUIRED = ["id", "raisedAt", "doing", "blockedBy", "need", "whoCanUnblock", "status"];
+const LANE_WHO = /^(mac lane|cloud lane)(\b|$)/;
+
+/** Is `who` a place a hand can legally be routed? owner, a lane, or an org-roster role
+ *  (a role id may be followed by prose: "security-engineer (the fix) with …"). */
+export function whoIsValid(who, roleIds) {
+  const w = String(who ?? "").trim().toLowerCase();
+  if (!w) return false;
+  if (/^(owner|dan)(\b|$)/.test(w) || LANE_WHO.test(w)) return true;
+  return roleIds.has(w.split(/[\s(,;]/)[0]);
+}
+
+/** Schema problems of ONE hand, each naming file and field. Pure: roles injected. */
+export function validateHand(h, roleIds) {
+  const file = h.__file ?? "(unknown file)";
+  if (h.__unreadable) return [`${file}: does not parse (${h.__unreadable})`];
+  const out = [];
+  for (const f of HAND_REQUIRED) if (typeof h[f] !== "string" || !h[f].trim()) out.push(`${file}: field "${f}" is missing or empty`);
+  if (typeof h.status === "string" && h.status.trim() && !HAND_STATUSES.includes(h.status)) out.push(`${file}: field "status" is "${h.status}", must be one of ${HAND_STATUSES.join(" | ")}`);
+  if (typeof h.id === "string" && h.id.trim() && `${h.id}.json` !== file) out.push(`${file}: field "id" is "${h.id}", must equal the filename stem "${file.replace(/\.json$/, "")}"`);
+  if (typeof h.whoCanUnblock === "string" && h.whoCanUnblock.trim() && h.status !== "resolved" && !whoIsValid(h.whoCanUnblock, roleIds)) {
+    out.push(`${file}: field "whoCanUnblock" is "${h.whoCanUnblock}", must be an org-roster role, owner, "mac lane" or "cloud lane"`);
+  }
+  return out;
+}
+
+export function validateLedger(hands, roleIds) {
+  return hands.flatMap((h) => validateHand(h, roleIds));
+}
+
 function readLedger() {
   if (!existsSync(LEDGER)) return [];
   return readdirSync(LEDGER)
@@ -143,6 +177,19 @@ function selfTest() {
   t("an ios blocker routes to mobile-native-engineer", routeHand({ domain: "ios-swift" }, roles).owner === "mobile-native-engineer");
   t("whoCanUnblock=owner resolves to the human owner", routeHand({ whoCanUnblock: "owner (a design call)" }, roles).kind === "human");
   t("whoCanUnblock=other-lane resolves to a lane", routeHand({ whoCanUnblock: "the other lane" }, roles).kind === "lane");
+  // validateHand: one planted defect per rule; removing the rule makes its line go FAIL.
+  const good = { __file: "h.json", id: "h", raisedAt: "2026-09-23T00:00:00Z", doing: "d", blockedBy: "b", need: "n", whoCanUnblock: "owner", status: "open" };
+  const bad = (over, needle) => validateHand({ ...good, ...over }, roles).some((p) => p.includes(needle));
+  t("validate: a well-formed hand has no problems", validateHand(good, roles).length === 0);
+  t("validate: a role-prefixed whoCanUnblock with prose is valid", validateHand({ ...good, whoCanUnblock: "product-manager (ranks it) with principal-engineer" }, roles).length === 0);
+  t("validate: lanes are valid unblockers", validateHand({ ...good, whoCanUnblock: "mac lane" }, roles).length === 0 && validateHand({ ...good, whoCanUnblock: "cloud lane" }, roles).length === 0);
+  t("validate: a missing need is named by file and field", bad({ need: undefined }, 'h.json: field "need"'));
+  t("validate: a missing whoCanUnblock is named", bad({ whoCanUnblock: undefined }, 'field "whoCanUnblock"'));
+  t("validate: a bogus whoCanUnblock is named", bad({ whoCanUnblock: "nobody-in-particular" }, 'field "whoCanUnblock" is "nobody-in-particular"'));
+  t("validate: status maybe is rejected", bad({ status: "maybe" }, 'field "status" is "maybe"'));
+  t("validate: an id that is not the filename stem is rejected", bad({ id: "other" }, 'field "id" is "other"'));
+  t("validate: an unreadable file is named", validateHand({ __file: "x.json", __unreadable: "bad" }, roles)[0].startsWith("x.json:"));
+  t("validate: ledger-wide, one bad hand among good ones is reported", validateLedger([good, { ...good, __file: "z.json", id: "z", status: "maybe" }], roles).length === 1);
   t("an unknown domain with no explicit unblocker is a GAP", routeHand({ domain: "quantum-teleport" }, roles).kind === "gap");
   t("a domain mapping to a role ABSENT from the roster is a GAP, not a misroute", routeHand({ domain: "network" }, roles).kind === "gap");
   // summarize: a resolved hand is not surfaced; an open one is; an unreadable one is a gap.
@@ -162,7 +209,19 @@ function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(selfTest());
   if (!existsSync(LEDGER)) mkdirSync(LEDGER, { recursive: true });
-  const s = summarize(readLedger(), rosterRoleIds(), Date.now());
+  const hands = readLedger();
+  const roleIds = rosterRoleIds();
+  const s = summarize(hands, roleIds, Date.now());
+  const quiet = argv.includes("--json") || argv.includes("--tick-summary");
+  if (!quiet) {
+    const bad = validateLedger(hands, roleIds);
+    if (bad.length) {
+      for (const p of bad) console.error(`  ✗ ${p}`);
+      console.error(`\nRaised-hands schema check FAILED: ${bad.length} problem(s). Fix the hand file (pnpm run hand:raise writes a valid one).`);
+      process.exit(1);
+    }
+    console.log(`Raised-hands schema check passed: ${hands.length} hand file(s) valid.`);
+  }
   if (argv.includes("--json")) { console.log(JSON.stringify(s)); return; }
   // --tick-summary: one short line for the Mac tick's RESULT (empty when none open, so
   // the tick stays honestly silent). Never mistaken for "monitor did not run".

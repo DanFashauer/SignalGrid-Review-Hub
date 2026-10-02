@@ -136,8 +136,10 @@ export function reportFromAdmin(resp: AdminResp, expected: readonly string[] | u
   if (actual && expected !== undefined) {
     missing = expected.filter((e) => !actual.includes(e)).sort();
     extra = actual.filter((a) => !expected.includes(a)).sort();
-    // never in_scope: a client list is unprovably complete under fine-grained admin filtering, so
-    // "nothing extra" is not proof of "nothing hidden"; the tightening grades rest on SEEN roles.
+    // never in_scope: a client or group list is unprovably complete under filtering, so "nothing
+    // extra" is not proof of "nothing hidden". over_privileged rests on a role that was SEEN;
+    // out_of_scope rests on a DECLARED role that was not seen, which under a filtered client or
+    // group list can be an invisibility artifact: it fails toward restrict, never toward authorized.
     scope = missing.length > 0 ? "out_of_scope" : extra.length > 0 ? "over_privileged" : "unknown";
   }
   return {
@@ -184,7 +186,8 @@ function makeKeycloakAdminTransport(
     const realmComposite = await get(`/users/${id}/role-mappings/realm/composite`);
     const clients = await get("/clients");
     let clientComposite: unknown = undefined;
-    // A token that sees only some clients gets 200 with a FILTERED list, not 403. A list holding
+    // A token holding query-clients but not view-clients got 200 with an EMPTY list on 26.4.7
+    // (view-users only got 403 on /clients: auth_failed). A list holding
     // both built-ins proves nothing (the mapper never grades in_scope for that reason), but every
     // realm has the built-in account + realm-management clients, so a list missing either is a
     // broken answer and clientComposite stays undefined (the mapper grades unknown).
@@ -390,9 +393,10 @@ async function offline(): Promise<Map<string, Graded>> {
       post.entitlementScope === "over_privileged", `scope=${post.entitlementScope}`);
   }
 
-  // O6 a FILTERED /clients list is a partial read: Keycloak answers 200 [] (not 403) to a
-  // token that can list users but not clients, which would silently drop every client:*
-  // entitlement. A list without the built-in account + realm-management clients is unknown.
+  // O6 a FILTERED /clients list is a partial read: on 26.4.7 a token holding query-clients but not
+  // view-clients got 200 [] (a view-users-only token got 403 on /clients: auth_failed), which would
+  // silently drop every client:* entitlement. A list without the built-in account +
+  // realm-management clients is unknown.
   for (const [label, list] of [
     ["200 []", []],
     ["a list without realm-management", [{ id: "cid-account", clientId: "account" }]],
@@ -407,11 +411,13 @@ async function offline(): Promise<Map<string, Graded>> {
     }
   }
 
-  // O6c NO input shape reads in_scope. Keycloak's admin API cannot prove a client list COMPLETE
-  // (a fine-grained admin token lists exactly account + realm-management and nothing else, and
-  // /admin/serverinfo answers 200 for any admin role, so it proves nothing: measured on 26.4.7), and in_scope is the
-  // one loosening verdict, so this bridge never emits it. The tightening grades stay: they rest
-  // on roles that were SEEN.
+  // O6c NO input shape reads in_scope. Keycloak's admin API gives no proof that a client list is
+  // COMPLETE: /admin/serverinfo answered 200 for every admin-role token probed on 26.4.7, so it
+  // proves nothing, and a query-clients-only token got 200 []. That a fine-grained token lists
+  // exactly account + realm-management is the reviewer's hypothesis, not observed; the rule covers
+  // it either way. in_scope is the one loosening verdict, so this bridge never emits it.
+  // over_privileged rests on a role that was SEEN; out_of_scope rests on a DECLARED role that was
+  // not seen, which under a filtered list can be an invisibility artifact (it fails toward restrict).
   {
     const builtIns = [{ id: "cid-account", clientId: "account" }, { id: "cid-realm-management", clientId: "realm-management" }];
     const withApp = [...builtIns, { id: "cid-pharmacy-app", clientId: "pharmacy-app" }];

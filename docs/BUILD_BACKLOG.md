@@ -2436,16 +2436,7 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       redeclaration or shadowing parameter of the name, a direct `eval` in scope, `sort()`/`reverse()`
       results written through, or a map with an `undefined`/`null`/`""`/`"[object Object]"` entry (an
       absent key HITS it) earns no exemption. Self-test pairs bug shapes with guarded
-      twins; live tree still 0 findings. Mutation testing (AST-generated over the analyzer helpers: every `&&`/`||` operand,
-      negation, `if` condition, ternary arm, boolean return and comparison): 902 mutants, 678 killed by
-      `--self-test` (75.2%), 224 survive — 55 are dropped `ts.is*` type guards; the rest are null/cache
-      guards, unreachable branches and provenance-plumbing bookkeeping. Differential check: a 560-case
-      corpus (the write-form matrix re-run in arrow/hook/`useEffect`/nested-`if` code shapes; 524 valid
-      cases) was run against every survivor, and none flips a flagged case to clean on THAT corpus. Round 9: the review's
-      independent corpus found 11-16 survivors that flip a flagged case to clean, so NOT every clause is pinned by a fixture; the
-      clauses it named (map write through an alias / `T!` / `Reflect.set` / `Object.defineProperty`, the `String` and ROW_KEEPING
-      key-rule arms) now each have a fixture, and a map's writes are a WHITELIST (any non-read reference to the map flags the
-      lookup) instead of a list of write forms. Remaining unpinned survivors are not enumerated here. Not claimed exhaustive. Still not followed: a child component, helper or class map
+      twins; live tree still 0 findings. Mutation testing is NOT claimed as a figure: my generator's region and counts could not be reproduced by the lane's reviewers (theirs, over the map-write and key-rule bands, kill roughly 50-80% of mutants), so no kill rate is quoted. `--self-test` does not pin every clause: reviewers found surviving mutants that flip a flagged case to clean; rounds 9-10 added a fixture for each they named (alias writes through `const T = T0`, `.slice` and unknown-helper keys, `T!` reads, call-initialised class constants, `Object.fromEntries`/`useMemo` maps, `export default T`/`export { T }`/`{ T }` escapes, object-pattern assignment targets) and each was re-checked by cp-aside mutant (self-test goes red). A map's writes are a WHITELIST: any non-read reference to the map flags the lookup. Unpinned survivors remain and are not enumerated. Not claimed exhaustive. Still not followed: a child component, helper or class map
       imported from another file (no module resolver); a callback parameter over query rows as DATA
       (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
       a component reached only through a wrapper (`withX(C)`); query data mutated in place through

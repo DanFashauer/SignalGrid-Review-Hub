@@ -107,12 +107,14 @@
 //     not modelled: `Object.prototype.s = "ok"`, `globalThis.String = …`, a `Proxy`-wrapped or
 //     `new Map(…)` class map (only a same-file const object LITERAL is resolved). A key whose
 //     map entry is a getter/method is resolved by its body; a computed key it cannot read is
-//     treated as matching every lookup. A class static-field map, a map returned by a helper
-//     (`const T = makeMap()`) and a `let` map are not resolved. A map's WRITES are a whitelist:
+//     treated as matching every lookup. A class static-field map and a `let` map are not resolved; a map built by a call
+//     (`const T = makeMap()`, `Object.fromEntries(…)`, `useMemo(…)`) is judged as a class string, not as a map
+//     (it flags, an over-flag); `new Map(…)` and an opaque `Object.entries(x).forEach(([k, v]) => { T[k] = v })` are silent. A map's WRITES are a whitelist:
 //     any reference to its name (or an alias in the same file) that is not a plain read — `T.x`,
 //     `T[k]`, `...T`, `k in T`, `Object.keys/values/entries(T)`, `const { a } = T` — is an
 //     unreadable possibly-good entry, so the lookup is flagged (fail-closed over-flag: passing
-//     the map to ANY function, even a read-only one, flags it).
+//     the map to ANY function, even a read-only one, flags it). A component's props reached through
+//     the `arguments` object (`arguments[0].s = "ok"`) are not seen; `props.s = …` is.
 //   - react-query `initialData` / `placeholderData` make `q.data` a literal while the real state is
 //     unknown; a presence guard and a plain-read key are both fooled (pre-existing, gate-wide).
 //     `Component.defaultProps` is not followed (ignored by React 19, which this repo pins).
@@ -919,6 +921,19 @@ function analyzeSourceFile(relPath, text) {
     // returned, an assignment/delete/update target, `(0, T)`, `Object["assign"](T)`, `Object.defineProperties(T)`,
     // `Reflect.defineProperty(T)`, `__proto__`) may write entries this file cannot see: an unreadable entry that
     // matches every lookup.
+    // Is this node (a member access) the TARGET of an assignment — directly, or inside an object / array
+    // destructuring pattern (`({ a: T.x } = v)`, `[{ a: T.x }] = v`, `({ ...T.x } = v)`, `for ({ a: T.x } of v)`)?
+    const isAssignTarget = (n) => {
+      for (let c = n, q = c.parent; q; c = q, q = c.parent) {
+        if (ts.isParenthesizedExpression(q) || ts.isNonNullExpression(q) || ts.isAsExpression(q) || ts.isSatisfiesExpression(q)) continue;
+        if (ts.isPropertyAssignment(q)) { if (q.initializer !== c) return false; continue; }
+        if (ts.isShorthandPropertyAssignment(q) || ts.isObjectLiteralExpression(q) || ts.isArrayLiteralExpression(q) || ts.isSpreadAssignment(q) || ts.isSpreadElement(q)) continue;
+        if (ts.isBinaryExpression(q)) return q.left === c && q.operatorToken.kind >= K.FirstAssignment && q.operatorToken.kind <= K.LastAssignment;
+        if (ts.isForInStatement(q) || ts.isForOfStatement(q)) return q.initializer === c;
+        return false;
+      }
+      return false;
+    };
     const isRead = (id) => {
       let c = id, par = c.parent;
       while (par && (ts.isParenthesizedExpression(par) && par.expression === c ? false : (ts.isNonNullExpression(par) || ts.isAsExpression(par) || ts.isSatisfiesExpression(par)) && par.expression === c)) { c = par; par = c.parent; }
@@ -935,6 +950,7 @@ function analyzeSourceFile(relPath, text) {
         for (;;) {
           const q = t.parent;
           if (!q) return true;
+          if (isAssignTarget(t)) return false;
           if ((ts.isPropertyAccessExpression(q) || ts.isElementAccessExpression(q)) && q.expression === t) { t = q; continue; }
           if (ts.isNonNullExpression(q) || ts.isAsExpression(q) || ts.isSatisfiesExpression(q) || ts.isParenthesizedExpression(q)) { t = q; continue; }
           if (ts.isBinaryExpression(q) && q.left === t && q.operatorToken.kind >= K.FirstAssignment && q.operatorToken.kind <= K.LastAssignment) return false;
@@ -2134,7 +2150,7 @@ OK_R6.push(
 
 // Round-8: a WRITE-FORM MATRIX. Each form below, written against each kind of binding (a scalar, a
 // component parameter, a container, an object), must flag; each READ-ONLY twin must not. This exercises
-// every clause of the read-only-use whitelist from many angles instead of one hand-picked shape.
+// the read-only-use whitelist from many angles instead of one hand-picked shape. It does not pin every clause (see the header).
 const MX_PAGE = (body, ret, tail = "") => `
 import { useQuery } from "@tanstack/react-query";
 ${TONE}
@@ -2205,6 +2221,23 @@ BUG_R6.push(
   ["map write: Object.defineProperties(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.defineProperties(T, { undefined: { value: "${EMER}" } });`, "T[q.data?.s] ?? T.default")],
   ["map write: Reflect.defineProperty(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Reflect.defineProperty(T, "undefined", { value: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
   ["map write: Object.setPrototypeOf(T, \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.setPrototypeOf(T, { undefined: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: object-pattern target ({ a: T.undefined } = \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; ({ a: T.undefined } = { a: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: computed object-pattern target", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; ({ [k]: T.undefined } = { a: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: parenthesized pattern target", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; ({ a: (T.undefined) } = { a: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: pattern nested in an array", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; [{ a: T.undefined }] = [{ a: "${EMER}" }];`, "T[q.data?.s] ?? T.default")],
+  ["map write: object rest target ({ ...T.undefined } = \u2026)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; ({ ...T.undefined } = { a: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write: pattern target inside a for-loop", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; for (let i = 0; i < 1; i++) ({ a: T.undefined } = { a: "${EMER}" });`, "T[q.data?.s] ?? T.default")],
+  ["map write through the alias target: const T0 = {...}; const T = T0; T0.undefined = \u2026", mkMap(`const T0 = { ok: "text-red-400", default: "text-slate-400" }; const T = T0; T0.undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
+  ["map escapes: export default T", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; export default T;`, "T[q.data?.s] ?? T.default")],
+  ["map escapes: export { T }", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; export { T };`, "T[q.data?.s] ?? T.default")],
+  ["map escapes: shorthand { T } stored", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = { T };`, "T[q.data?.s] ?? T.default")],
+  ["key rule: String(s).slice(0, 3) over an entry \"und\"", mkMap(`const T = { und: "${EMER}", default: "text-slate-400" };`, "T[String(q.data?.s).slice(0, 3)] ?? T.default")],
+  ["key rule: an unknown helper call as the key", mkMap(`const T = { ok: "${EMER}", default: "text-slate-400" };`, "T[helper(q.data?.s)] ?? T.default")],
+  ["map read through a non-null assertion: T![s], no fallback", mkMap(`const T = { ok: "${EMER}", bad: "text-red-400" };`, "T![q.data?.s]")],
+  ["map read through a non-null assertion: T!.ok", mkMap(`const T = { ok: "${EMER}", bad: "text-red-400" };`, "T!.ok")],
+  ["class hoisted through a call: const G = clsx(\"\u2026emerald\")", mkMap(`const G = clsx("${EMER}");`, "G")],
+  ["map built by Object.fromEntries", mkMap(`const T = Object.fromEntries([["ok", "${EMER}"]]);`, "T[q.data?.s]")],
+  ["map picked by a useMemo selector", mkMap(`const T = useMemo(() => ({ ok: "${EMER}" }), []);`, "T[q.data?.s]")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],

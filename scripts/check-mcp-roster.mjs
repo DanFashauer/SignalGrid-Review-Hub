@@ -342,7 +342,8 @@ export function logicalLines(lines, kind, path = "") {
   const directives = [];
   for (const [n, l] of lines.entries()) {
     // BuildKit strips leading whitespace and reads a non-empty value that may hold spaces (`check=skip=all; error=true`)
-    const d = /^\s*#\s*(syntax|escape|check)\s*=\s*(.+?)\s*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
+    // Go's unicode.IsSpace includes U+0085 (NEL), which JS `\s` does not; Go's `.` also matches `\r`, U+2028 and U+2029
+    const d = /^[\s\u0085]*#[\s\u0085]*(syntax|escape|check)[\s\u0085]*=[\s\u0085]*([\s\S]+?)[\s\u0085]*$/i.exec(n === 0 ? l.replace(/^\uFEFF/, "") : l);
     if (!d) break;
     directives.push(d);
   }
@@ -366,13 +367,14 @@ export function logicalLines(lines, kind, path = "") {
   const physical = [];
   for (let i = 0; i < lines.length; i++) {
     // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
-    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : lines[i];
+    // a Dockerfile line is trimmed of every trailing `\r` (BuildKit's trimNewline), so `\\\r\r\n` still continues
+    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : docker ? lines[i].replace(/\r+$/, "") : lines[i];
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
     } else physical.push({ i, text: l });
   }
-  return joinContinuations(physical, cont, modes, docker ? (t) => /^\s*(?:#|$)/.test(t) : null);
+  return joinContinuations(physical, cont, modes, docker ? (t) => /^[\s\u0085]*(?:#|$)/.test(t) : null);
 }
 
 /**
@@ -699,7 +701,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
     // (a Dockerfile also drops comment and empty lines inside a continuation, and allows whitespace after the escape)
     const rebuilt = text
-      .replace(/([\\`^])[ \t]*\r?\n(?:[ \t]*(?:#[^\n]*)?\r?\n)*[ \t]*/g, "")
+      .replace(/([\\`^])[ \t]*\r*\n(?:[ \t\u0085]*(?:#[^\n]*)?\r*\n)*[ \t]*/g, "")
       .replace(/["'\\`^]/g, "");
     if (!/context7/i.test(text) && !/context7/i.test(rebuilt) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
@@ -1604,6 +1606,13 @@ server.registerTool(
     ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\\\nmcp@latest\n", 3, true, "an empty `# check=` ends directive parsing"],
     ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y @upstash/context7-\\\nmcp@latest\nEOF\n", 3, true, "a `\\` split inside a heredoc under `# escape=\`` "],
     ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y " + SPEC + realPin + " \\\n  --stdio\nEOF\n", 3, false, "a pinned heredoc continuation under `# escape=\`` (no false positive)"],
+    // round 18: Go's whitespace (NEL) and `.` (\r, U+2028/9); BuildKit's trimNewline; the empty-value directive pinned
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\n\u0085# n\nmcp@latest\n", 1, true, "a NEL-indented comment line inside a continuation"],
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\n\u0085\nmcp@latest\n", 1, true, "a NEL-only line inside a continuation"],
+    ["Dockerfile", "\u0085# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a NEL before a directive"],
+    ["Dockerfile", "# check=skip=a\rb\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "a directive value holding a CR"],
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\r\r\nmcp@latest\n", 1, true, "a continuation ending in a doubled CR"],
+    ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\nRUN npx -y " + SPEC + realPin + "\n", 3, false, "an empty `# check=` ends parsing, so the backtick stays literal (no false positive)"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
     ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
   ]) {

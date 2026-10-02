@@ -20,9 +20,14 @@ import { EventEmitter } from "node:events";
 import { spawn, spawnSync } from "node:child_process";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, processCommand, installRestore, classifyRun } from "./mutation-guard.mjs";
+
+// A closed stdout/stderr (the parent died, or `| head`) raises EPIPE on the NEXT write, anywhere in this script — including
+// after the e2e block. Swallow it for the whole process, so the gate's exit status stays its own pass/fail result instead
+// of a crash with a half-printed report. Anything else is re-thrown.
+for (const st of [process.stdout, process.stderr]) st.on("error", (e) => { if (e?.code !== "EPIPE") throw e; });
 
 let passed = 0;
 const failures = [];
@@ -345,7 +350,10 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isRegular = true, isAl
 // real dead sweep's journal in the shared temp dir (an earlier version `rm -r`'d it — the recovery
 // record). It never matches processes by name: it records the sweep's own descendants by pid. The
 // target's bytes are saved and written back in `finally`, so a regression cannot leave the tree dirty.
-async function runE2e({ repo, guard, target, check, signalProc = process, afterLock = null }) {
+// Every catchable signal that terminates a process by default must run the gate's shutdown — an unhandled one (SIGQUIT,
+// SIGUSR2, SIGALRM …) killed the gate with its sweep still mutating the real tree. SIGKILL and SIGSTOP cannot be caught.
+const TERMINATING_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGUSR2", "SIGALRM", "SIGVTALRM", "SIGPROF", "SIGXCPU", "SIGXFSZ", "SIGPWR"];
+async function runE2e({ repo, guard, target, check, signalProc = process, streams = [process.stdout, process.stderr], afterLock = null }) {
   const PROOF = "proof:carrier-reachability";
   // "The original" is what HEAD says, as BYTES — never what the working tree holds at this instant (that
   // could be a live sweep's mutant). The precondition then requires the working file to equal it.
@@ -368,6 +376,7 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
   const restoreTarget = () => { if (shouldRestoreTarget(lockHeld, readFileSync(target), headBytes)) writeFileSync(target, headBytes); };
   const clearLock = () => { if (lockHeld) journalClear(lockDir, process.pid); };
   const handlers = [];
+  const streamHandlers = [];
   try {
     preconditionOk = e2ePrecondition({ lockDir, headBytes, workBytes: readFileSync(target), isRegular: lstatSync(target).isFile() });
     if (preconditionOk) {
@@ -375,12 +384,26 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
       // `--restore-stale` can act on (the sweeps' own journals live in this gate's scratch dir, which nothing else reads).
       journalWrite(lockDir, process.pid, [{ file: relative(repo, target), original: headBytes.toString("utf8") }]);
       lockHeld = true;
-      for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
-        const h = () => gateShutdown({
-          killSweeps: killKids,
-          restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), exit: (c) => signalProc.exit(c),
-        }, code);
-        signalProc.on(sig, h); handlers.push([sig, h]);
+      const shutdownWith = (code) => gateShutdown({
+        killSweeps: killKids,
+        restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), exit: (c) => signalProc.exit(c),
+      }, code);
+      for (const sig of TERMINATING_SIGNALS) {
+        const num = osConstants.signals[sig];
+        if (num === undefined) continue; // not a signal on this platform
+        const h = () => shutdownWith(128 + num);
+        try { signalProc.on(sig, h); handlers.push([sig, h]); } catch { /* not catchable here */ }
+      }
+      // An uncaught exception / unhandled rejection must not leave the sweeps running either.
+      for (const ev of ["uncaughtException", "unhandledRejection"]) {
+        const h = (err) => { console.error(`  gate crashed (${ev}): ${err instanceof Error ? err.message : String(err)}`); shutdownWith(1); };
+        signalProc.on(ev, h); handlers.push([ev, h]);
+      }
+      // A closed stdout/stderr (the gate's parent died, or `| head`) raises EPIPE: ignore it, so the gate runs on to its
+      // own restore instead of crashing with its sweep orphaned. Anything else is re-thrown (→ uncaughtException above).
+      for (const st of streams) {
+        const h = (e) => { if (e?.code !== "EPIPE") throw e; };
+        st.on("error", h); streamHandlers.push([st, h]);
       }
       installed = signalProc.listenerCount("SIGTERM");
     }
@@ -501,6 +524,7 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
     // only DISPATCHED on the next turn, and with the listener already gone it was silently dropped (exit 0, "pass").
     await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
     for (const [sig, h] of handlers) signalProc.removeListener(sig, h);
+    for (const [st, h] of streamHandlers) st.removeListener("error", h);
   }
   return { preconditionOk, installed };
 }
@@ -580,6 +604,45 @@ async function runE2e({ repo, guard, target, check, signalProc = process, afterL
     await new Promise((r) => setTimeout(r, 100));
     results.push(["e2e call site: an unexpected error is a NAMED failed check (not a crash without a summary), kills the gate's sweeps, and restores the target from HEAD",
       seen.some(([n, ok]) => /unexpected error — registered file vanished/.test(n) && ok === false) && sleeperPid !== null && isDeadPid(sleeperPid) && readFileSync(join(errRepo, "lib/t.ts"), "utf8") === "HEAD bytes\n"]);
+    // (f) every other catchable terminating signal runs the same shutdown (SIGQUIT/SIGUSR2/SIGALRM used to kill the gate with its sweep orphaned)
+    for (const sig of ["SIGQUIT", "SIGUSR2", "SIGALRM"]) {
+      const sigRepo = mkRepo(); repos.push(sigRepo);
+      let exitedS = null; const fakeS = Object.assign(new EventEmitter(), { exit(c) { exitedS = c; } });
+      let restoredS = false;
+      await runE2e({ repo: sigRepo, guard: "/nonexistent", target: join(sigRepo, "lib/t.ts"), check: quiet, signalProc: fakeS, afterLock: async () => {
+        writeFileSync(join(sigRepo, "lib/t.ts"), "MUTANT\n"); fakeS.emit(sig); restoredS = readFileSync(join(sigRepo, "lib/t.ts"), "utf8") === "HEAD bytes\n";
+      } });
+      results.push([`e2e call site: ${sig} to the gate while it holds a mutant restores the target from HEAD and exits ${128 + osConstants.signals[sig]} (an unhandled signal used to orphan the sweep)`, restoredS && exitedS === 128 + osConstants.signals[sig]]);
+    }
+    // (g) an uncaught exception runs the shutdown too
+    const exRepo = mkRepo(); repos.push(exRepo);
+    let exitedX = null; let restoredX = false; const fakeX = Object.assign(new EventEmitter(), { exit(c) { exitedX = c; } });
+    const origErrX = console.error; console.error = () => {};
+    try {
+      await runE2e({ repo: exRepo, guard: "/nonexistent", target: join(exRepo, "lib/t.ts"), check: quiet, signalProc: fakeX, afterLock: async () => {
+        writeFileSync(join(exRepo, "lib/t.ts"), "MUTANT\n"); fakeX.emit("uncaughtException", new Error("boom")); restoredX = readFileSync(join(exRepo, "lib/t.ts"), "utf8") === "HEAD bytes\n";
+      } });
+    } finally { console.error = origErrX; }
+    results.push(["e2e call site: an uncaught exception while the gate holds a mutant restores the target from HEAD and exits 1", restoredX && exitedX === 1]);
+    // (h) a closed stdout (EPIPE) is swallowed — the gate runs on to its own restore instead of crashing with its sweep orphaned
+    const pipeRepo = mkRepo(); repos.push(pipeRepo);
+    const fakeOut = new EventEmitter(); const seenP = []; let threw = false;
+    await runE2e({ repo: pipeRepo, guard: "/nonexistent", target: join(pipeRepo, "lib/t.ts"), check: (n, ok) => seenP.push([n, ok]), signalProc: new EventEmitter(), streams: [fakeOut], afterLock: async () => {
+      try { fakeOut.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })); } catch { threw = true; }
+    } });
+    results.push(["e2e call site: EPIPE on the gate's stdout is swallowed (no crash, the gate runs on and restores)", threw === false && !seenP.some(([, ok]) => ok === false) && fakeOut.listenerCount("error") === 0]);
+    // (i) killKids reaches the sweeps' DESCENDANTS, not just the sweeps
+    const dRepo = mkRepo(); repos.push(dRepo);
+    let parentPid = null; let grandPid = null; let bothDead = false;
+    const fakeD2 = Object.assign(new EventEmitter(), { exit() {} });
+    await runE2e({ repo: dRepo, guard: "/nonexistent", target: join(dRepo, "lib/t.ts"), check: quiet, signalProc: fakeD2, afterLock: async ({ track }) => {
+      const parent = track(spawn("node", ["-e", "const c = require('node:child_process').spawn('node', ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' }); process.stdout.write(String(c.pid)); setTimeout(() => {}, 60000);"], { stdio: ["ignore", "pipe", "ignore"] }));
+      parentPid = parent.pid;
+      grandPid = await new Promise((r) => { let b = ""; parent.stdout.on("data", (d) => { b += d; const n = Number.parseInt(b, 10); if (Number.isFinite(n)) r(n); }); });
+      fakeD2.emit("SIGTERM");
+      bothDead = isDeadPid(parentPid) && isDeadPid(grandPid);
+    } });
+    results.push(["e2e call site: a signal to the gate kills a sweep's DESCENDANTS as well as the sweep (recorded descendants are killed, and waited for)", parentPid !== null && grandPid !== null && bothDead]);
   } finally {
     for (const r of repos) { try { rmSync(journalDir(r), { recursive: true, force: true }); } catch { /* none */ } try { rmSync(r, { recursive: true, force: true }); } catch { /* scratch */ } }
   }
@@ -599,14 +662,19 @@ check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--"
 
 // Reported, not gated.
 const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);
-const weight = (t) => t.files.reduce((n, f) => n + mutationsFor(f).length, 0);
-const loads = Array.from({ length: N }, (_, i) => shardTargets(TARGETS, i, N).reduce((sum, t) => sum + weight(t), 0));
-const totalMutations = TARGETS.reduce((n, t) => n + weight(t), 0);
-// Report the quantity the sharder actually balances on. An earlier version of this
-// line reported FILES per shard while `shardTargets` balanced MUTATIONS — a real
-// number answering a different question than the one the reader would take it for.
-console.log(`\n  balance at N=${N}, by MUTATIONS per shard: ${loads.join(" · ")}`);
-console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.files.length, 0)} files · ${totalMutations} mutations`);
+try {
+  const weight = (t) => t.files.reduce((n, f) => n + mutationsFor(f).length, 0);
+  const loads = Array.from({ length: N }, (_, i) => shardTargets(TARGETS, i, N).reduce((sum, t) => sum + weight(t), 0));
+  const totalMutations = TARGETS.reduce((n, t) => n + weight(t), 0);
+  // Report the quantity the sharder actually balances on. An earlier version of this
+  // line reported FILES per shard while `shardTargets` balanced MUTATIONS — a real
+  // number answering a different question than the one the reader would take it for.
+  console.log(`\n  balance at N=${N}, by MUTATIONS per shard: ${loads.join(" · ")}`);
+  console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.files.length, 0)} files · ${totalMutations} mutations`);
+} catch (err) {
+  // Reported, not gated — and never a crash without a summary line (a registered file deleted or unreadable).
+  console.log(`\n  balance report unavailable: ${err instanceof Error ? err.message : String(err)}`);
+}
 
 const total = passed + failures.length;
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);

@@ -10,9 +10,9 @@
     {
       "id": "readiness-floor",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "headline": 0,
+        "headline": 100,
         "floor": 80
       },
       "source": "scripts/check-readiness-figure.mjs --json (headline, floor)"
@@ -20,10 +20,10 @@
     {
       "id": "evidence-fresh",
       "scope": "machine",
-      "state": "unmet",
+      "state": "met",
       "measured": {
-        "pct": 0,
-        "reason": "0/20 bound proofs/steps current — evidence covers manifest 9a469e562e51, tree is 67cae1d526eb; refresh on the Mac; launch items fully current 0/28"
+        "pct": 100,
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 5b15a3002124; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 64,
-        "partial": 4,
-        "closed": 126
+        "open": 52,
+        "partial": 5,
+        "closed": 137
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -50,8 +50,6 @@
     }
   ],
   "unmet": [
-    "readiness-floor",
-    "evidence-fresh",
     "owner-real-in-hand"
   ],
   "unknown": [],
@@ -137,14 +135,6 @@
         "accessibility-specialist"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
-    },
-    {
-      "rowId": "171",
-      "title": "The daily rot check watches a hand-picked tenth of the gate suite, and its own header called that the full suite.",
-      "roles": [
-        "sre"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     }
   ],
   "unmeasured": [
@@ -216,40 +206,26 @@
       "since": "2026-10-01T16:57:45.498Z"
     },
     {
-      "id": "readiness-floor-no-clearing-op",
-      "clears": "mac",
-      "asks": "readiness fell below the DR-036 floor — read the dimension that fell and re-mint or repair it",
-      "since": "2026-10-01T13:48:48.721Z"
-    },
-    {
       "id": "owner-real-in-hand",
       "clears": "owner",
       "asks": "Owner decision: is something real in hand for partners/collaborators (DR-033)? If yes, add a decision record carrying the attestation token and point attestedIn at it; if no, the loop keeps building the ranked queue.",
       "since": "2026-09-24T14:47:57.548Z"
     }
   ],
-  "queue": [
-    {
-      "criterionId": "evidence-fresh",
-      "op": "evidence",
-      "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-01",
-      "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
-    }
-  ],
+  "queue": [],
   "probeErrors": [],
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 6,
+    "needsExecutorCount": 5,
     "unmeasuredCount": 3,
     "awaitingCount": 3,
-    "openRows": 64,
-    "partialRows": 4
+    "openRows": 52,
+    "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-01T16:57:45.498Z",
-  "derivedAtCommit": "9fbb6a38c9fd6fc4b6c90d3a2b65f8b9c4d4be94",
+  "derivedAt": "2026-10-02T16:40:29.343Z",
+  "derivedAtCommit": "942ede9428d5a35cb273e1786a17ac7c4d9b4ac5",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "729fa803c24eed585b85acf610839f88d8c6a72870995564eb0148f4c37ab4d9"
+  "decisionAddress": "c8173365e1bb08d8eb6c066d72f1ac1284163bbda226ae20d747285dfc51f534"
 }

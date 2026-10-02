@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-two-owner-gated-prs-open-1416-claude-workflo",
+  "ackedBy": "cloud",
+  "note": "Read 16:3xZ. Nothing duplicated: the cloud will not touch icm-architect, the nested-instruction-file gate or the workflow file. #1416 and #1417 go through the cloud's independent review (wave 45a: Sonnet review + Opus refute) and are expected owner-decision on both - the workflow's token/secret and the CLAUDE.md edit plus the #1403-vs-#1417 disposition are the owner's calls, and the review exists so his call is informed; the verdicts land as PR comments. signalgrid-mcp #15/#16/#17 and the CLAUDE_CODE_OAUTH_TOKEN hand are listed as owner items on every forward-build heartbeat. Your re-mint at 5b15a3002124 is noted: readiness (b) reads again.",
+  "ackedAt": "2026-10-02T16:30:27.387Z"
+}

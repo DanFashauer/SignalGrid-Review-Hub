@@ -518,21 +518,24 @@ export const TARGETS = [
   },
   {
     proof: "proof:ot-posture",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
-      // ot-connector.ts dropped 2026-09-03: same reason as access-governance's connector
-      // — defensive parsing the mutators do not express, 0 mutations. evaluate.ts carries
-      // the mutable guards.
+      // ot-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0 mutations, but with
+      // `oneLine` on it carries 4 (its brace-less `readableString` guards).
+      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
       "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
   {
     proof: "proof:token-binding",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
-      // token-binding-connector.ts dropped 2026-09-03: same reason — defensive parsing the
-      // mutators do not express, 0 mutations. evaluate.ts carries the mutable guards.
+      // token-binding-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0
+      // mutations, but with `oneLine` on it carries 1.
+      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
     ],
   },
   {
@@ -568,10 +571,17 @@ export const TARGETS = [
   },
   {
     proof: "proof:carrier-reachability",
-    files: ["lib/integrations/src/integrations/carrier/index.ts"],
+    oneLine: true,
+    // reachability-connector.ts registered 2026-10-01: the proof drives the real connector, and
+    // its one-line decision guards (normalizeReachability) are what `oneLine` sweeps.
+    files: [
+      "lib/integrations/src/integrations/carrier/index.ts",
+      "lib/integrations/src/integrations/carrier/reachability-connector.ts",
+    ],
   },
   {
     proof: "proof:credential-exposure",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
@@ -580,6 +590,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:data-protection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
       "lib/integrations/src/integrations/data-protection/evaluate.ts",
@@ -638,6 +649,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:identity-risk",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
@@ -1666,7 +1678,24 @@ export function shardTargets(all, index, count) {
   return bins[index].targets;
 }
 
+/** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
+ *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
+ *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
+ *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
+ *  mutates registered source files in place for the better part of an hour. */
+export function unknownArgs(argv) {
+  // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
+  // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
+  // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
+  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+}
+
 function main() {
+  const unknown = unknownArgs(process.argv.slice(2));
+  if (unknown.length > 0) {
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
+    process.exit(1);
+  }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;

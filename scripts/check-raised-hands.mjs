@@ -32,7 +32,9 @@
 // dropped. --json / --tick-summary stay report-only (loop:state and the mac tick fold them
 // in so a raised hand is never lost); --self-test is a gate too (the routing must work).
 
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -73,7 +75,7 @@ export const DOMAIN_TO_ROLE = [
   ["reliab", "sre"], ["sre", "sre"],
 ];
 
-function rosterRoleIds() {
+export function rosterRoleIds() {
   try {
     const r = JSON.parse(readFileSync(ROSTER, "utf8"));
     const roles = Array.isArray(r) ? r : r.roles || [];
@@ -100,7 +102,7 @@ export function routeHand(hand, roleIds) {
 
 export const HAND_STATUSES = ["open", "resolved"];
 export const HAND_REQUIRED = ["id", "raisedAt", "doing", "blockedBy", "need", "whoCanUnblock", "status"];
-const LANE_WHO = /^(mac lane|cloud lane)(\b|$)/;
+const LANE_WHO = /^(mac lane|cloud lane|the other lane|other lane)(\b|$)/;
 
 /** Is `who` a place a hand can legally be routed? owner, a lane, or an org-roster role
  *  (a role id may be followed by prose: "security-engineer (the fix) with …"). */
@@ -119,8 +121,11 @@ export function validateHand(h, roleIds) {
   for (const f of HAND_REQUIRED) if (typeof h[f] !== "string" || !h[f].trim()) out.push(`${file}: field "${f}" is missing or empty`);
   if (typeof h.status === "string" && h.status.trim() && !HAND_STATUSES.includes(h.status)) out.push(`${file}: field "status" is "${h.status}", must be one of ${HAND_STATUSES.join(" | ")}`);
   if (typeof h.id === "string" && h.id.trim() && `${h.id}.json` !== file) out.push(`${file}: field "id" is "${h.id}", must equal the filename stem "${file.replace(/\.json$/, "")}"`);
-  if (typeof h.whoCanUnblock === "string" && h.whoCanUnblock.trim() && h.status !== "resolved" && !whoIsValid(h.whoCanUnblock, roleIds)) {
-    out.push(`${file}: field "whoCanUnblock" is "${h.whoCanUnblock}", must be an org-roster role, owner, "mac lane" or "cloud lane"`);
+  if (typeof h.whoCanUnblock === "string" && h.whoCanUnblock.trim() && !whoIsValid(h.whoCanUnblock, roleIds)) {
+    out.push(`${file}: field "whoCanUnblock" is "${h.whoCanUnblock}", must be an org-roster role, owner, "mac lane", "cloud lane" or "the other lane"`);
+  }
+  if (h.covers !== undefined && !(Array.isArray(h.covers) && h.covers.every((c) => typeof c === "string" && /^[a-z-]+:.+/.test(c)))) {
+    out.push(`${file}: field "covers" must be a list of auto-hand ids like "mail:<message-id>"`);
   }
   return out;
 }
@@ -188,6 +193,14 @@ function selfTest() {
   t("validate: a bogus whoCanUnblock is named", bad({ whoCanUnblock: "nobody-in-particular" }, 'field "whoCanUnblock" is "nobody-in-particular"'));
   t("validate: status maybe is rejected", bad({ status: "maybe" }, 'field "status" is "maybe"'));
   t("validate: an id that is not the filename stem is rejected", bad({ id: "other" }, 'field "id" is "other"'));
+  t("validate: 'Owner' is valid (case-folded, as routeHand folds it)", validateHand({ ...good, whoCanUnblock: "Owner" }, roles).length === 0);
+  t("validate: 'danger-zone' is NOT the owner (word boundary)", bad({ whoCanUnblock: "danger-zone" }, 'field "whoCanUnblock"'));
+  t("validate: 'ownerless' is NOT the owner (word boundary)", bad({ whoCanUnblock: "ownerless" }, 'field "whoCanUnblock"'));
+  t("validate: 'the other lane' is valid (routeHand routes it)", validateHand({ ...good, whoCanUnblock: "the other lane" }, roles).length === 0);
+  t("validate: a RESOLVED hand with a bogus whoCanUnblock is rejected too", bad({ status: "resolved", whoCanUnblock: "nobody" }, 'field "whoCanUnblock"'));
+  t("validate: covers that is a string, not a list, is named", bad({ covers: "mail:abc" }, 'field "covers"'));
+  t("validate: a covers entry with no kind prefix is named", bad({ covers: ["abc"] }, 'field "covers"'));
+  t("validate: a well-formed covers list is valid", validateHand({ ...good, covers: ["mail:abc"] }, roles).length === 0);
   t("validate: an unreadable file is named", validateHand({ __file: "x.json", __unreadable: "bad" }, roles)[0].startsWith("x.json:"));
   t("validate: ledger-wide, one bad hand among good ones is reported", validateLedger([good, { ...good, __file: "z.json", id: "z", status: "maybe" }], roles).length === 1);
   t("an unknown domain with no explicit unblocker is a GAP", routeHand({ domain: "quantum-teleport" }, roles).kind === "gap");
@@ -200,6 +213,32 @@ function selfTest() {
   t("resolved hands are not surfaced, open + unreadable are", s.open === 2);
   t("a very old open hand counts as stale", s.stale >= 1);
   t("an unreadable ledger file counts as a gap, never dropped", s.gaps >= 1);
+  // main(): the bare run must EXIT 1 on a planted bad hand and 0 on a good one (a self-test of
+  // validateHand alone cannot see main's wiring). Runs a copy of this script in a temp tree.
+  const tmp = mkdtempSync(join(tmpdir(), "crh-main-"));
+  try {
+    mkdirSync(join(tmp, "scripts"), { recursive: true }); mkdirSync(join(tmp, "docs/agent"), { recursive: true }); mkdirSync(join(tmp, "artifacts/raised-hands"), { recursive: true });
+    copyFileSync(fileURLToPath(import.meta.url), join(tmp, "scripts/check-raised-hands.mjs"));
+    writeFileSync(join(tmp, "docs/agent/org-roster.json"), JSON.stringify({ roles: [{ id: "sre" }] }));
+    const hp = join(tmp, "artifacts/raised-hands/h.json");
+    const runMain = () => spawnSync("node", [join(tmp, "scripts/check-raised-hands.mjs")], { encoding: "utf8" });
+    writeFileSync(hp, JSON.stringify({ ...good, __file: undefined }));
+    t("main: the bare run exits 0 on a well-formed ledger", runMain().status === 0);
+    writeFileSync(hp, JSON.stringify({ ...good, whoCanUnblock: "nobody-in-particular" }));
+    const bad1 = runMain();
+    t("main: the bare run exits 1 on a bad hand and names file and field", bad1.status === 1 && bad1.stderr.includes('h.json: field "whoCanUnblock"'));
+    // the WRITER and the schema must agree: whatever hand:raise accepts, the bare check accepts, and
+    // whatever the check would reject, hand:raise refuses to write (a hand raised by the tool's own
+    // route must never turn mainline red).
+    rmSync(hp);
+    copyFileSync(join(dirname(fileURLToPath(import.meta.url)), "raise-hand.mjs"), join(tmp, "scripts/raise-hand.mjs"));
+    const raise = (...a) => spawnSync("node", [join(tmp, "scripts/raise-hand.mjs"), "--doing", "d", "--blocked", "b", "--need", "n", ...a], { encoding: "utf8", env: { ...process.env, SIGNALGRID_LANE_REPO: tmp } });
+    t("writer: hand:raise with no --who is refused (rc 2), writes nothing", raise("--id", "w1", "--domain", "ios").status === 2 && !existsSync(join(tmp, "artifacts/raised-hands/w1.json")));
+    t("writer: hand:raise with a bogus --who is refused", raise("--id", "w2", "--who", "nobody-in-particular").status === 2);
+    t("writer: hand:raise with a malformed --covers is refused", raise("--id", "w3", "--who", "owner", "--covers", "nokind").status === 2);
+    const okRaise = raise("--id", "w4", "--who", "the other lane");
+    t("writer: …and every hand it DOES write passes the bare check (rc 0)", okRaise.status === 0 && runMain().status === 0);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
   if (fail.length) { for (const f of fail) console.error(`self-test FAIL: ${f}`); process.exit(1); }
   console.log("check-raised-hands self-test: ok");
   return 0;

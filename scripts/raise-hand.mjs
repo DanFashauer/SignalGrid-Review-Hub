@@ -25,7 +25,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // SIGNALGRID_LANE_REPO lets lane-deliver write the record into its throwaway worktree.
 const repo = process.env.SIGNALGRID_LANE_REPO ? resolve(process.env.SIGNALGRID_LANE_REPO) : resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -80,12 +80,22 @@ function resolveHand() {
   console.log(`resolved ${h.id}${note ? ` — ${note}` : ""}`);
 }
 
-function raise() {
+async function raise() {
   const doing = val("--doing"), blocked = val("--blocked"), need = val("--need");
   if (!doing || !blocked || !need) {
     console.error('raise-hand: --doing, --blocked and --need are all required (DR-054: what you were doing, what blocked you, what you need). An empty blocker looks answered.');
     process.exit(2);
   }
+  // DR-054's fourth field: who can unblock it. check-raised-hands.mjs (preflight + CI) rejects a hand
+  // whose whoCanUnblock is empty or not a role / owner / lane, so a writer that let one through would
+  // turn mainline red on the merge. Refuse here, with the same predicate.
+  const { whoIsValid, rosterRoleIds } = await import(pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "check-raised-hands.mjs")).href);
+  if (!whoIsValid(val("--who"), rosterRoleIds())) {
+    console.error(`raise-hand: --who "${val("--who") ?? ""}" must be owner, "mac lane", "cloud lane", "the other lane" or an org-roster role id (docs/agent/org-roster.json) — DR-054 needs WHO can unblock it.`);
+    process.exit(2);
+  }
+  const badCover = argv.flatMap((a, i) => (a === "--covers" ? [argv[i + 1]] : [])).find((c) => !/^[a-z-]+:.+/.test(String(c ?? "")));
+  if (badCover !== undefined) { console.error(`raise-hand: --covers "${badCover}" must look like kind:<id> (mail:<message-id>, sim:<id>, heartbeat:<routine>, …).`); process.exit(2); }
   ensureLedger();
   const raisedAt = new Date().toISOString();
   const id = val("--id") ?? `${raisedAt.slice(0, 10)}-${slug(blocked)}`;
@@ -114,4 +124,4 @@ function raise() {
 if (argv.includes("--list")) list();
 else if (argv.includes("--take")) take();
 else if (argv.includes("--resolve")) resolveHand();
-else raise();
+else await raise();

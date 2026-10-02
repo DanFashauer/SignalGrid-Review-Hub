@@ -29,6 +29,15 @@ measured that was not there to measure.
 
 ## 1 — Log the row first, evaluate second
 
+Look the resource up BEFORE appending: `grep -n -i <slug> docs/agent/RESOURCE_INTAKE.md`
+by repository slug, by display name and by upstream URL (one resource has three
+spellings — `icm-architect`, "ICM Architect", the author's name — and the 2026-10-02
+re-run missed the same-day row for the same pin because its brief cited only the
+method row), plus `ls docs/agent/resource-scans | grep -i <slug>`. A hit makes this a
+rule-6 re-run: cite the row and its scan file in the Stage-A brief and AMEND that row
+instead of appending a second one. Zero hits is INCONCLUSIVE, never proof of novelty —
+run `pnpm run check:absence <topic>` and read the matches yourself.
+
 Append to the intake log in `docs/agent/RESOURCE_INTAKE.md`: Date | Resource |
 Directed by (the owner's own words) | Disposition | What it changed. A row reading
 "evaluated, not adopted" is legitimate only when it names what was actually run or

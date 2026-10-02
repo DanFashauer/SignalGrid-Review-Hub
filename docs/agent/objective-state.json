@@ -23,7 +23,7 @@
       "state": "unmet",
       "measured": {
         "pct": 0,
-        "reason": "0/20 bound proofs/steps current — evidence covers manifest 9a469e562e51, tree is 67cae1d526eb; refresh on the Mac; launch items fully current 0/28"
+        "reason": "0/20 bound proofs/steps current — evidence covers manifest 9a469e562e51, tree is 5b15a3002124; refresh on the Mac; launch items fully current 0/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,7 +33,7 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 63,
+        "open": 64,
         "partial": 4,
         "closed": 126
       },
@@ -58,42 +58,42 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "17",
-      "title": "Run the three wire-truth shifts and bind the records to the code",
-      "role": "itsm-ops-domain",
+      "rowId": "17b",
+      "title": "Drive access-governance against the Keycloak lab that already exists",
+      "role": "iam-domain",
       "executor": "skill:signalgrid-core",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-26T03:28:19.253Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     },
     {
       "rank": 2,
-      "rowId": "18",
-      "title": "Make iOS port parity behavioral, not textual",
-      "role": "mobile-native-engineer",
-      "executor": "skill:signalgrid-native",
+      "rowId": "26",
+      "title": "Role-split follow-ups from PR #222's round-9 review (post-cutoff)",
+      "role": "data-persistence-engineer",
+      "executor": "skill:signalgrid-core",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-26T03:28:19.253Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     },
     {
       "rank": 3,
-      "rowId": "24",
-      "title": "Stage the ledger-truncation article for your review",
-      "role": "proof-led-content",
-      "executor": "skill:signalgrid-scribe",
+      "rowId": "27",
+      "title": "Wire WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN or retire it",
+      "role": "security-engineer",
+      "executor": "agent:security-reviewer",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-27T07:42:24.296Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     }
   ],
   "needsExecutor": [
@@ -132,7 +132,7 @@
     },
     {
       "rowId": "77",
-      "title": "",
+      "title": "There is no web accessibility standard in this repository, proven eight ways.",
       "roles": [
         "accessibility-specialist"
       ],
@@ -140,15 +140,81 @@
     },
     {
       "rowId": "171",
-      "title": "",
+      "title": "The daily rot check watches a hand-picked tenth of the gate suite, and its own header called that the full suite.",
       "roles": [
         "sre"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     }
   ],
-  "unmeasured": [],
+  "unmeasured": [
+    {
+      "rowId": "40",
+      "title": "Row 7's reconcile half never ran",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    },
+    {
+      "rowId": "49",
+      "title": "Assessor-facing overstatement",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    },
+    {
+      "rowId": "50",
+      "title": "Operability claims without live evidence",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    }
+  ],
+  "awaiting": [
+    {
+      "rowId": "17",
+      "title": "Run the two remaining wire-truth shifts and bind the records to the code",
+      "kind": "lab",
+      "blocker": "ITSM lab for the seven vendor adapters; shift-context live source",
+      "markedAt": "2026-09-29"
+    },
+    {
+      "rowId": "18",
+      "title": "Make iOS port parity behavioral, not textual",
+      "kind": "owner",
+      "blocker": "#1118 and #1121, golden-rule-1 ruling on the DecisionEngine.swift and AppWorkflows.swift re-port",
+      "markedAt": "2026-09-29"
+    },
+    {
+      "rowId": "24",
+      "title": "Stage the ledger-truncation article for your review",
+      "kind": "owner",
+      "blocker": "#1190 draft-4 review",
+      "markedAt": "2026-09-29"
+    }
+  ],
   "escalations": [
+    {
+      "id": "plan-rows-unmeasured",
+      "clears": "cloud",
+      "asks": "3 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 40, 49, 50. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-17",
+      "clears": "owner",
+      "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-18",
+      "clears": "owner",
+      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1118 and #1121, golden-rule-1 ruling on the DecisionEngine.swift and AppWorkflows.swift re-port), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-24",
+      "clears": "owner",
+      "asks": "row 24 (\"Stage the ledger-truncation article for your review\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1190 draft-4 review), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
     {
       "id": "readiness-floor-no-clearing-op",
       "clears": "mac",
@@ -167,7 +233,7 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-01",
+      "id": "objective-loop-evidence-fresh-2026-10-02",
       "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
     }
   ],
@@ -176,12 +242,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 6,
-    "unmeasuredCount": 0,
-    "openRows": 63
+    "unmeasuredCount": 3,
+    "awaitingCount": 3,
+    "openRows": 64,
+    "partialRows": 4
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-01T13:48:48.721Z",
-  "derivedAtCommit": "8fd6f6e58afd5e99df4097f41fd120253fa8fbcc",
+  "derivedAt": "2026-10-02T00:02:15.208Z",
+  "derivedAtCommit": "fb7573256b5e844d07e6156bb95b426ed9baadb8",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "c63dbf5aa4a39357fb2e9fc173be6145f3d55fe73906c11ba5bf2a04dc8e555f"
+  "decisionAddress": "d53362b177eec4e72915f8c563c947c1b43a1ac6af35061eecb97957a722d68b"
 }

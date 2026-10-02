@@ -110,7 +110,10 @@
 //     treated as matching every lookup. A class static-field map and a `let` map are not resolved; a map built by a call
 //     (`const T = makeMap()`, `Object.fromEntries(…)`, `useMemo(…)`) is judged as a class string, not as a map:
 //     it flags only when the call TEXT carries a good class, and `Object.create(null)` filled by later
-//     assignment is silent; `new Map(…)` and an opaque `Object.entries(x).forEach(([k, v]) => { T[k] = v })` are silent. A map's WRITES are a whitelist:
+//     assignment is silent; `new Map(…)` and an opaque `Object.entries(x).forEach(([k, v]) => { T[k] = v })` are silent. A nested sub-map is followed at every depth: used as a value (alias, call
+//     argument, `Object.values/entries`, destructure, spread of a map that holds one) it escapes; only indexing it further is a read.
+//     A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
+//     read (`T.x = pick()`, a parameter, an import) is treated as possibly good-state. A map's WRITES are a whitelist:
 //     any reference to its name (or an alias in the same file) that is not a plain read — `T.x`,
 //     `T[k]`, `...T`, `k in T`, `Object.keys/values/entries(T)`, `const { a } = T` — is an
 //     unreadable possibly-good entry, so the lookup is flagged (fail-closed over-flag: passing
@@ -916,7 +919,11 @@ function analyzeSourceFile(relPath, text) {
     // A target inside a pattern, even a defaulted one (`{ a: T.x = 1 } = v`), writes the pattern's value, not its default: it is not a precise write.
     const w = (n) => {
       if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
-          (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left) && !isAssignTarget(n)) { handled.add(rootIdent(n.left)); out.push({ node: n.right, key: keyOf(n.left) }); }
+          (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left) && !isAssignTarget(n)) { handled.add(rootIdent(n.left));
+        const rv = unwrapExpr(n.right); // a value this cannot read (a parameter, an import, a call) may be a good class
+        if (!(ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword || rv.kind === K.FalseKeyword ||
+              (ts.isIdentifier(rv) && (rv.text === "undefined" || resolveConstInit(rv))) || ts.isVoidExpression(rv))) escapedMapRefs.add(n.right);
+         out.push({ node: n.right, key: keyOf(n.left) }); }
       if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
         const obj = n.expression.expression, m = n.expression.name.text;
         if (ts.isIdentifier(obj) && obj.text === "Object" && (m === "assign" || m === "defineProperty") && n.arguments[0] && rootIs(n.arguments[0])) {
@@ -941,30 +948,39 @@ function analyzeSourceFile(relPath, text) {
     // returned, an assignment/delete/update target, `(0, T)`, `Object["assign"](T)`, `Object.defineProperties(T)`,
     // `Reflect.defineProperty(T)`, `__proto__`) may write entries this file cannot see: an unreadable entry that
     // matches every lookup.
+    // Objects an access chain from the map root denotes: `T` -> [T's literal]; `T.a.b` -> the literals of those entries.
+    const objectish = (v) => { const u = unwrapExpr(v); return ts.isObjectLiteralExpression(u) ? u : ts.isIdentifier(u) ? mapObject(u) : null; };
+    const chainObjects = (id, end) => {
+      const chain = [];
+      for (let c = id.parent; c; c = c.parent) {
+        if (ts.isPropertyAccessExpression(c) || ts.isElementAccessExpression(c)) chain.push(c);
+        if (c === end) break;
+      }
+      let cur = [mapObject(id)].filter(Boolean);
+      for (const a of chain) {
+        const lit = ts.isPropertyAccessExpression(a) ? a.name.text : a.argumentExpression && ts.isStringLiteralLike(a.argumentExpression) ? a.argumentExpression.text : null;
+        cur = cur.flatMap((o) => mapEntries(o, lit)).map(objectish).filter(Boolean);
+      }
+      return cur;
+    };
+    // A map whose entries include an object (a nested sub-map): taking its entries wholesale hands out a sub-map.
+    const hasNestedMap = (id) => { const o = mapObject(id); return Boolean(o) && mapEntries(o, null).some((v) => Boolean(objectish(v))); };
     const isRead = (id) => {
       let c = id, par = c.parent;
       while (par && (ts.isParenthesizedExpression(par) && par.expression === c ? false : (ts.isNonNullExpression(par) || ts.isAsExpression(par) || ts.isSatisfiesExpression(par)) && par.expression === c)) { c = par; par = c.parent; }
       if (!par) return false;
-      if (ts.isSpreadAssignment(par) && par.expression === c) return true;
+      if (ts.isSpreadAssignment(par) && par.expression === c) return !hasNestedMap(id);
       if (ts.isBinaryExpression(par) && par.operatorToken.kind === K.InKeyword && par.right === c) return true;
-      if (ts.isVariableDeclaration(par) && par.initializer === c) return ts.isObjectBindingPattern(par.name);
+      if (ts.isVariableDeclaration(par) && par.initializer === c) return ts.isObjectBindingPattern(par.name) && !hasNestedMap(id);
       if (ts.isCallExpression(par) && par.arguments[0] === c && ts.isPropertyAccessExpression(par.expression) &&
           ts.isIdentifier(par.expression.expression) && par.expression.expression.text === "Object" &&
-          ["keys", "values", "entries"].includes(par.expression.name.text)) return true;
+          ["keys", "values", "entries"].includes(par.expression.name.text)) return par.expression.name.text === "keys" || !hasNestedMap(id);
       if ((ts.isPropertyAccessExpression(par) || ts.isElementAccessExpression(par)) && par.expression === c) {
         if (ts.isPropertyAccessExpression(par) && par.name.text === "__proto__") return false;
-        // A nested sub-map (`T.a` where the entry is an object) that is not itself indexed further may escape.
-        if (par.expression === id) {
-          const lit0 = ts.isPropertyAccessExpression(par) ? par.name.text : par.argumentExpression && ts.isStringLiteralLike(par.argumentExpression) ? par.argumentExpression.text : null;
-          const o0 = mapObject(id);
-          const nested = o0 && mapEntries(o0, lit0).some((v) => { const u = unwrapExpr(v); return ts.isObjectLiteralExpression(u) || (ts.isIdentifier(u) && Boolean(mapObject(u))); });
-          const nq = par.parent;
-          if (nested && nq && !((ts.isPropertyAccessExpression(nq) || ts.isElementAccessExpression(nq)) && nq.expression === par)) return false;
-        }
         let t = par;
         for (;;) {
           const q = t.parent;
-          if (!q) return true;
+          if (!q) return chainObjects(id, t).length === 0; // the value of the whole chain is a sub-map: it escapes
           if (isAssignTarget(t)) return false;
           if ((ts.isPropertyAccessExpression(q) || ts.isElementAccessExpression(q)) && q.expression === t) { t = q; continue; }
           if (ts.isNonNullExpression(q) || ts.isAsExpression(q) || ts.isSatisfiesExpression(q) || ts.isParenthesizedExpression(q)) { t = q; continue; }
@@ -975,7 +991,7 @@ function analyzeSourceFile(relPath, text) {
           if (ts.isArrayLiteralExpression(q) || ts.isPropertyAssignment(q) && q.name === t) return false;
           if ((ts.isForInStatement(q) || ts.isForOfStatement(q)) && q.initializer === t) return false;
           if (ts.isObjectLiteralExpression(q) || ts.isShorthandPropertyAssignment(q)) return false;
-          return true;
+          return chainObjects(id, t).length === 0; // used as a value: a sub-map may only be indexed further
         }
       }
       return false;
@@ -998,8 +1014,17 @@ function analyzeSourceFile(relPath, text) {
     const names = new Set();
     const root = rootIdent(x.expression);
     if (root) names.add(root.text);
-    const obj = mapObjectOf(x.expression);
-    for (let c = obj && obj.parent; c; c = c.parent) { if (ts.isVariableDeclaration(c) && ts.isIdentifier(c.name)) { names.add(c.name.text); break; } if (ts.isBlock(c) || ts.isSourceFile(c)) break; }
+    const addDecl = (o) => { for (let c = o && o.parent; c; c = c.parent) { if (ts.isVariableDeclaration(c) && ts.isIdentifier(c.name)) { names.add(c.name.text); break; } if (ts.isBlock(c) || ts.isSourceFile(c)) break; } };
+    const seen = new Set();
+    const addMap = (o, depth) => { // the map's declaration, and the maps it spreads (`{ ...BASE }`): a write to BASE changes this map
+      if (!o || seen.has(o) || depth > 6) return;
+      seen.add(o); addDecl(o);
+      for (const p of o.properties) if (ts.isSpreadAssignment(p)) {
+        const r = rootIdent(p.expression); if (r) names.add(r.text);
+        addMap(mapObjectOf(p.expression), depth + 1);
+      }
+    };
+    addMap(mapObjectOf(x.expression), 0);
     return names;
   };
   const lookupEntries = (x) => { // x: ElementAccess | PropertyAccess over a resolvable map, else null
@@ -2267,6 +2292,22 @@ BUG_R6.push(
   ["map write: Reflect.set(T, k, v) with a non-literal value", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Reflect.set(T, "undefined", pick());`, "T[q.data?.s] ?? T.default")],
   ["nested sub-map escapes through a const alias", mkMap(`const T = { a: { undefined: "${EMER}" }, default: "text-slate-400" }; const sub = T.a; sub.x = 1;`, "T.a[q.data?.s] ?? T.default")],
   ["nested sub-map escapes as a call argument", mkMap(`const T = { a: { ok: "text-red-400" }, default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T.a);`, "T.a[q.data?.s] ?? T.default")],
+  ["nested sub-map taken by destructure: const { a } = T; a.undefined = \u2026", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } }; const { a } = T; a.undefined = "${EMER}";`, "T.a[q.data?.s] ?? T.a.default")],
+  ["nested sub-map taken by Object.values(T)[0]", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } }; Object.values(T)[0].undefined = "${EMER}";`, "T.a[q.data?.s] ?? T.a.default")],
+  ["nested sub-map written in Object.values(T).forEach", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } }; Object.values(T).forEach((m) => { m.undefined = "${EMER}"; });`, "T.a[q.data?.s] ?? T.a.default")],
+  ["nested sub-map written in a for\u2026of over Object.entries(T)", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } }; for (const [, m] of Object.entries(T)) m.undefined = "${EMER}";`, "T.a[q.data?.s] ?? T.a.default")],
+  ["nested sub-map copied by spread: const C = { ...T }; C.a.undefined = \u2026", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } }; const C = { ...T }; C.a.undefined = "${EMER}";`, "T.a[q.data?.s] ?? T.a.default")],
+  ["two-level sub-map escapes through an alias: const Bm = T.a.b", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; const Bm = T.a.b; Bm.undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["two-level sub-map escapes as a call argument: seed(T.a.b)", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; function seed(m) { m.undefined = "${EMER}"; } seed(T.a.b);`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["two-level sub-map escapes through element access: T[\"a\"][\"b\"]", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; const Bm = T["a"]["b"]; Bm.undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["two-level sub-map taken by a nested destructure", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; const { a: { b } } = T; b.undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["write to a ...BASE spread source before the spread", mkMap(`const BASE = { ok: "text-red-400" }; BASE.undefined = "${EMER}"; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign to a ...BASE spread source", mkMap(`const BASE = { ok: "text-red-400" }; Object.assign(BASE, { undefined: "${EMER}" }); const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["function writes a ...BASE spread source: seed(BASE)", mkMap(`const BASE = { ok: "text-red-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(BASE); const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["map write with an unreadable value: T.undefined = pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.undefined = pick();`, "T[q.data?.s] ?? T.default")],
+  ["map write with a parameter value: function set(v) { T.undefined = v }", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function set(v) { T.undefined = v; } set("${EMER}");`, "T[q.data?.s] ?? T.default")],
+  ["write to a spread source reached through a const alias", mkMap(`const B0 = { ok: "text-red-400" }; const BASE = B0; BASE.undefined = "${EMER}"; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["write to a spread source two levels up (...BASE of ...B0)", mkMap(`const B0 = { ok: "text-red-400" }; B0.undefined = "${EMER}"; const BASE = { ...B0 }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2283,6 +2324,10 @@ OK_R6.push(
   ["map mutated with a non-good entry", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
   ["map only read: Object.keys(T), `k in T`, spread, destructure", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const names = Object.keys(T); const has = "ok" in T; const C = { ...T }; const { ok } = T;`, "T[q.data?.s] ?? T.default")],
   ["map read through a non-null assertion", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" };`, "T![q.data?.s] ?? T!.default")],
+  ["control: nested map read only", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400" } };`, "T.a[q.data?.s] ?? T.a.default")],
+  ["control: two-level nested map read only", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } };`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["control: ...BASE spread source untouched", mkMap(`const BASE = { ok: "text-red-400" }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["control: map write of a readable non-good literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 

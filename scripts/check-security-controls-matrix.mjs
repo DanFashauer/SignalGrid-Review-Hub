@@ -456,6 +456,21 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
     if (/``/.test(r.where)) structural.push(`line ${r.line}: Where cell has a run of two or more backticks — citations are read single-backtick only, so a longer code span could hide a cited proof or path\n      ${r.raw}`);
     else if ((r.where.match(/`/g) ?? []).length % 2) structural.push(`line ${r.line}: Where cell has an unclosed backtick — the text after it renders as plain prose no check reads\n      ${r.raw}`);
   }
+  // a Control name is never resolved as evidence, so a proof, command or path
+  // cited THERE would read as evidence nothing checked (round 17): no unclosed
+  // backtick (a run of two or more is already failed by the round-10 code-span
+  // check above), no proof-like or command-like span, no path-like span other
+  // than the exact API route, and no `proof:` text at all. The matrix's Control
+  // spans are identifiers, role names, `/v1` and the bare word `pnpm`.
+  for (const c of controlCells) {
+    if ((c.cell.match(/`/g) ?? []).length % 2) structural.push(`line ${c.line}: Control name has an unclosed backtick\n      ${c.raw}`);
+    else for (const m of c.cell.matchAll(/`([^`]+)`/g)) {
+      const t = m[1];
+      if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || FILEEXT.test(t))
+        structural.push(`line ${c.line}: Control name cites \`${t}\` — a proof, command or path in the Control cell is never resolved; evidence belongs in the Where cell\n      ${c.raw}`);
+    }
+    if (/proof\s*:/i.test(c.cell)) structural.push(`line ${c.line}: Control name carries proof: text — a proof named outside the Where cell is never resolved\n      ${c.raw}`);
+  }
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
     structural.push(`line ${c.line}: Control name carries the status word "${w}" outside the Status cell\n      ${c.raw}`);
   for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
@@ -672,6 +687,11 @@ function selfTest() {
     ["fail: a triple-backtick span hiding proof: on an Implemented row", plant("| Planted M2 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; ```x` proof:zzz``` |"), 1],
     ["fail: a double-backtick span hiding proof: on an Automated row", plant("| Planted M3 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; ``x` pnpm run proof:nosuch`` |"), 1],
     ["fail: an unclosed backtick on an Implemented row", plant("| Planted M4 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `proof:zzz |"), 1],
+    // round 17: citations in a Control name
+    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts"].flatMap((ctl) => [
+      [`fail: Control name ${ctl} on an Implemented row`, plant(`| ${ctl} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\` |`), 1],
+      [`fail: Control name ${ctl} on an Automated row`, plant(`| ${ctl} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\` |`), 1]]),
+    ["pass: Control-name spans like the matrix's own (`/v1`, `pnpm`, an identifier)", plant("| Planted C9 on `/v1` via `pnpm` and `unsafeStore()` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

@@ -712,19 +712,31 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/CLAIM_INVENTORY.md",
     near: /review-hub-ci\.yml:63\s*\|\s*\|\s*17/,
-    count: 1,
+    count: 0,
     reason:
       "a claim-inventory ROW ID (17), not a count of workflow files: the preceding row's evidence cell ends in a " +
       "workflows/ citation, so the sweep window sees 'workflow' beside the next row's id. Collided when the " +
-      "raised-hands workflow (2026-09-23) moved the derived workflow count to 17. `\\s*` for the raw-document reader.",
+      "raised-hands workflow (2026-09-23) moved the derived workflow count to 17; the @claude workflow (2026-10-02) " +
+      "moved it to 18, so the row id produces no hit — count 0, kept as a trip-wire. `\\s*` for the raw-document reader.",
   },
   {
     doc: "docs/company/ROLE_LENS_REVIEW_2026-08-21.md",
     near: /desktop\.yml:17(?![0-9])/,
-    count: 1,
+    count: 0,
     reason:
       "a LINE-NUMBER citation (desktop.yml lines 17-31) in a dated 2026-08-21 review, not a count of workflow files. " +
-      "Collided when the raised-hands workflow (2026-09-23) moved the derived workflow count to 17.",
+      "Collided when the raised-hands workflow (2026-09-23) moved the derived workflow count to 17; the @claude " +
+      "workflow (2026-10-02) moved it to 18, so it produces no hit — count 0, kept as a trip-wire.",
+  },
+  {
+    doc: "docs/agent/EVIDENCE.md",
+    near: /18 "Fifteen workflow files/,
+    count: 1,
+    reason:
+      "a LINE-NUMBER citation (CI_AND_VALIDATION.md line 18) in a dated 2026-09-02 evidence entry that quotes the " +
+      "sentence it corrected, not a count of workflow files. Collided when the @claude workflow (2026-10-02) moved " +
+      "the derived workflow count to 18. The matcher spans exactly the sweep's snippet (figure through noun): the " +
+      "`CI_AND_VALIDATION.md:` prefix and the word `total` both sit outside it.",
   },
   {
     doc: "docs/CLAIM_INVENTORY.md",

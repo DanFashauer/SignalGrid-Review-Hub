@@ -320,7 +320,8 @@ const REJECTED_REF_DEF = /^\[(?:[^\]\\]|\\.)+\]:/;
 /**
  * True when a raw source line holds `<` (or an entity or escape that renders as one)
  * anywhere but inside a code span the two renderers are certain to agree on: opened by
- * ONE unescaped backtick and closed by the next lone backtick on the same line, with no
+ * ONE backtick that starts its word (line start, whitespace or `(`, the word not a URL) and
+ * closed by the next lone backtick on the same line, with no
  * `|` inside (a table splits cells on `|` before it reads code spans). Round 21: the
  * markdown-it check below exempts whatever markdown-it calls code, and markdown-it calls
  * an 81-backtick run code where cmark-gfm (MAXBACKTICKS 80) calls it text, so a tag
@@ -332,7 +333,13 @@ export function rawLtOutsideSimpleCode(line) {
     if (line[j] !== "`") { j += 1; continue; }
     let run = 1;
     while (line[j + run] === "`") run += 1;
-    if (run === 1 && line[j - 1] !== "\\") {
+    // The opening backtick must start its word (line start, whitespace or `(`) and that word
+    // must not be a URL: GitHub's autolink extension runs a `http://`, `ftp://` or `www.`
+    // link up to the next space and takes a touching backtick with it, so the tag after
+    // it is raw HTML on GitHub while markdown-it, with linkify off, reads a code span
+    // (round 22). Every code span in this file opens after a space, `(` or line start.
+    const word = line.slice(0, j).split(/\s/).pop();
+    if (run === 1 && (j === 0 || /[\s(]/.test(line[j - 1])) && !/:\/\/|www\./i.test(word)) {
       let k = j + 1;
       while (k < line.length && !(line[k] === "`" && line[k - 1] !== "`" && line[k + 1] !== "`")) k += 1;
       if (k < line.length && !line.slice(j, k).includes("|")) { safe.push([j, k]); j = k + 1; continue; }
@@ -890,6 +897,11 @@ function selfTest() {
     // A code span opened on the line before closes early here, so <b> is raw on GitHub; the
     // per-line raw scan pairs this line's backticks wrongly and misses it, markdown-it does not.
     ["a tag after a code span that opened on the previous line fails (round 21)", { ...base, doc: good.replace(BEGIN, "text `foo\nbar` <b> `x`\n\n" + BEGIN) }, 'outside a code span ('],
+    // Round 22: GitHub's autolink takes a backtick that touches a URL, so the span is not code.
+    ...["http://a.b/", "https://a.b/", "www.a.b/", "ftp://a.b/", "HTTP://a.b/", "(http://a.b/", "*http://a.b/", "http://a.b/(", "www.a.b/("].map((pre) =>
+      [`a backtick touching ${pre} does not shelter <details> (round 22)`, { ...base, doc: good.replace(BEGIN, `see ${pre}\`<details>\` y\n\n${BEGIN}`) }, "one-backtick code span"]),
+    ["a code span opening after a word character does not shelter <b> (round 22)", { ...base, doc: good.replace(BEGIN, "x y`<b>` z\n\n" + BEGIN) }, "one-backtick code span"],
+    ["a code span after a URL and a space still passes (round 22)", { ...base, doc: good.replace(BEGIN, "see http://a.b/ `<b>` and (`<c>`) y\n\n" + BEGIN) }, null],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

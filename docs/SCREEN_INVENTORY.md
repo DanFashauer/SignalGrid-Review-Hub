@@ -62,7 +62,9 @@ because GitHub may end the table at one while the gate's renderer continues it. 
 row may not contain `<` at all, even in a code span, because raw HTML in a cell such as
 an end-of-table tag passes through to the browser and ends the table there. Anywhere
 else in the file, `<` may appear only inside a code span written with one backtick on
-each side, opened and closed on the same line, with no `|` inside; not in a code block,
+each side, opened and closed on the same line, with no `|` inside, whose opening backtick
+follows a space, a `(` or the start of the line and does not touch a web address (GitHub
+links an address together with a backtick that touches it); not in a code block,
 not in a longer backtick run, and an entity or escape that renders as `<` counts too. A
 tag in prose, mid-line included, can hide, collapse or cut the table once a browser parses
 the page, and the renderers disagree on longer code spans. The inventory is the only

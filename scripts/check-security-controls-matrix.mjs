@@ -465,11 +465,16 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   for (const c of controlCells) {
     if ((c.cell.match(/`/g) ?? []).length % 2) structural.push(`line ${c.line}: Control name has an unclosed backtick\n      ${c.raw}`);
     else for (const m of c.cell.matchAll(/`([^`]+)`/g)) {
-      const t = m[1];
-      if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || FILEEXT.test(t))
+      // a file is path-like whatever its extension or case, and with a `:NN` line
+      // or `#…` anchor suffix too (round 18); the matrix's Control spans carry
+      // none (Where cells keep FILEEXT: they cite identifiers like `ApiKeyRecord.token`)
+      const t = m[1], bare = t.replace(/#.*$/, "").replace(/:\d+$/, "");
+      if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || /\.[A-Za-z][A-Za-z0-9]*$/.test(bare))
         structural.push(`line ${c.line}: Control name cites \`${t}\` — a proof, command or path in the Control cell is never resolved; evidence belongs in the Where cell\n      ${c.raw}`);
     }
-    if (/proof\s*:/i.test(c.cell)) structural.push(`line ${c.line}: Control name carries proof: text — a proof named outside the Where cell is never resolved\n      ${c.raw}`);
+    // emphasis and code-span markers are dropped first: `pro**of**:x`, `_proof_:x`
+    // and a `proof` span followed by `:x` all read as proof:x (round 18)
+    if (/proof\s*:/i.test(c.cell.replace(/[*_`]/g, ""))) structural.push(`line ${c.line}: Control name carries proof: text — a proof named outside the Where cell is never resolved\n      ${c.raw}`);
   }
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
     structural.push(`line ${c.line}: Control name carries the status word "${w}" outside the Status cell\n      ${c.raw}`);
@@ -688,10 +693,10 @@ function selfTest() {
     ["fail: a double-backtick span hiding proof: on an Automated row", plant("| Planted M3 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; ``x` pnpm run proof:nosuch`` |"), 1],
     ["fail: an unclosed backtick on an Implemented row", plant("| Planted M4 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `proof:zzz |"), 1],
     // round 17: citations in a Control name
-    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts"].flatMap((ctl) => [
+    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts", "Planted C8 `npm run test`", "Planted D0 `foo.ts`", "Planted D1 `scripts/foo`", "Planted D2 in `no-such-file.ts:12`", "Planted D3 in `no-such-gate.mjs#L1`", "Planted D4 in `no-such-file.py`", "Planted D5 in `no-such-file.TS`", "Planted D6 pro**of**:zzz", "Planted D7 _proof_:zzz", "Planted D8 `proof`:zzz"].flatMap((ctl) => [
       [`fail: Control name ${ctl} on an Implemented row`, plant(`| ${ctl} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\` |`), 1],
       [`fail: Control name ${ctl} on an Automated row`, plant(`| ${ctl} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\` |`), 1]]),
-    ["pass: Control-name spans like the matrix's own (`/v1`, `pnpm`, an identifier)", plant("| Planted C9 on `/v1` via `pnpm` and `unsafeStore()` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
+    ["pass: Control-name spans like the matrix's own (`/v1`, `pnpm`, an identifier)", plant("| Planted C9 on `/v1` and `/` via `pnpm`, `unsafeStore()`, `object.id + tenant_id` and `v1.2` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

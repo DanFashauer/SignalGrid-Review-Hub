@@ -447,6 +447,15 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   }
   for (const c of controlCells) if (CELL_MARKUP.test(c.cell)) structural.push(`line ${c.line}: Control name carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a status word past any fold\n      ${c.raw}`);
   for (const r of rows) if (CELL_MARKUP.test(r.where)) structural.push(`line ${r.line}: Where cell carries markup characters (${CELL_MARKUP_LIST}) — they could disguise a claim or re-point cited evidence\n      ${r.raw}`);
+  // citations are read with single-backtick pairing, which equals CommonMark's
+  // only when every backtick run is ONE long (backslash is already banned): a
+  // \`\`x\` proof:y\`\` span renders whole but hides proof:y from both parsers, and
+  // an unclosed backtick renders as plain text nothing reads (round 16). The
+  // matrix uses neither.
+  for (const r of rows) {
+    if (/``/.test(r.where)) structural.push(`line ${r.line}: Where cell has a run of two or more backticks — citations are read single-backtick only, so a longer code span could hide a cited proof or path\n      ${r.raw}`);
+    else if ((r.where.match(/`/g) ?? []).length % 2) structural.push(`line ${r.line}: Where cell has an unclosed backtick — the text after it renders as plain prose no check reads\n      ${r.raw}`);
+  }
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
     structural.push(`line ${c.line}: Control name carries the status word "${w}" outside the Status cell\n      ${c.raw}`);
   for (const d of linkDefs) structural.push(`line ${d.line} is a link reference definition — it never renders, so text in it (the matrix-wide binding, say) is invisible to the reader (the matrix uses none)\n      ${d.raw}`);
@@ -657,6 +666,12 @@ function selfTest() {
     ["fail: a case-variant proof span on an Automated row", plant("| Planted A6 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `PROOF:zzz` |"), 1],
     ["fail: a well-formed missing proof on an Automated row", plant("| Planted A7 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `pnpm run proof:zzz-no-such` |"), 1],
     ["pass: a bare `pnpm` word and `pnpm-workspace.yaml` beside a valid path", plant("| Planted K9 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `pnpm`; `pnpm-workspace.yaml` |"), 0],
+    // round 16: multi-backtick runs and unclosed backticks in a Where cell
+    ["fail: a double-backtick span hiding proof: on an Implemented row", plant("| Planted M0 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; ``x` proof:zzz`` |"), 1],
+    ["fail: a padded double-backtick span with an inner backtick on an Implemented row", plant("| Planted M1 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `` ` pnpm run proof:zzz` `` |"), 1],
+    ["fail: a triple-backtick span hiding proof: on an Implemented row", plant("| Planted M2 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; ```x` proof:zzz``` |"), 1],
+    ["fail: a double-backtick span hiding proof: on an Automated row", plant("| Planted M3 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; ``x` pnpm run proof:nosuch`` |"), 1],
+    ["fail: an unclosed backtick on an Implemented row", plant("| Planted M4 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `proof:zzz |"), 1],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

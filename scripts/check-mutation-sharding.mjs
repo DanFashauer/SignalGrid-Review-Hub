@@ -22,7 +22,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, installRestore, classifyRun } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, processCommand, installRestore, classifyRun } from "./mutation-guard.mjs";
 
 let passed = 0;
 const failures = [];
@@ -203,7 +203,9 @@ check("proof:carrier-reachability keeps its decision ladder registered: evaluate
 check("the own-pid rule holds on its own (not masked by the cmdline test): own pid never counts, a live mutation-guard pid does",
   sweepAlive(process.pid, process.pid, () => "node mutation-guard.mjs") === false
   && sweepAlive(process.pid, -1, () => "node mutation-guard.mjs") === true
-  && sweepAlive(process.pid, -1, () => "node something-else.mjs") === false);
+  && sweepAlive(process.pid, -1, () => "node something-else.mjs") === false
+  && sweepAlive(process.pid, -1, () => { throw new Error("unreadable"); }) === true);
+check("process identity is readable WITHOUT /proc (macOS): processCommand falls back to ps", /node/.test(processCommand(process.pid, "/nonexistent-proc-root")));
 {
   const here0 = dirname(fileURLToPath(import.meta.url));
   const repo0 = resolve(here0, "..");
@@ -293,7 +295,9 @@ check("the own-pid rule holds on its own (not masked by the cmdline test): own p
     return kids.flatMap((k) => [k, ...descendants(k)]);
   };
   const isDead = (pid) => {
-    try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch (e) { return e?.code === "ENOENT" ? true : (() => { try { process.kill(pid, 0); return false; } catch { return true; } })(); }
+    // /proc where it exists (a zombie counts as dead); kill(0) elsewhere. ENOENT under /proc means dead ONLY if /proc exists.
+    if (existsSync("/proc/self")) { try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch { return true; } }
+    try { process.kill(pid, 0); return false; } catch { return true; }
   };
   const live = [];
   try {
@@ -321,8 +325,7 @@ check("the own-pid rule holds on its own (not masked by the cmdline test): own p
       check(`e2e: SIGTERM mid-run exits 143 and restores the registered file byte-for-byte (exit ${ra.code})`,
         ra.code === 143 && !dirty() && /restored from the journal/.test(ra.out));
       check("e2e: no journal (not even the lock marker) is left behind after SIGTERM", journalFiles().length === 0);
-      await sleep(300);
-      check("e2e: the proof's WHOLE process tree died with the sweep (no orphan left running)", tree.every(isDead));
+      check("e2e: the proof's WHOLE process tree died with the sweep (no orphan left running)", await waitFor(() => tree.every(isDead), 3000));
 
       // 2. SIGKILL: no handler can run. The next start must refuse, name the file, and --restore-stale must fix it.
       const b = startSweep();

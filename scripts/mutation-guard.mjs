@@ -1689,17 +1689,25 @@ function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (err) { return err?.code === "EPERM"; }
 }
 
+/** The command line of `pid`: /proc where it exists, `ps` elsewhere (macOS has no /proc). Throws if neither can say. */
+export function processCommand(pid, procRoot = "/proc") {
+  try { return readFileSync(`${procRoot}/${pid}/cmdline`, "utf8"); } catch { /* fall through to ps */ }
+  const r = spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" });
+  if (r.error || r.status !== 0 || r.stdout.trim() === "") throw new Error(`cannot read the command line of pid ${pid}`);
+  return r.stdout;
+}
+
 /**
  * Is `pid` a LIVE mutation sweep? Liveness of the bare pid is not enough: a pid is reused (in a
  * container the sweep is routinely pid 1), so a dead sweep's journal would read "alive" and be
  * skipped — or, when the new sweep got the same pid, overwritten and deleted with the mutated
- * file left in the tree. Our own pid never counts; and where the process can be inspected it
- * must actually be a mutation-guard. Where it cannot (no /proc), say "not a live sweep":
- * fail closed — the journal is then treated as stale and refused, never silently skipped.
+ * file left in the tree. Our own pid never counts; and the process must actually be a
+ * mutation-guard. If its identity CANNOT be read (no /proc and no ps) it is treated as LIVE:
+ * a journal is then refused, never cleared or skipped — an unknown must tighten, not loosen.
  */
-export function sweepAlive(pid, self = process.pid, readCmd = (p) => readFileSync(`/proc/${p}/cmdline`, "utf8")) {
+export function sweepAlive(pid, self = process.pid, readCmd = processCommand) {
   if (pid === self || !pidAlive(pid)) return false;
-  try { return readCmd(pid).includes("mutation-guard"); } catch { return false; }
+  try { return readCmd(pid).includes("mutation-guard"); } catch { return true; }
 }
 
 /** Journals owned by a sweep that is running right now (two sweeps must not share the tree). */

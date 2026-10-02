@@ -301,9 +301,13 @@ export function logicalLines(lines, kind, path = "") {
   };
   if (kind === "yaml") {
     let cur = null;
+    let scalar = -1; // the indent of the key that opened a `|`/`>` block scalar; its more-indented lines are content
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i];
-      const t = stripYamlComment(l);
+      if (scalar >= 0 && l.trim() !== "" && indent(l) <= scalar) scalar = -1;
+      // inside a block scalar a `#` line is content (a script line the shell may glue and run), not a YAML comment
+      const t = scalar >= 0 ? l : stripYamlComment(l);
+      if (scalar < 0 && /(?::|^\s*-)\s+(?:[&!]\S+\s+)*[|>][+-]?\d*\s*$/.test(t)) scalar = indent(l);
       const isEntry = /^\s*(?:-(?:\s|$)|#|\?\s|:\s|(?:"[^"]*"|'[^']*'|[^\s#"'][^#]*?):(?:\s|$))/.test(l);
       if (
         cur &&
@@ -412,10 +416,11 @@ export function joinContinuations(entries, cont, modes, skip = null) {
       else skipped.push(j);
     }
     const base = /^\s*/.exec(entries[k].text)[0].length;
-    const joins = modes.map((mode) => {
-      let text = entries[k].text.replace(cont, "");
-      for (const n of parts.slice(1)) {
-        const next = n !== parts[parts.length - 1] ? entries[n].text.replace(cont, "") : entries[n].text;
+    // splice `first` with the members `rest` after it, the way each mode reads a continuation
+    const splice = (first, rest) => modes.map((mode) => {
+      let text = entries[first].text.replace(cont, "");
+      for (const n of rest) {
+        const next = n !== rest[rest.length - 1] ? entries[n].text.replace(cont, "") : entries[n].text;
         const lead = /^\s*/.exec(next)[0].length;
         text +=
           mode === "space"
@@ -430,14 +435,22 @@ export function joinContinuations(entries, cont, modes, skip = null) {
       }
       return text;
     });
+    const joins = splice(k, parts.slice(1));
+    // a skipped line that itself continues is ALSO spliced with the members after it: in a heredoc the shell glues
+    // `#x; npx -y @upstash/cont\` + `ext7-mcp@latest` and runs it, so the name may start on the skipped line
+    const skippedJoins = skipped
+      .filter((n) => cont.test(entries[n].text))
+      .flatMap((n) => splice(n, parts.filter((m) => m > n)).map((text) => ({ i: entries[n].i, text })));
     // a quote beside the marker (`"@upstash/context7-"\` + `mcp`) is concatenated by the shell: test quote-free too
     // and with escapes dropped (`context7\-\` + `mcp`): the shell removes both before the word is formed
-    if (!joins.some((t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "").replace(/\\(.)/g, "$1")))) {
+    const names = (t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "").replace(/\\(.)/g, "$1"));
+    if (!joins.some(names) && !skippedJoins.some((x) => names(x.text))) {
       out.push({ i: entries[k].i, text: entries[k].text });
       continue;
     }
     for (const text of joins) out.push({ i: entries[k].i, text }); // the same line named twice is de-duplicated in the sweep
     for (const n of skipped) out.push({ i: entries[n].i, text: entries[n].text });
+    out.push(...skippedJoins);
     k = j;
   }
   return out;
@@ -712,10 +725,13 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
     // the prefilter reads the text as a shell would rebuild it too — continuations spliced, quotes and escapes removed —
     // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
     // (a Dockerfile also drops comment and empty lines inside a continuation, and allows whitespace after the escape)
-    const rebuilt = text
-      .replace(new RegExp(`([\\\\\`^])[ \\t]*\\r*\\n(?:${GO_SPACE.replace("\\n", "")}*(?:#[^\\n]*)?\\r*\\n)*[ \\t]*`, "g"), "")
-      .replace(/["'\\`^]/g, "");
-    if (!/context7/i.test(text) && !/context7/i.test(rebuilt) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
+    // two rebuilds, both read: comment and empty lines inside a continuation are dropped only as BuildKit drops them;
+    // a shell keeps a `#`-led line after `\<newline>` (glued, not a comment), so it is also rebuilt with them kept
+    const rebuilt = [
+      new RegExp(`([\\\\\`^])[ \\t]*\\r*\\n(?:${GO_SPACE.replace("\\n", "")}*(?:#[^\\n]*)?\\r*\\n)*[ \\t]*`, "g"),
+      /([\\`^])[ \t]*\r*\n[ \t]*/g,
+    ].map((re) => text.replace(re, "").replace(/["'\\`^]/g, ""));
+    if (!/context7/i.test(text) && !rebuilt.some((r) => /context7/i.test(r)) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
     const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
@@ -812,7 +828,8 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
  * Pure: one tracked file's bytes as sweepable text; never null. UTF-8 when there
  * is no NUL byte. Otherwise (binary or UTF-16) a latin1 reading, a UTF-16LE
  * reading and a byte-swapped (UTF-16BE) reading are joined — BOM or not — so an
- * ASCII spec is found whichever encoding wrote it.
+ * ASCII spec is found whichever encoding wrote it. Ceiling: the UTF-16 reading sits behind the latin1 one, so a
+ * UTF-16 Dockerfile's `# escape=` directive is not on line 0 and is not honoured (BuildKit cannot parse it either).
  */
 export function decodeTracked(buf) {
   if (!buf.includes(0)) return buf.toString("utf8");
@@ -1643,6 +1660,17 @@ server.registerTool(
     const body = `RUN npx -y @upstash/cont\\\n${ch}# n\next7-mcp@latest\n`;
     checks.push([`[go-space U+${ch.codePointAt(0).toString(16).padStart(4, "0")}] a split inside context7 across a line led by it is named`, flags("Dockerfile", body, 1)]);
   }
+  {
+    // an oracle independent of GO_SPACE_CHARS: Go's unicode.IsSpace on the BMP is JS \s without U+FEFF, plus U+0085
+    const re = new RegExp(`^${GO_SPACE}$`);
+    let mismatch = -1;
+    for (let cp = 0; cp <= 0xffff && mismatch < 0; cp++) {
+      const c = String.fromCharCode(cp);
+      if (re.test(c) !== ((/\s/.test(c) && cp !== 0xfeff) || cp === 0x85)) mismatch = cp;
+    }
+    checks.push([`GO_SPACE equals Go unicode.IsSpace over the BMP (first mismatch: ${mismatch < 0 ? "none" : `U+${mismatch.toString(16)}`})`, mismatch < 0]);
+    checks.push(["GO_SPACE_CHARS lists exactly GO_SPACE's members", [...GO_SPACE_CHARS].length === [...Array(0x10000).keys()].filter((cp) => re.test(String.fromCharCode(cp))).length]);
+  }
   checks.push(["GO_SPACE matches exactly GO_SPACE_CHARS", [...GO_SPACE_CHARS].every((c) => new RegExp(GO_SPACE).test(c)) && !["\uFEFF", "\u180E", "\u200B", "x"].some((c) => new RegExp(GO_SPACE).test(c))]);
   for (const ch of ["\uFEFF", "\u180E", "\u200B"]) {
     const body = `RUN npx -y ${SPEC}${realPin} --help \\\n${ch}#x; npx -y ${NAME}@latest\n`;
@@ -1651,6 +1679,18 @@ server.registerTool(
   checks.push([
     "a `#` line inside a RUN heredoc continuation is also read on its own (the shell glues and runs it)",
     sweep("Dockerfile", `RUN <<EOF\nnpx -y ${SPEC}${realPin} --help\\\n#x; npx -y ${NAME}@latest\nEOF\n`).length >= 1,
+  ]);
+  checks.push([
+    "a name starting on a `#` heredoc line and finishing on the next is read (the skipped line is spliced too)",
+    sweep("Dockerfile", `RUN <<EOF\necho a\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\nEOF\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
+  ]);
+  checks.push([
+    "a plain .sh keeps a `#`-led line after a continuation for the prefilter (bash glues and runs it)",
+    sweep("x.sh", `echo a\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
+  ]);
+  checks.push([
+    "a `#` line inside a YAML `run: |` block is script content, not a comment (a name split across it is read)",
+    sweep(".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run: |\n          echo a\\\n          #x; npx -y @upstash/cont\\\n          ext7-mcp@latest\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
   ]);
   checks.push([
     "joinContinuations joins across a skipped line and still emits the skipped line on its own",

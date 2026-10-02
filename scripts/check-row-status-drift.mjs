@@ -21,7 +21,9 @@
 // the same size — or the same lines re-ended with CRLF, whose extra bytes offset
 // the cut — reads as an edit (both marks hold), and the marks follow the
 // first-parent line only, so content that only ever existed on a merged side
-// branch never raises them. A ledger with uncommitted edits, or flagged
+// branch never raises them. A landing is traced through at most 8 nested sync
+// merges; deeper is NOT MEASURED. An octopus merge's extra parents are not
+// followed, so its annotations read not-via-PR or NOT MEASURED, never stale. A ledger with uncommitted edits, or flagged
 // assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
 // 0 in every case, NOT MEASURED included: report-only is the contract this
 // row was dispatched with (making NOT MEASURED fatal is the owner's call).
@@ -117,7 +119,10 @@ const norm = (t) => t.replace(/\s+/g, " ");
 
 // Replace refs are local and rewrite history as git reports it (a `git replace
 // --graft` can hide the high-water copy); the detector reads the history as committed.
-const GIT_ENV = { ...process.env, GIT_NO_REPLACE_OBJECTS: "1" };
+const SYNC_DEPTH = 8;
+// The legacy graft file (.git/info/grafts, or GIT_GRAFT_FILE) does the same and
+// is not covered by that switch, so it is pointed at an empty file.
+const GIT_ENV = { ...process.env, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" };
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, env: GIT_ENV, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -208,7 +213,11 @@ function landingOf(cwd, intro, tip, depth = 0) {
   const pr = PR_MERGE.exec(subject);
   if (pr) return { land, pr: Number(pr[1]), subjectBranch: pr[2] };
   const parents = git(cwd, ["log", "-1", "--format=%P", land]).split(" ");
-  if (parents.length > 1 && depth < 8) return landingOf(cwd, intro, parents[1], depth + 1);
+  if (parents.length > 1) {
+    // Past SYNC_DEPTH nested sync merges the trace stops; that is NOT MEASURED, never "not via a PR".
+    if (depth >= SYNC_DEPTH) return { land, capped: true };
+    return landingOf(cwd, intro, parents[1], depth + 1);
+  }
   return { land };
 }
 
@@ -235,6 +244,7 @@ export function classify(cwd, a, opts = {}) {
   if (!intro) return { ...a, status: "NO-HISTORY", why: "no commit in this row's line history adds the annotation (added by a merge commit's own edit?)" };
   const l = landingOf(cwd, intro, "HEAD");
   if (!l) return { ...a, status: "NO-HISTORY", intro, why: `its adding commit ${intro.slice(0, 8)} reaches the tip by no first-parent or second-parent path (an octopus merge?)` };
+  if (l.capped) return { ...a, status: "NO-HISTORY", intro, why: `its landing is nested under more than ${SYNC_DEPTH} non-PR merges; the trace stops there` };
   if (!l.pr) return { ...a, status: "NOT-VIA-PR", intro, land: l.land };
   const changed = new Set(git(cwd, ["diff", "--name-only", `${l.land}^1`, l.land]).split("\n"));
   const hit = a.cited.filter((p) => changed.has(p));
@@ -614,6 +624,67 @@ function selfTest() {
     try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), (g, gs) => gs("replace", "--graft", "HEAD")]; }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push(["a graft replace ref cannot hide the high-water copy", /^NO-LEDGER: .*high-water mark/.test(st)]);
   }
+  // A legacy .git/info/grafts file cannot hide the high-water copy either.
+  {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), (g, gs) => writeFileSync(join(dirname(dirname(g)), ".git", "info", "grafts"), gs("rev-parse", "HEAD").trim() + "\n")]; }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a legacy .git/info/grafts file cannot hide the high-water copy", /^NO-LEDGER: .*high-water mark/.test(st)]);
+  }
+  // A blob-level replace on either read site (a history copy, or HEAD's copy) cannot change what is measured.
+  {
+    let st = "";
+    try {
+      st = shapeOf((f) => {
+        writeFileSync(f, bigPlan);
+        return [(g, gs) => {
+          const full = gs("rev-parse", `HEAD:${plan}`).trim();
+          writeFileSync(g, bigPlan.slice(0, 400));
+          gs("add", "-A"); gs("commit", "-qm", "cut");
+          gs("replace", full, gs("rev-parse", `HEAD:${plan}`).trim());
+        }];
+      });
+    } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a replace ref swapping a history copy for the cut one cannot hide the high-water copy", /^NO-LEDGER: .*high-water mark/.test(st)]);
+    try {
+      st = shapeOf((f) => {
+        writeFileSync(f, bigPlan);
+        return [(g, gs) => {
+          const full = gs("rev-parse", `HEAD:${plan}`).trim();
+          writeFileSync(g, bigPlan.slice(0, 400));
+          gs("add", "-A"); gs("commit", "-qm", "cut");
+          gs("replace", gs("rev-parse", `HEAD:${plan}`).trim(), full);
+        }];
+      });
+    } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a replace ref swapping HEAD's cut copy for the full one cannot hide the cut", /^NO-LEDGER: .*high-water mark/.test(st)]);
+  }
+  // A real PR landing nested under sync merges: 8 deep is traced to the PR; 9 deep is NOT MEASURED, never "not via a PR".
+  for (const [depth, expect] of [[8, "STALE"], [9, "NO-HISTORY"]]) {
+    const d = mkdtempSync(join(tmpdir(), "row-drift-depth-"));
+    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    try {
+      gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n");
+      writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); writeFileSync(join(d, "scripts/a.mjs"), "0\n");
+      gs("add", "-A"); gs("commit", "-qm", "base");
+      gs("checkout", "-qb", "claude/deep");
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/deep, x): `scripts/a.mjs`.\n");
+      writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "fix");
+      gs("checkout", "-q", "main"); gs("checkout", "-qb", "r0");
+      gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5 from o/claude/deep", "claude/deep");
+      let prev = "r0";
+      for (let i = 1; i < depth; i++) {
+        gs("checkout", "-q", "main"); gs("checkout", "-qb", `r${i}`);
+        writeFileSync(join(d, `scripts/r${i}.mjs`), `${i}\n`); gs("add", "-A"); gs("commit", "-qm", `r${i}`);
+        gs("merge", "-q", "--no-ff", "-m", `Merge branch '${prev}' into r${i}`, prev); prev = `r${i}`;
+      }
+      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", `Merge branch '${prev}'`, prev);
+      const r = measure(d).find((x) => x.row === "row 1");
+      checks.push([`a PR landing nested under ${depth} merges reads ${expect}`, r?.status === expect && (expect !== "STALE" || r.pr === 5)]);
+    } catch (e) {
+      checks.push([`depth-${depth} fixture ran (${String(e.message).split("\n")[0]})`, false]);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  }
   // Two ways a landing cannot be traced, each NOT MEASURED with its own reason.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-landing-"));
@@ -734,7 +805,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 64;
+  return failed === 0 && checks.length === 69;
 }
 
 let isMain = false;

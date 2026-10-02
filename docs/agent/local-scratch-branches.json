@@ -1,0 +1,135 @@
+[
+  {
+    "name": "attack-b1",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: neuters the prototype-depth bound beside a killed comment hunk; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "attack-b1-control",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: control run for the attack-b1 mutation; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "attack-b1-v2",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: second variant of the attack-b1 mutation; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "attack-b1b",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: b-variant of the attack-b1 mutation; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "attack-b3",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: mutates a gate for the B3 falsification case; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "final2-b3",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: final reproduction for the B3 falsification case; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-at-base",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the authorizer fixture with the fix applied at the base commit; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-b1",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the B1 case with the authorizer fix applied; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-b1b",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the B1b case with the authorizer fix applied; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-b3",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the B3 case with the authorizer fix applied; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-satisfiable",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the satisfiable-case fixture with the fix applied; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "fixed-sigterm",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: the SIGTERM-handling case with the fix applied; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "r1-b1",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: round-1 reproduction of the B1 case; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "r1-b1b",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: round-1 reproduction of the B1b case; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "r1-satisfiable",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: round-1 reproduction of the satisfiable case; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "verify-attack-b1-control",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: verification checkout of attack-b1-control; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "verify-attack-b1-v2",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: verification checkout of attack-b1-v2; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "verify-attack-b1b",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: verification checkout of attack-b1b; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  },
+  {
+    "name": "verify-attack-b3",
+    "reason": "Deliberately mutated gate kept local to prove the DR-050 pre-merge gate-falsification authorizer catches it: verification checkout of attack-b3; pushing it would publish a broken gate.",
+    "declaredBy": "owner directive 2026-10-02 (cloud lane worker B53)",
+    "declaredAt": "2026-10-02T09:50:00Z",
+    "origin": "DR-050 gate-falsification reproduction"
+  }
+]

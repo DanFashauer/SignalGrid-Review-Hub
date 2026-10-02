@@ -299,6 +299,58 @@ function isOnHubBySha(branch) {
   return containing.split("\n").map((l) => l.trim()).filter(Boolean).length > 0;
 }
 
+// ── Declared scratch branches ───────────────────────────────────────────────
+const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
+
+// Pure parse + validate. Every entry needs name/reason/origin/declaredAt/declaredBy; names are
+// exact (no wildcard, regex or glob characters); declaredAt must parse. Anything else invalidates
+// the WHOLE file — an invalid allowlist never widens.
+function validateScratchDeclaration(text) {
+  let arr;
+  try { arr = JSON.parse(text); } catch (e) { return { ok: false, error: "not valid JSON" }; }
+  if (!Array.isArray(arr)) return { ok: false, error: "top level is not an array" };
+  const seen = new Set();
+  for (const [i, e] of arr.entries()) {
+    if (!e || typeof e !== "object") return { ok: false, error: `entry ${i} is not an object` };
+    for (const k of ["name", "reason", "origin", "declaredAt", "declaredBy"]) {
+      if (typeof e[k] !== "string" || !e[k].trim()) return { ok: false, error: `entry ${i} (${e.name ?? "?"}) is missing ${k}` };
+    }
+    if (!/^[A-Za-z0-9._\/-]+$/.test(e.name)) return { ok: false, error: `entry ${i} name "${e.name}" is not a plain branch name (wildcards/regex refused)` };
+    if (!Number.isFinite(Date.parse(e.declaredAt))) return { ok: false, error: `entry ${i} (${e.name}) declaredAt does not parse` };
+    if (seen.has(e.name)) return { ok: false, error: `duplicate name ${e.name}` };
+    seen.add(e.name);
+  }
+  return { ok: true, entries: arr };
+}
+
+function loadScratchDeclaration(path) {
+  if (!existsSync(path)) return { exists: false, ok: true, entries: [] };
+  try { return { exists: true, ...validateScratchDeclaration(readFileSync(path, "utf8")) }; }
+  catch (e) { return { exists: true, ok: false, error: `unreadable: ${e.message}` }; }
+}
+
+// Commits on `branch` not on mainline whose committer time is after declaredAt. null = git could
+// not answer, which the caller treats as "new work" (fail-closed). Committer time comes from git,
+// declaredAt from the file: no clock is read.
+function newerCommitCount(branch, declaredAt, mainline, cwd) {
+  try {
+    const out = execFileSync("git", ["log", "--format=%ct", `${mainline}..${branch}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const at = Date.parse(declaredAt) / 1000;
+    return out.split("\n").filter(Boolean).filter((t) => Number(t) > at).length;
+  } catch { return null; }
+}
+
+// Pure: which declared names are excluded, which are reopened by newer work, which are stale.
+function classifyScratch(entries, localBranches, newerFn) {
+  const excluded = [], reopened = [], stale = [];
+  for (const e of entries) {
+    if (!localBranches.includes(e.name)) { stale.push(e.name); continue; }
+    const n = newerFn(e.name, e.declaredAt);
+    if (n === 0) excluded.push(e.name); else reopened.push(e.name);
+  }
+  return { excluded, reopened, stale };
+}
+
 function branchesInAgentWorktrees() {
   const out = git("worktree", "list", "--porcelain");
   if (!out) return [];
@@ -340,7 +392,24 @@ if (hubBranches.length) {
   const ephemeral = localBranches.filter(
     (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
   );
-  const noRemote = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  // DECLARED SCRATCH (owner-directed 2026-10-02): exact names in docs/agent/local-scratch-branches.json,
+  // each with a reason. Fail-closed: an invalid file excludes nothing and fails the seam; a declared
+  // branch with a commit newer than its declaredAt is work again. Reported on its own line, never silent.
+  const scratchDecl = loadScratchDeclaration(resolve(repo, SCRATCH_FILE));
+  const scratch = scratchDecl.ok
+    ? classifyScratch(scratchDecl.entries, localBranches, (b, at) => newerCommitCount(b, at, MAINLINE, repo))
+    : { excluded: [], reopened: [], stale: [] };
+  const noRemote = localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b) && !scratch.excluded.includes(b));
+  if (scratchDecl.exists) {
+    if (!scratchDecl.ok) {
+      add("fail", "Declared scratch branches", `${SCRATCH_FILE} is INVALID (${scratchDecl.error}) — nothing excluded; fix the file`);
+    } else {
+      const bits = [`declared scratch (${scratch.excluded.length}): ${scratch.excluded.join(", ") || "none"} — not counted`];
+      if (scratch.reopened.length) bits.push(`${scratch.reopened.length} declared but carry commits newer than declaredAt, counted as work: ${scratch.reopened.join(", ")}`);
+      if (scratch.stale.length) bits.push(`${scratch.stale.length} stale declaration(s), no such local branch: ${scratch.stale.join(", ")}`);
+      add(scratch.reopened.length ? "warn" : "ok", "Declared scratch branches", bits.join("; "), false);
+    }
+  }
   // THE SQUASH-MERGE HOLE, and it is the same shape as the one above. A branch merged
   // with squash has no remote afterwards (GitHub deletes it) and is NOT an ancestor of
   // mainline, because the squash makes a new commit. So this seam reported "local work
@@ -667,6 +736,29 @@ function selfTest() {
     check("STATE within a week reads fresh", stateFreshness("2026-09-20", "2026-09-22T10:00:00-04:00").kind === "fresh");
     check("an unparseable STATE date reads no-date, never fresh", stateFreshness("not-a-date", "2026-09-22T10:00:00-04:00").kind === "no-date");
     check("an unfetched remote reads no-remote, never fresh", stateFreshness("2026-09-20", "").kind === "no-remote");
+    // DECLARED SCRATCH: (a) declared -> excluded and reported, (b) undeclared -> counted,
+    // (c) invalid file -> invalid, (d) declared branch with a commit newer than declaredAt -> counted.
+    const decl = (name, at) => ({ name, reason: "r", origin: "DR-050 gate-falsification reproduction", declaredBy: "t", declaredAt: at });
+    const rawNow = Number(g("log", "-1", "--format=%ct", "same"));
+    const before = new Date((rawNow + 3600) * 1000).toISOString(), after = new Date((rawNow - 3600) * 1000).toISOString();
+    sh("checkout", "-q", "-b", "scratch-ok", "main"); put("s.txt", "x\n"); sh("add", "-A"); sh("commit", "-q", "-m", "scratch work");
+    sh("checkout", "-q", "-b", "undeclared", "main"); put("u.txt", "x\n"); sh("add", "-A"); sh("commit", "-q", "-m", "undeclared work");
+    const local = ["scratch-ok", "undeclared", "main"];
+    const newer = (b, at) => newerCommitCount(b, at, M, work);
+    const cA = classifyScratch([decl("scratch-ok", before), decl("ghost", before)], local, newer);
+    check("a declared branch is excluded (a)", cA.excluded.includes("scratch-ok") && !cA.excluded.includes("undeclared"));
+    check("a declared name with no local branch is reported stale, not fatal (a-stale)", cA.stale.join() === "ghost");
+    check("an undeclared branch is never excluded (b)", !classifyScratch([decl("scratch-ok", before)], local, newer).excluded.includes("undeclared"));
+    const good = JSON.stringify([decl("scratch-ok", before)]);
+    check("a complete declaration validates", validateScratchDeclaration(good).ok === true);
+    check("a declaration entry missing reason is INVALID (c)", validateScratchDeclaration(JSON.stringify([{ ...decl("scratch-ok", before), reason: "" }])).ok === false);
+    check("a declaration entry missing origin is INVALID (c2)", validateScratchDeclaration(JSON.stringify([{ ...decl("scratch-ok", before), origin: undefined }])).ok === false);
+    check("a wildcard name is refused (c3)", validateScratchDeclaration(JSON.stringify([decl("attack-*", before)])).ok === false);
+    check("a regex-shaped name is refused (c4)", validateScratchDeclaration(JSON.stringify([decl("^scratch.*$", before)])).ok === false);
+    check("a non-JSON declaration is INVALID (c5)", validateScratchDeclaration("{nope").ok === false);
+    const cD = classifyScratch([decl("scratch-ok", after)], local, newer);
+    check("a declared branch with a commit newer than declaredAt is counted again (d)", cD.reopened.join() === "scratch-ok" && cD.excluded.length === 0);
+    check("a git failure reads as new work, never as clean (d-fail)", newerCommitCount("no-such-branch", before, M, work) === null && classifyScratch([decl("scratch-ok", before)], local, () => null).excluded.length === 0);
   } catch (e) {
     check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
   } finally {

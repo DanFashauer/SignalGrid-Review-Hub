@@ -12,10 +12,12 @@
 // not a readable UTF-8 text file with rows at HEAD (missing, a directory, a
 // symlink, a submodule, binary, UTF-16 or another encoding, a Git LFS pointer,
 // a lone-CR line break, merge-conflict markers, no rows in its own grammar, or
-// more than a quarter below its high-water mark over its last 50 changes) is
-// a NOT MEASURED line, never silently zero. CEILING: a cut under a quarter of
-// that mark cannot be told from a deliberate deletion, and a deliberate cut
-// over a quarter reads NOT MEASURED until it ages out of the 50-change window. A ledger with uncommitted edits, or flagged
+// more than a quarter below its high-water marks — bytes and rows — over its
+// last 50 changes, or with history that cannot be read) is a NOT MEASURED
+// line, never silently zero. CEILINGS (see readLedger): a cut under a quarter
+// cannot be told from a deliberate deletion, any cut over a quarter reads clean
+// again after 49 further changes to that ledger, and a rename plus a cut in one
+// commit has no earlier copy to compare. A ledger with uncommitted edits, or flagged
 // assume-unchanged/skip-worktree, gets a NOTE saying HEAD's copy was measured. The exit code is
 // 0 in every case, NOT MEASURED included: report-only is the contract this
 // row was dispatched with (making NOT MEASURED fatal is the owner's call).
@@ -91,7 +93,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, marks, parseRows, statusText } from "./check-backlog-ownership.mjs";
 
@@ -264,22 +266,44 @@ export function readLedger(cwd, file) {
   // Rows in the ledger's OWN grammar: a backlog's checkboxes do not make a plan readable, nor the reverse.
   const rows = file === LEDGERS[1] ? (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(text).length;
   if (rows === 0) return { why: "has no rows in its own grammar (empty, cut before its first row, or its section heading renamed)" };
-  // A ledger cut mid-file still has rows. Compare with a HIGH-WATER MARK: the
-  // largest size this ledger reached over its last HIGH_WATER_WINDOW changes on
-  // the first-parent line. Comparing with the previous copy only was not enough:
-  // one later edit, or a routine sync-merge, made the cut copy the baseline, and
-  // cuts each under the floor added up unseen. Across both ledgers' histories a
-  // real copy never fell below about 95% of that mark, so under 75% is refused.
-  // CEILING: a cut under a quarter of the mark cannot be told from a deliberate
-  // deletion, and a deliberate cut over a quarter reads NOT MEASURED until it
-  // ages out of the window.
-  let high = 0, at = "";
+  // A ledger cut mid-file still has rows. Compare with HIGH-WATER MARKS over
+  // its last HIGH_WATER_WINDOW changes on the first-parent line: the largest
+  // size AND the most rows it reached. Comparing with the previous copy only
+  // was not enough: one later edit, or a routine sync-merge, made the cut copy
+  // the baseline, and cuts each under the floor added up unseen. Bytes alone
+  // were not enough either: a cut padded back out with prose kept its size;
+  // rows catch that. Measured across both ledgers' first-parent histories: no
+  // copy fell below about 95% of its byte mark, and the row count NEVER fell
+  // below its mark. Under 75% of either mark is refused. A history version
+  // that cannot be read (a blob-less partial clone offline, a missing object)
+  // is NOT MEASURED, never "nothing to compare".
+  // CEILINGS: a cut under a quarter of the marks cannot be told from a
+  // deliberate deletion; ANY cut over a quarter, accidental or deliberate,
+  // reads clean again once it has aged out of the window (49 further changes
+  // to that ledger — about a week on the plan ledger at its 2026-10 rate); a
+  // rename and a cut in one commit has no earlier copy under the new path.
+  const rowsOf = (t) => (file === LEDGERS[1] ? (t.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(t).length);
+  let shas = [];
   try {
-    const shas = git(cwd, ["log", "--first-parent", `-${HIGH_WATER_WINDOW}`, "--format=%H", "HEAD", "--", file]).split("\n").filter(Boolean);
-    const sizes = execFileSync("git", ["cat-file", "--batch-check=%(objectsize)"], { cwd, input: shas.map((h) => `${h}:${file}`).join("\n") + "\n", encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim().split("\n");
-    sizes.forEach((sz, i) => { const n = Number(sz); if (Number.isFinite(n) && n > high) { high = n; at = shas[i]; } });
-  } catch { high = 0; /* no history to compare: nothing to refuse on */ }
-  if (high > 0 && raw.length < high * 0.75) return { why: `is ${raw.length} bytes against a high-water mark of ${high} at ${at.slice(0, 8)} within its last ${HIGH_WATER_WINDOW} changes (more than a quarter gone: truncated?)` };
+    shas = git(cwd, ["log", "--first-parent", `-${HIGH_WATER_WINDOW}`, "--format=%H", "HEAD", "--", file]).split("\n").filter(Boolean);
+  } catch { return { why: "its history could not be walked (git log failed)" }; }
+  let highBytes = 0, highRows = 0, atBytes = "", atRows = "";
+  for (const h of shas) {
+    let body;
+    try { body = execFileSync("git", ["show", `${h}:${file}`], { cwd, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] }); }
+    catch {
+      // Deleted at that commit is a real state, not an unreadable one.
+      let gone = false;
+      try { gone = git(cwd, ["ls-tree", h, "--", file]) === ""; } catch { gone = false; }
+      if (gone) continue;
+      return { why: `its copy at ${h.slice(0, 8)} could not be read (missing object or offline partial clone)` };
+    }
+    if (body.length > highBytes) { highBytes = body.length; atBytes = h; }
+    const r = rowsOf(body.toString("utf8"));
+    if (r > highRows) { highRows = r; atRows = h; }
+  }
+  if (highBytes > 0 && raw.length < highBytes * 0.75) return { why: `is ${raw.length} bytes against a high-water mark of ${highBytes} at ${atBytes.slice(0, 8)} within its last ${HIGH_WATER_WINDOW} changes (more than a quarter gone: truncated?)` };
+  if (highRows > 0 && rows < highRows * 0.75) return { why: `has ${rows} rows against a high-water mark of ${highRows} at ${atRows.slice(0, 8)} within its last ${HIGH_WATER_WINDOW} changes (more than a quarter gone: truncated?)` };
   return { text };
 }
 
@@ -491,6 +515,22 @@ function selfTest() {
         (g, gs) => gs("merge", "-q", "--no-edit", "side"),
       ];
     }],
+    ["a cut padded back out with prose (bytes kept, rows lost)", /rows against a high-water mark/, (f) => {
+      writeFileSync(f, bigPlan);
+      return (g) => writeFileSync(g, bigPlan.slice(0, 400) + "\nNotes. " + "padding prose ".repeat(Math.ceil(bigPlan.length / 14)));
+    }],
+    ["a cut followed by 48 further edits (still inside the 50-change window)", /high-water mark/, (f) => {
+      writeFileSync(f, bigPlan);
+      return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), ...Array.from({ length: 48 }, () => (g) => writeFileSync(g, readFileSync(g, "utf8") + "\n"))];
+    }],
+    ["a history copy whose object is missing (offline partial clone)", /could not be read/, (f) => {
+      writeFileSync(f, bigPlan);
+      return (g, gs) => {
+        const old = gs("rev-parse", `HEAD:${plan}`).trim();
+        rmSync(join(dirname(dirname(g)), ".git", "objects", old.slice(0, 2), old.slice(2)));
+        writeFileSync(g, bigPlan + "\n");
+      };
+    }],
     ["three cuts in a row, each under a quarter", /high-water mark/, (f) => {
       writeFileSync(f, bigPlan);
       const keep = (g) => { const t = readFileSync(g, "utf8"); writeFileSync(g, t.slice(0, Math.floor(t.length * 0.8))); };
@@ -507,6 +547,12 @@ function selfTest() {
     let st = "";
     try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.replace("40. **Row 40.** — OPEN, qa. Some body text for row 40.\n", "")); }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
     checks.push(["a deliberate one-row deletion is still measured (the shrink check is not a hair trigger)", !st.startsWith("NO-LEDGER")]);
+  }
+  // The window is exactly 50 changes: a cut followed by 49 further edits has aged out and is measured.
+  {
+    let st = "";
+    try { st = shapeOf((f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), ...Array.from({ length: 49 }, () => (g) => writeFileSync(g, readFileSync(g, "utf8") + "\n"))]; }); } catch (e) { st = `threw: ${String(e.message).split("\n")[0]}`; }
+    checks.push(["a cut followed by 49 further edits has aged out of the 50-change window and is measured (pins the window)", !st.startsWith("NO-LEDGER") && !st.startsWith("threw")]);
   }
   // A ledger git is told to ignore (assume-unchanged) and then edited still gets the NOTE.
   {
@@ -551,7 +597,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 42;
+  return failed === 0 && checks.length === 46;
 }
 
 let isMain = false;

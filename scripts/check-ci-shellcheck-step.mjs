@@ -39,7 +39,10 @@
 //   · apt calls that do NOT install shellcheck (`apt-get install -y jq`, desktop.yml's
 //     libwebkit2gtk list): whether the lock-wait shape applies to EVERY apt call is the
 //     owner's scope decision, not this gate's.
-// Line endings are normalised (CRLF/CR -> LF) before any scan.
+//   · a double-quoted escape that decodes to a NON-ASCII separator (`\_`, `\N`, `\L`, `\P`):
+//     bash treats those as word characters, so no install runs; they are not rejected.
+// Line breaks are normalised before any scan: CRLF, lone CR, NEL/LS/PS (U+0085/2028/2029) all
+// become `\n`, and a leading BOM is dropped.
 // A missing or unparseable step FAILS.
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

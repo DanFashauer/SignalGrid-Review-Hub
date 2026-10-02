@@ -33,7 +33,11 @@
 //     (`'shell' + 'check'` in an actions/github-script body);
 //   · a command or a package list held in a variable or an env value (`${{ env.X }}`,
 //     `$PKGS`) when no single line both runs apt and names shellcheck;
-//   · a package list read from a file (`xargs -a pkgs.txt apt-get install`);
+//   · a package list read from a file (`xargs -a pkgs.txt apt-get install`) or built by a
+//     command on ANOTHER step (a trailing `|`, `&&` or `||` within one step is followed);
+//   · an apt verb or package behind an expression (`apt-get ${{ matrix.verb }} -y ${{ matrix.pkg }}`),
+//     and a Dockerfile `RUN` in a docker action (it installs inside an image, not on the runner,
+//     so it cannot race the runner's dpkg lock);
 //   · a workflow that calls a script which itself installs shellcheck (the script is not
 //     workflow text); the pinned steps are the supported path;
 //   · apt calls that do NOT install shellcheck (`apt-get install -y jq`, desktop.yml's
@@ -168,7 +172,7 @@ export function unsupportedYaml(text) {
     if ((q === '"' || q === "'") && !(val.length > 1 && val.endsWith(q) && !val.endsWith("\\" + q))) out.push(`line ${i + 1}: a multi-line quoted scalar is not supported`);
     if (/\\(x[0-9A-Fa-f]{2}|u00[0-9A-Fa-f]{2}|U0000[0-9A-Fa-f]{2}|[0-7]{1,3})/.test(t)) out.push(`line ${i + 1}: an ASCII escape (\\x, \\u00, octal) can hide a package name and is not supported`);
     // \n, \t, \r ... in a double-quoted value (or a flow mapping) decode to whitespace the scanner never sees.
-    if ((val[0] === '"' || /(^|[\s,-])\{(?!\{)/.test(t)) && /\\[abtnvfre ]/.test(t)) out.push(`line ${i + 1}: a whitespace/control escape (\\n, \\t, \\r ...) in a double-quoted value is not supported`);
+    if (/"[^"]*\\[abtnvfre ]/.test(t)) out.push(`line ${i + 1}: a whitespace/control escape (\\n, \\t, \\r ...) inside a double-quoted string is not supported`);
   });
   return out;
 }
@@ -270,14 +274,16 @@ function joinedStatements(rawLines) {
     const i = n - 1;
     const t = raw ? text.trim() : stripComment(text);
     const body = t.replace(/\\$/, ""); // the text before a trailing backslash, spacing kept
+    const bs = t.endsWith("\\");
+    const continues = bs || /(&&|\|)$/.test(t); // a trailing `|` (also `||`) or `&&` carries the statement on
     if (cur) {
       cur.text += " " + body.trim();
       cur.glued += body.trimStart();
-      cur.open = t.endsWith("\\");
+      cur.open = continues;
       if (!cur.open) { push(cur); cur = null; }
       return;
     }
-    if (t.endsWith("\\")) { cur = { n: i + 1, text: body.trim(), glued: body, open: true }; return; }
+    if (continues) { cur = { n: i + 1, text: body.trim(), glued: body, open: true }; return; }
     if (t) push({ n: i + 1, text: t, glued: t });
   });
   if (cur) push(cur);
@@ -460,6 +466,10 @@ function selfTest() {
     ["snap install shellcheck", "      - run: sudo snap install shellcheck\n", true],
     ["dpkg -i shellcheck.deb", "      - run: sudo dpkg -i shellcheck.deb\n", true],
     ["`#` inside a word is not a comment", "      - run: echo a#b && apt-get install -y -qq shellcheck\n", true],
+    ["a package list piped to xargs on the next line", "      - run: |\n          printf '%s\\n' shellcheck |\n            xargs apt-get install -y -qq\n", true],
+    ["a package list built before `&&` on the previous line", "      - run: |\n          printf '%s\\n' shellcheck &&\n            xargs apt-get install -y -qq\n", true],
+    ["a package list built before `||` on the previous line", "      - run: |\n          printf '%s\\n' shellcheck ||\n            xargs apt-get install -y -qq\n", true],
+    ["a space before the backslash keeps `shell check` as two words", "      - run: |\n          apt-get install -y -qq shell \\\n          check\n", false],
     ["same-indent backslash continuation naming shellcheck", "      - run: |\n          sudo apt-get install -y -qq jq \\\n          shellcheck\n", true],
     ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
     ["apt-get reinstall shellcheck", "      - run: sudo apt-get reinstall shellcheck\n", true],
@@ -482,6 +492,13 @@ function selfTest() {
     ["unicode ASCII escape in a double-quoted value", `      - run: "echo ${BS}u0063"\n`, true],
     ["octal escape in a double-quoted value", `      - run: "echo ${BS}143"\n`, true],
     ["a clean CRLF document with a commented block opener", "jobs:\n  a:\n    steps:\n      - name: x\n        run: | # c\n          echo hi: stuff\n".replace(/\n/g, "\r\n"), false],
+    ["`\\n` escape in a flow sequence value", `      cmd: ["echo hi${BS}napt-get install -y -qq shellcheck"]\n`, true],
+    ["`\\n` escape in a flow sequence of flow mappings", `      include: [{"cmd": "echo hi${BS}napt-get install -y -qq shellcheck"}]\n`, true],
+    ["`\\n` escape in a spaced flow sequence", `      cmd: [ "echo hi${BS}napt-get install -y -qq shellcheck" ]\n`, true],
+    ["`\\n` escape in a nested block sequence", `      - - "echo hi${BS}napt-get install -y -qq shellcheck"\n`, true],
+    ["`\\n` escape after `- key:` in a nested sequence", `      - - cmd: "echo hi${BS}napt-get install -y -qq shellcheck"\n`, true],
+    ["`\\n` escape after an odd (spaced) key", `      - odd key: "echo hi${BS}napt-get install -y -qq shellcheck"\n`, true],
+    ["a plain scalar with a literal backslash-n is NOT an escape", "      run: echo a\\nb\n", false],
     ...["0", "a", "b", "t", "n", "v", "f", "r", "e", " "].map((c) => [`whitespace/control escape ${BS}${c === " " ? "<space>" : c}`, `      - run: "echo ${BS}${c}x"\n`, true]),
     ["a clean document", "jobs:\n  a:\n    steps:\n      - name: x\n        run: |\n          echo hi # a comment\n", false],
   ];

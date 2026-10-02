@@ -181,7 +181,11 @@ function makeKeycloakAdminTransport(
     const realmComposite = await get(`/users/${id}/role-mappings/realm/composite`);
     const clients = await get("/clients");
     let clientComposite: unknown = undefined;
-    if (Array.isArray(clients)) {
+    // A token that sees only some clients gets 200 with a FILTERED list, not 403: every
+    // realm has the built-in account + realm-management clients, so a list missing either
+    // is a partial read and clientComposite stays undefined (the mapper grades unknown).
+    const ids = Array.isArray(clients) ? (clients as Record<string, unknown>[]).map((c) => c?.clientId) : [];
+    if (Array.isArray(clients) && ids.includes("account") && ids.includes("realm-management")) {
       // null-prototype: a client named "__proto__" must be an own key, not a prototype swap
       const acc: Record<string, unknown> = Object.create(null);
       for (const c of clients as Record<string, unknown>[]) {
@@ -372,13 +376,30 @@ async function offline(): Promise<Map<string, Graded>> {
     const cid = `cid-${clientId}`;
     const c = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
       makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, (p) => {
-        if (p.endsWith("/clients")) return [{ id: "cid-account", clientId: "account" }, { id: cid, clientId }];
+        if (p.endsWith("/clients")) return [{ id: "cid-account", clientId: "account" }, { id: "cid-realm-management", clientId: "realm-management" }, { id: cid, clientId }];
         if (p.endsWith(`/role-mappings/clients/${cid}/composite`)) return R("super-admin");
         return undefined;
       })));
     const post = await c.fetchPosture("ag-nurse");
     check(`O6 a client named ${label} with a role -> over_privileged, never in_scope`,
       post.entitlementScope === "over_privileged", `scope=${post.entitlementScope}`);
+  }
+
+  // O6 a FILTERED /clients list is a partial read: Keycloak answers 200 [] (not 403) to a
+  // token that can list users but not clients, which would silently drop every client:*
+  // entitlement. A list without the built-in account + realm-management clients is unknown.
+  for (const [label, list] of [
+    ["200 []", []],
+    ["a list without realm-management", [{ id: "cid-account", clientId: "account" }]],
+    ["a list without account", [{ id: "cid-realm-management", clientId: "realm-management" }]],
+  ] as const) {
+    for (const who of ["ag-nurse", "ag-group-admin"]) {
+      const c = new AccessGovernanceConnector({ accessToken: "t", baseUrl: base, source: "keycloak-bridge" },
+        makeKeycloakAdminTransport(base, REALM, stubFetch(RECORDED, (p) => (p.endsWith("/clients") ? list : undefined))));
+      const post = await c.fetchPosture(who);
+      check(`O6 /clients filtered to ${label} (${who}) -> scope unknown, never in_scope/over_privileged`,
+        post.entitlementScope === "unknown", `scope=${post.entitlementScope}`);
+    }
   }
 
   // O8 L5's predicate is not vacuous: it holds with the group role, fails without it, and

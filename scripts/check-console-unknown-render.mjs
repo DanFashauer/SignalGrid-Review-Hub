@@ -113,7 +113,8 @@
 //     assignment is silent; `new Map(…)` and an opaque `Object.entries(x).forEach(([k, v]) => { T[k] = v })` are silent. A nested sub-map is followed at every depth: used as a value (alias, call
 //     argument, `Object.values/entries`, destructure, spread of a map that holds one) it escapes; only indexing it further is a read.
 //     A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
-//     read (`T.x = pick()`, a parameter, an import) is treated as possibly good-state. A map's WRITES are a whitelist:
+//     read (`T.x = pick()`, a parameter, an import, `Object.assign(T, { x: pick() })`) is treated as possibly good-state; a spread this
+//     cannot resolve (`...(c ? BASE : {})`, `...getBase()`, `...cfg.base`, a `let` source) is treated as carrying a possibly good-state entry. A map's WRITES are a whitelist:
 //     any reference to its name (or an alias in the same file) that is not a plain read — `T.x`,
 //     `T[k]`, `...T`, `k in T`, `Object.keys/values/entries(T)`, `const { a } = T` — is an
 //     unreadable possibly-good entry, so the lookup is flagged (fail-closed over-flag: passing
@@ -823,6 +824,7 @@ function analyzeSourceFile(relPath, text) {
   // object literal (imported, a parameter, `let`) is not resolved.
   const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
     ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
+  const escapedMapRefs = new Set(); // a reference that may write the map, or a spread it cannot resolve: stands for an unreadable, possibly good-state entry
   const mapObject = (id, depth = 0) => {
     if (depth > 6) return null;
     const init = resolveConstInit(id, (n) => n && (ts.isObjectLiteralExpression(unwrapExpr(n)) || ts.isIdentifier(unwrapExpr(n))));
@@ -870,6 +872,7 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isSpreadAssignment(p)) {
         const o = depth < 6 ? mapObjectOf(p.expression, depth + 1) : null;
         if (o) out.push(...mapEntries(o, lit, depth + 1));
+        else { escapedMapRefs.add(p.expression); out.push(p.expression); } // a spread this cannot resolve (`...(c ? BASE : {})`, `...getBase()`) may carry any entry
         continue;
       }
       if (!p.name && !ts.isShorthandPropertyAssignment(p)) continue;
@@ -893,7 +896,6 @@ function analyzeSourceFile(relPath, text) {
   // `Object.defineProperty(T, k, { value })`, `Reflect.set(T, k, v)` — carries entries the literal does not show.
   // Name-based over the whole file (the map and any alias of it); a key it cannot read matches every lookup.
   const mutationCache = new Map();
-  const escapedMapRefs = new Set(); // a reference that may write the map: stands for an unreadable, possibly good-state entry
   const mapMutations = (names) => {
     const key = [...names].sort().join("|");
     if (mutationCache.has(key)) return mutationCache.get(key);
@@ -903,6 +905,12 @@ function analyzeSourceFile(relPath, text) {
     const keyOf0 = (left) => (ts.isPropertyAccessExpression(left) ? left.name.text
       : ts.isElementAccessExpression(left) && ts.isStringLiteralLike(left.argumentExpression) ? left.argumentExpression.text : null);
     const keyOf = (left) => { const k = keyOf0(left); return k === "__proto__" ? null : k; }; // `__proto__` swaps the whole entry set
+    // A value this can judge: a literal, a const it resolves, or a non-class constant. Anything else (a call, a parameter, a member read) may be a good class.
+    const readableValue = (e) => {
+      const rv = unwrapExpr(e);
+      return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
+        rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && (rv.text === "undefined" || Boolean(resolveConstInit(rv))));
+    };
     // Is this node (a member access) the TARGET of an assignment — directly, or inside an object / array
     // destructuring pattern (`({ a: T.x } = v)`, `[{ a: T.x }] = v`, `({ ...T.x } = v)`, `for ({ a: T.x } of v)`)?
     const isAssignTarget = (n) => {
@@ -920,9 +928,7 @@ function analyzeSourceFile(relPath, text) {
     const w = (n) => {
       if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment &&
           (ts.isPropertyAccessExpression(n.left) || ts.isElementAccessExpression(n.left)) && rootIs(n.left) && !isAssignTarget(n)) { handled.add(rootIdent(n.left));
-        const rv = unwrapExpr(n.right); // a value this cannot read (a parameter, an import, a call) may be a good class
-        if (!(ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword || rv.kind === K.FalseKeyword ||
-              (ts.isIdentifier(rv) && (rv.text === "undefined" || resolveConstInit(rv))) || ts.isVoidExpression(rv))) escapedMapRefs.add(n.right);
+        if (!readableValue(n.right)) escapedMapRefs.add(n.right); // a value this cannot read (a parameter, an import, a call) may be a good class
          out.push({ node: n.right, key: keyOf(n.left) }); }
       if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)) {
         const obj = n.expression.expression, m = n.expression.name.text;
@@ -932,6 +938,10 @@ function analyzeSourceFile(relPath, text) {
             out.push({ node: a, key: null });
             const u = unwrapExpr(a); // a source that is not a plain literal (an identifier, a spread) carries entries this cannot read
             if (!(ts.isObjectLiteralExpression(u) && !u.properties.some((pp) => ts.isSpreadAssignment(pp)))) escapedMapRefs.add(a);
+            else for (const pp of u.properties) { // a literal source whose VALUE this cannot read (`{ undefined: pick() }`) may be a good class
+              const val = ts.isPropertyAssignment(pp) ? pp.initializer : pp;
+              if (!readableValue(val)) escapedMapRefs.add(val);
+            }
           }
         }
         if (ts.isIdentifier(obj) && obj.text === "Reflect" && m === "set" && n.arguments[0] && rootIs(n.arguments[0])) {
@@ -1020,7 +1030,6 @@ function analyzeSourceFile(relPath, text) {
       if (!o || seen.has(o) || depth > 6) return;
       seen.add(o); addDecl(o);
       for (const p of o.properties) if (ts.isSpreadAssignment(p)) {
-        const r = rootIdent(p.expression); if (r) names.add(r.text);
         addMap(mapObjectOf(p.expression), depth + 1);
       }
     };
@@ -2308,6 +2317,21 @@ BUG_R6.push(
   ["map write with a parameter value: function set(v) { T.undefined = v }", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function set(v) { T.undefined = v; } set("${EMER}");`, "T[q.data?.s] ?? T.default")],
   ["write to a spread source reached through a const alias", mkMap(`const B0 = { ok: "text-red-400" }; const BASE = B0; BASE.undefined = "${EMER}"; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
   ["write to a spread source two levels up (...BASE of ...B0)", mkMap(`const B0 = { ok: "text-red-400" }; B0.undefined = "${EMER}"; const BASE = { ...B0 }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of a conditional: ...(cond ? BASE : {})", mkMap(`const BASE = { ok: "text-red-400", undefined: "${EMER}" }; const T = { ...(cond ? BASE : {}), default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of an ||: ...(ext || BASE)", mkMap(`const BASE = { ok: "text-red-400", undefined: "${EMER}" }; const T = { ...(ext || BASE), default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of a call: ...getBase()", mkMap(`const T = { ...getBase(), default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of a member read: ...cfg.base", mkMap(`const T = { ...cfg.base, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of a parameter: ...p", mkMap(`const T = { ...p, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["spread of a `let` source written before the spread", mkMap(`let BASE = { ok: "text-red-400" }; BASE.undefined = "${EMER}"; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign(T, { undefined: pick() })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined: pick() });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign(T, { undefined: arr[0] })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined: arr[0] });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign(T, { undefined: cfg.cls })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined: cfg.cls });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign(T, {}, { undefined: pick() })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, {}, { undefined: pick() });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign(T, { [k]: pick() })", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { [k]: pick() });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign of a parameter value inside a function", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function s(v) { Object.assign(T, { undefined: v }); } s("${EMER}");`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign to a spread source with an unreadable value", mkMap(`const BASE = { ok: "text-red-400" }; Object.assign(BASE, { undefined: pick() }); const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["Object.values(T.a)[0] write at two levels", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; Object.values(T.a)[0].undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["Object(T.a) write at two levels", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; Object(T.a).undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2328,6 +2352,7 @@ OK_R6.push(
   ["control: two-level nested map read only", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } };`, "T.a.b[q.data?.s] ?? T.a.b.default")],
   ["control: ...BASE spread source untouched", mkMap(`const BASE = { ok: "text-red-400" }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
   ["control: map write of a readable non-good literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
+  ["control: Object.assign with readable non-good literal values", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { default: "text-slate-500", n: 1 });`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 

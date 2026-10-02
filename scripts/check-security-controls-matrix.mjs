@@ -50,6 +50,14 @@
 //   3. An "Automated (CI bot)" row's cited paths must be tracked too (it need
 //      not cite one: several live in GitHub settings), under the same parser,
 //      and any proof it cites must exist and resolve.
+//   4. A Control name cites nothing (it is never resolved). On every row it
+//      fails on a proof- or command-like span, a span holding `/` (bar the exact
+//      route tokens `/` and `/v1`), a span holding a letter-led dot (bar the
+//      pinned CONTROL_SPAN_ALLOW), a span joined to a dot, `proof:` text once
+//      `*` `_` and backticks are dropped, or an unclosed backtick. CEILINGS: an
+//      extension-less file name (`Dockerfile`, `Makefile`) reads as a word and
+//      passes; it cites nothing the gate resolves, and the row still needs a
+//      real Where path. A dotted identifier (`object.id`) fails, safe side.
 //
 // KNOWN FAILURES. The matrix is an owner-gated surface (compliance docs in
 // scripts/check-owner-gated-surfaces.mjs); this gate does not edit it. Rows the
@@ -294,6 +302,9 @@ const API_ROUTE = /^\/(v1)?$/;
  *  of this repository (so `scripts/x.mjs@v2` is not mistaken for one; round 11). */
 const ACTION_REF = /^([A-Za-z0-9][A-Za-z0-9-]*)\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._/-]+)?@v\d+(\.\d+)*$/;
 
+/** The only Control-name code span with a letter-led dot the matrix uses; any other
+ *  dotted Control span is read as a file citation and fails (round 19). */
+const CONTROL_SPAN_ALLOW = new Set(["object.id + tenant_id"]);
 /** The exact shape citedProofs reads; a `pnpm …`/`proof:…` token in any other shape fails. */
 const PROOF_CITE = /^(pnpm run )?proof:[\w:.-]+$/;
 /** Non-proof commands the matrix cites verbatim (no evidence weight, never resolved). */
@@ -465,15 +476,19 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   for (const c of controlCells) {
     if ((c.cell.match(/`/g) ?? []).length % 2) structural.push(`line ${c.line}: Control name has an unclosed backtick\n      ${c.raw}`);
     else for (const m of c.cell.matchAll(/`([^`]+)`/g)) {
-      // a file is path-like whatever its extension or case, and with a `:NN` line
-      // or `#…` anchor suffix too (round 18); the matrix's Control spans carry
-      // none (Where cells keep FILEEXT: they cite identifiers like `ApiKeyRecord.token`)
-      const t = m[1], bare = t.replace(/#.*$/, "").replace(/:\d+$/, "");
-      if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || /\.[A-Za-z][A-Za-z0-9]*$/.test(bare))
+      // a letter-led dot ANYWHERE in the span reads as a file, whatever follows
+      // it (`x.ts:12:5`, `x.ts@v2`, `x.py,` — round 19; suffix-stripping was a
+      // denylist and leaked). The one dotted Control span the matrix uses is pinned
+      // in CONTROL_SPAN_ALLOW. Where cells keep FILEEXT: they cite identifiers
+      // like `ApiKeyRecord.token`.
+      const t = m[1];
+      if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || (/\.[A-Za-z]/.test(t) && !CONTROL_SPAN_ALLOW.has(t)))
         structural.push(`line ${c.line}: Control name cites \`${t}\` — a proof, command or path in the Control cell is never resolved; evidence belongs in the Where cell\n      ${c.raw}`);
     }
     // emphasis and code-span markers are dropped first: `pro**of**:x`, `_proof_:x`
     // and a `proof` span followed by `:x` all read as proof:x (round 18)
+    // a span cannot split a file name either: `no-such`.ts reads as no-such.ts (round 19)
+    if (/`\.[A-Za-z]|[A-Za-z0-9_-]\.`/.test(c.cell)) structural.push(`line ${c.line}: Control name has a code span joined to a dot — it can split a file name past the span check\n      ${c.raw}`);
     if (/proof\s*:/i.test(c.cell.replace(/[*_`]/g, ""))) structural.push(`line ${c.line}: Control name carries proof: text — a proof named outside the Where cell is never resolved\n      ${c.raw}`);
   }
   for (const c of controlCells) for (const w of EXPECTED_LEGEND) if (claimFold(c.cell).includes(claimFold(w)))
@@ -693,9 +708,10 @@ function selfTest() {
     ["fail: a double-backtick span hiding proof: on an Automated row", plant("| Planted M3 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; ``x` pnpm run proof:nosuch`` |"), 1],
     ["fail: an unclosed backtick on an Implemented row", plant("| Planted M4 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `proof:zzz |"), 1],
     // round 17: citations in a Control name
-    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts", "Planted C8 `npm run test`", "Planted D0 `foo.ts`", "Planted D1 `scripts/foo`", "Planted D2 in `no-such-file.ts:12`", "Planted D3 in `no-such-gate.mjs#L1`", "Planted D4 in `no-such-file.py`", "Planted D5 in `no-such-file.TS`", "Planted D6 pro**of**:zzz", "Planted D7 _proof_:zzz", "Planted D8 `proof`:zzz"].flatMap((ctl) => [
+    ...["Planted C0 (`pnpm run proof:zzz`)", "Planted C1 (`PROOF:zzz`)", "Planted C2 (`npm run proof:zzz`)", "Planted C3 in `lib/no-such-file.ts`", "Planted C4 (proof:zzz)", "Planted C5 `` ` y` ``", "Planted C6 ``x` y``", "Planted C7 in `lib/no-such-file.ts", "Planted C8 `npm run test`", "Planted D0 `foo.ts`", "Planted D1 `scripts/foo`", "Planted D2 in `no-such-file.ts:12`", "Planted D3 in `no-such-gate.mjs#L1`", "Planted D4 in `no-such-file.py`", "Planted D5 in `no-such-file.TS`", "Planted D6 pro**of**:zzz", "Planted D7 _proof_:zzz", "Planted D8 `proof`:zzz", "Planted E0 in `no-such.ts:12:5`", "Planted E1 in `no-such.ts@v2`", "Planted E2 in `no-such.ts,`", "Planted E3 in `no-such.ts `", "Planted E4 in `no-such.ts:L12`", "Planted E5 in `.env`", "Planted E6 `object.id`", "Planted E7 `no-such`.ts"].flatMap((ctl) => [
       [`fail: Control name ${ctl} on an Implemented row`, plant(`| ${ctl} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\` |`), 1],
       [`fail: Control name ${ctl} on an Automated row`, plant(`| ${ctl} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\` |`), 1]]),
+    ["pass (documented ceiling): an extension-less file name in a Control span reads as a word", plant("| Planted E9 `Dockerfile` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["pass: Control-name spans like the matrix's own (`/v1`, `pnpm`, an identifier)", plant("| Planted C9 on `/v1` and `/` via `pnpm`, `unsafeStore()`, `object.id + tenant_id` and `v1.2` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],

@@ -341,6 +341,14 @@ jobs:
         run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      - name: Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)
+        run: node scripts/check-connector-emulator-evidence.mjs --self-test
+      - name: "Connector-emulator evidence (the manifest asserts only what a step measured)"
+        run: node scripts/check-connector-emulator-evidence.mjs
+      - name: Scheduled-verification scope self-test (a hand-picked nightly gate must fail)
+        run: node scripts/check-scheduled-verification-scope.mjs --self-test
+      - name: "Scheduled-verification scope (the daily rot check runs preflight whole)"
+        run: node scripts/check-scheduled-verification-scope.mjs
       # Sibling of the gate above: that one asks whether the call was allowed and whether
       # it is bounded, this one asks whether it went out SIGNED.
       - name: Signing-unconditional self-test (the gate must be able to fail)
@@ -1077,6 +1085,9 @@ jobs:
       - name: Enterprise auth (OIDC/JWT) proof
         run: pnpm run proof:enterprise-auth
 
+      - name: Fixture IdP (CI gateway-smoke token source) proof
+        run: pnpm run test:fixture-idp
+
       # Real cryptographic material, zero cost: a certified OIDC provider booted
       # in-process mints genuine RS256/DPoP tokens over real HTTP, and every
       # accept/reject decision runs through the production verifier. The fixture
@@ -1654,34 +1665,38 @@ jobs:
         run: docker compose -f docker-compose.prod.yml exec -T db psql -U sg -d signalgrid -c "ALTER ROLE signalgrid_runtime WITH LOGIN PASSWORD 'ci-smoke'"
 
       - name: "Runbook step 3: recreate the api as the runtime role on the production default profile"
-        # The OIDC values are WELL-FORMED PLACEHOLDERS (a .invalid host cannot
-        # resolve), because gateway readiness now refuses an instance whose
-        # enterprise auth is unconfigured — an IdP-less gateway can
-        # authenticate nobody. This proves the configuration path; no token
-        # can verify against it, and the smoke's demo-bearer-401 assertion
-        # still holds for exactly that reason.
+        # The OIDC values point at the CI-ONLY fixture IdP (scripts/fixture-idp.compose.yml
+        # overlay, scripts/fixture-idp.mjs) on the compose network, so a signed,
+        # mapped token can verify against the packaged api. The overlay is CI
+        # only; docker-compose.prod.yml defaults are unchanged. The tenant map
+        # targets tenant_northwind because a mapped identity must bind to a
+        # tenant the core actually seeds.
         env:
           DATABASE_URL: postgres://signalgrid_runtime:ci-smoke@db:5432/signalgrid
-          OIDC_ISSUER: https://idp.ci-placeholder.invalid
+          OIDC_ISSUER: http://idp:9000
           OIDC_AUDIENCE: signalgrid-ci
-          OIDC_JWKS_URI: https://idp.ci-placeholder.invalid/jwks
-          OIDC_TENANT_MAP: '{"ci-tenant":"tenant-ci"}'
+          OIDC_JWKS_URI: http://idp:9000/jwks
+          OIDC_TENANT_MAP: '{"ci-tenant":"tenant_northwind"}'
           OIDC_ROLE_MAP: '{"ci-role":"operator"}'
-        run: docker compose -f docker-compose.prod.yml up -d --force-recreate api
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml up -d --force-recreate idp api
 
       - name: Wait for the gateway-profile API
         run: curl -sf --retry 60 --retry-delay 2 --retry-all-errors http://localhost:8080/api/healthz
 
-      - name: Smoke-test the gateway fence
+      # The fence assertions (unchanged) plus the positive path: SMOKE_IDP_URL
+      # makes the smoke mint a fixture-signed token and require 200 as the
+      # mapped tenant, with wrong-audience / expired / unmapped-role still 401.
+      - name: Smoke-test the gateway fence and the signed-token positive path
         env:
           BASE_URL: http://localhost:8080
           SMOKE_EXPECT_PROFILE: shared-device-gateway
+          SMOKE_IDP_URL: http://127.0.0.1:59000
         run: node scripts/smoke-stack.mjs
 
       - name: Stack logs (on failure)
         if: failure()
-        run: docker compose -f docker-compose.prod.yml logs --no-color
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml logs --no-color
 
       - name: Teardown
         if: always()
-        run: docker compose -f docker-compose.prod.yml down -v
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml down -v --remove-orphans

@@ -238,5 +238,228 @@
       "outcome": "owner",
       "where": "folded into T-1: append at the end of AGENTS.md; an end-of-file append shifts none of the five line-number citations, which were already stale (AGENTS.md:19 and :28 do not hold the quoted text; it is at :37 and :46)"
     }
-  }
+  },
+  "reruns": [
+    {
+      "date": "2026-10-02",
+      "lane": "mac",
+      "trigger": "rule 6 re-run: the owner re-shared the ICM Architect transcript in the Mac session the same day; the Stage-A brief cited only the 2026-09-19 method row (:121) and the self-scan itself found this row (:128) and its scan file — the lookup-before-append rule landed below is the fix",
+      "workflow": "wf_090f4217-42e (one Opus self-scan acting as the skill; four Sonnet confirms in parallel; the coordinator decided)",
+      "models": {
+        "selfScan": "claude-opus-5-5",
+        "confirms": "claude-sonnet-5-5",
+        "decide": "coordinator (Fable 5.1) — decision only, no engineering stage (DR-047)"
+      },
+      "proposal": {
+        "pin": "RinDig/icm-architect @ e16cafe6a664dcf6d787a726b452adba77d913f4 (committed 2026-08-25 14:01:37 -0400). This is the same sha as the same-day intake: docs/agent/RESOURCE_INTAKE.md:128 and docs/agent/resource-scans/2026-10-02-icm-architect.json (\"pin\": \"e16cafe6…\"). Upstream has not moved, so under rule 6 (RESOURCE_INTAKE.md:88-98, \"Past rows are re-run through the scan when re-shared\") this run is a re-run of the 2026-10-02 row. My brief cited only :121, the 2026-09-19 method row, and missed :128. Count: 15 files, 808 lines (wc -l), all markdown plus LICENSE.",
+        "licence": "MIT. LICENSE:1-3 reads \"MIT License / Copyright (c) 2026 Jake Van Clief\". The owner's transcript spells the name \"Van Cleef\"; the LICENSE spells it \"Van Clief\". The licence allows republishing from this public tree, so the licence ground does not apply.",
+        "boundary": {
+          "scripts": "None. `find . -type f -not -name '*.md' -not -name LICENSE` (excluding .git) returned nothing. The files are SKILL.md, README.md, 4 references and 8 templates. There is no hook, installer or package manifest. Running the skill just means a model follows its text.",
+          "egress": "None in the skill's own text. Its only URLs are in README.md:9-10 (an arXiv link and a Skool community link) and are not instructions. The model session that runs the skill is network inference, so 'offline' cannot be shim-measured. The 2026-10-02 scan recorded the same limit.",
+          "autoExecution": "None as rule 5 defines it (a hook, an installer that fetches code, a HEAD-tracking install). Its only standing effect once installed is that the harness lists its description. That description triggers on 'audit this folder', 'map this repo', 'ICM this' and 'second brain' (SKILL.md:3), which overlaps the repo's own context-audit skill (its description matches /audit/). Under rule 5 an overlap is recorded, never grounds.",
+          "skillDirCollision": "No collision. `ls .claude/skills | grep -i icm` exits 1. `git ls-files .claude | grep -ci icm` returns 0. `ls ~/.claude/skills | grep -ci icm` returns 0. `pnpm run check:absence icm-architect` returned REFUTED, but only because docs/agent/resource-scans/2026-10-02-icm-architect.json exists; no skill directory exists. Case-folded destination check (reference-integrity.md:16): no `icm*` entry exists in any case."
+        },
+        "trials": [
+          {
+            "what": "Trial 1: Restructure mode steps 1-4 (inventory, hidden form, five-role classification, reference integrity; SKILL.md:68-80) on docs/agent/ plus artifacts/lane-messages, artifacts/sim-requests and artifacts/sim-results, read-only. Nothing was moved or written.",
+            "measured": "Tracked files: docs/agent has 51 (50 top-level entries); lane-messages 446; sim-requests 25; sim-results 56; resource-scans 2. Folder-contract files (invariant 1, SKILL.md:18): lane-messages/README.md (4,935 B) and sim-results/README.md (1,856 B) are present; sim-requests, docs/agent and resource-scans have none. Status is derived from files (invariant 9, SKILL.md:26) and already GATED: sim-requests→sim-results by scripts/check-sim-requests.mjs (preflight.mjs:533-534), unread mail by check-lane-messages.mjs (:579-580), intake row→scan file by check-resource-scan-binding.mjs (:535-536; live: 68 rows walked, 3 citing lines, 2 files, passed). Hidden form: a Record library (forms.md:67-89) with RESOURCE_INTAKE.md as its index log and resource-scans/*.json as the records. Classification: 5 *-ratchet.json files are generated (factory); 4 dated one-off reports (CLAIM_REMOVE_DISPOSITIONS_2026-09-06.json, ECC_FULL_EVALUATION_2026-09-01.md, ORG_SELF_EVALUATION_2026-09-12.md, PONYTAIL_AUDIT_2026-09-01.md) are product. Reference integrity (SKILL.md:79): those 4 have 5, 6, 8 and 10 referrers, and a scan of every docs/agent/*.md|*.json found zero files with zero referrers, so the skill's own gate classifies 0 Dead and proposes 0 moves. Walk test failure (forms.md:89, 'the index log absorbing content'): RESOURCE_INTAKE.md is 185,991 B with 68 rows (`grep -c '^| 20'`), averaging 2,680 characters and peaking at 8,491; row :128 alone is 5,466. Token estimates below are bytes÷4, derived, not tokenizer-measured. The walk for 'evaluate a shared tool' is CLAUDE.md (24,592 B ≈ 6.1k) + tool-evaluation-by-use SKILL.md (8,293 B ≈ 2.1k) + the intake log (≈46.5k) ≈ 55k tokens, against the skill's 2k-8k band (SKILL.md:97). The live symptom is this run itself: its brief pointed at :121 and the 09-19 scan and missed the same-day row :128 for the same tool. Separately, CLAUDE.md:263 says to 'read docs/agent/LOOP.md' (193,645 B ≈ 48k), but .claude/hooks/session-start.sh:130-132 prints only PHASE..NEXT ACTION, and LOOP.md:2043 says reading the STATE block is the whole procedure."
+          },
+          {
+            "what": "Trial 2: walk test (SKILL.md:89-100) on .claude/skills and .claude/agents, with CLAUDE.md as the routing table, run cold, read-only.",
+            "measured": "Entry-file size (invariant 2, SKILL.md:19: under ~60 lines, routes only): CLAUDE.md is 269 lines / 24,592 B; AGENTS.md is 97 lines / 5,533 B. Two gates require CLAUDE.md to carry content, so the skill's rule cannot be applied here: check-agent-raise-hand.mjs:111 fails unless CLAUDE.md contains 'Raise your hand when stuck (DR-054)', and the live run prints '6 first-party agent definition(s) carry the raise-your-hand contract; 9 vendored inherit it from CLAUDE.md'. check-product-framing.mjs:110-111 requires CLAUDE.md, AGENTS.md and README.md to anchor docs/PURPOSE.md (live: PASS, 12 surfaces). CLAUDE.md does not route the skills plane: 0 `.claude/skills/<name>` paths, 1 `.claude/agents/*.md` glob, 6 docs/agent paths. Routing lives in three GATED registries instead: the harness skill listing (check-skill-plane-conformance.mjs, preflight.mjs:398-399; live: '119 skill(s), 15 agent(s), 12 command(s) walked … passed'), org-roster.json (check-org-roster.mjs, preflight.mjs:550-551) and hand-routing.json (raised-hands). 'Every folder becomes an agent' tested: agents here are FILES (15 .claude/agents/*.md, 15/15 pin `model:` — 8 opus, 6 sonnet, 1 haiku). The folder-shaped units are the 119 skills (`git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l` = 119, matching VENDORED.md's stated 101+18). The skill's own text describes ONE agent walking folders (SKILL.md:8,10), so the transcript's claim is not what the skill builds. Duplicate entry files (anti-pattern, SKILL.md:106; core.md:68; system-map.md:122): AGENTS.md names CLAUDE.md 0 times (`grep -c CLAUDE AGENTS.md` = 0) and carries 0 of 5 CLAUDE.md golden-rule markers (DecisionEngine, Golden, supervised, bash 3.2, validate-sim). AGENTS.md:84 'Do not merge your own PR' contradicts DR-037 (DECISION_RECORDS.md:2220) and landing-under-dr-037/SKILL.md:8. Both points are already filed as BUILD_BACKLOG.md:2575-2576 by the earlier trial. `git log --since='3 days ago' --all -- AGENTS.md` returns nothing, so they are not yet landed."
+          },
+          {
+            "what": "Re-check of the prior row's disposition against rule 5.",
+            "measured": "RESOURCE_INTAKE.md:128 reads 'Not adopted — grounds: none of rule 5's four apply; it is not installed because installing makes a standing instruction … (rule 3, no hook execution)'. Rule 5 (RESOURCE_INTAKE.md:75-87) says such a row 'names which of the four grounds applies, or it is wrong'. Rule 3 (:69-71) covers third-party code 'auto-executed from a hook', and this skill has no code and no hook. The prior row is therefore self-contradictory under the rules it cites. The collisions it measured (CLAUDE.md regeneration, CONTEXT.md in .claude/agents|commands, invariant 6 against DR-037) are the shape rule 5 assigns to VENDORED.md override rows, not to exclusion."
+          },
+          {
+            "what": "The relayed user request ('install GitHub for me').",
+            "measured": "This Stage-A agent cannot do it and did not try. The plugin:github MCP failed at session start with '400 … Authorization header is badly formatted', and DR-063 rule 5 (origin/mac/dr-063-brain-ecosystem DECISION_RECORDS.md:4184-4185) makes the Claude GitHub App token owner-only via `/install-github-app`, once per repository. The DR-063 text came from a local tracking ref: `git fetch` of that branch failed with an access-rights error, so the text may be stale. This is surfaced for the coordinator and does not block this proposal."
+          }
+        ],
+        "alreadyHere": [
+          "The filesystem as the state machine (invariant 9): sim-requests→sim-results bound by scripts/check-sim-requests.mjs (preflight.mjs:533-534); pending is reported and never green.",
+          "Unread lane mail named on every run, closable only by the addressee: scripts/check-lane-messages.mjs (preflight.mjs:579-580).",
+          "Durable stage outputs for intake (ICM 'state in files'): the tool-evaluation-by-use §5b three-stage contract (SKILL.md:98-119), plus scripts/check-resource-scan-binding.mjs (preflight.mjs:535-536), which binds an intake row to its scan file.",
+          "Each unit states its own purpose (invariant 1) for the skills/agents plane: check-skill-plane-conformance.mjs (preflight.mjs:398-399) requires name+description on 119 skills, 15 agents and 12 commands.",
+          "Routing by role instead of a CLAUDE.md table: org-roster.json via check-org-roster.mjs (preflight.mjs:550-551); stall routing via docs/agent/hand-routing.json and scripts/raised-hands.mjs --check.",
+          "Model-agnostic fallback, Claude side: DR-047 tiers. 15/15 .claude/agents/*.md pin `model:`; check-skill-plane-conformance requires `model` to be in haiku|sonnet|opus (V-1 landed per 2026-09-19-two-videos.json decision).",
+          "The STATE block alone loaded at session start: .claude/hooks/session-start.sh:130-132 prints PHASE..NEXT ACTION only.",
+          "Reference integrity before any move: every docs/agent/*.md|*.json file has ≥1 tracked referrer, and every VENDORED.md count is held by scripts/check-publication-boundary.mjs section E (:199-230).",
+          "FILED, NOT LANDED (do not re-propose): AGENTS.md as a pointer to CLAUDE.md, and the AGENTS.md:84/:63 drift (BUILD_BACKLOG.md:2575, scan T-1/T-3); a lexical gate for the AGENTS.md↔CLAUDE.md contradiction class (BUILD_BACKLOG.md:2576, M-1). DR-063 rule 2 ('This repository's CLAUDE.md and AGENTS.md stand') is why an APPEND pointer fits and the transcript's one-line shim replacement does not; it would also fail check-product-framing.mjs:111 without a PURPOSE.md anchor."
+        ],
+        "landingPlace": ".claude/skills/icm-architect/ — all 15 files copied byte-identical from e16cafe6 (LICENSE included), plus a new upstream section and override rows in .claude/skills/VENDORED.md. The skill would be used greenfield only (Build mode for a new workstation folder, or System map form under a proposed map/ shelf) and never to regenerate CLAUDE.md, AGENTS.md or the .claude/ layout.",
+        "gapClosed": "A cold agent cannot find a resource's prior disposition without loading or grepping a ~46.5k-token intake log (bytes÷4, derived). RESOURCE_INTAKE.md is the record library's index log, but it has absorbed the records: 68 rows, 2,680 characters on average, 8,491 at most. That is the anti-pattern the skill names at forms.md:89 (\"the index log absorbing content (it's a catalog line, not the record)\"), and it fails the walk test's 2k-8k token check (SKILL.md:97). Measured consequence: this run's own brief re-scanned a tool already scanned on the same pin the same day (RESOURCE_INTAKE.md:128) without citing that row. The skill's catalog-before-shelf rule closes it: look up the resource by name before logging a row.",
+        "tasks": [
+          {
+            "id": "ICMA-1",
+            "title": "Re-dispose the 2026-10-02 ICM Architect row to ADOPT: vendor byte-identical with VENDORED.md overrides",
+            "evidence": "docs/agent/RESOURCE_INTAKE.md:128 says 'Not adopted — grounds: none of rule 5's four apply' and cites rule 3 (hooks). Rule 5 at RESOURCE_INTAKE.md:75-87 says such a row 'is wrong'. The skill has no script or hook (find returned nothing), so rule 3 (:69-71) cannot apply. There is no directory collision (`ls .claude/skills | grep -i icm` exits 1).",
+            "change": "Copy the 15 files at e16cafe6 to .claude/skills/icm-architect/ unmodified. Add a VENDORED.md upstream section (RinDig/icm-architect, MIT, sha). Add five override rows: (1) SKILL.md:19 entry file under ~60 lines that routes only, overridden by check-agent-raise-hand.mjs:111 and check-product-framing.mjs:111, so CLAUDE.md keeps its content. (2) SKILL.md:23 and assets/templates/CLAUDE.md:27, a person reads every output, yielding to DR-037 (DECISION_RECORDS.md:2220) in lanes that self-land. (3) references/core.md:68 and references/system-map.md:31, AGENTS.md generated or a pointer, yielding to DR-063 rule 2 and the append-only fix at BUILD_BACKLOG.md:2575. (4) SKILL.md:21, a CONTEXT.md per folder: never inside .claude/agents or .claude/commands, where it would become an agent or command. (5) Any role count or classification it prints is a sample, never a repo figure (nondeterminism trial in the 2026-10-02 scan: 21 vs 43 files). Also bump the VENDORED.md header arithmetic (101→102 upstream, FOURTEEN→FIFTEEN upstreams, 119→120 tracked) together with the 'N skills vendored' reason in scripts/publication-boundary.mjs, or section E (check-publication-boundary.mjs:199-230) fails preflight. Amend row :128's disposition in the same PR.",
+            "owner": "agent-platform-steward (the edit must be made in the main session after the owner says yes; .claude/skills is write-denied to subagents and owner authority does not reach them)",
+            "risk": "Low-medium. The description (SKILL.md:3) triggers on 'audit this folder' and 'map this repo', overlapping context-audit, and a model may reach for it on the tree itself. Overrides (1)-(4) contain that. Missing the section-E bump turns preflight red."
+          },
+          {
+            "id": "ICMA-2",
+            "title": "tool-evaluation-by-use §1: look up the resource by name before logging a new row",
+            "evidence": ".claude/skills/tool-evaluation-by-use/SKILL.md §1 (lines 30-35) says 'Append to the intake log' with no prior-row lookup. §0 runs the prior-row cross-check only at the coordinator stage, after the scan. RESOURCE_INTAKE.md is 185,991 B / 68 rows, so a cold read is impractical. This run's brief missed :128 (same tool, same pin, same day). forms.md:85,89 says the index is the source of truth for what exists, as one line per record.",
+            "change": "Add one sentence at the start of §1: 'First run `grep -n -i <resource> docs/agent/RESOURCE_INTAKE.md` and `ls docs/agent/resource-scans | grep -i <resource>`; a hit makes this a rule-6 re-run, so cite the row and scan in the Stage-A brief and amend that row instead of appending a second one.' Do not split the log or shorten old rows; the binding gate (check-resource-scan-binding.mjs) already ties rows to records.",
+            "owner": "agent-platform-steward (skill edit; main session)",
+            "risk": "Low. Prose only. It would be gate-shaped only if check-resource-scan-binding later flags two rows citing scans with the same resource slug, which is not proposed here."
+          },
+          {
+            "id": "ICMA-3",
+            "title": "Route the session ritual to LOOP.md's STATE block, not the whole 193 KB file",
+            "evidence": "CLAUDE.md:263 says 'START — read `docs/agent/LOOP.md`'. LOOP.md is 193,645 B (≈48k tokens, bytes÷4). .claude/hooks/session-start.sh:130-132 already prints only PHASE..NEXT ACTION, and LOOP.md:2043 says 'read the STATE block above and do the NEXT ACTION. That is the whole recovery procedure.' This is the walk-test token check (SKILL.md:97) and the catalog-holds-no-books rule (core.md:73).",
+            "change": "One-line edit to CLAUDE.md:263: 'START — read the STATE block of `docs/agent/LOOP.md` (lines from `## STATE`, printed by the SessionStart hook), run `pnpm run loop:state`, quote output.' Keep the literal 'Raise your hand when stuck (DR-054)' line untouched (check-agent-raise-hand.mjs:111).",
+            "owner": "docs-writer (CLAUDE.md is owner-merged; the coordinator lands it under DR-037 only if CLAUDE.md is in the self-land class)",
+            "risk": "Low. Rerun check-product-framing and the hook deny-list or CLAUDE.md-citing gates after the edit. Optional: drop it if the coordinator prefers two tasks."
+          }
+        ],
+        "adoptionGround": "none — adopt. Licence: MIT (LICENSE:1-3). Auto-execution: none, because there are no scripts and no hooks, and description-triggered listing is not a hook, installer or HEAD-tracking install. Egress: none in its text. Directory collision: none (`.claude/skills` and `~/.claude/skills` have 0 icm entries). The prior same-pin row (RESOURCE_INTAKE.md:128) declined adoption while stating that none of the four grounds apply, which rule 5 (:75-87) calls wrong. Its measured collisions belong in VENDORED.md override rows (ICMA-1), not in an exclusion.",
+        "modelTier": "opus (Stage A self-scan, claude-opus-5-5; DR-047)"
+      },
+      "confirms": [
+        {
+          "perspective": "agent-platform-steward (Stage B, read-only)",
+          "verdicts": [
+            {
+              "id": "ICMA-1",
+              "verdict": "amend",
+              "reason": "Direction holds: the skill has no scripts, so rule 3 cannot bar it (my grep of the clone for rm -rf, git branch -D, force, --no-verify and reset --hard found nothing, so check-skill-instruction-conflicts stays green). Its SKILL.md frontmatter has name: icm-architect, which matches the directory (check-skill-plane-conformance requires this). Section E of check-publication-boundary.mjs compares the uncovered tracked directories with the 'N skills vendored' figure in the .claude/skills area's reason (scripts/publication-boundary.mjs:104, currently 101 skills / fourteen upstreams). The proposal's bump list is right but incomplete. Amended change: also reword 'fourteen upstreams' and add the RinDig/icm-architect MIT clause in that reason string (publication-boundary.mjs:104), and add a sixth override row for the template files (see missing task). I only saw the start of RESOURCE_INTAKE.md:128 ('adopted-by-reference only — nothing installed, nothing vendored'), so the claim that its grounds line contradicts rule 5 is not re-verified here."
+            },
+            {
+              "id": "ICMA-2",
+              "verdict": "confirm",
+              "reason": ".claude/skills/tool-evaluation-by-use/SKILL.md:30-35 (§1) says 'Append to the intake log' with no prior-row lookup, as the proposal states. A one-sentence grep-first rule is prose-only and fits the skills plane. The skill is first-party, so no VENDORED.md override is needed. It needs a main-session edit because .claude/skills is write-denied to subagents."
+            },
+            {
+              "id": "ICMA-3",
+              "verdict": "amend",
+              "reason": "CLAUDE.md:263 reads 'START — read `docs/agent/LOOP.md`, run `pnpm run loop:state`', as quoted. This is a CLAUDE.md edit, not a skills-plane task, and the file's own heading says the ritual is 'enforced by hooks, restated here'. Amended change: before editing, grep scripts/ and .claude/hooks for the literal ritual string. Then edit only if no gate matches it. If one does, change the gate and the line together, with the owner deciding, because CLAUDE.md is owner-merged. I did not run that grep."
+            }
+          ],
+          "missing": {
+            "title": "Neutralise the template CLAUDE.md and CONTEXT.md that vendoring would plant under .claude/skills/icm-architect/assets/templates/",
+            "evidence": "The upstream clone has assets/templates/CLAUDE.md, which starts '# {Workspace name}' and carries instructions, and assets/templates/CONTEXT.md. `git ls-files | grep -i CLAUDE.md` shows no tracked nested CLAUDE.md besides the root one and an example doc in writing-skills, so this would be the first. Claude Code lazy-loads a nested CLAUDE.md as instructions when a file in its directory is read, and the skill's Build mode reads these templates. Byte-identical vendoring forbids renaming them.",
+            "change": "Make this a deliberate decision in the VENDORED.md upstream section, recorded as a per-upstream exclusion or a documented override row. Either leave out assets/templates/CLAUDE.md and CONTEXT.md and say so (the skill then fails to find them, so list that effect too), or keep them and record that the harness may load them as instructions inside the skill directory. Prefer the exclusion. Then re-run the vendored-set arithmetic and check-skill-plane-conformance. Without the decision, ICMA-1's claim of 15 files copied byte-identical is not safe to land.",
+            "owner": "agent-platform-steward (main session, after the owner approves ICMA-1)"
+          },
+          "modelTier": "sonnet"
+        },
+        {
+          "perspective": "gate-and-proof-engineer (owns scripts/; read-only)",
+          "verdicts": [
+            {
+              "id": "ICMA-1",
+              "verdict": "amend",
+              "reason": "Direction holds: the rule 5 contradiction at RESOURCE_INTAKE.md:128 is real, and the upstream text has no rm -rf, git branch -D, git mv, --no-verify or git push (grep returned nothing), so check-skill-instruction-conflicts.mjs has nothing to flag. But the gate arithmetic is misdescribed. The gate that fails is section E of scripts/check-publication-boundary.mjs (lines ~199-285). The CODE half requires uncovered tracked skill dirs (now 101) to equal the '(\\d+) skills vendored' figure in the .claude/skills area reason at scripts/publication-boundary.mjs:104, so that figure must go 101 to 102. The DOC half counts only the first-party carve-outs: the 'EIGHTEEN exceptions' opener and the '> | `name/` | date |' rows. A new vendored skill touches neither. The 'FOURTEEN upstreams' and '101 = 14+1+85+1' wording is prose that no gate reads, so it needs a manual edit and nothing will catch it if forgotten. The proposal's '119 to 120 tracked' is also only VENDORED.md prose. The reason string at publication-boundary.mjs:104 must also gain an 'RinDig/icm-architect, 1 under MIT (c) 2026 Jake Van Clief' clause, which no gate checks. Amended change: bump 101 to 102 in the publication-boundary.mjs:104 reason (the only gated figure), hand-edit the unguarded VENDORED.md arithmetic and the upstream clause, and make the planted-drift check explicit. Copy the dir without the bump and confirm check-publication-boundary.mjs prints the section E failure. Then add the bump and confirm it passes."
+            },
+            {
+              "id": "ICMA-2",
+              "verdict": "amend",
+              "reason": "The prose edit is right, but the proposal is too soft on the lens question. The evidence is accurate: tool-evaluation-by-use SKILL.md section 1 (lines 30-36) says 'Append to the intake log' with no lookup. It is falsifiable as a gate, so 'prose only' undersells it. scripts/check-resource-scan-binding.mjs already walks every intake row and the scan files, so it can be made to FAIL when two rows cite the same resource slug or the same scan pin without the later row saying 're-run' or naming the earlier row. Amended change: add the lookup sentence at section 1, and extend check-resource-scan-binding.mjs with a duplicate-pin check that fails when two intake rows cite the same repo@sha. Prove it with a planted duplicate row, which must exit 1. Today docs/agent/resource-scans has only 2026-09-19-two-videos.json and 2026-10-02-icm-architect.json, so the check can be written and proven without a false positive on history."
+            },
+            {
+              "id": "ICMA-3",
+              "verdict": "confirm",
+              "reason": "CLAUDE.md:263 reads 'START - read docs/agent/LOOP.md'. The cited constraint holds: check-agent-raise-hand.mjs:111 requires only the literal 'Raise your hand when stuck (DR-054)' in CLAUDE.md, and that line is separate from :263. check-product-framing.mjs:110-111 anchors on PURPOSE.md, which is untouched. Add a gate pass after the edit: check-doc-line-counts.mjs includes CLAUDE.md in its scan (line 72), so a line-count or figure claim near the edit could break. Re-run it along with the other two. The edit is safe if the one line keeps the same length class and CLAUDE.md stays owner-merged."
+            }
+          ],
+          "missing": {
+            "title": "Gate the nested template CLAUDE.md and CONTEXT.md that vendoring would drop into .claude/skills",
+            "evidence": "The upstream tree has assets/templates/CLAUDE.md and assets/templates/CONTEXT.md (ls of icm-src/assets/templates showed CLAUDE.md, CONTEXT.md, node.md, object.md, process.md, questionnaire.md, schema.md, stage-CONTEXT.md). A byte-identical copy puts a file named CLAUDE.md at .claude/skills/icm-architect/assets/templates/CLAUDE.md. Claude Code loads nested CLAUDE.md files when files in that directory are read, so a template would be read as live instructions. Its content includes the 'a person reads every output' rule (assets/templates/CLAUDE.md:27 per Stage A), which conflicts with DR-037. No script in scripts/ checks for nested CLAUDE.md or CONTEXT.md under .claude/skills. check-skill-plane-conformance.mjs walks only */SKILL.md (line 137), and check-doc-line-counts.mjs matches only the root CLAUDE.md (line 72). I did not run a planted test, so whether the harness loads the nested file is unverified.",
+            "change": "Before vendoring, either rename the two files on copy and record the rename as a VENDORED.md override row (the copy is then not byte-identical), or add a small check in scripts/check-skill-plane-conformance.mjs that fails when any tracked path under .claude/skills/ ends in /CLAUDE.md or /AGENTS.md. Prove it with a planted .claude/skills/x/assets/CLAUDE.md in the existing --self-test fixture, which must fail. Also fix the proposal's ICMA-1 override (4), which covers only .claude/agents and .claude/commands and omits this path.",
+            "owner": "gate-and-proof-engineer for the check; agent-platform-steward for the VENDORED.md row"
+          },
+          "modelTier": "sonnet"
+        },
+        {
+          "perspective": "fail-closed-auditor",
+          "verdicts": [
+            {
+              "id": "ICMA-1",
+              "verdict": "amend",
+              "reason": "Evidence holds. RESOURCE_INTAKE.md:75-87 says a not-adopted row must name one of four grounds. The :128 row says nothing of the four applies and cites rule 3 (hooks), which is a ground for the mechanism, not the skill. docs/agent/resource-scans/2026-10-02-icm-architect.json records no script, hook or network call. The count is real: 119 skill dirs by `git ls-files .claude/skills | awk -F/ 'NF>3{print $3}' | sort -u | wc -l`. scripts/publication-boundary.mjs:104 says \"101 skills vendored … fourteen upstreams\", and check-publication-boundary.mjs section E (:199-230) fails if that figure drifts. AGENTS.md:84 and the BUILD_BACKLOG rows (docs/BUILD_BACKLOG.md:2575-2576) are filed, but the path the proposal cites (docs/agent/BUILD_BACKLOG.md) does not exist. Amended change: vendor the 15 files byte-identical with the override rows, but state each derived count (101->102, FOURTEEN->FIFTEEN, 119->120) once in publication-boundary.mjs:104 and in the VENDORED.md header, and re-run check-publication-boundary.mjs in the same PR; add an override row that the skill's CLAUDE.md/AGENTS.md generation never runs here, because the prior scan found the output nondeterministic (21 vs 43 files, 49 vs 57 lines). Fix the BUILD_BACKLOG path cite to docs/BUILD_BACKLOG.md."
+            },
+            {
+              "id": "ICMA-2",
+              "verdict": "amend",
+              "reason": "The gap is real: tool-evaluation-by-use/SKILL.md:30-35 says \"Append to the intake log\" with no prior-row lookup. But the proposed `grep -n -i <resource>` makes a MISS look like \"new\". This resource has three spellings (icm-architect, ICM Architect, Van Cleef/Van Clief) and RESOURCE_INTAKE.md:128 uses the display form, so a slug grep could miss it. An absent hit would loosen the answer. Amended change: grep by repo slug, display name and upstream URL, and treat zero hits as inconclusive (run `pnpm run check:absence <topic>` and read the matches) rather than as proof of novelty."
+            },
+            {
+              "id": "ICMA-3",
+              "verdict": "amend",
+              "reason": "The facts check out: CLAUDE.md:263 says to read docs/agent/LOOP.md, and session-start.sh:130-133 prints only the `sed -n '/^PHASE:/,/^NEXT ACTION:/p'` range. But the proposed text relies on \"printed by the SessionStart hook\". Codex via AGENTS.md, subagents and cloud sessions may not run that hook, so the model would read nothing and skip the state. Amended change: put the command in the line itself, for example \"START — run `sed -n '/^PHASE:/,/^NEXT ACTION:/p' docs/agent/LOOP.md` and `pnpm run loop:state`, quote the output\". Leave the \"Raise your hand when stuck (DR-054)\" line untouched (check-agent-raise-hand.mjs enforces it), and make no edit that DR-063 rule 2 (CLAUDE.md stands) would not cover."
+            }
+          ],
+          "missing": {
+            "title": "Gate: a \"Not adopted\" intake row must name one of rule 5's four grounds",
+            "evidence": "docs/agent/RESOURCE_INTAKE.md:75-87 (rule 5: \"A row that says 'not adopted' names which of the four grounds applies, or it is wrong\"). Row :128 says \"none of rule 5's four apply\" and still declines. `grep -n -i 'not adopted\\|four grounds\\|ground' scripts/check-resource-scan-binding.mjs` printed nothing, so the binding gate checks the row-to-scan link and never the ground. The rule is prose only, which is how the contradiction reached mainline.",
+            "change": "Extend scripts/check-resource-scan-binding.mjs (or add a sibling gate in preflight) with a lexical check. Every row dated after DR-039 (2026-09-12) whose disposition begins \"Not adopted\" must contain one of four literal markers: licence, auto-execution, egress, or directory collision. Add a self-test where a row saying \"none apply\" fails. The check is lexical, not semantic, and the other three rows must still pass.",
+            "owner": "devex-tooling-engineer (built by the gate-and-proof-engineer agent)"
+          },
+          "modelTier": "sonnet"
+        },
+        {
+          "perspective": "project-manager (priority vs DR-033/DR-056 objective, owner direction: fewer sessions, cheaper, model-agnostic brain, DR-063)",
+          "verdicts": [
+            {
+              "id": "ICMA-1",
+              "verdict": "amend",
+              "reason": "Rank 1: the owner said install it and stop arguing, and RESOURCE_INTAKE.md:75-87 (rule 5) says a 'not adopted' row must name one of four grounds or be wrong. Row :128 says 'nothing installed, nothing vendored' and its own text reports a determinism FAIL (21 vs 43 proposed files), which is not one of the four grounds. Adoption is correct. Amend: ship it as the smallest PR, namely the 15 files, the VENDORED.md section and override rows, and the section-E count bump. Do not let it touch CLAUDE.md, AGENTS.md or .claude/ layout, and keep override (5) that ICM output is a sample, not a repo figure. It is not a DR-033 blocker (objective-state.json tasks[] has only 3 rows: 17b, 26, 27, none about intake) but it is owner-directed, so it ranks above all of them for this session. Land it in the main session, since .claude/skills is write-denied to subagents."
+            },
+            {
+              "id": "ICMA-2",
+              "verdict": "confirm",
+              "reason": "Rank 2, and the best cost return: one sentence. tool-evaluation-by-use/SKILL.md:30 ('## 1 — Log the row first') has no prior-row lookup, and RESOURCE_INTAKE.md is 185,991 B with the ICM tool at both :121 and :128. This is the 'fewer sessions, cheaper' lever: it stops a repeat scan of a tool already logged. Same main-session constraint as ICMA-1 for the skill edit, so bundle it into the same PR."
+            },
+            {
+              "id": "ICMA-3",
+              "verdict": "amend",
+              "reason": "Rank 3. The evidence holds: CLAUDE.md:263 says 'START — read docs/agent/LOOP.md' (193,645 B), while session-start.sh already prints only the PHASE..NEXT ACTION block. Amend: make it a one-line edit that names the STATE block, but keep it out of the ICM PR. CLAUDE.md is owner-merged, and bundling it would put an owner-gated change in the way of ICMA-1 and ICMA-2. It is cheap and worth doing, but it is not ICM-derived value."
+            }
+          ],
+          "missing": {
+            "title": "Raise a hand for the owner-only GitHub install; do not leave it as a footnote",
+            "evidence": "The user's relayed request is 'install GitHub for me'. The proposal records only in a footnote that plugin:github MCP failed with a 400 'Authorization header is badly formatted'. On origin/mac/dr-063-brain-ecosystem, DECISION_RECORDS.md:4185 says the token is created by the owner through /install-github-app, once per repository, and no lane creates it. docs/agent/LOOP.md:1936 NEXT ACTION already lists 'run /install-github-app per repo'. I ran ls artifacts/raised-hands and found no hand for it, and grep for install-github-app in docs/agent/*.md found only the LOOP.md line. DR-054 and CLAUDE.md say a wall an agent cannot clear gets a raised hand.",
+            "change": "Run pnpm run hand:raise -- --doing 'evaluating ICM; owner asked to install GitHub' --blocked 'plugin:github MCP returns 400 bad Authorization header; the token is owner-only via /install-github-app' --need 'owner runs /install-github-app in each repo (and fixes the plugin:github MCP credential)' --who owner. Give the owner one phone-length line saying exactly that, instead of letting it sit as a footnote in the intake row.",
+            "owner": "owner (action); the coordinator main session raises the hand, since the sandbox cannot create it from a subagent"
+          },
+          "modelTier": "sonnet"
+        }
+      ],
+      "decision": {
+        "ICMA-1": {
+          "outcome": "landed",
+          "where": ".claude/skills/icm-architect/ — 15 files at e16cafe6, every file's content byte-identical (cmp), assets/templates/CLAUDE.md and CONTEXT.md carried as *.template; .claude/skills/VENDORED.md (header counts 102/FIFTEEN + a section with five override rows); scripts/publication-boundary.mjs:104 (102 skills, fifteen upstreams, RinDig clause — the gated figure); docs/research/MCP_MARKET_LEADERBOARDS.md (119 → 120 skill directories, gated); row :128 re-disposed to ADOPTED with the first disposition struck and the reason. Amendments taken: agent-plane (template neutralisation — renamed, see the gates row), gates (bump only the gated figure, prove section E), fail-closed (one statement per derived count; the BUILD_BACKLOG path cite was docs/BUILD_BACKLOG.md), direction (smallest PR; never touches AGENTS.md or the .claude layout)."
+        },
+        "ICMA-2": {
+          "outcome": "landed",
+          "where": ".claude/skills/tool-evaluation-by-use/SKILL.md §1 — look up by slug, display name and upstream URL before appending; zero hits read as INCONCLUSIVE and go through check:absence (fail-closed amend). The gate-and-proof amend (a duplicate-pin check in check-resource-scan-binding.mjs) is FILED, not built: docs/BUILD_BACKLOG.md row, with the lexical-ground check."
+        },
+        "ICMA-3": {
+          "outcome": "landed",
+          "where": "CLAUDE.md session-ritual line — the STATE-block command inline (fail-closed amend: a Codex session or a subagent runs no hook), 'Raise your hand' line untouched. Kept in this PR against the project-manager's amend: the PR is owner-gated already (scripts/, .claude/skills), so a second PR would cost a second tap for one line."
+        },
+        "missing:agent-plane": {
+          "outcome": "landed",
+          "where": "the two template instruction files are carried as CLAUDE.md.template and CONTEXT.md.template (content byte-identical; the rename is recorded in the VENDORED.md section)"
+        },
+        "missing:gates": {
+          "outcome": "landed",
+          "where": "scripts/check-skill-plane-conformance.mjs — any CLAUDE.md/AGENTS.md nested under .claude/skills is RED; four self-test cases, one planted two levels deep through the real disk walker (37/37)"
+        },
+        "missing:fail-closed": {
+          "outcome": "filed",
+          "where": "docs/BUILD_BACKLOG.md — a 'Not adopted' row after DR-039 must name one of rule 5's four grounds (lexical), plus the duplicate-pin check; proven FAILING on a planted row before trusted"
+        },
+        "missing:direction": {
+          "outcome": "landed",
+          "where": "artifacts/raised-hands/2026-10-02-the-repository-secret-claude-code-oauth-token-do.json on mainline @3479a32 (lane:deliver batch raise, who=owner): the GitHub-App token is owner-only and the guard denies this lane minting it"
+        },
+        "open": "VENDORED.md's header sentence 'lists 119 tracked directories = 101 upstream + the 18' predates this section and still reads 119/101; the permission guard refused that one-line edit in this session (no gate reads it — the gated figures are publication-boundary.mjs:104 and the research doc, both updated). One line for whoever lands this PR."
+      }
+    }
+  ]
 }

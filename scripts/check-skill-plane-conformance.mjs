@@ -157,6 +157,15 @@ export function auditPlane(io) {
     }
   }
 
+  // A CLAUDE.md or AGENTS.md nested anywhere under .claude/skills is NOT a skill file:
+  // the harness loads a nested CLAUDE.md as live instructions the moment a file beside
+  // it is read, so a vendored TEMPLATE (icm-architect ships assets/templates/CLAUDE.md,
+  // 2026-10-02) would quietly become doctrine for whatever session opened the skill.
+  // Vendor such a file under another name (`.template`) and record it in VENDORED.md.
+  for (const rel of (io.listSkillInstructionFiles?.() ?? []).slice().sort()) {
+    problems.push(`${SKILLS_DIR}/${rel}: an instruction file (CLAUDE.md/AGENTS.md) nested under the skills plane — the harness would load it as live instructions; vendor it under another name (e.g. \`.template\`) and record the rename in VENDORED.md`);
+  }
+
   const agentFiles = io.listAgents();
   for (const file of agentFiles.slice().sort()) {
     const rel = `${AGENTS_DIR}/${file}`;
@@ -236,6 +245,8 @@ const diskIoAt = (root) => ({
   // Recursive, both: a namespaced agent or command (`ns/x.md`) is still one.
   listAgents: () => listMdRecursive(join(root, AGENTS_DIR)),
   listCommands: () => listMdRecursive(join(root, COMMANDS_DIR)),
+  // Every CLAUDE.md / AGENTS.md at ANY depth under the skills plane (none belongs there).
+  listSkillInstructionFiles: () => listMdRecursive(join(root, SKILLS_DIR)).filter((f) => /(^|\/)(CLAUDE|AGENTS)\.md$/.test(f)),
   read: (rel) => readFileSync(join(root, rel), "utf8"),
 });
 const diskIo = diskIoAt(repo);
@@ -283,6 +294,7 @@ function selfTest() {
     listSkills: () => ["good", "nodesc", "mismatch", "nofm"],
     listAgents: () => ["good.md", "noname.md", "nomodel.md", "fable.md"],
     listCommands: () => [...commands.keys()].map((k) => k.slice(COMMANDS_DIR.length + 1)),
+    listSkillInstructionFiles: () => ["planted/assets/templates/CLAUDE.md", "planted/AGENTS.md"],
     read: (rel) => {
       if (skills.has(rel)) return skills.get(rel);
       if (agents.has(rel)) return agents.get(rel);
@@ -313,6 +325,8 @@ function selfTest() {
   checks.push(["a quoted description containing `#` is present (a `#` inside quotes is not a comment)", !r.problems.some((p) => p.includes("hash-in-text-cmd.md"))]);
   checks.push(["a block-scalar description starting with `#` is present (a block body is text)", !r.problems.some((p) => p.includes("hash-in-block-cmd.md"))]);
   checks.push(["a namespaced command (ns/x.md) is walked and RED without a description", r.problems.some((p) => p.includes("ns/nested-cmd.md"))]);
+  checks.push(["a CLAUDE.md nested under the skills plane is RED (the harness would load it as instructions)", has("planted/assets/templates/CLAUDE.md") && has("nested under the skills plane")]);
+  checks.push(["an AGENTS.md nested under the skills plane is RED", has("planted/AGENTS.md") && has("nested under the skills plane")]);
   // The counts the floors are checked against are the walked counts, not a guess.
   checks.push(["the audit reports how many it actually walked", r.skills === 4 && r.agents === 4 && r.commands === 18]);
 
@@ -325,9 +339,17 @@ function selfTest() {
     mkdirSync(join(tmp, AGENTS_DIR, "ns"), { recursive: true });
     writeFileSync(join(tmp, COMMANDS_DIR, "ns", "zz.md"), "---\nargument-hint: [x]\n---\nbody");
     writeFileSync(join(tmp, AGENTS_DIR, "ns", "zz.md"), "---\nname: zz\ndescription: d\nmodel: fable\n---\nbody");
+    // A well-formed skill that carries a template CLAUDE.md two levels down, beside a
+    // renamed twin — the depth is the point: a top-level-only walk would miss it.
+    mkdirSync(join(tmp, SKILLS_DIR, "vend", "assets", "templates"), { recursive: true });
+    writeFileSync(join(tmp, SKILLS_DIR, "vend", "SKILL.md"), "---\nname: vend\ndescription: d\n---\nbody");
+    writeFileSync(join(tmp, SKILLS_DIR, "vend", "assets", "templates", "CLAUDE.md"), "# {Workspace name}\n");
+    writeFileSync(join(tmp, SKILLS_DIR, "vend", "assets", "templates", "CONTEXT.md.template"), "# {Folder}\n");
     const walked = auditPlane(diskIoAt(tmp));
     checks.push(["the real disk walker reaches a namespaced command and turns it RED", walked.commands === 1 && walked.problems.some((p) => p.includes(`${COMMANDS_DIR}/ns/zz.md`))]);
     checks.push(["the real disk walker reaches a namespaced agent and holds it to DR-047", walked.agents === 1 && walked.problems.some((p) => p.includes(`${AGENTS_DIR}/ns/zz.md`) && p.includes("is not one of"))]);
+    checks.push(["the real disk walker finds a CLAUDE.md two levels inside a skill and turns it RED", walked.skills === 1 && walked.problems.some((p) => p.includes(`${SKILLS_DIR}/vend/assets/templates/CLAUDE.md`) && p.includes("nested under the skills plane"))]);
+    checks.push(["…and a `.template`-suffixed twin beside it is not flagged (the rename IS the fix)", !walked.problems.some((p) => p.includes("CONTEXT.md.template"))]);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

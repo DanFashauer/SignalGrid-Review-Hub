@@ -203,36 +203,49 @@ function yamlLogicalLines(lines) {
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
-    const ind = keyColumn(l);
+    const kc = keyColumn(l);
     const m = l.match(/^(\s*(?:-\s+)?(?:["']?[^"':#]+?["']?\s*:)?)\s*(.*)$/);
     const val = m ? m[2] : l.trim();
-    const isBlockStart = /^[|>][-+]?\s*$/.test(val);
-    const folded = /^>[-+]?\s*$/.test(val);
-    const plain = val && !isBlockStart && !val.startsWith("#");
-    if (isBlockStart && !folded) { out.push({ n: i + 1, text: l }); continue; }
-    if (folded || plain) {
+    // A block indicator may carry an indentation digit, a chomping sign and a trailing comment.
+    const isBlock = /^[|>][-+0-9]*\s*(#.*)?$/.test(val);
+    const literal = isBlock && val[0] === "|";
+    const folded = isBlock && val[0] === ">";
+    const plain = val && !isBlock && !val.startsWith("#");
+    if (literal) {
+      // Literal content is shell, one command per line: never fold it, and keep comments in the
+      // text (the shell's own quoting decides what a `#` is, not this scanner).
+      out.push({ n: i + 1, text: l, raw: false });
       let j = i + 1;
-      const parts = [folded ? m[1] : l];
-      while (j < lines.length && (lines[j].trim() === "" ? folded : indentOf(lines[j]) > ind && !/^\s*-\s/.test(lines[j]) && (folded || !/^\s*[\w"'-][^:]*:\s/.test(lines[j])))) {
-        parts.push(lines[j].trim()); j++;
+      while (j < lines.length && (lines[j].trim() === "" || indentOf(lines[j]) > kc)) {
+        if (lines[j].trim()) out.push({ n: j + 1, text: lines[j], raw: true });
+        j++;
       }
-      out.push({ n: i + 1, text: parts.join(" ") });
       i = j - 1;
       continue;
     }
-    out.push({ n: i + 1, text: l });
+    if (folded || plain) {
+      let j = i + 1;
+      const parts = [folded ? m[1] : l];
+      while (j < lines.length && (lines[j].trim() === "" ? folded : indentOf(lines[j]) > kc && !/^\s*-\s/.test(lines[j]) && (folded || !/^\s*[\w"'-][^:]*:\s/.test(lines[j])))) {
+        parts.push(lines[j].trim()); j++;
+      }
+      // A folded block reaches the shell as one line; scan it whole, comments included.
+      out.push({ n: i + 1, text: parts.join(" "), raw: folded });
+      i = j - 1;
+      continue;
+    }
+    out.push({ n: i + 1, text: l, raw: false });
   }
   return out;
 }
 
-/** Join `\` continuations: [{ n (1-based first line), text (comment-stripped) }]. */
+/** Join `\` continuations: [{ n (1-based first line), text }]. Raw (shell) lines keep their `#`s. */
 function joinedStatements(rawLines) {
   const out = [];
   let cur = null;
-  yamlLogicalLines(rawLines).forEach(({ n, text }) => {
+  yamlLogicalLines(rawLines).forEach(({ n, text, raw }) => {
     const i = n - 1;
-    const l = text;
-    const t = stripComment(l);
+    const t = raw ? text.trim() : stripComment(text);
     if (cur) { cur.text += " " + t.replace(/\\$/, "").trim(); cur.open = t.endsWith("\\"); if (!cur.open) { out.push(cur); cur = null; } return; }
     if (t.endsWith("\\")) { cur = { n: i + 1, text: t.replace(/\\$/, "").trim(), open: true }; return; }
     if (t) out.push({ n: i + 1, text: t });
@@ -351,6 +364,17 @@ function selfTest() {
     ["flow-mapping step with an escaped package name", wrap(spec.name, good) + "      - {name: x, run: \"sudo apt-get install -y shell\\x63heck\"}\n"],
     ["escaped package name in an env value", wrap(spec.name, good) + "      - name: p\n        env:\n          X: \"apt-get install -y -qq shell\\x63heck\"\n        run: ${{ env.X }}\n"],
     ["apt-get satisfy shellcheck", wrap(spec.name, good) + "      - name: p\n        run: apt-get satisfy -y shellcheck\n"],
+    ["trailing # on a `then` line above an indented install", wrap(spec.name, good) + "      - name: x\n        run: |\n          if true; then # refresh tools\n            apt-get install -y -qq shellcheck\n          fi\n"],
+    ["trailing # on a `do` line above an indented install", wrap(spec.name, good) + "      - name: x\n        run: |\n          for p in jq shellcheck; do # tools\n            apt-get install -y -qq shellcheck\n          done\n"],
+    ["trailing # on an echo line above an indented install", wrap(spec.name, good) + "      - name: x\n        run: |\n          echo start # note\n            apt-get install -y -qq shellcheck\n"],
+    ["`run: | # comment` opener", wrap(spec.name, good) + "      - name: x\n        run: | # install lint tools\n          apt-get update -qq\n          apt-get install -y -qq shellcheck\n"],
+    ["`run: |2 # comment` opener", wrap(spec.name, good) + "      - name: x\n        run: |2 # tools\n          apt-get install -y -qq shellcheck\n"],
+    ["`run: >- # comment` opener", wrap(spec.name, good) + "      - name: x\n        run: >- # tools\n          apt-get install -y -qq\n          shellcheck\n"],
+    ["`run: |+ # comment` opener", wrap(spec.name, good) + "      - name: x\n        run: |+ # keep\n          apt-get install -y -qq shellcheck\n"],
+    ["escaped quote then # then install", wrap(spec.name, good) + "      - name: x\n        run: |\n          echo \"a\\\" #b\"; apt-get install -y -qq shellcheck\n"],
+    ["folded block: escaped quote then # then install", wrap(spec.name, good) + "      - name: x\n        run: >\n          echo \"a\\\" #b\"; apt-get install -y -qq shellcheck\n"],
+    ["multi-line double-quoted string closing with # and an install", wrap(spec.name, good) + "      - name: x\n        run: |\n          echo \"line one\n          see #42\"; apt-get install -y -qq shellcheck\n"],
+    ["multi-line single-quoted string closing with # and an install", wrap(spec.name, good) + "      - name: x\n        run: |\n          jq '.a\n          # c'; apt-get install -y -qq shellcheck\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
   let bad = 0;
@@ -384,12 +408,14 @@ function selfTest() {
     ["same-indent backslash continuation naming shellcheck", "      - run: |\n          sudo apt-get install -y -qq jq \\\n          shellcheck\n", true],
     ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
     ["apt-get reinstall shellcheck", "      - run: sudo apt-get reinstall shellcheck\n", true],
+    ["a folded `- run: >` step does not swallow its sibling keys", "      - run: >\n          echo hi\n        name: apt-get\n        env: install $X\n", false],
     ["unrelated continued install is NOT flagged (desktop.yml's real shape)", "        run: |\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            patchelf\n", false],
   ];
   for (const [label, t, want] of strayCases) {
     if (stray(t) !== want) { console.error(`✗ self-test: stray-install case wrong: ${label}`); bad++; }
   }
   // unsupportedYaml driven directly: every construct it claims to reject, and a clean document.
+  const BS = String.fromCharCode(92);
   const grammarCases = [
     ["multi-line double-quoted scalar", "      - run: \"sudo apt-get install -y jq\n          shellcheck\"\n", true],
     ["anchor", "      - run: &x echo hi\n", true],
@@ -398,6 +424,8 @@ function selfTest() {
     ["explicit key", "      ? if\n      : false\n", true],
     ["multi-line double-quoted scalar whose continuation looks like a key", "      - run: \"echo hi\n          more: stuff\"\n", true],
     ["multi-line single-quoted scalar whose continuation looks like a key", "      - run: 'echo hi\n          more: stuff'\n", true],
+    ["unicode ASCII escape in a double-quoted value", `      - run: "echo ${BS}u0063"\n`, true],
+    ["octal escape in a double-quoted value", `      - run: "echo ${BS}143"\n`, true],
     ["a clean document", "jobs:\n  a:\n    steps:\n      - name: x\n        run: |\n          echo hi # a comment\n", false],
   ];
   for (const [label, t, want] of grammarCases) {

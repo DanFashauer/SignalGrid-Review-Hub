@@ -33,7 +33,8 @@ what it needs, and who can unblock it (`whoCanUnblock` / `domain`). Read the raw
    program-manager). The brain directs itself; bouncing task management to the founder is
    the exact bug this arc fixes. What stays with the owner is not paraphrased here: it is
    DR-037's "What stays owner-gated" and the `OWNER_RESERVED` and `DECISION_PATH` rules in
-   `scripts/check-owner-gated-surfaces.mjs`. When a call IS the owner's, hand a ranked
+   `scripts/check-owner-gated-surfaces.mjs`, as narrowed by DR-061 (a lane may merge a
+   DECISION_PATH PR under its conditions; its rule 2 paths never). When a call IS the owner's, hand a ranked
    recommendation, not an open question.
 3. **Routable blockers** (the monitor named a role): confirm the route is right, then hand
    the blocker to that role's executor — spawn the `agent:` or invoke the `skill:` named in

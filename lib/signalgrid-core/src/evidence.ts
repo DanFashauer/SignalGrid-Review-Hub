@@ -1,5 +1,5 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { canonicalJson, deterministicId, digest } from "./util";
+import { canonicalJson, deterministicId, digest, parseInstant } from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -274,6 +274,11 @@ interface CategoryReading {
    * be dropped for the other; the readers fold them worst-wins, like `illegible`
    * but WITHOUT the "unknown" floor — a tied reading is legible and can vouch
    * for its own currency, it just cannot outrank its twin on time.
+   *
+   * ALSO the latest reading(s) that stamp THEMSELVES "fresh", when `ordered` does
+   * not and they are strictly older (BUILD_BACKLOG row 2519; see `groupLatest`).
+   * Every reader folds this list worst-wins, so a member can only ever make the
+   * answer worse, never better — which is the whole reason it is safe to add to.
    */
   tied: NormalizedSignal[];
   /** EVERY reading whose `observedAt` did not parse, in arrival order. */
@@ -323,17 +328,38 @@ type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
  * both halves are kept and every reader resolves them WORST-WINS, in both
  * directions. See `resolveWorst` for the value rule and `readDockEvidenceFreshness`
  * for the freshness one; they are the same rule applied to two kinds of member.
+ *
+ * AN OFFSET-LESS STAMP IS ILLEGIBLE (BUILD_BACKLOG row 2520). `Date.parse` reads
+ * "2026-07-13T08:00:00" in the host's local zone, so the same evidence derived
+ * `compliant` on a UTC runner and `non_compliant` in Tokyo. `parseInstant` refuses
+ * it, and it lands in `illegible`: it may accuse, it may not vouch.
+ *
+ * A READING THAT IS NOT FRESH MAY ACCUSE BUT CANNOT VOUCH (row 2519) — the
+ * illegible rule, applied to the reading's own freshness label. Latest-wins looked
+ * only at the stamp, so a `tamper_state: "none"` stamped in 2099 — which the sync
+ * itself classified "unknown" — or one labelled "expired" erased an older
+ * `"confirmed"`, fresh or stale, and a deny became a step-up. Measured on
+ * `buildEvidence` → `evaluatePolicy(SHARED_DEVICE_RULES_V1)`. So when `ordered`
+ * is not fresh, every strictly older reading back to (and including) the latest
+ * fresh one — every older reading when none is fresh — joins `tied` and is folded
+ * worst-wins. That can only make the answer worse: an older accusation survives
+ * against a good or silent newer value (among accusing values the family's
+ * severity order in `resolveWorst` decides), and an older good value cannot make
+ * it better. A newer reading that is ITSELF fresh still replaces everything older.
+ * No clock is read here — the sync already classifies a future stamp as "unknown".
  */
 function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
   const map: LatestByCategory = new Map();
   const at = new Map<NormalizedSignal["category"], number>();
+  // The latest instant per category among readings stamped "fresh".
+  const latestFreshAt = new Map<NormalizedSignal["category"], number>();
   for (const signal of signals) {
     let reading = map.get(signal.category);
     if (!reading) {
       reading = { tied: [], illegible: [] };
       map.set(signal.category, reading);
     }
-    const observed = Date.parse(signal.observedAt);
+    const observed = parseInstant(signal.observedAt);
     if (Number.isNaN(observed)) {
       // Present, but unorderable. Kept ALONGSIDE any parseable sibling rather
       // than instead of it — and ALONGSIDE its illegible peers, all of them.
@@ -342,6 +368,9 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       // worst-wins does not care what order they arrived in (finding F-1).
       reading.illegible.push(signal);
       continue;
+    }
+    if (signal.freshness === "fresh" && observed > (latestFreshAt.get(signal.category) ?? -Infinity)) {
+      latestFreshAt.set(signal.category, observed);
     }
     const currentAt = at.get(signal.category);
     if (currentAt === undefined || observed > currentAt) {
@@ -353,6 +382,16 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       // every reader, so arrival order cannot pick the answer.
       reading.tied.push(signal);
     }
+  }
+  // Row 2519: a not-fresh reading cannot vouch. When the latest is not fresh, every
+  // strictly older reading back to (and including) the latest fresh one — all of
+  // them when none is fresh — joins `tied` and is folded worst-wins.
+  for (const signal of signals) {
+    const reading = map.get(signal.category)!;
+    const orderedAt = at.get(signal.category);
+    const observed = parseInstant(signal.observedAt);
+    if (reading.ordered?.freshness === "fresh" || orderedAt === undefined || !(observed < orderedAt)) continue;
+    if (observed >= (latestFreshAt.get(signal.category) ?? -Infinity)) reading.tied.push(signal);
   }
   return map;
 }
@@ -382,23 +421,33 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
  *    among them wins (finding F-1). Keeping only the first let a good peer
  *    arriving ahead of an accusing one erase the accusation.
  *
- * Severity has three levels and nothing finer, because nothing finer is
- * defensible without a policy: affirmative-good (0) < no answer (1) < anything
- * else the family can say (2). "Anything else" is the accusing half of every
- * family here, so a bad value is never traded down to silence.
+ * Severity: affirmative-good (below 1) < no answer (1) < anything else the family
+ * can say (2 and up). "Anything else" is the accusing half of every family here,
+ * so a bad value is never traded down to silence.
+ *
+ * WITHIN EACH BAND THE FAMILY'S `members` ORDER DECIDES (cloud review of #1224).
+ * With one flat level per band the first to ARRIVE kept the slot: [suspected,
+ * confirmed] resolved to suspected and [confirmed, suspected] to confirmed —
+ * restrict or deny by array order — and [checked_in, checked_out] kept whichever
+ * came first in the snapshot. `members` lists each family least to most severe,
+ * so every fold here is a max over a total order and gives the same field value
+ * whatever the arrival order (the core proof sweeps every pair, both orders). The
+ * order is a judgement, like `good`; the proof holds it to every shipped rule set
+ * (walking a family's accusing members in order never loosens the verdict).
  */
 function severityOf<T extends string | boolean>(
   value: T | undefined,
-  good: readonly T[],
+  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
 ): number {
   if (value === undefined) return 1;
-  return good.includes(value) ? 0 : 2;
+  const rank = domain.members.indexOf(value);
+  return domain.good.includes(value) ? rank / domain.members.length : 2 + rank;
 }
 
 function resolveWorst<T extends string | boolean>(
   reading: CategoryReading | undefined,
   parse: (value: NormalizedSignal["value"]) => T | undefined,
-  good: readonly T[],
+  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
 ): T | undefined {
   if (!reading) {
     return undefined;
@@ -409,7 +458,7 @@ function resolveWorst<T extends string | boolean>(
   // stands (eighth-round finding — array order used to pick the winner).
   for (const signal of reading.tied) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(ordered, good)) {
+    if (severityOf(candidate, domain) > severityOf(ordered, domain)) {
       ordered = candidate;
     }
   }
@@ -424,7 +473,7 @@ function resolveWorst<T extends string | boolean>(
   let worst = ordered;
   for (const signal of reading.illegible) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(worst, good)) {
+    if (severityOf(candidate, domain) > severityOf(worst, domain)) {
       worst = candidate;
     }
   }
@@ -454,7 +503,7 @@ function readCompliance(latestByCategory: LatestByCategory): ComplianceState {
         typeof value === "string" && (COMPLIANCE_STATES as readonly string[]).includes(value)
           ? (value as (typeof COMPLIANCE_STATES)[number])
           : undefined,
-      EVIDENCE_VALUE_DOMAINS.compliance.good,
+      EVIDENCE_VALUE_DOMAINS.compliance,
     ) ?? "unknown"
   );
 }
@@ -496,11 +545,13 @@ function readBoolean(
     resolveWorst(
       latestByCategory.get(category),
       (value) => (typeof value === "boolean" ? value : undefined),
-      EVIDENCE_VALUE_DOMAINS.boolean.good,
+      EVIDENCE_VALUE_DOMAINS.boolean,
     ) ?? "unknown"
   );
 }
 
+// Every family below is listed LEAST TO MOST SEVERE: `severityOf` breaks a tie
+// between two accusing readings by this order (cloud review of #1224).
 const CUSTODY_STATES = [
   "checked_in",
   "checked_out",
@@ -508,11 +559,11 @@ const CUSTODY_STATES = [
   "exception",
   "maintenance",
 ] as const;
-const CHARGE_STATES = ["charging", "charged", "low", "critical", "not_present"] as const;
-const TAMPER_STATES = ["none", "suspected", "confirmed", "sensor_unavailable"] as const;
-const DOCK_STATES = ["occupied", "empty", "reserved", "faulted", "offline"] as const;
+const CHARGE_STATES = ["charging", "charged", "low", "not_present", "critical"] as const;
+const TAMPER_STATES = ["none", "sensor_unavailable", "suspected", "confirmed"] as const;
+const DOCK_STATES = ["occupied", "empty", "reserved", "offline", "faulted"] as const;
 const BATTERY_HEALTH_STATES = ["healthy", "degraded", "failing"] as const;
-const BASELINE_STATES = ["aligned", "partial", "drifted", "not_assessed"] as const;
+const BASELINE_STATES = ["aligned", "partial", "not_assessed", "drifted"] as const;
 // Only the two AFFIRMATIVE values are readable from a signal. Absent or
 // unrecognized falls back to "unverified" — the same silence-is-not-an-answer
 // rule as every other read here, and the value the active v1 rule deliberately
@@ -522,7 +573,7 @@ const BENCHMARK_SELECTION_STATES = ["confirmed", "misfit"] as const;
 // absent or unrecognized falls back to "unverified", which the active v1 rule
 // deliberately does not match.
 const SHIFT_CONTEXT_STATES = ["confirmed", "misfit"] as const;
-const BADGE_STATES = ["present", "removed", "forced", "absent"] as const;
+const BADGE_STATES = ["present", "absent", "removed", "forced"] as const;
 // Rollup of the device-management-health family. All three values are readable —
 // the family computes them from enrollment, check-in freshness and policy drift —
 // but SILENCE reads as "unknown", never as a healthy management plane.
@@ -790,7 +841,7 @@ function readEnum<T extends string>(
       typeof value === "string" && (domain.members as readonly string[]).includes(value)
         ? (value as T)
         : undefined,
-    domain.good,
+    domain,
   );
 }
 
@@ -801,7 +852,7 @@ function readEnum<T extends string>(
  * whatever it says.
  *
  * The illegible case resolves WORST-WINS against the value rule in
- * `resolveWorst`, on the freshness severity ladder rather than the three-level
+ * `resolveWorst`, on the freshness severity ladder rather than the value
  * one: a sole illegible reading is floored at "unknown", so an illegible "fresh"
  * reads "unknown" (it may not vouch) while an illegible "stale" or "expired"
  * stays what it says (it may still accuse). Mixed with a parseable sibling, the

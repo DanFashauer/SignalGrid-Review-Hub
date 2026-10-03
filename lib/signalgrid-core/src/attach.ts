@@ -32,7 +32,7 @@
 
 import { CoreError } from "./types";
 import type { RemediationAction } from "./types";
-import { deterministicId } from "./util";
+import { deterministicId, parseInstant } from "./util";
 
 /** The three states, and only three. Anything else is `unknown` by construction. */
 export const ATTACH_STATES = ["attached", "removed", "unknown"] as const;
@@ -82,7 +82,7 @@ const blank = (value: unknown): boolean => typeof value !== "string" || value.tr
 
 function parse(instant: string | undefined): number | null {
   if (blank(instant)) return null;
-  const ms = Date.parse(instant as string);
+  const ms = parseInstant(instant as string);
   return Number.isNaN(ms) ? null : ms;
 }
 

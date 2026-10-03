@@ -110,7 +110,7 @@
 //     treated as matching every lookup. A class static-field map and a `let` map are not resolved; a map built by a call
 //     (`const T = makeMap()`, `Object.fromEntries(…)`, `useMemo(…)`) is judged as a class string, not as a map:
 //     it flags only when the call TEXT carries a good class, and `Object.create(null)` filled by later
-//     assignment is silent; `new Map(…)` and an opaque `Object.entries(x).forEach(([k, v]) => { T[k] = v })` are silent. A nested sub-map is followed at every depth: used as a value (alias, call
+//     assignment is silent; `new Map(…)` is silent (an `Object.entries(x).forEach(([k, v]) => { T[k] = v })` write flags). A nested sub-map is followed at every depth: used as a value (alias, call
 //     argument, `Object.values/entries`, destructure, spread of a map that holds one) it escapes; only indexing it further is a read.
 //     A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
 //     read (`T.x = pick()`, a parameter, an import, `Object.assign(T, { x: pick() })`) is treated as possibly good-state; a spread this
@@ -863,6 +863,13 @@ function analyzeSourceFile(relPath, text) {
     }
     return null;
   };
+  // A value this can judge: a literal, a const it resolves, or a non-class constant. Anything else (a call, a parameter, a member read) may be a good class.
+  const readableValue = (e) => {
+  const rv = unwrapExpr(e);
+  return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
+    rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && (rv.text === "undefined" || Boolean(resolveConstInit(rv))));
+  };
+  const ABSENT_ENTRY_KEYS = new Set(["undefined", "null", "", "[object object]", "__proto__"]);
   // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key. A shorthand
   // entry reads its const; a method / getter contributes its body; a computed key this cannot read
   // MAY match any key, so it is included; a `...BASE` spread of another same-file map contributes its entries.
@@ -878,6 +885,8 @@ function analyzeSourceFile(relPath, text) {
       if (!p.name && !ts.isShorthandPropertyAssignment(p)) continue;
       const key = ts.isShorthandPropertyAssignment(p) ? p.name.text : memberKey(p.name);
       if (!(lit === null || key === null || key === lit)) continue;
+      // an absent-key (`undefined`, `null`, `""`, `__proto__`) or unreadable-key entry whose VALUE this cannot read may be a good class
+      if (ts.isPropertyAssignment(p) && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase())) && !readableValue(p.initializer)) escapedMapRefs.add(p.initializer);
       if (ts.isPropertyAssignment(p)) out.push(p.initializer);
       else if (ts.isShorthandPropertyAssignment(p)) out.push(p.name);
       else out.push(p); // a method / getter / setter: its body is walked for class strings
@@ -905,12 +914,6 @@ function analyzeSourceFile(relPath, text) {
     const keyOf0 = (left) => (ts.isPropertyAccessExpression(left) ? left.name.text
       : ts.isElementAccessExpression(left) && ts.isStringLiteralLike(left.argumentExpression) ? left.argumentExpression.text : null);
     const keyOf = (left) => { const k = keyOf0(left); return k === "__proto__" ? null : k; }; // `__proto__` swaps the whole entry set
-    // A value this can judge: a literal, a const it resolves, or a non-class constant. Anything else (a call, a parameter, a member read) may be a good class.
-    const readableValue = (e) => {
-      const rv = unwrapExpr(e);
-      return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
-        rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && (rv.text === "undefined" || Boolean(resolveConstInit(rv))));
-    };
     // Is this node (a member access) the TARGET of an assignment — directly, or inside an object / array
     // destructuring pattern (`({ a: T.x } = v)`, `[{ a: T.x }] = v`, `({ ...T.x } = v)`, `for ({ a: T.x } of v)`)?
     const isAssignTarget = (n) => {
@@ -1325,7 +1328,7 @@ function analyzeSourceFile(relPath, text) {
   };
   // `T[undefined]` is `T["undefined"]`: a map with such an entry is HIT by an absent key, so a fallback never runs.
   // An absent key coerces to "undefined"/"null"; `String([])` is "" and `String({})` is "[object Object]".
-  const ABSENT_KEYS = new Set(["undefined", "null", "", "[object object]"]);
+  const ABSENT_KEYS = new Set(["undefined", "null", "", "[object object]", "__proto__"]); // `__proto__` sets the prototype: a missing key falls through to it
   const mapKeyNames = (obj, depth = 0) => obj.properties.flatMap((p) => {
     if (ts.isSpreadAssignment(p)) { const o = depth < 6 ? mapObjectOf(p.expression, depth + 1) : null; return o ? mapKeyNames(o, depth + 1) : [null]; }
     return [ts.isShorthandPropertyAssignment(p) ? p.name.text : p.name ? memberKey(p.name) : null];
@@ -2332,6 +2335,20 @@ BUG_R6.push(
   ["Object.assign to a spread source with an unreadable value", mkMap(`const BASE = { ok: "text-red-400" }; Object.assign(BASE, { undefined: pick() }); const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
   ["Object.values(T.a)[0] write at two levels", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; Object.values(T.a)[0].undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
   ["Object(T.a) write at two levels", mkMap(`const T = { a: { b: { ok: "text-red-400", default: "text-slate-400" } } }; Object(T.a).undefined = "${EMER}";`, "T.a.b[q.data?.s] ?? T.a.b.default")],
+  ["map literal: undefined: pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: pick() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: undefined: cfg.cls", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: cfg.cls };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: undefined: cond ? GOOD : \"x\"", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: cond ? GOOD : "x" };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: null: pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", null: pick() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: \"\": pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", "": pick() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: \"[object Object]\": pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", "[object Object]": pick() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: unreadable computed key with unreadable value", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", [keyFn()]: pick() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: __proto__: ext()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", __proto__: ext() };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: nested entry undefined: pick()", mkMap(`const T = { a: { ok: "text-red-400", default: "text-slate-400", undefined: pick() } };`, "T.a[q.data?.s] ?? T.a.default")],
+  ["map literal: spread source BASE with undefined: pick()", mkMap(`const BASE = { ok: "text-red-400", undefined: pick() }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign with a bad member after a good one: { n: 1, undefined: pick() }", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { n: 1, undefined: pick() });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign with a shorthand member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function s(undefined) { Object.assign(T, { undefined }); } s("${EMER}");`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign with a method member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined() { return pick(); } });`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign with a getter member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { get undefined() { return pick(); } });`, "T[q.data?.s] ?? T.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2353,6 +2370,8 @@ OK_R6.push(
   ["control: ...BASE spread source untouched", mkMap(`const BASE = { ok: "text-red-400" }; const T = { ...BASE, default: "text-slate-400" };`, "T[q.data?.s] ?? T.default")],
   ["control: map write of a readable non-good literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.default = "text-slate-500";`, "T[q.data?.s] ?? T.default")],
   ["control: Object.assign with readable non-good literal values", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { default: "text-slate-500", n: 1 });`, "T[q.data?.s] ?? T.default")],
+  ["control: absent-key entries with readable non-good values", mkMap(`const SLATE = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400", undefined: SLATE, null: "text-slate-500", "": null };`, "T[q.data?.s] ?? T.default")],
+  ["control: Object.assign with null / void 0 / template / const values", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const SLATE = "text-slate-500"; Object.assign(T, { a: null, b: void 0, c: \`text-slate-500\`, d: SLATE, e: 2, f: \`text-slate-\${n}\` });`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 

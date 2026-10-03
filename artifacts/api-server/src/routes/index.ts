@@ -50,7 +50,11 @@ router.use(radarRouter);
 //                      metrics increment). An anonymous caller can move another
 //                      tenant's ledger.
 //   controlPlaneRouter — /cp/v1 carries no principal at all, so its client-supplied
-//                      `?tenant=` query parameter is the only scoping present.
+//                      `?tenant=` query parameter is the only scoping present. It
+//                      also holds one WRITE: POST /cp/v1/telemetry overwrites a
+//                      seeded edge node's counts, so an anonymous caller can move
+//                      any tenant's health / ops-intelligence rollup (ids outside
+//                      the fixture's edge nodes are refused 404).
 //
 // Not mounted rather than 403'd on purpose: a route that exists and refuses still
 // answers "does this deployment have a control plane?", and there is no reason for a

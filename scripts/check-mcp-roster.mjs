@@ -39,10 +39,19 @@
 //     for that server, or a `grants.mentions[skill]` entry naming it as
 //     precedent/context rather than a call. An unaccounted-for name is a FAIL
 //     naming the file, the server and the missing grant/mention.
+//   - Every copy of the Context7 pin equals the version in
+//     `scripts/install-context7.mjs`'s `export const PINNED`, read from its
+//     SOURCE by regex (importing it would run `claude mcp add`). The copies are
+//     DERIVED: every tracked text file is swept for the package spec and for a
+//     `Context7 … x.y.z` phrase; only the dated records in CONTEXT7_PIN_HISTORY
+//     are exempt. A stale copy FAILS naming file:line; a known copy site whose
+//     copy vanished FAILS too. Pin-vs-published needs the network: not here.
+//     Ceiling: a UTF-16 file is decoded behind its latin1 reading, so a UTF-16 Dockerfile's BOM is not on line 0
+//     and its `# escape=` directive is not honoured (an unpinned spec in it is still named; see decodeTracked).
 //
 // Fail-closed: an unparseable roster, or one missing `servers`/`grants`, is
 // itself a finding — a broken roster is silence dressed as a green gate.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readlinkSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -59,6 +68,870 @@ export function deriveToolNames(indexSource) {
   let m;
   while ((m = re.exec(indexSource))) out.push(m[1]);
   return out;
+}
+
+// Context7 pin parity (BUILD_BACKLOG "Context7 pin staleness", offline half).
+// `scripts/install-context7.mjs` owns the pin; it is read from that file's
+// SOURCE by regex — never imported, because importing it runs `claude mcp add`
+// at module load. Two layers:
+//   1. A DERIVED sweep of every tracked text file: each `@upstash/context7-mcp@<v>`
+//      package spec, and each `Context7 … <x.y.z>` phrase (case-insensitive, same
+//      line, ≤40 chars apart), must name PINNED. Nothing is typed in a list, so a
+//      new copy anywhere — a skill doc, .mcp.json, a new doc — is held on arrival.
+//      A spec's WHOLE token after `@` must equal PINNED: a tag (@latest), range
+//      (@^4.1.1, @~, @>=), wildcard (@*, @4.1.x), partial (@4, @4.0) or prerelease
+//      is a finding, and `npx … @upstash/context7-mcp` with no version is too.
+//      Binary and large files are swept as latin1, never skipped. The PHRASE half
+//      is a heuristic over wording: a version written BEFORE the word, on the next
+//      line, >40 chars away, two-component, or under another name ("ctx7") is not
+//      seen; an unrelated x.y.z close after "Context7" fails (closed). A bare spec
+//      with no `@version` is a finding on a package-runner line (PACKAGE_RUNNER_RE)
+//      or as a JSON/YAML key; a git or URL install source is always a finding. A
+//      bare spec split across lines (`"args": ["-y",` ⏎ `"@upstash/…"]`) is not seen.
+//      The only exemptions are CONTEXT7_PIN_HISTORY: dated, append-only records of
+//      what was true on a day, vendored upstream trees (third_party/ — their
+//      configs are upstream's, not our pin), and this gate, whose fixtures plant
+//      stale pins.
+//   2. The known copy sites below must STILL carry a copy: a site whose copy was
+//      reworded out of the sweep's shapes is a finding, not a pass. The roster's
+//      `packageVersion` has no "context7" on its line, so it is held structurally.
+export const CONTEXT7_INSTALLER = "scripts/install-context7.mjs";
+// Known-site presence reads the token loosely; the SWEEP below is an allowlist.
+const CONTEXT7_SPEC_RE = /@upstash\\?\/context7-mcp@([^\s`"'(),;\]]+)/g;
+const specToken = (raw) => raw.replace(/[.:!?]+$/, "");
+// A .json file is first PARSED (JSON.parse) and walked (context7JsonFindings): keys, values and command/args
+// context come from the data. Only unparseable JSON (JSONC) falls back to the line reader below. A YAML value
+// that IS a spec and continues onto a more-indented line is REFUSED (yamlSpecContinuations): no YAML parser is
+// a dependency here, so a shape this gate cannot fold fails closed instead of passing.
+// Each line is TOKENIZED the way its reader would see it, then every token
+// naming the package must carry exactly PINNED. No terminator characters:
+//   * shell/prose (default): POSIX words — '…' literal, "…" with \-escapes,
+//     \x escaped, quotes glued to text concatenate (`@4.1.1' || 5'` is ONE word
+//     `…@4.1.1 || 5`). A backtick ends a word (markdown code). An unbalanced
+//     quote is a literal character (prose apostrophes).
+//   * .json: each string literal is decoded. An array element is ONE argv word;
+//     a value that is itself a spec (`npm:@upstash/…@x`) is one word; any other
+//     value is a command string, shell-split.
+//   * .yml/.yaml: a sequence item `- x` is ONE argv word; `key: value` is
+//     shell-split (a `run:` command), a flow list `[a, b]` is one word per item.
+// A key naming the package (`"@upstash/context7-mcp": "<v>"`, YAML
+// `@upstash/context7-mcp: <v>`) takes its WHOLE value. A word's value is shed
+// of trailing markup only: `**`, a markdown link `](…)`, closing HTML tags, and
+// trailing ) ] } > . , ; : ! ?.
+// Go's unicode.IsSpace, which BuildKit trims with: JS `\s` adds U+FEFF and lacks U+0085, so neither is used for Dockerfiles
+export const GO_SPACE_CHARS = "\t\n\v\f\r \u0085\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000";
+const GO_SPACE = "[\\t\\n\\v\\f\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]";
+const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
+const PACKAGE_RUNNER_RE =
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
+// Installing Context7 from git or a URL bypasses the npm pin entirely.
+const CONTEXT7_GIT_SOURCE_RE =
+  /(?:github:|gitlab:|bitbucket:|git\+[a-z]+:\/\/|git:\/\/|git@github\.com:)[^\s"'`]*upstash\/context7|codeload\.github\.com\/upstash\/context7|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
+const CONTEXT7_SHORTHAND_RE = /(?:^|[\s"'=])upstash\/context7(?:-mcp)?(?:#\S*)?(?=$|[\s"'])/;
+
+/** Pure: POSIX-ish shell words of `s` (quotes concatenate; an unbalanced quote is literal; a backtick splits). */
+export function shellWords(s) {
+  const words = [];
+  let cur = "";
+  let open = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (/\s/.test(c) || c === "`" || /[;&|<>]/.test(c)) {
+      // whitespace, a backtick (markdown code) and an unquoted shell operator (; & | < >) all end a word
+      if (open) words.push(cur);
+      cur = "";
+      open = false;
+    } else if (c === "'" && s.indexOf("'", i + 1) > i && !(/\w/.test(s[i - 1] ?? "") && /\w/.test(s[i + 1] ?? ""))) {
+      // (an apostrophe between two letters — `cloud's` — is prose, not a shell quote)
+      const close = s.indexOf("'", i + 1);
+      cur += s.slice(i + 1, close);
+      i = close;
+      open = true;
+    } else if (c === '"' && /^"(?:\\.|[^"\\])*"/.test(s.slice(i))) {
+      const lit = /^"((?:\\.|[^"\\])*)"/.exec(s.slice(i));
+      cur += lit[1].replace(/\\(.)/g, "$1");
+      i += lit[0].length - 1;
+      open = true;
+    } else if (c === "\\" && i + 1 < s.length) {
+      cur += s[++i];
+      open = true;
+    } else {
+      cur += c;
+      open = true;
+    }
+  }
+  if (open) words.push(cur);
+  return words;
+}
+
+// Markup is shed until stable, so `**…@4.1.1**.` and `…@4.1.1|` (a table cell) read as the pin.
+const shedMarkup = (v) => {
+  for (let prev = null; prev !== v; ) {
+    prev = v;
+    v = v
+      .replace(/(?:<\/[a-z][^>]*>)+$/i, "")
+      .replace(/\]\([^)]*\)$/, "")
+      .replace(/\*\*$/, "")
+      .replace(/[)\]}>.,;:!?|]+$/, "");
+  }
+  return v;
+};
+// A value that IS a spec (`npm:@upstash/…@x`, `@upstash/…@x`) is one argv unit, never shell-split.
+const SPEC_VALUE_RE = /^(?:npm:)?@upstash\\?\/context7-mcp/i;
+
+/** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
+/** Pure: `s` with a YAML ` # comment` removed — only outside quotes. */
+function stripYamlComment(s) {
+  let q = "";
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      if (c === "\\" && q === '"') i++;
+      else if (c === q) q = "";
+    } else if (c === '"' || c === "'") q = c;
+    else if (c === "#" && (i === 0 || /\s/.test(s[i - 1]))) return s.slice(0, i).trimEnd();
+  }
+  return s;
+}
+// a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own (`\x` is `x`), so a non-JSON escape
+// never throws the gate. An escaped line break never reaches here: logicalLines has already spliced it. A decoded
+// `\` + `\n` pair is a backslash-newline the shell splices (`cont\\\next7` runs context7): spliced here too.
+const YAML_ESCAPES = { 0: "\0", a: "\x07", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r", e: "\x1b", N: "\x85", _: "\xa0", L: "\u2028", P: "\u2029" };
+const unquoteDq = (v) => {
+  let d;
+  try {
+    d = JSON.parse(v);
+  } catch {
+    d = v.slice(1, -1).replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g, (_, c) => YAML_ESCAPES[c] ?? (c.length > 1 ? String.fromCodePoint(parseInt(c.slice(1), 16)) : c));
+  }
+  return spliceDecoded(d);
+};
+// a decoded string value (JSON, a YAML double-quoted scalar) run by a shell (`sh -c`, npm scripts, `run:`): a
+// backslash-newline inside it is a continuation, deleted with nothing inserted, so a name split at it is read whole
+const spliceDecoded = (s) => s.replace(/\\\r?\n/g, "");
+const unquote = (v) => (/^"(?:\\.|[^"\\])*"$/s.test(v) ? unquoteDq(v) : /^'.*'$/.test(v) ? v.slice(1, -1).replace(/''/g, "'") : v);
+// YAML anchors (&a), aliases (*a) and tags (!!str, !t) before a value are not part of it
+const stripYamlProps = (v) => v.replace(/^(?:(?:[&*][^\s,{}[\]]+|!\S*)(?:\s+|$))+/, "");
+
+/** Pure: the values of `@upstash/context7-mcp[@selector]` KEYS on a line (dependency and override keys), each to be held to PINNED. */
+// A key naming the package: the package itself, an override selector (`@x/y@4`), or a path-style
+// override/resolution key whose LAST segment is the package (pnpm `parent>pkg`, yarn `**/pkg`, `parent/pkg`).
+export const CONTEXT7_KEY_RE = /(?:^|[>/])@upstash\/context7-mcp(?:@\S*)?$/i;
+
+function context7KeyValues(line, kind) {
+  const out = [];
+  if (kind === "json") {
+    for (const m of line.matchAll(/"((?:\\.|[^"\\])*)"\s*:\s*("(?:\\.|[^"\\])*"|[^,}\]\s{["]+)?/g)) {
+      let key;
+      try {
+        key = JSON.parse(`"${m[1]}"`);
+      } catch {
+        key = m[1];
+      }
+      if (CONTEXT7_KEY_RE.test(key)) out.push(m[2] === undefined ? "" : unquote(m[2]));
+    }
+    return out;
+  }
+  if (kind === "yaml") return out; // YAML keys are read by context7YamlKeyScan, with multi-line context
+  // a quoted key (any kind, path-style allowed) or a bare one; an override key may carry a selector
+  const re = /(?:(["'])(?:[^"'\s]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?\1|(?:^|[\s{,?-])@upstash\\?\/context7-mcp(?:@[^\s"':=,]*)?)\s*[:=]\s*(.*)$/i;
+  const m = re.exec(line);
+  if (m && !/^\/\//.test(m[2])) {
+    let v = stripYamlProps(stripYamlComment(m[2]).trim());
+    const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
+    v = q ? unquote(q[1]) : v.replace(/[\s,}\]]+$/, "").trim();
+    out.push(v);
+  }
+  return out;
+}
+
+/** Pure: a YAML value as units — a spec value is ONE word, a flow mapping/list one word per entry, else shell-split. */
+function yamlValueUnits(raw) {
+  const v = stripYamlProps(stripYamlComment(raw).trim());
+  if (v.startsWith("{") || v.startsWith("[")) {
+    return v
+      .replace(/^[{[]|[}\]]$/g, "")
+      .split(/,(?=(?:[^"']|"[^"]*"|'[^']*')*$)/)
+      .map((e) => unquote(stripYamlProps(e.replace(/^\s*(?:"[^"]*"|'[^']*'|[^:"']+):\s+/, "").trim())));
+  }
+  const u = unquote(v);
+  // a double-quoted scalar is read as YAML decodes it (escapes, a spliced backslash-newline), then re-split as a command
+  return SPEC_VALUE_RE.test(u) || /^"(?:\\.|[^"\\])*"$/s.test(v) ? [u] : shellWords(v);
+}
+
+function lineUnits(line, kind) {
+  if (kind === "json") {
+    const units = [];
+    for (const m of line.matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+      let v;
+      try {
+        v = JSON.parse(m[0]);
+      } catch {
+        v = m[1];
+      }
+      const before = line.slice(0, m.index).trimEnd();
+      const after = line.slice(m.index + m[0].length).trimStart();
+      if (after.startsWith(":")) continue; // a key; dependency keys are handled by context7KeyValues
+      const isValue = before.endsWith(":");
+      if (!isValue || SPEC_VALUE_RE.test(v)) units.push(v);
+      else units.push(...shellWords(v));
+    }
+    return units;
+  }
+  if (kind === "yaml") {
+    const bare = stripYamlProps(stripYamlComment(line).trim());
+    if (SPEC_VALUE_RE.test(unquote(bare))) return [unquote(bare)]; // a continuation or bare item that IS a spec
+    const item = /^\s*-\s+(?!(?:"[^"]*"|'[^']*'|[^"'#:])*:\s)(.*)$/.exec(line);
+    if (item) return [unquote(stripYamlProps(stripYamlComment(item[1]).trim()))];
+    const kv = /^\s*(?:-\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)?\s*:\s+(.*)$/.exec(line); // incl. an explicit `: value`
+    if (kv) return yamlValueUnits(kv[1]);
+  }
+  return shellWords(line);
+}
+
+/**
+ * Pure: physical lines joined into LOGICAL lines, each `{ i, text }` with `i` its first line.
+ * YAML: a block scalar (`key: >-` / `|`), an unclosed quote, or a more-indented plain-scalar continuation
+ * is joined to its key line, as a YAML reader would fold it. Shell/prose: a line whose quote is left open
+ * after the package name is joined to the next line (comment markers stripped). JSON strings cannot span lines.
+ */
+export function logicalLines(lines, kind, path = "") {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const openQuote = (t) => {
+    let q = "";
+    for (let k = 0; k < t.length; k++) {
+      const c = t[k];
+      if (q) {
+        if (c === "\\" && q === '"') k++;
+        else if (c === q) q = "";
+      } else if ((c === '"' || c === "'") && !(c === "'" && /\w/.test(t[k - 1] ?? "") && /\w/.test(t[k + 1] ?? ""))) q = c;
+    }
+    return q !== "";
+  };
+  if (kind === "yaml") {
+    // a block header: `|`/`>` with an indent indicator before or after the chomp sign, after props (`&a`, `!!str`, a
+    // bare `!`), behind a key `:`, one or more `- `/`? ` entries (`- - |`), or a document start (`--- |`)
+    const HDR = "[|>](?:[+-]?([1-9])[+-]?|[+-])?";
+    const PROPS = "(?:[&!]\\S*\\s+)*";
+    const PRE = "(?::|^\\s*(?:[-?]\\s+)*[-?]|^\\s*---)";
+    const headerRe = (c) => new RegExp(`${PRE}\\s+${PROPS}${HDR.replace("[|>]", c)}\\s*$`);
+    const ANY_HDR = headerRe("[|>]");
+    const LITERAL_HDR = headerRe("\\|");
+    const FOLDED_HDR = headerRe(">");
+    const ALONE_HDR = new RegExp(`^\\s*${PROPS}${HDR}\\s*$`);
+    const ALONE_FOLDED = new RegExp(`^\\s*${PROPS}${HDR.replace("[|>]", ">")}\\s*$`);
+    const ODD_BS = /(?<=(?:^|[^\\])(?:\\\\)*)\\$/;
+    const plainJoinable = (text) => /(?::\s+\S|^\s*-\s+\S)/.test(text) && !LITERAL_HDR.test(text);
+    let cur = null;
+    let scalar = -1; // the indent of the key that opened a `|`/`>` block scalar; its more-indented lines are content
+    let keyIndent = -1; // the indent of the last non-blank line: a header alone on its line (`run:` + `|`) belongs to it
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (scalar >= 0 && l.trim() !== "" && indent(l) <= scalar) scalar = -1;
+      // inside a block scalar a `#` line is content (a script line the shell may glue and run), not a YAML comment;
+      // so is one inside a double- or single-quoted scalar left open on the line before
+      const t = scalar >= 0 || (cur && openQuote(cur.text)) ? l : stripYamlComment(l);
+      // a header after its key (`run: |2-`, the indent indicator before or after the chomp sign), or alone on the
+      // line after the key (`run:` / `run: &a` + `|`): either way the more-indented lines after it are content
+      if (scalar < 0 && ANY_HDR.test(t)) scalar = indent(l);
+      else if (scalar < 0 && keyIndent >= 0 && ALONE_HDR.test(t)) scalar = keyIndent;
+      if (l.trim() !== "" && (scalar >= 0 || !/^\s*#/.test(l))) keyIndent = indent(l); // a comment line is not the key
+      // a blank line inside a multi-line scalar (folded, quoted or plain) is a KEPT line break, not the scalar's end:
+      // `cont\` + blank + `ext7` reaches the shell as a backslash-newline, so the next line is spliced on
+      if (cur && l.trim() === "" && (cur.block === true || (scalar < 0 && (openQuote(cur.text) || plainJoinable(cur.text))))) {
+        cur.blank = true;
+        continue;
+      }
+      const isEntry = /^\s*(?:-(?:\s|$)|#|\?\s|:\s|(?:"[^"]*"|'[^']*'|[^\s#"'][^#]*?):(?:\s|$))/.test(l);
+      if (
+        cur &&
+        l.trim() !== "" &&
+        indent(l) > cur.indent &&
+        (cur.block ||
+          openQuote(cur.text) ||
+          // a literal `|` block's lines stay separate (each is a command); only plain scalars continue
+          (!isEntry && plainJoinable(cur.text)))
+      ) {
+        if (cur.block === "pending") {
+          // the folded block's content indent: the header's indent indicator counted from its key, else the first line's
+          const d = ANY_HDR.exec(cur.text)?.[1] ?? ALONE_HDR.exec(cur.text.replace(/^.*?:\s+/, ""))?.[1];
+          cur.bIndent = d ? /^\s*(?:[-?]\s+)*/.exec(cur.text)[0].length + Number(d) : indent(l);
+          cur.text = cur.text.replace(new RegExp(`\\s*${HDR}\\s*$`), "");
+          cur.block = true;
+          cur.lastMore = false;
+          cur.blank = false;
+        }
+        if (cur.block === true) {
+          // a folded `>` block folds a line break to a space, EXCEPT one next to a more-indented line, which is kept:
+          // there a trailing `\` is a shell continuation (`cont\` + `ext7` runs context7), so it is spliced
+          // (and one after a blank line, which YAML keeps as the break itself)
+          const more = indent(l) > cur.bIndent;
+          if ((more || cur.lastMore || cur.blank) && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + l.slice(Math.min(cur.bIndent, indent(l)));
+          else cur.text += ` ${t.trim()}`;
+          cur.lastMore = more;
+          cur.blank = false;
+          continue;
+        }
+        const dq = openQuote(cur.text) && /"[^"]*$/.test(cur.text);
+        // after a blank line the break is kept: in a double-quoted scalar it is written as an `\n` escape (decoded,
+        // then a `\`-newline is spliced); in a plain or single-quoted one a trailing `\` is spliced as the shell would
+        if (cur.blank && dq) cur.text += `\\n${t.trim()}`;
+        else if (cur.blank && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
+        // inside a double-quoted scalar an escaped line break vanishes with the next line's indent (YAML 1.2 §7.3.1)
+        else if (dq && ODD_BS.test(cur.text)) cur.text = cur.text.slice(0, -1) + t.trim();
+        else cur.text += ` ${t.trim()}`;
+        cur.blank = false;
+        if (!cur.block && ALONE_FOLDED.test(t)) cur.block = "pending"; // `run:` + `>` alone on the next line
+        continue;
+      }
+      if (cur) out.push(cur);
+      // only a FOLDED `>` block joins into one value; a literal `|` block keeps its lines (commands) separate
+      cur = { i, text: t, indent: indent(l), block: FOLDED_HDR.test(t) ? "pending" : false };
+    }
+    if (cur) out.push(cur);
+    // a `\` continuation inside a literal `|` script: YAML strips the block's indentation, the shell then glues
+    return joinContinuations(
+      out.map(({ i, text }) => ({ i, text })),
+      ODD_BS, // an odd run of backslashes continues
+      ["block"],
+    );
+  }
+  // a line continuation: `\` (sh, Dockerfile, a fenced block), PowerShell's backtick, cmd's `^`. How the next line
+  // is spliced on differs by reader, so each join the reader might make is read (CONTINUATION_JOINS).
+  const docker = /(?:^|\/)(?:Dockerfile|Containerfile)[^/]*$|\.(?:dockerfile|containerfile)$/i.test(path);
+  // a Dockerfile as BuildKit parses it: `# escape=\`` (a parser directive, before any instruction) makes the
+  // backtick the escape; whitespace may follow the escape; comment and empty lines inside a continuation are dropped
+  // directives are read only while every line so far IS one (`syntax`, `escape`, `check`): an ordinary comment, an
+  // unknown key, an empty line or an instruction ends them, and a later `# escape=` is a plain comment
+  const directives = [];
+  for (const [n, l] of lines.entries()) {
+    // BuildKit strips leading whitespace and reads a non-empty value that may hold spaces (`check=skip=all; error=true`)
+    // Go's unicode.IsSpace includes U+0085 (NEL), which JS `\s` does not; Go's `.` also matches `\r`, U+2028 and U+2029
+    const d = new RegExp(`^${GO_SPACE}*#${GO_SPACE}*(syntax|escape|check)${GO_SPACE}*=${GO_SPACE}*([\\s\\S]+?)${GO_SPACE}*$`, "i").exec(
+      n === 0 ? l.replace(/^\uFEFF/, "") : l,
+    );
+    if (!d) break;
+    directives.push(d);
+  }
+  const dockerEscape = docker && directives.some((d) => /^escape$/i.test(d[1]) && d[2] === "`") ? "`" : "\\";
+  const [cont, modes] = /\.(?:ps1|psm1)$/i.test(path)
+    ? [/(?<!`)`$/, ["space", "keep"]] // the escaped newline is whitespace; read glued too, fail-closed
+    : /\.(?:cmd|bat)$/i.test(path)
+      ? [/\^$/, ["keep"]] // `^` escapes the newline: the next line is appended as it stands
+      : /(?:^|\/)(?:GNU)?makefile(?:\.(?:in|am))?$|\.(?:mk|make)$/i.test(path)
+        ? [/(?<=(?:^|[^\\])(?:\\\\)*)\\$/, ["tab"]] // make drops the recipe tail's leading tab, then the shell glues
+        : docker
+          ? [
+              // under `# escape=\`` a heredoc body (`RUN <<EOF`) still reaches the shell raw, where `\` continues: read
+              // both markers in that file, fail-closed, rather than track heredoc bounds
+              dockerEscape === "`" ? /`[ \t]*$|\\[ \t]*$/ : /\\[ \t]*$/, // BuildKit: `\<escape>[ \t]*$`, no look-behind
+              ["keep", "strip"],
+            ] // with and without the next line's indent, fail-closed
+          : [/(?<=(?:^|[^\\])(?:\\\\)*)\\$/, ["keep"]]; // the shell deletes `\<newline>` and keeps the next line whole
+  if (kind === "json") return lines.map((text, i) => ({ i, text }));
+  const ps1 = /\.(?:ps1|psm1)$/i.test(path);
+  const physical = [];
+  for (let i = 0; i < lines.length; i++) {
+    // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
+    // a Dockerfile line is trimmed of every trailing `\r` (BuildKit's trimNewline), so `\\\r\r\n` still continues
+    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
+    const at = l.search(/@upstash\\?\/context7-mcp/i);
+    if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
+      physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
+    } else physical.push({ i, text: l });
+  }
+  // a U+FEFF-led `#` line is NOT a comment to BuildKit (and bash runs it): only Go's whitespace may lead a skipped line
+  const skipRe = new RegExp(`^${GO_SPACE}*(?:#|$)`);
+  return joinContinuations(physical, cont, modes, docker ? (t) => skipRe.test(t) : null);
+}
+
+/**
+ * Pure: entries `{ i, text }` with continuation groups joined. A group is spliced the way a reader would splice it —
+ * `keep` appends the next line as it stands (bash: `\<newline>` is deleted, nothing inserted), `strip` drops its
+ * leading whitespace, `tab` drops one leading tab (a make recipe tail), `space` puts one space between, `block` drops up to the group's first-line indentation (a YAML
+ * literal block's indent). One entry per mode is returned for a group that holds the package, so a pin or a name split
+ * mid-token across the join is read as the shell would read it; a group without the package keeps its lines.
+ */
+export function joinContinuations(entries, cont, modes, skip = null) {
+  const out = [];
+  const NAME = /@upstash\\?\/context7-mcp/i;
+  for (let k = 0; k < entries.length; k++) {
+    // a skipped line (a Dockerfile comment, such as `# escape=\``) never starts a group either
+    if (!cont.test(entries[k].text) || entries[k].quoteJoin || k + 1 >= entries.length || (skip && skip(entries[k].text))) {
+      out.push({ i: entries[k].i, text: entries[k].text });
+      continue;
+    }
+    // the group's members; `skip` lines inside it (a Dockerfile's comment and empty lines) are dropped, not joined
+    const parts = [k];
+    const skipped = [];
+    let j = k;
+    while (j + 1 < entries.length && cont.test(entries[parts[parts.length - 1]].text)) {
+      j++;
+      if (!(skip && skip(entries[j].text))) parts.push(j);
+      // a skipped line is ALSO read on its own: inside a `RUN <<EOF` heredoc it is not a Dockerfile comment, and the shell
+      // may glue it onto the line before and run it (`--help\` + `#x; npx …@latest`); bounds are not tracked, so fail closed
+      else skipped.push(j);
+    }
+    const base = /^\s*/.exec(entries[k].text)[0].length;
+    // splice `first` with the members `rest` after it, the way each mode reads a continuation
+    const splice = (first, rest) => modes.map((mode) => {
+      let text = entries[first].text.replace(cont, "");
+      for (const n of rest) {
+        const next = n !== rest[rest.length - 1] ? entries[n].text.replace(cont, "") : entries[n].text;
+        const lead = /^\s*/.exec(next)[0].length;
+        text +=
+          mode === "space"
+            ? ` ${next.trim()}`
+            : mode === "strip"
+              ? next.trimStart()
+              : mode === "tab"
+                ? next.replace(/^\t/, "")
+                : mode === "block"
+                  ? next.slice(Math.min(lead, base))
+                  : next;
+      }
+      return text;
+    });
+    const joins = splice(k, parts.slice(1));
+    // a skipped line that itself continues is ALSO spliced with the members after it: in a heredoc the shell glues
+    // `#x; npx -y @upstash/cont\` + `ext7-mcp@latest` and runs it, so the name may start on the skipped line
+    const skippedJoins = skipped
+      .filter((n) => cont.test(entries[n].text))
+      .flatMap((n) => splice(n, parts.filter((m) => m > n)).map((text) => ({ i: entries[n].i, text })));
+    // a quote beside the marker (`"@upstash/context7-"\` + `mcp`) is concatenated by the shell: test quote-free too
+    // and with escapes dropped (`context7\-\` + `mcp`): the shell removes both before the word is formed
+    const names = (t) => NAME.test(t) || NAME.test(t.replace(/["']/g, "").replace(/\\(.)/g, "$1"));
+    if (!joins.some(names) && !skippedJoins.some((x) => names(x.text))) {
+      out.push({ i: entries[k].i, text: entries[k].text });
+      continue;
+    }
+    for (const text of joins) out.push({ i: entries[k].i, text }); // the same line named twice is de-duplicated in the sweep
+    for (const n of skipped) out.push({ i: entries[n].i, text: entries[n].text });
+    out.push(...skippedJoins);
+    k = j;
+  }
+  return out;
+}
+
+/** Pure: findings for one (logical) line's Context7 install references, read as the units its file kind defines. */
+export function context7SpecFindings(line, pin, kind = "shell", before = "", after = "") {
+  const out = [];
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
+  const push = (f) => f && out.push(f);
+  // a key naming the package — with or without an override selector — takes its WHOLE value
+  for (const v of context7KeyValues(line, kind)) push(classify(v));
+  // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
+  const runner =
+    PACKAGE_RUNNER_RE.test(line) ||
+    /["']?command["']?\s*[:=]\s*["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
+  out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
+  if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
+  return out;
+}
+
+/** Pure: findings for argv-like units. An `npm:` alias with no version installs latest, so it is unpinned with or without a runner. */
+export function context7UnitFindings(units, pin, runner, depth = 0) {
+  const out = [];
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
+  for (const unit of units) {
+    // a unit that is itself a command (`sh -c "npx npm:pkg foo"`, a JSON `-c` argument): read its own words too
+    // (a unit that IS a spec, or a `--flag=<spec>` argument, is one argv word and is read whole below)
+    // (a decoded command string may spell the name only once the shell drops quotes and escapes: `cont\\ext7`, `cont''ext7`)
+    if (depth < 2 && /[\s;&|<>]/.test(unit) && /context7-mcp/i.test(unit.replace(/["'\\]/g, "")) && !SPEC_VALUE_RE.test(unit) && !/^--?[\w-]+=/.test(unit)) {
+      out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
+      continue;
+    }
+    // a quoted letter inside the word (`con't'ext7`, `cont""ext7`) is concatenated by the shell, but `shellWords` keeps
+    // a quote between two letters as a prose apostrophe: a word naming the package only once quotes go is read without them
+    const word = new RegExp(CONTEXT7_NAME_RE.source, "i").test(unit) ? unit : unit.replace(/["']/g, "");
+    for (const m of word.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
+      const rest = word.slice(m.index + m[0].length);
+      if (rest.startsWith("@")) {
+        const f = classify(shedMarkup(rest.slice(1)));
+        if (f) out.push(f);
+      } else if (/(?:^|[=:\s"'])npm:$/i.test(word.slice(0, m.index))) out.push({ unpinned: "<none> (npm: alias)" });
+      // in a runner context the name is versionless whenever `@<version>` does not follow it at once — whatever does
+      // follow (a `\` continuation, `$(…)`, `${VAR}`, more text) cannot pin it
+      else if (!/^["']?\s*[:=]/.test(rest) && runner) out.push({ bare: true });
+    }
+  }
+  return out;
+}
+
+/** Pure: JSONC → JSON — `//` and block comments and trailing commas removed, never inside a string. Line breaks are kept. */
+export function stripJsonc(text) {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      const m = /^"(?:\\.|[^"\\])*"/.exec(text.slice(i));
+      const lit = m ? m[0] : text.slice(i);
+      out += lit;
+      i += lit.length - 1;
+    } else if (c === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+      out += "\n";
+    } else if (c === "/" && text[i + 1] === "*") {
+      const end = text.indexOf("*/", i + 2);
+      const body = text.slice(i, end < 0 ? text.length : end + 2);
+      out += body.replace(/[^\n]/g, "");
+      i += body.length - 1;
+    } else out += c;
+  }
+  return out.replace(/,(\s*[}\]])/g, "$1");
+}
+
+/**
+ * Pure: findings for a whole PARSED JSON document — keys, values and `command`/`args` context come from the
+ * data, not from lines. `lineOf(needle)` maps a finding back to a line of the source. Null when `text` is not JSON.
+ */
+export function context7JsonFindings(text, pin) {
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    try {
+      doc = JSON.parse(stripJsonc(text)); // JSONC: comments and trailing commas removed outside strings
+    } catch {
+      return null; // templates and other non-JSON: the line reader takes over
+    }
+  }
+  const out = [];
+  const nameLine = (() => {
+    const at = text.search(/context7-mcp|upstash\\?\/context7/i);
+    return at < 0 ? 1 : text.slice(0, at).split("\n").length;
+  })();
+  const lineOf = (needle) => {
+    const at = needle ? text.indexOf(needle) : -1;
+    return at < 0 ? nameLine : text.slice(0, at).split("\n").length;
+  };
+  const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: String(v).slice(0, 24) || "<empty>" });
+  const RUNNER_CMD = /^(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?$/i;
+  const RUNNER_WORD_RE = /(?:^|[\s\\/"'])(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s]|$)/i;
+  // a command is a runner if its first word is one, or if the WHOLE value is a path to one (`C:\Program Files\nodejs\npx.cmd`)
+  const isRunnerCommand = (c) =>
+    typeof c === "string" &&
+    (RUNNER_CMD.test(c.trim().split(/\s+/)[0].replace(/^.*[\\/]/, "")) ||
+      RUNNER_CMD.test(c.trim().replace(/^["']|["']$/g, "").replace(/^.*[\\/]/, "")) ||
+      // a runner path followed by flags (`/Users/John Smith/bin/npx -y`, `"C:\…\npx.cmd" -y`), or behind `env X=1`
+      RUNNER_WORD_RE.test(c));
+  const walk = (node, inArray, runner) => {
+    if (Array.isArray(node)) {
+      // `"args": ["/c", "npx", "-y", "@…"]` (Windows `cmd /c`): a runner element makes the array a runner call
+      const here = runner || node.some((v) => typeof v === "string" && (isRunnerCommand(v) || PACKAGE_RUNNER_RE.test(v)));
+      for (const v of node) walk(v, true, here);
+    } else if (node && typeof node === "object") {
+      // `command` as a string, or an object `{ path, args }` (Zed): read from the parent so `args` BESIDE it inherit the
+      // runner, and from the object itself (its own `path`) for `args` inside it
+      const here = runner || isRunnerCommand(node.command) ||
+        isRunnerCommand(node.command?.path) ||
+        // the program under another key (`cmd`, `program`), or a command ARRAY whose first word is the runner
+        [node.command?.cmd, node.command?.program, node.path, node.cmd, node.program].some(isRunnerCommand) ||
+        (Array.isArray(node.command) && isRunnerCommand(node.command[0]));
+      for (const [k, v] of Object.entries(node)) {
+        if (CONTEXT7_KEY_RE.test(k)) {
+          const val = typeof v === "string" ? v : v && typeof v === "object" && typeof v["."] === "string" ? v["."] : null;
+          const f = val === null ? null : classify(val);
+          if (f) out.push({ line: lineOf(JSON.stringify(k).slice(1, -1)), f });
+          if (typeof v !== "string") walk(v, false, here);
+        } else walk(v, false, here);
+      }
+    } else if (typeof node === "string" && /context7/i.test(spliceDecoded(node).replace(/["'\\]/g, ""))) {
+      // the name may appear only once the shell running the value drops quotes and escapes (`cont\\ext7`, `cont''ext7`)
+      const raw = node;
+      node = spliceDecoded(node); // a backslash-newline inside the value is spliced as the shell running it would
+      const units = inArray || SPEC_VALUE_RE.test(node) ? [node] : shellWords(node);
+      const line = lineOf(JSON.stringify(raw).slice(1, -1));
+      for (const f of context7UnitFindings(units, pin, runner || PACKAGE_RUNNER_RE.test(node))) out.push({ line, f });
+      if (CONTEXT7_GIT_SOURCE_RE.test(node) || ((runner || PACKAGE_RUNNER_RE.test(node)) && CONTEXT7_SHORTHAND_RE.test(` ${node} `)))
+        out.push({ line, f: { git: true } });
+    }
+  };
+  walk(doc, false, false);
+  return out;
+}
+
+/**
+ * Pure: every YAML KEY naming the package — anywhere on a line (block or flow mapping, nested), with or without a
+ * path prefix (`foo>`, `**\/`, `parent/`) or a selector — and its value, taken from the same line, from the next
+ * more-indented line (a value on the line after its key, or a folded/literal block), or from an explicit
+ * `? key` / `: value` pair. Returns `{ i, value }` per key; each value must equal PINNED.
+ */
+export function context7YamlKeyScan(lines) {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const nextValueLine = (i, base) => {
+    let j = i + 1;
+    while (j < lines.length && (lines[j].trim() === "" || lines[j].trim().startsWith("#"))) j++;
+    return j < lines.length && indent(lines[j]) > base ? j : -1;
+  };
+  const oneScalar = (v, i, base) => {
+    v = stripYamlProps(v.trim());
+    if (/^[>|](?:[+-][1-9]?|[1-9][+-]?)?$/.test(v)) {
+      // a block scalar: its more-indented lines, folded
+      const parts = [];
+      for (let j = nextValueLine(i, base); j >= 0 && j < lines.length; j++) {
+        if (lines[j].trim() !== "" && indent(lines[j]) <= base) break;
+        parts.push(lines[j].trim());
+      }
+      return parts.filter(Boolean).join(" ");
+    }
+    const q = /^("(?:\\.|[^"\\])*"|'(?:[^']|'')*')/.exec(v);
+    return q ? unquote(q[1]) : v.split(/\s*[,}\]]/)[0].trim();
+  };
+  const KEY = /(["']?)((?:[^\s"'{},[\]#]*[>/])?@upstash\\?\/context7-mcp(?:@[^\s"':,{}[\]]*)?)\1\s*:(?=\s|$)/gi;
+  for (let i = 0; i < lines.length; i++) {
+    const l = stripYamlComment(lines[i]);
+    const ex = /^(\s*(?:-\s+)*)\?(?:\s+(.*))?$/.exec(l);
+    let exKey = ex ? stripYamlProps((ex[2] ?? "").trim()) : "";
+    if (ex && (exKey === "" || /^[>|](?:[+-][1-9]?|[1-9][+-]?)?$/.test(exKey))) {
+      // `?` alone, or `? |` / `? >`: the key is on the next more-indented line(s)
+      const k = nextValueLine(i, indent(l));
+      exKey = k < 0 ? "" : stripYamlProps(stripYamlComment(lines[k]).trim());
+    }
+    if (ex && CONTEXT7_KEY_RE.test(unquote(exKey).replace(/\\\//g, "/"))) {
+      let j = i + 1;
+      while (j < lines.length && !/^\s*(?:-\s+)*:(?:\s|$)/.test(lines[j]) && (lines[j].trim() === "" || indent(lines[j]) > indent(l))) j++;
+      const val = j < lines.length ? /^\s*(?:-\s+)*:\s*(.*)$/.exec(stripYamlComment(lines[j])) : null;
+      out.push({ i, value: val ? oneScalar(val[1], j, indent(l)) : "" });
+      continue;
+    }
+    for (const m of l.matchAll(KEY)) {
+      if (!CONTEXT7_KEY_RE.test(m[2].replace(/\\\//g, "/"))) continue;
+      const after = l.slice(m.index + m[0].length).trim();
+      if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
+      else {
+        const j = nextValueLine(i, indent(l));
+        out.push({ i, value: j < 0 ? "" : oneScalar(stripYamlComment(lines[j]), j, indent(l)) });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Pure: FAIL-CLOSED for YAML values that ARE a Context7 spec but continue onto a more-indented line (a plain
+ * or folded scalar, a next-line value, a bare `-` item). This parser-free gate cannot fold every YAML shape the
+ * way a YAML reader does, so it refuses them: the pinned spec must be written whole on one line. Literal `|`
+ * blocks are separate lines (commands) and are not refused. Returns `{ i, j }` (spec line, continuation line).
+ */
+export function yamlSpecContinuations(lines) {
+  const out = [];
+  const indent = (l) => /^\s*/.exec(l)[0].length;
+  const blank = (l) => l.trim() === "" || l.trim().startsWith("#");
+  for (let i = 0; i < lines.length; i++) {
+    const l = stripYamlComment(lines[i]);
+    const kv = /^\s*(?:-\s+)?(?:\?\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)\s*:\s+(.*)$/.exec(l);
+    const item = /^\s*-\s+(.*)$/.exec(l);
+    const value = stripYamlProps((kv ? kv[1] : item ? item[1] : l).trim()).replace(/^["']/, "");
+    if (!SPEC_VALUE_RE.test(value)) continue;
+    let base = indent(l);
+    if (!kv && !item) {
+      // a value on its own line: its owner is the nearest less-indented line above
+      let o = i - 1;
+      while (o >= 0 && (blank(lines[o]) || indent(lines[o]) >= indent(l))) o--;
+      // inside a literal `|` block the lines are separate (a script) — unless the spec is the block's FIRST line,
+      // where the block is the value itself
+      if (o >= 0 && /(?::\s*|^\s*)(?:[&!]\S+\s+)*\|(?:[+-][1-9]?|[1-9][+-]?)?\s*$/.test(stripYamlComment(lines[o]))) {
+        let p = i - 1;
+        while (p > o && blank(lines[p])) p--;
+        if (p !== o) continue;
+      }
+      base = o >= 0 ? indent(lines[o]) : 0;
+    }
+    let j = i + 1;
+    while (j < lines.length && blank(lines[j])) j++;
+    if (j < lines.length && indent(lines[j]) > base) out.push({ i, j });
+  }
+  return out;
+}
+
+/** Pure: the tokenizing mode for a tracked path. */
+export const context7FileKind = (path) => (/\.jsonc?$/i.test(path) ? "json" : /\.ya?ml$/i.test(path) ? "yaml" : "shell");
+
+const CONTEXT7_PHRASE_RE = /context7[^0-9\n]{0,40}?(\d+\.\d+\.\d+)/gi;
+export const CONTEXT7_PIN_HISTORY = [
+  /^docs\/BUILD_BACKLOG\.md$/,
+  /^docs\/agent\/RESOURCE_INTAKE\.md$/,
+  /^docs\/DECISION_RECORDS\.md$/,
+  /^artifacts\/lane-messages\//,
+  /^third_party\//,
+  /^scripts\/check-mcp-roster\.mjs$/,
+];
+export const CONTEXT7_PIN_COPIES = [
+  { path: CONTEXT7_INSTALLER, re: /^\/\/ (\d+\.\d+\.\d+) published/g },
+  { path: "docs/MCP_AND_SKILLS_LANE_PARITY.md", re: CONTEXT7_SPEC_RE },
+  { path: ROSTER_PATH, re: /"packageVersion":\s*"([^"]+)"/g, section: /"id":\s*"context7"/ },
+  { path: ROSTER_PATH, re: CONTEXT7_SPEC_RE, section: /"id":\s*"context7"/ },
+  { path: "scripts/setup-mcp-lane.mjs", re: CONTEXT7_PHRASE_RE },
+];
+
+/** Pure: the version in install-context7's `export const PINNED = "@upstash/context7-mcp@X"`, or null. */
+export function deriveContext7Pin(installerSource) {
+  const m = /export const PINNED = "@upstash\/context7-mcp@([^"]+)"/.exec(installerSource ?? "");
+  return m ? m[1] : null;
+}
+
+/**
+ * Pure: every Context7 pin copy that differs from PINNED, as file:line findings.
+ * `files` maps every tracked text path to its contents (the sweep's universe).
+ */
+export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN_COPIES, history = CONTEXT7_PIN_HISTORY }) {
+  const pin = deriveContext7Pin(installerSource);
+  if (!pin) return [`${CONTEXT7_INSTALLER}: no \`export const PINNED = "@upstash/context7-mcp@<version>"\` — the pin every copy is held to cannot be derived`];
+  const problems = [];
+  const stale = (path, line, v) => `${path}:${line}: Context7 pin copy says ${v}, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`;
+
+  // 1. the derived sweep
+  let swept = 0;
+  for (const [path, text] of Object.entries(files)) {
+    if (typeof text !== "string" || history.some((re) => re.test(path))) continue;
+    // the prefilter reads the text as a shell would rebuild it too — continuations spliced, quotes and escapes removed —
+    // so `cont\<newline>ext7`, `context''7` or `context\7` is not skipped before the readers below see it
+    // (a Dockerfile also drops comment and empty lines inside a continuation, and allows whitespace after the escape)
+    // two rebuilds, both read: comment and empty lines inside a continuation are dropped only as BuildKit drops them;
+    // a shell keeps a `#`-led line after `\<newline>` (glued, not a comment), so it is also rebuilt with them kept
+    const rebuilt = [
+      new RegExp(`([\\\\\`^])[ \\t]*\\r*\\n(?:${GO_SPACE.replace("\\n", "")}*(?:#[^\\n]*)?\\r*\\n)*[ \\t]*`, "g"),
+      // (blank lines between are kept breaks in a YAML scalar, where a `\` before one still splices: spanned too)
+      /([\\`^])[ \t]*\r*\n(?:[ \t]*\r*\n)*[ \t]*/g,
+      // and a backslash-newline written as escapes inside a JSON string or a YAML double-quoted scalar (`cont\\\next7`)
+      /\\\\\\(?:r\\)?n/g,
+    ].map((re) => text.replace(re, "").replace(/["'\\`^]/g, ""));
+    // and a YAML double-quoted hex or unicode escape (`cont\x65xt7`), decoded
+    rebuilt.push(text.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g, (_, a, b, c) => String.fromCodePoint(parseInt(a ?? b ?? c, 16))));
+    if (!/context7/i.test(text) && !rebuilt.some((r) => /context7/i.test(r)) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
+    const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
+    const kind = context7FileKind(path);
+    const seenAt = new Map(); // first line -> versions named by spec findings (so the phrase check does not double-report)
+    const json = kind === "json" ? context7JsonFindings(text, pin) : null;
+    const units = json
+      ? [...new Set(json.map((x) => x.line))].map((ln) => ({ i: ln - 1, findings: json.filter((x) => x.line === ln).map((x) => x.f) }))
+      : logicalLines(lines, kind, path).map(({ i, text: line }) => ({
+          i,
+          line,
+          findings: context7SpecFindings(line, pin, kind, lines.slice(Math.max(0, i - 6), i).join("\n"), lines.slice(i + 1, i + 7).join("\n")),
+        }));
+    if (json) swept += (text.match(/upstash\\?\/context7-mcp/gi) ?? []).length;
+    if (kind === "yaml") {
+      const classify = (v) => (v === pin ? null : /^\d+\.\d+\.\d+$/.test(v) ? { stale: v } : { unpinned: v.slice(0, 24) || "<empty>" });
+      for (const { i, value } of context7YamlKeyScan(lines)) {
+        const f = classify(value);
+        if (!f) continue;
+        const u = units.find((x) => x.i === i);
+        if (u) u.findings.push(f);
+        else units.push({ i, findings: [f] });
+      }
+      for (const { i, j } of yamlSpecContinuations(lines)) {
+        const u = units.find((x) => x.i === i);
+        if (u && u.findings.length) continue; // already named
+        problems.push(
+          `${path}:${i + 1}: Context7 spec value continues on line ${j + 1} (a multi-line YAML value this gate cannot fold) — write the pinned spec whole on one line (PINNED ${pin})`,
+        );
+      }
+    }
+    for (const { i, line, findings } of units) {
+      if (line !== undefined && /upstash\\?\/context7-mcp/i.test(line)) swept++;
+      const seen = new Set();
+      seenAt.set(i, seen);
+      for (const f of findings) {
+        if (f.stale) {
+          seen.add(f.stale);
+          problems.push(stale(path, i + 1, f.stale));
+        } else if (f.git) {
+          problems.push(`${path}:${i + 1}: Context7 is installed from a git/URL source, not the npm package pinned at ${pin} (${CONTEXT7_INSTALLER})`);
+        } else if (f.unpinned) {
+          seen.add(f.unpinned);
+          problems.push(`${path}:${i + 1}: Context7 spec is UNPINNED (@${f.unpinned}), but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        } else {
+          problems.push(`${path}:${i + 1}: Context7 is invoked via a package runner with NO version, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`);
+        }
+      }
+    }
+    lines.forEach((line, i) => {
+      const seen = seenAt.get(i) ?? new Set();
+      for (const m of line.matchAll(new RegExp(CONTEXT7_PHRASE_RE.source, CONTEXT7_PHRASE_RE.flags))) {
+        swept++;
+        if (m[1] === pin || seen.has(m[1]) || [...seen].some((v) => v.startsWith(m[1]))) continue;
+        seen.add(m[1]);
+        problems.push(stale(path, i + 1, m[1]));
+      }
+    });
+  }
+
+  // 2. the known sites must still hold a copy (and the roster's packageVersion is held here)
+  for (const { path, re, section } of copies) {
+    const text = files[path];
+    if (typeof text !== "string") {
+      problems.push(`${path}: unreadable — its Context7 pin copy cannot be checked against PINNED ${pin}`);
+      continue;
+    }
+    const lines = text.split("\n");
+    let from = 0;
+    let to = lines.length;
+    if (section) {
+      from = lines.findIndex((l) => section.test(l));
+      if (from < 0) {
+        problems.push(`${path}: no line matching ${section} — the Context7 entry holding the pin copy is gone`);
+        continue;
+      }
+      const next = lines.findIndex((l, i) => i > from && /"id":\s*"/.test(l));
+      if (next > 0) to = next;
+    }
+    let seen = 0;
+    for (let i = from; i < to; i++) {
+      for (const m of lines[i].matchAll(new RegExp(re.source, re.flags))) {
+        seen++;
+        const v = re === CONTEXT7_SPEC_RE ? specToken(m[1]) : m[1];
+        const msg = stale(path, i + 1, v);
+        if (v !== pin && !problems.some((p) => p.startsWith(`${path}:${i + 1}:`))) problems.push(msg);
+      }
+    }
+    if (!seen) problems.push(`${path}: no Context7 pin copy matching ${re} — reworded or removed, so the gate can no longer hold it to PINNED ${pin}`);
+  }
+  if (!swept) problems.push(`the Context7 pin sweep matched nothing across ${Object.keys(files).length} tracked file(s) — a sweep that sees nothing is not a pass`);
+  return [...new Set(problems)]; // a continuation read two ways can name the same line twice
+}
+
+/**
+ * Pure: one tracked file's bytes as sweepable text; never null. UTF-8 when there
+ * is no NUL byte. Otherwise (binary or UTF-16) a latin1 reading, a UTF-16LE
+ * reading and a byte-swapped (UTF-16BE) reading are joined — BOM or not — so an
+ * ASCII spec is found whichever encoding wrote it. Ceiling: the UTF-16 reading sits behind the latin1 one, so a
+ * UTF-16 Dockerfile's `# escape=` directive is not on line 0 and is not honoured (BuildKit cannot parse it either).
+ */
+export function decodeTracked(buf) {
+  if (!buf.includes(0)) return buf.toString("utf8");
+  const even = buf.subarray(0, buf.length - (buf.length % 2));
+  const swapped = Buffer.from(even).swap16();
+  return `${buf.toString("latin1")}\n${even.toString("utf16le")}\n${swapped.toString("utf16le")}`;
+}
+
+/**
+ * The sweep's universe: every tracked path. A symlink (git mode 120000) is held
+ * by the link text git tracks, never followed (a link to a FIFO cannot hang the
+ * gate); a gitlink (160000) has no content here. A path deleted in the worktree
+ * is not a copy; any OTHER read error is returned in `unreadable` — reported,
+ * never silently skipped.
+ */
+function loadContext7PinFiles() {
+  const files = {};
+  const unreadable = [];
+  const entries = execSync("git ls-files -s -z", { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).split("\0").filter(Boolean);
+  for (const entry of entries) {
+    const tab = entry.indexOf("\t");
+    const mode = entry.slice(0, 6);
+    const path = entry.slice(tab + 1);
+    if (mode === "160000") continue;
+    const abs = resolve(repo, path);
+    try {
+      files[path] = mode === "120000" ? readlinkSync(abs, "utf8") : decodeTracked(readFileSync(abs));
+    } catch (e) {
+      if (e?.code !== "ENOENT") unreadable.push(`${path}: unreadable (${e?.code ?? e}) — its Context7 pin copies cannot be checked`);
+    }
+  }
+  return { files, unreadable };
 }
 
 /** Pure: the mcp__<server>__ prefixes (lowercased) named in a chunk of markdown. */
@@ -516,6 +1389,556 @@ server.registerTool(
     "grants.skills.loop-start must be an array, got object",
   );
 
+  // Context7 pin parity, against the REAL tracked tree. Stale versions are built
+  // at run time so this file never carries a literal stale pin of its own.
+  const { files: pinFiles, unreadable: pinUnreadable } = loadContext7PinFiles();
+  const realInstaller = pinFiles[CONTEXT7_INSTALLER] ?? "";
+  const realPin = deriveContext7Pin(realInstaller);
+  const OLD = ["4", "0", "4"].join(".");
+  const SPEC = ["@upstash", "context7-mcp"].join("/") + "@";
+  const pinRun = (over = {}, installer = realInstaller) => checkContext7Pin({ installerSource: installer, files: { ...pinFiles, ...over } });
+  const appendTo = (path, line) => ({ [path]: `${pinFiles[path] ?? ""}\n${line}\n` });
+  const lineCount = (path) => (pinFiles[path] ?? "").split("\n").length + 1;
+  const names = (problems, path, line, v) => problems.some((p) => p.startsWith(`${path}:${line}: Context7 pin copy says ${v},`));
+  checks.push(["the committed tree holds every Context7 pin copy at PINNED, every tracked path read", realPin !== null && pinRun().length === 0 && pinUnreadable.length === 0]);
+
+  const bumped = realInstaller.replace(/(export const PINNED = "@upstash\/context7-mcp@)[^"]+"/, '$19.9.9"');
+  const stale = pinRun({}, bumped);
+  const expectStale = [];
+  for (const [path, text] of Object.entries(pinFiles)) {
+    if (path === CONTEXT7_INSTALLER || CONTEXT7_PIN_HISTORY.some((re) => re.test(path))) continue;
+    text.split("\n").forEach((l, i) => {
+      if (/@upstash\/context7-mcp@\d|context7[^0-9\n]{0,40}?\d+\.\d+\.\d+|"packageVersion":\s*"4/i.test(l) && (path !== ROSTER_PATH || /context7|packageVersion/.test(l)))
+        expectStale.push(`${path}:${i + 1}:`);
+    });
+  }
+  checks.push([
+    `a bumped PINNED (9.9.9) names every stale copy (${expectStale.join(" ")})`,
+    expectStale.length >= 5 && expectStale.every((loc) => stale.some((p) => p.startsWith(loc) && p.includes("PINNED is 9.9.9"))),
+  ]);
+  const plants = [
+    ["docs/agent/mcp-roster-UNLISTED.md", `${SPEC}${OLD}`, "an UNLISTED file's package spec"],
+    [".mcp.json", `"x": "${SPEC}${OLD}"`, "an unlisted .mcp.json key"],
+    [".claude/skills/signalgrid-master/SKILL.md", `npx -y ${SPEC}${OLD}`, "the context7-granted skill's doc"],
+    ["docs/MCP_AND_SKILLS_LANE_PARITY.md", `Context7 pinned at ${OLD}`, "a reworded phrase in a listed doc"],
+    ["scripts/setup-mcp-lane.mjs", `// ${SPEC}${OLD}`, "the package-spec form in a phrase-shaped site"],
+  ];
+  for (const [path, line, what] of plants) {
+    checks.push([`a stale pin in ${what} (${path}) is named`, names(pinRun(appendTo(path, line)), path, lineCount(path), OLD)]);
+  }
+  checks.push([
+    "an UNPINNED spec (@latest) in an unlisted doc is named",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y ${SPEC}latest`)).some((p) =>
+      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@latest)`),
+    ),
+  ]);
+  for (const tag of ["^4.1.1", "~4.1.1", ">=4.1.1", "*", "4.1.x", "4", "4.0", `${realPin}-rc.1`]) {
+    checks.push([
+      `a loose spec @${tag} (range, wildcard, partial or prerelease) is named`,
+      pinRun(appendTo("docs/CI_AND_VALIDATION.md", `npx -y "${SPEC}${tag}"`)).some((p) =>
+        p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 spec is UNPINNED (@${tag})`),
+      ),
+    ]);
+  }
+  checks.push([
+    "an npx invocation with NO version is named",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `run npx -y ${SPEC.slice(0, -1)} for docs`)).some((p) =>
+      p.startsWith(`docs/CI_AND_VALIDATION.md:${lineCount("docs/CI_AND_VALIDATION.md")}: Context7 is invoked via a package runner with NO version`),
+    ),
+  ]);
+  // Round-4 shapes, each checked on the pure per-line function: a finding of the right kind, or none.
+  const kind = (line, k = "shell") => context7SpecFindings(line, realPin, k).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
+  const NAME = SPEC.slice(0, -1);
+  for (const [line, want, what] of [
+    [`npx -y ${SPEC} --flag`, "unpinned", "an empty token after @ (npm reads it as *)"],
+    [`"args": ["-y", "${SPEC}"]`, "unpinned", "an empty token in a JSON args list"],
+    [`npx -y "${SPEC}${realPin} - 9.9.9"`, "unpinned", "a quoted hyphen range starting at PINNED"],
+    [`npx -y "${SPEC}${realPin} || ^5"`, "unpinned", "a quoted || union starting at PINNED"],
+    [`npx ${SPEC}'latest'`, "unpinned", "a shell-quoted tag"],
+    [`"${NAME}": "latest"`, "unpinned", "a package.json dependency on a tag"],
+    [`"${NAME}": "^${realPin}"`, "unpinned", "a package.json range at PINNED"],
+    [`"${NAME}": "${OLD}"`, "stale", "a package.json dependency on a stale version"],
+    [`pnpm dlx ${NAME}`, "bare", "a versionless pnpm dlx call"],
+    [`bunx ${NAME}`, "bare", "a versionless bunx call"],
+    [`npm exec -- ${NAME}`, "bare", "a versionless npm exec call"],
+    [`{"args":["-y","${SPEC.replace("/", "\\/")}latest"]}`, "unpinned", "the escaped-slash JSON form with a tag"],
+    [`**${SPEC}${realPin}**`, null, "the CORRECT pin in markdown bold (no false positive)"],
+    [`<code>${SPEC}${realPin}</code>`, null, "the CORRECT pin in an HTML tag (no false positive)"],
+    [`"packageName": "${NAME}",`, null, "the roster's bare packageName (not a runner, not a dependency)"],
+    // round 5: the spec is read as its shell/JSON ARGUMENT, not by terminator characters
+    [`npx -y "${SPEC}${realPin} x || 5"`, "unpinned", "a quoted union whose text after PINNED is not `||`"],
+    [`npx -y "${SPEC}${realPin}*||5"`, "unpinned", "a quoted `*||` union glued to PINNED"],
+    [`"args": ["-y", "${SPEC}${realPin} <5 || >=5"]`, "unpinned", "a union range in a JSON args list"],
+    [`npx -y ${SPEC}${realPin}"0"`, "stale", "shell concatenation onto PINNED (\"0\" makes 4.1.10)"],
+    [`npx -y ${SPEC}${realPin}'||5'`, "unpinned", "a shell-quoted union glued to PINNED"],
+    [`npx -y "${SPEC}${realPin}"0`, "stale", "text glued after the CLOSING quote (shell concatenation makes another version)"],
+    [`"args": ["-y", "${SPEC}${realPin}"],`, null, "the CORRECT pin as a JSON argument (closing quote then `]`)"],
+    [`npx -y github:upstash/context7#main`, "git", "a github: install source"],
+    [`npx -y https://github.com/upstash/context7/tarball/main`, "git", "a tarball URL install source"],
+    [`"upstream": "https://github.com/upstash/context7",`, null, "the roster's upstream repo URL (not an install source)"],
+    [`bun x ${NAME}`, "bare", "a versionless bun x call"],
+    [`pnpm exec ${NAME}`, "bare", "a versionless pnpm exec call"],
+    [`deno run npm:${NAME}`, "unpinned", "a versionless deno run npm: call (an npm: alias with no version)"],
+    [`${NAME}: latest`, "unpinned", "a YAML value that is a tag"],
+    [`npx -y ${SPEC}${realPin} - see below`, null, "an UNQUOTED pin followed by prose (the shell splits it; no false positive)"],
+    // round 6: lines are TOKENIZED as their reader would (shell words / JSON literals / YAML scalars)
+    [`npx -y ${SPEC}${realPin}' || 5'`, "unpinned", "a quote opening at the END of the word (one shell word `…@4.1.1 || 5`)"],
+    [`npx -y ${SPEC}${realPin}" - 5"`, "unpinned", "a double quote opening at the end of the word"],
+    [`npx -y "--package=${SPEC}${realPin} x || 5" context7-mcp`, "unpinned", "a quoted argument with a --package= prefix"],
+    [`deno run "npm:${SPEC}${realPin} || 5"`, "unpinned", "a quoted npm: argument"],
+    [`npx -y ${SPEC}"${realPin}"`, null, "a quoted version the shell yields as PINNED (no false positive)"],
+    [`[${SPEC}${realPin}](https://x)`, null, "a markdown link around the correct pin (no false positive)"],
+    [`npx -y upstash/context7`, "git", "a github shorthand install"],
+    [`npx -y git@github.com:upstash/context7.git`, "git", "an scp-style git install"],
+    [`npx -y https://codeload.github.com/upstash/context7/tar.gz/main`, "git", "a codeload tarball install"],
+    [`bun i ${NAME}`, "bare", "a versionless bun i call"],
+    [`npx -y ${SPEC}${realPin}*`, "unpinned", "a trailing single `*` (a range) is not shed as markdown"],
+    [`npx -y '${SPEC}${realPin}'`, null, "a single-quoted correct pin (quotes removed by the shell; no false positive)"],
+    [`the cloud's lane pins ${SPEC}${realPin} today`, null, "an unbalanced prose apostrophe stays literal (no false positive)"],
+  ]) {
+    const got = kind(line);
+    checks.push([`${what} → ${want ?? "no finding"}`, want ? got.length === 1 && got[0] === want : got.length === 0]);
+  }
+  for (const [line, k, want, what] of [
+    [`    "${NAME}": "${realPin} || 5",`, "json", "unpinned", "a package.json dependency range with whitespace"],
+    [`    "context7": "npm:${SPEC}${realPin} || 5",`, "json", "unpinned", "an npm: alias dependency with a union"],
+    [`    "${NAME}": "${realPin}",`, "json", null, "the CORRECT package.json dependency (no false positive)"],
+    [`      "build": "npm i ${SPEC}${realPin}, prebuilt dist; boots in under 1 s",`, "json", null, "the roster's build command string (shell-split; no false positive)"],
+    [`  "args": ["-y", "--package=${SPEC}${realPin} || 5"]`, "json", "unpinned", "a JSON args element is ONE argv word"],
+    [`    "${NAME.replace("/", "\\/")}": "latest",`, "json", "unpinned", "an escaped-slash JSON dependency key"],
+    [`  - --package=${SPEC}${realPin} || 5`, "yaml", "unpinned", "a YAML sequence item is ONE argv word"],
+    [`  run: npx -y ${SPEC}${realPin} --flag`, "yaml", null, "a YAML run: command (shell-split; no false positive)"],
+  ]) {
+    const got = kind(line, k);
+    checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
+  }
+  // round 7: unquoted YAML aliases, block-scalar continuations, a runner on a preceding line, settle-until-stable markup
+  for (const [line, k, before, want, what] of [
+    [`  context7: npm:${SPEC}${realPin} || 5`, "yaml", "", "unpinned", "an UNQUOTED YAML npm: alias with a union (whole value)"],
+    [`  c7: npm:${SPEC}${realPin} - 5 # pinned`, "yaml", "", "unpinned", "an unquoted YAML alias hyphen range with a comment"],
+    [`    npm:${SPEC}${realPin} || 5`, "yaml", "  context7: >-", "unpinned", "a YAML block-scalar continuation that IS a spec"],
+    [`  context7: npm:${SPEC}${realPin}`, "yaml", "", null, "the CORRECT unquoted YAML alias (no false positive)"],
+    [`  foo: npx -y ${SPEC}${realPin} || 5`, "yaml", "", null, "a YAML command where `||` is a shell operator (no false positive)"],
+    [`    "args": ["-y", "${NAME}"]`, "json", `  "context7": {\n    "command": "npx",`, "bare", "a versionless args element under a `command: npx` on the line before"],
+    [`  - "${NAME}"`, "yaml", "  command: npx\n  args:", "bare", "a versionless YAML args item under `command: npx`"],
+    [`    "args": ["-y", "${NAME}"]`, "json", `  "other": {\n    "url": "x",`, null, "a bare name with no runner nearby (no false positive)"],
+    [`**${SPEC}${realPin}**.`, "shell", "", null, "bold then a sentence period (shed until stable; no false positive)"],
+    [`| x | ${SPEC}${realPin}|`, "shell", "", null, "a markdown table cell glued to a pipe (no false positive)"],
+    [`"dependencies": {"${NAME}": "${realPin}"}`, "json", "", null, "a one-line JSON dependency object (no false positive)"],
+    [`"${NAME}" = "^4"`, "shell", "", "unpinned", "a TOML/ini `=` dependency range"],
+  ]) {
+    const got = context7SpecFindings(line, realPin, k, before).map((f) => (f.stale ? "stale" : f.unpinned ? "unpinned" : f.git ? "git" : "bare"));
+    checks.push([`[${k}] ${what} → ${want ?? "no finding"}`, want ? got.length >= 1 && got.every((g) => g === want) : got.length === 0]);
+  }
+  // round 7b: values that SPAN lines (logical-line joining), override keys with a selector, exotic YAML spellings —
+  // driven through the whole sweep on synthetic files, so the joiner and the key reader are both exercised
+  const sweep = (path, body) => checkContext7Pin({ installerSource: realInstaller, files: { [path]: body }, copies: [] });
+  const flags = (path, body, line) => sweep(path, body).some((p) => p.startsWith(`${path}:${line}: `));
+  for (const [path, body, line, want, what] of [
+    ["w.yaml", `x:\n    c7: npm:${SPEC}${realPin}\n      || 5\n`, 2, true, "a YAML plain scalar continued on the next line"],
+    ["w.yaml", `x:\n    c7: "npm:${SPEC}${realPin}\n      || 5"\n`, 2, true, "a YAML double-quoted scalar over two lines"],
+    ["w.yaml", `x:\n    c7: >-\n      npm:${SPEC}${realPin}\n      || 5\n`, 2, true, "a YAML folded block with the range on its second line"],
+    ["w.yaml", `x:\n    c7: "npm:${SPEC}${realPin}\n      - 5"\n`, 2, true, "an open double quote whose continuation looks like a `- ` entry (hyphen range)"],
+    ["w.yaml", `x:\n    c7: >-\n      npm:${SPEC}${realPin}\n      - 5\n`, 2, true, "a folded block whose continuation looks like a `- ` entry (hyphen range)"],
+    ["s.mjs", `// npx -y "${SPEC}${realPin}\n// || 5"\n`, 1, true, "a shell quote left open after the package, closed on the next (comment) line"],
+    ["package.json", `{\n  "pnpm": {"overrides": {"${SPEC}${realPin}": "^5"}}\n}\n`, 2, true, "a pnpm override key with a selector redirecting to a range"],
+    ["package.json", `{\n  "overrides": {"${SPEC}4": "latest"}\n}\n`, 2, true, "an npm override key `@4` redirecting to a tag"],
+    ["w.yaml", `overridesX:\n  "${SPEC}${realPin}": ^5\n`, 2, true, "a YAML override key with a selector"],
+    ["w.yaml", `x: {c7: npm:${SPEC}${realPin} || 5}\n`, 1, true, "an alias range inside a YAML flow mapping"],
+    ["w.yaml", `c7: &a npm:${SPEC}${realPin} || 5\n`, 1, true, "an alias range after a YAML anchor"],
+    ["w.yaml", `c7: !!str npm:${SPEC}${realPin} || 5\n`, 1, true, "an alias range after a YAML tag"],
+    ["w.yaml", `  "a:b": npm:${SPEC}${realPin} || 5\n`, 1, true, "a quoted YAML key containing `:`"],
+    ["w.yaml", `? c7\n: npm:${SPEC}${realPin} || 5\n`, 2, true, "a YAML explicit key `? / :`"],
+    ["package.json", `{"\\u0040upstash/context7-mcp": "^4"}\n`, 1, true, "a unicode-escaped JSON dependency key"],
+    ["w.yaml", `  "@upstash\\/context7-mcp": latest\n`, 1, true, "a YAML double-quoted key with an escaped slash"],
+    ["w.yaml", `  c7: "npm:${SPEC}${realPin} - 5 # c"\n`, 1, true, "a `#` INSIDE a quoted YAML value is not a comment"],
+    ["w.yaml", `x:\n    c7: npm:${SPEC}${realPin}\n    other: 1\n`, 2, false, "a correct alias followed by a sibling key (no join; no false positive)"],
+    ["w.yaml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo done\n`, 2, false, "a literal-block command whose next line is another command (no false positive)"],
+    ["package.json", `{\n  "pnpm": {"overrides": {"${SPEC}4": "${realPin}"}}\n}\n`, 2, false, "an override key redirecting TO the pin (no false positive)"],
+    ["d.md", `the cloud's pin is ${SPEC}${realPin} and Dan's too\n`, 1, false, "two prose apostrophes around a correct pin (no false positive)"],
+    // round 8: YAML spec values that continue on more-indented lines are REFUSED (fail closed, whatever follows)
+    ["w.yaml", `c7:\n  npm:${SPEC}${realPin}\n  || 5\n`, 2, true, "a YAML spec value starting on the line AFTER its key, continued"],
+    ["w.yaml", `c7: npm:${SPEC}${realPin}\n    - 5\n`, 1, true, "a plain spec scalar continued by a `- `-looking line"],
+    ["w.yaml", `- npm:${SPEC}${realPin}\n    - 5\n`, 1, true, "a sequence-item spec continued by a `- `-looking line"],
+    ["w.yaml", `c7: npm:${SPEC}${realPin}\n\n    || 5\n`, 1, true, "a blank line between a spec value and its continuation"],
+    ["w.yaml", `c7:\n  >-\n  npm:${SPEC}${realPin}\n  || 5\n`, 3, true, "`>-` on its own line below the key"],
+    ["w.yaml", `args:\n  -\n    npm:${SPEC}${realPin}\n    || 5\n`, 3, true, "a bare `-` item with the spec on the next lines"],
+    ["w.yaml", `deps:\n  c7:\n    npm:${SPEC}${realPin}\n    || 5\n`, 3, true, "a nested next-line spec value, continued"],
+    ["w.yaml", `c7:\n  npm:${SPEC}${realPin}\nother: 1\n`, 2, false, "a next-line spec value followed by a sibling key (no false positive)"],
+    ["w.yaml", `args:\n  - -y\n  - "${SPEC}${realPin}"\n  - --flag\n`, 3, false, "a spec item followed by sibling items (no false positive)"],
+    ["w.yaml", `script: |\n  echo start\n  npm:${SPEC}${realPin}\n  echo next\n`, 3, false, "a spec line in the MIDDLE of a literal `|` script (separate lines; no false positive)"],
+    ["w.yaml", `run: |\n  npx -y ${SPEC}${realPin}\n  echo next\n`, 2, false, "a literal `|` script whose first line runs the pin (no false positive)"],
+    ["w.yaml", `c7: |\n  npm:${SPEC}${realPin}\n  || 5\n`, 2, true, "a literal `|` block whose FIRST line is the spec, continued (the block is the value)"],
+    ["w.yaml", `run: >\n  npx -y ${SPEC}${realPin}\n  --flag\n`, 2, false, "a folded COMMAND continued by more args (not a spec value; no false positive)"],
+    ["w.yaml", `c7: npm:${NAME}\n`, 1, true, "a versionless YAML npm: alias (installs latest)"],
+    // round 8: path-style override/resolution keys
+    ["w.yaml", `overrides:\n  "foo>${NAME}": ^5\n`, 2, true, "a pnpm `parent>pkg` override key (quoted)"],
+    ["w.yaml", `overrides:\n  foo>${SPEC}${realPin}: ^5\n`, 2, true, "a pnpm `parent>pkg@sel` override key (unquoted)"],
+    ["w.yaml", `resolutions:\n  "**/${NAME}": ^5\n`, 2, true, "a yarn `**/pkg` resolution key"],
+    // round 9: YAML keys are found anywhere on a line (flow mappings, nested) and take values from later lines
+    ["w.yaml", `${NAME}: ${realPin} || 5\n`, 1, true, "a YAML catalog value with a union"],
+    ["w.yaml", `c7flow: {"${NAME}": "^5"}\n`, 1, true, "a Context7 key inside a YAML flow mapping"],
+    ["w.yaml", `overrides: {"${NAME}": "latest"}\n`, 1, true, "a flow-mapping override to a tag"],
+    ["w.yaml", `- {"${NAME}": "^5"}\n`, 1, true, "a flow mapping as a sequence item"],
+    ["w.yaml", `pnpm: {overrides: {"${NAME}": "*"}}\n`, 1, true, "a nested flow mapping"],
+    ["w.yaml", `x: {foo>${NAME}: ^5}\n`, 1, true, "an unquoted path key inside a flow mapping"],
+    ["w.yaml", `resolutions: {"foo/${NAME}": "latest"}\n`, 1, true, "a yarn path key inside a flow mapping"],
+    ["w.yaml", `overrides:\n  foo>${NAME}:\n    ^5\n`, 2, true, "an unquoted path key with its value on the NEXT line"],
+    ["w.yaml", `resolutions:\n  foo/${NAME}:\n    latest\n`, 2, true, "a yarn path key with its value on the next line"],
+    ["w.yaml", `overrides:\n  ? foo>${NAME}\n  : ^5\n`, 2, true, "an explicit `? key` / `: value` path override"],
+    ["w.yaml", `deps: {"${NAME}": "${realPin}", other: 1}\n`, 1, false, "a flow mapping pinning the package correctly (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}:\n    ${realPin}\n`, 2, false, "a next-line override value that IS the pin (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}: >-\n    ${realPin}\n`, 2, false, "a folded-block override value that IS the pin (no false positive)"],
+    ["w.yaml", `overrides:\n  foo>${NAME}: >-\n    ^5\n`, 2, true, "a folded-block override value that is a range"],
+    ["s.sh", `C7=npm:${NAME}\n`, 1, true, "a versionless npm: alias after `NAME=`"],
+    ["s.sh", `export C7="npm:${NAME}"\n`, 1, true, "a versionless npm: alias in an `export`"],
+    // round 10: commands inside quoted strings, shell operators, prefixed/next-line explicit keys, runner context
+    ["s.sh", `bash -c "npx npm:${NAME} foo"\n`, 1, true, "a versionless npm: alias inside a quoted `bash -c` command"],
+    ["s.sh", `npx -y npm:${NAME}&&echo\n`, 1, true, "a versionless alias glued to a shell operator"],
+    ["s.sh", `npx -y ${NAME}|cat\n`, 1, true, "a bare spec glued to a pipe"],
+    ["c.json", `{"command":"bash","args":["-c","npx npm:${NAME} foo"]}`, 1, true, "a JSON `-c` argument holding a versionless command"],
+    ["a.yml", `command: "npx npm:${NAME} foo"\n`, 1, true, "a YAML quoted command holding a versionless alias"],
+    ["x.ts", `execSync("npx -y ${NAME} --stdio")\n`, 1, true, "a source-code string holding a versionless runner call"],
+    ["a.yml", `- ? ${NAME}\n  : latest\n`, 1, true, "an explicit key behind a `- ` marker"],
+    ["a.yml", `? &k ${NAME}\n: latest\n`, 1, true, "an explicit key behind an anchor"],
+    ["a.yml", `?\n  ${NAME}\n: latest\n`, 1, true, "an explicit key on the line after a bare `?`"],
+    ["a.yml", `? |\n  ${NAME}\n: latest\n`, 1, true, "an explicit block-scalar key"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"cmd","args":["/c","npx","-y","${NAME}"]}}}`, 1, true, "a Windows `cmd /c npx` MCP config, versionless"],
+    ["config.toml", `[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "${NAME}"]\n`, 3, true, "a TOML `command = \"npx\"` with a versionless args element"],
+    ["README.md", `"args": ["-y", "${NAME}"],\n"command": "npx"\n`, 1, true, "args BEFORE command (runner within six lines after)"],
+    ["c.json", `{"@upstash/\\u0063ontext7-mcp":"latest"}`, 1, true, "a JSON file spelling the name only through a \\u escape (not skipped by the prefilter)"],
+    ["s.sh", `bash -c "npx -y ${SPEC}${realPin} --stdio"\n`, 1, false, "a quoted command running the pin (no false positive)"],
+    ["s.sh", `npx -y ${SPEC}${realPin} && echo ok\n`, 1, false, "the pin followed by a shell operator (no false positive)"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"cmd","args":["/c","npx","-y","${SPEC}${realPin}"]}}}`, 1, false, "the Windows MCP config pinned (no false positive)"],
+    ["a.yml", `- ? ${NAME}\n  : ${realPin}\n`, 1, false, "a prefixed explicit key pinned (no false positive)"],
+    ["d.md", `say 'pinned ${SPEC}${realPin} today\n`, 1, false, "a lone, never-closed quote before a correct pin stays literal (no false positive)"],
+    ["w.yaml", `deps: {"${NAME}": ${realPin}}\n`, 1, false, "a correct unquoted value closed by `}` in a YAML flow mapping (no false positive)"],
+    // round 11: glued continuations/expansions after a versionless spec, prop-only explicit keys, spaced/object runner paths
+    ["s.sh", `npx -y ${NAME}\\\n  --stdio\n`, 1, true, "a versionless spec glued to a `\\` line continuation"],
+    ["Dockerfile", `RUN npx -y ${NAME}\\\n    --stdio\n`, 1, true, "a Dockerfile RUN with a glued `\\` continuation"],
+    ["s.sh", `npx -y ${NAME}$(echo)\n`, 1, true, "a versionless spec glued to `$(…)`"],
+    ["s.sh", `npx -y ${NAME}\${SUFFIX}\n`, 1, true, "a versionless spec glued to `\${VAR}`"],
+    ["s.sh", `npx -y ${NAME}$EXTRA\n`, 1, true, "a versionless spec glued to `$VAR`"],
+    ["package.json", `{"scripts":{"c7":"npx -y ${NAME}\\\\\\n --stdio"}}`, 1, true, "a package.json script with a glued continuation"],
+    ["a.yml", `? &a\n  "${NAME}"\n: latest\n`, 1, true, "an explicit `?` line holding only an anchor, key on the next line"],
+    ["a.yml", `? !!str\n  "${NAME}"\n: latest\n`, 1, true, "an explicit `?` line holding only a tag"],
+    ["a.yml", `? !!str &a\n  "${NAME}"\n: latest\n`, 1, true, "an explicit `?` line holding a tag and an anchor"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"C:\\\\Program Files\\\\nodejs\\\\npx.cmd","args":["-y","${NAME}"]}}}`, 1, true, "a runner path with a space (Windows)"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"/Users/John Smith/.nvm/bin/npx","args":["-y","${NAME}"]}}}`, 1, true, "a runner path with a space (POSIX)"],
+    ["settings.json", `{"context_servers":{"c7":{"command":{"path":"npx","args":["-y","${NAME}"]}}}}`, 1, true, "a Zed object-valued command"],
+    [".mcp.json", `{"mcpServers":{"c7":{"command":"npx.ps1","args":["-y","${NAME}"]}}}`, 1, true, "a PowerShell `npx.ps1` runner"],
+    ["config.toml", `[mcp_servers.context7]\ncommand = "C:\\\\Program Files\\\\nodejs\\\\npx.cmd"\nargs = ["-y", "${NAME}"]\n`, 3, true, "a TOML spaced runner path"],
+    ["a.yml", `command: /Users/John Smith/bin/npx\nargs: ["-y", "${NAME}"]\n`, 2, true, "a YAML spaced runner path"],
+    ["settings.json", `{"context_servers":{"c7":{"command":{"path":"npx","args":["-y","${SPEC}${realPin}"]}}}}`, 1, false, "the Zed config pinned (no false positive)"],
+    ["s.sh", `npx -y ${SPEC}${realPin} \\\n  --stdio\n`, 1, false, "the pin followed by a continuation (no false positive)"],
+    // round 12: CRLF explicit keys, case-insensitive runners, runner paths with flags, continuation-split runner/name
+    ["a.yml", `? ${NAME}\r\n: latest\r\n`, 1, true, "a CRLF explicit `? key` / `: value` pair"],
+    ["a.yml", `? &a\r\n  ${NAME}\r\n: latest\r\n`, 1, true, "a CRLF props-only explicit key"],
+    ["a.yml", `? ${NAME}\r\n: ${realPin}\r\n`, 1, false, "a CRLF explicit key pinned (no false positive)"],
+    ["s.sh", `NPX -y ${NAME}\n`, 1, true, "an upper-case `NPX` runner"],
+    ["s.cmd", `NPX.CMD -y ${NAME}\n`, 1, true, "an upper-case `NPX.CMD` runner"],
+    ["a.yml", `command: Npx\nargs: ["-y", "${NAME}"]\n`, 2, true, "a mixed-case `command: Npx`"],
+    [".mcp.json", `{"command":"/Users/John Smith/bin/npx -y","args":["${NAME}"]}`, 1, true, "a spaced runner path plus flags in one command string"],
+    [".mcp.json", `{"command":"\\"C:\\\\Program Files\\\\nodejs\\\\npx.cmd\\" -y","args":["${NAME}"]}`, 1, true, "a quoted spaced runner path plus flags"],
+    [".mcp.json", `{"command":"env FOO=1 npx","args":["-y","${NAME}"]}`, 1, true, "a runner behind `env X=1`"],
+    ["settings.json", `{"command":{"path":"npx"},"args":["-y","${NAME}"]}`, 1, true, "args BESIDE an object-valued command"],
+    ["s.sh", `npx -y \\\n  ${NAME}\n`, 1, true, "a `\\` continuation splitting the runner from the name"],
+    ["Dockerfile", `RUN npx \\\n    -y ${NAME}\n`, 1, true, "a Dockerfile RUN split across a continuation"],
+    ["install.sh", `npx \\\n  --yes \\\n  ${NAME} \\\n  --api-key x\n`, 1, true, "a three-continuation install command"],
+    ["README.md", "\`\`\`bash\nnpx -y \\\n  " + NAME + "\n\`\`\`\n", 2, true, "a fenced README block split across a continuation"],
+    ["s.ps1", `npx -y \`\n  ${NAME}\n`, 1, true, "a PowerShell backtick continuation"],
+    ["s.cmd", `npx -y ^\n  ${NAME}\n`, 1, true, "a cmd `^` continuation"],
+    ["s.sh", `npx -y \\\n  ${SPEC}${realPin}\n`, 1, false, "the pin split across a continuation (no false positive)"],
+    ["d.md", `a line ending in a hard break\\\nthen ${NAME} in prose\n`, 2, false, "a markdown hard break without a runner stays prose (no false positive)"],
+    // round 13: a continuation splices the next line on with NOTHING between (bash), so a pin or a name split mid-token
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\n0\n`, 1, true, "a pin spliced across a continuation (`@4.1.1\\` + `0` runs 4.1.10)"],
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\n-beta.1\n`, 1, true, "a prerelease tail spliced onto the pin"],
+    ["s.sh", `npx -y ${SPEC}${realPin}\\\r\n0\r\n`, 1, true, "a CRLF pin splice"],
+    ["s.sh", `npx -y @upstash/context7-\\\nmcp@latest\n`, 1, true, "a package name split mid-token across a continuation"],
+    ["s.sh", `npx -y @\\\nupstash/context7-mcp\n`, 1, true, "a name split right after the scope's `@`"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n    mcp@latest\n`, 1, true, "a Dockerfile name split with an indented tail"],
+    ["s.cmd", `npx -y @upstash/context7-^\nmcp@latest\n`, 1, true, "a cmd `^` name split"],
+    ["s.ps1", `npx -y ${SPEC}${realPin}\`\n0\n`, 1, true, "a PowerShell pin splice (read glued too, fail-closed)"],
+    ["README.md", "\`\`\`sh\nnpx -y @upstash/context7-\\\nmcp@latest\n\`\`\`\n", 2, true, "a fenced README name split"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y @upstash/context7-\\\n      mcp@latest\n`, 3, true, "a YAML literal-block name split"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${SPEC}${realPin}\n`, 3, false, "a YAML literal-block continuation holding the pin (no false positive)"],
+    ["Dockerfile", `RUN npx -y \\\n    ${SPEC}${realPin}\n`, 1, false, "a Dockerfile continuation holding the pin, read both ways (no false positive)"],
+    [".mcp.json", `{"command":["npx","-y"],"args":["${NAME}"]}`, 1, true, "a command ARRAY with args beside it"],
+    [".mcp.json", `{"command":{"program":"npx"},"args":["-y","${NAME}"]}`, 1, true, "an object command under `program`"],
+    // round 14: the prefilter reads the shell-rebuilt text; make recipe tails; YAML double-quoted escaped line breaks
+    ["s.sh", `npx -y @upstash/cont\\\next7-mcp@latest\n`, 1, true, "a split INSIDE the word context7 (the file never spells it whole)"],
+    ["s.sh", `npx -y @upstash/c\\\non\\\ntext7-mcp@latest\n`, 1, true, "a double continuation inside context7"],
+    ["s.sh", `npx -y @upstash/context''7-mcp@latest\n`, 1, true, "quote concatenation rebuilding context7"],
+    ["s.sh", `npx -y "@upstash/context"7-mcp@latest\n`, 1, true, "a double-quoted part rebuilding context7"],
+    ["s.sh", `npx -y @upstash/context\\7-mcp@latest\n`, 1, true, "a backslash escape inside context7"],
+    ["s.ps1", `npx -y @upstash/cont\`\next7-mcp@latest\n`, 1, true, "a PowerShell split inside context7"],
+    ["Makefile", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a make recipe name split with a tab-indented tail"],
+    ["Makefile", `x:\n\tnpx -y ${SPEC}${realPin}\\\n\t0\n`, 2, true, "a make recipe pin splice (make runs 4.1.10)"],
+    ["x.mk", `x:\n\tnpx -y @upstash/cont\\\n\text7-mcp@latest\n`, 2, true, "a .mk recipe split inside context7"],
+    ["Makefile", `x:\n\tnpx -y ${SPEC}${realPin} \\\n\t--stdio\n`, 2, false, "a make recipe with the pin, then a spaced continuation (no false positive)"],
+    ["w.yml", `steps:\n  - run: "npx -y @upstash/context7-\\\n      mcp@latest"\n`, 2, true, "a YAML double-quoted escaped line break inside the name"],
+    ["w.yml", `a: "see C:\\path ${SPEC}${realPin}"\n`, 1, false, "a YAML double-quoted non-JSON escape does not throw (no false positive)"],
+    // round 15: Dockerfile continuations as BuildKit reads them; a quote beside the marker; more make file names
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n# note\nmcp@latest\n`, 1, true, "a Dockerfile comment line inside a continuation"],
+    ["Dockerfile", `RUN npx -y @upstash/cont\\\n# note\next7-mcp@latest\n`, 1, true, "a Dockerfile comment line inside a split of context7"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\\n\nmcp@latest\n`, 1, true, "a Dockerfile empty line inside a continuation"],
+    ["Dockerfile", `RUN npx -y @upstash/context7-\\  \nmcp@latest\n`, 1, true, "a Dockerfile escape followed by whitespace"],
+    ["Dockerfile", "# escape=\`\nRUN npx -y " + SPEC + realPin + "\`\n0\n", 2, true, "a Dockerfile `# escape=\`` pin splice"],
+    ["Dockerfile", "# escape=\`\nRUN npx -y @upstash/cont\`\next7-mcp@latest\n", 2, true, "a Dockerfile `# escape=\`` split inside context7"],
+    ["Dockerfile", `RUN npx -y ${SPEC}${realPin} \\\n  # note\n  --stdio\n`, 1, false, "a Dockerfile comment inside a pinned continuation (no false positive)"],
+    ["s.sh", `npx -y "@upstash/context7-"\\\nmcp@latest\n`, 1, true, "a double-quoted part beside the continuation"],
+    ["s.sh", `npx -y '@upstash/cont'\\\next7-mcp@latest\n`, 1, true, "a single-quoted part inside context7 beside the continuation"],
+    ["Makefile.in", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a Makefile.in recipe split"],
+    ["foo.make", `x:\n\tnpx -y @upstash/context7-\\\n\tmcp@latest\n`, 2, true, "a *.make recipe split"],
+    // round 16: directives end at the first non-directive line; escapes beside a split name; PowerShell escapes; Containerfile
+    ["Dockerfile", "# hello\n# escape=\`\nRUN npx -y @upstash/context7-\\\nmcp@latest\n", 3, true, "an `# escape=` after an ordinary comment is a plain comment"],
+    ["Dockerfile", "# foo=bar\n# escape=\`\nRUN npx -y @upstash/cont\\\next7-mcp@latest\n", 3, true, "an unknown directive ends directive parsing"],
+    ["Dockerfile", "# syntax=docker/dockerfile:1\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "`# escape=` after `# syntax=` still holds"],
+    ["Dockerfile", "\uFEFF# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a BOM before the directive"],
+    ["s.sh", `npx -y @upstash/context7\\-\\\nmcp@latest\n`, 1, true, "a backslash escape beside the continuation"],
+    ["s.sh", `npx -y @upstash/context7-\\\nm\\cp@latest\n`, 1, true, "a backslash escape in the tail of a split name"],
+    ["s.ps1", "npx -y @upstash/context7\`-\`\nmcp@latest\n", 1, true, "a PowerShell backtick escape beside the continuation"],
+    ["Containerfile", `RUN npx -y @upstash/context7-\\\n# n\nmcp@latest\n`, 1, true, "a Containerfile read as a Dockerfile"],
+    // round 17: BuildKit's directive grammar (indent, spaced values, empty value); heredoc bodies under a backtick escape
+    ["Dockerfile", "  # escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "an indented `# escape=` directive"],
+    ["Dockerfile", "# check=skip=all; error=true\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "a directive value with a space keeps the scan going"],
+    ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\\\nmcp@latest\n", 3, true, "an empty `# check=` ends directive parsing"],
+    ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y @upstash/context7-\\\nmcp@latest\nEOF\n", 3, true, "a `\\` split inside a heredoc under `# escape=\`` "],
+    ["Dockerfile", "# escape=\`\nRUN <<EOF\nnpx -y " + SPEC + realPin + " \\\n  --stdio\nEOF\n", 3, false, "a pinned heredoc continuation under `# escape=\`` (no false positive)"],
+    // round 18: Go's whitespace (NEL) and `.` (\r, U+2028/9); BuildKit's trimNewline; the empty-value directive pinned
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\n\u0085# n\nmcp@latest\n", 1, true, "a NEL-indented comment line inside a continuation"],
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\n\u0085\nmcp@latest\n", 1, true, "a NEL-only line inside a continuation"],
+    ["Dockerfile", "\u0085# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a NEL before a directive"],
+    ["Dockerfile", "# check=skip=a\rb\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 3, true, "a directive value holding a CR"],
+    ["Dockerfile", "RUN npx -y @upstash/context7-\\\r\r\nmcp@latest\n", 1, true, "a continuation ending in a doubled CR"],
+    ["Dockerfile", "# check=\n# escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\nRUN npx -y " + SPEC + realPin + "\n", 3, false, "an empty `# check=` ends parsing, so the backtick stays literal (no false positive)"],
+    // round 19: Go's whitespace set (not JS \s) for the prefilter, the skip test and the directive; prefilter fixes pinned
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\u00A0# n\next7-mcp@latest\n", 1, true, "a split inside context7 across an NBSP-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\v\next7-mcp@latest\n", 1, true, "a split inside context7 across a VT-only line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\r# n\next7-mcp@latest\n", 1, true, "a split inside context7 across a CR-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\n\u0085# n\next7-mcp@latest\n", 1, true, "a split inside context7 across a NEL-led comment line"],
+    ["Dockerfile", "RUN npx -y @upstash/cont\\\r\r\next7-mcp@latest\n", 1, true, "a split inside context7 across a doubled-CR line end"],
+    ["Dockerfile", "#\u0085escape=\`\nRUN npx -y @upstash/context7-\`\nmcp@latest\n", 2, true, "a NEL between `#` and the directive key"],
+    ["Dockerfile", "RUN npx -y " + SPEC + realPin + " --help \\\n\uFEFF#x; npx -y @upstash/context7-mcp@latest\n", 1, true, "a U+FEFF-led `#` line is not a comment (BuildKit keeps it, bash runs it)"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y \\\n        ${NAME}\n      echo done\n`, 3, true, "a YAML literal-block continuation splitting the runner from the name"],
+    ["ci.yml", `steps:\n  - run: |\n      npx -y ${SPEC}${realPin}\n      echo ${NAME} ok\n`, 3, false, "literal-block lines stay separate commands (no false positive from the next line)"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, flags(path, body, line) === want && (want || sweep(path, body).length === 0)]);
+  }
+  // every Go unicode.IsSpace member leads a skipped line (a split inside context7 is read); a non-member does not
+  for (const ch of GO_SPACE_CHARS.replace("\n", "")) {
+    const body = `RUN npx -y @upstash/cont\\\n${ch}# n\next7-mcp@latest\n`;
+    checks.push([`[go-space U+${ch.codePointAt(0).toString(16).padStart(4, "0")}] a split inside context7 across a line led by it is named`, flags("Dockerfile", body, 1)]);
+  }
+  {
+    // an oracle independent of GO_SPACE_CHARS: Go's unicode.IsSpace on the BMP is JS \s without U+FEFF, plus U+0085
+    const re = new RegExp(`^${GO_SPACE}$`);
+    let mismatch = -1;
+    for (let cp = 0; cp <= 0xffff && mismatch < 0; cp++) {
+      const c = String.fromCharCode(cp);
+      if (re.test(c) !== ((/\s/.test(c) && cp !== 0xfeff) || cp === 0x85)) mismatch = cp;
+    }
+    checks.push([`GO_SPACE equals Go unicode.IsSpace over the BMP (first mismatch: ${mismatch < 0 ? "none" : `U+${mismatch.toString(16)}`})`, mismatch < 0]);
+    // the same members, each once: a count alone lets a duplicate stand in for a dropped member, and that member's fixture stops running
+    const members = [...Array(0x10000).keys()].filter((cp) => re.test(String.fromCharCode(cp))).map((cp) => String.fromCharCode(cp));
+    checks.push([
+      "GO_SPACE_CHARS lists exactly GO_SPACE's members, each once",
+      new Set(GO_SPACE_CHARS).size === GO_SPACE_CHARS.length && [...GO_SPACE_CHARS].sort().join("") === members.sort().join(""),
+    ]);
+  }
+  checks.push(["GO_SPACE matches exactly GO_SPACE_CHARS", [...GO_SPACE_CHARS].every((c) => new RegExp(GO_SPACE).test(c)) && !["\uFEFF", "\u180E", "\u200B", "x"].some((c) => new RegExp(GO_SPACE).test(c))]);
+  for (const ch of ["\uFEFF", "\u180E", "\u200B"]) {
+    const body = `RUN npx -y ${SPEC}${realPin} --help \\\n${ch}#x; npx -y ${NAME}@latest\n`;
+    checks.push([`[not go-space U+${ch.codePointAt(0).toString(16).padStart(4, "0")}] a line led by it is not a comment, so its command is named`, sweep("Dockerfile", body).length >= 1]);
+  }
+  checks.push([
+    "a `#` line inside a RUN heredoc continuation is also read on its own (the shell glues and runs it)",
+    sweep("Dockerfile", `RUN <<EOF\nnpx -y ${SPEC}${realPin} --help\\\n#x; npx -y ${NAME}@latest\nEOF\n`).length >= 1,
+  ]);
+  checks.push([
+    "a name starting on a `#` heredoc line and finishing on the next is read (the skipped line is spliced too)",
+    sweep("Dockerfile", `RUN <<EOF\necho a\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\nEOF\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
+  ]);
+  checks.push([
+    "a plain .sh keeps a `#`-led line after a continuation for the prefilter (bash glues and runs it)",
+    sweep("x.sh", `echo a\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
+  ]);
+  checks.push([
+    "a `#` line inside a YAML `run: |` block is script content, not a comment (a name split across it is read)",
+    sweep(".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run: |\n          echo a\\\n          #x; npx -y @upstash/cont\\\n          ext7-mcp@latest\n`).some((p) => /UNPINNED \(@latest\)/.test(p)),
+  ]);
+  // round 22: a block header with its indent indicator before the chomp sign, or alone on the line after its key; a
+  // backslash-newline inside a decoded JSON or YAML double-quoted string; a split over three members after a `#` line
+  const W22 = (h) => `jobs:\n  a:\n    steps:\n${h}\n          echo a\\\n          #x; npx -y @upstash/cont\\\n          ext7-mcp@latest\n`;
+  for (const [path, body, what] of [
+    [".github/workflows/a.yml", W22("      - run: |2-"), "a YAML `|2-` header (indent indicator before the chomp sign)"],
+    [".github/workflows/a.yml", W22("      - run: |2+"), "a YAML `|2+` header"],
+    [".github/workflows/a.yml", W22("      - run:\n        |"), "a YAML `|` alone on the line after its key"],
+    [".github/workflows/a.yml", W22("      - run: &s\n        |"), "a YAML `|` on the line after a key carrying an anchor"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont\\\next7-mcp@latest" } }), "a JSON string value split by a backslash-newline (npm runs it through sh -c)"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont\\\r\next7-mcp@latest" } }), "a JSON string value split by a backslash-CRLF"],
+    ["a.yml", `run: "npx -y @upstash/cont\\\\\\next7-mcp@latest"\n`, "a YAML double-quoted value split by an escaped backslash-newline"],
+    ["a.yml", `run: "echo a\\\n  #x; npx -y @upstash/cont\\\n  ext7-mcp@latest"\n`, "a `#` line inside an open YAML double-quoted scalar is content, not a comment"],
+    ["Dockerfile", "RUN <<EOF\necho a\\\n#x; npx -y @ups\\\ntash/cont\\\next7-mcp@latest\nEOF\n", "a name starting on a `#` heredoc line and split over three members"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named UNPINNED (@latest)`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
+  }
+  // round 23: a folded `>` line break kept beside a more-indented line; quotes and escapes inside a decoded string; an
+  // odd backslash run before a `#` heredoc line; a header after a deeper comment; nested `- - |` and `? |` headers
+  const S23 = (n) => ["echo a\\", "#x; npx -y @upstash/cont\\", "ext7-mcp@latest"].map((l) => " ".repeat(n) + l).join("\n");
+  for (const [path, body, what] of [
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run: >\n          echo a\n            npx -y @upstash/cont\\\n          ext7-mcp@latest\n", "a folded `>` line break kept beside a more-indented line (its `\\` continues)"],
+    [".gitlab-ci.yml", "a:\n  script:\n    - >\n      echo a\n        npx -y @upstash/cont\\\n      ext7-mcp@latest\n", "a folded `- >` sequence item with a more-indented line"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont\\ext7-mcp@latest" } }), "a JSON value splitting the name with a stray backslash"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont''ext7-mcp@latest" } }), "a JSON value splitting the name with empty quotes"],
+    ["package.json", JSON.stringify({ scripts: { a: 'npx -y @upstash/con"te"xt7-mcp@latest' } }), "a JSON value quoting part of the name"],
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run: \"npx -y @upstash/cont\\\\\\\n          ext7-mcp@latest\"\n", "a YAML double-quoted `cont\\\\` + escaped line break (decodes to `cont\\ext7`)"],
+    ["Dockerfile", "FROM x\nRUN <<EOF\necho a\\\\\\\n#x; npx -y @upstash/cont\\\next7-mcp@latest\nEOF\n", "an odd backslash run before a `#` heredoc line"],
+    [".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run:\n                # pick\n          |\n${S23(12)}\n`, "a `|` alone on its line after a comment indented deeper than it"],
+    [".github/workflows/a.yml", "jobs:\n  a:\n    steps:\n      - run:\n          >\n          echo a\n            npx -y @upstash/cont\\\n          ext7-mcp@latest\n", "a folded `>` alone on the line after its key"],
+    [".gitlab-ci.yml", `a:\n  script:\n    - - |\n${S23(8)}\n`, "a nested `- - |` sequence block scalar"],
+    ["a.yml", `? |\n${S23(2)}\n: x\n`, "an explicit-key `? |` block scalar"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named UNPINNED (@latest)`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
+  }
+  // round 24: a blank line is a kept break in folded, plain and quoted scalars; an explicit indent indicator; `--- |`
+  // and a bare `!` tag; YAML hex escapes; a quoted letter inside the name; the YAML-block odd backslash run
+  const W24 = (body) => `jobs:\n  a:\n    steps:\n${body}`;
+  for (const [path, body, what, re] of [
+    [".github/workflows/a.yml", W24("      - run: >\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n"), "a folded `>` block with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24("      - run: >\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n").replace(/\n/g, "\r\n"), "the same in CRLF"],
+    [".github/workflows/a.yml", W24("      - run: >2\n              npx -y @upstash/cont\\\n          ext7-mcp@latest\n"), "a `>2` block whose first line is deeper than its content indent"],
+    ["a.yml", `--- |\n${S23(2)}\n`, "a document-level `--- |` block"],
+    [".github/workflows/a.yml", W24(`      - run: ! |\n${S23(10)}\n`), "a block behind a bare `!` tag"],
+    [".gitlab-ci.yml", `a:\n  script:\n    - ! |\n${S23(6)}\n`, "a `- ! |` sequence block"],
+    [".github/workflows/a.yml", W24("      - run: npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n"), "a plain scalar with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24("      - run: 'npx -y @upstash/cont\\\n\n          ext7-mcp@latest'\n"), "a single-quoted scalar with a blank line after `cont\\`"],
+    [".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\\\\n\n          ext7-mcp@latest"\n'), "a double-quoted scalar with a blank line after `cont\\\\`"],
+    [".github/workflows/a.yml", W24("      - run: 'echo a\\\n\n          #x; npx -y @upstash/cont\\\n\n          ext7-mcp@latest'\n"), "a single-quoted `#`-led split across blank lines"],
+    [".github/workflows/a.yml", W24('      - run: "echo a\\\\\n\n          #x; npx -y @upstash/cont\\\\\n\n          ext7-mcp@latest"\n'), "a double-quoted `#`-led split across blank lines"],
+    [".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\x65xt7-mcp@latest"\n'), "a YAML double-quoted `\\x65` escape inside the name"],
+    [".github/workflows/a.yml", W24("      - run: |\n          npx -y a\\\\\\\n           @upstash/context7-mcp\n"), "an odd backslash run in a `|` block carrying the runner (NO version)", /with NO version/],
+    ["s.sh", "npx -y @upstash/con't'ext7-mcp@latest\n", "a quoted letter inside the name in sh"],
+    ["package.json", JSON.stringify({ scripts: { a: "npx -y @upstash/cont'e'xt7-mcp@latest" } }), "a quoted letter inside the name in a JSON script"],
+    [".github/workflows/a.yml", W24("      - run: npx -y @upstash/co'n'text7-mcp@latest\n"), "a quoted letter inside the name in a YAML plain value"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  checks.push([
+    "[sweep a.yml] a blank line inside a literal `|` block ends the command (`cont\\` + blank + `ext7` is not a name) → no finding",
+    sweep(".github/workflows/a.yml", W24(`      - run: |\n          npx -y @upstash/cont\\\n\n          ext7-mcp@latest\n      - run: npx -y ${SPEC}${realPin}\n`)).length === 0,
+  ]);
+  checks.push([
+    "[sweep a.yml] a pinned name through a `\\x65` escape → no finding",
+    sweep(".github/workflows/a.yml", W24('      - run: "npx -y @upstash/cont\\x65xt7-mcp@' + realPin + '"\n' + `      - run: npx -y ${SPEC}${realPin}\n`)).length === 0,
+  ]);
+  checks.push([
+    "[sweep README.md] prose apostrophes beside a pinned name → no finding",
+    sweep("README.md", `Don't run ${SPEC}${realPin} twice; it's fine.\n`).length === 0,
+  ]);
+  checks.push([
+    "[sweep a.yml] a folded `>` block at one indent folds `\\` + break to `\\ ` (a name holding a space) → no finding",
+    sweep(".github/workflows/a.yml", `jobs:\n  a:\n    steps:\n      - run: >\n${S23(10)}\n      - run: npx -y ${SPEC}${realPin}\n`).length === 0,
+  ]);
+  checks.push([
+    "[sweep s.sh] an odd backslash run continues: the runner on the line before makes the bare name a runner call",
+    sweep("s.sh", `npx -y a\\\\\\\n @upstash/context7-mcp\n`).some((p) => /with NO version/.test(p)),
+  ]);
+  checks.push([
+    "[sweep s.sh] an even backslash run is literal, not a continuation → no finding",
+    sweep("s.sh", `npx -y @upstash/cont\\\\\next7-mcp@latest\nnpx -y ${SPEC}${realPin}\n`).length === 0,
+  ]);
+  checks.push([
+    "[sweep a.json] a pinned JSON value split by a backslash-newline → no finding",
+    sweep("a.json", JSON.stringify({ a: `npx -y ${SPEC}${realPin} \\\n--stdio` })).length === 0,
+  ]);
+  checks.push([
+    "[sweep a.yml] a block scalar ends at a line no more indented than its key: a later YAML comment stays a comment → no finding",
+    sweep("a.yml", `x: |\n  echo hi\n# npx -y ${NAME}@latest\ny: npx -y ${SPEC}${realPin}\n`).length === 0,
+  ]);
+  checks.push([
+    "joinContinuations joins across a skipped line and still emits the skipped line on its own",
+    JSON.stringify(
+      joinContinuations(
+        [{ i: 0, text: "npx @upstash/cont\\" }, { i: 1, text: "# c" }, { i: 2, text: "ext7-mcp" }, { i: 3, text: "# outside" }],
+        /\\$/,
+        ["keep"],
+        (t) => /^\s*#/.test(t),
+      ),
+    ) === JSON.stringify([{ i: 0, text: "npx @upstash/context7-mcp" }, { i: 1, text: "# c" }, { i: 3, text: "# outside" }]),
+  ]);
+  checks.push([
+    "a continuation read two ways names its line ONCE (problems are de-duplicated)",
+    sweep("Dockerfile", `RUN npx -y \\\n    ${NAME}@latest\n`).length === 1,
+  ]);
+  // round 8: JSON is PARSED (JSON.parse) and walked — keys split from colons, path keys, command/args context
+  for (const [body, want, what] of [
+    [`{"pnpm":{"overrides":{"foo>${NAME}":"^5"}}}`, true, "a pnpm `parent>pkg` override (JSON)"],
+    [`{"pnpm":{"overrides":{"foo@1>${NAME}":"latest"}}}`, true, "a pnpm `parent@1>pkg` override to a tag"],
+    [`{"resolutions":{"**/${NAME}":"^5"}}`, true, "a yarn `**/pkg` resolution"],
+    [`{"resolutions":{"foo/${NAME}":"^5"}}`, true, "a yarn `parent/pkg` resolution"],
+    [`{\n "overrides": {\n  "${SPEC}${realPin}"\n  : "^5"\n }\n}`, true, "an override key split from its colon"],
+    [`{"overrides":{"${NAME}":{".":"^5"}}}`, true, "an npm nested override `{\".\": range}`"],
+    [`{"dependencies":{"x":"npm:${NAME}"}}`, true, "a versionless JSON npm: alias"],
+    [`{"mcpServers":{"c7":{"command":"npx","args":["-y","${NAME}"]}}}`, true, "a one-line MCP config: command npx + bare args element"],
+    [`{"mcpServers":{"c7":{"command":"npx","args":["-y","${SPEC}${realPin}"]}}}`, false, "the same MCP config pinned (no false positive)"],
+    [`{"pnpm":{"overrides":{"foo>${NAME}":"${realPin}"}}}`, false, "a path override redirecting TO the pin (no false positive)"],
+  ]) {
+    const got = context7JsonFindings(body, realPin);
+    checks.push([`[json parsed] ${what} → ${want ? "named" : "no finding"}`, got !== null && (want ? got.length >= 1 : got.length === 0)]);
+  }
+  checks.push(["JSONC (comments, trailing comma) is parsed after stripJsonc", context7JsonFindings(`{ // c\n "a": 1, /* x */ }`, realPin)?.length === 0]);
+  checks.push([
+    "a JSONC key split from its colon, under a comment, is named",
+    (context7JsonFindings(`{\n // c\n "${SPEC}${realPin}"\n : "^5",\n}`, realPin) ?? []).length >= 1,
+  ]);
+  checks.push(["a `//` inside a JSON string is not a comment", JSON.parse(stripJsonc(`{"u": "https://x" /* c */} // c`)).u === "https://x"]);
+  checks.push(["unparseable non-JSON (a template) falls back to the line reader", context7JsonFindings(`{ "a": {{ x }} }`, realPin) === null]);
+  checks.push(["the file kind follows the extension", context7FileKind("a/package.json") === "json" && context7FileKind("x.yml") === "yaml" && context7FileKind("d.md") === "shell"]);
+  const be16 = Buffer.from(`npx -y ${SPEC}${OLD}\n`, "utf16le").swap16(); // UTF-16BE, no BOM
+  checks.push([
+    "a stale spec in a BOM-less UTF-16BE file is still named after decodeTracked",
+    pinRun({ "docs/agent/utf16be.md": decodeTracked(be16) }).some((p) => p.startsWith("docs/agent/utf16be.md:") && p.includes(`says ${OLD},`)),
+  ]);
+  const utf16 = Buffer.from(`\ufeffnpx -y ${SPEC}${OLD}\n`, "utf16le");
+  checks.push([
+    "a stale spec in a UTF-16LE file (BOM, NULs) is still named after decodeTracked",
+    pinRun({ "docs/agent/utf16.md": decodeTracked(utf16) }).some((p) => p.startsWith("docs/agent/utf16.md:") && p.includes(`says ${OLD},`)),
+  ]);
+  checks.push([
+    "the CORRECT pin ending a sentence (`…@<PINNED>.`) is not a false positive",
+    pinRun(appendTo("docs/CI_AND_VALIDATION.md", `Use ${SPEC}${realPin}.`)).length === 0,
+  ]);
+  checks.push([
+    "a capitalised-only `Context7 version <stale>` mention (case-insensitive prefilter) is named",
+    names(pinRun({ "docs/agent/cap-only.md": `Pinned: Context7 version ${OLD}\n` }), "docs/agent/cap-only.md", 1, OLD),
+  ]);
+  checks.push([
+    "a stale spec in a file with a NUL byte (binary) is still named, not skipped",
+    names(pinRun({ "docs/agent/blob.bin": decodeTracked(Buffer.from(`\u0000\u0001junk\n${SPEC}${OLD}\n`, "latin1")) }), "docs/agent/blob.bin", 2, OLD),
+  ]);
+  checks.push([
+    "a dated decision record (docs/DECISION_RECORDS.md) and a vendored third_party/ config are exempt, by name",
+    pinRun({ ...appendTo("docs/DECISION_RECORDS.md", `Context7 ${OLD}`), "third_party/x/mcp.json": `"${SPEC}latest"` }).length === 0,
+  ]);
+  checks.push([
+    "a stale pin in a dated history record (docs/agent/RESOURCE_INTAKE.md) is exempt, by name",
+    pinRun(appendTo("docs/agent/RESOURCE_INTAKE.md", `${SPEC}${OLD}`)).length === 0,
+  ]);
+  checks.push(["an installer with no PINNED FAILS", pinRun({}, "const X = 1;").some((p) => p.includes("cannot be derived"))]);
+  checks.push([
+    "a reworded copy (no match left at a known site) FAILS instead of passing unseen",
+    pinRun({ "scripts/setup-mcp-lane.mjs": "// Context seven, pinned" }).some((p) => p.startsWith("scripts/setup-mcp-lane.mjs: no Context7 pin copy")),
+  ]);
+  checks.push([
+    "a roster with no context7 entry FAILS",
+    pinRun({ [ROSTER_PATH]: "{}" }).some((p) => p.includes("Context7 entry holding the pin copy is gone")),
+  ]);
+  checks.push([
+    "an empty sweep universe FAILS",
+    checkContext7Pin({ installerSource: realInstaller, files: {}, copies: [] }).some((p) => p.includes("matched nothing")),
+  ]);
+
   const bad = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`);
   if (bad.length) {
@@ -541,7 +1964,12 @@ function main() {
     roster = rosterText; // let check() report the parse failure uniformly
   }
 
-  const problems = check({ roster, indexSource, skillDocs, firstPartyDirs });
+  const { files: pinFiles, unreadable: pinUnreadable } = loadContext7PinFiles();
+  const problems = [
+    ...check({ roster, indexSource, skillDocs, firstPartyDirs }),
+    ...pinUnreadable,
+    ...checkContext7Pin({ installerSource: pinFiles[CONTEXT7_INSTALLER], files: pinFiles }),
+  ];
   if (problems.length) {
     console.error(`check-mcp-roster FAIL — ${problems.length} problem(s):`);
     for (const p of problems) console.error(`  ${p}`);
@@ -559,7 +1987,10 @@ function main() {
   const derived = deriveToolNames(indexSource);
   console.log(
     `mcp-roster: ${nServers} servers (+${nExternal} external), signalgrid-mcp ${sg?.tools ?? 0}/${derived.length} tools derived, ` +
-      `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, ${mentionCount} mentions, 0 problems`,
+      `${laneGrants} lane grants, ${skillGrants} skill grants over ${firstPartyDirs.length} first-party skills, ${mentionCount} mentions, ` +
+      `Context7 pin ${deriveContext7Pin(pinFiles[CONTEXT7_INSTALLER])} held across ${Object.keys(pinFiles).length} tracked files swept ` +
+      `(${CONTEXT7_PIN_HISTORY.length} exemption patterns: dated records, third_party/, this gate; ` +
+      `${CONTEXT7_PIN_COPIES.length} known copies in ${new Set(CONTEXT7_PIN_COPIES.map((c) => c.path)).size} files present), 0 problems`,
   );
   console.log("PASS");
 }

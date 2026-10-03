@@ -67,6 +67,14 @@ export type VerifyResult =
 const SUPPORTED_ALG = "RS256";
 
 /**
+ * The most clock skew, in seconds, any caller may ask the verifier to forgive. It is
+ * skew allowance, not token lifetime: 1e9 would accept a token 31 years past `exp`.
+ * Enforced HERE, at the library boundary, and by config.ts for the env knob (which
+ * imports this, so there is one number).
+ */
+export const MAX_CLOCK_TOLERANCE_SEC = 300;
+
+/**
  * Read the `kid` out of a token's header WITHOUT verifying anything.
  *
  * This is deliberately unverified input and is safe for exactly one purpose:
@@ -129,6 +137,14 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   if (typeof token !== "string") {
     return fail("token is not a string");
   }
+  // A NaN clock or tolerance (or a tolerance that is, or overflows to, Infinity)
+  // makes the `exp` comparison below false, so an EXPIRED token would verify; an
+  // unbounded finite tolerance does the same in effect. Bad inputs refuse whatever
+  // the token is, before any key material is touched.
+  const toleranceSec = opts.clockToleranceSec ?? 60;
+  if (!Number.isFinite(opts.nowMs) || !Number.isFinite(toleranceSec) || toleranceSec > MAX_CLOCK_TOLERANCE_SEC) {
+    return fail(`verifier clock inputs refused: nowMs and clockToleranceSec must be finite, clockToleranceSec at most ${MAX_CLOCK_TOLERANCE_SEC}`);
+  }
   const parts = token.split(".");
   if (parts.length !== 3 || parts.some((p) => p.length === 0)) {
     return fail("token is not a well-formed JWS (expected 3 non-empty segments)");
@@ -142,6 +158,12 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
     claims = decodeJsonSegment<JwtClaims>(payloadSeg);
   } catch {
     return fail("header or payload is not valid base64url JSON");
+  }
+  // `JSON.parse` accepts `null`, arrays and scalars; reading `.alg` off `null`
+  // would throw an unauthenticated 500 instead of refusing.
+  const isObj = (v: unknown) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (!isObj(header) || !isObj(claims)) {
+    return fail("header or payload is not a JSON object");
   }
 
   // Algorithm gate FIRST — reject `none`/HMAC before touching key material.
@@ -179,15 +201,27 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   }
 
   // Signature is valid — now enforce the registered claims. Still fail-closed.
-  const tolMs = Math.max(0, (opts.clockToleranceSec ?? 60)) * 1000;
+  const tolMs = Math.max(0, toleranceSec) * 1000;
   const now = opts.nowMs;
 
   if (typeof claims.exp !== "number") {
     return fail("missing exp claim");
   }
+  // `"exp":1e999` parses to Infinity — a signed token that never expires.
+  if (!Number.isFinite(claims.exp)) {
+    return fail("malformed exp claim");
+  }
   // freshness: local-by-design — not the sighting-freshness rule — RFC 7519 `exp` validation with the OIDC clock tolerance (`clockToleranceSec`, default 60s, operator-configurable by standard)
   if (now > claims.exp * 1000 + tolMs) {
     return fail("token has expired");
+  }
+  // Optional, but a PRESENT nbf/iat that is not a finite number is refused, as
+  // exp is — skipping it would let an unparseable claim loosen the answer.
+  if (claims.nbf !== undefined && !Number.isFinite(claims.nbf)) {
+    return fail("malformed nbf claim");
+  }
+  if (claims.iat !== undefined && !Number.isFinite(claims.iat)) {
+    return fail("malformed iat claim");
   }
   if (typeof claims.nbf === "number" && now + tolMs < claims.nbf * 1000) {
     return fail("token is not yet valid (nbf)");
@@ -211,7 +245,7 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
 function selectKey(jwks: Jwks, kid: string | undefined): JwkKey | null {
   const keys = Array.isArray(jwks.keys) ? jwks.keys : [];
   const usable = keys.filter(
-    (k) => k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
+    (k) => k !== null && typeof k === "object" && k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
   );
   if (usable.length === 0) {
     return null;

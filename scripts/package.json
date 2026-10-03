@@ -181,7 +181,7 @@
     "proof:live-glpi": "tsx ./src/live-glpi-proof.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
     "@workspace/adaptive-proposals": "workspace:*",
     "@workspace/api-client-react": "workspace:*",
     "@workspace/app-workflows": "workspace:*",
@@ -220,14 +220,14 @@
     "@workspace/secrets": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
-    "@seriousme/openapi-schema-validator": "^2.9.1",
+    "@playwright/test": "1.63.0",
+    "@seriousme/openapi-schema-validator": "^2.11.0",
     "@types/node": "catalog:",
-    "@types/pg": "^8.21.0",
-    "@usebruno/cli": "^4.0.0",
+    "@types/pg": "^8.23.1",
+    "@usebruno/cli": "^4.2.0",
     "esbuild": "0.28.2",
-    "fast-check": "^4.10.0",
-    "oidc-provider": "9.11.3",
+    "fast-check": "^4.10.2",
+    "oidc-provider": "9.12.2",
     "tsx": "catalog:"
   }
 }

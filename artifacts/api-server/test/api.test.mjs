@@ -595,6 +595,26 @@ async function run() {
   const authzBad = await req("POST", "/v1/authorize", { token: KEYS.operator, body: { identityRef: "x" } });
   check("authorize with a malformed body → 400 (same validation as evaluate)", authzBad.status === 400);
 
+  // The strict client parse landed (#1145): every Assist client (Kotlin, Rust, Swift)
+  // denies a 2xx whose decisionId is missing, not a string, or blank, or whose reasons
+  // is present but not a list of strings (absent reasons is accepted: allow-no-reasons)
+  // — native/shared/assist-wire-conformance.json is the shared vector file all three run
+  // against. A regression here would have every host app refuse its workers. The server
+  // emits both on every outcome, and this four-outcome assertion pins it. Inputs
+  // measured on a fresh demo core (tenant_northwind).
+  for (const [deviceRef, want] of [
+    ["ipad-ward-01", "allow"], ["ipad-ward-03", "step_up"], ["ipad-ward-02", "restrict"], ["ipad-badge-02", "deny"],
+  ]) {
+    const r = await req("POST", "/v1/authorize", {
+      token: KEYS.operator,
+      body: { identityRef: "nurse.compliant", deviceRef, workflowKey: "clinical-session" },
+    });
+    check(`authorize ${want}: a non-blank string decisionId and string-only reasons (what every Assist client requires)`,
+      r.status === 200 && r.json?.assist === want &&
+      typeof r.json?.decisionId === "string" && r.json.decisionId.trim() !== "" &&
+      Array.isArray(r.json?.reasons) && r.json.reasons.every((x) => typeof x === "string"));
+  }
+
   // ── evaluate: restrict + stale ──────────────────────────────────────────
   const restrict = await req("POST", "/v1/decisions/evaluate", {
     token: KEYS.operator,

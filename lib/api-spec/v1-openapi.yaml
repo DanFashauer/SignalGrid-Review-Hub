@@ -1396,7 +1396,16 @@ components:
         assist:
           type: string
           enum: [allow, step_up, restrict, deny]
-        decisionId: { type: string }
+        # decisionId is always a dec_ id on a real decision: minLength 1 plus pattern \S
+        # (at least one non-whitespace character, the same "non-blank" every client
+        # checks — length alone would admit "   "). The strict
+        # client parse landed (#1145): every Assist client (Kotlin, Rust, Swift) denies
+        # a 2xx whose decisionId is missing, not a string, or blank, or whose reasons is
+        # present but not a list of strings (absent reasons is accepted:
+        # allow-no-reasons) — native/shared/assist-wire-conformance.json is the shared
+        # vector file all three run against. Documentation only: the enforcement is
+        # artifacts/api-server/test/api.test.mjs's four-outcome /v1/authorize assertion.
+        decisionId: { type: string, minLength: 1, pattern: '\S' }
         reasons:
           type: array
           items: { type: string }

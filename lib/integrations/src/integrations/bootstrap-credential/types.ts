@@ -40,6 +40,8 @@
 // standing method (that is passkey-assurance and platform-sso); and it never
 // lowers what another dimension raised.
 
+import type { FamilyAction } from "../action-ladder";
+
 /** The class of credential the current session authenticated with. TRUSTED
  *  allowlist — the IdP knows how the session was opened. */
 export type CredentialClass = "standing" | "bootstrap" | "unknown";
@@ -131,7 +133,7 @@ export type BootstrapCredentialPosture =
   | "bootstrap_weakened" // reusable, or no expiry at all — weaker than the mechanism promises
   | "credential_unverified"; // any axis unknown / malformed / uncovered
 
-export type BootstrapCredentialAction = "none" | "monitor" | "step_up" | "alert" | "restrict" | "escalate";
+export type BootstrapCredentialAction = FamilyAction;
 
 export type BootstrapCredentialReasonCode =
   | "STANDING_CREDENTIAL"

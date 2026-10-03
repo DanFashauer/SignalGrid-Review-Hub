@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 92,
-  "fingerprint": "5b15a30021249c127727287c4e3d3ed58a209817b52c47e35d89f6321ba773bc",
+  "manifestVersion": 93,
+  "fingerprint": "ea38b32c462feff471cf2a2d62086adbad96e3cacb08c4b67d46aaf97299367f",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -125,7 +125,7 @@
       "device-management-health": 207,
       "device-resolver": 14,
       "dual-control": 78,
-      "emitter-discipline": 100,
+      "emitter-discipline": 101,
       "entitlement-binding": 63,
       "estate-core": 13,
       "evidence-coverage": 30,

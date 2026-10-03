@@ -2415,6 +2415,34 @@ New ideas land here first (CLAUDE.md scope rule), then get ranked.
       the self-test misses every new bug shape.
       STILL OPEN from (1): provenance across component props (`<Panel items={items} />`) is not
       carried into the child; object-map classes (`TONE[status]`) are not resolved. **HALF DONE 2026-10-01** - PR #1274 merge f52e806f closed per-query provenance and const-class resolution; still OPEN: provenance across component props (`<Panel items={items} />`) and object-map classes (`TONE[status]`). Check: `node scripts/check-console-unknown-render.mjs`.
+      FIX PROPOSED 2026-10-01 (branch claude/build-console-unknown-render-props-maps, lands under DR-037 after the brain's review):
+      `scripts/check-console-unknown-render.mjs` now follows data provenance through same-file
+      component props — a `<Panel items={items} />` call site that passes query data no guard there
+      proves present taints the child's receiving parameter (destructured, renamed, rest, `props`
+      identifier, `{...spread}`, `children`; a whole query object under any prop name; a good-state
+      class handed down as a prop), so the child's render is judged with the parent's query origins.
+      Components resolve by declaring scope (and through `memo`/`forwardRef`). Object-map classes
+      resolve too: `className={TONE[status]}` over a same-file const map — directly, through a const
+      alias, a same-file helper, a nested `TONE.a[status]` or a `...BASE` spread — is judged like an
+      inline good class unless the lookup has an explicit `??`/`||` fallback AND a key the analysis
+      can show is a plain read of query data. That key rule is a conservative heuristic, not a
+      proof, and is fail-closed: a binding stays plain only if every reference to it is a known
+      read-only use (a whitelist, so no list of write forms is needed — assignment, destructuring
+      assignment, `for…of|in`, `++`, an argument to an unknown function, `.bind`, `Object.defineProperty`
+      and the like all escape); a literal, `??`/ternary default, helper or `useMemo` result,
+      destructuring or parameter default, `.length`/`.size` read, rest element, a prop any visible call
+      site defaults or spreads, a component referenced other than as a JSX tag (alias, direct call,
+      `createElement`, `cloneElement`, `memo`, `export`), a defaulted/augmented row array, a `var`/function
+      redeclaration or shadowing parameter of the name, a direct `eval` in scope, `sort()`/`reverse()`
+      results written through, or a map with an `undefined`/`null`/`""`/`"[object Object]"` entry (an
+      absent key HITS it) earns no exemption. Self-test pairs bug shapes with guarded
+      twins; live tree still 0 findings. Mutation testing is NOT claimed as a figure: my generator's region and counts could not be reproduced by the lane's reviewers (theirs, over the map-write and key-rule bands, kill about 45-72% on two bands of mutants), so no kill rate is quoted. `--self-test` does not pin every clause: reviewers found surviving mutants that flip a flagged case to clean; rounds 9-10 added a fixture for each they named (alias writes through `const T = T0`, `.slice` and unknown-helper keys, `T!` reads, call-initialised class constants, `Object.fromEntries`/`useMemo` maps, `export default T`/`export { T }`/`{ T }` escapes, object-pattern assignment targets) and each was re-checked by cp-aside mutant (self-test goes red). A map's writes are a WHITELIST: any non-read reference to the map flags the lookup. Round 12 extended it: nested sub-maps are followed at every depth (alias, call argument, destructure, `Object.values/entries`, spread), writes to a `...BASE` spread source are followed, and a write whose value cannot be read is treated as possibly good-state. Round 13: a spread the gate cannot resolve (`...(c ? BASE : {})`, `...getBase()`, a `let` source) and an unreadable value inside an `Object.assign`/`defineProperty` literal source are likewise treated as possibly good-state. Round 14: an absent-key (`undefined`/`null`/`""`/`__proto__`) or unreadable-key entry in a map's own literal whose value cannot be read is treated the same way, and an `Object.entries(x).forEach` write flags (it is no longer listed as silent). Unpinned survivors remain and are not enumerated. Not claimed exhaustive. Still not followed: a child component, helper or class map
+      imported from another file (no module resolver); a callback parameter over query rows as DATA
+      (only as a key); a class assembled from a prop; data fields destructured out of `q.data`;
+      a component reached only through a wrapper (`withX(C)`); query data mutated in place through
+      another path; `initialData`/`placeholderData`; `defaultProps`; global state (`Object.prototype`, `Proxy`/`new Map`
+      class maps). Known over-flags: `T[s ?? "bad"]
+      ?? T.d`, `.flatMap((x) => [x])`, `rows[0]`/`.length`/`.size` keys. Row stays open for those.
 
 - [x] **The 8 remediation-allow reason codes are absent from `docs/REASON_CODES.md` (Mac-lane flag, #403). DONE.**
       Closed by teaching `scripts/gen-reason-codes.mjs` to derive the wrapper's declared

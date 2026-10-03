@@ -90,7 +90,6 @@ part an attacker writes.
 | `REDIS_URL` | Set ⇒ WebAuthn step-up session state persists to Redis instead of in-memory. That is the ONLY Redis-backed state in this deployment: the connector/webhook routes run the in-process core, and the `@workspace/integrations` Redis stores are not part of the served API. | unset (in-memory) |
 | `STEPUP_TTL_SECONDS` | Step-up session time-to-live. | `300` |
 | `WEBAUTHN_RP_ID` / `WEBAUTHN_RP_NAME` / `WEBAUTHN_ORIGIN` | WebAuthn relying-party identity for step-up ceremonies; must match the origin the operator console is served from. | `localhost` / dev defaults |
-| `WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN` | **Reserved — currently UNENFORCED.** The value is parsed into the WebAuthn config, but no route consults it yet: admin actions enforce their role checks only. Do not rely on it as a control; the wiring is tracked as backlog work. | unset |
 | `GRAPH_ACCESS_TOKEN` | Read-only Microsoft Graph token for the posture connector. | unset (fixture mode) |
 | `CARRIER_ACCESS_TOKEN` | Read-only carrier/IoT-connectivity token for the reachability connector. | unset (fixture mode) |
 | `LOCATION_ACCESS_TOKEN` | Read-only token for the device location-services connector. | unset (fixture mode) |

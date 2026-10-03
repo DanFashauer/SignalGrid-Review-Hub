@@ -8,7 +8,6 @@ export interface WebAuthnConfig {
   rpId: string;
   rpName: string;
   origin: string;
-  requireStepUpForAdmin: boolean;
 }
 
 /**
@@ -132,6 +131,5 @@ export function getWebAuthnConfig(): WebAuthnConfig {
     rpId: process.env.WEBAUTHN_RP_ID || 'localhost',
     rpName: process.env.WEBAUTHN_RP_NAME || 'Enterprise Shell',
     origin: process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000',
-    requireStepUpForAdmin: process.env.WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN === 'true',
   };
 }

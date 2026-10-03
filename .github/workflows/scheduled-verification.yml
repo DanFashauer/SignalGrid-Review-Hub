@@ -77,7 +77,15 @@ jobs:
 
       - name: Install shellcheck (preflight's shell-lint gate needs it)
         timeout-minutes: 5
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+        run: |
+          # Same shape as review-hub-ci.yml's Shell lint step (gated by
+          # scripts/check-ci-shellcheck-step.mjs): preinstalled first, wait for the apt lock.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get -o DPkg::Lock::Timeout=180 update -qq
+            sudo apt-get -o DPkg::Lock::Timeout=180 install -y -qq shellcheck
+          fi
+          command -v shellcheck >/dev/null 2>&1 || { echo "::error::shellcheck is unavailable; preflight's shell lint cannot run"; exit 1; }
+          shellcheck --version
 
       # Bounded and retried per attempt — the reasoning is review-hub-ci.yml's step of
       # the same name (an unbounded apt/CDN stall once ate a whole job).

@@ -239,6 +239,10 @@ jobs:
       # workspace overrides). Static, so it catches that without a daemon.
       - name: "Container native base (a Dockerfile that cannot build is not a deploy path)"
         run: node scripts/check-container-native-base.mjs
+      - name: "CI shellcheck step (prefers the preinstalled binary, waits for the apt lock, fails closed; self-tested)"
+        run: |
+          node scripts/check-ci-shellcheck-step.mjs
+          node scripts/check-ci-shellcheck-step.mjs --self-test
       - name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)"
         run: node scripts/check-image-build-hardening.mjs
       - name: "Image build hardening self-test (the gate must be able to fail)"
@@ -1242,7 +1246,15 @@ jobs:
 
       - name: Shell lint (shellcheck)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # Prefer the runner's preinstalled shellcheck; install only when absent, and
+          # wait for the dpkg lock (a concurrent apt-get on the runner made this step
+          # fail at once with exit 100). Still absent afterwards -> fail, never skip.
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get -o DPkg::Lock::Timeout=180 update -qq
+            sudo apt-get -o DPkg::Lock::Timeout=180 install -y -qq shellcheck
+          fi
+          command -v shellcheck >/dev/null 2>&1 || { echo "::error::shellcheck is unavailable; the shell lint cannot run"; exit 1; }
+          shellcheck --version
           node scripts/check-shell.mjs
 
       - name: Bash deny-list hook self-test (a wrapped `sh -c` payload and unreadable input must DENY)

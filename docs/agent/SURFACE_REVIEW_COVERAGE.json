@@ -842,6 +842,15 @@
           "scope": "partial: docs/NAC_DERIVED_STATE_ARTICLE.md in full",
           "open": 0,
           "closed": 2
+        },
+        {
+          "date": "2026-09-28",
+          "read": "Codex review round 1 on #1190 (head 9c45f0ea) read docs/IDENTITY_WIRE_TRUTH_ARTICLE.md (new, draft 4 of the plan row 24 article series) in full: 5 findings (the ID token scoped to the client, the expiry conclusion limited to the observed token's session, same-user sessions reworded as device ambiguity, phishing_resistant added to the top tier, the session-shape claims called historical), all applied in 5ba97c7f.",
+          "reviewer": "cloud lane (every finding checked against the tree before it was applied)",
+          "record": "5ba97c7f",
+          "scope": "partial: docs/IDENTITY_WIRE_TRUTH_ARTICLE.md in full",
+          "open": 0,
+          "closed": 5
         }
       ]
     },

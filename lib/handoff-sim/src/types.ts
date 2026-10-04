@@ -133,8 +133,12 @@ export interface ReleaseLedger {
    *  resolved+verified exception could free ANY held task, including one whose
    *  own blocker was still open — an audit story that says exc-A closed while
    *  exc-B's task quietly went live. A release names both halves, and the
-   *  ledger is what makes the naming checkable. */
-  holds: Readonly<Record<string, string>>;
+   *  ledger is what makes the naming checkable.
+   *  A LIST per task, not one entry: a single-valued map let a second hold-grade
+   *  exception on the SAME task overwrite the first, so releasing the survivor
+   *  freed the task while the overwritten one was still unresolved (the same-task
+   *  twin of the hole above, BUILD_BACKLOG row "ReleaseLedger.holds"). */
+  holds: Readonly<Record<string, readonly string[]>>;
   resolutions: Readonly<Record<string, string>>;
   /** exception entry → verification evidence ref (the proof of the fix). */
   verifications: Readonly<Record<string, string>>;

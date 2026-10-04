@@ -3492,7 +3492,7 @@ Proven by ADDING assertions to the existing, already-registered `scripts/src/eve
 
 **Reversal / amendment.** The owner reverses by saying so; the rule is then struck here with the date and the rows already produced under it stand as records.
 
-## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves; the owner's 2026-09-24 note adds a one-to-one ASSIGNED-device mode, recorded as a declared input and an assignment check that only tightens (owner-directed 2026-09-23, amended 2026-09-24)
+## DR-055 — The owner's 2026-09-23 puck flow is recorded as a REFINEMENT of the DR-043 hypothesis, not a product: keys only on the puck, attach is custody evidence that may start a sign-in, sessions stay with the OS/IdP/VDI broker, return is docking and clearing belongs to the MDM, clinical continuity escalates, and no hardware moves; the owner's 2026-09-24 note adds a one-to-one ASSIGNED-device mode, recorded as a declared input and an assignment check that only tightens; the owner's 2026-10-02 ARC-kiosk note adds hard-bound-token requirements R1–R6 as design targets, with two questions left open to him (owner-directed 2026-09-23, amended 2026-09-24 and 2026-10-02)
 **Status: an owner-directed record of a hardware HYPOTHESIS refinement.** Every puck, dock, locker, custody and tap-point surface it names is a deferred design target; nothing here is shipped or claimed.
 
 **Question.** On 2026-09-23 the owner described *"the hardware flow I'm thinking for this
@@ -3505,7 +3505,9 @@ open PR #905 (`docs/agent/LOOP.md:1390`–`1392`) and DR-054 by open PR #1019, s
 takes DR-055. It amends nothing in DR-043's text; it adds to it. On 2026-09-24, while this
 record was still unmerged, the owner added a second input (below): the shared-device flow is one
 example use case, and a one-to-one assigned mode sits beside it. The record is amended in place
-to take it; item 6 is the call on it.
+to take it; item 6 is the call on it. On 2026-10-02 the owner added a third (below): an ARC-kiosk
+photo and a note on the puck as a hard-bound token, recorded as direction and design targets, with
+two questions left open to him.
 
 **The input, in one paragraph.** The flow, in the owner's words as the review quotes them.
 **C1** a *"MagSafe-style"* magnetic puck that locks onto the back of the device, shaped like his
@@ -3546,6 +3548,40 @@ critic that re-read the load-bearing facts at their primary sources on 2026-09-2
 material and is not committed; the platform facts in item 6 that it did not re-read were re-read
 for this amendment on 2026-09-24, and the ones nobody re-read are marked unverified where they
 appear.
+
+**The third input (owner, 2026-10-02), recorded as direction — amended in place.** The owner
+pasted a photo of an ARC dispensing kiosk and a sentence about the puck as the single token that
+replaces a badge, key card, 2FA and MFA, is *"hard locked"* to the person it is enrolled to, and
+is cleared only by a factory wipe that only a *"super admin of the system"* can do (quoted whole
+in the hypothesis page's *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
+section, which carries requirements R1–R6, the architecture sentence and the never-claim words).
+It changes none of the Call below. It adds requirements, all design targets: a non-exportable key
+accepted only with IdP attestation; the binding is the IdP registration, revoked through the IdP
+and the PACS; replacement is a new keypair; a CTAP 2.1 authenticatorReset is open to whoever
+holds the key and leaves the puck inert, so RE-BINDING is the guarded step; re-bind and revoke
+are **proposed** under two-person authorization, although `lib/dual-control` has no such action
+class today (`lib/dual-control/src/types.ts:33`); and an absent, unknown, wiped or unreadable IdP
+binding reads UNBOUND and never loosens a decision. Two questions are **open and the owner's**,
+raised as a hand on 2026-10-02 (`artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json`):
+(1) whether the puck is one factor a customer may choose to offer or the required factor, which
+`docs/PURPOSE.md:38` ("the factor is the customer's choice") would have to change to allow; and
+(2) whether "super admin" means the customer's IdP and PACS administrator under dual control or a
+role SignalGrid holds over enrolment and keys, which DR-043 item 2 forbids. The ARC kiosk is a
+candidate read-only custody source (`docs/HARDWARE_PARTNER_MATRIX.md:17`); no connector or
+emulator is recorded. This amendment reaches past the docs-only footprint of the 2026-09-24
+Boundary, and the Boundary below is read with that exception: it also changes the security-absolute
+markers and self-tests in `scripts/check-launch-claims.mjs` (the absolute wording it quotes had no
+guard at all) and the five "not claimable" rows it adds to the claim inventory
+(`docs/agent/CLAIM_INVENTORY.json`, with the derived `docs/CLAIM_INVENTORY.md`); a catalog clause in
+`docs/SIGNAL_SOURCE_CATALOG.md`; the *Kiosk interaction contract* section of
+`docs/PHYSICAL_CUSTODY_SIGNAL_MODEL.md` and a pointer to it in `docs/HARDWARE_PARTNER_MATRIX.md`
+(a partner-facing page, so under the buyer-scope claim gate); backlog row Puck 16; the scan file
+`docs/agent/resource-scans/2026-10-02-arc-kiosk-puck-token.json` with its intake row; one attribution
+in `docs/research/COMPETITIVE_TELEPORT.md` (its "tamper-proof" audit-log phrase is now quoted as
+Teleport's own wording, not verified here); and the regenerated
+`docs/agent/SURFACE_REVIEW_COVERAGE.md`. Nothing under `lib/*`, `/v1`, a connector, a proof, the
+launch profile or any Swift source changes. DR text is owner-reserved: the owner adopts this
+paragraph by merging the pull request that carries it.
 
 **Call.**
 
@@ -3910,7 +3946,8 @@ item 5:
 `native/ios/FLEET_MDM.md` (markdown), `docs/BUILD_BACKLOG.md`,
 `docs/agent/RESOURCE_INTAKE.md` and `docs/agent/DISCOVERY_LOG.md` (prompts only, no count).
 Nothing touches `lib/*`, `/v1`, a connector, a proof, the launch profile, the publication
-boundary, the claim inventory, the docs-sanity denylist or any Swift source. The review's
+boundary, the claim inventory, the docs-sanity denylist or any Swift source (the claim inventory
+and the launch-claims gate are touched by the 2026-10-02 amendment above, and only by it). The review's
 proposed claim guards — denylist entries, claim-inventory pre-registration, and a *"not a session
 broker"* clause beside `docs/POSITIONING.md:73` — belong to a change that owns those surfaces
 and goes through the launch-claims gate; they are not made here. The 2026-09-24 amendment
@@ -3934,6 +3971,10 @@ security-key, `UserRights` CSP, Platform SSO deployment and Apple Wallet badge p
 this amendment on 2026-09-24, and the Conditional Access device-filter page as saved that day — the `check:absence` runs quoted in item 6, and
 PR #1005's branch (`claude/build-dr043-live-attach-rules`) read on 2026-09-24 for its
 `not_applicable` reading.
+For the 2026-10-02 amendment: the photo (session material, not committed; its serial number, support
+phone and support email are in no file), the owner's note quoted whole in the hypothesis page, CTAP
+2.1 §6.6 *authenticatorReset* as fetched 2026-10-02, the scan file with its four confirms, and the
+launch-claims gate run with its self-tests (planted first, then the markers).
 
 **Reversal.** The owner reverses any line of this by saying so. Mechanically: delete this record,
 the *Owner refinement (2026-09-23, DR-055)* section of the hypothesis page, backlog rows Puck 6–9
@@ -3945,7 +3986,15 @@ and item 5's question closes only by the owner's own decision record. Item 6 (th
 amendment) reverses the same way: delete it and its do-not-claim lines, the *Assigned-device mode*
 section of the hypothesis page, rows Puck 10–15, the 2026-09-24 intake row and the assigned-device
 discovery prompts; the platform facts it cites stay true whatever the owner decides, and item
-6(v)'s question closes only by the owner's answer.
+6(v)'s question closes only by the owner's answer. The 2026-10-02 amendment reverses the same way:
+delete its paragraph, the *Credential binding and reset (owner note 2026-10-02; DR-055 amendment)*
+section of the hypothesis page, backlog row Puck 16, the 2026-10-02 ARC intake row and the scan file
+with its regenerated coverage line, the five *docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md* rows in the
+claim inventory (then regenerate `docs/CLAIM_INVENTORY.md`), the security-absolute alternatives and
+self-tests in `scripts/check-launch-claims.mjs` (the absolute words are then unguarded again, which
+is a loss, not a neutral state), the ARC-class clause in `docs/SIGNAL_SOURCE_CATALOG.md`, the *Kiosk
+interaction contract* section and its pointer in `docs/HARDWARE_PARTNER_MATRIX.md`. The two open
+questions close only by the owner's own answer, on the raised hand.
 
 ## DR-056 — The company brain runs the owner's agentic loop: one declared objective, a deterministic evaluator and ranker, and the Mac tick that already exists (owner-directed 2026-09-24)
 

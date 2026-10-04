@@ -70,6 +70,25 @@ async function main() {
   const crossTenant = await store.getDecision("tenant_atlas", decision.id);
   check("tenant isolation: the same id under another tenant returns null", crossTenant === null);
 
+  // ── 2b. IMMUTABILITY: a decision is written once ───────────────────────────
+  // An identical re-save is idempotent; a DIFFERENT record under the same id
+  // must be refused, never upserted over the original (it used to be
+  // ON CONFLICT DO UPDATE). Compared as JSONB in SQL, not as text.
+  const failureOf = (p: Promise<unknown>) => p.then(() => "", (e: unknown) => String((e as Error)?.message ?? e));
+  check("an IDENTICAL re-save is idempotent (no error)", (await failureOf(store.saveDecision(decision, snapshot))) === "");
+  const otherOutcome = decision.outcome === "deny" ? "allow" : "deny";
+  const rewrite = await failureOf(store.saveDecision({ ...decision, outcome: otherOutcome }, snapshot));
+  check("a DIFFERENT decision under the same id is REFUSED (immutable record)", /refusing to overwrite an immutable record/.test(rewrite));
+  const kept = await admin.query("SELECT outcome, data = $2::jsonb AS same FROM decisions WHERE id = $1",
+    [decision.id, JSON.stringify(decision)]);
+  check("…and the stored decision is still the ORIGINAL (outcome and data)",
+    kept.rows[0]?.outcome === decision.outcome && kept.rows[0]?.same === true);
+  const reSnap = await failureOf(store.saveDecision(decision, { ...snapshot, capturedAt: "1999-01-01T00:00:00.000Z" }));
+  check("a DIFFERENT evidence snapshot under the same id is REFUSED", /refusing to overwrite an immutable record/.test(reSnap));
+  const keptSnap = await admin.query("SELECT data = $2::jsonb AS same FROM evidence_snapshots WHERE id = $1",
+    [snapshot.id, JSON.stringify(snapshot)]);
+  check("…and the stored snapshot is still the ORIGINAL", keptSnap.rows[0]?.same === true);
+
   // ── 3. SNAPSHOT + VERIFY ───────────────────────────────────────────────────
   const gotSnap = await store.getSnapshot(tenantId, snapshot.id);
   check("snapshot persists and reads back", !!gotSnap && gotSnap.id === snapshot.id);

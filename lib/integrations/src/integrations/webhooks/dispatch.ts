@@ -433,6 +433,8 @@ async function dispatchWithRetry(
   config: DispatcherConfig = DEFAULT_DISPATCHER_CONFIG
 ): Promise<DeliveryResult> {
   let lastResult: DeliveryResult | null = null;
+  // COUNTED, not assumed: the DLQ record below states how many deliveries were made.
+  let attemptsMade = 0;
 
   // WHAT IS PERMANENT, and why the list is no longer typed out here.
   //
@@ -453,6 +455,7 @@ async function dispatchWithRetry(
 
   for (let attempt = 1; attempt <= config.retry.maxAttempts; attempt++) {
     const result = await dispatchToEndpoint(webhook, payload, config);
+    attemptsMade += 1;
     lastResult = result;
 
     if (result.success || isPermanentDeliveryError(result)) {
@@ -488,7 +491,8 @@ async function dispatchWithRetry(
     webhook.id,
     payload.id,
     payload,
-    finalError
+    finalError,
+    attemptsMade
   );
 
   return {

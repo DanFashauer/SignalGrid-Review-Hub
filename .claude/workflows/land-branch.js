@@ -5,6 +5,12 @@
 // required; preBrief and bodyNotes are optional). trailers and sessionUrl are the
 // caller's own attribution (this file has no session baked in, so it is reusable
 // across sessions without silently mis-attributing someone else's commits/PRs).
+// `klass` is now only the CALLER'S CLAIM, not the truth (Codex summary finding 7 on
+// #1126/#1127, docs/BUILD_BACKLOG.md): the Merge stage runs
+// `scripts/check-owner-gated-surfaces.mjs --classify-branch` over the actual diff, and
+// resolveKlass() (mirrored below, next to canPush) lets that DERIVED class win
+// whatever the caller passed — including escalating a caller's 'other' up to
+// OWNER_RESERVED, never the other way.
 //
 // Lessons this codifies, so a future rewrite does not relearn them:
 //   L1  one sequential chain per host for port-bound gates (preflight/breadth/test:api
@@ -39,12 +45,24 @@
 //       exit path (success, failure, or the job's own `cd` failing) releases it —
 //       never a trailing `&& (...; rm)` that only runs if everything before it did.
 //   L15 a stacked branch merges Alpha after its base lands, never the base tip.
+//   L23 a worktree with no root node_modules (or a symlink to one) fails the chain
+//       at the first tsx proof; the Merge stage installs it from the lockfile
+//       (`pnpm install --frozen-lockfile`) before anything else — and so does the Pre
+//       stage (Codex #1133 P2), when a `preBrief` is given: a Pre stage runs its own
+//       gates before the Merge stage ever gets a turn, so the SAME install-if-needed
+//       step has to be first there too, not only in Merge. The Merge stage ALSO
+//       reinstalls, unconditionally, right after the Alpha merge and before its own
+//       generators/gates (Codex round 2 on #1133): the merge can bring in a lockfile
+//       change the step-0 install never saw. Neither install passes `--offline` (Codex
+//       round 2 on #1133 P3) — the flag traded a clear `ERR_PNPM_OUTDATED_LOCKFILE` for
+//       a confusing "not found in offline mode" on a genuinely stale lockfile, for no
+//       benefit in an environment where the registry is reachable.
 export const meta = {
   name: 'land-branch',
   description: 'Optional pre-edit, merge Alpha + regenerate on a clean index, one sequential preflight+breadth chain, push only on 0/0 verified by the script, open the PR',
   phases: [
     { title: 'Pre', detail: 'optional Sonnet edit stage from args.preBrief' },
-    { title: 'Merge', detail: 'Sonnet merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
+    { title: 'Merge', detail: 'Sonnet installs the worktree if needed (L23), merges origin/SignalGrid_Alpha, regenerates on a clean index, runs the quick gates' },
     { title: 'Chain', detail: 'Haiku runs preflight + breadth with sentinels; the SCRIPT gates the push on 0/0, a Haiku push agent runs only when it clears' },
     { title: 'PR', detail: 'Sonnet drafts the body from the diff; Haiku opens the PR' },
   ],
@@ -105,6 +123,40 @@ function canPush(run, expectedHead) {
   return { ok: reasons.length === 0, reasons };
 }
 
+// resolveKlass / ownerDecisionText are MIRRORED from scripts/lib/land-branch-gate.mjs,
+// byte-for-byte after whitespace normalisation, for the same reason canPush is above:
+// the Workflow sandbox has no import.meta / filesystem. That module's self-test READS
+// THIS FILE and fails when either copy differs — change the module first, then paste
+// it here. KLASS_LINE_RE is the regex both this file and the module need in scope for
+// resolveKlass to run; it is not itself mirror-checked, only used.
+const KLASS_LINE_RE = /^KLASS (OWNER_RESERVED|DECISION_PATH|SAFETY_MACHINERY|other) files=(\d+) matched=(\d+)$/;
+function resolveKlass(callerKlass, derivedLine) {
+  const m = KLASS_LINE_RE.exec(String(derivedLine ?? ""));
+  if (!m) return { ok: false, reasons: [`derived line does not match the KLASS sentinel shape: ${JSON.stringify(derivedLine)}`] };
+  const derivedKlass = m[1];
+  const files = Number(m[2]);
+  if (files === 0) return { ok: false, reasons: [`derived line reports files=0 (an empty diff is unknown, not "other"): ${JSON.stringify(derivedLine)}`] };
+  const matched = Number(m[3]);
+  if ((derivedKlass === "other") !== (matched === 0)) return { ok: false, reasons: [`derived line is internally inconsistent (klass ${derivedKlass} with matched=${matched}): ${JSON.stringify(derivedLine)}`] };
+  return { ok: true, klass: derivedKlass, callerKlass, overridden: callerKlass !== derivedKlass };
+}
+function ownerDecisionText(klass) {
+  switch (klass) {
+    case "SAFETY_MACHINERY":
+      return 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it';
+    case "DECISION_PATH":
+      return 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (name the rule(s) that match <paths>: lib/*, artifacts/api-server/, or a native decision port): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence, from the diff, what the change touches (whether it alters any route, verdict or decision logic) so the owner can judge it from the phone';
+    case "OWNER_RESERVED":
+      return 'write: "OWNER_RESERVED (<paths>): the launch profile, launch-claims gate, publication boundary, pricing, LICENSE/NOTICE or another owner-reserved surface changed — the OWNER merges this PR; the cloud lane will not merge it under DR-037 whatever the checks say." and name the paths';
+    case "other":
+      return 'write what the owner must decide, or "None - docs/record only, landed under DR-037 with check run <id recorded before merge>"';
+    default:
+      // Fail closed: an unrecognised klass must never fall through to a default
+      // paragraph that understates what changed.
+      throw new Error(`ownerDecisionText: unknown klass ${JSON.stringify(klass)}`);
+  }
+}
+
 const RULES = `
 HARD RULES (a violation is a failed stage): never \`git fetch --depth/--deepen/--shallow-*\`, never \`git stash\`, \`git reset --hard\`, \`git rebase\`, \`rm -rf\`, \`--no-verify\`, force-push; never \`git checkout --\` on a dirty file EXCEPT \`--theirs\` on the two GENERATED paths named in the Merge stage's step 2 (docs/agent/SURFACE_REVIEW_COVERAGE.md, artifacts/sync/live-sync-manifest.json), and only while a merge conflict is actually in progress there — docs/agent/CLAIM_INVENTORY.json is a SOURCE input and is never resolved with \`--theirs\`, only by merging both sides' records by hand; never touch any worktree but ${worktree}; never boot a server yourself; never hand-edit docs/agent/SURFACE_REVIEW_COVERAGE.md or artifacts/sync/live-sync-manifest.json (only their generators write them, and only on a CLEAN index: \`git ls-files -u\` must print nothing first); never put a model id in a commit message except the required trailers; gates run only AFTER \`git add -A\` (lesson L9). Every figure you report comes from output you produced in this stage. If blocked, stop and return the blocker in \`blockers\`; never return a best guess as complete.
 Commit trailers (exact, last lines of every commit body):
@@ -119,8 +171,11 @@ const STAGE_SCHEMA = {
     gateResults: { type: 'array', items: { type: 'object', properties: { command: { type: 'string' }, exit: { type: 'number' }, lastLine: { type: 'string' } }, required: ['command', 'exit', 'lastLine'] } },
     notes: { type: 'string' },
     blockers: { type: 'array', items: { type: 'string' } },
+    // The single line `check-owner-gated-surfaces.mjs --classify-branch` prints, EXACTLY
+    // as printed (Codex finding 7). Only the Merge stage computes this — Pre returns ''.
+    klassLine: { type: 'string' },
   },
-  required: ['headSha', 'filesChanged', 'gateResults', 'notes', 'blockers'],
+  required: ['headSha', 'filesChanged', 'gateResults', 'notes', 'blockers', 'klassLine'],
 }
 
 // What the Chain-run worker reports — NEVER includes a push decision or a remoteSha.
@@ -155,8 +210,9 @@ let pre = null
 if (preBrief) {
   phase('Pre')
   pre = await agent(`You are the Sonnet edit worker (DR-060 rule 1: mechanical edits run on the mid tier). Worktree ${worktree}, branch ${branch}. \`git status --short\` must be empty before you start; if not, return the blocker.
+0. \`cd ${worktree} && { test -x scripts/node_modules/.bin/tsx || pnpm install --frozen-lockfile; }\` — an uninstalled worktree (root node_modules missing or a symlink) fails the chain at the first tsx proof (L23); report the install's last line in gateResults if it ran.
 ${preBrief}
-After the edits: \`git add -A\`, run the gates the brief names (each exit 0, quote the last line), commit ONE commit with the subject the brief gives and the trailers. Do NOT push. Return the schema.
+After the edits: \`git add -A\`, run the gates the brief names (each exit 0, quote the last line), commit ONE commit with the subject the brief gives and the trailers. Do NOT push. Return the schema with klassLine = '' (this stage never computes it; the Merge stage does).
 ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium', schema: STAGE_SCHEMA })
   if (!pre || pre.blockers?.length) { log(`pre blocked: ${JSON.stringify(pre?.blockers)}`); return { pre } }
   log(`pre: ${pre.headSha}`)
@@ -164,14 +220,26 @@ ${RULES}`, { label: `pre:${tag}`, phase: 'Pre', model: 'sonnet', effort: 'medium
 
 phase('Merge')
 const merge = await agent(`You are the Sonnet merge worker (DR-060 rule 1: mid tier). Worktree ${worktree}, branch ${branch}.
+0. \`cd ${worktree} && { test -x scripts/node_modules/.bin/tsx || pnpm install --frozen-lockfile; }\` — an uninstalled worktree (root node_modules missing or a symlink) fails the chain at the first tsx proof (L23); report the install's last line in gateResults if it ran.
 1. \`cd ${REPO} && git fetch origin SignalGrid_Alpha\` (plain fetch). \`cd ${worktree} && git status --short\` must be empty.
-2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 3 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
-3. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.
-4. Quick gates after \`git add -A\` (nothing should be pending): node scripts/check-publication-boundary.mjs; node scripts/check-surface-review-coverage.mjs; node scripts/check-surface-ownership.mjs (if it exists); node scripts/check-lessons.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-cited-paths.mjs; node scripts/check-doc-line-counts.mjs. Each exit 0, quote the last line; a failure is returned as a blocker with the output, NOT patched around.
-Return headSha = \`git rev-parse HEAD\`.
+2. \`git merge --no-ff -m "Merge origin/SignalGrid_Alpha into ${branch}" -m "${trailers}" origin/SignalGrid_Alpha\` — the trailers go on the merge commit's message from this ONE command, in the SAME commit \`git merge\` creates (a merge with no conflicts commits immediately; a later "append the trailers with git commit" step would then have nothing left to commit, and every conflict-free landing would silently lose its attribution — this is why the trailers are two -m paragraphs on the merge command itself, not a follow-up commit). If the output says "Already up to date.", nothing was committed and that is fine — do not try to force a commit. On conflicts: docs/agent/LOOP.md and docs/agent/EVIDENCE.md keep BOTH sides (append-only records); docs/agent/LESSONS.md keeps both sides and renumbers so ids read L1..Ln in order with no gap (a row from mainline keeps its id, the branch's rows take the next ids); the ONLY generated files this merge may resolve with \`--theirs\` are docs/agent/SURFACE_REVIEW_COVERAGE.md and artifacts/sync/live-sync-manifest.json (\`git checkout --theirs -- <path> && git add <path>\` — the one allowed exception to "never git checkout -- on a dirty file", scoped to exactly these two paths during this merge), because both are regenerated from the tree in step 4 by their own generator; docs/agent/CLAIM_INVENTORY.json is a SOURCE input, never \`--theirs\` — on a conflict there, merge the JSON records from BOTH sides by hand (never drop the branch's own claim records) and then regenerate docs/CLAIM_INVENTORY.md from the merged JSON with \`node scripts/gen-claim-inventory-md.mjs\` (never hand-edit the derived Markdown); if a conflict lands on docs/CLAIM_INVENTORY.md alone with the JSON already resolved, resolve it the same way (regenerate, don't pick a side). Any other conflict you resolve by reading both sides and keeping the intent of both, and you name it in notes. If the merge left a conflict, finish it with \`git commit --no-edit --cleanup=strip\` (the trailers are already on the merge's own message from the \`-m\` above, so nothing further needs appending; \`--cleanup=strip\` drops MERGE_MSG's \`# Conflicts:\` comment block so the trailers stay the LAST lines of the body instead of having that block appended after them — git still parses trailers either way, but the body should end with them, not with a leftover conflict listing).
+3. \`cd ${worktree} && pnpm install --frozen-lockfile\` — right after the Alpha merge, before the generators and gates below (Codex round 2 on #1133): the merge can bring in a lockfile the worktree's own step-0 install never saw, and step 4's generators plus every gate after it run against node_modules, not against the lockfile text, so a dependency the merge added must be installed before anything reads the tree. Report its last line in gateResults. It must exit 0; a non-zero exit (e.g. ERR_PNPM_OUTDATED_LOCKFILE) is returned as a blocker with its output, not patched around.
+4. ONLY with \`git ls-files -u\` empty and \`git status --short\` empty: \`node scripts/generate-sync-manifest.mjs\` (if it exists and touches the manifest), then \`node scripts/check-surface-review-coverage.mjs --write\`. If either changed a file: \`git add -A\`, run \`node scripts/check-surface-review-coverage.mjs\` (must exit 0), commit "coverage page regenerated on top of <alpha short sha>" with the trailers.
+5. Quick gates after \`git add -A\` (nothing should be pending): node scripts/check-publication-boundary.mjs; node scripts/check-surface-review-coverage.mjs; node scripts/check-surface-ownership.mjs (if it exists); node scripts/check-lessons.mjs; node scripts/check-preflight-ci-parity.mjs; node scripts/check-cited-paths.mjs; node scripts/check-doc-line-counts.mjs. Each exit 0, quote the last line; a failure is returned as a blocker with the output, NOT patched around.
+6. Derive the owner-decision class from the diff (Codex summary finding 7 on #1126/#1127, docs/BUILD_BACKLOG.md): \`cd ${worktree} && node scripts/check-owner-gated-surfaces.mjs --classify-branch origin/SignalGrid_Alpha\`. It prints exactly one line, either \`KLASS <klass> files=<n> matched=<m>\` or \`KLASS ERROR <reason>\`. Return that line EXACTLY as printed, verbatim, as klassLine — do not paraphrase it, do not compute or guess the class yourself; a later stage parses it.
+Return headSha = \`git rev-parse HEAD\` and klassLine from step 6.
 ${RULES}`, { label: `merge:${tag}`, phase: 'Merge', model: 'sonnet', effort: 'medium', schema: STAGE_SCHEMA })
 if (!merge || merge.blockers?.length) { log(`merge blocked: ${JSON.stringify(merge?.blockers)}`); return { pre, merge } }
 log(`merged: ${merge.headSha}`)
+
+// The push-decision precedent (canPush, L2) applies here too: the DERIVED class from
+// the diff wins over whatever klass the caller passed, never the other way (Codex
+// finding 7). A klassLine that fails to resolve (unparsable, a KLASS ERROR from a git
+// failure, or files=0) is a blocker, not a fallback to the caller's guess.
+const kl = resolveKlass(klass, merge.klassLine)
+if (!kl.ok) { log(`klass could not be derived from the diff: ${JSON.stringify(kl.reasons)}`); return { pre, merge, klass: kl } }
+if (kl.overridden) log(`klass overridden: caller said ${klass}, the diff says ${kl.klass}`)
+if (kl.klass === 'OWNER_RESERVED') log('OWNER_RESERVED: the lane must not merge this PR')
 
 phase('Chain')
 
@@ -181,12 +249,40 @@ phase('Chain')
 // line can never match itself (L13) — this is a lock FILE with a ps precondition, not a bare
 // /proc scan; two independent bare scans is the shape that let each see the other's sleeping
 // shell and wait on it forever, which is what this replaced.
+// Codex round 4 on #1133 (P2, thread 4113330657, 2026-09-26): `try()` below also clears any
+// stale `${tag}-job.pid` marker the instant it freshly acquires the lock — on the SUCCESS
+// branch only (`&&`), so a failed attempt (the lock is genuinely held by someone else) never
+// touches a marker it does not own. A marker's lifetime is now scoped to the lock that owns
+// it: a NEW acquisition never starts life carrying a previous run's already-dead pid. See the
+// release comment on the failure path below for the other half of this fix.
+// Codex round 5 on #1133 (2026-09-27, thread 4114900885): the chain now runs a detached
+// `pnpm install` before preflight (step 3, below), and the STALE-CLEAR check above never
+// consulted liveness at all — it read only the lock file's own mtime (`find "$LOCK" -mmin
+// +40`) and `busy()` named just two process shapes (`scripts/preflight.mjs`,
+// `verify-breadth.mjs`), neither of which an install matches. So a second landing whose
+// own lock-waiter runs while lane A's install is still inside its first 40 minutes would
+// find nothing wrong; but let that install run PAST 40 minutes (a slow network, a cold
+// pnpm store) and the second landing's very next poll reads the lock as stale and removes
+// it out from under a chain that is still alive — the two chains then race the SAME
+// worktree. `holder_alive()` fixes this by reading the LOCK's own first field (the owning
+// tag) and testing THAT tag's `${tag}-job.pid` marker as a process group (`kill -0 --
+// -PID`, the same test the failure-path release already uses below, so a lone SIGKILLed
+// top shell with its install/preflight/breadth child still running in the group still
+// reads alive) — never a name list, so it does not matter whether the group's live member
+// is `pnpm install`, `node scripts/preflight.mjs`, or `pnpm run verify:breadth`. The
+// 40-minute stale-clear now ALSO requires `! holder_alive`, and `busy()` now checks
+// `holder_alive()` first, falling back to the old process-name probe only when there is no
+// lock or no marker to consult (a foreign/legacy lock shape). Reproduced in scratch before
+// landing (see the mutation proof on this PR): the pre-fix script wrongly printed
+// STALE_CLEARED/ACQUIRED for a second tag while the first tag's job.pid process group was
+// still alive; the fixed script printed HELD/STILL_HELD instead, and only cleared once the
+// group had no live member.
 const LOCK_SCHEMA = { type: 'object', properties: { acquired: { type: 'boolean' }, holder: { type: 'string' }, note: { type: 'string' } }, required: ['acquired', 'holder', 'note'] }
 let acquired = false, lockTries = 0
 while (!acquired && lockTries < 12) {
   lockTries++
   const lk = await agent(`You are the lock waiter (mechanical). Call the Bash tool with timeout: 600000 for this command (it can legitimately run for up to 8 minutes; the tool's own 120s default would abort it mid-wait and read as a failure). Run EXACTLY this one command in the foreground and report what it prints; do nothing else, edit nothing, kill nothing:
-\`LOCK=${S}/chain.lock; TAG=${tag}; try() { ( set -o noclobber; echo "$TAG $(date -u +%FT%TZ)" > "$LOCK" ) 2>/dev/null; }; busy() { ps -eo args | grep -E '[s]cripts/preflight.mjs|[v]erify-breadth.mjs' >/dev/null; }; if [ -e "$LOCK" ] && [ -n "$(find "$LOCK" -mmin +40 2>/dev/null)" ]; then echo "STALE_CLEARED $(cat "$LOCK")"; rm -f "$LOCK"; fi; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; timeout 480 bash -c 'until [ ! -e "'"$LOCK"'" ] && ! (ps -eo args | grep -E "[s]cripts/preflight.mjs|[v]erify-breadth.mjs" >/dev/null); do sleep 15; done'; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "STILL_HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; fi; fi\`
+\`LOCK=${S}/chain.lock; TAG=${tag}; M=${S}/${tag}-job.pid; try() { ( set -o noclobber; echo "$TAG $(date -u +%FT%TZ)" > "$LOCK" ) 2>/dev/null && { rm -f "$M" 2>/dev/null || true; }; }; holder_alive() { [ -f "$LOCK" ] || return 1; OT=$(awk '{print $1}' "$LOCK" 2>/dev/null); [ -n "$OT" ] || return 1; OM="${S}/${OT}-job.pid"; [ -s "$OM" ] && kill -0 -- -"$(cat "$OM")" 2>/dev/null; }; busy() { holder_alive || ps -eo args | grep -E '[s]cripts/preflight.mjs|[v]erify-breadth.mjs' >/dev/null; }; if [ -e "$LOCK" ] && [ -n "$(find "$LOCK" -mmin +40 2>/dev/null)" ] && ! holder_alive; then echo "STALE_CLEARED $(cat "$LOCK")"; rm -f "$LOCK"; fi; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; timeout 480 bash -c 'holder_alive() { OT=$(awk "{print \$1}" "'"$LOCK"'" 2>/dev/null); [ -n "$OT" ] && [ -s "'"${S}"'/${OT}-job.pid" ] && kill -0 -- -"$(cat "'"${S}"'/${OT}-job.pid")" 2>/dev/null; }; until [ ! -e "'"$LOCK"'" ] && ! holder_alive && ! (ps -eo args | grep -E "[s]cripts/preflight.mjs|[v]erify-breadth.mjs" >/dev/null); do sleep 15; done'; if ! busy && try; then echo "ACQUIRED $(cat "$LOCK")"; else echo "STILL_HELD $(cat "$LOCK" 2>/dev/null || echo by-a-running-chain)"; fi; fi\`
 Return acquired=true only if the output contains a line starting with ACQUIRED; holder = the text after HELD/STILL_HELD/ACQUIRED; note = the full output.`, { label: `lock:${tag}#${lockTries}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: LOCK_SCHEMA })
   acquired = !!(lk && lk.acquired)
   log(`lock try ${lockTries}: ${acquired ? 'acquired' : 'held by ' + (lk?.holder || '?')}`)
@@ -197,11 +293,12 @@ let chainRun = await agent(`You are the Haiku validation worker (mechanical gate
 Steps, in order, stopping at the first failure:
 1. \`cd ${worktree} && git status --short\` must be empty and \`git rev-parse HEAD\` must equal ${merge.headSha}.
 2. The host's chain lock ${S}/chain.lock is ALREADY HELD FOR YOU by a previous stage (its first word is your tag). Confirm with \`cat ${S}/chain.lock\`; do not wait on anything, do not remove it - the background job in step 3 releases it itself (via a trap) when it starts, however it ends.
-3. Start the WHOLE chain as ONE DETACHED job (a job owned by your shell dies when your turn ends or the tool's 10-minute cap hits - a worker-owned background chain has been killed mid-preflight that way with no exit line written, L14; \`setsid nohup\` detaches it from you). Run exactly this single command in the FOREGROUND (it returns in 2 seconds; the chain keeps running on its own). Note the \`trap ... EXIT\` is the FIRST statement inside the job, so the lock is released on every exit path (success, a failing \`cd\`, anything) rather than only after a full run; and both log files are truncated (\`: >\`) before preflight starts, not left holding a previous run's sentinel line under the same tag:
-   \`setsid nohup bash -c 'trap "rm -f ${S}/chain.lock" EXIT; cd ${worktree} && echo ${merge.headSha} > ${S}/${tag}-run-head && : > ${S}/${tag}-pf.log && : > ${S}/${tag}-br.log && ( node scripts/preflight.mjs > ${S}/${tag}-pf.log 2>&1; echo "PREFLIGHT_EXIT $? $(git rev-parse HEAD)" >> ${S}/${tag}-pf.log; pnpm run verify:breadth > ${S}/${tag}-br.log 2>&1; echo "BREADTH_EXIT $? $(git rev-parse HEAD)" >> ${S}/${tag}-br.log )' > /dev/null 2>&1 < /dev/null & disown; sleep 2; ps -eo pid,args | grep -E "[s]cripts/preflight.mjs" | head -2\`
-   The last line must show a running \`node scripts/preflight.mjs\`; if it shows nothing, report jobStarted=false and that as a failure — do NOT proceed to step 4.
+3. Start the WHOLE chain as ONE DETACHED job (a job owned by your shell dies when your turn ends or the tool's 10-minute cap hits - a worker-owned background chain has been killed mid-preflight that way with no exit line written, L14; \`setsid nohup\` detaches it from you). Run exactly this single command in the FOREGROUND (it returns in 2 seconds; the chain keeps running on its own). Note the \`trap ... EXIT\` is the FIRST statement inside the job, so the lock is released on every exit path (success, a failing \`cd\`, anything) rather than only after a full run, and the job's SECOND statement writes its own pid to a marker file (Codex round 3 on #1133 — see the paragraph below the command for why; Codex round 4 on #1133, P2, thread 4113330657: that SAME trap now ALSO removes its own marker on EXIT — and, since the 40-minute stale-clear below can in principle hand the lock to a second chain while this job is still finishing, only removes \`chain.lock\` itself when the lock still names THIS tag, never a second chain's freshly-acquired one, proven with a stand-in job in scratch before landing; see the release comment on the failure path below for what that changes there); the OLD job-pid marker AND all three log files (plus the run-head file) from any previous run under this tag are removed SYNCHRONOUSLY, before the detached job is even launched (review sweep on #1133: the in-job \`: >\` truncation only runs after \`cd ${worktree}\` succeeds, so a job that died at \`cd\` used to leave a previous run's sentinel lines in place for JOB_STARTED to point at instead of nothing — removing them up front closes that regardless of whether \`cd\` succeeds); and the job now installs from the lockfile BEFORE preflight (Codex round 2 on #1133) so the sentinel certifies the tree CI actually installs, not whatever node_modules the worktree happened to carry in — chained with \`&&\` onto \`node scripts/preflight.mjs\`, so if the install fails preflight never runs and \`$?\` (captured right after, in the same \`;\`-separated statement) is the INSTALL's non-zero exit, which still produces a well-formed \`PREFLIGHT_EXIT <n> <sha>\` line (n non-zero) — canPush() then refuses on that exit code exactly as it would refuse a real preflight failure:
+   \`rm -f ${S}/${tag}-job.pid ${S}/${tag}-pf.log ${S}/${tag}-br.log ${S}/${tag}-install.log ${S}/${tag}-run-head; setsid nohup bash -c 'trap '\\''L=${S}/chain.lock; F=""; read -r F _ < "$L" 2>/dev/null; if [ "$F" = "${tag}" ]; then rm -f "$L"; fi; rm -f ${S}/${tag}-job.pid'\\'' EXIT; echo $$ > ${S}/${tag}-job.pid; cd ${worktree} && echo ${merge.headSha} > ${S}/${tag}-run-head && : > ${S}/${tag}-pf.log && : > ${S}/${tag}-br.log && : > ${S}/${tag}-install.log && ( pnpm install --frozen-lockfile > ${S}/${tag}-install.log 2>&1 && node scripts/preflight.mjs > ${S}/${tag}-pf.log 2>&1; echo "PREFLIGHT_EXIT $? $(git rev-parse HEAD)" >> ${S}/${tag}-pf.log; pnpm run verify:breadth > ${S}/${tag}-br.log 2>&1; echo "BREADTH_EXIT $? $(git rev-parse HEAD)" >> ${S}/${tag}-br.log )' > /dev/null 2>&1 < /dev/null & disown; sleep 2; if [ -s ${S}/${tag}-job.pid ]; then echo "JOB_STARTED $(cat ${S}/${tag}-job.pid)"; else echo JOB_NOT_STARTED; fi\`
+   Finding 11 (review sweep on #1133; superseded by Codex round 3 on #1133, thread 4112838149, 2026-09-26): the process-name probe this used to be (\`pgrep -af '^node scripts/preflight.mjs|^pnpm install'\`) never matches on a real run — under this toolchain \`pnpm\` runs as a Node shebang script, so \`pnpm install ...\` shows up in \`ps\` as \`node /opt/node22/bin/pnpm install ...\`, not as an argv[0] the anchored pattern recognises (measured: a live \`pnpm exec sleep 3\` shows the same shape and the anchored probe printed nothing). The job now proves its own start with a marker it writes ITSELF instead: \`${S}/${tag}-job.pid\` is removed before the job is launched, so a stale marker left by an earlier run under the same tag can never be mistaken for this run's own start, and the job's SECOND statement — right after the \`trap\` that releases \`${S}/chain.lock\` on EXIT — writes its own pid to that file. A job cannot reach its second statement without its first having already run, so a job that wrote the marker has ALSO already installed the lock-releasing trap. Before Codex round 4 on #1133 (P2, thread 4113330657) that trap released only \`chain.lock\`, so a non-empty marker was read as "this job owns the lock, forever" — but nothing ever removed a FINISHED job's marker, so a run that had already ended left the failure path below holding a lock that owned no job at all. The trap now also removes its own marker on EXIT (and, symmetrically, a fresh lock acquisition clears any marker left by a run that ended before this one existed — see the lock-acquisition comment above), so a non-empty marker means only "still alive, or SIGKILLed before its trap could run", never "finished a while ago" — the failure path below tells those two apart with \`kill -0\` on the marker's pid's PROCESS GROUP (\`kill -0 -- -PID\`; review fixes on the round-4 changes, #1133 — a lone \`kill -0\` on the marker's own pid stops proving anything once a SIGKILLed top shell is reaped, even while the chain it started is still running in the same group), never by the marker's mere existence and never by the top shell's pid alone — so a job that is merely slow to reach PREFLIGHT_EXIT/BREADTH_EXIT, or one whose top shell died but whose chain is still running, is kept, and only once no member of the job's process group is alive does the failure path release the lock. The marker is written BEFORE the job's \`cd ${worktree}\`, so \`JOB_STARTED\` proves only that the trap is installed, never that \`cd\` (or anything after it) went on to succeed — which is exactly why the old pf/br/install/run-head files from any previous run under this tag are cleared in the SAME breath as the marker, before this job is even launched: a \`cd\` failure now leaves nothing behind for a later stage to misread as this run's result, instead of a previous run's stale sentinel lines.
+   The last line must read \`JOB_STARTED <pid>\` — set jobStarted=true only then. A \`JOB_NOT_STARTED\` line means the marker was empty 2 seconds in: the job either never reached its second statement, or it already exited, because its EXIT trap removes the marker (e.g. \`cd\` failed or install failed instantly). Report jobStarted=false as a failure with \`tail -5\` of ${S}/${tag}-install.log and ${S}/${tag}-pf.log so the two cases can be told apart. Do NOT proceed to step 4.
 4. Wait on the SENTINEL FILE, never on a process: foreground \`timeout 540 bash -c 'until grep -q BREADTH_EXIT ${S}/${tag}-br.log 2>/dev/null; do sleep 30; done'; grep -h "_EXIT" ${S}/${tag}-pf.log ${S}/${tag}-br.log\` and repeat that same call (each with the 600000ms Bash timeout above) until it prints both a PREFLIGHT_EXIT and a BREADTH_EXIT line (up to 6 repeats; each repeat is a fresh call, never a longer one). If after 6 repeats BREADTH_EXIT is still missing, return a failure with the last 40 lines of ${tag}-pf.log.
-5. Read the last line of each log file EXACTLY as written (do not paraphrase, do not summarize the exit code — quote the literal text) into preflightLastLine / breadthLastLine, and their exit codes into preflightExit / breadthExit. Re-run \`git rev-parse HEAD\` into headSha. Do NOT push, do NOT run any other git command, do NOT fetch, do NOT edit files — that decision and that command belong to a later stage.
+5. Read the last line of each log file EXACTLY as written (do not paraphrase, do not summarize the exit code — quote the literal text) into preflightLastLine / breadthLastLine, and their exit codes into preflightExit / breadthExit. If preflightExit is non-zero, also run \`tail -5 ${S}/${tag}-install.log\` and include it verbatim in failures (a non-zero PREFLIGHT_EXIT can be the chained install failing before preflight ever ran, per step 3 above, and pf.log alone will not say so). Re-run \`git rev-parse HEAD\` into headSha. Do NOT push, do NOT run any other git command, do NOT fetch, do NOT edit files — that decision and that command belong to a later stage.
 ${RULES}`, { label: `chain-run:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: CHAIN_RUN_SCHEMA })
 
 if (!chainRun || !chainRun.jobStarted) {
@@ -210,7 +307,45 @@ if (!chainRun || !chainRun.jobStarted) {
   // (chainRun is null, or it reported jobStarted=false), nothing has released it, and the
   // 40-minute stale-clear is the only other path — dispatch a narrow one-command release
   // instead of leaving every later landing on this host to wait that out.
-  await agent(`Run EXACTLY this one command and report its output; do nothing else: \`LOCK=${S}/chain.lock; if [ -f "$LOCK" ] && [ "$(awk '{print $1}' "$LOCK")" = "${tag}" ]; then rm -f "$LOCK"; echo RELEASED; else echo NOT_MINE_OR_ABSENT; fi\`. released=true only if the output is RELEASED.`, { label: `release:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: RELEASE_SCHEMA })
+  // Review sweep on #1133: `chainRun.jobStarted` is the WORKER's self-report, not a fact —
+  // a chain-run worker that dies after step 3 launches the job (chainRun === null: a usage
+  // limit, a schema failure) or that wrongly reports jobStarted=false still lands here, and
+  // the old command below released the lock purely on the tag matching, with no check for
+  // whether the job it launched is actually running.
+  // Codex round 4 on #1133 (P2, thread 4113330657, 2026-09-26): a non-empty marker used to
+  // mean "keep the lock, forever" — but nothing removed the marker when a job exited, so a
+  // PREVIOUS completed run's leftover `${tag}-job.pid` made this branch print
+  // JOB_STARTED_KEEP for a lock that owned no job at all, stranding every later landing
+  // under this tag for the full 40-minute stale-clear. Two changes (both above) make the
+  // marker trustworthy again: the job's own trap removes its marker on EXIT (a finished run
+  // leaves none), and the lock stage's `try()` also clears any leftover marker the instant
+  // it freshly acquires the lock (so even a marker a trap could not remove — SIGKILL skips
+  // traps entirely — can never survive into a NEW lock's lifetime). What CAN still be true
+  // here is a marker from THIS SAME lock's own job after a SIGKILL. Review fixes on the
+  // round-4 changes (#1133): a SIGKILL of just the job's TOP shell (`kill -9
+  // $(cat ${tag}-job.pid)`) does not touch the chain it started — the `( ... )` subshell
+  // running install/preflight/breadth is a SEPARATE process, and it survives — and both
+  // share one process group, because `setsid` (step 3 above) makes the top shell the
+  // group's session leader, so its pgid equals its own pid equals the marker's contents
+  // (measured live: pgid == marker for a stand-in job). A `kill -0` on the marker's pid
+  // ALONE therefore proves nothing once that pid is reaped: it reads "nothing is running"
+  // the instant the LEADER is gone, even while the install/preflight/breadth chain is still
+  // running under the very same group — reproduced live: SIGKILL the top shell only, wait
+  // for it to be reaped, and the OLD single-pid check already read "dead" while `ps` still
+  // showed the subshell and its child alive in that pgid — moving this case from fail-closed
+  // (keep the lock) to fail-open (release a lock a live chain still needs). The check below
+  // tests the marker's pid as a PROCESS GROUP instead (`kill -0 -- -PID`: POSIX sends signal
+  // 0 to every process whose pgid is PID and succeeds if any one of them still exists) — not
+  // merely "does a marker file exist", and not merely "is the marker's own pid alive": ANY
+  // member of the job's process group still alive means a real job still owns the lock (keep
+  // it); no member alive, or no marker at all, means nothing here still needs it (release it,
+  // subject to the same tag-matched guard as before). All shapes were run with a stand-in
+  // job in scratch before landing: a finished run's leftover marker + a freshly acquired
+  // lock + the worker dying before step 3 -> RELEASED; a live job -> JOB_STARTED_KEEP; the
+  // job's top shell alone SIGKILLed with its subshell/child still running in the same group
+  // -> JOB_STARTED_KEEP (this is the fix — the OLD single-pid check gave RELEASED here); the
+  // whole process group SIGKILLed (`kill -9 -- -PID`) -> RELEASED.
+  await agent(`Run EXACTLY this one command and report its output; do nothing else: \`LOCK=${S}/chain.lock; M=${S}/${tag}-job.pid; if [ -s "$M" ] && kill -0 -- -"$(cat "$M")" 2>/dev/null; then echo JOB_STARTED_KEEP; elif [ -f "$LOCK" ] && [ "$(awk '{print $1}' "$LOCK")" = "${tag}" ]; then rm -f "$LOCK"; echo RELEASED; else echo NOT_MINE_OR_ABSENT; fi\`. released=true only if the output is RELEASED.`, { label: `release:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: RELEASE_SCHEMA })
   return { pre, merge, chainRun }
 }
 log(`chain ran: head ${chainRun.headSha}, preflight ${chainRun.preflightExit}, breadth ${chainRun.breadthExit}`)
@@ -243,10 +378,10 @@ if (!gate.ok) {
   return { pre, merge, chainRun, gate }
 }
 
-const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it, and you do not re-derive it either: the ONLY git command you run is the one shell line below, which re-verifies the sentinel logs and the worktree's own HEAD/branch ref DETERMINISTICALLY (never from your own report of what a file says) before the push runs at all. Worktree ${worktree}, branch ${branch}.
-1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output). Every step is chained with \`&&\`, never \`;\`, and the previous run's output file is removed FIRST, so a failed \`cd\`, a verifier that never runs, or a stale leftover file from an earlier run under the same tag can never be mistaken for a fresh PASS:
-   \`cd ${worktree} && rm -f ${S}/${tag}-verify.out && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} | tee ${S}/${tag}-verify.out && grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} " ${S}/${tag}-verify.out && git push -u origin HEAD:refs/heads/${branch}\`
-   If the verify half prints "REFUSED", or prints nothing, or its PASS line does not literally match (wrong head, wrong tag), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. A failed \`cd\` into the worktree, or the \`rm -f\`/verifier/\`tee\` step failing outright, stops the line at that \`&&\` before anything downstream (including the push) ever runs — there is no \`;\` anywhere in this line for a failure to fall through. Never run this with any other git command chained on, never pass --force.
+const push = await agent(`You are the Haiku push worker. You have been dispatched ONLY because the script already verified a green preflight+breadth sentinel on head ${merge.headSha} — you do not re-decide that, you execute it, and you do not re-derive it either: the ONLY git command you run is the one shell line below, which re-verifies the sentinel logs, the worktree's own HEAD/branch ref, AND the owner-decision class DETERMINISTICALLY (never from your own report of what a file says) before the push runs at all. Worktree ${worktree}, branch ${branch}, resolved class ${kl.klass}.
+1. Run exactly this one command, in the worktree, in the foreground. The verifier is invoked from ${worktree} (the copy preflight itself just ran, never from ${REPO} — a shared checkout that may sit on an older commit lacking --verify would then no-op and print nothing, and \`&&\` would fall straight through to the push with no gate at all), and the push is gated on the module's own literal PASS line via grep, not merely on its exit code (an older module ignoring an unknown flag also exits 0 with empty output). \`--klass ${kl.klass}\` makes \`--verify\` re-run the classifier itself over this worktree's own diff and refuse if it disagrees with ${kl.klass} — closing the gap where a fabricated but validly-shaped klassLine from an earlier stage could steer the push (Codex #1133 P1); you do not compute this value, you pass through the one given to you. Every step is chained with \`&&\`, never \`;\`, and the previous run's output file is removed FIRST, so a failed \`cd\`, a verifier that never runs, or a stale leftover file from an earlier run under the same tag can never be mistaken for a fresh PASS:
+   \`cd ${worktree} && rm -f ${S}/${tag}-verify.out && node ${worktree}/scripts/lib/land-branch-gate.mjs --verify --scratch ${S} --tag ${tag} --worktree ${worktree} --branch ${branch} --head ${merge.headSha} --klass ${kl.klass} | tee ${S}/${tag}-verify.out && grep -q "^land-branch-gate --verify PASS: head ${merge.headSha} klass ${kl.klass} " ${S}/${tag}-verify.out && git push -u origin HEAD:refs/heads/${branch}\`
+   If the verify half prints "REFUSED" (including a derived-class mismatch), or prints nothing, or its PASS line does not literally match (wrong head, wrong tag, wrong klass), the \`grep -q\` fails and the \`&&\` never reaches the push — report the printed reasons (or "no PASS line printed") as a failure and pushed=false. A failed \`cd\` into the worktree, or the \`rm -f\`/verifier/\`tee\` step failing outright, stops the line at that \`&&\` before anything downstream (including the push) ever runs — there is no \`;\` anywhere in this line for a failure to fall through. Never run this with any other git command chained on, never pass --force.
 2. Only if the command above succeeded: \`git ls-remote origin refs/heads/${branch}\` → remoteSha.
 Never run any other git command; never fetch; never edit files.
 ${RULES}`, { label: `push:${tag}`, phase: 'Chain', model: 'haiku', effort: 'low', schema: PUSH_SCHEMA })
@@ -261,7 +396,7 @@ Write the PR body in this repository's house template, every figure from output 
 ## Validation (quote: the preflight PASSED line + "PREFLIGHT_EXIT ${chainRun.preflightExit}", the breadth PASSED line + "BREADTH_EXIT ${chainRun.breadthExit}", both on head ${push.remoteSha}; then each gate the branch adds or changes, run it and quote its last line with EXIT code; if a self-test exists run it and quote N/N)
 ## Public-safety note (public-safe content only; no secrets, tenant IDs, customer data, PHI/PII, live API calls; no production-readiness, compliance, partnership or replacement claims; nothing in lib/ or /v1 changes - verify the last with the diff stat and say so only if true)
 ## Remaining risks (honest, 2-4 bullets)
-## Owner decision needed (${klass === 'SAFETY_MACHINERY' ? 'write: "SAFETY_MACHINERY (<paths>): merged under DR-037 with check run <id recorded before merge>" - leave "<id recorded before merge>" literally; the coordinator fills it' : klass === 'DECISION_PATH' ? 'write: "Yes - DECISION_PATH by scripts/check-owner-gated-surfaces.mjs (its blanket artifacts/api-server rule matches <paths>): the OWNER merges this PR or vetoes it by not merging; the cloud lane will not self-merge it, however green the gauntlet is." and say in one sentence what the change touches (test harness only, no route or verdict logic) so the owner can judge it from the phone' : 'write what the owner must decide, or "None - docs/record only, landed under DR-037 with check run <id recorded before merge>"'})
+## Owner decision needed (${ownerDecisionText(kl.klass)})
 Notes from the build: ${bodyNotes || '(none)'}
 End the body with exactly:
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
@@ -286,4 +421,4 @@ BODY-START
 ${cleanBody}
 BODY-END`, { label: `open:${tag}`, phase: 'PR', model: 'haiku', effort: 'low', schema: PR_SCHEMA })
 
-return { pre, merge, chainRun, push, pr, body: cleanBody }
+return { pre, merge, chainRun, push, pr, body: cleanBody, klass: kl }

@@ -99,6 +99,19 @@ function auditResults(outFile, label) {
       requests += 1;
       const name = res.suitename ?? res.test?.filename ?? res.request?.url ?? "unnamed";
       if (res.error) problems.push(`${label}: ${name} — transport error: ${res.error}`);
+      // Defence in depth (review sweep on #1133, round 3): a request skipped by a
+      // pre-request script (bru.runner.skipRequest()) carries error: null and an
+      // empty assertionResults, so none of the checks below see it — it would
+      // otherwise count toward `requests` without ever being asserted on. Verified
+      // live against real bru 4.0.0 output: a skipped result's top-level `status` is
+      // the STRING "skipped" (not the numeric res.response.status the check below
+      // reads) and it also carries `skipped: true`. The primary fix is gating
+      // collection.bru/bruno.json/environments/ in scripts/check-owner-gated-
+      // surfaces.mjs so this path can't be edited autonomously in the first place;
+      // this is the second layer, in case a request is ever skipped some other way.
+      if (res.skipped || res.status === "skipped") {
+        problems.push(`${label}: ${name} — skipped, not executed (a skipped request asserts nothing)`);
+      }
       const status = res.response?.status;
       if (typeof status === "number" && status >= 500) {
         problems.push(`${label}: ${name} — server error ${status}`);

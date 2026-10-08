@@ -66,11 +66,11 @@ The last two are gauges over state the core HOLDS at scrape time
 `signalInventory()`), not counters bumped beside a route, so they recover when
 a re-sync does. How they keep the four rules:
 
-- **Rule 1.** `kind` is `ConnectorKind` (3 values), `status` is
-  `ConnectorStatus` (3), `freshness` is `Freshness` (5), each plus a literal
-  `unknown`. The vocabularies are typed maps in `metrics.ts`, so a new union
-  member that the exposition does not list is a typecheck error. 16 + 5
-  series in total.
+- **Rule 1.** `kind` is `ConnectorKind` (3 values) plus a literal `unknown`,
+  `status` is `ConnectorStatus` (3) plus a literal `unknown`, and `freshness`
+  is `Freshness` (5), whose own `unknown` member is the fold. The
+  vocabularies are typed maps in `metrics.ts`, so a new union member that the
+  exposition does not list is a typecheck error. 16 + 5 series in total.
 - **Rule 2.** No label names a customer. The counts aggregate over every
   customer this process holds; the per-customer view stays with the audit
   ledger. The exposition is also asserted (`api.test.mjs`) to contain no
@@ -84,6 +84,14 @@ a re-sync does. How they keep the four rules:
   the scrape still answers 200 with `kind="unknown",status="unknown"` (or
   `freshness="unknown"`) at 1 and every affirmative series at 0: a failed
   scrape would hide the outage the metric exists to show.
-  `proof:observability` pins these cases in process and plants two mutants
-  (fold `unknown` into the affirmative value; skip the zero-fill), each of
-  which turns it red.
+  `proof:observability` pins these cases in process: an out-of-vocabulary
+  status, kind and freshness; illegible counts (NaN, negative, Infinity, a
+  string), which must reach no affirmative series and print no NaN, Infinity
+  or negative; an empty inventory; a throwing read. It plants four mutants
+  (fold `unknown` into the affirmative value; skip the zero-fill; stop
+  folding an out-of-vocabulary kind; accept an illegible count as given),
+  each of which turns it red. The `/metrics` handler's call into the core is
+  pinned by `api.test.mjs`, not by the proof.
+- **What freshness means here.** `freshness` is the value stamped on each
+  signal when it was ingested, so the gauge reports what the last sync saw,
+  not a re-evaluation against the clock at scrape time.

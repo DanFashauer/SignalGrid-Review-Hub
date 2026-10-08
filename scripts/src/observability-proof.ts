@@ -87,6 +87,13 @@ const everySeries = (t: string) =>
 const noAffirmative = (t: string) =>
   KINDS.every((k) => conn(t, k, "healthy") === 0) && freshSeries(t, "fresh") === 0;
 
+/** Every sample on the two gauges is a finite, non-negative number: no NaN,
+ *  Infinity or negative value may reach the exposition, whatever the core hands over. */
+const legibleSamples = (t: string) =>
+  t.split("\n")
+    .filter((l) => /^signalgrid_(connectors|evidence_signals)\{/.test(l))
+    .every((l) => { const v = Number(l.slice(l.lastIndexOf(" ") + 1)); return Number.isFinite(v) && v >= 0; });
+
 /** The in-process cases. Returns the names of the cases that FAILED. */
 function inventoryCases(m: MetricsModule): string[] {
   const failed: string[] = [];
@@ -100,6 +107,35 @@ function inventoryCases(m: MetricsModule): string[] {
   want("a status outside the vocabulary lands on NO healthy series", noAffirmative(t));
   want("a freshness outside the vocabulary renders as freshness=\"unknown\" 3", freshSeries(t, "unknown") === 3);
   want("an out-of-vocabulary row still leaves every series present", everySeries(t));
+
+  // An out-of-vocabulary KIND (with a legible status) must still be counted, under
+  // kind="unknown", rather than vanish from the exposition.
+  m.observeConnectors([{ kind: "acme-badge", status: "degraded", count: 4 }]);
+  t = m.renderMetrics();
+  want("a kind outside the vocabulary renders as kind=\"unknown\" under its status",
+    conn(t, "unknown", "degraded") === 4);
+  want("a kind outside the vocabulary is not dropped (the exported total is still 4)",
+    KINDS.reduce((n, k) => n + STATUSES.reduce((a, st) => a + (conn(t, k, st) ?? 0), 0), 0) === 4);
+
+  // An ILLEGIBLE count (NaN, negative, Infinity, not a number) is one illegible item:
+  // it folds into unknown/unknown as 1, never onto the row's own (affirmative) labels,
+  // and never prints as NaN, Infinity or a negative.
+  m.observeConnectors([
+    { kind: "microsoft-entra-intune", status: "healthy", count: Number.NaN },
+    { kind: "wfm-shift", status: "healthy", count: -3 },
+    { kind: "dockbridge-custody", status: "healthy", count: Number.POSITIVE_INFINITY },
+    { kind: "wfm-shift", status: "healthy", count: "7" },
+  ]);
+  m.observeEvidence([
+    { freshness: "fresh", count: Number.NaN },
+    { freshness: "fresh", count: -1 },
+  ]);
+  t = m.renderMetrics();
+  want("illegible connector counts fold to kind=\"unknown\",status=\"unknown\" as one item each",
+    conn(t, "unknown", "unknown") === 4);
+  want("illegible counts land on NO healthy or fresh series", noAffirmative(t));
+  want("illegible evidence counts fold to freshness=\"unknown\" as one item each", freshSeries(t, "unknown") === 2);
+  want("no NaN, Infinity or negative value reaches the exposition", legibleSamples(t));
 
   m.observeConnectors([]);
   m.observeEvidence([]);
@@ -130,6 +166,16 @@ const MUTANTS: Array<{ name: string; from: string; to: string }> = [
     name: "skip the zero-fill",
     from: "connectorsGauge.set(acc.get(key({ kind, status })) ?? 0, { kind, status });",
     to: "{ const v = acc.get(key({ kind, status })) ?? 0; if (v > 0) connectorsGauge.set(v, { kind, status }); }",
+  },
+  {
+    name: "stop folding an out-of-vocabulary kind",
+    from: "kind: inVocabulary(CONNECTOR_KIND_LABELS, row.kind)",
+    to: "kind: String(row.kind)",
+  },
+  {
+    name: "accept an illegible count as given",
+    from: "typeof count === \"number\" && Number.isFinite(count) && count >= 0 ? count : null;",
+    to: "typeof count === \"number\" ? count : null;",
   },
 ];
 

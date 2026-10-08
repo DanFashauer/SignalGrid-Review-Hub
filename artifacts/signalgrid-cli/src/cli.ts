@@ -135,10 +135,12 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   const { body: answer } = await call(cfg, "POST", "/v1/decisions/evaluate", body, key);
   const d = answer["decision"] as Record<string, unknown> | undefined;
   const outcome = d?.["outcome"];
-  if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || !isSafeId(d["decisionId"])) {
+  // An EvaluateResult always names its evidence snapshot; a verdict with no evidence
+  // binding is not a decision the CLI reports, however well-formed the outcome (round 6).
+  if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || !isSafeId(d["decisionId"]) || !isSafeId(d["evidenceSnapshotId"])) {
     throw new CliError(
       "malformed_answer",
-      "POST /v1/decisions/evaluate answered without a recognisable outcome and decision id; nothing is reported as decided.",
+      "POST /v1/decisions/evaluate answered without a recognisable outcome, decision id and evidence snapshot id; nothing is reported as decided.",
       EXIT.refused,
     );
   }
@@ -247,18 +249,18 @@ async function signals(cfg: Config, id: string): Promise<Out> {
 function chainVerdict(chain: Record<string, unknown>): { valid: boolean; label: string; length: unknown } {
   const hasValid = typeof chain["valid"] === "boolean";
   const hasOk = typeof chain["ok"] === "boolean";
+  if (!hasValid && !hasOk) return { valid: false, label: "UNKNOWN (no verdict field)", length: undefined };
   if (hasValid && hasOk && chain["valid"] !== chain["ok"]) return { valid: false, label: "CONTRADICTORY (valid and ok disagree)", length: chain["length"] ?? chain["count"] };
-  if (hasValid) {
-    return chain["valid"] === true
-      ? { valid: true, label: "valid", length: chain["length"] }
-      : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
-  }
+  // Each shape's own rule applies whenever its field is present — a durable verdict
+  // carrying a compatibility `valid` field is still capped by `truncated` (round 6).
   if (hasOk) {
     if (chain["ok"] !== true) return { valid: false, label: `BROKEN at index ${str(chain["brokenAtIndex"])}`, length: chain["count"] };
     if (chain["truncated"] !== false) return { valid: false, label: "INCONCLUSIVE (the server's verifier stopped at its read cap)", length: chain["count"] };
-    return { valid: true, label: "valid", length: chain["count"] };
+    return { valid: true, label: "valid", length: chain["count"] ?? chain["length"] };
   }
-  return { valid: false, label: "UNKNOWN (no verdict field)", length: undefined };
+  return chain["valid"] === true
+    ? { valid: true, label: "valid", length: chain["length"] }
+    : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
 }
 
 /** One audit event as a table row, from either record shape (core AuditEvent or lib/audit AuditRecord). */
@@ -479,9 +481,13 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     json = v.json === true;
     const [command, ...rest] = positionals;
     if (v.help || !command) return { stdout: `${help()}\n`, stderr: "", exit: command || v.help ? EXIT.ok : EXIT.usage };
-    if (command === "skill") return { stdout: renderSkillMd(), stderr: "", exit: EXIT.ok };
-    if (!(command in COMMANDS)) throw new CliError("usage", `unknown command "${command}". Run signalgrid --help.`, EXIT.usage);
+    // An own-property check: `in` would accept inherited keys such as "constructor".
+    if (!Object.hasOwn(COMMANDS, command)) throw new CliError("usage", `unknown command "${command}". Run signalgrid --help.`, EXIT.usage);
     checkArity(command, rest);
+    if (command === "skill") {
+      const md = renderSkillMd();
+      return { stdout: json ? `${JSON.stringify({ ok: true, command: "skill", skillMd: md }, null, 2)}\n` : md, stderr: "", exit: EXIT.ok };
+    }
     const getCfg = () => readConfig(env);
     let out: Out;
     switch (command) {

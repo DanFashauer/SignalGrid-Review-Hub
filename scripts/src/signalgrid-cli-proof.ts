@@ -332,11 +332,12 @@ async function main(): Promise<void> {
 
     // A liar that answers every non-context route with `body`; each case is one lie the
     // CLI must refuse to report as a clean answer (review round 1 on PR #1321).
-    const viaLiar = async (body: unknown, args: string[]) => {
+    const viaLiarEnv = async (body: unknown, args: string[], extra: Record<string, string>) => {
       const liar = await startLiar(body);
       liars.push(liar.server);
-      return cli(args, { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${liar.port}/api` });
+      return cli(args, { ...env, ...extra, SIGNALGRID_BASE_URL: `http://127.0.0.1:${liar.port}/api` });
     };
+    const viaLiar = (body: unknown, args: string[]) => viaLiarEnv(body, args, {});
     const oov = await viaLiar(
       { decision: { id: "dec_x", outcome: "probably_fine" }, evidence: { signalsUsed: [] }, verified: true },
       ["explain", "dec_x"],
@@ -418,6 +419,12 @@ async function main(): Promise<void> {
     check("signals with no `verified` field exits 1", noVerifiedSignals.code === 1);
     const noValid = await viaLiar({ events: [], chain: { length: 0 } }, ["audit"]);
     check("audit with no `chain.valid` field exits 1", noValid.code === 1);
+
+    // decide refuses a verdict with no evidence binding, and writes no session for it (round 6).
+    const unboundSession = join(sessionDir, "unbound.json");
+    const unbound = await viaLiarEnv({ decision: { decisionId: "dec_x", outcome: "allow" } }, [...decideArgs, "--allow-write"], { SIGNALGRID_CLI_SESSION: unboundSession });
+    check("decide refuses an allow that names no evidence snapshot (exit 1, no outcome, no session)",
+      unbound.code === 1 && !/^outcome/m.test(unbound.stdout) && !existsSync(unboundSession));
 
     // decide refuses a decision id the server should never mint.
     const badId = await viaLiar({ decision: { decisionId: "../x", outcome: "allow" } }, [...decideArgs, "--allow-write"]);
@@ -504,7 +511,7 @@ async function main(): Promise<void> {
         return;
       }
       writeFileSync(`${s10}.lock`, "");
-      res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow" } }));
+      res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow", evidenceSnapshotId: "ev_raced" } }));
     });
     const racerPort = await listen(racer);
     liars.push(racer);
@@ -551,6 +558,8 @@ async function main(): Promise<void> {
     check("audit on a durable verdict that stopped at its read cap exits 1 (inconclusive, not valid)", durCap.code === 1 && /INCONCLUSIVE/.test(durCap.stdout));
     const durBroken = await viaLiar({ events: [durableRec], chain: { ok: false, count: 1, truncated: false, brokenAtIndex: 0 }, source: "durable" }, ["audit"]);
     check("audit on a broken durable ledger exits 1 and names the break", durBroken.code === 1 && /BROKEN at index 0/.test(durBroken.stdout));
+    const dualCapped = await viaLiar({ events: [], chain: { valid: true, ok: true, truncated: true, count: 10000 }, source: "durable" }, ["audit"]);
+    check("audit on agreeing valid/ok fields whose verifier stopped at its cap exits 1 (truncation still applies)", dualCapped.code === 1 && /INCONCLUSIVE/.test(dualCapped.stdout));
     const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false } }, ["audit"]);
     check("audit on two verdict fields that disagree exits 1", contra.code === 1);
 
@@ -647,6 +656,13 @@ async function main(): Promise<void> {
       check(`${label} exits 2 and sends nothing`, r.code === 2 && /unexpected operand/.test(r.stderr) && seen.length === 0);
     }
 
+    // An inherited object key is not a command (round 6).
+    for (const name of ["constructor", "toString", "__proto__"]) {
+      seen.length = 0;
+      const r = await cli([name], env);
+      check(`"${name}" is an unknown command (exit 2, nothing sent)`, r.code === 2 && /unknown command/.test(r.stderr) && seen.length === 0);
+    }
+
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});
     check("--help lists all five subcommands", help.code === 0 && ["decide", "explain", "signals", "audit", "connectors"].every((c) => help.stdout.includes(`signalgrid ${c}`)));
@@ -675,6 +691,10 @@ async function main(): Promise<void> {
     check("…and with the habitual `--` separator, --json is still honoured", pubDash.code === 0 && parse(pubDash.stdout)?.["ok"] === true);
     const pubSkill = await viaPnpm(["skill"]);
     check("the documented run line prints the SKILL.md byte-for-byte", pubSkill.code === 0 && pubSkill.stdout === committed);
+    const skillJson = await cli(["skill", "--json"], {});
+    check("skill --json prints one JSON object carrying the SKILL.md", skillJson.code === 0 && parse(skillJson.stdout)?.["skillMd"] === committed);
+    const skillTypo = await cli(["skill", "typo"], {});
+    check("skill with a stray operand exits 2", skillTypo.code === 2);
     // scripts/check-skill-plane-conformance.mjs walks .claude/skills/*/SKILL.md one level deep, so
     // this nested skill is outside its walk; its three rules are held here instead, not waived.
     const fm = /^---\n([\s\S]*?)\n---\n/.exec(committed)?.[1] ?? "";

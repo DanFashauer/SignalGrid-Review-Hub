@@ -7,6 +7,9 @@
   "need": "One click: merge PR #1431 when its CI is green (SAFETY_MACHINERY, test + proof harness only, no decision path). After that the lane re-runs the #1421 chain and the queued ships itself. Alternative that needs no one: the next container restart empties the leak for several hours.",
   "whoCanUnblock": "owner",
   "domain": "cloud-lane-gates",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.261Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1421 merged 2026-10-03T01:17:46Z at head 15776edf43c206f2f1e9ddfe7953d680e8878788 after the 2026-10-02T23:59Z container restart emptied the harness socket leak. Measured 2026-10-08T10:22Z: 17 ESTABLISHED sockets on the box. #1431 (the probe fix) remains open on the owner's queue as the durable fix."
 }

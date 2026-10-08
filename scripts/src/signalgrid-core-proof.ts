@@ -1945,6 +1945,28 @@ for (const [fromRow, fromSignal, want, why] of [
 
 
 
+// ── MEMORY BOUND (F6e): step-up answers are evicted WITH their decision ─────────
+// A read-side filter alone would pass the first check and leave the map growing, so
+// the second check counts the collection itself.
+{
+  const answered = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 1 });
+  const answeredStore = (answered as unknown as { store: MemoryStore }).store;
+  const stepUpIds: string[] = [];
+  for (let i = 0; i < 3; i += 1) {
+    const d = answered.evaluate(T.operator, { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" });
+    if (d.outcome === "step_up") {
+      answered.answerStepUp(T.operator, d.decisionId, { credentialReference: `cred_${i}` });
+      stepUpIds.push(d.decisionId);
+    }
+  }
+  check("step-up eviction: three step_up decisions were each answered (floor, so the checks below measure real rows)", stepUpIds.length === 3);
+  check("step-up eviction: an answer is unreadable once its decision has been evicted",
+    answered.getStepUpAnswer(T.operator, stepUpIds[0]) === undefined && answered.getStepUpAnswer(T.operator, stepUpIds[1]) === undefined);
+  check("step-up eviction: the newest decision keeps its answer", answered.getStepUpAnswer(T.operator, stepUpIds[2])?.decisionId === stepUpIds[2]);
+  check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredStore.stepUpAnswerCount()})`,
+    answeredStore.stepUpAnswerCount() === 1);
+}
+
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────
 // A bound of 3 makes the eviction observable in a handful of evaluates. FIFO by
 // insertion: after five evaluates only the newest three remain, the oldest two are

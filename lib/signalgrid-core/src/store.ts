@@ -62,6 +62,8 @@ export class MemoryStore {
   // constant than the memory it holds:
   //
   //   decisions + snapshots  1x  one snapshot per decision
+  //   stepUpAnswers          1x  at most one per decision; deleted in putDecision's
+  //                              evict callback together with the decision
   //   auditEvents            2x  decision.evaluated + evidence.snapshot.created
   //                              (lib/signalgrid-core/src/decision.ts:157,166)
   //   webhookDeliveries      2x  one per ACTIVE subscribed endpoint — a fan-out
@@ -391,6 +393,8 @@ export class MemoryStore {
       const evicted = this.decisions.get(evictId);
       this.decisions.delete(evictId);
       if (evicted) this.snapshots.delete(evicted.evidenceSnapshotId);
+      // The answer is keyed by its decision and bounded by it: dropped here, not filtered on read.
+      this.stepUpAnswers.delete(`${evicted?.tenantId ?? decision.tenantId}::${evictId}`);
       // Counted so /v1/metrics can say its numbers cover a WINDOW, not the whole history.
       this.decisionsEvicted.set(decision.tenantId, (this.decisionsEvicted.get(decision.tenantId) ?? 0) + 1);
     });
@@ -485,11 +489,18 @@ export class MemoryStore {
 
   // ── Step-up answers ───────────────────────────────────────────────────────
   //
-  // Bounded by the decisions that raised them (one per decision, evicted with the
-  // decision order), so this collection can never outgrow the one knob.
+  // At most one per decision, and deleted by putDecision's evict callback when its
+  // decision leaves the FIFO window, so this collection can never outgrow the one
+  // knob. Callers must only put an answer for a retained decision (answerStepUp
+  // 404s first); an answer put for an absent decision would never be evicted.
 
   putStepUpAnswer(answer: StepUpAnswer): void {
     this.stepUpAnswers.set(`${answer.tenantId}::${answer.decisionId}`, answer);
+  }
+
+  /** Rows held across all tenants — exists so a proof can measure the collection, not just reads. */
+  stepUpAnswerCount(): number {
+    return this.stepUpAnswers.size;
   }
 
   getStepUpAnswer(tenantId: string, decisionId: string): StepUpAnswer | undefined {

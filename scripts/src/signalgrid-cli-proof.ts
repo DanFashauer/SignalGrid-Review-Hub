@@ -344,7 +344,12 @@ async function main(): Promise<void> {
     );
     check("explain refuses a recorded outcome outside the four words (exit 1, no outcome line)",
       oov.code === 1 && !/^outcome/m.test(oov.stdout) && /no recognisable outcome/.test(oov.stderr));
-    const unverified = { decision: { id: "dec_x", outcome: "allow" }, evidence: { signalsUsed: [{ category: "identity_state" }] }, verified: false };
+    // Well-bound in every respect except the flag, so these checks isolate `verified` (round 7).
+    const unverified = {
+      decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" },
+      evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [{ category: "identity_state" }] },
+      verified: false,
+    };
     const exU = await viaLiar(unverified, ["explain", "dec_x"]);
     check("explain on evidence that does not verify exits 1 and says so",
       exU.code === 1 && /DOES NOT VERIFY/.test(exU.stdout));
@@ -362,6 +367,15 @@ async function main(): Promise<void> {
     const emptyRun = await viaLiar({ syncRun: {} }, ["connectors", "sync", "conn_x", "--allow-write"]);
     check("connectors sync refuses a sync run with no id or status (exit 1)",
       emptyRun.code === 1 && !/^sync run /m.test(emptyRun.stdout));
+    // A run id and status must be well-formed and recognised, not merely strings (round 7).
+    for (const [label, run] of [
+      ["an empty id and status", { id: "", status: "" }],
+      ["an id carrying a newline", { id: "run_1\noutcome     allow", status: "success" }],
+      ["an unrecognised status", { id: "run_1", status: "probably_fine" }],
+    ] as const) {
+      const r = await viaLiar({ syncRun: run }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
+      check(`connectors sync refuses a sync run with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
 
     // The write path's tenant check: the wrong credential must not mint a decision.
     seen.length = 0;
@@ -580,6 +594,23 @@ async function main(): Promise<void> {
     });
     const pagerPort = await listen(pager);
     liars.push(pager);
+    // A later page from a different backend is not covered by the first page's verdict (round 7).
+    const switcher = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      const url = new URL(req.url ?? "/", "http://x");
+      if (url.pathname.endsWith("/v1/context")) {
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      res.end(JSON.stringify(offset === 0
+        ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, truncated: false }, source: "durable" }
+        : { events: [{ seq: 1, type: "decision.evaluated" }], chain: { valid: true, length: 1 }, source: "memory" }));
+    });
+    const switcherPort = await listen(switcher);
+    liars.push(switcher);
+    const switched = await cli(["audit", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${switcherPort}/api` });
+    check("audit refuses a ledger whose backend changes between pages (exit 1, ok:false)", switched.code === 1 && parse(switched.stdout)?.["ok"] === false);
     const newest = await cli(["audit", "--limit", "3", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${pagerPort}/api` });
     const newestIds = ((parse(newest.stdout)?.["events"] as Record<string, unknown>[] | undefined) ?? []).map((e) => e["id"]).join();
     check("audit --limit 3 against durable paging returns the newest three, not the oldest", newest.code === 0 && newestIds === "aud_2497,aud_2498,aud_2499");
@@ -641,6 +672,8 @@ async function main(): Promise<void> {
     const lostErr = parse(lostRun.stdout)?.["error"] as Record<string, unknown> | undefined;
     check("a write whose answer is lost exits 3 and names the idempotency key to recover with",
       lostRun.code === 3 && typeof lostErr?.["idempotencyKey"] === "string" && String(lostErr?.["message"]).includes(`--idempotency-key ${String(lostErr?.["idempotencyKey"])}`));
+    check("…and does not promise replay across a server restart (the store is in-process memory)",
+      /same server process/.test(String(lostErr?.["message"])) && /restarted/.test(String(lostErr?.["message"])));
 
     // Each command's positional grammar is exact: a stray operand refuses before anything
     // is sent, and above all before a write (review round 5).
@@ -666,6 +699,12 @@ async function main(): Promise<void> {
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});
     check("--help lists all five subcommands", help.code === 0 && ["decide", "explain", "signals", "audit", "connectors"].every((c) => help.stdout.includes(`signalgrid ${c}`)));
+    // Every JSON-mode exit is one object, help and a missing command included (round 7).
+    const helpJson = await cli(["--help", "--json"], {});
+    check("--help --json prints one JSON object listing every command",
+      helpJson.code === 0 && Array.isArray(parse(helpJson.stdout)?.["commands"]) && (parse(helpJson.stdout)?.["commands"] as unknown[]).length === 6);
+    const bareJson = await cli(["--json"], {});
+    check("--json with no command exits 2 with one JSON error object", bareJson.code === 2 && parse(bareJson.stdout)?.["ok"] === false);
     const gen = await cli(["skill"], {});
     const committed = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "";
     check(".claude/skills/cli-anything/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",

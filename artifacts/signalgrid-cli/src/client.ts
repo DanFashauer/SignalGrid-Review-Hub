@@ -119,7 +119,8 @@ export function idempotencyKey(given: string | undefined): string {
  * carries an Idempotency-Key (artifacts/api-server/src/middlewares/idempotency.ts).
  * When a write gets no answer, the server may still have recorded it, so the error
  * names the key: re-running the same command with `--idempotency-key <key>` inside the
- * server's replay window returns the recorded answer instead of writing again. There
+ * server's replay window returns the recorded answer instead of writing again — from the
+ * same server process only, since that store is per-process memory (review round 7). There
  * is no automatic retry — two copies in flight at once both execute (that middleware's
  * own stated scope), so a retry is the operator's deliberate act, never a reflex.
  *
@@ -135,7 +136,7 @@ export async function call(
 ): Promise<Answer> {
   if (method !== "GET" && !key) throw new CliError("unexpected", `${method} ${path} without an idempotency key; nothing was sent.`, EXIT.usage);
   const lost = key
-    ? ` The write may have been recorded: re-run the same command with --idempotency-key ${key} within 5 minutes to get its answer instead of writing again.`
+    ? ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check \`signalgrid audit\` for the write before retrying.`
     : "";
   const extra = key ? { idempotencyKey: key } : undefined;
   let res: Response;

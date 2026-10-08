@@ -23,6 +23,8 @@ import { checkSessionWritable, readSession, sessionPath, writeSession } from "./
 
 /** The four words a host app obeys (lib/signalgrid-core/src/types.ts DecisionOutcome). */
 const OUTCOMES = new Set(["allow", "step_up", "restrict", "deny"]);
+/** A sync run's recognised statuses (lib/signalgrid-core/src/types.ts SyncStatus). */
+const SYNC_STATUSES = new Set(["success", "partial", "failed"]);
 
 interface CommandSpec {
   usage: string;
@@ -303,6 +305,12 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     if (!Array.isArray(events) || !pageChain || typeof pageChain !== "object") {
       throw new CliError("malformed_answer", "GET /v1/audit carried no events list or chain verdict; nothing is reported.", EXIT.refused);
     }
+    // One verdict covers one ledger: a later page answered by a different backend (a
+    // memory instance behind the same URL) is not part of the chain the first page
+    // described, so a source change refuses rather than merging the two (review round 7).
+    if (page > 0 && body["source"] !== source) {
+      throw new CliError("malformed_answer", "GET /v1/audit changed backend between pages; no single chain verdict covers the events, so nothing is reported.", EXIT.refused);
+    }
     chain = pageChain as Record<string, unknown>;
     source = body["source"];
     shown = shown.concat(events as Record<string, unknown>[]);
@@ -332,12 +340,14 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     const tenant = await confirmTenant(cfg);
     const { body } = await call(cfg, "POST", path, undefined, key);
     const run = body["syncRun"] as Record<string, unknown> | undefined;
-    if (!run || typeof run["id"] !== "string" || typeof run["status"] !== "string") {
-      throw new CliError("malformed_answer", `POST ${path} carried no sync run with an id and a status; nothing is reported.`, EXIT.refused);
+    // A well-formed id and a recognised status, or nothing is reported (review round 7): an
+    // empty or newline-bearing id would otherwise pass as an answer and rewrite the output.
+    if (!run || !isSafeId(run["id"]) || typeof run["status"] !== "string" || !SYNC_STATUSES.has(run["status"])) {
+      throw new CliError("malformed_answer", `POST ${path} carried no sync run with a well-formed id and a recognised status; nothing is reported.`, EXIT.refused);
     }
     return {
       json: { ok: true, command: "connectors sync", tenant: tenant.id, sent: true, syncRun: run },
-      human: `sync run ${str(run["id"])} · status ${str(run["status"])} · ${str(run["note"])}`,
+      human: `sync run ${run["id"]} · status ${run["status"]} · ${str(run["note"]).replace(/[\r\n]+/g, " ")}`,
     };
   }
   if (sub === "runs") {
@@ -412,7 +422,7 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass \`--allow-write\` only when the task says to mint a decision or start a sync.
-- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-run the same command with \`--idempotency-key <key>\` within 5 minutes to get the recorded answer instead of writing twice.
+- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-running the same command with \`--idempotency-key <key>\` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check \`signalgrid audit\` for the write before retrying.
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - \`--json\` prints one JSON object on stdout for every exit, errors included.
 `;
@@ -480,7 +490,15 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     const v = values as Values;
     json = v.json === true;
     const [command, ...rest] = positionals;
-    if (v.help || !command) return { stdout: `${help()}\n`, stderr: "", exit: command || v.help ? EXIT.ok : EXIT.usage };
+    if (v.help || !command) {
+      if (!v.help) throw new CliError("usage", `no command given. ${help()}`, EXIT.usage);
+      // --json is honoured here too: every JSON-mode exit is one object (review round 7).
+      if (json) {
+        const commands = Object.entries(COMMANDS).map(([name, c]) => ({ name, usage: c.usage, summary: c.summary, writes: c.writes, requests: c.requests }));
+        return { stdout: `${JSON.stringify({ ok: true, command: "help", commands, exit: EXIT }, null, 2)}\n`, stderr: "", exit: EXIT.ok };
+      }
+      return { stdout: `${help()}\n`, stderr: "", exit: EXIT.ok };
+    }
     // An own-property check: `in` would accept inherited keys such as "constructor".
     if (!Object.hasOwn(COMMANDS, command)) throw new CliError("usage", `unknown command "${command}". Run signalgrid --help.`, EXIT.usage);
     checkArity(command, rest);

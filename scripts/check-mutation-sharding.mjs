@@ -22,7 +22,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, processCommand, installRestore, classifyRun } from "./mutation-guard.mjs";
+import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, journalWrite, journalRestore, journalStale, journalClear, journalDir, journalLive, sweepAlive, processCommand, installRestore, terminatingSignals, classifyRun } from "./mutation-guard.mjs";
 
 // A closed stdout/stderr (the parent died, or `| head`) raises EPIPE on the NEXT write, anywhere in this script — including
 // after the e2e block. Swallow it for the whole process, so the gate's exit status stays its own pass/fail result instead
@@ -244,6 +244,15 @@ check("process identity is readable WITHOUT /proc (macOS): processCommand falls 
     installRestore({ jDir: jdir, pid: 12, proc, root });
     mutate(12); proc.emit("SIGTERM");
     check("the SIGTERM handler restores and exits 143", readFileSync(join(root, "g.ts"), "utf8") === "orig" && exited === 143);
+    // every terminating signal (the shared list), not just INT/TERM/HUP
+    for (const [sigName, sigCode] of terminatingSignals()) {
+      let exitedAll = null;
+      const procAll = Object.assign(new EventEmitter(), { exitCode: 0, exit(c) { exitedAll = c; } });
+      installRestore({ jDir: jdir, pid: 20 + sigCode, proc: procAll, root });
+      mutate(20 + sigCode); procAll.emit(sigName);
+      if (!(readFileSync(join(root, "g.ts"), "utf8") === "orig" && exitedAll === sigCode)) { check(`the GUARD's installRestore handles ${sigName}: restores and exits ${sigCode}`, false); }
+    }
+    check("the GUARD's installRestore handles every terminating signal (QUIT, USR2, ALRM, IO … not just INT/TERM/HUP): restores and exits 128+signal", true);
     // a FAILED restore is reported as failed, exit 1, once
     exited = null; logged.length = 0;
     proc = Object.assign(new EventEmitter(), { exitCode: 0, exit(c) { exited = c; } });
@@ -278,18 +287,31 @@ function killIfSame(r, startOf, kill) {
   const blind = killIfSame({ pid: 7, start: "" }, () => "", () => { killed += 100; });
   check("killIfSame: the same process is killed; a reused pid (different start time) and an unreadable start are NOT", same === true && reused === false && blind === false && killed === 1);
 }
-// What the gate does when IT is signalled (SIGINT/SIGTERM/SIGHUP) while the e2e block has the tree: kill its
-// sweeps (the SIGKILLed sweep's journal sits in the gate's scratch dir, which nothing else reads), put the target
-// back to HEAD's bytes, drop its lock, and exit. Each step is isolated so one failing cannot skip the restore.
-function gateShutdown({ killSweeps, restoreTarget, clearLock, cleanup, exit }, code) {
-  for (const step of [killSweeps, restoreTarget, clearLock, cleanup]) { try { step(); } catch { /* never skip the next step */ } }
-  exit(code);
+// Put the target back, THEN drop the records. If the write-back fails, the lock marker (which journals HEAD's bytes) and the
+// scratch dir (the sweep's own journal) are the ONLY records left — they are kept, and the failure is reported.
+function finishCleanup({ restoreTarget, clearLock, cleanup, report = () => {} }) {
+  try { restoreTarget(); } catch (err) { report(err); return false; }
+  for (const step of [clearLock, cleanup]) { try { step(); } catch { /* a leftover marker is a dead-pid journal; the next start clears it */ } }
+  return true;
+}
+// What the gate does when IT is signalled (any catchable terminating signal) while the e2e block has the tree: kill its
+// sweeps, put the target back to HEAD's bytes, drop its lock, and exit. Each step is isolated so one failing cannot skip the restore.
+function gateShutdown({ killSweeps, restoreTarget, clearLock, cleanup, report, exit }, code) {
+  try { killSweeps(); } catch { /* never skip the restore */ }
+  const ok = finishCleanup({ restoreTarget, clearLock, cleanup, report });
+  exit(ok ? code : 1);
 }
 {
   const order = [];
   const steps = { killSweeps: () => { order.push("kill"); throw new Error("boom"); }, restoreTarget: () => order.push("restore"), clearLock: () => order.push("clear"), cleanup: () => order.push("cleanup"), exit: (c) => order.push(`exit${c}`) };
   gateShutdown(steps, 143);
   check("gateShutdown: kills sweeps, restores the target, clears the lock, cleans up, exits — and a failing step never skips the restore", order.join(",") === "kill,restore,clear,cleanup,exit143");
+  const order2 = []; let reported = null;
+  gateShutdown({ killSweeps: () => order2.push("kill"), restoreTarget: () => { throw new Error("EIO simulated"); }, clearLock: () => order2.push("clear"), cleanup: () => order2.push("cleanup"), report: (e) => { reported = e.message; }, exit: (c) => order2.push(`exit${c}`) }, 143);
+  check("gateShutdown: if the write-back FAILS the lock marker and scratch (the only records) are KEPT, the failure is reported, and it exits 1",
+    order2.join(",") === "kill,exit1" && reported === "EIO simulated");
+  check("terminatingSignals: the shared list covers QUIT, USR2, ALRM and IO (not just INT/TERM/HUP), exit codes are 128+signal, SIGIO/SIGPOLL deduplicated",
+    (() => { const m = Object.fromEntries(terminatingSignals()); return m.SIGINT === 130 && m.SIGTERM === 143 && m.SIGHUP === 129 && m.SIGQUIT === 131 && "SIGUSR2" in m && "SIGALRM" in m && "SIGIO" in m && !("SIGKILL" in m) && !("SIGSTOP" in m) && terminatingSignals({ SIGIO: 29, SIGPOLL: 29, SIGINT: 2 }).length === 2; })());
 }
 function e2ePrecondition({ lockDir, headBytes, workBytes, isRegular = true, isAlive }) {
   if (isRegular !== true) return false; // a symlink or other non-regular file passes a bytes comparison but is not the file git tracks
@@ -350,10 +372,9 @@ function e2ePrecondition({ lockDir, headBytes, workBytes, isRegular = true, isAl
 // real dead sweep's journal in the shared temp dir (an earlier version `rm -r`'d it — the recovery
 // record). It never matches processes by name: it records the sweep's own descendants by pid. The
 // target's bytes are saved and written back in `finally`, so a regression cannot leave the tree dirty.
-// Every catchable signal that terminates a process by default must run the gate's shutdown — an unhandled one (SIGQUIT,
-// SIGUSR2, SIGALRM …) killed the gate with its sweep still mutating the real tree. SIGKILL and SIGSTOP cannot be caught.
-const TERMINATING_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGUSR2", "SIGALRM", "SIGVTALRM", "SIGPROF", "SIGXCPU", "SIGXFSZ", "SIGPWR"];
-async function runE2e({ repo, guard, target, check, signalProc = process, streams = [process.stdout, process.stderr], afterLock = null }) {
+// Signals: the shared `terminatingSignals()` list (also used by the guard's own installRestore) — an unhandled one killed the gate
+// or the sweep with the guard still mutated in the real tree. SIGKILL and SIGSTOP cannot be caught.
+async function runE2e({ repo, guard, target, check, signalProc = process, streams = [process.stdout, process.stderr], afterLock = null, deadCheck = null }) {
   const PROOF = "proof:carrier-reachability";
   // "The original" is what HEAD says, as BYTES — never what the working tree holds at this instant (that
   // could be a live sweep's mutant). The precondition then requires the working file to equal it.
@@ -375,6 +396,7 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
   const live = [];
   const restoreTarget = () => { if (shouldRestoreTarget(lockHeld, readFileSync(target), headBytes)) writeFileSync(target, headBytes); };
   const clearLock = () => { if (lockHeld) journalClear(lockDir, process.pid); };
+  const reportRestoreFailed = (err) => { console.error(`  RESTORE FAILED (${err instanceof Error ? err.message : String(err)}) — the target may still be MUTATED; the gate's lock marker and scratch dir are KEPT as the record: run \`node scripts/mutation-guard.mjs --restore-stale\``); };
   const handlers = [];
   const streamHandlers = [];
   try {
@@ -386,12 +408,10 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
       lockHeld = true;
       const shutdownWith = (code) => gateShutdown({
         killSweeps: killKids,
-        restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), exit: (c) => signalProc.exit(c),
+        restoreTarget, clearLock, cleanup: () => rmSync(scratch, { recursive: true, force: true }), report: reportRestoreFailed, exit: (c) => signalProc.exit(c),
       }, code);
-      for (const sig of TERMINATING_SIGNALS) {
-        const num = osConstants.signals[sig];
-        if (num === undefined) continue; // not a signal on this platform
-        const h = () => shutdownWith(128 + num);
+      for (const [sig, code] of terminatingSignals()) {
+        const h = () => shutdownWith(code);
         try { signalProc.on(sig, h); handlers.push([sig, h]); } catch { /* not catchable here */ }
       }
       // An uncaught exception / unhandled rejection must not leave the sweeps running either.
@@ -453,10 +473,12 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
     const pids = [];
     for (const c of kids) { for (const r of record(descendants(c.pid))) live.push(r); pids.push(c.pid); try { c.kill("SIGKILL"); } catch { /* gone */ } }
     for (const r of live) killRecorded(r, true);
-    const deadline = Date.now() + 2000;
-    while (Date.now() < deadline && !pids.every(isDead)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    const deadline = Date.now() + 3000;
+    const everyone = () => [...pids, ...live.map((r) => r.pid)];
+    while (Date.now() < deadline && !everyone().every(isDead)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   }
-  const isDead = (pid) => {
+  const isDead = (pid) => (deadCheck ? deadCheck(pid) : isDeadReal(pid));
+  const isDeadReal = (pid) => {
     // /proc where it exists (a zombie counts as dead); kill(0) elsewhere. ENOENT under /proc means dead ONLY if /proc exists.
     if (existsSync("/proc/self")) { try { return /^\d+ \(.*\) Z/.test(readFileSync(`/proc/${pid}/stat`, "utf8")); } catch { return true; } }
     try { process.kill(pid, 0); return false; } catch { return true; }
@@ -516,10 +538,13 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
   } finally {
     // Cleanup never throws past the summary line, and never writes unless this gate took the lock.
     try { killKids(); } catch { /* gone */ }
-    try { restoreTarget(); } catch { /* reported by the checks */ }
     for (const r of live) { try { if (!isDead(r.pid)) killRecorded(r, false); } catch { /* gone */ } }
-    try { clearLock(); } catch (err) { console.error(`  note: could not remove the gate's lock marker (${err instanceof Error ? err.message : String(err)}); it is a dead-pid journal and the next sweep start clears it`); }
-    try { rmSync(scratch, { recursive: true, force: true }); } catch { /* scratch only */ }
+    finishCleanup({
+      restoreTarget,
+      clearLock: () => { try { clearLock(); } catch (err) { console.error(`  note: could not remove the gate's lock marker (${err instanceof Error ? err.message : String(err)}); it is a dead-pid journal and the next sweep start clears it`); } },
+      cleanup: () => rmSync(scratch, { recursive: true, force: true }),
+      report: (err) => { reportRestoreFailed(err); check("e2e: restoring the target FAILED — marker and scratch kept; run mutation-guard --restore-stale", false); },
+    });
     // Keep the handlers until the event loop has turned twice: a signal that arrived during the synchronous tail is
     // only DISPATCHED on the next turn, and with the listener already gone it was silently dropped (exit 0, "pass").
     await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
@@ -531,7 +556,22 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const repo = resolve(here, "..");
-  await runE2e({ repo, guard: join(here, "mutation-guard.mjs"), target: join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts"), check });
+  // REAL-PROCESS WIRING PIN: the call below must use the real `process` (signals, uncaughtException) and the real stdout/stderr.
+  // A child copy of this script (MG_GATE_WIRING_PROBE=1) takes the lock the same way, reports what is actually registered on
+  // the real process while it holds the tree, and exits — the parent asserts it. (Every other handler pin uses a fake process.)
+  const probeWiring = process.env.MG_GATE_WIRING_PROBE === "1";
+  await runE2e({
+    repo, guard: join(here, "mutation-guard.mjs"), target: join(repo, "lib/integrations/src/integrations/carrier/evaluate.ts"), check,
+    afterLock: probeWiring ? async () => {
+      process.stdout.write(`WIRING ${JSON.stringify({ quit: process.listenerCount("SIGQUIT"), io: process.listenerCount("SIGIO"), term: process.listenerCount("SIGTERM"), uncaught: process.listenerCount("uncaughtException"), epipe: process.stdout.listenerCount("error") })}\n`);
+    } : null,
+  });
+  if (probeWiring) process.exit(0);
+  const wp = spawnSync("node", [fileURLToPath(import.meta.url)], { cwd: repo, encoding: "utf8", env: { ...process.env, MG_GATE_WIRING_PROBE: "1" } });
+  const wm = /WIRING (\{.*\})/.exec(wp.stdout ?? "");
+  const w = wm ? JSON.parse(wm[1]) : null;
+  check("real-process wiring: while the real gate holds the tree, SIGQUIT/SIGIO/SIGTERM handlers, an uncaughtException handler and a stdout error listener are registered on the REAL process",
+    w !== null && w.quit >= 1 && w.io >= 1 && w.term >= 1 && w.uncaught >= 1 && w.epipe >= 1);
 }
 
 // ── The e2e call sites, exercised in a THROWAWAY git repo (no sweep is run: the block stops after taking the lock) ──
@@ -633,16 +673,19 @@ async function runE2e({ repo, guard, target, check, signalProc = process, stream
     results.push(["e2e call site: EPIPE on the gate's stdout is swallowed (no crash, the gate runs on and restores)", threw === false && !seenP.some(([, ok]) => ok === false) && fakeOut.listenerCount("error") === 0]);
     // (i) killKids reaches the sweeps' DESCENDANTS, not just the sweeps
     const dRepo = mkRepo(); repos.push(dRepo);
-    let parentPid = null; let grandPid = null; let bothDead = false;
+    let parentPid = null; let grandPid = null; let bothDead = false; let waitedOnGrand = false;
+    const polled = new Set();
     const fakeD2 = Object.assign(new EventEmitter(), { exit() {} });
-    await runE2e({ repo: dRepo, guard: "/nonexistent", target: join(dRepo, "lib/t.ts"), check: quiet, signalProc: fakeD2, afterLock: async ({ track }) => {
+    await runE2e({ repo: dRepo, guard: "/nonexistent", target: join(dRepo, "lib/t.ts"), check: quiet, signalProc: fakeD2, deadCheck: (pid) => { polled.add(pid); return isDeadPid(pid); }, afterLock: async ({ track }) => {
       const parent = track(spawn("node", ["-e", "const c = require('node:child_process').spawn('node', ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' }); process.stdout.write(String(c.pid)); setTimeout(() => {}, 60000);"], { stdio: ["ignore", "pipe", "ignore"] }));
       parentPid = parent.pid;
       grandPid = await new Promise((r) => { let b = ""; parent.stdout.on("data", (d) => { b += d; const n = Number.parseInt(b, 10); if (Number.isFinite(n)) r(n); }); });
+      polled.clear();
       fakeD2.emit("SIGTERM");
+      waitedOnGrand = polled.has(grandPid);   // the bounded wait must watch the DESCENDANT, not just the sweep (else the restore can race it)
       bothDead = isDeadPid(parentPid) && isDeadPid(grandPid);
     } });
-    results.push(["e2e call site: a signal to the gate kills a sweep's DESCENDANTS as well as the sweep (recorded descendants are killed, and waited for)", parentPid !== null && grandPid !== null && bothDead]);
+    results.push(["e2e call site: a signal to the gate kills a sweep's DESCENDANTS as well as the sweep, and the bounded wait polls the descendant too (recorded descendants are killed, and waited for)", parentPid !== null && grandPid !== null && bothDead && waitedOnGrand]);
   } finally {
     for (const r of repos) { try { rmSync(journalDir(r), { recursive: true, force: true }); } catch { /* none */ } try { rmSync(r, { recursive: true, force: true }); } catch { /* scratch */ } }
   }

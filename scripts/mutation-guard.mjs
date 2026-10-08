@@ -49,7 +49,7 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1582,6 +1582,20 @@ function killGroup(child) {
  * baseline); the startup lock is check-then-write, not atomic; originals are restored as UTF-8 text (invalid
  * UTF-8 would not round-trip — all registered files do); a CRLF registered file yields 0 mutations.
  */
+// Every catchable signal whose default action TERMINATES the process. An unhandled one kills the sweep (or the gate) with
+// a deliberately broken guard still on disk. SIGKILL and SIGSTOP cannot be caught; the synchronous fault signals
+// (SEGV/BUS/ILL/FPE) are unsafe to handle in JS. SIGPOLL is SIGIO on Linux — deduplicated by number.
+const TERMINATING_SIGNAL_NAMES = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGUSR2", "SIGALRM", "SIGVTALRM", "SIGPROF", "SIGXCPU", "SIGXFSZ", "SIGPWR", "SIGIO", "SIGPOLL", "SIGSTKFLT"];
+export function terminatingSignals(consts = osConstants.signals) {
+  const seen = new Set(); const out = [];
+  for (const name of TERMINATING_SIGNAL_NAMES) {
+    const n = consts[name];
+    if (n === undefined || seen.has(n)) continue;
+    seen.add(n); out.push([name, 128 + n]);
+  }
+  return out;
+}
+
 export function installRestore({ jDir, pid, proc = process, getChild = () => null, root = repoRoot }) {
   let reported = false;
   const restoreAll = () => { try { journalRestore(jDir, pid, root); return null; } catch (err) { return err; } };
@@ -1590,15 +1604,17 @@ export function installRestore({ jDir, pid, proc = process, getChild = () => nul
     const err = restoreAll();
     if (err && !reported) { console.error(`\nMutation guard: ${failed(err)}`); proc.exitCode = 1; }
   });
-  for (const [sig, code] of [["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]]) {
-    proc.on(sig, () => {
-      const child = getChild();
-      if (child) killGroup(child); // the proof must not outlive the restore
-      const err = restoreAll();
-      reported = true;
-      console.error(err ? `\nMutation guard interrupted by ${sig} — ${failed(err)}` : `\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
-      proc.exit(err ? 1 : code);
-    });
+  for (const [sig, code] of terminatingSignals()) {
+    try {
+      proc.on(sig, () => {
+        const child = getChild();
+        if (child) killGroup(child); // the proof must not outlive the restore
+        const err = restoreAll();
+        reported = true;
+        console.error(err ? `\nMutation guard interrupted by ${sig} — ${failed(err)}` : `\nMutation guard interrupted by ${sig} — source files restored from the journal.`);
+        proc.exit(err ? 1 : code);
+      });
+    } catch { /* not catchable on this platform */ }
   }
 }
 

@@ -1210,6 +1210,22 @@ export const ALLOWED = [
     reason:
       "The catch in `digestsEqual` is UNREACHABLE: timingSafeEqual throws only on a length mismatch, already refused one line earlier. Kept as the rule 'an exception is not a match'. Labelled unreachable in the source.",
   },
+  // The next two were EXPOSED, not added to cover a new gap: the entry above used to be the
+  // substring `return false;`, which also exempted these two real-looking guards in
+  // digestsEqual (surfaced by the single-line resolution, 2026-10-08). Each has its own
+  // exact entry because each is genuinely redundant, verified by reading the callers.
+  {
+    file: "lib/verdict-attestation/src/attest.ts",
+    line: 'if (typeof a !== "string" || typeof b !== "string") return false;',
+    reason:
+      "Redundant at the only call site: `a` is hs256() output (always a string) and `att.digest` is rejected by `isMalformed` (`typeof own(\"digest\") !== \"string\"`, attest.ts:125) before digestsEqual runs, so both arguments are always strings. Kept as the type guard that makes the helper safe on its own.",
+  },
+  {
+    file: "lib/verdict-attestation/src/attest.ts",
+    line: "if (a.length !== b.length) return false;",
+    reason:
+      "Redundant with the catch below it: `timingSafeEqual` throws on a length mismatch and the catch returns false, so removing this line yields the same verdict (a mismatch is never a match). Kept because it states the rule explicitly and avoids relying on an exception for the ordinary mismatch path.",
+  },
   {
     file: "lib/verdict-attestation/src/attest.ts",
     line: 'typeof own("issuedAt") !== "number" ||',

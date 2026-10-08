@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-row-17-has-been-parked-since-2026-09-29-because-",
+  "raisedAt": "2026-10-08T11:16:06.711Z",
+  "origin": "cloud",
+  "doing": "Ranking docs/COMPANY_BUILD_PLAN.md row 17 (run the two remaining wire-truth shifts and bind the records to the code) in the objective loop.",
+  "blockedBy": "Row 17 has been parked since 2026-09-29 because it needs an ITSM lab for the seven vendor adapters and a live shift-context source; neither lane can provide either. Measured 2026-10-08 by scripts/raised-hands.mjs --check: 6.8 days parked, past the 144h limit.",
+  "need": "Owner: provide access to an ITSM lab and a shift-context source (or name a vendor sandbox the lane may use), or decline and re-park row 17 with a date so the loop can rank around it.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-17"
+  ]
+}

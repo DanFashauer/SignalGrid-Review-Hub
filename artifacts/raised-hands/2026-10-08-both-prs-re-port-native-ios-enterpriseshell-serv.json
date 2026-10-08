@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-both-prs-re-port-native-ios-enterpriseshell-serv",
+  "raisedAt": "2026-10-08T11:16:06.753Z",
+  "origin": "cloud",
+  "doing": "Landing the Mac lane's #1118 (mac/ios-parity-behavioral) and #1121 (mac/app-workflows-parity), docs/COMPANY_BUILD_PLAN.md row 18 (iOS port parity behavioral, not textual).",
+  "blockedBy": "Both PRs re-port native/ios/EnterpriseShell/Services/DecisionEngine.swift and AppWorkflows.swift, which CLAUDE.md golden rule 1 reserves; only the owner can rule whether a behavioral re-port of those two files is allowed. Parked since 2026-09-29; measured 2026-10-08: 6.8 days, past the 144h limit.",
+  "need": "Owner: rule on the DecisionEngine.swift / AppWorkflows.swift re-port in #1118 and #1121 - allow the behavioral port of the two files, or require the new logic to go around them (the SignalContext.swift pattern) - so the Mac lane can finish and the cloud can land.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-18"
+  ]
+}

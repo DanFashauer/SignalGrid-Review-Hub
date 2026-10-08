@@ -86,10 +86,12 @@ function readIfPresent(path, encoding = "utf8") {
 // ENOBUFS, which gitIn turns into "": the same answer as a real empty one. Round 5's landed-by-content check compared `git show`
 // text through it, so two files over 1 MiB (the live docs/CLAIM_INVENTORY.md is 1,128,935 bytes) both read "" and "" === ""
 // cleared REAL work as squash-landed. That check no longer reads file text at all (see hasLandedByContent); this is the second lock.
-const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_PROXY_COMMAND", "GIT_SSL_NO_VERIFY"];
+// GIT_EXEC_PATH and GIT_REMOTE*: where git looks for its remote helpers (git-remote-<vcs>) is the caller's to set, so a transport can be swapped under every command here (round-11 refute); git
+// finds its own helpers without them.
+const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_PROXY_COMMAND", "GIT_SSL_NO_VERIFY", "GIT_EXEC_PATH"];
 function gitEnv(extra) {
   const env = { ...process.env, ...extra };
-  for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_")) delete env[k];
+  for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE")) delete env[k];
   for (const k of GIT_ENV_DROPPED) delete env[k];
   return { ...env, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
@@ -171,10 +173,15 @@ function transportKey(scope, origin, kv, own = null) {
   const val = nl < 0 ? null : noUserinfo(kv.slice(nl + 1), last.includes("proxy"));
   const local = !["system", "global", "command"].includes(scope);
   const isHttp = key.startsWith("http."), isUrl = key.startsWith("url."), isProxyCmd = key === "core.gitproxy";
-  const label = `${key}${val === null ? "" : `=${val}`}`;
+  // A REMOTE HELPER swaps the transport without touching the URL (round-11 refute, HIGH): `remote.<name>.vcs` makes git run `git remote-<vcs>`, which an `alias.remote-<vcs>` answers, and a remote whose NAME
+  // is the Hub URL is the one `ls-remote <Hub URL>` picks. So a vcs on any remote, an alias named like a helper, and any key of a remote named like a URL, are transport overrides; as is core.sshCommand (ssh).
+  const remoteName = key.startsWith("remote.") ? key.slice(7, key.lastIndexOf(".")) : "";
+  const isHelper = key === "core.sshcommand" || key.startsWith("alias.remote-") || (remoteName !== "" && (last === "vcs" || /[/:@]/.test(remoteName)));
+  // A credential can sit in a KEY (a url.<base> subsection named https://user:token@host/): keys are scrubbed exactly like values wherever they are printed.
+  const label = `${noUserinfo(key, true)}${val === null ? "" : `=${key.startsWith("alias.") ? "(not shown)" : val}`}`;
   const where = scope === "command" ? "command line" : `${scope} ${origin.replace(/^file:/, "")}`;
   if (isHttp && (last === "sslverify" || last === "proxysslverify") && !gitBool(val)) return { problem: `${label} (${where}) turns TLS verification off` };
-  const relevant = isUrl || isProxyCmd || (isHttp && !HTTP_HARMLESS.test(key));
+  const relevant = isUrl || isProxyCmd || isHelper || (isHttp && !HTTP_HARMLESS.test(key));
   if (local && relevant) return { problem: `repository-scope ${label} (${where}) can redirect or weaken the Hub transport` };
   const file = own ? own.fileOf(origin) : "";
   if (relevant && file && own.roots.some((r) => file === r || file.startsWith(r + sep))) {
@@ -217,8 +224,10 @@ function hubTransport(cwd = repo, hub = HUB) {
   for (const k of ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]) if (env[k]) { const v = noUserinfo(env[k], true); proxies.set(v, [...(proxies.get(v) || []), k]); }
   for (const [v, ks] of proxies) trusted.push(`environment proxy ${ks.join("/")}=${v}`);
   for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
+  // Where git looks for its remote helpers: named, and never passed on (gitEnv drops it), so it can swap no transport here.
+  for (const k of Object.keys(env)) if (k === "GIT_EXEC_PATH" || k.startsWith("GIT_REMOTE")) trusted.push(`environment ${k}=${env[k]} (not passed to any git started here)`);
   // The configuration, with scope and origin. Exit 1 is "no key matched" (a clean answer); anything else is a configuration git could not read.
-  const cfg = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|url\\.)"]);
+  const cfg = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|core\\.sshcommand$|url\\.|alias\\.remote-|remote\\.)"]);
   if (!cfg.ok && !(cfg.status === 1 && !String(cfg.stdout).trim())) {
     problems.push(`git could not read its configuration (${String(cfg.stderr).split("\n").find(Boolean) || `exit ${cfg.status}`}), so no proxy / TLS / rewrite setting could be checked`);
   } else {
@@ -235,11 +244,25 @@ function hubTransport(cwd = repo, hub = HUB) {
   const r = gitRun(cwd, ["ls-remote", "--get-url", hub]);
   if (!r.ok) problems.unshift(`git could not expand the Hub URL (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`);
   else {
-    const expanded = r.stdout.trim();
-    if (expanded !== hub && !isHubUrl(expanded)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${noUserinfo(expanded) || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
-    else if (expanded !== hub) trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${noUserinfo(expanded)} (same host and repository)`);
+    // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
+    const expanded = r.stdout.trim(), shown = noUserinfo(expanded, true);
+    if (shown === hub && expanded !== hub) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
+    else if (expanded !== hub && !isHubUrlLoose(expanded)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
+    else if (expanded !== hub) trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
   }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
+}
+// THE LISTING ITSELF. Every setting a repository can carry (a remote helper named by `remote.<Hub URL>.vcs`, a proxy, an insteadOf, core.sshCommand, an include) reaches `git ls-remote` through the repository
+// it runs in, and hubTransport can only name the shapes it knows. So the listing runs in a fresh empty directory (nothing above it may be a repository: GIT_CEILING_DIRECTORIES), where only the
+// environment's own configuration (global, system, GIT_CONFIG_*) and environment exist; the scan above still names what the repository carries. (Round-11 refute: remote.<Hub URL>.vcs plus an inline
+// alias.remote-<vcs> served a fake listing from repository configuration alone.)
+function listHub(hub = HUB) {
+  const dir = mkdtempSync(join(tmpdir(), "loop-state-ls-"));
+  try {
+    return gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: { GIT_CEILING_DIRECTORIES: realpathSync(tmpdir()) } });
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway empty directory */ }
+  }
 }
 function hubUrlProblem(cwd = repo, hub = HUB) {
   return hubTransport(cwd, hub).problems.join("; ");
@@ -258,18 +281,46 @@ const HUB_SPELLINGS = ["https://github.com/danfashauer/signalgrid-review-hub", "
 function isHubUrl(u) {
   return HUB_SPELLINGS.includes(String(u || "").trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase());
 }
+// A URL with credentials in it (a token-bearing insteadOf is common and legitimate) is still the Hub when it is the Hub once the userinfo is taken away, and the userinfo is never printed.
+function isHubUrlLoose(u) { return isHubUrl(u) || isHubUrl(noUserinfo(u, true)); }
 function originRow(cwd = repo) {
   const g = gitIn(cwd);
   const configured = g("config", "--get", "remote.origin.url"), fetchUrl = g("remote", "get-url", "origin"), pushUrl = g("remote", "get-url", "--push", "origin");
-  const ok = isHubUrl(fetchUrl) && isHubUrl(pushUrl);
-  const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${pushUrl})` : "";
-  const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${configured}, rewritten by url.<base>.insteadOf)` : "";
-  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${fetchUrl || "(no origin)"}${pushNote}${rewriteNote}` };
+  const ok = isHubUrlLoose(fetchUrl) && isHubUrlLoose(pushUrl);
+  const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${noUserinfo(pushUrl, true)})` : "";
+  const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${noUserinfo(configured, true)}, rewritten by url.<base>.insteadOf)` : "";
+  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${noUserinfo(fetchUrl, true) || "(no origin)"}${pushNote}${rewriteNote}` };
 }
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
 // remote-tracking ref in a bare resolution, and every landed check below would then compare a local
 // branch against the tag's commit, not against mainline.
 const MAINLINE = "refs/remotes/origin/SignalGrid_Alpha";
+// Is the local tracking ref `mainline` really the Hub's branch of that name, or a lagging copy of it? Every landed exemption and the scratch declaration read their "mainline" from this
+// LOCAL ref, and anyone can write one (round-11 refute: `merge --squash` on a throwaway branch, `update-ref refs/remotes/origin/SignalGrid_Alpha`, `branch -D`: the unpushed branch read
+// "squash-landed" with exit 0). So it must equal the sha the Hub LISTS for that name, or be an ancestor of it with every commit on the way re-hashed (tipReachableFromAny/chainIsReal), and the
+// Hub's commit must be in this checkout. Anything else is not mainline: the exemptions and the declaration are off, with the remedy (a fetch settles every honest case).
+// { ok, reason } where reason is a sentence for the row.
+function mainlineAnchor(cwd, hubShaMap, mainline = MAINLINE) {
+  const name = mainline.startsWith("refs/remotes/origin/") ? mainline.slice("refs/remotes/origin/".length) : "";
+  const off = (why) => ({ ok: false, reason: `${mainline.replace(/^refs\/remotes\//, "")} is not confirmed as the Hub's ${name || "mainline"}: ${why}` });
+  if (!name) return off("it is not a refs/remotes/origin/<name> ref");
+  if (!(hubShaMap instanceof Map)) return off("there is no Hub sha map");
+  const hub = hubShaMap.get(name);
+  if (typeof hub !== "string" || !hub) return off(`the Hub lists no ${name}`);
+  const tip = gitIn(cwd)("rev-parse", "--verify", "-q", `${mainline}^{commit}`);
+  if (!tip) return off("the ref does not resolve to a commit");
+  if (!localCommits(cwd, [hub]).has(hub)) return off(`the Hub's ${name} (${hub.slice(0, 12)}) is not fetched here: run git fetch origin, then re-run`);
+  if (tip === hub) return { ok: true, reason: "" };
+  return tipReachableFromAny(cwd, tip, [hub]) === true ? { ok: true, reason: "" } : off(`it (${tip.slice(0, 12)}) is neither the Hub's ${hub.slice(0, 12)} nor an ancestor of it: run git fetch origin, then re-run`);
+}
+// The scratch declaration, read from mainline only while mainline is anchored. Returns the evaluation and, when a declaration is there but cannot be trusted, the row that says so.
+function mainlineScratch(cwd, hubShaMap, localBranches, mainline = MAINLINE) {
+  const anchor = mainlineAnchor(cwd, hubShaMap, mainline);
+  if (anchor.ok) return { scratch: evaluateScratch(mainline, cwd, localBranches), anchor, row: null };
+  const none = { exists: false, ok: true, excluded: [], reopened: [], stale: [] };
+  const declared = readMainlineDeclaration(mainline, cwd) !== null; // information only: nothing read from it is acted on
+  return { scratch: none, anchor, row: declared ? { state: "warn", what: "Declared scratch branches", detail: `NOT read — ${anchor.reason}; no branch is excluded as scratch until then`, gated: false } : null };
+}
 // Every git argument that names a LOCAL branch is headRef(name), never the bare name (see listLocalBranches).
 const HEADS = "refs/heads/";
 const headRef = (name) => `${HEADS}${name}`;
@@ -301,7 +352,7 @@ if (hubUrlTrouble) {
   add("fail", "Review Hub URL", `${hubUrlTrouble} — the unpushed-work check did NOT run; unknown is not clean${hubScan.trusted.length ? ` (${hubScan.note})` : ""}`);
 } else try {
   // through gitRun like every other git here (the guarded environment, `-C <repo>`), never a bare spawn that reads GIT_DIR from the caller
-  const ls = gitRun(repo, ["ls-remote", "--heads", HUB], { timeout: 60000 });
+  const ls = listHub(HUB);
   if (!ls.ok) throw new Error(String(ls.stderr).split("\n").find(Boolean) || `exit ${ls.status}`);
   const heads = String(ls.stdout).split("\n").filter(Boolean).map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/"));
   for (const [sha, ref] of heads) hubSha.set(ref.slice("refs/heads/".length), sha);
@@ -1054,11 +1105,12 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   const beyond = Number(counted);
   if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: label, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond ${label} could not be counted${why.unproven ? ` (${why.unproven})` : ""}` };
   if (beyond === 0) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
-  // held by a Hub-listed commit, or by a tracking ref that lags the Hub (a fetch settles that one): the work is, or may well be, on the Hub, so
-  // nothing is gated; the comparison is still unreadable, so it stays the warning (containment never turns an unreadable comparison into a
-  // clean one; the d-alias-unknown case). Only commits NO such evidence covers gate.
+  // held by a commit the Hub LISTS: the work is on the Hub, so nothing is gated; the comparison is still unreadable, so it stays the warning
+  // (containment never turns an unreadable comparison into a clean one; the d-alias-unknown case). Only commits no such evidence covers gate.
+  // ONLY the Hub's own listing can downgrade a gate (round-11 refute): a hand-made refs/remotes/origin/<other> at the tip made `st.behind` non-empty and turned a gated ahead into an ungated warning. The
+  // branch's own origin/<name> already counted above (the commits beyond it), and any other tracking ref is a name anyone can write.
   const st = hubTipState(branch, hubShaMap, cwd);
-  if (st.holds || st.behind.length) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
+  if (st.holds) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
   return { state: "ahead", ahead: beyond, beyond: label, ...(fetch ? { fetch } : {}), ...noSha };
 }
 // How many commits of the branch the Hub is not KNOWN to hold: reachable from the tip and from neither the branch's own tracking ref (the
@@ -1255,7 +1307,7 @@ function branchesInAgentWorktrees() {
 // script produces (listLocalBranches), with tags, same-named refs and broken refs in the fixture. Every
 // branch is a SHORT name here (the string after refs/heads/, the same key the Hub map uses) and is
 // qualified with headRef() at each git call below and in the functions it calls.
-function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExcluded, mainline = MAINLINE, cwd = repo }) {
+function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExcluded, mainline = MAINLINE, cwd = repo, anchor = null }) {
   if (!listing.ok) return [branchListRow(listing)];
   const localBranches = listing.names;
   const git = gitIn(cwd);
@@ -1297,8 +1349,10 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   const onHub = noRemote.filter((b) => isOnHubBySha(b, hubShaMap, cwd));
   const offHub = noRemote.filter((b) => !onHub.includes(b));
   const traces = new Map(offHub.map((b) => [b, { blocked: "" }]));
-  const landedByBytes = offHub.filter((b) => hasLandedByContent(b, mainline, cwd, traces.get(b)));
-  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd, traces.get(b)));
+  // Both landed exemptions read "mainline" from a LOCAL ref, so they run only while it is anchored to the Hub's own listing (mainlineAnchor); otherwise they are off and the row says why.
+  const mlAnchor = offHub.length ? (anchor || mainlineAnchor(cwd, hubShaMap, mainline)) : { ok: true, reason: "" };
+  const landedByBytes = mlAnchor.ok ? offHub.filter((b) => hasLandedByContent(b, mainline, cwd, traces.get(b))) : [];
+  const landedByHunks = mlAnchor.ok ? offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd, traces.get(b))) : [];
   const landed = [...landedByBytes, ...landedByHunks];
   const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
@@ -1306,6 +1360,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // ...and a row that silently stopped clearing aliases and squash-landed branches would look like the branches themselves had changed.
   // So it says why.
   const graftsNote = graftsReason ? ` (alias and squash-landed exemptions OFF: ${graftsReason})` : "";
+  const anchorNote = !mlAnchor.ok ? ` (squash-landed exemptions OFF: ${mlAnchor.reason})` : "";
   // ...and the same for a shallow boundary that hides a branch's own history (shallowBounds): named per branch, only for the ones still reported.
   // (a landing refused because the mainline commit does not descend from the cut is named too: landsAfterCut)
   const cutWhy = (b) => { const c = traces.get(b) && traces.get(b).blocked; return c ? `a mainline commit carries this work but does not descend from the shallow boundary ${c.slice(0, 12)} under the branch, so it may be older than the branch: ${deepenHint()}` : ""; };
@@ -1323,7 +1378,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
     // remedy is a fetch, not a push (hubFetchCauses). Grouped by remedy so one cause reads one way.
     const remedyOf = (b) => { const c = hubFetchCauses(b, hubShaMap, cwd); return c.length ? fetchHint(c[0].name) : ""; };
     const groups = remedyGroups(unpushed.map((b) => [b, remedyOf(b)]), "push, or confirm the remote");
-    row("fail", "Local work not on the Review Hub", `${groups}${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${shallowNote}${warnNote}`);
+    row("fail", "Local work not on the Review Hub", `${groups}${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${anchorNote}${shallowNote}${warnNote}`);
   } else {
     row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   }
@@ -1387,7 +1442,9 @@ if (hubBranches.length && listing.ok) {
   // DECLARED SCRATCH (owner-directed 2026-10-02): exact names in docs/agent/local-scratch-branches.json,
   // each with a reason. Fail-closed: an invalid file excludes nothing and fails the seam; a declared
   // branch with a commit newer than its declaredAt is work again. Reported on its own line, never silent.
-  const scratch = evaluateScratch(MAINLINE, repo, localBranches);
+  const ms = mainlineScratch(repo, hubSha, localBranches);
+  const scratch = ms.scratch;
+  if (ms.row) add(ms.row.state, ms.row.what, ms.row.detail, ms.row.gated);
   if (scratch.exists) {
     if (!scratch.ok) {
       add("fail", "Declared scratch branches", `${SCRATCH_FILE} on mainline is INVALID (${scratch.error}) — nothing excluded; fix the file`);
@@ -1398,7 +1455,7 @@ if (hubBranches.length && listing.ok) {
       add(scratch.reopened.length ? "warn" : "ok", "Declared scratch branches", bits.join("; "), false);
     }
   }
-  for (const r of branchSeamRows({ listing, hubBranches, hubShaMap: hubSha, ephemeral, scratchExcluded: scratch.excluded })) {
+  for (const r of branchSeamRows({ listing, hubBranches, hubShaMap: hubSha, ephemeral, scratchExcluded: scratch.excluded, anchor: ms.anchor })) {
     add(r.state, r.what, r.detail, r.gated);
   }
 }
@@ -1602,6 +1659,13 @@ process.exitCode = gatedFails.length ? 1 : 0;
 // with a bare "hub" remote, and proves each shape the seam must catch or clear.
 function selfTest() {
   const root = mkdtempSync(join(tmpdir(), "loop-state-selftest-"));
+  // HERMETIC (round-11 review): a developer's own global or system git configuration (fetch.prune, http.sslVerify=false, merge.ff=only, core.hooksPath) turned the self-test red, and one that
+  // happened to agree with a fixture could turn a case green for the wrong reason. Every git the self-test starts, fixtures and the script copies it runs alike, sees an EMPTY global
+  // configuration and no system one, and no GIT_SSL_NO_VERIFY. (The environment's own GIT_CONFIG_COUNT entries stay: they are command-line scope and several cases read them.)
+  const callerGitEnv = Object.fromEntries(["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_SSL_NO_VERIFY"].map((k) => [k, process.env[k]]));
+  const emptyGlobalConfig = join(root, "empty-global.gitconfig");
+  writeFileSync(emptyGlobalConfig, "");
+  process.env.GIT_CONFIG_GLOBAL = emptyGlobalConfig; process.env.GIT_CONFIG_NOSYSTEM = "1"; delete process.env.GIT_SSL_NO_VERIFY;
   const work = join(root, "work"), hub = join(root, "hub.git");
   const g = gitIn(work);
   const sh = (...a) => execFileSync("git", a, { cwd: work, stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
@@ -2143,8 +2207,9 @@ function selfTest() {
     const pu = mkFx("r6u");
     const puNext = hubAdvance(pu, "main"); execFileSync("git", ["-C", pu.h, "update-ref", "refs/heads/hubonly", puNext]); pu.f("branch", "hubonly", "main");
     const puW = rowOf(pu.rows(), T_UNKNOWN);
-    check("a same-named branch whose Hub tip is not fetched and has no origin/<name> says fetch, not 'behind' (R6-unfetched)",
-      pu.f("for-each-ref", "refs/remotes/origin/hubonly") === "" && !!puW && puW.detail.includes("hubonly — the Hub's hubonly is not fetched here: run git fetch origin, then re-run"));
+    const puA = rowOf(pu.rows(), T_AHEAD);
+    check("a same-named branch whose Hub tip is not fetched, has no origin/<name> and carries commits no Hub-listed commit holds is a GATED failure that says fetch (it was an ungated warning while the tracking ref of ANOTHER branch, origin/main, counted as evidence; no tracking ref is, round 12) (R6-unfetched)",
+      pu.f("for-each-ref", "refs/remotes/origin/hubonly") === "" && !(puW && /hubonly/.test(puW.detail)) && !!puA && puA.state === "fail" && puA.gated === true && puA.detail.startsWith("hubonly (+") && puA.detail.includes("hubonly: the Hub's hubonly is not fetched here: run git fetch origin, then re-run"));
     // the one-process yes/no (rev-list) cannot read a corrupt listed commit: it answers "unknown", and the answer is then asked of each commit alone,
     // so ONE bad object among the Hub's listed shas neither disables the exemption for the rest nor grants anything
     const pn = mkFx("r6null");
@@ -2740,7 +2805,8 @@ function selfTest() {
     const sklT1 = treeOf(skl, [["base.txt", sklBase], ["f.txt", sklV1]]), sklT2 = treeOf(skl, [["base.txt", sklBase], ["f.txt", sklV2]]);
     const sklR = ctOf(skl, sklT1, "R"), sklC = ctOf(skl, sklT2, "C: the feature, on the Hub, reverted later", sklR), sklP = ctOf(skl, sklT1, "P: revert", sklC);
     const sklB = ctOf(skl, sklT1, "B: boundary", sklP), sklT = ctOf(skl, sklT2, "T: LOCAL re-apply of the reverted feature", sklB), sklM = ctOf(skl, sklT1, "M: mainline merge reaching C by a side parent, and B", sklB, sklC);
-    skl.f("update-ref", "refs/remotes/origin/main", sklM); skl.f("update-ref", "refs/heads/work", sklT);
+    skl.f("push", "-q", "-f", "origin", `${sklM}:refs/heads/main`); skl.f("update-ref", "refs/heads/main", sklM); // the Hub's main IS sklM, so mainline is anchored (R12) and the shallow rule is what is under test
+    skl.f("update-ref", "refs/heads/work", sklT);
     writeFileSync(join(skl.w, ".git", "shallow"), `${sklB}\n`);
     const sklCut = dropLoose(skl, sklP);
     const sklTrace = { blocked: "" }, sklSb = shallowBounds(skl.w, "refs/heads/work", R6M);
@@ -2887,6 +2953,120 @@ function selfTest() {
     check("no existsSync / statSync check is followed by a read, write or unlink of the same path in this file: the README, the discovery log and LOOP.md are read through readIfPresent, the throwaway index is opened, the self-test drops a loose object by unlinking it (R11-no-check-then-use)",
       !/existsSync\(resolve\(repo, "README\.md"\)\)/.test(prodText) && !/existsSync\(logPath\)/.test(prodText) && !/existsSync\(loopPath\)/.test(prodText) && !/existsSync\(idx\)/.test(prodText) &&
       !/exist[s]Sync\(graftsFile\)/.test(prodSrc) && !/const was = exist[s]Sync/.test(prodSrc) && /function readIfPresent/.test(rpProd) && /e\.code === "ENOENT" \|\| e\.code === "ENOTDIR"/.test(rpProd));
+    // ══ ROUND 12 ══ The independent review wave on ca9fdfa9 (wave77): a remote helper from repository configuration alone, a hand-made refs/remotes/origin/<mainline>, a hand-made
+    // origin/<other> in the same-name gate, a credential in a config KEY, core.sshCommand, and a self-test that was not hermetic. Each case builds the lie first (a precondition inside its own check).
+    const unreachable = { HTTPS_PROXY: "http://127.0.0.1:9", https_proxy: "http://127.0.0.1:9", ALL_PROXY: null, all_proxy: null }; // so nothing here can reach a real network
+    // (1) a remote helper: remote.<Hub URL>.url=<Hub URL>, remote.<Hub URL>.vcs=rvfake, and an inline alias.remote-rvfake that answers `list` with a Hub of its own
+    const rh = mkFx("r12rh"); rh.f("config", "remote.origin.url", HUB);
+    const rhMain = rh.f("rev-parse", "HEAD");
+    rh.f("checkout", "-q", "-b", "feat"); const rhFeat = rh.c("a.txt", "REAL unpushed work\n", "w"); rh.f("checkout", "-q", "main");
+    const rhMarker = join(root, "r12rh-helper-ran");
+    rh.f("config", `remote.${HUB}.url`, HUB); rh.f("config", `remote.${HUB}.vcs`, "rvfake");
+    rh.f("config", "alias.remote-rvfake", `!f() { : > ${rhMarker}; while read -r c r; do case "$c" in capabilities) printf "fetch\\n\\n";; list) printf "${rhMain} refs/heads/main\\n${rhFeat} refs/heads/feat\\n\\n";; "") exit 0;; esac; done; }; f`);
+    const rhScan = inCleanEnv(() => hubTransport(rh.w));
+    const rhInRepo = inCleanEnv(() => gitRun(rh.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), unreachable); // the shape of a listing run INSIDE the repository
+    const rhPrecondition = rhInRepo.ok && rhInRepo.stdout.includes(rhFeat) && readIfPresent(rhMarker) !== null;
+    unlinkSync(rhMarker);
+    const rhHere = process.cwd(); process.chdir(rh.w);
+    let rhList; try { rhList = inCleanEnv(() => listHub(), unreachable); } finally { process.chdir(rhHere); }
+    // ...and when the system temp directory is itself INSIDE the planted repository (the listing's empty directory is then below a repository): discovery must stop at the temp directory
+    mkdirSync(join(rh.w, "tmp")); const rhInside = inCleanEnv(() => listHub(), { ...unreachable, TMPDIR: join(rh.w, "tmp") });
+    const rhInsideRan = readIfPresent(rhMarker) !== null;
+    check("a remote helper planted by repository configuration alone (remote.<Hub URL>.vcs plus an inline alias.remote-<vcs>) is named by the transport scan as a gated override, and the Hub listing, run where no repository's configuration reaches it, never runs the helper nor returns its fake listing (R12-helper)",
+      rhPrecondition && rhScan.problems.some((p) => /^repository-scope remote\.https:\/\/github\.com\/DanFashauer\/SignalGrid-Review-Hub\.git\.vcs=rvfake \(local \.git\/config\)/.test(p)) &&
+      rhScan.problems.some((p) => /^repository-scope alias\.remote-rvfake=\(not shown\) \(local \.git\/config\)/.test(p)) && rhScan.problems.some((p) => /\.url=https:\/\/github\.com\/DanFashauer\/SignalGrid-Review-Hub\.git \(local \.git\/config\)/.test(p)) &&
+      readIfPresent(rhMarker) === null && !String(rhList.stdout).includes(rhFeat) && !rhInsideRan && !String(rhInside.stdout).includes(rhFeat));
+    const rhRun = wholeScript(rh, "r12rh-e2e", unreachable);
+    check("the whole check, in a repository carrying that configuration, exits 1 with a failing Hub-URL row that names the vcs and the alias, reads no listing, and never runs the helper (R12-helper-e2e)",
+      rhRun.status === 1 && /✗ Review Hub URL\s+repository-scope remote\..*\.vcs=rvfake/.test(rhRun.out) && /alias\.remote-rvfake/.test(rhRun.out) && !/all present on the Review Hub/.test(rhRun.out) && readIfPresent(rhMarker) === null);
+    const rhGlobal = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r12-global-helper.cfg", "[alias]\n\tremote-foo = !true\n[remote \"mirror\"]\n\tvcs = foo\n") });
+    const rhEnv = withEnvVars({ GIT_EXEC_PATH: "/tmp/evil-exec", GIT_REMOTE_HELPER: "x", GIT_KEEP_ME: "y" }, () => gitEnv());
+    const rhEnvScan = inCleanEnv(() => hubTransport(txc.w), { GIT_EXEC_PATH: "/tmp/evil-exec", GIT_REMOTE_HELPER: "x" });
+    check("the same keys in the ENVIRONMENT's own configuration (the global file) are reported, not gated, and the caller's GIT_EXEC_PATH / GIT_REMOTE* never reach a git started here (R12-helper-env)",
+      rhGlobal.problems.length === 0 && rhGlobal.trusted.some((t) => t.includes("alias.remote-foo=(not shown)")) && rhGlobal.trusted.some((t) => t.includes("remote.mirror.vcs=foo")) &&
+      !("GIT_EXEC_PATH" in rhEnv) && !("GIT_REMOTE_HELPER" in rhEnv) && rhEnv.GIT_KEEP_ME === "y" && rhEnvScan.problems.length === 0 &&
+      rhEnvScan.trusted.some((t) => t === "environment GIT_EXEC_PATH=/tmp/evil-exec (not passed to any git started here)") && rhEnvScan.trusted.some((t) => t.startsWith("environment GIT_REMOTE_HELPER=x")));
+    // (5) core.sshCommand: a global ssh rewrite of the Hub (trusted) plus a planted repository core.sshCommand served a fake listing
+    const ssx = mkFx("r12ss"); ssx.f("config", "remote.origin.url", HUB); ssx.f("config", "core.sshCommand", "/tmp/evil-ssh");
+    const sshRewrite = cfgFile("r12-global-ssh.cfg", "[url \"ssh://git@github.com/\"]\n\tinsteadOf = https://github.com/\n");
+    const ssScan = inCleanEnv(() => hubTransport(ssx.w), { GIT_CONFIG_GLOBAL: sshRewrite }), ssGlobal = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r12-global-sshcmd.cfg", "[core]\n\tsshCommand = ssh -i /home/u/key\n") });
+    check("a repository-scope core.sshCommand is a gated transport override (the global ssh rewrite beside it is only reported), and the same key in the global file is reported (R12-sshcommand)",
+      ssScan.problems.length === 1 && /^repository-scope core\.sshcommand=\/tmp\/evil-ssh \(local \.git\/config\)/.test(ssScan.problems[0]) && ssScan.trusted.some((t) => t.includes("rewrites the Hub URL to ssh://")) &&
+      ssGlobal.problems.length === 0 && ssGlobal.trusted.some((t) => t.includes("core.sshcommand=ssh -i /home/u/key")));
+    // (4) a credential inside a config KEY
+    const keyToken = "ghp_R12SECRETTOKEN0123", keyPw = "pw0r12secret";
+    const keyGlobal = cfgFile("r12-key-global.cfg", `[url "https://x-access-token:${keyToken}@github.com/"]\n\tinsteadOf = https://github.com/\n[http "https://user:${keyPw}@proxy.example/"]\n\tproxy = http://proxy.example:3128\n`);
+    const keyScan = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: keyGlobal });
+    const keyLocal = mkFx("r12kl"); keyLocal.f("config", "remote.origin.url", HUB); keyLocal.f("config", `url.https://x-access-token:${keyToken}@github.com/.insteadOf`, "https://github.com/");
+    const keyLocalScan = inCleanEnv(() => hubTransport(keyLocal.w));
+    const keyEvil = mkFx("r12ke"); keyEvil.f("config", "remote.origin.url", HUB); keyEvil.f("config", `url.https://tok:${keyPw}@evil.example/.insteadOf`, "https://github.com/");
+    const keyEvilScan = inCleanEnv(() => hubTransport(keyEvil.w));
+    const keyRx = mkFx("r12kr"); keyRx.f("config", "remote.origin.url", HUB); mkdirSync(join(keyRx.w, "docs")); writeFileSync(join(keyRx.w, "docs", "PURPOSE.md"), "fixture\n");
+    const keyRun = wholeScript(keyRx, "r12kr-e2e", { GIT_CONFIG_GLOBAL: keyGlobal });
+    check("a token inside a url.<base> key (or a password inside an http.<url> key) is printed nowhere, a global insteadOf that only adds credentials to the Hub URL is no finding (no 'rewrites X to X'), and the whole check stays green with a warning row (R12-key-scrub)",
+      keyScan.problems.length === 0 && !JSON.stringify(keyScan).includes(keyToken) && !JSON.stringify(keyScan).includes(keyPw) && keyScan.trusted.some((t) => t.includes("adds credentials to the Hub URL")) &&
+      keyScan.trusted.some((t) => t.includes("url.https://github.com/.insteadof=https://github.com/")) && keyScan.trusted.some((t) => t.includes("http.https://proxy.example/.proxy=")) &&
+      keyLocalScan.problems.length === 1 && !JSON.stringify(keyLocalScan).includes(keyToken) && /^repository-scope url\.https:\/\/github\.com\/\.insteadof=https:\/\/github\.com\/ \(local /.test(keyLocalScan.problems[0]) &&
+      keyEvilScan.problems.length >= 2 && keyEvilScan.problems.some((p) => /rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && !JSON.stringify(keyEvilScan).includes(keyPw) &&
+      keyRun.status === 0 && !keyRun.out.includes(keyToken) && !keyRun.err.includes(keyToken) && !keyRun.out.includes(keyPw) && /! Review Hub transport/.test(keyRun.out) && !/✗ Review Hub URL/.test(keyRun.out));
+    // (2) MAINLINE is anchored to the Hub's own listing: a hand-made refs/remotes/origin/main (porcelain only: merge --squash on a throwaway, update-ref, branch -D) cleared real unpushed work
+    const fm = mkFx("r12fm"), fmBase = fm.f("rev-parse", "HEAD");
+    const fmHonest = mainlineAnchor(fm.w, hubMapOf(fm.h), R6M);
+    fm.f("checkout", "-q", "-b", "feat"); fm.c("a.txt", "REAL unpushed work\n", "w");
+    fm.f("checkout", "-q", "-b", "throwaway", "main"); fm.f("merge", "-q", "--squash", "feat"); fm.f("commit", "-q", "-m", "forged squash"); const fmForged = fm.f("rev-parse", "HEAD");
+    fm.f("update-ref", R6M, fmForged); fm.f("checkout", "-q", "main"); fm.f("branch", "-D", "throwaway");
+    const fmRow = rowOf(fm.rows(), T_UNPUSHED), fmAnchor = mainlineAnchor(fm.w, hubMapOf(fm.h), R6M);
+    check("a hand-made refs/remotes/origin/main that is not the Hub's main nor an ancestor of it does not turn real unpushed work into 'squash-landed': the exemptions are off, the row says so and says to fetch (R12-mainline-forged)",
+      fmHonest.ok === true && hasLandedByContent("feat", R6M, fm.w) === true && fm.f("rev-parse", R6M) === fmForged && fmForged !== fmBase && fmAnchor.ok === false &&
+      !!fmRow && fmRow.gated === true && fmRow.detail.startsWith("feat — push, or confirm the remote") && fmRow.detail.includes("squash-landed exemptions OFF: origin/main is not confirmed as the Hub's main") && fmRow.detail.includes("run git fetch origin, then re-run") && !/squash-landed, /.test(JSON.stringify(fm.rows())));
+    const lgm = mkFx("r12lgm"), lgmBase = lgm.f("rev-parse", "HEAD"), lgmHub = hubAdvance(lgm, "main");
+    const lgmUnfetched = mainlineAnchor(lgm.w, hubMapOf(lgm.h), R6M);
+    lgm.f("fetch", "-q", "origin"); const lgmEqual = mainlineAnchor(lgm.w, hubMapOf(lgm.h), R6M);
+    lgm.f("update-ref", R6M, lgmBase); const lgmLagging = mainlineAnchor(lgm.w, hubMapOf(lgm.h), R6M);
+    check("the honest shapes stay anchored: the tracking ref equal to the Hub's main, and a LAGGING one (an ancestor of a Hub main that is in the store); the Hub's main not fetched is not anchored and the reason says to fetch (R12-mainline-anchor)",
+      lgmUnfetched.ok === false && /is not fetched here: run git fetch origin, then re-run/.test(lgmUnfetched.reason) && lgmEqual.ok === true && lgm.f("rev-parse", R6M) === lgmBase && lgmLagging.ok === true && lgmHub.length === 40 &&
+      mainlineAnchor(lgm.w, undefined, R6M).ok === false && mainlineAnchor(lgm.w, new Map(), R6M).ok === false && mainlineAnchor(lgm.w, hubMapOf(lgm.h), "refs/remotes/origin/nope").ok === false && mainlineAnchor(lgm.w, hubMapOf(lgm.h), "refs/heads/main").reason.includes("it is not a refs/remotes/origin/<name> ref"));
+    const mf = mkForged("r12mf"); mf.f.f("update-ref", "refs/remotes/origin/other", mf.T); // a hand-made ref at unpushed work, "held" by the Hub's other only through a forged-name parent
+    check("a hand-made mainline whose only link to the Hub's commit is a commit that does not hash to its name is not anchored: the chain is re-hashed (R12-mainline-chain)",
+      localCommits(mf.f.w, [mf.H2]).has(mf.H2) && mf.f.f("merge-base", "--is-ancestor", mf.T, mf.H2).length === 0 && mainlineAnchor(mf.f.w, mf.map, "refs/remotes/origin/other").ok === false);
+    // ...and the scratch declaration is read from mainline only while it is anchored
+    const fs2 = mkFx("r12fs");
+    fs2.f("checkout", "-q", "-b", "feat"); const fs2Tip = fs2.c("a.txt", "REAL unpushed work\n", "w"); fs2.f("checkout", "-q", "main");
+    const fs2At = new Date((Number(fs2.f("log", "-1", "--format=%ct", "feat")) + 3600) * 1000).toISOString();
+    fs2.f("checkout", "-q", "-b", "throwaway", "main"); mkdirSync(join(fs2.w, "docs", "agent"), { recursive: true });
+    writeFileSync(join(fs2.w, SCRATCH_FILE), JSON.stringify([{ name: "feat", tip: fs2Tip, reason: "r", origin: "DR-050 gate-falsification reproduction", declaredBy: "t", declaredAt: fs2At }]));
+    fs2.f("add", "-A"); fs2.f("commit", "-q", "-m", "forged mainline declaring feat scratch"); fs2.f("update-ref", R6M, fs2.f("rev-parse", "HEAD")); fs2.f("checkout", "-q", "main"); fs2.f("branch", "-D", "throwaway");
+    const fs2Map = hubMapOf(fs2.h), fs2Old = evaluateScratch(R6M, fs2.w, ["main", "feat"]), fs2New = mainlineScratch(fs2.w, fs2Map, ["main", "feat"], R6M);
+    check("a scratch declaration on a hand-made mainline excludes nothing: it is not read, and a warning row says so (the same declaration read from an anchored mainline still excludes the branch) (R12-scratch-forged)",
+      fs2Old.excluded.join() === "feat" && fs2New.anchor.ok === false && fs2New.scratch.excluded.length === 0 && fs2New.scratch.exists === false && !!fs2New.row && fs2New.row.state === "warn" && fs2New.row.gated === false &&
+      /^NOT read — origin\/main is not confirmed as the Hub's main/.test(fs2New.row.detail) && (() => { fs2.f("push", "-q", "-f", "origin", `${R6M}:refs/heads/main`); return mainlineScratch(fs2.w, hubMapOf(fs2.h), ["main", "feat"], R6M).scratch.excluded.join() === "feat"; })());
+    // (3) a hand-made origin/<other> at the tip of an unfetched same-name branch with local commits
+    const oz = mkFx("r12oz");
+    oz.f("checkout", "-q", "-b", "X"); oz.c("x1.txt", "1\n", "x1"); oz.f("push", "-q", "origin", "X");
+    const ozHub = hubAdvance(oz, "X"); execFileSync("git", ["-C", oz.h, "update-ref", "refs/heads/Z", ozHub], { env: FX_ENV }); // the Hub moves X and gains a Hub-only Z; this checkout fetches neither
+    oz.c("x2.txt", "REAL unpushed\n", "x2");
+    const ozHonest = rowOf(oz.rows(), T_AHEAD);
+    oz.f("update-ref", "refs/remotes/origin/Z", "refs/heads/X");
+    const ozPlanted = rowOf(oz.rows(), T_AHEAD), ozRows = oz.rows();
+    oz.f("update-ref", "-d", "refs/remotes/origin/X");
+    const ozNoTracking = rowOf(oz.rows(), T_AHEAD);
+    check("a hand-made refs/remotes/origin/Z at the tip does not downgrade the gated 'unfetched same-name tip with local commits' to an ungated warning, with the branch's own tracking ref and in a single-branch clone without one (R12-origin-other)",
+      !!ozHonest && ozHonest.gated === true && ozHonest.detail.startsWith("X (+1 beyond origin/X)") && !!ozPlanted && ozPlanted.gated === true && ozPlanted.detail.startsWith("X (+1 beyond origin/X)") &&
+      !ozRows.some((r) => r.what === T_UNKNOWN && /X/.test(r.detail)) && !!ozNoTracking && ozNoTracking.gated === true && /^X \(\+\d+ beyond the Hub's listed commits\)/.test(ozNoTracking.detail));
+    // (6) hermetic: the self-test isolates the developer's own git configuration for every fixture
+    const hermProbe = mkFx("r12h");
+    const hermGet = (k) => hermProbe.f("config", "--get", "--default", "", k);
+    check("the self-test runs with an empty global git configuration and no system one for every fixture: fetch.prune and http.sslVerify of the developer's own configuration are not seen (R12-hermetic)",
+      process.env.GIT_CONFIG_GLOBAL === emptyGlobalConfig && process.env.GIT_CONFIG_NOSYSTEM === "1" && !("GIT_SSL_NO_VERIFY" in process.env) && hermGet("fetch.prune") === "" && hermGet("http.sslverify") === "" && hermGet("merge.ff") === "");
+    if (process.env.LOOP_STATE_SELFTEST_NESTED === "1") {
+      check("(the hostile-configuration run is not nested a second time) (R12-hostile-global)", true);
+    } else {
+      const hostile = cfgFile("r12-hostile-global.cfg", "[fetch]\n\tprune = true\n[http]\n\tsslVerify = false\n[merge]\n\tff = only\n[core]\n\thooksPath = /nonexistent-hooks\n");
+      const nested = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--self-test"], { encoding: "utf8", timeout: 900000, env: { ...process.env, GIT_CONFIG_GLOBAL: hostile, LOOP_STATE_SELFTEST_NESTED: "1" } });
+      const nestedTail = String(nested.stdout).trim().split("\n").pop() || "";
+      check("the whole self-test, started under a global git configuration that sets fetch.prune=true, http.sslVerify=false, merge.ff=only and a missing core.hooksPath, passes (R12-hostile-global)",
+        nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
+    }
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit
@@ -2959,6 +3139,7 @@ function selfTest() {
   } catch (e) {
     check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
   } finally {
+    for (const [k, v] of Object.entries(callerGitEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     try { rmSync(root, { recursive: true, force: true }); } catch { /* temp dir */ }
   }
   const failed = checks.filter(([, ok]) => !ok).length;

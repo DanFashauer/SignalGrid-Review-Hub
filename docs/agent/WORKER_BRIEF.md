@@ -68,11 +68,13 @@ first; it binds you. Then:
    with the repo's one shape: `FIX PROPOSED <date> (branch <your branch>,
    lands under DR-037)` for SAFETY_MACHINERY or autonomous files, `FIX
    PROPOSED <date> (branch <your branch>, owner merges)` for DECISION_PATH
-   ones; the row-status drift detector (PR #1378) reads only that shape, and
-   a `(PR #n, sha)` form is invisible to it. Then run both gates on that
-   final head and write the body for it. No product claim the launch-claims
-   gate does not allow. No model identifier anywhere in commits, PR text or
-   code.
+   ones. Use the branch form: it is the repo's one shape. The row-status
+   drift detector (PR #1378) is still open and not on mainline; its head
+   464b9cae0cc09eb935c12254e2c839e0ad68601d reads that shape and also a
+   `(PR #n, sha)` one (PR_SHAPE, classifyPrShape). Then run both gates on
+   that final head and write the body for it. No product claim the
+   launch-claims gate does not allow. No model identifier anywhere in
+   commits, PR text or code.
 7. **Review rounds.** A verdict comment on your PR is the next instruction.
    `fix-needed`: fix on this same branch as NEW commits (plus a merge of
    `origin/SignalGrid_Alpha` if mainline moved), refresh the body for the new

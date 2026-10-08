@@ -305,25 +305,77 @@ function isOnHubBySha(branch, cwd = repo) {
 // "Local tip ahead of its same-named Hub branch" counted `hubSha..branch` and nothing else, so
 // it never asked the question the sibling seam above already answers: is this tip on the Hub
 // under ANOTHER ref? Measured today: claude/signalgrid-launch-plan-emxm01 sits at 369913e57,
-// an ancestor of origin/SignalGrid_Alpha (`git merge-base --is-ancestor` exits 0; `git branch -r
-// --contains` lists origin/SignalGrid_Alpha), while a stale same-named Hub branch from
-// 2026-09-15 (5eb1ead40, a closed PR #531) is 2380 commits apart from it. The seam reported
-// "+50" and BOTH remedies it offers were wrong: the push is a non-fast-forward (refused without
-// force, and force is forbidden here) and "confirm the remote" was already true, just unread.
-// A session cannot clear that, so it learns to narrate past it.
+// an ancestor of origin/SignalGrid_Alpha (`git merge-base --is-ancestor` exits 0), while a stale
+// same-named Hub branch from 2026-09-15 (5eb1ead40, a closed PR #531) has DIVERGED from it:
+// `gh api repos/DanFashauer/SignalGrid-Review-Hub/compare/5eb1ead40...369913e57` reads
+// ahead_by 2611, behind_by 35, merge base 9ee581eb (2026-09-15T00:19:37Z). The "+50" the seam
+// printed is the shallow clone's depth (rev-list counts only back to the shallow boundary), not
+// the divergence. The seam reported "+50" and BOTH remedies it offers were wrong: the push is a
+// non-fast-forward (refused without force, and force is forbidden here) and "confirm the remote"
+// was already true, just unread. A session cannot clear that, so it learns to narrate past it.
 //
-// The rule is the one stated above isOnHubBySha: the tip being contained in ANY remote ref IS
-// "confirm the remote". The same-named remote ref cannot be that ref (a tip AHEAD of it is not
-// reachable from it), so any containing ref is another one. The branch is then "confirmed", not
-// ahead, and the seam REPORTS it by name so the exclusion is visible, never silent.
-// Fail-closed exactly like the alias check: a git error, an unreadable ref or an empty answer
-// leaves the branch AHEAD; an unknown Hub sha stays UNKNOWN (containment is only asked of a
-// branch already proven ahead, never used to clear an unreadable comparison); and a branch with
-// a commit no remote ref has is contained in none, so renaming cannot clear real local work.
-function sameNameVerdict(branch, hubSha, cwd = repo) {
+// The rule is the one stated above isOnHubBySha, with ONE difference that matters: that sibling
+// reads the LOCAL refs/remotes snapshot, and a snapshot is not the Hub. A first version of this
+// function trusted `git branch -r --contains` and an Opus refuter overturned it with four
+// fixtures, each reading "confirmed" for a tip that is on the Hub nowhere: (F1) the Hub rewound
+// the same-named branch while local origin/X still sat at the old tip; (F2) a tracking ref for a
+// branch the Hub has since deleted (no fetch.prune); (F3) a second remote (fork/X); (F4) a
+// hand-written refs/remotes/pr/999. The comment that version carried, "the same-named remote ref
+// cannot be that ref", was false.
+//
+// So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took, never to a local
+// snapshot: a ref counts only if it is origin/<name> for a name that is not this branch and not
+// HEAD, AND its local sha EQUALS the Hub's current sha for <name> (hubShaMap). Then the tip is
+// an ancestor of a commit the Hub holds right now under another name, and ancestry is content-
+// addressed, so the local object graph cannot disagree with the Hub about it. Stale origin/X
+// (F1), a pruned-late origin/Z the Hub no longer lists (F2), any other remote (F3) and any
+// hand-made ref (F4) all fail that test. The seam REPORTS a confirmed branch by name so the
+// exclusion is visible, never silent. Fail-closed exactly like the alias check: a git error, an
+// unreadable ref, an empty answer or a missing map leaves the branch AHEAD; an unknown Hub sha
+// stays UNKNOWN (containment is only asked of a branch already proven ahead, never used to clear
+// an unreadable comparison); and a branch with a commit no Hub ref holds is contained in none,
+// so renaming cannot clear real local work.
+function hubNamesHoldingTip(branch, hubShaMap, cwd = repo) {
+  if (!(hubShaMap instanceof Map)) return [];
+  const git = gitIn(cwd);
+  const tip = git("rev-parse", "--verify", `${branch}^{commit}`);
+  if (!tip) return [];
+  const rows = git("for-each-ref", "--contains", tip, "--format=%(refname:lstrip=3) %(objectname)", "refs/remotes/origin");
+  if (!rows) return [];
+  const names = [];
+  for (const line of rows.split("\n")) {
+    const i = line.lastIndexOf(" ");
+    if (i < 1) continue;
+    const name = line.slice(0, i), sha = line.slice(i + 1);
+    if (name === branch || name === "HEAD") continue;
+    if (sha && hubShaMap.get(name) === sha) names.push(name);
+  }
+  return names;
+}
+function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
   const r = aheadOfHub(branch, hubSha, cwd);
   if (r.state !== "ahead") return r;
-  return isOnHubBySha(branch, cwd) ? { state: "confirmed", ahead: r.ahead } : r;
+  return hubNamesHoldingTip(branch, hubShaMap, cwd).length > 0 ? { state: "confirmed", ahead: r.ahead } : r;
+}
+
+// The row the seam prints for the same-named comparison, pure so the self-test can call it: a
+// confirmed branch is named in the detail (never swallowed), and the ok row's title says what it
+// now covers. verdicts: [{ branch, state, ahead }] as sameNameVerdict returns, plus the name.
+function sameNameRows(verdicts) {
+  const ahead = verdicts.filter((v) => v.state === "ahead").map((v) => `${v.branch} (+${v.ahead})`);
+  const confirmed = verdicts.filter((v) => v.state === "confirmed").map((v) => v.branch);
+  const unknown = verdicts.filter((v) => v.state === "unknown").length;
+  const note = confirmed.length
+    ? ` (${confirmed.length} same-named branch(es) ahead of the Hub's same name but confirmed on the Hub under another branch: ${confirmed.join(", ")})`
+    : "";
+  if (ahead.length) {
+    return { level: "fail", title: "Local tip ahead of its same-named Hub branch", detail: `${ahead.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${note}` };
+  }
+  return {
+    level: "ok",
+    title: "Same-named branches at or behind their Hub tip, or confirmed on the Hub under another branch",
+    detail: `${verdicts.length - unknown} branch(es) compared by sha${note}`,
+  };
 }
 
 // ── Declared scratch branches ───────────────────────────────────────────────
@@ -505,19 +557,10 @@ if (hubBranches.length) {
   // is not lost (the worktree belongs to a live agent, and anything real is pushed
   // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
   const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
-  const aheadRows = [], unknownRows = [], confirmedRows = [];
-  for (const b of sameNamed) {
-    const r = sameNameVerdict(b, hubSha.get(b));
-    if (r.state === "ahead") aheadRows.push(`${b} (+${r.ahead})`);
-    else if (r.state === "confirmed") confirmedRows.push(b);
-    else if (r.state === "unknown") unknownRows.push(b);
-  }
-  const confirmedNote = confirmedRows.length ? ` (${confirmedRows.length} same-named branch(es) whose tip is on the Hub under another ref: ${confirmedRows.join(", ")})` : "";
-  if (aheadRows.length) {
-    add("fail", "Local tip ahead of its same-named Hub branch", `${aheadRows.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${confirmedNote}`);
-  } else {
-    add("ok", "Same-named branches at or behind their Hub tip", `${sameNamed.length - unknownRows.length} branch(es) compared by sha${confirmedNote}`);
-  }
+  const verdicts = sameNamed.map((b) => ({ branch: b, ...sameNameVerdict(b, hubSha.get(b), hubSha) }));
+  const unknownRows = verdicts.filter((v) => v.state === "unknown").map((v) => v.branch);
+  const sameRow = sameNameRows(verdicts);
+  add(sameRow.level, sameRow.title, sameRow.detail);
   if (unknownRows.length) {
     add("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
   }
@@ -748,6 +791,13 @@ function selfTest() {
   const g = gitIn(work);
   const sh = (...a) => execFileSync("git", a, { cwd: work, stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
   const put = (f, s) => writeFileSync(join(work, f), s);
+  // The Hub as the seam sees it: name -> sha from `ls-remote --heads`, never from a local ref. `hb` moves the bare remote
+  // behind the work clone's back (a rewind, a deletion) WITHOUT refetching, which is how a local snapshot goes stale.
+  const hubMap = () => new Map(execFileSync("git", ["ls-remote", "--heads", hub], { encoding: "utf8" }).split("\n").filter(Boolean)
+    .map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/")).map(([sha, ref]) => [ref.slice("refs/heads/".length), sha]));
+  const hb = (...a) => execFileSync("git", ["-C", hub, ...a], { stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
+  const cm = (f, text) => { put(f, text); sh("add", "-A"); sh("commit", "-q", "-m", f); return g("rev-parse", "HEAD"); };
+  const verdictOf = (b, map = hubMap()) => sameNameVerdict(b, map.get(b), map, work);
   const checks = [];
   const check = (name, ok) => { checks.push([name, ok]); console.log(`  ${ok ? "ok  " : "FAIL"} — self-test: ${name}`); };
   try {
@@ -788,17 +838,62 @@ function selfTest() {
     check("a same-named branch one commit ahead of its Hub tip is reported with the count (d)", r.state === "ahead" && r.ahead === 1);
     check("a Hub tip not in the local store reads unknown, never clean (d-unknown)", aheadOfHub("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
     // (d-alias) the same one-ahead tip, now ALSO on the Hub under another name → confirmed, not ahead
-    check("with no other remote ref holding the tip, sameNameVerdict still reads ahead (d-alias-pre)", sameNameVerdict("same", hubTip, work).state === "ahead");
+    check("with no other remote ref holding the tip, sameNameVerdict still reads ahead (d-alias-pre)", sameNameVerdict("same", hubTip, hubMap(), work).state === "ahead");
     sh("push", "-q", "origin", "same:refs/heads/elsewhere"); sh("fetch", "-q", "origin");
-    const vAlias = sameNameVerdict("same", hubTip, work);
+    const vAlias = sameNameVerdict("same", hubTip, hubMap(), work);
     check("a same-named branch ahead of its Hub name whose tip is on the Hub under another ref reads confirmed (d-alias)", vAlias.state === "confirmed" && vAlias.ahead === 1);
+    // (d-alias-nomap) no Hub map at all, while the tip IS on origin/elsewhere: containment has nothing to be anchored to, so it can never confirm
+    check("with no Hub sha map the branch stays ahead, never confirmed (d-alias-nomap)", sameNameVerdict("same", hubTip, undefined, work).state === "ahead" && sameNameVerdict("same", hubTip, {}, work).state === "ahead");
+    // (d-alias-map) the anchored positive case again, through the map: origin/<other> equals the Hub's own sha for <other>
+    check("the tip held by origin/elsewhere at the Hub's own sha for elsewhere is the one thing that confirms (d-alias-map)",
+      hubNamesHoldingTip("same", hubMap(), work).join() === "elsewhere" && g("rev-parse", "origin/elsewhere") === hubMap().get("elsewhere"));
     // (d-alias-unknown) asked while the tip IS contained elsewhere: containment must never clear an unreadable comparison
-    check("an unknown Hub sha still reads unknown even when the tip is on the Hub under another ref (d-alias-unknown)", sameNameVerdict("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
+    check("an unknown Hub sha still reads unknown even when the tip is on the Hub under another ref (d-alias-unknown)", sameNameVerdict("same", "0123456789abcdef0123456789abcdef01234567", hubMap(), work).state === "unknown");
     // (d-alias-fail-closed) one MORE local commit that no remote ref has → back to ahead, count 2
     put("d.txt", "unpushed\n"); sh("add", "-A"); sh("commit", "-q", "-m", "ahead again, pushed nowhere");
-    const vFail = sameNameVerdict("same", hubTip, work);
+    const vFail = sameNameVerdict("same", hubTip, hubMap(), work);
     check("one more local commit that no remote ref holds is back to ahead with the count 2 (d-alias-fail-closed)", vFail.state === "ahead" && vFail.ahead === 2);
     check("a branch that does not resolve is never confirmed (d-alias-fail-closed2)", isOnHubBySha("no-such-branch", work) === false);
+    // (d-same) a branch AT its Hub tip stays "same" even when that tip is also held by another Hub name (origin/main): containment
+    // is asked only of a branch already proven ahead, so the verdict is never renamed "confirmed" (M4)
+    sh("checkout", "-q", "-b", "mtip", "main"); sh("push", "-q", "origin", "mtip");
+    const vSame = verdictOf("mtip");
+    check("a branch at its Hub tip stays same although origin/main also holds that tip (d-same)", vSame.state === "same" && vSame.ahead === 0 && hubMap().get("main") === hubMap().get("mtip"));
+    // The four ways a LOCAL snapshot lies about the Hub (the refuter's F1-F4). Each tip below is real work that no Hub
+    // ref holds, and a version that trusted `git branch -r --contains` read every one of them "confirmed".
+    // (d-F1) the Hub rewinds the same-named branch while local origin/X still sits at the old tip
+    sh("checkout", "-q", "-b", "rw", "main"); const rw1 = cm("rw1.txt", "1\n"); sh("push", "-q", "origin", "rw"); cm("rw2.txt", "2\n"); sh("push", "-q", "origin", "rw");
+    hb("update-ref", "refs/heads/rw", rw1);
+    check("the Hub rewound the same name while origin/rw is stale at the old tip: ahead, not confirmed (d-F1)",
+      g("rev-parse", "origin/rw") !== hubMap().get("rw") && verdictOf("rw").state === "ahead");
+    // (d-F1b) same, but the stale ref is a DIFFERENT Hub name that the Hub still lists, at a sha that no longer matches
+    sh("checkout", "-q", "-b", "stale", "main"); const st1 = cm("st1.txt", "1\n"); sh("push", "-q", "origin", "stale"); cm("st2.txt", "2\n");
+    sh("push", "-q", "origin", "stale:refs/heads/stale-alias"); hb("update-ref", "refs/heads/stale-alias", st1);
+    check("another Hub name listed at a different sha than the local ref holds does not confirm (d-F1b)",
+      hubMap().has("stale-alias") && g("rev-parse", "origin/stale-alias") !== hubMap().get("stale-alias") && verdictOf("stale").state === "ahead");
+    // (d-F2) a tracking ref for a branch the Hub has since deleted (no fetch.prune) still contains the tip
+    sh("checkout", "-q", "-b", "zdel", "main"); cm("z1.txt", "1\n"); sh("push", "-q", "origin", "zdel"); cm("z2.txt", "2\n");
+    sh("push", "-q", "origin", "zdel:refs/heads/zgone"); hb("update-ref", "-d", "refs/heads/zgone"); sh("fetch", "-q", "origin");
+    check("a tracking ref the Hub no longer lists (deleted, not pruned) does not confirm (d-F2)",
+      g("branch", "-r", "--contains", g("rev-parse", "zdel")).includes("origin/zgone") && !hubMap().has("zgone") && verdictOf("zdel").state === "ahead");
+    // (d-F3) the tip is held only by a second remote, never by the Hub
+    const fork = join(root, "fork.git"); execFileSync("git", ["init", "-q", "--bare", fork]); sh("remote", "add", "fork", fork);
+    sh("checkout", "-q", "-b", "forked", "main"); cm("f1.txt", "1\n"); sh("push", "-q", "origin", "forked"); cm("f2.txt", "2\n"); sh("push", "-q", "fork", "forked"); sh("fetch", "-q", "fork");
+    check("a ref on a second remote does not confirm (d-F3)",
+      g("branch", "-r", "--contains", g("rev-parse", "forked")).includes("fork/forked") && verdictOf("forked").state === "ahead");
+    // (d-F4) a hand-written refs/remotes ref that no remote owns
+    sh("checkout", "-q", "-b", "handmade", "main"); cm("h1.txt", "1\n"); sh("push", "-q", "origin", "handmade"); const h2 = cm("h2.txt", "2\n");
+    sh("update-ref", "refs/remotes/pr/999", h2);
+    check("a hand-made refs/remotes ref does not confirm (d-F4)",
+      g("branch", "-r", "--contains", h2).includes("pr/999") && verdictOf("handmade").state === "ahead");
+    // (d-rows) the row text names a confirmed branch, and the title says what the ok row covers (M5)
+    const rowsOk = sameNameRows([{ branch: "b-same", state: "same", ahead: 0 }, { branch: "claude/conf-branch", state: "confirmed", ahead: 3 }, { branch: "b-unk", state: "unknown" }]);
+    check("the ok row names the confirmed branch and counts the compared ones (d-rows)",
+      rowsOk.level === "ok" && rowsOk.detail.includes("claude/conf-branch") && rowsOk.detail.startsWith("2 branch(es) compared by sha") && /confirmed on the Hub under another branch/.test(rowsOk.title));
+    const rowsFail = sameNameRows([{ branch: "claude/conf-branch", state: "confirmed", ahead: 3 }, { branch: "x-ahead", state: "ahead", ahead: 2 }]);
+    check("the fail row names the ahead branch with its count and still names the confirmed one (d-rows-fail)",
+      rowsFail.level === "fail" && rowsFail.detail.startsWith("x-ahead (+2)") && rowsFail.detail.includes("claude/conf-branch"));
+    check("with nothing confirmed the row carries no confirmed note (d-rows-none)", !/confirmed/.test(sameNameRows([{ branch: "b", state: "same", ahead: 0 }]).detail));
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

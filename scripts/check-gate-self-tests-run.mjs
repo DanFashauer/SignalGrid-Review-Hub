@@ -35,10 +35,13 @@
 // scripts/lib/workflow-invocation.mjs — the SAME matcher scripts/check-preflight-ci-parity.mjs
 // uses (command position only; quotes masked; `echo`, a quoted `|`, a `continue-on-error` step and a
 // folded `run: >` credit nothing). Only workflows that trigger on `pull_request` or `push` count: a
-// `workflow_dispatch`-only file never runs on a change. PATH FILTERS ARE NOT READ — a step in a
-// workflow that triggers on push but filters out the gate's paths is credited (a known limit).
+// `workflow_dispatch`-only file never runs on a change. BRANCH AND PATH FILTERS ARE NOT READ — a step in a
+// workflow whose push trigger is limited to one branch, or filters out the gate's paths, is credited (a known
+// limit). A STEPS entry with extra keys after `cmd` (heavy, needsNativeBuild, …) is credited although preflight
+// can skip it under --quick or on another platform; no self-test step on the real tree carries one.
 // STEPS sources (scripts/preflight.mjs, scripts/verify-breadth.mjs) must be `{ name: "…", cmd: [...] }`
-// objects outside every comment; `bash -c "…"` entries are NOT credited (they are spawned here instead —
+// objects outside every comment AND outside every string or template literal (matched on a view with string
+// bodies masked); `bash -c "…"` entries are NOT credited (they are spawned here instead —
 // the safe direction: the worst case is one extra spawn of a self-test that was already registered).
 //
 // COMMENT STRIPPING is a small JS scanner (strings, template literals, regex literals and comments),
@@ -64,28 +67,34 @@ const SPAWN_TIMEOUT_MS = 120_000;
 /** Pure: the source with every comment blanked (line structure kept). Strings, template
  *  literals (with `${}` nesting) and regex literals are walked, so comment markers inside them
  *  are not comments. */
-export function stripComments(src) {
+export function stripComments(src, { maskStrings = false } = {}) {
   const n = src.length;
   let out = "";
   let i = 0;
   let prev = ""; // last significant code character, for the regex-vs-division call
   let prevWord = "";
-  const REGEX_AFTER = new Set(["", "(", ",", "=", ":", "[", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "<", ">", "~", "^"]);
+  let wordOpen = false;
+  // After `)` and `]` the call is ambiguous (division, or `if (x) /re/.test(y)`); a regex read as division
+  // can open a bogus comment and blank real code, a division read as a regex only copies text, so regex wins.
+  const REGEX_AFTER = new Set(["", "(", ")", ",", "=", ":", "[", "]", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "<", ">", "~", "^"]);
+  const REGEX_WORDS = new Set(["return", "typeof", "else", "case", "in", "of", "void", "delete", "throw", "yield", "await", "do", "instanceof", "new"]);
+  const FILL = "\u0001";
+  const lit = (t) => (maskStrings ? t.replace(/[^\n]/g, FILL) : t); // string text, or filler of the same length
   const copyString = (q) => { // at src[i] === q; copies through the closing quote or the line end
     out += src[i++];
     while (i < n && src[i] !== "\n") {
-      if (src[i] === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
+      if (src[i] === "\\") { out += lit(src.slice(i, i + 2)); i += 2; continue; }
       if (src[i] === q) { out += src[i++]; return; }
-      out += src[i++];
+      out += lit(src[i++]);
     }
   };
   const copyTemplate = () => {
     out += src[i++];
     while (i < n) {
-      if (src[i] === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
+      if (src[i] === "\\") { out += lit(src.slice(i, i + 2)); i += 2; continue; }
       if (src[i] === "`") { out += src[i++]; return; }
-      if (src[i] === "$" && src[i + 1] === "{") { out += "${"; i += 2; code(true); continue; }
-      out += src[i++];
+      if (src[i] === "$" && src[i + 1] === "{") { out += lit("${"); i += 2; code(true); continue; }
+      out += lit(src[i++]);
     }
   };
   function code(untilBrace) {
@@ -102,7 +111,7 @@ export function stripComments(src) {
       }
       if (c === '"' || c === "'") { copyString(c); prev = "a"; prevWord = ""; continue; }
       if (c === "`") { copyTemplate(); prev = "a"; prevWord = ""; continue; }
-      if (c === "/" && (REGEX_AFTER.has(prev) || prevWord === "return" || prevWord === "typeof")) {
+      if (c === "/" && (REGEX_WORDS.has(prevWord) || (REGEX_AFTER.has(prev) && !/[A-Za-z0-9_$]/.test(prev)))) {
         let j = i + 1, inClass = false, ok = false;
         while (j < n && src[j] !== "\n") {
           if (src[j] === "\\") { j += 2; continue; }
@@ -119,9 +128,9 @@ export function stripComments(src) {
       }
       out += c;
       i++;
-      if (/\s/.test(c)) continue;
-      if (/[A-Za-z0-9_$]/.test(c)) { prevWord = /[A-Za-z_$]/.test(prevWord.slice(-1) || "a") && /[A-Za-z0-9_$]/.test(prev) ? prevWord + c : c; prev = c; }
-      else { prev = c; prevWord = ""; }
+      if (/\s/.test(c)) { wordOpen = false; continue; }
+      if (/[A-Za-z0-9_$]/.test(c)) { prevWord = wordOpen ? prevWord + c : c; wordOpen = true; prev = c; }
+      else { prev = c; prevWord = ""; wordOpen = false; }
     }
   }
   code(false);
@@ -145,9 +154,14 @@ export function namesControl(src) {
  *  `pnpm run <alias>` resolves through `aliases`. `bash -c` strings credit nothing. */
 export function selfTestFilesInSteps(source, aliases = new Map()) {
   const out = new Set();
+  // Match on the view in which every string/template body is filler, so a string CONSTANT holding a whole
+  // `{ name: "…", cmd: [...] }` entry is invisible; then read the real text of the matched span.
+  const masked = stripComments(source, { maskStrings: true });
   const live = stripComments(source);
-  for (const m of live.matchAll(/\bname:\s*(["'`])(?:(?!\1)[^\\\n]|\\.)*\1\s*,\s*cmd:\s*\[([^\]]+)\]/g)) {
-    const parts = m[2].replace(/["'`]/g, "").split(",").map((x) => x.trim());
+  if (masked.length !== live.length) return out; // the two views must align; if not, credit nothing
+  for (const m of masked.matchAll(/\bname:\s*(["'`])\u0001*\1\s*,\s*cmd:\s*\[([^\]]*)\]/g)) {
+    const start = m.index + m[0].length - m[2].length - 1;
+    const parts = live.slice(start, start + m[2].length).replace(/["'`]/g, "").split(",").map((x) => x.trim());
     if (!parts.includes("--self-test")) continue;
     if (parts[0] === "node" && /^scripts\/check-[\w.-]+\.mjs$/.test(parts[1] ?? "")) out.add(parts[1].split("/").pop());
     else if (parts[0] === "pnpm" && parts[1] === "run" && aliases.has(parts[2])) out.add(aliases.get(parts[2]));
@@ -166,17 +180,21 @@ export function gateAliases(pkgScripts) {
   return out;
 }
 
-/** Pure: does this workflow text trigger on a pull request or a push (the only runs that gate a change)? */
+/** Pure: does this workflow text trigger on a pull request or a push (the only runs that gate a change)?
+ *  Only the DIRECT children of `on:` count — an input named `push` under workflow_dispatch does not.
+ *  Branch and path filters are not read. */
 export function runsOnChange(text) {
   const t = stripYamlComments(text);
   const m = /^on:[ \t]*(.*)$/m.exec(t);
   if (!m) return false;
   if (m[1].trim() !== "") return /\b(pull_request|push)\b/.test(m[1]); // on: push / on: [push, pull_request]
-  const after = t.slice(m.index + m[0].length).split("\n");
-  for (const l of after) {
+  let indent = -1;
+  for (const l of t.slice(m.index + m[0].length).split("\n")) {
     if (l.trim() === "") continue;
-    if (!/^[ \t]/.test(l)) break; // next top-level key
-    if (/^[ \t]+(pull_request|push)[ \t]*:/.test(l)) return true;
+    const ind = /^[ \t]*/.exec(l)[0].length;
+    if (ind === 0) break; // next top-level key
+    if (indent < 0) indent = ind;
+    if (ind === indent && /^(pull_request|push)[ \t]*:/.test(l.trim())) return true;
   }
   return false;
 }
@@ -329,7 +347,10 @@ function selfTest() {
     R("a commented-out preflight step", { preflight: `  // { name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] },` });
     R("a block-commented preflight/breadth step", { breadth: `const STEPS = [\n  /* parked: { name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }, */\n];\n` });
     R("a trailing-comment step", { preflight: `  { name: "q", cmd: ["node", "scripts/other.mjs"] }, // { name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }` });
-    R("a string constant naming a cmd array", { preflight: `  const doc = 'cmd: ["node", "scripts/check-bad.mjs", "--self-test"]';` });
+    R("a string constant holding a whole step entry", { preflight: `  const doc = '{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }';` });
+    R("a template literal holding a whole step entry (breadth)", { breadth: "const doc = `{ name: \"r\", cmd: [\"node\", \"scripts/check-bad.mjs\", \"--self-test\"] }`;\n" });
+    R("a plain flag-less step for the gate", { preflight: `  { name: "r", cmd: ["node", "scripts/check-bad.mjs"] },` });
+    R("a non-node runner naming the gate", { preflight: `  { name: "r", cmd: ["echo", "scripts/check-bad.mjs", "--self-test"] },` });
     R("a bash -c step that only echoes it", { preflight: `  { name: "r", cmd: ["bash", "-c", "echo node scripts/check-bad.mjs --self-test"] },` });
     R("a workflow name: line", { workflow: `      - name: ${CMD}\n        run: echo nothing\n` });
     R("a YAML comment", { workflow: `      # run: ${CMD}\n` });
@@ -339,6 +360,7 @@ function selfTest() {
     R("a continue-on-error step", { workflow: `      - continue-on-error: true\n        run: ${CMD}\n` });
     R("a folded run: > whose first line is echo", { workflow: `      - run: >\n          echo skipped\n          ${CMD}\n` });
     R("a step in a workflow_dispatch-only file", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\n" });
+    R("a dispatch-only workflow with an input named push", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n" });
 
     // ── the handler/comment scanner: a glob string must not blank a real handler ──
     red("a handler after a \"lib/**\" glob string is still seen (and spawned, and fails)", mkTree("red-glob", { "check-glob.mjs": `const g = ["lib/**", "docs/*"];\n${BAD_ST}/* tail */\n` }), "check-glob.mjs");
@@ -387,6 +409,11 @@ function selfTest() {
     note("pure: a commented-out handler is not a handler", !hasHandler('// if (argv.includes("--self-test"))\nconst a = 1;'));
     note("pure: a handler after `\"a/**\"` is a handler", hasHandler('const g = "a/**";\nif (x.includes("--self-test")) f();\n// */\n'));
     note("pure: a handler inside a template ${} after a nested template is a handler", hasHandler('const t = `a ${`b`} c`;\nif (x.includes("--self-test")) f();\n'));
+    note("pure: an escaped quote does not end a string (\"a\\\"/*\" then a handler)", hasHandler('const s = "a\\"/*"; if (x.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: an unterminated quote ends at the newline (a commented handler on the next line stays a comment)", !hasHandler('const s = "oops;\n// if (x.includes("--self-test")) f();\nconst t = "x";\n'));
+    note("pure: a regex literal after `)` holding /* does not hide a handler", hasHandler('if (x) /[/*]/.test(y);\nif (a.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: a regex literal after `else return` holding /* does not hide a handler", hasHandler('else return /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: runsOnChange reads only direct children of on:", !runsOnChange("on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n") && runsOnChange("on:\n  push:\n    branches: [a]\n"));
     note("pure: exit 1 earns no credit", !spawnCredit({ status: 1, stdout: "self-test" }).ok);
     note("pure: exit 0 with silent stdout earns no credit", !spawnCredit({ status: 0, stdout: "all ok" }).ok);
     note("pure: a timeout (status null) earns no credit", !spawnCredit({ status: null, signal: "SIGKILL", stdout: "self-test" }).ok);

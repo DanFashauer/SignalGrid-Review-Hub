@@ -61,6 +61,30 @@ async function main() {
   check("end marks ended", (await store.end("tenant_northwind", "sess_pg_a"))?.status === "ended");
   check("tenant isolation: cross-tenant end returns null", (await store.end("tenant_atlas", "sess_pg_b")) === null);
 
+  // ── UNKNOWN DURABLE STATUS reads as expired (fail closed) ───────────────────
+  // `status` is TEXT NOT NULL with no CHECK, so an out-of-band row can hold any
+  // string. Each is inserted raw (the store only ever writes active|expired|ended).
+  // Past expiry AND a still-future expiry: an unknown status must read expired
+  // either way, and refresh must hand back nothing.
+  const planted = async (id: string, status: string, expiresAtMs: number) =>
+    admin.query(
+      `INSERT INTO sessions (id, tenant_id, identity_ref, device_ref, workflow_key, status, outcome, decision_id, created_at, last_seen_at, expires_at)
+       VALUES ($1,'tenant_northwind','nurse.compliant','ipad-ward-01','clinical-session',$2,'allow','dec_test',$3,$3,$4)`,
+      [id, status, iso(T0), iso(expiresAtMs)],
+    );
+  for (const [id, status] of [["sess_pg_zombie", "zombie"], ["sess_pg_valid", "valid"], ["sess_pg_upper", "ACTIVE"], ["sess_pg_empty", ""]] as const) {
+    await planted(id, status, T0 + 60_000);
+    check(`unknown durable status '${status}' + past expiry reads as expired`,
+      (await store.get("tenant_northwind", id, T0 + 120_000))?.status === "expired");
+    check(`refresh of unknown durable status '${status}' returns null`,
+      (await store.refresh("tenant_northwind", id, 900, T0 + 130_000)) === null);
+  }
+  await planted("sess_pg_zombie_live", "zombie", T0 + 900_000);
+  check("unknown durable status with a FUTURE expiry still reads as expired",
+    (await store.get("tenant_northwind", "sess_pg_zombie_live", T0 + 1000))?.status === "expired");
+  const stored = await admin.query("SELECT status FROM sessions WHERE id = 'sess_pg_zombie_live'");
+  check("the expired transition is persisted over the unknown status", stored.rows[0]?.status === "expired");
+
   // ── CONCURRENCY: N parallel starts all persist ──────────────────────────────
   await admin.query("TRUNCATE sessions");
   const N = 20;

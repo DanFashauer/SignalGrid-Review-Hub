@@ -16,6 +16,10 @@
 #   unread    artifacts/lane-messages/*.json addressed to THIS lane with no ack in
 #             artifacts/lane-messages/acks/ written by that lane (an ack from anyone
 #             else does not close a message — scripts/lane-message.mjs refuses it too).
+#             Every message must have the shape that script's audit demands (id equal to
+#             its filename, from and to two different real lanes, a subject, a body); ONE
+#             record that does not (a misspelled `to`, an unknown lane, no `from`) leaves
+#             the whole part out rather than silently dropping that record from the count.
 #   lane      SIGNALGRID_LANE if it is mac or cloud, else mac on macOS and cloud
 #             everywhere else — scripts/lib/lane-identity.mjs's rule; the self-test
 #             compares the two so this copy cannot drift.
@@ -80,6 +84,23 @@ def text(v):
 
 def json_files(d):
     return sorted(f for f in os.listdir(d) if f.endswith(".json"))
+
+
+LANES = ("cloud", "mac")
+
+
+def check_message(m, stem):
+    """The shape scripts/lane-message.mjs auditLaneMessages() treats as FATAL for a message:
+    id equal to its filename, from and to both real lanes and not the same lane, a non-empty
+    subject and a non-empty body. A record that fails is not silently skipped: the unread
+    count is then unknown, and an unknown count is left out, never printed as a number."""
+    if m.get("id") != stem:
+        raise ValueError("id does not match its filename: " + stem)
+    if m.get("from") not in LANES or m.get("to") not in LANES or m.get("from") == m.get("to"):
+        raise ValueError("from/to is not two different known lanes: " + stem)
+    for key in ("subject", "body"):
+        if not m.get(key) or str(m.get(key)).strip() == "":
+            raise ValueError("no " + key + ": " + stem)
 
 
 def read_obj(p):
@@ -165,8 +186,8 @@ if root:
             n = 0
             for f in json_files(d):
                 m = read_obj(os.path.join(d, f))
-                mid = m["id"] if isinstance(m.get("id"), str) else f[:-5]
-                if m.get("to") == lane and mid not in closed:
+                check_message(m, f[:-5])  # a malformed record raises: the whole unread part is dropped
+                if m["to"] == lane and m["id"] not in closed:
                     n += 1
             mail = n
     except Exception:
@@ -277,6 +298,28 @@ self_test() {
   out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
   expect "a torn ack file removes the unread part too (an ack that cannot be read may have closed a message)" "fixture-branch | 1 open hand | Test Model" "$out"
   rm -f -- "$repo/artifacts/lane-messages/acks/torn-ack.json"
+  # A message that is valid JSON but malformed is NOT quietly left out of the count (that printed
+  # "0 unread" beside a record the audit calls fatal): one such record drops the whole part.
+  # Shapes: scripts/lane-message.mjs auditLaneMessages().
+  bad_message() { # <label> <file stem> <json>
+    printf '%s\n' "$3" > "$repo/artifacts/lane-messages/$2.json"
+    out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+    expect "$1: no unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+    rm -f -- "$repo/artifacts/lane-messages/$2.json"
+  }
+  bad_message "a message with \`to\` misspelled (\`too\`)" m-bad-too '{"id":"m-bad-too","from":"cloud","too":"mac","subject":"s","body":"b"}'
+  bad_message "a message addressed to a lane that does not exist" m-bad-lane '{"id":"m-bad-lane","from":"cloud","to":"orbit","subject":"s","body":"b"}'
+  bad_message "a message with no \`from\`" m-bad-from '{"id":"m-bad-from","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message addressed to its own sender" m-bad-self '{"id":"m-bad-self","from":"mac","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message whose id disagrees with its filename" m-bad-id '{"id":"something-else","from":"cloud","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message with an empty body" m-bad-body '{"id":"m-bad-body","from":"cloud","to":"mac","subject":"s","body":"  "}'
+  bad_message "a message with no subject" m-bad-subject '{"id":"m-bad-subject","from":"cloud","to":"mac","body":"b"}'
+  # the same record, well-formed, is counted: the case above is about the shape, not the file name
+  printf '%s\n' '{"id":"m-good-extra","from":"cloud","to":"mac","subject":"s","body":"b"}' > "$repo/artifacts/lane-messages/m-good-extra.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "contrast: a well-formed extra message to this lane is counted (2 unread)" "fixture-branch | 1 open hand | 2 unread for mac | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/m-good-extra.json"
+
   mv "$repo/artifacts/raised-hands" "$fx/hands.away"
   out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
   expect "the raised-hands directory absent: no open-hands part (never '0 open hands')" "fixture-branch | 1 unread for mac | Test Model" "$out"

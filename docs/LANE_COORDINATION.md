@@ -277,8 +277,9 @@ session's directory: the branch from `git symbolic-ref`, open hands from
 `artifacts/lane-messages/` (addressed to this lane, with no ack written by this
 lane). No fetch, no `gh`, no network, so the numbers are as fresh as the last pull
 and are a prompt to run `pnpm run hands` or `pnpm run lane:inbox`, not a replacement
-for either. A part it cannot read (not a git checkout, a file that does not parse)
-is left out of the line instead of shown as a number. To turn it off, delete the
+for either. A part it cannot read (not a git checkout, a file that does not parse, a lane
+message of a shape `pnpm run lane:inbox` would refuse, such as a misspelled `to`) is left
+out of the line instead of shown as a number. To turn it off, delete the
 `statusLine` key from `.claude/settings.json`, or override it in your own local
 settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
 fixture tree; preflight and CI run it.

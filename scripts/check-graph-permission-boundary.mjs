@@ -24,14 +24,38 @@
 // Prose outside the tables (the deferred `User-LifeCycleInfo.Read.All` paragraph)
 // is not a grant instruction and is not read.
 //
-//   node scripts/check-graph-permission-boundary.mjs [--self-test]
+// SECOND RECORD SET (plan row 30, part a — this is that row's "transport abstraction
+// check"). The page is not the only consent record. `artifacts/lab-collections/
+// microsoft-graph/` transcribes the connector's OWN transport as Bruno requests and
+// carries `permissions.json`, which its README calls "the record a tenant admin
+// consents from". When the connector gained `/identityProtection/riskyUsers` neither
+// was updated, and nothing read them: a tenant admin consenting from permissions.json
+// under-provisioned, and the connector graded every subject's risk `unknown`. So this
+// gate also holds that folder to the connector, both directions:
+//   · every request literal the connector builds, query INCLUDED, has a .bru file;
+//   · every .bru request is a connector request (a request there asserts "the product
+//     uses this"; it must not assert more);
+//   · the permission names in permissions.json equal the scopes the connector names;
+//   · every connector request sits under at least one `usedBy`, and every `usedBy`
+//     entry is a connector request;
+//   · floors (3 connector requests, 3 request files, 2 permissions) so a parser that
+//     goes blind cannot pass vacuously; a missing folder or unreadable file is FATAL.
+// It does NOT prove (a) that a request needs the permission its `usedBy` pairs it with
+// — that is Microsoft's published fact, not derivable from the connector (part b,
+// the msgraph-metadata OpenAPI cross-diff, would catch a wrong pairing), nor (b) that
+// the request answers on a real tenant (the live-tenant milestone).
+//
+//   node scripts/check-graph-permission-boundary.mjs [--self-test] [--root <dir>]
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { REQUEST_BLOCK } from "./check-lab-collections.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const CONNECTOR = "lib/integrations/src/integrations/graph/posture-connector.ts";
+export const COLLECTION_DIR = "artifacts/lab-collections/microsoft-graph";
+export const PERMISSIONS = `${COLLECTION_DIR}/permissions.json`;
 export const DOC = "docs/connectors/MICROSOFT_GRAPH_PERMISSION_BOUNDARY.md";
 
 /** Pure: distinct endpoint paths the connector builds, query strings stripped. */
@@ -82,6 +106,105 @@ export function auditBoundary(connectorSrc, docMd) {
   return { fatal, connectorEndpoints: ce, connectorScopes: cs, docEndpoints: de, docScopes: ds };
 }
 
+/** Floors: below these the parsers have gone blind, and "nothing missing" would be a vacuous pass. */
+export const FLOORS = { connectorRequests: 3, collectionFiles: 3, permissions: 2 };
+
+/** Pure: distinct request literals the connector builds, path AND query, cut at the closing backtick. */
+export function connectorRequests(src) {
+  const out = new Set();
+  for (const m of src.matchAll(/\$\{this\.baseUrl\}(\/[^`]*)/g)) out.add(m[1]);
+  return [...out].sort();
+}
+
+/** Pure: one entry per request file ({ file, method, path }); anything but a GET on `{{baseUrl}}/…` is fatal. */
+export function collectionRequests(filesByName) {
+  const fatal = [];
+  const requests = [];
+  for (const name of Object.keys(filesByName).sort()) {
+    if (!name.endsWith(".bru") || name === "collection.bru") continue;
+    const m = REQUEST_BLOCK.exec(filesByName[name]);
+    if (!m) { fatal.push(`${name}: no request block (method + url) found — an unparseable request file proves nothing`); continue; }
+    const method = m[1].toUpperCase();
+    const url = m[2];
+    if (method !== "GET") { fatal.push(`${name}: ${method} — the Graph connector is read-only; a non-GET request asserts a write the product never makes`); continue; }
+    if (!url.startsWith("{{baseUrl}}/")) { fatal.push(`${name}: url ${url} does not start with {{baseUrl}}/ — it is not the connector's transport`); continue; }
+    requests.push({ file: name, method, path: url.slice("{{baseUrl}}".length) });
+  }
+  return { requests, fatal };
+}
+
+/** Pure: the permission record. Returns { permissions: [{ permission, kind, usedBy: [path…] }], fatal }. */
+export function permissionRecord(jsonText) {
+  const fatal = [];
+  const permissions = [];
+  let doc;
+  try { doc = JSON.parse(jsonText); } catch (e) { return { permissions, fatal: [`permissions.json does not parse: ${e.message}`] }; }
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return { permissions, fatal: ["permissions.json is not an object"] };
+  for (const kind of ["application", "delegated"]) {
+    if (!Array.isArray(doc[kind])) { fatal.push(`permissions.json \`${kind}\` is missing or not an array — the consent record has the wrong shape`); continue; }
+    doc[kind].forEach((p, i) => {
+      const where = `permissions.json ${kind}[${i}]`;
+      if (p === null || typeof p !== "object" || typeof p.permission !== "string" || !p.permission) { fatal.push(`${where}: no \`permission\` string`); return; }
+      if (!Array.isArray(p.usedBy)) { fatal.push(`${where} (${p.permission}): \`usedBy\` is not an array`); return; }
+      const usedBy = [];
+      for (const u of p.usedBy) {
+        const m = typeof u === "string" ? /^GET (\/\S*)$/.exec(u) : null;
+        if (!m) fatal.push(`${where} (${p.permission}): usedBy entry ${JSON.stringify(u)} is not of the form \`GET <path+query>\``);
+        else usedBy.push(m[1]);
+      }
+      permissions.push({ permission: p.permission, kind, usedBy });
+    });
+  }
+  return { permissions, fatal };
+}
+
+/** Pure audit: the connector against the lab collection and permissions.json, both directions. */
+export function auditCollection(connectorSrc, bruByName, permissionsText) {
+  const fatal = [];
+  const cr = connectorRequests(connectorSrc);
+  const cs = connectorScopes(connectorSrc);
+  const col = collectionRequests(bruByName);
+  const rec = permissionRecord(permissionsText);
+  fatal.push(...col.fatal, ...rec.fatal);
+  const colPaths = new Set(col.requests.map((r) => r.path));
+  const perms = new Set(rec.permissions.map((p) => p.permission));
+  const usedBy = new Set(rec.permissions.flatMap((p) => p.usedBy));
+  const usedByCount = rec.permissions.reduce((n, p) => n + p.usedBy.length, 0);
+  if (cr.length < FLOORS.connectorRequests) fatal.push(`floor: the connector yields ${cr.length} request literal(s), under ${FLOORS.connectorRequests} — the parser or the connector changed shape; refusing to conclude anything`);
+  if (col.requests.length < FLOORS.collectionFiles) fatal.push(`floor: the collection holds ${col.requests.length} request file(s), under ${FLOORS.collectionFiles}`);
+  if (rec.permissions.length < FLOORS.permissions) fatal.push(`floor: permissions.json holds ${rec.permissions.length} permission(s), under ${FLOORS.permissions}`);
+  for (const r of cr) {
+    if (!colPaths.has(r)) fatal.push(`the connector makes GET ${r} and ${COLLECTION_DIR} has no request file for it — the collection no longer transcribes the transport (exact path and query: the $select is the privacy posture)`);
+    if (!usedBy.has(r)) fatal.push(`the connector makes GET ${r} and no permissions.json \`usedBy\` names it — the consent record does not cover a read the connector makes`);
+  }
+  for (const r of col.requests) if (!cr.includes(r.path)) fatal.push(`${r.file} asserts GET ${r.path} and the connector never makes it — a collection request must not assert more than posture-connector.ts does`);
+  for (const u of usedBy) if (!cr.includes(u)) fatal.push(`permissions.json usedBy names GET ${u} and the connector never makes it — a grant the code cannot justify`);
+  for (const s of cs) if (!perms.has(s)) fatal.push(`the connector needs ${s} and permissions.json does not list it — a tenant admin consenting from it under-provisions, and the read answers 403 so the connector grades every subject \`unknown\``);
+  for (const p of perms) if (!cs.includes(p)) fatal.push(`permissions.json lists ${p} and the connector never names it — a grant the code cannot justify`);
+  return {
+    fatal,
+    counts: { connectorRequests: cr.length, collectionFiles: col.requests.length, distinctCollectionRequests: colPaths.size, permissions: rec.permissions.length, usedBy: usedByCount },
+  };
+}
+
+/** Reads the collection directory and permissions.json. Missing or unreadable is FATAL, never a skip. */
+export function loadCollection(root) {
+  const fatal = [];
+  const bruByName = {};
+  const dir = join(root, COLLECTION_DIR);
+  let names = [];
+  try { names = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && d.name.endsWith(".bru")).map((d) => d.name); }
+  catch (e) { fatal.push(`${COLLECTION_DIR}: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the collection is the second consent record; absence is not a skip`); }
+  for (const n of names) {
+    try { bruByName[n] = readFileSync(join(dir, n), "utf8"); }
+    catch (e) { fatal.push(`${COLLECTION_DIR}/${n}: unreadable (${e.message})`); }
+  }
+  let permissionsText = "";
+  try { permissionsText = readFileSync(join(root, PERMISSIONS), "utf8"); }
+  catch (e) { fatal.push(`${PERMISSIONS}: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the consent record cannot be skipped`); }
+  return { bruByName, permissionsText, fatal };
+}
+
 function selfTest() {
   const checks = [];
   const src = [
@@ -114,6 +237,70 @@ function selfTest() {
   checks.push(["a connector that yields no endpoints refuses to conclude (never a vacuous pass)", r.fatal.some((f) => f.includes("refusing"))]);
   const live = auditBoundary(readFileSync(join(repoRoot, CONNECTOR), "utf8"), readFileSync(join(repoRoot, DOC), "utf8"));
   checks.push(["LIVE: the connector reads at least three endpoints and the page names every one of them", live.connectorEndpoints.length >= 3 && live.fatal.length === 0]);
+
+  // ---- the lab collection and permissions.json ----
+  const csrc = [
+    "const a = `${this.baseUrl}/deviceManagement/managedDevices?$top=1`;",
+    "const b = `${this.baseUrl}/users?$select=id,userPrincipalName,accountEnabled`;",
+    "const c = `${this.baseUrl}/deviceManagement/managedDevices`;",
+    "// Needs the IdentityRiskyUser.Read.All scope; e.g. User.Read.All, DeviceManagementManagedDevices.Read.All",
+    "const d = `${this.baseUrl}/identityProtection/riskyUsers?$select=id,riskLevel,riskState`;",
+  ].join("\n");
+  const P = { probe: "/deviceManagement/managedDevices?$top=1", users: "/users?$select=id,userPrincipalName,accountEnabled", dev: "/deviceManagement/managedDevices", risky: "/identityProtection/riskyUsers?$select=id,riskLevel,riskState" };
+  const bru = (path, method = "get", base = "{{baseUrl}}") => `meta {\n  name: x\n}\n\n${method} {\n  url: ${base}${path}\n  body: none\n  auth: inherit\n}\n\ndocs {\n  x\n}\n`;
+  const baseBru = () => ({ "a.bru": bru(P.probe), "b.bru": bru(P.users), "c.bru": bru(P.dev), "d.bru": bru(P.risky), "collection.bru": "auth {\n  mode: bearer\n}\n" });
+  const permObj = () => ({
+    application: [
+      { permission: "DeviceManagementManagedDevices.Read.All", usedBy: [`GET ${P.probe}`, `GET ${P.dev}`], why: "x" },
+      { permission: "User.Read.All", usedBy: [`GET ${P.users}`], why: "x" },
+      { permission: "IdentityRiskyUser.Read.All", usedBy: [`GET ${P.risky}`], why: "x" },
+    ],
+    delegated: [],
+  });
+  const pj = (o) => JSON.stringify(o);
+  const audit = (src = csrc, b = baseBru(), p = pj(permObj())) => auditCollection(src, b, p);
+  const has = (r, ...needles) => r.fatal.some((f) => needles.every((n) => f.includes(n)));
+  let c = audit();
+  checks.push(["COLLECTION: the connector, four request files and a three-permission record agree (positive control)", c.fatal.length === 0 && c.counts.connectorRequests === 4 && c.counts.collectionFiles === 4 && c.counts.permissions === 3 && c.counts.usedBy === 4]);
+  checks.push(["COLLECTION: connectorRequests keeps the query, and connectorEndpoints still strips it", connectorRequests(csrc).includes(P.users) && connectorEndpoints(csrc).includes("/users")]);
+  let b = baseBru(); delete b["d.bru"];
+  c = audit(csrc, b);
+  checks.push(["COLLECTION: a request file missing for a request the connector makes is FATAL and names it", has(c, "identityProtection/riskyUsers", "no request file")]);
+  let o = permObj(); o.application = o.application.filter((p) => p.permission !== "IdentityRiskyUser.Read.All");
+  c = audit(csrc, baseBru(), pj(o));
+  checks.push(["COLLECTION: a scope missing from permissions.json is FATAL and names the 403/unknown consequence", has(c, "IdentityRiskyUser.Read.All", "403", "unknown")]);
+  o = permObj(); o.application.push({ permission: "Directory.Read.All", usedBy: [], why: "x" });
+  checks.push(["COLLECTION: an extra permission is FATAL — a grant the code cannot justify", has(audit(csrc, baseBru(), pj(o)), "Directory.Read.All")]);
+  b = baseBru(); b["e.bru"] = bru("/groups");
+  checks.push(["COLLECTION: an extra request file is FATAL — it asserts more than the connector does", has(audit(csrc, b), "e.bru", "asserts")]);
+  b = baseBru(); b["b.bru"] = bru(`${P.users},mail`);
+  c = audit(csrc, b);
+  checks.push(["COLLECTION: a $select widened in a .bru is FATAL (exact path+query, so a path-only compare would miss it)", has(c, "b.bru", ",mail") && has(c, "no request file")]);
+  c = audit(csrc.replace("accountEnabled`", "accountEnabled,mail`"));
+  checks.push(["COLLECTION: a $select widened in the connector text is FATAL", has(c, "accountEnabled,mail", "no request file")]);
+  b = baseBru(); b["b.bru"] = bru(P.users, "post");
+  checks.push(["COLLECTION: a POST .bru is FATAL", has(audit(csrc, b), "b.bru", "POST")]);
+  b = baseBru(); b["b.bru"] = bru(P.users, "get", "{{other}}");
+  checks.push(["COLLECTION: a url not prefixed {{baseUrl}}/ is FATAL", has(audit(csrc, b), "b.bru", "{{baseUrl}}")]);
+  o = permObj(); o.application[1].usedBy.push("GET /nope");
+  checks.push(["COLLECTION: a usedBy naming a non-request is FATAL", has(audit(csrc, baseBru(), pj(o)), "/nope", "never makes")]);
+  o = permObj(); o.application[2].usedBy = [];
+  checks.push(["COLLECTION: a request with no usedBy is FATAL", has(audit(csrc, baseBru(), pj(o)), "riskyUsers", "usedBy")]);
+  o = permObj(); o.delegated.push({ permission: "Mail.Read.All", usedBy: [], why: "x" });
+  checks.push(["COLLECTION: a delegated entry the connector never names is FATAL", has(audit(csrc, baseBru(), pj(o)), "Mail.Read.All")]);
+  checks.push(["COLLECTION: unparseable permissions.json is FATAL", has(audit(csrc, baseBru(), "{not json"), "does not parse")]);
+  checks.push(["COLLECTION: a wrong-shaped permissions.json is FATAL", has(audit(csrc, baseBru(), pj({ application: {} })), "not an array")]);
+  const gone = loadCollection(join(repoRoot, "no-such-root"));
+  checks.push(["COLLECTION: a missing directory and a missing permissions.json are each FATAL, never a skip", gone.fatal.length === 2 && gone.fatal.every((f) => f.includes("missing"))]);
+  const two = csrc.split("\n").filter((l) => !l.includes("managedDevices`;")).join("\n").replace(/^const a.*\n/, "");
+  checks.push(["FLOOR: under three connector request literals is FATAL", has(audit(two), "floor", "connector yields")]);
+  b = baseBru(); delete b["c.bru"]; delete b["d.bru"];
+  checks.push(["FLOOR: under three request files is FATAL", has(audit(csrc, b), "floor", "request file")]);
+  o = permObj(); o.application = o.application.slice(0, 1);
+  checks.push(["FLOOR: under two permissions is FATAL", has(audit(csrc, baseBru(), pj(o)), "floor", "permission(s)")]);
+  const liveC = loadCollection(repoRoot);
+  const liveR = auditCollection(readFileSync(join(repoRoot, CONNECTOR), "utf8"), liveC.bruByName, liveC.permissionsText);
+  checks.push(["LIVE COLLECTION: the real collection and permissions.json match the real connector", liveC.fatal.length === 0 && liveR.fatal.length === 0 && liveR.counts.connectorRequests >= 3]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -122,13 +309,21 @@ function selfTest() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
-  const r = auditBoundary(readFileSync(join(repoRoot, CONNECTOR), "utf8"), readFileSync(join(repoRoot, DOC), "utf8"));
+  const ri = process.argv.indexOf("--root");
+  const root = ri > -1 && process.argv[ri + 1] ? resolve(process.argv[ri + 1]) : repoRoot;
+  const connectorSrc = readFileSync(join(root, CONNECTOR), "utf8");
+  const r = auditBoundary(connectorSrc, readFileSync(join(root, DOC), "utf8"));
   console.log(`Graph permission boundary — connector reads ${r.connectorEndpoints.join(", ")}; needs ${r.connectorScopes.join(", ")}`);
   console.log(`  page tables: ${r.docEndpoints.length} endpoint(s), ${r.docScopes.length} scope(s)`);
-  if (r.fatal.length > 0) {
-    console.error(`\nGraph-permission-boundary check FAILED: ${r.fatal.length} problem(s).`);
-    for (const f of r.fatal) console.error(`  ✗ ${f}`);
+  const lc = loadCollection(root);
+  const cr = auditCollection(connectorSrc, lc.bruByName, lc.permissionsText);
+  const n = cr.counts;
+  console.log(`  lab collection: ${n.connectorRequests} connector request(s), ${n.collectionFiles} collection file(s), ${n.distinctCollectionRequests} distinct collection request(s), ${n.permissions} permission(s), ${n.usedBy} usedBy entr(ies)`);
+  const fatal = [...r.fatal, ...lc.fatal, ...cr.fatal];
+  if (fatal.length > 0) {
+    console.error(`\nGraph-permission-boundary check FAILED: ${fatal.length} problem(s).`);
+    for (const f of fatal) console.error(`  ✗ ${f}`);
     process.exit(1);
   }
-  console.log(`Graph-permission-boundary check passed — ${DOC} names exactly what ${CONNECTOR} reads.`);
+  console.log(`Graph-permission-boundary check passed — ${DOC} names exactly what ${CONNECTOR} reads, and ${COLLECTION_DIR} (requests and permissions.json) matches it.`);
 }

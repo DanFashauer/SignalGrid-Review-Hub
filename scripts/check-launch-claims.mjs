@@ -423,10 +423,24 @@ const audienceDocs = [];
 // dimensions" — a claim of SIX current dimensions against a three-signal
 // launch scope — sailed through green. A marker that only catches one casing
 // of its own defect is a marker that catches nothing.
+//
+// SECURITY ABSOLUTES (2026-10-02). The owner's puck note said a token "cannot be duplicated
+// and or replicated" and is "impossible to break and or hack"; the ARC kiosk intake landed
+// it as DIRECTION and a design target, never as a claim. No mitigation is a guarantee
+// (DR-043 item 5; docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md never-claim list), so the words
+// that promise one are gated everywhere this gate reads. Their classification is the
+// "NOT claimable" rows in docs/agent/CLAIM_INVENTORY.json (file docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md).
+// `puck` is deliberately NOT a DEFERRED_NOUN: the nouns are word-anchored capabilities, and
+// a bare product word would flag every honest sentence that names the hardware.
+// Hyphen-like separators: word processors swap "-" for U+2010 (hyphen), U+2011 (non-breaking hyphen) or U+2013 (en dash).
+const HY = "\\-\u2010\u2011\u2013";
+const SECURITY_ABSOLUTE =
+  `(?:un[${HY}]?(?:hack|clone?|break|breach|copy)able|(?:hack|clone|tamper|breach|phishing)[\\s${HY}]?proof|impossible[\\s${HY}]to[\\s${HY}](?:hack|break|clone|copy|duplicate|replicate|steal)|can(?:\\s?not|'t|\u2019t|\\s+never)(?:\\s+ever)? be (?:copied|duplicated|cloned|hacked|replicated|broken))`;
 const OVERCLAIM_MARKERS = [
   /evaluated[\s-]today/i,
   /evaluated:\s*true/i,
   /\b([4-9]|\d{2,})\s+(?:evaluated[\s-]today\s+)?signal dimensions/i,
+  new RegExp(`\\b${SECURITY_ABSOLUTE}\\b`, "i"),
 ];
 const LAUNCH_IDS = new Set(["device-posture", "management-health", "local-authority"]);
 // `zone` IS WORD-ANCHORED ON BOTH SIDES, and it was anchored on the right only.
@@ -510,11 +524,49 @@ const PAGE_SCOPE =
 // first widened version flagged it, which would have taught the next author to
 // delete a true sentence to appease a gate. Strip negated occurrences before
 // testing; a gate that punishes honesty is worse than no gate.
-const stripNegated = (body) =>
-  body
+//
+// Security absolutes get the same courtesy, narrowly, and ONLY in the docs path (non-buyer markdown):
+// the HARD buyer scope takes no negation exemption at all (review of 2026-10-02, round 3). A clause
+// boundary is a regex arms race — '!', '?', ' - ', 'and', '(' each let a negated claim verb shelter an
+// absolute in the next clause, and every patch closed one phrase and left the next — so the buyer scope
+// deletes the exemption instead of patching it; a buyer line that names an absolute is reworded, never
+// exempted. (1) A NEGATION that GOVERNS a claim verb
+// ("never claim the puck is unhackable", "do not say it cannot be duplicated") or an "is/are not"
+// form — a negation word merely somewhere earlier in the sentence ("Not just fast — it's
+// hack-proof") shelters nothing, and neither does "without". (2) Markdown only: a QUOTED string that
+// names the phrase without asserting it (a never-claim list, the owner's verbatim note) — in the
+// docs path only, where the quoting is the document's own subject. The hard buyer scope has NO quoted
+// exemption (review of 2026-10-02, round 4): AVOID_LIST names negated claim verbs, so an avoid-list
+// exemption sheltered every quoted absolute after "never say", and a quoted testimonial is still the
+// copy. The quote must open after a non-word character, close before one, and contain no other quote
+// mark, so it is exactly one quoted span; in markup or code a quoted string IS the copy and stays flagged.
+const CLAIM_VERB = "(?:claim|say|call|describe|promise|state|assert|market|label|advertis|imply)\\w*";
+// One CLAUSE character: it ends at a sentence/colon/semicolon/dash, a comma, or a contrastive
+// (but/yet/just), so a negated claim verb governs ITS clause and shelters nothing after the turn
+// ("I'm not saying it's perfect, but it's unhackable"; "never promised a rose garden, just an
+// unhackable token"; review of 2026-10-02). `{0,30}`/`{0,40}` below are the verb's reach in it.
+const CLAUSE_CH = "(?:(?!\\b(?:but|yet|just)\\b)[^.<\\n:;,\u2014\u2013])";
+// The one adverb the is/are-not form may carry ("not entirely unhackable") excludes the additive
+// focusers: "not only/simply/merely unhackable" ASSERTS it and adds more (same review).
+const NEG_ADVERB = "(?:(?!(?:only|just|simply|merely)\\b)\\w+ly\\s+)?";
+const NEGATED_ABSOLUTE = new RegExp(
+  `\\b(?:not|never|nor|avoid)\\b${CLAUSE_CH}{0,30}?\\b${CLAIM_VERB}\\b${CLAUSE_CH}{0,40}?${SECURITY_ABSOLUTE}` +
+    `|\\b(?:is|are|be|was|were)\\s+(?:not|never)\\s+${NEG_ADVERB}${SECURITY_ABSOLUTE}`,
+  "gi",
+);
+const QUOTED_ABSOLUTE = new RegExp(`(?<!\\w)["\u201c][^"\u201c\u201d\\n]{0,1500}?${SECURITY_ABSOLUTE}[^"\u201c\u201d\\n]{0,1500}?["\u201d](?!\\w)`, "gi");
+const stripQuoted = (t) => t.replace(QUOTED_ABSOLUTE, " ");
+const stripNegated = (body, name = "", buyer = false) => {
+  let t = body
     .replace(/\bnot\b[^.<\n]{0,60}?evaluated[\s-]today/gi, " ")
     .replace(/\bnever\b[^.<\n]{0,60}?evaluated[\s-]today/gi, " ")
     .replace(/what(?:'|&#39;|\u2019)?s evaluated today/gi, " ");
+  // Docs-path markdown only: the buyer scope and every non-markdown source take NO negated-absolute exemption.
+  if (!buyer && /\.md$/.test(name)) t = t.replace(NEGATED_ABSOLUTE, " ");
+  // A quoted absolute is a NAME only in the docs path (non-buyer markdown). Buyer scope and every non-markdown
+  // source: the quoted string IS the copy, and AVOID_LIST (which feeds the hedge scan below) shelters nothing here.
+  return /\.md$/.test(name) && !buyer ? stripQuoted(t) : t;
+};
 
 // The unit a hedge covers. A slide deck's <section> is a slide and a reader
 // takes it in whole; prose splits at the blank line. Both are the largest span
@@ -563,9 +615,9 @@ function blocksOf(name, body) {
  * Closing it is a copy decision for whoever owns those surfaces, not a scope change
  * this gate may make on their behalf.
  */
-function violationsIn(name, body, hedgeBody = body, commentOnlyHedges = null) {
+function violationsIn(name, body, hedgeBody = body, commentOnlyHedges = null, buyer = false) {
   const out = [];
-  const scannable = stripNegated(body);
+  const scannable = stripNegated(body, name, buyer);
   for (const re of OVERCLAIM_MARKERS) {
     if (re.test(scannable)) out.push(`${name}: overclaim marker ${re} — the shipped defect's exact shape`);
   }
@@ -918,6 +970,17 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
 
 // ── self-test ────────────────────────────────────────────────────────────────
 {
+  const SECURITY_ABSOLUTE_SPELLINGS = [
+    "unhackable", "un-hackable", "hack-proof", "hackproof", "clone-proof", "tamper-proof", "tamper proof",
+    "impossible to hack", "impossible to break", "impossible to clone", "impossible to duplicate", "impossible to replicate",
+    "cannot be duplicated", "cannot be cloned", "cannot be hacked", "cannot be replicated", "can't be cloned",
+    "uncloneable", "unclonable", "breach-proof", "phishing-proof", "impossible to copy", "can not be duplicated",
+    "can never be cloned", "cannot be copied, duplicated or cloned",
+    "unbreakable", "impossible-to-hack", "cannot ever be hacked", "can't ever be cloned",
+    // Round 4: more spellings, and the Unicode hyphens word processors insert in place of "-".
+    "unbreachable", "uncopyable", "cannot be broken", "impossible to steal",
+    "hack\u2010proof", "clone\u2011proof", "tamper\u2013proof", "impossible\u2011to\u2011hack", "un\u2011hackable",
+  ];
   const bad0 = "6 evaluated-today signal dimensions";
   const bad1 = 'const x = { evaluated: true };';
   const bad2 = '{ id: "badge", limitedGA: true }';
@@ -954,6 +1017,94 @@ function ceilingMentions(name, body, exempt = ENGINEERING_DOCS_EXEMPT) {
     violationsIn("st3", bad3).length > 0 &&
     violationsIn("st4", good3).length === 0 &&
     violationsIn("st5", goodNeg).length === 0 &&
+    // ── security absolutes (2026-10-02, ARC/puck owner note) ─────────────────
+    // Every spelling the owner's own sentence and the usual marketing register use must
+    // FLAG when asserted bare …
+    violationsIn("stS0", "The puck is unhackable.").length > 0 &&
+    violationsIn("stS1", "A hack-proof, clone-proof, tamper-proof token.").length > 0 &&
+    violationsIn("stS2", "It is impossible to hack or clone the token.").length > 0 &&
+    violationsIn("stS3", "The token cannot be duplicated or replicated.").length > 0 &&
+    violationsIn("stS3b", "Once enrolled, the key cannot be cloned.").length > 0 &&
+    // … and the honest idiom must be legal, or the marker teaches the next author to delete
+    // a true sentence. A NEGATED sentence is the never-claim list doing its job …
+    violationsIn("stS4.md", "We never claim the puck is unhackable.").length === 0 &&
+    violationsIn("stS5.md", "Do not say the token cannot be duplicated, and never call it clone-proof.").length === 0 &&
+    // … and a QUOTED string in prose names the phrase (a never-claim list, an owner's verbatim
+    // note) without asserting it. Markdown only: in markup or code the same string is the copy.
+    violationsIn("stS6.md", 'Never-claim list: "unhackable", "clone-proof".').length === 0 &&
+    violationsIn("stS7.md", '> "making it impossible to break and or hack."').length === 0 &&
+    violationsIn("stS8.tsx", '<p>"unhackable"</p>').length > 0 &&
+    // The negation-precision cases below are named .md on purpose: the negation exemption now lives ONLY in the
+    // docs path (non-buyer markdown), so that is the one place its precision can still be wrong.
+    // A negation in one sentence must not shelter an assertion in the next.
+    violationsIn("stS9.md", "We never claim a guarantee. The puck is unhackable.").length > 0 &&
+    // … nor from a distance: a negation word that merely appears earlier in the sentence, with no
+    // claim verb governing the absolute, is marketing copy (advisor review of this gate, 2026-10-02).
+    violationsIn("stS10.md", "Not just fast — it's hack-proof.").length > 0 &&
+    violationsIn("stS11.md", "Never lose a device again — tamper-proof docks.").length > 0 &&
+    violationsIn("stS12.md", "Built without compromise: unhackable.").length > 0 &&
+    violationsIn("stS12b.md", "It is not slow: unhackable.").length > 0 &&
+    violationsIn("stS12c.md", "The puck is not unhackable; no mitigation is a guarantee.").length === 0 &&
+    // The is/are-not exemption allows ONE -ly adverb and nothing else (review of 2026-10-02: a free
+    // 20-character filler stripped "The puck is not just fast but unhackable." and "Our token is not a
+    // password and is tamper-proof." before the marker ran, both measured exit 0).
+    violationsIn("stS12d.md", "The puck is not just fast but unhackable.").length > 0 &&
+    violationsIn("stS12e.md", "Our token is not a password and is tamper-proof.").length > 0 &&
+    violationsIn("stS12f.tsx", "<p>The puck is not just fast but unhackable.</p>", undefined, null, true).length > 0 &&
+    violationsIn("stS12g.md", "The puck is not entirely unhackable; no mitigation is a guarantee.").length === 0 &&
+    // A colon or semicolon ends the governed clause: "Never say never: ..." shelters nothing after it.
+    violationsIn("stS12h.md", "Never say never: the puck is unhackable.").length > 0 &&
+    violationsIn("stS12i.md", "Never say never: the puck is unhackable.", undefined, null, true).length > 0 &&
+    // A quoted absolute is a NAME only in the docs path. In the hard buyer scope a testimonial is
+    // still the copy, and so is a quoted list item: there is no avoid-list exemption there.
+    violationsIn("stS13.md", 'Customers call it "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stS14.md", 'Words to avoid: "unhackable", "clone-proof".', undefined, null, true).length > 0 &&
+    violationsIn("stS15.md", 'Customers call it "unhackable".').length === 0 &&
+    violationsIn("stS16.md", 'Avoid breaches. Do not say maybe: our puck is "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stS17.md", '### Words to avoid\n"unhackable", "clone-proof".', undefined, null, true).length > 0 &&
+    // Review of 2026-10-02 (planted first, each measured exit 0 before the fix): additive focusers are
+    // assertions, a negated claim verb stops at the comma/contrast.
+    violationsIn("stS18.md", "Our puck is not only unhackable, it is waterproof.").length > 0 &&
+    violationsIn("stS19.md", "The token is not simply tamper-proof; it is also cheap.").length > 0 &&
+    violationsIn("stS19b.md", "The token is not merely clone-proof.").length > 0 &&
+    violationsIn("stS20.md", "I'm not saying it's perfect, but it's unhackable.").length > 0 &&
+    violationsIn("stS21.md", "We never promised a rose garden, just an unhackable token.").length > 0 &&
+    violationsIn("stS21c.md", "We never promised a rose garden but an unhackable token.").length > 0 &&
+    violationsIn("stS21d.md", "We do not claim perfection, our puck is unhackable.").length > 0 &&
+    violationsIn("stS21b.md", "We do not claim perfection, but we claim it is unhackable.").length > 0 &&
+    violationsIn("stS22.md", 'Words to avoid: "breach". Our badge is "tamper-proof" and "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stS23.md", 'Words to avoid:\n- "unhackable".\n- "clone-proof".', undefined, null, true).length > 0 &&
+    // Review of 2026-10-02, round 4 (planted first, each measured exit 0 before the fix): the HARD buyer scope
+    // takes NO quoted-absolute exemption either. AVOID_LIST names negated claim verbs ("never say", "do not
+    // say"), so any paragraph that opens with one sheltered every quoted absolute in its head, and the head
+    // swallowed bullets and quote-opening sentences. A quoted testimonial is still the copy.
+    violationsIn("stV0.md", 'Never say never: our customers call the puck "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stV1.md", '**Never say never.** Our customers call the puck "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stV2.md", 'Don\'t say "maybe" \u2014 say "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stV3.md", "Do not say \u201cgood enough\u201d when you can say \u201ctamper-proof\u201d.", undefined, null, true).length > 0 &&
+    violationsIn("stV4.md", 'Words to avoid: "breach". "Unhackable" is what every customer calls our puck.', undefined, null, true).length > 0 &&
+    violationsIn("stV5.md", 'Words to avoid:\n- "slow".\n- Our puck is "unhackable".', undefined, null, true).length > 0 &&
+    violationsIn("stV6.md", '## Never say never\nOur token is "clone-proof".', undefined, null, true).length > 0 &&
+    // Review of 2026-10-02, round 3 (planted first, each measured exit 0 before the fix): the HARD buyer scope
+    // takes NO negation exemption at all. A clause boundary list is a regex arms race ('!', '?', ' - ', 'and',
+    // '(' each let a negated claim verb shelter an absolute in the next clause), so the exemption is deleted
+    // there; it survives only for docs-path markdown, where the never-claim list is the document's own subject.
+    violationsIn("stB0.md", "We never claim perfection! It is unhackable.", undefined, null, true).length > 0 &&
+    violationsIn("stB0b.md", "We never claim it is unhackable! It is unhackable.", undefined, null, true).length > 0 &&
+    violationsIn("stB1.md", "Not just fast - it's hack-proof", undefined, null, true).length > 0 &&
+    violationsIn("stB2.md", "We never say it is slow? It is clone-proof.", undefined, null, true).length > 0 &&
+    violationsIn("stB3.md", "We do not claim perfection - and it is unhackable.", undefined, null, true).length > 0 &&
+    violationsIn("stB4.md", "We never claim speed (it is tamper-proof).", undefined, null, true).length > 0 &&
+    violationsIn("stB5.md", "We do not claim speed and our puck is unhackable.", undefined, null, true).length > 0 &&
+    violationsIn("stB6.tsx", "<p>We never claim perfection! It is unhackable.</p>", undefined, null, true).length > 0 &&
+    // The docs path (non-buyer markdown) keeps the exemption — the never-claim list stays legal there …
+    violationsIn("stB7.md", "Never call it clone-proof.").length === 0 &&
+    violationsIn("stB7b.md", "We do not claim the puck is unhackable, and we never call it tamper-proof.").length === 0 &&
+    // … and nowhere else: a non-markdown, non-buyer source takes no negation exemption either.
+    violationsIn("stB8.txt", "Never call it clone-proof.").length > 0 &&
+    // ONE CASE PER SPELLING: a bundled string stays green when one alternative is deleted from the
+    // regex, so each spelling the marker names must flag on its own (mutation-checked).
+    SECURITY_ABSOLUTE_SPELLINGS.every((w, i) => violationsIn(`stSa${i}`, `The token is ${w}.`).length > 0) &&
     // The identifier-suffix idiom, both directions. A field NAMED `LocationZone` in a
     // table of what crosses to a vendor is a document naming a string; "the zone is
     // evaluated" is a claim. A rule that cannot tell them apart punishes the honest one.
@@ -1222,7 +1373,7 @@ const commentOnlyHedges = [];
 for (const f of files) {
   if (f.endsWith("check-launch-claims.mjs")) continue;
   const raw = readFileSync(f, "utf8");
-  for (const v of violationsIn(f, scannableTextOf(f, raw), raw, commentOnlyHedges)) {
+  for (const v of violationsIn(f, scannableTextOf(f, raw), raw, commentOnlyHedges, true)) {
     console.error(`  ✗ ${v}`);
     problems += 1;
   }

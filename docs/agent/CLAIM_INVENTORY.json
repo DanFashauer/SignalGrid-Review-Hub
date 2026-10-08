@@ -2,16 +2,16 @@
  "generated": "2026-08-21",
  "derivation": "README.md + artifacts/signalgrid-web/src (pages + sections) + artifacts/{signalgrid-review,signalgrid-app,signalgrid-desktop,signalgrid-mobile-pwa}/src + docs/{fabric,room-entry}-console.html — the union of docs-sanity's app SCAN_PATHS plus README and the consoles; extraction: 9-agent workflow + completeness critic (web/README/consoles), 4-agent second pass (app trees, after review found the first derivation incomplete); corrections per docs/CLAIM_INVENTORY.md honesty note; README rows re-extracted 2026-09-06 against the 2026-09-01 rebuild (the 58 rows of 2026-08-21 kept and resolved — 57 quoted sentences the rebuild removed, one still present; 58 new rows, every quotation anchored by check-claim-inventory-anchors); five web surfaces (SignalTypes, Verticals, Differentiators, Outcomes sections and docs/fabric-console.html) re-extracted 2026-09-06 — 120 rows, every quotation anchored",
  "groundTruth": "scripts/launch-profile.mjs (DR-005 ratified v4; LAUNCH_PROFILE_VERSION is 5 under DR-023 — rows were classified against v4 on 2026-08-21)",
- "rowCount": 1202,
+ "rowCount": 1207,
  "counts": {
-  "unsubstantiated": 263,
-  "deferred": 315,
+  "unsubstantiated": 266,
+  "deferred": 318,
   "launch": 364,
   "demo-only": 259
  },
  "actions": {
-  "rewrite": 578,
-  "keep": 481,
+  "rewrite": 579,
+  "keep": 486,
   "remove": 142
  },
  "rows": [
@@ -11511,6 +11511,51 @@
    "classification": "deferred",
    "evidence": "Bundled into docs/room-entry-console.html's verdict summary (the generated line moves on every rebuild, so the row anchors at the source). Badge/PACS is a deferred family (scripts/launch-profile.mjs `pacs-access` deferred); the launch step-up path is WebAuthn-shaped, and docs/competitive-battlecard.html lists \"badge tap / tap-and-go\" as a trap phrase to avoid. A second rendering of the same claim the :167 shell row already carries — a shell rewrite alone would leave this sentence rendering (twenty-third round, 2026-09-06).",
    "action": "rewrite"
+  },
+  {
+   "file": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md",
+   "line": "755",
+   "claim": "\"which is replacing of your ID badge/key card/2fa/MFA all of the above\"",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "Owner direction of 2026-10-02, quoted whole at docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:755 and logged in docs/agent/RESOURCE_INTAKE.md; it is NOT on any buyer-facing surface and must never become one as a claim. NOT claimable: the puck is a deferred hardware hypothesis (DR-043, DR-055) and docs/PURPOSE.md:38 makes the factor the customer's choice, so the puck can at most be one factor a customer chooses to offer; whether it is the required factor is an open owner question (artifacts/raised-hands/2026-10-02-two-readings-of-the-note-conflict-with-canonical.json). Guard: this inventory row only (check-claim-inventory-anchors keeps its quotation and citations true); scripts/check-launch-claims.mjs has no marker for this sentence.",
+   "action": "keep"
+  },
+  {
+   "file": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md",
+   "line": "755",
+   "claim": "\"cannot be duplicated and or replicated\"",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "Owner direction of 2026-10-02, quoted whole at docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:755 and logged in docs/agent/RESOURCE_INTAKE.md; it is NOT on any buyer-facing surface and must never become one as a claim. NOT claimable: no mitigation is a guarantee (DR-043 item 5; docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:400). The testable property is a non-exportable key accepted only with IdP attestation (requirement R1 in the same section). Guard: the security-absolute markers in scripts/check-launch-claims.mjs gate this wording in buyer-facing copy; this row records the classification and check-claim-inventory-anchors keeps its citations true.",
+   "action": "keep"
+  },
+  {
+   "file": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md",
+   "line": "755",
+   "claim": "\"only way it's cleared is by factory wipe only super admin of the system can do\"",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "Owner direction of 2026-10-02, quoted whole at docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:755 and logged in docs/agent/RESOURCE_INTAKE.md; it is NOT on any buyer-facing surface and must never become one as a claim. NOT claimable: FIDO CTAP 2.1 section 6.6 authenticatorReset is open to whoever holds the key and needs only user interaction, so 'only a super admin can clear it' cannot be a hardware property (requirement R4); who the super admin is stays an open owner question (DR-043 item 2 keeps credentials in the customer's identity plane, DR-055 amendment of 2026-10-02). Guard: this inventory row only (check-claim-inventory-anchors keeps its quotation and citations true); scripts/check-launch-claims.mjs has no marker for this sentence.",
+   "action": "keep"
+  },
+  {
+   "file": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md",
+   "line": "755",
+   "claim": "\"making it impossible to break and or hack\"",
+   "kind": "capability",
+   "classification": "unsubstantiated",
+   "evidence": "Owner direction of 2026-10-02, quoted whole at docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:755 and logged in docs/agent/RESOURCE_INTAKE.md; it is NOT on any buyer-facing surface and must never become one as a claim. NOT claimable in any tense (DR-043 item 5; docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:400). The words are gated by scripts/check-launch-claims.mjs (the 2026-10-02 security-absolute markers, with self-tests); the repository states proven or proposed properties instead (requirements R1 to R6).",
+   "action": "keep"
+  },
+  {
+   "file": "docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md",
+   "line": "755",
+   "claim": "\"This company is also a good choice to look at for part of integration\"",
+   "kind": "capability",
+   "classification": "deferred",
+   "evidence": "Owner direction of 2026-10-02, quoted whole at docs/SESSION_PUCK_HARDWARE_HYPOTHESIS.md:755 and logged in docs/agent/RESOURCE_INTAKE.md; it is NOT on any buyer-facing surface and must never become one as a claim. NOT claimable: ARC is a candidate read-only custody signal source and a design target (docs/HARDWARE_PARTNER_MATRIX.md:17); no public ARC API was found, no connector or emulator exists, and no partnership, integration or certification is claimed. Custody is a deferred family in scripts/launch-profile.mjs. Guard: this inventory row only (check-claim-inventory-anchors keeps its quotation and citations true); scripts/check-launch-claims.mjs has no marker for an ARC integration, partnership or certification claim.",
+   "action": "keep"
   }
  ]
 }

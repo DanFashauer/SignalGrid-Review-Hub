@@ -62,6 +62,32 @@ The owner's session-puck concept — a worker-carried token whose attach and rem
 | Failing battery | `batteryHealth` is `failing`, at any charge level. | Distinct from low charge: charging cannot clear it, so the device is routed for battery replacement rather than back to a bay. |
 | Unknown dock state + high-risk workflow | `dockState` is `unknown`, `faulted`, or `offline` during a sensitive workflow. | Degraded confidence; require step-up, alternate evidence, or owner review. |
 
+## Kiosk interaction contract (design target)
+
+A device-dispensing kiosk (ARC-class; a candidate signal source and a design target, see
+[Hardware partner matrix](HARDWARE_PARTNER_MATRIX.md), row "Device-dispensing kiosks and checkout
+stations") would talk to SignalGrid in two directions, and the two must not be conflated:
+
+- **Call 1 — the kiosk ASKS (a design target).** On Pick Up it sends a decision request (requester, device, bay).
+  SignalGrid answers with a verdict from the custody-ledger evaluator's ladder: `none` (ready for
+  check-out, the one grant), `monitor` (an advisory, **not** a grant: the requester already holds the
+  device, nothing to dispense), `step_up` (a hold), `restrict` or `escalate`
+  ([`custody-ledger.ts`](../lib/integrations/src/integrations/rtls-custody/custody-ledger.ts):331 for `monitor`;
+  the action type also lists `alert` at :129, which the evaluator does not emit). The kiosk
+  keeps the bay lock and acts on the answer; SignalGrid never actuates the bay.
+- **Call 2 — the kiosk TELLS.** It reports what happened: dispense, return, fault, unreturned. Dispense,
+  return and unreturned map to events the shared contract already defines (`device_removed`,
+  `device_returned`, `non_return`; a bay that will not release maps to `dock_timeout` or `tamper_detected`,
+  [`lib/event-contract/src/types.ts`](../lib/event-contract/src/types.ts):11–25). A generic **bay fault** has
+  no event type there: that is a gap, named here, and a fault the kiosk cannot map reads `unknown`.
+- **The unknown rule.** A bay, ledger entry or observation the kiosk cannot report reads `unknown`, and
+  the ledger evaluator grades any unknown axis a hold, never a grant (`custody-ledger.ts`:20–31, "ANY unknown axis holds"). A
+  silent kiosk therefore cannot loosen a pickup.
+
+No connector and no emulator exist or are proposed: no public ARC API, webhook or SDK was found
+(2026-10-02), and the ask path and the tell path above are already held by the custody ledger and the
+event contract. Building is not claiming: the family stays deferred in the launch profile.
+
 ## The ledger-versus-bay reconciliation (built)
 
 The schema above is a design surface. One piece of it is now **built and proven**: the

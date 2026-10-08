@@ -43,6 +43,10 @@ Multi-bay dispensing kiosks are the closest adjacent category to SignalGrid's
 custody plane (a deferred family, not Limited GA), so it is worth being precise about which of their capabilities
 already have a home in the custody model and which do not.
 
+How such a kiosk would talk to SignalGrid — it **asks** before a pickup and **tells** after a dispense,
+return or fault, and a bay or ledger it cannot report reads unknown — is the [Kiosk interaction contract](PHYSICAL_CUSTODY_SIGNAL_MODEL.md#kiosk-interaction-contract-design-target),
+a candidate design target in a deferred family; no kiosk vendor integration is claimed.
+
 Two reading notes, because both directions of this table are easy to get wrong:
 
 - **The left column is vendor-stated and unverified.** It paraphrases capability

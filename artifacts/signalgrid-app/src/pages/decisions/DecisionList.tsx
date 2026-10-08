@@ -45,7 +45,7 @@ export function DecisionList() {
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
         message={
-          decisions ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied.` : ""
+          decisions ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied${filtered[0] ? `, newest record ${filtered[0].id.slice(-6)} at ${new Date(filtered[0].createdAt).toLocaleTimeString()}` : ""}.` : ""
         }
         alert={error ? "Decision ledger could not be read." : ""}
       />

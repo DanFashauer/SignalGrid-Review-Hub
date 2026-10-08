@@ -38,7 +38,7 @@ export default function DecisionsPage() {
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
-        message={data ? `${data.decisions.length} decisions shown, ${data.decisions.filter((d) => d.outcome === "deny").length} denied.` : ""}
+        message={data ? `${data.decisions.length} decisions shown, ${data.decisions.filter((d) => d.outcome === "deny").length} denied${data.decisions[0] ? `, newest record ${data.decisions[0].id.slice(-6)} at ${new Date(data.decisions[0].evaluatedAt).toLocaleTimeString()}` : ""}.` : ""}
         alert={isError ? "Decisions could not be loaded." : ""}
       />
       <div className="flex items-center justify-between">

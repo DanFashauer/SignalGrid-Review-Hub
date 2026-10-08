@@ -307,16 +307,21 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   const rels = new Set(parsed.map((f) => f.rel));
   for (const f of parsed) for (const why of opaqueHookExports(f.code)) failures.push(`${f.rel}: ${why} — the gate cannot follow it; failing closed`);
   const polls = new Set();
-  const names = new Set();   // named exports of polling files
+  const names = new Set();   // named exports of polling files, any module
+  const exportsOf = new Map(); // polling file -> the names it carries
   // A .ts file renders no JSX, so nothing it exports is a component: every
   // default export of a polling .ts is followed, whatever its name.
   const defaultCarries = (rel) => {
     const code = parsed.find((x) => x.rel === rel).code;
     return rel.endsWith(".ts") ? hasDefaultExport(code) : defaultIsHookOrValue(code);
   };
+  // A name carries polling only where it is imported: from a polling file that
+  // exports it, or from a specifier the gate cannot resolve (another package, a
+  // path outside the tree) — there it is followed by name and fails closed. A
+  // local identifier that merely shares a polling export's name (`state`) is not.
+  const carried = (target, orig) => (target ? polls.has(target) && (exportsOf.get(target)?.has(orig) ?? false) : names.has(orig));
   const usesPolling = (f) => {
-    const own = exportedNames(f.code);
-    const local = new Set([...names].filter((n) => !own.has(n)));
+    const local = new Set();
     // `import * as NS from "./polling"`: NS.default carries a followable default.
     for (const m of f.code.matchAll(/import\s+(?:([A-Za-z_$][\w$]*)\s*,\s*)?\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["']([^"']+)["']/g)) {
       const target = resolveImport(f.rel, m[3], rels);
@@ -324,16 +329,24 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
         if (defaultCarries(target)) local.add(`${m[2]}.default`);
         if (m[1] && defaultCarries(target)) local.add(m[1]);
       }
+      for (const n of target ? (polls.has(target) ? exportsOf.get(target) ?? [] : []) : names) local.add(`${m[2]}.${n}`);
     }
     for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:([A-Za-z_$][\w$]*)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*["']([^"']+)["']/g)) {
       const target = resolveImport(f.rel, m[3], rels);
       if (m[1] && target && polls.has(target) && defaultCarries(target)) local.add(m[1]);
       for (const part of (m[2] ?? "").split(",").map((x) => x.trim()).filter(Boolean)) {
         const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
-        if (alias && (names.has(orig) || (orig === "default" && target && polls.has(target) && defaultCarries(target)))) local.add(alias);
+        if (orig === "default" ? target && polls.has(target) && defaultCarries(target) : carried(target, orig)) local.add(alias ?? orig);
       }
     }
-    return [...local].some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "")));
+    // A polling name used with no import binding it (an ambient or auto-imported
+    // hook) still carries polling unless this file declares that name itself.
+    const body = f.code.replace(/import[^;]*?from\s*["'][^"']+["'];?/g, "");
+    const bound = new Set();
+    for (const m of f.code.matchAll(/import\s+(?:type\s+)?([^;]*?)\s+from\s*["'][^"']+["']/g)) for (const id of m[1].match(/[A-Za-z_$][\w$]*/g) ?? []) bound.add(id);
+    const declares = (n) => new RegExp(`(?:\\b(?:const|let|var|function\\*?|class)\\s+${escapeRegExp(n)}(?![\\w$])|\\b(?:const|let|var)\\s*[\\[{][^=]*(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])[^=]*[\\]}]\\s*=)`).test(body);
+    for (const n of names) if (!bound.has(n) && !declares(n)) local.add(n);
+    return [...local].some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(body));
   };
   for (let changed = true; changed; ) {
     changed = false;
@@ -348,7 +361,9 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
         // case) in a .tsx counts as a component; every other export — hooks,
         // values, SCREAMING_CASE options, and anything from a .ts — is followed.
         const isTs = f.rel.endsWith(".ts");
-        for (const n of exportedNames(f.code)) if (isTs || !new RegExp(`^${PASCAL}$`).test(n)) names.add(n);
+        const carries = new Set([...exportedNames(f.code)].filter((n) => isTs || !new RegExp(`^${PASCAL}$`).test(n)));
+        exportsOf.set(f.rel, carries);
+        for (const n of carries) names.add(n);
         changed = true;
       }
     }
@@ -396,8 +411,51 @@ export function checkLiveRegionText(rel, raw) {
     // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
     // or a member test (`!data.chain.valid`).
     if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
-    if (/\[0\]/.test(message) && !/\[0\]\??\.(?:id|createdAt|evaluatedAt)\b/.test(message)) {
+    const identity = /\[0\]\??\.(?:id|createdAt|evaluatedAt)\b/.test(message);
+    if (/\[0\]/.test(message) && !identity) {
       failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
+    }
+    // A capped decision list can take a new record and drop an old one with the
+    // same outcome: its counts do not change, so counts alone announce nothing.
+    if (/\.length\b/.test(message) && /\bdecisions?\b/i.test(message) && !identity) {
+      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions without naming the newest record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
+    }
+  }
+  return failures;
+}
+
+/** What an alert says it lost: "Signal feed" in "Signal feed unreachable …". */
+const alertSubject = (text) => text.match(/^(.*?)\s+(?:unreachable|could not)\b/i)?.[1].trim().toLowerCase() ?? null;
+
+/**
+ * One assertive alert per outage. A layout shell (components/*Layout*) is on
+ * screen on every page, so when its <LiveRegion> alerts that a source is down,
+ * a page alerting the same source interrupts the user twice for one outage.
+ * Over one tree's files; returns failure strings.
+ */
+export function checkSharedAlerts(files) {
+  const alertsOf = (src) => {
+    const out = [];
+    const code = stripComments(src);
+    for (const m of code.matchAll(/<LiveRegion\b/g)) {
+      const tag = openingTag(code, m.index);
+      const alert = tag === null ? null : attrExpression(tag, "alert");
+      if (!alert) continue;
+      for (const q of alert.matchAll(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g)) {
+        const subject = alertSubject(q[2]);
+        if (subject) out.push({ subject, line: code.slice(0, m.index).split("\n").length });
+      }
+    }
+    return out;
+  };
+  const shells = files.filter((f) => /\/components\/[^/]*Layout[^/]*\.tsx$/.test(f.rel));
+  const owned = new Map();
+  for (const f of shells) for (const a of alertsOf(f.src)) owned.set(a.subject, f.rel);
+  const failures = [];
+  for (const f of files) {
+    if (shells.includes(f)) continue;
+    for (const a of alertsOf(f.src)) {
+      if (owned.has(a.subject)) failures.push(`${f.rel}:${a.line}: <LiveRegion> alerts "${a.subject}" down, which ${owned.get(a.subject)} already announces on every page — one outage, two assertive interruptions`);
     }
   }
   return failures;
@@ -728,6 +786,7 @@ function run() {
         failures.push(`${treeRel}: <LiveRegion> is used but components/LiveRegion.tsx no longer declares aria-live="polite" and "assertive"`);
       }
     }
+    failures.push(...checkSharedAlerts(files.filter((x) => x.rel.endsWith(".tsx"))));
     pollingTotal += lr.polling.length;
     failures.push(...lr.failures);
     for (const f of files.filter((x) => x.rel.endsWith(".tsx"))) {
@@ -960,6 +1019,25 @@ function selfTest() {
     ["a live-region message naming the latest record must carry its identity",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d?.[0] ? `Latest: ${d[0].outcome}.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d?.[0] ? `Latest: ${d[0].outcome}, record ${d[0].id}.` : ""} />').length === 0],
+    ["a local name that matches a polling export is not polling; an import of it is",
+      (() => {
+        const poll = view("t/src/lib/poll.ts", "export const state = useQuery({ refetchInterval: 5 });");
+        const other = view("t/src/lib/other.ts", "export const state = 1;");
+        const run = (page) => checkLiveRegions([poll, other, view("t/src/pages/P.tsx", page)], false).polling.includes("t/src/pages/P.tsx");
+        return !run("const state = 1; return <div>{state}</div>;") &&
+          !run('import { state } from "../lib/other"; return <div>{state}</div>;') &&
+          run('import { state } from "../lib/poll"; return <div>{state}</div>;') &&
+          run('import * as P from "../lib/poll"; return <div>{P.state}</div>;');
+      })()],
+    ["a decision-list announcement names its newest record",
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.length} decisions shown.` : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.length} decisions shown, newest ${d[0].id}.` : ""} />').length === 0 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={s ? `${s.length} signals.` : ""} />').length === 0],
+    ["a page does not re-alert an outage its layout shell already announces",
+      checkSharedAlerts([view("t/src/components/AppLayout.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable — state unknown." : ""} />'),
+        view("t/src/pages/S.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable; count unknown." : ""} />')]).length === 1 &&
+      checkSharedAlerts([view("t/src/components/AppLayout.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable." : ""} />'),
+        view("t/src/pages/D.tsx", '<LiveRegion message="" alert={e ? "Decisions could not be loaded." : ""} />')]).length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",

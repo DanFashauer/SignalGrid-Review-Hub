@@ -24,15 +24,15 @@ export default function DashboardPage() {
       <LiveRegion
         message={
           decisions?.decisions[0]
-            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals?.signals.filter((s) => s.status === "critical").length ?? 0} critical signals.`
+            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals && !signalsError ? `${signals.signals.filter((s) => s.status === "critical").length} critical signals.` : "Critical signal count unknown."}`
             : ""
         }
         alert={
+          // The DesktopLayout shell owns the signal-feed outage alert:
+          // one assertive announcement per outage, not one per region.
           decisionsError
             ? "Decisions could not be loaded."
-            : signalsError
-              ? "Signal feed unreachable; critical signal count unknown."
-              : ""
+            : ""
         }
       />
       <div>

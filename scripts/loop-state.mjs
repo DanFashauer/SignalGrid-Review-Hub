@@ -2604,10 +2604,10 @@ function selfTest() {
       inCleanEnv(() => hubTransport(txu.w)).problems.some((p) => /^repository-scope url\.git@github\.com:\.insteadof=https:\/\/github\.com\/ \(local /.test(p)) &&
       inCleanEnv(() => hubTransport(txg.w)).problems.length === 1 && /core\.gitproxy/.test(inCleanEnv(() => hubTransport(txg.w)).problems[0]));
     // the same keys below the environment's own boundary (the global file, the command line) are what the sandbox's proxy and CA ARE: reported, not gated
-    const gProxy = cfgFile("r9-global-proxy.cfg", "[http]\n\tproxy = http://user:s3cret@10.9.8.7:3128\n\tsslVerify = true\n\tsslCAInfo = /etc/ssl/corp-ca.pem\n");
+    const gProxy = cfgFile("r9-global-proxy.cfg", "[http]\n\tproxy = http://user:s3cret@proxy.invalid:3128\n\tsslVerify = true\n\tsslCAInfo = /etc/ssl/corp-ca.pem\n");
     const gTrusted = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: gProxy });
     check("the same proxy and CA keys in the user's GLOBAL configuration, with sslVerify true, are reported as trusted (userinfo removed) and are no finding (R9-tx-global-report)",
-      gTrusted.problems.length === 0 && gTrusted.trusted.some((t) => t.includes("global") && t.includes("http.proxy=http://10.9.8.7:3128")) && gTrusted.trusted.some((t) => t.includes("http.sslcainfo=/etc/ssl/corp-ca.pem")) &&
+      gTrusted.problems.length === 0 && gTrusted.trusted.some((t) => t.includes("global") && t.includes("http.proxy=http://proxy.invalid:3128")) && gTrusted.trusted.some((t) => t.includes("http.sslcainfo=/etc/ssl/corp-ca.pem")) &&
       !JSON.stringify(gTrusted).includes("s3cret") && /^trusted, not verified: /.test(gTrusted.note));
     const gOff = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-ssl.cfg", "[http]\n\tsslVerify = false\n") });
     const gOffUrl = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-url.cfg", "[http \"https://github.com/\"]\n\tsslVerify = off\n") });
@@ -2803,7 +2803,7 @@ function selfTest() {
     const warnRun = wholeScript(txw2, "r10warn-a", cloudShape);
     check("a listing read through the environment's proxy and CA, or a global proxy, renders a WARNING row (!), never gating, whose text still lists what was trusted; the same shape through the whole script exits 0 with the ! row (R10-tx-warn)",
       cloudScan.problems.length === 0 && cloudScan.trusted.length >= 2 && cloudRow.state === "warn" && cloudRow.gated === false && cloudRow.what === "Review Hub transport" && cloudRow.detail.includes("trusted, not verified: ") &&
-      cloudRow.detail.includes("through a transport this check cannot verify") && globalOnly.state === "warn" && globalOnly.detail.includes("http.proxy=http://10.9.8.7:3128") && rewriteOnly.state === "warn" && warnRun.status === 0 && /! Review Hub transport\s+listing read from .*trusted, not verified: environment proxy HTTPS_PROXY\/https_proxy=http:\/\/127\.0\.0\.1:40381; environment CA GIT_SSL_CAINFO=\/root\/\.ccr\/ca-bundle\.crt/.test(warnRun.out) &&
+      cloudRow.detail.includes("through a transport this check cannot verify") && globalOnly.state === "warn" && globalOnly.detail.includes("http.proxy=http://proxy.invalid:3128") && rewriteOnly.state === "warn" && warnRun.status === 0 && /! Review Hub transport\s+listing read from .*trusted, not verified: environment proxy HTTPS_PROXY\/https_proxy=http:\/\/127\.0\.0\.1:40381; environment CA GIT_SSL_CAINFO=\/root\/\.ccr\/ca-bundle\.crt/.test(warnRun.out) &&
       !/✓ Review Hub transport/.test(warnRun.out) && /all present on the Review Hub/.test(warnRun.out));
     const cleanRun = wholeScript(txw2, "r10warn-b", cleanOfTrust);
     check("a listing read with no proxy, no CA override and no rewrite at any scope renders the green row, whose text says nothing was configured (R10-tx-clean)",

@@ -163,7 +163,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
           <div className="absolute right-0 top-0 w-80 h-full bg-card border-l border-border flex flex-col z-50">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <span className="text-sm font-semibold">Alerts</span>
-              <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+              <button onClick={() => setNotifOpen(false)} aria-label="Close alerts" className="text-muted-foreground hover:text-foreground text-xs">✕</button>
             </div>
             <div className="flex-1 overflow-auto p-3 space-y-2">
               {feedUnreachable ? (

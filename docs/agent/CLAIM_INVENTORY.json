@@ -7720,7 +7720,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Audit.tsx",
-   "line": "60, 63, 64",
+   "line": "61, 64, 65",
    "claim": "\"chain verified\" / \"CHAIN BROKEN\" badge plus \"{n} events, every digest recomputed on this request\" and \"— broken at seq {n}\"",
    "kind": "capability",
    "classification": "launch",

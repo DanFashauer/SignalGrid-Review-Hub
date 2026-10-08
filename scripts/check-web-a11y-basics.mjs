@@ -412,14 +412,14 @@ export function checkLiveRegionText(rel, raw) {
     // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
     // or a member test (`!data.chain.valid`).
     if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
-    const identity = /\[0\]\??\.(?:id|createdAt|evaluatedAt)\b/.test(message);
+    const identity = /\[(?:0|[^\]]*\.length\s*-\s*1)\]\??\.(?:id|createdAt|evaluatedAt|recordedAt)\b/.test(message);
     if (/\[0\]/.test(message) && !identity) {
       failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
     }
     // A capped decision list can take a new record and drop an old one with the
     // same outcome: its counts do not change, so counts alone announce nothing.
-    if (/\.length\b/.test(message) && /\bdecisions?\b/i.test(message) && !identity) {
-      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions without naming the newest record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
+    if (/\.length\b/.test(message) && /\b(?:decisions?|(?:audit )?events?)\b/i.test(message) && !identity) {
+      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions or audit events without naming the newest record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
     }
   }
   return failures;
@@ -493,6 +493,9 @@ function openingTag(src, index) {
 // controls, the tag characters and the variation selector supplement.
 const INVISIBLE = /[\s\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFFA0\uFFF9-\uFFFC\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
 export const isBlank = (text) => text.replace(INVISIBLE, "") === "";
+// Text made only of symbols and punctuation (`×`, `✕`, `→`, `…`) is read out as
+// the glyph's name, not the action: it does not name a button.
+export const isGlyphOnly = (text) => !isBlank(text) && /^[\p{S}\p{P}]+$/u.test(text.replace(INVISIBLE, ""));
 
 /** Named HTML entities that are whitespace or invisible; any other name is left as text. */
 const NAMED_WS = {
@@ -503,6 +506,13 @@ const NAMED_WS = {
   NoBreak: "\u2060", Tab: "\t", NewLine: "\n", shy: "\u00AD", lrm: "\u200E", rlm: "\u200F",
   InvisibleTimes: "\u2062", it: "\u2062", InvisibleComma: "\u2063", ic: "\u2063", ApplyFunction: "\u2061", af: "\u2061",
 };
+// Glyph entities a close, next or more control is commonly written with: decoded so
+// that `&times;` is judged as the `×` it renders (a glyph, not a name).
+const NAMED_GLYPH = {
+  times: "\u00D7", rarr: "\u2192", larr: "\u2190", uarr: "\u2191", darr: "\u2193", raquo: "\u00BB", laquo: "\u00AB",
+  rsaquo: "\u203A", lsaquo: "\u2039", hellip: "\u2026", middot: "\u00B7", bull: "\u2022", check: "\u2713", cross: "\u2717",
+  minus: "\u2212", plus: "+", ndash: "\u2013", mdash: "\u2014", amp: "&", lt: "<", gt: ">",
+};
 const codePoint = (n) => (Number.isInteger(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : "\uFFFD");
 
 /** Decode every numeric character reference and the whitespace named ones. */
@@ -510,7 +520,7 @@ export function decodeEntities(text) {
   return text
     .replace(/&#(\d+);/g, (_, d) => codePoint(Number(d)))
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => codePoint(parseInt(h, 16)))
-    .replace(/&([A-Za-z][A-Za-z0-9]*);/g, (m, n) => NAMED_WS[n] ?? m);
+    .replace(/&([A-Za-z][A-Za-z0-9]*);/g, (m, n) => NAMED_WS[n] ?? NAMED_GLYPH[n] ?? m);
 }
 
 /** Decode the escapes of a JS string literal's body. */
@@ -619,6 +629,7 @@ export function checkIconButtons(rel, raw) {
     const text = buttonText(src, r.index + tag.length);
     if (text === null) { failures.push(`${rel}:${line}: <button> body could not be parsed — failing closed`); continue; }
     if (isBlank(text)) failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+    else if (isGlyphOnly(text)) failures.push(`${rel}:${line}: <button> is named only by a glyph (${text.trim()}) and has no aria-label — it reads as the symbol, not the action (WCAG 4.1.2)`);
   }
   const re = /<Button\b/g;
   let m;
@@ -627,7 +638,8 @@ export function checkIconButtons(rel, raw) {
     const tag = openingTag(src, m.index);
     if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
     // A child text node (an sr-only <span>) names the button as well as aria-label does.
-    const named = hasNonBlankLabel(tag) || (!tag.trimEnd().endsWith("/") && !isBlank(buttonText(src, m.index + tag.length, "Button") ?? ""));
+    const childText = tag.trimEnd().endsWith("/") ? "" : buttonText(src, m.index + tag.length, "Button") ?? "";
+    const named = hasNonBlankLabel(tag) || (!isBlank(childText) && !isGlyphOnly(childText));
     if (/\bsize=["{]\s*["'`]?icon["'`]?/.test(tag) && !named) {
       failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
@@ -740,12 +752,15 @@ export function checkReducedMotion(rel, raw) {
         // …and it must damp every family, not just one: a block left with only
         // `scroll-behavior: auto` lets every animation and transition run.
         const families = new Set(decls.map(([prop]) => prop.split("-")[0]));
-        if (["animation", "transition", "scroll"].every((f) => families.has(f)) && decls.every(([prop, value]) => damps(prop, value))) return [];
+        // …and reach every element: a rule whose selector list holds the bare
+        // universal `*`. `.unused { animation: none }` damps nothing on screen.
+        const universal = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{/g)].some((r) => r[1].split(",").some((sel) => sel.trim() === "*"));
+        if (universal && ["animation", "transition", "scroll"].every((f) => families.has(f)) && decls.every(([prop, value]) => damps(prop, value))) return [];
         break;
       }
     }
   }
-  return [`${rel}: no @media (prefers-reduced-motion: reduce) block that damps animation, transition and scroll-behavior — WCAG 2.3.3`];
+  return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
 function webTrees() {
@@ -923,7 +938,7 @@ function selfTest() {
     ["astral invisible characters do not name a button",
       ["&#xE0100;", "&#x1D173;", "&#xE0001;", "&#x1BCA0;", "\\u{E0100}"].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c.startsWith("&") ? c : `{"${c}"}`}</button>`).length === 1) &&
-      checkIconButtons("x.tsx", '<button onClick={f}>&#x1F600;</button>').length === 0],
+      checkIconButtons("x.tsx", '<button onClick={f}>&#x1D400;</button>').length === 0],
     ["DEL, C1 controls and invisible format characters do not name a button",
       ["&#x7F;", "&#x85;", "&shy;", "&#173;", "&lrm;", "&#x200E;", "&#x2800;", "&#x3164;", "&#x115F;", "&#x034F;", "&#xFE0F;", "&#x061C;", "&#xFFFC;", "&#x17B4;"].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}><svg/>${c}</button>`).length === 1)],
@@ -1049,6 +1064,17 @@ function selfTest() {
         view("t/src/pages/S.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable; count unknown." : ""} />')]).length === 1 &&
       checkSharedAlerts([view("t/src/components/AppLayout.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable." : ""} />'),
         view("t/src/pages/D.tsx", '<LiveRegion message="" alert={e ? "Decisions could not be loaded." : ""} />')]).length === 0],
+    ["a button named only by a glyph is not named",
+      ["×", "✕", "&times;", "→", "…"].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
+      checkIconButtons("x.tsx", '<button onClick={f} aria-label="Close">×</button>').length === 0 &&
+      checkIconButtons("x.tsx", '<button onClick={f}>× Close</button>').length === 0],
+    ["an audit-event count names the newest event",
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events. Hash chain intact.` : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],
+    ["a reduced-motion block must reach every element through a universal rule",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",

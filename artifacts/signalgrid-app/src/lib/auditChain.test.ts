@@ -1,24 +1,50 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeChain } from "./auditChain.ts";
+import { normalizeChain, chainAlert } from "./auditChain.ts";
 
-test("the in-memory core's verdict passes through unchanged", () => {
-  assert.deepEqual(normalizeChain({ valid: true, brokenAtSeq: null, length: 7, truncated: false }), { valid: true, brokenAtSeq: null, length: 7 });
-  assert.deepEqual(normalizeChain({ valid: false, brokenAtSeq: 3, length: 7 }), { valid: false, brokenAtSeq: 3, length: 7 });
+test("a whole, intact in-memory chain is verified", () => {
+  const c = normalizeChain({ valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: 0 });
+  assert.deepEqual(c, { valid: true, partial: false, brokenAtSeq: null, brokenAtLedgerIndex: null, length: 7 });
+  assert.equal(chainAlert(c), "");
+});
+
+test("a truncated in-memory chain is only partially verified, never 'intact'", () => {
+  const c = normalizeChain({ valid: true, brokenAtSeq: null, length: 500, truncated: true, evictedCount: 40 });
+  assert.equal(c.partial, true);
+  assert.match(chainAlert(c), /retained part only/);
+});
+
+test("an in-memory break names its tenant sequence", () => {
+  const c = normalizeChain({ valid: false, brokenAtSeq: 3, length: 7, truncated: false });
+  assert.equal(chainAlert(c), "Hash chain broken at sequence 3.");
 });
 
 test("a clean durable ledger is verified, not broken at sequence undefined", () => {
-  assert.deepEqual(normalizeChain({ ok: true, count: 12, truncated: false, batches: 1 }), { valid: true, brokenAtSeq: null, length: 12 });
+  const c = normalizeChain({ ok: true, count: 12, truncated: false, batches: 1 });
+  assert.deepEqual(c, { valid: true, partial: false, brokenAtSeq: null, brokenAtLedgerIndex: null, length: 12 });
 });
 
-test("a broken durable ledger names the index it broke at", () => {
-  assert.deepEqual(normalizeChain({ ok: false, count: 12, truncated: false, brokenAtIndex: 5 }), { valid: false, brokenAtSeq: 5, length: 12 });
+test("a durable break keeps its zero-based global ledger index apart from audit sequences", () => {
+  const c = normalizeChain({ ok: false, count: 12, truncated: false, brokenAtIndex: 0 });
+  assert.equal(c.brokenAtSeq, null);
+  assert.equal(c.brokenAtLedgerIndex, 0);
+  assert.equal(chainAlert(c), "Hash chain broken at global ledger index 0 (zero-based).");
 });
 
-test("a truncated durable verification is inconclusive: not valid, and no invented break", () => {
-  assert.deepEqual(normalizeChain({ ok: true, count: 10000, truncated: true }), { valid: false, brokenAtSeq: null, length: 10000 });
+test("a truncated durable verification is partial: verified prefix, not a whole chain", () => {
+  const c = normalizeChain({ ok: true, count: 10000, truncated: true });
+  assert.equal(c.partial, true);
+  assert.match(chainAlert(c), /retained part only/);
+});
+
+test("a verdict that does not say whether it covered the whole history counts as partial", () => {
+  assert.equal(normalizeChain({ valid: true, brokenAtSeq: null, length: 7 }).partial, true);
+  assert.equal(normalizeChain({ ok: true, count: 7 }).partial, true);
 });
 
 test("an unrecognised shape is unverified", () => {
-  for (const raw of [undefined, null, {}, { ok: "yes" }]) assert.deepEqual(normalizeChain(raw), { valid: false, brokenAtSeq: null, length: 0 });
+  for (const raw of [undefined, null, {}, { ok: "yes" }]) {
+    const c = normalizeChain(raw);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
 });

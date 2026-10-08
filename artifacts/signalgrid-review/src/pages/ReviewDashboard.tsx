@@ -173,7 +173,7 @@ export default function ReviewDashboard() {
                 Navigate
               </span>
               <button
-                onClick={() => setMobileNavOpen(false)}
+                onClick={() => setMobileNavOpen(false)} aria-label="Close navigation"
                 className="text-muted-foreground hover:text-foreground text-xl leading-none"
               >
                 ×

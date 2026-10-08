@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { getAuditV1 } from "@/lib/v1";
+import { chainAlert, chainBreak } from "@/lib/auditChain";
 import { LiveRegion } from "@/components/LiveRegion";
 
 /**
@@ -19,14 +20,14 @@ export function Audit() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
-        message={data?.chain.valid && !error ? `${data.events.length} audit events. Hash chain intact.` : ""}
+        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.events.length} audit events, newest ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
         alert={
           error
             ? data
               ? "Audit ledger could not be re-read; chain unverified since the last read."
               : "Audit ledger could not be read; chain unverified."
-            : data && !data.chain.valid
-              ? data.chain.brokenAtSeq !== null ? `Hash chain broken at sequence ${data.chain.brokenAtSeq}.` : "Hash chain could not be fully verified."
+            : data
+              ? chainAlert(data.chain)
               : ""
         }
       />
@@ -50,18 +51,18 @@ export function Audit() {
       {data && (
         <div
           className={`border rounded p-4 font-mono text-sm flex items-center gap-3 ${
-            data.chain.valid ? "border-border bg-card/50" : "border-destructive bg-destructive/10"
+            data.chain.valid && !data.chain.partial ? "border-border bg-card/50" : "border-destructive bg-destructive/10"
           }`}
         >
           <Badge
             variant="outline"
-            className={`font-mono uppercase border-transparent ${data.chain.valid ? "bg-status-allow" : "bg-status-deny"}`}
+            className={`font-mono uppercase border-transparent ${data.chain.valid && !data.chain.partial ? "bg-status-allow" : "bg-status-deny"}`}
           >
-            {data.chain.valid ? "chain verified" : data.chain.brokenAtSeq !== null ? "CHAIN BROKEN" : "CHAIN UNVERIFIED"}
+            {!data.chain.valid ? (chainBreak(data.chain) ? "CHAIN BROKEN" : "CHAIN UNVERIFIED") : data.chain.partial ? "PARTIALLY VERIFIED" : "chain verified"}
           </Badge>
           <span className="text-muted-foreground">
             {data.chain.length} events, every digest recomputed on this request
-            {data.chain.brokenAtSeq !== null ? ` — broken at seq ${data.chain.brokenAtSeq}` : ""}
+            {chainBreak(data.chain) ? ` — broken at ${chainBreak(data.chain)}` : data.chain.partial ? " — retained part only; earlier events not verified" : ""}
           </span>
         </div>
       )}

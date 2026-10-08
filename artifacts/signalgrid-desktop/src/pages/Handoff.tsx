@@ -49,10 +49,10 @@ export default function HandoffPage() {
       <LiveRegion
         message={
           recentDecisions?.decisions[0]
-            ? `Most recent custody decision: ${recentDecisions.decisions[0].outcome.replace("_", " ")}.`
+            ? `Most recent custody decision: ${recentDecisions.decisions[0].outcome.replace("_", " ")}, record ${recentDecisions.decisions[0].id.slice(-6)} at ${new Date(recentDecisions.decisions[0].evaluatedAt).toLocaleTimeString()}.`
             : ""
         }
-        alert={recentDecisionsError && !recentDecisions ? "Recent custody decisions could not be loaded." : ""}
+        alert={recentDecisionsError ? "Recent custody decisions could not be loaded." : ""}
       />
       <div className="flex items-center gap-3">
         <GitBranch className="w-5 h-5 text-primary" />

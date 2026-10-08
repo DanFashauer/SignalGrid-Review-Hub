@@ -39,7 +39,7 @@ export default function DecisionsPage() {
     <div className="p-6 space-y-4">
       <LiveRegion
         message={data ? `${data.decisions.length} decisions shown, ${data.decisions.filter((d) => d.outcome === "deny").length} denied.` : ""}
-        alert={isError && !data ? "Decisions could not be loaded." : ""}
+        alert={isError ? "Decisions could not be loaded." : ""}
       />
       <div className="flex items-center justify-between">
         <div>

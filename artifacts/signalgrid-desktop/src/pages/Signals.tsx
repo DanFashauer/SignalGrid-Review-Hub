@@ -26,7 +26,7 @@ export default function SignalsPage() {
     <div className="p-6 space-y-4">
       <LiveRegion
         message={data ? `${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
-        alert={isError && !data ? "Signal feed unreachable; critical signal count unknown." : ""}
+        alert={isError ? "Signal feed unreachable; critical signal count unknown." : ""}
       />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Signals</h1>

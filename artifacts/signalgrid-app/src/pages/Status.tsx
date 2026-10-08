@@ -28,7 +28,7 @@ export function Status() {
             ? `${metrics.data.totalDecisions} decisions: ${metrics.data.byOutcome.deny} denied, ${metrics.data.byOutcome.restrict} restricted, ${metrics.data.pendingReview} pending review.`
             : ""
         }
-        alert={metrics.error && !metrics.data ? "Decision metrics could not be read." : ""}
+        alert={metrics.error ? "Decision metrics could not be read." : ""}
       />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Deployment assurance</h1>

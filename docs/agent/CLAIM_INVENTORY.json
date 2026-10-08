@@ -7479,7 +7479,7 @@
    "claim": "Metric tiles \"Total Decisions\", \"Allow Rate\", \"Restrict/Deny Rate\", \"Avg Latency\" as 24h figures",
    "kind": "count",
    "classification": "demo-only",
-   "evidence": "Sourced from useGetDashboardMetrics against the /api fixture surface, not /v1/metrics (which Status.tsx :69-71 does use). Mitigation: the \"(FIXTURE)\" header at :37 governs this row of tiles by proximity.",
+   "evidence": "Sourced from useGetDashboardMetrics against the /api fixture surface, not /v1/metrics (which Status.tsx :78-80 does use). Mitigation: the \"(FIXTURE)\" header at :67 governs this row of tiles by proximity.",
    "action": "rewrite"
   },
   {
@@ -7488,7 +7488,7 @@
    "claim": "\"Decision Volume\" stacked area chart of allow/stepUp/restrict/deny over 24h",
    "kind": "count",
    "classification": "demo-only",
-   "evidence": "useGetDecisionSeries, /api fixture. The card carries no label of its own; the comment at :21, 22 concedes \"the charts above it remain labelled fixture telemetry until their own /v1 series exists\" but no per-card label is actually rendered — only the page header.",
+   "evidence": "useGetDecisionSeries, /api fixture. The card carries no label of its own; the comment at :43, 44 concedes \"the charts above it remain labelled fixture telemetry until their own /v1 series exists\" but no per-card label is actually rendered — only the page header.",
    "action": "rewrite"
   },
   {
@@ -7497,7 +7497,7 @@
    "claim": "\"Recent decisions · /v1 core\" list linking to decision detail",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Reads listDecisionsV1 (/v1/decisions — a launch published-api-path, \"the console's list view\"). Comment at :21, 22 correctly separates this card from the fixture charts. Chip \"· /v1 core\" in the title is the mitigation.",
+   "evidence": "Reads listDecisionsV1 (/v1/decisions — a launch published-api-path, \"the console's list view\"). Comment at :43, 44 correctly separates this card from the fixture charts. Chip \"· /v1 core\" in the title is the mitigation.",
    "action": "rewrite"
   },
   {
@@ -7506,7 +7506,7 @@
    "claim": "Card \"Integration Health\" on the launch Overview screen",
    "kind": "status",
    "classification": "unsubstantiated",
-   "evidence": "Entire card is fed by useListIntegrations against the /api fixture catalog and carries NO fixture, catalog or preview label — unlike its sibling cards at :95 (\"· /v1 core\") and :249 (\"STATIC DEMO MOCK\"). A buyer reads it as the health of this deployment's live integrations.",
+   "evidence": "Entire card is fed by useListIntegrations against the /api fixture catalog and carries NO fixture, catalog or preview label — unlike its sibling cards at :129 (\"· /v1 core\") and :316 (\"STATIC DEMO MOCK\"). A buyer reads it as the health of this deployment's live integrations.",
    "action": "rewrite"
   },
   {
@@ -7547,7 +7547,7 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Dashboard.tsx",
-   "line": "281",
+   "line": "315, 316",
    "claim": "\"Shift Handoff\" / \"DEVICE CUSTODY (STATIC DEMO MOCK — illustrative, not from the decision core)\"",
    "kind": "status",
    "classification": "demo-only",
@@ -7578,7 +7578,7 @@
    "claim": "Card \"Connector health · launch families\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Names the launch fence explicitly. Comment at :306-308 states the static list is gated: \"the profile gate fails the build if this set changes\".",
+   "evidence": "Names the launch fence explicitly. Comment at :372-374 states the static list is gated: \"the profile gate fails the build if this set changes\".",
    "action": "rewrite"
   },
   {
@@ -7720,11 +7720,11 @@
   },
   {
    "file": "artifacts/signalgrid-app/src/pages/Audit.tsx",
-   "line": "57",
+   "line": "60, 63, 64",
    "claim": "\"chain verified\" / \"CHAIN BROKEN\" badge plus \"{n} events, every digest recomputed on this request\" and \"— broken at seq {n}\"",
    "kind": "capability",
    "classification": "launch",
-   "evidence": "Comment at :10-14: \"The chain banner is the server RE-VERIFYING every digest on this request, not a stored flag.\" Broken state names the sequence number rather than degrading to a generic warning.",
+   "evidence": "Comment at :11-15: \"The chain banner is the server RE-VERIFYING every digest on this request, not a stored flag.\" Broken state names the sequence number rather than degrading to a generic warning.",
    "action": "rewrite"
   },
   {
@@ -8711,15 +8711,15 @@
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
    "line": "64",
-   "claim": "Title-bar wordmark \"SIGNALGRID DESKTOP\" presented as a native desktop application window (macOS traffic-light controls rendered at :39-43).",
+   "claim": "Title-bar wordmark \"SIGNALGRID DESKTOP\" presented as a native desktop application window (macOS traffic-light controls rendered at :55-57).",
    "kind": "surface",
    "classification": "demo-only",
    "action": "rewrite",
-   "evidence": "scripts/launch-profile.mjs:487-489 (demo_only, fixture-fed). No native desktop packaging exists: artifacts/signalgrid-desktop/package.json scripts are only vite dev/build/serve/typecheck, and no electron or tauri dependency appears in any package.json in the repo. MITIGATION PRESENT and adjacent: \"review build\" (:50) and the amber \"FIXTURE DATA\" badge (:51) sit on the same title bar."
+   "evidence": "scripts/launch-profile.mjs:487-489 (demo_only, fixture-fed). No native desktop packaging exists: artifacts/signalgrid-desktop/package.json scripts are only vite dev/build/serve/typecheck, and no electron or tauri dependency appears in any package.json in the repo. MITIGATION PRESENT and adjacent: \"review build\" (:65) and the amber \"FIXTURE DATA\" badge (:66) sit on the same title bar."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "65",
+   "line": "65, 66",
    "claim": "Persistent title-bar labels \"review build\" and \"FIXTURE DATA\".",
    "kind": "status",
    "classification": "demo-only",
@@ -8728,12 +8728,12 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "73",
+   "line": "72, 73",
    "claim": "Status indicator \"ENGINE · FIXTURE\" with a live pulsing dot.",
    "kind": "status",
    "classification": "demo-only",
    "action": "keep",
-   "evidence": "Truthful: no decision core runs behind this app. MITIGATION PRESENT. The animated pulse dot (:57) is the only element that reads as liveness; the text itself is accurate against artifacts/api-server/src/routes/monitoring.ts:10-21."
+   "evidence": "Truthful: no decision core runs behind this app. MITIGATION PRESENT. The animated pulse dot (:72) is the only element that reads as liveness; the text itself is accurate against artifacts/api-server/src/routes/monitoring.ts:10-21."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
@@ -8915,7 +8915,7 @@
    "kind": "status",
    "classification": "demo-only",
    "action": "keep",
-   "evidence": "MITIGATION PRESENT and inline — the correct pattern; the neighbouring \"Signal Feed\" card at :99 is missing the same parenthetical."
+   "evidence": "MITIGATION PRESENT and inline — the correct pattern; the neighbouring \"Signal Feed\" card at :138 is missing the same parenthetical."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
@@ -9174,7 +9174,7 @@
    "kind": "status",
    "classification": "demo-only",
    "action": "keep",
-   "evidence": "MITIGATION PRESENT and the strongest in the surface — it names the data static, names it a mock, and explicitly disclaims the decision core. Accurate: the table is generated client-side by mockHandoffState() (:11-21) with no API call at all. This is the labeling pattern the Decisions, Policies and Integrations pages should copy."
+   "evidence": "MITIGATION PRESENT and the strongest in the surface — it names the data static, names it a mock, and explicitly disclaims the decision core. Accurate: the table is generated client-side by mockHandoffState() (:21-31) with no API call at all. This is the labeling pattern the Decisions, Policies and Integrations pages should copy."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Handoff.tsx",

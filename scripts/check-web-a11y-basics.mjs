@@ -366,6 +366,43 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   return { polling, failures };
 }
 
+/** The `{…}` expression of attribute `name` in an opening tag, "" if absent, null if unbalanced. */
+function attrExpression(tag, name) {
+  const m = new RegExp(`(?<![\\w-])${name}\\s*=\\s*\\{`).exec(tag);
+  if (!m) return "";
+  for (let i = m.index + m[0].length, depth = 1; i < tag.length; i++) {
+    if (tag[i] === "{") depth++;
+    else if (tag[i] === "}" && --depth === 0) return tag.slice(m.index + m[0].length, i);
+  }
+  return null;
+}
+
+/**
+ * What a <LiveRegion> says, over one file. A query keeps its last `data` when a
+ * refetch fails, so an `alert` gated on that data being absent (`error && !data`)
+ * goes silent for every outage after the first load. And a `message` naming the
+ * latest record (`…[0]`) must carry that record's identity: two records with the
+ * same outcome otherwise produce the same text, and unchanged text is not announced.
+ */
+export function checkLiveRegionText(rel, raw) {
+  const src = stripComments(raw);
+  const failures = [];
+  for (const m of src.matchAll(/<LiveRegion\b/g)) {
+    const line = src.slice(0, m.index).split("\n").length;
+    const tag = openingTag(src, m.index);
+    const alert = tag === null ? null : attrExpression(tag, "alert");
+    const message = tag === null ? null : attrExpression(tag, "message");
+    if (alert === null || message === null) { failures.push(`${rel}:${line}: <LiveRegion> could not be parsed — failing closed`); continue; }
+    // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
+    // or a member test (`!data.chain.valid`).
+    if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
+    if (/\[0\]/.test(message) && !/\[0\]\??\.(?:id|createdAt|evaluatedAt)\b/.test(message)) {
+      failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
+    }
+  }
+  return failures;
+}
+
 /** Text of the JSX opening tag starting at `index`, brace-aware; null if unclosed. */
 function openingTag(src, index) {
   let depth = 0;
@@ -447,7 +484,18 @@ function buttonText(src, openEnd, tagName = "button") {
     if (tag === null) return null;
     body = body.slice(0, i) + body.slice(i + tag.length + 1);
   }
+  // With its tags gone, an expression child whose only renderable operand was a
+  // tag — `{show && <Trash2 />}`, `{a ? <X /> : null}`, `{null}` — renders no text.
+  body = body.replace(/\{([^{}]*)\}/g, (m, inner) => (emptyExpression(inner) ? "" : m));
   return decodeEntities(body);
+}
+
+const NOTHING = String.raw`(?:null|undefined|false|true|""|''|\(\s*\))?`;
+/** Does this expression (its JSX tags already removed) render nothing at all? */
+export function emptyExpression(inner) {
+  const t = inner.replace(/\(\s*\)/g, "").trim();
+  return new RegExp(`^${NOTHING}$`).test(t) || /&&$/.test(t) ||
+    new RegExp(`^[^?:]*\\?\\s*${NOTHING}\\s*:\\s*${NOTHING}$`).test(t);
 }
 
 /** Is this opening tag aria-hidden (any value but false)? */
@@ -594,6 +642,22 @@ export function checkScrollMotion(rel, raw) {
   return failures;
 }
 
+// Longhands that change how motion runs, not how much of it there is.
+const MOTION_NEUTRAL = new Set(["animation-timing-function", "animation-fill-mode", "animation-direction", "animation-play-state", "transition-timing-function", "transition-behavior"]);
+const NEAR_ZERO = (v) => v.split(",").every((t) => {
+  const m = t.trim().match(/^(\d*\.?\d+)(ms|s)$/);
+  return m !== null && Number(m[1]) / (m[2] === "ms" ? 1000 : 1) <= 0.01;
+});
+/** Does this reduced-motion declaration damp motion? Anything unrecognised does not. */
+export function damps(prop, value) {
+  const v = value.toLowerCase();
+  if (prop === "scroll-behavior") return v === "auto";
+  if (prop === "animation" || prop === "transition" || prop === "animation-name" || prop === "transition-property") return v === "none";
+  if (prop === "animation-iteration-count") return v === "1" || v === "0";
+  if (/-(duration|delay)$/.test(prop)) return NEAR_ZERO(v);
+  return false;
+}
+
 /**
  * Rule 3 over one stylesheet. Comments are stripped first, and the block must
  * hold at least one declaration: a commented-out or empty block reduces nothing.
@@ -607,9 +671,14 @@ export function checkReducedMotion(rel, raw) {
     for (let i = m.index + m[0].length - 1; i < css.length; i++) {
       if (css[i] === "{") depth++;
       else if (css[i] === "}" && --depth === 0) {
-        // It must actually damp motion: an animation-*, transition-* or
-        // scroll-behavior declaration. `.x { color: red }` reduces nothing.
-        if (/(?:^|[\s;{])(animation|transition)(-[\w-]+)?\s*:[^;{}]+[;}]|scroll-behavior\s*:[^;{}]+[;}]/.test(css.slice(m.index + m[0].length, i + 1))) return [];
+        // It must actually damp motion: at least one animation-*, transition-*
+        // or scroll-behavior declaration, and every one of them damping —
+        // `.x { color: red }` reduces nothing, `animation-duration: 99s` or
+        // `scroll-behavior: smooth` reverses the block.
+        const decls = [...css.slice(m.index + m[0].length, i + 1).matchAll(/(?:^|[\s;{])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:\s*([^;{}]+)/g)]
+          .map(([, prop, value]) => [prop, value.replace(/!\s*important/, "").trim()])
+          .filter(([prop]) => !MOTION_NEUTRAL.has(prop));
+        if (decls.length && decls.every(([prop, value]) => damps(prop, value))) return [];
         break;
       }
     }
@@ -665,6 +734,7 @@ function run() {
       buttons += (f.src.match(/<Button\b/g) ?? []).length;
       rawButtons += (stripComments(f.src).match(/<button\b/g) ?? []).length;
       failures.push(...checkIconButtons(f.rel, f.src));
+      failures.push(...checkLiveRegionText(f.rel, f.src));
       if (/["']recharts["']/.test(f.src)) charts++;
       failures.push(...checkChartMotion(f.rel, f.src));
     }
@@ -873,6 +943,23 @@ function selfTest() {
       checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: "smooth" });').length === 1],
     ["a preference-chosen scroll behaviour passes",
       checkScrollMotion("x.tsx", 'window.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });').length === 0],
+    ["an expression child that renders only a tag (or nothing) does not name a button",
+      ['{show && <Trash2 />}', '{show && (<Trash2 />)}', '{a ? <X /> : null}', '{null}'].every((c) =>
+        checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1 && checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1) &&
+      ['{label}', '{a && "Save"}', '{show && <span>Save</span>}'].every((c) => checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 0)],
+    ["a reduced-motion block whose declarations do not damp motion does not count",
+      ["animation-duration: 99s", "scroll-behavior: smooth", "transition-duration: 0.01ms; animation-duration: 2s", "animation-iteration-count: infinite", "transition: opacity 1s"].every((d) =>
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
+      ["animation: none", "transition-duration: 0s !important", "scroll-behavior: auto", "animation-duration: 10ms; animation-timing-function: linear"].every((d) =>
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 0)],
+    ["a live-region alert gated on cached data being absent is flagged",
+      checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={isError && !data ? "Feed down." : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={m.error && !m.data ? "Down." : ""} />').length === 1 &&
+      ['alert={isError ? "Feed down." : ""}', 'alert={error ? "x" : data && !data.chain.valid ? "Broken." : ""}', 'alert={isError && !isLoading ? "x" : ""}'].every((a) =>
+        checkLiveRegionText("x.tsx", `<LiveRegion message="" ${a} />`).length === 0)],
+    ["a live-region message naming the latest record must carry its identity",
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d?.[0] ? `Latest: ${d[0].outcome}.` : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={d?.[0] ? `Latest: ${d[0].outcome}, record ${d[0].id}.` : ""} />').length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",

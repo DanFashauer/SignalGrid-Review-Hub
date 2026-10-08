@@ -32,7 +32,7 @@ export default function IntegrationsPage() {
     <div className="p-6 space-y-4">
       <LiveRegion
         message={data ? `${connected} integrations connected, ${degraded} degraded.` : ""}
-        alert={isError && !data ? "Integrations could not be loaded." : ""}
+        alert={isError ? "Integrations could not be loaded." : ""}
       />
       <div className="flex items-center justify-between">
         <div>

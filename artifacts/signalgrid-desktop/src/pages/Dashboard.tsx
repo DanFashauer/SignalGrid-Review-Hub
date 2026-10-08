@@ -24,13 +24,13 @@ export default function DashboardPage() {
       <LiveRegion
         message={
           decisions?.decisions[0]
-            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}. ${signals?.signals.filter((s) => s.status === "critical").length ?? 0} critical signals.`
+            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals?.signals.filter((s) => s.status === "critical").length ?? 0} critical signals.`
             : ""
         }
         alert={
-          decisionsError && !decisions
+          decisionsError
             ? "Decisions could not be loaded."
-            : signalsError && !signals
+            : signalsError
               ? "Signal feed unreachable; critical signal count unknown."
               : ""
         }

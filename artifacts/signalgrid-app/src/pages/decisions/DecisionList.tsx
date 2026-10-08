@@ -47,7 +47,7 @@ export function DecisionList() {
         message={
           decisions ? `${filtered.length} decisions shown, ${filtered.filter((d) => d.outcome === "deny").length} denied.` : ""
         }
-        alert={error && !decisions ? "Decision ledger could not be read." : ""}
+        alert={error ? "Decision ledger could not be read." : ""}
       />
       <div className="flex items-center justify-between">
         <div>

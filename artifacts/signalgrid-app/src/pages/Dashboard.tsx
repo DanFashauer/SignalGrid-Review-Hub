@@ -57,10 +57,10 @@ export function Dashboard() {
       <LiveRegion
         message={
           v1Decisions?.[0]
-            ? `Most recent decision: ${v1Decisions[0].outcome.replace("_", " ")} for ${v1Decisions[0].workflowId}.`
+            ? `Most recent decision: ${v1Decisions[0].outcome.replace("_", " ")} for ${v1Decisions[0].workflowId}, record ${v1Decisions[0].id.slice(-6)} at ${new Date(v1Decisions[0].createdAt).toLocaleTimeString()}.`
             : ""
         }
-        alert={v1DecisionsError && !v1Decisions ? "Decision ledger could not be read." : ""}
+        alert={v1DecisionsError ? "Decision ledger could not be read." : ""}
       />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Overview</h1>

@@ -726,7 +726,7 @@ export default function ReviewDashboard() {
                 >
                   <div className="flex items-start gap-4">
                     <button
-                      onClick={() => toggle(item.id)}
+                      onClick={() => toggle(item.id)} aria-label={`Mark "${item.title}" done`} aria-pressed={isDone}
                       className={`w-4 h-4 rounded border shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
                         isDone
                           ? "bg-teal-700 border-teal-600"

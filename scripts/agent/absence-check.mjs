@@ -225,6 +225,23 @@ export function stemVariants(topic) {
   return [...out];
 }
 
+/**
+ * The words probe applies when two or more significant words remain, OR when a generic noun
+ * was dropped from a multi-word topic and one word is left ("lessons gate" -> lessons, which
+ * exited 0 CORROBORATED while scripts/check-lessons.mjs exists; review round 1 of PR #1464).
+ * A weak probe, so the cost of the one-word case is INCONCLUSIVE noise, never a refusal.
+ */
+export function wordsProbeApplies(topic) {
+  const sig = significantWords(topic).length;
+  return sig >= 2 || (sig === 1 && topicWords(topic).length >= 2);
+}
+
+/** Merge the git-grep half and the tracked-path half of the words probe; a failure in either is a failure. */
+export function combineWordsProbe(grep, tracked, words) {
+  const pathHits = tracked.lines.filter((f) => words.every((w) => f.toLowerCase().includes(w)));
+  return probeResult([...new Set([...grep.lines, ...pathHits])], Boolean(grep.failed || tracked.failed), grep.why || tracked.why);
+}
+
 /** git argv for the `words` probe: files containing ALL the words, in any order. Pure so the self-test can inspect it. */
 export function wordsProbeArgv(words) {
   return ["grep", "-lIi", "--all-match", ...words.flatMap((w) => ["-e", w]), "--", ...CONTENT_EXCLUSIONS];
@@ -311,17 +328,12 @@ export function probeSpecs(topic) {
   // A WEAK probe, so classify() is unchanged: a hit is INCONCLUSIVE, never REFUTED, and
   // CORROBORATED still needs every probe empty. Tracked files containing ALL the
   // significant words (any order, any suffix) plus tracked paths containing all of them.
-  if (words.length >= 2) {
+  if (wordsProbeApplies(topic)) {
     specs.push({
       id: "words",
       strength: "weak",
       how: `a tracked file or path containing ALL of: ${words.join(", ")}`,
-      run: () => {
-        const g = gitLines(wordsProbeArgv(words), { emptyStatus: 1 });
-        const p = trackedFiles();
-        const pathHits = p.lines.filter((f) => words.every((w) => f.toLowerCase().includes(w)));
-        return probeResult([...new Set([...g.lines, ...pathHits])], g.failed || p.failed, g.why || p.why);
-      },
+      run: () => combineWordsProbe(gitLines(wordsProbeArgv(words), { emptyStatus: 1 }), trackedFiles(), words),
     });
   }
   return specs;
@@ -494,6 +506,33 @@ function selfTest() {
       "stem variants drop the generic noun only when two or more words remain",
       stemVariants("agent model tier gate").includes("agent-model-tier") && stemVariants("agent gate").length === 0 && stemVariants("agent model tier").length === 0,
     ]);
+  }
+  {
+    // Review round 1: one significant word left after a generic noun is dropped.
+    const one = probeSpecs("lessons gate");
+    checks.push(["a two-word topic left with ONE significant word still gets the weak words probe", one.some((s) => s.id === "words" && s.strength === "weak")]);
+    checks.push(["LIVE: 'lessons gate' is NOT corroborated while scripts/check-lessons.mjs exists", classify(one.map((s) => ({ ...s, ...s.run() }))) !== "corroborated"]);
+    checks.push(["a plain single-word topic still gets no words probe", !wordsProbeApplies("android") && !wordsProbeApplies("gate check")]);
+    // The two halves and the failure flag of the words probe, pinned.
+    const g = { lines: ["a.txt"], failed: false, why: null };
+    const tr = { lines: ["scripts/check-agent-model-tier.mjs", "x.md"], failed: false, why: null };
+    const w3 = ["agent", "model", "tier"];
+    checks.push(["words probe merges the grep half and the tracked-PATH half", JSON.stringify(combineWordsProbe(g, tr, w3).hits.sort()) === JSON.stringify(["a.txt", "scripts/check-agent-model-tier.mjs"])]);
+    checks.push(["a failure in either half marks the words probe failed (never silently empty)", combineWordsProbe({ ...g, failed: true, why: "boom" }, tr, w3).failed === true && combineWordsProbe(g, { ...tr, failed: true, why: "boom" }, w3).failed === true && combineWordsProbe(g, tr, w3).failed === false]);
+    // The grep half is CASE-INSENSITIVE: topicWords lowercases the topic, files do not.
+    const tmp = mkdtempSync(join(tmpdir(), "absence-words-"));
+    try {
+      writeFileSync(join(tmp, "doc.md"), "Agent MODEL Tier\n");
+      const git = (...a) => execFileSync("git", ["-C", tmp, ...a], { encoding: "utf8" });
+      git("init", "-q");
+      git("add", "-A");
+      const hits = git(...wordsProbeArgv(w3)).split("\n").filter(Boolean);
+      checks.push(["the words-probe grep matches capitalised content (case-insensitive)", JSON.stringify(hits) === JSON.stringify(["doc.md"])]);
+    } catch (err) {
+      checks.push([`the words-probe grep matches capitalised content (hermetic repo failed: ${err && err.message})`, false]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   }
   {
     // A nonsense multi-word topic, assembled from parts, must still CORROBORATE: --all-match

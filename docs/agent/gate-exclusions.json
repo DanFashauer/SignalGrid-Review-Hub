@@ -1,26 +1,66 @@
 {
   "schema": "signalgrid-gate-exclusions/v1",
-  "_about": "Every exclusion site in scripts/ (a named EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT constant, or a quoted ':!' / ':(exclude)' git pathspec) with the reason it exists. Derived and enforced by scripts/check-gate-census.mjs: a site with no entry fails, an entry whose site is gone fails. 'finding' marks an exclusion that hides in-scope content and is filed, not yet fixed (plan row 61).",
+  "_about": "Every exclusion site in scripts/ (a named EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT constant, or a quoted ':!' / ':(exclude)' git pathspec) with the reason it exists. Derived and enforced by scripts/check-gate-census.mjs: a site with no entry fails, an entry whose site is gone fails. 'finding' marks an exclusion that hides in-scope content and is filed, not yet fixed (plan row 61: the three filed findings were fixed 2026-10-08, so none remains).",
   "entries": [
     {
       "path": "scripts/agent/absence-check.mjs",
       "symbol": "CONTENT_EXCLUSIONS",
-      "reason": "Names the three pathspecs below as build output and generated artefacts; docs/ is deliberately NOT in it, and the pathspec entries carry the per-site reasons.",
+      "reason": "Names the pathspecs below as build output and generated artefacts; docs/ is deliberately NOT in it, and the pathspec entries carry the per-site reasons.",
       "date": "2026-09-30"
     },
     {
       "path": "scripts/agent/absence-check.mjs",
-      "pathspec": ":!*lock*",
-      "reason": "Meant to drop lockfiles (pnpm-lock.yaml, Cargo.lock), whose dependency names would otherwise corroborate any package-shaped topic.",
-      "date": "2026-09-30",
-      "finding": "HIDES IN-SCOPE CONTENT: the glob matches any path containing 'lock', so the content probe cannot see first-party docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md, native/ios/EnterpriseShell/Views/LockedIdleView.swift, .claude/agents/blocker-dispatcher.md, .claude/hooks/block-dangerous.sh or five lane-messages; narrowing it to lockfile names is filed, not edited, here."
+      "pathspec": ":!pnpm-lock.yaml",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
     },
     {
       "path": "scripts/agent/absence-check.mjs",
-      "pathspec": ":!*dist*",
-      "reason": "Meant to drop dist/ build output, which restates source and would double-count every hit.",
-      "date": "2026-09-30",
-      "finding": "LATENT: the glob matches any path containing 'dist', not only dist/ directories; today it also hides .claude/skills/exploratory-data-analysis/scripts/distribution_sensitivity.py."
+      "pathspec": ":!Cargo.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/Cargo.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!package-lock.json",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/package-lock.json",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!yarn.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/yarn.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!dist/**",
+      "reason": "dist/ build output restates source and would double-count every hit. Narrowed from the substring glob '*dist*' to dist/ directories only (plan row 61); '**/' needs a parent directory, so the root form has its own entry.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/dist/**",
+      "reason": "dist/ build output restates source and would double-count every hit. Narrowed from the substring glob '*dist*' to dist/ directories only (plan row 61); '**/' needs a parent directory, so the root form has its own entry.",
+      "date": "2026-10-08"
     },
     {
       "path": "scripts/agent/absence-check.mjs",
@@ -31,7 +71,7 @@
     {
       "path": "scripts/check-accuracy-doctrine.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output and .git, plus docs/inspiration/ \u2014 imported reference catalogues this repository does not assert (plan row 61); the self-test FATALs if docs/research/ is ever excluded again.",
+      "reason": "Skips build output and .git, plus docs/inspiration/ — imported reference catalogues this repository does not assert (plan row 61); the self-test FATALs if docs/research/ is ever excluded again.",
       "date": "2026-09-30"
     },
     {
@@ -55,7 +95,7 @@
     {
       "path": "scripts/check-decision-vocabulary.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output and the orval-generated clients under lib/api-zod/src/generated and lib/api-client-react/src/generated, which are derived from lib/api-spec \u2014 the spec the gate already reads directly.",
+      "reason": "Skips build output and the orval-generated clients under lib/api-zod/src/generated and lib/api-client-react/src/generated, which are derived from lib/api-spec — the spec the gate already reads directly.",
       "date": "2026-09-30"
     },
     {
@@ -163,7 +203,7 @@
     {
       "path": "scripts/check-nan-fail-open.mjs",
       "symbol": "SKIP",
-      "reason": "Skips build output, .git, coverage, third_party and .next \u2014 compiled or vendored copies of source the walk already reads (confirmed by the row 61 sweep).",
+      "reason": "Skips build output, .git, coverage, third_party and .next — compiled or vendored copies of source the walk already reads (confirmed by the row 61 sweep).",
       "date": "2026-09-30"
     },
     {
@@ -229,7 +269,7 @@
     {
       "path": "scripts/check-test-execution.mjs",
       "symbol": "SKIP_DIR",
-      "reason": "Skips build output, coverage, .git and .claude/worktrees \u2014 other agents' checkouts reached only because the walk reads the filesystem, not the index.",
+      "reason": "Skips build output, coverage, .git and .claude/worktrees — other agents' checkouts reached only because the walk reads the filesystem, not the index.",
       "date": "2026-09-30"
     },
     {
@@ -251,11 +291,10 @@
       "date": "2026-09-30"
     },
     {
-      "path": "scripts/verify-all.mjs",
+      "path": "scripts/lib/untracked-ignore.mjs",
       "symbol": "IGNORED_UNTRACKED",
-      "reason": "Known scratch and generated paths (virtualenvs, caches, node_modules, dist, build, .DS_Store) do not change which MCP code ran, so they do not mark live evidence dirty.",
-      "date": "2026-09-30",
-      "finding": "FAIL-OPEN CANDIDATE: the '\\.lock$' arm also ignores an untracked uv.lock or poetry.lock, which DOES change the resolved MCP dependencies, so evidence could be stamped clean from an unpinned environment; filed, not edited, here."
+      "reason": "Known scratch and generated paths (virtualenvs, caches, node_modules, dist, build, .DS_Store) do not change which MCP code ran, so they do not mark live evidence dirty. Lockfiles are NOT scratch: an untracked uv.lock or poetry.lock changes resolved dependencies and counts as source (plan row 61; scripts/check-untracked-ignore.mjs --self-test).",
+      "date": "2026-10-08"
     }
   ]
 }

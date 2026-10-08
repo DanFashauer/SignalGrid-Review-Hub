@@ -53,7 +53,7 @@
 import { webauthn, webauthnStore, webauthnTypes } from "@workspace/webauthn";
 import IORedis from "ioredis";
 import { getAuditRecords } from "@workspace/audit";
-import { completeEnrolment, enrol, mintEnrolment, newAuthenticator, sameKeyNewId, signAssertion, stepUp } from "./lib/webauthn-ceremony";
+import { completeEnrolment, enrol, mintEnrolment, newAuthenticator, paddedKeyNewId, sameKeyNewId, signAssertion, stepUp } from "./lib/webauthn-ceremony";
 
 type WebAuthnCredential = webauthnTypes.WebAuthnCredential;
 
@@ -166,6 +166,17 @@ async function revocationRedis() {
     "redis: the revoked KEY under a NEW credential id is refused",
     disguisedEnrol.success === false && !(await webauthnStore.getCredentialsForUser(user)).some((c) => c.id === disguised.id),
     `success=${disguisedEnrol.success} error=${disguisedEnrol.error}`,
+  );
+  // …and RE-ENCODED (review round 2, MEDIUM): x padded to 33 bytes under another fresh id.
+  // Refused only because the key fingerprint is of the canonical SPKI DER; see the
+  // in-memory proof for the control showing the padded encoding enrols on its own.
+  const padded = paddedKeyNewId(device);
+  const paddedEnrol = await completeEnrolment(user, await mintEnrolment(user), padded, tenant);
+  check(
+    "redis: the revoked key RE-ENCODED (x padded to 33 bytes) under a new id is refused AS REVOKED",
+    paddedEnrol.success === false && /revoked/i.test(paddedEnrol.error ?? "") &&
+      !(await webauthnStore.getCredentialsForUser(user)).some((c) => c.id === padded.id),
+    `success=${paddedEnrol.success} error=${paddedEnrol.error}`,
   );
 
   // 1b' — the same key enrolled under two ids (review round 1, MEDIUM): revoking one id
@@ -292,6 +303,32 @@ async function revocationRedis() {
     "redis: confirmCredentialEnrolled — false once the credential is revoked",
     (await webauthnStore.confirmCredentialEnrolled(user2, passkey.id, stored?.publicKey ?? "")) === false,
   );
+
+  // 2b — THE RE-READ FAILS CLOSED (review round 2, MEDIUM: claimed, never pinned). Another
+  // holder owns the per-user lock, so the release's re-read cannot run: the step-up must
+  // NOT be released — it throws, and a caller that swallowed that into "still enrolled"
+  // would release over a credential nobody re-read.
+  const user3 = "t_proof:revocation-redis-lockheld";
+  await resetIdentity(user3);
+  const held = newAuthenticator(false);
+  await enrol(user3, held, tenant);
+  const pending = await signAssertion(user3, held);
+  const heldLock = `webauthn:user:${user3}:lock`;
+  await rawRedis((r) => r.set(heldLock, "another-holder", "PX", 20_000));
+  let lockHeld: unknown;
+  try {
+    lockHeld = await webauthn.verifyAuthentication(user3, pending.challengeId, pending.response, tenant);
+  } catch (err) {
+    lockHeld = err;
+  }
+  await rawRedis((r) => r.del(heldLock));
+  check(
+    "redis: a step-up whose re-read cannot take the per-user lock is NOT released (it throws)",
+    lockHeld instanceof Error && /could not acquire the per-user lock/.test(lockHeld.message),
+    lockHeld instanceof Error ? lockHeld.message : `returned ${JSON.stringify(lockHeld)}`,
+  );
+  check("redis: …and with the lock free, the same credential releases a step-up (control)", (await stepUp(user3, held, tenant)).success === true);
+  await resetIdentity(user3);
 
   await resetIdentity(user);
   await resetIdentity(user2);

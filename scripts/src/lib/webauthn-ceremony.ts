@@ -56,20 +56,28 @@ export interface Authenticator {
   idBytes: Buffer;
   privateKey: KeyObject;
   cose: Buffer;
+  /** The raw P-256 coordinates, so a test can re-encode the same key differently. */
+  x: Buffer;
+  y: Buffer;
   counting: boolean;
   signCount: number;
+}
+
+function ec2Cose(x: Buffer, y: Buffer): Buffer {
+  return cborMap([
+    [1, cborInt(2)], [3, cborInt(-7)], [-1, cborInt(1)],
+    [-2, cborBytes(x)],
+    [-3, cborBytes(y)],
+  ]);
 }
 
 export function newAuthenticator(counting: boolean): Authenticator {
   const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   const jwk = publicKey.export({ format: "jwk" }) as { x: string; y: string };
-  const cose = cborMap([
-    [1, cborInt(2)], [3, cborInt(-7)], [-1, cborInt(1)],
-    [-2, cborBytes(Buffer.from(jwk.x, "base64url"))],
-    [-3, cborBytes(Buffer.from(jwk.y, "base64url"))],
-  ]);
+  const x = Buffer.from(jwk.x, "base64url");
+  const y = Buffer.from(jwk.y, "base64url");
   const idBytes = randomBytes(16);
-  return { id: idBytes.toString("base64url"), idBytes, privateKey, cose, counting, signCount: counting ? 1 : 0 };
+  return { id: idBytes.toString("base64url"), idBytes, privateKey, cose: ec2Cose(x, y), x, y, counting, signCount: counting ? 1 : 0 };
 }
 
 /** The SAME key pair under a different credential id. With `none` attestation the id is
@@ -78,6 +86,15 @@ export function newAuthenticator(counting: boolean): Authenticator {
 export function sameKeyNewId(auth: Authenticator): Authenticator {
   const idBytes = randomBytes(16);
   return { ...auth, id: idBytes.toString("base64url"), idBytes };
+}
+
+/** The SAME key, RE-ENCODED: its x coordinate sent as 33 bytes with a leading 0x00, under
+ *  a fresh credential id. Nothing in the attestation path length-checks the coordinate and
+ *  Node verifies with it, so this is the same key byte-for-byte different — what a party
+ *  holding a revoked authenticator can present to dodge an exact-string key match. */
+export function paddedKeyNewId(auth: Authenticator): Authenticator {
+  const x = Buffer.concat([Buffer.from([0x00]), auth.x]);
+  return { ...sameKeyNewId(auth), x, cose: ec2Cose(x, auth.y) };
 }
 
 export interface MintedCeremony {

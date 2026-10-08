@@ -165,7 +165,7 @@ export async function getUser(userId: string): Promise<WebAuthnUser | null> {
     // during enrollment, followed by Redis recovering before saveUser, silently
     // overwrote every previously enrolled credential. An unavailable store is an
     // error, not an empty credential set. The in-memory map remains the store
-    // only when no Redis is configured, matching saveUser's durability contract.
+    // only when no Redis is configured (see CREDENTIAL RECORDS ARE DURABLE below).
     try {
       await redis.connect();
       const data = await redis.get(key);
@@ -186,39 +186,28 @@ export async function getUser(userId: string): Promise<WebAuthnUser | null> {
   return inMemoryUsers.get(userId) ?? null;
 }
 
-export async function saveUser(user: WebAuthnUser): Promise<void> {
-  const redis = await getRedisClient();
-  const key = `${USER_PREFIX}${user.userId}`;
-
-  if (redis) {
-    try {
-      await redis.connect();
-      // Credentials are DURABLE enrollment records, not sessions — persist them with NO
-      // TTL. A 24h expiry meant an enrolled credential vanished from Redis after a day,
-      // so a challenge request on another instance (or any instance after a restart)
-      // found no credential and returned 409 despite enrollment having succeeded; the
-      // per-process in-memory mirror only masked that on the one surviving instance.
-      // Removal is explicit, via removeCredential (which DELs the key). (Adversarial
-      // review finding.) Ephemeral records — challenges (60s) and step-up sessions —
-      // keep their TTLs below; only the credential store is durable.
-      await redis.set(key, JSON.stringify(user));
-    } catch (err) {
-      // When Redis IS configured it is the authoritative shared store (review
-      // finding): swallowing a write failure here stored the credential only in
-      // this process's memory while the enrollment endpoint answered
-      // `enrolled: true` — and the single-use registration challenge was already
-      // consumed, so another instance (or this one after a restart) rejected the
-      // next challenge with no way to retry the ceremony. Propagate the failure so
-      // enrollment fails loudly instead of acknowledging a non-durable write. The
-      // in-memory fallback remains the store ONLY when no Redis is configured.
-      await redis.quit().catch(() => undefined);
-      throw err instanceof Error ? err : new Error("WebAuthn credential persistence failed");
-    }
-    await redis.quit();
-  }
-
-  inMemoryUsers.set(user.userId, user);
-}
+/**
+ * CREDENTIAL RECORDS ARE DURABLE, AND EVERY WRITE OF ONE GOES THROUGH THE LOCK.
+ *
+ * Durable: credentials are enrollment records, not sessions — persisted with NO TTL. A
+ * 24h expiry meant an enrolled credential vanished from Redis after a day, so a challenge
+ * request on another instance (or any instance after a restart) found no credential and
+ * returned 409 despite enrollment having succeeded; the per-process in-memory mirror only
+ * masked that on the one surviving instance. Removal is explicit, via removeCredential.
+ * (Adversarial review finding.) Ephemeral records — challenges (60s) and step-up sessions
+ * — keep their TTLs below; only the credential store is durable.
+ *
+ * Failures propagate: when Redis IS configured it is the authoritative shared store, and
+ * swallowing a write failure stored the credential only in this process's memory while
+ * the enrollment endpoint answered `enrolled: true` (review finding). The in-memory map
+ * is the store ONLY when no Redis is configured.
+ *
+ * Through the lock: there is deliberately NO exported whole-record writer. `saveUser`
+ * was one — an unlocked `SET` of the whole record that skipped the revocation tombstone
+ * check, so it could put a revoked credential back (PR #1314 review round 2; nothing
+ * called it). Removed. The only writers are `addCredential`, `removeCredential` (both
+ * under `withUserLock`, fenced) and `advanceCredentialCounter` (WATCH/MULTI).
+ */
 
 /**
  * Append a credential to a user's enrollment record ATOMICALLY.
@@ -384,7 +373,9 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
       async (redis, key, fence) => {
         // A failed read here propagates (no enrolment), never reads as "not revoked".
         const hits = await redis.smismember(`${REVOKED_PREFIX}${userId}`, ...tombstoneMembers(credential));
-        if (hits.some((hit) => hit === 1)) {
+        // Anything but a clean 0 for every member reads as REVOKED — an unexpected reply
+        // shape (a client swap, a protocol change) must tighten, never loosen.
+        if (!hits.every((hit) => hit === 0)) {
           throw new CredentialRevokedError(credential.id);
         }
         const data = await redis.get(key);
@@ -396,7 +387,7 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
         let stored = false;
         if (!user.credentials.some((c) => c.id === credential.id)) {
           user.credentials.push(credential);
-          // Durable, no TTL — matching saveUser. A credential is an enrollment record,
+          // Durable, no TTL (CREDENTIAL RECORDS ARE DURABLE). A credential is an enrollment record,
           // not a session. Fenced against OUR lock token (FENCED_SET_LUA): if the lease
           // expired or was deleted mid-section, the write is refused rather than landing
           // over whatever the NEXT holder is doing.
@@ -408,7 +399,7 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
           }
           stored = true;
         }
-        inMemoryUsers.set(userId, user); // keep the mirror consistent, as saveUser does
+        inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent
         return { stored };
       },
     );
@@ -456,7 +447,7 @@ export async function addCredential(userId: string, credential: WebAuthnCredenti
  * enrolment landing in that window was deleted together with the user (measured: 43 of
  * 516 swept interleavings on Node 22). It also swallowed a failed Redis DEL and returned
  * `true` — a revocation reported over a credential the authoritative store still held.
- * A failed write now propagates, as in saveUser.
+ * A failed write now propagates (CREDENTIAL RECORDS ARE DURABLE).
  */
 export async function removeCredential(userId: string, credentialId: string): Promise<boolean> {
   if (redisConfigured()) {
@@ -598,7 +589,7 @@ export async function advanceCredentialCounter(
       if (!cred || cred.counter !== expectedCounter) { await redis!.unwatch(); return false; }
       cred.counter = newCounter;
       cred.lastUsedAt = usedAtIso;
-      // Persist durably (no TTL), matching saveUser — a counter advance must not
+      // Persist durably (no TTL, CREDENTIAL RECORDS ARE DURABLE) — a counter advance must not
       // re-introduce a 24h expiry on the credential record it just updated.
       const execRes = await redis!.multi().set(key, JSON.stringify(user)).exec();
       if (execRes === null) return false; // WATCHed key changed mid-transaction → lost the race
@@ -610,7 +601,7 @@ export async function advanceCredentialCounter(
       // clean "OK" on the SET is an advance; anything else fails closed.
       const [setErr, setRes] = execRes[0] ?? [new Error("empty EXEC result"), null];
       if (setErr || setRes !== "OK") return false;
-      inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent (as saveUser does)
+      inMemoryUsers.set(userId, user); // keep the in-memory mirror consistent
       return true;
     } finally {
       await redis!.quit();

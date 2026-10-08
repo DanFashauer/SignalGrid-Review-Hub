@@ -41,6 +41,7 @@ import {
   enrol as enrolAs,
   mintEnrolment,
   newAuthenticator,
+  paddedKeyNewId,
   sameKeyNewId,
   stepUp as stepUpAs,
   type Authenticator,
@@ -144,6 +145,28 @@ async function gapOneRevivalByEnrolment() {
     `success=${disguisedEnrol.success} error=${disguisedEnrol.error}`,
   );
   check("…and a step-up signed by the revoked key under that id is not released", (await stepUp(user, disguised)).success === false);
+
+  // …and RE-ENCODED (review round 2, MEDIUM): the same key with its x coordinate sent as
+  // 33 bytes (a leading 0x00), under another fresh id. The key tombstone only holds
+  // because the fingerprint is of the key's canonical SPKI DER — an exact-string match
+  // would miss this, and nothing else pinned the canonicalisation. The control first
+  // shows the padded encoding IS accepted on its own, so the refusal is revocation, not
+  // a parse failure.
+  const fresh2 = newAuthenticator(false);
+  const paddedControl = paddedKeyNewId(fresh2);
+  check(
+    "control: a padded-coordinate encoding of a NON-revoked key enrols and releases a step-up",
+    (await enrol("t_proof:revocation-gap1-padded-control", paddedControl)).success === true &&
+      (await stepUp("t_proof:revocation-gap1-padded-control", paddedControl)).success === true,
+  );
+  const padded = paddedKeyNewId(device);
+  const paddedEnrol = await completeEnrolment(user, await mintEnrolment(user), padded, TENANT);
+  check(
+    "the revoked key RE-ENCODED (x padded to 33 bytes) under a new id is refused AS REVOKED",
+    paddedEnrol.success === false && /revoked/i.test(paddedEnrol.error ?? "") && !(await enrolledIds(user)).includes(padded.id),
+    `success=${paddedEnrol.success} error=${paddedEnrol.error}`,
+  );
+  check("…and a step-up signed by it is not released", (await stepUp(user, padded)).success === false);
 
   // What the tombstone does NOT block: re-enrolling the same person's device. A
   // conforming authenticator generates a new key pair and credential id on every

@@ -39,6 +39,7 @@
 import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -176,6 +177,11 @@ function scratchCloneChecks(ok) {
   const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8", env: cleanEnv });
   const g = (cwd, ...args) =>
     run(cwd, "git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
+  // Commit at a fixed time, so a scratch case can make one file's last touch LATER than another's.
+  const gAt = (cwd, when, ...args) =>
+    spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
+      cwd, encoding: "utf8", env: { ...cleanEnv, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
+    });
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });
@@ -227,15 +233,70 @@ function scratchCloneChecks(ok) {
     g(src, "commit", "-q", "-m", "side-branch sha");
     const sideDefault = gate(src);
     const sideFlag = gate(src, "--require-history");
+
+    // Evidence freshness through the LIVE `git log -1 -- <path>`: the result cites a file, the
+    // file is touched in a LATER commit. Control first (evidence committed with the result: exit
+    // 0), so the exit 1 afterwards can only be the late last-touch. A `commitTime` that drops the
+    // path filter gives every path HEAD's time, the two times tie, and the late evidence passes.
+    const evPath = `${RESULTS_DIR}/ev/a.txt`;
+    mkdirSync(join(src, RESULTS_DIR, "ev"), { recursive: true });
+    writeFileSync(join(src, evPath), "evidence v1\n");
+    writeFileSync(join(src, RESULTS_DIR, "r0.json"), JSON.stringify({ provenance: { commit: head }, runs: [{ tail: evPath }] }));
+    g(src, "add", "-A");
+    gAt(src, "2030-01-01T00:00:00Z", "commit", "-q", "-m", "result with evidence");
+    const evFreshFlag = gate(src, "--require-history");
+    writeFileSync(join(src, evPath), "evidence v2\n");
+    g(src, "add", "-A");
+    gAt(src, "2030-01-02T00:00:00Z", "commit", "-q", "-m", "evidence touched later");
+    const evLateDefault = gate(src);
+    const evLateFlag = gate(src, "--require-history");
     return [
       ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
       ok("scratch clone: an unresolvable 40-hex sha exits 0 without the flag (reported)", ghostDefault === 0),
       ok("scratch clone: the same sha exits 1 under --require-history", ghostFlag === 1),
       ok("scratch clone: --require-history on a SHALLOW clone exits 1 (full history is checked, not assumed)", shallowDefault === 0 && shallowFlag === 1),
       ok("scratch clone: a resolvable sha on a side branch (not an ancestor of HEAD) exits 1, with and without the flag", sideDefault === 1 && sideFlag === 1),
+      ok("scratch clone: evidence last touched in a LATER commit than the result exits 1 (control: same evidence committed with the result exits 0)", evFreshFlag === 0 && evLateDefault === 1 && evLateFlag === 1),
     ];
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+}
+
+/**
+ * A caller that exports GIT_INDEX_FILE ALONE (a git pre-commit hook does) must not have its
+ * index written by the scratch repository. GIT_DIR would mask this, since it breaks the scratch
+ * cases first; so only GIT_INDEX_FILE is set, at a decoy repository, and the decoy's index is
+ * hashed before and after. Removing GIT_INDEX_FILE from the scrub makes the scratch `git add -A`
+ * write into the decoy index and the hash changes.
+ */
+function decoyIndexCheck(ok) {
+  const decoy = mkdtempSync(join(tmpdir(), "prov-decoy-"));
+  const had = Object.prototype.hasOwnProperty.call(process.env, "GIT_INDEX_FILE");
+  const prior = process.env.GIT_INDEX_FILE;
+  try {
+    const dg = (...args) =>
+      spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
+        cwd: decoy, encoding: "utf8", env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))),
+      });
+    dg("init", "-q");
+    writeFileSync(join(decoy, "decoy.txt"), "decoy\n");
+    dg("add", "-A");
+    dg("commit", "-q", "-m", "decoy");
+    const indexPath = join(decoy, ".git", "index");
+    const sha1 = () => createHash("sha1").update(readFileSync(indexPath)).digest("hex");
+    const before = sha1();
+    process.env.GIT_INDEX_FILE = indexPath;
+    const inner = scratchCloneChecks(ok);
+    const after = sha1();
+    return ok(
+      "scratch clone: GIT_INDEX_FILE exported alone at a decoy repo leaves the decoy index byte-identical and the scratch cases green",
+      before === after && inner.every((c) => c.cond),
+    );
+  } finally {
+    if (had) process.env.GIT_INDEX_FILE = prior;
+    else delete process.env.GIT_INDEX_FILE;
+    rmSync(decoy, { recursive: true, force: true });
   }
 }
 
@@ -320,6 +381,7 @@ function selfTest() {
     ),
   ];
   checks.push(...scratchCloneChecks(ok));
+  checks.push(decoyIndexCheck(ok));
   let bad = 0;
   for (const c of checks) {
     console.log(`  ${c.cond ? "ok" : "FAIL"} — ${c.name}`);

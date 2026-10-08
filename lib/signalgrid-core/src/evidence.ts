@@ -283,6 +283,25 @@ interface CategoryReading {
 type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
 
 /**
+ * The instant an `observedAt` names, or NaN when it names none the host cannot
+ * disagree about. A date-time with no zone designator ("2026-07-13T08:00:00")
+ * is parsed by `Date.parse` as HOST-LOCAL time (ECMA-262), so the same wire
+ * input ordered differently under TZ=UTC and TZ=Asia/Tokyo and flipped a
+ * security decision (backlog row, reproduced 2026-09-26). An offset-less stamp
+ * is an unknown instant, so it is NaN here — i.e. illegible, which the rest of
+ * this file already resolves fail-closed (never wins as latest, cannot vouch,
+ * worst-wins). Accepted: ISO-8601 date-time with `Z` or a numeric offset, and a
+ * date-only form (UTC by spec). Anything else is NaN rather than left to the
+ * engine's locale-dependent fallback parsers. No clock, no host zone.
+ */
+const ZONED_ISO = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(:\d{2}(\.\d+)?)?([Zz]|[+-]\d{2}:\d{2})$/;
+const DATE_ONLY_ISO = /^\d{4}-\d{2}-\d{2}$/;
+function parseObservedInstant(observedAt: string): number {
+  if (!ZONED_ISO.test(observedAt) && !DATE_ONLY_ISO.test(observedAt)) return Number.NaN;
+  return Date.parse(observedAt);
+}
+
+/**
  * One pass over the signals, keeping the latest (max observedAt) entry per
  * category.
  *
@@ -333,7 +352,7 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
       reading = { tied: [], illegible: [] };
       map.set(signal.category, reading);
     }
-    const observed = Date.parse(signal.observedAt);
+    const observed = parseObservedInstant(signal.observedAt);
     if (Number.isNaN(observed)) {
       // Present, but unorderable. Kept ALONGSIDE any parseable sibling rather
       // than instead of it — and ALONGSIDE its illegible peers, all of them.

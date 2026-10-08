@@ -51,7 +51,39 @@ and to every future exporter.
 `signalgrid_http_request_duration_seconds` (fixed buckets, normalized route),
 `signalgrid_decisions_total` (outcome enum),
 `signalgrid_audit_events_total` (event type), `signalgrid_up`,
-`signalgrid_process_uptime_seconds`. Every label set is bounded per rule 1;
-none is tenant-shaped. The opt-in lab transport for these is
+`signalgrid_process_uptime_seconds`,
+`signalgrid_connectors` (connector kind, connector status) and
+`signalgrid_evidence_signals` (signal freshness). Every label set is bounded
+per rule 1; none is tenant-shaped. The opt-in lab transport for these is
 `./scripts/run-live-lanes.sh --with-telemetry`
-(app → OTel collector → Prometheus, asserted end to end).
+(app → OTel collector → Prometheus, asserted end to end; that lane predates the
+last two series and has not been re-run against them).
+
+### Connector health and evidence freshness
+
+The last two are gauges over state the core HOLDS at scrape time
+(`connectorInventory()` and `signalFreshnessInventory()`, beside
+`signalInventory()`), not counters bumped beside a route, so they recover when
+a re-sync does. How they keep the four rules:
+
+- **Rule 1.** `kind` is `ConnectorKind` (3 values), `status` is
+  `ConnectorStatus` (3), `freshness` is `Freshness` (5), each plus a literal
+  `unknown`. The vocabularies are typed maps in `metrics.ts`, so a new union
+  member that the exposition does not list is a typecheck error. 16 + 5
+  series in total.
+- **Rule 2.** No label names a customer. The counts aggregate over every
+  customer this process holds; the per-customer view stays with the audit
+  ledger. The exposition is also asserted (`api.test.mjs`) to contain no
+  customer-scope word anywhere, HELP and TYPE text included, which is why
+  the HELP strings avoid it.
+- **Fail-closed.** `healthy` and `fresh` are the only affirmative values. Any
+  value outside the vocabulary, and any count that is not a non-negative
+  number, folds into `unknown`, which reads as not healthy and not fresh.
+  Every series is written on every scrape, zeros included, so a missing
+  series never stands in for a missing problem. If an inventory read throws,
+  the scrape still answers 200 with `kind="unknown",status="unknown"` (or
+  `freshness="unknown"`) at 1 and every affirmative series at 0: a failed
+  scrape would hide the outage the metric exists to show.
+  `proof:observability` pins these cases in process and plants two mutants
+  (fold `unknown` into the affirmative value; skip the zero-fill), each of
+  which turns it red.

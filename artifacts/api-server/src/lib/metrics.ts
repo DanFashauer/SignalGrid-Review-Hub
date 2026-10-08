@@ -206,7 +206,7 @@ export const UNKNOWN_LABEL = "unknown";
 
 const CONNECTOR_KINDS: Record<ConnectorKind, true> = {
   "microsoft-entra-intune": true,
-  "dockbridge-custody": true,
+  "dockbridge-custody": true, // deferred family: the label is enumerated so the series is bounded, not Limited GA capability
   "wfm-shift": true,
 };
 const CONNECTOR_STATUSES: Record<ConnectorStatus, true> = {

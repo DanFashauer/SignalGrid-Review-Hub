@@ -358,6 +358,13 @@ export function stripYamlComments(text) {
 //      it — the start of a line, or after `;`, `&&`, `||`, `|`, `&` or `(` — after
 //      optional `VAR=value` prefixes, and for a script path also after `bash`, `sh`,
 //      `source` or `.`. Never after `echo`, inside quotes, or inside a comment.
+//   3. QUOTES ARE MASKED FIRST (second Codex pass, same PR): `run: echo "disabled |
+//      node scripts/check-x.mjs"` still credited the gate, because the `|` inside the
+//      quotes looked like a command boundary. Every single- and double-quoted span
+//      (backslash escapes inside double quotes honoured, `$(…)` and backticks inside
+//      them kept inside the span) is replaced by filler before the position test, so a
+//      separator in quotes is not a boundary and a gate path in quotes is not a run.
+//      The YAML `|` after `run:` is not shell and is handled before this.
 //
 // A gate invoked some other way (`bash -c "…"`, a wrapper such as `timeout 60`, a
 // `then`/`do` clause) is NOT credited and the parity run says UNWIRED; the fix is to
@@ -389,6 +396,50 @@ export function runCommands(text) {
   return out;
 }
 
+/** Pure: `cmd` with every shell-quoted span (quotes included) replaced by a filler
+ *  character of the same length, so nothing inside quotes can look like a command
+ *  boundary or a command. Single quotes end at the next `'`. Double quotes end at the
+ *  next `"` that is not backslash-escaped; a `$(…)` (with its own quotes and
+ *  parentheses) or a backtick span inside them stays inside the span. An unterminated
+ *  quote masks to the end, so a half-written line credits nothing. Outside quotes a
+ *  backslash masks itself and the character it escapes (`\;` is not a separator). */
+export function maskQuoted(cmd) {
+  const FILL = "\u0001";
+  const n = cmd.length;
+  const single = (i) => { let j = i + 1; while (j < n && cmd[j] !== "'") j++; return Math.min(j + 1, n); };
+  const backtick = (i) => { let j = i + 1; while (j < n && cmd[j] !== "`") j += cmd[j] === "\\" ? 2 : 1; return Math.min(j + 1, n); };
+  const subshell = (i) => { // i is just after "$(" ; returns the index after the matching ")"
+    let depth = 1, j = i;
+    while (j < n && depth > 0) {
+      const c = cmd[j];
+      if (c === "'") j = single(j);
+      else if (c === '"') j = double(j);
+      else if (c === "\\") j += 2;
+      else if (c === "(") { depth++; j++; }
+      else if (c === ")") { depth--; j++; }
+      else j++;
+    }
+    return Math.min(j, n);
+  };
+  function double(i) {
+    let j = i + 1;
+    while (j < n && cmd[j] !== '"') {
+      if (cmd[j] === "\\") j += 2;
+      else if (cmd[j] === "$" && cmd[j + 1] === "(") j = subshell(j + 2);
+      else if (cmd[j] === "`") j = backtick(j);
+      else j++;
+    }
+    return Math.min(j + 1, n);
+  }
+  let out = "";
+  for (let i = 0; i < n; ) {
+    const c = cmd[i];
+    const j = c === "'" ? single(i) : c === '"' ? double(i) : c === "\\" ? Math.min(i + 2, n) : -1;
+    if (j < 0) { out += c; i++; } else { out += FILL.repeat(j - i); i = j; }
+  }
+  return out;
+}
+
 const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
 const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
 const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[A-Za-z]+[ \t]+)*)?(?:\./)?`;
@@ -415,7 +466,7 @@ function invokes(head, wantsSelfTest, commands) {
 /** Pure: is `gate` invoked (not merely mentioned) in the workflow text, by path
  *  or by any npm-script alias? Exported so the self-test drives it directly. */
 export function gateWiredIn(gate, rawWorkflowText, aliasMap = new Map()) {
-  const commands = runCommands(stripYamlComments(rawWorkflowText));
+  const commands = runCommands(stripYamlComments(rawWorkflowText)).map(maskQuoted);
   const wantsSelfTest = / --self-test$/.test(gate);
   const head = gate.replace(/ --self-test$/, "");
   if (invokes(head, wantsSelfTest, commands)) return true;
@@ -563,6 +614,23 @@ function selfTest() {
   checks.push(["a `--self-test` flag on a backslash-continued next line still credits the self-test token", wiredMjs("  - run: node scripts/check-x.mjs \\\n      --self-test\n", `${MJS} --self-test`) === true]);
   checks.push(["a real step after a block scalar that named the script only in an echo does credit the later step", wiredMjs("  - run: |\n      echo node scripts/check-x.mjs\n  - run: node scripts/check-x.mjs\n") === true]);
   checks.push(["the pnpm alias at a command position credits it", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", new Map([["review-invariants.mjs", ["review:invariants"]]])) === true]);
+  // ── quoted text (Codex, second pass on PR #1450): a separator or a gate path inside shell
+  // quotes is neither a boundary nor a run. [old: true] = true under the db67ad7a matcher.
+  const ALIAS = new Map([["proof-x.mjs", ["proof:x"]]]);
+  checks.push(["[old: true] `run: echo \"disabled | node scripts/check-x.mjs\"` does NOT credit it (a quoted `|`)", wiredMjs('  - run: echo "disabled | node scripts/check-x.mjs"\n') === false]);
+  checks.push(["[old: true] `run: echo 'x; node scripts/check-x.mjs'` does NOT credit it (a quoted `;`)", wiredMjs("  - run: echo 'x; node scripts/check-x.mjs'\n") === false]);
+  checks.push(["[old: true] `run: echo \"a && bash scripts/mac/x.sh --self-test\"` does NOT credit the script (a quoted `&&`)", wiredSh('  - run: echo "a && bash scripts/mac/x.sh --self-test"\n') === false]);
+  checks.push(["[old: true] `run: echo \"(pnpm run proof:x)\"` does NOT credit the pnpm form (a quoted `(`)", gateWiredIn("scripts/proof-x.mjs", '  - run: echo "(pnpm run proof:x)"\n', ALIAS) === false]);
+  checks.push(["[old: true] an escaped quote does not end a double-quoted span", wiredMjs('  - run: echo "a \\" | node scripts/check-x.mjs"\n') === false]);
+  checks.push(["[old: true] a `$(…)` with its own quotes inside a double-quoted span stays inside the span", wiredMjs('  - run: echo "$(echo "x"; node scripts/check-x.mjs)"\n') === false]);
+  checks.push(["[old: true] a backslash-escaped `;` outside quotes is not a separator", wiredMjs("  - run: echo a \\; node scripts/check-x.mjs\n") === false]);
+  checks.push(["[old: true] an unterminated quote masks to the end of the step", wiredMjs('  - run: echo "oops; node scripts/check-x.mjs\n') === false]);
+  checks.push(["`run: echo \"starting\" && node scripts/check-x.mjs` still credits it", wiredMjs('  - run: echo "starting" && node scripts/check-x.mjs\n') === true]);
+  checks.push(["`run: echo 'done'; bash scripts/mac/x.sh --self-test` still credits it", wiredSh("  - run: echo 'done'; bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["`run: VAR=\"a b\" node scripts/check-x.mjs` still credits it (a quoted env value)", wiredMjs('  - run: VAR="a b" node scripts/check-x.mjs\n') === true]);
+  checks.push(["a quoted argument after the command does not hide it", wiredMjs('  - run: node scripts/check-x.mjs --flag "a | b"\n') === true]);
+  checks.push(["a gate AFTER a multi-line quoted string in a block scalar still credits", wiredMjs('  - run: |\n      echo "line one\n      node scripts/check-x.mjs inside"\n      node scripts/check-x.mjs\n') === true]);
+  checks.push(["maskQuoted keeps length, blanks quoted spans and leaves the rest", (() => { const m = maskQuoted(`a "b | c" 'd; e' f`); return m.length === 18 && m.startsWith("a ") && !m.includes("|") && !m.includes(";") && m.endsWith(" f"); })()]);
   checks.push([
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",
     gatesIn('  {\n    name: "X",\n    cmd: ["node", "scripts/x.mjs"],\n    selfSkipsWithout: "GITHUB_TOKEN",\n    env: { GH_TOKEN: "" },\n    surface: /red streak\\(s\\) of \\d+\\+ .* REPORTED, not fatal/,\n  },').join() === "scripts/x.mjs",

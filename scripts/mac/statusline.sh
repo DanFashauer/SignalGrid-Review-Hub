@@ -41,13 +41,19 @@
 # new dependency in practice: on a Mac `git` and `python3` both come from the Xcode
 # command-line tools this repo already needs. Kept to what Python 3.9 (the CLT's) runs.
 #
-# HOW IT IS STARTED: .claude/settings.json runs it through `bash -c 'cd "$(git rev-parse
-# --show-toplevel …)" && exec bash scripts/mac/statusline.sh'`, because a relative
-# `bash scripts/mac/statusline.sh` is resolved from the session's current directory and
-# a session started in (or moved to) a subdirectory would lose the line. This script
-# cannot repair that itself: it is not found yet when the path is wrong. The same entry
-# sets "refreshInterval": 30, so the line is re-run every 30 s as well as on Claude
-# Code's own events; hands and mail change while the session is idle.
+# HOW IT IS STARTED: .claude/settings.json runs a short `bash -c` wrapper that reads the
+# status JSON once, takes workspace.project_dir (where Claude Code was LAUNCHED), asks
+# `git -C <project_dir> rev-parse --show-toplevel` for the repository root, and feeds the
+# same JSON to that root's scripts/mac/statusline.sh. It never uses the process cwd to
+# find the executable: a relative path lost the line from a subdirectory, and a
+# `git rev-parse` from the cwd ran whatever repository the session had wandered into.
+# No project_dir, a relative one, a directory that is not in a repository, or no such
+# file at the root: it prints nothing and exits 0. The launch directory's own file is
+# the one that runs (the same trust as that tree's settings and hooks, which Claude Code
+# loaded when it started). The status-line docs name no environment variable for this
+# (COLUMNS and LINES only), so the JSON field is the anchor. The same entry sets
+# "refreshInterval": 30, so the line is re-run every 30 s as well as on Claude Code's own
+# events; hands and mail change while the session is idle.
 #
 # Turn it off: delete the "statusLine" key from .claude/settings.json, or point your own
 # .claude/settings.local.json "statusLine" at another command. Nothing else depends on it.
@@ -188,7 +194,7 @@ status_line() {
 }
 
 self_test() {
-  local self fx repo n_ok n_fail out want root cmd refresh json from_root from_sub
+  local self fx repo n_ok n_fail out want root cmd refresh other rc
   case "$0" in /*) self=$0 ;; *) self=$PWD/$0 ;; esac
   n_ok=0
   n_fail=0
@@ -281,20 +287,47 @@ self_test() {
   out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$self")
   expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "fixture-branch | 1 open hand | 0 unread for ${want:-?}" "$out"
 
-  # the command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c), from the
-  # repository root and from a subdirectory: same line both times, and not empty. A relative
-  # `bash scripts/mac/statusline.sh` printed nothing from a subdirectory.
+  # The command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c) with the
+  # status JSON on stdin. It anchors the executable to workspace.project_dir (where Claude Code
+  # was LAUNCHED), never to the process cwd, which moves: a relative path lost the line from a
+  # subdirectory, and a `git rev-parse` from the cwd ran another repository's script.
   root=${self%/scripts/mac/statusline.sh}
   if [ -f "$root/.claude/settings.json" ] && [ -d "$root/scripts/mac" ]; then
     cmd=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["statusLine"]["command"])' "$root/.claude/settings.json" 2>/dev/null)
     expect "settings.json registers a statusLine command" "yes" "$([ -n "$cmd" ] && echo yes || echo no)"
     refresh=$(python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1]))["statusLine"].get("refreshInterval"); print(v if isinstance(v, int) and v >= 1 else "none")' "$root/.claude/settings.json" 2>/dev/null)
     expect "...with a refreshInterval (hands and mail change while the session is idle)" "30" "$refresh"
-    json=$(printf '{"model":{"display_name":"x"},"workspace":{"current_dir":"%s"}}' "$root")
-    from_root=$( cd "$root" && printf '%s' "$json" | sh -c "$cmd" )
-    from_sub=$( cd "$root/scripts/mac" && printf '%s' "$json" | sh -c "$cmd" )
-    expect "the registered command prints the same line from a subdirectory as from the root" "$from_root" "$from_sub"
-    expect "...and that line is not empty" "yes" "$([ -n "$from_root" ] && echo yes || echo no)"
+
+    other=$fx/other
+    mkdir -p "$other/scripts/mac" "$fx/notgit"
+    git init -q "$other" || return 1
+    printf '%s\n' '#!/bin/sh' 'echo OTHER REPO SCRIPT RAN' > "$other/scripts/mac/statusline.sh"
+    run_registered() { ( cd "$1" && printf '%s' "$2" | sh -c "$cmd" ); }
+    pj() { printf '{"model":{"display_name":"x"},"workspace":{"project_dir":"%s","current_dir":"%s"}}' "$1" "$2"; }
+
+    want=$(pj "$root" "$root" | bash "$self")
+    expect "(0) the script run directly on the same JSON prints a line (the reference for 1-4)" "yes" "$([ -n "$want" ] && echo yes || echo no)"
+    out=$(run_registered "$root" "$(pj "$root" "$root")")
+    expect "(1) from the repo root, project_dir = the root: the full line" "$want" "$out"
+    out=$(run_registered "$root/scripts/mac" "$(pj "$root" "$root")")
+    expect "(2) from a subdirectory, project_dir = the root: the same line" "$want" "$out"
+    out=$(run_registered "$fx/notgit" "$(pj "$root" "$root")")
+    expect "(3) cwd outside any repository, project_dir = the root: the same line" "$want" "$out"
+    out=$(run_registered "$other" "$(pj "$root" "$root")")
+    expect "(4) cwd inside ANOTHER repository that has its own statusline.sh: this checkout's line, never that repository's" "$want" "$out"
+    out=$(run_registered "$other" "$(pj "$other" "$other")")
+    expect "(5) project_dir = another repository: THAT launch directory's own script runs (the rule is the launch directory's file, which Claude Code was started in and trusted)" "OTHER REPO SCRIPT RAN" "$out"
+    rm -f -- "$other/scripts/mac/statusline.sh"
+    out=$(run_registered "$other" "$(pj "$other" "$other")"); rc=$?
+    expect "(5b) ...and with no such file in the launch directory: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" '{"model":{"display_name":"x"}}'); rc=$?
+    expect "(6) no workspace key at all: nothing printed, exit 0 (the cwd is never used to find the executable)" "|0" "$out|$rc"
+    out=$(run_registered "$root" '{"workspace":{"current_dir":"'"$root"'"}}'); rc=$?
+    expect "(6b) current_dir but no project_dir: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" "$(pj "$fx/notgit" "$fx/notgit")"); rc=$?
+    expect "(7) project_dir is not inside a git repository: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" "$(pj . .)"); rc=$?
+    expect "(8) a relative project_dir is refused: nothing printed, exit 0" "|0" "$out|$rc"
   else
     n_fail=$((n_fail + 1))
     echo "  FAIL — no .claude/settings.json beside this script ($root); the registered command was not tested" >&2

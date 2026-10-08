@@ -270,16 +270,41 @@ function scratchCloneChecks(ok) {
 }
 
 /**
- * A caller that exports GIT_INDEX_FILE ALONE (a git pre-commit hook does) must not have its
- * index written by the scratch repository. GIT_DIR would mask this, since it breaks the scratch
- * cases first; so only GIT_INDEX_FILE is set, at a decoy repository, and the decoy's index is
- * hashed before and after. Removing GIT_INDEX_FILE from the scrub makes the scratch `git add -A`
- * write into the decoy index and the hash changes.
+ * A caller that exports one of GIT_INDEX_FILE / GIT_DIR / GIT_WORK_TREE (a git hook does; a pre-commit
+ * hook in a LINKED worktree exports GIT_DIR) must not have ITS repository written by the scratch
+ * repository. Each variable is exported ALONE at a decoy repository and the decoy is fingerprinted
+ * before and after: index bytes, HEAD, branch refs, the object count and the worktree files. Removing
+ * that variable from the scrub in scratchCloneChecks makes the scratch `init`/`add`/`commit`/`reset
+ * --hard` land in the decoy, so the fingerprint moves (or the inner cases go red). CI's own
+ * environment exports none of them, which is why dropping one from the scrub passed 22/22 until
+ * each had its own decoy case.
  */
-function decoyIndexCheck(ok) {
+const DECOY_VARS = [
+  ["GIT_INDEX_FILE", (decoy) => join(decoy, ".git", "index")],
+  ["GIT_DIR", (decoy) => join(decoy, ".git")],
+  ["GIT_WORK_TREE", (decoy) => decoy],
+];
+
+function decoyFingerprint(decoy) {
+  const h = createHash("sha1");
+  const feed = (label, path) => {
+    h.update(`${label}\0`);
+    try { h.update(readFileSync(path)); } catch { h.update("<absent>"); }
+  };
+  feed("index", join(decoy, ".git", "index"));
+  feed("HEAD", join(decoy, ".git", "HEAD"));
+  const heads = join(decoy, ".git", "refs", "heads");
+  for (const f of existsSync(heads) ? readdirSync(heads).sort() : []) feed(`ref:${f}`, join(heads, f));
+  const objs = join(decoy, ".git", "objects");
+  h.update(`objects:${existsSync(objs) ? readdirSync(objs).filter((d) => /^[0-9a-f]{2}$/.test(d)).flatMap((d) => readdirSync(join(objs, d)).map((o) => d + o)).sort().join(",") : ""}`);
+  for (const f of readdirSync(decoy).filter((n) => n !== ".git").sort()) feed(`work:${f}`, join(decoy, f));
+  return h.digest("hex");
+}
+
+function decoyEnvCheck(ok, name, valueFor) {
   const decoy = mkdtempSync(join(tmpdir(), "prov-decoy-"));
-  const had = Object.prototype.hasOwnProperty.call(process.env, "GIT_INDEX_FILE");
-  const prior = process.env.GIT_INDEX_FILE;
+  const had = Object.prototype.hasOwnProperty.call(process.env, name);
+  const prior = process.env[name];
   try {
     const dg = (...args) =>
       spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
@@ -289,19 +314,17 @@ function decoyIndexCheck(ok) {
     writeFileSync(join(decoy, "decoy.txt"), "decoy\n");
     dg("add", "-A");
     dg("commit", "-q", "-m", "decoy");
-    const indexPath = join(decoy, ".git", "index");
-    const sha1 = () => createHash("sha1").update(readFileSync(indexPath)).digest("hex");
-    const before = sha1();
-    process.env.GIT_INDEX_FILE = indexPath;
+    const before = decoyFingerprint(decoy);
+    process.env[name] = valueFor(decoy);
     const inner = scratchCloneChecks(ok);
-    const after = sha1();
+    const after = decoyFingerprint(decoy);
     return ok(
-      "scratch clone: GIT_INDEX_FILE exported alone at a decoy repo leaves the decoy index byte-identical and the scratch cases green",
+      `scratch clone: ${name} exported alone at a decoy repo leaves the decoy byte-identical and the scratch cases green`,
       before === after && inner.every((c) => c.cond),
     );
   } finally {
-    if (had) process.env.GIT_INDEX_FILE = prior;
-    else delete process.env.GIT_INDEX_FILE;
+    if (had) process.env[name] = prior;
+    else delete process.env[name];
     rmSync(decoy, { recursive: true, force: true });
   }
 }
@@ -387,7 +410,7 @@ function selfTest() {
     ),
   ];
   checks.push(...scratchCloneChecks(ok));
-  checks.push(decoyIndexCheck(ok));
+  for (const [name, valueFor] of DECOY_VARS) checks.push(decoyEnvCheck(ok, name, valueFor));
   let bad = 0;
   for (const c of checks) {
     console.log(`  ${c.cond ? "ok" : "FAIL"} — ${c.name}`);

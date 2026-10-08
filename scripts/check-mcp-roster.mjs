@@ -123,7 +123,7 @@ export const GO_SPACE_CHARS = "\t\n\v\f\r \u0085\u00A0\u1680\u2000\u2001\u2002\u
 const GO_SPACE = "[\\t\\n\\v\\f\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]";
 const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
-  /\b(?:npx|pnpx|bunx|uvx|dlx|bun\s+(?:x|add|i|install)|npm\s+(?:exec|x|i|install|add)|pnpm\s+(?:add|i|install|exec|dlx)|yarn\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:x|add|i|install)|npm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:exec|x|i|install|add)|pnpm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:add|i|install|exec|dlx)|yarn(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*(?:\s+workspace\s+\S+)?\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // options may come before the verb (`pnpm --filter x add`, `npm --prefix t install`, `yarn workspace x add`) // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
 // Installing Context7 from git or a URL bypasses the npm pin entirely.
 const CONTEXT7_GIT_SOURCE_RE =
   /(?:github:|gitlab:|bitbucket:|git\+[a-z]+:\/\/|git:\/\/|git@github\.com:)[^\s"'`]*upstash\/context7|codeload\.github\.com\/upstash\/context7|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
@@ -196,13 +196,15 @@ function stripYamlComment(s) {
 // a YAML double-quoted scalar: JSON escapes where they parse; otherwise YAML's own (`\x` is `x`), so a non-JSON escape
 // never throws the gate. An escaped line break never reaches here: logicalLines has already spliced it. A decoded
 // `\` + `\n` pair is a backslash-newline the shell splices (`cont\\\next7` runs context7): spliced here too.
+// a decoded escape; one past U+10FFFF (`\UFFFFFFFF`) is no character, so it stays as written rather than throw the gate
+const codePoint = (cp, raw) => (cp <= 0x10ffff ? String.fromCodePoint(cp) : raw);
 const YAML_ESCAPES = { 0: "\0", a: "\x07", b: "\b", t: "\t", n: "\n", v: "\v", f: "\f", r: "\r", e: "\x1b", N: "\x85", _: "\xa0", L: "\u2028", P: "\u2029" };
 const unquoteDq = (v) => {
   let d;
   try {
     d = JSON.parse(v);
   } catch {
-    d = v.slice(1, -1).replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g, (_, c) => YAML_ESCAPES[c] ?? (c.length > 1 ? String.fromCodePoint(parseInt(c.slice(1), 16)) : c));
+    d = v.slice(1, -1).replace(/\\(x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)/g, (_, c) => YAML_ESCAPES[c] ?? (c.length > 1 ? codePoint(parseInt(c.slice(1), 16), `\\${c}`) : c));
   }
   return spliceDecoded(d);
 };
@@ -524,7 +526,7 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner =
     PACKAGE_RUNNER_RE.test(line) ||
-    /["']?command["']?\s*[:=]\s*["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
+    /["']?command["']?\s*[:=]\s*(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
@@ -542,13 +544,17 @@ export function context7UnitFindings(units, pin, runner, depth = 0) {
       out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
       continue;
     }
-    // a quoted letter inside the word (`con't'ext7`, `cont""ext7`) is concatenated by the shell, but `shellWords` keeps
-    // a quote between two letters as a prose apostrophe: a word naming the package only once quotes go is read without them
-    const word = new RegExp(CONTEXT7_NAME_RE.source, "i").test(unit) ? unit : unit.replace(/["']/g, "");
+    // a quoted letter inside the word (`con't'ext7`, `cont""ext7`), or quotes mixed with escapes (`c'ont'\e'x't7`), is
+    // concatenated by the shell, but `shellWords` keeps a quote between two letters as a prose apostrophe: a word naming
+    // the package only once its quotes and backslashes go is read without them (dropping a literal `\` only over-reads)
+    const word = new RegExp(CONTEXT7_NAME_RE.source, "i").test(unit) ? unit : unit.replace(/["'\\]/g, "");
     for (const m of word.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
       const rest = word.slice(m.index + m[0].length);
       if (rest.startsWith("@")) {
-        const f = classify(shedMarkup(rest.slice(1)));
+        // `4.1.1||` is an npm RANGE whose empty alternative is `*` (it resolves to the newest release): a tail holding
+        // `||` is never shed down to the pin, whatever markup surrounds it
+        const tail = rest.slice(1);
+        const f = /\|\|/.test(tail) ? { unpinned: tail.slice(0, 24) } : classify(shedMarkup(tail));
         if (f) out.push(f);
       } else if (/(?:^|[=:\s"'])npm:$/i.test(word.slice(0, m.index))) out.push({ unpinned: "<none> (npm: alias)" });
       // in a runner context the name is versionless whenever `@<version>` does not follow it at once — whatever does
@@ -631,7 +637,13 @@ export function context7JsonFindings(text, pin) {
         (Array.isArray(node.command) && isRunnerCommand(node.command[0]));
       for (const [k, v] of Object.entries(node)) {
         if (CONTEXT7_KEY_RE.test(k)) {
-          const val = typeof v === "string" ? v : v && typeof v === "object" && typeof v["."] === "string" ? v["."] : null;
+          // a string, an object's `"."` (npm overrides) or `version` (package-lock's `node_modules/<pkg>`); a non-string
+          // scalar (`null`, `true`, `4`) is no pin at all
+          const val =
+            typeof v === "string" ? v
+            : v && typeof v === "object" && !Array.isArray(v) ? (typeof v["."] === "string" ? v["."] : typeof v.version === "string" ? v.version : null)
+            : v === null || typeof v !== "object" ? String(v)
+            : null;
           const f = val === null ? null : classify(val);
           if (f) out.push({ line: lineOf(JSON.stringify(k).slice(1, -1)), f });
           if (typeof v !== "string") walk(v, false, here);
@@ -780,6 +792,8 @@ export function deriveContext7Pin(installerSource) {
 export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN_COPIES, history = CONTEXT7_PIN_HISTORY }) {
   const pin = deriveContext7Pin(installerSource);
   if (!pin) return [`${CONTEXT7_INSTALLER}: no \`export const PINNED = "@upstash/context7-mcp@<version>"\` — the pin every copy is held to cannot be derived`];
+  // a tag, range or partial PINNED would hold every copy to a floating install and pass: the source itself must be exact
+  if (!/^\d+\.\d+\.\d+$/.test(pin)) return [`${CONTEXT7_INSTALLER}: PINNED is "${pin}", not an exact x.y.z version — a floating pin cannot be held`];
   const problems = [];
   const stale = (path, line, v) => `${path}:${line}: Context7 pin copy says ${v}, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`;
 
@@ -800,7 +814,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
       /\\\\\\(?:r\\)?n/g,
     ].map((re) => text.replace(re, "").replace(/["'\\`^]/g, ""));
     // and a YAML double-quoted hex or unicode escape (`cont\x65xt7`), decoded
-    rebuilt.push(text.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g, (_, a, b, c) => String.fromCodePoint(parseInt(a ?? b ?? c, 16))));
+    rebuilt.push(text.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g, (m, a, b, c) => codePoint(parseInt(a ?? b ?? c, 16), m)));
     if (!/context7/i.test(text) && !rebuilt.some((r) => /context7/i.test(r)) && !(context7FileKind(path) === "json" && /\\u00/i.test(text))) continue;
     const lines = text.split(/\r?\n/); // a CRLF file: every reader below sees lines without the `\r`
     const kind = context7FileKind(path);
@@ -1823,6 +1837,57 @@ server.registerTool(
     [".github/workflows/a.yml", W24("      - run: npx -y @upstash/co'n'text7-mcp@latest\n"), "a quoted letter inside the name in a YAML plain value"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  // round 25: `||` glued to the pin (an npm range); quotes mixed with backslashes; options before a package manager's
+  // verb; YAML `command:` list and flow forms; package-lock `version`; non-string dependency values; plus pins for
+  // round 25's surviving mutants (whitespace-only blank lines, a column-0 block, an escaped quote before `#`, …)
+  const C7 = `${SPEC}${realPin}`;
+  for (const [path, body, what, re] of [
+    [".mcp.json", JSON.stringify({ mcpServers: { c: { command: "npx", args: ["-y", `${C7}||`] } } }), "`@<pin>||` in JSON args (npm reads it as a range)", /UNPINNED \(@[\d.]+\|\|\)/],
+    ["s.sh", `npx -y "${C7}||"\n`, "a double-quoted `@<pin>||` in sh", /UNPINNED \(@[\d.]+\|\|\)/],
+    ["s.sh", `npx -y ${C7}\\|\\|\n`, "an escaped `\\|\\|` after the pin", /UNPINNED \(@[\d.]+\|\|\)/],
+    ["s.sh", `npx -y "${C7})||"\n`, "`)||` after the pin", /UNPINNED/],
+    ["s.sh", "npx -y @upstash/c'ont'\\e'x't7-mcp@latest\n", "quotes mixed with a backslash inside the name"],
+    ["s.sh", "npx -y @u'pst'\\a's'h/context7-mcp@latest\n", "quotes mixed with a backslash inside the scope"],
+    ["s.sh", "pnpm --filter x add -D @upstash/context7-mcp\n", "`pnpm --filter x add` (options before the verb)", /with NO version/],
+    ["s.sh", "npm --prefix tools install @upstash/context7-mcp\n", "`npm --prefix tools install`", /with NO version/],
+    ["s.sh", "yarn workspace x add @upstash/context7-mcp\n", "`yarn workspace x add`", /with NO version/],
+    ["docker-compose.yml", 'services:\n  c:\n    command:\n      - npx\n      - -y\n      - "@upstash/context7-mcp"\n', "a compose `command:` block list", /with NO version/],
+    ["a.yaml", 'c:\n  command: ["npx"]\n  args: ["-y", "@upstash/context7-mcp"]\n', "a YAML flow `command: [\"npx\"]` with `args`", /with NO version/],
+    // pretty-printed, so `version` sits on its own line where the `Context7 … x.y.z` phrase check cannot see it
+    ["package-lock.json", JSON.stringify({ packages: { "node_modules/@upstash/context7-mcp": { version: "4.0.4" } } }, null, 2), "a package-lock entry whose `version` is stale", /says 4\.0\.4/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": null } }), "a `null` dependency value", /UNPINNED \(@null\)/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": 4 } }), "a numeric dependency value", /UNPINNED \(@4\)/],
+    ["package.json", JSON.stringify({ overrides: { "@upstash/context7-mcp": { ".": realPin, x: "@upstash/context7-mcp@latest" } } }), "a spec inside a package-named key's object value"],
+    [".github/workflows/a.yml", W24('      - run: "echo \\" # x; npx -y @upstash/context7-mcp@latest"\n'), "an escaped quote before `#` inside a double-quoted value"],
+    [".github/workflows/a.yml", W24("      - run: >\n          npx -y @upstash/cont\\\n   \n          ext7-mcp@latest\n"), "a folded block with a whitespace-only blank line"],
+    [".github/workflows/a.yml", W24("      - run: npx -y @upstash/cont\\\n   \n          ext7-mcp@latest\n"), "a plain scalar with a whitespace-only blank line"],
+    ["a.yml", `run: |\n${S23(2)}\n`, "a column-0 `run: |` block"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  for (const bad of ["latest", "^4", "4.1", `${realPin}-rc.1`]) {
+    const installer = realInstaller.replace(/export const PINNED = "@upstash\/context7-mcp@[^"]+"/, `export const PINNED = "@upstash/context7-mcp@${bad}"`);
+    checks.push([
+      `a floating PINNED (${bad}) fails at its source, even with every copy agreeing`,
+      checkContext7Pin({ installerSource: installer, files: { "s.sh": `npx -y ${SPEC}${bad}\n` }, copies: [] }).some((p) => /not an exact x\.y\.z/.test(p)),
+    ]);
+  }
+  for (const [path, body, what] of [
+    ["package-lock.json", JSON.stringify({ packages: { "node_modules/@upstash/context7-mcp": { version: realPin } } }), "a package-lock entry at the pin"],
+    ["s.sh", `npx -y ${C7}||true\n`, "an unquoted `||` is a shell OR: npx receives the pinned spec"],
+    ["README.md", `| npx -y ${C7} | ok |\n`, "a markdown table cell around the pin"],
+    ["notes.txt", `x \\UFFFFFFFF y\nnpx -y ${C7}\n`, "a `\\U` escape past U+10FFFF does not throw the gate"],
+    ["package.json", JSON.stringify({ files: ["@upstash/context7-mcp"], dependencies: { "@upstash/context7-mcp": realPin } }), "a bare name in a non-runner string array"],
+    ["package.json", JSON.stringify({ repository: "upstash/context7", dependencies: { "@upstash/context7-mcp": realPin } }), "a `upstash/context7` shorthand with no runner"],
+  ]) {
+    let got;
+    try {
+      got = sweep(path, body);
+    } catch (e) {
+      got = [`threw: ${e.message}`];
+    }
+    checks.push([`[sweep ${path}] ${what} → no finding`, got.length === 0]);
   }
   checks.push([
     "[sweep a.yml] a blank line inside a literal `|` block ends the command (`cont\\` + blank + `ext7` is not a name) → no finding",

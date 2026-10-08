@@ -100,6 +100,25 @@ export function constantTimeEquals(a: string, b: string): boolean {
 }
 
 /**
+ * The instant an `observedAt` names, or NaN when it names none the host cannot
+ * disagree about. A date-time with no zone designator ("2026-07-13T08:00:00")
+ * is parsed by `Date.parse` as HOST-LOCAL time (ECMA-262), so the same wire
+ * input ordered differently under TZ=UTC and TZ=Asia/Tokyo and flipped a
+ * security decision (backlog row, reproduced 2026-09-26). An offset-less stamp
+ * is an unknown instant, so it is NaN here — i.e. illegible, which the rest of
+ * this file already resolves fail-closed (never wins as latest, cannot vouch,
+ * worst-wins). Accepted: ISO-8601 date-time with `Z` or a numeric offset, and a
+ * date-only form (UTC by spec). Anything else is NaN rather than left to the
+ * engine's locale-dependent fallback parsers. No clock, no host zone.
+ */
+const ZONED_ISO = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(:\d{2}(\.\d+)?)?([Zz]|[+-]\d{2}:\d{2})$/;
+const DATE_ONLY_ISO = /^\d{4}-\d{2}-\d{2}$/;
+export function parseObservedInstant(observedAt: string): number {
+  if (!ZONED_ISO.test(observedAt) && !DATE_ONLY_ISO.test(observedAt)) return Number.NaN;
+  return Date.parse(observedAt);
+}
+
+/**
  * Classify posture freshness from an observation time relative to the
  * evaluation clock. Fail-safe: unpariseable or future timestamps are "unknown",
  * never "fresh".
@@ -113,8 +132,10 @@ export function classifyFreshness(
   if (!observedAtIso) {
     return "missing";
   }
-  const observedMs = Date.parse(observedAtIso);
-  const nowMs = Date.parse(nowIso);
+  // An offset-less stamp is an unknown instant (parseObservedInstant), so it is "unknown" here too: reading it
+  // host-local made the same dock feed fresh in one zone and stale in another.
+  const observedMs = parseObservedInstant(observedAtIso);
+  const nowMs = parseObservedInstant(nowIso);
   // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — signalgrid-core is the BASE package with zero dependencies; the shared helper would have to move here, not be imported (tolerance 0, future reads `unknown`)
   if (Number.isNaN(observedMs) || Number.isNaN(nowMs) || observedMs > nowMs) {
     return "unknown";

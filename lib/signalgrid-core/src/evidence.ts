@@ -1,5 +1,5 @@
 import { CORE_NORMALIZATION_VERSION } from "./core-normalization-version";
-import { canonicalJson, deterministicId, digest } from "./util";
+import { canonicalJson, deterministicId, digest, parseObservedInstant } from "./util";
 import { OWNER_TYPES, RISK_TIERS } from "./types";
 import type {
   BadgeBindingState,
@@ -283,25 +283,6 @@ interface CategoryReading {
 type LatestByCategory = Map<NormalizedSignal["category"], CategoryReading>;
 
 /**
- * The instant an `observedAt` names, or NaN when it names none the host cannot
- * disagree about. A date-time with no zone designator ("2026-07-13T08:00:00")
- * is parsed by `Date.parse` as HOST-LOCAL time (ECMA-262), so the same wire
- * input ordered differently under TZ=UTC and TZ=Asia/Tokyo and flipped a
- * security decision (backlog row, reproduced 2026-09-26). An offset-less stamp
- * is an unknown instant, so it is NaN here — i.e. illegible, which the rest of
- * this file already resolves fail-closed (never wins as latest, cannot vouch,
- * worst-wins). Accepted: ISO-8601 date-time with `Z` or a numeric offset, and a
- * date-only form (UTC by spec). Anything else is NaN rather than left to the
- * engine's locale-dependent fallback parsers. No clock, no host zone.
- */
-const ZONED_ISO = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(:\d{2}(\.\d+)?)?([Zz]|[+-]\d{2}:\d{2})$/;
-const DATE_ONLY_ISO = /^\d{4}-\d{2}-\d{2}$/;
-function parseObservedInstant(observedAt: string): number {
-  if (!ZONED_ISO.test(observedAt) && !DATE_ONLY_ISO.test(observedAt)) return Number.NaN;
-  return Date.parse(observedAt);
-}
-
-/**
  * One pass over the signals, keeping the latest (max observedAt) entry per
  * category.
  *
@@ -409,15 +390,23 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
 function severityOf<T extends string | boolean>(
   value: T | undefined,
   good: readonly T[],
+  worse: readonly T[] = [],
 ): number {
   if (value === undefined) return 1;
-  return good.includes(value) ? 0 : 2;
+  if (good.includes(value)) return 0;
+  // A family may name its accusing members from least to most severe (`worse`). A listed member ranks
+  // above an unlisted accusation and above the listed members before it, so two DIFFERENT accusations
+  // (an older "suspected" against a later "confirmed" whose stamp cannot be ordered) resolve to the
+  // worse one whatever order they arrived in, instead of tying at 2 and letting the ordered one stand.
+  const rank = worse.indexOf(value);
+  return rank < 0 ? 2 : 2 + (rank + 1) / 10;
 }
 
 function resolveWorst<T extends string | boolean>(
   reading: CategoryReading | undefined,
   parse: (value: NormalizedSignal["value"]) => T | undefined,
   good: readonly T[],
+  worse: readonly T[] = [],
 ): T | undefined {
   if (!reading) {
     return undefined;
@@ -428,7 +417,7 @@ function resolveWorst<T extends string | boolean>(
   // stands (eighth-round finding — array order used to pick the winner).
   for (const signal of reading.tied) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(ordered, good)) {
+    if (severityOf(candidate, good, worse) > severityOf(ordered, good, worse)) {
       ordered = candidate;
     }
   }
@@ -443,7 +432,7 @@ function resolveWorst<T extends string | boolean>(
   let worst = ordered;
   for (const signal of reading.illegible) {
     const candidate = parse(signal.value);
-    if (severityOf(candidate, good) > severityOf(worst, good)) {
+    if (severityOf(candidate, good, worse) > severityOf(worst, good, worse)) {
       worst = candidate;
     }
   }
@@ -621,12 +610,15 @@ export const EVIDENCE_VALUE_DOMAINS = {
   custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"] },
   charge: { members: CHARGE_STATES, good: ["charging", "charged"] },
   batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"] },
-  tamper: { members: TAMPER_STATES, good: ["none"] },
+  // `worse` orders the accusing members the shipped rule set separates by outcome: a confirmed tamper
+  // denies (TAMPER_CONFIRMED) and a suspected one restricts (TAMPER_SUSPECTED).
+  tamper: { members: TAMPER_STATES, good: ["none"], worse: ["suspected", "confirmed"] },
   dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
   baseline: { members: BASELINE_STATES, good: ["aligned"] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
-  badge: { members: BADGE_STATES, good: ["present"] },
+  // A forced badge removal denies (BADGE_FORCED_REMOVAL) and a plain removal restricts (BADGE_REMOVED).
+  badge: { members: BADGE_STATES, good: ["present"], worse: ["removed", "forced"] },
   managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"] },
   localAuthority: { members: LOCAL_AUTHORITY_STATES, good: ["verified"] },
   attach: { members: ATTACH_READABLE, good: ["attached"] },
@@ -801,7 +793,7 @@ function readPresentOrNotApplicable<T extends string>(
 function readEnum<T extends string>(
   latestByCategory: LatestByCategory,
   category: NormalizedSignal["category"],
-  domain: { readonly members: readonly T[]; readonly good: readonly T[] },
+  domain: { readonly members: readonly T[]; readonly good: readonly T[]; readonly worse?: readonly T[] },
 ): T | undefined {
   return resolveWorst(
     latestByCategory.get(category),
@@ -810,6 +802,7 @@ function readEnum<T extends string>(
         ? (value as T)
         : undefined,
     domain.good,
+    domain.worse,
   );
 }
 

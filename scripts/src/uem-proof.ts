@@ -15,6 +15,7 @@
 //      reintroduce.
 
 import { readFileSync } from "node:fs";
+import { createServer, type AddressInfo } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
@@ -296,6 +297,14 @@ check("Jamf's 'no compliance evaluated' is NOT reported as compliant",
   normalizeJamfDevice({ computer: { general: { id: 7, remote_management: { managed: true }, supervised: true } } }).compliance === "not_evaluated");
 check("...and it grades as step_up, not none",
   evaluateUem(normalizeJamfDevice({ computer: { general: { id: 7, remote_management: { managed: true }, supervised: true } } })).recommendedAction === "step_up");
+// Graph's two affirmative managementState members, each ISOLATED — the brace-less
+// mapping lines the sweep reaches with `oneLine: true`. Without them both fall to
+// `unknown`: a managed device could never read as enrolled, and a discovered-only one
+// would lose its affirmative "not enrolled".
+check("Intune managementState 'managed' → enrolled",
+  normalizeIntuneDevice({ id: "x", managementState: "managed" }).enrollment === "enrolled");
+check("Intune managementState 'discovered' (seen, never fully enrolled) → not_enrolled, affirmatively — not unknown",
+  normalizeIntuneDevice({ id: "x", managementState: "discovered" }).enrollment === "not_enrolled");
 check("an Intune device being retired is not reported as enrolled",
   normalizeIntuneDevice({ id: "x", managementState: "retirePending" }).enrollment === "retired");
 check("an unrecognised Intune complianceState falls to unknown, never a pass",
@@ -628,6 +637,47 @@ check("a Redis WRITE fault is reported too",
   redisFaults.some((f) => f.startsWith("write failed")));
 check("...and the config still falls back to the process-local value, so the fault is audible WITHOUT being fatal",
   (await getUEMConfig("tenant-fault", () => undefined))?.provider === "jamf");
+// A HEALTHY Redis is the source of truth, not the process-local copy — the brace-less
+// `if (data) return …` in getUEMConfig, which the sweep reaches with `oneLine: true`.
+// Removing it would read the stored config and then serve the stale in-memory one.
+// Nothing tested it because no proof reached a Redis that ANSWERS; this is a minimal
+// RESP responder on loopback (INFO for ioredis's ready check, GET → the stored JSON,
+// anything else → +OK), so the check needs no server and makes no external call.
+const redisServed: string[] = [];
+const fakeRedis = createServer((sock) => {
+  let buf = "";
+  sock.on("data", (chunk) => {
+    buf += chunk.toString("utf8");
+    for (;;) {
+      const m = /^\*(\d+)\r\n/.exec(buf);
+      if (!m) return;
+      let at = m[0].length;
+      const args: string[] = [];
+      for (let i = 0; i < Number(m[1]); i += 1) {
+        const lm = /^\$(\d+)\r\n/.exec(buf.slice(at));
+        if (!lm || buf.length < at + lm[0].length + Number(lm[1]) + 2) return;
+        at += lm[0].length;
+        args.push(buf.slice(at, at + Number(lm[1])));
+        at += Number(lm[1]) + 2;
+      }
+      buf = buf.slice(at);
+      const cmd = (args[0] ?? "").toUpperCase();
+      redisServed.push(cmd);
+      const bulk = (s: string) => `$${Buffer.byteLength(s)}\r\n${s}\r\n`;
+      if (cmd === "INFO") sock.write(bulk("# Server\r\nredis_version:7.0.0\r\nloading:0\r\n"));
+      else if (cmd === "GET") sock.write(bulk(JSON.stringify({ provider: "intune", enabled: false })));
+      else if (cmd === "QUIT") sock.end("+OK\r\n");
+      else sock.write("+OK\r\n");
+    }
+  });
+});
+await new Promise<void>((r) => fakeRedis.listen(0, "127.0.0.1", () => r()));
+process.env["REDIS_URL"] = `redis://127.0.0.1:${(fakeRedis.address() as AddressInfo).port}`;
+const liveFaults: string[] = [];
+const fromRedis = await getUEMConfig("tenant-fault", (m) => liveFaults.push(m));
+await new Promise<void>((r) => fakeRedis.close(() => r()));
+check("a config Redis ANSWERS with is served from Redis, never the stale process-local copy (in-memory holds jamf/enabled)",
+  fromRedis?.provider === "intune" && fromRedis.enabled === false && liveFaults.length === 0 && redisServed.includes("GET"));
 if (priorRedisUrl === undefined) delete process.env["REDIS_URL"];
 else process.env["REDIS_URL"] = priorRedisUrl;
 // NON-VACUITY: with no REDIS_URL there is nothing to fault, and silence is correct.

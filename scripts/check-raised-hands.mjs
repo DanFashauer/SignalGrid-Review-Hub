@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // check-raised-hands — the MONITOR for DR-054's "raise your hand" function.
 //
-//   node scripts/check-raised-hands.mjs             human report (open raised hands, routed owners, gaps)
+//   node scripts/check-raised-hands.mjs             VALIDATES every hand against the schema (exit 1 naming file + field), then the human report
 //   node scripts/check-raised-hands.mjs --json      machine-readable (loop:state + the mac tick read this)
 //   node scripts/check-raised-hands.mjs --self-test prove the routing + gap detection can fail
 //
@@ -25,13 +25,19 @@
 //      The blocker-dispatcher agent (.claude/agents/blocker-dispatcher.md) then routes it
 //      or specs the new agent/skill to create. A gap is reported the loudest.
 //
-// REPORT, not a build gate: it exits 0 on any state (an open blocker is not a code defect
-// that should block a push). loop:state and the mac tick fold its output in so a raised
-// hand is never lost, and its --self-test IS a preflight/CI gate (the routing must work).
+// An open blocker is NOT a build failure, but a MALFORMED hand is: the bare run validates
+// every hand's shape (validateHand) and exits 1 naming the file and the field, and that run is
+// a preflight/CI gate. Before this, a hand with a bogus whoCanUnblock, no need, status
+// "maybe" or an id that disagreed with its filename exited 0 and was routed to a GAP or
+// dropped. --json / --tick-summary stay report-only (loop:state and the mac tick fold them
+// in so a raised hand is never lost); --self-test is a gate too (the routing must work).
 
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { AUTO_KINDS } from "./lib/raised-hand-kinds.mjs"; // the one list of auto-stall kinds a hand may cover
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const LEDGER = join(repo, "artifacts/raised-hands");
@@ -70,7 +76,7 @@ export const DOMAIN_TO_ROLE = [
   ["reliab", "sre"], ["sre", "sre"],
 ];
 
-function rosterRoleIds() {
+export function rosterRoleIds() {
   try {
     const r = JSON.parse(readFileSync(ROSTER, "utf8"));
     const roles = Array.isArray(r) ? r : r.roles || [];
@@ -82,9 +88,13 @@ function rosterRoleIds() {
  *  target, or a capability GAP. Pure (roles injected) so the self-test needs no roster. */
 export function routeHand(hand, roleIds) {
   const who = String(hand.whoCanUnblock ?? "").toLowerCase();
-  if (who.startsWith("owner") || who === "dan") return { owner: "owner", kind: "human" };
+  if (/^(owner|dan)(\b|$)/.test(who)) return { owner: "owner", kind: "human" };
   if (who.includes("lane")) return { owner: who, kind: "lane" };
   if (who.startsWith("tool:")) return { owner: who, kind: "tool" };
+  // A role named as the unblocker ("security-engineer (the fix)") IS the route; without this the
+  // writer and schema accept it while the hands page labels it a capability GAP.
+  const named = who.split(/[\s(,;]/)[0];
+  if (roleIds.has(named)) return { owner: named, kind: "role" };
   const domain = String(hand.domain ?? "").toLowerCase();
   for (const [kw, role] of DOMAIN_TO_ROLE) {
     if (domain.includes(kw)) {
@@ -93,6 +103,59 @@ export function routeHand(hand, roleIds) {
     }
   }
   return { owner: null, kind: "gap", reason: `domain "${domain || "(none)"}" matches no role and no explicit unblocker` };
+}
+
+export const HAND_STATUSES = ["open", "resolved"];
+export const HAND_REQUIRED = ["id", "raisedAt", "doing", "blockedBy", "need", "whoCanUnblock", "status"];
+const LANE_WHO = /^(the )?(mac lane|cloud lane|other lane)(\b|$)/;
+
+/** Is `who` a place a hand can legally be routed? owner, a lane, or an org-roster role
+ *  (a role id may be followed by prose: "security-engineer (the fix) with …"). */
+export function whoIsValid(who, roleIds) {
+  const w = String(who ?? "").trim().toLowerCase();
+  if (!w) return false;
+  if (/^(owner|dan)(\b|$)/.test(w) || LANE_WHO.test(w) || /^tool:\S+/.test(w)) return true;
+  return roleIds.has(w.split(/[\s(,;]/)[0]);
+}
+
+/** Why one `covers` entry can never match an auto-stall, or null. A trailing space, a missing value
+ *  (`--covers` as the last argument) and a typo'd kind all pass a loose "kind:id" regex and then fail
+ *  (or silently disable) the stale-hand rule later, so the writer and the schema share this. */
+export function coverProblem(c) {
+  if (typeof c !== "string") return `entry ${JSON.stringify(c)} is not a string`;
+  if (!/^[a-z-]+:\S+$/.test(c)) return `"${c}" must look like kind:<id> with no spaces`;
+  const kind = c.split(":")[0];
+  if (!AUTO_KINDS.includes(kind)) return `"${c}": kind "${kind}" is not an auto-stall kind (${AUTO_KINDS.join(", ")})`;
+  return null;
+}
+
+/** Schema problems of ONE hand, each naming file and field. Pure: roles injected. */
+export function validateHand(h, roleIds) {
+  const file = h.__file ?? "(unknown file)";
+  if (h.__unreadable) return [`${file}: does not parse (${h.__unreadable})`];
+  const out = [];
+  for (const f of HAND_REQUIRED) if (typeof h[f] !== "string" || !h[f].trim()) out.push(`${file}: field "${f}" is missing or empty`);
+  if (typeof h.status === "string" && h.status.trim() && !HAND_STATUSES.includes(h.status)) out.push(`${file}: field "status" is "${h.status}", must be one of ${HAND_STATUSES.join(" | ")}`);
+  if (typeof h.id === "string" && h.id.trim() && `${h.id}.json` !== file) out.push(`${file}: field "id" is "${h.id}", must equal the filename stem "${file.replace(/\.json$/, "")}"`);
+  if (typeof h.whoCanUnblock === "string" && h.whoCanUnblock.trim() && !whoIsValid(h.whoCanUnblock, roleIds)) {
+    out.push(`${file}: field "whoCanUnblock" is "${h.whoCanUnblock}", must be an org-roster role, owner, "mac lane", "cloud lane", "the other lane" or tool:<name>`);
+  }
+  if (h.covers !== undefined) {
+    if (!Array.isArray(h.covers)) out.push(`${file}: field "covers" must be a list of auto-hand ids like "mail:<message-id>"`);
+    else for (const c of h.covers) { const why = coverProblem(c); if (why) out.push(`${file}: field "covers" — ${why}`); }
+  }
+  // A future raisedAt ages as 0h forever, so it would sit inside every grace window and the stale-hand rule
+  // would never judge it. (10 min of skew between hosts is not a future date.)
+  if (typeof h.raisedAt === "string" && h.raisedAt.trim()) {
+    const at = Date.parse(h.raisedAt);
+    if (!Number.isFinite(at)) out.push(`${file}: field "raisedAt" is "${h.raisedAt}", not an ISO instant`);
+    else if (at > Date.now() + 600_000) out.push(`${file}: field "raisedAt" is "${h.raisedAt}", in the future`);
+  }
+  return out;
+}
+
+export function validateLedger(hands, roleIds) {
+  return hands.flatMap((h) => validateHand(h, roleIds));
 }
 
 function readLedger() {
@@ -143,6 +206,36 @@ function selfTest() {
   t("an ios blocker routes to mobile-native-engineer", routeHand({ domain: "ios-swift" }, roles).owner === "mobile-native-engineer");
   t("whoCanUnblock=owner resolves to the human owner", routeHand({ whoCanUnblock: "owner (a design call)" }, roles).kind === "human");
   t("whoCanUnblock=other-lane resolves to a lane", routeHand({ whoCanUnblock: "the other lane" }, roles).kind === "lane");
+  // validateHand: one planted defect per rule; removing the rule makes its line go FAIL.
+  const good = { __file: "h.json", id: "h", raisedAt: "2026-09-23T00:00:00Z", doing: "d", blockedBy: "b", need: "n", whoCanUnblock: "owner", status: "open" };
+  const bad = (over, needle) => validateHand({ ...good, ...over }, roles).some((p) => p.includes(needle));
+  t("validate: a well-formed hand has no problems", validateHand(good, roles).length === 0);
+  t("validate: a role-prefixed whoCanUnblock with prose is valid", validateHand({ ...good, whoCanUnblock: "product-manager (ranks it) with principal-engineer" }, roles).length === 0);
+  t("validate: lanes are valid unblockers", validateHand({ ...good, whoCanUnblock: "mac lane" }, roles).length === 0 && validateHand({ ...good, whoCanUnblock: "cloud lane" }, roles).length === 0);
+  t("validate: a missing need is named by file and field", bad({ need: undefined }, 'h.json: field "need"'));
+  t("validate: a missing whoCanUnblock is named", bad({ whoCanUnblock: undefined }, 'field "whoCanUnblock"'));
+  t("validate: a bogus whoCanUnblock is named", bad({ whoCanUnblock: "nobody-in-particular" }, 'field "whoCanUnblock" is "nobody-in-particular"'));
+  t("validate: status maybe is rejected", bad({ status: "maybe" }, 'field "status" is "maybe"'));
+  t("validate: an id that is not the filename stem is rejected", bad({ id: "other" }, 'field "id" is "other"'));
+  t("validate: 'Owner' is valid (case-folded, as routeHand folds it)", validateHand({ ...good, whoCanUnblock: "Owner" }, roles).length === 0);
+  t("validate: 'danger-zone' is NOT the owner (word boundary)", bad({ whoCanUnblock: "danger-zone" }, 'field "whoCanUnblock"'));
+  t("validate: 'ownerless' is NOT the owner (word boundary)", bad({ whoCanUnblock: "ownerless" }, 'field "whoCanUnblock"'));
+  t("validate: 'the other lane' is valid (routeHand routes it)", validateHand({ ...good, whoCanUnblock: "the other lane" }, roles).length === 0);
+  t("validate: a RESOLVED hand with a bogus whoCanUnblock is rejected too", bad({ status: "resolved", whoCanUnblock: "nobody" }, 'field "whoCanUnblock"'));
+  t("validate: a typo'd cover kind is named (the writer, the schema and lane-deliver must all refuse it)", bad({ covers: ["mial:typo"] }, 'field "covers"'));
+  t("validate: a cover with a trailing space is named", bad({ covers: ["heartbeat:x "] }, 'field "covers"'));
+  t("validate: a null cover entry (--covers with no value) is named", bad({ covers: [null] }, 'field "covers"'));
+  t("validate: a future raisedAt is named (it would sit inside every grace window)", bad({ raisedAt: "2038-02-28T12:18:00Z" }, 'field "raisedAt"'));
+  t("validate: an unparseable raisedAt is named", bad({ raisedAt: "soon" }, 'field "raisedAt"'));
+  t("validate: 'the mac lane' and tool:x are valid unblockers", validateHand({ ...good, whoCanUnblock: "the mac lane" }, roles).length === 0 && validateHand({ ...good, whoCanUnblock: "tool:fleet" }, roles).length === 0);
+  t("route: a role named as the unblocker routes to that role, not a GAP", routeHand({ whoCanUnblock: "principal-engineer (the fix)" }, roles).owner === "principal-engineer");
+  t("route: 'dan (founder)' routes to the owner; 'danger-zone' does not", routeHand({ whoCanUnblock: "dan (founder)" }, roles).kind === "human" && routeHand({ whoCanUnblock: "danger-zone" }, roles).kind !== "human");
+  t("lane-deliver runs the schema gate on a raise (pinned: deleting the line must turn this red)", readFileSync(join(dirname(fileURLToPath(import.meta.url)), "lane-deliver.mjs"), "utf8").includes('["scripts/check-raised-hands.mjs", "raised-hands schema"]'));
+  t("validate: covers that is a string, not a list, is named", bad({ covers: "mail:abc" }, 'field "covers"'));
+  t("validate: a covers entry with no kind prefix is named", bad({ covers: ["abc"] }, 'field "covers"'));
+  t("validate: a well-formed covers list is valid", validateHand({ ...good, covers: ["mail:abc"] }, roles).length === 0);
+  t("validate: an unreadable file is named", validateHand({ __file: "x.json", __unreadable: "bad" }, roles)[0].startsWith("x.json:"));
+  t("validate: ledger-wide, one bad hand among good ones is reported", validateLedger([good, { ...good, __file: "z.json", id: "z", status: "maybe" }], roles).length === 1);
   t("an unknown domain with no explicit unblocker is a GAP", routeHand({ domain: "quantum-teleport" }, roles).kind === "gap");
   t("a domain mapping to a role ABSENT from the roster is a GAP, not a misroute", routeHand({ domain: "network" }, roles).kind === "gap");
   // summarize: a resolved hand is not surfaced; an open one is; an unreadable one is a gap.
@@ -153,6 +246,36 @@ function selfTest() {
   t("resolved hands are not surfaced, open + unreadable are", s.open === 2);
   t("a very old open hand counts as stale", s.stale >= 1);
   t("an unreadable ledger file counts as a gap, never dropped", s.gaps >= 1);
+  // main(): the bare run must EXIT 1 on a planted bad hand and 0 on a good one (a self-test of
+  // validateHand alone cannot see main's wiring). Runs a copy of this script in a temp tree.
+  const tmp = mkdtempSync(join(realpathSync(tmpdir()), "crh-main-"));
+  try {
+    mkdirSync(join(tmp, "scripts"), { recursive: true }); mkdirSync(join(tmp, "docs/agent"), { recursive: true }); mkdirSync(join(tmp, "artifacts/raised-hands"), { recursive: true });
+    copyFileSync(fileURLToPath(import.meta.url), join(tmp, "scripts/check-raised-hands.mjs"));
+    mkdirSync(join(tmp, "scripts/lib"), { recursive: true });
+    copyFileSync(join(dirname(fileURLToPath(import.meta.url)), "lib/raised-hand-kinds.mjs"), join(tmp, "scripts/lib/raised-hand-kinds.mjs"));
+    writeFileSync(join(tmp, "docs/agent/org-roster.json"), JSON.stringify({ roles: [{ id: "sre" }] }));
+    const hp = join(tmp, "artifacts/raised-hands/h.json");
+    const runMain = () => spawnSync("node", [join(tmp, "scripts/check-raised-hands.mjs")], { encoding: "utf8" });
+    writeFileSync(hp, JSON.stringify({ ...good, __file: undefined }));
+    t("main: the bare run exits 0 on a well-formed ledger", runMain().status === 0);
+    writeFileSync(hp, JSON.stringify({ ...good, whoCanUnblock: "nobody-in-particular" }));
+    const bad1 = runMain();
+    t("main: the bare run exits 1 on a bad hand and names file and field", bad1.status === 1 && bad1.stderr.includes('h.json: field "whoCanUnblock"'));
+    // the WRITER and the schema must agree: whatever hand:raise accepts, the bare check accepts, and
+    // whatever the check would reject, hand:raise refuses to write (a hand raised by the tool's own
+    // route must never turn mainline red).
+    rmSync(hp);
+    copyFileSync(join(dirname(fileURLToPath(import.meta.url)), "raise-hand.mjs"), join(tmp, "scripts/raise-hand.mjs"));
+    const raise = (...a) => spawnSync("node", [join(tmp, "scripts/raise-hand.mjs"), "--doing", "d", "--blocked", "b", "--need", "n", ...a], { encoding: "utf8", env: { ...process.env, SIGNALGRID_LANE_REPO: tmp } });
+    t("writer: hand:raise with no --who is refused (rc 2), writes nothing", raise("--id", "w1", "--domain", "ios").status === 2 && !existsSync(join(tmp, "artifacts/raised-hands/w1.json")));
+    t("writer: hand:raise with a bogus --who is refused", raise("--id", "w2", "--who", "nobody-in-particular").status === 2);
+    t("writer: hand:raise with a malformed --covers is refused", raise("--id", "w3", "--who", "owner", "--covers", "nokind").status === 2);
+    t("writer: hand:raise with a typo'd --covers kind is refused", raise("--id", "w5", "--who", "owner", "--covers", "mial:typo").status === 2);
+    t("writer: hand:raise with --covers as the LAST argument (no value) is refused, writes nothing", raise("--id", "w6", "--who", "owner", "--covers").status === 2 && !existsSync(join(tmp, "artifacts/raised-hands/w6.json")));
+    const okRaise = raise("--id", "w4", "--who", "the other lane");
+    t("writer: …and every hand it DOES write passes the bare check (rc 0)", okRaise.status === 0 && runMain().status === 0);
+  } finally { rmSync(tmp, { recursive: true, force: true }); }
   if (fail.length) { for (const f of fail) console.error(`self-test FAIL: ${f}`); process.exit(1); }
   console.log("check-raised-hands self-test: ok");
   return 0;
@@ -162,7 +285,19 @@ function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(selfTest());
   if (!existsSync(LEDGER)) mkdirSync(LEDGER, { recursive: true });
-  const s = summarize(readLedger(), rosterRoleIds(), Date.now());
+  const hands = readLedger();
+  const roleIds = rosterRoleIds();
+  const s = summarize(hands, roleIds, Date.now());
+  const quiet = argv.includes("--json") || argv.includes("--tick-summary");
+  if (!quiet) {
+    const bad = validateLedger(hands, roleIds);
+    if (bad.length) {
+      for (const p of bad) console.error(`  ✗ ${p}`);
+      console.error(`\nRaised-hands schema check FAILED: ${bad.length} problem(s). Fix the hand file (pnpm run hand:raise writes a valid one).`);
+      process.exit(1);
+    }
+    console.log(`Raised-hands schema check passed: ${hands.length} hand file(s) valid.`);
+  }
   if (argv.includes("--json")) { console.log(JSON.stringify(s)); return; }
   // --tick-summary: one short line for the Mac tick's RESULT (empty when none open, so
   // the tick stays honestly silent). Never mistaken for "monitor did not run".

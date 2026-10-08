@@ -44,9 +44,15 @@ const add = (state, what, detail, gated = true) => rows.push({ state, what, deta
 // rest on. Nothing in this file relies on a replace ref. It does NOT cover a legacy
 // .git/info/grafts file, which git still honours with replace objects off; graftsBlock below
 // is the guard for that, and the same-name verdict calls it.
+//
+// maxBuffer is 64 MiB, like gitRaw/gitFeed/listLocalBranches. Node's default is 1 MiB, and a command whose output
+// passes it throws ENOBUFS, which the catch below turns into "": the same answer as a real empty one. Round 5's
+// landed-by-content check compared `git show` text through this function, so two files over 1 MiB (the live
+// docs/CLAIM_INVENTORY.md is 1,128,935 bytes) both read "" and "" === "" cleared REAL work as squash-landed.
+// That check no longer reads file text at all (see hasLandedByContent), and this limit is the second lock.
 const gitIn = (cwd) => (...a) => {
   try {
-    return execFileSync("git", ["--no-replace-objects", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", ["--no-replace-objects", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim();
   } catch {
     return "";
   }
@@ -59,6 +65,29 @@ const gitRaw = (cwd, args) => {
 const gitFeed = (cwd, args, input, env) => {
   try { return execFileSync("git", args, { cwd, encoding: "utf8", input, env, stdio: ["pipe", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim(); } catch { return ""; }
 };
+// The EXIT STATUS of a git command (replace objects off): 0 yes, 1 no for a yes/no command such as `merge-base --is-ancestor`,
+// anything else (or null: git could not run) is an error. gitIn cannot answer a yes/no command: its "" is the output of
+// BOTH "no" and "yes" for a command that prints nothing, and of every failure besides.
+function gitStatus(cwd, args) {
+  const r = spawnSync("git", ["--no-replace-objects", ...args], { cwd, stdio: "ignore" });
+  return r.error ? null : r.status;
+}
+// What a path IS in a tree: { entry: "<mode> <type> <object id>" } | { missing: true } | { error: true }.
+// `git ls-tree` exits 0 with NO output for a path the tree does not have and non-zero for a ref it cannot read, so a missing path
+// and a git failure are different answers here; gitIn gave both as "" and the landed check read "" === "" as "identical".
+// The entry carries the MODE as well as the blob id (a chmod, or a symlink whose target text equals a file's bytes, has the same
+// blob id and is a different change). -z keeps the path unquoted and exact; the tab splits the entry from the path.
+function entryAt(cwd, ref, file) {
+  const r = spawnSync("git", ["--no-replace-objects", "--literal-pathspecs", "ls-tree", "-z", "--full-tree", ref, "--", file], {
+    cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024,
+  });
+  if (r.error || r.status !== 0) return { error: true };
+  const recs = String(r.stdout || "").split("\0").filter(Boolean);
+  if (recs.length === 0) return { missing: true };
+  if (recs.length > 1) return { error: true }; // a path names exactly one entry; anything else is not understood
+  const m = /^(\d{6} (?:blob|commit|tree) [0-9a-f]{40,64})\t/.exec(recs[0]);
+  return m ? { entry: m[1] } : { error: true };
+}
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
 // remote-tracking ref in a bare resolution, and every landed check below would then compare a local
 // branch against the tag's commit, not against mainline.
@@ -209,28 +238,39 @@ function branchListRow(l) {
 /**
  * Has this branch's content already landed on mainline?
  *
- * TRUE only when every file the branch changes relative to its merge base is
- * byte-identical to mainline's copy. That is what survives a SQUASH merge, which
- * rewrites the commit and defeats `merge-base --is-ancestor`.
+ * TRUE only when every path the branch changes relative to its merge base has the very same tree entry
+ * (mode and object id) on mainline, or had it in a mainline commit made AFTER the branch forked
+ * (fileEverMatchedMainline). That is what survives a SQUASH merge, which rewrites the commit and defeats
+ * `merge-base --is-ancestor`.
  *
- * Fail-closed in every direction: an unreadable diff, a file mainline does not have, a
- * file whose bytes differ, or any git error returns false and the branch stays reported
- * as unpushed. The only way to pass is for mainline to already carry every byte the
- * branch would add — which is precisely what "already on the Review Hub" means.
+ * It compares OBJECT IDS, never file text. Round 5 compared the trimmed text of `git show` through gitIn, which had
+ * no maxBuffer: a file over 1 MiB threw ENOBUFS on both sides, both read "", and "" === "" cleared real work (the
+ * live docs/CLAIM_INVENTORY.md is 1,128,935 bytes); a trim-only difference (indentation, trailing blank lines in
+ * YAML) read byte-identical too. A path the tree does not have is a distinct answer (entryAt), not an empty file:
+ *   · missing on BOTH sides is the same state (the branch deleted a file mainline also deleted: cleared);
+ *   · missing on the branch only is a difference (the branch deletes what mainline still has: reported);
+ *   · missing on mainline only falls through to the history check (mainline may have landed the content and removed it).
+ * The diff is `-z --no-renames`: -z because git QUOTES a path like "\303\244.txt" in plain output and a quoted name is
+ * missing on both sides; --no-renames because a rename is listed under its NEW name only, so the half that deletes the
+ * old path was never compared.
+ *
+ * Fail-closed in every direction: an unreadable diff, an unreadable entry on either side (any git error), an entry
+ * that differs and never appeared on mainline since the fork all return false, and the branch stays reported as
+ * unpushed. What this does NOT say is that the work reached the Hub: it reads the local refs/remotes mainline ref.
  */
 function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
-  const git = gitIn(cwd);
-  const names = git("diff", "--name-only", `${mainline}...${headRef(branch)}`);
-  if (!names) return false;
-  const files = names.split("\n").map((f) => f.trim()).filter(Boolean);
+  const tip = headRef(branch);
+  const raw = gitRaw(cwd, ["--no-replace-objects", "diff", "--name-only", "--no-renames", "-z", `${mainline}...${tip}`]);
+  const files = raw.split("\0").filter(Boolean);
   // A branch that touches nothing is not evidence of landing — it is an unreadable
   // diff, or a branch identical to its base. Say nothing rather than clear it.
   if (files.length === 0) return false;
   for (const file of files) {
-    const mine = git("show", `${headRef(branch)}:${file}`);
-    const theirs = git("show", `${mainline}:${file}`);
-    if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
-    if (mine !== theirs && !fileEverMatchedMainline(branch, file, mainline, cwd)) return false;
+    const mine = entryAt(cwd, tip, file), theirs = entryAt(cwd, mainline, file);
+    if (mine.error || theirs.error) return false;
+    if (mine.missing && theirs.missing) continue; // deleted on both sides: the same state
+    if (mine.missing) return false; // the branch removes what mainline still has: a difference (fileEverMatchedMainline answers the same; said here so the rule reads in one place)
+    if (mine.entry !== theirs.entry && !fileEverMatchedMainline(branch, file, mainline, cwd)) return false;
   }
   return true;
 }
@@ -251,8 +291,14 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
 // dangerous-command hook.
 //
 // So the question becomes "was this content EVER on mainline", not "is it there
-// this instant". A blob that appeared in mainline's history for that path is content
+// this instant". An entry that appeared in mainline's history for that path is content
 // that landed, whatever happened to the file since.
+//
+// ...SINCE THE BRANCH FORKED, and only since. Round 5 walked mainline from its first commit, so a local-only REVERT
+// (or revert of a revert) matched a blob from BEFORE the branch existed: mainline had gone v1 -> v2 -> v1, the branch
+// re-applied v2, and v2's old commit "matched", clearing real work the Hub has never seen. A squash of THIS branch can
+// only land after the branch forked, so the walk is `<merge-base>..mainline`. No merge base (unrelated histories) is
+// no answer: false.
 //
 // Fail-closed, like its three siblings. Bounded to the most recent MAX_HISTORY
 // commits touching the path: an unbounded walk on a long history is a check nobody
@@ -261,12 +307,14 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
 // looking too little is a branch that stays named, never one that vanishes quietly.
 function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) {
   const git = gitIn(cwd);
-  const mine = git("rev-parse", `${headRef(branch)}:${file}`);
-  if (!mine) return false;
-  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, "--", file);
+  const mine = entryAt(cwd, headRef(branch), file);
+  if (!mine.entry) return false;
+  const base = git("merge-base", mainline, headRef(branch));
+  if (!base) return false;
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", `${base}..${mainline}`, "--", file);
   if (!hist) return false;
   for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
-    if (git("rev-parse", `${commit}:${file}`) === mine) return true;
+    if (entryAt(cwd, commit, file).entry === mine.entry) return true;
   }
   return false;
 }
@@ -288,7 +336,9 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) 
 //   · a patch-id match is a CANDIDATE, not a verdict: the branch's hunks re-applied to the
 //     squash's parent must reproduce the squash's tree exactly, or the branch stays reported.
 // Bound to the CURRENT tip by construction — a branch extended after its merge has a
-// different whole-diff patch-id. Purely local: no network, no GitHub call from a hook
+// different whole-diff patch-id. And bound to the FORK: the history walked is `<merge-base>..mainline` (see
+// fileEverMatchedMainline for the round-5 revert that matched a commit from before the branch existed).
+// Purely local: no network, no GitHub call from a hook
 // (AGENTS.md: no live API calls); confirming a landing against GitHub by hand is an
 // operator step outside this path. Fail-closed like its siblings: no diff, no merge-base,
 // no history, a git error, a matched id that does not re-apply — all FALSE, all reported.
@@ -301,7 +351,7 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
   if (!patch) return false;
   const want = patchIdOf(cwd, patch);
   if (!want) return false;
-  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", mainline);
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", `${base}..${mainline}`);
   if (!hist) return false;
   for (const line of hist.split("\n")) {
     const [commit, ...parents] = line.trim().split(" ");
@@ -443,16 +493,22 @@ function graftsBlock(cwd = repo) {
 // WHAT "HELD BY THE HUB" MEANS here is the one thing hubNamesHoldingTip (below) answers, and this
 // function is only its yes/no. Until round 5 this function read `git branch -r --contains` instead: the
 // LOCAL refs/remotes snapshot, which is not the Hub. A grafts file, a hand-made refs/remotes/pr/999 (the
-// shared checkout carries 18 refs/remotes/pr/* refs) or a stale tracking ref cleared REAL unpushed work in
-// this gated row ("1 on the hub under another name") with exit 0, and the sentence that stood here, "this
-// cannot clear real local work", was false on exactly those inputs. It holds now, up to the two things
-// hubNamesHoldingTip says are still trusted (content addressing; the Hub holds the whole history of a commit
-// it lists): a branch is on the Hub under another name when some origin/<name> (a) sits at the sha the
-// Hub's own ls-remote lists for <name>, (b) contains the tip with replace objects off, and (c) no grafts file
-// is in force. A snapshot ref, a second remote, a replace ref, a graft and a same-named tag each fail one of
-// the three, and with a grafts file in force the row says the exemption is off and names the file.
+// shared checkout carries a set of refs/remotes/pr/* refs; count them with `git for-each-ref refs/remotes/pr/`,
+// the number moves) or a stale tracking ref cleared REAL unpushed work in this gated row ("1 on the hub under
+// another name") with exit 0, and the sentence that stood here, "this cannot clear real local work", was false
+// on exactly those inputs. Round 5 fixed that by trusting a tracking ref only where its sha EQUALED the Hub's, and
+// round 6's refuter found the price: when the Hub moved <name> FORWARD after the last fetch the holder was merely
+// BEHIND, no longer equal, and a branch that IS on the Hub read "push, or confirm the remote" until a `git fetch`;
+// a tip that EQUALLED a Hub-listed sha pushed by URL (so no tracking ref was ever written) never cleared at all.
+//
+// So the rule is ANCESTRY AGAINST THE HUB'S OWN LISTING, not a tracking ref: a branch is on the Hub under another
+// name when its tip is an ancestor of (or equal to) the commit the Hub's ls-remote lists for <name>, that commit
+// is in the local object store, replace objects are off and no grafts file is in force (hubTipState). A snapshot
+// ref, a second remote, a replace ref, a graft and a same-named tag each fail it, and with a grafts file in force
+// the row says the exemption is off and names the file. When NO listed commit is local but a tracking ref that
+// holds the tip lags the Hub's sha for its name, the answer is "fetch" (hubFetchCauses), still a gated failure.
 function isOnHubBySha(branch, hubShaMap, cwd = repo) {
-  return hubNamesHoldingTip(branch, hubShaMap, cwd).length > 0;
+  return hubTipState(branch, hubShaMap, cwd).holds;
 }
 
 // THE SAME-NAME ALIAS HOLE (2026-10-08), the alias hole's twin on the other seam. The seam
@@ -469,7 +525,7 @@ function isOnHubBySha(branch, hubShaMap, cwd = repo) {
 // was already true, just unread. A session cannot clear that, so it learns to narrate past it.
 //
 // The rule is the one stated above isOnHubBySha, and since round 5 BOTH seams call the same function
-// (hubNamesHoldingTip) for it. For two rounds they did not: this seam was Hub-anchored and the sibling
+// (hubTipState) for it. For two rounds they did not: this seam was Hub-anchored and the sibling
 // read the LOCAL refs/remotes snapshot, and a snapshot is not the Hub. A first version of this
 // function trusted `git branch -r --contains` and an Opus refuter overturned it with four
 // fixtures, each reading "confirmed" for a tip that is on the Hub nowhere: (F1) the Hub rewound
@@ -478,17 +534,17 @@ function isOnHubBySha(branch, hubShaMap, cwd = repo) {
 // hand-written refs/remotes/pr/999. Round 4's refuter then found the same four holes, unchanged, in the
 // sibling (isOnHubBySha), whose row is gated.
 //
-// So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took: a ref counts only if it
-// is origin/<name> for a name that is not this branch and not HEAD, AND its local sha EQUALS the
-// Hub's current sha for <name> (hubShaMap). A stale origin/X (F1), a pruned-late origin/Z the Hub
-// no longer lists (F2), any other remote (F3) and a hand-made ref outside origin or at a sha the
-// Hub does not list for that name (F4) all fail that test.
+// So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took: the only commits asked about
+// are the shas the Hub's own listing gives (hubShaMap), under a name that is not this branch. A stale origin/X
+// (F1), a pruned-late origin/Z the Hub no longer lists (F2), any other remote (F3) and a hand-made ref outside
+// origin or at a sha the Hub does not list (F4) are never asked about at all. (Rounds 3-5 asked about the LOCAL
+// origin/<name> refs and required each to sit AT the Hub's sha; round 6 asks about the Hub's shas themselves, by
+// ancestry, so a holder the Hub has since moved forward still counts: see isOnHubBySha.)
 //
-// That test is necessary and NOT sufficient. It proves a local ref sits where the Hub's does; it
-// does not prove the LOCAL graph answers "does that commit descend from my tip" the way the Hub's
-// would, because three pieces of hand-made local state rewrite the graph or the name it is asked
-// about. A second Opus refute (round 2) read each of them "confirmed" for work the Hub's object
-// store does not hold:
+// Anchoring is necessary and NOT sufficient. It proves the sha is the Hub's; it does not prove the LOCAL graph
+// answers "does that commit descend from my tip" the way the Hub's would, because three pieces of hand-made
+// local state rewrite the graph or the name it is asked about. A second Opus refute (round 2) read each of
+// them "confirmed" for work the Hub's object store does not hold:
 //   G1  `git replace --graft <Hub sha of other> <T>` (refs/replace/*) gives origin/other, whose
 //       local sha equals the Hub's, a parent of T, so --contains lists it;
 //   G2  a legacy .git/info/grafts line does the same, and replace-objects-off does not disable it;
@@ -511,22 +567,87 @@ function isOnHubBySha(branch, hubShaMap, cwd = repo) {
 // ahead, never used to clear an unreadable comparison); and a branch with a commit no Hub ref
 // holds is contained in none, so renaming cannot clear real local work.
 function hubNamesHoldingTip(branch, hubShaMap, cwd = repo) {
-  if (!(hubShaMap instanceof Map)) return [];
-  if (graftsBlock(cwd)) return []; // a grafts file can fake the very containment asked below
+  return hubTipState(branch, hubShaMap, cwd, { names: true }).holders;
+}
+// The remedy for a branch the Hub may well hold but this checkout cannot see yet: a gated failure all the same,
+// worded so the next step is the right one. hubFetchCauses answers WHICH tracking ref lags; the strings are shared
+// by every row that says it, so one cause reads one way everywhere.
+function hubFetchCauses(branch, hubShaMap, cwd = repo) {
+  return hubTipState(branch, hubShaMap, cwd).behind;
+}
+// (function declarations, not consts: the self-test runs before this module body reaches a const)
+function fetchHint(name) { return `origin/${name} is behind the Hub: run git fetch origin, then re-run`; }
+function unfetchedHint(name) { return `the Hub's ${name} is not fetched here: run git fetch origin, then re-run`; }
+
+// The shas among `shas` that are COMMITS in this checkout's object store (replace objects off): one process, `cat-file --batch-check`.
+// An unreadable answer is the empty set, which can only withhold a confirmation, never grant one.
+function localCommits(cwd, shas) {
+  if (!shas.length) return new Set();
+  const out = gitFeed(cwd, ["--no-replace-objects", "cat-file", "--batch-check=%(objectname) %(objecttype)"], `${shas.join("\n")}\n`);
+  return new Set(out.split("\n").map((l) => l.split(" ")).filter(([, type]) => type === "commit").map(([sha]) => sha));
+}
+
+// Is the tip an ancestor of (or equal to) AT LEAST ONE of these commits? ONE process: `rev-list <tip> --not <every sha>` prints
+// the tip exactly when none of them reaches it, so empty output is "yes". true | false | null (git could not answer: a listed
+// commit with a broken history, say; the caller then asks each commit alone, and an unanswered question never grants). Asked of
+// each listed commit in turn this cost ~35 ms a sha on the shared checkout (211 Hub branches: 4-7 s for ONE unpushed branch,
+// measured 2026-10-08, which doubled the whole check); asked once it is ~30 ms. Replace objects are off; the grafts guard is the caller's.
+function tipReachableFromAny(cwd, tip, shas) {
+  if (!shas.length) return false;
+  const r = spawnSync("git", ["--no-replace-objects", "rev-list", "--stdin", "--max-count=1"], {
+    cwd, encoding: "utf8", input: `${tip}\n${shas.map((s) => `^${s}`).join("\n")}\n`, stdio: ["pipe", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024,
+  });
+  if (r.error || r.status !== 0) return null;
+  return String(r.stdout || "").trim() === "";
+}
+
+// What the Hub's own listing says about a local tip (the ancestry rule above isOnHubBySha):
+//   holds    whether any Hub-listed commit (never this branch's own name) that is in the local store has the tip as an
+//            ancestor, or IS the tip (`merge-base --is-ancestor T T` is true): tipReachableFromAny, one process.
+//   holders  the NAMES behind that yes, one `merge-base --is-ancestor` per local commit; only when asked for (names: true),
+//            because the seams need the yes/no and the names cost a process each (hubNamesHoldingTip, the self-test).
+//   behind   only when there is NO holder: [{ name, local, hub }] for each tracking ref origin/<name> that holds the
+//            tip while the Hub lists <name> at a DIFFERENT sha whose object this checkout does not have. The holder is
+//            behind the Hub (or the Hub moved it sideways), the tip may be on the Hub, and only a fetch tells which.
+//            A Hub sha that IS local and does not have the tip is no such cause: that is a rewind, and fetching changes nothing.
+// `name === branch` is skipped because "under ANOTHER name" is what the callers ask. Neither caller can reach it with
+// a holder (the unpushed seam only asks about names the Hub lacks; the same-name seam only after hubSha..tip > 0, which
+// means the tip is not an ancestor of the Hub's own sha for that name), so it is a defensive equivalent and no case
+// claims to test it. A Hub branch literally named HEAD is a real branch here (the map comes from ls-remote --heads).
+function hubTipState(branch, hubShaMap, cwd = repo, { names = false } = {}) {
+  const none = { holds: false, holders: [], behind: [] };
+  if (!(hubShaMap instanceof Map)) return none;
+  if (graftsBlock(cwd)) return none; // a grafts file can fake the very ancestry asked below
   const git = gitIn(cwd);
   const tip = git("rev-parse", "--verify", `refs/heads/${branch}^{commit}`); // the BRANCH, never a same-named tag
-  if (!tip) return [];
+  if (!tip) return none;
+  const listed = [...hubShaMap].filter(([name, sha]) => name !== branch && typeof sha === "string" && sha);
+  const local = localCommits(cwd, listed.map(([, sha]) => sha));
+  const present = listed.filter(([, sha]) => local.has(sha));
+  const reach = tipReachableFromAny(cwd, tip, present.map(([, sha]) => sha));
+  const holders = [];
+  // names wanted, or the one-process answer unavailable (null): ask each local commit alone
+  if (names || reach === null) {
+    for (const [name, sha] of present) {
+      if (gitStatus(cwd, ["merge-base", "--is-ancestor", tip, sha]) === 0) {
+        holders.push(name);
+        if (!names) break; // only the unknown yes/no is being settled: one holder answers it
+      }
+    }
+  }
+  const holds = reach === null ? holders.length > 0 : reach;
+  if (holds) return { holds: true, holders, behind: [] };
+  const behind = [];
   const rows = git("for-each-ref", "--contains", tip, "--format=%(refname:lstrip=3) %(objectname)", "refs/remotes/origin");
-  if (!rows) return [];
-  const names = [];
-  for (const line of rows.split("\n")) {
+  for (const line of rows ? rows.split("\n") : []) {
     const i = line.lastIndexOf(" ");
     if (i < 1) continue;
-    const name = line.slice(0, i), sha = line.slice(i + 1);
-    if (name === branch || name === "HEAD") continue;
-    if (sha && hubShaMap.get(name) === sha) names.push(name);
+    const name = line.slice(0, i), have = line.slice(i + 1), hub = hubShaMap.get(name);
+    if (name === branch || name === "HEAD") continue; // origin/HEAD is a symref to a branch, not a Hub branch of its own
+    if (!hub || hub === have || local.has(hub)) continue;
+    behind.push({ name, local: have, hub });
   }
-  return names;
+  return { holds: false, holders: [], behind };
 }
 function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
   const r = aheadOfHub(branch, hubSha, cwd);
@@ -534,8 +655,28 @@ function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
   // graft could have set. It stays a gated AHEAD (count unreadable) naming the file, never the
   // non-gated "unknown" warning: planting a file must not turn a failing row into a quiet one.
   if (r.reason) return { state: "ahead", ahead: null, reason: r.reason };
+  // The Hub's own tip for this name is not in the local store: the cure is a fetch, and which wording depends on whether
+  // origin/<name> exists at all. (A Hub sha that IS local and still unreadable is no fetch cause, and gets no hint.)
+  if (r.state === "unknown") {
+    if (!hubSha || gitIn(cwd)("cat-file", "-t", hubSha) === "commit") return r;
+    const tracked = gitIn(cwd)("rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}^{commit}`);
+    return { ...r, fetch: tracked ? fetchHint(branch) : unfetchedHint(branch) };
+  }
   if (r.state !== "ahead") return r;
-  return hubNamesHoldingTip(branch, hubShaMap, cwd).length > 0 ? { state: "confirmed", ahead: r.ahead } : r;
+  const s = hubTipState(branch, hubShaMap, cwd);
+  if (s.holds) return { state: "confirmed", ahead: r.ahead };
+  return s.behind.length ? { ...r, fetch: fetchHint(s.behind[0].name) } : r;
+}
+// "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.
+// pairs: [[branch, remedy or ""]]; the ones with no remedy of their own go first under `plainRemedy`.
+function remedyGroups(pairs, plainRemedy) {
+  const by = new Map(), plain = [];
+  for (const [b, remedy] of pairs) {
+    if (!remedy) { plain.push(b); continue; }
+    if (!by.has(remedy)) by.set(remedy, []);
+    by.get(remedy).push(b);
+  }
+  return [...(plain.length ? [`${plain.join(", ")} — ${plainRemedy}`] : []), ...[...by].map(([remedy, bs]) => `${bs.join(", ")} — ${remedy}`)].join("; ");
 }
 
 // The row the seam prints for the same-named comparison, pure so the self-test can call it: a
@@ -549,8 +690,11 @@ function sameNameRows(verdicts) {
   const note = confirmed.length
     ? ` (${confirmed.length} same-named branch(es) ahead of the Hub's same name but confirmed on the Hub under another branch: ${confirmed.join(", ")})`
     : "";
+  // An ahead branch whose tip may be held by a tracking ref the Hub has moved on from: a fetch comes BEFORE any push.
+  const fetchFirst = verdicts.filter((v) => v.state === "ahead" && v.fetch).map((v) => `${v.branch}: ${v.fetch}`);
+  const fetchNote = fetchFirst.length ? ` (${fetchFirst.join("; ")})` : "";
   if (ahead.length) {
-    return { level: "fail", title: "Local tip ahead of its same-named Hub branch", detail: `${ahead.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${note}${why}` };
+    return { level: "fail", title: "Local tip ahead of its same-named Hub branch", detail: `${ahead.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${note}${why}${fetchNote}` };
   }
   return {
     level: "ok",
@@ -705,9 +849,17 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // re-pushing the corpse.
   //
   // So membership is derived from CONTENT here too, not from reachability. Fail-closed
-  // by construction: one differing file, one file mainline lacks, an unreadable diff or
-  // any git error and the branch is still reported unpushed. Real work is a difference,
-  // and a difference can never pass this.
+  // in every direction: one path whose tree entry (mode and object id) never appeared on mainline
+  // since the branch forked, a path the branch removes that mainline still has, an unreadable diff
+  // or entry, or any git error and the branch is still reported unpushed. "Real work is a difference,
+  // and a difference can never pass this" was this comment's claim through round 5 and it was false:
+  // the compare read trimmed TEXT through a reader that returned "" on any failure (two files over
+  // 1 MiB, or two paths git could not name, both read "" and "" === "" cleared real work), and the
+  // history walk began at mainline's first commit, so a local revert matched a blob from before the
+  // branch existed. What is claimed now is narrower and checked: the branch's change counts as
+  // landed only where a mainline commit made AFTER it forked carries the very same entry (or, in
+  // landedByPatchId, the very same hunks). Content mainline carried and later removed still
+  // counts as landed (that is the squash that was overtaken); a chmod-only change is a difference.
   // Three independent ways a branch is already safe, each REPORTED by name so the
   // exclusion is visible rather than silent: its commit is on the hub under another
   // name, or its content is in mainline (squash), or neither — and then it is work.
@@ -731,7 +883,11 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
     (landedByBytes.length ? ` (${landedByBytes.length} squash-landed, every file byte-identical to a mainline blob: ${landedByBytes.join(", ")})` : "") +
     (landedByHunks.length ? ` (${landedByHunks.length} squash-landed, exact hunks found in a mainline squash: ${landedByHunks.join(", ")})` : "");
   if (unpushed.length) {
-    row("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
+    // A branch the Hub may hold under a name this checkout has not caught up with is still a gated failure, and its
+    // remedy is a fetch, not a push (hubFetchCauses). Grouped by remedy so one cause reads one way.
+    const remedyOf = (b) => { const c = hubFetchCauses(b, hubShaMap, cwd); return c.length ? fetchHint(c[0].name) : ""; };
+    const groups = remedyGroups(unpushed.map((b) => [b, remedyOf(b)]), "push, or confirm the remote");
+    row("fail", "Local work not on the Review Hub", `${groups}${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   } else {
     row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   }
@@ -739,12 +895,19 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
   // (No `b !== "HEAD"`: see unpushedCandidates. A real refs/heads/HEAD with a Hub branch of that name is compared like any other.)
   const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && !ephemeral.includes(b));
-  const verdicts = sameNamed.map((b) => ({ branch: b, ...sameNameVerdict(b, hubShaMap.get(b), hubShaMap, cwd) }));
-  const unknownRows = verdicts.filter((v) => v.state === "unknown").map((v) => v.branch);
+  // No Hub sha map is no Hub: every same-named branch is then an unanswerable comparison, reported as the gated AHEAD it must be
+  // (count unreadable, the cause named) rather than a TypeError on `.get` that takes the whole check down with it.
+  const mapOk = hubShaMap instanceof Map;
+  const verdicts = sameNamed.map((b) => mapOk
+    ? { branch: b, ...sameNameVerdict(b, hubShaMap.get(b), hubShaMap, cwd) }
+    : { branch: b, state: "ahead", ahead: null, reason: "no Hub sha map was passed — the same-name comparison did not run" });
+  const unknownV = verdicts.filter((v) => v.state === "unknown");
   const sameRow = sameNameRows(verdicts);
   row(sameRow.level, sameRow.title, sameRow.detail);
-  if (unknownRows.length) {
-    row("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
+  if (unknownV.length) {
+    // The same cause as the unpushed row's (a tracking ref behind the Hub) reads the same way: fetchHint / unfetchedHint.
+    row("warn", "Same-named branches whose Hub tip is not fetched locally",
+      remedyGroups(unknownV.map((v) => [v.branch, v.fetch || ""]), "cannot tell ahead from behind; reported, not counted clean"), false);
   }
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work is not lost (the worktree
   // belongs to a live agent, and anything real is pushed from it), but an agent branch carrying commits
@@ -1342,10 +1505,15 @@ function selfTest() {
     // (R2-warn) a deprecated config key prints a warning on EVERY git command and exits 0: it must not fail the listing, and must be named
     const wn = mkFx("warnbenign");
     wn.f("branch", "-q", "side-ok"); wn.f("push", "-q", "origin", "side-ok");
-    const withFsync = (fn) => {
-      process.env.GIT_CONFIG_COUNT = "1"; process.env.GIT_CONFIG_KEY_0 = "core.fsyncObjectFiles"; process.env.GIT_CONFIG_VALUE_0 = "true";
-      try { return fn(); } finally { delete process.env.GIT_CONFIG_COUNT; delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0; }
+    // Runs fn with git config pairs set through GIT_CONFIG_COUNT/KEY_n/VALUE_n, then puts back what those variables held BEFORE
+    // (the harness this runs under exports its own GIT_CONFIG_*), never deletes them.
+    const withGitConfig = (pairs, fn) => {
+      const keys = ["GIT_CONFIG_COUNT", ...pairs.flatMap((_, i) => [`GIT_CONFIG_KEY_${i}`, `GIT_CONFIG_VALUE_${i}`])], prior = keys.map((k) => process.env[k]);
+      process.env.GIT_CONFIG_COUNT = String(pairs.length);
+      pairs.forEach(([k, v], i) => { process.env[`GIT_CONFIG_KEY_${i}`] = k; process.env[`GIT_CONFIG_VALUE_${i}`] = v; });
+      try { return fn(); } finally { keys.forEach((k, i) => { if (prior[i] === undefined) delete process.env[k]; else process.env[k] = prior[i]; }); }
     };
+    const withFsync = (fn) => withGitConfig([["core.fsyncObjectFiles", "true"]], fn);
     const wnPlain = listLocalBranches(wn.w);
     const wnL = withFsync(() => listLocalBranches(wn.w)), wnC = withFsync(() => rowOf(wn.rows(), T_CLEAN));
     check("a benign git warning (deprecated core.fsyncObjectFiles) leaves the listing ok and the verdict clean, and the row names the warning (R2-warn)",
@@ -1366,7 +1534,7 @@ function selfTest() {
     check("a grafts file that makes origin/other contain unpushed work does not clear it as 'on the hub under another name': a gated failure naming Y, with the grafts file as the reason (R3-graft)",
       guLie && !!guU && guU.state === "fail" && guU.gated === true && guU.detail.split(" — ")[0] === "Y" && !/on the hub under another name/.test(guU.detail) &&
       /alias exemption OFF: graft file present/.test(guU.detail) && guU.detail.includes(guGrafts));
-    // (R3-pr999) a hand-made refs/remotes/pr/999 at the unpushed tip: the shared checkout carries 18 refs/remotes/pr/* refs
+    // (R3-pr999) a hand-made refs/remotes/pr/999 at the unpushed tip: the shared checkout carries refs/remotes/pr/* refs (count them: git for-each-ref refs/remotes/pr/)
     const pr = mkFx("pr999");
     pr.f("checkout", "-q", "-b", "Y"); const prT = pr.c("y.txt", "real unpushed work\n"); pr.f("update-ref", "refs/remotes/pr/999", prT);
     const prLie = pr.f("branch", "-r", "--contains", prT).includes("pr/999"), prU = rowOf(pr.rows(), T_UNPUSHED);
@@ -1386,7 +1554,9 @@ function selfTest() {
     execFileSync("git", ["-C", as.h, "update-ref", "refs/heads/other", asO1], { stdio: "ignore" });
     const asU = rowOf(as.rows(), T_UNPUSHED);
     check("a branch whose only holder is a local origin/other the Hub has since rewound is a gated failure naming it (R3-alias-stale)",
-      as.f("rev-parse", "refs/remotes/origin/other") !== hubMapOf(as.h).get("other") && !!asU && asU.state === "fail" && asU.gated === true && asU.detail.split(" — ")[0] === "pr782");
+      as.f("rev-parse", "refs/remotes/origin/other") !== hubMapOf(as.h).get("other") && !!asU && asU.state === "fail" && asU.gated === true && asU.detail.split(" — ")[0] === "pr782" &&
+      // the Hub's rewound sha IS local and does not hold the tip: a fetch changes nothing, so the remedy stays the push/confirm one
+      /push, or confirm the remote/.test(asU.detail) && !asU.detail.includes("git fetch origin"));
     // (R4-M1) a local-only branch whose name contains a slash and begins `tags/`: the bare name `tags/rel` resolves refs/tags/rel (the DWIM rule
     // refs/<name>), the tag, so a headRef that qualifies only names WITHOUT a slash lets the tag's squash-landed commit clear the branch's real work
     const m1 = mkFx("m1slash");
@@ -1397,6 +1567,181 @@ function selfTest() {
     check("a local-only branch tags/rel with real work beside a tag rel on a squash-landed commit is not cleared as squash-landed: headRef qualifies names with a slash too (R4-M1)",
       m1.f("rev-parse", "tags/rel^{commit}") === m1z && headRef("tags/rel") === "refs/heads/tags/rel" && !!m1U && m1U.state === "fail" && m1U.gated === true &&
       m1U.detail.split(" — ")[0] === "tags/rel" && !/squash-landed/.test(JSON.stringify(m1Rows)));
+    // ══ ROUND 6 ══ The refuter's p1a-p1g fixtures, rebuilt here beside the rows they must change. Each case states its own
+    // precondition (the lie really is on offer in the fixture) before the guarded answer is checked.
+    const R6M = "refs/remotes/origin/main", T_UNKNOWN = "Same-named branches whose Hub tip is not fetched locally";
+    const FETCH = (n) => `origin/${n} is behind the Hub: run git fetch origin, then re-run`;
+    // The Hub moves <name> forward by one commit WITHOUT the work clone fetching it: plumbing in the bare repo, no clone, no network.
+    const hubAdvance = (fx, name) => {
+      const hg = (...a) => execFileSync("git", ["-C", fx.h, ...a], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: FX_ENV }).trim();
+      const parent = hg("rev-parse", `refs/heads/${name}`);
+      const next = hg("commit-tree", `${parent}^{tree}`, "-p", parent, "-m", `hub moves ${name} forward`);
+      hg("update-ref", `refs/heads/${name}`, next);
+      return next;
+    };
+    const hasObject = (fx, sha) => { try { execFileSync("git", ["-C", fx.w, "cat-file", "-e", `${sha}^{commit}`], { stdio: "ignore" }); return true; } catch { return false; } };
+    // (C) the walks end at the fork. p1a: mainline went v1 -> v2 -> v1 (a revert); the branch forked at the revert and re-applies v2.
+    const pa = mkFx("r6a");
+    pa.c("f.txt", "v1\n"); const paA = pa.c("f.txt", "v2 FEATURE\n", "A: feature"); pa.c("f.txt", "v1\n", "B: revert A"); pa.f("push", "-q", "origin", "main");
+    pa.f("checkout", "-q", "-b", "rr"); pa.c("f.txt", "v2 FEATURE\n", "revert B (re-apply the feature)");
+    const paRows = pa.rows(), paU = rowOf(paRows, T_UNPUSHED);
+    check("a local re-apply of a change mainline already reverted matches a blob from BEFORE the fork and is still reported: both landed checks false (R6-p1a, revert of a revert)",
+      pa.f("rev-parse", `${paA}:f.txt`) === pa.f("rev-parse", "refs/heads/rr:f.txt") && pa.f("merge-base", R6M, "refs/heads/rr") === pa.f("rev-parse", R6M) &&
+      hasLandedByContent("rr", R6M, pa.w) === false && landedByPatchId("rr", R6M, pa.w) === false &&
+      !!paU && paU.state === "fail" && paU.gated === true && paU.detail.split(" — ")[0] === "rr" && !/squash-landed/.test(JSON.stringify(paRows)));
+    // p1a2: the plain revert: mainline went v1 -> v2, the branch forked at v2 and restores v1
+    const pb = mkFx("r6b");
+    const pbV1 = pb.c("f.txt", "v1 old\n"); pb.c("f.txt", "v2 current\n", "A"); pb.f("push", "-q", "origin", "main");
+    pb.f("checkout", "-q", "-b", "rv"); pb.c("f.txt", "v1 old\n", "revert A");
+    const pbRows = pb.rows(), pbU = rowOf(pbRows, T_UNPUSHED);
+    check("a local plain revert of mainline's last change to a file is still reported, not cleared by the file's pre-fork blob (R6-p1a2)",
+      pb.f("rev-parse", `${pbV1}:f.txt`) === pb.f("rev-parse", "refs/heads/rv:f.txt") && hasLandedByContent("rv", R6M, pb.w) === false && landedByPatchId("rv", R6M, pb.w) === false &&
+      !!pbU && pbU.state === "fail" && pbU.gated === true && pbU.detail.split(" — ")[0] === "rv" && !/squash-landed/.test(JSON.stringify(pbRows)));
+    // the bound must not over-restrict: content that landed AFTER the fork and was then overtaken (the moved-on hole) is still cleared
+    const mo = mkFx("r6mo");
+    mo.c("f.txt", "base\n"); mo.f("push", "-q", "origin", "main"); mo.f("checkout", "-q", "-b", "feat"); mo.c("f.txt", "landed\n", "feat");
+    mo.f("checkout", "-q", "main"); mo.c("f.txt", "landed\n", "squash of feat"); mo.c("f.txt", "landed\nmoved on\n", "next merge"); mo.f("push", "-q", "origin", "main");
+    check("content that landed after the fork and was then overtaken by a later change to the same file is still cleared by bytes (R6-moved-on)",
+      mo.f("rev-parse", "refs/heads/feat:f.txt") !== mo.f("rev-parse", `${R6M}:f.txt`) && hasLandedByContent("feat", R6M, mo.w) === true);
+    // (B) object ids, never text. p1c: a file over Node's 1 MiB default maxBuffer, edited on the branch only.
+    const pc = mkFx("r6c");
+    const big = `${"x".repeat(1100000)}\n`;
+    pc.c("big.md", big); pc.f("push", "-q", "origin", "main");
+    pc.f("checkout", "-q", "-b", "bigwork"); pc.c("big.md", big.replace(/^x/, "REAL UNPUSHED EDIT "), "real work in the big file");
+    let enobufs = false;
+    try { execFileSync("git", ["show", "refs/heads/bigwork:big.md"], { cwd: pc.w, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch (e) { enobufs = Boolean(e && e.code === "ENOBUFS"); }
+    const pcRows = pc.rows(), pcU = rowOf(pcRows, T_UNPUSHED);
+    check("a file over 1 MiB with a real unpushed edit is reported, not cleared because both sides failed to read as \"\" (R6-p1c)",
+      enobufs && pc.f("rev-parse", "refs/heads/bigwork:big.md") !== pc.f("rev-parse", `${R6M}:big.md`) && hasLandedByContent("bigwork", R6M, pc.w) === false &&
+      !!pcU && pcU.state === "fail" && pcU.gated === true && pcU.detail.split(" — ")[0] === "bigwork" && !/squash-landed/.test(JSON.stringify(pcRows)));
+    check("gitIn reads output past 1 MiB (a 64 MiB maxBuffer) instead of swallowing the overflow as an empty answer (R6-maxbuffer)", gitIn(pc.w)("show", "refs/heads/bigwork:big.md").length > 1000000);
+    // ...and the same big file, when mainline really carries the branch's blob, is still cleared (no false positive from the change)
+    pc.f("checkout", "-q", "main"); pc.c("big.md", big.replace(/^x/, "LANDED "), "squash of the big edit"); pc.f("push", "-q", "origin", "main");
+    pc.f("checkout", "-q", "-b", "biglanded", "main~1"); pc.c("big.md", big.replace(/^x/, "LANDED "), "the big edit, original commit");
+    check("a file over 1 MiB whose bytes ARE mainline's blob is still cleared as squash-landed (R6-p1c-pos)", hasLandedByContent("biglanded", R6M, pc.w) === true);
+    // p1g: a difference that trim() erases (indentation, trailing blank lines in YAML)
+    const pg = mkFx("r6g");
+    pg.c("conf.yml", "key: value\n"); pg.f("push", "-q", "origin", "main"); pg.f("checkout", "-q", "-b", "indent"); pg.c("conf.yml", "  key: value\n\n\n");
+    const pgRows = pg.rows(), pgU = rowOf(pgRows, T_UNPUSHED);
+    check("a trim-only difference (indentation and trailing blank lines) is a difference: the texts trim equal, the blob ids do not, the branch is reported (R6-p1g)",
+      pg.f("show", "refs/heads/indent:conf.yml") === pg.f("show", `${R6M}:conf.yml`) && pg.f("rev-parse", "refs/heads/indent:conf.yml") !== pg.f("rev-parse", `${R6M}:conf.yml`) &&
+      hasLandedByContent("indent", R6M, pg.w) === false && !!pgU && pgU.state === "fail" && pgU.detail.split(" — ")[0] === "indent");
+    // a mode-only change has the same blob id and is still a change
+    const pm = mkFx("r6m");
+    pm.c("run.sh", "echo hi\n"); pm.f("push", "-q", "origin", "main"); pm.f("checkout", "-q", "-b", "chmod"); pm.f("update-index", "--chmod=+x", "run.sh"); pm.f("commit", "-q", "-m", "chmod +x");
+    check("a chmod-only change (same blob id, different mode) is reported, not cleared as byte-identical (R6-chmod)",
+      pm.f("rev-parse", "refs/heads/chmod:run.sh") === pm.f("rev-parse", `${R6M}:run.sh`) && pm.f("diff", "--name-only", `${R6M}...refs/heads/chmod`) === "run.sh" && hasLandedByContent("chmod", R6M, pm.w) === false);
+    // a path git QUOTES in plain diff output: "\303\244.txt" names no path, so BOTH sides were missing and "" === ""
+    const pq = mkFx("r6q");
+    pq.c("ä.txt", "original\n"); pq.f("push", "-q", "origin", "main"); pq.f("checkout", "-q", "-b", "qb"); pq.c("ä.txt", "real unpushed change\n");
+    const pqU = rowOf(pq.rows(), T_UNPUSHED);
+    check("a real change to a file with a non-ASCII name (git quotes it in plain diff output) is reported, not read as missing on both sides (R6-quote)",
+      pq.f("diff", "--name-only", `${R6M}...refs/heads/qb`).startsWith("\"") && hasLandedByContent("qb", R6M, pq.w) === false && !!pqU && pqU.state === "fail" && pqU.detail.split(" — ")[0] === "qb");
+    // a RENAME is listed under its new name only by default: the old path's deletion was never compared
+    const pr6 = mkFx("r6rn");
+    const rnBody = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\n";
+    pr6.c("old.txt", rnBody); pr6.f("push", "-q", "origin", "main"); pr6.f("checkout", "-q", "-b", "mv"); pr6.f("mv", "old.txt", "new.txt"); pr6.f("commit", "-q", "-m", "rename old to new");
+    pr6.f("checkout", "-q", "main"); pr6.c("new.txt", rnBody, "main gains a copy and keeps old.txt"); pr6.f("push", "-q", "origin", "main");
+    check("a rename whose new name mainline already carries, while mainline still has the OLD path, is reported: the deleted old path counts (R6-rename)",
+      pr6.f("diff", "--name-only", `${R6M}...refs/heads/mv`) === "new.txt" && hasLandedByContent("mv", R6M, pr6.w) === false);
+    // a path missing on BOTH sides is the same state (the INFO case), and one removed by the branch but kept by mainline is not
+    const pb2 = mkFx("r6db");
+    pb2.c("g.txt", "g\n"); pb2.f("push", "-q", "origin", "main"); pb2.f("checkout", "-q", "-b", "del"); pb2.f("rm", "-q", "g.txt"); pb2.f("commit", "-q", "-m", "del g");
+    pb2.f("checkout", "-q", "main"); pb2.f("rm", "-q", "g.txt"); pb2.f("commit", "-q", "-m", "main del g"); pb2.c("h.txt", "h\n"); pb2.f("push", "-q", "origin", "main");
+    check("a branch that only deletes a file mainline also deleted is still cleared: missing on both sides is the same state (R6-del-both)",
+      pb2.f("ls-tree", "--name-only", R6M, "g.txt") === "" && hasLandedByContent("del", R6M, pb2.w) === true);
+    const pk = mkFx("r6dk");
+    pk.c("g.txt", "g\n"); pk.f("push", "-q", "origin", "main"); pk.f("checkout", "-q", "-b", "rmkeep"); pk.f("rm", "-q", "g.txt"); pk.f("commit", "-q", "-m", "branch deletes g");
+    pk.f("checkout", "-q", "main"); pk.c("h.txt", "h\n"); pk.f("push", "-q", "origin", "main");
+    check("a branch that deletes a file mainline still has is a difference, not cleared (R6-del-kept)",
+      pk.f("ls-tree", "--name-only", R6M, "g.txt") === "g.txt" && hasLandedByContent("rmkeep", R6M, pk.w) === false);
+    // (A) ancestry against the Hub's own listing. p1d: the tip IS the sha the Hub lists for another name, pushed by URL (no tracking ref written)
+    const pd = mkFx("r6d");
+    pd.f("checkout", "-q", "-b", "mine"); const pdT = pd.c("m.txt", "work\n"); pd.f("push", "-q", pd.h, "mine:refs/heads/other");
+    const pdMap = hubMapOf(pd.h), pdRows = pd.rows(), pdC = rowOf(pdRows, T_CLEAN);
+    check("a tip equal to a sha the Hub lists for another name is on the Hub even with no tracking ref for it: cleared and named (R6-p1d)",
+      pd.f("for-each-ref", "refs/remotes/origin/other") === "" && pdMap.get("other") === pdT && hubNamesHoldingTip("mine", pdMap, pd.w).join() === "other" &&
+      !!pdC && pdC.state === "ok" && /\(1 on the hub under another name: mine\)/.test(pdC.detail) && !rowOf(pdRows, T_UNPUSHED));
+    // p1e: the holder is BEHIND the Hub (the Hub moved `other` forward after the last fetch), and the Hub's new sha IS in the local store
+    const mkBehind = (name) => {
+      const x = mkFx(name);
+      x.f("checkout", "-q", "-b", "other"); const o = x.c("o.txt", "o\n"); x.f("push", "-q", "origin", "other");
+      x.f("checkout", "-q", "-b", "pr782", "other"); x.f("branch", "-q", "-D", "other");
+      return { x, o, o2: hubAdvance(x, "other") };
+    };
+    const pe = mkBehind("r6e");
+    pe.x.f("fetch", "-q", pe.x.h, "refs/heads/other:refs/remotes/stash/other"); // by URL: the object arrives, origin/other does not move
+    const peRows = pe.x.rows(), peC = rowOf(peRows, T_CLEAN);
+    check("a holder BEHIND the Hub, with the Hub's newer sha in the local store, still clears the branch by ancestry and names it (R6-p1e)",
+      pe.x.f("rev-parse", "refs/remotes/origin/other") === pe.o && hubMapOf(pe.x.h).get("other") === pe.o2 && hasObject(pe.x, pe.o2) &&
+      hubNamesHoldingTip("pr782", hubMapOf(pe.x.h), pe.x.w).join() === "other" && !!peC && peC.state === "ok" && /\(1 on the hub under another name: pr782\)/.test(peC.detail) && !rowOf(peRows, T_UNPUSHED));
+    // p1e2: the same, with the Hub's newer sha NOT in the local store: only a fetch can say, so a gated failure whose remedy is the fetch
+    const pe2 = mkBehind("r6e2");
+    const pe2Rows = pe2.x.rows(), pe2U = rowOf(pe2Rows, T_UNPUSHED);
+    check("a holder behind the Hub with the Hub's newer sha NOT local is a gated failure whose remedy is 'run git fetch origin', not 'push' (R6-p1e2)",
+      !hasObject(pe2.x, pe2.o2) && !!pe2U && pe2U.state === "fail" && pe2U.gated === true && pe2U.detail.split(" — ")[0] === "pr782" &&
+      pe2U.detail.includes(FETCH("other")) && !/push, or confirm the remote/.test(pe2U.detail));
+    pe2.x.f("fetch", "-q", "origin");
+    check("...and after the fetch the same branch is cleared and named (R6-p1e2-after)", (() => { const r = pe2.x.rows(), c = rowOf(r, T_CLEAN); return !!c && c.state === "ok" && /on the hub under another name: pr782/.test(c.detail) && !rowOf(r, T_UNPUSHED); })());
+    // p1f: the only holder is mainline, and the Hub's mainline moves on (the ordinary state of the shared checkout). The same-name warn agrees with the failure row.
+    const pf = mkFx("r6f");
+    pf.c("m1.txt", "m1\n"); pf.f("push", "-q", "origin", "main"); pf.f("branch", "pinned", "main"); hubAdvance(pf, "main");
+    const pfRows = pf.rows(), pfU = rowOf(pfRows, T_UNPUSHED), pfW = rowOf(pfRows, T_UNKNOWN);
+    check("a branch pinned at a mainline the Hub has moved on from is a gated failure saying fetch, and the same-name warn for main says it in the same words (R6-p1f)",
+      !!pfU && pfU.state === "fail" && pfU.gated === true && pfU.detail.split(" — ")[0] === "pinned" && pfU.detail.includes(FETCH("main")) && !/push, or confirm the remote/.test(pfU.detail) &&
+      !!pfW && pfW.state === "warn" && pfW.gated === false && pfW.detail.includes(FETCH("main")));
+    pf.f("fetch", "-q", "origin");
+    check("...and after the fetch the pinned branch is cleared and the warn is gone (R6-p1f-after)", (() => { const r = pf.rows(); return rowOf(r, T_CLEAN)?.state === "ok" && !rowOf(r, T_UNPUSHED) && !rowOf(r, T_UNKNOWN); })());
+    // a same-named branch whose Hub tip is not fetched and which has NO tracking ref at all: still the fetch remedy, honestly worded (nothing "is behind")
+    const pu = mkFx("r6u");
+    const puNext = hubAdvance(pu, "main"); execFileSync("git", ["-C", pu.h, "update-ref", "refs/heads/hubonly", puNext]); pu.f("branch", "hubonly", "main");
+    const puW = rowOf(pu.rows(), T_UNKNOWN);
+    check("a same-named branch whose Hub tip is not fetched and has no origin/<name> says fetch, not 'behind' (R6-unfetched)",
+      pu.f("for-each-ref", "refs/remotes/origin/hubonly") === "" && !!puW && puW.detail.includes("hubonly — the Hub's hubonly is not fetched here: run git fetch origin, then re-run"));
+    // the one-process yes/no (rev-list) cannot read a corrupt listed commit: it answers "unknown", and the answer is then asked of each commit alone,
+    // so ONE bad object among the Hub's listed shas neither disables the exemption for the rest nor grants anything
+    const pn = mkFx("r6null");
+    pn.f("checkout", "-q", "-b", "pr1"); const pnTip = pn.c("p.txt", "p\n"); pn.f("push", "-q", "origin", "pr1:refs/heads/holder");
+    const pnBad = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin", "--literally"], { cwd: pn.w, input: "garbage, not a commit", encoding: "utf8", env: FX_ENV }).trim();
+    const pnMap = new Map([...hubMapOf(pn.h), ["corrupt", pnBad]]), pnOnly = new Map([["corrupt", pnBad]]);
+    const pnBoth = hubTipState("pr1", pnMap, pn.w), pnNone = hubTipState("pr1", pnOnly, pn.w);
+    check("a corrupt Hub-listed commit makes the one-process answer unknown, and the per-commit fallback still finds the real holder; with only the corrupt one nothing is granted (R6-reach-unknown)",
+      localCommits(pn.w, [pnBad]).has(pnBad) && tipReachableFromAny(pn.w, pnTip, [pnBad, pnTip]) === null && pnBoth.holds === true && !pnNone.holds && pnNone.holders.length === 0);
+    // the same-name row, ahead of its Hub name AND held by a tracking ref the Hub has moved on from: a fetch before any push
+    const ps = mkFx("r6s");
+    ps.f("checkout", "-q", "-b", "X"); ps.c("x1.txt", "1\n"); ps.f("push", "-q", "origin", "X"); ps.c("x2.txt", "2\n");
+    ps.f("push", "-q", "origin", "X:refs/heads/main"); hubAdvance(ps, "main");
+    const psA = rowOf(ps.rows(), T_AHEAD);
+    check("a branch one ahead of its Hub name whose tip a lagging origin/main holds is a gated failure that says to fetch first (R6-same-ahead)",
+      !!psA && psA.state === "fail" && psA.gated === true && psA.detail.startsWith("X (+1)") && psA.detail.includes(`X: ${FETCH("main")}`));
+    ps.f("fetch", "-q", "origin");
+    check("...and after the fetch the same-name row is clean, naming X as confirmed (R6-same-ahead-after)", (() => { const a = rowOf(ps.rows(), "Same-named branches at or behind their Hub tip, or confirmed on the Hub under another branch"); return !!a && a.state === "ok" && /confirmed on the Hub under another branch: X/.test(a.detail); })());
+    // (D) every benign warning is carried, not only the first (a .slice(0, 1) survived); past three, a count. Also the missing-map guard.
+    const tw = mkFx("r6tw");
+    tw.f("branch", "-q", "side-ok"); tw.f("push", "-q", "origin", "side-ok");
+    // two DIFFERENT warnings from git itself: an unknown core.fsync component, and the deprecated core.fsyncObjectFiles
+    const twRun = withGitConfig([["core.fsync", "foo"], ["core.fsyncObjectFiles", "true"]], () => ({ l: listLocalBranches(tw.w), d: rowOf(tw.rows(), T_CLEAN) }));
+    check("two benign warnings printed by git are BOTH named in the row, in git's order, verdict unaffected (R6-two-warnings)",
+      twRun.l.ok && twRun.l.warnings.length === 2 && !!twRun.d && twRun.d.state === "ok" &&
+      twRun.d.detail.includes("ignoring unknown core.fsync component 'foo'") && twRun.d.detail.includes("core.fsyncObjectFiles is deprecated") &&
+      twRun.d.detail.indexOf("core.fsync component") < twRun.d.detail.indexOf("core.fsyncObjectFiles") && !/more\)/.test(twRun.d.detail));
+    // more than three: the first three, then a count (handcrafted: git has no cheap fifth warning to print)
+    const twFive = rowOf(tw.rows({ listing: { ...twRun.l, warnings: ["warning: w1", "warning: w2", "warning: w3", "warning: w4", "warning: w5"] } }), T_CLEAN).detail;
+    check("five benign warnings name the first three and count the rest (R6-five-warnings)", /warning: w1 \| warning: w2 \| warning: w3 \| \+2 more\)/.test(twFive) && !twFive.includes("warning: w4"));
+    // (the harness may export these three itself, so the case plants known values, runs withFsync, and puts the originals back)
+    const envKeys = ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"], envOrig = envKeys.map((k) => process.env[k]);
+    let envKept;
+    try {
+      process.env.GIT_CONFIG_COUNT = "0"; process.env.GIT_CONFIG_KEY_0 = "x.planted"; process.env.GIT_CONFIG_VALUE_0 = "planted";
+      withFsync(() => 0);
+      envKept = process.env.GIT_CONFIG_COUNT === "0" && process.env.GIT_CONFIG_KEY_0 === "x.planted" && process.env.GIT_CONFIG_VALUE_0 === "planted";
+    } finally { envKeys.forEach((k, i) => { if (envOrig[i] === undefined) delete process.env[k]; else process.env[k] = envOrig[i]; }); }
+    check("withFsync puts the three GIT_CONFIG_* variables back to what they held instead of deleting them (R6-env)", envKept === true);
+    const um = mkFx("r6um");
+    const umRun = (map) => { try { return { rows: branchSeamRows({ listing: listLocalBranches(um.w), hubBranches: ["main"], hubShaMap: map, ephemeral: [], scratchExcluded: [], mainline: R6M, cwd: um.w }) }; } catch (e) { return { threw: String(e && e.message) }; } };
+    const umU = umRun(undefined), umN = umRun(null), umA = umU.rows && rowOf(umU.rows, T_AHEAD);
+    check("no Hub sha map does not throw: every same-named branch is a gated failure naming the cause (R6-undefined-map)",
+      !umU.threw && !umN.threw && !!umA && umA.state === "fail" && umA.gated === true && umA.detail.startsWith("main (count unreadable)") && /no Hub sha map was passed/.test(umA.detail) && rowOf(umN.rows, T_AHEAD).state === "fail");
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

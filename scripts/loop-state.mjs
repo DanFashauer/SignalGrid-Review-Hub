@@ -19,7 +19,7 @@
 
 import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dirname, resolve, isAbsolute } from "node:path";
@@ -42,7 +42,7 @@ const add = (state, what, detail, gated = true) => rows.push({ state, what, deta
 // Every call through gitIn reads the REAL object graph: `--no-replace-objects` is prepended, so a
 // refs/replace/* entry (`git replace --graft`) cannot rewrite the ancestry any of these answers
 // rest on. Nothing in this file relies on a replace ref. It does NOT cover a legacy
-// .git/info/grafts file, which git still honours with replace objects off; graftsFileIn below
+// .git/info/grafts file, which git still honours with replace objects off; graftsBlock below
 // is the guard for that, and the same-name verdict calls it.
 const gitIn = (cwd) => (...a) => {
   try {
@@ -59,7 +59,13 @@ const gitRaw = (cwd, args) => {
 const gitFeed = (cwd, args, input, env) => {
   try { return execFileSync("git", args, { cwd, encoding: "utf8", input, env, stdio: ["pipe", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).trim(); } catch { return ""; }
 };
-const MAINLINE = "origin/SignalGrid_Alpha";
+// A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
+// remote-tracking ref in a bare resolution, and every landed check below would then compare a local
+// branch against the tag's commit, not against mainline.
+const MAINLINE = "refs/remotes/origin/SignalGrid_Alpha";
+// Every git argument that names a LOCAL branch is headRef(name), never the bare name (see listLocalBranches).
+const HEADS = "refs/heads/";
+const headRef = (name) => `${HEADS}${name}`;
 const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
 // Bounded walk of mainline history for the landed checks: an unbounded walk is a check
 // nobody waits for, and a check nobody waits for gets switched off. Exhausting the bound
@@ -72,7 +78,10 @@ console.log(`\n${B}Loop check${X} ${D}— reality, not notes${X}\n`);
 
 // ── 1. Does local work exist that the Review Hub has never seen? ────────────
 // This is the check that would have caught the lost week.
-const localBranches = git("branch", "--format=%(refname:short)").split("\n").filter(Boolean);
+// The list is built from FULL refnames (see listLocalBranches); a failed listing is a reported failure
+// (branchListRow), never an empty clean list.
+const listing = listLocalBranches(repo);
+const localBranches = listing.names;
 let hubBranches = [];
 const hubSha = new Map();
 let hubListed = false;
@@ -110,6 +119,53 @@ if (hubListed && hubBranches.length === 0) {
     "git ls-remote --heads succeeded but returned ZERO branches — the unpushed-work check did NOT run. " +
       "An empty answer is not a clean answer.",
   );
+}
+{
+  const r = branchListRow(listing);
+  if (r) add(r.state, r.what, r.detail, r.gated);
+}
+
+// ── Local branches, as FULL refnames ─────────────────────────────────────────
+// `git branch --format=%(refname:short)` is not a list of branch names. When a TAG shares a branch's
+// name, git shortens the BRANCH to `heads/<name>` (the shortest form that is not ambiguous), and
+// `heads/<name>` is a name no refs/heads/ entry carries: round 3 then asked about `refs/heads/heads/<name>`,
+// which never exists, so a branch sitting exactly at its Hub tip with a same-named tag FAILED the unpushed
+// seam and could not be cleared, and (contrived) real unpushed work on refs/heads/X next to a Hub branch
+// literally called heads/X was demoted from a gated AHEAD to a non-gated "not fetched locally" warning.
+// `%(refname:lstrip=2)` is no fix on its own: the bare name X it returns resolves the TAG in every git
+// argument that is not qualified, and a tag on a commit whose bytes are in mainline then cleared real
+// unpushed work as "squash-landed".
+//
+// So the listing asks for %(refname), the display/short name is the string after "refs/heads/" (it never
+// changes under a tag, and it is the same key the Hub map uses: ls-remote names are stripped the same way),
+// and EVERY git argument that names a local branch is headRef(name), never the bare name.
+//
+// The listing is fail-closed too: a git error, a spawn error, or any warning/error/fatal on stderr is
+// `ok:false`. for-each-ref SKIPS a broken ref with only a warning ("ignoring broken ref") and exits 0, so
+// the exit code alone would read a branch git could not read as a branch that does not exist.
+function listLocalBranches(cwd = repo) {
+  const r = spawnSync("git", ["--no-replace-objects", "for-each-ref", "--format=%(refname)", HEADS], {
+    cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, LC_ALL: "C", LANGUAGE: "C" }, // the warning prefixes below are matched in English
+  });
+  const fail = (error) => ({ ok: false, refs: [], names: [], error });
+  if (r.error) return fail(String(r.error.message || r.error).split("\n")[0]);
+  const complaint = String(r.stderr || "").split("\n").map((l) => l.trim()).find((l) => /^(warning|error|fatal):/.test(l));
+  if (r.status !== 0) return fail(complaint || `git exited ${r.status}`);
+  if (complaint) return fail(complaint);
+  const refs = String(r.stdout || "").split("\n").filter(Boolean);
+  const stray = refs.find((x) => !x.startsWith(HEADS) || x.length === HEADS.length);
+  if (stray !== undefined) return fail(`unexpected refname in a refs/heads listing: ${stray}`);
+  return { ok: true, refs, names: refs.map((x) => x.slice(HEADS.length)) };
+}
+function branchListRow(l) {
+  if (l.ok) return null;
+  return {
+    state: "fail",
+    what: "Local branch list unreadable",
+    detail: `git for-each-ref refs/heads failed (${l.error}) — the unpushed-work and same-name checks did NOT run; an unreadable list is not an empty one`,
+    gated: true,
+  };
 }
 
 /**
@@ -151,14 +207,14 @@ if (hubListed && hubBranches.length === 0) {
  */
 function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
   const git = gitIn(cwd);
-  const names = git("diff", "--name-only", `${mainline}...${branch}`);
+  const names = git("diff", "--name-only", `${mainline}...${headRef(branch)}`);
   if (!names) return false;
   const files = names.split("\n").map((f) => f.trim()).filter(Boolean);
   // A branch that touches nothing is not evidence of landing — it is an unreadable
   // diff, or a branch identical to its base. Say nothing rather than clear it.
   if (files.length === 0) return false;
   for (const file of files) {
-    const mine = git("show", `${branch}:${file}`);
+    const mine = git("show", `${headRef(branch)}:${file}`);
     const theirs = git("show", `${mainline}:${file}`);
     if (mine === null || theirs === null || mine === undefined || theirs === undefined) return false;
     if (mine !== theirs && !fileEverMatchedMainline(branch, file, mainline, cwd)) return false;
@@ -192,7 +248,7 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
 // looking too little is a branch that stays named, never one that vanishes quietly.
 function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) {
   const git = gitIn(cwd);
-  const mine = git("rev-parse", `${branch}:${file}`);
+  const mine = git("rev-parse", `${headRef(branch)}:${file}`);
   if (!mine) return false;
   const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, "--", file);
   if (!hist) return false;
@@ -225,8 +281,8 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) 
 // no history, a git error, a matched id that does not re-apply — all FALSE, all reported.
 function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
   const git = gitIn(cwd);
-  const base = git("merge-base", mainline, branch);
-  const tip = git("rev-parse", "--verify", `${branch}^{commit}`);
+  const base = git("merge-base", mainline, headRef(branch));
+  const tip = git("rev-parse", "--verify", `${headRef(branch)}^{commit}`);
   if (!base || !tip || base === tip) return false;
   const patch = gitRaw(cwd, ["diff", base, tip]);
   if (!patch) return false;
@@ -292,16 +348,60 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
 
 // A legacy .git/info/grafts file rewrites parentage exactly as a refs/replace entry does, and
 // `--no-replace-objects` (or GIT_NO_REPLACE_OBJECTS) does NOT switch it off; only GIT_GRAFT_FILE=/dev/null
-// does. While one exists no ancestry answer from this checkout is trusted. Returns "" when there is none,
-// else the reason, which names the file. git's own answer to "where would you look" is used (a linked
-// worktree names the shared one), GIT_GRAFT_FILE is honoured the way git honours it, and when git cannot
-// say the answer is still a reason, never "": unreadable tightens.
-function graftsBlock(cwd = repo) {
-  const p = process.env.GIT_GRAFT_FILE || gitIn(cwd)("rev-parse", "--git-path", "info/grafts");
+// does. While one is in force no ancestry answer from this checkout is trusted.
+//
+// WHERE git looks is git's own answer, and nobody else's: `git rev-parse --git-path info/grafts` already
+// honours GIT_GRAFT_FILE (relative values included: it prints the path relative to the CALLER's directory,
+// while git itself reads a relative GIT_GRAFT_FILE from the top of the worktree), and a linked worktree
+// names the shared file. The script used to read process.env.GIT_GRAFT_FILE first, which is the raw value
+// and wrong for a relative one asked from a subdirectory (it resolved the name against the wrong directory
+// and read "no grafts" while git applied them).
+//
+// WHETHER git applies anything is measured against git 2.43, not assumed (each shape has a self-test that
+// compares this function with `git for-each-ref --contains`):
+//   absent file, dangling symlink, nonexistent GIT_GRAFT_FILE ........ git applies none  -> no block
+//   0-byte file ...................................................... git applies none  -> no block ("empty")
+//   a directory at the path .......................................... git applies none  -> no block
+//   GIT_GRAFT_FILE='' (git-path prints "./", the cwd) ................ git applies none, even with a
+//                                                                      real .git/info/grafts -> no block
+//   GIT_GRAFT_FILE=/dev/null (git's documented off switch) ........... git applies none  -> no block
+//   any non-empty regular file (comment-only and garbage included) ... BLOCK. git applies none from a
+//                                                                      comment-only file too; we do not
+//                                                                      reimplement its parser, so a file
+//                                                                      with content blocks (conservative).
+//   a path we cannot stat for any reason but "does not exist" ........ BLOCK (unreadable tightens)
+//   a device, fifo or socket other than /dev/null .................... BLOCK (cannot tell what it holds)
+//   git cannot name the path at all .................................. BLOCK
+// Only a BLOCK has a `reason`; the no-block states carry a `note` saying what they are.
+function graftsState(cwd = repo) {
   const tail = "ancestry cannot be trusted, confirmation disabled";
-  if (!p) return `grafts path unreadable (git did not name info/grafts); ${tail}`;
+  const p = gitIn(cwd)("rev-parse", "--git-path", "info/grafts");
+  if (!p) return { block: true, state: "unreadable", reason: `grafts path unreadable (git did not name info/grafts); ${tail}` };
   const abs = isAbsolute(p) ? p : resolve(cwd, p);
-  return existsSync(abs) ? `graft file present: ${abs}; ${tail}` : "";
+  let st;
+  try {
+    st = statSync(abs);
+  } catch (e) {
+    if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) return { block: false, state: "absent", path: abs, note: `no grafts file at ${abs}` };
+    return { block: true, state: "unreadable", path: abs, reason: `graft file unreadable (${e && e.code ? e.code : e}): ${abs}; ${tail}` };
+  }
+  if (st.isDirectory()) {
+    return process.env.GIT_GRAFT_FILE === ""
+      ? { block: false, state: "disabled", path: abs, note: "grafts disabled by GIT_GRAFT_FILE='' (git applies none)" }
+      : { block: false, state: "directory", path: abs, note: `the grafts path is a directory (git applies none): ${abs}` };
+  }
+  if (st.isFile()) {
+    return st.size === 0
+      ? { block: false, state: "empty", path: abs, note: `the grafts file is empty (git applies none): ${abs}` }
+      : { block: true, state: "present", path: abs, reason: `graft file present: ${abs}; ${tail}` };
+  }
+  if (abs === "/dev/null") return { block: false, state: "disabled", path: abs, note: "grafts disabled by GIT_GRAFT_FILE=/dev/null" };
+  return { block: true, state: "present", path: abs, reason: `graft path is not a regular file: ${abs}; ${tail}` };
+}
+// "" when no grafts file is in force, else the reason, which names the file.
+function graftsBlock(cwd = repo) {
+  const g = graftsState(cwd);
+  return g.block ? g.reason : "";
 }
 
 // THE ALIAS HOLE, and it is the third of exactly this shape. Membership was derived
@@ -371,7 +471,9 @@ function isOnHubBySha(branch, cwd = repo) {
 // off (gitIn prepends --no-replace-objects); a grafts file, which replace-objects-off does not
 // cover, disables confirmation outright (graftsBlock), and the verdict then reads AHEAD with the
 // count unreadable and the reason naming the file; and the branch tip is always
-// refs/heads/<branch>, never the bare name (here, in aheadOfHub and in isOnHubBySha). What is still
+// refs/heads/<branch>, never the bare name (here, in aheadOfHub and in isOnHubBySha, and in every other git
+// argument that names a local branch: hasLandedByContent, fileEverMatchedMainline, landedByPatchId,
+// newerCommitCount and the carrying count; the list itself is full refnames, see listLocalBranches). What is still
 // trusted: that an object in the local store is the object its sha says (content addressing), and
 // that the Hub holds the whole history of a commit it lists. The seam REPORTS a confirmed branch by
 // name so the exclusion is visible, never silent. Fail-closed exactly like the alias check: a git
@@ -473,7 +575,8 @@ function localTip(name, cwd) {
 // declaredAt from the file: no clock is read.
 function newerCommitCount(branch, declaredAt, mainline, cwd) {
   try {
-    const out = execFileSync("git", ["log", "--format=%ct", `${mainline}..${branch}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    // refs/heads/<branch>, never the bare name (a same-named tag would win), and replace objects off like gitIn.
+    const out = execFileSync("git", ["--no-replace-objects", "log", "--format=%ct", `${mainline}..${headRef(branch)}`], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
     const at = Date.parse(declaredAt) / 1000;
     if (!Number.isFinite(at)) return null;
     // An unparseable commit time counts as newer: unknown tightens the answer.
@@ -545,29 +648,18 @@ function branchesInAgentWorktrees() {
   return [...found];
 }
 
-if (hubBranches.length) {
-  // Ephemeral by NAME (the Agent tool's own) or by LOCATION (anything checked out
-  // in an agent worktree). Named in the output either way: the exclusion is
-  // visible, never silent.
-  const inWorktrees = branchesInAgentWorktrees();
-  const ephemeral = localBranches.filter(
-    (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
-  );
-  // DECLARED SCRATCH (owner-directed 2026-10-02): exact names in docs/agent/local-scratch-branches.json,
-  // each with a reason. Fail-closed: an invalid file excludes nothing and fails the seam; a declared
-  // branch with a commit newer than its declaredAt is work again. Reported on its own line, never silent.
-  const scratch = evaluateScratch(MAINLINE, repo, localBranches);
-  const noRemote = unpushedCandidates(localBranches, hubBranches, ephemeral, scratch.excluded);
-  if (scratch.exists) {
-    if (!scratch.ok) {
-      add("fail", "Declared scratch branches", `${SCRATCH_FILE} on mainline is INVALID (${scratch.error}) — nothing excluded; fix the file`);
-    } else {
-      const bits = [`declared scratch (${scratch.excluded.length}): ${scratch.excluded.join(", ") || "none"} — not counted`];
-      if (scratch.reopened.length) bits.push(`${scratch.reopened.length} declared but tip moved or carries commits newer than declaredAt, counted as work: ${scratch.reopened.join(", ")}`);
-      if (scratch.stale.length) bits.push(`${scratch.stale.length} stale declaration(s), no such local branch: ${scratch.stale.join(", ")}`);
-      add(scratch.reopened.length ? "warn" : "ok", "Declared scratch branches", bits.join("; "), false);
-    }
-  }
+// The seam rows for the local branches, from a listing, the Hub's branch map and the exclusions already decided.
+// A FUNCTION, not inline, so the self-test runs the very code the live script runs, on the listing the live
+// script produces (listLocalBranches), with tags, same-named refs and broken refs in the fixture. Every
+// branch is a SHORT name here (the string after refs/heads/, the same key the Hub map uses) and is
+// qualified with headRef() at each git call below and in the functions it calls.
+function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExcluded, mainline = MAINLINE, cwd = repo }) {
+  if (!listing.ok) return [branchListRow(listing)];
+  const localBranches = listing.names;
+  const git = gitIn(cwd);
+  const rows = [];
+  const row = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
+  const noRemote = unpushedCandidates(localBranches, hubBranches, ephemeral, scratchExcluded);
   // THE SQUASH-MERGE HOLE, and it is the same shape as the one above. A branch merged
   // with squash has no remote afterwards (GitHub deletes it) and is NOT an ancestor of
   // mainline, because the squash makes a new commit. So this seam reported "local work
@@ -586,10 +678,10 @@ if (hubBranches.length) {
   // Three independent ways a branch is already safe, each REPORTED by name so the
   // exclusion is visible rather than silent: its commit is on the hub under another
   // name, or its content is in mainline (squash), or neither — and then it is work.
-  const onHub = noRemote.filter((b) => isOnHubBySha(b));
+  const onHub = noRemote.filter((b) => isOnHubBySha(b, cwd));
   const offHub = noRemote.filter((b) => !onHub.includes(b));
-  const landedByBytes = offHub.filter((b) => hasLandedByContent(b));
-  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b));
+  const landedByBytes = offHub.filter((b) => hasLandedByContent(b, mainline, cwd));
+  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd));
   const landed = [...landedByBytes, ...landedByHunks];
   const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
@@ -598,39 +690,66 @@ if (hubBranches.length) {
     (landedByBytes.length ? ` (${landedByBytes.length} squash-landed, every file byte-identical to a mainline blob: ${landedByBytes.join(", ")})` : "") +
     (landedByHunks.length ? ` (${landedByHunks.length} squash-landed, exact hunks found in a mainline squash: ${landedByHunks.join(", ")})` : "");
   if (unpushed.length) {
-    add("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}`);
+    row("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}`);
   } else {
-    add("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}`);
+    row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}`);
   }
 
-  // REPORTED, never fatal — the lane-message rule, for the same reason. The work
-  // is not lost (the worktree belongs to a live agent, and anything real is pushed
   // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
   const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
-  const verdicts = sameNamed.map((b) => ({ branch: b, ...sameNameVerdict(b, hubSha.get(b), hubSha) }));
+  const verdicts = sameNamed.map((b) => ({ branch: b, ...sameNameVerdict(b, hubShaMap.get(b), hubShaMap, cwd) }));
   const unknownRows = verdicts.filter((v) => v.state === "unknown").map((v) => v.branch);
   const sameRow = sameNameRows(verdicts);
-  add(sameRow.level, sameRow.title, sameRow.detail);
+  row(sameRow.level, sameRow.title, sameRow.detail);
   if (unknownRows.length) {
-    add("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
+    row("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
   }
-  // from it), but an agent branch carrying commits beyond mainline is still worth
-  // a session's eyes, so it is named rather than swallowed by the exclusion above.
+  // REPORTED, never fatal — the lane-message rule, for the same reason. The work is not lost (the worktree
+  // belongs to a live agent, and anything real is pushed from it), but an agent branch carrying commits
+  // beyond mainline is still worth a session's eyes, so it is named rather than swallowed by the exclusion above.
   const carrying = ephemeral
     .filter((b) => !hubBranches.includes(b))
     // Commits reachable from the branch and from NO origin ref at all — a truer
     // reading of "carrying work the remote does not have" than a diff against one
     // named branch, which would miscount a branch cut from a different base.
-    .map((b) => ({ b, ahead: git("rev-list", "--count", b, "--not", "--remotes=origin") }))
+    .map((b) => ({ b, ahead: git("rev-list", "--count", headRef(b), "--not", "--remotes=origin") }))
     .filter((x) => x.ahead && x.ahead !== "0");
   if (carrying.length) {
-    add(
+    row(
       "warn",
       "Agent-worktree branches carrying commits",
       `${carrying.map((x) => `${x.b} (+${x.ahead})`).join(", ")} — reported, never fatal: they belong to a live agent's ` +
         `isolated checkout and are not the session's to push or delete. An attack reproduction MUST NOT be pushed.`,
       false,
     );
+  }
+  return rows;
+}
+
+if (hubBranches.length && listing.ok) {
+  // Ephemeral by NAME (the Agent tool's own) or by LOCATION (anything checked out
+  // in an agent worktree). Named in the output either way: the exclusion is
+  // visible, never silent.
+  const inWorktrees = branchesInAgentWorktrees();
+  const ephemeral = localBranches.filter(
+    (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
+  );
+  // DECLARED SCRATCH (owner-directed 2026-10-02): exact names in docs/agent/local-scratch-branches.json,
+  // each with a reason. Fail-closed: an invalid file excludes nothing and fails the seam; a declared
+  // branch with a commit newer than its declaredAt is work again. Reported on its own line, never silent.
+  const scratch = evaluateScratch(MAINLINE, repo, localBranches);
+  if (scratch.exists) {
+    if (!scratch.ok) {
+      add("fail", "Declared scratch branches", `${SCRATCH_FILE} on mainline is INVALID (${scratch.error}) — nothing excluded; fix the file`);
+    } else {
+      const bits = [`declared scratch (${scratch.excluded.length}): ${scratch.excluded.join(", ") || "none"} — not counted`];
+      if (scratch.reopened.length) bits.push(`${scratch.reopened.length} declared but tip moved or carries commits newer than declaredAt, counted as work: ${scratch.reopened.join(", ")}`);
+      if (scratch.stale.length) bits.push(`${scratch.stale.length} stale declaration(s), no such local branch: ${scratch.stale.join(", ")}`);
+      add(scratch.reopened.length ? "warn" : "ok", "Declared scratch branches", bits.join("; "), false);
+    }
+  }
+  for (const r of branchSeamRows({ listing, hubBranches, hubShaMap: hubSha, ephemeral, scratchExcluded: scratch.excluded })) {
+    add(r.state, r.what, r.detail, r.gated);
   }
 }
 
@@ -762,7 +881,7 @@ for (const [label, script] of [
     : undefined;
   let newest = "";
   try {
-    newest = execFileSync("git", ["log", "-1", "--format=%cI", "origin/SignalGrid_Alpha"], { cwd: repo, encoding: "utf8" }).trim();
+    newest = execFileSync("git", ["log", "-1", "--format=%cI", MAINLINE], { cwd: repo, encoding: "utf8" }).trim();
   } catch { /* unfetched remote → stateFreshness returns no-remote */ }
   const f = stateFreshness(touched, newest);
   if (f.kind === "no-date") {
@@ -843,8 +962,9 @@ function selfTest() {
   const put = (f, s) => writeFileSync(join(work, f), s);
   // The Hub as the seam sees it: name -> sha from `ls-remote --heads`, never from a local ref. `hb` moves the bare remote
   // behind the work clone's back (a rewind, a deletion) WITHOUT refetching, which is how a local snapshot goes stale.
-  const hubMap = () => new Map(execFileSync("git", ["ls-remote", "--heads", hub], { encoding: "utf8" }).split("\n").filter(Boolean)
+  const hubMapOf = (h) => new Map(execFileSync("git", ["ls-remote", "--heads", h], { encoding: "utf8" }).split("\n").filter(Boolean)
     .map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/")).map(([sha, ref]) => [ref.slice("refs/heads/".length), sha]));
+  const hubMap = () => hubMapOf(hub);
   const hb = (...a) => execFileSync("git", ["-C", hub, ...a], { stdio: "ignore", env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });
   const cm = (f, text) => { put(f, text); sh("add", "-A"); sh("commit", "-q", "-m", f); return g("rev-parse", "HEAD"); };
   const verdictOf = (b, map = hubMap()) => sameNameVerdict(b, map.get(b), map, work);
@@ -961,11 +1081,13 @@ function selfTest() {
     writeFileSync(graftsFile, `${g1o} ${g1t}\n${g1b} ${g1t}\n`);
     const g2v = verdictOf("g1x"), g2a = aheadOfHub("g1x", hubMap().get("g1x"), work);
     const g2raw = raw("for-each-ref", "--contains", g1t, "--format=%(refname:lstrip=3)", "refs/remotes/origin").split("\n").includes("g1o");
+    const g2n = hubNamesHoldingTip("g1x", hubMap(), work); // called directly, under the grafts file
     unlinkSync(graftsFile);
     check("a grafts file that makes origin/g1o a parent of the unpushed tip is not confirmed, and the row reason names the file (d-G2)",
       g2raw && g2v.state === "ahead" && g2v.ahead === null && String(g2v.reason).includes(graftsFile) && /graft file present/.test(g2v.reason));
     check("aheadOfHub under a grafts file reads unknown with the file named, never same (d-G2b)",
       g2a.state === "unknown" && String(g2a.reason).includes(graftsFile));
+    check("hubNamesHoldingTip itself names no holder while a grafts file is in force, not only the verdict above it (d-G2l)", g2raw && g2n.length === 0);
     const g2r = sameNameRows([{ branch: "g1x", ...g2v }]);
     check("the fail row carries the reason and prints no invented count (d-G2c)", g2r.level === "fail" && g2r.detail.startsWith("g1x (count unreadable)") && g2r.detail.includes(graftsFile));
     check("with the grafts file removed the same branch reads ahead by one and carries no reason (d-G2d)", !existsSync(graftsFile) && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
@@ -973,6 +1095,41 @@ function selfTest() {
     const envGrafts = join(root, "env-grafts"); writeFileSync(envGrafts, `${g1o} ${g1t}\n`); process.env.GIT_GRAFT_FILE = envGrafts;
     let g2e; try { g2e = verdictOf("g1x"); } finally { delete process.env.GIT_GRAFT_FILE; }
     check("a grafts file named by GIT_GRAFT_FILE blocks confirmation and is named (d-G2e)", g2e.state === "ahead" && String(g2e.reason).includes(envGrafts));
+    // (d-G2f..k) every other shape of "is a grafts file in force", each beside what git ITSELF does: rawApplied() is true only while
+    // `git for-each-ref --contains` lists origin/g1o as holding the unpushed g1t, i.e. while git applies the graft. Measured on git 2.43.
+    const rawApplied = (cwd = work) => execFileSync("git", ["for-each-ref", "--contains", g1t, "--format=%(refname:lstrip=3)", "refs/remotes/origin"], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).split("\n").includes("g1o");
+    const withEnv = (v, fn) => { process.env.GIT_GRAFT_FILE = v; try { return fn(); } finally { delete process.env.GIT_GRAFT_FILE; } };
+    // (d-G2f) a 0-byte grafts file: git opens it and applies nothing, so it is no block (it used to read "graft file present" and fail the row)
+    writeFileSync(graftsFile, "");
+    const g2f = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
+    check("a 0-byte grafts file applies no graft in git and is no block: the verdict reads ahead by one with no reason (d-G2f)",
+      g2f.raw === false && g2f.st.state === "empty" && g2f.st.block === false && graftsBlock(work) === "" && g2f.v.state === "ahead" && g2f.v.ahead === 1 && !g2f.v.reason);
+    // (d-G2g) the path is a directory: git warns and applies nothing
+    mkdirSync(graftsFile);
+    const g2g = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; rmSync(graftsFile, { recursive: true });
+    check("a directory at the grafts path applies no graft in git and is no block (d-G2g)",
+      g2g.raw === false && g2g.st.state === "directory" && g2g.st.block === false && g2g.v.state === "ahead" && g2g.v.ahead === 1 && !g2g.v.reason);
+    // (d-G2h) a comment-only file: git applies nothing from it either, but a file with content is not parsed here, so it BLOCKS (documented, conservative)
+    writeFileSync(graftsFile, "# nothing to see\n");
+    const g2h = { raw: rawApplied(), st: graftsState(work) }; unlinkSync(graftsFile);
+    check("a comment-only grafts file applies no graft in git yet blocks here: a file with content is not reimplemented-parsed, unknown tightens (d-G2h)",
+      g2h.raw === false && g2h.st.state === "present" && g2h.st.block === true && String(g2h.st.reason).includes(graftsFile));
+    // (d-G2i) GIT_GRAFT_FILE='' switches grafts off in git EVEN over a real info/grafts: no block, and the state says so (it used to name the worktree directory)
+    writeFileSync(graftsFile, `${g1o} ${g1t}\n`);
+    const g2iBefore = rawApplied();
+    const g2i = withEnv("", () => ({ raw: rawApplied(), st: graftsState(work), blk: graftsBlock(work), v: verdictOf("g1x") })); unlinkSync(graftsFile);
+    check("GIT_GRAFT_FILE='' disables grafts in git over a real info/grafts file; here it is no block and says grafts are disabled (d-G2i)",
+      g2iBefore === true && g2i.raw === false && g2i.st.state === "disabled" && g2i.blk === "" && /GIT_GRAFT_FILE=''/.test(g2i.st.note) && g2i.v.state === "ahead" && g2i.v.ahead === 1 && !g2i.v.reason);
+    // (d-G2j) git's own off switches: /dev/null, and a path that does not exist (while a real info/grafts sits at the default place)
+    writeFileSync(graftsFile, `${g1o} ${g1t}\n`);
+    const g2j = ["/dev/null", join(root, "no-such-grafts")].map((v) => withEnv(v, () => ({ raw: rawApplied(), blk: graftsBlock(work) }))); unlinkSync(graftsFile);
+    check("GIT_GRAFT_FILE=/dev/null and GIT_GRAFT_FILE=<nonexistent> switch grafts off in git, and are no block here (d-G2j)", g2j.every((o) => o.raw === false && o.blk === ""));
+    // (d-G2k) a RELATIVE GIT_GRAFT_FILE asked from a subdirectory: git reads it from the top of the worktree and `--git-path` prints it
+    // relative to the caller, so only git's own answer finds the file (the raw env value resolved against the subdirectory and read "none")
+    const relGrafts = join(work, "rel-grafts"), subDir = join(work, "sub"); mkdirSync(subDir); writeFileSync(relGrafts, `${g1o} ${g1t}\n`);
+    const g2k = withEnv("rel-grafts", () => ({ raw: rawApplied(subDir), fromSub: graftsBlock(subDir), fromTop: graftsBlock(work) })); unlinkSync(relGrafts); rmSync(subDir, { recursive: true });
+    check("a relative GIT_GRAFT_FILE asked from a subdirectory finds the file git applies, and names it (d-G2k)",
+      g2k.raw === true && g2k.fromSub.includes(relGrafts) && g2k.fromTop.includes(relGrafts));
     // (d-G3) a local TAG named like the branch: tag tg at a commit the Hub holds under another name, branch tg two ahead of its Hub tip
     sh("checkout", "-q", "-b", "tg", "main"); sh("push", "-q", "origin", "tg"); const tgA = cm("tgA.txt", "1\n"); sh("push", "-q", "origin", "tg:refs/heads/tg-other");
     sh("tag", "tg", tgA); cm("tgU.txt", "2\n");
@@ -998,6 +1155,101 @@ function selfTest() {
     check("the fail row names the ahead branch with its count and still names the confirmed one (d-rows-fail)",
       rowsFail.level === "fail" && rowsFail.detail.startsWith("x-ahead (+2)") && rowsFail.detail.includes("claude/conf-branch"));
     check("with nothing confirmed the row carries no confirmed note (d-rows-none)", !/confirmed/.test(sameNameRows([{ branch: "b", state: "same", ahead: 0 }]).detail));
+    // ── The inputs the CALLER produces. Every case below builds its own repository and Hub, lists the branches with
+    // listLocalBranches and builds the rows with branchSeamRows: the very code the live script runs, so a tag, a same-named
+    // ref or a broken ref changes the listing exactly as it would live. (Round 3's cases handed the guards inputs the live
+    // caller never produced, which is how a listing that shortened a branch to `heads/<name>` went unnoticed.)
+    const FX_ENV = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+    const mkFx = (name) => {
+      const dir = join(root, name), w = join(dir, "work"), h = join(dir, "hub.git");
+      mkdirSync(dir);
+      execFileSync("git", ["init", "-q", "--bare", h]);
+      execFileSync("git", ["init", "-q", "-b", "main", w]);
+      const f = (...a) => execFileSync("git", a, { cwd: w, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: FX_ENV }).trim();
+      const c = (file, text, msg = file) => { writeFileSync(join(w, file), text); f("add", "-A"); f("commit", "-q", "-m", msg); return f("rev-parse", "HEAD"); };
+      f("remote", "add", "origin", h);
+      c("base.txt", "base\n"); f("push", "-q", "origin", "main");
+      const rows = (extra = {}) => { const m = hubMapOf(h); return branchSeamRows({ listing: listLocalBranches(w), hubBranches: [...m.keys()], hubShaMap: m, ephemeral: [], scratchExcluded: [], mainline: "refs/remotes/origin/main", cwd: w, ...extra }); };
+      return { w, h, f, c, rows };
+    };
+    const rowOf = (rs, what) => rs.find((x) => x.what === what);
+    const T_UNPUSHED = "Local work not on the Review Hub", T_CLEAN = "Local branches all present on the Review Hub", T_AHEAD = "Local tip ahead of its same-named Hub branch";
+    const shortNames = (fx) => fx.f("branch", "--format=%(refname:short)").split("\n"); // what round 3 listed
+    // (E1) a branch exactly at its Hub tip, and a tag with its name: git shortens the branch to heads/v1
+    const e1 = mkFx("e1");
+    e1.f("checkout", "-q", "-b", "v1"); e1.c("rel.txt", "1\n"); e1.f("push", "-q", "origin", "v1"); e1.f("tag", "v1");
+    const e1l = listLocalBranches(e1.w), e1r = e1.rows();
+    check("a branch at its Hub tip with a same-named tag is listed by its real name, and both rows stay clean (E1)",
+      shortNames(e1).includes("heads/v1") && e1l.ok && e1l.names.includes("v1") && !e1l.names.includes("heads/v1") &&
+      e1r.length === 2 && e1r.every((x) => x.state === "ok") && /^2 branch\(es\) compared by sha/.test(e1r[1].detail));
+    // (E2a) real unpushed work on refs/heads/X, a tag X, and a Hub branch literally named heads/X
+    const e2a = mkFx("e2a");
+    e2a.f("push", "-q", "origin", "main:refs/heads/heads/X"); e2a.f("fetch", "-q", "origin");
+    e2a.f("checkout", "-q", "-b", "X"); e2a.c("work.txt", "real unpushed work\n"); e2a.f("tag", "X", "main");
+    const e2aU = rowOf(e2a.rows(), T_UNPUSHED);
+    check("real unpushed work on refs/heads/X beside a Hub branch named heads/X and a tag X is a gated failure naming X (E2a)",
+      shortNames(e2a).includes("heads/X") && listLocalBranches(e2a.w).names.includes("X") && !!e2aU && e2aU.state === "fail" && e2aU.gated === true && e2aU.detail.split(" — ")[0] === "X");
+    // (E2b) the same, with a LOCAL branch heads/X too (it is at the Hub's heads/X): X is still the only unpushed name
+    const e2b = mkFx("e2b");
+    e2b.f("push", "-q", "origin", "main:refs/heads/heads/X"); e2b.f("fetch", "-q", "origin"); e2b.f("branch", "heads/X", "main");
+    e2b.f("checkout", "-q", "-b", "X"); e2b.c("work.txt", "real unpushed work\n"); e2b.f("tag", "X", "main");
+    const e2bR = e2b.rows(), e2bU = rowOf(e2bR, T_UNPUSHED);
+    check("with a local branch heads/X as well, X alone is reported unpushed and heads/X compares clean (E2b)",
+      !!e2bU && e2bU.state === "fail" && e2bU.detail.split(" — ")[0] === "X" && rowOf(e2bR, "Same-named branches at or behind their Hub tip, or confirmed on the Hub under another branch").state === "ok");
+    // (G3-live) tag tg on a commit the Hub holds under another name; branch tg two ahead of the Hub's tg
+    const g3l = mkFx("g3live");
+    g3l.f("checkout", "-q", "-b", "tg"); g3l.f("push", "-q", "origin", "tg"); const g3lA = g3l.c("A.txt", "1\n"); g3l.f("push", "-q", "origin", "tg:refs/heads/tg-other");
+    g3l.f("tag", "tg", g3lA); g3l.c("U.txt", "2\n");
+    const g3lR = g3l.rows(), g3lA2 = rowOf(g3lR, T_AHEAD);
+    check("a tag on a Hub-held commit named like a branch two ahead: the same-name row fails with +2, never confirmed, never landed (G3-live)",
+      shortNames(g3l).includes("heads/tg") && !!g3lA2 && g3lA2.state === "fail" && g3lA2.detail.startsWith("tg (+2)") &&
+      !/but confirmed on the Hub under another branch/.test(g3lA2.detail) && !/squash-landed/.test(JSON.stringify(g3lR)));
+    // (caution-bytes) a local-only branch with real work; a tag with its name on the ORIGINAL commit of a squash-merged change whose bytes are in mainline.
+    const cauA = mkFx("cautionA");
+    cauA.f("checkout", "-q", "--detach"); const cauAz = cauA.c("f.txt", "landed\n"); cauA.f("tag", "X", cauAz);
+    cauA.f("checkout", "-q", "main"); cauA.c("f.txt", "landed\n", "squash of f"); cauA.f("push", "-q", "origin", "main");
+    cauA.f("branch", "probe", cauAz); const cauAprobe = hasLandedByContent("probe", "refs/remotes/origin/main", cauA.w); cauA.f("branch", "-q", "-D", "probe");
+    cauA.f("checkout", "-q", "-b", "X", cauAz); cauA.c("g.txt", "real work, not in mainline\n");
+    const cauAu = rowOf(cauA.rows(), T_UNPUSHED);
+    check("a tag named like a local-only branch, on a commit whose bytes are in mainline, does not clear the branch's real work as squash-landed (caution-bytes)",
+      cauAprobe === true && cauA.f("diff", "--name-only", "refs/remotes/origin/main...X") === "f.txt" && !!cauAu && cauAu.state === "fail" && cauAu.detail.split(" — ")[0] === "X" && !/squash-landed/.test(cauAu.detail));
+    // (caution-hunks) the same for the exact-hunk check: the tag sits on the original commit of a squash whose shared file mainline also moved
+    const cauB = mkFx("cautionB");
+    const shared0 = "- row 1\n- row 2\n- row 3\n- row 4\n- row 5\n- row 6\n", sharedMain = "- row 1\n- row 2 (main moved)\n- row 3\n- row 4\n- row 5\n- row 6\n";
+    cauB.c("shared.md", shared0); cauB.f("push", "-q", "origin", "main");
+    cauB.f("checkout", "-q", "--detach"); const cauBz = cauB.c("shared.md", `${shared0}- row 7 (feat)\n`); cauB.f("tag", "X", cauBz);
+    cauB.f("checkout", "-q", "main"); cauB.c("shared.md", sharedMain); cauB.c("shared.md", `${sharedMain}- row 7 (feat)\n`, "squash of feat"); cauB.f("push", "-q", "origin", "main");
+    cauB.f("branch", "probe", cauBz); const cauBprobe = landedByPatchId("probe", "refs/remotes/origin/main", cauB.w); cauB.f("branch", "-q", "-D", "probe");
+    cauB.f("checkout", "-q", "-b", "X", cauBz); cauB.c("g.txt", "real work, not in mainline\n");
+    const cauBu = rowOf(cauB.rows(), T_UNPUSHED);
+    check("a tag named like a local-only branch, on a commit whose hunks are a mainline squash, does not clear the branch's real work (caution-hunks)",
+      cauBprobe === true && !!cauBu && cauBu.state === "fail" && cauBu.detail.split(" — ")[0] === "X" && !/squash-landed/.test(cauBu.detail));
+    // (m-tag) MAINLINE is a full refname: a local tag named origin/main outranks the remote-tracking ref in a bare resolution
+    const mt = mkFx("mltag");
+    mt.f("checkout", "-q", "--detach"); mt.c("q.txt", "same bytes\n", "tag side"); mt.f("tag", "origin/main");
+    mt.f("checkout", "-q", "-b", "X", "main"); mt.c("q.txt", "same bytes\n", "branch side");
+    check("a tag named like the remote-tracking mainline cannot stand in for it: the bare name is shown to lie, the full refname is not fooled, and MAINLINE is a full refname (m-tag)",
+      hasLandedByContent("X", "origin/main", mt.w) === true && hasLandedByContent("X", "refs/remotes/origin/main", mt.w) === false && MAINLINE.startsWith("refs/remotes/origin/"));
+    // (E-broken) for-each-ref SKIPS a broken ref with only a warning on stderr and exits 0
+    const eb = mkFx("ebroken");
+    eb.f("branch", "brk"); writeFileSync(join(eb.w, ".git", "refs", "heads", "brk"), "garbage\n");
+    const ebL = listLocalBranches(eb.w), ebR = eb.rows();
+    check("a branch ref git cannot read is an unreadable listing (a gated failing row), not a branch that is not there (E-broken)",
+      ebL.ok === false && /broken ref/.test(String(ebL.error)) && ebR.length === 1 && ebR[0].state === "fail" && ebR[0].gated === true && ebR[0].what === "Local branch list unreadable");
+    // (E-listfail) git failing outright
+    process.env.GIT_DIR = join(root, "no-such-git-dir");
+    let lf; try { lf = listLocalBranches(eb.w); } finally { delete process.env.GIT_DIR; }
+    const lfRows = branchSeamRows({ listing: lf, hubBranches: ["main"], hubShaMap: new Map(), ephemeral: [], scratchExcluded: [] });
+    check("a failed branch listing is a gated failing row 'Local branch list unreadable', never an empty clean list (E-listfail)",
+      lf.ok === false && lf.names.length === 0 && lfRows.length === 1 && lfRows[0].state === "fail" && lfRows[0].gated === true && lfRows[0].what === "Local branch list unreadable" &&
+      branchListRow(lf).gated === true && branchListRow(listLocalBranches(eb.w.replace("ebroken", "e1"))) === null);
+    // (E-carry) an ephemeral agent-worktree branch with a commit no origin ref holds, and a tag named like it on a Hub-held commit:
+    // the bare name would count the tag's history (zero) and the warning would never name the branch
+    const ecar = mkFx("ecarry");
+    ecar.f("checkout", "-q", "-b", "eph"); ecar.c("eph.txt", "agent work\n"); ecar.f("tag", "eph", "main"); ecar.f("checkout", "-q", "main");
+    const ecarRow = rowOf(ecar.rows({ ephemeral: ["eph"] }), "Agent-worktree branches carrying commits");
+    check("an agent-worktree branch carrying a commit no origin ref holds is named with its count although a tag shares its name (E-carry)",
+      !!ecarRow && ecarRow.state === "warn" && ecarRow.gated === false && ecarRow.detail.startsWith("eph (+1)"));
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit
@@ -1029,6 +1281,17 @@ function selfTest() {
     check("a declared name whose local tip is NOT the declared tip is counted as work (tip)", cT.reopened.join() === "scratch-ok" && cT.excluded.length === 0);
     const cD = classifyScratch([decl("scratch-ok", pastAt, tipOk)], local, tipOf, newer);
     check("a declared branch at its tip with a commit newer than declaredAt is counted again (d)", cD.reopened.join() === "scratch-ok" && cD.excluded.length === 0);
+    // (n-tag) a TAG named like the declared branch, on an older commit: the bare name would count the tag's history and read zero newer commits
+    sh("checkout", "-q", "-b", "scratch-tag", "main"); cm("st-tag.txt", "x\n"); sh("tag", "scratch-tag", "main");
+    check("a tag named like a declared scratch branch does not hide the branch's own commit newer than declaredAt (n-tag)",
+      raw("rev-list", "--count", `${M}..scratch-tag`) === "0" && newerCommitCount("scratch-tag", pastAt, M, work) === 1);
+    sh("tag", "-d", "scratch-tag");
+    // (n-replace) a replace graft on the branch tip would shrink the count to one: the log runs with replace objects off, like gitIn
+    sh("checkout", "-q", "-b", "rp", "main"); cm("rp1.txt", "1\n"); const rp2 = cm("rp2.txt", "2\n");
+    sh("replace", "--graft", rp2, g("rev-parse", "main"));
+    const rpCount = newerCommitCount("rp", pastAt, M, work), rpRaw = raw("log", "--format=%ct", `${M}..refs/heads/rp`).split("\n").filter(Boolean).length;
+    sh("replace", "-d", rp2);
+    check("newerCommitCount reads the real graph: a replace graft on the branch tip does not shrink the count (n-replace)", rpRaw === 1 && rpCount === 2);
     check("a git failure reads as new work, never as clean (d-fail)", newerCommitCount("no-such-branch", futureAt, M, work) === null && classifyScratch([decl("scratch-ok", futureAt, tipOk)], local, tipOf, () => null).excluded.length === 0);
     check("an unresolvable local tip never equals a declared tip", localTip("no-such-branch", work) === null && classifyScratch([decl("scratch-ok", futureAt, tipOk)], local, () => null, () => 0).excluded.length === 0);
     // validation (c): every shape the file must refuse

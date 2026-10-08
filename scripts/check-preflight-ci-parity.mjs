@@ -308,7 +308,8 @@ export function unguardedDiffSteps(rawSource) {
 // rule — a proof that runs only on a developer's machine is not a gate — but
 // CI invokes the lane as one step (`pnpm run verify:breadth`), so each of its
 // gates is wired exactly when the RUNNER is. Checked, not assumed: if no
-// workflow references the runner, every breadth gate reports unwired below.
+// workflow RUNS the runner (a run line in command position — see
+// breadthLaneWiredIn), the lane is reported unwired once below.
 const breadthSource = readFileSync(join(repo, "scripts/verify-breadth.mjs"), "utf8");
 const breadthGates = new Set(gatesIn(breadthSource));
 gates.push(...breadthGates);
@@ -545,9 +546,20 @@ export function gateWiredIn(gate, rawWorkflowText, aliasMap = new Map()) {
   return false;
 }
 
+/** Pure: does a workflow RUN the breadth lane (scripts/verify-breadth.mjs) — as
+ *  `node scripts/verify-breadth.mjs` or its npm alias `pnpm run verify:breadth`,
+ *  in command position? It was `blob.includes(...)`, which a YAML comment, an
+ *  `echo`, or the lane's own `--self-test` step all satisfied, and every one of
+ *  the lane's gates was credited off that. It reuses gateWiredIn, so it inherits
+ *  the same rules (comments stripped, quotes masked, `--self-test` is not the
+ *  plain run) and the same KNOWN LIMITS (`|| true`, `if:`, `continue-on-error`). */
+export function breadthLaneWiredIn(rawWorkflowText, aliasMap = new Map()) {
+  return gateWiredIn("scripts/verify-breadth.mjs", rawWorkflowText, aliasMap);
+}
+
 /** True when a workflow invokes this gate by path OR by any npm-script alias —
- *  or, for a breadth-lane gate, when the lane runner itself is wired. */
-const breadthRunnerWired = blob.includes("verify:breadth") || blob.includes("verify-breadth.mjs");
+ *  or, for a breadth-lane gate, when a workflow RUNS the lane runner. */
+const breadthRunnerWired = breadthLaneWiredIn(blob, aliasesFor);
 function wired(gate) {
   if (breadthGates.has(gate) && breadthRunnerWired) return true;
   return gateWiredIn(gate, blob, aliasesFor);
@@ -566,6 +578,15 @@ function selfTest() {
   checks.push(["a lone --self-test run does not credit the plain gate", gateWiredIn("scripts/check-x.mjs", "  - run: node scripts/check-x.mjs --self-test\n") === false]);
   checks.push(["a path gate run via its pnpm alias is credited", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", aliasMap) === true]);
   checks.push(["a shorter gate name does not borrow a longer one's invocation", gateWiredIn("proof:live", "  - run: pnpm run proof:live-fleet\n") === false]);
+
+  // ── the breadth lane is credited from a real run line, never a mention ─────
+  const breadthAlias = new Map([["verify-breadth.mjs", ["verify:breadth"]]]);
+  checks.push(["breadth lane: a YAML comment naming `pnpm run verify:breadth` credits nothing", breadthLaneWiredIn("steps:\n  # pnpm run verify:breadth\n", breadthAlias) === false]);
+  checks.push(["breadth lane: `run: echo pnpm run verify:breadth` credits nothing", breadthLaneWiredIn("  - run: echo pnpm run verify:breadth\n", breadthAlias) === false]);
+  checks.push(["breadth lane: a lone `node scripts/verify-breadth.mjs --self-test` step credits nothing", breadthLaneWiredIn("  - run: node scripts/verify-breadth.mjs --self-test\n", breadthAlias) === false]);
+  checks.push(["breadth lane: `run: pnpm run verify:breadth` is credited", breadthLaneWiredIn("  - run: pnpm run verify:breadth\n", breadthAlias) === true]);
+  checks.push(["breadth lane: `run: node scripts/verify-breadth.mjs` is credited", breadthLaneWiredIn("  - run: node scripts/verify-breadth.mjs\n", breadthAlias) === true]);
+  checks.push(["breadth lane: LIVE positive control — the real workflows run the lane (the fix cannot pass by never crediting)", breadthLaneWiredIn(blob, aliasesFor) === true]);
 
   // ── self-skipping-proof derivation: it must FIND the shape and REJECT lookalikes
   const SELF_SKIP_SRC = [
@@ -752,7 +773,17 @@ function selfTest() {
 
 if (process.argv.includes("--self-test")) process.exit(selfTest());
 
+if (!breadthRunnerWired) {
+  console.error(
+    `  ✗ breadth lane (${breadthGates.size} gates): no workflow run: step runs \`pnpm run verify:breadth\` ` +
+      "(or `node scripts/verify-breadth.mjs`). A mention, an echo or the --self-test step is not a run, " +
+      "so none of the lane's gates can fail a pull request.",
+  );
+  problems += 1;
+}
+
 for (const gate of gates) {
+  if (breadthGates.has(gate) && !breadthRunnerWired) continue; // reported once, above
   if (wired(gate)) continue;
   if (LOCAL_ONLY.has(gate)) {
     localOnlyHit.push(gate);

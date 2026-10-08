@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-objective-loop-awaiting-owner-row-22-needs-o",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "objective-loop: awaiting-owner-row-22 — needs owner",
+  "body": "row 22 (\"Stand up the cost model and shift economics\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today), checked 2026-10-08. Clear the blocker, or remove its marker once cleared\n\n(Raised by scripts/objective-loop.mjs on the Mac tick, DR-056. Verdict escalate; state docs/agent/objective-state.json @ 16cd115843ab72030beac8a9d9cc148566a0ac02. Sent once, on the first tick this escalation appeared; it stays in the state file until cleared.)",
+  "sentAt": "2026-10-08T14:30:21.818Z"
+}

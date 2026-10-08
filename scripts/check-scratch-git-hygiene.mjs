@@ -70,7 +70,11 @@ export const PENDING = {
 /** The text with comment-only lines blanked (line count preserved). See the header for the rule. */
 export function stripComments(text) {
   let inBlock = false;
-  return text.split("\n").map((raw) => {
+  const lines = text.split("\n");
+  // A `/*` that is never closed anywhere below is not a comment (it is a template literal or a
+  // regex); reading it as one would hide the rest of the file. It stays code.
+  const closesBelow = (from) => lines.slice(from).some((l) => l.includes("*/"));
+  return lines.map((raw, i) => {
     let l = raw;
     if (inBlock) {
       const end = l.indexOf("*/");
@@ -82,7 +86,11 @@ export function stripComments(text) {
     if (t.startsWith("//")) return "";
     if (t.startsWith("/*")) {
       const end = t.indexOf("*/", 2);
-      if (end < 0) { inBlock = true; return ""; }
+      if (end < 0) {
+        if (!closesBelow(i + 1)) return l;
+        inBlock = true;
+        return "";
+      }
       return t.slice(end + 2);
     }
     return l;
@@ -232,6 +240,20 @@ export function helperBattery(mod, root) {
     let threw = false;
     try { mod.scratchGitOk(root, ["rev-parse", "--verify", "no-such-ref^{commit}"]); } catch { threw = true; }
     if (!threw) failures.push("scratchGitOk did not throw on a failing git call");
+    // opts.env must reach git (check-gitignore-producers relies on it) and opts.input must reach stdin.
+    const gcfg = join(root, "pass.gitconfig");
+    writeFileSync(gcfg, "[core]\n\texcludesFile = /pass/through\n");
+    const tryOr = (fn) => { try { return fn(); } catch { return null; } };
+    if (tryOr(() => mod.scratchGitOk(root, ["config", "--get", "core.excludesFile"], { env: { GIT_CONFIG_GLOBAL: gcfg } })) !== "/pass/through") failures.push("opts.env did not reach git");
+    if (tryOr(() => mod.scratchGitOk(root, ["hash-object", "--stdin"], { input: "x\n" })) !== "587be6b4c3f93f93c489c0111bba5596147a26cb") failures.push("opts.input did not reach git");
+    // scrubProcessGitEnv must clear process.env in place (the migrated self-tests rely on it).
+    const probe = Object.fromEntries(REQUIRED_SCRUB.map((k) => [k, "x"]));
+    mod.scrubProcessGitEnv(probe);
+    if (REQUIRED_SCRUB.some((k) => k in probe)) failures.push("scrubProcessGitEnv left a repo-location variable in the object it was given");
+    set({ GIT_INDEX_FILE: "/nonexistent" });
+    mod.scrubProcessGitEnv();
+    if ("GIT_INDEX_FILE" in process.env) failures.push("scrubProcessGitEnv() did not clear process.env");
+    restore();
     // The pure env must drop every variable git names as repo-local.
     const env = mod.scratchGitEnv(Object.fromEntries(REQUIRED_SCRUB.map((k) => [k, "x"])), {});
     const left = REQUIRED_SCRUB.filter((k) => k in env);
@@ -243,6 +265,8 @@ export function helperBattery(mod, root) {
 // ───────────────────────── self-test ─────────────────────────
 
 async function selfTest() {
+  // The self-test runs mutated, scrub-less helper copies; an ambient GIT_* must not reach them.
+  for (const k of REQUIRED_SCRUB) delete process.env[k];
   const results = [];
   const check = (name, ok) => { results.push([name, ok]); console.log(`  ${ok ? "✓" : "✗"} ${name}`); };
   const tmp = mkdtempSync(join(tmpdir(), "sg-scratch-hygiene-"));
@@ -280,6 +304,10 @@ async function selfTest() {
   check("an import written inside a string does not count as migrated (exit 1)", (() => { const d = T("e3"); put(d, "scripts/x.mjs", "const s = 'import { scratchGit } from \"./lib/scratch-git.mjs\"'; scratchGit(1);\n" + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
   check("a look-alike helper path does not count as migrated (exit 1)", (() => { const d = T("e5"); put(d, "scripts/x.mjs", 'import { scratchGit } from "./fake/scratch-git.mjs";\nscratchGit(1);\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
 
+  check("an unterminated `/*` line does not hide the rest of the file", seen("e12", "const t = `\n/* not closed\n`;\n" + BARE));
+  check("a PENDING row without a reason fails (exit 1)", (() => { const d = T("p1"); put(d, "scripts/x.mjs", BARE); return cli(d, ["--floor", "1"], { "scripts/x.mjs": { pr: "#1" } }).status === 1; })());
+  check("a PENDING entry for a file that stopped matching the detector fails (exit 1)", (() => { const d = T("p2"); put(d, "scripts/x.mjs", "export const x = 1;\n"); return cli(d, ["--floor", "0"], { "scripts/x.mjs": row }).status === 1; })());
+
   // Rule mutants (in-process): break one rule; the plants for that rule must go red.
   const run = (d, pending, opts = {}) => audit(loadFiles(d, false), pending, { floor: 1, ...opts });
   const exitOf = (r) => (r.problems.length ? 1 : 0);
@@ -308,6 +336,9 @@ async function selfTest() {
     ["commit.gpgsign override deleted", (s) => s.replace('"-c", "commit.gpgsign=false",', "")],
     ["hooks override deleted", (s) => s.replace('"-c", "core.hooksPath=/dev/null",', "")],
     ["identity pin deleted", (s) => s.replace("...SCRATCH_IDENTITY, ", "")],
+    ["opts.env ignored", (s) => s.replace("...SCRATCH_IDENTITY, ...extra }", "...SCRATCH_IDENTITY }")],
+    ["opts.input ignored", (s) => s.replace("...(opts?.input === undefined ? {} : { input: opts.input }),", "")],
+    ["scrubProcessGitEnv made a no-op", (s) => s.replace("export function scrubProcessGitEnv(env = process.env) {\n  for (const k of SCRATCH_GIT_SCRUB) delete env[k];", "export function scrubProcessGitEnv(env = process.env) {\n  void env;")],
     ["scratchGitOk made non-throwing", (s) => s.replace("if (r.error || r.status !== 0) {", "if (false) {")],
   ];
   for (const [name, mutate] of helperMutants) {
@@ -315,6 +346,17 @@ async function selfTest() {
     const applied = src !== helperSrc;
     const failures = applied ? helperBattery(await load(name.replace(/\W+/g, "_"), src), bt(name.replace(/\W+/g, "_"))) : [];
     check(`helper mutant "${name}" is applied and turns the battery red`, applied && failures.length > 0);
+  }
+
+  // The self-test itself must be hermetic: run it (once, nested) with the three variables exported at a decoy.
+  if (!process.env.SG_HYGIENE_INNER) {
+    const decoy = victimRepo(tmp);
+    const before = snap(decoy);
+    const r = spawnSync(process.execPath, [SELF_FILE, "--self-test"], {
+      encoding: "utf8", timeout: 600000,
+      env: { ...process.env, SG_HYGIENE_INNER: "1", GIT_DIR: join(decoy, ".git"), GIT_WORK_TREE: decoy, GIT_INDEX_FILE: join(decoy, ".git", "index") },
+    });
+    check("the self-test under GIT_DIR+GIT_WORK_TREE+GIT_INDEX_FILE passes and leaves the decoy repo untouched", r.status === 0 && snap(decoy) === before);
   }
 
   rmSync(tmp, { recursive: true, force: true });

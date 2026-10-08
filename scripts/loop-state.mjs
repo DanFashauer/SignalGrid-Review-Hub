@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -39,9 +39,14 @@ const rows = [];
 // on EVERY outcome, so the hook's gate arm could never fire at all.
 const add = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
 
+// Every call through gitIn reads the REAL object graph: `--no-replace-objects` is prepended, so a
+// refs/replace/* entry (`git replace --graft`) cannot rewrite the ancestry any of these answers
+// rest on. Nothing in this file relies on a replace ref. It does NOT cover a legacy
+// .git/info/grafts file, which git still honours with replace objects off; graftsFileIn below
+// is the guard for that, and the same-name verdict calls it.
 const gitIn = (cwd) => (...a) => {
   try {
-    return execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", ["--no-replace-objects", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
@@ -268,13 +273,35 @@ function reappliesExactly(cwd, parent, patch, commit) {
 // finding (claude/landing-record-2026-09-20 at d29bf79f, one ahead of origin). The Hub's
 // tip sha comes from the same ls-remote; when that object is not in the local store the
 // answer is UNKNOWN and is reported as such, never counted clean and never counted as work.
+//
+// The tip is refs/heads/<branch>, never the bare name: a tag called X outranks the branch X in a bare
+// resolution (git's "ambiguous refname" warning goes to the stderr this file swallows), and `hubSha..X`
+// then compares the TAG's commit, so a tag at the Hub's own sha read an ahead branch as "same".
+// Replace objects are off (gitIn), and a present grafts file makes the count untrustworthy in the same
+// way, so it reads UNKNOWN with the reason (graftsBlock) rather than a number a graft could have set.
 function aheadOfHub(branch, hubSha, cwd = repo) {
   const git = gitIn(cwd);
   if (!hubSha) return { state: "unknown" };
   if (git("cat-file", "-t", hubSha) !== "commit") return { state: "unknown" };
-  const n = git("rev-list", "--count", `${hubSha}..${branch}`);
+  const reason = graftsBlock(cwd);
+  if (reason) return { state: "unknown", reason };
+  const n = git("rev-list", "--count", `${hubSha}..refs/heads/${branch}`);
   if (n === "") return { state: "unknown" };
   return { state: Number(n) > 0 ? "ahead" : "same", ahead: Number(n) };
+}
+
+// A legacy .git/info/grafts file rewrites parentage exactly as a refs/replace entry does, and
+// `--no-replace-objects` (or GIT_NO_REPLACE_OBJECTS) does NOT switch it off; only GIT_GRAFT_FILE=/dev/null
+// does. While one exists no ancestry answer from this checkout is trusted. Returns "" when there is none,
+// else the reason, which names the file. git's own answer to "where would you look" is used (a linked
+// worktree names the shared one), GIT_GRAFT_FILE is honoured the way git honours it, and when git cannot
+// say the answer is still a reason, never "": unreadable tightens.
+function graftsBlock(cwd = repo) {
+  const p = process.env.GIT_GRAFT_FILE || gitIn(cwd)("rev-parse", "--git-path", "info/grafts");
+  const tail = "ancestry cannot be trusted, confirmation disabled";
+  if (!p) return `grafts path unreadable (git did not name info/grafts); ${tail}`;
+  const abs = isAbsolute(p) ? p : resolve(cwd, p);
+  return existsSync(abs) ? `graft file present: ${abs}; ${tail}` : "";
 }
 
 // THE ALIAS HOLE, and it is the third of exactly this shape. Membership was derived
@@ -294,7 +321,7 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
 // in no remote ref, and no amount of renaming changes that.
 function isOnHubBySha(branch, cwd = repo) {
   const git = gitIn(cwd);
-  const sha = git("rev-parse", "--verify", `${branch}^{commit}`);
+  const sha = git("rev-parse", "--verify", `refs/heads/${branch}^{commit}`); // never the bare name: a same-named tag would win
   if (!sha) return false;
   const containing = git("branch", "-r", "--contains", sha);
   if (!containing) return false;
@@ -320,25 +347,43 @@ function isOnHubBySha(branch, cwd = repo) {
 // fixtures, each reading "confirmed" for a tip that is on the Hub nowhere: (F1) the Hub rewound
 // the same-named branch while local origin/X still sat at the old tip; (F2) a tracking ref for a
 // branch the Hub has since deleted (no fetch.prune); (F3) a second remote (fork/X); (F4) a
-// hand-written refs/remotes/pr/999. The comment that version carried, "the same-named remote ref
-// cannot be that ref", was false.
+// hand-written refs/remotes/pr/999.
 //
-// So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took, never to a local
-// snapshot: a ref counts only if it is origin/<name> for a name that is not this branch and not
-// HEAD, AND its local sha EQUALS the Hub's current sha for <name> (hubShaMap). Then the tip is
-// an ancestor of a commit the Hub holds right now under another name, and ancestry is content-
-// addressed, so the local object graph cannot disagree with the Hub about it. Stale origin/X
-// (F1), a pruned-late origin/Z the Hub no longer lists (F2), any other remote (F3) and any
-// hand-made ref (F4) all fail that test. The seam REPORTS a confirmed branch by name so the
-// exclusion is visible, never silent. Fail-closed exactly like the alias check: a git error, an
-// unreadable ref, an empty answer or a missing map leaves the branch AHEAD; an unknown Hub sha
-// stays UNKNOWN (containment is only asked of a branch already proven ahead, never used to clear
-// an unreadable comparison); and a branch with a commit no Hub ref holds is contained in none,
-// so renaming cannot clear real local work.
+// So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took: a ref counts only if it
+// is origin/<name> for a name that is not this branch and not HEAD, AND its local sha EQUALS the
+// Hub's current sha for <name> (hubShaMap). A stale origin/X (F1), a pruned-late origin/Z the Hub
+// no longer lists (F2), any other remote (F3) and a hand-made ref outside origin or at a sha the
+// Hub does not list for that name (F4) all fail that test.
+//
+// That test is necessary and NOT sufficient. It proves a local ref sits where the Hub's does; it
+// does not prove the LOCAL graph answers "does that commit descend from my tip" the way the Hub's
+// would, because three pieces of hand-made local state rewrite the graph or the name it is asked
+// about. A second Opus refute (round 2) read each of them "confirmed" for work the Hub's object
+// store does not hold:
+//   G1  `git replace --graft <Hub sha of other> <T>` (refs/replace/*) gives origin/other, whose
+//       local sha equals the Hub's, a parent of T, so --contains lists it;
+//   G2  a legacy .git/info/grafts line does the same, and replace-objects-off does not disable it;
+//   G3  a local TAG named like the branch shadows it: a bare `X^{commit}` resolves refs/tags/X, so
+//       the verdict is computed on the tag's commit, not the branch's tip (real unpushed work on
+//       refs/heads/X read confirmed, +1 instead of +2).
+//
+// What holds now: confirmation is anchored to the Hub's sha AND reads ancestry with replace objects
+// off (gitIn prepends --no-replace-objects); a grafts file, which replace-objects-off does not
+// cover, disables confirmation outright (graftsBlock), and the verdict then reads AHEAD with the
+// count unreadable and the reason naming the file; and the branch tip is always
+// refs/heads/<branch>, never the bare name (here, in aheadOfHub and in isOnHubBySha). What is still
+// trusted: that an object in the local store is the object its sha says (content addressing), and
+// that the Hub holds the whole history of a commit it lists. The seam REPORTS a confirmed branch by
+// name so the exclusion is visible, never silent. Fail-closed exactly like the alias check: a git
+// error, an unreadable ref, an empty answer, a missing map or a grafts file leaves the branch
+// AHEAD; an unknown Hub sha stays UNKNOWN (containment is only asked of a branch already proven
+// ahead, never used to clear an unreadable comparison); and a branch with a commit no Hub ref
+// holds is contained in none, so renaming cannot clear real local work.
 function hubNamesHoldingTip(branch, hubShaMap, cwd = repo) {
   if (!(hubShaMap instanceof Map)) return [];
+  if (graftsBlock(cwd)) return []; // a grafts file can fake the very containment asked below
   const git = gitIn(cwd);
-  const tip = git("rev-parse", "--verify", `${branch}^{commit}`);
+  const tip = git("rev-parse", "--verify", `refs/heads/${branch}^{commit}`); // the BRANCH, never a same-named tag
   if (!tip) return [];
   const rows = git("for-each-ref", "--contains", tip, "--format=%(refname:lstrip=3) %(objectname)", "refs/remotes/origin");
   if (!rows) return [];
@@ -354,6 +399,10 @@ function hubNamesHoldingTip(branch, hubShaMap, cwd = repo) {
 }
 function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
   const r = aheadOfHub(branch, hubSha, cwd);
+  // A grafts file: aheadOfHub cannot read the count, and "same" or "confirmed" would both be answers a
+  // graft could have set. It stays a gated AHEAD (count unreadable) naming the file, never the
+  // non-gated "unknown" warning: planting a file must not turn a failing row into a quiet one.
+  if (r.reason) return { state: "ahead", ahead: null, reason: r.reason };
   if (r.state !== "ahead") return r;
   return hubNamesHoldingTip(branch, hubShaMap, cwd).length > 0 ? { state: "confirmed", ahead: r.ahead } : r;
 }
@@ -362,14 +411,15 @@ function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
 // confirmed branch is named in the detail (never swallowed), and the ok row's title says what it
 // now covers. verdicts: [{ branch, state, ahead }] as sameNameVerdict returns, plus the name.
 function sameNameRows(verdicts) {
-  const ahead = verdicts.filter((v) => v.state === "ahead").map((v) => `${v.branch} (+${v.ahead})`);
+  const ahead = verdicts.filter((v) => v.state === "ahead").map((v) => `${v.branch} (${Number.isFinite(v.ahead) ? `+${v.ahead}` : "count unreadable"})`);
+  const why = [...new Set(verdicts.filter((v) => v.reason).map((v) => v.reason))].map((r) => ` (${r})`).join("");
   const confirmed = verdicts.filter((v) => v.state === "confirmed").map((v) => v.branch);
   const unknown = verdicts.filter((v) => v.state === "unknown").length;
   const note = confirmed.length
     ? ` (${confirmed.length} same-named branch(es) ahead of the Hub's same name but confirmed on the Hub under another branch: ${confirmed.join(", ")})`
     : "";
   if (ahead.length) {
-    return { level: "fail", title: "Local tip ahead of its same-named Hub branch", detail: `${ahead.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${note}` };
+    return { level: "fail", title: "Local tip ahead of its same-named Hub branch", detail: `${ahead.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${note}${why}` };
   }
   return {
     level: "ok",
@@ -886,6 +936,60 @@ function selfTest() {
     sh("update-ref", "refs/remotes/pr/999", h2);
     check("a hand-made refs/remotes ref does not confirm (d-F4)",
       g("branch", "-r", "--contains", h2).includes("pr/999") && verdictOf("handmade").state === "ahead");
+    // The three pieces of hand-made LOCAL state that rewrite the graph or the name it is asked about (the round-2 refuter's
+    // G1-G3). `raw` is git WITHOUT the guards, so each precondition proves the lie is really on offer before the guarded
+    // answer is checked: without it a passing case could mean the fixture never reproduced the hole.
+    const raw = (...a) => execFileSync("git", a, { cwd: work, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const graftsFile = join(work, ".git", "info", "grafts");
+    // (d-G1) `git replace --graft`: origin/g1o (local sha == the Hub's) is made a parent of the never-pushed g1t
+    sh("checkout", "-q", "-b", "g1o", "main"); const g1o = cm("g1o.txt", "1\n"); sh("push", "-q", "origin", "g1o");
+    sh("checkout", "-q", "-b", "g1x", "main"); const g1b = cm("g1b.txt", "1\n"); sh("push", "-q", "origin", "g1x"); const g1t = cm("g1t.txt", "2\n");
+    sh("replace", "--graft", g1o, g1t);
+    const g1v = verdictOf("g1x");
+    check("a replace-ref graft that makes origin/g1o a parent of the unpushed tip does not confirm it (d-G1)",
+      raw("for-each-ref", "--contains", g1t, "--format=%(refname:lstrip=3)", "refs/remotes/origin").split("\n").includes("g1o") &&
+      g("rev-parse", "origin/g1o") === hubMap().get("g1o") && g1v.state === "ahead" && g1v.ahead === 1);
+    sh("replace", "-d", g1o);
+    // (d-G1b) the same trick on the count: replacing the Hub's own g1x tip with a child of g1t makes g1t reachable from it
+    sh("replace", "--graft", g1b, g1t);
+    const g1c = aheadOfHub("g1x", hubMap().get("g1x"), work);
+    check("a replace-ref graft on the Hub's tip does not turn an ahead branch into same (d-G1b)",
+      raw("rev-list", "--count", `${g1b}..refs/heads/g1x`) === "0" && g1c.state === "ahead" && g1c.ahead === 1);
+    sh("replace", "-d", g1b);
+    check("with the replace refs gone the plain branch still reads ahead by one (d-G1c)", verdictOf("g1x").state === "ahead" && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
+    // (d-G2) a legacy info/grafts file: replace-objects-off does not disable it, so the file itself must block confirmation
+    writeFileSync(graftsFile, `${g1o} ${g1t}\n${g1b} ${g1t}\n`);
+    const g2v = verdictOf("g1x"), g2a = aheadOfHub("g1x", hubMap().get("g1x"), work);
+    const g2raw = raw("for-each-ref", "--contains", g1t, "--format=%(refname:lstrip=3)", "refs/remotes/origin").split("\n").includes("g1o");
+    unlinkSync(graftsFile);
+    check("a grafts file that makes origin/g1o a parent of the unpushed tip is not confirmed, and the row reason names the file (d-G2)",
+      g2raw && g2v.state === "ahead" && g2v.ahead === null && String(g2v.reason).includes(graftsFile) && /graft file present/.test(g2v.reason));
+    check("aheadOfHub under a grafts file reads unknown with the file named, never same (d-G2b)",
+      g2a.state === "unknown" && String(g2a.reason).includes(graftsFile));
+    const g2r = sameNameRows([{ branch: "g1x", ...g2v }]);
+    check("the fail row carries the reason and prints no invented count (d-G2c)", g2r.level === "fail" && g2r.detail.startsWith("g1x (count unreadable)") && g2r.detail.includes(graftsFile));
+    check("with the grafts file removed the same branch reads ahead by one and carries no reason (d-G2d)", !existsSync(graftsFile) && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
+    // (d-G2e) GIT_GRAFT_FILE points git at a grafts file anywhere: the guard must read what git would read
+    const envGrafts = join(root, "env-grafts"); writeFileSync(envGrafts, `${g1o} ${g1t}\n`); process.env.GIT_GRAFT_FILE = envGrafts;
+    let g2e; try { g2e = verdictOf("g1x"); } finally { delete process.env.GIT_GRAFT_FILE; }
+    check("a grafts file named by GIT_GRAFT_FILE blocks confirmation and is named (d-G2e)", g2e.state === "ahead" && String(g2e.reason).includes(envGrafts));
+    // (d-G3) a local TAG named like the branch: tag tg at a commit the Hub holds under another name, branch tg two ahead of its Hub tip
+    sh("checkout", "-q", "-b", "tg", "main"); sh("push", "-q", "origin", "tg"); const tgA = cm("tgA.txt", "1\n"); sh("push", "-q", "origin", "tg:refs/heads/tg-other");
+    sh("tag", "tg", tgA); cm("tgU.txt", "2\n");
+    const tgv = verdictOf("tg");
+    check("a tag named like the branch does not hide its real tip: ahead by two, not confirmed (d-G3)",
+      raw("rev-parse", "tg^{commit}") === tgA && tgv.state === "ahead" && tgv.ahead === 2);
+    sh("tag", "-d", "tg");
+    // (d-G3b) aheadOfHub: a tag at the Hub's own sha for the branch used to read an ahead branch as same
+    sh("checkout", "-q", "-b", "tb", "main"); sh("push", "-q", "origin", "tb"); sh("tag", "tb"); cm("tbU.txt", "1\n");
+    const tbv = aheadOfHub("tb", hubMap().get("tb"), work);
+    check("a tag at the Hub's own sha does not make an ahead branch read same (d-G3b)", raw("rev-list", "--count", `${hubMap().get("tb")}..tb`) === "0" && tbv.state === "ahead" && tbv.ahead === 1);
+    sh("tag", "-d", "tb");
+    // (d-G3c) isOnHubBySha: a tag on a Hub-held commit named like a local-only branch must not clear that branch
+    sh("checkout", "-q", "-b", "tc", "main"); cm("tcU.txt", "1\n"); sh("tag", "tc", "main");
+    check("a tag named like a local-only branch does not make its unpushed tip look like it is on the Hub (d-G3c)",
+      raw("branch", "-r", "--contains", raw("rev-parse", "tc^{commit}")).includes("origin/main") && isOnHubBySha("tc", work) === false);
+    sh("tag", "-d", "tc");
     // (d-rows) the row text names a confirmed branch, and the title says what the ok row covers (M5)
     const rowsOk = sameNameRows([{ branch: "b-same", state: "same", ahead: 0 }, { branch: "claude/conf-branch", state: "confirmed", ahead: 3 }, { branch: "b-unk", state: "unknown" }]);
     check("the ok row names the confirmed branch and counts the compared ones (d-rows)",

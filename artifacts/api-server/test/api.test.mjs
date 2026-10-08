@@ -1198,8 +1198,10 @@ async function run() {
   // counted there, so a delta in this counter is exactly the route's refusal rows.
   const auditCount = async (eventType) => {
     const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
-    const m = text.match(new RegExp(`signalgrid_audit_events_total\\{event_type="${eventType.replace(/\./g, "\\.")}"\\} (\\d+)`));
-    return m ? Number(m[1]) : 0;
+    // A plain prefix match, no regex built from the event name: nothing to escape.
+    const prefix = `signalgrid_audit_events_total{event_type="${eventType}"} `;
+    const line = text.split("\n").find((l) => l.startsWith(prefix));
+    return line ? Number(line.slice(prefix.length)) : 0;
   };
   const suIdentity = "nurse.baseline_drift";
   const suDevice = "ipad-ward-06";

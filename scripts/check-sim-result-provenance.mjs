@@ -204,6 +204,9 @@ function scratchCloneChecks(ok) {
 
     const cleanDefault = gate(src);
     const cleanFlag = gate(src, "--require-history");
+    // An unknown flag is refused, not ignored: `--require-histroy` used to run as the plain gate.
+    const unknownFlag = gate(src, "--require-histroy");
+    const unknownWithGood = gate(src, "--require-history", "--bogus");
     writeFileSync(join(src, RESULTS_DIR, "r0.json"), JSON.stringify({ provenance: { commit: "b".repeat(40) } }));
     g(src, "add", "-A");
     g(src, "commit", "-q", "-m", "ghost sha");
@@ -217,6 +220,7 @@ function scratchCloneChecks(ok) {
     g(root, "clone", "-q", "--depth", "2", `file://${src}`, shallow);
     const shallowDefault = gate(shallow);
     const shallowFlag = gate(shallow, "--require-history");
+    const shallowMisspelt = gate(shallow, "--require-histroy");
 
     // A sha that RESOLVES but sits on a side branch (not an ancestor of HEAD): the live
     // `merge-base --is-ancestor <commit> HEAD` is the only thing that can fail this.
@@ -252,6 +256,8 @@ function scratchCloneChecks(ok) {
     const evLateFlag = gate(src, "--require-history");
     return [
       ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
+      ok("scratch clone: an unknown flag exits 1 on a clean full tree, alone or beside the real flag", unknownFlag === 1 && unknownWithGood === 1),
+      ok("scratch clone: a MISSPELT --require-history exits 1 on a shallow clone too (it was a silent exit 0)", shallowMisspelt === 1),
       ok("scratch clone: an unresolvable 40-hex sha exits 0 without the flag (reported)", ghostDefault === 0),
       ok("scratch clone: the same sha exits 1 under --require-history", ghostFlag === 1),
       ok("scratch clone: --require-history on a SHALLOW clone exits 1 (full history is checked, not assumed)", shallowDefault === 0 && shallowFlag === 1),
@@ -389,6 +395,16 @@ function selfTest() {
   }
   console.log(`\nself-test: ${checks.length - bad}/${checks.length}`);
   process.exit(bad === 0 ? 0 : 1);
+}
+
+// An unknown argument is refused, never ignored: `--require-histroy` used to run as the plain
+// gate (and exit 0 even on a shallow checkout), so a typo silently dropped the very check the
+// flag exists for.
+const KNOWN_ARGS = new Set(["--self-test", "--require-history"]);
+const unknownArgs = process.argv.slice(2).filter((a) => !KNOWN_ARGS.has(a));
+if (unknownArgs.length > 0) {
+  console.error(`sim-result provenance: unknown argument(s) ${unknownArgs.map((a) => JSON.stringify(a)).join(", ")} — known: ${[...KNOWN_ARGS].join(", ")}. Refusing to run as the plain gate.`);
+  process.exit(1);
 }
 
 if (process.argv.includes("--self-test")) selfTest();

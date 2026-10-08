@@ -557,6 +557,30 @@ export function breadthLaneWiredIn(rawWorkflowText, aliasMap = new Map()) {
   return gateWiredIn("scripts/verify-breadth.mjs", rawWorkflowText, aliasMap);
 }
 
+/** Gates whose CI run line must carry a flag, or the run is a different (weaker) check.
+ *  A flag is a claim the gate checks about its own checkout; remove or misspell it on the
+ *  run line and every other gate stays green (measured 2026-10-08), so the run line is
+ *  pinned here, by gate path -> { flag, why }. */
+export const REQUIRED_RUN_FLAGS = new Map([
+  [
+    "scripts/check-sim-result-provenance.mjs",
+    { flag: "--require-history", why: "without it the CI provenance run only REPORTS an unresolvable sha instead of failing on it" },
+  ],
+]);
+
+/** Pure: does some run: step invoke `node <script>` in command position with `flag` as a
+ *  whole argument? Comments are stripped and quotes masked (as gateWiredIn does), so a
+ *  comment, an `echo`, a quoted string or a misspelling (`--require-histroy`,
+ *  `--require-history-x`) does not carry the flag. */
+export function runLineCarriesFlag(script, flag, rawWorkflowText) {
+  const commands = runCommands(stripYamlComments(rawWorkflowText)).map(maskQuoted);
+  const re = new RegExp(
+    `${SEP}${ENV}node[ \\t]+${escapeRe(script)}(?:[ \\t]+[^\\s;&|()]+)*?[ \\t]+${escapeRe(flag)}(?![\\w=-])`,
+    "m",
+  );
+  return re.test(commands.join("\n"));
+}
+
 /** True when a workflow invokes this gate by path OR by any npm-script alias —
  *  or, for a breadth-lane gate, when a workflow RUNS the lane runner. */
 const breadthRunnerWired = breadthLaneWiredIn(blob, aliasesFor);
@@ -586,6 +610,15 @@ function selfTest() {
   checks.push(["breadth lane: a lone `node scripts/verify-breadth.mjs --self-test` step credits nothing", breadthLaneWiredIn("  - run: node scripts/verify-breadth.mjs --self-test\n", breadthAlias) === false]);
   checks.push(["breadth lane: `run: pnpm run verify:breadth` is credited", breadthLaneWiredIn("  - run: pnpm run verify:breadth\n", breadthAlias) === true]);
   checks.push(["breadth lane: `run: node scripts/verify-breadth.mjs` is credited", breadthLaneWiredIn("  - run: node scripts/verify-breadth.mjs\n", breadthAlias) === true]);
+  const PV = "scripts/check-sim-result-provenance.mjs", PF = "--require-history";
+  checks.push(["required flag: the plain run line without the flag does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs\n") === false]);
+  checks.push(["required flag: a misspelt flag does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-histroy\n") === false]);
+  checks.push(["required flag: a longer flag does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-history-x\n") === false]);
+  checks.push(["required flag: the flag in a comment or an echo does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs # --require-history\n  - run: echo node scripts/check-sim-result-provenance.mjs --require-history\n") === false]);
+  checks.push(["required flag: the flag on the --self-test step does not carry it for the plain run", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --self-test\n") === false]);
+  checks.push(["required flag: the real run line is credited", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-history\n") === true]);
+  checks.push(["required flag: the flag may come after another argument", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --x --require-history\n") === true]);
+  checks.push(["required flag: LIVE positive control — every REQUIRED_RUN_FLAGS entry is carried by the real workflows", [...REQUIRED_RUN_FLAGS].every(([sc, { flag }]) => runLineCarriesFlag(sc, flag, blob))]);
   checks.push(["breadth lane: LIVE positive control — the real workflows run the lane (the fix cannot pass by never crediting)", breadthLaneWiredIn(blob, aliasesFor) === true]);
 
   // ── self-skipping-proof derivation: it must FIND the shape and REJECT lookalikes
@@ -779,6 +812,12 @@ if (!breadthRunnerWired) {
       "(or `node scripts/verify-breadth.mjs`). A mention, an echo or the --self-test step is not a run, " +
       "so none of the lane's gates can fail a pull request.",
   );
+  problems += 1;
+}
+
+for (const [script, { flag, why }] of REQUIRED_RUN_FLAGS) {
+  if (runLineCarriesFlag(script, flag, blob)) continue;
+  console.error(`  ✗ ${script}: no workflow run: step carries ${flag} — ${why}.`);
   problems += 1;
 }
 

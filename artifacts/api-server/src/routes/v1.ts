@@ -11,7 +11,7 @@ import {
   type StandingBound,
 } from "@workspace/signalgrid-core";
 import { getDecisionStore, getSessionStore, type Session } from "@workspace/persistence";
-import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedger, type Target as AuditTarget } from "@workspace/audit";
+import { appendAuditRecord, getAuditBackend, getAuditRecordsForTenant, verifyLedgerFull, type Target as AuditTarget } from "@workspace/audit";
 import { listAppIntegrations, findAppIntegration, planAppSession } from "@workspace/app-workflows";
 import { webauthn, webauthnStore } from "@workspace/webauthn";
 import { readSecret, secretMatches } from "@workspace/secrets";
@@ -443,14 +443,17 @@ router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next:
 
 router.get("/v1/audit", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Durable (Postgres, the /readyz predicate): the tenant's rows + the whole chain's verdict — DR-025 / listAudit in v1-openapi.yaml.
+    // Durable (Postgres, the /readyz predicate): the tenant's rows + the WHOLE chain's verdict — DR-025 item 3 / listAudit in
+    // v1-openapi.yaml. verifyLedgerFull pages the entire ledger in bounded memory (one batch held at a time), the same
+    // verifier `db:verify-ledger` runs; the capped verifyLedger() stopped at 10,000 rows, so past that a tampered row went
+    // unchecked. Here chain.truncated is false by construction: the walk ends only when the backend runs out of rows.
     if (typeof getAuditBackend().ping === "function") {
       const tenantId = core.authorizedContext(token(req), "audit:read").tenant.id;
       // parseInt, as clampLimit does: "1.5" must never reach a bigint bind parameter
       const limit = Math.min(Math.max(Number.parseInt(String(req.query["limit"] ?? 200), 10) || 200, 1), 1000);
       const offset = Math.max(Number.parseInt(String(req.query["offset"] ?? 0), 10) || 0, 0);
       const events = await getAuditRecordsForTenant(tenantId, limit, offset);
-      const chain = { ...(await verifyLedger()), scope: "global-ledger" as const };
+      const chain = { ...(await verifyLedgerFull()), scope: "global-ledger" as const };
       res.json(envelope(req, { events, chain, source: "durable" as const, limit, offset }));
       return;
     }

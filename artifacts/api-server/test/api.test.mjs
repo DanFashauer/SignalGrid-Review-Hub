@@ -2045,6 +2045,134 @@ async function run() {
     }
   }
 
+  // ── durable GET /v1/audit verifies the WHOLE chain (DR-025 item 3) ─────────
+  // The route's durable branch used verifyLedger()'s capped first-10,000-row
+  // read, so on a longer ledger chain.count froze at 10,000, chain.truncated
+  // went true and tampering past row 10,000 went unchecked — while DR-025 says
+  // "the chain is verified whole and the response says so". Two more short-lived
+  // servers: DATABASE_URL set, `pg` answered by test/fixtures/fake-pg (a resolve
+  // hook; `pg` is external in the bundle), seeded with CAP+1 rows minted by the
+  // real appendAuditRecord so every hash is genuine. The real
+  // PostgresAuditBackend and the real route run; only the wire is faked.
+  {
+    const { build: esbuildBuild } = await import("esbuild");
+    const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { spawnSync } = await import("node:child_process");
+    const { resolve: pathResolve } = await import("node:path"); // `resolve` is shadowed in this scope
+    const CAP = 10000; // verifyLedger()'s default limit — the cap this section must exceed
+    const SEEDED = CAP + 1;
+    const TENANT_ROWS = 11; // every 1000th row is northwind's: the tenant read view has rows to show
+    const work = await mkdtemp(pathResolve(tmpdir(), "sg-durable-audit-"));
+    const PORT7A = await freePort();
+    const BASE7A = `http://localhost:${PORT7A}/api`;
+    let server7a;
+    let server7b;
+    try {
+      // Mint the seed with the ONE implementation of the chain (@workspace/audit's
+      // appendAuditRecord over its in-memory backend), bundled on the fly so this
+      // .mjs suite needs no TypeScript runtime and no second hash definition.
+      const minter = pathResolve(work, "mint.mjs");
+      const seed = pathResolve(work, "seed.ndjson");
+      await esbuildBuild({
+        stdin: {
+          resolveDir: pathResolve(here, ".."),
+          loader: "ts",
+          contents: `
+            import { appendAuditRecord, getAuditRecords } from "@workspace/audit";
+            import { writeFileSync } from "node:fs";
+            const [n, out] = [Number(process.argv[2]), process.argv[3]];
+            for (let i = 0; i < n; i++) {
+              await appendAuditRecord("admin.access", { type: "system" }, {
+                meta: { i },
+                ...(i % 1000 === 0 ? { tenantId: "tenant_northwind" } : {}),
+              });
+            }
+            const rows = (await getAuditRecords(n + 1, 0)).map((r) => JSON.stringify({
+              id: r.id, ts: r.ts, request_id: r.requestId ?? null, actor: r.actor,
+              event_type: r.eventType, target: r.target ?? null, meta: r.meta ?? null,
+              tenant_id: r.tenantId ?? null, prev_hash: r.prevHash, hash: r.hash,
+            }));
+            writeFileSync(out, rows.join("\\n") + "\\n");
+          `,
+        },
+        bundle: true,
+        platform: "node",
+        format: "esm",
+        outfile: minter,
+        logLevel: "silent",
+      });
+      const { DATABASE_URL: _unset, ...mintEnv } = process.env;
+      const mint = spawnSync("node", [minter, String(SEEDED), seed], { env: mintEnv, stdio: ["ignore", "ignore", "inherit"] });
+      const seededLines = mint.status === 0 ? (await readFile(seed, "utf8")).split("\n").filter(Boolean).length : -1;
+      check("durable audit: the seed holds more rows than verifyLedger()'s 10,000 cap", seededLines === SEEDED);
+
+      const bootFakePg = async (port, seedFile) => {
+        const child = spawn("node", ["--import", pathResolve(here, "fixtures/fake-pg/register.mjs"), serverEntry], {
+          env: {
+            ...process.env,
+            PORT: String(port),
+            NODE_ENV: "production",
+            LOG_LEVEL: "silent",
+            DATABASE_URL: "postgres://fake-pg@127.0.0.1:1/never-dialled",
+            SIGNALGRID_FAKE_PG_SEED: seedFile,
+          },
+          stdio: ["ignore", "ignore", "inherit"],
+        });
+        let up = false;
+        const t0 = Date.now();
+        while (Date.now() - t0 < 15000) {
+          try { if ((await fetch(`http://localhost:${port}/api/healthz`)).ok) { up = true; break; } } catch { /* not up yet */ }
+          await new Promise((r) => setTimeout(r, 250));
+        }
+        return { child, up };
+      };
+      const booted = await bootFakePg(PORT7A, seed);
+      server7a = booted.child;
+      check("durable audit: the fake-pg server boots", booted.up === true);
+
+      const durable = await fetch(`${BASE7A}/v1/audit`, { headers: { authorization: `Bearer ${KEYS.owner}` } });
+      const durableBody = await durable.json().catch(() => null);
+      check("durable audit: GET /v1/audit → 200 from the DURABLE ledger",
+        durable.status === 200 && durableBody?.source === "durable" && durableBody?.chain?.scope === "global-ledger");
+      // THE ROW'S CHECK (docs/BUILD_BACKLOG.md, B67): red on the capped read
+      // (count 10,000, truncated true), green only on a whole-chain walk.
+      check("durable audit: chain.count equals the seeded total past the 10,000 cap (the whole chain was read)",
+        durableBody?.chain?.count === SEEDED);
+      check("durable audit: chain.truncated is false — nothing was left unverified",
+        durableBody?.chain?.truncated === false);
+      check("durable audit: the whole-chain verdict is intact, headed at the LAST seeded row",
+        durableBody?.chain?.ok === true && typeof durableBody?.chain?.headHash === "string" &&
+        durableBody.chain.headHash === JSON.parse((await readFile(seed, "utf8")).trim().split("\n").at(-1)).hash);
+      check("durable audit: the tenant view is still a READ slice of the one chain (northwind's rows only)",
+        Array.isArray(durableBody?.events) && durableBody.events.length === TENANT_ROWS &&
+        durableBody.events.every((e) => e.tenantId === "tenant_northwind"));
+      server7a.kill("SIGTERM");
+      server7a = undefined;
+
+      // Non-vacuity, and the reason the cap mattered: tamper with the ONE row
+      // past the cap (index 10,000). The capped read never saw it and answered
+      // ok:true; the whole-chain walk must localize it.
+      const lines = (await readFile(seed, "utf8")).trim().split("\n");
+      const last = JSON.parse(lines[CAP]);
+      lines[CAP] = JSON.stringify({ ...last, meta: { ...last.meta, i: -1 } });
+      const tampered = pathResolve(work, "tampered.ndjson");
+      await writeFile(tampered, lines.join("\n") + "\n");
+      const PORT7B = await freePort();
+      const bootedB = await bootFakePg(PORT7B, tampered);
+      server7b = bootedB.child;
+      const tamperedRes = await fetch(`http://localhost:${PORT7B}/api/v1/audit`, { headers: { authorization: `Bearer ${KEYS.owner}` } });
+      const tamperedBody = await tamperedRes.json().catch(() => null);
+      check("durable audit: a row tampered PAST the 10,000 cap fails the chain verdict, localized at its index",
+        bootedB.up === true && tamperedRes.status === 200 && tamperedBody?.chain?.ok === false &&
+        tamperedBody?.chain?.brokenAtIndex === CAP);
+    } finally {
+      server7a?.kill("SIGTERM");
+      server7b?.kill("SIGTERM");
+      await rm(work, { recursive: true, force: true });
+    }
+  }
+
   // ── idempotency replay: the retry that must not double ───────────────────
   // A frontline device re-sends after connectivity drops mid-response. With
   // Idempotency-Key set, the repeat must replay the FIRST outcome — same

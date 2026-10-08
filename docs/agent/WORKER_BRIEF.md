@@ -56,9 +56,16 @@ first; it binds you. Then:
    needed`. Under the last, state the `classifyDiff` tier of your files
    (`node scripts/check-owner-gated-surfaces.mjs`): OWNER_RESERVED and
    DECISION_PATH are the owner's merge; SAFETY_MACHINERY and autonomous files
-   land under DR-037 by the cloud lane after review. No product claim the
-   launch-claims gate does not allow. No model identifier anywhere in commits,
-   PR text or code.
+   land under DR-037 by the cloud lane after review. In
+   `docs/BUILD_BACKLOG.md` annotate the row you fixed, in a final commit,
+   with the repo's one shape: `FIX PROPOSED <date> (branch <your branch>,
+   lands under DR-037)` for SAFETY_MACHINERY or autonomous files, `FIX
+   PROPOSED <date> (branch <your branch>, owner merges)` for DECISION_PATH
+   ones; `scripts/check-row-status-drift.mjs` reads only that shape, and a
+   `(PR #n, sha)` form is invisible to it. Then run both gates on that
+   final head and write the body for it. No product claim the launch-claims
+   gate does not allow. No model identifier anywhere in commits, PR text or
+   code.
 7. **Review rounds.** A verdict comment on your PR is the next instruction.
    `fix-needed`: fix on this same branch as NEW commits (plus a merge of
    `origin/SignalGrid_Alpha` if mainline moved), refresh the body for the new

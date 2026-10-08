@@ -56,7 +56,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { scratchGit, scrubProcessGitEnv } from './lib/scratch-git.mjs';
+import { scratchGitOk, scrubProcessGitEnv } from './lib/scratch-git.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -283,8 +283,8 @@ function makeFixture(name, { manifestMutator, extraPng = false, sourceSuffix = '
   if (manifestMutator) manifestMutator(manifest, { dir, srcRel, pngRel });
   fs.writeFileSync(path.join(assets, 'renders.json'), JSON.stringify(manifest, null, 2) + '\n');
 
-  scratchGit(dir, ['init', '-q']);
-  scratchGit(dir, ['add', '-A']);
+  scratchGitOk(dir, ['init', '-q']);
+  scratchGitOk(dir, ['add', '-A']);
   return { dir, srcRel, pngRel };
 }
 

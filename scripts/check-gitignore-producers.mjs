@@ -88,7 +88,7 @@
 // rather than reporting clean.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { scratchGit, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
+import { scratchGit, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -184,7 +184,7 @@ export function buildHarness(files) {
   // harness cannot inherit anything, and neutralise the user's global excludes.
   writeFileSync(join(dir, ".git", "info", "exclude"), "");
   writeFileSync(join(dir, ".git", "empty-excludes"), "");
-  scratchGit(dir, ["config", "core.excludesFile", join(dir, ".git", "empty-excludes")]);
+  scratchGitOk(dir, ["config", "core.excludesFile", join(dir, ".git", "empty-excludes")]);
   for (const [rel, text] of files) {
     const target = join(dir, rel);
     mkdirSync(dirname(target), { recursive: true });

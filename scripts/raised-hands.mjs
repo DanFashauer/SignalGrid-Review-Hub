@@ -64,7 +64,7 @@
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
-import { scratchGit, scratchGitEnv, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
+import { scratchGit, scratchGitEnv, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -601,7 +601,7 @@ async function selfTest() {
   checks.push(["a STALE heartbeat in the branch tree with a FRESH one at the tip raises NO hand", (await plant(ago(20), ago(1))) === 0]);
   checks.push(["…the inverse (fresh in the branch tree, stale at the tip) raises a hand", (await plant(ago(1), ago(20))) === 1]);
   const bare = mkdtempSync(join(realpathSync(tmpdir()), "rh-bare-"));
-  try { scratchGit(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
+  try { scratchGitOk(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
   finally { rmSync(bare, { recursive: true, force: true }); }
 
   // main() end to end: a temp git repo holding a copy of the scripts, run as the real CLI. The cases

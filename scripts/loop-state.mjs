@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve, isAbsolute, relative, sep } from "node:path";
+import { dirname, resolve, isAbsolute, relative, sep, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -735,10 +735,15 @@ function patchIdOf(cwd, patch) {
 }
 // The exact follow-up: read the squash's parent tree into a throwaway index, apply the
 // branch's patch to that index, and compare the written tree with the squash's own tree.
+// The throwaway index lives in a directory of its own: a name made up of the pid and the time, created straight in the shared temp directory, is predictable, and a symlink planted there by another
+// local user redirects git's index write (CodeQL js/insecure-temporary-file; the clock also has no place in a gate). mkdtemp makes the directory with mode 0700 and an unpredictable name; the
+// index is a file inside it, and the finally removes that one directory (never anything else). Any failure to make it is "not cleared".
 function reappliesExactly(cwd, parent, patch, commit) {
-  const idx = join(tmpdir(), `loop-state-idx-${process.pid}-${Date.now()}`);
-  const env = { GIT_INDEX_FILE: idx }; // gitRun adds the guards (replace objects off) to every one of these, apply / read-tree / write-tree included
+  let dir = "";
   try {
+    dir = mkdtempSync(join(tmpdir(), "loop-state-idx-"));
+    const idx = join(dir, "index");
+    const env = { GIT_INDEX_FILE: idx }; // gitRun adds the guards (replace objects off) to every one of these, apply / read-tree / write-tree included
     if (!gitRun(cwd, ["read-tree", parent], { env }).ok) return false;
     try { closeSync(openSync(idx, "r")); } catch { return false; } // the index read-tree wrote must be there; opening it is the check and the use in one
     if (!gitRun(cwd, ["apply", "--cached", "-"], { input: patch, env }).ok) return false;
@@ -748,7 +753,7 @@ function reappliesExactly(cwd, parent, patch, commit) {
   } catch {
     return false;
   } finally {
-    try { unlinkSync(idx); } catch { /* never existed */ }
+    if (dir) { try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway directory of our own */ } }
   }
 }
 
@@ -3089,6 +3094,30 @@ function selfTest() {
       check("the whole self-test, started under a global git configuration that sets fetch.prune=true, http.sslVerify=false, merge.ff=only and a missing core.hooksPath, passes (R12-hostile-global)",
         nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
     }
+    // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
+    // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
+    const ixSeen = [], realGitRun = gitRun;
+    gitRun = (cwd2, args2, opts2 = {}) => {
+      const idx2 = opts2.env && opts2.env.GIT_INDEX_FILE;
+      if (idx2) {
+        let st = null; try { st = statSync(dirname(idx2)); } catch { /* absent */ }
+        ixSeen.push({ idx: idx2, dir: dirname(idx2), mode: st ? st.mode & 0o777 : null, isDir: st ? st.isDirectory() : false });
+      }
+      return realGitRun(cwd2, args2, opts2);
+    };
+    let ixGood, ixBadParent, ixBadPatch, ixDone = false;
+    try {
+      const ixSquash = ap.f("rev-parse", R6M), ixPatch = commitDiff(ap.w, ap.f("merge-base", R6M, "refs/heads/feat"), ap.f("rev-parse", "refs/heads/feat"));
+      ixGood = reappliesExactly(ap.w, apP, ixPatch, ixSquash); // reads the tree, applies the patch, writes a tree: the success path
+      ixBadParent = reappliesExactly(ap.w, "1".repeat(40), ixPatch, ixSquash); // read-tree fails: an early return
+      ixBadPatch = reappliesExactly(ap.w, apP, "this is not a patch\n", ixSquash); // apply fails: another early return
+      ixDone = true;
+    } finally { gitRun = realGitRun; }
+    const ixDirs = [...new Set(ixSeen.map((e) => e.dir))];
+    check("reappliesExactly puts its throwaway index in a fresh mkdtemp directory of its own (an unpredictable name under the temp directory, mode 0700, the index inside it), on the success path and on both early returns, and removes that directory whatever the outcome (R15-tmp-index)",
+      ixDone && ixGood === true && ixBadParent === false && ixBadPatch === false && ixDirs.length === 3 &&
+      ixSeen.every((e) => basename(e.idx) === "index" && dirname(e.dir) === tmpdir() && /^loop-state-idx-[A-Za-z0-9]{6}$/.test(basename(e.dir)) && e.isDir && e.mode === 0o700) &&
+      ixDirs.every((d) => !existsSync(d)) && !ixSeen.some((e) => basename(e.dir).includes(String(process.pid))));
     // ══ ROUND 14 ══ The walker-floor meta-gate flagged a list named like a walk root beside a readdirSync (a name-only match). Nothing here walks that list, so the name is gone; the list's shrinkage would silently loosen the
     // origin-inside-the-repository rule, so it has a floor, and the one real directory read in the self-test must have read something.
     const flNone = join(root, "r14-not-a-repository"); mkdirSync(flNone);

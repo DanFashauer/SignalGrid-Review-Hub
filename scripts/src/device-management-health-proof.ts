@@ -444,6 +444,10 @@ let citedWhileContradictory = 0;
 let driftedGeneric = 0;
 let unreachableHeadline = 0;
 let explicitUnreachable = 0;
+// Two COUNTERFACTUALS the docs quote about guards/orderings that no longer exist. They were
+// typed once and went stale by 7x when the raw space grew; counted here so they cannot.
+let counterfactualUnknownShrink = 0;
+let raisedLastHeadline = 0;
 const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeof evaluateDeviceManagementHealth> => {
   const v = evaluateDeviceManagementHealth(n);
   if (channelsContradictory(n.agentCheckInFreshness, n.remediationHealth)) {
@@ -458,7 +462,19 @@ const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeo
   }
   if (n.policyDrift === "drifted" && v.reasonCode === "MANAGEMENT_STATE_UNKNOWN") driftedGeneric += 1;
   if (v.reasonCode === "MANAGEMENT_UNREACHABLE") unreachableHeadline += 1;
-  if (n.managementReachable === false) explicitUnreachable += 1;
+  if (n.managementReachable === false) {
+    explicitUnreachable += 1;
+    // Had MANAGEMENT_UNREACHABLE been raised LAST it would headline only where nothing else
+    // is wrong: the report grants once the plane is reported reachable.
+    if (evaluateDeviceManagementHealth({ ...n, managementReachable: true }).recommendedAction === "none") raisedLastHeadline += 1;
+  }
+  // The removed consistency guard demoted on_baseline/covered to unknown for a never-checked-in
+  // device, and covered for a failed/retired enrollment: its removal shrinks unknownSignals here.
+  const neverIn = n.mdmCheckInFreshness === "never";
+  const unenrolled = n.enrollmentState === "failed" || n.enrollmentState === "retired";
+  if ((neverIn && (n.policyDrift === "on_baseline" || n.complianceCoverage === "covered")) || (unenrolled && n.complianceCoverage === "covered")) {
+    counterfactualUnknownShrink += 1;
+  }
   return v;
 };
 // rootCauseEvidence cannot influence grant-ness (both arms push `restrict`), but a junk
@@ -678,7 +694,7 @@ check("an unparseable rootCauseEvidence is MALFORMED, not silently read as avail
 
 // One machine-readable line, derived from the SAME variables the checks above asserted
 // on — not restated by hand, which is the mistake this feeds a guard against.
-console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable}`);
+console.log(`figures=normalized=${enumRes.combos},raw=${rawEnumRes.combos},grants=${rawEnumRes.noneCount},contradictory=${contradictoryCount},driftedGeneric=${driftedGeneric},unreachableHeadline=${unreachableHeadline},explicitUnreachable=${explicitUnreachable},counterfactualUnknownShrink=${counterfactualUnknownShrink},raisedLastHeadline=${raisedLastHeadline}`);
 
 // ── The live-call gate and the default transport, each condition ISOLATED ────
 //

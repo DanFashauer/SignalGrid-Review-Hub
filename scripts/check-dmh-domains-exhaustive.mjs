@@ -9,7 +9,8 @@
 //   - a new MEMBER added to EACH of the nine judged fields' types, left out of its tuple
 //     (every entry is exercised, not one: slack in any single entry must fail);
 //   - a tuple that drops a real member of its own field;
-//   - a tuple cross-wired to another field's values;
+//   - a tuple cross-wired to another field's values, a tuple with a foreign value, and an
+//     extra key (these are rejected by `satisfies` alone, not by the Missing assertion);
 //   - a new raw report key with no rawDomains entry.
 // A mutant that compiles is a mechanism that has gone slack, and this gate fails.
 // It also binds the PROOF to the module: the proof must import `domains`/`rawDomains` from
@@ -62,12 +63,21 @@ const addRawKey = (t) => t.replace('  "rootCauseEvidence",\n] as const;', '  "ro
 // Every judged field of the interface, read from the real contract: `  field: Type;`.
 const iface = typesSrc.slice(typesSrc.indexOf("export interface NormalizedDeviceManagementHealth"));
 const ifaceBody = iface.slice(0, iface.indexOf("\n}"));
-const JUDGED = [...ifaceBody.matchAll(/^ {2}(\w+): ([^;]+);$/gm)]
+const JUDGED = [...ifaceBody.matchAll(/^ {2}(\w+)\??:/gm)]
   .map((m) => m[1])
   .filter((f) => !["sourceSystem", "deviceId", "source"].includes(f));
 must(JUDGED.length === 9, `expected nine judged fields in the contract, found ${JUDGED.length}: ${JUDGED.join(", ")}`);
 
-const addMemberTo = (field) => (t) => t.replace(new RegExp(`^( {2}${field}: [^;]+);$`, "m"), '$1 | "planted_member";');
+// Mutations apply to the NormalizedDeviceManagementHealth interface only (the raw-report
+// interface declares the same field names as optional `unknown`).
+const IFACE_START = "export interface NormalizedDeviceManagementHealth";
+const inIface = (t, fn) => {
+  const a = t.indexOf(IFACE_START);
+  const b = t.indexOf("\n}", a);
+  return t.slice(0, a) + fn(t.slice(a, b)) + t.slice(b);
+};
+const addMemberTo = (field) => (t) =>
+  inIface(t, (body) => body.replace(new RegExp(`^( {2}${field}\\??:[^;]+);`, "m"), '$1 | "planted_member";'));
 const replaceDomainLine = (field, values) => (d) =>
   d.replace(new RegExp(`^ {2}${field}: .*$`, "m"), `  ${field}: ${values},`);
 
@@ -76,6 +86,8 @@ const mutants = [
   ["new raw report key with no rawDomains entry", addRawKey, (d) => d],
   ...JUDGED.map((f) => [`new union member missing from ${f}'s tuple`, addMemberTo(f), (d) => d]),
   ["tuple drops a real member of its own field (rootCauseEvidence)", (t) => t, replaceDomainLine("rootCauseEvidence", '["available", "unavailable", "not_supported"]')],
+  ["tuple gains a value that is not of its own field's type (satisfies: foreign value)", (t) => t, replaceDomainLine("rootCauseEvidence", '["available", "unavailable", "not_supported", "unknown", "fresh"]')],
+  ["domains gains a key that is not a judged field (satisfies: extra key)", (t) => t, (d) => d.replace(/^( {2}reportIntegrity: .*)$/m, '$1\n  plantedKey: ["x"],')],
   ["tuple cross-wired to another field's values (rootCauseEvidence <- mdmCheckInFreshness)", (t) => t, replaceDomainLine("rootCauseEvidence", '["fresh", "stale", "never", "unknown"]')],
 ];
 for (const [name, mt, md] of mutants) {

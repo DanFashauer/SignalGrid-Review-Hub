@@ -36,19 +36,21 @@ type Missing = { [K in JudgedField]: Exclude<N[K], (typeof domains)[K][number]> 
 const domainsAreExhaustive: [Missing] extends [never] ? true : { missingMembers: Missing } = true;
 void domainsAreExhaustive;
 
+// The raw sweep's enum spellings are DERIVED from the normalized `domains` above, so a new
+// enum member joins the raw sweep too (and, until the parse-fidelity allowlist in the proof
+// names it, the proof fails closed rather than skipping it). Each field then adds the wire
+// CLASSES the normalizer must survive: an omitted key, a JSON null, and a junk value.
 export const rawDomains: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number] | "__alias", readonly unknown[]> = {
-  // Every enum field carries the same six wire CLASSES: the allowed spellings, an
-  // omitted key, a JSON null, and a junk value. The two new fields were originally
-  // asymmetric — `agentCheckInFreshness` omitted `null` and `remediationHealth` omitted
-  // the literal `"unknown"` — while `PARSEABLE_RAW` below listed both, so the
-  // parse-fidelity pass advertised coverage of two cells it never produced.
-  mdmCheckInFreshness: ["fresh", "stale", "never", "unknown", undefined, null, "very_old"],
-  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown", undefined, null, 7],
-  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", "unknown", undefined, null, "green"],
-  policyDrift: ["on_baseline", "drifted", "unknown", undefined, null, ["drifted"]],
-  complianceCoverage: ["covered", "uncovered", "unknown", undefined, null, {}],
-  enrollmentState: ["enrolled", "failed", "retired", "unknown", undefined, null, "pending_enrollment"],
-  managementReachable: [true, false, null, undefined, "true", 1],
-  rootCauseEvidence: ["available", "unavailable", "not_supported", "unknown", undefined, null, "likely"],
+  // Every enum field carries the same wire classes (see above). `agentCheckInFreshness` once
+  // omitted `null` and `remediationHealth` the literal "unknown" while `PARSEABLE_RAW` listed
+  // both, so the parse-fidelity pass advertised coverage of cells it never produced.
+  mdmCheckInFreshness: [...domains.mdmCheckInFreshness, undefined, null, "very_old"],
+  agentCheckInFreshness: [...domains.agentCheckInFreshness, undefined, null, 7],
+  remediationHealth: [...domains.remediationHealth, undefined, null, "green"],
+  policyDrift: [...domains.policyDrift, undefined, null, ["drifted"]],
+  complianceCoverage: [...domains.complianceCoverage, undefined, null, {}],
+  enrollmentState: [...domains.enrollmentState, undefined, null, "pending_enrollment"],
+  managementReachable: [...domains.managementReachable, undefined, "true", 1],
+  rootCauseEvidence: [...domains.rootCauseEvidence, undefined, null, "likely"],
   __alias: ["absent", "present"],
 };

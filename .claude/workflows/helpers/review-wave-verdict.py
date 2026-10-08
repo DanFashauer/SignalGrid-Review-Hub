@@ -6,8 +6,9 @@ S = os.path.dirname(os.path.abspath(journal)) if len(sys.argv) < 4 else sys.argv
 out_dir = sys.argv[3] if len(sys.argv) > 3 else os.path.dirname(os.path.abspath(__file__))
 rows = [json.loads(l) for l in open(journal) if l.strip()]
 res = {}
+labels = {r["key"]: r.get("label", "") for r in rows if r.get("type") == "started" and r.get("key")}
 for r in rows:
-    lab = r.get("label") or (r.get("opts") or {}).get("label") or ""
+    lab = r.get("label") or labels.get(r.get("key", ""), "") or (r.get("opts") or {}).get("label") or ""
     val = r.get("result") if "result" in r else r.get("value")
     m = re.match(r"(review|refute):#(\d+) r(\d+)", lab)
     if not m or val is None: continue

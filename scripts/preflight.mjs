@@ -246,6 +246,7 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)", cmd: ["node", "scripts/check-untracked-ignore.mjs", "--self-test"] },
   // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
   // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
   // which prove each piece can fail in both directions.

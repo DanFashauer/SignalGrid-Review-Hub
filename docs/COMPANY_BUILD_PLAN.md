@@ -717,7 +717,7 @@ earlier — that is the loop working, not a reason to soften the record.
     Registration is decided by `scripts/lib/workflow-invocation.mjs`, the matcher
     `scripts/check-preflight-ci-parity.mjs` uses (command position, quotes masked, no `echo`, no
     `continue-on-error`), and only for workflows that list `pull_request` or `push` directly under `on:`; branch and path
-    filters are not read, and a STEPS entry must sit outside every comment and string literal. Its `--self-test` (56 cases; 32 planted mutants of the gate each turn it red)
+    filters are not read, and a STEPS entry must sit inside the `STEPS` array, outside every comment and string literal. Its `--self-test` (67 cases; 41 planted mutants of the gate each turn it red)
     plants an unregistered gate whose flag exits 1, an unregistered no-op
     flag, and a flag-less gate whose only control sits in a comment (each exit 1), against a
     registered gate that must NOT be spawned and a gate with a real control (each exit 0).

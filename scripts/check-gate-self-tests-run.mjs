@@ -40,8 +40,8 @@
 // limit). A STEPS entry with extra keys after `cmd` (heavy, needsNativeBuild, …) is credited although preflight
 // can skip it under --quick or on another platform; no self-test step on the real tree carries one.
 // STEPS sources (scripts/preflight.mjs, scripts/verify-breadth.mjs) must be `{ name: "…", cmd: [...] }`
-// objects outside every comment AND outside every string or template literal (matched on a view with string
-// bodies masked); `bash -c "…"` entries are NOT credited (they are spawned here instead —
+// objects inside the `STEPS = [ … ]` array, outside every comment AND outside every string or template literal
+// (matched on a view with string bodies masked); `bash -c "…"` entries are NOT credited (they are spawned here instead —
 // the safe direction: the worst case is one extra spawn of a self-test that was already registered).
 //
 // COMMENT STRIPPING is a small JS scanner (strings, template literals, regex literals and comments),
@@ -159,8 +159,19 @@ export function selfTestFilesInSteps(source, aliases = new Map()) {
   const masked = stripComments(source, { maskStrings: true });
   const live = stripComments(source);
   if (masked.length !== live.length) return out; // the two views must align; if not, credit nothing
-  for (const m of masked.matchAll(/\bname:\s*(["'`])\u0001*\1\s*,\s*cmd:\s*\[([^\]]*)\]/g)) {
-    const start = m.index + m[0].length - m[2].length - 1;
+  // Only the `STEPS = [ … ]` array counts: an object literal elsewhere in the file (dead code, a parked list)
+  // is not a step. Brackets are counted on the masked view, so a bracket in a string cannot unbalance it.
+  const open = /\bSTEPS\s*=\s*\[/.exec(masked);
+  if (!open) return out;
+  let depth = 0, end = -1;
+  for (let k = open.index + open[0].length - 1; k < masked.length; k++) {
+    if (masked[k] === "[") depth++;
+    else if (masked[k] === "]" && --depth === 0) { end = k; break; }
+  }
+  if (end < 0) return out;
+  const region = masked.slice(open.index, end + 1);
+  for (const m of region.matchAll(/\bname:\s*(["'`])\u0001*\1\s*,\s*cmd:\s*\[([^\]]*)\]/g)) {
+    const start = open.index + m.index + m[0].length - m[2].length - 1;
     const parts = live.slice(start, start + m[2].length).replace(/["'`]/g, "").split(",").map((x) => x.trim());
     if (!parts.includes("--self-test")) continue;
     if (parts[0] === "node" && /^scripts\/check-[\w.-]+\.mjs$/.test(parts[1] ?? "")) out.add(parts[1].split("/").pop());
@@ -296,7 +307,7 @@ export function runGate(root, { floor = DEFAULT_FLOOR, spawn = realSpawn } = {})
     gates: gates.length, withHandler: c.withHandler.length, registered: c.registeredGates.length,
     runHere: c.toSpawn.length, runHereOk: spawnedOk.length, controlOnly: c.controlOnly.length, controlless: c.controlless.length,
   };
-  return { problems, counts };
+  return { problems, counts, spawned: c.toSpawn.map((g) => g.file) };
 }
 
 function formatCounts(k) {
@@ -323,6 +334,7 @@ function selfTest() {
     if (o.breadth !== undefined) writeFileSync(join(root, "scripts", "verify-breadth.mjs"), o.breadth);
     if (!o.noWorkflows) writeFileSync(join(root, ".github", "workflows", "ci.yml"), `${o.on ?? ON}jobs:\n  a:\n    steps:\n      - run: echo hi\n${o.workflow ?? ""}`);
     writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: o.pkg ?? {} }));
+    writeFileSync(join(root, "fixture-marker.txt"), "x");
     return root;
   };
   const self = (root, floor = "1") => spawnSync(process.execPath, [SELF_FILE, "--root", root, "--floor", floor], { encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL" });
@@ -359,6 +371,10 @@ function selfTest() {
     R("a quoted separator (echo \"x | node …\")", { workflow: stepOf(`echo "disabled | ${CMD}"`) });
     R("a continue-on-error step", { workflow: `      - continue-on-error: true\n        run: ${CMD}\n` });
     R("a folded run: > whose first line is echo", { workflow: `      - run: >\n          echo skipped\n          ${CMD}\n` });
+    R("a plain flag-less workflow run", { workflow: stepOf("node scripts/check-bad.mjs") });
+    R("an object literal outside the STEPS array (breadth)", { breadth: `const STEPS = [];\nconst RETIRED = [{ name: "parked", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n` });
+    R("an inline `on: workflow_dispatch`", { workflow: stepOf(CMD), on: "on: workflow_dispatch\n" });
+    R("a job named push in a dispatch-only file", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\nx:\n  push:\n    y: 1\n" });
     R("a step in a workflow_dispatch-only file", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\n" });
     R("a dispatch-only workflow with an input named push", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n" });
 
@@ -397,6 +413,7 @@ function selfTest() {
     green("a gate a verify-breadth step runs with --self-test is NOT spawned", "green1c", { "check-regbr.mjs": trapFor(m) }, { breadth: `const STEPS = [\n  { name: "r", cmd: ["node", "scripts/check-regbr.mjs", "--self-test"] },\n];\n` }, m);
     m = join(tmp, "m4");
     green("a gate registered through a package.json alias (preflight and workflow) is NOT spawned", "green1d", { "check-alias.mjs": trapFor(m), "check-alias2.mjs": trapFor(join(tmp, "m4b")) }, { pkg: { gx: "node scripts/check-alias.mjs", gy: "node scripts/check-alias2.mjs" }, preflight: `  { name: "r", cmd: ["pnpm", "run", "gx", "--self-test"] },`, workflow: stepOf("pnpm run gy --self-test") }, m);
+    green("a spawned self-test runs with the tree root as its cwd", "green-cwd", { "check-cwd.mjs": `import { existsSync } from "node:fs";\nif (process.argv.includes("--self-test")) { if (!existsSync("fixture-marker.txt")) process.exit(1); console.log("self-test ok (cwd)"); }\n` });
     green("a flag-less gate with a control on a code line passes", "green2", { "check-ctl.mjs": `const planted = "bad";\nif (!planted) process.exit(1);\nconsole.log("real check ok");\n` });
     let r = green("an unregistered gate whose --self-test exits 0 and names itself passes (and is spawned)", "green3", { "check-good.mjs": GOOD_ST });
     note("GREEN: …and the printed counts say it was run here", /1 run by this gate \(1 passed\)/.test(r.stdout), r.stdout.split("\n")[0]);
@@ -414,6 +431,11 @@ function selfTest() {
     note("pure: a regex literal after `)` holding /* does not hide a handler", hasHandler('if (x) /[/*]/.test(y);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: a regex literal after `else return` holding /* does not hide a handler", hasHandler('else return /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: runsOnChange reads only direct children of on:", !runsOnChange("on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n") && runsOnChange("on:\n  push:\n    branches: [a]\n"));
+    note("pure: a regex after a bare else holding /* does not hide a handler", hasHandler('if (a) b(); else /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: a character class holding // does not end the regex early", hasHandler('const r = /[//*]/; if (a.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: a gate alias must be exactly `node scripts/check-*.mjs`", gateAliases({ a: "node scripts/check-x.mjs && echo", b: "node scripts/check-y.mjs", c: "node scripts/check-z.mjs.bak" }).size === 1);
+    note("pure: a step naming scripts/check-x.mjs.bak registers nothing", selfTestFilesInSteps('const STEPS = [\n  { name: "r", cmd: ["node", "scripts/check-x.mjs.bak", "--self-test"] },\n];\n').size === 0);
+    note("pure: a step inside STEPS registers, one in a later array does not", (() => { const f = selfTestFilesInSteps('const STEPS = [\n  { name: "r", cmd: ["node", "scripts/check-in.mjs", "--self-test"] },\n];\nconst X = [{ name: "r", cmd: ["node", "scripts/check-out.mjs", "--self-test"] }];\n'); return f.has("check-in.mjs") && !f.has("check-out.mjs") && f.size === 1; })());
     note("pure: exit 1 earns no credit", !spawnCredit({ status: 1, stdout: "self-test" }).ok);
     note("pure: exit 0 with silent stdout earns no credit", !spawnCredit({ status: 0, stdout: "all ok" }).ok);
     note("pure: a timeout (status null) earns no credit", !spawnCredit({ status: null, signal: "SIGKILL", stdout: "self-test" }).ok);
@@ -424,6 +446,7 @@ function selfTest() {
     const live = runGate(REPO, { spawn: () => ({ status: 0, stdout: "self-test" }) });
     note("live: the real tree yields at least the floor of gates", live.counts.gates >= DEFAULT_FLOOR, `${live.counts.gates} gates`);
     note("live: the real tree has registered self-tests (the registration scan reads preflight and the workflows)", live.counts.registered >= 50, `${live.counts.registered} registered`);
+    note("live: the three formerly unrun self-tests are in the spawn set", ["check-api-collection.mjs", "check-deployment-runbook.mjs", "check-desktop-core-tests.mjs"].every((f) => live.spawned.includes(f)), live.spawned.join(","));
     const grepCount = readdirSync(join(REPO, "scripts")).filter((f) => /^check-.*\.mjs$/.test(f)).filter((f) => /["'`]--self-test["'`]/.test(readFileSync(join(REPO, "scripts", f), "utf8"))).length;
     note("live: the handler count equals a plain grep for a quoted --self-test literal (a comment-stripper that eats code diverges)", live.counts.withHandler === grepCount, `${live.counts.withHandler} vs grep ${grepCount}`);
   } finally {

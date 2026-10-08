@@ -2,31 +2,39 @@
 //
 // They used to be plain `Record<string, readonly unknown[]>`, so a new contract FIELD or a
 // new enum MEMBER could be added without updating them and the proof stayed green (the
-// pinned combo count only counted the arrays that existed). Now:
-//   - `domains` must have an entry for every judged field of the normalized contract, and
-//     each entry is a tuple the compiler checks contains EVERY member of that field's own
-//     union (`allOf`);
+// pinned combo count only counted the arrays that existed). Now, structurally, for EVERY
+// entry (nothing is opt-in per entry):
+//   - `domains` must have exactly one entry per judged field of the normalized contract;
+//   - each entry's values must all be values of THAT field's own type (`satisfies` — a
+//     tuple cross-wired to another field's values is rejected);
+//   - `Missing` below is the union of members a field's type has that its entry lacks, and
+//     the assertion fails to compile unless it is `never` for every field;
 //   - `rawDomains` must have an entry for every wire key the connector registers
 //     (`DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS`) plus the build-time `__alias` toggle.
-// `scripts/check-dmh-domains-exhaustive.mjs` plants mutants and requires the compiler to
-// reject each.
+// `scripts/check-dmh-domains-exhaustive.mjs` plants a member in each of the nine field
+// types, a dropped member, a cross-wired tuple and a new raw key, and requires the compiler
+// to reject each.
 import type { NormalizedDeviceManagementHealth, DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS } from "@workspace/integrations/device-management-health";
-import { allOf } from "./exhaustive-domain.js";
 
 type N = NormalizedDeviceManagementHealth;
 type JudgedField = Exclude<keyof N, "sourceSystem" | "deviceId" | "source">;
 
-export const domains: Record<JudgedField, readonly unknown[]> = {
-  mdmCheckInFreshness: allOf<N["mdmCheckInFreshness"]>()(["fresh", "stale", "never", "unknown"]),
-  agentCheckInFreshness: allOf<N["agentCheckInFreshness"]>()(["fresh", "stale", "never", "not_applicable", "unknown"]),
-  remediationHealth: allOf<N["remediationHealth"]>()(["healthy", "issues_detected", "failed", "not_applicable", "unknown"]),
-  policyDrift: allOf<N["policyDrift"]>()(["on_baseline", "drifted", "unknown"]),
-  complianceCoverage: allOf<N["complianceCoverage"]>()(["covered", "uncovered", "unknown"]),
-  enrollmentState: allOf<N["enrollmentState"]>()(["enrolled", "failed", "retired", "unknown"]),
-  managementReachable: allOf<N["managementReachable"]>()([true, false, null]),
-  rootCauseEvidence: allOf<N["rootCauseEvidence"]>()(["available", "unavailable", "not_supported", "unknown"]),
-  reportIntegrity: allOf<N["reportIntegrity"]>()(["clean", "malformed"]),
-};
+export const domains = {
+  mdmCheckInFreshness: ["fresh", "stale", "never", "unknown"],
+  agentCheckInFreshness: ["fresh", "stale", "never", "not_applicable", "unknown"],
+  remediationHealth: ["healthy", "issues_detected", "failed", "not_applicable", "unknown"],
+  policyDrift: ["on_baseline", "drifted", "unknown"],
+  complianceCoverage: ["covered", "uncovered", "unknown"],
+  enrollmentState: ["enrolled", "failed", "retired", "unknown"],
+  managementReachable: [true, false, null],
+  rootCauseEvidence: ["available", "unavailable", "not_supported", "unknown"],
+  reportIntegrity: ["clean", "malformed"],
+} as const satisfies { readonly [K in JudgedField]: readonly N[K][] };
+
+/** Members of a judged field's type that its `domains` entry does not list. */
+type Missing = { [K in JudgedField]: Exclude<N[K], (typeof domains)[K][number]> }[JudgedField];
+const domainsAreExhaustive: [Missing] extends [never] ? true : { missingMembers: Missing } = true;
+void domainsAreExhaustive;
 
 export const rawDomains: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number] | "__alias", readonly unknown[]> = {
   // Every enum field carries the same six wire CLASSES: the allowed spellings, an

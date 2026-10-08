@@ -512,7 +512,7 @@ check(
 // enumeration stays at 0 mismatches and the condition is load-bearing but unproven.
 // Mutation testing found exactly that hole. This pass closes it by asserting the
 // integrity flag itself against an independent positive allowlist of wire values.
-const PARSEABLE_RAW: Record<string, readonly unknown[]> = {
+const PARSEABLE_RAW: Record<(typeof DEVICE_MANAGEMENT_HEALTH_REPORT_KEYS)[number], readonly unknown[]> = {
   mdmCheckInFreshness: [undefined, null, "fresh", "stale", "never", "unknown"],
   agentCheckInFreshness: [undefined, null, "fresh", "stale", "never", "not_applicable", "unknown"],
   remediationHealth: [undefined, null, "healthy", "issues_detected", "failed", "not_applicable", "unknown"],
@@ -535,7 +535,7 @@ const integrityRes = enumerateGrantSafety({
   actionOf: (n) => (n.reportIntegrity === "clean" ? "none" : "malformed"),
   positivelyClean: (c) =>
     c.__alias !== "present" &&
-    Object.keys(PARSEABLE_RAW).every((k) => PARSEABLE_RAW[k].includes(c[k])),
+    (Object.keys(PARSEABLE_RAW) as (keyof typeof PARSEABLE_RAW)[]).every((k) => PARSEABLE_RAW[k].includes(c[k])),
 });
 check(
   `parse fidelity: over all ${integrityRes.combos} raw reports, reportIntegrity is 'clean' for EXACTLY the reports whose every field carries a parseable wire value and which carry no unrecognized key (mismatches=${integrityRes.mismatches}${integrityRes.firstMismatch ? ", first=" + integrityRes.firstMismatch : ""})`,

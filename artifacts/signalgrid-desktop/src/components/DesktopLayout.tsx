@@ -44,7 +44,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
       {/* The shell polls the signal feed on every page: its alert count and an
           unreachable feed are announced here, not only drawn on the bell. */}
       <LiveRegion
-        message={alertsKnown ? `${anomalous.length} active ${anomalous.length === 1 ? "alert" : "alerts"}.` : ""}
+        message={alertsKnown ? `${anomalous.length} active ${anomalous.length === 1 ? "alert" : "alerts"}${anomalous[0] ? `; first listed: ${anomalous[0].status} ${anomalous[0].signalType} on ${anomalous[0].deviceId}, received ${new Date(anomalous[0].receivedAt).toLocaleTimeString()}` : ""}.` : ""}
         alert={feedUnreachable ? "Signal feed unreachable — alert state unknown." : ""}
       />
 

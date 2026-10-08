@@ -413,14 +413,14 @@ export function checkLiveRegionText(rel, raw) {
     // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
     // or a member test (`!data.chain.valid`).
     if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
-    const identity = /\[(?:0|[^\]]*\.length\s*-\s*1)\]\??\.(?:id|createdAt|evaluatedAt|recordedAt)\b/.test(message);
+    const identity = /\[(?:0|[^\]]*\.length\s*-\s*1)\]\??\.(?:id|createdAt|evaluatedAt|recordedAt|receivedAt)\b/.test(message);
     if (/\[0\]/.test(message) && !identity) {
       failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
     }
     // A capped decision list can take a new record and drop an old one with the
     // same outcome: its counts do not change, so counts alone announce nothing.
-    if (/\.length\b/.test(message) && /\b(?:decisions?|(?:audit )?events?)\b/i.test(message) && !identity) {
-      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions or audit events without naming the newest record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
+    if (/\.length\b/.test(message) && /\b(?:decisions?|(?:audit )?events?|alerts?)\b/i.test(message) && !identity) {
+      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions, audit events or alerts without naming a record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
     }
   }
   return failures;
@@ -748,6 +748,11 @@ export function checkChartMotion(rel, raw) {
       const tag = openingTag(src, m.index);
       if (tag === null) { failures.push(`${rel}:${line}: <${name}> tag could not be parsed — failing closed`); continue; }
       const v = tag.match(/\bisAnimationActive=\{\s*(false|!\s*(\w+))\s*\}/);
+      // JSX applies attributes in order: a spread AFTER the gate can set isAnimationActive back to true.
+      if (v && /\{\s*\.\.\./.test(tag.slice(v.index + v[0].length))) {
+        failures.push(`${rel}:${line}: recharts <${name}> spreads props after isAnimationActive — the spread can re-enable animation (WCAG 2.3.3)`);
+        continue;
+      }
       if (!v || (v[2] && !reduced.has(v[2]))) {
         failures.push(`${rel}:${line}: recharts <${name}> animates in JS and ignores prefers-reduced-motion — set isAnimationActive={false} or {!usePrefersReducedMotion()} (WCAG 2.3.3)`);
       }
@@ -795,6 +800,8 @@ export function checkReducedMotion(rel, raw) {
   const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
   const re = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/g;
   let m;
+  let ok = false;
+  const reversals = [];
   while ((m = re.exec(css))) {
     let depth = 0;
     for (let i = m.index + m[0].length - 1; i < css.length; i++) {
@@ -815,14 +822,22 @@ export function checkReducedMotion(rel, raw) {
         const universal = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
           .filter((r) => r[1].split(",").some((sel) => sel.trim() === "*"))
           .some((r) => {
-            const own = new Set([...r[2].matchAll(/(?:^|[\s;])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:/g)].map((d) => d[1]).filter((p) => !MOTION_NEUTRAL.has(p)).map((p) => p.split("-")[0]));
+            // A family counts only through a declaration that stops it: `animation:
+            // none`/`-name: none`/near-zero `-duration` (an iteration count of 1 still
+            // runs a one-shot entrance animation in full), likewise for transition.
+            const own = new Set([...r[2].matchAll(/(?:^|[\s;])(animation(?:-name|-duration)?|transition(?:-property|-duration)?|scroll-behavior)\s*:/g)].map((d) => d[1].split("-")[0]));
             return ["animation", "transition", "scroll"].every((f) => own.has(f));
           });
-        if (universal && decls.every(([prop, value]) => damps(prop, value))) return [];
+        if (universal) ok = true;
+        // Every block's motion declarations must damp: a later block that re-enables
+        // motion (`.spinner { animation: spin 2s infinite !important }`) reverses the first.
+        for (const [prop, value] of decls) if (!damps(prop, value)) reversals.push(`${prop}: ${value}`);
         break;
       }
     }
   }
+  if (reversals.length) return [`${rel}: a prefers-reduced-motion block re-enables motion (${reversals.join("; ")}) — WCAG 2.3.3`];
+  if (ok) return [];
   return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
@@ -1184,6 +1199,18 @@ function selfTest() {
         const r = webTreeCandidates("b", ["signalgrid-a", "signalgrid-new", "signalgrid-lib", "other"], has);
         return r.trees.length === 1 && r.missing.length === 1 && r.missing[0] === "signalgrid-new";
       })()],
+    ["a prop spread after isAnimationActive fails",
+      checkChartMotion("c.tsx", 'import { Area } from "recharts"; <Area isAnimationActive={false} {...props} />').length === 1 &&
+      checkChartMotion("c.tsx", 'import { Area } from "recharts"; <Area {...props} isAnimationActive={false} />').length === 0],
+    ["a later reduced-motion block that re-enables motion fails",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } } @media (prefers-reduced-motion: reduce) { .spinner { animation: spin 2s infinite !important; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } } @media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+    ["an iteration count alone does not damp the animation family",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-iteration-count: 1; transition: none; scroll-behavior: auto; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms; animation-iteration-count: 1; transition-duration: 0s; scroll-behavior: auto; } }").length === 0],
+    ["an alert count names a record",
+      checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts.` : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts, first ${a[0]?.receivedAt}.` : ""} />').length === 0],
     ["an audit-event count names the newest event",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events. Hash chain intact.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],

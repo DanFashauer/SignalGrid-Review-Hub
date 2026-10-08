@@ -41,9 +41,24 @@ test("a truncated durable verification is partial: verified prefix, not a whole 
   assert.doesNotMatch(chainAlert(c), /earlier/);
 });
 
-test("a verdict that does not say whether it covered the whole history counts as partial", () => {
-  assert.equal(normalizeChain({ valid: true, brokenAtSeq: null, length: 7 }).partial, true);
-  assert.equal(normalizeChain({ ok: true, count: 7 }).partial, true);
+test("a verdict that does not say whether it covered the whole history is unverified", () => {
+  for (const raw of [{ valid: true, brokenAtSeq: null, length: 7 }, { ok: true, count: 7 }]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.valid, false);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
+});
+
+test("an incomplete or contradictory verdict is never 'intact'", () => {
+  for (const raw of [
+    { valid: true, truncated: false },                     // no length
+    { ok: true, truncated: false },                        // no count
+    { valid: true, ok: false, length: 7, count: 7, truncated: false }, // both shapes at once
+  ]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.valid, false);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
 });
 
 test("an unrecognised shape is unverified", () => {

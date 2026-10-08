@@ -35,10 +35,16 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : n
 export function normalizeChain(raw: unknown): ChainVerdict {
   const c = (raw ?? {}) as Record<string, unknown>;
   const partial = c.truncated !== false;
-  if (typeof c.valid === "boolean") {
+  // Only a complete, unambiguous verifier shape is believed: a verdict missing its
+  // length/count or its truncated flag, or carrying both shapes' verdicts at once
+  // (`valid` AND `ok`), is unverified — never "intact" by default.
+  const memory = typeof c.valid === "boolean" && num(c.length) !== null && typeof c.truncated === "boolean" && !("ok" in c);
+  const durable = typeof c.ok === "boolean" && num(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
+  if (!memory && !durable) return { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };
+  if (memory && typeof c.valid === "boolean") {
     return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, length: num(c.length) ?? 0 };
   }
-  if (typeof c.ok === "boolean") {
+  if (durable && typeof c.ok === "boolean") {
     return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), length: num(c.count) ?? 0 };
   }
   return { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };

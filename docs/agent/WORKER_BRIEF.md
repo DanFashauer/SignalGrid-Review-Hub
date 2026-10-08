@@ -61,8 +61,8 @@ first; it binds you. Then:
    with the repo's one shape: `FIX PROPOSED <date> (branch <your branch>,
    lands under DR-037)` for SAFETY_MACHINERY or autonomous files, `FIX
    PROPOSED <date> (branch <your branch>, owner merges)` for DECISION_PATH
-   ones; `scripts/check-row-status-drift.mjs` reads only that shape, and a
-   `(PR #n, sha)` form is invisible to it. Then run both gates on that
+   ones; the row-status drift detector (PR #1378) reads only that shape, and
+   a `(PR #n, sha)` form is invisible to it. Then run both gates on that
    final head and write the body for it. No product claim the launch-claims
    gate does not allow. No model identifier anywhere in commits, PR text or
    code.

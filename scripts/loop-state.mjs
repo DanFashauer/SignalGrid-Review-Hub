@@ -247,7 +247,7 @@ function hubTransport(cwd = repo, hub = HUB) {
     // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
     const expanded = r.stdout.trim(), shown = noUserinfo(expanded, true);
     if (shown === hub && expanded !== hub) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
-    else if (expanded !== hub && !isHubUrlLoose(expanded)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
+    else if (expanded !== hub && !isHubUrlLoose(expanded, hub)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
     else if (expanded !== hub) trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
   }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
@@ -277,16 +277,23 @@ function transportRow(scan, hub = HUB) {
     detail: clean ? `listing read from ${hub}; ${scan.note}` : `listing read from ${hub} through a transport this check cannot verify; ${scan.note}`,
   };
 }
-const HUB_SPELLINGS = ["https://github.com/danfashauer/signalgrid-review-hub", "git@github.com:danfashauer/signalgrid-review-hub", "ssh://git@github.com/danfashauer/signalgrid-review-hub"];
-function isHubUrl(u) {
-  return HUB_SPELLINGS.includes(String(u || "").trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase());
+// The spellings of a Hub URL (https, scp-style, ssh), lower case and without .git, DERIVED from the Hub URL asked about: the host and repository come from `hub`, never from a literal here
+// (the self-test asks about a reserved-host Hub, so no fixture has to put a credential on a real host).
+function hubSpellings(hub = HUB) {
+  const m = /^https:\/\/([^/]+)\/(.+?)(?:\.git)?\/*$/i.exec(String(hub || "").trim());
+  if (!m) return [];
+  const host = m[1].toLowerCase(), path = m[2].toLowerCase();
+  return [`https://${host}/${path}`, `git@${host}:${path}`, `ssh://git@${host}/${path}`];
+}
+function isHubUrl(u, hub = HUB) {
+  return hubSpellings(hub).includes(String(u || "").trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase());
 }
 // A URL with credentials in it (a token-bearing insteadOf is common and legitimate) is still the Hub when it is the Hub once the userinfo is taken away, and the userinfo is never printed.
-function isHubUrlLoose(u) { return isHubUrl(u) || isHubUrl(noUserinfo(u, true)); }
-function originRow(cwd = repo) {
+function isHubUrlLoose(u, hub = HUB) { return isHubUrl(u, hub) || isHubUrl(noUserinfo(u, true), hub); }
+function originRow(cwd = repo, hub = HUB) {
   const g = gitIn(cwd);
   const configured = g("config", "--get", "remote.origin.url"), fetchUrl = g("remote", "get-url", "origin"), pushUrl = g("remote", "get-url", "--push", "origin");
-  const ok = isHubUrlLoose(fetchUrl) && isHubUrlLoose(pushUrl);
+  const ok = isHubUrlLoose(fetchUrl, hub) && isHubUrlLoose(pushUrl, hub);
   const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${noUserinfo(pushUrl, true)})` : "";
   const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${noUserinfo(configured, true)}, rewritten by url.<base>.insteadOf)` : "";
   return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${noUserinfo(fetchUrl, true) || "(no origin)"}${pushNote}${rewriteNote}` };
@@ -2744,8 +2751,11 @@ function selfTest() {
     // (everything else is the real git), so the lie is on offer exactly where the proxy offered it.
     const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), fakeBin = join(root, "r9bin");
     mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
-    const wholeScript = (fx, name, vars = {}) => {
-      mkdirSync(join(fx.w, "scripts"), { recursive: true }); writeFileSync(join(fx.w, "scripts", "loop-state.mjs"), prodSrc);
+    const wholeScript = (fx, name, vars = {}, opts = {}) => {
+      // opts.hub: run a copy of the script whose Hub constant is another URL (a reserved host, so no fixture carries a credential for a real one)
+      const hubLine = `const HUB = "${HUB}";`, copy = opts.hub ? prodSrc.replace(hubLine, `const HUB = "${opts.hub}";`) : prodSrc;
+      if (opts.hub && (!prodSrc.includes(hubLine) || copy === prodSrc)) throw new Error("the Hub constant is not where the self-test expects it");
+      mkdirSync(join(fx.w, "scripts"), { recursive: true }); writeFileSync(join(fx.w, "scripts", "loop-state.mjs"), copy);
       const listing = cfgFile(`${name}-listing`, `${hubMapOf(fx.h).get("main")}\trefs/heads/main\n`);
       const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
       delete childEnv.GIT_SSL_NO_VERIFY;
@@ -2994,20 +3004,26 @@ function selfTest() {
       ssScan.problems.length === 1 && /^repository-scope core\.sshcommand=\/tmp\/evil-ssh \(local \.git\/config\)/.test(ssScan.problems[0]) && ssScan.trusted.some((t) => t.includes("rewrites the Hub URL to ssh://")) &&
       ssGlobal.problems.length === 0 && ssGlobal.trusted.some((t) => t.includes("core.sshcommand=ssh -i /home/u/key")));
     // (4) a credential inside a config KEY
-    const keyToken = "ghp_R12SECRETTOKEN0123", keyPw = "pw0r12secret";
-    const keyGlobal = cfgFile("r12-key-global.cfg", `[url "https://x-access-token:${keyToken}@github.com/"]\n\tinsteadOf = https://github.com/\n[http "https://user:${keyPw}@proxy.example/"]\n\tproxy = http://proxy.example:3128\n`);
-    const keyScan = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: keyGlobal });
-    const keyLocal = mkFx("r12kl"); keyLocal.f("config", "remote.origin.url", HUB); keyLocal.f("config", `url.https://x-access-token:${keyToken}@github.com/.insteadOf`, "https://github.com/");
-    const keyLocalScan = inCleanEnv(() => hubTransport(keyLocal.w));
-    const keyEvil = mkFx("r12ke"); keyEvil.f("config", "remote.origin.url", HUB); keyEvil.f("config", `url.https://tok:${keyPw}@evil.example/.insteadOf`, "https://github.com/");
-    const keyEvilScan = inCleanEnv(() => hubTransport(keyEvil.w));
-    const keyRx = mkFx("r12kr"); keyRx.f("config", "remote.origin.url", HUB); mkdirSync(join(keyRx.w, "docs")); writeFileSync(join(keyRx.w, "docs", "PURPOSE.md"), "fixture\n");
-    const keyRun = wholeScript(keyRx, "r12kr-e2e", { GIT_CONFIG_GLOBAL: keyGlobal });
+    // The Hub here is a RESERVED host (.invalid never resolves): a fixture must not put a credential on a real host, and the checks below take the Hub URL from their argument, not from a literal.
+    const keyToken = "ghp_R12SECRETTOKEN0123", keyPw = "pw0r12secret", keyHub = "https://hub.invalid/DanFashauer/SignalGrid-Review-Hub.git";
+    const keyGlobal = cfgFile("r12-key-global.cfg", `[url "https://ci-bot:${keyToken}@hub.invalid/"]\n\tinsteadOf = https://hub.invalid/\n[http "https://user:${keyPw}@proxy.example/"]\n\tproxy = http://proxy.example:3128\n`);
+    const keyScan = inCleanEnv(() => hubTransport(txc.w, keyHub), { GIT_CONFIG_GLOBAL: keyGlobal });
+    const keyLocal = mkFx("r12kl"); keyLocal.f("config", "remote.origin.url", keyHub); keyLocal.f("config", `url.https://ci-bot:${keyToken}@hub.invalid/.insteadOf`, "https://hub.invalid/");
+    const keyLocalScan = inCleanEnv(() => hubTransport(keyLocal.w, keyHub));
+    const keyEvil = mkFx("r12ke"); keyEvil.f("config", "remote.origin.url", keyHub); keyEvil.f("config", `url.https://tok:${keyPw}@evil.example/.insteadOf`, "https://hub.invalid/");
+    const keyEvilScan = inCleanEnv(() => hubTransport(keyEvil.w, keyHub));
+    const keyRx = mkFx("r12kr"); keyRx.f("config", "remote.origin.url", keyHub); mkdirSync(join(keyRx.w, "docs")); writeFileSync(join(keyRx.w, "docs", "PURPOSE.md"), "fixture\n");
+    const keyRun = wholeScript(keyRx, "r12kr-e2e", { GIT_CONFIG_GLOBAL: keyGlobal }, { hub: keyHub }); // (the script copy's Hub constant is the reserved host)
+    const keyOrigin = inCleanEnv(() => originRow(keyRx.w, keyHub), { GIT_CONFIG_GLOBAL: keyGlobal });
+    const keySsh = inCleanEnv(() => hubTransport(txc.w, keyHub), { GIT_CONFIG_GLOBAL: cfgFile("r13-global-ssh-hub.cfg", "[url \"git@hub.invalid:\"]\n\tinsteadOf = https://hub.invalid/\n") }); // a host-preserving rewrite of THIS Hub
     check("a token inside a url.<base> key (or a password inside an http.<url> key) is printed nowhere, a global insteadOf that only adds credentials to the Hub URL is no finding (no 'rewrites X to X'), and the whole check stays green with a warning row (R12-key-scrub)",
       keyScan.problems.length === 0 && !JSON.stringify(keyScan).includes(keyToken) && !JSON.stringify(keyScan).includes(keyPw) && keyScan.trusted.some((t) => t.includes("adds credentials to the Hub URL")) &&
-      keyScan.trusted.some((t) => t.includes("url.https://github.com/.insteadof=https://github.com/")) && keyScan.trusted.some((t) => t.includes("http.https://proxy.example/.proxy=")) &&
-      keyLocalScan.problems.length === 1 && !JSON.stringify(keyLocalScan).includes(keyToken) && /^repository-scope url\.https:\/\/github\.com\/\.insteadof=https:\/\/github\.com\/ \(local /.test(keyLocalScan.problems[0]) &&
+      keyScan.trusted.some((t) => t.includes("url.https://hub.invalid/.insteadof=https://hub.invalid/")) && keyScan.trusted.some((t) => t.includes("http.https://proxy.example/.proxy=")) &&
+      keyLocalScan.problems.length === 1 && !JSON.stringify(keyLocalScan).includes(keyToken) && /^repository-scope url\.https:\/\/hub\.invalid\/\.insteadof=https:\/\/hub\.invalid\/ \(local /.test(keyLocalScan.problems[0]) &&
       keyEvilScan.problems.length >= 2 && keyEvilScan.problems.some((p) => /rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && !JSON.stringify(keyEvilScan).includes(keyPw) &&
+      keySsh.problems.length === 0 && keySsh.trusted.some((t) => t.includes("rewrites the Hub URL to git@hub.invalid:DanFashauer/SignalGrid-Review-Hub.git")) &&
+      keyOrigin.state === "ok" && keyOrigin.detail === "https://hub.invalid/DanFashauer/SignalGrid-Review-Hub.git (remote.origin.url is https://hub.invalid/DanFashauer/SignalGrid-Review-Hub.git, rewritten by url.<base>.insteadOf)" && !JSON.stringify(keyOrigin).includes(keyToken) &&
+      isHubUrl("git@hub.invalid:DanFashauer/SignalGrid-Review-Hub", keyHub) && !isHubUrl("https://github.com/DanFashauer/SignalGrid-Review-Hub", keyHub) && !isHubUrl("https://hub.invalid/DanFashauer/SignalGrid-Review-Hub", HUB) &&
       keyRun.status === 0 && !keyRun.out.includes(keyToken) && !keyRun.err.includes(keyToken) && !keyRun.out.includes(keyPw) && /! Review Hub transport/.test(keyRun.out) && !/✗ Review Hub URL/.test(keyRun.out));
     // (2) MAINLINE is anchored to the Hub's own listing: a hand-made refs/remotes/origin/main (porcelain only: merge --squash on a throwaway, update-ref, branch -D) cleared real unpushed work
     const fm = mkFx("r12fm"), fmBase = fm.f("rev-parse", "HEAD");

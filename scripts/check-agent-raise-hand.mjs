@@ -64,11 +64,9 @@ export function isCompliant(body) {
 // subagent loads; this gate asserts CLAUDE.md still carries it. An agent the registry does
 // not mark vendored (including an UNREGISTERED one) must carry the clause: unknown
 // provenance tightens, never loosens.
-// Exported (with an overridable root) so check-agent-model-tier.mjs discriminates
-// first-party from vendored with THIS list rather than a second one that could drift.
-export function vendoredIds(root = repo) {
+function vendoredIds() {
   try {
-    const reg = JSON.parse(readFileSync(join(root, "docs/agent/agent-tiers.json"), "utf8"));
+    const reg = JSON.parse(readFileSync(join(repo, "docs/agent/agent-tiers.json"), "utf8"));
     return new Set((reg.agents ?? []).filter((a) => a.provenance === "vendored").map((a) => a.id));
   } catch { return new Set(); } // an unreadable registry exempts nobody
 }

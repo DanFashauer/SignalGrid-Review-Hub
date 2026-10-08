@@ -55,12 +55,22 @@ const add = (state, what, detail, gated = true) => rows.push({ state, what, deta
 //     Every ancestry answer here is computed from the commit objects themselves.
 //   GIT_OPTIONAL_LOCKS=0: a read-only check must not write. `git status` otherwise refreshes (and locks) the index; the live
 //     run from a session took the index lock.
+//   And three things git would otherwise read from the CALLER's environment are dropped (round-7 refute): every GIT_TEST_* variable
+//     (GIT_TEST_COMMIT_GRAPH=1 forces the commit-graph back on over core.commitGraph=false, so a forged graph held a tip again),
+//     GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES (they point the object reads at a store this check did not choose).
+// The replace guard on the apply / read-tree / write-tree spawns is load-bearing too, in the fail-closed direction: a refs/replace entry on
+// the squash parent's blob makes git apply the branch's hunks to the REPLACEMENT, and a legitimate hunks-only landing then stops
+// clearing (R8-AP). Round 7's note that this flag "cannot change a verdict" was wrong; it cannot make a branch clear that should not.
 // maxBuffer is 64 MiB, like listLocalBranches always had. Node's default is 1 MiB, and a command whose output passes it throws
 // ENOBUFS, which gitIn turns into "": the same answer as a real empty one. Round 5's landed-by-content check compared `git show`
 // text through it, so two files over 1 MiB (the live docs/CLAIM_INVENTORY.md is 1,128,935 bytes) both read "" and "" === ""
 // cleared REAL work as squash-landed. That check no longer reads file text at all (see hasLandedByContent); this is the second lock.
 function gitEnv(extra) {
-  return { ...process.env, ...extra, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
+  const env = { ...process.env, ...extra };
+  for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_")) delete env[k];
+  delete env.GIT_OBJECT_DIRECTORY;
+  delete env.GIT_ALTERNATE_OBJECT_DIRECTORIES;
+  return { ...env, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
 // { ok, status, stdout, stderr }; ok is "git ran and exited 0". stdout is a string, or a Buffer with { buffer: true }.
 function gitRun(cwd, args, { input, env, buffer = false } = {}) {
@@ -99,6 +109,34 @@ function entryAt(cwd, ref, file) {
   const m = /^(\d{6} (?:blob|commit|tree) [0-9a-f]{40,64})\t/.exec(recs[0]);
   return m ? { entry: m[1] } : { error: true };
 }
+// THE HUB URL AS GIT WILL REALLY USE IT (round-7 refute E2E-ls). `url.<base>.insteadOf` in ANY configuration git reads (the repository's
+// own, the user's, the system's, GIT_CONFIG_*) rewrites a URL before git touches it, so `git ls-remote https://github.com/<Hub>` could be
+// served by a local mirror: the listing was the mirror's, a push "succeeded" into the mirror, the origin row matched the Hub's name
+// as a substring of the mirror's path, and the whole check read "✓ all present on the Review Hub" with exit 0. Two exact tests, no substring:
+//   hubUrlProblem: `git ls-remote --get-url <Hub>` (the expansion git itself applies, from the same configuration the listing uses) must give
+//     back the Hub URL unchanged, else the listing is not read and the row says what the URL became;
+//   originRow: the origin's fetch URL and push URL, after rewriting, must be one of the spellings of the Hub (https, scp-style or ssh
+//     on github.com); a mirror path, or the Hub's name inside another URL, is a failing row that names both URLs.
+// The configuration is NOT switched off for the listing (GIT_CONFIG_NOSYSTEM / GIT_CONFIG_GLOBAL=/dev/null): the proxy and credential
+// settings the real fetch needs live there, and the exact comparison above already sees a rewrite from every one of those sources.
+function hubUrlProblem(cwd = repo, hub = HUB) {
+  const r = gitRun(cwd, ["ls-remote", "--get-url", hub]);
+  if (!r.ok) return `git could not expand the Hub URL (${r.stderr.split("\n").find(Boolean) || `exit ${r.status}`})`;
+  const expanded = r.stdout.trim();
+  return expanded === hub ? "" : `git configuration rewrites the Hub URL ${hub} to ${expanded || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`;
+}
+const HUB_SPELLINGS = ["https://github.com/danfashauer/signalgrid-review-hub", "git@github.com:danfashauer/signalgrid-review-hub", "ssh://git@github.com/danfashauer/signalgrid-review-hub"];
+function isHubUrl(u) {
+  return HUB_SPELLINGS.includes(String(u || "").trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase());
+}
+function originRow(cwd = repo) {
+  const g = gitIn(cwd);
+  const configured = g("config", "--get", "remote.origin.url"), fetchUrl = g("remote", "get-url", "origin"), pushUrl = g("remote", "get-url", "--push", "origin");
+  const ok = isHubUrl(fetchUrl) && isHubUrl(pushUrl);
+  const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${pushUrl})` : "";
+  const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${configured}, rewritten by url.<base>.insteadOf)` : "";
+  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${fetchUrl || "(no origin)"}${pushNote}${rewriteNote}` };
+}
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
 // remote-tracking ref in a bare resolution, and every landed check below would then compare a local
 // branch against the tag's commit, not against mainline.
@@ -127,8 +165,12 @@ const localBranches = listing.names;
 let hubBranches = [];
 const hubSha = new Map();
 let hubListed = false;
-try {
-  const heads = execFileSync("git", ["ls-remote", "--heads", HUB], { encoding: "utf8", timeout: 60000 })
+const hubUrlTrouble = hubUrlProblem(repo);
+if (hubUrlTrouble) {
+  // not listed at all: a listing read from somewhere that is not the Hub is worse than none
+  add("fail", "Review Hub URL", `${hubUrlTrouble} — the unpushed-work check did NOT run; unknown is not clean`);
+} else try {
+  const heads = execFileSync("git", ["ls-remote", "--heads", HUB], { cwd: repo, encoding: "utf8", timeout: 60000 })
     .split("\n").filter(Boolean).map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/"));
   for (const [sha, ref] of heads) hubSha.set(ref.slice("refs/heads/".length), sha);
   hubBranches = [...hubSha.keys()];
@@ -274,6 +316,9 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
   // branch's work into the history this walks (round-6 refute GL2), and the row printed "graft file present" while it cleared real work.
   if (graftsBlock(cwd)) return false;
   const tip = headRef(branch);
+  // (No shallowBounds check here: an entry byte-identical to mainline's CURRENT one needs no history, and every walk that does -- fileEverMatchedMainline
+  // for an entry that differs -- applies shallowBounds itself. The path list below may be LONGER under a cut, never shorter: a common ancestor visible
+  // under a cut is a real one, and the merge base is then at most as new as the real one.)
   const base = gitIn(cwd)("merge-base", mainline, tip);
   if (!base) return false;
   // The path list is PLUMBING: `git diff` (porcelain) honours diff.ignoreSubmodules=all and left a bumped gitlink out of the list, so a
@@ -331,10 +376,14 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) 
   const mine = entryAt(cwd, headRef(branch), file);
   if (!mine.entry) return false;
   if (!git("merge-base", mainline, headRef(branch))) return false; // unrelated histories: no fork to bound by
+  const sb = shallowBounds(cwd, headRef(branch), mainline);
+  if (sb.off) return false;
   // `<tip>..mainline`, not `<merge-base>..mainline`: with TWO merge bases (a criss-cross merge) `git merge-base` names one, and the other
   // side's pre-fork commits stay in the walk, so a change mainline made and reverted BEFORE the fork matched a local re-apply of it
   // (round-6 refute C1, both merge orders). Everything reachable from the branch is by definition not a post-fork landing of it.
-  const hist = git("--literal-pathspecs", "log", `--max-count=${MAX_HISTORY}`, "--format=%H", `${headRef(branch)}..${mainline}`, "--", file);
+  // ...minus what a shallow boundary on the branch's own side HIDES from "reachable from the branch" (sb.exclude: the real parents of every
+  // boundary commit under the tip, see shallowBounds).
+  const hist = git("--literal-pathspecs", "log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, `^${headRef(branch)}`, ...sb.exclude.map((p) => `^${p}`), "--", file);
   if (!hist) return false;
   for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
     if (entryAt(cwd, commit, file).entry === mine.entry) return true;
@@ -371,12 +420,14 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
   const base = git("merge-base", mainline, headRef(branch));
   const tip = git("rev-parse", "--verify", `${headRef(branch)}^{commit}`);
   if (!base || !tip || base === tip) return false;
+  const sb = shallowBounds(cwd, headRef(branch), mainline);
+  if (sb.off) return false;
   const patch = commitDiff(cwd, base, tip);
   if (!patch) return false;
   const want = patchIdOf(cwd, patch);
   if (!want) return false;
-  // the walk ends at the BRANCH, not at one merge base (fileEverMatchedMainline says why)
-  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", `${headRef(branch)}..${mainline}`);
+  // the walk ends at the BRANCH, not at one merge base, and not at a shallow cut either (fileEverMatchedMainline says why)
+  const hist = git("log", `--max-count=${MAX_HISTORY}`, "--format=%H %P", mainline, `^${headRef(branch)}`, ...sb.exclude.map((p) => `^${p}`));
   if (!hist) return false;
   for (const line of hist.split("\n")) {
     const [commit, ...parents] = line.trim().split(" ");
@@ -387,12 +438,80 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
   }
   return false;
 }
+// A SHALLOW BOUNDARY on the branch's side defeats `<tip>..mainline` (round-7 refute SH1, SH3). A commit named in .git/shallow has its
+// parents CUT in every walk, so the real ancestors of the tip that lie below the cut are no longer "reachable from the branch", and a
+// mainline commit that really is one of them (a feature mainline made and reverted before the fork) appears in the walk as if it landed
+// AFTER the fork. SH1: a hand-written .git/shallow line naming the local re-apply commit. SH3, with ordinary commands only: a full clone
+// checks out a Hub PR branch, re-applies the reverted feature locally, merges another Hub branch, and a later depth-1 fetch of that PR
+// branch makes the PR tip a boundary under the lane's own work. The live shared checkout IS shallow.
+// shallowClosure repairs the cut: for each boundary commit reachable from a start (iterating: the real parents are walked too, and may sit
+// above further boundaries) the REAL parents are read from the commit object itself (`cat-file commit` ignores the cut). A real parent that
+// is in the store goes to `exclude` (to be added as `^<parent>` to both walks) and is walked on; a boundary whose real parent is NOT in
+// the store is `opaque`. shallowBounds then decides, for the tip:
+//   no opaque boundary under the tip                       -> exclude, nothing else;
+//   every opaque boundary is also reached from mainline    -> the same: the cut is SHARED history (the ordinary shallow clone: tip and mainline are
+//                                                             cut at the same depth, mainline's own cut repaired the same way, and whatever lies
+//                                                             below is hidden from both walks alike);
+//   an opaque boundary mainline does not reach              -> the branch's own history is unknowable here, `off` says so and every landed
+//                                                             exemption for this branch is off, with the reason in the row.
+// Known limit: a shared opaque boundary is trusted to hide the same history from both sides; a checkout fetched at two different depths whose
+// mainline reaches the same old commit by a path that avoids the boundary could still show it as post-fork.
+function shallowClosure(cwd, start, shallow) {
+  const exclude = new Set(), opaque = new Set(), handled = new Set(), reached = new Set();
+  let frontier = [start];
+  for (let round = 0; frontier.length && round < 64; round++) {
+    const listed = gitRun(cwd, ["rev-list", "--stdin"], { input: `${frontier.join("\n")}\n` });
+    if (!listed.ok) return { error: "the history under the shallow boundary could not be listed" };
+    const next = [];
+    for (const c of listed.stdout.split("\n")) {
+      if (!c) continue;
+      reached.add(c);
+      if (!shallow.has(c) || handled.has(c)) continue;
+      handled.add(c);
+      const body = gitRun(cwd, ["cat-file", "commit", c]);
+      if (!body.ok) return { error: `the shallow boundary commit ${c.slice(0, 12)} could not be read` };
+      for (const line of body.stdout.split("\n\n")[0].split("\n")) {
+        if (!line.startsWith("parent ")) continue;
+        const parent = line.slice(7).trim();
+        if (gitRun(cwd, ["cat-file", "-e", `${parent}^{commit}`]).ok) { exclude.add(parent); next.push(parent); } else opaque.add(c);
+      }
+    }
+    frontier = next;
+  }
+  if (frontier.length) return { error: "the shallow boundaries are nested too deeply to bound" };
+  return { reached, exclude: [...exclude], opaque: [...opaque] };
+}
+function shallowBounds(cwd, tipRef, mainline) {
+  const none = { exclude: [], off: "" };
+  const g = gitIn(cwd);
+  if (g("rev-parse", "--is-shallow-repository") !== "true") return none;
+  let shallow;
+  try { shallow = new Set(readFileSync(resolve(cwd, g("rev-parse", "--git-path", "shallow")), "utf8").split("\n").map((l) => l.trim()).filter((l) => /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(l))); }
+  catch { return { exclude: [], off: "the shallow file could not be read" }; }
+  if (!shallow.size) return none;
+  const tip = g("rev-parse", "--verify", `${tipRef}^{commit}`);
+  if (!tip) return { exclude: [], off: "the branch tip could not be read" };
+  const t = shallowClosure(cwd, tip, shallow);
+  if (t.error) return { exclude: [], off: t.error };
+  if (!t.opaque.length) return { exclude: t.exclude, off: "" };
+  const main = g("rev-parse", "--verify", `${mainline}^{commit}`);
+  const m = main ? shallowClosure(cwd, main, shallow) : { error: "mainline could not be read" };
+  if (m.error) return { exclude: [], off: m.error };
+  const unshared = t.opaque.find((c) => !m.reached.has(c));
+  if (unshared) return { exclude: [], off: `the history below the shallow boundary ${unshared.slice(0, 12)} is not in this checkout and mainline does not reach that commit, so the branch's own ancestry cannot be bounded` };
+  return { exclude: t.exclude, off: "" };
+}
 // The patch between two commits, the same way for the branch and for each mainline commit it is compared with: plumbing (`diff-tree`),
 // because the porcelain `git diff` reads user configuration. diff.ignoreSubmodules=all dropped a gitlink hunk from the branch's patch, so the
 // branch matched a squash that never carried it (round-6 refute B2), and color.diff=always / diff.external changed the bytes patch-id reads.
 // --no-renames: a rename is a delete and an add on both sides, whatever diff.renames says.
+// --text: a `-diff` or `binary` attribute (a repository's .gitattributes, or .git/info/attributes) makes git print "Binary files differ" for a TEXT
+// file, so a legitimate hunks-only landing had no hunks to compare and never cleared (round-7 refute, fail-closed). With --text every file is
+// diffed as the text it is; two different changes to a real binary file produce different patches (they used to produce the same, equally empty
+// one, and only the exact re-apply kept them apart), and the exact re-apply still decides. (`--binary` was tried: the binary patch of a squash is
+// relative to ITS parent, so it never equals the branch's.)
 function commitDiff(cwd, a, b) {
-  return gitRaw(cwd, ["diff-tree", "-p", "-r", "--no-renames", "--ignore-submodules=none", "--no-ext-diff", "--no-textconv", "--no-color", a, b]);
+  return gitRaw(cwd, ["diff-tree", "-p", "--text", "-r", "--no-renames", "--ignore-submodules=none", "--no-ext-diff", "--no-textconv", "--no-color", a, b]);
 }
 function patchIdOf(cwd, patch) {
   const out = gitFeed(cwd, ["patch-id", "--verbatim"], patch);
@@ -652,11 +771,22 @@ function localCommits(cwd, shas) {
 // commit with a broken history, say; the caller then asks each commit alone, and an unanswered question never grants). Asked of
 // each listed commit in turn this cost ~35 ms a sha on the shared checkout (211 Hub branches: 4-7 s for ONE unpushed branch,
 // measured 2026-10-08, which doubled the whole check); asked once it is ~30 ms. Replace objects are off; the grafts guard is the caller's.
+//
+// A "yes" is then CHECKED: the commits on the paths from the tip up to the holders (`rev-list --ancestry-path ^tip <holders>`) are re-hashed
+// (chainIsReal). Round 7 re-hashed only the commits the Hub LISTS, so the real Hub commit planted over a FORGED parent whose content names
+// the tip read held (round-7 refute OBb); every link of the chain the answer rests on is now verified, not only its end.
 function tipReachableFromAny(cwd, tip, shas) {
   if (!shas.length) return false;
   const r = gitRun(cwd, ["rev-list", "--stdin", "--max-count=1"], { input: `${tip}\n${shas.map((s) => `^${s}`).join("\n")}\n` });
   if (!r.ok) return null;
-  return r.stdout.trim() === "";
+  if (r.stdout.trim() !== "") return false;
+  return chainIsReal(cwd, tip, shas);
+}
+function chainIsReal(cwd, tip, shas) {
+  const p = gitRun(cwd, ["rev-list", "--ancestry-path", "--stdin"], { input: `^${tip}\n${shas.join("\n")}\n` });
+  if (!p.ok) return false;
+  const chain = [...new Set(p.stdout.split("\n").filter(Boolean))];
+  return localCommits(cwd, chain).size === chain.length;
 }
 
 // What the Hub's own listing says about a local tip (the ancestry rule above isOnHubBySha):
@@ -664,8 +794,9 @@ function tipReachableFromAny(cwd, tip, shas) {
 //            ancestor, or IS the tip (`merge-base --is-ancestor T T` is true): tipReachableFromAny, one process.
 //   holders  the NAMES behind that yes, one tipReachableFromAny([that commit]) per local commit (the SAME primitive as the yes/no, so
 //            the two cannot disagree: round 6 asked `merge-base --is-ancestor` here, which errors on a missing parent beside the tip
-//            and answered "no" where the one-process answer was a true "yes", leaving holds: true with no name); only when asked for
-//            (names: true), because the seams need the yes/no and the names cost a process each (hubNamesHoldingTip, the self-test).
+//            and answered "no" where the one-process answer was a true "yes", leaving holds: true with no name; since round 8 the answer
+//            also re-hashes every link of the chain, which reads every parent of a holder, so that hole fails BOTH closed); only when asked
+//            for (names: true), because the seams need the yes/no and the names cost a process each (hubNamesHoldingTip, the self-test).
 //   behind   only when there is NO holder: [{ name, local, hub }] for each tracking ref origin/<name> that holds the
 //            tip while the Hub lists <name> at a DIFFERENT sha whose object this checkout does not have. The holder is
 //            behind the Hub (or the Hub moved it sideways), the tip may be on the Hub, and only a fetch tells which.
@@ -735,15 +866,45 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   const tracked = git("rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}^{commit}`);
   const fetch = !hubSha ? "" : tracked ? fetchHint(branch) : unfetchedHint(branch);
   const noSha = hubSha ? {} : { reason: `the Hub sha map has no sha for ${branch}` };
-  if (!tracked) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
-  const counted = git("rev-list", "--count", `refs/remotes/origin/${branch}..${headRef(branch)}`);
+  // With NO origin/<name> the count is made against the Hub-listed commits alone (round-7 refute SNb: a single-branch clone, whose refspec
+  // is +refs/heads/main only, never gets origin/feat from a push; the early "unknown" for a missing tracking ref was a gate that needed the
+  // very ref a single-branch clone does not have).
+  const label = tracked ? `origin/${branch}` : "the Hub's listed commits";
+  const counted = commitsBeyondHub(cwd, branch, hubShaMap, tracked ? `refs/remotes/origin/${branch}` : "");
   const beyond = Number(counted);
-  if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: `origin/${branch}`, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond origin/${branch} could not be counted` };
+  if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: label, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond ${label} could not be counted` };
   if (beyond === 0) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
-  // held by a Hub-listed commit: the work IS on the Hub, so nothing is gated; the comparison is still unreadable, so it stays the warning
-  // (containment never turns an unreadable comparison into a clean one; the d-alias-unknown case)
-  if (hubTipState(branch, hubShaMap, cwd).holds) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
-  return { state: "ahead", ahead: beyond, beyond: `origin/${branch}`, ...(fetch ? { fetch } : {}), ...noSha };
+  // held by a Hub-listed commit, or by a tracking ref that lags the Hub (a fetch settles that one): the work is, or may well be, on the Hub, so
+  // nothing is gated; the comparison is still unreadable, so it stays the warning (containment never turns an unreadable comparison into a
+  // clean one; the d-alias-unknown case). Only commits NO such evidence covers gate.
+  const st = hubTipState(branch, hubShaMap, cwd);
+  if (st.holds || st.behind.length) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
+  return { state: "ahead", ahead: beyond, beyond: label, ...(fetch ? { fetch } : {}), ...noSha };
+}
+// How many commits of the branch the Hub is not KNOWN to hold: reachable from the tip and from neither the branch's own tracking ref (the
+// ref a lagging fetch leaves behind, the premise of "behind the Hub") nor any commit the Hub LISTS that is in the store and hashes to its
+// name. Round 7 counted against origin/<name> alone, so commits the Hub already holds under another listed name inflated the count. Other
+// origin/* refs are NOT taken as evidence (a hand-made one could hide the gate); a lagging one holding the tip's older commits only
+// over-counts, which gates, with the fetch remedy. "" when git cannot count.
+function commitsBeyondHub(cwd, branch, hubShaMap, trackingRef) {
+  const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
+  const nots = [...(trackingRef ? [trackingRef] : []), ...listed];
+  const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${headRef(branch)}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
+  return r.ok ? r.stdout.trim() : "";
+}
+// A DETACHED HEAD carries work no branch row can name (round-7 refute SNc): the branch list is the list of refs/heads, and commits made on
+// a detached HEAD are in none of them, so a session that ended there read "all present on the Review Hub". Gated when HEAD is detached and
+// has commits that no local branch, no remote-tracking ref and no Hub-listed commit holds (an uncountable answer gates too).
+function detachedHeadWork(cwd, hubShaMap) {
+  if (gitRun(cwd, ["symbolic-ref", "-q", "HEAD"]).ok) return null;
+  const head = gitIn(cwd)("rev-parse", "--verify", "-q", "HEAD^{commit}");
+  if (!head) return null;
+  const refs = gitIn(cwd)("for-each-ref", "--format=%(objectname)", "refs/heads", "refs/remotes");
+  const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
+  const nots = [...new Set([...(refs ? refs.split("\n") : []), ...listed])].filter(Boolean);
+  const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${head}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
+  const n = r.ok ? Number(r.stdout.trim()) : NaN;
+  return Number.isInteger(n) && n === 0 ? null : { head, count: Number.isInteger(n) ? n : null };
 }
 // "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.
 // pairs: [[branch, remedy or ""]]; the ones with no remedy of their own go first under `plainRemedy`.
@@ -955,6 +1116,9 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // ...and a row that silently stopped clearing aliases and squash-landed branches would look like the branches themselves had changed.
   // So it says why.
   const graftsNote = graftsReason ? ` (alias and squash-landed exemptions OFF: ${graftsReason})` : "";
+  // ...and the same for a shallow boundary that hides a branch's own history (shallowBounds): named per branch, only for the ones still reported.
+  const shallowOff = unpushed.map((b) => [b, shallowBounds(cwd, headRef(b), mainline).off]).filter(([, why]) => why);
+  const shallowNote = shallowOff.length ? ` (squash-landed exemptions OFF for ${shallowOff.map(([b, why]) => `${b}: ${why}`).join("; ")})` : "";
   // A warning git printed while listing the refs that is NOT a ref-skip one (see listLocalBranches) did not change the
   // verdict, and it is named here so nothing git said is thrown away: the first three, then a count.
   const warns = listing.warnings || [];
@@ -967,7 +1131,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
     // remedy is a fetch, not a push (hubFetchCauses). Grouped by remedy so one cause reads one way.
     const remedyOf = (b) => { const c = hubFetchCauses(b, hubShaMap, cwd); return c.length ? fetchHint(c[0].name) : ""; };
     const groups = remedyGroups(unpushed.map((b) => [b, remedyOf(b)]), "push, or confirm the remote");
-    row("fail", "Local work not on the Review Hub", `${groups}${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
+    row("fail", "Local work not on the Review Hub", `${groups}${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${shallowNote}${warnNote}`);
   } else {
     row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   }
@@ -992,6 +1156,11 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
     // The same cause as the unpushed row's (a tracking ref behind the Hub) reads the same way: fetchHint / unfetchedHint.
     row("warn", "Same-named branches whose Hub tip is not fetched locally",
       remedyGroups(unknownV.map((v) => [v.branch, v.fetch || v.reason || ""]), "cannot tell ahead from behind; reported, not counted clean"), false);
+  }
+  const dh = detachedHeadWork(cwd, hubShaMap);
+  if (dh) {
+    row("fail", "Detached HEAD work not on the Review Hub",
+      `HEAD (detached at ${dh.head.slice(0, 12)}) carries ${dh.count === null ? "commits that could not be counted" : `${dh.count} commit(s)`} no branch, remote-tracking ref or Hub-listed commit holds — make a branch and push it, or confirm it is scratch`);
   }
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work is not lost (the worktree
   // belongs to a live agent, and anything real is pushed from it), but an agent branch carrying commits
@@ -1048,9 +1217,8 @@ if (hubBranches.length && listing.ok) {
 // (the Hub listing nothing) was the condition under which nobody asked which repo
 // origin points at. A push can "succeed" into the wrong repository.
 {
-  const origin = git("remote", "get-url", "origin");
-  const pointsAtHub = /DanFashauer\/SignalGrid-Review-Hub/i.test(origin);
-  add(pointsAtHub ? "ok" : "fail", "origin points at the Review Hub", origin || "(no origin)");
+  const o = originRow(repo);
+  add(o.state, o.what, o.detail);
 }
 
 // ── 2. Uncommitted work — the other way things get lost ─────────────────────
@@ -2017,14 +2185,19 @@ function selfTest() {
     check("a loose object forged at a Hub-listed sha (its content does not hash to its name) is not a holder: git believes it on read, the check re-hashes the listed commits (R7-forged-object)",
       createHash("sha1").update(foObj).digest("hex") !== foHub && fo.f("cat-file", "-t", foHub) === "commit" && !hubHolds(fo, foT, "other") && !localCommits(fo.w, [foHub]).has(foHub) &&
       hubTipState("mine", hubMapOf(fo.h), fo.w).holds === false && reported(foRows, "mine"));
-    // (8) the one-process yes/no and the per-commit names must agree: a listed commit with a missing parent BESIDE the tip holds it
+    // (8) the one-process yes/no and the per-commit names must agree. Round 7: a listed commit with a missing parent BESIDE the tip held the tip
+    // by the one-process answer and not by merge-base --is-ancestor. Round 8 verifies the chain the answer rests on (chainIsReal), which reads every
+    // parent of the holder, so the hole now fails BOTH closed; a sound holder says yes in both.
     const an = mkFx("r7an");
     an.f("checkout", "-q", "-b", "mine"); const anT = an.c("w.txt", "w\n");
     const anHole = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin", "--literally"], { cwd: an.w, encoding: "utf8", env: FX_ENV,
       input: `tree ${an.f("rev-parse", "HEAD^{tree}")}\nparent ${"1234567890".repeat(4)}\nparent ${anT}\nauthor t <t@t> 1 +0000\ncommitter t <t@t> 1 +0000\n\nhole beside the tip\n` }).trim();
     const anMap = new Map([["h", anHole]]);
-    check("a listed commit whose other parent is missing still holds the tip, and hubNamesHoldingTip names it: the yes/no and the names ask the same question (R7-names-agree)",
-      tipReachableFromAny(an.w, anT, [anHole]) === true && hubTipState("mine", anMap, an.w).holds === true && hubNamesHoldingTip("mine", anMap, an.w).join() === "h");
+    const anKid = an.c("kid.txt", "k\n"), anKidMap = new Map([["h2", anKid]]);
+    an.f("checkout", "-q", "-b", "mine2", anT);
+    check("the yes/no and the names ask the same question: a holder with an unreadable parent beside the tip fails closed in both, a sound holder says yes in both (R7-names-agree)",
+      tipReachableFromAny(an.w, anT, [anHole]) === false && hubTipState("mine", anMap, an.w).holds === false && hubNamesHoldingTip("mine", anMap, an.w).length === 0 &&
+      hubTipState("mine2", anKidMap, an.w).holds === true && hubNamesHoldingTip("mine2", anKidMap, an.w).join() === "h2");
     // (9) read-only: `git status` refreshes the index (and takes its lock) unless told not to
     const ro = mkFx("r7ro");
     ro.c("t.txt", "same bytes\n"); writeFileSync(join(ro.w, "t.txt"), "same bytes\n"); utimesSync(join(ro.w, "t.txt"), new Date(Date.now() - 86400000), new Date(Date.now() - 3600000));
@@ -2035,10 +2208,193 @@ function selfTest() {
     check("the check's own `git status` leaves the index byte-identical, where a plain `git status` rewrites it (R7-readonly)", roGuarded === roBefore && roSum() !== roBefore);
     // (10) one place starts git: the environment guards live in gitEnv, and no other direct spawn of git reads objects
     const prodSrc = readFileSync(fileURLToPath(import.meta.url), "utf8"), prodText = prodSrc.slice(0, prodSrc.indexOf("\nfunction selfTest()"));
-    const stray = [...prodText.matchAll(/\b(?:execFileSync|spawnSync)\(\s*"git"\s*,\s*(\[[^\]]{0,40})/g)].map((m) => m[1]).filter((a) => !/^\["ls-remote"/.test(a) && !/^\["-c", "core\.commitGraph=false"/.test(a));
+    // quote-agnostic (round-7 refute: a single-quoted stray was not found): any quote, execFile / spawn / exec forms, only the two allowed argument lists pass
+    const strayGit = (text) => [...text.matchAll(/\b(?:execFileSync|spawnSync|execFile|spawn)\(\s*(["'`])git\1\s*,\s*(\[[^\]]{0,60})?/g)].map((m) => m[2] || "")
+      .filter((a) => !/^\[\s*["'`]ls-remote["'`]/.test(a) && !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]/.test(a))
+      .concat([...text.matchAll(/\b(?:exec|execSync)\(\s*(["'`])\s*git\b/g)].map((m) => m[0]));
+    const stray = strayGit(prodText);
     check("no git is started outside gitRun (apart from ls-remote), and gitEnv forces replace objects off and optional locks off whatever the caller passes (R7-spawns)",
       stray.length === 0 && gitEnv({ GIT_NO_REPLACE_OBJECTS: "0", GIT_OPTIONAL_LOCKS: "1", KEEP: "x" }).GIT_NO_REPLACE_OBJECTS === "1" &&
       gitEnv({ GIT_OPTIONAL_LOCKS: "1" }).GIT_OPTIONAL_LOCKS === "0" && gitEnv({ KEEP: "x" }).KEEP === "x");
+    // ══ ROUND 8 ══ The round-7 refuter's fixtures (E2E-ls, SH1, SH3, SNb, SNc, the env and object attacks, AP, the attribute scenarios), rebuilt beside
+    // the rows they must change. Each case builds the lie first (a precondition inside its own check) and then asks the guarded answer.
+    const withEnvVars = (vars, fn) => {
+      const prior = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
+      Object.assign(process.env, vars);
+      try { return fn(); } finally { for (const [k, v] of Object.entries(prior)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
+    };
+    const plantLoose = (fx, sha, body) => { // a loose object written under a name it does not hash to (git does not verify on read)
+      const obj = Buffer.concat([Buffer.from(`commit ${body.length}\0`), body]);
+      mkdirSync(join(fx.w, ".git", "objects", sha.slice(0, 2)), { recursive: true });
+      writeFileSync(join(fx.w, ".git", "objects", sha.slice(0, 2), sha.slice(2)), deflateSync(obj));
+    };
+    const laneOf = (fx, name, cloneArgs = []) => { // a hermetic clone of the fixture's hub, with the seam rows for it
+      const dir = join(root, `${name}-lane`);
+      execFileSync("git", ["clone", "-q", ...cloneArgs, `file://${fx.h}`, dir], { env: FX_ENV, stdio: "ignore" });
+      const lf = (...a) => execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], env: FX_ENV }).trim();
+      lf("config", "commit.gpgsign", "false");
+      const lrows = () => { const m = hubMapOf(fx.h); return branchSeamRows({ listing: listLocalBranches(dir), hubBranches: [...m.keys()], hubShaMap: m, ephemeral: [], scratchExcluded: [], mainline: R6M, cwd: dir }); };
+      return { dir, f: lf, rows: lrows };
+    };
+    // (1) the Hub URL is what git will really use. E2E-ls: `url.<mirror>.insteadOf <Hub URL>` served the listing, took the push, and passed the origin row
+    const lsx = mkFx("r8ls"), lsMirror = join(root, "r8ls-mirror.git");
+    execFileSync("git", ["init", "-q", "--bare", "-b", "main", lsMirror]);
+    lsx.f("config", "remote.origin.url", HUB); lsx.f("push", "-q", lsMirror, "main");
+    const lsPlain = { problem: hubUrlProblem(lsx.w), row: originRow(lsx.w) };
+    lsx.f("config", `url.${lsMirror}.insteadOf`, HUB);
+    const lsRedirected = { problem: hubUrlProblem(lsx.w), row: originRow(lsx.w) };
+    check("a url.<mirror>.insteadOf for the Hub URL is a failing Hub-URL problem and a failing origin row that name the mirror, where an unrewritten repository has neither (R8-ls-url)",
+      lsPlain.problem === "" && lsPlain.row.state === "ok" && lsRedirected.problem.includes("rewrites the Hub URL") && lsRedirected.problem.includes(lsMirror) &&
+      lsRedirected.row.state === "fail" && lsRedirected.row.detail.includes(lsMirror) && /remote\.origin\.url is https:\/\/github\.com\/.*rewritten by url\.<base>\.insteadOf/.test(lsRedirected.row.detail));
+    const lsv = mkFx("r8ls2"), lsVariant = (url, extra = []) => { lsv.f("config", "remote.origin.url", url); for (const [k, v] of extra) lsv.f("config", k, v); const r = originRow(lsv.w).state; for (const [k] of extra) lsv.f("config", "--unset", k); return r; };
+    check("the origin row is an exact test: every spelling of the Hub passes, and a mirror path, another host, a longer repository name or the Hub's name inside another URL fails (R8-ls-origin)",
+      ["https://github.com/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com/DanFashauer/SignalGrid-Review-Hub", "https://github.com/danfashauer/signalgrid-review-hub/", "git@github.com:DanFashauer/SignalGrid-Review-Hub.git", "ssh://git@github.com/DanFashauer/SignalGrid-Review-Hub.git"].every((u) => lsVariant(u) === "ok") &&
+      [`${lsMirror}/DanFashauer/SignalGrid-Review-Hub.git`, "https://example.org/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com/DanFashauer/SignalGrid-Review-Hub-fork.git", "https://github.com/evil/DanFashauer/SignalGrid-Review-Hub.git"].every((u) => lsVariant(u) === "fail") &&
+      lsVariant("https://github.com/DanFashauer/SignalGrid-Review-Hub.git", [["remote.origin.pushurl", lsMirror]]) === "fail");
+    // the whole script, end to end, in a copy of the fixture (the refuter's run: file protocol only, an unreachable proxy for anything else)
+    mkdirSync(join(lsx.w, "scripts"), { recursive: true });
+    writeFileSync(join(lsx.w, "scripts", "loop-state.mjs"), prodSrc);
+    const lsRun = spawnSync(process.execPath, [join(lsx.w, "scripts", "loop-state.mjs")], { cwd: lsx.w, encoding: "utf8", env: { ...process.env, GIT_ALLOW_PROTOCOL: "file", HTTPS_PROXY: "http://127.0.0.1:9", https_proxy: "http://127.0.0.1:9" }, timeout: 120000 });
+    const lsOut = String(lsRun.stdout).replace(/\x1b\[[0-9;]*m/g, "");
+    check("the whole check, run in a repository whose Hub URL is rewritten to a local mirror, exits 1 with a failing Hub-URL row and a failing origin row, and never says the branches are present on the Review Hub (R8-ls-e2e)",
+      lsRun.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lsOut) && /✗ origin points at the Review Hub/.test(lsOut) && !/all present on the Review Hub/.test(lsOut));
+    // (2) shallow boundaries. SH1: a .git/shallow line naming the local re-apply commit hides its real parent from `<tip>..mainline`
+    const sh1 = mkFx("r8sh1");
+    const sh1O = sh1.c("f.txt", "v1\n", "O"); sh1.f("push", "-q", "origin", "main");
+    sh1.f("checkout", "-q", "-b", "kside", sh1O); sh1.c("k.txt", "k\n", "K: side"); sh1.f("push", "-q", "origin", "kside");
+    sh1.f("checkout", "-q", "main"); sh1.c("f.txt", "v2 FEATURE\n", "X: feature"); const sh1Z = sh1.c("f.txt", "v1\n", "Z: revert the feature");
+    sh1.f("merge", "-q", "--no-edit", "--no-ff", "kside"); sh1.f("push", "-q", "origin", "main");
+    sh1.f("checkout", "-q", "-b", "work", sh1Z); const sh1T1 = sh1.c("f.txt", "v2 FEATURE\n", "T1: LOCAL re-apply of the reverted feature");
+    sh1.f("merge", "-q", "--no-edit", "--no-ff", "kside"); sh1.f("branch", "-D", "kside");
+    const sh1Pre = reported(sh1.rows(), "work");
+    writeFileSync(join(sh1.w, ".git", "shallow"), `${sh1T1}\n`);
+    const sh1Walk = sh1.f("log", "--format=%s", `refs/heads/work..${R6M}`).split("\n"), sh1B = shallowBounds(sh1.w, "refs/heads/work", R6M);
+    check("a hand-written .git/shallow line naming the branch's own commit does not hide the real ancestry from the fork walk: the real parent is excluded and the work stays reported (R8-SH1)",
+      sh1Pre && sh1Walk.includes("X: feature") && sh1B.off === "" && sh1B.exclude.includes(sh1Z) &&
+      hasLandedByContent("work", R6M, sh1.w) === false && landedByPatchId("work", R6M, sh1.w) === false && reported(sh1.rows(), "work"));
+    // SH3: the same, with ordinary commands only: a full clone, a local re-apply on a Hub PR branch, a merge of another Hub branch, then a depth-1 refresh of the PR
+    const sh3 = mkFx("r8sh3");
+    const sh3O = sh3.c("f.txt", "v1\n", "O"); sh3.f("push", "-q", "origin", "main");
+    sh3.f("checkout", "-q", "-b", "kside", sh3O); sh3.c("k.txt", "k\n", "K: side"); sh3.f("push", "-q", "origin", "kside");
+    sh3.f("checkout", "-q", "main"); sh3.c("f.txt", "v2 FEATURE\n", "X: feature"); const sh3Z = sh3.c("f.txt", "v1\n", "Z: revert the feature"); sh3.f("push", "-q", "origin", "main");
+    sh3.f("checkout", "-q", "-b", "prb", sh3Z); const sh3P = sh3.c("doc.txt", "a PR\n", "P: the PR commit"); sh3.f("push", "-q", "origin", "prb");
+    sh3.f("checkout", "-q", "main"); sh3.f("merge", "-q", "--no-edit", "--no-ff", "kside"); sh3.c("doc.txt", "a PR\n", "squash of P"); sh3.f("push", "-q", "origin", "main");
+    const l3 = laneOf(sh3, "r8sh3");
+    l3.f("checkout", "-q", "-b", "work", "origin/prb"); writeFileSync(join(l3.dir, "f.txt"), "v2 FEATURE\n"); l3.f("add", "-A"); l3.f("commit", "-q", "-m", "T1: LOCAL re-apply of the reverted feature");
+    l3.f("merge", "-q", "--no-edit", "--no-ff", "origin/kside");
+    const l3Pre = hasLandedByContent("work", R6M, l3.dir) === false && reported(l3.rows(), "work");
+    l3.f("fetch", "-q", "--depth=1", "origin", "prb");
+    check("a depth-1 refresh of a Hub PR branch under the lane's own work does not clear it: the PR tip becomes a boundary, its real parent is excluded from both walks (R8-SH3)",
+      l3Pre && readFileSync(join(l3.dir, ".git", "shallow"), "utf8").trim() === sh3P && shallowBounds(l3.dir, "refs/heads/work", R6M).exclude.includes(sh3Z) &&
+      hasLandedByContent("work", R6M, l3.dir) === false && landedByPatchId("work", R6M, l3.dir) === false && reported(l3.rows(), "work"));
+    // ...and a boundary whose real parent is NOT in the store and that mainline does not reach cannot be bounded: the exemptions are off for that branch, and the
+    // row says so. Mainline made the feature together with the PR's two commits (X*) and reverted all of it (Z*); the lane's branch is the PR tip (a depth-1 boundary,
+    // its first commit Q absent) merged with kside, plus the local re-apply of the feature. Walked from the tip, X* looks like a post-fork landing of exactly the
+    // branch's hunks AND of every file it changes, so both landed checks clear it unless the exemptions are off.
+    const so = mkFx("r8so");
+    const soO = so.c("f.txt", "v1\n", "O"); so.f("push", "-q", "origin", "main");
+    so.f("checkout", "-q", "-b", "kside", soO); so.c("k.txt", "k\n", "K: side"); so.f("push", "-q", "origin", "kside");
+    so.f("checkout", "-q", "main"); so.put("f.txt", "v2 FEATURE\n"); so.put("q.txt", "q\n"); so.put("doc.txt", "a PR\n"); so.f("add", "-A"); so.f("commit", "-q", "-m", "X*: the feature and the PR");
+    so.f("rm", "-q", "q.txt", "doc.txt"); so.put("f.txt", "v1\n"); so.f("add", "-A"); so.f("commit", "-q", "-m", "Z*: revert all of it"); const soZ = so.f("rev-parse", "HEAD");
+    so.f("merge", "-q", "--no-edit", "--no-ff", "kside"); so.f("push", "-q", "origin", "main");
+    so.f("checkout", "-q", "-b", "prb", soZ); so.c("q.txt", "q\n", "Q: the PR's first commit"); so.c("doc.txt", "a PR\n", "P: the PR tip"); so.f("push", "-q", "origin", "prb");
+    const lo = laneOf(so, "r8so", ["--depth=6", "-b", "main"]);
+    lo.f("fetch", "-q", "--depth=1", "origin", "refs/heads/prb:refs/remotes/origin/prb");
+    lo.f("update-ref", "refs/remotes/origin/kside", execFileSync("git", ["-C", so.h, "rev-parse", "refs/heads/kside"], { encoding: "utf8" }).trim()); // K is in mainline's history, so it is in the store
+    lo.f("checkout", "-q", "-b", "work", "origin/prb");
+    lo.f("merge", "-q", "--no-edit", "--no-ff", "--allow-unrelated-histories", "origin/kside"); // the PR tip is cut off from everything: its merge with kside is what gives the branch a visible common ancestor
+    writeFileSync(join(lo.dir, "f.txt"), "v2 FEATURE\n"); lo.f("add", "-A"); lo.f("commit", "-q", "-m", "T1: LOCAL re-apply of the reverted feature");
+    const loB = shallowBounds(lo.dir, "refs/heads/work", R6M), loRow = rowOf(lo.rows(), T_UNPUSHED);
+    check("a branch on a shallow boundary whose real parent is not in the store and that mainline does not reach has its landed exemptions OFF, and the row names the branch and why (R8-SH-opaque)",
+      lo.f("rev-parse", "--is-shallow-repository") === "true" && lo.f("log", "--format=%s", `refs/heads/work..${R6M}`).split("\n").includes("X*: the feature and the PR") &&
+      loB.off !== "" && hasLandedByContent("work", R6M, lo.dir) === false && landedByPatchId("work", R6M, lo.dir) === false &&
+      !!loRow && loRow.state === "fail" && loRow.gated === true && loRow.detail.split(" — ")[0] === "work" && /squash-landed exemptions OFF for work: the history below the shallow boundary/.test(loRow.detail));
+    // ...while the ordinary shallow clone keeps working: a squash-landed branch whose only boundary is SHARED with mainline still clears (the exemption is not given up for every shallow checkout)
+    const sc2 = mkFx("r8sc");
+    sc2.c("a.txt", "base\n"); sc2.f("push", "-q", "origin", "main");
+    sc2.f("checkout", "-q", "-b", "feat"); sc2.c("feat.txt", "the feature\n", "feat"); sc2.f("checkout", "-q", "main");
+    sc2.c("feat.txt", "the feature\n", "squash of feat"); sc2.c("later.txt", "later\n", "a later change"); sc2.f("push", "-q", "origin", "main");
+    const ls2 = laneOf(sc2, "r8sc", ["--depth=3", "-b", "main"]);
+    ls2.f("fetch", "-q", sc2.w, "refs/heads/feat:refs/heads/feat");
+    const ls2B = shallowBounds(ls2.dir, "refs/heads/feat", R6M);
+    check("a squash-landed branch in an ordinary shallow clone, whose boundary mainline shares, still clears by bytes (R8-SH-shared)",
+      ls2.f("rev-parse", "--is-shallow-repository") === "true" && ls2B.off === "" && hasLandedByContent("feat", R6M, ls2.dir) === true);
+    // (3a) the count is of commits the Hub is NOT known to hold: a.1 was pushed (origin/feat is there, behind), a.2 sits on a Hub branch `hold` pushed by URL
+    // (no tracking ref), a.3 is held by nothing, and the Hub has since moved feat. Counted against origin/feat alone that is +2; it is +1.
+    const bc = mkFx("r8bc");
+    bc.f("checkout", "-q", "-b", "feat"); bc.c("a1.txt", "1\n"); bc.f("push", "-q", "origin", "feat"); const bcA2 = bc.c("a2.txt", "2\n"); bc.f("push", "-q", bc.h, "feat:refs/heads/hold");
+    bc.c("a3.txt", "3\n", "held by nothing"); hubAdvance(bc, "feat");
+    const bcA = rowOf(bc.rows(), T_AHEAD);
+    check("the 'beyond' count leaves out commits a Hub-listed commit already holds: +1, not the +2 a count against origin/<name> alone gives (R8-beyond-count)",
+      bc.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "2" && hubHolds(bc, bcA2, "hold") && !!bcA && bcA.state === "fail" && bcA.detail.startsWith("feat (+1 beyond origin/feat)"));
+    // (3) SNb: a single-branch clone's refspec never gives origin/feat, and another lane pushes feat
+    const nb = mkFx("r8nb");
+    nb.f("config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main");
+    nb.f("checkout", "-q", "-b", "feat"); nb.c("f1.txt", "1\n"); nb.f("push", "-q", "origin", "feat"); const nbT = nb.c("mine.txt", "REAL local-only\n", "local only");
+    const nbLane = join(root, "r8nb-lane"); execFileSync("git", ["clone", "-q", "-b", "feat", nb.h, nbLane], { env: FX_ENV, stdio: "ignore" });
+    writeFileSync(join(nbLane, "t.txt"), "t\n"); execFileSync("git", ["-C", nbLane, "add", "-A"], { env: FX_ENV }); execFileSync("git", ["-C", nbLane, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "other lane"], { env: FX_ENV });
+    execFileSync("git", ["-C", nbLane, "push", "-q", "origin", "feat"], { env: FX_ENV, stdio: "ignore" });
+    const nbRows = nb.rows(), nbA = rowOf(nbRows, T_AHEAD);
+    check("a same-named branch with a local-only commit, in a clone with no origin/<name> at all, is a GATED failure counted against the Hub's listed commits, with the fetch remedy (R8-SNb)",
+      nb.f("for-each-ref", "refs/remotes/origin/feat") === "" && !hubHolds(nb, nbT, "feat") && !!nbA && nbA.state === "fail" && nbA.gated === true &&
+      /^feat \(\+\d+ beyond the Hub's listed commits\)/.test(nbA.detail) && nbA.detail.includes(`feat: ${unfetchedHint("feat")}`) && !rowOf(nbRows, T_UNKNOWN));
+    // (4) the environment: GIT_TEST_COMMIT_GRAPH=1 forces the commit-graph back on over core.commitGraph=false, GIT_OBJECT_DIRECTORY / GIT_ALTERNATE_OBJECT_DIRECTORIES re-point the reads
+    const cgLiesUnderEnv = withEnvVars({ GIT_TEST_COMMIT_GRAPH: "1" }, () => execFileSync("git", ["-c", "core.commitGraph=false", "rev-list", cgT, "--not", cgO], { cwd: cg.w, encoding: "utf8" }).trim() === "");
+    const cgUnderEnv = withEnvVars({ GIT_TEST_COMMIT_GRAPH: "1" }, () => ({ holds: hubTipState("mine", hubMapOf(cg.h), cg.w).holds, rows: cg.rows() }));
+    const scrubbed = withEnvVars({ GIT_TEST_ANYTHING: "1", GIT_OBJECT_DIRECTORY: join(root, "no-objects"), GIT_ALTERNATE_OBJECT_DIRECTORIES: join(root, "no-alt"), GIT_AUTHOR_NAME: "kept" }, () => gitEnv({}));
+    check("with GIT_TEST_COMMIT_GRAPH=1 the forged commit-graph is still not read, and GIT_TEST_*, GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES never reach a git this file starts (R8-env)",
+      cgLiesUnderEnv && cgUnderEnv.holds === false && reported(cgUnderEnv.rows, "mine") && scrubbed.GIT_TEST_ANYTHING === undefined && scrubbed.GIT_OBJECT_DIRECTORY === undefined &&
+      scrubbed.GIT_ALTERNATE_OBJECT_DIRECTORIES === undefined && scrubbed.GIT_AUTHOR_NAME === "kept" && scrubbed.GIT_NO_REPLACE_OBJECTS === "1");
+    // (5) the REAL Hub commit over a FORGED parent: the listed commit hashes to its name, the chain below it does not
+    const ob = mkFx("r8ob");
+    ob.f("checkout", "-q", "-b", "oth"); ob.c("o.txt", "o\n"); ob.f("push", "-q", "origin", "oth:refs/heads/other");
+    ob.f("checkout", "-q", "-b", "mine", "main"); const obT = ob.c("w.txt", "REAL unpushed\n"); ob.f("branch", "-D", "oth");
+    const obHg = (...a) => execFileSync("git", ["-C", ob.h, ...a], { encoding: "utf8", env: FX_ENV }).trim(), obO = obHg("rev-parse", "refs/heads/other");
+    const obP2 = obHg("commit-tree", `${obO}^{tree}`, "-p", obO, "-m", "hub P2"), obH2 = obHg("commit-tree", `${obO}^{tree}`, "-p", obP2, "-m", "hub H2"); obHg("update-ref", "refs/heads/other", obH2);
+    const obPlanted = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin"], { cwd: ob.w, input: execFileSync("git", ["-C", ob.h, "cat-file", "commit", obH2]), encoding: "utf8", env: FX_ENV }).trim();
+    plantLoose(ob, obP2, Buffer.from(`tree ${ob.f("rev-parse", `${obT}^{tree}`)}\nparent ${obT}\nauthor t <t@t> 1 +0000\ncommitter t <t@t> 1 +0000\n\nforged P2\n`));
+    const obMap = hubMapOf(ob.h);
+    check("the real Hub commit planted over a forged parent (whose content names the tip) is not a holder: the whole chain from the tip to the holder is re-hashed, not only its end (R8-chain)",
+      obPlanted === obH2 && localCommits(ob.w, [obH2]).has(obH2) && !hubHolds(ob, obT, "other") && tipReachableFromAny(ob.w, obT, [obH2]) === false &&
+      hubTipState("mine", obMap, ob.w).holds === false && hubNamesHoldingTip("mine", obMap, ob.w).length === 0 && reported(ob.rows(), "mine"));
+    // (6) detached HEAD: commits made on a detached HEAD are in no branch
+    const dh = mkFx("r8dh");
+    dh.f("checkout", "-q", "--detach"); const dhT = dh.c("d.txt", "REAL work on a detached HEAD\n", "detached work");
+    const dhRows = dh.rows(), dhRow = rowOf(dhRows, "Detached HEAD work not on the Review Hub");
+    check("work committed on a detached HEAD that no branch, remote-tracking ref or Hub-listed commit holds is a GATED failure naming HEAD and the count (R8-detached)",
+      dh.f("rev-parse", "HEAD") === dhT && dh.f("branch", "--contains", dhT).startsWith("* (HEAD detached") && !!dhRow && dhRow.state === "fail" && dhRow.gated === true &&
+      dhRow.detail.startsWith(`HEAD (detached at ${dhT.slice(0, 12)}) carries 1 commit(s)`));
+    dh.f("branch", "saved", "HEAD");
+    const dhSaved = dh.rows();
+    check("...and once a branch holds it the detached row is gone and the branch is what is reported; a detached HEAD at a commit a remote-tracking ref holds is clean (R8-detached-clean)",
+      !rowOf(dhSaved, "Detached HEAD work not on the Review Hub") && reported(dhSaved, "saved") && (() => { dh.f("checkout", "-q", "--detach", "origin/main"); return !rowOf(dh.rows(), "Detached HEAD work not on the Review Hub"); })());
+    // (7) apply / read-tree / write-tree and refs/replace: a LEGIT hunks-only landing stays cleared with a replace ref on the squash parent's blob
+    const ap = mkFx("r8ap");
+    ap.c("a.txt", "one\ntwo\nthree\n"); ap.c("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n"); ap.f("push", "-q", "origin", "main");
+    ap.f("checkout", "-q", "-b", "feat"); ap.put("a.txt", "one\nTWO\nthree\n"); ap.put("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n- r7 (feat)\n"); ap.f("add", "-A"); ap.f("commit", "-q", "-m", "feat");
+    ap.f("checkout", "-q", "main"); ap.c("shared.md", "- r1\n- r2 (main moved)\n- r3\n- r4\n- r5\n- r6\n", "main moves shared"); const apP = ap.f("rev-parse", "HEAD");
+    ap.f("merge", "-q", "--squash", "feat"); ap.f("commit", "-q", "-m", "squash feat"); ap.f("push", "-q", "origin", "main");
+    const apBefore = landedByPatchId("feat", R6M, ap.w);
+    ap.f("replace", ap.f("rev-parse", `${apP}:shared.md`), blobOf(ap, "garbage that no hunk applies to\n"));
+    check("a legitimate hunks-only landing still clears with a refs/replace entry on the squash parent's blob: the apply, read-tree and write-tree spawns read the real objects too (R8-AP)",
+      apBefore === true && ap.f("cat-file", "-p", `${apP}:shared.md`).startsWith("garbage") && landedByPatchId("feat", R6M, ap.w) === true);
+    // (8) attributes: `-diff` / `binary` make git print "Binary files differ" for a TEXT file, and no two hunks could then be compared
+    const at = mkFx("r8at"), atBody = "c1\nc2\nc3\nANCHOR\nc5\nc6\nc7\n";
+    at.c("a.txt", "one\ntwo\nthree\n"); at.c("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n"); at.c("bin.dat", "AAAA\n"); const atB = at.f("rev-parse", "HEAD"); at.f("push", "-q", "origin", "main");
+    at.f("checkout", "-q", "-b", "feat"); at.put("a.txt", "one\nTWO\nthree\n"); at.put("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n- r7 (feat)\n"); at.f("add", "-A"); at.f("commit", "-q", "-m", "feat");
+    at.f("checkout", "-q", "-b", "real", "feat"); at.c("extra.txt", "REAL unpushed line\n", "real extra");
+    at.f("checkout", "-q", "-b", "binb", atB); at.c("bin.dat", "BRANCH-ONLY bytes\n", "bin branch");
+    at.f("checkout", "-q", "main"); at.c("shared.md", "- r1\n- r2 (main moved)\n- r3\n- r4\n- r5\n- r6\n", "main moves shared"); at.f("merge", "-q", "--squash", "feat"); at.f("commit", "-q", "-m", "squash feat");
+    at.c("bin.dat", "MAINLINE bytes\n", "squash of a different bin change"); at.f("push", "-q", "origin", "main");
+    const atPlain = landedByPatchId("feat", R6M, at.w);
+    writeFileSync(join(at.w, ".git", "info", "attributes"), "* -diff\n");
+    check("with `* -diff` in .git/info/attributes a legit hunks-only landing still clears, a branch with one extra real line and a different binary change to the same path stay reported (R8-attr)",
+      atPlain === true && landedByPatchId("feat", R6M, at.w) === true && landedByPatchId("real", R6M, at.w) === false && landedByPatchId("binb", R6M, at.w) === false && hasLandedByContent("binb", R6M, at.w) === false);
+    // (9) R7-spawns, quote-agnostic: the scanner is a function so the synthetic samples can test it
+    check("the stray-git scanner is quote-agnostic: double, single and backtick quotes, execFile, spawn and exec forms are all found, the two allowed forms are not (R8-spawns-scan)",
+      strayGit(`execFileSync('git', ['rev-parse'])`).length === 1 && strayGit("spawnSync(`git`, [`log`])").length === 1 && strayGit(`execFile("git", ["log"], cb)`).length === 1 &&
+      strayGit(`spawn('git',['status'])`).length === 1 && strayGit(`execSync("git status")`).length === 1 && strayGit(`execFileSync('git', ['ls-remote', '--heads'])`).length === 0 &&
+      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 0 && strayGit(prodText).length === 0);
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

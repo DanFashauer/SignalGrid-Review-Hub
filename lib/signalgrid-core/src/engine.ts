@@ -439,6 +439,23 @@ export class SignalGridCore {
     return this.store.signalInventory();
   }
 
+  /**
+   * How many connectors this process holds, per kind and status. No token, for
+   * the same reason `signalInventory()` takes none — a fact about the PROCESS,
+   * not a tenant — and no id, ref, subject or tenant. This is what /metrics
+   * derives connector health FROM, so the gauge reports held state rather than a
+   * counter incremented beside a route.
+   */
+  connectorInventory(): ReturnType<MemoryStore["connectorInventory"]> {
+    return this.store.connectorInventory();
+  }
+
+  /** How many signals this process holds, per freshness value. Same rule as
+   *  `signalInventory()`: no token, no id, ref, subject or tenant. */
+  signalFreshnessInventory(): ReturnType<MemoryStore["signalFreshnessInventory"]> {
+    return this.store.signalFreshnessInventory();
+  }
+
   listSyncRuns(token: string, connectorId: string): ConnectorSyncRun[] {
     const principal = authenticate(this.store, token);
     authorize(principal, "connector:read");

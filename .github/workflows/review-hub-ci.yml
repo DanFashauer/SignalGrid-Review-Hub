@@ -441,6 +441,10 @@ jobs:
         run: node scripts/check-agent-raise-hand.mjs --self-test
       - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
         run: node scripts/check-agent-raise-hand.mjs
+      - name: Agent model tier self-test (the gate must be able to fail)
+        run: node scripts/check-agent-model-tier.mjs --self-test
+      - name: Agent model tier (DR-047 — every first-party agent names haiku, sonnet or opus; never inherit, never Fable/Mythos)
+        run: node scripts/check-agent-model-tier.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)

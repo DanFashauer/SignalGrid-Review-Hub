@@ -696,14 +696,32 @@ earlier — that is the loop working, not a reason to soften the record.
     functions that cannot return falsy). Only the fourteen above were verified
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
-    verdict core, and 21 of 50 check-gates carry no self-test.
-    RE-MEASURED 2026-09-30 (`grep -L -- '--self-test' scripts/check-*.mjs | wc -l`
-    at `SignalGrid_Alpha` 3a59d864): that figure was stale — 25 of 150 take no
-    `--self-test` flag (26 before #1274 gave `scripts/check-module-init-order.mjs` one).
-    Most of those carry an in-run control instead; the six that had neither (0–2
-    comment-only hits for self-test/control/planted/falsif) are the ones fixed above.
-    This is a dated measurement, not a held figure: no gate re-derives it, so re-run
-    the grep rather than trusting the number.
+    verdict core (the check-gate self-test half is re-derived below).
+    RE-MEASURED 2026-10-08 (at `SignalGrid_Alpha` 44885201): a re-derived figure now, not a
+    dated grep. `node scripts/check-gate-self-tests-run.mjs` prints it on every run and
+    fails on the defect: of the `scripts/check-*.mjs` gates it finds, those with a quoted
+    `--self-test` handler on a non-comment line are split into the ones a
+    `scripts/preflight.mjs` step or a workflow `run:` line invokes as `<gate> --self-test`
+    and the ones nobody does; the second kind it SPAWNS, requiring exit 0 AND stdout that
+    names a self-test (a flag accepted as a no-op is not credited); a gate with no handler
+    must name a control on a non-comment line, which is a FLOOR against a gate with none,
+    NOT proof that its control can fail (counted as "control-only", never "self-tested").
+    Measured on the branch head: 154 gates, 128 with a handler, 119 registered, 9 run by the
+    gate (all passed, including `scripts/check-api-collection.mjs`,
+    `scripts/check-deployment-runbook.mjs` and `scripts/check-desktop-core-tests.mjs`, whose
+    self-tests ran in no step before), 26 control-only, 0 with neither. Falsified: with
+    `return 1;` first in `selfTest()` of `scripts/check-api-collection.mjs` (and of
+    `scripts/check-deployment-runbook.mjs`) in a scratch copy, the default run, preflight's
+    step and CI's step stayed green and only this gate went red, naming the file.
+    Its `--self-test` plants an unregistered gate whose flag exits 1, an unregistered no-op
+    flag, and a flag-less gate whose only control sits in a comment (each exit 1), against a
+    registered gate that must NOT be spawned and a gate with a real control (each exit 0).
+    STILL OPEN after this, and not restated as measured: the roughly 334 structurally
+    unfailable assertions in `scripts/src/signalgrid-grid-proof.ts` (no gate counts
+    tautological assertions; sweeping them means planting defects in the simulator),
+    mutation coverage of the verdict core (`scripts/mutation-guard.mjs` TARGETS registers no
+    `lib/signalgrid-simulator` or `lib/signalgrid-core/src/engine.ts` file; a separate row),
+    and retirement of the `tests/load` k6 drivers (the owner's).
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,
@@ -4795,7 +4813,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (933) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (935) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

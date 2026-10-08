@@ -443,6 +443,10 @@ jobs:
         run: node scripts/check-agent-raise-hand.mjs --self-test
       - name: Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)
         run: node scripts/check-agent-raise-hand.mjs
+      - name: Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)
+        run: node scripts/check-gate-self-tests-run.mjs --self-test
+      - name: Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)
+        run: node scripts/check-gate-self-tests-run.mjs
       - name: Positioning trace (every ratified claim resolves by id in the launch profile)
         run: node scripts/check-positioning-trace.mjs
       - name: Module init order (a const read before it is initialised)

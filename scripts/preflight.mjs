@@ -400,6 +400,8 @@ const STEPS = [
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
   { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
   { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
+  { name: "Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs", "--self-test"] },
+  { name: "Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },

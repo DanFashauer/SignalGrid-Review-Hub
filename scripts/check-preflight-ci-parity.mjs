@@ -366,13 +366,50 @@ export function stripYamlComments(text) {
 //      separator in quotes is not a boundary and a gate path in quotes is not a run.
 //      The YAML `|` after `run:` is not shell and is handled before this.
 //
+//   4. WHAT THE SHELL RECEIVES (round 2, same PR): YAML folds a `run: >` scalar (also `>-`,
+//      `>+`), and a plain `run:` value wrapped onto indented lines, into ONE line, so
+//      `echo skipped` on the first line swallows a script named on the next; a `run: |`
+//      block keeps its lines (and a trailing backslash joins them, as the shell sees it).
+//      `bash -n` / `sh -n` is a syntax check, not a run, so a runner flag outside e, u, x,
+//      v, f credits nothing. A step with `continue-on-error` set to anything but `false`
+//      cannot fail CI, so it credits nothing.
+//
 // A gate invoked some other way (`bash -c "…"`, a wrapper such as `timeout 60`, a
 // `then`/`do` clause) is NOT credited and the parity run says UNWIRED; the fix is to
 // write the step in a plain shape, not to widen this matcher.
+//
+// KNOWN LIMITS (credited today although the step would not really gate; each is pinned by a
+// "KNOWN GAP" assertion in the self-test, so closing one is a visible change, not a silent
+// one): a command that cannot fail or never runs (`false && bash x.sh --self-test`,
+// `bash x.sh --self-test || true`); a heredoc body that names the script; a step or job
+// `if:` condition; a job-level `continue-on-error`. Parsing a shell is not this file's job;
+// these need a step to be written that way on purpose.
 
-/** Pure: the command text of every `run:` step in YAML (comments already stripped),
- *  one string per step, backslash-continued lines joined. Exported for the self-test. */
-export function runCommands(text) {
+const indentOf = (l) => l.length - l.trimStart().length;
+
+/** Pure: a folded YAML scalar as the lines the shell receives. `first` is text already on
+ *  the key's line (plain scalars), `cont` the raw continuation lines. Consecutive lines fold
+ *  into one with single spaces; a blank line ends the current line; with `base` given (a `>`
+ *  block), a line indented deeper than `base` is kept on a line of its own. */
+function foldScalar(first, cont, base) {
+  const out = [];
+  let cur = first === "" ? null : first;
+  for (const raw of cont) {
+    const t = raw.trim();
+    if (t === "") { if (cur !== null) out.push(cur); cur = null; continue; }
+    if (base !== undefined && indentOf(raw) > base) { if (cur !== null) out.push(cur); cur = null; out.push(t); continue; }
+    cur = cur === null ? t : `${cur} ${t}`;
+  }
+  if (cur !== null) out.push(cur);
+  return out;
+}
+
+/** Pure: one record per `run:` step in YAML (comments already stripped): the command text the
+ *  shell receives, and whether the step is `continue-on-error` (anything but a literal
+ *  `false`: its failure cannot fail CI). Scalar styles follow YAML: `|` literal (lines kept,
+ *  a trailing backslash joins the next), `>` folded, plain/quoted wrapped (lines fold into
+ *  one). Exported for the self-test. */
+export function runSteps(text) {
   const lines = text.split("\n");
   const out = [];
   for (let i = 0; i < lines.length; i++) {
@@ -380,20 +417,47 @@ export function runCommands(text) {
     if (!m) continue;
     const keyCol = m[1].length + (m[2] ? m[2].length : 0);
     let inline = m[3].trim();
-    const block = /^[|>][+-]?\d*$/.test(inline);
-    if (block) inline = "";
+    const ind = /^([|>])[+-]?\d*$/.exec(inline);
+    const style = ind ? ind[1] : "plain";
+    if (ind) inline = "";
     inline = inline.replace(/^(["'])(.*)\1$/, "$2");
-    const body = inline === "" ? [] : [inline];
     // continuation: blank lines, or lines indented deeper than the `run` key itself
+    const cont = [];
     for (let j = i + 1; j < lines.length; j++) {
-      const l = lines[j];
-      if (l.trim() === "") { body.push(""); continue; }
-      if (l.length - l.trimStart().length <= keyCol) break;
-      body.push(l.trim());
+      if (lines[j].trim() !== "" && indentOf(lines[j]) <= keyCol) break;
+      cont.push(lines[j]);
     }
-    out.push(body.join("\n").replace(/\\\n[ \t]*/g, " "));
+    const body = style === "|"
+      ? cont.map((l) => l.trim()).join("\n").replace(/\\\n[ \t]*/g, " ")
+      : foldScalar(inline, cont, style === ">" ? indentOf(cont.find((l) => l.trim() !== "") ?? "") : undefined).join("\n");
+
+    // the step mapping: from its `- ` line (or this one) to the first line indented less than keyCol
+    let start = i;
+    if (!m[2]) {
+      for (let j = i - 1; j >= 0; j--) {
+        if (lines[j].trim() === "" || indentOf(lines[j]) >= keyCol) continue;
+        const d = /^[ \t]*-[ \t]+/.exec(lines[j]);
+        if (d && d[0].length === keyCol) start = j;
+        break;
+      }
+    }
+    let end = i + 1 + cont.length;
+    while (end < lines.length && (lines[end].trim() === "" || indentOf(lines[end]) >= keyCol)) end++;
+    let continueOnError = false;
+    for (let j = start; j < end; j++) {
+      const dash = j === start && start !== i ? /^[ \t]*-[ \t]+/.exec(lines[j]) : null;
+      const col = dash ? dash[0].length : indentOf(lines[j]);
+      const k = /^continue-on-error:[ \t]*(.*)$/.exec(lines[j].slice(dash ? dash[0].length : col));
+      if (col === keyCol && k && k[1].trim().replace(/^(["'])(.*)\1$/, "$2").toLowerCase() !== "false") continueOnError = true;
+    }
+    out.push({ command: body, continueOnError });
   }
   return out;
+}
+
+/** Pure: the command text of every `run:` step that can fail CI, one string per step. */
+export function runCommands(text) {
+  return runSteps(text).filter((st) => !st.continueOnError).map((st) => st.command);
 }
 
 /** Pure: `cmd` with every shell-quoted span (quotes included) replaced by a filler
@@ -442,7 +506,9 @@ export function maskQuoted(cmd) {
 
 const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
 const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
-const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[A-Za-z]+[ \t]+)*)?(?:\./)?`;
+// Runner flags are limited to e u x v f: `-n` (parse only), `-c` (the next word is a command
+// string) and the rest do not run the script as a script.
+const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[euxvf]+[ \t]+)*)?(?:\./)?`;
 
 // Does the `run:` command text INVOKE this head? `head` is a script path
 // (`scripts/x.mjs`, `scripts/mac/x.sh`) or an npm-script name (`review:invariants`).
@@ -611,7 +677,7 @@ function selfTest() {
   checks.push(["after `;`, `||` and `|` credits it", wiredMjs("  - run: echo a; node scripts/check-x.mjs\n") === true && wiredMjs("  - run: false || node scripts/check-x.mjs\n") === true && wiredMjs("  - run: echo a | node scripts/check-x.mjs\n") === true]);
   checks.push(["`sh`, `source` and `. ` before a script path credit it, and so does a bare `./` path", wiredSh("  - run: sh scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: source scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: . scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: ./scripts/mac/x.sh --self-test\n") === true]);
   checks.push(["`VAR=value` prefixes before the command still credit it", wiredMjs("  - run: FOO=1 BAR=\"a b\" node scripts/check-x.mjs\n") === true]);
-  checks.push(["a `--self-test` flag on a backslash-continued next line still credits the self-test token", wiredMjs("  - run: node scripts/check-x.mjs \\\n      --self-test\n", `${MJS} --self-test`) === true]);
+  checks.push(["a `--self-test` flag on a backslash-continued next line of a `run: |` block still credits the self-test token", wiredMjs("  - run: |\n      node scripts/check-x.mjs \\\n        --self-test\n", `${MJS} --self-test`) === true]);
   checks.push(["a real step after a block scalar that named the script only in an echo does credit the later step", wiredMjs("  - run: |\n      echo node scripts/check-x.mjs\n  - run: node scripts/check-x.mjs\n") === true]);
   checks.push(["the pnpm alias at a command position credits it", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", new Map([["review-invariants.mjs", ["review:invariants"]]])) === true]);
   // ── quoted text (Codex, second pass on PR #1450): a separator or a gate path inside shell
@@ -630,6 +696,29 @@ function selfTest() {
   checks.push(["`run: VAR=\"a b\" node scripts/check-x.mjs` still credits it (a quoted env value)", wiredMjs('  - run: VAR="a b" node scripts/check-x.mjs\n') === true]);
   checks.push(["a quoted argument after the command does not hide it", wiredMjs('  - run: node scripts/check-x.mjs --flag "a | b"\n') === true]);
   checks.push(["a gate AFTER a multi-line quoted string in a block scalar still credits", wiredMjs('  - run: |\n      echo "line one\n      node scripts/check-x.mjs inside"\n      node scripts/check-x.mjs\n') === true]);
+  // ── what the shell RECEIVES (round 2 review of PR #1450). [old: true] = credited by the cae7b29b matcher.
+  const SHF = "scripts/mac/x.sh --self-test";
+  const sh = (yaml) => gateWiredIn(SHF, yaml);
+  checks.push(["[old: true] a folded `run: >` scalar: `echo skipped` on line one swallows the script named on line two", sh("  - run: >\n      echo skipped\n      bash scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] the same with `>-` and with `>+`", sh("  - run: >-\n      echo skipped\n      bash scripts/mac/x.sh --self-test\n") === false && sh("  - run: >+\n      echo skipped\n      bash scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] a plain `run:` value wrapped onto an indented line folds into one echo", sh("  - run: echo skipped\n      bash scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] a plain scalar wrapped with a trailing backslash does NOT join (YAML folds it to `\\ `, an escaped space)", wiredMjs("  - run: node scripts/check-x.mjs \\\n      --self-test\n", `${MJS} --self-test`) === false]);
+  checks.push(["[old: true] `bash -n scripts/mac/x.sh --self-test` and `sh -n` are syntax checks, not runs", sh("  - run: bash -n scripts/mac/x.sh --self-test\n") === false && sh("  - run: sh -n scripts/mac/x.sh --self-test\n") === false && sh("  - run: bash -en scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] `bash -c scripts/mac/x.sh --self-test` (the path is a command string) is not a run", sh("  - run: bash -c scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] a step with `continue-on-error: true` (after or before its run) cannot fail CI and credits nothing", sh("  - run: bash scripts/mac/x.sh --self-test\n    continue-on-error: true\n") === false && sh("  - name: n\n    continue-on-error: true\n    run: bash scripts/mac/x.sh --self-test\n") === false && sh("  - continue-on-error: true\n    run: bash scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] a `continue-on-error` that is not provably false (a quoted true, an expression) credits nothing", sh("  - run: bash scripts/mac/x.sh --self-test\n    continue-on-error: \"true\"\n") === false && sh("  - run: bash scripts/mac/x.sh --self-test\n    continue-on-error: ${{ matrix.experimental }}\n") === false]);
+  checks.push(["`continue-on-error: false` still credits, and so does a neighbouring step's `continue-on-error: true`", sh("  - run: bash scripts/mac/x.sh --self-test\n    continue-on-error: false\n") === true && sh("  - run: echo a\n    continue-on-error: true\n  - run: bash scripts/mac/x.sh --self-test\n") === true && sh("  - run: bash scripts/mac/x.sh --self-test\n  - run: echo a\n    continue-on-error: true\n") === true]);
+  checks.push(["a folded `run: >` scalar holding only the command still credits it", sh("  - run: >\n      bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["a blank line, or a more-indented line, inside a `>` scalar starts a new line, so the later command is credited", sh("  - run: >\n      echo hi\n\n      bash scripts/mac/x.sh --self-test\n") === true && sh("  - run: >\n      echo hi\n        bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["a `run: |` block keeps its lines: an echo on one line does not swallow the next", sh("  - run: |\n      echo skipped\n      bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["runner flags e u x v f before the script still credit it", sh("  - run: bash -e scripts/mac/x.sh --self-test\n") === true && sh("  - run: bash -ex scripts/mac/x.sh --self-test\n") === true && sh("  - run: sh -eu scripts/mac/x.sh --self-test\n") === true]);
+  // KNOWN GAPS: shapes the step would not really gate on, credited today (see KNOWN LIMITS in the header). Each
+  // assertion records the CURRENT behaviour; if one is closed, this check fails and the header must change with it.
+  checks.push(["KNOWN GAP: `false && bash scripts/mac/x.sh --self-test` is still credited", sh("  - run: false && bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["KNOWN GAP: `bash scripts/mac/x.sh --self-test || true` is still credited", sh("  - run: bash scripts/mac/x.sh --self-test || true\n") === true]);
+  checks.push(["KNOWN GAP: a heredoc body naming the script is still credited", sh("  - run: |\n      cat <<'EOF'\n      bash scripts/mac/x.sh --self-test\n      EOF\n") === true]);
+  checks.push(["KNOWN GAP: a step `if: false` condition is still credited", sh("  - if: false\n    run: bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["KNOWN GAP: a job-level `continue-on-error: true` is still credited", sh("jobs:\n  j:\n    continue-on-error: true\n    steps:\n      - run: bash scripts/mac/x.sh --self-test\n") === true]);
   checks.push(["maskQuoted keeps length, blanks quoted spans and leaves the rest", (() => { const m = maskQuoted(`a "b | c" 'd; e' f`); return m.length === 18 && m.startsWith("a ") && !m.includes("|") && !m.includes(";") && m.endsWith(" f"); })()]);
   checks.push([
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",

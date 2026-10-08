@@ -215,7 +215,7 @@ status_line() {
 }
 
 self_test() {
-  local self fx repo n_ok n_fail out want got json root cmd refresh other rc
+  local self fx repo n_ok n_fail out want got json root cmd refresh other rc spaced
   case "$0" in /*) self=$0 ;; *) self=$PWD/$0 ;; esac
   n_ok=0
   n_fail=0
@@ -354,12 +354,30 @@ self_test() {
   out=$(printf '{"workspace":{"current_dir":"%s"}}' "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
   expect "outside a repo and with no model, nothing is printed" "" "$out"
 
-  # the lane rule is lane-identity.mjs's rule: compare, so the copy cannot drift
-  want=$(node -e 'import(process.argv[1]).then((m) => console.log(m.currentLane()))' -- "file://$(dirname "$self")/../lib/lane-identity.mjs" 2>/dev/null)
+  # the lane rule is lane-identity.mjs's rule: compare, so the copy cannot drift.
+  # The module is imported by a file URL built with node's pathToFileURL: a hand-built
+  # "file://$path" is not percent-encoded: Node's URL parser repairs a plain space, but a `#`
+  # (the rest of the path becomes a fragment), a `?` or a `%41` (decoded to "A") sends the
+  # import to the wrong file or fails it, and this check failed with "?".
+  lane_of_module() { # <path to lane-identity.mjs>: the lane its currentLane() names
+    node -e 'import(require("url").pathToFileURL(require("path").resolve(process.argv[1])).href).then((m) => console.log(m.currentLane()))' -- "$1" 2>/dev/null
+  }
+  label_of() { sed -n 's/.* unread for \([a-z]*\).*/\1/p'; } # the count differs by lane (one unread for mac, none left for cloud): compare the label only
+  want=$(lane_of_module "$(dirname "$self")/../lib/lane-identity.mjs")
   out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$self")
-  # compare the LABEL only: the count differs by lane (the fixture has one unread for mac, none left for cloud)
-  got=$(printf '%s' "$out" | sed -n 's/.* unread for \([a-z]*\).*/\1/p')
+  got=$(printf '%s' "$out" | label_of)
   expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "${want:-?}" "$got"
+  # the same check from a copy of the two files in a directory whose name holds a space, a `#`,
+  # a `?` and a `%41`
+  spaced="$fx/a checkout #1 with spaces? and %41"
+  mkdir -p "$spaced/scripts/mac" "$spaced/scripts/lib"
+  cp "$self" "$spaced/scripts/mac/statusline.sh"
+  cp "$(dirname "$self")/../lib/lane-identity.mjs" "$spaced/scripts/lib/lane-identity.mjs"
+  want=$(lane_of_module "$spaced/scripts/lib/lane-identity.mjs")
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$spaced/scripts/mac/statusline.sh")
+  got=$(printf '%s' "$out" | label_of)
+  expect "the lane label check works from a checkout path containing a space, #, ? and %41" "${want:-?}" "$got"
+  expect "...and the module really was imported from that path (a lane name, not a failed import)" "yes" "$([ "$want" = cloud ] || [ "$want" = mac ] && echo yes || echo no)"
 
   # The command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c) with the
   # status JSON on stdin. It anchors the executable to workspace.project_dir (where Claude Code

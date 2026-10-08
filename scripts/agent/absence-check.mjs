@@ -35,7 +35,8 @@
 //
 // EXIT CODES:  0 = absence corroborated   1 = refuted (a file exists)   2 = inconclusive
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -120,7 +121,24 @@ function workflowFilesMentioning(needles) {
  * ever agree with each other. These four look in different places.
  */
 // Build output and generated artefacts. NOT docs/ — see the content probe below.
-const CONTENT_EXCLUSIONS = [":!*lock*", ":!*dist*", ":!*.map"];
+// EXACT lockfile names and dist/ directories only (plan row 61, 2026-10-08). The earlier
+// substring globs `*lock*` / `*dist*` matched ANY path containing those letters and hid
+// first-party files (a locker doc, LockedIdleView.swift, a hook, a distribution script),
+// so an absence claim about a word living only there came back CORROBORATED.
+// `**/` needs a directory before it, so a ROOT-level Cargo.lock / dist/ needs its own entry
+// (measured: `git grep -- ':!**/dist/**'` still returns dist/b.js at the repo root).
+const CONTENT_EXCLUSIONS = [
+  ":!pnpm-lock.yaml",
+  ":!Cargo.lock",
+  ":!**/Cargo.lock",
+  ":!package-lock.json",
+  ":!**/package-lock.json",
+  ":!yarn.lock",
+  ":!**/yarn.lock",
+  ":!dist/**",
+  ":!**/dist/**",
+  ":!*.map",
+];
 
 /** A pathspec's bare directory, so ':!docs', ':!docs/*' and ':!docs/**' all normalise to 'docs'. */
 export function excludedDir(pathspec) {
@@ -427,6 +445,58 @@ function selfTest() {
     "no bare catch returns an empty array from a git probe",
     !code.split(/\s+/).join("").includes("catch{" + "return[];}"),
   ]);
+
+  // THE EXCLUSIONS HIDE LOCKFILES AND dist/, NOT EVERY PATH THAT CONTAINS THOSE LETTERS
+  // (plan row 61). The old globs `*lock*` / `*dist*` matched any path containing the
+  // substring, so the content probe could not see docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md,
+  // LockedIdleView.swift, .claude/hooks/block-dangerous.sh or distribution_sensitivity.py:
+  // `check:absence SHALLOW_PATTERN` returned CORROBORATED for a word that is in the tree.
+  // Hermetic: a throwaway repo, the REAL CONTENT_EXCLUSIONS, one canary in every file.
+  {
+    const canary = ["zzq", "canary", "row61"].join("-");
+    const tmp = mkdtempSync(join(tmpdir(), "absence-excl-"));
+    try {
+      const put = (rel) => {
+        mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+        writeFileSync(join(tmp, rel), `${canary}\n`);
+      };
+      const firstParty = [
+        "docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md",
+        "native/Views/LockedIdleView.swift",
+        ".claude/hooks/block-dangerous.sh",
+        "scripts/distribution_sensitivity.py",
+        "lib/redistribute.ts",
+      ];
+      const excluded = [
+        "pnpm-lock.yaml",
+        "firmware/dock/core/Cargo.lock",
+        "native/desktop/app/Cargo.lock",
+        "native/desktop/core/Cargo.lock",
+        "web/package-lock.json",
+        "web/yarn.lock",
+        "dist/bundle.js",
+        "packages/a/dist/x.js",
+        "a.js.map",
+      ];
+      for (const f of [...firstParty, ...excluded]) put(f);
+      const git = (...a) => execFileSync("git", ["-C", tmp, ...a], { encoding: "utf8" });
+      git("init", "-q");
+      git("add", "-A");
+      const hits = git("grep", "-lIi", "-e", canary, "--", ...CONTENT_EXCLUSIONS).split("\n").filter(Boolean).sort();
+      checks.push([
+        "EXCLUSIONS NARROW: first-party paths containing lock/dist are SEARCHED; pnpm-lock.yaml, the three Cargo.lock, package-lock, yarn.lock, dist/ and .map stay excluded",
+        JSON.stringify(hits) === JSON.stringify([...firstParty].sort()),
+      ]);
+    } catch (err) {
+      checks.push([`EXCLUSIONS NARROW: hermetic repo could not run (${err && err.message})`, false]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+    checks.push([
+      "EXCLUSIONS NARROW: no bare substring glob (*lock*, *dist*) survives in CONTENT_EXCLUSIONS",
+      !CONTENT_EXCLUSIONS.some((e) => /^:!\*[a-z]+\*$/.test(e)),
+    ]);
+  }
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

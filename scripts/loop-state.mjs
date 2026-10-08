@@ -19,7 +19,7 @@
 
 import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dirname, resolve, isAbsolute } from "node:path";
@@ -66,6 +66,8 @@ const MAINLINE = "refs/remotes/origin/SignalGrid_Alpha";
 // Every git argument that names a LOCAL branch is headRef(name), never the bare name (see listLocalBranches).
 const HEADS = "refs/heads/";
 const headRef = (name) => `${HEADS}${name}`;
+// The two warnings `git for-each-ref` prints when it SKIPS a ref it cannot read (see listLocalBranches); anchored on the wording.
+const REF_SKIP_WARNING = /^warning: ignoring (broken ref|ref with broken name)\b/;
 const SCRATCH_FILE = "docs/agent/local-scratch-branches.json";
 // Bounded walk of mainline history for the landed checks: an unbounded walk is a check
 // nobody waits for, and a check nobody waits for gets switched off. Exhausting the bound
@@ -140,9 +142,19 @@ if (hubListed && hubBranches.length === 0) {
 // changes under a tag, and it is the same key the Hub map uses: ls-remote names are stripped the same way),
 // and EVERY git argument that names a local branch is headRef(name), never the bare name.
 //
-// The listing is fail-closed too: a git error, a spawn error, or any warning/error/fatal on stderr is
-// `ok:false`. for-each-ref SKIPS a broken ref with only a warning ("ignoring broken ref") and exits 0, so
-// the exit code alone would read a branch git could not read as a branch that does not exist.
+// The listing is fail-closed too: a git error, a spawn error, a non-zero exit, an `error:`/`fatal:` line, or
+// one of the two warnings for-each-ref prints WHEN IT SKIPS A REF is `ok:false`. for-each-ref SKIPS a broken
+// ref with only a warning ("ignoring broken ref" / "ignoring ref with broken name") and exits 0, so the exit
+// code alone would read a branch git could not read as a branch that does not exist.
+//
+// Any OTHER `warning:` is not about the refs and is not a reason to withhold the verdict. Round 4 failed the
+// listing on ANY `warning:` line, and a deprecated config key in a dotfile (`core.fsyncObjectFiles=true`
+// prints "warning: core.fsyncObjectFiles is deprecated; use core.fsync instead" on every git command, exit 0)
+// then turned every session red with a false "checks did NOT run". Measured on git 2.43 (LC_ALL=C): the only
+// warnings for-each-ref prints about the refs it lists are the two ref-skip ones below; a dangling symref and
+// a *.lock file are dropped silently; `hint:` and GIT_TRACE lines never start with `warning:`. So the ref-skip
+// warnings are anchored on their WORDING, and every other warning is carried on `warnings` and printed in the
+// detail of the row built from this listing (branchSeamRows), named, never swallowed and never failing it.
 function listLocalBranches(cwd = repo) {
   const r = spawnSync("git", ["--no-replace-objects", "for-each-ref", "--format=%(refname)", HEADS], {
     cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
@@ -150,13 +162,14 @@ function listLocalBranches(cwd = repo) {
   });
   const fail = (error) => ({ ok: false, refs: [], names: [], error });
   if (r.error) return fail(String(r.error.message || r.error).split("\n")[0]);
-  const complaint = String(r.stderr || "").split("\n").map((l) => l.trim()).find((l) => /^(warning|error|fatal):/.test(l));
-  if (r.status !== 0) return fail(complaint || `git exited ${r.status}`);
-  if (complaint) return fail(complaint);
+  const lines = String(r.stderr || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const hard = lines.find((l) => /^(error|fatal):/.test(l) || REF_SKIP_WARNING.test(l));
+  if (r.status !== 0) return fail(hard || `git exited ${r.status}`);
+  if (hard) return fail(hard);
   const refs = String(r.stdout || "").split("\n").filter(Boolean);
   const stray = refs.find((x) => !x.startsWith(HEADS) || x.length === HEADS.length);
   if (stray !== undefined) return fail(`unexpected refname in a refs/heads listing: ${stray}`);
-  return { ok: true, refs, names: refs.map((x) => x.slice(HEADS.length)) };
+  return { ok: true, refs, names: refs.map((x) => x.slice(HEADS.length)), warnings: [...new Set(lines.filter((l) => l.startsWith("warning:")))] };
 }
 function branchListRow(l) {
   if (l.ok) return null;
@@ -357,21 +370,30 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
 // and wrong for a relative one asked from a subdirectory (it resolved the name against the wrong directory
 // and read "no grafts" while git applied them).
 //
-// WHETHER git applies anything is measured against git 2.43, not assumed (each shape has a self-test that
-// compares this function with `git for-each-ref --contains`):
-//   absent file, dangling symlink, nonexistent GIT_GRAFT_FILE ........ git applies none  -> no block
-//   0-byte file ...................................................... git applies none  -> no block ("empty")
-//   a directory at the path .......................................... git applies none  -> no block
-//   GIT_GRAFT_FILE='' (git-path prints "./", the cwd) ................ git applies none, even with a
+// WHETHER git applies anything is measured against git 2.43, not assumed. Each row names the self-test case that
+// builds the shape and compares graftsState with git ITSELF (rawApplied: does `git for-each-ref --contains`
+// list origin/g1o as holding the unpushed tip, i.e. does git apply the graft); a row with no case id has NONE,
+// and says so:
+//   absent file ...................................................... (d-G2m baseline) git applies none  -> no block
+//   dangling symlink ................................................. (d-G2m)  git applies none  -> no block
+//   nonexistent GIT_GRAFT_FILE ....................................... (d-G2j)  git applies none  -> no block
+//   0-byte file ...................................................... (d-G2f)  git applies none  -> no block ("empty")
+//   a directory at the path .......................................... (d-G2g)  git applies none  -> no block
+//   GIT_GRAFT_FILE='' (git-path prints "./", the cwd) ................ (d-G2i)  git applies none, even with a
 //                                                                      real .git/info/grafts -> no block
-//   GIT_GRAFT_FILE=/dev/null (git's documented off switch) ........... git applies none  -> no block
-//   any non-empty regular file (comment-only and garbage included) ... BLOCK. git applies none from a
-//                                                                      comment-only file too; we do not
-//                                                                      reimplement its parser, so a file
-//                                                                      with content blocks (conservative).
-//   a path we cannot stat for any reason but "does not exist" ........ BLOCK (unreadable tightens)
-//   a device, fifo or socket other than /dev/null .................... BLOCK (cannot tell what it holds)
-//   git cannot name the path at all .................................. BLOCK
+//   GIT_GRAFT_FILE=/dev/null (git's documented off switch) ........... (d-G2j)  git applies none  -> no block
+//   symlink to a non-empty file ...................................... (d-G2n)  git APPLIES it    -> BLOCK (stat follows the link)
+//   plain graft line, ordinary file .................................. (d-G2)   git APPLIES it    -> BLOCK
+//   CRLF line ending ................................................. (d-G2p)  git APPLIES it    -> BLOCK
+//   comment line followed by a graft line ............................ (d-G2q)  git APPLIES it    -> BLOCK
+//   GIT_GRAFT_FILE naming a file, own or another repository's ........ (d-G2e, d-G2r) git APPLIES it -> BLOCK
+//   relative GIT_GRAFT_FILE asked from a subdirectory ................ (d-G2k)  git APPLIES it    -> BLOCK
+//   comment-only file ................................................ (d-G2h)  git applies none from it; we do not
+//   whitespace-only file ............................................. (d-G2o)  reimplement its parser, so ANY
+//                                                                      non-empty regular file BLOCKS (conservative)
+// Shapes with NO case: a path we cannot stat for any reason but "does not exist" (BLOCK, unreadable tightens);
+// a device, fifo or socket other than /dev/null (BLOCK, cannot tell what it holds); git failing to name the
+// path at all (BLOCK). They are fail-closed by construction and are not measured against git.
 // Only a BLOCK has a `reason`; the no-block states carry a `note` saying what they are.
 function graftsState(cwd = repo) {
   const tail = "ancestry cannot be trusted, confirmation disabled";
@@ -414,18 +436,23 @@ function graftsBlock(cwd = repo) {
 // pushing would litter the shared remote with duplicate names for branches already on
 // it, and deletion is refused by this repo's own dangerous-command hook.
 //
-// The tip being contained in ANY remote ref IS "confirm the remote", which is the
-// message's own second option. Fail-closed like its two siblings: a git error, an
-// unreadable ref or an empty answer leaves the branch REPORTED, never cleared. This
-// cannot clear real local work — a branch carrying a commit no remote has is contained
-// in no remote ref, and no amount of renaming changes that.
-function isOnHubBySha(branch, cwd = repo) {
-  const git = gitIn(cwd);
-  const sha = git("rev-parse", "--verify", `refs/heads/${branch}^{commit}`); // never the bare name: a same-named tag would win
-  if (!sha) return false;
-  const containing = git("branch", "-r", "--contains", sha);
-  if (!containing) return false;
-  return containing.split("\n").map((l) => l.trim()).filter(Boolean).length > 0;
+// The tip being held by a Hub branch under another name IS "confirm the remote", which is the
+// message's own second option. Fail-closed like its two siblings: a git error, an unreadable ref
+// or an empty answer leaves the branch REPORTED, never cleared.
+//
+// WHAT "HELD BY THE HUB" MEANS here is the one thing hubNamesHoldingTip (below) answers, and this
+// function is only its yes/no. Until round 5 this function read `git branch -r --contains` instead: the
+// LOCAL refs/remotes snapshot, which is not the Hub. A grafts file, a hand-made refs/remotes/pr/999 (the
+// shared checkout carries 18 refs/remotes/pr/* refs) or a stale tracking ref cleared REAL unpushed work in
+// this gated row ("1 on the hub under another name") with exit 0, and the sentence that stood here, "this
+// cannot clear real local work", was false on exactly those inputs. It holds now, up to the two things
+// hubNamesHoldingTip says are still trusted (content addressing; the Hub holds the whole history of a commit
+// it lists): a branch is on the Hub under another name when some origin/<name> (a) sits at the sha the
+// Hub's own ls-remote lists for <name>, (b) contains the tip with replace objects off, and (c) no grafts file
+// is in force. A snapshot ref, a second remote, a replace ref, a graft and a same-named tag each fail one of
+// the three, and with a grafts file in force the row says the exemption is off and names the file.
+function isOnHubBySha(branch, hubShaMap, cwd = repo) {
+  return hubNamesHoldingTip(branch, hubShaMap, cwd).length > 0;
 }
 
 // THE SAME-NAME ALIAS HOLE (2026-10-08), the alias hole's twin on the other seam. The seam
@@ -441,13 +468,15 @@ function isOnHubBySha(branch, cwd = repo) {
 // non-fast-forward (refused without force, and force is forbidden here) and "confirm the remote"
 // was already true, just unread. A session cannot clear that, so it learns to narrate past it.
 //
-// The rule is the one stated above isOnHubBySha, with ONE difference that matters: that sibling
-// reads the LOCAL refs/remotes snapshot, and a snapshot is not the Hub. A first version of this
+// The rule is the one stated above isOnHubBySha, and since round 5 BOTH seams call the same function
+// (hubNamesHoldingTip) for it. For two rounds they did not: this seam was Hub-anchored and the sibling
+// read the LOCAL refs/remotes snapshot, and a snapshot is not the Hub. A first version of this
 // function trusted `git branch -r --contains` and an Opus refuter overturned it with four
 // fixtures, each reading "confirmed" for a tip that is on the Hub nowhere: (F1) the Hub rewound
 // the same-named branch while local origin/X still sat at the old tip; (F2) a tracking ref for a
 // branch the Hub has since deleted (no fetch.prune); (F3) a second remote (fork/X); (F4) a
-// hand-written refs/remotes/pr/999.
+// hand-written refs/remotes/pr/999. Round 4's refuter then found the same four holes, unchanged, in the
+// sibling (isOnHubBySha), whose row is gated.
 //
 // So the confirmation is ANCHORED TO THE LS-REMOTE the seam already took: a ref counts only if it
 // is origin/<name> for a name that is not this branch and not HEAD, AND its local sha EQUALS the
@@ -471,7 +500,7 @@ function isOnHubBySha(branch, cwd = repo) {
 // off (gitIn prepends --no-replace-objects); a grafts file, which replace-objects-off does not
 // cover, disables confirmation outright (graftsBlock), and the verdict then reads AHEAD with the
 // count unreadable and the reason naming the file; and the branch tip is always
-// refs/heads/<branch>, never the bare name (here, in aheadOfHub and in isOnHubBySha, and in every other git
+// refs/heads/<branch>, never the bare name (here, in aheadOfHub, and in every other git
 // argument that names a local branch: hasLandedByContent, fileEverMatchedMainline, landedByPatchId,
 // newerCommitCount and the carrying count; the list itself is full refnames, see listLocalBranches). What is still
 // trusted: that an object in the local store is the object its sha says (content addressing), and
@@ -610,9 +639,13 @@ function evaluateScratch(mainline, cwd, localBranches) {
   };
 }
 
-// Pure: the branches still to be reported as unpushed after every exclusion.
+// Pure: the branches still to be reported as unpushed after every exclusion. There is no `b !== "HEAD"`
+// here: `for-each-ref refs/heads/` never yields a pseudo entry (HEAD is not under refs/heads/), so a name
+// "HEAD" in this list is a REAL branch, refs/heads/HEAD, made by `git update-ref`. Round 4 filtered it out
+// (a leftover from `git branch`'s `(HEAD detached at ...)` line, which no listing here reads), and real
+// unpushed work on it read "all present on the Review Hub", exit 0.
 function unpushedCandidates(localBranches, hubBranches, ephemeral, scratchExcluded) {
-  return localBranches.filter((b) => !hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b) && !scratchExcluded.includes(b));
+  return localBranches.filter((b) => !hubBranches.includes(b) && !ephemeral.includes(b) && !scratchExcluded.includes(b));
 }
 
 function branchesInAgentWorktrees() {
@@ -678,7 +711,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // Three independent ways a branch is already safe, each REPORTED by name so the
   // exclusion is visible rather than silent: its commit is on the hub under another
   // name, or its content is in mainline (squash), or neither — and then it is work.
-  const onHub = noRemote.filter((b) => isOnHubBySha(b, cwd));
+  const onHub = noRemote.filter((b) => isOnHubBySha(b, hubShaMap, cwd));
   const offHub = noRemote.filter((b) => !onHub.includes(b));
   const landedByBytes = offHub.filter((b) => hasLandedByContent(b, mainline, cwd));
   const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd));
@@ -686,17 +719,26 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
   const onHubNote = onHub.length ? ` (${onHub.length} on the hub under another name: ${onHub.join(", ")})` : "";
+  // A grafts file switches the alias exemption OFF (hubNamesHoldingTip names no holder under one), and a row that
+  // silently stopped clearing aliases would look like the branches themselves had changed. So it says why.
+  const graftsReason = noRemote.length ? graftsBlock(cwd) : "";
+  const graftsNote = graftsReason ? ` (alias exemption OFF: ${graftsReason})` : "";
+  // A warning git printed while listing the refs that is NOT a ref-skip one (see listLocalBranches) did not change the
+  // verdict, and it is named here so nothing git said is thrown away: the first three, then a count.
+  const warns = listing.warnings || [];
+  const warnNote = warns.length ? ` (git warned while listing branches, verdict unaffected: ${warns.slice(0, 3).join(" | ")}${warns.length > 3 ? ` | +${warns.length - 3} more` : ""})` : "";
   const landedNote =
     (landedByBytes.length ? ` (${landedByBytes.length} squash-landed, every file byte-identical to a mainline blob: ${landedByBytes.join(", ")})` : "") +
     (landedByHunks.length ? ` (${landedByHunks.length} squash-landed, exact hunks found in a mainline squash: ${landedByHunks.join(", ")})` : "");
   if (unpushed.length) {
-    row("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}`);
+    row("fail", "Local work not on the Review Hub", `${unpushed.join(", ")} — push, or confirm the remote${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   } else {
-    row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}`);
+    row("ok", "Local branches all present on the Review Hub", `${localBranches.length - ephemeral.length} branch(es)${ephemeralNote}${onHubNote}${landedNote}${graftsNote}${warnNote}`);
   }
 
   // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
-  const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
+  // (No `b !== "HEAD"`: see unpushedCandidates. A real refs/heads/HEAD with a Hub branch of that name is compared like any other.)
+  const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && !ephemeral.includes(b));
   const verdicts = sameNamed.map((b) => ({ branch: b, ...sameNameVerdict(b, hubShaMap.get(b), hubShaMap, cwd) }));
   const unknownRows = verdicts.filter((v) => v.state === "unknown").map((v) => v.branch);
   const sameRow = sameNameRows(verdicts);
@@ -1023,7 +1065,7 @@ function selfTest() {
     put("d.txt", "unpushed\n"); sh("add", "-A"); sh("commit", "-q", "-m", "ahead again, pushed nowhere");
     const vFail = sameNameVerdict("same", hubTip, hubMap(), work);
     check("one more local commit that no remote ref holds is back to ahead with the count 2 (d-alias-fail-closed)", vFail.state === "ahead" && vFail.ahead === 2);
-    check("a branch that does not resolve is never confirmed (d-alias-fail-closed2)", isOnHubBySha("no-such-branch", work) === false);
+    check("a branch that does not resolve is never confirmed (d-alias-fail-closed2)", isOnHubBySha("no-such-branch", hubMap(), work) === false);
     // (d-same) a branch AT its Hub tip stays "same" even when that tip is also held by another Hub name (origin/main): containment
     // is asked only of a branch already proven ahead, so the verdict is never renamed "confirmed" (M4)
     sh("checkout", "-q", "-b", "mtip", "main"); sh("push", "-q", "origin", "mtip");
@@ -1130,6 +1172,37 @@ function selfTest() {
     const g2k = withEnv("rel-grafts", () => ({ raw: rawApplied(subDir), fromSub: graftsBlock(subDir), fromTop: graftsBlock(work) })); unlinkSync(relGrafts); rmSync(subDir, { recursive: true });
     check("a relative GIT_GRAFT_FILE asked from a subdirectory finds the file git applies, and names it (d-G2k)",
       g2k.raw === true && g2k.fromSub.includes(relGrafts) && g2k.fromTop.includes(relGrafts));
+    // (d-G2m..r) the remaining shapes graftsState's comment lists, each compared with git ITSELF through rawApplied(). A mutant that
+    // treats a symlinked grafts file as absent (lstat instead of stat) passes every case above and fails d-G2n.
+    const gs_m0 = rawApplied(); // the absent baseline: no file at the default place, git applies none
+    // (d-G2m) a DANGLING symlink: git cannot open it and applies nothing
+    symlinkSync(join(root, "no-such-target"), graftsFile);
+    const gs_m = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
+    check("an absent grafts file and a dangling symlink at its place both apply no graft in git and are no block (d-G2m)",
+      gs_m0 === false && gs_m.raw === false && gs_m.st.block === false && gs_m.st.state === "absent" && gs_m.v.state === "ahead" && gs_m.v.ahead === 1 && !gs_m.v.reason);
+    // (d-G2n) a SYMLINK to a real grafts file: git follows it and APPLIES the graft, so it must block
+    const linkTarget = join(root, "grafts-link-target"); writeFileSync(linkTarget, `${g1o} ${g1t}\n`); symlinkSync(linkTarget, graftsFile);
+    const gs_n = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
+    check("a symlink to a grafts file is followed by git and blocks here, with the file named (d-G2n)",
+      gs_n.raw === true && gs_n.st.block === true && gs_n.st.state === "present" && gs_n.v.state === "ahead" && gs_n.v.ahead === null && String(gs_n.v.reason).includes(graftsFile));
+    // (d-G2o) a whitespace-only file: git applies none, and here a file with content blocks (documented, conservative)
+    writeFileSync(graftsFile, "  \n\t\n\n");
+    const gs_o = { raw: rawApplied(), st: graftsState(work) }; unlinkSync(graftsFile);
+    check("a whitespace-only grafts file applies no graft in git yet blocks here, like a comment-only one (d-G2o)", gs_o.raw === false && gs_o.st.state === "present" && gs_o.st.block === true);
+    // (d-G2p) CRLF line endings: git still reads the line, so it must block
+    writeFileSync(graftsFile, `${g1o} ${g1t}\r\n`);
+    const gs_p = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
+    check("a CRLF grafts file is applied by git and blocks here (d-G2p)", gs_p.raw === true && gs_p.st.block === true && gs_p.v.state === "ahead" && gs_p.v.ahead === null);
+    // (d-G2q) a comment line followed by a real graft line: git applies the graft, so it must block
+    writeFileSync(graftsFile, `# a comment\n${g1o} ${g1t}\n`);
+    const gs_q = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
+    check("a comment line followed by a graft line is applied by git and blocks here (d-G2q)", gs_q.raw === true && gs_q.st.block === true && gs_q.v.state === "ahead" && gs_q.v.ahead === null);
+    // (d-G2r) GIT_GRAFT_FILE naming ANOTHER repository's grafts file, while this repository has none of its own
+    const otherRepo = join(root, "other-repo"); execFileSync("git", ["init", "-q", otherRepo]);
+    const otherGrafts = join(otherRepo, ".git", "info", "grafts"); mkdirSync(join(otherRepo, ".git", "info"), { recursive: true }); writeFileSync(otherGrafts, `${g1o} ${g1t}\n`);
+    const gs_r = withEnv(otherGrafts, () => ({ raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }));
+    check("a GIT_GRAFT_FILE naming another repository's grafts is applied by git and blocks here, with that file named (d-G2r)",
+      !existsSync(graftsFile) && gs_r.raw === true && gs_r.st.block === true && String(gs_r.v.reason).includes(otherGrafts));
     // (d-G3) a local TAG named like the branch: tag tg at a commit the Hub holds under another name, branch tg two ahead of its Hub tip
     sh("checkout", "-q", "-b", "tg", "main"); sh("push", "-q", "origin", "tg"); const tgA = cm("tgA.txt", "1\n"); sh("push", "-q", "origin", "tg:refs/heads/tg-other");
     sh("tag", "tg", tgA); cm("tgU.txt", "2\n");
@@ -1145,7 +1218,7 @@ function selfTest() {
     // (d-G3c) isOnHubBySha: a tag on a Hub-held commit named like a local-only branch must not clear that branch
     sh("checkout", "-q", "-b", "tc", "main"); cm("tcU.txt", "1\n"); sh("tag", "tc", "main");
     check("a tag named like a local-only branch does not make its unpushed tip look like it is on the Hub (d-G3c)",
-      raw("branch", "-r", "--contains", raw("rev-parse", "tc^{commit}")).includes("origin/main") && isOnHubBySha("tc", work) === false);
+      raw("branch", "-r", "--contains", raw("rev-parse", "tc^{commit}")).includes("origin/main") && isOnHubBySha("tc", hubMap(), work) === false);
     sh("tag", "-d", "tc");
     // (d-rows) the row text names a confirmed branch, and the title says what the ok row covers (M5)
     const rowsOk = sameNameRows([{ branch: "b-same", state: "same", ahead: 0 }, { branch: "claude/conf-branch", state: "confirmed", ahead: 3 }, { branch: "b-unk", state: "unknown" }]);
@@ -1250,6 +1323,80 @@ function selfTest() {
     const ecarRow = rowOf(ecar.rows({ ephemeral: ["eph"] }), "Agent-worktree branches carrying commits");
     check("an agent-worktree branch carrying a commit no origin ref holds is named with its count although a tag shares its name (E-carry)",
       !!ecarRow && ecarRow.state === "warn" && ecarRow.gated === false && ecarRow.detail.startsWith("eph (+1)"));
+    // (R1-HEAD) a REAL branch refs/heads/HEAD (git update-ref makes one; for-each-ref refs/heads/ yields it as the bare name HEAD)
+    // with unpushed work. Round 4 filtered the name out of the unpushed list, so this read "all present on the Review Hub", exit 0.
+    const hh = mkFx("headhead");
+    hh.f("checkout", "-q", "-b", "side"); const hhTip = hh.c("hh.txt", "real unpushed work\n"); hh.f("update-ref", "refs/heads/HEAD", hhTip);
+    hh.f("checkout", "-q", "main"); hh.f("branch", "-q", "-D", "side");
+    const hhL = listLocalBranches(hh.w), hhU = rowOf(hh.rows(), T_UNPUSHED);
+    check("unpushed work on a branch literally named HEAD (refs/heads/HEAD) is a gated failure naming HEAD (R1-HEAD)",
+      hhL.ok && hhL.names.includes("HEAD") && !!hhU && hhU.state === "fail" && hhU.gated === true && hhU.detail.split(" — ")[0] === "HEAD");
+    // (R1-HEAD2) the same name on BOTH sides: the Hub has a branch HEAD and the local one is a commit ahead of it
+    const hh2 = mkFx("headhead2");
+    hh2.f("push", "-q", "origin", "main:refs/heads/HEAD");
+    hh2.f("checkout", "-q", "-b", "side"); const hh2Tip = hh2.c("hh2.txt", "ahead of the Hub's HEAD\n"); hh2.f("update-ref", "refs/heads/HEAD", hh2Tip);
+    hh2.f("checkout", "-q", "main"); hh2.f("branch", "-q", "-D", "side");
+    const hh2A = rowOf(hh2.rows(), T_AHEAD);
+    check("a local branch HEAD one commit ahead of a Hub branch HEAD is a gated same-name failure, +1 (R1-HEAD2)",
+      hubMapOf(hh2.h).has("HEAD") && !!hh2A && hh2A.state === "fail" && hh2A.gated === true && hh2A.detail.startsWith("HEAD (+1)"));
+    // (R2-warn) a deprecated config key prints a warning on EVERY git command and exits 0: it must not fail the listing, and must be named
+    const wn = mkFx("warnbenign");
+    wn.f("branch", "-q", "side-ok"); wn.f("push", "-q", "origin", "side-ok");
+    const withFsync = (fn) => {
+      process.env.GIT_CONFIG_COUNT = "1"; process.env.GIT_CONFIG_KEY_0 = "core.fsyncObjectFiles"; process.env.GIT_CONFIG_VALUE_0 = "true";
+      try { return fn(); } finally { delete process.env.GIT_CONFIG_COUNT; delete process.env.GIT_CONFIG_KEY_0; delete process.env.GIT_CONFIG_VALUE_0; }
+    };
+    const wnPlain = listLocalBranches(wn.w);
+    const wnL = withFsync(() => listLocalBranches(wn.w)), wnC = withFsync(() => rowOf(wn.rows(), T_CLEAN));
+    check("a benign git warning (deprecated core.fsyncObjectFiles) leaves the listing ok and the verdict clean, and the row names the warning (R2-warn)",
+      wnPlain.ok && wnPlain.warnings.length === 0 && wnL.ok && wnL.names.includes("side-ok") && wnL.warnings.some((w) => /core\.fsyncObjectFiles is deprecated/.test(w)) &&
+      !!wnC && wnC.state === "ok" && /git warned while listing branches, verdict unaffected: warning: core\.fsyncObjectFiles is deprecated/.test(wnC.detail));
+    // (R2-warn2) ...and the same warning does NOT mask a broken ref: the ref-skip warning still fails the listing
+    const wb = mkFx("warnbroken");
+    wb.f("branch", "brk"); writeFileSync(join(wb.w, ".git", "refs", "heads", "brk"), "garbage\n");
+    const wbL = withFsync(() => listLocalBranches(wb.w));
+    check("with a benign warning ALSO printed, a broken ref is still an unreadable listing (R2-warn2)", wbL.ok === false && /ignoring broken ref/.test(String(wbL.error)));
+    // (R3-graft) real unpushed work Y; the Hub's `other` is made to "contain" Y by a grafts file; `git branch -r --contains` then says Y is on origin/other
+    const gu = mkFx("graftunpushed");
+    gu.f("checkout", "-q", "-b", "other"); const guO = gu.c("o.txt", "o\n"); gu.f("push", "-q", "origin", "other");
+    gu.f("checkout", "-q", "-b", "Y", "main"); const guT = gu.c("y.txt", "real unpushed work\n");
+    const guGrafts = join(gu.w, ".git", "info", "grafts"); writeFileSync(guGrafts, `${guO} ${guT}\n`);
+    const guLie = gu.f("branch", "-r", "--contains", guT).split("\n").map((l) => l.trim()).includes("origin/other");
+    const guRows = gu.rows(), guU = rowOf(guRows, T_UNPUSHED); unlinkSync(guGrafts);
+    check("a grafts file that makes origin/other contain unpushed work does not clear it as 'on the hub under another name': a gated failure naming Y, with the grafts file as the reason (R3-graft)",
+      guLie && !!guU && guU.state === "fail" && guU.gated === true && guU.detail.split(" — ")[0] === "Y" && !/on the hub under another name/.test(guU.detail) &&
+      /alias exemption OFF: graft file present/.test(guU.detail) && guU.detail.includes(guGrafts));
+    // (R3-pr999) a hand-made refs/remotes/pr/999 at the unpushed tip: the shared checkout carries 18 refs/remotes/pr/* refs
+    const pr = mkFx("pr999");
+    pr.f("checkout", "-q", "-b", "Y"); const prT = pr.c("y.txt", "real unpushed work\n"); pr.f("update-ref", "refs/remotes/pr/999", prT);
+    const prLie = pr.f("branch", "-r", "--contains", prT).includes("pr/999"), prU = rowOf(pr.rows(), T_UNPUSHED);
+    check("a hand-made refs/remotes/pr/999 holding the tip does not clear unpushed work: a gated failure naming Y (R3-pr999)",
+      prLie && !!prU && prU.state === "fail" && prU.gated === true && prU.detail.split(" — ")[0] === "Y" && !/on the hub under another name/.test(prU.detail));
+    // (R3-alias) the LEGITIMATE alias still clears and is named: pr782 at the tip of Hub branch `other` (local origin/other fetched, at the Hub's sha)
+    const al = mkFx("aliasok");
+    al.f("checkout", "-q", "-b", "other"); al.c("o.txt", "o\n"); al.f("push", "-q", "origin", "other"); al.f("fetch", "-q", "origin");
+    al.f("checkout", "-q", "-b", "pr782", "other");
+    const alR = al.rows(), alC = rowOf(alR, T_CLEAN);
+    check("a branch whose tip is on the Hub under another name, at the Hub's own sha, is still cleared and named (R3-alias)",
+      !!alC && alC.state === "ok" && /\(1 on the hub under another name: pr782\)/.test(alC.detail) && !rowOf(alR, T_UNPUSHED));
+    // (R3-alias-stale) the same branch after the Hub REWOUND `other` below the tip while local origin/other kept the old sha: no longer cleared
+    const as = mkFx("aliasstale");
+    as.f("checkout", "-q", "-b", "other"); const asO1 = as.c("o1.txt", "1\n"); as.c("o2.txt", "2\n"); as.f("push", "-q", "origin", "other"); as.f("fetch", "-q", "origin");
+    as.f("checkout", "-q", "-b", "pr782", "other");
+    execFileSync("git", ["-C", as.h, "update-ref", "refs/heads/other", asO1], { stdio: "ignore" });
+    const asU = rowOf(as.rows(), T_UNPUSHED);
+    check("a branch whose only holder is a local origin/other the Hub has since rewound is a gated failure naming it (R3-alias-stale)",
+      as.f("rev-parse", "refs/remotes/origin/other") !== hubMapOf(as.h).get("other") && !!asU && asU.state === "fail" && asU.gated === true && asU.detail.split(" — ")[0] === "pr782");
+    // (R4-M1) a local-only branch whose name contains a slash and begins `tags/`: the bare name `tags/rel` resolves refs/tags/rel (the DWIM rule
+    // refs/<name>), the tag, so a headRef that qualifies only names WITHOUT a slash lets the tag's squash-landed commit clear the branch's real work
+    const m1 = mkFx("m1slash");
+    m1.f("checkout", "-q", "--detach"); const m1z = m1.c("f.txt", "landed\n"); m1.f("tag", "rel", m1z);
+    m1.f("checkout", "-q", "main"); m1.c("f.txt", "landed\n", "squash of f"); m1.f("push", "-q", "origin", "main");
+    m1.f("checkout", "-q", "-b", "tags/rel", m1z); m1.c("g.txt", "real work, not in mainline\n");
+    const m1Rows = m1.rows(), m1U = rowOf(m1Rows, T_UNPUSHED);
+    check("a local-only branch tags/rel with real work beside a tag rel on a squash-landed commit is not cleared as squash-landed: headRef qualifies names with a slash too (R4-M1)",
+      m1.f("rev-parse", "tags/rel^{commit}") === m1z && headRef("tags/rel") === "refs/heads/tags/rel" && !!m1U && m1U.state === "fail" && m1U.gated === true &&
+      m1U.detail.split(" — ")[0] === "tags/rel" && !/squash-landed/.test(JSON.stringify(m1Rows)));
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

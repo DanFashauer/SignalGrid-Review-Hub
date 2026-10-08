@@ -166,7 +166,7 @@ const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s]*@/ :
 // ROUND 10 (origin inside the repository). `--show-scope` names the scope of the file that INCLUDED a key, so an include.path in the global file that points at a
 // file kept inside the repository reported that file's keys as "global", and they were only reported (round-9 refute, fx/include). The signal git also gives is the
 // ORIGIN path: a key whose origin file resolves (realpath) inside the worktree, its git dir or the common git dir is the repository's own whatever scope is named,
-// and is gated. `own` = { fileOf(origin) -> absolute real path or "", roots: [real paths], via(file) -> "include.path in <scope> <file>" or "" }; absent, only the scope decides.
+// and is gated. `own` = { fileOf(origin) -> absolute real path or "", owned: [real paths], via(file) -> "include.path in <scope> <file>" or "" }; absent, only the scope decides.
 function transportKey(scope, origin, kv, own = null) {
   const nl = kv.indexOf("\n");
   const key = nl < 0 ? kv : kv.slice(0, nl), last = key.slice(key.lastIndexOf(".") + 1);
@@ -184,7 +184,7 @@ function transportKey(scope, origin, kv, own = null) {
   const relevant = isUrl || isProxyCmd || isHelper || (isHttp && !HTTP_HARMLESS.test(key));
   if (local && relevant) return { problem: `repository-scope ${label} (${where}) can redirect or weaken the Hub transport` };
   const file = own ? own.fileOf(origin) : "";
-  if (relevant && file && own.roots.some((r) => file === r || file.startsWith(r + sep))) {
+  if (relevant && file && own.owned.some((r) => file === r || file.startsWith(r + sep))) {
     const via = own.via(file);
     return { problem: `repository-owned ${label} (${scope} scope, but read from ${file}, a file inside the repository${via ? `, pulled in by ${via}` : ""}) can redirect or weaken the Hub transport` };
   }
@@ -193,10 +193,10 @@ function transportKey(scope, origin, kv, own = null) {
 // The real paths the repository owns (worktree, git dir, common git dir), the real path of a `file:` origin, and which include line named a file.
 function repoOwnership(cwd) {
   const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
-  const roots = [];
+  const owned = []; // (not called "roots": that name is the walker-floor gate's mark for a hand-listed walk; this list is walked by nothing, it is only searched)
   for (const a of ["--show-toplevel", "--git-common-dir"]) { // (a linked worktree's private git dir lies inside the common dir, so it needs no root of its own)
     const r = gitRun(cwd, ["rev-parse", a]);
-    if (r.ok && r.stdout.trim()) { const p = real(resolve(cwd, r.stdout.trim())); if (!roots.includes(p)) roots.push(p); }
+    if (r.ok && r.stdout.trim()) { const p = real(resolve(cwd, r.stdout.trim())); if (!owned.includes(p)) owned.push(p); }
   }
   const fileOf = (origin) => { const m = /^file:(.+)$/.exec(String(origin)); return m ? real(resolve(cwd, m[1])) : ""; };
   let includes = null; // lazily: only a finding needs to name its include line
@@ -214,7 +214,7 @@ function repoOwnership(cwd) {
     }
     return includes.get(file) || "";
   };
-  return { roots, fileOf, via };
+  return { owned, fileOf, via };
 }
 function hubTransport(cwd = repo, hub = HUB) {
   const problems = [], trusted = [];
@@ -234,6 +234,9 @@ function hubTransport(cwd = repo, hub = HUB) {
     const t = String(cfg.stdout).split("\0"); // scope \0 origin \0 key \n value \0, repeated
     const seen = new Map();
     const own = repoOwnership(cwd);
+    // FLOOR: a repository has at least a worktree or a git dir. Fewer means git could not name them, and then no key can be recognised as read from a file inside the repository
+    // (the origin test above would match nothing and say nothing): that is a finding, not a pass.
+    if (own.owned.length < 1) problems.push("git could not name the repository's own paths (rev-parse failed), so a setting read from a file inside it cannot be told from the environment's");
     for (let i = 0; i + 2 < t.length; i += 3) {
       const f = transportKey(t[i], t[i + 1], t[i + 2], own);
       if (f.problem) problems.push(f.problem);
@@ -2439,8 +2442,11 @@ function selfTest() {
     check("a forged commit-graph that makes a Hub-listed commit the child of the unpushed tip does not make the Hub hold it: every ancestry answer is read from the objects (R7-CG)",
       cgHonest && cgLie && cgTruthOff && !hubHolds(cg, cgT, "other") && hubTipState("mine", hubMapOf(cg.h), cg.w).holds === false && isOnHubBySha("mine", hubMapOf(cg.h), cg.w) === false && reported(cgRows, "mine"));
     // The forge must leave the file exactly as read-only as git made it (and git does make it read-only): a forge that wrote in place, or chmodded it writable, only works as root.
+    // A directory listing that proves "no temp file is left" must have READ the directory: it has to contain the commit-graph itself, or an empty read would pass.
+    const noTempLeft = (names, must) => names.includes(must) && names.every((n) => !n.includes(".forged-"));
+    const cgDirEntries = readdirSync(dirname(cgFile));
     check("forging the commit-graph keeps the mode git gave the file (read-only) and REPLACES the file (a new inode, no temp file left), where an in-place write needs a user who may write it (R11-CG-mode)",
-      (cgForged.mode & 0o222) === 0 && (cgAfter.mode & 0o777) === cgForged.mode && cgAfter.ino !== cgForged.ino && readdirSync(dirname(cgFile)).every((n) => !n.includes(".forged-")));
+      (cgForged.mode & 0o222) === 0 && (cgAfter.mode & 0o777) === cgForged.mode && cgAfter.ino !== cgForged.ino && noTempLeft(cgDirEntries, "commit-graph") && noTempLeft(["commit-graph"], "commit-graph") && !noTempLeft([], "commit-graph") && !noTempLeft(["commit-graph", "commit-graph.forged-1"], "commit-graph") && !noTempLeft(["other"], "commit-graph"));
     // (6) user configuration must not change the answer: diff.ignoreSubmodules=all hides a gitlink bump from the porcelain path list and patch
     const sb = mkFx("r7sb"), sbS1 = "1".repeat(40), sbS3 = "3".repeat(40);
     sb.f("update-index", "--add", "--cacheinfo", `160000,${sbS1},sub`); sb.f("commit", "-q", "-m", "sub@s1"); const sbB = sb.f("rev-parse", "HEAD"); sb.f("push", "-q", "origin", "main");
@@ -3083,6 +3089,14 @@ function selfTest() {
       check("the whole self-test, started under a global git configuration that sets fetch.prune=true, http.sslVerify=false, merge.ff=only and a missing core.hooksPath, passes (R12-hostile-global)",
         nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
     }
+    // ══ ROUND 14 ══ The walker-floor meta-gate flagged a list named like a walk root beside a readdirSync (a name-only match). Nothing here walks that list, so the name is gone; the list's shrinkage would silently loosen the
+    // origin-inside-the-repository rule, so it has a floor, and the one real directory read in the self-test must have read something.
+    const flNone = join(root, "r14-not-a-repository"); mkdirSync(flNone);
+    const flScan = inCleanEnv(() => hubTransport(flNone));
+    const flOwn = repoOwnership(txc.w);
+    check("a directory that is no repository (git can name none of its own paths) is a gated finding, where a repository names at least its worktree and its git directory (R14-owned-floor)",
+      flScan.problems.some((p) => /^git could not name the repository's own paths/.test(p)) && repoOwnership(flNone).owned.length === 0 && flOwn.owned.length >= 2 && flOwn.owned.every((p) => isAbsolute(p)) &&
+      inCleanEnv(() => hubTransport(txc.w)).problems.length === 0);
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

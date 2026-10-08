@@ -7,6 +7,9 @@
 // imported for this because it runs its whole check at import time; this module has no
 // side effects. Change a rule HERE and both gates move together — and the parity gate's
 // self-test (which drives these exports) holds it.
+//
+// ONE DEVIATION from the moved text (review round 4): `--self-test` must not be followed by `[\w-]`, so a step
+// running `--self-test-not` no longer credits the gate (the original `\b` matched before the `-`). Stricter only.
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -201,12 +204,12 @@ export function invokes(head, wantsSelfTest, commands) {
     const base = head.endsWith(".mjs")
       ? String.raw`${SEP}${ENV}node[ \t]+${g}` // node scripts/x.mjs
       : String.raw`${SEP}${ENV}${SHELL_RUNNER}${g}`; // bash scripts/x.sh, or the path run directly
-    if (wantsSelfTest) return test(`${base}(?:[ \\t]+--?[\\w=-]+)*[ \\t]+--self-test\\b`);
+    if (wantsSelfTest) return test(`${base}(?:[ \\t]+--?[\\w=-]+)*[ \\t]+--self-test(?![\\w-])`);
     return test(`${base}(?![ \\t]+--self-test)(?![\\w./-])`);
   }
   // npm-script name: `pnpm|npm|$PNPM run <name>`, flags allowed, command position only.
   const run = String.raw`${SEP}${ENV}(?:\$PNPM|pnpm|npm)(?:[ \t]+--?[\w-]+(?:=\S+)?)*[ \t]+run[ \t]+(?:--?[\w-]+[ \t]+)*${g}(?![\w:-])`;
-  if (wantsSelfTest) return test(`${run}(?:[ \\t]+--)?[ \\t]+--self-test\\b`);
+  if (wantsSelfTest) return test(`${run}(?:[ \\t]+--)?[ \\t]+--self-test(?![\\w-])`);
   return test(`${run}(?!(?:[ \\t]+--)?[ \\t]+--self-test)`);
 }
 

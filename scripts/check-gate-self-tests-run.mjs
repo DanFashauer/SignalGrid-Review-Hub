@@ -191,6 +191,30 @@ export function gateAliases(pkgScripts) {
   return out;
 }
 
+/** Pure: the event names in an inline `on:` value — a scalar (`push`), a flow sequence (`[push, pull_request]`)
+ *  or the TOP-LEVEL keys of a flow mapping (`{ push: {…}, workflow_dispatch: { inputs: { push: … } } }`; nested keys
+ *  do not count). Anything else yields no event, which is the tight answer. */
+export function inlineEvents(value) {
+  const v = value.trim();
+  const unq = (x) => x.trim().replace(/^(["'])(.*)\1$/, "$2");
+  if (v.startsWith("[") || v.startsWith("{")) {
+    const mapping = v.startsWith("{");
+    const out = [];
+    let depth = 0, cur = "";
+    const flush = (isKey) => { if (cur.trim() !== "" && (!mapping || isKey)) out.push(unq(cur)); cur = ""; };
+    for (let i = 0; i < v.length; i++) {
+      const c = v[i];
+      if (c === "{" || c === "[") { depth++; if (depth > 1) cur += c; continue; }
+      if (c === "}" || c === "]") { if (depth === 1) flush(false); depth--; if (depth >= 1) cur += c; continue; }
+      if (depth === 1 && c === ",") { flush(false); continue; }
+      if (depth === 1 && mapping && c === ":") { flush(true); continue; } // a scalar value is flushed (and dropped) at the next comma
+      if (depth === 1) cur += c;
+    }
+    return out;
+  }
+  return [unq(v.split(/\s+#/)[0])];
+}
+
 /** Pure: does this workflow text trigger on a pull request or a push (the only runs that gate a change)?
  *  Only the DIRECT children of `on:` count — an input named `push` under workflow_dispatch does not.
  *  Branch and path filters are not read. */
@@ -198,7 +222,7 @@ export function runsOnChange(text) {
   const t = stripYamlComments(text);
   const m = /^on:[ \t]*(.*)$/m.exec(t);
   if (!m) return false;
-  if (m[1].trim() !== "") return /\b(pull_request|push)\b/.test(m[1]); // on: push / on: [push, pull_request]
+  if (m[1].trim() !== "") return inlineEvents(m[1]).some((e) => e === "pull_request" || e === "push"); // on: push / [push, …] / { push: … }
   let indent = -1;
   for (const l of t.slice(m.index + m[0].length).split("\n")) {
     if (l.trim() === "") continue;
@@ -372,6 +396,10 @@ function selfTest() {
     R("a continue-on-error step", { workflow: `      - continue-on-error: true\n        run: ${CMD}\n` });
     R("a folded run: > whose first line is echo", { workflow: `      - run: >\n          echo skipped\n          ${CMD}\n` });
     R("a plain flag-less workflow run", { workflow: stepOf("node scripts/check-bad.mjs") });
+    R("a plain flag-less `pnpm run <alias>` workflow run", { pkg: { gz: "node scripts/check-bad.mjs" }, workflow: stepOf("pnpm run gz") });
+    R("a run of --self-test-not", { workflow: stepOf("node scripts/check-bad.mjs --self-test-not") });
+    R("an inline flow-mapping `on:` whose dispatch input is named push", { workflow: stepOf(CMD), on: "on: { workflow_dispatch: { inputs: { push: { type: boolean } } } }\n" });
+    R("a PARKED_STEPS array ahead of STEPS", { breadth: `const PARKED_STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nconst STEPS = [];\n` });
     R("an object literal outside the STEPS array (breadth)", { breadth: `const STEPS = [];\nconst RETIRED = [{ name: "parked", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n` });
     R("an inline `on: workflow_dispatch`", { workflow: stepOf(CMD), on: "on: workflow_dispatch\n" });
     R("a job named push in a dispatch-only file", { workflow: stepOf(CMD), on: "on:\n  workflow_dispatch:\nx:\n  push:\n    y: 1\n" });
@@ -430,6 +458,7 @@ function selfTest() {
     note("pure: an unterminated quote ends at the newline (a commented handler on the next line stays a comment)", !hasHandler('const s = "oops;\n// if (x.includes("--self-test")) f();\nconst t = "x";\n'));
     note("pure: a regex literal after `)` holding /* does not hide a handler", hasHandler('if (x) /[/*]/.test(y);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: a regex literal after `else return` holding /* does not hide a handler", hasHandler('else return /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
+    note("pure: inline on: values read scalars, sequences and only TOP-LEVEL mapping keys", JSON.stringify(inlineEvents("push")) === '["push"]' && JSON.stringify(inlineEvents("[push, pull_request]")) === '["push","pull_request"]' && JSON.stringify(inlineEvents("{ workflow_dispatch: { inputs: { push: {} } } }")) === '["workflow_dispatch"]' && JSON.stringify(inlineEvents("{ push: { branches: [a, b] }, workflow_dispatch: {} }")) === '["push","workflow_dispatch"]' && runsOnChange("on: { push: {} }\n") && !runsOnChange("on: { workflow_dispatch: { inputs: { pull_request: {} } } }\n"));
     note("pure: runsOnChange reads only direct children of on:", !runsOnChange("on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n") && runsOnChange("on:\n  push:\n    branches: [a]\n"));
     note("pure: a regex after a bare else holding /* does not hide a handler", hasHandler('if (a) b(); else /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: a character class holding // does not end the regex early", hasHandler('const r = /[//*]/; if (a.includes("--self-test")) f();\n/* end */\n'));

@@ -18,7 +18,7 @@
  *      SIGNALGRID_BASE_URL.
  */
 import { parseArgs } from "node:util";
-import { call, CliError, confirmTenant, EXIT, isSafeId, readConfig, safeId, type Config } from "./client.js";
+import { call, CliError, confirmTenant, EXIT, idempotencyKey, isSafeId, readConfig, safeId, type Config } from "./client.js";
 import { checkSessionWritable, readSession, sessionPath, writeSession } from "./session.js";
 
 /** The four words a host app obeys (lib/signalgrid-core/src/types.ts DecisionOutcome). */
@@ -35,7 +35,7 @@ interface CommandSpec {
 /** Drives `--help` AND the generated SKILL.md, so the two cannot drift apart. */
 export const COMMANDS: Record<string, CommandSpec> = {
   decide: {
-    usage: "signalgrid decide --identity <ref> --device <ref> --workflow <key> [--allow-write] [--json]",
+    usage: "signalgrid decide --identity <ref> --device <ref> --workflow <key> [--allow-write [--idempotency-key <key>]] [--json]",
     summary:
       "Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4.",
     requests: ["GET /v1/context", "POST /v1/decisions/evaluate"],
@@ -56,12 +56,13 @@ export const COMMANDS: Record<string, CommandSpec> = {
   },
   audit: {
     usage: "signalgrid audit [--limit <n>] [--json]",
-    summary: "Show the tenant's audit events (newest last) and the ledger's chain verdict. A broken chain exits 1.",
+    summary:
+      "Show the tenant's audit events (newest last; --limit keeps the newest n) and the ledger's chain verdict. A broken or inconclusive chain exits 1.",
     requests: ["GET /v1/context", "GET /v1/audit"],
     writes: false,
   },
   connectors: {
-    usage: "signalgrid connectors [runs <connectorId> | sync <connectorId> [--allow-write]] [--json]",
+    usage: "signalgrid connectors [runs <connectorId> | sync <connectorId> [--allow-write [--idempotency-key <key>]]] [--json]",
     summary:
       "List the tenant's connectors, or one connector's sync runs. `sync` starts a sync run (a WRITE) and needs --allow-write.",
     requests: ["GET /v1/context", "GET /v1/connectors", "GET /v1/connectors/:id/sync-runs", "POST /v1/connectors/:id/sync"],
@@ -129,8 +130,9 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   // has been minted (review round 2 on PR #1321).
   const session = sessionPath(env);
   checkSessionWritable(session);
+  const key = idempotencyKey(v["idempotency-key"]);
   const tenant = await confirmTenant(cfg);
-  const { body: answer } = await call(cfg, "POST", "/v1/decisions/evaluate", body);
+  const { body: answer } = await call(cfg, "POST", "/v1/decisions/evaluate", body, key);
   const d = answer["decision"] as Record<string, unknown> | undefined;
   const outcome = d?.["outcome"];
   if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || !isSafeId(d["decisionId"])) {
@@ -162,6 +164,20 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   };
 }
 
+/**
+ * `verified: true` counts only for the snapshot of THIS decision: an evidence answer with
+ * no snapshot, or a verified snapshot belonging to another decision, is not a verified
+ * record of this one (review round 4 on PR #1321).
+ */
+function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: unknown): boolean {
+  const snap = ev["evidence"];
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return false;
+  const s = snap as Record<string, unknown>;
+  if (s["decisionId"] !== decisionId) return false;
+  if (snapshotId !== undefined && s["id"] !== snapshotId) return false;
+  return ev["verified"] === true;
+}
+
 async function explain(cfg: Config, id: string): Promise<Out> {
   const tenant = await confirmTenant(cfg);
   const enc = encodeURIComponent(id);
@@ -173,7 +189,11 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   if (!d || typeof d["outcome"] !== "string" || !OUTCOMES.has(d["outcome"])) {
     throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried no recognisable outcome; nothing is reported.`, EXIT.refused);
   }
-  const verified = ev["verified"] === true;
+  // The record must be the one asked for, or its outcome is some other decision's.
+  if ((d["id"] ?? d["decisionId"]) !== id) {
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} answered with a different decision; nothing is reported.`, EXIT.refused);
+  }
+  const verified = boundVerdict(ev, id, d["evidenceSnapshotId"]);
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
   const signals = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
   return {
@@ -199,7 +219,7 @@ async function signals(cfg: Config, id: string): Promise<Out> {
   if (!Array.isArray(list)) {
     throw new CliError("malformed_answer", "the evidence snapshot named no signalsUsed list; nothing is reported.", EXIT.refused);
   }
-  const verified = ev["verified"] === true;
+  const verified = boundVerdict(ev, id, undefined);
   const rows = (list as Record<string, unknown>[]).map((s) => [
     str(s["category"]), str(s["subjectType"]), str(s["value"]), str(s["freshness"]), str(s["observedAt"]), str(s["sourceReference"]),
   ]);
@@ -213,6 +233,47 @@ async function signals(cfg: Config, id: string): Promise<Out> {
   };
 }
 
+/**
+ * The two verdict shapes /v1/audit returns: the in-memory core's `{ valid, brokenAtSeq,
+ * length }` and the durable ledger's `{ ok, truncated, brokenAtIndex, count }`
+ * (lib/audit verifyLedger). A durable `ok: true` that stopped at the verifier's read cap
+ * (`truncated` not exactly false) is "the prefix read is intact" and nothing more, so it
+ * is inconclusive, not valid. No verdict field, or two that disagree, is not valid either.
+ */
+function chainVerdict(chain: Record<string, unknown>): { valid: boolean; label: string; length: unknown } {
+  const hasValid = typeof chain["valid"] === "boolean";
+  const hasOk = typeof chain["ok"] === "boolean";
+  if (hasValid && hasOk && chain["valid"] !== chain["ok"]) return { valid: false, label: "CONTRADICTORY (valid and ok disagree)", length: chain["length"] ?? chain["count"] };
+  if (hasValid) {
+    return chain["valid"] === true
+      ? { valid: true, label: "valid", length: chain["length"] }
+      : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
+  }
+  if (hasOk) {
+    if (chain["ok"] !== true) return { valid: false, label: `BROKEN at index ${str(chain["brokenAtIndex"])}`, length: chain["count"] };
+    if (chain["truncated"] !== false) return { valid: false, label: "INCONCLUSIVE (the server's verifier stopped at its read cap)", length: chain["count"] };
+    return { valid: true, label: "valid", length: chain["count"] };
+  }
+  return { valid: false, label: "UNKNOWN (no verdict field)", length: undefined };
+}
+
+/** One audit event as a table row, from either record shape (core AuditEvent or lib/audit AuditRecord). */
+function auditRow(e: Record<string, unknown>): string[] {
+  const ref = (v: unknown): string => {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const o = v as Record<string, unknown>;
+      return [o["type"], o["id"]].filter((x) => typeof x === "string").join(":") || "unknown";
+    }
+    return str(v);
+  };
+  return [str(e["seq"] ?? e["id"]), str(e["recordedAt"] ?? e["ts"]), str(e["type"] ?? e["eventType"]), ref(e["actor"]), ref(e["subject"] ?? e["target"])];
+}
+
+/** The durable route serves at most this many rows per request (artifacts/api-server/src/routes/v1.ts). */
+const AUDIT_PAGE = 1000;
+/** A read bound: past it the newest events cannot be located, and the CLI says so instead of guessing. */
+const AUDIT_MAX_PAGES = 100;
+
 async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
   let limit: number | undefined;
   if (limitRaw !== undefined) {
@@ -220,33 +281,50 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     if (!Number.isInteger(limit) || limit < 1) throw new CliError("usage", "--limit must be a positive integer.", EXIT.usage);
   }
   const tenant = await confirmTenant(cfg);
-  const { body } = await call(cfg, "GET", `/v1/audit${limit ? `?limit=${limit}` : ""}`);
-  const events = body["events"];
-  const chain = body["chain"] as Record<string, unknown> | undefined;
-  if (!Array.isArray(events) || !chain) {
-    throw new CliError("malformed_answer", "GET /v1/audit carried no events list or chain verdict; nothing is reported.", EXIT.refused);
+  // The durable backend pages OLDEST first, so the newest n are found by reading every
+  // page and keeping the tail; --limit is never forwarded as the server's row limit. The
+  // in-memory backend ignores the paging and answers the whole list once.
+  let shown: Record<string, unknown>[] = [];
+  let chain: Record<string, unknown> | undefined;
+  let source: unknown;
+  for (let page = 0; ; page++) {
+    if (page === AUDIT_MAX_PAGES) {
+      throw new CliError("too_large", `the tenant's ledger is longer than ${AUDIT_MAX_PAGES * AUDIT_PAGE} events; the newest cannot be located within the CLI's read bound, so nothing is reported.`, EXIT.refused);
+    }
+    const { body } = await call(cfg, "GET", `/v1/audit?limit=${AUDIT_PAGE}&offset=${page * AUDIT_PAGE}`);
+    const events = body["events"];
+    const pageChain = body["chain"];
+    if (!Array.isArray(events) || !pageChain || typeof pageChain !== "object") {
+      throw new CliError("malformed_answer", "GET /v1/audit carried no events list or chain verdict; nothing is reported.", EXIT.refused);
+    }
+    chain = pageChain as Record<string, unknown>;
+    source = body["source"];
+    shown = shown.concat(events as Record<string, unknown>[]);
+    if (limit) shown = shown.slice(-limit);
+    // Stop on the last page, on any non-durable answer, or on the first verdict that is not valid.
+    if (source !== "durable" || events.length < AUDIT_PAGE || !chainVerdict(chain).valid) break;
   }
-  const shown = limit ? (events as Record<string, unknown>[]).slice(-limit) : (events as Record<string, unknown>[]);
-  const valid = chain["valid"] === true;
+  const verdict = chainVerdict(chain);
   return {
-    exit: valid ? EXIT.ok : EXIT.refused,
-    json: { ok: valid, command: "audit", tenant: tenant.id, source: body["source"] ?? null, chain, events: shown },
+    exit: verdict.valid ? EXIT.ok : EXIT.refused,
+    json: { ok: verdict.valid, command: "audit", tenant: tenant.id, source: source ?? null, chain, events: shown },
     human: [
-      `chain ${valid ? "valid" : `BROKEN at seq ${str(chain["brokenAtSeq"])}`} · length ${str(chain["length"])} · source ${str(body["source"])} · showing ${shown.length}`,
-      table(["seq", "recordedAt", "type", "actor", "subject"], shown.map((e) => [str(e["seq"]), str(e["recordedAt"]), str(e["type"]), str(e["actor"]), str(e["subject"])])),
+      `chain ${verdict.label} · length ${str(verdict.length)} · source ${str(source)} · showing ${shown.length}`,
+      table(["event", "at", "type", "actor", "subject"], shown.map(auditRow)),
     ].join("\n"),
   };
 }
 
-async function connectors(getCfg: () => Config, args: string[], allowWrite: boolean): Promise<Out> {
+async function connectors(getCfg: () => Config, args: string[], allowWrite: boolean, givenKey: string | undefined): Promise<Out> {
   const [sub, id] = args;
   if (sub === "sync") {
     const cid = safeId(need(id, "connectors sync <connectorId>"), "the connector id");
     const path = `/v1/connectors/${encodeURIComponent(cid)}/sync`;
     if (!allowWrite) return writeRefused("connectors sync", "POST", path, undefined);
     const cfg = getCfg();
+    const key = idempotencyKey(givenKey);
     const tenant = await confirmTenant(cfg);
-    const { body } = await call(cfg, "POST", path);
+    const { body } = await call(cfg, "POST", path, undefined, key);
     const run = body["syncRun"] as Record<string, unknown> | undefined;
     if (!run || typeof run["id"] !== "string" || typeof run["status"] !== "string") {
       throw new CliError("malformed_answer", `POST ${path} carried no sync run with an id and a status; nothing is reported.`, EXIT.refused);
@@ -304,7 +382,8 @@ A client of the decision core, never a shortcut around it (DR-040). It prints wh
 - \`SIGNALGRID_TOKEN\` — the bearer. Never pass it as a flag.
 - \`SIGNALGRID_CLI_SESSION\` — optional absolute path OUTSIDE the repository; remembers the last decision id (never the token), written under an exclusive lock.
 
-Run it from the repository root with \`pnpm --filter @workspace/signalgrid-cli run start -- <command>\`.
+Run it from the repository root with \`pnpm --silent --filter @workspace/signalgrid-cli run start <command>\`.
+\`--silent\` is what keeps pnpm's own banner off stdout, so \`--json\` output stays one JSON object.
 
 ## Commands
 
@@ -327,6 +406,7 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass \`--allow-write\` only when the task says to mint a decision or start a sync.
+- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-run the same command with \`--idempotency-key <key>\` within 5 minutes to get the recorded answer instead of writing twice.
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - \`--json\` prints one JSON object on stdout for every exit, errors included.
 `;
@@ -339,6 +419,7 @@ type Values = {
   device?: string;
   workflow?: string;
   limit?: string;
+  "idempotency-key"?: string;
   help?: boolean;
 };
 
@@ -354,6 +435,10 @@ function help(): string {
 }
 
 export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string; exit: number }> {
+  // `pnpm run start -- <command>` forwards the `--` itself, and parseArgs would read every
+  // flag after it as a positional (silently dropping --json). No command begins with `--`,
+  // so one leading `--` is only ever that separator.
+  if (argv[0] === "--") argv = argv.slice(1);
   let json = argv.includes("--json");
   try {
     const { values, positionals } = parseArgs({
@@ -367,6 +452,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
         device: { type: "string" },
         workflow: { type: "string" },
         limit: { type: "string" },
+        "idempotency-key": { type: "string" },
         help: { type: "boolean", short: "h" },
       },
     });
@@ -383,7 +469,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
       case "explain": { const cfg = getCfg(); out = await explain(cfg, decisionIdArg(rest[0], cfg, env)); break; }
       case "signals": { const cfg = getCfg(); out = await signals(cfg, decisionIdArg(rest[0], cfg, env)); break; }
       case "audit": out = await audit(getCfg(), v.limit); break;
-      default: out = await connectors(getCfg, rest, v["allow-write"] === true);
+      default: out = await connectors(getCfg, rest, v["allow-write"] === true, v["idempotency-key"]);
     }
     const exit = out.exit ?? EXIT.ok;
     return { stdout: `${json ? JSON.stringify(out.json, null, 2) : out.human}\n`, stderr: out.warning ? `signalgrid: warning: ${out.warning}\n` : "", exit };
@@ -397,7 +483,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
         ? new CliError("usage", (err as Error).message, EXIT.usage)
         : new CliError("unexpected", `unexpected error (${(err as Error).name}); nothing is reported.`, EXIT.refused);
     return json
-      ? { stdout: `${JSON.stringify({ ok: false, error: { code: e.code, message: e.message, exit: e.exit } }, null, 2)}\n`, stderr: "", exit: e.exit }
+      ? { stdout: `${JSON.stringify({ ok: false, error: { code: e.code, message: e.message, exit: e.exit, ...e.extra } }, null, 2)}\n`, stderr: "", exit: e.exit }
       : { stdout: "", stderr: `signalgrid: ${e.message}\n`, exit: e.exit };
   }
 }

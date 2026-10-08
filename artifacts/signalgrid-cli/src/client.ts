@@ -8,6 +8,7 @@
  * is an error with a non-zero exit and a message that says which of those it
  * was. None of them is ever rendered as an empty-but-successful result.
  */
+import { randomUUID } from "node:crypto";
 
 /** Exit codes. Stable: an agent branches on them. */
 export const EXIT = {
@@ -27,6 +28,8 @@ export class CliError extends Error {
     readonly code: string,
     message: string,
     readonly exit: number,
+    /** Machine-readable facts an agent needs to recover (e.g. the idempotency key of a write). */
+    readonly extra?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -99,13 +102,39 @@ export interface Answer {
   body: Record<string, unknown>;
 }
 
-/** Every request the CLI makes. `method` other than GET is a write. */
+/** The Idempotency-Key a write sends: the operator's, to recover a lost answer, or a fresh one. */
+export function idempotencyKey(given: string | undefined): string {
+  if (given === undefined) return randomUUID();
+  if (!ID_SHAPE.test(given)) {
+    throw new CliError("usage", "--idempotency-key is not a well-formed key (letters, digits, _ and - only, at most 128); refused.", EXIT.usage);
+  }
+  return given;
+}
+
+/**
+ * Every request the CLI makes. `method` other than GET is a write, and every write
+ * carries an Idempotency-Key (artifacts/api-server/src/middlewares/idempotency.ts).
+ * When a write gets no answer, the server may still have recorded it, so the error
+ * names the key: re-running the same command with `--idempotency-key <key>` inside the
+ * server's replay window returns the recorded answer instead of writing again. There
+ * is no automatic retry — two copies in flight at once both execute (that middleware's
+ * own stated scope), so a retry is the operator's deliberate act, never a reflex.
+ *
+ * Redirects are refused, never followed: the bearer token goes to SIGNALGRID_BASE_URL
+ * and nowhere else, and a redirected answer is not the answer of the server configured.
+ */
 export async function call(
   cfg: Config,
   method: "GET" | "POST",
   path: string,
   body?: unknown,
+  key?: string,
 ): Promise<Answer> {
+  if (method !== "GET" && !key) throw new CliError("unexpected", `${method} ${path} without an idempotency key; nothing was sent.`, EXIT.usage);
+  const lost = key
+    ? ` The write may have been recorded: re-run the same command with --idempotency-key ${key} within 5 minutes to get its answer instead of writing again.`
+    : "";
+  const extra = key ? { idempotencyKey: key } : undefined;
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl}${path}`, {
@@ -114,17 +143,27 @@ export async function call(
         authorization: `Bearer ${cfg.token}`,
         accept: "application/json",
         ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...(key ? { "idempotency-key": key } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      redirect: "error",
       signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
-    const c = (err as { cause?: { code?: string; errors?: Array<{ code?: string }> } }).cause;
+    const c = (err as { cause?: { code?: string; message?: string; errors?: Array<{ code?: string }> } }).cause;
+    if (/redirect/i.test(c?.message ?? "")) {
+      throw new CliError(
+        "redirect_refused",
+        `${method} ${path}: ${cfg.display} answered with a redirect, which the CLI never follows; nothing is reported.`,
+        EXIT.refused,
+      );
+    }
     const cause = c?.code ?? c?.errors?.[0]?.code ?? (err as Error).name;
     throw new CliError(
       "unreachable",
-      `could not reach ${cfg.display} (${cause}); no answer was received, so nothing is reported.`,
+      `could not reach ${cfg.display} (${cause}); no answer was received, so nothing is reported.${lost}`,
       EXIT.unreachable,
+      extra,
     );
   }
   let text: string;
@@ -134,8 +173,9 @@ export async function call(
     // Headers arrived but the body did not: no complete answer was received.
     throw new CliError(
       "unreachable",
-      `${method} ${path}: the connection to ${cfg.display} dropped mid-answer; nothing is reported.`,
+      `${method} ${path}: the connection to ${cfg.display} dropped mid-answer; nothing is reported.${lost}`,
       EXIT.unreachable,
+      extra,
     );
   }
   let parsed: unknown;

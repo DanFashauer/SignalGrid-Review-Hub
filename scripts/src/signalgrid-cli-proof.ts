@@ -17,7 +17,11 @@
 //     tenant mismatch, and a server that answers 200 with no verdict each exit
 //     non-zero with a message naming the cause, and none prints an outcome.
 //   · The session file never holds the token and is refused inside the tree.
-//   · The committed .claude/skills/cli-anything/signalgrid-cli/SKILL.md equals the generator.
+//   · The committed .claude/skills/cli-anything/signalgrid-cli/SKILL.md equals the generator,
+//     and the run line it documents (pnpm --silent …) yields one parseable JSON object.
+//   · Every write carries an Idempotency-Key; reusing it replays instead of writing twice,
+//     and a write whose answer is lost names the key to recover with.
+//   · Redirects are refused; the durable ledger's verdict shape and paging are read right.
 //
 // Offline and public-safe: the in-memory demo core and synthetic demo keys only.
 
@@ -66,9 +70,13 @@ async function freePort(): Promise<number> {
 
 // ── the recording proxy: every request the CLI makes, by method and path ──
 const seen: string[] = [];
+/** The Idempotency-Key header of every request the proxy saw, by method ("" when absent). */
+const seenKeys: Array<{ method: string; key: string }> = [];
 function startProxy(upstreamPort: number): Promise<{ server: Server; port: number }> {
   const server = createServer((req, res) => {
     seen.push(`${req.method} ${(req.url ?? "").split("?")[0]}`);
+    const k = req.headers["idempotency-key"];
+    seenKeys.push({ method: req.method ?? "", key: typeof k === "string" ? k : "" });
     const up = httpRequest(
       { host: "127.0.0.1", port: upstreamPort, method: req.method, path: req.url, headers: req.headers },
       (upRes) => {
@@ -152,6 +160,9 @@ async function main(): Promise<void> {
   const env = { SIGNALGRID_BASE_URL: VIA, SIGNALGRID_TENANT: "northwind-health", SIGNALGRID_TOKEN: TOKEN };
   const liars: Server[] = [];
   const sessionDir = mkdtempSync(join(tmpdir(), "signalgrid-cli-proof-"));
+  // A previous run that died mid-way must not leave this file to fail the check below.
+  const leak = join(repoRoot, "signalgrid-cli-tmpleak.json");
+  rmSync(leak, { force: true });
   try {
     let ready = false;
     for (let i = 0; i < 60 && !ready; i++) {
@@ -445,7 +456,6 @@ async function main(): Promise<void> {
     const s7Text = readRegularFileNoFollow(s7);
     check("…and the session lands as a regular file holding the decision",
       typeof s7Id === "string" && s7Text !== null && s7Text.includes(s7Id));
-    const leak = join(repoRoot, "signalgrid-cli-tmpleak.json");
     const s7b = join(sessionDir, "s7b.json");
     symlinkSync(leak, `${s7b}.tmp`);
     const intoRepo = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_CLI_SESSION: s7b });
@@ -461,17 +471,158 @@ async function main(): Promise<void> {
     check("a session path that is a directory exits 2 and sends no POST",
       isDir.code === 2 && !seen.some((x) => x.startsWith("POST ")));
 
-    // A session write that fails AFTER the POST keeps the verdict and warns; it never
-    // hides a decision the server has recorded behind an error exit.
+    // A directory at `<session>.tmp` can never be cleared for the write, so it refuses
+    // BEFORE the POST, like every other session problem (review round 4 on PR #1321).
     const s8 = join(sessionDir, "s8.json");
     mkdirSync(`${s8}.tmp`);
     seen.length = 0;
-    const late = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: s8 });
+    const tmpDir = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: s8 });
+    check("a directory at <session>.tmp exits 2 and sends no POST",
+      tmpDir.code === 2 && !seen.some((x) => x.startsWith("POST ")));
+    // A dangling symlink at `<session>.lock` makes the O_EXCL lock fail; that too refuses first.
+    const s9 = join(sessionDir, "s9.json");
+    symlinkSync(join(sessionDir, "no-such-target"), `${s9}.lock`);
+    seen.length = 0;
+    const dangling = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_CLI_SESSION: s9 });
+    check("a dangling symlink at <session>.lock exits 2 and sends no POST",
+      dangling.code === 2 && !seen.some((x) => x.startsWith("POST ")));
+
+    // A session write that fails AFTER the POST keeps the verdict and warns; it never
+    // hides a decision the server has recorded behind an error exit. The server below
+    // takes the session's lock while it answers — the race the pre-check cannot see.
+    const s10 = join(sessionDir, "s10.json");
+    const racer = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      writeFileSync(`${s10}.lock`, "");
+      res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow" } }));
+    });
+    const racerPort = await listen(racer);
+    liars.push(racer);
+    const late = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${racerPort}/api`, SIGNALGRID_CLI_SESSION: s10 });
     const lateJ = parse(late.stdout);
     check("a session write that fails after the POST still reports the decision (exit 0, sessionWarning, stderr warning)",
-      late.code === 0 && seen.includes("POST /api/v1/decisions/evaluate") &&
-      typeof (lateJ?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"] === "string" &&
+      late.code === 0 && (lateJ?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"] === "dec_raced" &&
       typeof lateJ?.["sessionWarning"] === "string" && /warning:/.test(late.stderr));
+
+    // A FIFO at the session path is refused, not read (a read would block forever).
+    const fifo = join(sessionDir, "fifo.json");
+    const mk = spawnSync("mkfifo", [fifo]);
+    check("mkfifo made a FIFO for the session check", mk.status === 0);
+    seen.length = 0;
+    const fifoRun = await cli(["explain"], { ...env, SIGNALGRID_CLI_SESSION: fifo });
+    check("a session path that is a FIFO exits 2 and requests nothing", fifoRun.code === 2 && /not a regular file/.test(fifoRun.stderr) && seen.length === 0);
+
+    // ── review round 4 on PR #1321 ──
+    // `verified: true` counts only for a snapshot bound to THIS decision.
+    const bindings: Array<[string, unknown, string[]]> = [
+      ["explain: verified with no snapshot", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, verified: true }, ["explain", "dec_x"]],
+      ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["signals: a verified snapshot of another decision", { evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
+    ];
+    for (const [label, body, args] of bindings) {
+      const r = await viaLiar(body, args);
+      check(`${label} exits 1 and never says it verifies`, r.code === 1 && !/digest verifies|evidence verifies/.test(r.stdout));
+    }
+    const bound = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    check("explain: a verified snapshot bound to the decision exits 0 (the binding check can pass)", bound.code === 0 && /digest verifies/.test(bound.stdout));
+    const otherDecision = await viaLiar({ decision: { id: "dec_other", outcome: "allow" } }, ["explain", "dec_x"]);
+    check("explain refuses a record of a different decision than the one asked for", otherDecision.code === 1 && !/^outcome/m.test(otherDecision.stdout));
+
+    // The durable ledger's verdict shape: `ok` + `truncated`, records with ts/eventType/target.
+    const durableRec = { id: "aud_1", ts: "2026-10-08T00:00:00.000Z", actor: { type: "system" }, eventType: "decision.allow", target: { type: "decision", id: "dec_1" }, prevHash: "", hash: "h1" };
+    const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, truncated: false, batches: 1, scope: "global-ledger" }, source: "durable" }, ["audit"]);
+    check("audit reads an intact durable ledger (`ok`, not truncated) as valid and renders its record fields",
+      durOk.code === 0 && /^chain valid · length 1 · source durable/.test(durOk.stdout) && /decision\.allow/.test(durOk.stdout) && /decision:dec_1/.test(durOk.stdout) && /2026-10-08T00:00:00/.test(durOk.stdout));
+    const durCap = await viaLiar({ events: [durableRec], chain: { ok: true, count: 10000, truncated: true }, source: "durable" }, ["audit"]);
+    check("audit on a durable verdict that stopped at its read cap exits 1 (inconclusive, not valid)", durCap.code === 1 && /INCONCLUSIVE/.test(durCap.stdout));
+    const durBroken = await viaLiar({ events: [durableRec], chain: { ok: false, count: 1, truncated: false, brokenAtIndex: 0 }, source: "durable" }, ["audit"]);
+    check("audit on a broken durable ledger exits 1 and names the break", durBroken.code === 1 && /BROKEN at index 0/.test(durBroken.stdout));
+    const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false } }, ["audit"]);
+    check("audit on two verdict fields that disagree exits 1", contra.code === 1);
+
+    // Durable paging is oldest-first: `--limit 3` must still be the NEWEST three.
+    const ledger = Array.from({ length: 2500 }, (_, i) => ({ ...durableRec, id: `aud_${i}` }));
+    const pageQueries: string[] = [];
+    const pager = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      const url = new URL(req.url ?? "/", "http://x");
+      if (url.pathname.endsWith("/v1/context")) {
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      pageQueries.push(url.search);
+      const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 1000);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      res.end(JSON.stringify({ events: ledger.slice(offset, offset + limit), chain: { ok: true, count: 2500, truncated: false }, source: "durable", limit, offset }));
+    });
+    const pagerPort = await listen(pager);
+    liars.push(pager);
+    const newest = await cli(["audit", "--limit", "3", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${pagerPort}/api` });
+    const newestIds = ((parse(newest.stdout)?.["events"] as Record<string, unknown>[] | undefined) ?? []).map((e) => e["id"]).join();
+    check("audit --limit 3 against durable paging returns the newest three, not the oldest", newest.code === 0 && newestIds === "aud_2497,aud_2498,aud_2499");
+    check("…by reading every page", pageQueries.join() === "?limit=1000&offset=0,?limit=1000&offset=1000,?limit=1000&offset=2000");
+
+    // A redirect is never followed: the POST body does not travel to another origin.
+    const elsewhere: string[] = [];
+    const target = createServer((req, res) => { elsewhere.push(req.url ?? ""); res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ decision: { decisionId: "dec_y", outcome: "allow" } })); });
+    const targetPort = await listen(target);
+    liars.push(target);
+    const redirector = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      res.writeHead(307, { location: `http://127.0.0.1:${targetPort}${req.url ?? ""}` });
+      res.end();
+    });
+    const redirectorPort = await listen(redirector);
+    liars.push(redirector);
+    const redir = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${redirectorPort}/api` });
+    check("a 307 on decide is refused (exit 1, no outcome) and nothing reaches the redirect target",
+      redir.code === 1 && /redirect/.test(redir.stderr) && !/^outcome/m.test(redir.stdout) && elsewhere.length === 0);
+
+    // Every write carries an Idempotency-Key; reads carry none.
+    seenKeys.length = 0;
+    const keyed = await cli([...decideArgs, "--allow-write", "--json"], env);
+    const posts = seenKeys.filter((k) => k.method === "POST");
+    check("decide --allow-write sends its POST with an Idempotency-Key, and its GETs with none",
+      keyed.code === 0 && posts.length === 1 && posts[0]!.key.length > 0 && seenKeys.filter((k) => k.method === "GET").every((k) => k.key === ""));
+    // Reusing a key replays the recorded answer instead of writing again.
+    const beforeKey = await counts();
+    const KEY = "proof-recovery-key-1";
+    const k1 = await cli([...decideArgs, "--allow-write", "--json", "--idempotency-key", KEY], env);
+    const k2 = await cli([...decideArgs, "--allow-write", "--json", "--idempotency-key", KEY], env);
+    const afterKey = await counts();
+    const id1 = (parse(k1.stdout)?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"];
+    const id2 = (parse(k2.stdout)?.["decision"] as Record<string, unknown> | undefined)?.["decisionId"];
+    check("re-running decide with the same --idempotency-key returns the same decision and mints only one",
+      k1.code === 0 && k2.code === 0 && typeof id1 === "string" && id1 === id2 && afterKey.decisions === beforeKey.decisions + 1);
+    seen.length = 0;
+    const badKey = await cli([...decideArgs, "--allow-write", "--idempotency-key", "../x"], env);
+    check("a malformed --idempotency-key is refused before any request (exit 2)", badKey.code === 2 && seen.length === 0);
+    // A write whose answer is lost names the key to recover with.
+    const loser = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json", "content-length": "4096" });
+      res.write('{"decision":');
+      setTimeout(() => res.socket?.destroy(), 20);
+    });
+    const loserPort = await listen(loser);
+    liars.push(loser);
+    const lostRun = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${loserPort}/api` });
+    const lostErr = parse(lostRun.stdout)?.["error"] as Record<string, unknown> | undefined;
+    check("a write whose answer is lost exits 3 and names the idempotency key to recover with",
+      lostRun.code === 3 && typeof lostErr?.["idempotencyKey"] === "string" && String(lostErr?.["message"]).includes(`--idempotency-key ${String(lostErr?.["idempotencyKey"])}`));
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});
@@ -480,6 +631,27 @@ async function main(): Promise<void> {
     const committed = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "";
     check(".claude/skills/cli-anything/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
       gen.code === 0 && gen.stdout.length > 0 && gen.stdout === committed);
+    // The run line the SKILL.md documents, exactly as an agent types it: pnpm must add
+    // nothing to stdout, or `--json` is no longer one JSON object.
+    const viaPnpm = (args: string[]) => new Promise<Run>((r) => {
+      const child = spawn("pnpm", ["--silent", "--filter", "@workspace/signalgrid-cli", "run", "start", ...args], {
+        cwd: repoRoot,
+        env: { ...process.env, ...env },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (b: Buffer) => { stdout += b.toString("utf8"); });
+      child.stderr.on("data", (b: Buffer) => { stderr += b.toString("utf8"); });
+      const timer = setTimeout(() => child.kill(), 60_000);
+      child.on("close", (code) => { clearTimeout(timer); r({ code: code ?? -1, stdout, stderr }); });
+    });
+    check("the documented run line is the one the SKILL.md carries", committed.includes("pnpm --silent --filter @workspace/signalgrid-cli run start <command>"));
+    const pubJson = await viaPnpm(["audit", "--limit", "1", "--json"]);
+    check("the documented run line with --json prints exactly one parseable JSON object", pubJson.code === 0 && parse(pubJson.stdout)?.["ok"] === true);
+    const pubDash = await viaPnpm(["--", "audit", "--limit", "1", "--json"]);
+    check("…and with the habitual `--` separator, --json is still honoured", pubDash.code === 0 && parse(pubDash.stdout)?.["ok"] === true);
+    const pubSkill = await viaPnpm(["skill"]);
+    check("the documented run line prints the SKILL.md byte-for-byte", pubSkill.code === 0 && pubSkill.stdout === committed);
     // scripts/check-skill-plane-conformance.mjs walks .claude/skills/*/SKILL.md one level deep, so
     // this nested skill is outside its walk; its three rules are held here instead, not waived.
     const fm = /^---\n([\s\S]*?)\n---\n/.exec(committed)?.[1] ?? "";
@@ -492,6 +664,7 @@ async function main(): Promise<void> {
     proxy.server.close();
     for (const l of liars) l.close();
     rmSync(sessionDir, { recursive: true, force: true });
+    rmSync(leak, { force: true });
   }
 }
 

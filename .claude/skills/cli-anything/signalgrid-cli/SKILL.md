@@ -18,7 +18,8 @@ A client of the decision core, never a shortcut around it (DR-040). It prints wh
 - `SIGNALGRID_TOKEN` — the bearer. Never pass it as a flag.
 - `SIGNALGRID_CLI_SESSION` — optional absolute path OUTSIDE the repository; remembers the last decision id (never the token), written under an exclusive lock.
 
-Run it from the repository root with `pnpm --filter @workspace/signalgrid-cli run start -- <command>`.
+Run it from the repository root with `pnpm --silent --filter @workspace/signalgrid-cli run start <command>`.
+`--silent` is what keeps pnpm's own banner off stdout, so `--json` output stays one JSON object.
 
 ## Commands
 
@@ -27,7 +28,7 @@ Run it from the repository root with `pnpm --filter @workspace/signalgrid-cli ru
 | `decide` | yes, only with `--allow-write` | `GET /v1/context`, `POST /v1/decisions/evaluate` | Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4. |
 | `explain` | no | `GET /v1/context`, `GET /v1/decisions/:id`, `GET /v1/decisions/:id/evidence` | Show a recorded decision: outcome, reason codes, matched rules, the server's explanation, and whether its evidence snapshot verifies. |
 | `signals` | no | `GET /v1/context`, `GET /v1/decisions/:id/evidence` | List the normalized signals a decision's evidence snapshot used, with freshness and source reference. |
-| `audit` | no | `GET /v1/context`, `GET /v1/audit` | Show the tenant's audit events (newest last) and the ledger's chain verdict. A broken chain exits 1. |
+| `audit` | no | `GET /v1/context`, `GET /v1/audit` | Show the tenant's audit events (newest last; --limit keeps the newest n) and the ledger's chain verdict. A broken or inconclusive chain exits 1. |
 | `connectors` | yes, only with `--allow-write` | `GET /v1/context`, `GET /v1/connectors`, `GET /v1/connectors/:id/sync-runs`, `POST /v1/connectors/:id/sync` | List the tenant's connectors, or one connector's sync runs. `sync` starts a sync run (a WRITE) and needs --allow-write. |
 | `skill` | no | none | Print this CLI's SKILL.md, generated from the command table (offline; no request). |
 
@@ -46,5 +47,6 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass `--allow-write` only when the task says to mint a decision or start a sync.
+- A write that exits 3 may still have been recorded. Its error names an idempotency key (`error.idempotencyKey` under `--json`); re-run the same command with `--idempotency-key <key>` within 5 minutes to get the recorded answer instead of writing twice.
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - `--json` prints one JSON object on stdout for every exit, errors included.

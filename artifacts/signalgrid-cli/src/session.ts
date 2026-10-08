@@ -67,8 +67,29 @@ function realOf(p: string): string {
   return parent === p ? p : join(realOf(parent), basename(p));
 }
 
+/** Whether anything at all sits at `p` — a dangling symlink included, which existsSync misses. */
+function present(p: string): boolean {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function readSession(path: string | null, cfg: Config): SessionData | null {
-  if (!path || !existsSync(path)) return null;
+  if (!path || !present(path)) return null;
+  // Only a regular file (or a link to one) is read: a FIFO would block the read forever,
+  // and a directory or device is not a session (review round 4 on PR #1321).
+  let isFile = false;
+  try {
+    isFile = statSync(path).isFile();
+  } catch {
+    isFile = false;
+  }
+  if (!isFile) {
+    throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) is not a regular file; refusing to read it.`, EXIT.usage);
+  }
   let data: SessionData;
   try {
     data = JSON.parse(readFileSync(path, "utf8")) as SessionData;
@@ -101,8 +122,15 @@ export function checkSessionWritable(path: string | null): void {
   if (existsSync(path) && !lstatSync(path).isFile() && !lstatSync(path).isSymbolicLink()) {
     throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) is not a file; nothing was sent.`, EXIT.usage);
   }
-  if (existsSync(`${path}.lock`)) {
+  // lstat, not existsSync: a dangling symlink at the lock name still makes the O_EXCL
+  // create fail, and that failure must surface here, before anything is sent.
+  if (present(`${path}.lock`)) {
     throw new CliError("session_locked", `session ${path} is locked by another process (${path}.lock); nothing was sent.`, EXIT.usage);
+  }
+  // writeSession removes a stale `<file>.tmp` before creating its own; a directory there
+  // cannot be removed that way, so it would fail only after the decision was minted.
+  if (present(`${path}.tmp`) && lstatSync(`${path}.tmp`).isDirectory()) {
+    throw new CliError("session_invalid", `${path}.tmp is a directory, so the session cannot be written; nothing was sent.`, EXIT.usage);
   }
 }
 

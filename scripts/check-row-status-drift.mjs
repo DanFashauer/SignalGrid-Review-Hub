@@ -99,7 +99,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, marks, parseRows, statusText } from "./check-backlog-ownership.mjs";
 
@@ -107,9 +107,16 @@ export const LEDGERS = ["docs/COMPANY_BUILD_PLAN.md", "docs/BUILD_BACKLOG.md"];
 const HIGH_WATER_WINDOW = 50;
 
 // Whitespace-tolerant: a hard-wrapped annotation is still an annotation.
-const ANNOTATION = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})\s+\(branch\s+([A-Za-z0-9._/-]+)/g;
+// Every dated FIX PROPOSED is found; its SHAPE is read next. A shape the
+// detector cannot read is a NOT MEASURED line, never silently skipped.
+const DATED = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})/g;
+const BRANCH_SHAPE = /^\s+\(branch\s+([A-Za-z0-9._/-]+)/;
+const PR_SHAPE = /^\s+\(PR\s+#(\d+)(?:,\s*([0-9a-f]{7,40}))?/;
 const PR_MERGE = /^Merge pull request #(\d+)(?: from [^/\s]+\/(\S+))?/;
 const SQUASH = /\(#(\d+)\)$/;
+// A merge GitHub itself committed under a custom title (the landing chain's
+// "… (#1376, check run …)" and "… (#N) — merged under DR-037 …") is a PR landing too.
+const GITHUB_TITLED_MERGE = /\(#(\d+)[,)\s]/;
 // GitHub commits every squash merge itself; a worker's own commit whose subject
 // happens to end "(#N)" is not a landing.
 const GITHUB_COMMITTER = "GitHub <noreply@github.com>";
@@ -179,18 +186,24 @@ export function findAnnotations(file, text) {
   const lines = text.split("\n");
   const planRows = parseRows(text);
   const lineAt = (off) => text.slice(0, off).split("\n").length;
-  const all = [...text.matchAll(ANNOTATION)];
-  all.forEach((m, k) => {
+  const all = [...text.matchAll(DATED)].map((d) => {
+    const rest = text.slice(d.index + d[0].length, d.index + d[0].length + 200);
+    const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
+    const m = [d[0] + (b ? b[0] : p ? p[0] : ""), d[1]];
+    m.index = d.index;
+    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p?.[2] };
+  });
+  all.forEach(({ m, kind, branch, claimPr, claimSha }, k) => {
     // The cited paths are the annotation's OWN: the span stops at the next
     // annotation, the next row or checkbox head, a heading, or a blank line.
     const after = text.slice(m.index + m[0].length);
     const stop = after.search(/\n(?:\s*\n|\d+[a-z]*(?:-\d+)?\.\s|\s*[-*] \[[ xX]\]|#)/);
-    const end = Math.min(k + 1 < all.length ? all[k + 1].index : text.length, m.index + m[0].length + (stop < 0 ? after.length : stop), m.index + 2000);
+    const end = Math.min(k + 1 < all.length ? all[k + 1].m.index : text.length, m.index + m[0].length + (stop < 0 ? after.length : stop), m.index + 2000);
     const span = text.slice(m.index, end);
     const line = lineAt(m.index);
     const lastLine = lineAt(m.index + m[0].length);
     const cited = [...new Set(span.match(CITED_PATH) ?? [])].filter((p) => !LEDGERS.includes(p));
-    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], branch: m[2], key: norm(m[0]), cited });
+    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, key: norm(m[0]), cited });
   });
   return out;
 }
@@ -225,10 +238,12 @@ function landingOf(cwd, intro, tip, depth = 0) {
   const desc = git(cwd, ["rev-list", "--ancestry-path", `${intro}..${tip}`]).split("\n").filter((h) => fp.has(h));
   const land = desc[desc.length - 1];
   if (!land) return null;
-  const subject = git(cwd, ["log", "-1", "--format=%s", land]);
+  const [subject, committer, parentLine] = git(cwd, ["log", "-1", "--format=%s%n%cn <%ce>%n%P", land]).split("\n");
   const pr = PR_MERGE.exec(subject);
   if (pr) return { land, pr: Number(pr[1]), subjectBranch: pr[2] };
-  const parents = git(cwd, ["log", "-1", "--format=%P", land]).split(" ");
+  const parents = parentLine.split(" ");
+  const titled = parents.length > 1 && committer === GITHUB_COMMITTER ? GITHUB_TITLED_MERGE.exec(subject) : null;
+  if (titled) return { land, pr: Number(titled[1]) };
   if (parents.length > 1) {
     // Past SYNC_DEPTH nested sync merges the trace stops; that is NOT MEASURED, never "not via a PR".
     if (depth >= SYNC_DEPTH) return { land, capped: true };
@@ -255,7 +270,42 @@ function branchEvidence(cwd, a, l) {
  *   NOT-VIA-PR             not landed through a PR merge or squash (a branch tip, a direct push)
  *   NO-HISTORY             no adding commit found in this row's line history
  */
+/** The first-parent commit of HEAD that landed PR #n: a PR merge subject, a GitHub-titled merge, or a GitHub squash. */
+const fpLogCache = new Map();
+function prLandingOf(cwd, n) {
+  if (!fpLogCache.has(cwd)) {
+    fpLogCache.set(cwd, git(cwd, ["log", "--first-parent", "--format=%H%x09%P%x09%cn <%ce>%x09%s", "HEAD"]).split("\n").map((l) => {
+      const [sha, parents, committer, ...rest] = l.split("\t");
+      return { sha, merge: parents.split(" ").length > 1, github: committer === GITHUB_COMMITTER, subject: rest.join("\t") };
+    }));
+  }
+  return fpLogCache.get(cwd).find((c) => {
+    const m = PR_MERGE.exec(c.subject);
+    if (m) return Number(m[1]) === n;
+    if (!c.github) return false;
+    const t = (c.merge ? GITHUB_TITLED_MERGE : SQUASH).exec(c.subject);
+    return t ? Number(t[1]) === n : false;
+  });
+}
+
+/** An annotation that names its PR ("FIX PROPOSED <date> (PR #N, <sha>)"): read the claim directly. */
+function classifyPrShape(cwd, a) {
+  const l = prLandingOf(cwd, a.claimPr);
+  if (!l) return { ...a, status: "NOT-VIA-PR" };
+  const changed = new Set(git(cwd, ["diff", "--name-only", `${l.sha}^1`, l.sha]).split("\n"));
+  const hit = a.cited.filter((p) => changed.has(p));
+  let shaIn = true;
+  if (a.claimSha) {
+    try { git(cwd, ["merge-base", "--is-ancestor", a.claimSha, l.sha]); } catch { shaIn = false; }
+  }
+  const ok = hit.length > 0 && shaIn;
+  const status = a.closed ? "CLOSED-RESIDUE" : ok ? "STALE" : "LANDED-UNCORROBORATED";
+  return { ...a, status, land: l.sha, pr: a.claimPr, hit, shaIn, branchEvidence: "pr-named" };
+}
+
 export function classify(cwd, a, opts = {}) {
+  if (a.kind === "unknown") return { ...a, status: "NO-HISTORY", why: "a dated FIX PROPOSED in a shape this detector cannot read (expected \"(branch X\" or \"(PR #N\")" };
+  if (a.kind === "pr") return classifyPrShape(cwd, a);
   const intro = introOf(cwd, a);
   if (!intro) return { ...a, status: "NO-HISTORY", why: "no commit in this row's line history adds the annotation (added by a merge commit's own edit?)" };
   const l = landingOf(cwd, intro, "HEAD");
@@ -347,6 +397,7 @@ export function readLedger(cwd, file) {
 
 export function measure(where, ledgers = LEDGERS, opts = {}) {
   fpCache.clear();
+  fpLogCache.clear();
   const cwd = git(where, ["rev-parse", "--show-toplevel"]);
   const results = [];
   for (const file of ledgers) {
@@ -389,19 +440,26 @@ function restBranch(cwd) {
 function report(results, dirty = []) {
   for (const f of dirty) console.log(`  NOTE   ${f} has uncommitted changes (or is flagged assume-unchanged/skip-worktree); HEAD's copy was measured, the working-tree edit was NOT — commit it to have it read`);
   const by = (s) => results.filter((r) => r.status === s);
-  const note = (r) => (r.branchEvidence === "match" ? "branch verified" : "branch unverified offline");
+  const note = (r) => (r.kind === "pr" ? "PR named in the row" : r.branchEvidence === "match" ? "branch verified" : "branch unverified offline");
+  const claim = (r) => (r.kind === "pr" ? `PR #${r.claimPr}${r.claimSha ? `, ${r.claimSha}` : ""}` : `branch ${r.branch}`);
   for (const r of by("STALE")) {
-    console.log(`  STALE  ${r.file}:${r.line} ${r.row} — FIX PROPOSED (branch ${r.branch}) landed: PR #${r.pr} at ${r.land.slice(0, 8)} (commit ${r.intro.slice(0, 8)}; changed ${r.hit[0]}; ${note(r)}) — restamp the annotation`);
+    console.log(`  STALE  ${r.file}:${r.line} ${r.row} — FIX PROPOSED (${claim(r)}) landed: PR #${r.pr} at ${r.land.slice(0, 8)} (${r.intro ? `commit ${r.intro.slice(0, 8)}; ` : ""}changed ${r.hit[0]}; ${note(r)}) — restamp the annotation`);
   }
   for (const r of by("LANDED-UNCORROBORATED")) {
-    const why = r.branchEvidence === "mismatch" ? `PR #${r.pr} came from a different branch than ${r.branch}` : `that commit changed none of the ${r.cited.length} path(s) it cites`;
+    const why = r.branchEvidence === "mismatch" ? `PR #${r.pr} came from a different branch than ${r.branch}` : r.shaIn === false ? `the commit it cites (${r.claimSha}) is not in that landing` : `that commit changed none of the ${r.cited.length} path(s) it cites`;
     console.log(`  READ   ${r.file}:${r.line} ${r.row} — annotation landed via PR #${r.pr} at ${r.land.slice(0, 8)}, but ${why}; read by hand`);
   }
   for (const r of by("NO-LEDGER")) console.log(`  ?      ${r.file} — ${r.why}; NOT MEASURED (a ledger nobody could read is never a clean result)`);
   for (const r of by("NO-HISTORY")) console.log(`  ?      ${r.file}:${r.line} ${r.row} — ${r.why}; NOT MEASURED`);
+  console.log(summaryLine(results));
+}
+
+/** The REPORTED line. Every unreadable ledger and every untraceable annotation counts as not measured. */
+export function summaryLine(results) {
+  const by = (s) => results.filter((r) => r.status === s);
   const s = by("STALE"), u = by("LANDED-UNCORROBORATED").length, n = by("NOT-VIA-PR").length, h = by("NO-HISTORY").length + by("NO-LEDGER").length, c = by("CLOSED-RESIDUE").length;
   const rows = new Set(s.map((r) => `${r.file}|${r.row}`)).size;
-  console.log(`REPORTED: ${results.filter((r) => r.status !== "NO-LEDGER").length} FIX PROPOSED annotation(s) — ${s.length} stale (claim already landed via a PR) across ${rows} open row(s), ${u} landed-uncorroborated, ${c} closed-row residue, ${n} not landed via a PR, ${h} not measured. A stale annotation needs restamping; its row may still have work left. Never fatal (plan row 170).`);
+  return `REPORTED: ${results.filter((r) => r.status !== "NO-LEDGER").length} FIX PROPOSED annotation(s) — ${s.length} stale (claim already landed via a PR) across ${rows} open row(s), ${u} landed-uncorroborated, ${c} closed-row residue, ${n} not landed via a PR, ${h} not measured. A stale annotation needs restamping; its row may still have work left. Never fatal (plan row 170).`;
 }
 
 function selfTest() {
@@ -422,7 +480,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -462,6 +520,24 @@ function selfTest() {
     pr("claude/self-cite", 20, () => edit(plan, row(14), row(14) + " FIX PROPOSED 2026-10-01 (branch claude/self-cite, lands under DR-037): see `docs/COMPANY_BUILD_PLAN.md`."));
     // 15: the only cited path sits past the 2000-character span cap — READ.
     pr("claude/far-cite", 21, () => { edit(plan, row(15), row(15) + ann("claude/far-cite", "no/path") + " " + "word ".repeat(450) + "`scripts/a.mjs`."); write("scripts/a.mjs", "15\n"); });
+    // 16: the PR-named shape "FIX PROPOSED <date> (PR #N, <sha>)", landed as PR #23 — STALE.
+    g("checkout", "-qb", "claude/pr-shape"); write("scripts/c.mjs", "16\n"); commit("fix 16");
+    const fix16 = g("rev-parse", "--short=8", "HEAD");
+    edit(plan, row(16), row(16) + ` FIX PROPOSED 2026-10-08 (PR #23, ${fix16}): \`scripts/c.mjs\` changed.`);
+    // 20: same PR, but the commit it cites is not in that landing — READ by hand.
+    edit(plan, row(20), row(20) + " FIX PROPOSED 2026-10-08 (PR #23, 1234567): `scripts/c.mjs` changed."); commit("annotate 16 and 20");
+    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #23: pr shape", "claude/pr-shape");
+    // 18: a dated FIX PROPOSED in a shape nobody reads — NOT MEASURED, never skipped.
+    edit(plan, row(18), row(18) + " FIX PROPOSED 2026-10-08 (OFFLINE HALF ONLY), branch claude/x: `scripts/c.mjs`."); commit("odd shape");
+    // 19: a GitHub-committed merge under a custom title "… (#24, check run …)" is PR #24's landing — STALE.
+    g("checkout", "-qb", "claude/custom-title"); edit(plan, row(19), row(19) + ann("claude/custom-title", "scripts/d.mjs")); write("scripts/d.mjs", "19\n"); commit("fix 19");
+    g("checkout", "-q", "main"); gAs(["GitHub", "noreply@github.com"], "merge", "-q", "--no-ff", "-m", "gates: custom title (#24, check run 5)", "claude/custom-title");
+    // 21: a worker's own merge whose subject happens to carry "(#25" is not a landing — GitHub did not commit it.
+    g("checkout", "-qb", "claude/fake-title"); edit(plan, row(21), row(21) + ann("claude/fake-title", "scripts/d.mjs")); write("scripts/d.mjs", "21\n"); commit("fix 21");
+    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "sync work (#25, local)", "claude/fake-title");
+    // 22: a PR-named row whose only "(#26)" commit is the worker's own — not a landing either.
+    write("scripts/c.mjs", "22\n"); commit("wip (#26)");
+    edit(plan, row(22), row(22) + ` FIX PROPOSED 2026-10-08 (PR #26, ${g("rev-parse", "--short=8", "HEAD")}): \`scripts/c.mjs\`.`); commit("annotate 22");
     // Plain box: a non-bold open box under a ticked bold one, landed — STALE, not the ticked box's residue.
     pr("claude/fix-m", 19, () => { edit(backlog, "Plain open box — open.", "Plain open box — open." + ann("claude/fix-m", "scripts/c.mjs")); write("scripts/c.mjs", "m\n"); });
     // 10: the worker's branch merged mainline in (a sync merge) before its PR landed — STALE via the PR.
@@ -476,7 +552,9 @@ function selfTest() {
     g("merge", "-q", "--no-ff", "-m", "Merge remote-tracking branch 'origin/main' into claude/worker", mainTip);
     // 4: in flight — HEAD is the worker's own branch; its annotation must not be STALE.
     // …and the worker's own commit subject happens to end "(#99)": not a squash landing (GitHub did not commit it).
-    edit(plan, row(4), row(4) + ann("claude/worker", "scripts/w.mjs")); write("scripts/w.mjs", "4\n"); commit("fix 4 (#99)");
+    edit(plan, row(4), row(4) + ann("claude/worker", "scripts/w.mjs")); write("scripts/w.mjs", "4\n");
+    // 17: a PR-named annotation whose PR has not landed — in flight, not STALE.
+    edit(plan, row(17), row(17) + " FIX PROPOSED 2026-10-08 (PR #98, abc1234): `scripts/w.mjs`."); commit("fix 4 (#99)");
 
     const res = Object.fromEntries(measure(dir).map((r) => [r.row, r]));
     const is = (k, st, extra = () => true) => res[k]?.status === st && extra(res[k]);
@@ -496,7 +574,19 @@ function selfTest() {
     checks.push(["a path cited only by the NEXT row does not corroborate this row — READ", is("row 12", "LANDED-UNCORROBORATED", (r) => r.pr === 18)]);
     checks.push(["a non-bold open box under a ticked bold box is its own row and flags STALE", is('"Plain open box"', "STALE", (r) => r.pr === 19)]);
     const stale = Object.values(res).filter((r) => r.status === "STALE").map((r) => r.row).sort();
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 5", "row 7"])]);
+    checks.push(["a PR-named annotation \"(PR #23, <sha>)\" landed as PR #23 is flagged STALE", is("row 16", "STALE", (r) => r.pr === 23)]);
+    checks.push(["a PR-named annotation whose PR has not landed is not STALE", is("row 17", "NOT-VIA-PR")]);
+    checks.push(["a worker's merge titled \"(#25, …)\" is not a landing (GitHub did not commit it)", is("row 21", "NOT-VIA-PR")]);
+    checks.push(["a PR-named row whose \"(#26)\" commit is the worker's own is not a landing", is("row 22", "NOT-VIA-PR")]);
+    checks.push(["a PR-named annotation citing a commit not in that landing is READ, not STALE", is("row 20", "LANDED-UNCORROBORATED", (r) => r.shaIn === false)]);
+    checks.push(["a dated FIX PROPOSED in an unreadable shape is NOT MEASURED, never skipped", is("row 18", "NO-HISTORY", (r) => /shape this detector cannot read/.test(r.why))]);
+    checks.push(["a GitHub-committed merge titled \"… (#24, check run …)\" is PR #24's landing", is("row 19", "STALE", (r) => r.pr === 24)]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 5", "row 7"])]);
+    // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
+    const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
+    const line = summaryLine(kinds.map((status, i) => ({ status, file: "f", row: `r${i}` })));
+    checks.push(["the REPORTED line counts every bucket, NO-HISTORY and NO-LEDGER both as not measured",
+      line.startsWith("REPORTED: 5 FIX PROPOSED annotation(s) — 1 stale (claim already landed via a PR) across 1 open row(s), 1 landed-uncorroborated, 1 closed-row residue, 1 not landed via a PR, 2 not measured.")]);
     const sig = (rs) => JSON.stringify(rs.map((r) => [r.file, r.row, r.status, r.pr ?? null]));
     const missing = measure(dir, [plan, "docs/RENAMED_LEDGER.md"]);
     checks.push(["a ledger missing at HEAD is NOT MEASURED, never skipped", missing.some((r) => r.file === "docs/RENAMED_LEDGER.md" && r.status === "NO-LEDGER" && /not present at HEAD/.test(r.why))]);
@@ -869,7 +959,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 75;
+  return failed === 0 && checks.length === 83;
 }
 
 let isMain = false;
@@ -900,4 +990,9 @@ if (isMain) {
     console.log(`REPORTED: NOT MEASURED — ${String(e.message).split("\n")[0]} (plan row 170).`);
   }
   process.exit(0);
+} else if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url)) && process.argv.length > 2) {
+  // Run as this file by name, with arguments, yet the entry guard said "imported": that is the
+  // guard failing, and a silent exit 0 (the round-1 defect) would read as a pass. Refuse loudly.
+  console.error("row-status-drift: entry guard did not recognise this run as the CLI; refusing to exit 0 silently");
+  process.exit(2);
 }

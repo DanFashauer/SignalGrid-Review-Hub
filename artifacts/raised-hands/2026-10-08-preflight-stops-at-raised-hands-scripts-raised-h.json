@@ -7,6 +7,11 @@
   "need": "owner or blocker-dispatcher clears or marks those rows (row 17 lab, rows 18 and 24 owner rulings); then re-run node scripts/preflight.mjs",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "takenBy": "cloud",
+  "takenAt": "2026-10-08T12:12:15.111Z",
+  "resolvedAt": "2026-10-08T12:12:15.822Z",
+  "resolvedBy": "cloud",
+  "resolution": "preflight now passes end to end on b21e180a after merging mainline; the three stalled rows no longer fail the gate"
 }

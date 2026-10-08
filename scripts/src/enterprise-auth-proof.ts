@@ -19,6 +19,7 @@ import {
 import {
   createEnterpriseAuthenticator,
   createJwksCache,
+  verifyJwtRs256,
   type EnterpriseAuthConfig,
   type JwksFetch,
   type Jwks,
@@ -228,6 +229,46 @@ if (!accepted.ok) {
   }
   check("cross-tenant read of the OIDC identity's decision is denied", denied);
 }
+
+// ── NULL / NON-OBJECT SEGMENTS REFUSE, NEVER THROW ───────────────────────────
+//
+// A segment that is valid base64url JSON but not an object (`null`, a number, an
+// array) used to reach `header.alg` / `key.kty` unguarded and throw a TypeError
+// out of `verifyJwtRs256` — an unauthenticated HTTP 500 instead of the refusal the
+// file's contract names. Each case below must come back `{ ok: false }`.
+function refuses(name: string, run: () => ReturnType<typeof verifyJwtRs256>): void {
+  let threw: unknown;
+  let result: ReturnType<typeof verifyJwtRs256> | undefined;
+  try {
+    result = run();
+  } catch (err) {
+    threw = err;
+  }
+  check(
+    `${name}: refuses with { ok: false }, never throws${threw ? ` (threw ${String(threw)})` : ""}`,
+    threw === undefined && result !== undefined && result.ok === false,
+  );
+}
+const verifyOpts = { jwks, issuer: ISSUER, audience: AUDIENCE, nowMs: NOW_MS };
+const validPayloadSeg = b64url(JSON.stringify(validParts().payload));
+
+refuses("null JOSE header (bnVsbA)", () => verifyJwtRs256(`${b64url("null")}.${validPayloadSeg}.x`, verifyOpts));
+for (const [label, literal] of [["number", "42"], ["string", '"RS256"'], ["array", "[]"]] as const) {
+  refuses(`${label} JOSE header`, () => verifyJwtRs256(`${b64url(literal)}.${validPayloadSeg}.x`, verifyOpts));
+}
+refuses("JWKS holding only a null element", () =>
+  verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null] as unknown as JwkKey[] } }),
+);
+refuses("validly signed token whose payload decodes to null", () => {
+  const headerSeg = b64url(JSON.stringify(validParts().header));
+  const signingInput = `${headerSeg}.${b64url("null")}`;
+  const sig = cryptoSign("RSA-SHA256", Buffer.from(signingInput, "ascii"), privateKey);
+  return verifyJwtRs256(`${signingInput}.${b64url(sig)}`, verifyOpts);
+});
+check(
+  "a null JWKS element does not hide a good key (valid token still accepted)",
+  verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null, ...jwks.keys] as unknown as JwkKey[] } }).ok === true,
+);
 
 // ── JWKS ROTATION SURVIVAL ───────────────────────────────────────────────────
 //

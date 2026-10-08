@@ -143,6 +143,11 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
   } catch {
     return fail("header or payload is not valid base64url JSON");
   }
+  // Valid JSON is not enough: `null`, a number, a string or an array parses fine
+  // and would throw on the first property read. Refuse at the decode boundary.
+  if (!isJsonObject(header) || !isJsonObject(claims)) {
+    return fail("header or payload is not a JSON object");
+  }
 
   // Algorithm gate FIRST — reject `none`/HMAC before touching key material.
   if (header.alg !== SUPPORTED_ALG) {
@@ -211,7 +216,7 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
 function selectKey(jwks: Jwks, kid: string | undefined): JwkKey | null {
   const keys = Array.isArray(jwks.keys) ? jwks.keys : [];
   const usable = keys.filter(
-    (k) => k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
+    (k) => isJsonObject(k) && k.kty === "RSA" && typeof k.n === "string" && typeof k.e === "string",
   );
   if (usable.length === 0) {
     return null;
@@ -231,6 +236,10 @@ function audienceMatches(aud: string | string[] | undefined, expected: string): 
     return aud.includes(expected);
   }
   return false;
+}
+
+function isJsonObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function fail(reason: string): VerifyResult {

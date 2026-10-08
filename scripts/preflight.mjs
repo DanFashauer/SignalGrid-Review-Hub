@@ -337,6 +337,7 @@ const STEPS = [
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
+  { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },

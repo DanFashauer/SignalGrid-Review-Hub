@@ -19,6 +19,10 @@ export interface ChainVerdict {
   valid: boolean;
   /** The verification did not cover the whole history. */
   partial: boolean;
+  /** Which end went unverified: the memory core verifies the retained SUFFIX
+   *  (earlier events were evicted); the durable verifier reads a PREFIX from the
+   *  start of the ledger (later records past its cap). "unknown" when unsaid. */
+  unverified: "earlier" | "later" | "unknown" | null;
   /** One-based tenant audit sequence of the break (memory core), or null. */
   brokenAtSeq: number | null;
   /** Zero-based global durable-ledger position of the break, or null. */
@@ -32,12 +36,12 @@ export function normalizeChain(raw: unknown): ChainVerdict {
   const c = (raw ?? {}) as Record<string, unknown>;
   const partial = c.truncated !== false;
   if (typeof c.valid === "boolean") {
-    return { valid: c.valid, partial, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, length: num(c.length) ?? 0 };
+    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, length: num(c.length) ?? 0 };
   }
   if (typeof c.ok === "boolean") {
-    return { valid: c.ok, partial, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), length: num(c.count) ?? 0 };
+    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), length: num(c.count) ?? 0 };
   }
-  return { valid: false, partial: true, brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };
+  return { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };
 }
 
 /** Where the break is, in the verifier's own terms; "" when none was located. */
@@ -47,8 +51,15 @@ export function chainBreak(c: ChainVerdict): string {
   return "";
 }
 
+/** What a partial verification left out, in the direction its verifier read; "" when whole. */
+export function chainGap(c: ChainVerdict): string {
+  if (c.unverified === "earlier") return "verified for the retained recent events only; earlier events are not verified";
+  if (c.unverified === "later") return "verified from the start of the ledger up to the verifier's cap; later records are not verified";
+  return c.partial ? "only partially verified" : "";
+}
+
 /** The assertive announcement for a chain that is not fully verified; "" when it is. */
 export function chainAlert(c: ChainVerdict): string {
   if (!c.valid) return chainBreak(c) ? `Hash chain broken at ${chainBreak(c)}.` : "Hash chain could not be verified.";
-  return c.partial ? "Hash chain verified for the retained part only; earlier events are not verified." : "";
+  return c.partial ? `Hash chain ${chainGap(c)}.` : "";
 }

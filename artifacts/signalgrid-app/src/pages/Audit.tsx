@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { getAuditV1 } from "@/lib/v1";
-import { chainAlert, chainBreak } from "@/lib/auditChain";
+import { chainAlert, chainBreak, chainGap } from "@/lib/auditChain";
 import { LiveRegion } from "@/components/LiveRegion";
 
 /**
@@ -62,7 +62,7 @@ export function Audit() {
           </Badge>
           <span className="text-muted-foreground">
             {data.chain.length} events, every digest recomputed on this request
-            {chainBreak(data.chain) ? ` — broken at ${chainBreak(data.chain)}` : data.chain.partial ? " — retained part only; earlier events not verified" : ""}
+            {chainBreak(data.chain) ? ` — broken at ${chainBreak(data.chain)}` : data.chain.partial ? ` — ${chainGap(data.chain)}` : ""}
           </span>
         </div>
       )}

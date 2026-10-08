@@ -25,7 +25,7 @@ export default function SignalsPage() {
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
-        message={data ? `${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+        message={data ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
         alert="" /* the DesktopLayout shell announces a feed outage: one alert per outage */
       />
       <div>

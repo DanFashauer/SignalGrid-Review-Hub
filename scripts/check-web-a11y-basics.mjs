@@ -607,9 +607,30 @@ export function hasNonBlankLabel(tag) {
   for (const m of tag.matchAll(/(?<![\w-])aria-label(?:ledby)?\s*=\s*(?:(["'])([\s\S]*?)\1|\{\s*(["'`])((?:\\[\s\S]|(?!\3)[^\\])*)\3\s*\}|\{)/g)) {
     if (m[1] !== undefined) { if (!isBlank(decodeEntities(m[2]))) return true; }
     else if (m[3] !== undefined) { if (!isBlank(decodeEscapes(m[4]))) return true; }
-    else return true; // an expression the gate cannot evaluate
+    else {
+      // An expression names the button only if it cannot come out empty. React drops
+      // an attribute whose value is undefined, null or false, so `{undefined}`, a
+      // ternary arm that is one of those (or blank), and `a && "x"` (false when a is)
+      // all leave the button unnamed. Anything else the gate cannot evaluate counts.
+      const open = m.index + m[0].length - 1;
+      let depth = 0, end = -1;
+      for (let i = open; i < tag.length; i++) {
+        if (tag[i] === "{") depth++;
+        else if (tag[i] === "}" && --depth === 0) { end = i; break; }
+      }
+      if (end < 0) return false; // unclosed: fail closed
+      if (!mayBeEmpty(tag.slice(open + 1, end))) return true;
+    }
   }
   return false;
+}
+
+const EMPTY_VALUE = String.raw`(?:undefined|null|false|""|''|\`\`)`;
+/** Can this attribute expression evaluate to nothing (no attribute, or blank)? */
+export function mayBeEmpty(expr) {
+  const t = expr.trim();
+  return new RegExp(`^${EMPTY_VALUE}$`).test(t) || /&&/.test(t) ||
+    new RegExp(`[?:]\\s*${EMPTY_VALUE}\\s*(?=:|$)`).test(t) || /\?\?\s*(?:undefined|null)\s*$/.test(t);
 }
 
 /** Rule 2 over one file. Returns failure strings. */
@@ -1069,6 +1090,11 @@ function selfTest() {
         checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
       checkIconButtons("x.tsx", '<button onClick={f} aria-label="Close">×</button>').length === 0 &&
       checkIconButtons("x.tsx", '<button onClick={f}>× Close</button>').length === 0],
+    ["a label expression that can come out empty does not name a button",
+      ['aria-label={undefined}', 'aria-label={null}', 'aria-label={open ? "Close" : undefined}', 'aria-label={open && "Close"}', 'aria-labelledby={id ?? undefined}', 'aria-label={x ? "" : "Close"}'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
+      ['aria-label={t("close")}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
     ["an audit-event count names the newest event",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events. Hash chain intact.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],

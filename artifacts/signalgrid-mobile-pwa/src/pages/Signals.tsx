@@ -20,7 +20,7 @@ export default function Signals() {
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
       <LiveRegion
-        message={data ? `${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+        message={data ? `${filter} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
         alert={isError ? "Signal feed unreachable; critical signal count unknown." : ""}
       />
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">

@@ -292,12 +292,38 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
 // unreadable ref or an empty answer leaves the branch REPORTED, never cleared. This
 // cannot clear real local work — a branch carrying a commit no remote has is contained
 // in no remote ref, and no amount of renaming changes that.
-function isOnHubBySha(branch) {
+function isOnHubBySha(branch, cwd = repo) {
+  const git = gitIn(cwd);
   const sha = git("rev-parse", "--verify", `${branch}^{commit}`);
   if (!sha) return false;
   const containing = git("branch", "-r", "--contains", sha);
   if (!containing) return false;
   return containing.split("\n").map((l) => l.trim()).filter(Boolean).length > 0;
+}
+
+// THE SAME-NAME ALIAS HOLE (2026-10-08), the alias hole's twin on the other seam. The seam
+// "Local tip ahead of its same-named Hub branch" counted `hubSha..branch` and nothing else, so
+// it never asked the question the sibling seam above already answers: is this tip on the Hub
+// under ANOTHER ref? Measured today: claude/signalgrid-launch-plan-emxm01 sits at 369913e57,
+// an ancestor of origin/SignalGrid_Alpha (`git merge-base --is-ancestor` exits 0; `git branch -r
+// --contains` lists origin/SignalGrid_Alpha), while a stale same-named Hub branch from
+// 2026-09-15 (5eb1ead40, a closed PR #531) is 2380 commits apart from it. The seam reported
+// "+50" and BOTH remedies it offers were wrong: the push is a non-fast-forward (refused without
+// force, and force is forbidden here) and "confirm the remote" was already true, just unread.
+// A session cannot clear that, so it learns to narrate past it.
+//
+// The rule is the one stated above isOnHubBySha: the tip being contained in ANY remote ref IS
+// "confirm the remote". The same-named remote ref cannot be that ref (a tip AHEAD of it is not
+// reachable from it), so any containing ref is another one. The branch is then "confirmed", not
+// ahead, and the seam REPORTS it by name so the exclusion is visible, never silent.
+// Fail-closed exactly like the alias check: a git error, an unreadable ref or an empty answer
+// leaves the branch AHEAD; an unknown Hub sha stays UNKNOWN (containment is only asked of a
+// branch already proven ahead, never used to clear an unreadable comparison); and a branch with
+// a commit no remote ref has is contained in none, so renaming cannot clear real local work.
+function sameNameVerdict(branch, hubSha, cwd = repo) {
+  const r = aheadOfHub(branch, hubSha, cwd);
+  if (r.state !== "ahead") return r;
+  return isOnHubBySha(branch, cwd) ? { state: "confirmed", ahead: r.ahead } : r;
 }
 
 // ── Declared scratch branches ───────────────────────────────────────────────
@@ -479,16 +505,18 @@ if (hubBranches.length) {
   // is not lost (the worktree belongs to a live agent, and anything real is pushed
   // A branch whose NAME is on the Hub is not thereby ON the Hub: the local tip may be ahead.
   const sameNamed = localBranches.filter((b) => hubBranches.includes(b) && b !== "HEAD" && !ephemeral.includes(b));
-  const aheadRows = [], unknownRows = [];
+  const aheadRows = [], unknownRows = [], confirmedRows = [];
   for (const b of sameNamed) {
-    const r = aheadOfHub(b, hubSha.get(b));
+    const r = sameNameVerdict(b, hubSha.get(b));
     if (r.state === "ahead") aheadRows.push(`${b} (+${r.ahead})`);
+    else if (r.state === "confirmed") confirmedRows.push(b);
     else if (r.state === "unknown") unknownRows.push(b);
   }
+  const confirmedNote = confirmedRows.length ? ` (${confirmedRows.length} same-named branch(es) whose tip is on the Hub under another ref: ${confirmedRows.join(", ")})` : "";
   if (aheadRows.length) {
-    add("fail", "Local tip ahead of its same-named Hub branch", `${aheadRows.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub`);
+    add("fail", "Local tip ahead of its same-named Hub branch", `${aheadRows.join(", ")} — push, or confirm the remote; a name on the Hub is not the tip on the Hub${confirmedNote}`);
   } else {
-    add("ok", "Same-named branches at or behind their Hub tip", `${sameNamed.length - unknownRows.length} branch(es) compared by sha`);
+    add("ok", "Same-named branches at or behind their Hub tip", `${sameNamed.length - unknownRows.length} branch(es) compared by sha${confirmedNote}`);
   }
   if (unknownRows.length) {
     add("warn", "Same-named branches whose Hub tip is not fetched locally", `${unknownRows.join(", ")} — cannot tell ahead from behind; reported, not counted clean`, false);
@@ -759,6 +787,18 @@ function selfTest() {
     const r = aheadOfHub("same", hubTip, work);
     check("a same-named branch one commit ahead of its Hub tip is reported with the count (d)", r.state === "ahead" && r.ahead === 1);
     check("a Hub tip not in the local store reads unknown, never clean (d-unknown)", aheadOfHub("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
+    // (d-alias) the same one-ahead tip, now ALSO on the Hub under another name → confirmed, not ahead
+    check("with no other remote ref holding the tip, sameNameVerdict still reads ahead (d-alias-pre)", sameNameVerdict("same", hubTip, work).state === "ahead");
+    sh("push", "-q", "origin", "same:refs/heads/elsewhere"); sh("fetch", "-q", "origin");
+    const vAlias = sameNameVerdict("same", hubTip, work);
+    check("a same-named branch ahead of its Hub name whose tip is on the Hub under another ref reads confirmed (d-alias)", vAlias.state === "confirmed" && vAlias.ahead === 1);
+    // (d-alias-unknown) asked while the tip IS contained elsewhere: containment must never clear an unreadable comparison
+    check("an unknown Hub sha still reads unknown even when the tip is on the Hub under another ref (d-alias-unknown)", sameNameVerdict("same", "0123456789abcdef0123456789abcdef01234567", work).state === "unknown");
+    // (d-alias-fail-closed) one MORE local commit that no remote ref has → back to ahead, count 2
+    put("d.txt", "unpushed\n"); sh("add", "-A"); sh("commit", "-q", "-m", "ahead again, pushed nowhere");
+    const vFail = sameNameVerdict("same", hubTip, work);
+    check("one more local commit that no remote ref holds is back to ahead with the count 2 (d-alias-fail-closed)", vFail.state === "ahead" && vFail.ahead === 2);
+    check("a branch that does not resolve is never confirmed (d-alias-fail-closed2)", isOnHubBySha("no-such-branch", work) === false);
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

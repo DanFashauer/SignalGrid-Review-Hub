@@ -1699,6 +1699,11 @@ export function auditAllowlist(entries, readText) {
   return out;
 }
 
+/** What main() fails on: audit problems plus entries whose file no target sweeps. */
+export function allowlistFailureCount(problems, outsideSweep) {
+  return problems.length + outsideSweep.length;
+}
+
 export function isAllowed(mutation) {
   // Resolved against the file text the mutation came from; an entry that is stale or
   // ambiguous resolves to no line and exempts NOTHING (main() reports it as a failure).
@@ -1799,7 +1804,6 @@ function main() {
   // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
   // entry surfaces in seconds rather than after the full sweep.
   const allowlistProblems = auditAllowlist(ALLOWED, (f) => readFileSync(join(repoRoot, f), "utf8"));
-  let staleAllowlist = allowlistProblems.length; // the count IS the audit result, not a side effect of printing
   for (const problem of allowlistProblems) {
     const { entry } = problem;
     if (problem.kind === "missing") {
@@ -1821,8 +1825,8 @@ function main() {
     console.error(`    "${entry.line}"`);
     console.error("    Nothing was ever going to mutate it, so the entry documents a decision no sweep made.");
     console.error("    Add the file to a target, or delete the entry.");
-    staleAllowlist += 1;
   }
+  const staleAllowlist = allowlistFailureCount(allowlistProblems, outsideSweep); // pinned by check-mutation-sharding fixtures
   if (staleAllowlist > 0) {
     console.error(`\nMutation guard FAILED: ${staleAllowlist} stale or out-of-scope allowlist entr${staleAllowlist === 1 ? "y" : "ies"}.`);
     process.exit(1);

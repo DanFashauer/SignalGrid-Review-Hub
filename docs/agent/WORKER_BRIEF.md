@@ -32,6 +32,13 @@ first; it binds you. Then:
    "does X exist" sentence. STALE-TREE RULE: a heartbeat, mailbox, sim-request
    or backlog row in your branch tree is as old as your branch point; a hand
    raised from it is false. Measure at the origin tip, never from your tree.
+   The same rule covers the stall gate: a stall your clone shows that
+   mainline's hands already cover is not yours to raise. If
+   `node scripts/raised-hands.mjs --check` fails on your clone, merge
+   `origin/SignalGrid_Alpha` first; raise a hand only for a stall mainline
+   does not cover, and never commit a hand whose only purpose is to make
+   your own preflight pass (a duplicate covering hand turns stale-fatal once
+   the real one is cleared).
 2. **Test first.** Write the failing assertion, then the change; a gate ships
    with a self-test that plants at least two mutants and shows each turns it
    red. A figure written into `docs/*` is measured on your head, by a command

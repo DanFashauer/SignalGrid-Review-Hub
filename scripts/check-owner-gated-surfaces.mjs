@@ -31,7 +31,8 @@
 //   OWNER_RESERVED — legal, pricing, launch scope, decision records, buyer-facing
 //     copy. Correct code is not the question; these are the owner's to commit.
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -65,6 +66,7 @@ export const SAFETY_MACHINERY = [
   // a PR touching only these classified autonomous (backlog row, 2026-10-08).
   { rule: ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)", re: /^(\.claude\/(agents|skills|commands|workflows)\/|\.mcp\.json$)/ },
   { rule: ".githooks/** (the pre-push lockfile enforcement)", re: /^\.githooks\// },
+  { rule: ".claude-plugin/** (the plugin manifest enumerating the agents, skills and commands a consumer loads)", re: /^\.claude-plugin\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -149,6 +151,7 @@ function selfTest() {
   for (const f of [
     ".claude/agents/x.md", ".claude/skills/a/SKILL.md", ".claude/commands/c.md",
     ".claude/workflows/land-branch.js", ".mcp.json", ".githooks/pre-push",
+    ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
   ]) {
     const c = cls([f]);
     t(`${f} alone is SAFETY_MACHINERY`, c.tier === "owner-gated" && c.matched.length > 0 && c.matched.every((m) => m.category === "SAFETY_MACHINERY"));
@@ -158,12 +161,20 @@ function selfTest() {
   // the real .claude/ either matches a rule or is named in the small doc-only exemption list.
   {
     const DOC_ONLY = new Set(["COMMANDS.md", "WORKFLOWS.md"]);
-    const unclassified = readdirSync(join(repo, ".claude")).filter((name) => {
+    // From the TRACKED files, not the disk: an ignored child (.claude/worktrees/, a Finder
+    // .DS_Store) makes the on-disk listing differ per machine and turned this red locally only
+    // (review round 1 of PR #1464). If git cannot list, the case fails closed.
+    let tracked = null;
+    try {
+      tracked = execFileSync("git", ["-C", repo, "ls-files", "-z", "--", ".claude"], { encoding: "utf8" }).split("\0").filter(Boolean);
+    } catch { /* tracked stays null -> the case below fails */ }
+    const children = tracked ? [...new Set(tracked.map((f) => f.split("/")[1]))] : [];
+    const unclassified = children.filter((name) => {
       if (DOC_ONLY.has(name)) return false;
       // A directory is probed with a file inside it; a file by its own path.
       return cls([`.claude/${name}/probe.x`]).tier !== "owner-gated" && cls([`.claude/${name}`]).tier !== "owner-gated";
     });
-    t(`every child of .claude/ is classified or a named doc-only exemption (unclassified: ${unclassified.join(", ") || "none"})`, unclassified.length === 0);
+    t(`every TRACKED child of .claude/ is classified or a named doc-only exemption (${children.length} children; unclassified: ${unclassified.join(", ") || "none"})`, tracked !== null && children.length > 0 && unclassified.length === 0);
   }
   t("negative control: docs/agent/x.md stays autonomous", cls(["docs/agent/x.md"]).tier === "autonomous");
   t("negative control: .claude/COMMANDS.md (doc-only exemption) stays autonomous", cls([".claude/COMMANDS.md"]).tier === "autonomous");

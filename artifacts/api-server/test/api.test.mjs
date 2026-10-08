@@ -2068,6 +2068,8 @@ async function run() {
     const BASE7A = `http://localhost:${PORT7A}/api`;
     let server7a;
     let server7b;
+    let server7c;
+    let server7d;
     try {
       // Mint the seed with the ONE implementation of the chain (@workspace/audit's
       // appendAuditRecord over its in-memory backend), bundled on the fly so this
@@ -2107,7 +2109,7 @@ async function run() {
       const seededLines = mint.status === 0 ? (await readFile(seed, "utf8")).split("\n").filter(Boolean).length : -1;
       check("durable audit: the seed holds more rows than verifyLedger()'s 10,000 cap", seededLines === SEEDED);
 
-      const bootFakePg = async (port, seedFile) => {
+      const bootFakePg = async (port, seedFile, extraEnv = {}) => {
         const child = spawn("node", ["--import", pathResolve(here, "fixtures/fake-pg/register.mjs"), serverEntry], {
           env: {
             ...process.env,
@@ -2116,6 +2118,7 @@ async function run() {
             LOG_LEVEL: "silent",
             DATABASE_URL: "postgres://fake-pg@127.0.0.1:1/never-dialled",
             SIGNALGRID_FAKE_PG_SEED: seedFile,
+            ...extraEnv,
           },
           stdio: ["ignore", "ignore", "inherit"],
         });
@@ -2166,9 +2169,62 @@ async function run() {
       check("durable audit: a row tampered PAST the 10,000 cap fails the chain verdict, localized at its index",
         bootedB.up === true && tamperedRes.status === 200 && tamperedBody?.chain?.ok === false &&
         tamperedBody?.chain?.brokenAtIndex === CAP);
+      server7b.kill("SIGTERM");
+      server7b = undefined;
+
+      const getAudit = (port, init = {}) =>
+        fetch(`http://localhost:${port}/api/v1/audit`, { ...init, headers: { authorization: `Bearer ${KEYS.owner}` } });
+
+      // FAIL-CLOSED: the database errors mid-walk (a page past seq 5,000 throws).
+      // The verdict must be an error, never a chain at all — above all never an
+      // all-clear over the half that was read.
+      const PORT7C = await freePort();
+      const bootedC = await bootFakePg(PORT7C, seed, { SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ: "5000" });
+      server7c = bootedC.child;
+      const failedRes = await getAudit(PORT7C);
+      const failedBody = await failedRes.json().catch(() => null);
+      check("durable audit: a database error MID-WALK fails closed — a 5xx and no chain verdict, never ok:true",
+        bootedC.up === true && failedRes.status >= 500 && failedBody?.chain === undefined);
+      server7c.kill("SIGTERM");
+      server7c = undefined;
+
+      // ONE WALK FOR MANY CALLERS, and an abandoned walk stops. Each page now
+      // answers after 60ms (a walk takes ~0.7s) and is logged, so the number of
+      // walks the server ran is countable: 10,001 rows in pages of 1,000 is 11
+      // page reads per walk.
+      const PAGES_PER_WALK = 11;
+      const readLogFile = pathResolve(work, "reads.log");
+      await writeFile(readLogFile, "");
+      const pagesRead = async () => (await readFile(readLogFile, "utf8")).split("\n").filter(Boolean).length;
+      const PORT7D = await freePort();
+      const bootedD = await bootFakePg(PORT7D, seed, { SIGNALGRID_FAKE_PG_PAGE_DELAY_MS: "60", SIGNALGRID_FAKE_PG_READ_LOG: readLogFile });
+      server7d = bootedD.child;
+      const burst = await Promise.all(Array.from({ length: 6 }, () =>
+        getAudit(PORT7D).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))));
+      check("durable audit: 6 concurrent requests each get the whole-chain verdict",
+        bootedD.up === true && burst.every((b) => b.status === 200 && b.body?.chain?.ok === true && b.body.chain.count === SEEDED));
+      check("durable audit: …from ONE shared walk (11 page reads, not 66) — concurrent callers do not multiply the work",
+        (await pagesRead()) === PAGES_PER_WALK);
+
+      const beforeAbort = await pagesRead();
+      const ac = new AbortController();
+      const abandoned = getAudit(PORT7D, { signal: ac.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 150));
+      ac.abort();
+      await abandoned;
+      await new Promise((r) => setTimeout(r, 1500)); // > a whole walk: an unaborted walk would have finished by now
+      const readByAbandoned = (await pagesRead()) - beforeAbort;
+      check("durable audit: a walk whose only client disconnected STOPS early (fewer pages than a whole walk)",
+        readByAbandoned >= 1 && readByAbandoned < PAGES_PER_WALK);
+      const afterAbortRes = await getAudit(PORT7D);
+      const afterAbortBody = await afterAbortRes.json().catch(() => null);
+      check("durable audit: the next request after an aborted walk gets a fresh, whole verdict",
+        afterAbortRes.status === 200 && afterAbortBody?.chain?.ok === true && afterAbortBody.chain.count === SEEDED);
     } finally {
       server7a?.kill("SIGTERM");
       server7b?.kill("SIGTERM");
+      server7c?.kill("SIGTERM");
+      server7d?.kill("SIGTERM");
       await rm(work, { recursive: true, force: true });
     }
   }

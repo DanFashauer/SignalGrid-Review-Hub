@@ -4,17 +4,33 @@
 // DB's own column shape, minted by the real appendAuditRecord so every hash is
 // genuine). FAIL-CLOSED: a statement it does not recognise THROWS, so a code
 // path this fake was never taught can never pass silently as an empty result.
-import { readFileSync } from "node:fs";
+//
+// Test knobs for the whole-chain walk's keyset page (`WHERE seq > $1`), all optional:
+//   SIGNALGRID_FAKE_PG_PAGE_DELAY_MS   each page answers after this many ms (a walk that takes time)
+//   SIGNALGRID_FAKE_PG_READ_LOG        a file that gets one line per page read (how many walks ran)
+//   SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ  a page starting at or past this seq THROWS (a database error mid-walk)
+import { appendFileSync, readFileSync } from "node:fs";
 
 const seedPath = process.env.SIGNALGRID_FAKE_PG_SEED;
 if (!seedPath) throw new Error("fake-pg: SIGNALGRID_FAKE_PG_SEED is unset");
-const table = readFileSync(seedPath, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line));
+// node-postgres returns BIGSERIAL as a string; so does this.
+const table = readFileSync(seedPath, "utf8").split("\n").filter(Boolean).map((line, i) => ({ seq: String(i + 1), ...JSON.parse(line) }));
+const pageDelayMs = Number(process.env.SIGNALGRID_FAKE_PG_PAGE_DELAY_MS ?? 0);
+const readLog = process.env.SIGNALGRID_FAKE_PG_READ_LOG;
+const failAfterSeq = process.env.SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ;
 
 const norm = (sql) => sql.replace(/\s+/g, " ").trim();
 const result = (rows) => ({ rows, rowCount: rows.length });
 
-function query(sqlIn, params = []) {
+async function query(sqlIn, params = []) {
   const sql = norm(sqlIn);
+  if (sql === "SELECT seq, id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash FROM public.audit_ledger WHERE seq > $1 ORDER BY seq ASC LIMIT $2") {
+    const [after, limit] = params.map(Number);
+    if (readLog) appendFileSync(readLog, `page after ${after}\n`);
+    if (pageDelayMs > 0) await new Promise((r) => setTimeout(r, pageDelayMs));
+    if (failAfterSeq !== undefined && after >= Number(failAfterSeq)) throw new Error("fake-pg: planted read failure mid-walk");
+    return result(table.filter((r) => Number(r.seq) > after).slice(0, limit));
+  }
   if (sql.startsWith("CREATE TABLE IF NOT EXISTS public.audit_ledger")) return result([]);
   if (sql === "SELECT 1") return result([{ "?column?": 1 }]);
   if (sql.includes("FROM information_schema.columns") && sql.includes("column_name = 'tenant_id'")) return result([{ "?column?": 1 }]);
@@ -32,7 +48,7 @@ function query(sqlIn, params = []) {
   if (sql.startsWith("INSERT INTO public.audit_ledger")) {
     const [id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash] = params;
     const parse = (v) => (v === null ? null : JSON.parse(v));
-    table.push({ id, ts, request_id, actor: parse(actor), event_type, target: parse(target), meta: parse(meta), tenant_id, prev_hash, hash });
+    table.push({ seq: String(table.length + 1), id, ts, request_id, actor: parse(actor), event_type, target: parse(target), meta: parse(meta), tenant_id, prev_hash, hash });
     return result([]);
   }
   throw new Error(`fake-pg: unrecognised statement: ${sql.slice(0, 120)}`);

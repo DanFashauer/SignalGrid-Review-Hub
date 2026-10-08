@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-08-preflight-stops-at-raised-hands-scripts-raised-h",
+  "raisedAt": "2026-10-08T11:37:21.104Z",
+  "origin": "cloud",
+  "doing": "B56: running node scripts/preflight.mjs on the head of claude/build-session-store-status-normalize (PR #1438)",
+  "blockedBy": "preflight stops at 'Raised hands' (scripts/raised-hands.mjs --check exits 1) on mainline b95f94f3 itself: objective-owner:awaiting-owner-row-17/-18/-24 and executor-gap:objective-state are stalls past 3x limit with no hand raised; my diff touches none of them, so every step after that gate is unrun",
+  "need": "owner or blocker-dispatcher clears or raises hands for those four stalls on mainline; then preflight can be re-run to completion on this PR",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null
+}

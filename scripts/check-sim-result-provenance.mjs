@@ -170,8 +170,12 @@ function liveFacts() {
  */
 function scratchCloneChecks(ok) {
   const root = mkdtempSync(join(tmpdir(), "prov-selftest-"));
-  const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8" });
-  const g = (cwd, ...args) => run(cwd, "git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
+  // A caller that exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would otherwise point every
+  // git call below (the `reset --hard` especially) at ITS repository instead of the scratch one.
+  const { GIT_DIR: _d, GIT_WORK_TREE: _w, GIT_INDEX_FILE: _i, ...cleanEnv } = process.env;
+  const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8", env: cleanEnv });
+  const g = (cwd, ...args) =>
+    run(cwd, "git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });
@@ -207,11 +211,28 @@ function scratchCloneChecks(ok) {
     g(root, "clone", "-q", "--depth", "2", `file://${src}`, shallow);
     const shallowDefault = gate(shallow);
     const shallowFlag = gate(shallow, "--require-history");
+
+    // A sha that RESOLVES but sits on a side branch (not an ancestor of HEAD): the live
+    // `merge-base --is-ancestor <commit> HEAD` is the only thing that can fail this.
+    const mainBranch = g(src, "rev-parse", "--abbrev-ref", "HEAD").stdout.trim();
+    const rootSha = g(src, "rev-list", "--max-parents=0", "HEAD").stdout.trim();
+    g(src, "checkout", "-q", "-b", "side-branch", rootSha);
+    writeFileSync(join(src, "side.txt"), "side\n");
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "side");
+    const sideSha = g(src, "rev-parse", "HEAD").stdout.trim();
+    g(src, "checkout", "-q", mainBranch);
+    writeFileSync(join(src, RESULTS_DIR, "r0.json"), JSON.stringify({ provenance: { commit: sideSha } }));
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "side-branch sha");
+    const sideDefault = gate(src);
+    const sideFlag = gate(src, "--require-history");
     return [
       ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
       ok("scratch clone: an unresolvable 40-hex sha exits 0 without the flag (reported)", ghostDefault === 0),
       ok("scratch clone: the same sha exits 1 under --require-history", ghostFlag === 1),
       ok("scratch clone: --require-history on a SHALLOW clone exits 1 (full history is checked, not assumed)", shallowDefault === 0 && shallowFlag === 1),
+      ok("scratch clone: a resolvable sha on a side branch (not an ancestor of HEAD) exits 1, with and without the flag", sideDefault === 1 && sideFlag === 1),
     ];
   } finally {
     rmSync(root, { recursive: true, force: true });

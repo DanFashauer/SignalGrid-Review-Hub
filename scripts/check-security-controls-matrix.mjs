@@ -37,7 +37,9 @@
 //         path, no untracked file, not the matrix itself; a path-like citation
 //         the parser cannot read fails rather than being skipped (`lib/x/{a,b}.ts` braces expand; `path:NN` suffixes are
 //         stripped; a bare `file.ts` resolves beside the cell's previous path,
-//         else to the ONE tracked file of that basename);
+//         else to the ONE tracked file of that basename, which must itself pass
+//         every rule here — never the matrix, tracked AND present; `./x` is
+//         root-relative, never a bare name — round 23);
 //      b. be bound to a proof script that exists in package.json `scripts` and
 //         resolves to a source file: the row's own `proof:*` citation(s), else
 //         the closing note's matrix-wide binding ("Everything marked Implemented
@@ -375,11 +377,17 @@ function resolver(root, tracked) {
     return dirs.has(p) && segs.length >= 2 && existsSync(join(root, p)) ? p : null;
   };
   return (tok, lastDir) => {
-    const t = tok.replace(/\/$/, "").replace(/^\.\/(?=.)/, "");
+    const t0 = tok.replace(/\/$/, "");
+    // `./x` is ROOT-relative, never a bare name to look up anywhere (round 23)
+    if (/^\.\/./.test(t0)) return inRepo(t0.slice(2));
+    const t = t0;
     if (t.includes("/") || t.startsWith(".")) return inRepo(t);
     if (lastDir && inRepo(`${lastDir}/${t}`)) return `${lastDir}/${t}`;
+    // a bare name resolves to the ONE tracked file of that basename, and that file
+    // still passes every inRepo rule: not the matrix itself, tracked AND present
+    // (round 23: `SECURITY_CONTROLS_MATRIX.md` used to skip both)
     const hits = byBase.get(t) ?? [];
-    return hits.length === 1 ? hits[0] : null;
+    return hits.length === 1 ? inRepo(hits[0]) : null;
   };
 }
 
@@ -724,6 +732,14 @@ function selfTest() {
     ["pass (documented ceiling): a digit-led extension in a Control span reads as a version-like word", plant("| Planted F9 `no-such.7z` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["pass (documented ceiling): an extension-less file name in a Control span reads as a word", plant("| Planted E9 `Dockerfile` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
     ["pass: Control-name spans like the matrix's own (`/v1`, `pnpm`, an identifier)", plant("| Planted C9 on `/v1` and `/` via `pnpm`, `unsafeStore()`, `object.id + tenant_id` and `v1.2` | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 0],
+    // round 23: a bare basename or `./` citation goes through every inRepo rule
+    ...["`SECURITY_CONTROLS_MATRIX.md`", "`SECURITY_CONTROLS_MATRIX.md:12`", "`./SECURITY_CONTROLS_MATRIX.md`", "`SECURITY_CONTROLS_MATRIX.md/`", "`./PURPOSE.md`", "`index.ts`"].flatMap((w, i) => [
+      [`fail: Implemented row whose only evidence is ${w}`, plant(`| Planted H${i} | ASVS 5.0 | Implemented (public core) | ${w} |`), 1],
+      [`fail: Automated row citing ${w} beside a valid workflow`, plant(`| Planted H${i} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\`; ${w} |`), 1]]),
+    ["pass: a unique, present bare basename resolves (`PURPOSE.md` -> docs/PURPOSE.md)", plant("| Planted H9 | ASVS 5.0 | Implemented (public core) | `PURPOSE.md` |"), 0],
+    // round 23: claimFold's emphasis strip — a legend word split by ** or __ in a Control name
+    ["fail: a legend word split by ** in a Control name", plant("| Im**ple**men**ted (public core) ZZ7 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
+    ["fail: a legend word split by __ in a Control name", plant("| Imple__men__ted (public core) ZZ8 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
     ["fail: a leading-slash missing workflow on an Automated row", plant("| Planted A1 | ASVS 5.0 | Automated (CI bot) | `/.github/workflows/no-such.yml` |"), 1],
     ["fail: an unparseable path on an Automated row", plant("| Planted A2 | ASVS 5.0 | Automated (CI bot) | `scripts/no such gate.mjs` |"), 1],
     ["fail: a repo path disguised as an action ref on an Automated row", plant("| Planted A3 | ASVS 5.0 | Automated (CI bot) | `scripts/no-such-gate.mjs@v2` |"), 1],

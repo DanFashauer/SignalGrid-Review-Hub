@@ -57,7 +57,7 @@ Raised hands — 3 open (PRs NOT CHECKED here — the hourly issue job checks th
 
 | State | Meaning | Where SignalGrid is |
 | --- | --- | --- |
-| **Implemented** | Code exists and its proof gate passes | **154** proof gates |
+| **Implemented** | Code exists and its proof gate passes | **155** proof gates |
 | **Fixture-backed** | Runs on public-safe fixtures; no live tenant, no customer data | **all connectors** |
 | **Live-validated** | Read real vendor software in an opt-in lane | **4** lane(s) available; run `pnpm run verify:live` for actual results |
 | **Customer-validated** | A named organisation ran it against their own estate | **none** |
@@ -67,7 +67,7 @@ customer-validated. Nothing here has reached the fourth state, and no
 document, demo or gate can move it there — only a customer can.
 
 ## Inventory
-- proof gates: **154** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **17**
+- proof gates: **155** · live-vendor lanes: **4** · browser E2E specs: **10** · CI workflows: **17**
 
 ## Not verified by this run
 - Preflight (typecheck, build, all proofs, browser E2E) — heavy — re-run with --full

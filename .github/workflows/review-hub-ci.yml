@@ -128,6 +128,9 @@ jobs:
 
       - name: "Proof: evidence-coverage (what can this estate answer)"
         run: pnpm run proof:evidence-coverage
+
+      - name: "Proof: evidence-observedat-tz (observedAt ordering is host-timezone independent)"
+        run: pnpm run proof:evidence-observedat-tz
       - name: "Proof: device-resolver (read-only injection boundary)"
         run: pnpm run proof:device-resolver
       - name: "Proof: config-scope (per-tenant connector config keys)"

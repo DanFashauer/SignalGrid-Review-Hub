@@ -590,6 +590,7 @@ const STEPS = [
   { name: "Objective loop self-test (every clause driven from the failing side)", cmd: ["node", "scripts/objective-loop.mjs", "--self-test"] },
   { name: "Proof: operating-method (the handbook is a gate — buckets, ladder, dispositions, links, roles)", cmd: ["pnpm", "run", "proof:operating-method"] },
   { name: "Proof: evidence-coverage (what can this estate actually answer)", cmd: ["pnpm", "run", "proof:evidence-coverage"] },
+  { name: "Proof: evidence observedAt ordering is host-timezone independent (TZ=UTC, New_York, Tokyo as child processes)", cmd: ["pnpm", "run", "proof:evidence-observedat-tz"] },
   { name: "Proof: device-resolver (read-only at the injection boundary)", cmd: ["pnpm", "run", "proof:device-resolver"] },
   { name: "Proof: config-scope (connector config keyed per tenant, never normalized)", cmd: ["pnpm", "run", "proof:config-scope"] },
   { name: "Proof: unsafe-claim (a disclaimer is not a claim)", cmd: ["pnpm", "run", "proof:unsafe-claim"] },

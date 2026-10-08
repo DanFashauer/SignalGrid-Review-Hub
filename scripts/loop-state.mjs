@@ -19,10 +19,10 @@
 
 import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve, isAbsolute } from "node:path";
+import { dirname, resolve, isAbsolute, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -55,9 +55,17 @@ const add = (state, what, detail, gated = true) => rows.push({ state, what, deta
 //     Every ancestry answer here is computed from the commit objects themselves.
 //   GIT_OPTIONAL_LOCKS=0: a read-only check must not write. `git status` otherwise refreshes (and locks) the index; the live
 //     run from a session took the index lock.
-//   And three things git would otherwise read from the CALLER's environment are dropped (round-7 refute): every GIT_TEST_* variable
-//     (GIT_TEST_COMMIT_GRAPH=1 forces the commit-graph back on over core.commitGraph=false, so a forged graph held a tip again),
-//     GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES (they point the object reads at a store this check did not choose).
+//   And what git would otherwise read from the CALLER's environment is dropped (round-7 refute, completed in round 9):
+//     every GIT_TEST_* variable (GIT_TEST_COMMIT_GRAPH=1 forces the commit-graph back on over core.commitGraph=false, so a forged graph held a tip again);
+//     GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES (they point the object reads at a store this check did not choose);
+//     GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_NAMESPACE (they point every read at a repository, a worktree or a ref namespace this
+//     check did not choose: a GIT_DIR at a decoy hid every branch, and the spawn's `-C <repo>` would not have helped, since GIT_DIR beats discovery);
+//     GIT_PROXY_COMMAND and GIT_SSL_NO_VERIFY (a transport override and a switch that turns TLS verification off; the second is also a gated
+//     finding in hubTransport, since it says the session's own fetches are unverified).
+//   KEPT, on purpose: GIT_SSL_CAINFO and GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n. The sandbox this runs in reaches github.com through an
+//     environment-provided proxy with its own CA bundle, and its URL rewrites arrive as GIT_CONFIG_* entries; dropping them breaks the real listing,
+//     and a check that fails on every legitimate transport gets switched off. They are TRUSTED, not verified, and hubTransport says so in its row.
+//   Every command is also pinned with `-C <repo>` (resolved to an absolute path, so the spawn's cwd and -C cannot compound).
 // The replace guard on the apply / read-tree / write-tree spawns is load-bearing too, in the fail-closed direction: a refs/replace entry on
 // the squash parent's blob makes git apply the branch's hunks to the REPLACEMENT, and a legitimate hunks-only landing then stops
 // clearing (R8-AP). Round 7's note that this flag "cannot change a verdict" was wrong; it cannot make a branch clear that should not.
@@ -65,17 +73,18 @@ const add = (state, what, detail, gated = true) => rows.push({ state, what, deta
 // ENOBUFS, which gitIn turns into "": the same answer as a real empty one. Round 5's landed-by-content check compared `git show`
 // text through it, so two files over 1 MiB (the live docs/CLAIM_INVENTORY.md is 1,128,935 bytes) both read "" and "" === ""
 // cleared REAL work as squash-landed. That check no longer reads file text at all (see hasLandedByContent); this is the second lock.
+const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_PROXY_COMMAND", "GIT_SSL_NO_VERIFY"];
 function gitEnv(extra) {
   const env = { ...process.env, ...extra };
   for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_")) delete env[k];
-  delete env.GIT_OBJECT_DIRECTORY;
-  delete env.GIT_ALTERNATE_OBJECT_DIRECTORIES;
+  for (const k of GIT_ENV_DROPPED) delete env[k];
   return { ...env, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
 // { ok, status, stdout, stderr }; ok is "git ran and exited 0". stdout is a string, or a Buffer with { buffer: true }.
-function gitRun(cwd, args, { input, env, buffer = false } = {}) {
-  const r = spawnSync("git", ["-c", "core.commitGraph=false", ...args], {
-    cwd, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024,
+function gitRun(cwd, args, { input, env, buffer = false, timeout } = {}) {
+  const dir = resolve(cwd);
+  const r = spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args], {
+    cwd: dir, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024, ...(timeout ? { timeout } : {}),
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   });
   const ok = !r.error && r.status === 0;
@@ -119,11 +128,71 @@ function entryAt(cwd, ref, file) {
 //     on github.com); a mirror path, or the Hub's name inside another URL, is a failing row that names both URLs.
 // The configuration is NOT switched off for the listing (GIT_CONFIG_NOSYSTEM / GIT_CONFIG_GLOBAL=/dev/null): the proxy and credential
 // settings the real fetch needs live there, and the exact comparison above already sees a rewrite from every one of those sources.
-function hubUrlProblem(cwd = repo, hub = HUB) {
+//
+// ROUND 9 (the transport, not only the URL). The exact URL test above says nothing about HOW the bytes travel: a repository-scope `http.proxy` (plus
+// `http.sslVerify=false`) served a fake listing through a local TLS-terminating proxy with the URL untouched, and the row read "all present on the
+// Review Hub" with exit 0 (round-8 refute, fx/proxy). hubTransport reads every proxy / TLS / rewrite key git will apply, WITH the scope and file each
+// came from (`git config --show-origin --show-scope`), and sorts them by who can write them:
+//   GATED (a failing row, the listing is not read): any http.* key (except the harmless tuning ones), core.gitProxy or url.* key at local or worktree scope
+//     (a repository can carry them and a checkout does not mean they were chosen); http.sslVerify=false / http.proxySSLVerify=false at ANY scope; GIT_SSL_NO_VERIFY
+//     in the environment; a rewrite of the Hub URL, at any scope (command line included), whose result is not one of the Hub's own spellings (isHubUrl:
+//     same host, same repository, https / scp / ssh); a configuration git cannot read at all.
+//   REPORTED, and named in the row text (the "trusted, not verified" line): the environment's proxy (HTTPS_PROXY, https_proxy, ALL_PROXY) and CA (GIT_SSL_CAINFO,
+//     GIT_SSL_CAPATH), and any proxy / CA / rewrite from the user's global and system configuration or from the command line / GIT_CONFIG_* entries. These are
+//     the machine's own trust boundary: the cloud sandbox's proxy and CA are exactly such environment entries, and failing on them would fail on every real run.
+//     Anything a SANDBOX can plant below that boundary (the repository's own config, an included file from it, a worktree config) is gated.
+const HTTP_HARMLESS = /\.(postbuffer|lowspeedlimit|lowspeedtime|maxrequests|minsessions|version|useragent|extraheader|cookiefile|savecookies|emptyauth|delegation|proactiveauth)$/; // (extraHeader: actions/checkout writes its token there, in the repository's own config; it cannot move the traffic, and its value is never printed)
+const gitBool = (v) => v === null || !/^(false|no|off|0|)$/i.test(String(v).trim());
+const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s]*@/ : /\/\/[^/@\s]*:[^/@\s]*@/, "//"); // credentials always; the user name too for a proxy (a token can be the user name)
+// One configuration entry (scope, origin, "key\nvalue" as `git config --show-origin --show-scope -z` prints them) -> { problem } | { trusted } | {}.
+// Pure, so the scope rule is testable for a scope this git never prints: system, global and command line are the environment's; ANYTHING else (local, worktree,
+// and any scope a later git adds) is the repository's own and is gated.
+function transportKey(scope, origin, kv) {
+  const nl = kv.indexOf("\n");
+  const key = nl < 0 ? kv : kv.slice(0, nl), last = key.slice(key.lastIndexOf(".") + 1);
+  const val = nl < 0 ? null : noUserinfo(kv.slice(nl + 1), last.includes("proxy"));
+  const local = !["system", "global", "command"].includes(scope);
+  const isHttp = key.startsWith("http."), isUrl = key.startsWith("url."), isProxyCmd = key === "core.gitproxy";
+  const label = `${key}${val === null ? "" : `=${val}`}`;
+  const where = scope === "command" ? "command line" : `${scope} ${origin.replace(/^file:/, "")}`;
+  if (isHttp && (last === "sslverify" || last === "proxysslverify") && !gitBool(val)) return { problem: `${label} (${where}) turns TLS verification off` };
+  const relevant = isUrl || isProxyCmd || (isHttp && !HTTP_HARMLESS.test(key));
+  if (local && relevant) return { problem: `repository-scope ${label} (${where}) can redirect or weaken the Hub transport` };
+  return relevant ? { trusted: `${where}: ${label}` } : {};
+}
+function hubTransport(cwd = repo, hub = HUB) {
+  const problems = [], trusted = [];
+  const env = process.env;
+  if ("GIT_SSL_NO_VERIFY" in env) problems.push("GIT_SSL_NO_VERIFY is set in the environment (TLS verification is off for any git this session starts; this check ignores it, a fetch or push of yours would not)");
+  const proxies = new Map(); // one entry per value: HTTPS_PROXY and https_proxy are nearly always the same
+  for (const k of ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]) if (env[k]) { const v = noUserinfo(env[k], true); proxies.set(v, [...(proxies.get(v) || []), k]); }
+  for (const [v, ks] of proxies) trusted.push(`environment proxy ${ks.join("/")}=${v}`);
+  for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
+  // The configuration, with scope and origin. Exit 1 is "no key matched" (a clean answer); anything else is a configuration git could not read.
+  const cfg = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|url\\.)"]);
+  if (!cfg.ok && !(cfg.status === 1 && !String(cfg.stdout).trim())) {
+    problems.push(`git could not read its configuration (${String(cfg.stderr).split("\n").find(Boolean) || `exit ${cfg.status}`}), so no proxy / TLS / rewrite setting could be checked`);
+  } else {
+    const t = String(cfg.stdout).split("\0"); // scope \0 origin \0 key \n value \0, repeated
+    const seen = new Map();
+    for (let i = 0; i + 2 < t.length; i += 3) {
+      const f = transportKey(t[i], t[i + 1], t[i + 2]);
+      if (f.problem) problems.push(f.problem);
+      else if (f.trusted) seen.set(f.trusted, (seen.get(f.trusted) || 0) + 1);
+    }
+    for (const [k, n] of seen) trusted.push(`${k}${n > 1 ? ` (x${n})` : ""}`);
+  }
   const r = gitRun(cwd, ["ls-remote", "--get-url", hub]);
-  if (!r.ok) return `git could not expand the Hub URL (${r.stderr.split("\n").find(Boolean) || `exit ${r.status}`})`;
-  const expanded = r.stdout.trim();
-  return expanded === hub ? "" : `git configuration rewrites the Hub URL ${hub} to ${expanded || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`;
+  if (!r.ok) problems.unshift(`git could not expand the Hub URL (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`);
+  else {
+    const expanded = r.stdout.trim();
+    if (expanded !== hub && !isHubUrl(expanded)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${noUserinfo(expanded) || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
+    else if (expanded !== hub) trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${noUserinfo(expanded)} (same host and repository)`);
+  }
+  return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
+}
+function hubUrlProblem(cwd = repo, hub = HUB) {
+  return hubTransport(cwd, hub).problems.join("; ");
 }
 const HUB_SPELLINGS = ["https://github.com/danfashauer/signalgrid-review-hub", "git@github.com:danfashauer/signalgrid-review-hub", "ssh://git@github.com/danfashauer/signalgrid-review-hub"];
 function isHubUrl(u) {
@@ -165,16 +234,20 @@ const localBranches = listing.names;
 let hubBranches = [];
 const hubSha = new Map();
 let hubListed = false;
-const hubUrlTrouble = hubUrlProblem(repo);
+const hubScan = hubTransport(repo);
+const hubUrlTrouble = hubScan.problems.join("; ");
 if (hubUrlTrouble) {
   // not listed at all: a listing read from somewhere that is not the Hub is worse than none
-  add("fail", "Review Hub URL", `${hubUrlTrouble} — the unpushed-work check did NOT run; unknown is not clean`);
+  add("fail", "Review Hub URL", `${hubUrlTrouble} — the unpushed-work check did NOT run; unknown is not clean${hubScan.trusted.length ? ` (${hubScan.note})` : ""}`);
 } else try {
-  const heads = execFileSync("git", ["ls-remote", "--heads", HUB], { cwd: repo, encoding: "utf8", timeout: 60000 })
-    .split("\n").filter(Boolean).map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/"));
+  // through gitRun like every other git here (the guarded environment, `-C <repo>`), never a bare spawn that reads GIT_DIR from the caller
+  const ls = gitRun(repo, ["ls-remote", "--heads", HUB], { timeout: 60000 });
+  if (!ls.ok) throw new Error(String(ls.stderr).split("\n").find(Boolean) || `exit ${ls.status}`);
+  const heads = String(ls.stdout).split("\n").filter(Boolean).map((l) => l.split(/\s+/)).filter((p) => p[1] && p[1].startsWith("refs/heads/"));
   for (const [sha, ref] of heads) hubSha.set(ref.slice("refs/heads/".length), sha);
   hubBranches = [...hubSha.keys()];
   hubListed = true;
+  add("ok", "Review Hub transport", `listing read from ${HUB}; ${hubScan.note}`);
 } catch {
   // FAIL, not warn. An unreachable Hub means the unpushed-work check below did
   // not run, and "the check that would have caught the lost week did not run"
@@ -311,7 +384,7 @@ function branchListRow(l) {
  * force, an entry that differs and never appeared on mainline since the fork all return false, and the branch stays reported
  * as unpushed. What this does NOT say is that the work reached the Hub: it reads the local refs/remotes mainline ref.
  */
-function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
+function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo, trace = null) {
   // Every exemption that rests on mainline's HISTORY is off while a grafts file is in force: a graft line `S1 Q` splices a local copy Q of the
   // branch's work into the history this walks (round-6 refute GL2), and the row printed "graft file present" while it cleared real work.
   if (graftsBlock(cwd)) return false;
@@ -334,7 +407,7 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
     if (mine.error || theirs.error) return false;
     if (mine.missing && theirs.missing) continue; // deleted on both sides: the same state
     if (mine.missing) return false; // the branch removes what mainline still has: a difference (fileEverMatchedMainline answers the same; said here so the rule reads in one place)
-    if (mine.entry !== theirs.entry && !fileEverMatchedMainline(branch, file, mainline, cwd)) return false;
+    if (mine.entry !== theirs.entry && !fileEverMatchedMainline(branch, file, mainline, cwd, trace)) return false;
   }
   return true;
 }
@@ -370,7 +443,7 @@ function hasLandedByContent(branch, mainline = MAINLINE, cwd = repo) {
 // waits for, and a check nobody waits for gets switched off. Exhausting the bound
 // without a match returns FALSE — reported, never cleared — so the failure mode of
 // looking too little is a branch that stays named, never one that vanishes quietly.
-function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) {
+function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo, trace = null) {
   if (graftsBlock(cwd)) return false;
   const git = gitIn(cwd);
   const mine = entryAt(cwd, headRef(branch), file);
@@ -386,7 +459,7 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) 
   const hist = git("--literal-pathspecs", "log", `--max-count=${MAX_HISTORY}`, "--format=%H", mainline, `^${headRef(branch)}`, ...sb.exclude.map((p) => `^${p}`), "--", file);
   if (!hist) return false;
   for (const commit of hist.split("\n").map((c) => c.trim()).filter(Boolean)) {
-    if (entryAt(cwd, commit, file).entry === mine.entry) return true;
+    if (entryAt(cwd, commit, file).entry === mine.entry && landsAfterCut(cwd, sb, commit, trace)) return true;
   }
   return false;
 }
@@ -414,7 +487,7 @@ function fileEverMatchedMainline(branch, file, mainline = MAINLINE, cwd = repo) 
 // (AGENTS.md: no live API calls); confirming a landing against GitHub by hand is an
 // operator step outside this path. Fail-closed like its siblings: no diff, no merge-base,
 // no history, a git error, a matched id that does not re-apply — all FALSE, all reported.
-function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
+function landedByPatchId(branch, mainline = MAINLINE, cwd = repo, trace = null) {
   if (graftsBlock(cwd)) return false; // see hasLandedByContent: a graft rewrites the history both diffs and the walk below read
   const git = gitIn(cwd);
   const base = git("merge-base", mainline, headRef(branch));
@@ -434,7 +507,7 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
     if (!commit || parents.length !== 1) continue; // a squash has exactly one parent
     const own = commitDiff(cwd, parents[0], commit);
     if (!own || patchIdOf(cwd, own) !== want) continue;
-    return reappliesExactly(cwd, parents[0], patch, commit);
+    return reappliesExactly(cwd, parents[0], patch, commit) && landsAfterCut(cwd, sb, commit, trace);
   }
   return false;
 }
@@ -454,8 +527,9 @@ function landedByPatchId(branch, mainline = MAINLINE, cwd = repo) {
 //                                                             below is hidden from both walks alike);
 //   an opaque boundary mainline does not reach              -> the branch's own history is unknowable here, `off` says so and every landed
 //                                                             exemption for this branch is off, with the reason in the row.
-// Known limit: a shared opaque boundary is trusted to hide the same history from both sides; a checkout fetched at two different depths whose
-// mainline reaches the same old commit by a path that avoids the boundary could still show it as post-fork.
+// (Round 8 left a known limit here: a shared opaque boundary was trusted to hide the same history from both sides, and a mainline that reaches the
+// boundary's commit by a path that avoids it still showed a pre-fork commit as post-fork. Round 9 closes it in landsAfterCut, below: a mainline commit
+// counts as a landing only if it descends from every opaque boundary under the tip.)
 function shallowClosure(cwd, start, shallow) {
   const exclude = new Set(), opaque = new Set(), handled = new Set(), reached = new Set();
   let frontier = [start];
@@ -482,7 +556,7 @@ function shallowClosure(cwd, start, shallow) {
   return { reached, exclude: [...exclude], opaque: [...opaque] };
 }
 function shallowBounds(cwd, tipRef, mainline) {
-  const none = { exclude: [], off: "" };
+  const none = { exclude: [], off: "", opaque: [] };
   const g = gitIn(cwd);
   if (g("rev-parse", "--is-shallow-repository") !== "true") return none;
   let shallow;
@@ -493,13 +567,34 @@ function shallowBounds(cwd, tipRef, mainline) {
   if (!tip) return { exclude: [], off: "the branch tip could not be read" };
   const t = shallowClosure(cwd, tip, shallow);
   if (t.error) return { exclude: [], off: t.error };
-  if (!t.opaque.length) return { exclude: t.exclude, off: "" };
+  if (!t.opaque.length) return { exclude: t.exclude, off: "", opaque: [] };
   const main = g("rev-parse", "--verify", `${mainline}^{commit}`);
   const m = main ? shallowClosure(cwd, main, shallow) : { error: "mainline could not be read" };
   if (m.error) return { exclude: [], off: m.error };
   const unshared = t.opaque.find((c) => !m.reached.has(c));
-  if (unshared) return { exclude: [], off: `the history below the shallow boundary ${unshared.slice(0, 12)} is not in this checkout and mainline does not reach that commit, so the branch's own ancestry cannot be bounded` };
-  return { exclude: t.exclude, off: "" };
+  if (unshared) return { exclude: [], off: `the history below the shallow boundary ${unshared.slice(0, 12)} is not in this checkout and mainline does not reach that commit, so the branch's own ancestry cannot be bounded: ${deepenHint()}` };
+  return { exclude: t.exclude, off: "", opaque: t.opaque };
+}
+// ROUND 9 (the shared-boundary limit, closed). Round 8 trusted a shared opaque boundary to hide the same history from both walks, and said where that
+// fails: mainline can reach the boundary's commit by a path that AVOIDS it (a merge whose side parent is a commit the branch really has below
+// the cut), so a pre-fork mainline commit C appears in `<tip>..mainline` as if it landed after the fork, and a local re-apply of a feature
+// mainline made and reverted long ago cleared as squash-landed (round-8 refute dShallowKL: the live checkout is shallow). The walk cannot be
+// repaired (the branch's real ancestors are not in the store), so the claim is narrowed instead: a mainline commit X is evidence of a LANDING only
+// if it descends from EVERY opaque boundary under the tip. X is then provably newer than everything the cut hides, whatever lies below it, and a
+// commit that reaches the boundary only from beside it, or not at all, is not. Descent is proved with the commits on the way re-hashed (chainIsReal),
+// like every other ancestry claim here. No opaque boundary under the tip: nothing to prove. The refusal is recorded in `trace.blocked` (the
+// boundary X did not descend from) so the row can say WHY a branch it used to clear is reported, and what to do (deepen the checkout).
+// (a function, not a const: the self-test runs before this module body reaches a const)
+function deepenHint() { return `run ${["git", "fetch", "--deepen=N", "origin"].join(" ")} (N: enough commits to reach the branch's fork point, e.g. 50), then re-run`; }
+function descendsFrom(cwd, x, o) {
+  if (!x || !o || x === o) return false;
+  return gitRun(cwd, ["merge-base", "--is-ancestor", o, x]).ok && chainIsReal(cwd, o, [x]);
+}
+function landsAfterCut(cwd, sb, commit, trace) {
+  const cut = (sb.opaque || []).find((o) => !descendsFrom(cwd, commit, o));
+  if (!cut) return true;
+  if (trace && !trace.blocked) trace.blocked = cut;
+  return false;
 }
 // The patch between two commits, the same way for the branch and for each mainline commit it is compared with: plumbing (`diff-tree`),
 // because the porcelain `git diff` reads user configuration. diff.ignoreSubmodules=all dropped a gitlink hunk from the branch's patch, so the
@@ -554,9 +649,27 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
   if (git("cat-file", "-t", hubSha) !== "commit") return { state: "unknown" };
   const reason = graftsBlock(cwd);
   if (reason) return { state: "unknown", reason };
-  const n = git("rev-list", "--count", `${hubSha}..refs/heads/${branch}`);
-  if (n === "") return { state: "unknown" };
-  return { state: Number(n) > 0 ? "ahead" : "same", ahead: Number(n) };
+  const c = commitsNotHeldBy(cwd, `refs/heads/${branch}`, [hubSha]);
+  // "at or behind the Hub" is a ZERO, and a zero is earned (commitsNotHeldBy): a forged commit in the chain between the tip and the Hub's tip
+  // made real unpushed work read same (round-8 refute P3). The reason makes sameNameVerdict a gated AHEAD with the count unreadable, as a grafts file does.
+  if (c.unproven) return { state: "unknown", reason: c.unproven };
+  if (c.count === null) return { state: "unknown" };
+  return { state: c.count > 0 ? "ahead" : "same", ahead: c.count };
+}
+// How many commits of `tip` NONE of `nots` reaches, where a ZERO has to be earned. `rev-list --count tip ^nots` trusts every parent line it reads, and
+// git does not check an object against its name, so a forged commit in the store whose parent line names the tip, placed under a commit the Hub
+// really lists, hides the tip behind a Hub commit that does not hold it: the count reads 0 for real unpushed work (round-8 refute P3 for the
+// same-name count, and detached HEAD work the same way). A positive count is safe whatever was forged (it gates, and a forgery only ever lowers
+// it); a ZERO is accepted only when every commit on the paths from the tip up to the `nots` hashes to its own name (chainIsReal, the check the
+// holders of hubTipState already pass). { count } is an integer, or null when git cannot count; { unproven } is a sentence when the count is 0 and the chain failed.
+function commitsNotHeldBy(cwd, tip, nots) {
+  const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${tip}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
+  const n = r.ok ? Number(r.stdout.trim()) : NaN;
+  if (!Number.isInteger(n)) return { count: null };
+  if (n > 0) return { count: n };
+  const tipSha = gitIn(cwd)("rev-parse", "--verify", "-q", `${tip}^{commit}`);
+  if (tipSha && chainIsReal(cwd, tipSha, nots)) return { count: 0 };
+  return { count: null, unproven: "the commits between the branch tip and the commit that should hold it do not all hash to their names (a hand-made object in the ancestry), so \"already on the Hub\" is not believed" };
 }
 
 // A legacy .git/info/grafts file rewrites parentage exactly as a refs/replace entry does, and
@@ -828,8 +941,13 @@ function hubTipState(branch, hubShaMap, cwd = repo, { names = false } = {}) {
   }
   const holds = reach === null ? holders.length > 0 : reach;
   if (holds) return { holds: true, holders, behind: [] };
+  return { holds: false, holders: [], behind: behindCauses(cwd, tip, hubShaMap, local, branch) };
+}
+// The tracking refs origin/<name> that hold `tip` while the Hub lists <name> at a DIFFERENT sha this checkout does not have (`local`: the listed
+// commits that are in the store): a fetch settles whether the Hub holds the tip, so the remedy is a fetch. Remedy evidence only, never a clearing one.
+function behindCauses(cwd, tip, hubShaMap, local, branch) {
   const behind = [];
-  const rows = git("for-each-ref", "--contains", tip, "--format=%(refname:lstrip=3) %(objectname)", "refs/remotes/origin");
+  const rows = gitIn(cwd)("for-each-ref", "--contains", tip, "--format=%(refname:lstrip=3) %(objectname)", "refs/remotes/origin");
   for (const line of rows ? rows.split("\n") : []) {
     const i = line.lastIndexOf(" ");
     if (i < 1) continue;
@@ -838,7 +956,7 @@ function hubTipState(branch, hubShaMap, cwd = repo, { names = false } = {}) {
     if (!hub || hub === have || local.has(hub)) continue;
     behind.push({ name, local: have, hub });
   }
-  return { holds: false, holders: [], behind };
+  return behind;
 }
 function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
   const r = aheadOfHub(branch, hubSha, cwd);
@@ -870,9 +988,10 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   // is +refs/heads/main only, never gets origin/feat from a push; the early "unknown" for a missing tracking ref was a gate that needed the
   // very ref a single-branch clone does not have).
   const label = tracked ? `origin/${branch}` : "the Hub's listed commits";
-  const counted = commitsBeyondHub(cwd, branch, hubShaMap, tracked ? `refs/remotes/origin/${branch}` : "");
+  const why = {};
+  const counted = commitsBeyondHub(cwd, branch, hubShaMap, tracked ? `refs/remotes/origin/${branch}` : "", why);
   const beyond = Number(counted);
-  if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: label, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond ${label} could not be counted` };
+  if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: label, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond ${label} could not be counted${why.unproven ? ` (${why.unproven})` : ""}` };
   if (beyond === 0) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
   // held by a Hub-listed commit, or by a tracking ref that lags the Hub (a fetch settles that one): the work is, or may well be, on the Hub, so
   // nothing is gated; the comparison is still unreadable, so it stays the warning (containment never turns an unreadable comparison into a
@@ -886,25 +1005,34 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
 // name. Round 7 counted against origin/<name> alone, so commits the Hub already holds under another listed name inflated the count. Other
 // origin/* refs are NOT taken as evidence (a hand-made one could hide the gate); a lagging one holding the tip's older commits only
 // over-counts, which gates, with the fetch remedy. "" when git cannot count.
-function commitsBeyondHub(cwd, branch, hubShaMap, trackingRef) {
+function commitsBeyondHub(cwd, branch, hubShaMap, trackingRef, why = {}) {
   const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
   const nots = [...(trackingRef ? [trackingRef] : []), ...listed];
-  const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${headRef(branch)}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
-  return r.ok ? r.stdout.trim() : "";
+  const c = commitsNotHeldBy(cwd, headRef(branch), nots);
+  if (c.unproven) why.unproven = c.unproven; // "" is "cannot count" to the caller, which gates; this says why
+  return c.count === null ? "" : String(c.count);
 }
 // A DETACHED HEAD carries work no branch row can name (round-7 refute SNc): the branch list is the list of refs/heads, and commits made on
 // a detached HEAD are in none of them, so a session that ended there read "all present on the Review Hub". Gated when HEAD is detached and
 // has commits that no local branch, no remote-tracking ref and no Hub-listed commit holds (an uncountable answer gates too).
+//
+// WHAT HOLDS A COMMIT (round 9; round 8 counted against every ref under refs/heads AND refs/remotes). A remote-tracking ref is a snapshot anyone can
+// write: `git update-ref refs/remotes/evil/x HEAD`, or refs/remotes/origin/pr/999 (the shared checkout really carries a set of refs/remotes/pr/*
+// refs), made detached work read "all present on the Review Hub". Evidence is now only what the other rows already trust: a LOCAL BRANCH (its own
+// row decides whether that is on the Hub) and a commit the Hub LISTS (re-hashed by localCommits), never a tag and never a tracking ref. A zero is earned
+// (commitsNotHeldBy: the chain between HEAD and the commit that holds it is re-hashed). A HEAD that a tracking ref holds while the Hub lists that
+// name at a sha this checkout lacks is the stale-fetch case: the row says run a fetch (behindCauses), it does not stop gating.
 function detachedHeadWork(cwd, hubShaMap) {
   if (gitRun(cwd, ["symbolic-ref", "-q", "HEAD"]).ok) return null;
   const head = gitIn(cwd)("rev-parse", "--verify", "-q", "HEAD^{commit}");
   if (!head) return null;
-  const refs = gitIn(cwd)("for-each-ref", "--format=%(objectname)", "refs/heads", "refs/remotes");
+  const refs = gitIn(cwd)("for-each-ref", "--format=%(objectname)", "refs/heads");
   const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
   const nots = [...new Set([...(refs ? refs.split("\n") : []), ...listed])].filter(Boolean);
-  const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${head}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
-  const n = r.ok ? Number(r.stdout.trim()) : NaN;
-  return Number.isInteger(n) && n === 0 ? null : { head, count: Number.isInteger(n) ? n : null };
+  const c = commitsNotHeldBy(cwd, head, nots);
+  if (c.count === 0) return null;
+  const behind = hubShaMap instanceof Map ? behindCauses(cwd, head, hubShaMap, new Set(listed), "") : [];
+  return { head, count: c.count, ...(c.unproven ? { unproven: c.unproven } : {}), ...(behind.length ? { fetch: fetchHint(behind[0].name) } : {}) };
 }
 // "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.
 // pairs: [[branch, remedy or ""]]; the ones with no remedy of their own go first under `plainRemedy`.
@@ -1107,8 +1235,9 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   const graftsReason = noRemote.length ? graftsBlock(cwd) : "";
   const onHub = noRemote.filter((b) => isOnHubBySha(b, hubShaMap, cwd));
   const offHub = noRemote.filter((b) => !onHub.includes(b));
-  const landedByBytes = offHub.filter((b) => hasLandedByContent(b, mainline, cwd));
-  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd));
+  const traces = new Map(offHub.map((b) => [b, { blocked: "" }]));
+  const landedByBytes = offHub.filter((b) => hasLandedByContent(b, mainline, cwd, traces.get(b)));
+  const landedByHunks = offHub.filter((b) => !landedByBytes.includes(b) && landedByPatchId(b, mainline, cwd, traces.get(b)));
   const landed = [...landedByBytes, ...landedByHunks];
   const unpushed = offHub.filter((b) => !landed.includes(b));
   const ephemeralNote = ephemeral.length ? ` (${ephemeral.length} ephemeral agent-worktree branch(es) not counted)` : "";
@@ -1117,7 +1246,9 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   // So it says why.
   const graftsNote = graftsReason ? ` (alias and squash-landed exemptions OFF: ${graftsReason})` : "";
   // ...and the same for a shallow boundary that hides a branch's own history (shallowBounds): named per branch, only for the ones still reported.
-  const shallowOff = unpushed.map((b) => [b, shallowBounds(cwd, headRef(b), mainline).off]).filter(([, why]) => why);
+  // (a landing refused because the mainline commit does not descend from the cut is named too: landsAfterCut)
+  const cutWhy = (b) => { const c = traces.get(b) && traces.get(b).blocked; return c ? `a mainline commit carries this work but does not descend from the shallow boundary ${c.slice(0, 12)} under the branch, so it may be older than the branch: ${deepenHint()}` : ""; };
+  const shallowOff = unpushed.map((b) => [b, shallowBounds(cwd, headRef(b), mainline).off || cutWhy(b)]).filter(([, why]) => why);
   const shallowNote = shallowOff.length ? ` (squash-landed exemptions OFF for ${shallowOff.map(([b, why]) => `${b}: ${why}`).join("; ")})` : "";
   // A warning git printed while listing the refs that is NOT a ref-skip one (see listLocalBranches) did not change the
   // verdict, and it is named here so nothing git said is thrown away: the first three, then a count.
@@ -1160,7 +1291,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
   const dh = detachedHeadWork(cwd, hubShaMap);
   if (dh) {
     row("fail", "Detached HEAD work not on the Review Hub",
-      `HEAD (detached at ${dh.head.slice(0, 12)}) carries ${dh.count === null ? "commits that could not be counted" : `${dh.count} commit(s)`} no branch, remote-tracking ref or Hub-listed commit holds — make a branch and push it, or confirm it is scratch`);
+      `HEAD (detached at ${dh.head.slice(0, 12)}) carries ${dh.count === null ? "commits that could not be counted" : `${dh.count} commit(s)`} no local branch or Hub-listed commit holds${dh.unproven ? ` (${dh.unproven})` : ""}${dh.fetch ? ` (${dh.fetch})` : ""} — make a branch and push it, or confirm it is scratch`);
   }
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work is not lost (the worktree
   // belongs to a live agent, and anything real is pushed from it), but an agent branch carrying commits
@@ -1726,9 +1857,10 @@ function selfTest() {
     const ebL = listLocalBranches(eb.w), ebR = eb.rows();
     check("a branch ref git cannot read is an unreadable listing (a gated failing row), not a branch that is not there (E-broken)",
       ebL.ok === false && /broken ref/.test(String(ebL.error)) && ebR.length === 1 && ebR[0].state === "fail" && ebR[0].gated === true && ebR[0].what === "Local branch list unreadable");
-    // (E-listfail) git failing outright
-    process.env.GIT_DIR = join(root, "no-such-git-dir");
-    let lf; try { lf = listLocalBranches(eb.w); } finally { delete process.env.GIT_DIR; }
+    // (E-listfail) git failing outright: asked in a directory that is no repository. (Until round 9 this planted GIT_DIR at a missing directory, which gitEnv now
+    // drops on purpose, so it would have listed the fixture's branches -- and the 'ebroken' fixture's broken ref made the case pass anyway; R9-env-gitdir covers the env.)
+    const lfNoRepo = join(root, "no-repo-here"); mkdirSync(lfNoRepo);
+    const lf = listLocalBranches(lfNoRepo);
     const lfRows = branchSeamRows({ listing: lf, hubBranches: ["main"], hubShaMap: new Map(), ephemeral: [], scratchExcluded: [] });
     check("a failed branch listing is a gated failing row 'Local branch list unreadable', never an empty clean list (E-listfail)",
       lf.ok === false && lf.names.length === 0 && lfRows.length === 1 && lfRows[0].state === "fail" && lfRows[0].gated === true && lfRows[0].what === "Local branch list unreadable" &&
@@ -2210,17 +2342,17 @@ function selfTest() {
     const prodSrc = readFileSync(fileURLToPath(import.meta.url), "utf8"), prodText = prodSrc.slice(0, prodSrc.indexOf("\nfunction selfTest()"));
     // quote-agnostic (round-7 refute: a single-quoted stray was not found): any quote, execFile / spawn / exec forms, only the two allowed argument lists pass
     const strayGit = (text) => [...text.matchAll(/\b(?:execFileSync|spawnSync|execFile|spawn)\(\s*(["'`])git\1\s*,\s*(\[[^\]]{0,60})?/g)].map((m) => m[2] || "")
-      .filter((a) => !/^\[\s*["'`]ls-remote["'`]/.test(a) && !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]/.test(a))
+      .filter((a) => !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]\s*,\s*["'`]-C["'`]/.test(a))
       .concat([...text.matchAll(/\b(?:exec|execSync)\(\s*(["'`])\s*git\b/g)].map((m) => m[0]));
     const stray = strayGit(prodText);
-    check("no git is started outside gitRun (apart from ls-remote), and gitEnv forces replace objects off and optional locks off whatever the caller passes (R7-spawns)",
+    check("no git is started outside gitRun (the Hub listing included since round 9), and gitEnv forces replace objects off and optional locks off whatever the caller passes (R7-spawns)",
       stray.length === 0 && gitEnv({ GIT_NO_REPLACE_OBJECTS: "0", GIT_OPTIONAL_LOCKS: "1", KEEP: "x" }).GIT_NO_REPLACE_OBJECTS === "1" &&
       gitEnv({ GIT_OPTIONAL_LOCKS: "1" }).GIT_OPTIONAL_LOCKS === "0" && gitEnv({ KEEP: "x" }).KEEP === "x");
     // ══ ROUND 8 ══ The round-7 refuter's fixtures (E2E-ls, SH1, SH3, SNb, SNc, the env and object attacks, AP, the attribute scenarios), rebuilt beside
     // the rows they must change. Each case builds the lie first (a precondition inside its own check) and then asks the guarded answer.
     const withEnvVars = (vars, fn) => {
       const prior = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
-      Object.assign(process.env, vars);
+      for (const [k, v] of Object.entries(vars)) { if (v === null) delete process.env[k]; else process.env[k] = v; } // (null: unset)
       try { return fn(); } finally { for (const [k, v] of Object.entries(prior)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
     };
     const plantLoose = (fx, sha, body) => { // a loose object written under a name it does not hash to (git does not verify on read)
@@ -2361,12 +2493,12 @@ function selfTest() {
     const dh = mkFx("r8dh");
     dh.f("checkout", "-q", "--detach"); const dhT = dh.c("d.txt", "REAL work on a detached HEAD\n", "detached work");
     const dhRows = dh.rows(), dhRow = rowOf(dhRows, "Detached HEAD work not on the Review Hub");
-    check("work committed on a detached HEAD that no branch, remote-tracking ref or Hub-listed commit holds is a GATED failure naming HEAD and the count (R8-detached)",
+    check("work committed on a detached HEAD that no local branch or Hub-listed commit holds is a GATED failure naming HEAD and the count (R8-detached)",
       dh.f("rev-parse", "HEAD") === dhT && dh.f("branch", "--contains", dhT).startsWith("* (HEAD detached") && !!dhRow && dhRow.state === "fail" && dhRow.gated === true &&
       dhRow.detail.startsWith(`HEAD (detached at ${dhT.slice(0, 12)}) carries 1 commit(s)`));
     dh.f("branch", "saved", "HEAD");
     const dhSaved = dh.rows();
-    check("...and once a branch holds it the detached row is gone and the branch is what is reported; a detached HEAD at a commit a remote-tracking ref holds is clean (R8-detached-clean)",
+    check("...and once a branch holds it the detached row is gone and the branch is what is reported; a detached HEAD at a commit the Hub lists is clean (R8-detached-clean)",
       !rowOf(dhSaved, "Detached HEAD work not on the Review Hub") && reported(dhSaved, "saved") && (() => { dh.f("checkout", "-q", "--detach", "origin/main"); return !rowOf(dh.rows(), "Detached HEAD work not on the Review Hub"); })());
     // (7) apply / read-tree / write-tree and refs/replace: a LEGIT hunks-only landing stays cleared with a replace ref on the squash parent's blob
     const ap = mkFx("r8ap");
@@ -2393,8 +2525,221 @@ function selfTest() {
     // (9) R7-spawns, quote-agnostic: the scanner is a function so the synthetic samples can test it
     check("the stray-git scanner is quote-agnostic: double, single and backtick quotes, execFile, spawn and exec forms are all found, the two allowed forms are not (R8-spawns-scan)",
       strayGit(`execFileSync('git', ['rev-parse'])`).length === 1 && strayGit("spawnSync(`git`, [`log`])").length === 1 && strayGit(`execFile("git", ["log"], cb)`).length === 1 &&
-      strayGit(`spawn('git',['status'])`).length === 1 && strayGit(`execSync("git status")`).length === 1 && strayGit(`execFileSync('git', ['ls-remote', '--heads'])`).length === 0 &&
-      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 0 && strayGit(prodText).length === 0);
+      strayGit(`spawn('git',['status'])`).length === 1 && strayGit(`execSync("git status")`).length === 1 && strayGit(`execFileSync('git', ['ls-remote', '--heads'])`).length === 1 &&
+      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args])`).length === 0 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 1 && strayGit(prodText).length === 0);
+    // ══ ROUND 9 ══ The round-8 refuter's fixtures (the proxy repository, dDetach, dShallowKL, dProbe P3, dEnv), rebuilt beside the rows they must change.
+    // Each case builds the lie first (a precondition inside its own check) and then asks the guarded answer; each FAILS on the round-8 file.
+    const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
+    const cfgFile = (name, text) => { const p = join(root, name); writeFileSync(p, text); return p; };
+    // hermetic: a developer's (or a CI runner's) own global or system sslVerify / proxy settings, or a GIT_SSL_NO_VERIFY, must not decide the cases below
+    const hermetic = { GIT_CONFIG_GLOBAL: cfgFile("r9-empty-global.cfg", ""), GIT_CONFIG_NOSYSTEM: "1", GIT_SSL_NO_VERIFY: null };
+    const inCleanEnv = (fn, vars = {}) => withEnvVars({ ...hermetic, ...vars }, fn);
+    const ctOf = (fx, tree, msg, ...parents) => execFileSync("git", ["commit-tree", tree, ...parents.flatMap((p) => ["-p", p]), "-m", msg], { cwd: fx.w, encoding: "utf8", env: FX_ENV }).trim();
+    const dropLoose = (fx, sha) => { const p = join(fx.w, ".git", "objects", sha.slice(0, 2), sha.slice(2)); const was = existsSync(p); if (was) unlinkSync(p); return was && !existsSync(p); };
+    // (1) The Hub transport. A repository-scope http.proxy plus http.sslVerify=false served a listing through a TLS-terminating proxy with the URL untouched.
+    const tx = mkFx("r9tx"); tx.f("config", "remote.origin.url", HUB);
+    const txc = mkFx("r9txc"); txc.f("config", "remote.origin.url", HUB); // a clean repository: nothing of its own below the environment's boundary
+    const txBase = inCleanEnv(() => hubTransport(tx.w));
+    tx.f("config", "http.proxy", "http://127.0.0.1:39689");
+    const txProxy = inCleanEnv(() => hubTransport(tx.w));
+    tx.f("config", "http.sslVerify", "false");
+    const txSsl = inCleanEnv(() => hubTransport(tx.w));
+    check("a repository-scope http.proxy and http.sslVerify=false are gated findings naming the key, the value, the scope and the file, where the same repository without them has none (R9-tx-local)",
+      txBase.problems.length === 0 && txProxy.problems.length === 1 && /^repository-scope http\.proxy=http:\/\/127\.0\.0\.1:39689 \(local \.git\/config\) can redirect or weaken the Hub transport$/.test(txProxy.problems[0]) &&
+      txSsl.problems.length === 2 && txSsl.problems.some((p) => /^http\.sslverify=false \(local \.git\/config\) turns TLS verification off$/.test(p)) && /http\.proxy/.test(inCleanEnv(() => hubUrlProblem(tx.w))));
+    const txw = mkFx("r9txw"); txw.f("config", "extensions.worktreeConfig", "true"); txw.f("config", "--worktree", "http.proxy", "http://127.0.0.1:1");
+    const txi = mkFx("r9txi"), txInc = cfgFile("r9-include.cfg", "[http]\n\tproxy = http://127.0.0.1:2\n"); txi.f("config", "include.path", txInc);
+    const txu = mkFx("r9txu"); txu.f("config", "url.git@github.com:.insteadOf", "https://github.com/"); // host-preserving, but a REPOSITORY chose it
+    const txg = mkFx("r9txg"); txg.f("config", "core.gitProxy", "/tmp/x-proxy"); txg.f("config", "http.postBuffer", "524288000");
+    check("scope decides, not the file name: a worktree-scope http.proxy, a proxy pulled in by a local include.path, a repository-scope url.*.insteadOf (even host-preserving) and core.gitProxy are gated, and a harmless tuning key (http.postBuffer) is not (R9-tx-scope)",
+      inCleanEnv(() => hubTransport(txw.w)).problems.some((p) => /^repository-scope http\.proxy=http:\/\/127\.0\.0\.1:1 \(worktree /.test(p)) &&
+      inCleanEnv(() => hubTransport(txi.w)).problems.some((p) => p.includes("repository-scope http.proxy=http://127.0.0.1:2") && p.includes(txInc)) &&
+      inCleanEnv(() => hubTransport(txu.w)).problems.some((p) => /^repository-scope url\.git@github\.com:\.insteadof=https:\/\/github\.com\/ \(local /.test(p)) &&
+      inCleanEnv(() => hubTransport(txg.w)).problems.length === 1 && /core\.gitproxy/.test(inCleanEnv(() => hubTransport(txg.w)).problems[0]));
+    // the same keys below the environment's own boundary (the global file, the command line) are what the sandbox's proxy and CA ARE: reported, not gated
+    const gProxy = cfgFile("r9-global-proxy.cfg", "[http]\n\tproxy = http://user:s3cret@10.9.8.7:3128\n\tsslVerify = true\n\tsslCAInfo = /etc/ssl/corp-ca.pem\n");
+    const gTrusted = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: gProxy });
+    check("the same proxy and CA keys in the user's GLOBAL configuration, with sslVerify true, are reported as trusted (userinfo removed) and are no finding (R9-tx-global-report)",
+      gTrusted.problems.length === 0 && gTrusted.trusted.some((t) => t.includes("global") && t.includes("http.proxy=http://10.9.8.7:3128")) && gTrusted.trusted.some((t) => t.includes("http.sslcainfo=/etc/ssl/corp-ca.pem")) &&
+      !JSON.stringify(gTrusted).includes("s3cret") && /^trusted, not verified: /.test(gTrusted.note));
+    const gOff = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-ssl.cfg", "[http]\n\tsslVerify = false\n") });
+    const gOffUrl = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-url.cfg", "[http \"https://github.com/\"]\n\tsslVerify = off\n") });
+    const gOffProxy = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-proxyssl.cfg", "[http]\n\tproxySSLVerify = no\n") });
+    check("http.sslVerify=false is gated at ANY scope, the per-URL form, the 'off' spelling and http.proxySSLVerify included (R9-tx-sslverify-any)",
+      gOff.problems.some((p) => /^http\.sslverify=false \(global .*r9-global-ssl\.cfg\) turns TLS verification off$/.test(p)) && gOffUrl.problems.some((p) => /^http\.https:\/\/github\.com\/\.sslverify=off \(global /.test(p)) &&
+      gOffProxy.problems.some((p) => /^http\.proxysslverify=no \(global .*\) turns TLS verification off$/.test(p)));
+    check("an entry in a scope this git never prints is the repository's own and is gated, where the same key in the global or system scope is only reported, and a bare sslVerify key counts as true (R9-tx-scope-unknown)",
+      /^repository-scope http\.proxy=http:\/\/h:1 \(submodule \.gitmodules\)/.test(transportKey("submodule", "file:.gitmodules", "http.proxy\nhttp://h:1").problem || "") &&
+      transportKey("global", "file:/x", "http.proxy\nhttp://h:1").problem === undefined && transportKey("system", "file:/x", "http.proxy\nhttp://h:1").trusted === "system /x: http.proxy=http://h:1" &&
+      transportKey("command", "command line:", "url.https://github.com/.insteadof\ngit@github.com:").trusted === "command line: url.https://github.com/.insteadof=git@github.com:" &&
+      transportKey("global", "file:/x", "http.sslverify").problem === undefined && transportKey("local", "file:.git/config", "http.postbuffer\n1").problem === undefined);
+    const noVerify = inCleanEnv(() => ({ t: hubTransport(txc.w), env: gitEnv({ KEEP: "x" }) }), { GIT_SSL_NO_VERIFY: "1" });
+    check("GIT_SSL_NO_VERIFY in the environment is a gated finding, and no git this file starts inherits it (R9-tx-env-noverify)",
+      noVerify.t.problems.length === 1 && /^GIT_SSL_NO_VERIFY is set in the environment/.test(noVerify.t.problems[0]) && !("GIT_SSL_NO_VERIFY" in noVerify.env) && noVerify.env.KEEP === "x");
+    const rewriteWith = (vars) => inCleanEnv(() => hubTransport(txc.w), vars);
+    const rwCmdEvil = rewriteWith({ GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.https://evil.example/.insteadOf", GIT_CONFIG_VALUE_0: "https://github.com/" });
+    const rwCmdSame = rewriteWith({ GIT_CONFIG_COUNT: "3", GIT_CONFIG_KEY_0: "credential.interactive", GIT_CONFIG_VALUE_0: "false", GIT_CONFIG_KEY_1: "url.https://github.com/.insteadOf", GIT_CONFIG_VALUE_1: "git@github.com:", GIT_CONFIG_KEY_2: "url.https://github.com/.insteadOf", GIT_CONFIG_VALUE_2: "ssh://git@github.com/" });
+    const rwGlobEvil = rewriteWith({ GIT_CONFIG_GLOBAL: cfgFile("r9-global-evil.cfg", "[url \"https://mirror.example/\"]\n\tinsteadOf = https://github.com/\n") });
+    const rwGlobSsh = rewriteWith({ GIT_CONFIG_GLOBAL: cfgFile("r9-global-ssh.cfg", "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/\n") });
+    check("a rewrite of the Hub URL that changes its host is gated at the command line and in the global file; the sandbox's own host-preserving entries (GIT_CONFIG_*), and a global https-to-ssh rewrite of the same repository, are reported and not gated (R9-tx-rewrite)",
+      rwCmdEvil.problems.length === 1 && /rewrites the Hub URL .* to https:\/\/evil\.example\/DanFashauer\/SignalGrid-Review-Hub\.git/.test(rwCmdEvil.problems[0]) &&
+      rwGlobEvil.problems.length === 1 && /rewrites the Hub URL .* to https:\/\/mirror\.example\//.test(rwGlobEvil.problems[0]) &&
+      rwCmdSame.problems.length === 0 && rwCmdSame.trusted.some((t) => t.startsWith("command line: url.https://github.com/.insteadof=git@github.com:")) &&
+      rwGlobSsh.problems.length === 0 && rwGlobSsh.trusted.some((t) => t.includes("rewrites the Hub URL to git@github.com:DanFashauer/SignalGrid-Review-Hub.git")));
+    const envNote = inCleanEnv(() => hubTransport(txc.w), { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: null, all_proxy: null, GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
+    check("the environment's proxy and CA are named as trusted-not-verified in the row text, once per distinct proxy, with the proxy's userinfo removed, and are no finding (R9-tx-env-trusted)",
+      envNote.problems.length === 0 && envNote.note.includes("environment proxy HTTPS_PROXY/https_proxy=http://127.0.0.1:9") && envNote.note.split("environment proxy").length === 2 && envNote.note.includes("environment CA GIT_SSL_CAINFO=/etc/agent/ca.pem") && !envNote.note.includes("pw123"));
+    const badCfg = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r9-global-bad.cfg", "[http\nproxy=\n") });
+    check("a configuration git cannot read is a finding, never an empty clean scan (R9-tx-unreadable)",
+      badCfg.problems.some((p) => /^git could not read its configuration/.test(p)));
+    const txh = mkFx("r9txh"); txh.f("config", "remote.origin.url", HUB);
+    txh.f("config", "http.https://github.com/.extraheader", "AUTHORIZATION: basic c2VjcmV0LXRva2Vu"); txh.f("config", "http.postBuffer", "524288000");
+    const txhScan = inCleanEnv(() => hubTransport(txh.w));
+    check("the credential actions/checkout writes as a repository-scope http.<url>.extraheader, and a tuning key, are no finding and are never printed (R9-tx-harmless)",
+      txhScan.problems.length === 0 && !JSON.stringify(txhScan).includes("c2VjcmV0LXRva2Vu") && !/extraheader|postbuffer/i.test(txhScan.note));
+    // the whole script. Stand-in for the refuter's TLS-terminating proxy: a `git` first on PATH that answers `ls-remote --heads` with a listing of its own
+    // (everything else is the real git), so the lie is on offer exactly where the proxy offered it.
+    const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), fakeBin = join(root, "r9bin");
+    mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
+    const wholeScript = (fx, name, vars = {}) => {
+      mkdirSync(join(fx.w, "scripts"), { recursive: true }); writeFileSync(join(fx.w, "scripts", "loop-state.mjs"), prodSrc);
+      const listing = cfgFile(`${name}-listing`, `${hubMapOf(fx.h).get("main")}\trefs/heads/main\n`);
+      const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
+      delete childEnv.GIT_SSL_NO_VERIFY;
+      const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: 120000, env: childEnv });
+      return { status: r.status, out: stripAnsi(r.stdout) };
+    };
+    const txe = mkFx("r9txe"); txe.f("config", "remote.origin.url", HUB);
+    const txeClean = wholeScript(txe, "r9txe-a", { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: "", all_proxy: "", GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
+    txe.f("config", "http.proxy", "http://127.0.0.1:39689"); txe.f("config", "http.sslVerify", "false");
+    const txeLie = wholeScript(txe, "r9txe-b");
+    check("the whole check, with a repository-scope http.proxy and http.sslVerify=false and a listing served by whatever sits behind them, exits 1 with a failing Hub-URL row and never reads the listing; the same repository without them reads it and names what it trusted (R9-tx-e2e)",
+      txeLie.status === 1 && /✗ Review Hub URL\s+repository-scope http\.proxy=http:\/\/127\.0\.0\.1:39689/.test(txeLie.out) && !/all present on the Review Hub/.test(txeLie.out) && !/Review Hub transport/.test(txeLie.out) &&
+      /✓ Review Hub transport\s+listing read from /.test(txeClean.out) && txeClean.out.includes("trusted, not verified: ") && /environment proxy HTTPS_PROXY(\/https_proxy)?=http:\/\/127\.0\.0\.1:9\b/.test(txeClean.out) &&
+      txeClean.out.includes("environment CA GIT_SSL_CAINFO=/etc/agent/ca.pem") && !txeClean.out.includes("pw123") && /all present on the Review Hub/.test(txeClean.out));
+
+    // (2) detached HEAD. Evidence is a local branch or a commit the Hub lists, never a remote-tracking ref (anyone can write one) and never a tag.
+    const dhe = mkFx("r9dh1");
+    dhe.f("checkout", "-q", "--detach"); const dheT = dhe.c("d.txt", "REAL detached work the Hub never saw\n", "detached work");
+    const dheRowOf = () => rowOf(dhe.rows(), "Detached HEAD work not on the Review Hub");
+    const dheKept = [];
+    for (const [label, plant, unplant] of [["refs/remotes/evil/x", () => dhe.f("update-ref", "refs/remotes/evil/x", dheT), () => dhe.f("update-ref", "-d", "refs/remotes/evil/x")],
+      ["refs/remotes/origin/pr/999", () => dhe.f("update-ref", "refs/remotes/origin/pr/999", dheT), () => dhe.f("update-ref", "-d", "refs/remotes/origin/pr/999")],
+      ["a tag", () => dhe.f("tag", "keep", dheT), () => dhe.f("tag", "-d", "keep")]]) {
+      plant(); const row = dheRowOf(); unplant();
+      dheKept.push(label, !!row && row.state === "fail" && row.gated === true && row.detail.startsWith(`HEAD (detached at ${dheT.slice(0, 12)}) carries 1 commit(s) no local branch or Hub-listed commit holds`));
+    }
+    check("a hand-made refs/remotes/evil/x, a hand-made refs/remotes/origin/pr/999 and a tag at the detached tip each leave the detached-HEAD row gated; only a local branch or a Hub-listed commit clears it (R9-detach)",
+      dhe.f("rev-parse", "HEAD") === dheT && dheKept.length === 6 && dheKept.filter((x) => typeof x === "boolean").every(Boolean) && (dhe.f("branch", "saved", "HEAD"), !dheRowOf()));
+    const dhl = mkFx("r9dh2");
+    dhl.f("checkout", "-q", "--detach"); dhl.f("branch", "-D", "main"); const dhlOld = dhl.f("rev-parse", "HEAD");
+    const dhlStale = (() => { hubAdvance(dhl, "main"); return dhl.rows(); })(); // the Hub moved main; this checkout has not fetched; HEAD is origin/main's old commit, held by no branch
+    const dhlRow = rowOf(dhlStale, "Detached HEAD work not on the Review Hub");
+    dhl.f("fetch", "-q", "origin");
+    check("a detached HEAD at origin/main's OLD commit, held by no branch while the Hub's main is not fetched, is still gated but says run a fetch; once fetched, the Hub's listed main holds it and the row is gone (R9-detach-fetch)",
+      dhl.f("rev-parse", "HEAD") === dhlOld && !!dhlRow && dhlRow.gated === true && dhlRow.detail.includes("origin/main is behind the Hub: run git fetch origin, then re-run") && !rowOf(dhl.rows(), "Detached HEAD work not on the Review Hub"));
+    // a forged-name parent under a real Hub commit (the R8-chain construction): the Hub lists H2 over P2, the local P2 is a forgery whose content names the tip
+    const mkForged = (name) => {
+      const f = mkFx(name);
+      f.f("checkout", "-q", "-b", "oth"); f.c("o.txt", "o\n"); f.f("push", "-q", "origin", "oth:refs/heads/other");
+      f.f("checkout", "-q", "-b", "mine", "main"); const T = f.c("w.txt", "REAL unpushed\n"); f.f("branch", "-D", "oth");
+      const hg = (...a) => execFileSync("git", ["-C", f.h, ...a], { encoding: "utf8", env: FX_ENV }).trim(), O = hg("rev-parse", "refs/heads/other");
+      const P2 = hg("commit-tree", `${O}^{tree}`, "-p", O, "-m", "hub P2"), H2 = hg("commit-tree", `${O}^{tree}`, "-p", P2, "-m", "hub H2"); hg("update-ref", "refs/heads/other", H2);
+      execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin"], { cwd: f.w, input: execFileSync("git", ["-C", f.h, "cat-file", "commit", H2]), encoding: "utf8", env: FX_ENV });
+      plantLoose(f, P2, Buffer.from(`tree ${f.f("rev-parse", `${T}^{tree}`)}\nparent ${T}\nauthor t <t@t> 1 +0000\ncommitter t <t@t> 1 +0000\n\nforged P2\n`));
+      return { f, T, H2, P2, map: hubMapOf(f.h) };
+    };
+    const dff = mkForged("r9dh3");
+    dff.f.f("checkout", "-q", "--detach", dff.T); dff.f.f("branch", "-D", "mine");
+    const dffRow = rowOf(dff.f.rows(), "Detached HEAD work not on the Review Hub");
+    check("a detached HEAD whose only cover is a real Hub commit over a forged-name parent is not covered: the chain is re-hashed and the row says why (R9-detach-chain)",
+      localCommits(dff.f.w, [dff.H2]).has(dff.H2) && !localCommits(dff.f.w, [dff.P2]).has(dff.P2) && dff.f.f("rev-list", "--count", "HEAD", `^${dff.H2}`) === "0" && !!dffRow && dffRow.gated === true && /hand-made object in the ancestry/.test(dffRow.detail));
+
+    // (3) shallow boundaries. dShallowKL: mainline reaches the boundary B by a SIDE parent C (a commit the branch really has below the cut), so C appeared as a landing after the fork.
+    const skl = mkFx("r9skl");
+    const sklV1 = blobOf(skl, "f=v1\n"), sklV2 = blobOf(skl, "f=v2 FEATURE\n"), sklBase = blobOf(skl, "base\n");
+    const sklT1 = treeOf(skl, [["base.txt", sklBase], ["f.txt", sklV1]]), sklT2 = treeOf(skl, [["base.txt", sklBase], ["f.txt", sklV2]]);
+    const sklR = ctOf(skl, sklT1, "R"), sklC = ctOf(skl, sklT2, "C: the feature, on the Hub, reverted later", sklR), sklP = ctOf(skl, sklT1, "P: revert", sklC);
+    const sklB = ctOf(skl, sklT1, "B: boundary", sklP), sklT = ctOf(skl, sklT2, "T: LOCAL re-apply of the reverted feature", sklB), sklM = ctOf(skl, sklT1, "M: mainline merge reaching C by a side parent, and B", sklB, sklC);
+    skl.f("update-ref", "refs/remotes/origin/main", sklM); skl.f("update-ref", "refs/heads/work", sklT);
+    writeFileSync(join(skl.w, ".git", "shallow"), `${sklB}\n`);
+    const sklCut = dropLoose(skl, sklP);
+    const sklTrace = { blocked: "" }, sklSb = shallowBounds(skl.w, "refs/heads/work", R6M);
+    const sklBytes = hasLandedByContent("work", R6M, skl.w, sklTrace), sklHunks = landedByPatchId("work", R6M, skl.w), sklRows = skl.rows(), sklRow = rowOf(sklRows, T_UNPUSHED);
+    check("a local re-apply of a feature mainline made and reverted below a shared opaque shallow boundary is NOT squash-landed: the mainline commit carrying it does not descend from the boundary, so neither the byte check nor the hunk check clears it, and the row names the cut and the remedy (R9-skl)",
+      sklCut && skl.f("rev-parse", "--is-shallow-repository") === "true" && sklSb.off === "" && (sklSb.opaque || []).join() === sklB && sklBytes === false && sklTrace.blocked === sklB && sklHunks === false &&
+      !!sklRow && sklRow.gated === true && sklRow.detail.startsWith("work — push, or confirm the remote") && sklRow.detail.includes(`does not descend from the shallow boundary ${sklB.slice(0, 12)}`) && sklRow.detail.includes("--deepen=N"));
+    // ...and the ordinary shallow lane, cut ON mainline: the squash that landed the work is newer than the boundary, so both exemptions still clear
+    const shl = mkFx("r9shl");
+    shl.c("f.txt", "v1\n", "B"); shl.put("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n"); shl.f("add", "-A"); shl.f("commit", "-q", "-m", "B: shared file"); const shlB = shl.f("rev-parse", "HEAD"); shl.f("push", "-q", "origin", "main");
+    shl.f("checkout", "-q", "-b", "work"); shl.put("f.txt", "v2\n"); shl.put("shared.md", "- r1\n- r2\n- r3\n- r4\n- r5\n- r6\n- r7 (feat)\n"); shl.f("add", "-A"); shl.f("commit", "-q", "-m", "feat");
+    shl.f("checkout", "-q", "-b", "workb", shlB); shl.c("f.txt", "v2\n", "feat b");
+    shl.f("checkout", "-q", "main"); const shlU = shl.c("shared.md", "- r1\n- r2 (main moved)\n- r3\n- r4\n- r5\n- r6\n", "U: main moves shared"); shl.f("merge", "-q", "--squash", "work"); shl.f("commit", "-q", "-m", "S: squash feat");
+    shl.c("f.txt", "v3\n", "S2: f.txt moves on"); shl.f("push", "-q", "origin", "main");
+    const shlA0 = shl.f("rev-parse", `${shlB}^`);
+    writeFileSync(join(shl.w, ".git", "shallow"), `${shlB}\n`);
+    const shlCut = dropLoose(shl, shlA0);
+    const shlRows = shl.rows(), shlTrace = { blocked: "" };
+    check("the ordinary shallow lane still clears: with the boundary ON mainline and the squash newer than it, a hunks-only landing and a bytes-landing (the file moved on afterwards) both stay cleared (R9-skl-legit)",
+      shlCut && shl.f("rev-parse", "--is-shallow-repository") === "true" && (shallowBounds(shl.w, "refs/heads/work", R6M).opaque || []).join() === shlB && hasLandedByContent("work", R6M, shl.w, shlTrace) === false &&
+      landedByPatchId("work", R6M, shl.w, shlTrace) === true && shlTrace.blocked === "" && hasLandedByContent("workb", R6M, shl.w) === true && !rowOf(shlRows, T_UNPUSHED) && rowOf(shlRows, T_CLEAN).detail.includes("squash-landed"));
+    // a cut INSIDE the branch's own commits (mainline never reaches the boundary): the exemptions are off and the row says to deepen the checkout
+    const cut = mkFx("r9cut");
+    cut.f("checkout", "-q", "-b", "cutown"); const cutP1 = cut.c("p1.txt", "1\n", "P1"), cutB = cut.c("p2.txt", "2\n", "B"); cut.c("t.txt", "3\n", "T");
+    writeFileSync(join(cut.w, ".git", "shallow"), `${cutB}\n`); const cutDropped = dropLoose(cut, cutP1);
+    const cutRow = rowOf(cut.rows(), T_UNPUSHED), cutSb = shallowBounds(cut.w, "refs/heads/cutown", R6M);
+    check("a shallow cut inside the branch's own commits that mainline does not reach turns the exemptions off and the row says: git fetch --deepen=N origin (R9-skl-deepen)",
+      cutDropped && cutSb.off.includes("--deepen=N") && !!cutRow && cutRow.detail.includes("cutown: the history below the shallow boundary") && cutRow.detail.includes("--deepen=N"));
+
+    // (4) the same-name zero is earned. A real Hub commit over a forged-name parent hid the branch tip behind it: aheadOfHub read same, commitsBeyondHub read 0.
+    const fg = mkForged("r9fg");
+    fg.f.f("branch", "other", fg.T);
+    const fgAhead = aheadOfHub("other", fg.H2, fg.f.w), fgBeyond = commitsBeyondHub(fg.f.w, "other", fg.map, "");
+    const fgRows = fg.f.rows(), fgSame = rowOf(fgRows, "Local tip ahead of its same-named Hub branch");
+    const fgVerdict = sameNameVerdict("other", fg.H2, fg.map, fg.f.w);
+    check("a tip hidden behind a real Hub commit by a forged-name parent is no longer 'at or behind the Hub': aheadOfHub gives an unproven zero, commitsBeyondHub cannot count, and the same-name row is a gated failure with the count unreadable (R9-ahead-forged)",
+      fg.f.f("rev-list", "--count", `${fg.H2}..refs/heads/other`) === "0" && !localCommits(fg.f.w, [fg.P2]).has(fg.P2) && fgAhead.state === "unknown" && /hand-made object in the ancestry/.test(fgAhead.reason) && fgBeyond === "" &&
+      fgVerdict.state === "ahead" && fgVerdict.ahead === null && !!fgSame && fgSame.state === "fail" && fgSame.gated === true && /other \(count unreadable\)/.test(fgSame.detail));
+    const lg = mkFx("r9lg");
+    lg.f("checkout", "-q", "-b", "feat"); const lgOld = lg.c("a.txt", "1\n", "A"); lg.f("push", "-q", "origin", "feat"); hubAdvance(lg, "feat"); lg.f("fetch", "-q", "origin");
+    const lgMap = hubMapOf(lg.h), lgAhead = aheadOfHub("feat", lgMap.get("feat"), lg.w), lgAt = aheadOfHub("feat", lgOld, lg.w);
+    check("a branch genuinely behind its Hub tip (a real chain, every commit hashing to its name) still reads same, with a zero count; a branch at its Hub tip too (R9-ahead-legit)",
+      lg.f("rev-parse", "refs/heads/feat") === lgOld && lgAhead.state === "same" && lgAhead.ahead === 0 && lgAt.state === "same" && commitsBeyondHub(lg.w, "feat", lgMap, "") === "0");
+
+    // the descent from the boundary is proved with every commit on the way re-hashed: a forged-name commit between the boundary and the landing commit claims the descent and is not believed
+    const shlUBody = Buffer.from(`tree ${shl.f("rev-parse", `${shlU}^{tree}`)}\nparent ${shlB}\nauthor t <t@t> 1 +0000\ncommitter t <t@t> 1 +0000\n\nforged U\n`);
+    const shlForgedDropped = dropLoose(shl, shlU); plantLoose(shl, shlU, shlUBody);
+    const shlForgedTrace = { blocked: "" };
+    check("a forged-name commit between the shallow boundary and the squash that landed the work does not prove the squash newer than the boundary: the bytes-landing is reported again and the trace names the boundary (and the hunks-only landing, whose apply git refuses on the forged commit, is reported too) (R9-skl-forged-chain)",
+      shlForgedDropped && !localCommits(shl.w, [shlU]).has(shlU) && hasLandedByContent("workb", R6M, shl.w, shlForgedTrace) === false && shlForgedTrace.blocked === shlB && landedByPatchId("work", R6M, shl.w) === false && !!rowOf(shl.rows(), T_UNPUSHED));
+    // an unfetched same-name tip counted against the tracking ref: the zero is earned here too
+    const bt = mkForged("r9bt");
+    bt.f.f("branch", "other", bt.T); bt.f.f("update-ref", "refs/remotes/origin/other", bt.H2); hubAdvance(bt.f, "other");
+    const btMap = hubMapOf(bt.f.h), btV = sameNameVerdict("other", btMap.get("other"), btMap, bt.f.w), btRow = rowOf(bt.f.rows(), "Local tip ahead of its same-named Hub branch");
+    check("an unfetched same-name tip hidden behind its tracking ref by a forged-name parent is a gated ahead with the count unreadable and the reason named, not the quiet 'not fetched' warning (R9-beyond-tracking)",
+      !hasObject(bt.f, btMap.get("other")) && bt.f.f("rev-list", "--count", "refs/heads/other", "^refs/remotes/origin/other") === "0" && btV.state === "ahead" && btV.ahead === null && /could not be counted \(.*hand-made object in the ancestry/.test(btV.reason) &&
+      !!btRow && btRow.gated === true && /other \(count unreadable\)/.test(btRow.detail) && btRow.detail.includes("origin/other is behind the Hub: run git fetch origin"));
+
+    // (5) the environment. A GIT_DIR at a decoy hid every real branch; the other variables point reads at a repository, worktree, namespace or transport this check did not choose.
+    const en = mkFx("r9en");
+    en.f("checkout", "-q", "-b", "realwork"); en.c("w.txt", "REAL unpushed\n");
+    const decoy = join(root, "r9en-decoy"); execFileSync("git", ["init", "-q", "-b", "main", decoy], { env: FX_ENV });
+    execFileSync("git", ["-C", decoy, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "clean"], { env: FX_ENV });
+    const enMap = hubMapOf(en.h);
+    const enUnder = withEnvVars({ GIT_DIR: join(decoy, ".git"), GIT_WORK_TREE: decoy, GIT_COMMON_DIR: join(decoy, ".git"), GIT_NAMESPACE: "evil" }, () => ({
+      names: listLocalBranches(en.w).names, rows: branchSeamRows({ listing: listLocalBranches(en.w), hubBranches: [...enMap.keys()], hubShaMap: enMap, ephemeral: [], scratchExcluded: [], mainline: R6M, cwd: en.w }) }));
+    const enUnpushed = rowOf(enUnder.rows, T_UNPUSHED);
+    check("with GIT_DIR (and GIT_WORK_TREE, GIT_COMMON_DIR, GIT_NAMESPACE) pointing at a decoy repository the branches are still read from the repository asked about, and the unpushed branch is still reported (R9-env-gitdir)",
+      enUnder.names.includes("realwork") && !!enUnpushed && enUnpushed.gated === true && enUnpushed.detail.startsWith("realwork") && execFileSync("git", ["-C", decoy, "for-each-ref", "--format=%(refname)", "refs/heads"], { encoding: "utf8", env: FX_ENV }).trim() === "refs/heads/main");
+    const enGit = withEnvVars({ GIT_DIR: "/x/d", GIT_COMMON_DIR: "/x/c", GIT_WORK_TREE: "/x/w", GIT_NAMESPACE: "ns", GIT_PROXY_COMMAND: "/x/p", GIT_SSL_NO_VERIFY: "1", GIT_SSL_CAINFO: "/x/ca.pem",
+      GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "a.b", GIT_CONFIG_VALUE_0: "c", GIT_TEST_COMMIT_GRAPH: "1", GIT_OBJECT_DIRECTORY: "/x/o" }, () => gitEnv({ GIT_INDEX_FILE: "/x/i" }));
+    check("gitEnv drops GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_NAMESPACE, GIT_PROXY_COMMAND and GIT_SSL_NO_VERIFY, and KEEPS GIT_SSL_CAINFO, GIT_CONFIG_* and what its caller passes (R9-env-unit)",
+      ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_PROXY_COMMAND", "GIT_SSL_NO_VERIFY", "GIT_TEST_COMMIT_GRAPH", "GIT_OBJECT_DIRECTORY"].every((k) => !(k in enGit)) &&
+      enGit.GIT_SSL_CAINFO === "/x/ca.pem" && enGit.GIT_CONFIG_COUNT === "1" && enGit.GIT_CONFIG_KEY_0 === "a.b" && enGit.GIT_CONFIG_VALUE_0 === "c" && enGit.GIT_INDEX_FILE === "/x/i");
+    const relCwd = relative(process.cwd(), en.w);
+    check("every git is pinned to the repository asked about, and a relative path to it is resolved once, never compounded by -C beside the spawn's cwd (R9-env-pin)",
+      !isAbsolute(relCwd) && gitRun(relCwd, ["rev-parse", "--show-toplevel"]).stdout.trim() === realpathSync(en.w) && gitRun(join(root, "no-repo-here"), ["rev-parse", "--git-dir"]).ok === false &&
+      /spawnSync\("git", \["-c", "core\.commitGraph=false", "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

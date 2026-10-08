@@ -793,6 +793,13 @@ router.post("/v1/step-up/challenge", async (req: Request, res: Response, next: N
 //    plan with the step-up satisfied.
 router.post("/v1/app-workflows/complete-step-up", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize BEFORE anything is read from or done to the challenge store — the same
+    // `decision:evaluate` its mint sibling (/v1/step-up/challenge) runs first. This
+    // route used to verify the assertion and only then reach core.evaluate's check, so
+    // a same-tenant auditor holding a validly-signed assertion consumed the holder's
+    // single-use challenge, advanced the counter and left a step-up success row before
+    // being refused. A refusal is audited as a failure; WebAuthn is never reached.
+    await authorizeStepUpCompletion(req, core.context(token(req)).principal, undefined);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const integrationId = requireString(body, "integrationId");
     const identityRef = requireString(body, "identityRef");
@@ -1045,12 +1052,17 @@ router.post("/v1/decisions/:id/step-up/challenge", async (req: Request, res: Res
 
 router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Authorize FIRST, mirroring the mint sibling (/v1/decisions/:id/step-up/challenge):
+    // `decision:evaluate`, before the decision lookup, the challenge store or WebAuthn.
+    // decision:read (an auditor) is enough to READ the decision but must never be enough
+    // to spend the holder's challenge — see authorizeStepUpCompletion.
     const decisionId = param(req, "id");
+    const ctx = core.context(token(req));
+    await authorizeStepUpCompletion(req, ctx.principal, { type: "decision", id: decisionId });
     const body = (req.body ?? {}) as Record<string, unknown>;
     const challengeId = requireString(body, "challengeId");
     const assertion = requireObject(body, "assertion", "WebAuthn authentication");
-    const ctx = core.context(token(req));
-    // 404 before anything else: a decision this tenant does not hold gets the same
+    // 404 before any challenge work: a decision this tenant does not hold gets the same
     // answer a nonexistent id gets.
     const decision = core.getDecision(token(req), decisionId);
 
@@ -1100,6 +1112,29 @@ router.post("/v1/decisions/:id/step-up", async (req: Request, res: Response, nex
 
 export default router;
 
+/** The authorization a step-up COMPLETION runs before it touches WebAuthn: exactly the
+ *  `decision:evaluate` its mint sibling runs, no new permission. A refusal is appended to
+ *  the ledger as `security.webauthn.step_up.failure` (reason `not_authorized`) — the
+ *  attempt happened and was refused, and the ledger must say refused, never success —
+ *  and then rethrown unchanged, so the caller gets the same 403 `authorize` gives
+ *  everywhere else. */
+async function authorizeStepUpCompletion(
+  req: Request,
+  principal: Parameters<typeof authorize>[0],
+  target: AuditTarget | undefined,
+): Promise<void> {
+  try {
+    authorize(principal, "decision:evaluate");
+  } catch (err) {
+    await audit(req, "security.webauthn.step_up.failure", principal.subjectId, target, {
+      reason: "not_authorized",
+      permission: "decision:evaluate",
+      route: req.route?.path,
+    });
+    throw err;
+  }
+}
+
 /** Append a route-level audit event through the real redacting ledger path and
  *  witness it at /metrics. AWAITED, not fire-and-forget: an admin action whose
  *  audit record silently failed to persist is the unearned affirmative with a
@@ -1108,7 +1143,7 @@ async function audit(
   req: Request,
   eventType: Parameters<typeof appendAuditRecord>[0],
   subjectId: string | undefined,
-  target: AuditTarget,
+  target: AuditTarget | undefined,
   meta?: Record<string, unknown>,
 ): Promise<void> {
   await appendAuditRecord(eventType, { type: "user", id: subjectId }, {

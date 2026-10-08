@@ -69,13 +69,18 @@ which single backticks GitHub pairs into code spans.
 A line that follows a blockquote line must itself start with `>` or be blank: GitHub
 can read an unquoted (lazy) continuation line as a table header and the gate's renderer
 does not.
+No line outside the inventory block may hold a pipe character at all, in prose, code
+spans or code blocks alike: every table GitHub builds needs one on its header row, and
+rounds of review kept finding container and indentation shapes (a quote at the wrong
+depth, a header indented four spaces, a list item over an indented delimiter row) where
+GitHub builds a table that the gate's renderer never sees.
 Between the begin and end markers the block may hold only the header row, the
-delimiter row and page rows, one per line: no blank, text, comment or bare `|` line,
+delimiter row and page rows, one per line: no blank, text, comment or pipe-only line,
 because GitHub may end the table at one while the gate's renderer continues it. A page
 row may not contain `<` at all, even in a code span, because raw HTML in a cell such as
 an end-of-table tag passes through to the browser and ends the table there. Anywhere
 else in the file, `<` may appear only inside a code span written with one backtick on
-each side, opened and closed on the same line, with no `|` inside, whose opening backtick
+each side, opened and closed on the same line, with no pipe character inside, whose opening backtick
 follows an ASCII space or tab, a `(` or the start of the line and does not touch a web
 address (GitHub links an address together with a backtick that touches it, through any
 other kind of space); not in a code block,

@@ -404,7 +404,14 @@ export function definitionProblems(doc) {
   if (uws >= 0)
     problems.push(`line ${doc.slice(0, uws).split(/\r\n|\r|\n/).length} holds the non-ASCII space U+${doc.charCodeAt(uws).toString(16).toUpperCase().padStart(4, "0")} — the two renderers disagree on where it ends a table cell, so write a plain space`);
   const lines = doc.split(/\r\n|\r|\n/);
+  const beginAt = lines.indexOf(BEGIN), endAt = lines.indexOf(END);
   for (const [i, line] of lines.entries()) {
+    // The inventory is the only table the file may hold, and every table GitHub builds
+    // needs a `|` on its header row. Rounds 24 to 27 each found a container or indent
+    // shape where cmark-gfm builds a table markdown-it does not see; refusing any `|`
+    // outside the inventory block closes that whole class by construction (round 27).
+    if (line.includes("|") && !(beginAt >= 0 && endAt > beginAt && i > beginAt && i < endAt))
+      problems.push(`line ${i + 1} holds a pipe outside the inventory block — GitHub can build a table from it that the gate never counts, so write "pipe" or remove it`);
     // A line that continues a blockquote paragraph without its own `>` is a lazy
     // continuation. markdown-it never checks a lazy line for a table header, while
     // cmark-gfm takes it as one against a following `> -|-` row and splits cells there,
@@ -958,6 +965,10 @@ function selfTest() {
     ...[["> x\na | b\n> -|-\n> `p |`e `</table><select>` z", "a quote"], ["> > x\na | b\n> > -|-\n> > `p |`e `</table><select>` z", "a nested quote"], ["- > x\n  a | b\n  > -|-\n  > `p |`e `</table><select>` z", "a quote in a list item"]].map(([x, where]) =>
       [`a lazy table header in ${where} fails (round 26)`, { ...base, doc: good.replace(BEGIN, `${x}\n\n${BEGIN}`) }, "continues the blockquote on line"]),
     ["a quote followed by quoted lines and a blank line still passes (round 26)", { ...base, doc: good.replace(END, `${END}\n\n> x\n> y\n\nz\n`) }, null],
+    // Round 27: any `|` outside the inventory block, whatever container or indent hides it.
+    ...[["> > x\n> a | b\n> > -|-\n> > `p |`e `</table><select>` z", "a lazy line at the wrong quote depth"], ["x\n    a | b\n-|-\n`p |`e `</table><select>` z", "a header indented 4 spaces"], ["x\n\ta | b\n-|-\n`p |`e `</table><select>` z", "a header indented by a tab"], ["- x\na | b\n    -|-\n  `p |`e `</table><select>` z", "a list item over a 4-space delimiter"], ["> x\n>     a | b\n> -|-\n> `p |`e `</table><select>` z", "a quoted over-indented header"]].map(([x, where]) =>
+      [`${where} that steals a code span fails (round 27)`, { ...base, doc: good.replace(BEGIN, `${x}\n\n${BEGIN}`) }, "holds a pipe outside the inventory block"]),
+    ["a pipe in prose after the inventory fails (round 27)", { ...base, doc: good.replace(END, `${END}\n\nx | y\n`) }, "holds a pipe outside the inventory block"],
     // Round 18: a browser obeys raw HTML that cmark-gfm passes through a cell.
     ...["</table>", "</TABLE>", "</td></tr></table>", "<template>", "`<b>`"].map((x) =>
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),

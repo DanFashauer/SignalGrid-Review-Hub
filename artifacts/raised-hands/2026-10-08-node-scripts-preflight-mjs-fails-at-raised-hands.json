@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-08-node-scripts-preflight-mjs-fails-at-raised-hands",
+  "raisedAt": "2026-10-08T11:30:34.137Z",
+  "origin": "cloud",
+  "doing": "Driving PR #1439 (session refresh active guard) through preflight",
+  "blockedBy": "node scripts/preflight.mjs fails at 'Raised hands' on origin/SignalGrid_Alpha itself: COMPANY_BUILD_PLAN rows 17, 18, 24 are owner-parked 6.8d (past 144h) with no hand raised; checked in a clean worktree of mainline",
+  "need": "Owner or the blocker-dispatcher raises/clears hands for rows 17, 18, 24 (objective-owner:awaiting-owner-row-17/18/24); then preflight can run past this step on any branch",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null
+}

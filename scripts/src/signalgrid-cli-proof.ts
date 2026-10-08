@@ -145,10 +145,10 @@ async function direct(base: string, path: string): Promise<Record<string, unknow
 
 async function main(): Promise<void> {
   console.log("== Proof: signalgrid CLI (read-only by default, fail-closed, dual output) ==");
-  if (!existsSync(serverEntry)) {
-    const b = spawnSync("pnpm", ["--filter", "@workspace/api-server", "run", "build"], { cwd: repoRoot, stdio: "inherit" });
-    if (b.status !== 0) throw new Error("api-server build failed; the proof cannot run");
-  }
+  // Always rebuilt (about two seconds): dist/ is gitignored, so a stale bundle left by an
+  // earlier build would test the CLI against server code this tree no longer has.
+  const b = spawnSync("pnpm", ["--filter", "@workspace/api-server", "run", "build"], { cwd: repoRoot, stdio: ["ignore", "ignore", "inherit"] });
+  if (b.status !== 0 || !existsSync(serverEntry)) throw new Error("api-server build failed; the proof cannot run");
   const apiPort = await freePort();
   const api: ChildProcess = spawn(process.execPath, [serverEntry], {
     env: { ...process.env, PORT: String(apiPort), LOG_LEVEL: "silent", DATABASE_URL: "", NODE_ENV: "development" },
@@ -316,6 +316,12 @@ async function main(): Promise<void> {
       mism.code === 2 && /belongs to "tenant_northwind"/.test(mism.stderr) && seen.join() === "GET /api/v1/context", `exit ${mism.code} ${seen.join(", ")}`);
     const plain = await cli(["connectors"], { ...env, SIGNALGRID_BASE_URL: "http://example.invalid/api" });
     check("a plaintext non-loopback base URL is refused before any request (exit 2)", plain.code === 2, `exit ${plain.code}`);
+    // The public Review Hub never calls a live deployment, https or not (review round 5).
+    for (const remote of ["https://api.example.invalid/api", "https://10.0.0.7/api"]) {
+      const r = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_BASE_URL: remote });
+      check(`a remote https base URL (${remote.split("/")[2]}) is refused before any request (exit 2)`,
+        r.code === 2 && /loopback/.test(String((parse(r.stdout)?.["error"] as Record<string, unknown> | undefined)?.["message"])));
+    }
     for (const [label, body] of [["no verdict", {}], ["a word outside the four", { decision: { decisionId: "dec_x", outcome: "probably_fine" } }]] as const) {
       const liar = await startLiar(body);
       liars.push(liar.server);
@@ -530,6 +536,9 @@ async function main(): Promise<void> {
     }
     const bound = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
     check("explain: a verified snapshot bound to the decision exits 0 (the binding check can pass)", bound.code === 0 && /digest verifies/.test(bound.stdout));
+    const noSnapshotId = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { id: "ev_any", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    check("explain: a decision record that names no evidenceSnapshotId is never reported as verified (exit 1)",
+      noSnapshotId.code === 1 && !/digest verifies/.test(noSnapshotId.stdout));
     const otherDecision = await viaLiar({ decision: { id: "dec_other", outcome: "allow" } }, ["explain", "dec_x"]);
     check("explain refuses a record of a different decision than the one asked for", otherDecision.code === 1 && !/^outcome/m.test(otherDecision.stdout));
 
@@ -623,6 +632,20 @@ async function main(): Promise<void> {
     const lostErr = parse(lostRun.stdout)?.["error"] as Record<string, unknown> | undefined;
     check("a write whose answer is lost exits 3 and names the idempotency key to recover with",
       lostRun.code === 3 && typeof lostErr?.["idempotencyKey"] === "string" && String(lostErr?.["message"]).includes(`--idempotency-key ${String(lostErr?.["idempotencyKey"])}`));
+
+    // Each command's positional grammar is exact: a stray operand refuses before anything
+    // is sent, and above all before a write (review round 5).
+    for (const [label, args] of [
+      ["decide with a stray operand and --allow-write", ["decide", "typo", ...decideArgs.slice(1), "--allow-write"]],
+      ["audit with an operand", ["audit", "extra"]],
+      ["explain with two ids", ["explain", seedId, seedId]],
+      ["connectors runs with no id", ["connectors", "runs"]],
+      ["connectors sync with a stray operand and --allow-write", ["connectors", "sync", connId, "extra", "--allow-write"]],
+    ] as const) {
+      seen.length = 0;
+      const r = await cli([...args], env);
+      check(`${label} exits 2 and sends nothing`, r.code === 2 && /unexpected operand/.test(r.stderr) && seen.length === 0);
+    }
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

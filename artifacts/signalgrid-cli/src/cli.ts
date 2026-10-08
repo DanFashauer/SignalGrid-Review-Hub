@@ -169,12 +169,14 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
  * no snapshot, or a verified snapshot belonging to another decision, is not a verified
  * record of this one (review round 4 on PR #1321).
  */
-function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: unknown): boolean {
+function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: string | null): boolean {
   const snap = ev["evidence"];
   if (!snap || typeof snap !== "object" || Array.isArray(snap)) return false;
   const s = snap as Record<string, unknown>;
   if (s["decisionId"] !== decisionId) return false;
-  if (snapshotId !== undefined && s["id"] !== snapshotId) return false;
+  // `null` only where no decision record was read (`signals`); a record that names no
+  // snapshot id is never a reason to skip the comparison (review round 5).
+  if (snapshotId !== null && (typeof s["id"] !== "string" || s["id"] !== snapshotId)) return false;
   return ev["verified"] === true;
 }
 
@@ -193,7 +195,9 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   if ((d["id"] ?? d["decisionId"]) !== id) {
     throw new CliError("malformed_answer", `GET /v1/decisions/${id} answered with a different decision; nothing is reported.`, EXIT.refused);
   }
-  const verified = boundVerdict(ev, id, d["evidenceSnapshotId"]);
+  // A decision record that names no snapshot cannot have its evidence bound to it.
+  const snapshotId = typeof d["evidenceSnapshotId"] === "string" && d["evidenceSnapshotId"] ? d["evidenceSnapshotId"] : "";
+  const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId);
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
   const signals = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
   return {
@@ -219,7 +223,7 @@ async function signals(cfg: Config, id: string): Promise<Out> {
   if (!Array.isArray(list)) {
     throw new CliError("malformed_answer", "the evidence snapshot named no signalsUsed list; nothing is reported.", EXIT.refused);
   }
-  const verified = boundVerdict(ev, id, undefined);
+  const verified = boundVerdict(ev, id, null);
   const rows = (list as Record<string, unknown>[]).map((s) => [
     str(s["category"]), str(s["subjectType"]), str(s["value"]), str(s["freshness"]), str(s["observedAt"]), str(s["sourceReference"]),
   ]);
@@ -377,7 +381,7 @@ A client of the decision core, never a shortcut around it (DR-040). It prints wh
 
 ## Configure (environment only)
 
-- \`SIGNALGRID_BASE_URL\` — the api-server prefix, e.g. \`http://127.0.0.1:<port>/api\`. https is required except on loopback.
+- \`SIGNALGRID_BASE_URL\` — the api-server prefix, e.g. \`http://127.0.0.1:<port>/api\`. Loopback only (localhost, 127.0.0.1, ::1): a remote or live deployment is refused before any request.
 - \`SIGNALGRID_TENANT\` — the tenant id or slug you expect; the CLI refuses when the token belongs to another.
 - \`SIGNALGRID_TOKEN\` — the bearer. Never pass it as a flag.
 - \`SIGNALGRID_CLI_SESSION\` — optional absolute path OUTSIDE the repository; remembers the last decision id (never the token), written under an exclusive lock.
@@ -434,6 +438,21 @@ function help(): string {
   ].join("\n");
 }
 
+/**
+ * Each command's exact positional grammar, checked before configuration is read or
+ * anything is sent: a stray operand is a typo, and a typo must never ride along on a
+ * write that mints a decision (review round 5 on PR #1321).
+ */
+function checkArity(command: string, rest: string[]): void {
+  const ok =
+    command === "explain" || command === "signals" ? rest.length <= 1
+    : command === "connectors" ? rest.length === 0 || (rest.length === 2 && (rest[0] === "runs" || rest[0] === "sync"))
+    : rest.length === 0;
+  if (!ok) {
+    throw new CliError("usage", `unexpected operand(s) for ${command}: ${rest.join(" ")}. Usage: ${COMMANDS[command]!.usage}; nothing was sent.`, EXIT.usage);
+  }
+}
+
 export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string; exit: number }> {
   // `pnpm run start -- <command>` forwards the `--` itself, and parseArgs would read every
   // flag after it as a positional (silently dropping --json). No command begins with `--`,
@@ -462,6 +481,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     if (v.help || !command) return { stdout: `${help()}\n`, stderr: "", exit: command || v.help ? EXIT.ok : EXIT.usage };
     if (command === "skill") return { stdout: renderSkillMd(), stderr: "", exit: EXIT.ok };
     if (!(command in COMMANDS)) throw new CliError("usage", `unknown command "${command}". Run signalgrid --help.`, EXIT.usage);
+    checkArity(command, rest);
     const getCfg = () => readConfig(env);
     let out: Out;
     switch (command) {

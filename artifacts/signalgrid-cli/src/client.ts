@@ -70,11 +70,14 @@ export function readConfig(env: NodeJS.ProcessEnv): Config {
   } catch {
     throw new CliError("config_invalid", "SIGNALGRID_BASE_URL is not a URL; no request was sent.", EXIT.usage);
   }
-  // A bearer token over plaintext is only tolerable on this machine.
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && LOOPBACK.has(url.hostname))) {
+  // Loopback only, over either scheme. This repository is the public Review Hub: the
+  // CLI drives a local or fixture api-server and never a live deployment (AGENTS.md:
+  // no real vendor/API calls here), so a remote host is refused before the token, or a
+  // write, can leave this machine — https or not (review round 5 on PR #1321).
+  if ((url.protocol !== "http:" && url.protocol !== "https:") || !LOOPBACK.has(url.hostname)) {
     throw new CliError(
       "config_invalid",
-      "SIGNALGRID_BASE_URL must be https:// (plain http:// is accepted for loopback only); no request was sent.",
+      "SIGNALGRID_BASE_URL must be a loopback api-server (localhost, 127.0.0.1 or ::1); a remote or live deployment is refused and no request was sent.",
       EXIT.usage,
     );
   }

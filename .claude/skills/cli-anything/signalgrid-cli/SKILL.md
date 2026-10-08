@@ -13,7 +13,7 @@ A client of the decision core, never a shortcut around it (DR-040). It prints wh
 
 ## Configure (environment only)
 
-- `SIGNALGRID_BASE_URL` — the api-server prefix, e.g. `http://127.0.0.1:<port>/api`. https is required except on loopback.
+- `SIGNALGRID_BASE_URL` — the api-server prefix, e.g. `http://127.0.0.1:<port>/api`. Loopback only (localhost, 127.0.0.1, ::1): a remote or live deployment is refused before any request.
 - `SIGNALGRID_TENANT` — the tenant id or slug you expect; the CLI refuses when the token belongs to another.
 - `SIGNALGRID_TOKEN` — the bearer. Never pass it as a flag.
 - `SIGNALGRID_CLI_SESSION` — optional absolute path OUTSIDE the repository; remembers the last decision id (never the token), written under an exclusive lock.

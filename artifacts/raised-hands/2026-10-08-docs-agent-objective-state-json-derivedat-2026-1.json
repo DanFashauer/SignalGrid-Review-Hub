@@ -11,5 +11,7 @@
   "routedTo": null,
   "covers": [
     "executor-gap:objective-state"
-  ]
+  ],
+  "takenBy": "cloud",
+  "takenAt": "2026-10-08T12:11:05.433Z"
 }

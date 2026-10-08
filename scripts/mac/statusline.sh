@@ -28,10 +28,10 @@
 # can be read it prints nothing.
 #
 # WHAT IT READS: files in the checkout of the session's directory
-# (workspace.current_dir, else cwd, else $PWD). Nothing else — no network, no `gh`,
-# no `pnpm run hands` (which asks GitHub). So the counts are as fresh as the last
-# `git pull`; they are a prompt to run `pnpm run lane:inbox` / `pnpm run hands`,
-# not a replacement for either.
+# (workspace.current_dir, else cwd, else workspace.project_dir, else $PWD). Nothing
+# else: no network, no `gh`, no `pnpm run hands` (which asks GitHub). So the counts
+# are as fresh as the last `git pull`; they are a prompt to run `pnpm run lane:inbox` /
+# `pnpm run hands`, not a replacement for either.
 #
 # WHY python3 -I and not node: it is the faster parser. The same program in each, whole
 # script, 30 runs per round, three rounds on a 4-core box under other sessions' load
@@ -40,6 +40,14 @@
 # at the median and p90 with room; node's p90 reached 150-167 ms under load. It is not a
 # new dependency in practice: on a Mac `git` and `python3` both come from the Xcode
 # command-line tools this repo already needs. Kept to what Python 3.9 (the CLT's) runs.
+#
+# HOW IT IS STARTED: .claude/settings.json runs it through `bash -c 'cd "$(git rev-parse
+# --show-toplevel …)" && exec bash scripts/mac/statusline.sh'`, because a relative
+# `bash scripts/mac/statusline.sh` is resolved from the session's current directory and
+# a session started in (or moved to) a subdirectory would lose the line. This script
+# cannot repair that itself: it is not found yet when the path is wrong. The same entry
+# sets "refreshInterval": 30, so the line is re-run every 30 s as well as on Claude
+# Code's own events; hands and mail change while the session is idle.
 #
 # Turn it off: delete the "statusLine" key from .claude/settings.json, or point your own
 # .claude/settings.local.json "statusLine" at another command. Nothing else depends on it.
@@ -98,7 +106,9 @@ else:
 
 ws = data.get("workspace") if isinstance(data.get("workspace"), dict) else {}
 root = None
-for cand in (ws.get("current_dir"), data.get("cwd"), sys.argv[1] if len(sys.argv) > 1 else None):
+# workspace.current_dir first, then cwd (Claude Code's docs list both; the first is where
+# the session is NOW), then workspace.project_dir (where it was launched), then $PWD.
+for cand in (ws.get("current_dir"), data.get("cwd"), ws.get("project_dir"), sys.argv[1] if len(sys.argv) > 1 else None):
     d = text(cand)
     if d and os.path.isabs(d) and os.path.isdir(d):
         while True:
@@ -178,7 +188,7 @@ status_line() {
 }
 
 self_test() {
-  local self fx repo n_ok n_fail out want
+  local self fx repo n_ok n_fail out want root cmd refresh json from_root from_sub
   case "$0" in /*) self=$0 ;; *) self=$PWD/$0 ;; esac
   n_ok=0
   n_fail=0
@@ -249,6 +259,17 @@ self_test() {
   expect "an unknown status counts as open" "fixture-branch | 2 open hands | 1 unread for mac" "$out"
   rm -f -- "$repo/artifacts/raised-hands/h-typo.json"
 
+  # directory precedence, per Claude Code's status-line docs: workspace.current_dir (where the
+  # session is NOW) beats cwd, which beats workspace.project_dir (where it was launched)
+  out=$(printf '{"workspace":{"current_dir":"%s"},"cwd":"%s"}' "$repo" "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "workspace.current_dir beats cwd (repo vs plain dir)" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+  out=$(printf '{"workspace":{"current_dir":"%s"},"cwd":"%s"}' "$fx/plain" "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "...and the other way round: a current_dir outside a repo wins over a cwd inside one" "" "$out"
+  out=$(printf '{"cwd":"%s","workspace":{"project_dir":"%s"}}' "$repo/sub" "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "cwd beats workspace.project_dir" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+  out=$(printf '{"workspace":{"project_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "workspace.project_dir is used when it is all there is" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+
   # no repo: only what is readable is printed
   out=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
   expect "outside a repo only the model name is printed" "Test Model" "$out"
@@ -259,6 +280,25 @@ self_test() {
   want=$(node -e 'import(process.argv[1]).then((m) => console.log(m.currentLane()))' -- "file://$(dirname "$self")/../lib/lane-identity.mjs" 2>/dev/null)
   out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$self")
   expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "fixture-branch | 1 open hand | 0 unread for ${want:-?}" "$out"
+
+  # the command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c), from the
+  # repository root and from a subdirectory: same line both times, and not empty. A relative
+  # `bash scripts/mac/statusline.sh` printed nothing from a subdirectory.
+  root=${self%/scripts/mac/statusline.sh}
+  if [ -f "$root/.claude/settings.json" ] && [ -d "$root/scripts/mac" ]; then
+    cmd=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["statusLine"]["command"])' "$root/.claude/settings.json" 2>/dev/null)
+    expect "settings.json registers a statusLine command" "yes" "$([ -n "$cmd" ] && echo yes || echo no)"
+    refresh=$(python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1]))["statusLine"].get("refreshInterval"); print(v if isinstance(v, int) and v >= 1 else "none")' "$root/.claude/settings.json" 2>/dev/null)
+    expect "...with a refreshInterval (hands and mail change while the session is idle)" "30" "$refresh"
+    json=$(printf '{"model":{"display_name":"x"},"workspace":{"current_dir":"%s"}}' "$root")
+    from_root=$( cd "$root" && printf '%s' "$json" | sh -c "$cmd" )
+    from_sub=$( cd "$root/scripts/mac" && printf '%s' "$json" | sh -c "$cmd" )
+    expect "the registered command prints the same line from a subdirectory as from the root" "$from_root" "$from_sub"
+    expect "...and that line is not empty" "yes" "$([ -n "$from_root" ] && echo yes || echo no)"
+  else
+    n_fail=$((n_fail + 1))
+    echo "  FAIL — no .claude/settings.json beside this script ($root); the registered command was not tested" >&2
+  fi
 
   echo "statusline self-test: $n_ok passed, $n_fail failed"
   [ "$n_fail" -eq 0 ]

@@ -342,35 +342,87 @@ export function stripYamlComments(text) {
     .join("\n");
 }
 
-// Does `text` INVOKE this head in a run position? Ported from check-gate-census's
-// invokesByName and widened to the path form preflight uses. `head` is a script
-// path (`scripts/x.mjs`) or an npm-script name (`review:invariants`).
-function invokes(head, wantsSelfTest, text) {
+// WHAT COUNTS AS AN INVOCATION (tightened 2026-10-08, Codex on PR #1450).
+//
+// The first matcher credited a gate whenever its path appeared ANYWHERE in the
+// comment-stripped workflow text after whitespace. So `name: scripts/mac/x.sh
+// --self-test` beside `run: echo nope`, or `run: echo node scripts/check-x.mjs`,
+// credited the gate: the real CI step could be deleted while a label or an echo kept
+// this check green, which is the exact failure it exists to catch. Two parts now:
+//
+//   1. WHERE: only the command text of a `run:` step is searched — the inline value
+//      plus the continuation lines of a block scalar (`run: |`) or a wrapped plain
+//      scalar. `name:`, `description:`, `env:`, `with:` and github-script bodies can
+//      never credit a gate.
+//   2. WHICH POSITION: within that text the head must stand where a shell would run
+//      it — the start of a line, or after `;`, `&&`, `||`, `|`, `&` or `(` — after
+//      optional `VAR=value` prefixes, and for a script path also after `bash`, `sh`,
+//      `source` or `.`. Never after `echo`, inside quotes, or inside a comment.
+//
+// A gate invoked some other way (`bash -c "…"`, a wrapper such as `timeout 60`, a
+// `then`/`do` clause) is NOT credited and the parity run says UNWIRED; the fix is to
+// write the step in a plain shape, not to widen this matcher.
+
+/** Pure: the command text of every `run:` step in YAML (comments already stripped),
+ *  one string per step, backslash-continued lines joined. Exported for the self-test. */
+export function runCommands(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^([ \t]*)(-[ \t]+)?run:[ \t]*(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const keyCol = m[1].length + (m[2] ? m[2].length : 0);
+    let inline = m[3].trim();
+    const block = /^[|>][+-]?\d*$/.test(inline);
+    if (block) inline = "";
+    inline = inline.replace(/^(["'])(.*)\1$/, "$2");
+    const body = inline === "" ? [] : [inline];
+    // continuation: blank lines, or lines indented deeper than the `run` key itself
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j];
+      if (l.trim() === "") { body.push(""); continue; }
+      if (l.length - l.trimStart().length <= keyCol) break;
+      body.push(l.trim());
+    }
+    out.push(body.join("\n").replace(/\\\n[ \t]*/g, " "));
+  }
+  return out;
+}
+
+const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
+const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
+const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[A-Za-z]+[ \t]+)*)?(?:\./)?`;
+
+// Does the `run:` command text INVOKE this head? `head` is a script path
+// (`scripts/x.mjs`, `scripts/mac/x.sh`) or an npm-script name (`review:invariants`).
+function invokes(head, wantsSelfTest, commands) {
   const g = escapeRe(head);
+  const text = commands.join("\n");
+  const test = (re) => new RegExp(re, "m").test(text);
   if (head.includes("/")) {
     const base = head.endsWith(".mjs")
-      ? String.raw`node\s+${g}` // node scripts/x.mjs
-      : String.raw`(?:^|\s)${g}`; // a .sh or other path, run directly
-    if (wantsSelfTest) return new RegExp(`${base}(?:\\s+--?[\\w=-]+)*\\s+--self-test\\b`).test(text);
-    return new RegExp(`${base}(?!\\s+--self-test)(?![\\w./-])`).test(text);
+      ? String.raw`${SEP}${ENV}node[ \t]+${g}` // node scripts/x.mjs
+      : String.raw`${SEP}${ENV}${SHELL_RUNNER}${g}`; // bash scripts/x.sh, or the path run directly
+    if (wantsSelfTest) return test(`${base}(?:[ \\t]+--?[\\w=-]+)*[ \\t]+--self-test\\b`);
+    return test(`${base}(?![ \\t]+--self-test)(?![\\w./-])`);
   }
-  // npm-script name: `pnpm|npm|$PNPM run <name>`, flags allowed, run position only.
-  const run = String.raw`(?:\$PNPM|pnpm|npm)(?:\s+--?[\w-]+(?:=\S+)?)*\s+run\s+(?:--?[\w-]+\s+)*${g}(?![\w:-])`;
-  if (wantsSelfTest) return new RegExp(`${run}(?:\\s+--)?\\s+--self-test\\b`).test(text);
-  return new RegExp(`${run}(?!(?:\\s+--)?\\s+--self-test)`).test(text);
+  // npm-script name: `pnpm|npm|$PNPM run <name>`, flags allowed, command position only.
+  const run = String.raw`${SEP}${ENV}(?:\$PNPM|pnpm|npm)(?:[ \t]+--?[\w-]+(?:=\S+)?)*[ \t]+run[ \t]+(?:--?[\w-]+[ \t]+)*${g}(?![\w:-])`;
+  if (wantsSelfTest) return test(`${run}(?:[ \\t]+--)?[ \\t]+--self-test\\b`);
+  return test(`${run}(?!(?:[ \\t]+--)?[ \\t]+--self-test)`);
 }
 
 /** Pure: is `gate` invoked (not merely mentioned) in the workflow text, by path
  *  or by any npm-script alias? Exported so the self-test drives it directly. */
 export function gateWiredIn(gate, rawWorkflowText, aliasMap = new Map()) {
-  const text = stripYamlComments(rawWorkflowText);
+  const commands = runCommands(stripYamlComments(rawWorkflowText));
   const wantsSelfTest = / --self-test$/.test(gate);
   const head = gate.replace(/ --self-test$/, "");
-  if (invokes(head, wantsSelfTest, text)) return true;
+  if (invokes(head, wantsSelfTest, commands)) return true;
   if (head.includes("/")) {
     const file = head.split("/").pop();
     for (const alias of aliasMap.get(file) ?? []) {
-      if (invokes(alias, wantsSelfTest, text)) return true;
+      if (invokes(alias, wantsSelfTest, commands)) return true;
     }
   }
   return false;
@@ -488,6 +540,29 @@ function selfTest() {
     gateWiredIn("scripts/mac/x.sh --self-test", "  - run: bash scripts/mac/x.sh --self-test\n") === true &&
       gateWiredIn("scripts/mac/x.sh", "  - run: bash scripts/mac/x.sh --self-test\n") === false,
   ]);
+  // ── command position (Codex on PR #1450, 2026-10-08): a path that is merely NAMED in a
+  // step is not a step that RUNS it. Each case marked [old: true] returned true under the
+  // anywhere-after-whitespace matcher and must now be false.
+  const SH = "scripts/mac/x.sh --self-test";
+  const MJS = "scripts/check-x.mjs";
+  const wiredSh = (yaml) => gateWiredIn(SH, yaml);
+  const wiredMjs = (yaml, gate = MJS) => gateWiredIn(gate, yaml);
+  checks.push(["[old: true] a `name:` label carrying the script path beside `run: echo nope` does NOT credit it", wiredSh("  - name: scripts/mac/x.sh --self-test\n    run: echo nope\n") === false]);
+  checks.push(["[old: true] `run: echo scripts/mac/x.sh --self-test` does NOT credit it (an echo is not a run)", wiredSh("  - run: echo scripts/mac/x.sh --self-test\n") === false]);
+  checks.push(["[old: true] `run: echo node scripts/check-x.mjs` does NOT credit the node gate", wiredMjs("  - run: echo node scripts/check-x.mjs\n") === false]);
+  checks.push(["[old: true] a `description:` or `with:` body naming `node scripts/check-x.mjs` does NOT credit it", wiredMjs("  - name: n\n    description: node scripts/check-x.mjs\n    with:\n      script: |\n        node scripts/check-x.mjs\n") === false]);
+  checks.push(["[old: true] a quoted mention inside an echo does NOT credit it", wiredMjs('  - run: echo "node scripts/check-x.mjs"\n') === false]);
+  checks.push(["[old: true] `run: echo pnpm run review:invariants` does NOT credit the pnpm alias", gateWiredIn("scripts/review-invariants.mjs", "  - run: echo pnpm run review:invariants\n", new Map([["review-invariants.mjs", ["review:invariants"]]])) === false]);
+  checks.push(["[old: true] a key AFTER the run step (a sibling at the same column) is not part of the step", wiredMjs("  - run: echo hi\n    name: node scripts/check-x.mjs\n") === false]);
+  checks.push(["`run: bash scripts/mac/x.sh --self-test` credits it", wiredSh("  - run: bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["a block scalar `run: |` continuation line credits it", wiredSh("  - run: |\n      bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["`run: cd somewhere && bash scripts/mac/x.sh --self-test` credits it (after `&&`)", wiredSh("  - run: cd somewhere && bash scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["after `;`, `||` and `|` credits it", wiredMjs("  - run: echo a; node scripts/check-x.mjs\n") === true && wiredMjs("  - run: false || node scripts/check-x.mjs\n") === true && wiredMjs("  - run: echo a | node scripts/check-x.mjs\n") === true]);
+  checks.push(["`sh`, `source` and `. ` before a script path credit it, and so does a bare `./` path", wiredSh("  - run: sh scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: source scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: . scripts/mac/x.sh --self-test\n") === true && wiredSh("  - run: ./scripts/mac/x.sh --self-test\n") === true]);
+  checks.push(["`VAR=value` prefixes before the command still credit it", wiredMjs("  - run: FOO=1 BAR=\"a b\" node scripts/check-x.mjs\n") === true]);
+  checks.push(["a `--self-test` flag on a backslash-continued next line still credits the self-test token", wiredMjs("  - run: node scripts/check-x.mjs \\\n      --self-test\n", `${MJS} --self-test`) === true]);
+  checks.push(["a real step after a block scalar that named the script only in an echo does credit the later step", wiredMjs("  - run: |\n      echo node scripts/check-x.mjs\n  - run: node scripts/check-x.mjs\n") === true]);
+  checks.push(["the pnpm alias at a command position credits it", gateWiredIn("scripts/review-invariants.mjs", "  - run: pnpm run review:invariants\n", new Map([["review-invariants.mjs", ["review:invariants"]]])) === true]);
   checks.push([
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",
     gatesIn('  {\n    name: "X",\n    cmd: ["node", "scripts/x.mjs"],\n    selfSkipsWithout: "GITHUB_TOKEN",\n    env: { GH_TOKEN: "" },\n    surface: /red streak\\(s\\) of \\d+\\+ .* REPORTED, not fatal/,\n  },').join() === "scripts/x.mjs",

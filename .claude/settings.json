@@ -17,7 +17,7 @@
       "Read(**/.env)", "Read(**/.env.*)", "Read(~/.ssh/**)"
     ]
   },
-  "statusLine": { "type": "command", "command": "bash scripts/mac/statusline.sh" },
+  "statusLine": { "type": "command", "command": "bash -c 'cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && exec bash scripts/mac/statusline.sh'", "refreshInterval": 30 },
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" } ] }

@@ -168,6 +168,15 @@ app.get("/metrics", (req, res) => {
 
 app.use("/api", router);
 
+// JSON 404 for every root path nothing above claimed. The human surfaces (the demo
+// console at / and /console, /metrics) are registered earlier and keep their own
+// responses; everything else used to fall through to Express's default HTML error
+// page — and under shared-device-gateway, where the console is not mounted, that
+// included GET / itself. Same flat envelope as the /api catch-all.
+app.use((req, res) => {
+  res.status(404).json({ requestId: req.requestId ?? null, error: "not_found", message: "No such route." });
+});
+
 // Structured error translation must be registered after the routes.
 app.use(errorHandler);
 

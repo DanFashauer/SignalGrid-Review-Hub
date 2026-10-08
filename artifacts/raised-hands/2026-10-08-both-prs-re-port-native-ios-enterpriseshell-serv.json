@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-both-prs-re-port-native-ios-enterpriseshell-serv",
+  "raisedAt": "2026-10-08T11:16:06.753Z",
+  "origin": "cloud",
+  "doing": "Landing the Mac lane's #1118 (mac/ios-parity-behavioral) and #1121 (mac/app-workflows-parity), docs/COMPANY_BUILD_PLAN.md row 18 (iOS port parity behavioral, not textual).",
+  "blockedBy": "The golden-rule-1 question row 18's AWAITING OWNER marker (2026-09-29) still names was answered: the owner RULED 2026-09-29 'Grant exception - Swift port catches up to the TS engine', written up as DR-061 in #1246 (docs/agent/LOOP.md, the 2026-09-27 record). What remains owner-only, already asked in the open hand 2026-09-28-1118-changes-decisionengine-swift-behaviour-clau: (a) merging #1246 so the ruling is a decision record, (b) the unsafe-allow repair shape for #1118. The loop's escalation awaiting-owner-row-18 has been open since 2026-10-01T16:57Z (6.8 days at the 2026-10-08 measurement, past the 144h limit); this hand covers it so the stall gate reads the row as raised, and the plan row's marker text is corrected to the remaining blocker in a follow-up to the plan.",
+  "need": "Owner: merge #1246 (DR-061) and pick the #1118 unsafe-allow repair shape in the 2026-09-28 hand; nothing else on row 18 is yours. Then the lane updates row 18's marker and clears THIS covering hand only; the 2026-09-28 hand stays open until its item (d) - #1037's CodeQL alert and its merge-or-close - is resolved as well.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-18"
+  ]
+}

@@ -7,6 +7,9 @@
   "need": "On the cloud box (any session with Bash on it, or an owner-granted Bash permission rule for this one): `cd /home/user/SignalGrid-Review-Hub && git branch -f cloud-work c5db0b64a64257511412305d62dcd21069f47dbd && git checkout cloud-work && git branch -D big side feat orphan claude/x` — afterwards `git status` is clean and `git diff c5db0b64 HEAD` is empty (pre-state recorded at reflog HEAD@{147}). Alternatively a one-line OK that the lane may run exactly those commands.",
   "whoCanUnblock": "owner",
   "domain": "cloud-lane-checkout",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.229Z",
+  "resolvedBy": "cloud",
+  "resolution": "The same container rebuild re-cloned /home/user/SignalGrid-Review-Hub. Measured 2026-10-08T10:28Z: `git branch --list` prints only SignalGrid_Alpha and claude/signalgrid-launch-plan-emxm01, and loop:state prints no 'Local work not on the Review Hub' row. The branches big, side, feat, orphan, claude/x and the +108 cloud-work no longer exist locally; nothing had been pushed."
 }

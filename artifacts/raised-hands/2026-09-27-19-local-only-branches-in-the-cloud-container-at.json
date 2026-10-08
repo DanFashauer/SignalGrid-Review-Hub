@@ -7,6 +7,9 @@
   "need": "One owner call: yes = the cloud lane deletes these 19 local-only branches (nothing is lost; #758's content is on mainline); no = they stay and the seam stays reported.",
   "whoCanUnblock": "owner",
   "domain": "lane",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.300Z",
+  "resolvedBy": "cloud",
+  "resolution": "The container rebuild between 2026-10-05 and 2026-10-08 did not carry the 19 local-only adversarial-fixture branches over. Measured 2026-10-08T10:28Z: `git branch --list` in the shared checkout prints only SignalGrid_Alpha and claude/signalgrid-launch-plan-emxm01. #758's fix is on mainline as e65ea599, so nothing is lost."
 }

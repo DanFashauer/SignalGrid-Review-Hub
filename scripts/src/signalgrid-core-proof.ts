@@ -1965,6 +1965,25 @@ for (const [fromRow, fromSignal, want, why] of [
   check("step-up eviction: the newest decision keeps its answer", answered.getStepUpAnswer(T.operator, stepUpIds[2])?.decisionId === stepUpIds[2]);
   check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredStore.stepUpAnswerCount()})`,
     answeredStore.stepUpAnswerCount() === 1);
+
+  // A RETAINED decision must keep its answer. Bound 2, answers minted out of decision
+  // order (d1 before d0), then a third decision evicts d0 only: a mutant that wipes every
+  // answer on each eviction, or gives answers their own FIFO, turns this red.
+  const retained = SignalGridCore.demo(undefined, { maxDecisionsPerTenant: 2 });
+  const retainedStore = (retained as unknown as { store: MemoryStore }).store;
+  const stale = { identityRef: "nurse.stale", deviceRef: "ipad-ward-03", workflowKey: "clinical-session" };
+  const d0 = retained.evaluate(T.operator, stale);
+  const d1 = retained.evaluate(T.operator, stale);
+  retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "cred_d1" });
+  retained.answerStepUp(T.operator, d0.decisionId, { credentialReference: "cred_d0" });
+  const d2 = retained.evaluate(T.operator, stale);
+  check("step-up eviction (bound 2): the evicted decision's answer is gone", retained.getStepUpAnswer(T.operator, d0.decisionId) === undefined);
+  check("step-up eviction (bound 2): the RETAINED decision keeps its answer", retained.getStepUpAnswer(T.operator, d1.decisionId)?.credentialReference === "cred_d1");
+  check(`step-up eviction (bound 2): the collection holds exactly the retained decision's answer (got ${retainedStore.stepUpAnswerCount()})`,
+    retainedStore.stepUpAnswerCount() === 1 && d2.outcome === "step_up");
+  let secondAccepted = true;
+  try { retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "replay" }); } catch { secondAccepted = false; }
+  check("step-up eviction (bound 2): a second answer for the retained decision is still refused (replay guard intact)", secondAccepted === false);
 }
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────

@@ -88,6 +88,7 @@
 // rather than reporting clean.
 
 import { execFileSync, spawnSync } from "node:child_process";
+import { scratchGit, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -174,7 +175,7 @@ export function countPatterns(files) {
  */
 export function buildHarness(files) {
   const dir = mkdtempSync(join(tmpdir(), "sg-ignore-harness-"));
-  const init = spawnSync("git", ["init", "-q", "."], { cwd: dir, encoding: "utf8" });
+  const init = scratchGit(dir, ["init", "-q", "."]);
   if (init.status !== 0) {
     rmSync(dir, { recursive: true, force: true });
     throw new Error(`could not git init the ignore harness: ${init.stderr || init.stdout}`);
@@ -183,7 +184,7 @@ export function buildHarness(files) {
   // harness cannot inherit anything, and neutralise the user's global excludes.
   writeFileSync(join(dir, ".git", "info", "exclude"), "");
   writeFileSync(join(dir, ".git", "empty-excludes"), "");
-  spawnSync("git", ["config", "core.excludesFile", join(dir, ".git", "empty-excludes")], { cwd: dir });
+  scratchGit(dir, ["config", "core.excludesFile", join(dir, ".git", "empty-excludes")]);
   for (const [rel, text] of files) {
     const target = join(dir, rel);
     mkdirSync(dirname(target), { recursive: true });
@@ -198,11 +199,8 @@ export function buildHarness(files) {
  *   it, or null when nothing did.
  */
 export function checkIgnored(harnessDir, paths, env = undefined) {
-  const r = spawnSync(
-    "git",
-    ["check-ignore", "--no-index", "-v", "--non-matching", "--stdin"],
-    { cwd: harnessDir, encoding: "utf8", input: `${paths.join("\n")}\n`, env: env ? { ...process.env, ...env } : process.env },
-  );
+  // The deliberate GIT_CONFIG_GLOBAL case rides `env`; scratchGitEnv only strips repo-location vars.
+  const r = scratchGit(harnessDir, ["check-ignore", "--no-index", "-v", "--non-matching", "--stdin"], { env, input: `${paths.join("\n")}\n` });
   // 0 = at least one match, 1 = no matches; anything else is git failing.
   if (r.status !== 0 && r.status !== 1) {
     throw new Error(`git check-ignore failed in the harness (status ${r.status}): ${r.stderr || r.stdout}`);
@@ -393,6 +391,7 @@ function run() {
 // ── self-test ────────────────────────────────────────────────────────────────
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const results = [];
   const check = (name, ok, detail = "") => {
     results.push(ok);

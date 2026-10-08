@@ -97,6 +97,7 @@
 // leaves the rest of the repository unopened.
 
 import { execFileSync } from "node:child_process";
+import { scratchGit, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -873,12 +874,13 @@ function makeTempRepo() {
   // per-key F2 check (a key matching zero tracked files is fatal) rather than tripping it.
   w("third_party/vendor/thing.js", "// vendored\n");
   w("attached_assets/raw/pasted.txt", "raw\n");
-  execFileSync("git", ["init", "-q"], { cwd: root });
-  execFileSync("git", ["add", "-A"], { cwd: root });
+  scratchGit(root, ["init", "-q"]);
+  scratchGit(root, ["add", "-A"]);
   return root;
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const controls = [];
   const check = (name, fn) => {
     let ok = false;
@@ -982,7 +984,7 @@ function selfTest() {
     mkdirSync(join(temp, "lib/planted"), { recursive: true });
     writeFileSync(join(temp, "lib/planted/package.json"), '{"name":"planted"}\n');
     writeFileSync(join(temp, "lib/planted/index.ts"), "export const z = 1;\n");
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGit(temp, ["add", "-A"]);
     const pTracked = listTracked(temp);
     const pSurfaces = deriveSurfaces(temp, pTracked);
     const pCover = coverTracked(pSurfaces, pTracked);
@@ -1004,7 +1006,7 @@ function selfTest() {
 
     // PLANT 2 — the surface is gone, the row is not.
     rmSync(join(temp, "lib/planted"), { recursive: true, force: true });
-    execFileSync("git", ["add", "-A"], { cwd: temp });
+    scratchGit(temp, ["add", "-A"]);
     const dTracked = listTracked(temp);
     const dSurfaces = deriveSurfaces(temp, dTracked);
     check("a row whose directory has been DELETED is FATAL", () => {
@@ -1031,7 +1033,7 @@ function selfTest() {
     // the fatal arm runs end to end: the injected checks above pin the decision, this
     // one pins that the decision is reached from real `git log` / `git rev-parse` output.
     const commitHere = (subject) =>
-      execFileSync("git", ["-c", "user.email=selftest@local", "-c", "user.name=selftest", "commit", "-q", "--allow-empty", "-m", subject], { cwd: temp });
+      scratchGit(temp, ["commit", "-q", "--allow-empty", "-m", subject]);
     commitHere("core: something (#4242)");
     commitHere("Merge pull request #4243 from someone/branch");
     check("the REAL probe finds BOTH subject forms GitHub writes — squash \"(#N)\" and merge-commit \"Merge pull request #N\" — and finds neither for an absent number", () => {

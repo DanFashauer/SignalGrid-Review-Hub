@@ -445,7 +445,9 @@ let driftedGeneric = 0;
 let unreachableHeadline = 0;
 let explicitUnreachable = 0;
 // Two COUNTERFACTUALS the docs quote about guards/orderings that no longer exist. They were
-// typed once and went stale by 7x when the raw space grew; counted here so they cannot.
+// typed once and went stale by 7x when the raw space grew. They are counted here, asserted
+// below against an independent closed form, and the doc sentences that quote them are
+// checked against these counts (the figure guard cannot: "counterfactual" exempts them).
 let counterfactualUnknownShrink = 0;
 let raisedLastHeadline = 0;
 const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeof evaluateDeviceManagementHealth> => {
@@ -515,6 +517,39 @@ check(
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 check("exhaustive (raw wire): exactly THREE channel shapes grant — each once per parseable rootCauseEvidence wire spelling — and nothing else", rawEnumRes.noneCount === 3 * ROOT_CAUSE_WIRE.length);
+// The counterfactual counters, asserted three ways. (1) `raisedLastHeadline`: flipping an
+// explicit `managementReachable: false` to true can only land on a granting report, so it
+// equals the raw grant count. (2) `counterfactualUnknownShrink`: an independent closed form
+// over the four raw domains it depends on (the removed guard's two clauses), scaled by the
+// product of the sizes of every other raw domain — it does not use normalizeReport. (3) The
+// doc sentences that quote them carry these exact figures.
+const rawSize = (k: keyof typeof rawDomains): number => rawDomains[k].length;
+const othersProduct = (Object.keys(rawDomains) as (keyof typeof rawDomains)[])
+  .filter((k) => !["mdmCheckInFreshness", "policyDrift", "complianceCoverage", "enrollmentState"].includes(k))
+  .reduce((n, k) => n * rawSize(k), 1);
+let closedShrink = 0;
+for (const mdm of rawDomains.mdmCheckInFreshness) {
+  for (const drift of rawDomains.policyDrift) {
+    for (const cov of rawDomains.complianceCoverage) {
+      for (const enr of rawDomains.enrollmentState) {
+        if ((mdm === "never" && (drift === "on_baseline" || cov === "covered")) || ((enr === "failed" || enr === "retired") && cov === "covered")) {
+          closedShrink += 1;
+        }
+      }
+    }
+  }
+}
+closedShrink *= othersProduct;
+check(
+  `counterfactuals: raised-last headline (${raisedLastHeadline}) equals the grant count, and the removed-guard unknownSignals shrink (${counterfactualUnknownShrink}) equals its independent closed form (${closedShrink})`,
+  raisedLastHeadline === rawEnumRes.noneCount && counterfactualUnknownShrink === closedShrink,
+);
+const catalog = await readFile(resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/INTEGRATION_CATALOG.md"), "utf8");
+const fmt = (n: number): string => n.toLocaleString("en-US");
+check(
+  "counterfactuals: docs/INTEGRATION_CATALOG.md quotes the live shrink figure and the live raised-last headline figure",
+  catalog.includes(`would shrink \`unknownSignals\` on ${fmt(counterfactualUnknownShrink)}`) && catalog.includes(`it headlined **${raisedLastHeadline}** of the raw reports`),
+);
 check(
   `exhaustive (raw wire): across all ${contradictoryCount} self-contradictory reports, NOT ONE cites the disbelieved remediation claim — no REMEDIATION_* reason code and no remediation critical finding (violations=${citedWhileContradictory})`,
   citedWhileContradictory === 0 && contradictoryCount > 0,

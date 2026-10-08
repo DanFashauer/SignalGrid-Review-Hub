@@ -63,7 +63,7 @@ const addRawKey = (t) => t.replace('  "rootCauseEvidence",\n] as const;', '  "ro
 // Every judged field of the interface, read from the real contract: `  field: Type;`.
 const iface = typesSrc.slice(typesSrc.indexOf("export interface NormalizedDeviceManagementHealth"));
 const ifaceBody = iface.slice(0, iface.indexOf("\n}"));
-const JUDGED = [...ifaceBody.matchAll(/^ {2}(\w+)\??:/gm)]
+const JUDGED = [...ifaceBody.matchAll(/^ {2}(?:readonly )?(\w+)\??:/gm)]
   .map((m) => m[1])
   .filter((f) => !["sourceSystem", "deviceId", "source"].includes(f));
 must(JUDGED.length === 9, `expected nine judged fields in the contract, found ${JUDGED.length}: ${JUDGED.join(", ")}`);
@@ -77,7 +77,7 @@ const inIface = (t, fn) => {
   return t.slice(0, a) + fn(t.slice(a, b)) + t.slice(b);
 };
 const addMemberTo = (field) => (t) =>
-  inIface(t, (body) => body.replace(new RegExp(`^( {2}${field}\\??:[^;]+);`, "m"), '$1 | "planted_member";'));
+  inIface(t, (body) => body.replace(new RegExp(`^( {2}(?:readonly )?${field}\\??:[^;]+);`, "m"), '$1 | "planted_member";'));
 const replaceDomainLine = (field, values) => (d) =>
   d.replace(new RegExp(`^ {2}${field}: .*$`, "m"), `  ${field}: ${values},`);
 
@@ -90,6 +90,9 @@ const mutants = [
   ["domains gains a key that is not a judged field (satisfies: extra key)", (t) => t, (d) => d.replace(/^( {2}reportIntegrity: .*)$/m, '$1\n  plantedKey: ["x"],')],
   ["tuple cross-wired to another field's values (rootCauseEvidence <- mdmCheckInFreshness)", (t) => t, replaceDomainLine("rootCauseEvidence", '["fresh", "stale", "never", "unknown"]')],
 ];
+// The mutant list itself is floored: the per-field member mutants must cover every judged field.
+must(mutants.filter(([n]) => n.startsWith("new union member")).length === JUDGED.length, "a member mutant must be planted for every judged field");
+must(mutants.length === JUDGED.length + 6, `expected ${JUDGED.length + 6} mutants, have ${mutants.length} (a mutant was removed or added without updating this floor)`);
 for (const [name, mt, md] of mutants) {
   must(mt(typesSrc) !== typesSrc || md(readFileSync(DOMAINS, "utf8")) !== readFileSync(DOMAINS, "utf8"), `mutant "${name}" did not apply (the contract text moved; update this gate)`);
   const r = compile(mt, md);
@@ -103,9 +106,10 @@ const proof = readFileSync(PROOF, "utf8");
 const bound = (src) =>
   /import \{[^}]*\bdomains\b[^}]*\} from "\.\/lib\/dmh-domains\.js"/.test(src) &&
   /import \{[^}]*\brawDomains\b[^}]*\} from "\.\/lib\/dmh-domains\.js"/.test(src) &&
-  !/^(?:export )?(?:const|let|var) (?:domains|rawDomains)\b/m.test(src);
+  !/^\s*(?:export )?(?:const|let|var) (?:domains|rawDomains)\b/m.test(src);
 must(bound(proof), "the proof must import `domains` and `rawDomains` from ./lib/dmh-domains.js and declare no local copy");
+must(!bound(proof + "\nif (process.argv.length < 0) {\n  const domains = {};\n}\n"), "binding check must reject an INDENTED local `domains` copy (self-test)");
 must(!bound(proof + "\nconst domains = {};\n"), "binding check must reject a local `domains` copy (self-test)");
 must(!bound(proof.replace('from "./lib/dmh-domains.js"', 'from "./lib/other.js"')), "binding check must reject a proof that stops importing the module (self-test)");
-console.log("ok   proof is bound to the checked module (2 binding mutants rejected)");
+console.log("ok   proof is bound to the checked module (3 binding mutants rejected)");
 console.log(`dmh-domains exhaustiveness self-test: ${mutants.length}/${mutants.length} mutants rejected`);

@@ -1960,11 +1960,14 @@ for (const [fromRow, fromSignal, want, why] of [
     }
   }
   check("step-up eviction: three step_up decisions were each answered (floor, so the checks below measure real rows)", stepUpIds.length === 3);
+  // Count BEFORE any read: a getStepUpAnswer that lazily dropped dead rows would otherwise
+  // empty the map before it is measured, and a store with no eviction delete would pass.
+  const answeredCount = answeredStore.stepUpAnswerCount();
   check("step-up eviction: an answer is unreadable once its decision has been evicted",
     answered.getStepUpAnswer(T.operator, stepUpIds[0]) === undefined && answered.getStepUpAnswer(T.operator, stepUpIds[1]) === undefined);
   check("step-up eviction: the newest decision keeps its answer", answered.getStepUpAnswer(T.operator, stepUpIds[2])?.decisionId === stepUpIds[2]);
-  check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredStore.stepUpAnswerCount()})`,
-    answeredStore.stepUpAnswerCount() === 1);
+  check(`step-up eviction: the stepUpAnswers collection itself holds exactly 1 answer, not 3 (got ${answeredCount})`,
+    answeredCount === 1);
 
   // A RETAINED decision must keep its answer. Bound 2, answers minted out of decision
   // order (d1 before d0), then a third decision evicts d0 only: a mutant that wipes every
@@ -1977,10 +1980,11 @@ for (const [fromRow, fromSignal, want, why] of [
   retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "cred_d1" });
   retained.answerStepUp(T.operator, d0.decisionId, { credentialReference: "cred_d0" });
   const d2 = retained.evaluate(T.operator, stale);
+  const retainedCount = retainedStore.stepUpAnswerCount(); // before any read, as above
   check("step-up eviction (bound 2): the evicted decision's answer is gone", retained.getStepUpAnswer(T.operator, d0.decisionId) === undefined);
   check("step-up eviction (bound 2): the RETAINED decision keeps its answer", retained.getStepUpAnswer(T.operator, d1.decisionId)?.credentialReference === "cred_d1");
-  check(`step-up eviction (bound 2): the collection holds exactly the retained decision's answer (got ${retainedStore.stepUpAnswerCount()})`,
-    retainedStore.stepUpAnswerCount() === 1 && d2.outcome === "step_up");
+  check(`step-up eviction (bound 2): the collection holds exactly the retained decision's answer (got ${retainedCount})`,
+    retainedCount === 1 && d2.outcome === "step_up");
   let secondAccepted = true;
   try { retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "replay" }); } catch { secondAccepted = false; }
   check("step-up eviction (bound 2): a second answer for the retained decision is still refused (replay guard intact)", secondAccepted === false);
@@ -1996,11 +2000,12 @@ for (const [fromRow, fromSignal, want, why] of [
   putAnswered("tenant_atlas", "dec_atlas_1");
   putAnswered("tenant_northwind", "dec_nw_1");
   putAnswered("tenant_northwind", "dec_nw_2"); // evicts dec_nw_1 only
+  const tenantCount = tenantStore.stepUpAnswerCount(); // before any read
   check("step-up eviction (tenants): one tenant's eviction removes only its own answer",
     tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_1") === undefined
       && tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_2")?.credentialReference === "cred_dec_nw_2");
-  check(`step-up eviction (tenants): another tenant's answer survives (collection holds 2, got ${tenantStore.stepUpAnswerCount()})`,
-    tenantStore.getStepUpAnswer("tenant_atlas", "dec_atlas_1")?.credentialReference === "cred_dec_atlas_1" && tenantStore.stepUpAnswerCount() === 2);
+  check(`step-up eviction (tenants): another tenant's answer survives (collection holds 2, got ${tenantCount})`,
+    tenantStore.getStepUpAnswer("tenant_atlas", "dec_atlas_1")?.credentialReference === "cred_dec_atlas_1" && tenantCount === 2);
 }
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────

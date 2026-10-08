@@ -354,7 +354,8 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       if (polls.has(f.rel)) continue;
       // A timer driving a refetch polls: setInterval, or a setTimeout loop that re-arms itself.
       // So does a timer invalidating or resetting queries: TanStack refetches the active ones.
-      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\b(?:refetch\w*|invalidateQueries|resetQueries)\s*\(/.test(f.code);
+      // `setInterval(refetch, 5000)` passes the function itself, so no `(` follows it.
+      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\b(?:refetch\w*|invalidateQueries|resetQueries)\b/.test(f.code);
       if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
         // A component renders its own live region, so it does not carry polling
@@ -623,7 +624,18 @@ export function hasNonBlankLabel(tag, src = "") {
   // aria-labelledby names the button only through elements that exist: every
   // literal id it lists must be declared in the same file (`id="x"`). An id the
   // gate cannot see, or a computed one, names nothing it can verify — fail closed.
-  const resolves = (ids) => ids.trim().split(/\s+/).every((id) => new RegExp(`(?<![\\w-])id\\s*=\\s*(?:["']${escapeRegExp(id)}["']|\\{\\s*["'\`]${escapeRegExp(id)}["'\`]\\s*\\})`).test(src));
+  // …and each target must itself contribute a name: its own non-blank label, or
+  // text that is not blank and not a lone glyph. An empty <span id="x" /> names nothing.
+  const resolves = (ids) => ids.trim().split(/\s+/).every((id) => {
+    const at = new RegExp(`<([A-Za-z][\\w.]*)\\b[^>]*?(?<![\\w-])id\\s*=\\s*(?:["']${escapeRegExp(id)}["']|\\{\\s*["'\`]${escapeRegExp(id)}["'\`]\\s*\\})`).exec(src);
+    if (!at) return false;
+    const tag = openingTag(src, at.index);
+    if (tag === null) return false;
+    if (/(?<![\w-])aria-label\s*=\s*["'][^"']*\S[^"']*["']/.test(tag)) return true;
+    if (tag.trimEnd().endsWith("/")) return false;
+    const text = buttonText(src, at.index + tag.length, at[1]);
+    return text !== null && !isBlank(text) && !isGlyphOnly(text);
+  });
   // `(?<![\w-])` so `data-aria-label` is not read as a label.
   for (const m of tag.matchAll(/(?<![\w-])aria-label(ledby)?\s*=\s*(?:(["'])([\s\S]*?)\2|\{\s*(["'`])((?:\\[\s\S]|(?!\4)[^\\])*)\4\s*\}|\{)/g)) {
     const byRef = m[1] !== undefined;
@@ -814,16 +826,33 @@ export function checkReducedMotion(rel, raw) {
   return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
+/**
+ * Every artifacts/signalgrid-* web package (a vite config, or .tsx under src/),
+ * found WITHOUT looking at its stylesheet: a new package whose stylesheet is
+ * missing or named differently must fail here, not drop out of the scan.
+ */
+export function webTreeCandidates(base, dirs, has) {
+  const trees = [];
+  const missing = [];
+  for (const d of dirs.filter((x) => x.startsWith("signalgrid-"))) {
+    const isWeb = has(join(base, d, "vite.config.ts")) || has(join(base, d, "vite.config.js")) || has(join(base, d, "vite.config.mts")) || has(join(base, d, "src"), ".tsx");
+    if (!isWeb) continue;
+    if (has(join(base, d, "src", "index.css"))) trees.push(join(base, d));
+    else missing.push(d);
+  }
+  return { trees, missing };
+}
+
 function webTrees() {
   const base = join(repo, "artifacts");
-  return readdirSync(base)
-    .filter((d) => d.startsWith("signalgrid-") && existsSync(join(base, d, "src", "index.css")))
-    .map((d) => join(base, d));
+  const has = (p, ext) => (ext ? existsSync(p) && sourceFiles(p).some((f) => f.endsWith(ext)) : existsSync(p));
+  return webTreeCandidates(base, readdirSync(base), has);
 }
 
 function run() {
   const failures = [];
-  const trees = webTrees();
+  const { trees, missing } = webTrees();
+  for (const d of missing) failures.push(`artifacts/${d}: a web package with no src/index.css — its reduced-motion rule, live regions and buttons are unchecked (failing closed)`);
   if (trees.length < TREE_FLOOR) {
     failures.push(`found ${trees.length} web trees with src/index.css, floor is ${TREE_FLOOR} — the scan lost its inputs`);
   }
@@ -1139,6 +1168,22 @@ function selfTest() {
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { color: red; } .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; } .x { transition: none; scroll-behavior: auto; } }").length === 1 &&
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+    ["a refetch passed to a timer as its callback polls",
+      ["setInterval(refetch, 5000)", "setTimeout(function tick() { refetchAll(); setTimeout(tick, 5000); }, 5000)", "const id = setInterval(refetchFeed, 3000)"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
+    ["an aria-labelledby target must itself carry a name",
+      checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<span id="close">×</span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<span id="close" aria-label="Close dialog" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 0 &&
+      checkIconButtons("x.tsx", '<span id="close">Close</span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 0],
+    ["a web package without src/index.css fails instead of dropping out of the scan",
+      (() => {
+        const files = new Set(["b/signalgrid-a/vite.config.ts", "b/signalgrid-a/src/index.css", "b/signalgrid-new/vite.config.ts", "b/signalgrid-new/src/styles.css", "b/signalgrid-lib/README.md"]);
+        const has = (p, ext) => (ext ? p === "b/signalgrid-x/src" : files.has(p));
+        const r = webTreeCandidates("b", ["signalgrid-a", "signalgrid-new", "signalgrid-lib", "other"], has);
+        return r.trees.length === 1 && r.missing.length === 1 && r.missing[0] === "signalgrid-new";
+      })()],
     ["an audit-event count names the newest event",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events. Hash chain intact.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],

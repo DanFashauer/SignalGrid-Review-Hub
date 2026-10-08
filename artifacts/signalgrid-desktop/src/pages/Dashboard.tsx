@@ -7,8 +7,8 @@ import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 
 export default function DashboardPage() {
   const reduceMotion = usePrefersReducedMotion();
-  const { data: metrics, isLoading } = useGetDashboardMetrics({ window: "24h" });
-  const { data: series } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
+  const { data: metrics, isLoading, isError: metricsError } = useGetDashboardMetrics({ window: "24h" });
+  const { data: series, isError: seriesError } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
   const { data: decisions, isError: decisionsError } = useListDecisions({ limit: 10 });
   const { data: signals, isError: signalsError } = useListLatestSignals({ limit: 8 });
 
@@ -32,7 +32,7 @@ export default function DashboardPage() {
           // one assertive announcement per outage, not one per region.
           decisionsError
             ? "Decisions could not be loaded."
-            : ""
+            : metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : ""
         }
       />
       <div>

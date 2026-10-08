@@ -6,7 +6,8 @@
 // (requires the api-server to be built; preflight builds it beforehand.)
 
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -133,17 +134,31 @@ function inventoryCases(m: MetricsModule): string[] {
     { kind: "wfm-shift", status: "healthy", count: -3 },
     { kind: "dockbridge-custody", status: "healthy", count: Number.POSITIVE_INFINITY },
     { kind: "wfm-shift", status: "healthy", count: "7" },
+    { kind: "wfm-shift", status: "healthy", count: null },
+    { kind: "wfm-shift", status: "healthy", count: undefined },
+    { kind: "wfm-shift", status: "healthy", count: 1.5 },
   ]);
   m.observeEvidence([
     { freshness: "fresh", count: Number.NaN },
     { freshness: "fresh", count: -1 },
   ]);
   t = m.renderMetrics();
-  want("illegible connector counts fold to kind=\"unknown\",status=\"unknown\" as one item each",
-    conn(t, "unknown", "unknown") === 4);
+  want("illegible connector counts (NaN, negative, Infinity, string, null, undefined, fractional) fold to kind=\"unknown\",status=\"unknown\" as one item each",
+    conn(t, "unknown", "unknown") === 7);
   want("illegible counts land on NO healthy or fresh series", noAffirmative(t));
   want("illegible evidence counts fold to freshness=\"unknown\" as one item each", freshSeries(t, "unknown") === 2);
   want("no NaN, Infinity or negative value reaches the exposition", legibleSamples(t));
+
+  // Two huge but individually legible counts must not sum to Infinity on an
+  // affirmative series.
+  m.observeConnectors([
+    { kind: "wfm-shift", status: "healthy", count: Number.MAX_VALUE },
+    { kind: "wfm-shift", status: "healthy", count: Number.MAX_VALUE },
+  ]);
+  m.observeEvidence([]);
+  t = m.renderMetrics();
+  want("counts too large to add exactly never overflow a healthy series to Infinity",
+    legibleSamples(t) && conn(t, "wfm-shift", "healthy") === 0);
 
   m.observeConnectors([]);
   m.observeEvidence([]);
@@ -187,7 +202,7 @@ const MUTANTS: Array<{ name: string; from: string; to: string }> = [
   },
   {
     name: "accept an illegible count as given",
-    from: "typeof count === \"number\" && Number.isFinite(count) && count >= 0 ? count : null;",
+    from: "typeof count === \"number\" && Number.isSafeInteger(count) && count >= 0 ? count : null;",
     to: "typeof count === \"number\" ? count : null;",
   },
 ];
@@ -332,9 +347,122 @@ async function coreInventoryProof(m: MetricsModule): Promise<void> {
   }
 }
 
+// ── /metrics RE-READS held state on every scrape (plan row 33) ────────────────
+//
+// Every case above drives the exporter or the core directly, and the black-box
+// suite cannot change connector state (demo mode's only state-changing route
+// re-syncs to identical values). So a handler that refreshed the gauges once at
+// boot, or AFTER rendering, would freeze them and pass everything else. This
+// serves the real app.ts in process, scrapes, degrades a held connector and
+// stales a held signal, scrapes again, and requires the series to move.
+const appSource = resolve(repoRoot, "artifacts/api-server/src/app.ts");
+
+/** Serve the app module at `appUrl` in process and run the scrape-moves cases.
+ *  Returns the names of the cases that FAILED. */
+async function scrapeMovesCases(appUrl: string): Promise<string[]> {
+  const failed: string[] = [];
+  const want = (name: string, ok: boolean) => { if (!ok) failed.push(name); };
+  const appModule = (await import(appUrl)) as {
+    default: { listen(port: number, host: string, cb: () => void): import("node:http").Server };
+  };
+  const coreModule = (await import(pathToFileURL(resolve(repoRoot, "artifacts/api-server/src/lib/core.ts")).href)) as {
+    core: { store: StoreLike };
+  };
+  const store = coreModule.core.store;
+  const server = await new Promise<import("node:http").Server>((done) => {
+    const s = appModule.default.listen(0, "127.0.0.1", () => done(s));
+  });
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const scrape = async () => (await fetch(`http://127.0.0.1:${port}/metrics`)).text();
+    const healthy = [...store.connectors.values()].find((c) => c.status === "healthy");
+    const fresh = [...store.signals.values()].find((x) => x.freshness === "fresh");
+    want("the served core holds a healthy connector and a fresh signal to change", Boolean(healthy && fresh));
+    if (!healthy || !fresh) return failed;
+    const kind = String(healthy.kind);
+    // A warm-up scrape first, so `before` is measured on a scrape that already
+    // follows one: a handler that refreshes AFTER rendering then serves the
+    // pre-change state on `after`, instead of leftover state from an earlier run
+    // happening to equal the expected movement.
+    await scrape();
+    const before = await scrape();
+    store.putConnector({ ...healthy, status: "degraded" });
+    store.putSignal({ ...fresh, freshness: "stale" });
+    const after = await scrape();
+    const moved = (series: number | null, prior: number | null, by: number) =>
+      series !== null && prior !== null && series === prior + by;
+    want("a connector that degrades after an earlier scrape moves healthy -1 and degraded +1",
+      moved(conn(after, kind, "healthy"), conn(before, kind, "healthy"), -1) &&
+        moved(conn(after, kind, "degraded"), conn(before, kind, "degraded"), 1));
+    want("a signal that goes stale after an earlier scrape moves fresh -1 and stale +1",
+      moved(freshSeries(after, "fresh"), freshSeries(before, "fresh"), -1) &&
+        moved(freshSeries(after, "stale"), freshSeries(before, "stale"), 1));
+  } finally {
+    await new Promise<void>((done) => server.close(() => done()));
+  }
+  return failed;
+}
+
+const HANDLER_REFRESH = `  refreshInventoryGauges(core);
+  res.type("text/plain; version=0.0.4").send(renderMetrics());`;
+const APP_MUTANTS: Array<{ name: string; to: string }> = [
+  {
+    name: "refresh once at boot, not per scrape",
+    to: `  res.type("text/plain; version=0.0.4").send(renderMetrics());`,
+  },
+  {
+    name: "refresh after rendering",
+    to: `  const body = renderMetrics();
+  refreshInventoryGauges(core);
+  res.type("text/plain; version=0.0.4").send(body);`,
+  },
+];
+
+async function scrapeTracksHeldState(): Promise<void> {
+  const realFailures = await scrapeMovesCases(pathToFileURL(appSource).href);
+  check("scrape tracks state: /metrics re-reads held state on every scrape" +
+    (realFailures.length ? ` (failed: ${realFailures.join("; ")})` : ""), realFailures.length === 0);
+
+  // The mutant copies live outside the package, so every specifier is rewritten
+  // to the file app.ts itself resolves to: the copies share app.ts's core and
+  // metrics module instances, and differ only in the handler.
+  const source = readFileSync(appSource, "utf8");
+  const requireFromApp = createRequire(appSource);
+  const appDir = dirname(appSource);
+  const rewired = source.replace(/from "([^"]+)"/g, (_all, spec: string) => {
+    let target: string;
+    if (spec.startsWith(".")) {
+      const base = resolve(appDir, spec);
+      target = existsSync(`${base}.ts`) ? `${base}.ts` : join(base, "index.ts");
+    } else {
+      target = requireFromApp.resolve(spec);
+    }
+    return `from ${JSON.stringify(pathToFileURL(target).href)}`;
+  });
+  const dir = mkdtempSync(join(tmpdir(), "sg-app-mutant-"));
+  try {
+    for (const [i, mutant] of APP_MUTANTS.entries()) {
+      const hits = rewired.split(HANDLER_REFRESH).length - 1;
+      check(`app mutant "${mutant.name}": the handler's refresh-then-render text is present exactly once`, hits === 1);
+      if (hits !== 1) continue;
+      let planted = rewired.replace(HANDLER_REFRESH, mutant.to);
+      if (i === 0) planted += "\nrefreshInventoryGauges(core);\n";
+      const file = join(dir, `app-mutant-${i}.mts`);
+      writeFileSync(file, planted);
+      const red = await scrapeMovesCases(pathToFileURL(file).href);
+      console.log(`  app mutant "${mutant.name}": ${red.length} case(s) red`);
+      check(`app mutant "${mutant.name}": turns the scrape-moves cases red`, red.length > 0);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await inProcessInventoryProof();
   await coreInventoryProof((await import(pathToFileURL(metricsSource).href)) as MetricsModule);
+  await scrapeTracksHeldState();
 
   const server = spawn(process.execPath, ["--enable-source-maps", serverEntry], {
     env: { ...process.env, PORT: String(PORT), DATABASE_URL: "" },

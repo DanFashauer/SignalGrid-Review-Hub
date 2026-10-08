@@ -237,19 +237,20 @@ export const FRESHNESS_LABELS = withUnknown(FRESHNESS_VALUES);
 const inVocabulary = (vocabulary: readonly string[], value: unknown): string =>
   typeof value === "string" && vocabulary.includes(value) ? value : UNKNOWN_LABEL;
 
-/** A count that is not a non-negative finite number is itself illegible: it is
+/** A count that is not a non-negative safe integer is itself illegible: it is
  *  folded into the `unknown` series as ONE item, never dropped and never added
- *  to an affirmative series. */
+ *  to an affirmative series. Safe integers also keep any sum of counts finite, so
+ *  no series can overflow to Infinity. */
 const legibleCount = (count: unknown): number | null =>
-  typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : null;
+  typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : null;
 
 const connectorsGauge = new Gauge(
   "signalgrid_connectors",
-  "Connectors held by this process, by kind and status, as of each connector's last completed sync. Only status=healthy is affirmative; unknown counts as not healthy.",
+  "Connectors held by this process, by kind and status, as of each connector's last completed sync; a source that stops answering leaves this at its last value. Only status=healthy is affirmative; unknown counts as not healthy.",
 );
 const evidenceGauge = new Gauge(
   "signalgrid_evidence_signals",
-  "Normalized signals held by this process, by freshness as stamped at ingest. Only freshness=fresh is affirmative; unknown counts as not fresh.",
+  "Normalized signals held by this process, by freshness as stamped at ingest; a source that stops answering leaves this at its last value. Only freshness=fresh is affirmative; unknown counts as not fresh.",
 );
 
 /** Write EVERY kind x status series from the core's connector inventory. */

@@ -78,7 +78,9 @@ a re-sync does. How they keep the four rules:
   the HELP strings avoid it.
 - **Fail-closed.** `healthy` and `fresh` are the only affirmative values. Any
   value outside the vocabulary, and any count that is not a non-negative
-  number, folds into `unknown`, which reads as not healthy and not fresh. A
+  safe integer, folds into `unknown`, which reads as not healthy and not
+  fresh (safe integers also keep every sum finite, so no series overflows
+  to Infinity). A
   connector of an unrecognised kind cannot vouch for itself: a `healthy`
   status on it is demoted to `unknown`, so no `kind="unknown"` series reads
   healthy (a `degraded` or `never_synced` status keeps its label).
@@ -89,8 +91,9 @@ a re-sync does. How they keep the four rules:
   scrape would hide the outage the metric exists to show.
   `proof:observability` pins these cases in process: an out-of-vocabulary
   status, kind and freshness; an unrecognised kind reporting `healthy`;
-  illegible counts (NaN, negative, Infinity, a string), which must reach no
-  affirmative series and print no NaN, Infinity or negative; an empty
+  illegible counts (NaN, negative, Infinity, a string, null, undefined, a
+  fraction), which must reach no affirmative series and print no NaN,
+  Infinity or negative; counts too large to add exactly; an empty
   inventory; a throwing read. It plants five mutants of `metrics.ts` (fold
   `unknown` into the affirmative value; skip the zero-fill; stop folding an
   out-of-vocabulary kind; let an unrecognised kind keep `healthy`; accept an
@@ -102,8 +105,15 @@ a re-sync does. How they keep the four rules:
   the exported series to match. Three mutants of `store.ts` (report every
   signal fresh; report every connector healthy; drop the connectors that are
   not healthy) each turn it red. `api.test.mjs` also requires the seeded
-  stale and missing evidence to reach the gauge, and is the only check that
-  pins the `/metrics` handler's call into the core.
+  stale and missing evidence to reach the gauge.
+- **`/metrics` re-reads held state on every scrape.** The black-box suite
+  cannot see this, because demo mode has no route that changes connector
+  state. The proof serves the real `app.ts` in process, scrapes, degrades a
+  held connector and stales a held signal, scrapes again, and requires both
+  series to move by exactly one. Two mutants of the handler (refresh once at
+  boot; refresh after rendering) are loaded from a temp copy and each turns
+  it red. A cache or TTL added to the scrape later must keep this case
+  green.
 - **As of the last completed sync, and not an outage detector.**
   `freshness` is the value stamped on each signal when it was ingested, and
   a connector's `status` changes only when a sync completes. Both gauges

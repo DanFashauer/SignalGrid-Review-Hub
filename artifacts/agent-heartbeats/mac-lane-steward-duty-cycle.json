@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-08T12:11:01.284Z",
-  "result": "11:25Z cycle quiet (no new or moved mac/* branch, no sim result, no mail to ack; Mac tick 11:15Z; live-evidence 2026-10-04, refresh ask unread 55m then); keepalive delivered with the 12:10Z forward-build batch. Mac PRs #1416 #1417 #1424 still conflicted (Mac re-merges). Owner not escalated."
+  "firedAt": "2026-10-08T14:14:28.494Z",
+  "result": "13:25Z cycle quiet (no new or moved mac/* branch, no sim result, no mail to ack; Mac tick 13:08Z then 13:4xZ; live-evidence 2026-10-04 with the refresh ask still unread by the Mac; manifest --check clean); keepalive delivered with the 14:11Z forward-build batch, two hours after the 12:11Z heartbeat. Mac PRs #1416 #1417 #1424 still conflicted (Mac re-merges). Owner not escalated."
 }

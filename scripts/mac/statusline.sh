@@ -1,0 +1,435 @@
+#!/usr/bin/env bash
+# =============================================================================
+# SignalGrid — a one-line Claude Code status line for the lane session.
+#
+#   bash scripts/mac/statusline.sh              # reads Claude Code's status JSON on stdin
+#   bash scripts/mac/statusline.sh --self-test  # builds a fixture tree, asserts the counts
+#
+# It prints ONE line, built only from files already on disk:
+#
+#   <branch> | <N> open hands | <M> unread for <lane> | <model display name>
+#
+#   branch    git plumbing only (`git symbolic-ref`, `git rev-parse --short` when
+#             detached). No fetch, no status, no network.
+#   hands     artifacts/raised-hands/*.json whose status is not "resolved" — the same
+#             rule scripts/raised-hands.mjs applies to decide a hand is still open.
+#   unread    artifacts/lane-messages/*.json addressed to THIS lane with no ack in
+#             artifacts/lane-messages/acks/ written by that lane (an ack from anyone
+#             else does not close a message — scripts/lane-message.mjs refuses it too).
+#             Every message must have the shape that script's audit demands (id equal to
+#             its filename, from and to two different real lanes, a subject, a body); ONE
+#             record that does not (a misspelled `to`, an unknown lane, no `from`) leaves
+#             the whole part out rather than silently dropping that record from the count.
+#   lane      SIGNALGRID_LANE if it is mac or cloud, else mac on macOS and cloud
+#             everywhere else — scripts/lib/lane-identity.mjs's rule; the self-test
+#             compares the two so this copy cannot drift.
+#   model     model.display_name from the status JSON, when Claude Code sends it.
+#
+# A part that cannot be read is LEFT OUT, never replaced by a placeholder: no repo,
+# no directory, a file that does not parse. A count that might be too low is not
+# shown (golden rule 2: unknown never reads as "nothing waiting"); a 0 is printed
+# only when the directory WAS read and nothing in it is waiting. When nothing at all
+# can be read it prints nothing.
+#
+# WHAT IT READS: files in the checkout of the session's directory
+# (workspace.current_dir, else cwd, else workspace.project_dir, else $PWD). Nothing
+# else: no network, no `gh`, no `pnpm run hands` (which asks GitHub). So the counts
+# are as fresh as the last `git pull`; they are a prompt to run `pnpm run lane:inbox` /
+# `pnpm run hands`, not a replacement for either.
+#
+# WHY python3 -I and not node: it is the faster parser. The same program in each, whole
+# script, 30 runs per round, three rounds on a 4-core box under other sessions' load
+# (load average 12-14): python3 median 32 / 72 / 74 ms, node median 45 / 123 / 127 ms.
+# Bare interpreter start is 20 ms against 55 ms. The budget is 150 ms; python3 holds it
+# at the median and p90 with room; node's p90 reached 150-167 ms under load. It is not a
+# new dependency in practice: on a Mac `git` and `python3` both come from the Xcode
+# command-line tools this repo already needs. Kept to what Python 3.9 (the CLT's) runs.
+#
+# HOW IT IS STARTED: .claude/settings.json runs a short `bash -c` wrapper that reads the
+# status JSON once, takes workspace.project_dir (where Claude Code was LAUNCHED), asks
+# `git -C <project_dir> rev-parse --show-toplevel` for the repository root, and feeds the
+# same JSON to that root's scripts/mac/statusline.sh. It never uses the process cwd to
+# find the executable: a relative path lost the line from a subdirectory, and a
+# `git rev-parse` from the cwd ran whatever repository the session had wandered into.
+# No project_dir, a relative one, a directory that is not in a repository, or no such
+# file at the root: it prints nothing and exits 0. The launch directory's own file is
+# the one that runs (the same trust as that tree's settings and hooks, which Claude Code
+# loaded when it started). The status-line docs name no environment variable for this
+# (COLUMNS and LINES only), so the JSON field is the anchor. The same entry sets
+# "refreshInterval": 30, so the line is re-run every 30 s as well as on Claude Code's own
+# events; hands and mail change while the session is idle.
+#
+# Turn it off: delete the "statusLine" key from .claude/settings.json, or point your own
+# .claude/settings.local.json "statusLine" at another command. Nothing else depends on it.
+#
+# bash 3.2 (the only bash on a stock Mac): no arrays are used; `read -d ''` and
+# `[ ]` only; every variable is defaulted under `set -u`.
+# =============================================================================
+set -u
+
+IFS= read -r -d '' STATUS_PY <<'PYEOF'
+import json
+import os
+import subprocess
+import sys
+
+
+def clean(s):
+    return "".join(c for c in str(s) if ord(c) >= 32 and not 0x7F <= ord(c) <= 0x9F).strip()
+
+
+def text(v):
+    return v if isinstance(v, str) and v.strip() != "" else None
+
+
+def json_files(d):
+    return sorted(f for f in os.listdir(d) if f.endswith(".json"))
+
+
+LANES = ("cloud", "mac")
+
+
+def check_message(m, stem):
+    """The shape scripts/lane-message.mjs auditLaneMessages() treats as FATAL for a message:
+    id equal to its filename, from and to both real lanes and not the same lane, a non-empty
+    subject and a non-empty body. A record that fails is not silently skipped: the unread
+    count is then unknown, and an unknown count is left out, never printed as a number."""
+    if m.get("id") != stem:
+        raise ValueError("id does not match its filename: " + stem)
+    if m.get("from") not in LANES or m.get("to") not in LANES or m.get("from") == m.get("to"):
+        raise ValueError("from/to is not two different known lanes: " + stem)
+    for key in ("subject", "body"):
+        if not m.get(key) or str(m.get(key)).strip() == "":
+            raise ValueError("no " + key + ": " + stem)
+
+
+def read_obj(p):
+    with open(p, encoding="utf-8") as fh:
+        v = json.load(fh)
+    if not isinstance(v, dict):
+        raise ValueError("not an object: " + p)
+    return v
+
+
+# Claude Code's status JSON arrives on stdin; a terminal, an empty pipe or garbage all
+# mean "no JSON", and the session directory falls back to $PWD.
+data = {}
+try:
+    if not sys.stdin.isatty():
+        raw = sys.stdin.read()
+        if raw.strip() != "":
+            data = json.loads(raw)
+except Exception:
+    data = {}
+if not isinstance(data, dict):
+    data = {}
+
+# currentLane() in scripts/lib/lane-identity.mjs, without its console.warn.
+declared = os.environ.get("SIGNALGRID_LANE")
+if declared in ("mac", "cloud"):
+    lane = declared
+else:
+    lane = "mac" if sys.platform == "darwin" else "cloud"
+
+ws = data.get("workspace") if isinstance(data.get("workspace"), dict) else {}
+root = None
+# workspace.current_dir first, then cwd (Claude Code's docs list both; the first is where
+# the session is NOW), then workspace.project_dir (where it was launched), then $PWD.
+for cand in (ws.get("current_dir"), data.get("cwd"), ws.get("project_dir"), sys.argv[1] if len(sys.argv) > 1 else None):
+    d = text(cand)
+    if d and os.path.isabs(d) and os.path.isdir(d):
+        while True:
+            if os.path.exists(os.path.join(d, ".git")):
+                root = d
+                break
+            up = os.path.dirname(d)
+            if up == d:
+                break
+            d = up
+        break
+
+branch = ""
+if root:
+    def git(*args):
+        try:
+            r = subprocess.run(["git", "-C", root] + list(args), capture_output=True, text=True, timeout=1,
+                               env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"))
+            return clean(r.stdout) if r.returncode == 0 else ""
+        except Exception:
+            return ""
+    branch = git("symbolic-ref", "--short", "-q", "HEAD")
+    if not branch:
+        sha = git("rev-parse", "--short", "HEAD")
+        branch = "detached@" + sha if sha else ""
+
+hands = None
+if root:
+    d = os.path.join(root, "artifacts", "raised-hands")
+    try:
+        if os.path.isdir(d):
+            hands = sum(1 for f in json_files(d) if read_obj(os.path.join(d, f)).get("status") != "resolved")
+    except Exception:
+        hands = None
+
+mail = None
+if root:
+    d = os.path.join(root, "artifacts", "lane-messages")
+    try:
+        if os.path.isdir(d):
+            closed = set()
+            ad = os.path.join(d, "acks")
+            if os.path.isdir(ad):
+                for f in json_files(ad):
+                    a = read_obj(os.path.join(ad, f))
+                    if a.get("ackedBy") == lane and isinstance(a.get("messageId"), str):
+                        closed.add(a["messageId"])
+            n = 0
+            for f in json_files(d):
+                m = read_obj(os.path.join(d, f))
+                check_message(m, f[:-5])  # a malformed record raises: the whole unread part is dropped
+                if m["to"] == lane and m["id"] not in closed:
+                    n += 1
+            mail = n
+    except Exception:
+        mail = None
+
+m = data.get("model")
+model = text(m if isinstance(m, str) else m.get("display_name") if isinstance(m, dict) else None)
+
+parts = []
+if branch:
+    parts.append(clean(branch))
+if hands is not None:
+    parts.append("%d open hand%s" % (hands, "" if hands == 1 else "s"))
+if mail is not None:
+    parts.append("%d unread for %s" % (mail, lane))
+if model and clean(model):
+    parts.append(clean(model))
+if parts:
+    sys.stdout.write(" | ".join(parts) + "\n")
+PYEOF
+
+status_line() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  exec python3 -I -c "$STATUS_PY" "$PWD" 2>/dev/null
+}
+
+self_test() {
+  local self fx repo n_ok n_fail out want got json root cmd refresh other rc spaced
+  case "$0" in /*) self=$0 ;; *) self=$PWD/$0 ;; esac
+  n_ok=0
+  n_fail=0
+  command -v python3 >/dev/null 2>&1 || { echo "statusline self-test: python3 is not on PATH" >&2; return 1; }
+  command -v node >/dev/null 2>&1 || { echo "statusline self-test: node is not on PATH (needed to read lane-identity.mjs)" >&2; return 1; }
+  command -v git >/dev/null 2>&1 || { echo "statusline self-test: git is not on PATH" >&2; return 1; }
+
+  fx=$(mktemp -d "${TMPDIR:-/tmp}/sg-statusline.XXXXXX") || return 1
+  case "$fx" in /*/sg-statusline.*) ;; *) echo "statusline self-test: unexpected temp dir $fx" >&2; return 1 ;; esac
+  # shellcheck disable=SC2064  # $fx is expanded NOW on purpose: the trap removes this fixture only
+  trap "rm -rf -- '$fx'" EXIT
+
+  repo=$fx/repo
+  mkdir -p "$repo/artifacts/raised-hands" "$repo/artifacts/lane-messages/acks" "$repo/sub" "$fx/plain"
+  git init -q "$repo" || return 1
+  git -C "$repo" symbolic-ref HEAD refs/heads/fixture-branch || return 1
+
+  # two hands: one open, one cleared (the real ledger marks a cleared hand status "resolved")
+  printf '%s\n' '{"id":"h-open","status":"open","doing":"d","blockedBy":"b","need":"n","whoCanUnblock":"owner"}' > "$repo/artifacts/raised-hands/h-open.json"
+  printf '%s\n' '{"id":"h-cleared","status":"resolved","resolvedAt":"2026-10-08T00:00:00Z","resolution":"done"}' > "$repo/artifacts/raised-hands/h-cleared.json"
+  # one unread message to each lane, plus one to mac that mac has acknowledged
+  printf '%s\n' '{"id":"m-to-mac","from":"cloud","to":"mac","subject":"s","body":"b"}' > "$repo/artifacts/lane-messages/m-to-mac.json"
+  printf '%s\n' '{"id":"m-to-cloud","from":"mac","to":"cloud","subject":"s","body":"b"}' > "$repo/artifacts/lane-messages/m-to-cloud.json"
+  printf '%s\n' '{"id":"m-to-mac-acked","from":"cloud","to":"mac","subject":"s","body":"b"}' > "$repo/artifacts/lane-messages/m-to-mac-acked.json"
+  printf '%s\n' '{"messageId":"m-to-mac-acked","ackedBy":"mac","note":"done"}' > "$repo/artifacts/lane-messages/acks/m-to-mac-acked.json"
+
+  expect() {
+    # expect <name> <wanted> <got>
+    if [ "$2" = "$3" ]; then
+      n_ok=$((n_ok + 1))
+      echo "  ok   — $1"
+    else
+      n_fail=$((n_fail + 1))
+      echo "  FAIL — $1" >&2
+      echo "         want: [$2]" >&2
+      echo "         got:  [$3]" >&2
+    fi
+  }
+
+  out=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "mac lane: branch, 1 open hand (not 2), 1 unread (the acked one is closed), model" "fixture-branch | 1 open hand | 1 unread for mac | Test Model" "$out"
+  out=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=cloud bash "$self")
+  expect "cloud lane: the cloud lane's one unread message is counted" "fixture-branch | 1 open hand | 1 unread for cloud | Test Model" "$out"
+
+  out=$(printf '{"cwd":"%s"}' "$repo/sub" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "cwd field, from a subdirectory, finds the repo above it; no model, none printed" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+
+  out=$( cd "$repo" && printf 'this is not json' | env SIGNALGRID_LANE=mac bash "$self" )
+  expect "garbage on stdin falls back to \$PWD" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+
+  # an ack written by the SENDER does not close the message (lane-message.mjs refuses it too)
+  printf '%s\n' '{"messageId":"m-to-cloud","ackedBy":"mac","note":"graded my own homework"}' > "$repo/artifacts/lane-messages/acks/m-to-cloud.json"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=cloud bash "$self")
+  expect "an ack by the sender leaves the message unread" "fixture-branch | 1 open hand | 1 unread for cloud" "$out"
+  printf '%s\n' '{"messageId":"m-to-cloud","ackedBy":"cloud","note":"read"}' > "$repo/artifacts/lane-messages/acks/m-to-cloud.json"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=cloud bash "$self")
+  expect "an ack by the addressee closes it (a true zero is printed)" "fixture-branch | 1 open hand | 0 unread for cloud" "$out"
+
+  # a hand file that does not parse: the count is LEFT OUT, never shown as 1
+  printf '%s' '{"id":' > "$repo/artifacts/raised-hands/torn.json"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "an unreadable hand file removes the hands count instead of undercounting" "fixture-branch | 1 unread for mac" "$out"
+  rm -f -- "$repo/artifacts/raised-hands/torn.json"
+
+  # a hand whose status is not "resolved" (a typo, say) is still counted as open
+  printf '%s\n' '{"id":"h-typo","status":"reolved"}' > "$repo/artifacts/raised-hands/h-typo.json"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "an unknown status counts as open" "fixture-branch | 2 open hands | 1 unread for mac" "$out"
+  rm -f -- "$repo/artifacts/raised-hands/h-typo.json"
+
+  # An unreadable part is LEFT OUT, never zeroed. Hands (above) and now mail, in every shape:
+  # a torn message, a torn ack, a missing directory for each count, both missing. A directory
+  # that was READ and holds nothing is a true zero and is printed (the contrast case).
+  json=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$repo")
+  printf '%s' '{"id":' > "$repo/artifacts/lane-messages/torn-msg.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "a torn lane-message file removes the unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/torn-msg.json"
+  printf '%s' '{"messageId":' > "$repo/artifacts/lane-messages/acks/torn-ack.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "a torn ack file removes the unread part too (an ack that cannot be read may have closed a message)" "fixture-branch | 1 open hand | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/acks/torn-ack.json"
+  # A message that is valid JSON but malformed is NOT quietly left out of the count (that printed
+  # "0 unread" beside a record the audit calls fatal): one such record drops the whole part.
+  # Shapes: scripts/lane-message.mjs auditLaneMessages().
+  bad_message() { # <label> <file stem> <json>
+    printf '%s\n' "$3" > "$repo/artifacts/lane-messages/$2.json"
+    out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+    expect "$1: no unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+    rm -f -- "$repo/artifacts/lane-messages/$2.json"
+  }
+  bad_message "a message with \`to\` misspelled (\`too\`)" m-bad-too '{"id":"m-bad-too","from":"cloud","too":"mac","subject":"s","body":"b"}'
+  bad_message "a message addressed to a lane that does not exist" m-bad-lane '{"id":"m-bad-lane","from":"cloud","to":"orbit","subject":"s","body":"b"}'
+  bad_message "a message with no \`from\`" m-bad-from '{"id":"m-bad-from","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message addressed to its own sender" m-bad-self '{"id":"m-bad-self","from":"mac","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message whose id disagrees with its filename" m-bad-id '{"id":"something-else","from":"cloud","to":"mac","subject":"s","body":"b"}'
+  bad_message "a message with an empty body" m-bad-body '{"id":"m-bad-body","from":"cloud","to":"mac","subject":"s","body":"  "}'
+  bad_message "a message with no subject" m-bad-subject '{"id":"m-bad-subject","from":"cloud","to":"mac","body":"b"}'
+  # the same record, well-formed, is counted: the case above is about the shape, not the file name
+  printf '%s\n' '{"id":"m-good-extra","from":"cloud","to":"mac","subject":"s","body":"b"}' > "$repo/artifacts/lane-messages/m-good-extra.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "contrast: a well-formed extra message to this lane is counted (2 unread)" "fixture-branch | 1 open hand | 2 unread for mac | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/m-good-extra.json"
+
+  mv "$repo/artifacts/raised-hands" "$fx/hands.away"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "the raised-hands directory absent: no open-hands part (never '0 open hands')" "fixture-branch | 1 unread for mac | Test Model" "$out"
+  mv "$repo/artifacts/lane-messages" "$fx/mail.away"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "both artifact directories absent: the branch only" "fixture-branch" "$out"
+  mv "$fx/hands.away" "$repo/artifacts/raised-hands"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "the lane-messages directory absent: no unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+  mkdir "$repo/artifacts/lane-messages"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "contrast: a lane-messages directory that was read and is empty IS a true zero" "fixture-branch | 1 open hand | 0 unread for mac | Test Model" "$out"
+  rmdir "$repo/artifacts/lane-messages"
+  mv "$fx/mail.away" "$repo/artifacts/lane-messages"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "...and with everything restored the full line is back" "fixture-branch | 1 open hand | 1 unread for mac | Test Model" "$out"
+
+  # directory precedence, per Claude Code's status-line docs: workspace.current_dir (where the
+  # session is NOW) beats cwd, which beats workspace.project_dir (where it was launched)
+  out=$(printf '{"workspace":{"current_dir":"%s"},"cwd":"%s"}' "$repo" "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "workspace.current_dir beats cwd (repo vs plain dir)" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+  out=$(printf '{"workspace":{"current_dir":"%s"},"cwd":"%s"}' "$fx/plain" "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "...and the other way round: a current_dir outside a repo wins over a cwd inside one" "" "$out"
+  out=$(printf '{"cwd":"%s","workspace":{"project_dir":"%s"}}' "$repo/sub" "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "cwd beats workspace.project_dir" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+  out=$(printf '{"workspace":{"project_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "workspace.project_dir is used when it is all there is" "fixture-branch | 1 open hand | 1 unread for mac" "$out"
+
+  # no repo: only what is readable is printed
+  out=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "outside a repo only the model name is printed" "Test Model" "$out"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "outside a repo and with no model, nothing is printed" "" "$out"
+
+  # the lane rule is lane-identity.mjs's rule: compare, so the copy cannot drift.
+  # The module is imported by a file URL built with node's pathToFileURL: a hand-built
+  # "file://$path" is not percent-encoded: Node's URL parser repairs a plain space, but a `#`
+  # (the rest of the path becomes a fragment), a `?` or a `%41` (decoded to "A") sends the
+  # import to the wrong file or fails it, and this check failed with "?".
+  lane_of_module() { # <path to lane-identity.mjs>: the lane its currentLane() names
+    node -e 'import(require("url").pathToFileURL(require("path").resolve(process.argv[1])).href).then((m) => console.log(m.currentLane()))' -- "$1" 2>/dev/null
+  }
+  label_of() { sed -n 's/.* unread for \([a-z]*\).*/\1/p'; } # the count differs by lane (one unread for mac, none left for cloud): compare the label only
+  want=$(lane_of_module "$(dirname "$self")/../lib/lane-identity.mjs")
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$self")
+  got=$(printf '%s' "$out" | label_of)
+  expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "${want:-?}" "$got"
+  # the same check from a copy of the two files in a directory whose name holds a space, a `#`,
+  # a `?` and a `%41`
+  spaced="$fx/a checkout #1 with spaces? and %41"
+  mkdir -p "$spaced/scripts/mac" "$spaced/scripts/lib"
+  cp "$self" "$spaced/scripts/mac/statusline.sh"
+  cp "$(dirname "$self")/../lib/lane-identity.mjs" "$spaced/scripts/lib/lane-identity.mjs"
+  want=$(lane_of_module "$spaced/scripts/lib/lane-identity.mjs")
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$spaced/scripts/mac/statusline.sh")
+  got=$(printf '%s' "$out" | label_of)
+  expect "the lane label check works from a checkout path containing a space, #, ? and %41" "${want:-?}" "$got"
+  expect "...and the module really was imported from that path (a lane name, not a failed import)" "yes" "$([ "$want" = cloud ] || [ "$want" = mac ] && echo yes || echo no)"
+
+  # The command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c) with the
+  # status JSON on stdin. It anchors the executable to workspace.project_dir (where Claude Code
+  # was LAUNCHED), never to the process cwd, which moves: a relative path lost the line from a
+  # subdirectory, and a `git rev-parse` from the cwd ran another repository's script.
+  root=${self%/scripts/mac/statusline.sh}
+  if [ -f "$root/.claude/settings.json" ] && [ -d "$root/scripts/mac" ]; then
+    cmd=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["statusLine"]["command"])' "$root/.claude/settings.json" 2>/dev/null)
+    expect "settings.json registers a statusLine command" "yes" "$([ -n "$cmd" ] && echo yes || echo no)"
+    refresh=$(python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1]))["statusLine"].get("refreshInterval"); print(v if isinstance(v, int) and v >= 1 else "none")' "$root/.claude/settings.json" 2>/dev/null)
+    expect "...with a refreshInterval (hands and mail change while the session is idle)" "30" "$refresh"
+
+    other=$fx/other
+    mkdir -p "$other/scripts/mac" "$fx/notgit"
+    git init -q "$other" || return 1
+    printf '%s\n' '#!/bin/sh' 'echo OTHER REPO SCRIPT RAN' > "$other/scripts/mac/statusline.sh"
+    run_registered() { ( cd "$1" && printf '%s' "$2" | sh -c "$cmd" ); }
+    pj() { printf '{"model":{"display_name":"x"},"workspace":{"project_dir":"%s","current_dir":"%s"}}' "$1" "$2"; }
+
+    want=$(pj "$root" "$root" | bash "$self")
+    expect "(0) the script run directly on the same JSON prints a line (the reference for 1-4)" "yes" "$([ -n "$want" ] && echo yes || echo no)"
+    out=$(run_registered "$root" "$(pj "$root" "$root")")
+    expect "(1) from the repo root, project_dir = the root: the full line" "$want" "$out"
+    out=$(run_registered "$root/scripts/mac" "$(pj "$root" "$root")")
+    expect "(2) from a subdirectory, project_dir = the root: the same line" "$want" "$out"
+    out=$(run_registered "$fx/notgit" "$(pj "$root" "$root")")
+    expect "(3) cwd outside any repository, project_dir = the root: the same line" "$want" "$out"
+    out=$(run_registered "$other" "$(pj "$root" "$root")")
+    expect "(4) cwd inside ANOTHER repository that has its own statusline.sh: this checkout's line, never that repository's" "$want" "$out"
+    out=$(run_registered "$other" "$(pj "$other" "$other")")
+    expect "(5) project_dir = another repository: THAT launch directory's own script runs (the rule is the launch directory's file, which Claude Code was started in and trusted)" "OTHER REPO SCRIPT RAN" "$out"
+    rm -f -- "$other/scripts/mac/statusline.sh"
+    out=$(run_registered "$other" "$(pj "$other" "$other")"); rc=$?
+    expect "(5b) ...and with no such file in the launch directory: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" '{"model":{"display_name":"x"}}'); rc=$?
+    expect "(6) no workspace key at all: nothing printed, exit 0 (the cwd is never used to find the executable)" "|0" "$out|$rc"
+    out=$(run_registered "$root" '{"workspace":{"current_dir":"'"$root"'"}}'); rc=$?
+    expect "(6b) current_dir but no project_dir: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" "$(pj "$fx/notgit" "$fx/notgit")"); rc=$?
+    expect "(7) project_dir is not inside a git repository: nothing printed, exit 0" "|0" "$out|$rc"
+    out=$(run_registered "$root" "$(pj . .)"); rc=$?
+    expect "(8) a relative project_dir is refused: nothing printed, exit 0" "|0" "$out|$rc"
+  else
+    n_fail=$((n_fail + 1))
+    echo "  FAIL — no .claude/settings.json beside this script ($root); the registered command was not tested" >&2
+  fi
+
+  echo "statusline self-test: $n_ok passed, $n_fail failed"
+  [ "$n_fail" -eq 0 ]
+}
+
+case "${1:-}" in
+  --self-test) self_test ;;
+  *) status_line ;;
+esac

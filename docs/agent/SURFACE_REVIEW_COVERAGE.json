@@ -922,6 +922,20 @@
         }
       ]
     },
+    "docs/archive": {
+      "path": "docs/archive",
+      "reads": [
+        {
+          "date": "2026-09-30",
+          "read": "The one file read whole: product-openapi.json, moved here from lib/api-spec/ with an x-archived header. Ten paths, servers api.signalgrid.local and localhost:3000, referenced by nothing; valid JSON after the header key was added. api-contract-proof now fails on any spec left in lib/api-spec that no DOCUMENTS entry governs.",
+          "reviewer": "cloud lane (build worker, firsthand read of the file and every edit site)",
+          "record": "docs/BUILD_BACKLOG.md",
+          "scope": "surface",
+          "open": 0,
+          "closed": 1
+        }
+      ]
+    },
     "docs/assets": {
       "path": "docs/assets",
       "reads": [

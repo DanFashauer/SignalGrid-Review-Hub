@@ -202,7 +202,7 @@ announce in the commit message, not only in chat.
   main way this repo breaks.
 - **Record what you did NOT verify.** Coverage gaps are findings. An honest
   "not checked: iOS build, no Xcode here" is worth more than silence.
-- **Prefer deleting to adding.** With ~1,800 files, 144 `proof:*` scripts (2026-09-06; `node scripts/check-status-figures.mjs` prints the live count) and four native
+- **Prefer deleting to adding.** With thousands of tracked files (`git ls-files | wc -l` counts them; never type the number here), well over a hundred `proof:*` scripts (`node scripts/check-status-figures.mjs` prints the live count) and four native
   surfaces maintained by one non-engineer, added surface area is a cost. The
   question is rarely "can this be built" — it is "should this exist."
 

@@ -47,6 +47,36 @@ const STATUS = join(repo, "docs/STATUS.md");
 
 const GENERATOR = join(repo, "scripts/status-summary.mjs");
 const E2E_README = join(repo, "scripts/src/e2e/README.md");
+const SIGNALGRID_SKILL = join(repo, ".claude/skills/signalgrid/SKILL.md");
+const COMPLETION_PLAN = join(repo, "docs/PRODUCT_COMPLETION_PLAN.md");
+
+/**
+ * docs/PRODUCT_COMPLETION_PLAN.md hand-quotes a 2026-08-10 census ("exactly 51"
+ * connector families, "167 entries", "47 gates fire on deferred families") that no
+ * gate can keep true and nobody maintains (BUILD_BACKLOG, census-figures row). Those
+ * figures stay as history; what is held is the banner that says so. It must sit
+ * above the first section, carry a date, and name a command that derives the live
+ * numbers — a banner without the command tells the reader the figure is stale and
+ * leaves them nowhere to go.
+ */
+export function hasSnapshotBanner(src) {
+  // "Above the first section" needs a first section: a document with no `## ` heading
+  // would make the whole file the head, and a banner at the very bottom would pass.
+  const parts = src.split(/^## /m);
+  if (parts.length < 2) return false;
+  const m = parts[0].match(/^> \*\*Point-in-time snapshot \(census taken (\d{4}-\d{2}-\d{2})[^\n]*(?:\n>[^\n]*)*/m);
+  if (!m) return false;
+  // A banner inside an HTML comment is invisible to the reader it exists for. Located
+  // by position rather than by stripping comments out: the banner is hidden when the
+  // last `<!--` before it has no `-->` between it and the banner.
+  const before = parts[0].slice(0, m.index);
+  const open = before.lastIndexOf("<!--");
+  if (open !== -1 && before.indexOf("-->", open) === -1) return false;
+  const d = new Date(`${m[1]}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== m[1]) return false;
+  const text = m[0].replace(/\n>\s?/g, " ");
+  return /`node scripts\/check-preflight-ci-parity\.mjs`/.test(text) && /\bNOT maintained\b/.test(text);
+}
 
 /**
  * Live test-count claims in the e2e README (plan row 148). It said the suite "has
@@ -72,6 +102,25 @@ const COUNT_CLAIM = new RegExp(
 );
 export function e2eReadmeCountClaims(src) {
   return [...src.matchAll(COUNT_CLAIM)].map((m) => m[0]);
+}
+
+/**
+ * A typed repository file count in the signalgrid skill (plan row 73). Its "Prefer
+ * deleting to adding" rule said "With ~1,800 files" from 2026-08 until 2026-09-30,
+ * while `git ls-files` counted 2,306, then 3,446, then 3,515 — the instruction every
+ * agent loads described a repository half the size of the real one, and nothing read
+ * the figure. Same two stable states as the e2e README, so the same answer: held at
+ * absent. The skill points at `git ls-files | wc -l`. Digits only, with an optional
+ * `~`/`about`/`over` and thousands separators; "thousands of tracked files" is prose,
+ * not a count, and does not fire.
+ */
+// \p{Nd} rather than \d so full-width and other Unicode digits count too. Up to three
+// qualifying words may stand between the figure and "files" ("3,515 Markdown and TS
+// files"), and a magnitude word ("3.5 thousand files") is part of the figure.
+const FILE_COUNT_CLAIM =
+  /(?<![\p{L}\p{Nd}_/.:])~?\p{Nd}[\p{Nd},.]*(?:\s*(?:k|thousand|hundred))?\+?(?:\s+[\p{L}`*/-]+){0,3}?\s+files\b|\bfile\s+count\s*[:=]?\s*~?\p{Nd}[\p{Nd},.]*/giu;
+export function skillFileCountClaims(src) {
+  return [...src.matchAll(FILE_COUNT_CLAIM)].map((m) => m[0]);
 }
 
 /**
@@ -185,6 +234,27 @@ function main() {
     process.exit(1);
   }
   console.log("  ok   — scripts/src/e2e/README.md types no live test count (it points at --list)");
+  if (!existsSync(SIGNALGRID_SKILL)) {
+    console.error("\n.claude/skills/signalgrid/SKILL.md is missing — this gate cannot read what it guards; refusing.\n");
+    process.exit(1);
+  }
+  const fileClaims = skillFileCountClaims(readFileSync(SIGNALGRID_SKILL, "utf8"));
+  if (fileClaims.length) {
+    console.error(
+      `\n.claude/skills/signalgrid/SKILL.md types a repository file count (${fileClaims.map((c) => `"${c}"`).join(", ")}).` +
+        `\n  No gate can keep that true; point at \`git ls-files | wc -l\` instead (plan row 73).\n`,
+    );
+    process.exit(1);
+  }
+  console.log("  ok   — .claude/skills/signalgrid/SKILL.md types no repository file count (it points at git ls-files)");
+  if (!existsSync(COMPLETION_PLAN) || !hasSnapshotBanner(readFileSync(COMPLETION_PLAN, "utf8"))) {
+    console.error(
+      "\ndocs/PRODUCT_COMPLETION_PLAN.md has lost its dated point-in-time snapshot banner (or the file is gone)." +
+        "\n  Its census figures are a 2026-08-10 hand count; without the banner they read as current measurements.\n",
+    );
+    process.exit(1);
+  }
+  console.log("  ok   — docs/PRODUCT_COMPLETION_PLAN.md carries its dated snapshot banner naming the live-count command");
 
   console.log("\nSTATUS.md figure gate passed — the inventory line matches the tree.");
   console.log("  NOT checked here: the commit sha STATUS.md names, or its gate verdicts. The sha is the");
@@ -245,6 +315,36 @@ function selfTest() {
     {
       name: "the real e2e README types no live count",
       run: () => e2eReadmeCountClaims(readFileSync(E2E_README, "utf8")).length === 0,
+    },
+    {
+      name: "the skill's retired file-count phrasings are caught, and prose without a count is not",
+      run: () =>
+        ["With ~1,800 files, 144", "3515 files", "about 3,446 tracked files", "~3,500+ files", "file count: 3,515",
+          "3.5 thousand files", "3,515 Markdown and TS files", "\uFF13\uFF15\uFF11\uFF15 files"].every((x) => skillFileCountClaims(x).length === 1) &&
+        skillFileCountClaims("With thousands of tracked files (`git ls-files | wc -l` counts them)").length === 0 &&
+        skillFileCountClaims("144 `proof:*` scripts").length === 0 &&
+        skillFileCountClaims("see SKILL.md:205 files").length === 0,
+    },
+    {
+      name: "the real signalgrid skill types no repository file count",
+      run: () => skillFileCountClaims(readFileSync(SIGNALGRID_SKILL, "utf8")).length === 0,
+    },
+    {
+      name: "the completion plan's snapshot banner is found, and a missing, undated, command-less or buried one is not",
+      run: () => {
+        const real = readFileSync(COMPLETION_PLAN, "utf8");
+        const banner = "> **Point-in-time snapshot (census taken 2026-08-10).**\n> The figures are NOT maintained; live: `node scripts/check-preflight-ci-parity.mjs`\n";
+        return hasSnapshotBanner(real) &&
+          hasSnapshotBanner(`# T\n\n${banner}\n## 1. x\n`) &&
+          !hasSnapshotBanner("# T\n\n## 1. x\n") &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace("census taken 2026-08-10", "census taken recently")}\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace("`node scripts/check-preflight-ci-parity.mjs`", "the tree")}\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\n## 1. x\n\n${banner}`) &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace("2026-08-10", "9999-99-99")}\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\n<!--\n${banner}-->\n## 1.\n`) &&
+          !hasSnapshotBanner(`# T\n\nbody\n\n${banner}`) &&
+          !hasSnapshotBanner(`# T\n\n${banner.replace(" NOT maintained", "")}\n## 1.\n`);
+      },
     },
     {
       name: "a lane declared in LANE_ENV but absent from package.json is NOT counted",

@@ -101,7 +101,6 @@ check("the nonce is inside the seal too", (verifyVerdict(tamperedNonce, RING, op
 const truncated = { ...sealed, attestation: { ...sealed.attestation, digest: sealed.attestation.digest.slice(0, -1) } };
 check("a truncated digest is refused (length is compared before the constant-time check)", (verifyVerdict(truncated, RING, opts()) as { failure: string }).failure === "digest_mismatch");
 const flipped = { ...sealed, attestation: { ...sealed.attestation, digest: sealed.attestation.digest.slice(0, -1) + (sealed.attestation.digest.endsWith("a") ? "b" : "a") } };
-check("a digest differing in ONE character is refused", (verifyVerdict(flipped, RING, opts()) as { failure: string }).failure === "digest_mismatch");
 // UTF-16 length is not byte length. "é" + 63 ASCII characters has .length 64 (equal to a real hex
 // digest, so it passes the length comparison) but is 65 bytes, so timingSafeEqual THROWS and the
 // catch in digestsEqual is the only thing between this input and a verdict. It is reachable, and
@@ -110,8 +109,9 @@ check("a digest differing in ONE character is refused", (verifyVerdict(flipped, 
 const wideDigest = "\u00e9" + sealed.attestation.digest.slice(1);
 const wide = { ...sealed, attestation: { ...sealed.attestation, digest: wideDigest } };
 check(
-  "an equal-.length digest that is longer in BYTES is refused (timingSafeEqual throws; the catch must not read as a match)",
-  wideDigest.length === sealed.attestation.digest.length &&
+  "a digest differing in ONE character is refused, and so is an equal-.length digest that is longer in BYTES (timingSafeEqual throws; the catch must not read as a match)",
+  (verifyVerdict(flipped, RING, opts()) as { failure: string }).failure === "digest_mismatch" &&
+    wideDigest.length === sealed.attestation.digest.length &&
     Buffer.byteLength(wideDigest) !== Buffer.byteLength(sealed.attestation.digest) &&
     (verifyVerdict(wide, RING, opts()) as { failure: string }).failure === "digest_mismatch",
 );

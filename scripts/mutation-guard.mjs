@@ -1203,17 +1203,12 @@ export const ALLOWED = [
     reason:
       "Documented redundant in the source: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:task-exception green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
   },
-  {
-    file: "lib/verdict-attestation/src/attest.ts",
-    line: "return false;",
-    whole: true,
-    reason:
-      "The catch in `digestsEqual` is UNREACHABLE: timingSafeEqual throws only on a length mismatch, already refused one line earlier. Kept as the rule 'an exception is not a match'. Labelled unreachable in the source.",
-  },
-  // The next two were EXPOSED, not added to cover a new gap: the entry above used to be the
-  // substring `return false;`, which also exempted these two real-looking guards in
-  // digestsEqual (surfaced by the single-line resolution, 2026-10-08). Each has its own
-  // exact entry because each is genuinely redundant, verified by reading the callers.
+  // The next two were EXPOSED, not added to cover a new gap: an entry for the bare
+  // `return false;` used to be a substring that also exempted these two guards in
+  // digestsEqual (surfaced by the single-line resolution, 2026-10-08). That entry is GONE: the
+  // catch at attest.ts:51 is REACHABLE (a non-ASCII digest of equal UTF-16 .length is longer in
+  // bytes, so timingSafeEqual throws into it), and its return-flip is now killed by a
+  // proof:verdict-attestation vector (review round 1 of PR #1464).
   {
     file: "lib/verdict-attestation/src/attest.ts",
     line: 'if (typeof a !== "string" || typeof b !== "string") return false;',
@@ -1224,7 +1219,7 @@ export const ALLOWED = [
     file: "lib/verdict-attestation/src/attest.ts",
     line: "if (a.length !== b.length) return false;",
     reason:
-      "Redundant with the catch below it: `timingSafeEqual` throws on a length mismatch and the catch returns false, so removing this line yields the same verdict (a mismatch is never a match). Kept because it states the rule explicitly and avoids relying on an exception for the ordinary mismatch path.",
+      "Redundant with the catch below it: `timingSafeEqual` throws on a byte-length mismatch and the catch returns false (the catch is reachable and pinned by the non-ASCII equal-.length vector in proof:verdict-attestation), so removing this line yields the same verdict. Kept because it states the rule explicitly and avoids relying on an exception for the ordinary mismatch path.",
   },
   {
     file: "lib/verdict-attestation/src/attest.ts",
@@ -1681,6 +1676,29 @@ export function resolveAllowedLine(entry, fileText) {
   return { line: hits[0] };
 }
 
+/**
+ * The one place an entry is judged stale or ambiguous, shared by main() and
+ * check-mutation-sharding.mjs so a gate and the sweep cannot disagree. `null` = exactly one line.
+ */
+export function allowlistProblem(entry, fileText) {
+  const r = resolveAllowedLine(entry, fileText);
+  if (r.stale) return { kind: "stale" };
+  if (r.ambiguous) return { kind: "ambiguous", lines: r.ambiguous };
+  return null;
+}
+
+/** Every entry that is missing its file, stale, or ambiguous — main() fails on a non-empty result. */
+export function auditAllowlist(entries, readText) {
+  const out = [];
+  for (const entry of entries) {
+    let text;
+    try { text = readText(entry.file); } catch { out.push({ entry, kind: "missing" }); continue; }
+    const p = allowlistProblem(entry, text);
+    if (p) out.push({ entry, ...p });
+  }
+  return out;
+}
+
 export function isAllowed(mutation) {
   // Resolved against the file text the mutation came from; an entry that is stale or
   // ambiguous resolves to no line and exempts NOTHING (main() reports it as a failure).
@@ -1778,26 +1796,18 @@ function main() {
   // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
   // entry surfaces in seconds rather than after the full sweep.
   let staleAllowlist = 0;
-  for (const entry of ALLOWED) {
-    const abs = join(repoRoot, entry.file);
-    let text;
-    try {
-      text = readFileSync(abs, "utf8");
-    } catch {
+  for (const problem of auditAllowlist(ALLOWED, (f) => readFileSync(join(repoRoot, f), "utf8"))) {
+    const { entry } = problem;
+    if (problem.kind === "missing") {
       console.error(`✗ allowlist entry references a missing file: ${entry.file}`);
-      staleAllowlist += 1;
-      continue;
-    }
-    const resolved = resolveAllowedLine(entry, text);
-    if (resolved.stale) {
+    } else if (problem.kind === "stale") {
       console.error(`✗ STALE allowlist entry — no line matches in ${entry.file}:\n    "${entry.line}"`);
       console.error("    The code moved. Re-derive whether the justification still holds, then update or remove.");
-      staleAllowlist += 1;
-    } else if (resolved.ambiguous) {
-      console.error(`✗ AMBIGUOUS allowlist entry — lines ${resolved.ambiguous.join(", ")} of ${entry.file} all contain:\n    "${entry.line}"`);
+    } else {
+      console.error(`✗ AMBIGUOUS allowlist entry — lines ${problem.lines.join(", ")} of ${entry.file} all contain:\n    "${entry.line}"`);
       console.error("    An entry exempts ONE line. Lengthen it to text unique in the file.");
-      staleAllowlist += 1;
     }
+    staleAllowlist += 1;
   }
   // ...and the prior question the staleness loop never asked: is the exempted file
   // even IN the sweep? Checked against ALL TARGETS, never the shard — a shard is a

@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, isAllowed } from "./mutation-guard.mjs";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, isAllowed } from "./mutation-guard.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -156,19 +156,27 @@ check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--"
 //
 // `isAllowed` used to be `mutation.sourceLine.includes(entry.line)`, so an entry exempted
 // EVERY line containing its text: attest.ts `return false;` also exempted the two real
-// guards in digestsEqual (lines 42-43) that only the unreachable catch at 51 was meant to
-// cover. An allowlist entry is a per-line justification; it must name one line.
+// guards in digestsEqual (lines 42-43) that only the catch at 51 was meant to cover. An allowlist entry is a per-line justification; it must name one line.
+function auditAllowed(entries, readText) {
+  return auditAllowlist(entries, readText).map((p) =>
+    p.kind === "missing" ? `${p.entry.file} (unreadable)`
+      : p.kind === "stale" ? `${p.entry.file}: STALE "${p.entry.line}"`
+        : `${p.entry.file}: AMBIGUOUS lines ${p.lines.join(",")} "${p.entry.line}"`);
+}
 {
-  const bad = [];
-  for (const entry of ALLOWED) {
-    let text;
-    try { text = readFileSync(join(REPO, entry.file), "utf8"); } catch { bad.push(`${entry.file} (unreadable)`); continue; }
-    const r = resolveAllowedLine(entry, text);
-    if (r.stale) bad.push(`${entry.file}: STALE "${entry.line}"`);
-    else if (r.ambiguous) bad.push(`${entry.file}: AMBIGUOUS lines ${r.ambiguous.join(",")} "${entry.line}"`);
-  }
+  const bad = auditAllowed(ALLOWED, (f) => readFileSync(join(REPO, f), "utf8"));
   check(`every real ALLOWED entry resolves to exactly one line (${ALLOWED.length} entries)${bad.length ? " — " + bad.join(" | ") : ""}`, bad.length === 0);
   for (const b of bad) console.error(`    ${b}`);
+}
+{
+  const fakeText = "a();\nreturn false;\nreturn false;\n";
+  const read = (f) => { if (f === "gone.ts") throw new Error("ENOENT"); return fakeText; };
+  const run = (e) => auditAllowed([e], read);
+  check("fixture: the real-entry audit FAILS on an ambiguous entry, a stale entry and an unreadable file, and passes a unique one",
+    run({ file: "x.ts", line: "return false;" }).some((b) => b.includes("AMBIGUOUS lines 2,3")) &&
+    run({ file: "x.ts", line: "return 7;" }).some((b) => b.includes("STALE")) &&
+    run({ file: "gone.ts", line: "a();" }).some((b) => b.includes("unreadable")) &&
+    run({ file: "x.ts", line: "a();" }).length === 0);
 }
 {
   const text = ["export function f(a, b) {", "  if (a === b) return false;", "  if (!a) return false;", "  return true;", "}"].join("\n");
@@ -176,6 +184,7 @@ check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--"
   check("fixture: a snippet no line contains is STALE", resolveAllowedLine({ line: "return 42;" }, text).stale === true);
   check("fixture: a unique snippet resolves to its 1-based line", resolveAllowedLine({ line: "if (!a) return false;" }, text).line === 3);
   check("fixture: `whole` pins a bare line that is a suffix of other lines (the attest.ts catch)", resolveAllowedLine({ line: "return false;", whole: true }, text.replace("  return true;", "    return false;")).ambiguous === undefined);
+  check("fixture: allowlistProblem reports ambiguous with the lines, stale, and null for exactly one", allowlistProblem({ line: "return false;" }, text)?.kind === "ambiguous" && allowlistProblem({ line: "return false;" }, text).lines.join() === "2,3" && allowlistProblem({ line: "return 42;" }, text)?.kind === "stale" && allowlistProblem({ line: "if (!a) return false;" }, text) === null);
   const fx = (lineNo) => ({ file: "fx.ts", original: text, lineNo, sourceLine: text.split("\n")[lineNo - 1].trim() });
   const saved = ALLOWED.splice(0, ALLOWED.length, { file: "fx.ts", line: "if (!a) return false;", reason: "fixture" }, { file: "fx.ts", line: "return false;", reason: "fixture (ambiguous)" });
   try {

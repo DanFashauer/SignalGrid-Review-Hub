@@ -462,6 +462,23 @@ export function checkSharedAlerts(files) {
   return failures;
 }
 
+/**
+ * The LiveRegion component itself: a polite channel (`aria-live="polite"`) and an
+ * assertive one carried by `role="alert"` ALONE — role="alert" already implies
+ * assertive, atomic live semantics, and adding aria-live="assertive" to it makes
+ * VoiceOver on iOS speak every alert twice (MDN, live-region compatibility).
+ */
+export function checkLiveRegionComponent(raw) {
+  const code = stripComments(raw);
+  const out = [];
+  if (!/(?<![\w-])aria-live="polite"/.test(code)) out.push('no longer declares a polite channel (aria-live="polite")');
+  if (!/\brole="alert"/.test(code)) out.push('no longer declares an assertive channel (role="alert")');
+  for (const m of code.matchAll(/<[A-Za-z][^>]*\brole="alert"[^>]*>/g)) {
+    if (/(?<![\w-])aria-live=/.test(m[0])) out.push('puts aria-live on its role="alert" region — VoiceOver on iOS speaks such an alert twice');
+  }
+  return out;
+}
+
 /** Text of the JSX opening tag starting at `index`, brace-aware; null if unclosed. */
 function openingTag(src, index) {
   let depth = 0;
@@ -602,11 +619,17 @@ function dropAriaHidden(body) {
  * Does the opening tag carry a label that names something? `aria-label=""`,
  * `aria-label=" "` or `aria-label={""}` names nothing; any other expression may.
  */
-export function hasNonBlankLabel(tag) {
+export function hasNonBlankLabel(tag, src = "") {
+  // aria-labelledby names the button only through elements that exist: every
+  // literal id it lists must be declared in the same file (`id="x"`). An id the
+  // gate cannot see, or a computed one, names nothing it can verify — fail closed.
+  const resolves = (ids) => ids.trim().split(/\s+/).every((id) => new RegExp(`(?<![\\w-])id\\s*=\\s*(?:["']${escapeRegExp(id)}["']|\\{\\s*["'\`]${escapeRegExp(id)}["'\`]\\s*\\})`).test(src));
   // `(?<![\w-])` so `data-aria-label` is not read as a label.
-  for (const m of tag.matchAll(/(?<![\w-])aria-label(?:ledby)?\s*=\s*(?:(["'])([\s\S]*?)\1|\{\s*(["'`])((?:\\[\s\S]|(?!\3)[^\\])*)\3\s*\}|\{)/g)) {
-    if (m[1] !== undefined) { if (!isBlank(decodeEntities(m[2]))) return true; }
-    else if (m[3] !== undefined) { if (!isBlank(decodeEscapes(m[4]))) return true; }
+  for (const m of tag.matchAll(/(?<![\w-])aria-label(ledby)?\s*=\s*(?:(["'])([\s\S]*?)\2|\{\s*(["'`])((?:\\[\s\S]|(?!\4)[^\\])*)\4\s*\}|\{)/g)) {
+    const byRef = m[1] !== undefined;
+    if (m[2] !== undefined) { const v = decodeEntities(m[3]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
+    else if (m[4] !== undefined) { const v = decodeEscapes(m[5]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
+    else if (byRef) continue; // a computed id: cannot be verified
     else {
       // An expression names the button only if it cannot come out empty. React drops
       // an attribute whose value is undefined, null or false, so `{undefined}`, a
@@ -646,7 +669,9 @@ export function checkIconButtons(rel, raw) {
     const line = src.slice(0, r.index).split("\n").length;
     const tag = openingTag(src, r.index);
     if (tag === null) { failures.push(`${rel}:${line}: <button> tag could not be parsed — failing closed`); continue; }
-    if (hasNonBlankLabel(tag) || tag.trimEnd().endsWith("/")) continue;
+    if (hasNonBlankLabel(tag, src)) continue;
+    // A self-closing <button /> renders an empty control: nothing names it.
+    if (tag.trimEnd().endsWith("/")) { failures.push(`${rel}:${line}: self-closing <button /> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`); continue; }
     const text = buttonText(src, r.index + tag.length);
     if (text === null) { failures.push(`${rel}:${line}: <button> body could not be parsed — failing closed`); continue; }
     if (isBlank(text)) failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
@@ -660,7 +685,7 @@ export function checkIconButtons(rel, raw) {
     if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
     // A child text node (an sr-only <span>) names the button as well as aria-label does.
     const childText = tag.trimEnd().endsWith("/") ? "" : buttonText(src, m.index + tag.length, "Button") ?? "";
-    const named = hasNonBlankLabel(tag) || (!isBlank(childText) && !isGlyphOnly(childText));
+    const named = hasNonBlankLabel(tag, src) || (!isBlank(childText) && !isGlyphOnly(childText));
     if (/\bsize=["{]\s*["'`]?icon["'`]?/.test(tag) && !named) {
       failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
@@ -772,11 +797,16 @@ export function checkReducedMotion(rel, raw) {
           .filter(([prop]) => !MOTION_NEUTRAL.has(prop));
         // …and it must damp every family, not just one: a block left with only
         // `scroll-behavior: auto` lets every animation and transition run.
-        const families = new Set(decls.map(([prop]) => prop.split("-")[0]));
-        // …and reach every element: a rule whose selector list holds the bare
-        // universal `*`. `.unused { animation: none }` damps nothing on screen.
-        const universal = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{/g)].some((r) => r[1].split(",").some((sel) => sel.trim() === "*"));
-        if (universal && ["animation", "transition", "scroll"].every((f) => families.has(f)) && decls.every(([prop, value]) => damps(prop, value))) return [];
+        // …and reach every element: the rule whose selector list holds the bare
+        // universal `*` must ITSELF damp all three families. `* { color: red }`
+        // beside `.unused { animation: none … }` damps nothing on screen.
+        const universal = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+          .filter((r) => r[1].split(",").some((sel) => sel.trim() === "*"))
+          .some((r) => {
+            const own = new Set([...r[2].matchAll(/(?:^|[\s;])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:/g)].map((d) => d[1]).filter((p) => !MOTION_NEUTRAL.has(p)).map((p) => p.split("-")[0]));
+            return ["animation", "transition", "scroll"].every((f) => own.has(f));
+          });
+        if (universal && decls.every(([prop, value]) => damps(prop, value))) return [];
         break;
       }
     }
@@ -821,10 +851,7 @@ function run() {
     }
     if (files.some((f) => /<LiveRegion\b/.test(stripComments(f.src)))) {
       const comp = files.find((f) => f.rel.endsWith("/components/LiveRegion.tsx"));
-      const code = comp ? stripComments(comp.src) : "";
-      if (!/aria-live="polite"/.test(code) || !/aria-live="assertive"/.test(code)) {
-        failures.push(`${treeRel}: <LiveRegion> is used but components/LiveRegion.tsx no longer declares aria-live="polite" and "assertive"`);
-      }
+      for (const why of checkLiveRegionComponent(comp ? comp.src : "")) failures.push(`${treeRel}: components/LiveRegion.tsx ${why}`);
     }
     failures.push(...checkSharedAlerts(files.filter((x) => x.rel.endsWith(".tsx"))));
     pollingTotal += lr.polling.length;
@@ -937,7 +964,7 @@ function selfTest() {
     ["an empty or blank aria-label does not name a button",
       ['aria-label=""', 'aria-label=" "', 'aria-label={""}', "aria-label={` `}", 'aria-label="&nbsp;"', 'aria-labelledby=""'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
-      ['aria-label="Close"', "aria-label={t('close')}", 'aria-labelledby="close-label"'].every((a) => checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
+      ['aria-label="Close"', "aria-label={t('close')}", 'aria-labelledby="close-label"'].every((a) => checkIconButtons("x.tsx", `<span id="close-label">Close</span><button onClick={f} ${a}><svg/></button>`).length === 0)],
     ["text inside an aria-hidden child does not name a button",
       ['<span aria-hidden="true">×</span>', "<span aria-hidden>×</span>", "<span aria-hidden={true}>×</span>", '<span aria-hidden="true"><b>×</b></span>'].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
@@ -1095,6 +1122,23 @@ function selfTest() {
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
       ['aria-label={t("close")}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
+    ["the LiveRegion component keeps a polite channel and a role=alert channel without a redundant aria-live",
+      checkLiveRegionComponent('<div role="status" aria-live="polite" aria-atomic="true">{m}</div><div role="alert" aria-atomic="true">{a}</div>').length === 0 &&
+      checkLiveRegionComponent('<div role="status" aria-live="polite">{m}</div><div role="alert" aria-live="assertive" aria-atomic="true">{a}</div>').length === 1 &&
+      checkLiveRegionComponent('<div role="status" aria-live="polite">{m}</div>').length === 1],
+    ["aria-labelledby names a button only through an id the file declares",
+      checkIconButtons("x.tsx", '<button onClick={f} aria-labelledby="missing"><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button onClick={f} aria-labelledby={labelId}><svg/></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<span id="close-label">Close</span><button onClick={f} aria-labelledby="close-label"><svg/></button>').length === 0 &&
+      checkIconButtons("x.tsx", '<span id="a">x</span><button onClick={f} aria-labelledby="a b"><svg/></button>').length === 1],
+    ["a self-closing button with no label is unnamed",
+      checkIconButtons("x.tsx", '<button onClick={close} />').length === 1 &&
+      checkIconButtons("x.tsx", '<button onClick={close} aria-label="Close" />').length === 0 &&
+      checkIconButtons("x.tsx", '<Button size="icon" onClick={close} />').length === 1],
+    ["the universal rule itself must damp all three motion families",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { color: red; } .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; } .x { transition: none; scroll-behavior: auto; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
     ["an audit-event count names the newest event",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events. Hash chain intact.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],

@@ -20,7 +20,7 @@ export function Audit() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
-        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.events.length} audit events, newest ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
+        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.chain.length} events in the chain, ${data.events.length} shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
         alert={
           error
             ? data

@@ -189,11 +189,54 @@ export function spellingVariants(topic) {
   return [...out].filter(Boolean);
 }
 
+/** The topic's words, camelCase split, as spellingVariants sees them. */
+function topicWords(topic) {
+  return String(topic)
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[\s\-_.\/]+/)
+    .filter(Boolean);
+}
+
+// Generic suffix nouns a caller adds to a name ("model tier GATE") that an identifier may
+// spell differently ("check-agent-model-tier"), so they carry no matching weight.
+const GENERIC_WORDS = new Set(["gate", "check", "checker", "guard", "script", "test", "tests", "proof", "rule", "lint"]);
+
+/** The words worth matching on their own: generic nouns and tokens under 3 characters dropped. */
+export function significantWords(topic) {
+  return topicWords(topic).filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w));
+}
+
+/**
+ * Variants of the topic with its generic nouns removed ("agent model tier gate" ->
+ * agent-model-tier). Only when a generic noun was actually dropped AND two or more words
+ * remain: a one-word stem ("agent") would match half the tree and turn every query into
+ * a refusal.
+ */
+export function stemVariants(topic) {
+  const words = topicWords(topic);
+  const kept = words.filter((w) => !GENERIC_WORDS.has(w));
+  if (kept.length === words.length || kept.length < 2) return [];
+  const out = new Set();
+  for (const sep of [" ", "-", "_", "."]) out.add(kept.join(sep));
+  const glued = kept.join("");
+  if (glued.length >= 5) out.add(glued);
+  return [...out];
+}
+
+/** git argv for the `words` probe: files containing ALL the words, in any order. Pure so the self-test can inspect it. */
+export function wordsProbeArgv(words) {
+  return ["grep", "-lIi", "--all-match", ...words.flatMap((w) => ["-e", w]), "--", ...CONTENT_EXCLUSIONS];
+}
+
 export function probeSpecs(topic) {
   const variants = spellingVariants(topic);
+  const strongVariants = [...new Set([...variants, ...stemVariants(topic)])];
+  const words = significantWords(topic);
   const t = String(topic).toLowerCase();
-  const anyVariant = (hay) => variants.some((v) => hay.includes(v));
-  return [
+  const anyVariant = (hay) => strongVariants.some((v) => hay.includes(v));
+  const specs = [
     {
       id: "filename",
       strength: "strong",
@@ -220,7 +263,7 @@ export function probeSpecs(topic) {
       id: "ci",
       strength: "strong",
       how: "a CI WORKFLOW that builds or tests it",
-      run: () => workflowFilesMentioning(variants),
+      run: () => workflowFilesMentioning(strongVariants),
     },
     {
       id: "content",
@@ -265,6 +308,23 @@ export function probeSpecs(topic) {
       },
     },
   ];
+  // A WEAK probe, so classify() is unchanged: a hit is INCONCLUSIVE, never REFUTED, and
+  // CORROBORATED still needs every probe empty. Tracked files containing ALL the
+  // significant words (any order, any suffix) plus tracked paths containing all of them.
+  if (words.length >= 2) {
+    specs.push({
+      id: "words",
+      strength: "weak",
+      how: `a tracked file or path containing ALL of: ${words.join(", ")}`,
+      run: () => {
+        const g = gitLines(wordsProbeArgv(words), { emptyStatus: 1 });
+        const p = trackedFiles();
+        const pathHits = p.lines.filter((f) => words.every((w) => f.toLowerCase().includes(w)));
+        return probeResult([...new Set([...g.lines, ...pathHits])], g.failed || p.failed, g.why || p.why);
+      },
+    });
+  }
+  return specs;
 }
 
 export function classify(results) {
@@ -279,6 +339,10 @@ export function classify(results) {
 
 function selfTest() {
   const checks = [];
+  // Assembled so the token is never a contiguous literal in this tracked file: the words
+  // probe (all words in one file) would otherwise find this file and the absent-topic
+  // cases could never corroborate.
+  const NONSENSE = ["zz", "q"].join("");
   const spec = probeSpecs("android");
 
   checks.push(["four differently-shaped probes, no two the same id", new Set(spec.map((s) => s.id)).size === 4]);
@@ -402,6 +466,43 @@ function selfTest() {
     !spellingVariants("a b").includes("ab") && spellingVariants("a b").includes("a-b"),
   ]);
 
+  // WORDS PROBE (backlog row: check:absence returned CORROBORATED for a multi-word topic
+  // spelled differently from the identifier that enforces it). Measured 2026-10-08:
+  // "agent frontmatter model gate" exited 0 "Safe to claim" while
+  // scripts/check-skill-plane-conformance.mjs enforces exactly that. Every probe tested
+  // each variant as ONE contiguous substring, so the words were never matched separately.
+  const multi = probeSpecs("agent frontmatter model gate");
+  checks.push(["a multi-word topic gets a fifth, WEAK `words` probe", multi.some((s) => s.id === "words" && s.strength === "weak")]);
+  {
+    const res = multi.map((s) => ({ ...s, ...s.run() }));
+    const wordHits = res.find((r) => r.id === "words")?.hits ?? [];
+    checks.push([
+      "LIVE: a multi-word topic spelled differently from the enforcing identifier is NOT corroborated, and the words probe names that file",
+      classify(res) !== "corroborated" && wordHits.includes("scripts/check-skill-plane-conformance.mjs"),
+    ]);
+  }
+  checks.push(["a single-word topic gets no words probe (it is the content probe already)", !probeSpecs("android").some((s) => s.id === "words")]);
+  {
+    const words = significantWords("agent model tier gate");
+    checks.push(["significantWords drops generic suffix nouns and tokens under 3 characters", JSON.stringify(words) === JSON.stringify(["agent", "model", "tier"]) && JSON.stringify(significantWords("an id gate check")) === "[]"]);
+    const argv = wordsProbeArgv(["agent", "model", "tier"]);
+    checks.push([
+      "the word-probe argv carries --all-match and exactly one -e per word",
+      argv.includes("--all-match") && argv.filter((a) => a === "-e").length === 3 && ["agent", "model", "tier"].every((w) => argv[argv.indexOf(w) - 1] === "-e"),
+    ]);
+    checks.push([
+      "stem variants drop the generic noun only when two or more words remain",
+      stemVariants("agent model tier gate").includes("agent-model-tier") && stemVariants("agent gate").length === 0 && stemVariants("agent model tier").length === 0,
+    ]);
+  }
+  {
+    // A nonsense multi-word topic, assembled from parts, must still CORROBORATE: --all-match
+    // needs every word in ONE file and the nonsense token is in none.
+    const nonsense = [NONSENSE, "frobnicate", "quux", NONSENSE].join(" ");
+    const res = probeSpecs(nonsense).map((s) => ({ ...s, ...s.run() }));
+    checks.push(["LIVE: a multi-word nonsense topic assembled from parts still CORROBORATES", res.some((r) => r.id === "words") && classify(res) === "corroborated"]);
+  }
+
   const fed = probeSpecs("fedramp").map((s) => ({ ...s, ...s.run() }));
   checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
 
@@ -421,12 +522,12 @@ function selfTest() {
   checks.push(["a git invocation that ERRORS reports failed, not empty", bogus.failed === true && bogus.lines.length === 0]);
   // git grep exits 1 on no-match. If that were read as a failure every clean topic would
   // be inconclusive and the tool would be useless — the opposite error, equally fatal.
-  const nomatch = probeSpecs(["zzq", "no", "such", "topic", "zzq"].join("-")).find((sp) => sp.id === "content").run();
+  const nomatch = probeSpecs([NONSENSE, "no", "such", "topic", NONSENSE].join("-")).find((sp) => sp.id === "content").run();
   checks.push(["git grep finding NOTHING is an empty probe, not a failed one", nomatch.failed === false && nomatch.hits.length === 0]);
 
   // END TO END, both directions, on this tree: the reproduction that started this.
   // The topic is assembled from parts so the literal is not itself tracked content.
-  const absentTopic = ["zzq", "no", "such", "topic", "zzq"].join("-");
+  const absentTopic = [NONSENSE, "no", "such", "topic", NONSENSE].join("-");
   const self = fileURLToPath(import.meta.url);
   const clean = spawnSync(process.execPath, [self, absentTopic], { cwd: REPO, encoding: "utf8" });
   const noGit = spawnSync(process.execPath, [self, absentTopic], {
@@ -453,7 +554,7 @@ function selfTest() {
   // `check:absence SHALLOW_PATTERN` returned CORROBORATED for a word that is in the tree.
   // Hermetic: a throwaway repo, the REAL CONTENT_EXCLUSIONS, one canary in every file.
   {
-    const canary = ["zzq", "canary", "row61"].join("-");
+    const canary = [NONSENSE, "canary", "row61"].join("-");
     const tmp = mkdtempSync(join(tmpdir(), "absence-excl-"));
     try {
       const put = (rel) => {

@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-row-24-in-docs-company-build-plan-md-is-owner-pa",
+  "raisedAt": "2026-10-08T11:44:10.248Z",
+  "origin": "cloud",
+  "doing": "Driving PR #1439 through preflight",
+  "blockedBy": "row 24 in docs/COMPANY_BUILD_PLAN.md is owner-parked past 144h; fails on origin/SignalGrid_Alpha too",
+  "need": "Owner clears or re-dates the row-24 blocker",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-24"
+  ]
+}

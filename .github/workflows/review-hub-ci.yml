@@ -288,6 +288,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
+      - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
+        run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -865,6 +867,8 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
+        run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.

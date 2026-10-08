@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-08-preflight-stops-at-raised-hands-scripts-raised-h",
+  "raisedAt": "2026-10-08T11:37:04.497Z",
+  "origin": "cloud",
+  "doing": "B62 observedAt UTC fix (PR #1442): final preflight on the branch head",
+  "blockedBy": "preflight stops at 'Raised hands' (scripts/raised-hands.mjs --check): 3 objective-owner stalls (COMPANY_BUILD_PLAN rows 17, 18, 24) are red on pristine origin/SignalGrid_Alpha b95f94f3 too, not from this diff, so the later preflight gates cannot run in the official order",
+  "need": "owner or blocker-dispatcher clears or marks those rows (row 17 lab, rows 18 and 24 owner rulings); then re-run node scripts/preflight.mjs",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null
+}

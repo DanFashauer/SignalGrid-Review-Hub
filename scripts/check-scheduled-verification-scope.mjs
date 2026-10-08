@@ -31,8 +31,9 @@
 //   - a breadth step whose `if:` is not exactly `success() || failure()` or `always()` —
 //     otherwise the first red gate hides the whole breadth lane, or a green night skips it;
 //   - a header that does not name `scripts/preflight.mjs` as what it runs.
-// It parses the job by indentation rather than with a YAML library (none is a
-// dependency here); the self-test plants each defect in a copy of the real file.
+// It parses the job by indentation rather than with a YAML parser (the pinned shellcheck
+// steps are parsed by scripts/check-ci-shellcheck-step.mjs, which uses the `yaml` package); the
+// self-test plants each defect in a copy of the real file.
 // (First two review rounds' bypasses — continue-on-error, `if: false`, an empty token,
 // a chained gate, a hidden breadth lane — are each a self-test case below.)
 import { readFileSync } from "node:fs";
@@ -48,8 +49,14 @@ const JOB = "verify";
 // breadth lane (its own CI job with its own registry, scripts/verify-breadth.mjs).
 const SETUP = [
   /^pnpm install --frozen-lockfile$/,
-  /^sudo apt-get update -qq$/,
-  /^sudo apt-get install -y -qq shellcheck$/,
+  // The shellcheck install, in the shape scripts/check-ci-shellcheck-step.mjs pins (preinstalled
+  // first, apt lock waited on, fail-closed). `}`, `then`, `fi`, `exit 1` are shell punctuation.
+  /^if ! command -v shellcheck >\/dev\/null 2>&1$/,
+  /^sudo apt-get -o DPkg::Lock::Timeout=\d+ (update -qq|install -y -qq shellcheck)$/,
+  /^command -v shellcheck >\/dev\/null 2>&1$/,
+  /^\{ echo "::error::[^"`]*"$/,
+  /^\}$/,
+  /^shellcheck --version$/,
   /^(if )?timeout \d+ pnpm --filter @workspace\/scripts exec playwright install(-deps)? chromium$/,
   /^(ok=|ok=1|break|for attempt in 1 2 3|do|done|then|fi|exit 1|if \[ -z "\$ok" \])$/,
   /^sleep \$\(\(attempt \* \d+\)\)$/,
@@ -177,7 +184,7 @@ function selfTest() {
   const real = readFileSync(resolve(repo, WORKFLOW), "utf8");
   const pfLine = "        run: node scripts/preflight.mjs\n";
   const pfName = "      - name: Preflight — the whole gate suite (daily rot check)\n";
-  const aptLine = /(        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck)\n/;
+  const aptLine = /(            sudo apt-get -o DPkg::Lock::Timeout=180 install -y -qq shellcheck)\n/;
   const breadthIf = "        if: success() || failure()\n        run: pnpm run verify:breadth\n";
   const jobLine = "    name: Daily verification (full preflight + breadth lane)\n";
   const planted = (from, to) => real.replace(from, to);

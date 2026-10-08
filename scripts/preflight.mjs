@@ -299,6 +299,8 @@ const STEPS = [
   // daemon needed, which is the point: the web image was unbuildable for months
   // because no gate ever built it.
   { name: "Container native base (a Dockerfile that cannot build is not a deploy path)", cmd: ["node", "scripts/check-container-native-base.mjs"] },
+  { name: "CI shellcheck step (prefers the preinstalled binary, waits for the apt lock, fails closed; self-tested)", cmd: ["node", "scripts/check-ci-shellcheck-step.mjs"] },
+  { name: "CI shellcheck step self-test (the old bare apt-get shape must fail, the new shape must pass)", cmd: ["node", "scripts/check-ci-shellcheck-step.mjs", "--self-test"] },
   // Plan row 59 + backlog "grype || true": the corepack pnpm fetch is retried and
   // pinned, the CVE-closing corepack-cache strip stays, grype cannot swallow a crash.
   { name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)", cmd: ["node", "scripts/check-image-build-hardening.mjs"] },

@@ -23,13 +23,21 @@
 // (`--depth`), and a cross-lane sha that has not landed yet is a fact about the clone,
 // not about the file. A gate that goes red on every shallow runner gets switched off.
 //
+// `--require-history` turns the two REPORTED shallow-clone cases (an unresolvable sha, an
+// unknown last-touch time) into FATAL ones, and refuses to run at all on a shallow clone
+// (fail closed: the flag is a claim about the checkout, so the checkout is asked). Run it
+// where history is full: the CI validation job deepens first, then runs this; local preflight
+// and the Mac full-clone lanes run the plain form, which still reports.
+//
 // NOT IN SCOPE, deliberately: throughput, latency, durations and any other number in
 // the `runs` array. Those move with the machine; binding them here would make this a
 // flaky gate over measurements it has no way to reproduce.
 //
 //   node scripts/check-sim-result-provenance.mjs
+//   node scripts/check-sim-result-provenance.mjs --require-history
 //   node scripts/check-sim-result-provenance.mjs --self-test
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -82,14 +90,16 @@ export function citedEvidencePaths(jsonText) {
  *   { file, commit, resolves, isAncestor, jsonCommitTime, evidence: [{ path, exists, commitTime }] }
  * Returns { fatal: [...], reported: [...] }.
  */
-export function verdictFor(facts, laterOk = EVIDENCE_LATER_OK) {
+export function verdictFor(facts, laterOk = EVIDENCE_LATER_OK, { requireHistory = false } = {}) {
   const fatal = [];
   const reported = [];
   const where = facts.file;
 
   if (!facts.commit) fatal.push(`${where}: provenance.commit is missing — the record names no code at all`);
   else if (!SHA_RE.test(facts.commit)) fatal.push(`${where}: provenance.commit "${facts.commit}" is not a 40-hex sha`);
-  else if (!facts.resolves) {
+  else if (!facts.resolves && requireHistory) {
+    fatal.push(`${where}: ${facts.commit} does not resolve, and --require-history says this checkout holds full history — a sha nobody can look at attests to nothing`);
+  } else if (!facts.resolves) {
     reported.push(`${where}: ${facts.commit} does not resolve in this checkout (shallow clone, or a cross-lane sha that has not landed)`);
   } else if (!facts.isAncestor) {
     fatal.push(`${where}: ${facts.commit} resolves but is NOT an ancestor of HEAD — it belongs to another history, so this result attests to code this branch does not carry`);
@@ -102,6 +112,10 @@ export function verdictFor(facts, laterOk = EVIDENCE_LATER_OK) {
     }
     const dir = e.path.slice(0, e.path.lastIndexOf("/"));
     if (e.commitTime === null || facts.jsonCommitTime === null) {
+      if (requireHistory) {
+        fatal.push(`${where}: last-touch commit unknown for ${e.path} or for the result itself, and --require-history says history is full — freshness cannot be shown`);
+        continue;
+      }
       reported.push(`${where}: last-touch commit unknown for ${e.path} or for the result itself (shallow clone) — freshness not checked`);
       continue;
     }
@@ -148,6 +162,62 @@ function liveFacts() {
   });
 }
 
+/**
+ * End-to-end: a scratch git repository holding a copy of this script and six result JSONs,
+ * one given a 40-hex sha that exists nowhere. Without the flag the gate exits 0 (it
+ * REPORTS); under --require-history it exits 1; a shallow scratch clone under the flag also
+ * exits 1, because "full history" is a claim the gate checks rather than assumes.
+ */
+function scratchCloneChecks(ok) {
+  const root = mkdtempSync(join(tmpdir(), "prov-selftest-"));
+  const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8" });
+  const g = (cwd, ...args) => run(cwd, "git", ["-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
+  try {
+    const src = join(root, "src");
+    mkdirSync(join(src, "scripts"), { recursive: true });
+    mkdirSync(join(src, RESULTS_DIR), { recursive: true });
+    copyFileSync(fileURLToPath(import.meta.url), join(src, "scripts", "check-sim-result-provenance.mjs"));
+    g(src, "init", "-q");
+    writeFileSync(join(src, "root.txt"), "root\n");
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "root");
+    writeFileSync(join(src, "seed.txt"), "seed\n");
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "seed");
+    const head = g(src, "rev-parse", "HEAD").stdout.trim();
+    for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
+      writeFileSync(join(src, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
+    }
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "results");
+    const gate = (cwd, ...flags) => run(cwd, "node", [join(cwd, "scripts", "check-sim-result-provenance.mjs"), ...flags]).status;
+
+    const cleanDefault = gate(src);
+    const cleanFlag = gate(src, "--require-history");
+    writeFileSync(join(src, RESULTS_DIR, "r0.json"), JSON.stringify({ provenance: { commit: "b".repeat(40) } }));
+    g(src, "add", "-A");
+    g(src, "commit", "-q", "-m", "ghost sha");
+    const ghostDefault = gate(src);
+    const ghostFlag = gate(src, "--require-history");
+
+    // A depth-2 clone of the CLEAN tree: every cited sha still resolves, so the only thing
+    // that can turn this red is the shallow refusal itself.
+    g(src, "reset", "-q", "--hard", "HEAD~1");
+    const shallow = join(root, "shallow");
+    g(root, "clone", "-q", "--depth", "2", `file://${src}`, shallow);
+    const shallowDefault = gate(shallow);
+    const shallowFlag = gate(shallow, "--require-history");
+    return [
+      ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
+      ok("scratch clone: an unresolvable 40-hex sha exits 0 without the flag (reported)", ghostDefault === 0),
+      ok("scratch clone: the same sha exits 1 under --require-history", ghostFlag === 1),
+      ok("scratch clone: --require-history on a SHALLOW clone exits 1 (full history is checked, not assumed)", shallowDefault === 0 && shallowFlag === 1),
+    ];
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function selfTest() {
   const ok = (name, cond) => ({ name, cond });
   const base = {
@@ -168,6 +238,30 @@ function selfTest() {
       (() => {
         const v = verdictFor({ ...base, resolves: false, isAncestor: false });
         return v.fatal.length === 0 && v.reported.length === 1;
+      })(),
+    ),
+    ok(
+      "--require-history: an unresolvable sha is FATAL (history is full where this runs)",
+      (() => {
+        const v = verdictFor({ ...base, resolves: false, isAncestor: false }, laterOk, { requireHistory: true });
+        return v.fatal.length === 1 && v.reported.length === 0;
+      })(),
+    ),
+    ok(
+      "--require-history: an unknown last-touch time is FATAL, not reported",
+      (() => {
+        const ev = [{ path: "artifacts/sim-results/d/a.png", exists: true, commitTime: null }];
+        return (
+          verdictFor({ ...base, evidence: ev }, laterOk, { requireHistory: true }).fatal.length === 1 &&
+          verdictFor({ ...base, evidence: ev }, laterOk).fatal.length === 0
+        );
+      })(),
+    ),
+    ok(
+      "--require-history changes nothing for a clean, resolvable record",
+      (() => {
+        const v = verdictFor(base, laterOk, { requireHistory: true });
+        return v.fatal.length === 0 && v.reported.length === 0;
       })(),
     ),
     ok("a resolvable NON-ancestor sha is FATAL", verdictFor({ ...base, isAncestor: false }).fatal.length === 1),
@@ -204,6 +298,7 @@ function selfTest() {
       [...EVIDENCE_LATER_OK.values()].every((r) => typeof r === "string" && r.trim().length > 0),
     ),
   ];
+  checks.push(...scratchCloneChecks(ok));
   let bad = 0;
   for (const c of checks) {
     console.log(`  ${c.cond ? "ok" : "FAIL"} — ${c.name}`);
@@ -215,6 +310,11 @@ function selfTest() {
 
 if (process.argv.includes("--self-test")) selfTest();
 
+const requireHistory = process.argv.includes("--require-history");
+if (requireHistory && git("rev-parse", "--is-shallow-repository").stdout.trim() !== "false") {
+  console.error("sim-result provenance: --require-history on a shallow (or unreadable) checkout — deepen it first (git fetch --unshallow); refusing to report a clean run over history it cannot see.");
+  process.exit(1);
+}
 const facts = liveFacts();
 console.log(`sim-result provenance — ${facts.length} result(s) under ${RESULTS_DIR}\n`);
 if (facts.length < MIN_RESULTS) {
@@ -225,7 +325,7 @@ if (facts.length < MIN_RESULTS) {
 const fatal = [];
 const reported = [];
 for (const f of facts) {
-  const v = verdictFor(f);
+  const v = verdictFor(f, EVIDENCE_LATER_OK, { requireHistory });
   fatal.push(...v.fatal);
   reported.push(...v.reported);
   const evi = f.evidence.length;

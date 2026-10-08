@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve, isAbsolute, relative } from "node:path";
+import { dirname, resolve, isAbsolute, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -147,7 +147,12 @@ const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s]*@/ :
 // One configuration entry (scope, origin, "key\nvalue" as `git config --show-origin --show-scope -z` prints them) -> { problem } | { trusted } | {}.
 // Pure, so the scope rule is testable for a scope this git never prints: system, global and command line are the environment's; ANYTHING else (local, worktree,
 // and any scope a later git adds) is the repository's own and is gated.
-function transportKey(scope, origin, kv) {
+//
+// ROUND 10 (origin inside the repository). `--show-scope` names the scope of the file that INCLUDED a key, so an include.path in the global file that points at a
+// file kept inside the repository reported that file's keys as "global", and they were only reported (round-9 refute, fx/include). The signal git also gives is the
+// ORIGIN path: a key whose origin file resolves (realpath) inside the worktree, its git dir or the common git dir is the repository's own whatever scope is named,
+// and is gated. `own` = { fileOf(origin) -> absolute real path or "", roots: [real paths], via(file) -> "include.path in <scope> <file>" or "" }; absent, only the scope decides.
+function transportKey(scope, origin, kv, own = null) {
   const nl = kv.indexOf("\n");
   const key = nl < 0 ? kv : kv.slice(0, nl), last = key.slice(key.lastIndexOf(".") + 1);
   const val = nl < 0 ? null : noUserinfo(kv.slice(nl + 1), last.includes("proxy"));
@@ -158,7 +163,38 @@ function transportKey(scope, origin, kv) {
   if (isHttp && (last === "sslverify" || last === "proxysslverify") && !gitBool(val)) return { problem: `${label} (${where}) turns TLS verification off` };
   const relevant = isUrl || isProxyCmd || (isHttp && !HTTP_HARMLESS.test(key));
   if (local && relevant) return { problem: `repository-scope ${label} (${where}) can redirect or weaken the Hub transport` };
+  const file = own ? own.fileOf(origin) : "";
+  if (relevant && file && own.roots.some((r) => file === r || file.startsWith(r + sep))) {
+    const via = own.via(file);
+    return { problem: `repository-owned ${label} (${scope} scope, but read from ${file}, a file inside the repository${via ? `, pulled in by ${via}` : ""}) can redirect or weaken the Hub transport` };
+  }
   return relevant ? { trusted: `${where}: ${label}` } : {};
+}
+// The real paths the repository owns (worktree, git dir, common git dir), the real path of a `file:` origin, and which include line named a file.
+function repoOwnership(cwd) {
+  const real = (p) => { try { return realpathSync(p); } catch { return resolve(p); } };
+  const roots = [];
+  for (const a of ["--show-toplevel", "--git-common-dir"]) { // (a linked worktree's private git dir lies inside the common dir, so it needs no root of its own)
+    const r = gitRun(cwd, ["rev-parse", a]);
+    if (r.ok && r.stdout.trim()) { const p = real(resolve(cwd, r.stdout.trim())); if (!roots.includes(p)) roots.push(p); }
+  }
+  const fileOf = (origin) => { const m = /^file:(.+)$/.exec(String(origin)); return m ? real(resolve(cwd, m[1])) : ""; };
+  let includes = null; // lazily: only a finding needs to name its include line
+  const via = (file) => {
+    if (!includes) {
+      includes = new Map();
+      const r = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(include\\.path|includeif\\..*\\.path)$"]);
+      const t = String(r.ok ? r.stdout : "").split("\0");
+      for (let i = 0; i + 2 < t.length; i += 3) {
+        const from = fileOf(t[i + 1]), kv = t[i + 2], nl = kv.indexOf("\n");
+        if (!from || nl < 0) continue;
+        const raw = kv.slice(nl + 1), target = raw.startsWith("~/") ? join(process.env.HOME || "", raw.slice(2)) : resolve(dirname(from), raw);
+        includes.set(real(target), `${kv.slice(0, nl)} in ${t[i]} ${from}`);
+      }
+    }
+    return includes.get(file) || "";
+  };
+  return { roots, fileOf, via };
 }
 function hubTransport(cwd = repo, hub = HUB) {
   const problems = [], trusted = [];
@@ -175,8 +211,9 @@ function hubTransport(cwd = repo, hub = HUB) {
   } else {
     const t = String(cfg.stdout).split("\0"); // scope \0 origin \0 key \n value \0, repeated
     const seen = new Map();
+    const own = repoOwnership(cwd);
     for (let i = 0; i + 2 < t.length; i += 3) {
-      const f = transportKey(t[i], t[i + 1], t[i + 2]);
+      const f = transportKey(t[i], t[i + 1], t[i + 2], own);
       if (f.problem) problems.push(f.problem);
       else if (f.trusted) seen.set(f.trusted, (seen.get(f.trusted) || 0) + 1);
     }
@@ -193,6 +230,16 @@ function hubTransport(cwd = repo, hub = HUB) {
 }
 function hubUrlProblem(cwd = repo, hub = HUB) {
   return hubTransport(cwd, hub).problems.join("; ");
+}
+// The row for a listing that WAS read. Green only when nothing was taken on trust: no proxy, no CA override and no rewrite at any scope. Anything listed under
+// "trusted, not verified" (the cloud sandbox's own proxy and CA always are) is a warning, never gating, so it stands out instead of reading like a clean pass
+// (round-9 refute: a global proxy plus an environment CA served a fake listing and the row was a green tick).
+function transportRow(scan, hub = HUB) {
+  const clean = scan.trusted.length === 0;
+  return {
+    state: clean ? "ok" : "warn", what: "Review Hub transport", gated: false,
+    detail: clean ? `listing read from ${hub}; ${scan.note}` : `listing read from ${hub} through a transport this check cannot verify; ${scan.note}`,
+  };
 }
 const HUB_SPELLINGS = ["https://github.com/danfashauer/signalgrid-review-hub", "git@github.com:danfashauer/signalgrid-review-hub", "ssh://git@github.com/danfashauer/signalgrid-review-hub"];
 function isHubUrl(u) {
@@ -247,7 +294,7 @@ if (hubUrlTrouble) {
   for (const [sha, ref] of heads) hubSha.set(ref.slice("refs/heads/".length), sha);
   hubBranches = [...hubSha.keys()];
   hubListed = true;
-  add("ok", "Review Hub transport", `listing read from ${HUB}; ${hubScan.note}`);
+  { const tr = transportRow(hubScan); add(tr.state, tr.what, tr.detail, tr.gated); }
 } catch {
   // FAIL, not warn. An unreachable Hub means the unpushed-work check below did
   // not run, and "the check that would have caught the lost week did not run"
@@ -2606,6 +2653,7 @@ function selfTest() {
       const listing = cfgFile(`${name}-listing`, `${hubMapOf(fx.h).get("main")}\trefs/heads/main\n`);
       const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
       delete childEnv.GIT_SSL_NO_VERIFY;
+      for (const [k, v] of Object.entries(vars)) if (v === null) delete childEnv[k]; // (null: unset)
       const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: 120000, env: childEnv });
       return { status: r.status, out: stripAnsi(r.stdout) };
     };
@@ -2613,9 +2661,9 @@ function selfTest() {
     const txeClean = wholeScript(txe, "r9txe-a", { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: "", all_proxy: "", GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
     txe.f("config", "http.proxy", "http://127.0.0.1:39689"); txe.f("config", "http.sslVerify", "false");
     const txeLie = wholeScript(txe, "r9txe-b");
-    check("the whole check, with a repository-scope http.proxy and http.sslVerify=false and a listing served by whatever sits behind them, exits 1 with a failing Hub-URL row and never reads the listing; the same repository without them reads it and names what it trusted (R9-tx-e2e)",
+    check("the whole check, with a repository-scope http.proxy and http.sslVerify=false and a listing served by whatever sits behind them, exits 1 with a failing Hub-URL row and never reads the listing; the same repository without them reads it and names what it trusted, as a warning (R9-tx-e2e)",
       txeLie.status === 1 && /✗ Review Hub URL\s+repository-scope http\.proxy=http:\/\/127\.0\.0\.1:39689/.test(txeLie.out) && !/all present on the Review Hub/.test(txeLie.out) && !/Review Hub transport/.test(txeLie.out) &&
-      /✓ Review Hub transport\s+listing read from /.test(txeClean.out) && txeClean.out.includes("trusted, not verified: ") && /environment proxy HTTPS_PROXY(\/https_proxy)?=http:\/\/127\.0\.0\.1:9\b/.test(txeClean.out) &&
+      /! Review Hub transport\s+listing read from /.test(txeClean.out) && txeClean.out.includes("trusted, not verified: ") && /environment proxy HTTPS_PROXY(\/https_proxy)?=http:\/\/127\.0\.0\.1:9\b/.test(txeClean.out) &&
       txeClean.out.includes("environment CA GIT_SSL_CAINFO=/etc/agent/ca.pem") && !txeClean.out.includes("pw123") && /all present on the Review Hub/.test(txeClean.out));
 
     // (2) detached HEAD. Evidence is a local branch or a commit the Hub lists, never a remote-tracking ref (anyone can write one) and never a tag.
@@ -2740,6 +2788,46 @@ function selfTest() {
     check("every git is pinned to the repository asked about, and a relative path to it is resolved once, never compounded by -C beside the spawn's cwd (R9-env-pin)",
       !isAbsolute(relCwd) && gitRun(relCwd, ["rev-parse", "--show-toplevel"]).stdout.trim() === realpathSync(en.w) && gitRun(join(root, "no-repo-here"), ["rev-parse", "--git-dir"]).ok === false &&
       /spawnSync\("git", \["-c", "core\.commitGraph=false", "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
+    // ══ ROUND 10 ══ The round-9 refuter's two ranked items: the trusted-not-verified row must not look like a clean pass, and a key whose ORIGIN file lies inside the
+    // repository is the repository's own whatever scope git names. Each case FAILS on a1b43b42.
+    const cleanOfTrust = { GIT_CONFIG_COUNT: null, GIT_SSL_CAINFO: null, GIT_SSL_CAPATH: null, HTTPS_PROXY: null, https_proxy: null, ALL_PROXY: null, all_proxy: null };
+    const cloudShape = { HTTPS_PROXY: "http://127.0.0.1:40381", https_proxy: "http://127.0.0.1:40381", GIT_SSL_CAINFO: "/root/.ccr/ca-bundle.crt" }; // what the cloud sandbox always sets
+    const cloudScan = inCleanEnv(() => hubTransport(txc.w), { ...cloudShape, GIT_CONFIG_GLOBAL: gProxy });
+    const cloudRow = transportRow(cloudScan);
+    const cleanScan = inCleanEnv(() => hubTransport(txc.w), cleanOfTrust), cleanRow = transportRow(cleanScan);
+    // trust that is NOT in the environment still makes the row a warning: a global proxy alone, a command-line rewrite alone
+    const globalOnly = transportRow(inCleanEnv(() => hubTransport(txc.w), { ...cleanOfTrust, GIT_CONFIG_GLOBAL: gProxy }));
+    const rewriteOnly = transportRow(inCleanEnv(() => hubTransport(txc.w), { ...cleanOfTrust, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.https://github.com/.insteadOf", GIT_CONFIG_VALUE_0: "git@github.com:" }));
+    const txw2 = mkFx("r10warn"); txw2.f("config", "remote.origin.url", HUB);
+    mkdirSync(join(txw2.w, "docs")); writeFileSync(join(txw2.w, "docs", "PURPOSE.md"), "fixture\n"); // so that no OTHER seam gates the exit code below
+    const warnRun = wholeScript(txw2, "r10warn-a", cloudShape);
+    check("a listing read through the environment's proxy and CA, or a global proxy, renders a WARNING row (!), never gating, whose text still lists what was trusted; the same shape through the whole script exits 0 with the ! row (R10-tx-warn)",
+      cloudScan.problems.length === 0 && cloudScan.trusted.length >= 2 && cloudRow.state === "warn" && cloudRow.gated === false && cloudRow.what === "Review Hub transport" && cloudRow.detail.includes("trusted, not verified: ") &&
+      cloudRow.detail.includes("through a transport this check cannot verify") && globalOnly.state === "warn" && globalOnly.detail.includes("http.proxy=http://10.9.8.7:3128") && rewriteOnly.state === "warn" && warnRun.status === 0 && /! Review Hub transport\s+listing read from .*trusted, not verified: environment proxy HTTPS_PROXY\/https_proxy=http:\/\/127\.0\.0\.1:40381; environment CA GIT_SSL_CAINFO=\/root\/\.ccr\/ca-bundle\.crt/.test(warnRun.out) &&
+      !/✓ Review Hub transport/.test(warnRun.out) && /all present on the Review Hub/.test(warnRun.out));
+    const cleanRun = wholeScript(txw2, "r10warn-b", cleanOfTrust);
+    check("a listing read with no proxy, no CA override and no rewrite at any scope renders the green row, whose text says nothing was configured (R10-tx-clean)",
+      cleanScan.problems.length === 0 && cleanScan.trusted.length === 0 && cleanRow.state === "ok" && cleanRow.gated === false && cleanRow.detail === `listing read from ${HUB}; no proxy, CA or URL rewrite configured; direct` &&
+      cleanRun.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(cleanRun.out) && !/! Review Hub transport/.test(cleanRun.out));
+    // (2) a repository-owned file pulled in by a GLOBAL include.path
+    const inc = mkFx("r10inc"); inc.f("config", "remote.origin.url", HUB);
+    const incEvil = join(inc.w, "repoevil.cfg"); writeFileSync(incEvil, "[http]\n\tproxy = http://127.0.0.1:1\n");
+    const incGitDir = join(inc.w, ".git", "gitdir-evil.cfg"); writeFileSync(incGitDir, "[url \"https://mirror.example/\"]\n\tinsteadOf = https://example.org/\n");
+    const incGlobal = cfgFile("r10-global-include.cfg", `[include]\n\tpath = ${incEvil}\n[include]\n\tpath = ${incGitDir}\n`);
+    const incScan = inCleanEnv(() => hubTransport(inc.w), { GIT_CONFIG_GLOBAL: incGlobal });
+    const incLink = join(root, "r10-link.cfg"); symlinkSync(incEvil, incLink);
+    const incViaLink = inCleanEnv(() => hubTransport(inc.w), { GIT_CONFIG_GLOBAL: cfgFile("r10-global-link.cfg", `[include]\n\tpath = ${incLink}\n`) });
+    const incWt = join(root, "r10inc-wt"); inc.f("worktree", "add", "-q", incWt, "-b", "r10wt");
+    const incFromWt = inCleanEnv(() => hubTransport(incWt), { GIT_CONFIG_GLOBAL: cfgFile("r10-global-gitdir.cfg", `[include]\n\tpath = ${incGitDir}\n`) });
+    check("a key from a file INSIDE the repository (worktree, git dir, common git dir seen from a linked worktree, or a symlink to one) is gated whatever scope git reports, and the finding names the scope, the origin path and the include.path that pulled it in (R10-tx-include)",
+      incScan.problems.length === 2 && /^repository-owned http\.proxy=http:\/\/127\.0\.0\.1:1 \(global scope, but read from .*\/r10inc\/work\/repoevil\.cfg, a file inside the repository, pulled in by include\.path in global .*r10-global-include\.cfg\) can redirect or weaken the Hub transport$/.test(incScan.problems[0]) &&
+      /^repository-owned url\.https:\/\/mirror\.example\/\.insteadof=https:\/\/example\.org\/ \(global scope, but read from .*gitdir-evil\.cfg, a file inside the repository/.test(incScan.problems[1]) &&
+      incViaLink.problems.length === 1 && incViaLink.problems[0].includes(`read from ${realpathSync(incEvil)}`) && incFromWt.problems.length === 1 && incFromWt.problems[0].includes("gitdir-evil.cfg") && /repository-owned/.test(inCleanEnv(() => hubUrlProblem(inc.w), { GIT_CONFIG_GLOBAL: incGlobal })));
+    const incOutside = cfgFile("r10-outside.cfg", "[http]\n\tproxy = http://127.0.0.1:2\n"), incSibling = join(dirname(inc.w), "work2.cfg");
+    writeFileSync(incSibling, "[http]\n\tproxy = http://127.0.0.1:3\n");
+    const incOk = inCleanEnv(() => hubTransport(inc.w), { GIT_CONFIG_GLOBAL: cfgFile("r10-global-outside.cfg", `[include]\n\tpath = ${incOutside}\n[include]\n\tpath = ${incSibling}\n`) });
+    check("the environment's own shape stays a warning: a global file, and files it includes, that lie OUTSIDE the repository (even a sibling whose path begins with the repository's) are reported as trusted and are no finding (R10-tx-include-outside)",
+      incOk.problems.length === 0 && incOk.trusted.some((t) => t.includes("http.proxy=http://127.0.0.1:2")) && incOk.trusted.some((t) => t.includes("http.proxy=http://127.0.0.1:3")) && transportRow(incOk).state === "warn");
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

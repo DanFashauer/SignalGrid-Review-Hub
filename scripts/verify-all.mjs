@@ -100,6 +100,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { nativeBuildExclusion } from "./lib/platform-native-build.mjs";
 import { attestedNativeSteps, readAttestation } from "./lib/native-build-attestation.mjs";
+import { isIgnoredUntracked } from "./lib/untracked-ignore.mjs";
 // The proof/step roster a green run COVERS, and the per-proof source-fingerprint
 // derivation, read through the SAME functions the binding gate and the readiness
 // figure use — one reading, so the roster and digests the evidence records cannot
@@ -441,11 +442,12 @@ if (emitEvidence) {
       // generated/scratch paths are ignored; any other untracked path is source
       // that could change the outcome, so it counts toward dirtiness and is also
       // surfaced on its own so a reader can see exactly what was present.
-      const IGNORED_UNTRACKED = /(^|\/)(\.venv|venv|node_modules|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|dist|build|\.DS_Store)(\/|$)|\.lock$|\.egg-info(\/|$)/;
+      // IGNORED_UNTRACKED lives in scripts/lib/untracked-ignore.mjs (testable). No lockfile arm:
+      // an untracked uv.lock / poetry.lock changes the resolved deps, so it counts as source.
       const statusLines = mcpStatus === null ? null : mcpStatus.split("\n").filter(Boolean);
       const trackedModified = statusLines === null ? null : statusLines.filter((l) => !l.startsWith("??")).length;
       const untrackedSource = statusLines === null ? null
-        : statusLines.filter((l) => l.startsWith("??") && !IGNORED_UNTRACKED.test(l.slice(3))).length;
+        : statusLines.filter((l) => l.startsWith("??") && !isIgnoredUntracked(l.slice(3))).length;
       // Public-safe by construction: fingerprints, booleans, and counts only.
       const evidence = {
         schema: "signalgrid-live-evidence/v1",
@@ -483,7 +485,7 @@ if (emitEvidence) {
         mcpCommit,
         // Dirty if the tree has tracked modifications OR untracked SOURCE that the
         // recorded commit cannot reproduce. Known scratch (venvs, caches, build
-        // dirs, lockfiles) is excluded — see IGNORED_UNTRACKED — and the untracked
+        // dirs) is excluded; lockfiles are NOT — see scripts/lib/untracked-ignore.mjs — and the untracked
         // source count is reported separately so the claim is auditable, not
         // asserted.
         mcpDirty: statusLines === null ? null : (trackedModified > 0 || untrackedSource > 0),

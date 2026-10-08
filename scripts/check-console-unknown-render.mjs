@@ -112,7 +112,8 @@
 //     it flags only when the call TEXT carries a good class, and `Object.create(null)` filled by later
 //     assignment is silent; `new Map(…)` is silent (an `Object.entries(x).forEach(([k, v]) => { T[k] = v })` write flags). A nested sub-map is followed at every depth: used as a value (alias, call
 //     argument, `Object.values/entries`, destructure, spread of a map that holds one) it escapes; only indexing it further is a read.
-//     A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
+//     Depth caps FAIL OPEN: a const alias chain of 7+ hops and a chain of 9+ nested components are not
+//     followed. A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
 //     read (`T.x = pick()`, a parameter, an import, `Object.assign(T, { x: pick() })`) is treated as possibly good-state; a spread this
 //     cannot resolve (`...(c ? BASE : {})`, `...getBase()`, `...cfg.base`, a `let` source) is treated as carrying a possibly good-state entry. A map's WRITES are a whitelist:
 //     any reference to its name (or an alias in the same file) that is not a plain read — `T.x`,
@@ -864,10 +865,16 @@ function analyzeSourceFile(relPath, text) {
     return null;
   };
   // A value this can judge: a literal, a const it resolves, or a non-class constant. Anything else (a call, a parameter, a member read) may be a good class.
-  const readableValue = (e) => {
-  const rv = unwrapExpr(e);
-  return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
-    rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && (rv.text === "undefined" || Boolean(resolveConstInit(rv))));
+  const readableValue = (e, seen = new Set()) => {
+    const rv = unwrapExpr(e);
+    if (ts.isIdentifier(rv) && rv.text !== "undefined") { // a const is judged by what it is bound to, not by being a const
+      const ci = resolveConstInit(rv, () => true);
+      if (!ci || seen.has(ci)) return false;
+      seen.add(ci);
+      return readableValue(ci, seen);
+    }
+    return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
+      rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && rv.text === "undefined");
   };
   const ABSENT_ENTRY_KEYS = new Set(["undefined", "null", "", "[object object]", "__proto__"]);
   // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key. A shorthand
@@ -887,6 +894,12 @@ function analyzeSourceFile(relPath, text) {
       if (!(lit === null || key === null || key === lit)) continue;
       // an absent-key (`undefined`, `null`, `""`, `__proto__`) or unreadable-key entry whose VALUE this cannot read may be a good class
       if (ts.isPropertyAssignment(p) && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase())) && !readableValue(p.initializer)) escapedMapRefs.add(p.initializer);
+      if (ts.isGetAccessor(p) && p.body && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase()))) { // a getter on an absent key: what it returns must be readable
+        const rets = [];
+        const rv = (n) => { if (ts.isReturnStatement(n)) { if (n.expression) rets.push(n.expression); return; } if (ts.isFunctionLike(n)) return; ts.forEachChild(n, rv); };
+        rv(p.body);
+        for (const r of rets) if (!readableValue(r)) escapedMapRefs.add(r);
+      }
       if (ts.isPropertyAssignment(p)) out.push(p.initializer);
       else if (ts.isShorthandPropertyAssignment(p)) out.push(p.name);
       else out.push(p); // a method / getter / setter: its body is walked for class strings
@@ -2349,6 +2362,15 @@ BUG_R6.push(
   ["Object.assign with a shorthand member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function s(undefined) { Object.assign(T, { undefined }); } s("${EMER}");`, "T[q.data?.s] ?? T.default")],
   ["Object.assign with a method member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined() { return pick(); } });`, "T[q.data?.s] ?? T.default")],
   ["Object.assign with a getter member", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { get undefined() { return pick(); } });`, "T[q.data?.s] ?? T.default")],
+  ["map literal: undefined bound through a const to a call", mkMap(`const X = pick(); const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: undefined bound through a const to a member read", mkMap(`const X = cfg.cls; const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: undefined bound through two consts", mkMap(`const Y = pick(); const X = Y; const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
+  ["map write: T.undefined = X with X bound to a call", mkMap(`const X = pick(); const T = { ok: "text-red-400", default: "text-slate-400" }; T.undefined = X;`, "T[q.data?.s] ?? T.default")],
+  ["Object.assign literal value bound to a call", mkMap(`const X = pick(); const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { undefined: X });`, "T[q.data?.s] ?? T.default")],
+  ["map literal: getter on undefined returning pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { return pick(); } };`, "T[q.data?.s] ?? T.default")],
+  ["map literal: getter on null returning cfg.cls", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get null() { return cfg.cls; } };`, "T[q.data?.s] ?? T.default")],
+  ["const alias chain of 6 hops still resolves the map", mkMap(`const A0 = { ok: "${EMER}" }; const A1 = A0; const A2 = A1; const A3 = A2; const A4 = A3; const A5 = A4; const A6 = A5;`, "A6.ok")],
+  ["map write: T.undefined = A with a cyclic const chain", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const A = B; const B = A; T.undefined = A;`, "T[q.data?.s] ?? T.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2372,6 +2394,9 @@ OK_R6.push(
   ["control: Object.assign with readable non-good literal values", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; Object.assign(T, { default: "text-slate-500", n: 1 });`, "T[q.data?.s] ?? T.default")],
   ["control: absent-key entries with readable non-good values", mkMap(`const SLATE = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400", undefined: SLATE, null: "text-slate-500", "": null };`, "T[q.data?.s] ?? T.default")],
   ["control: Object.assign with null / void 0 / template / const values", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const SLATE = "text-slate-500"; Object.assign(T, { a: null, b: void 0, c: \`text-slate-500\`, d: SLATE, e: 2, f: \`text-slate-\${n}\` });`, "T[q.data?.s] ?? T.default")],
+  ["control: absent-key entry bound through a const to a readable literal", mkMap(`const X = "text-slate-500"; const Y = X; const T = { ok: "text-red-400", default: "text-slate-400", undefined: Y };`, "T[q.data?.s] ?? T.default")],
+  ["control: writes of true / false / undefined / a numeric const", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const N = 3; T.undefined = true; T.null = false; T[\"\"] = undefined; T.undefined = N;`, "T[q.data?.s] ?? T.default")],
+  ["control: getter on undefined returning a readable literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { return "text-slate-500"; } };`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 

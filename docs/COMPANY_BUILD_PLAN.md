@@ -2690,7 +2690,7 @@ earlier — that is the loop working, not a reason to soften the record.
 
 97. **`POST /cp/v1/telemetry` is an unauthenticated, unbounded, cross-tenant
     WRITE that the profile documentation does not name as a write.** — OPEN,
-    api-contract-architect. RE-MEASURED 2026-09-26 (still open, reproduced live today): `artifacts/api-server/src/routes/control-plane.ts` still accepts an anonymous POST with any string nodeId of any length and `lib/control-plane/src/index.ts` stores it by nodeId, so a post under another tenant's real node id rewrites that tenant's rollup (reproduced: `9000000` decisions, denyRate `1`) and a `60000`-character nodeId is ingested; PR #456 (65edddaf, 2026-09-05) closed only the count-folding defect (malformed counts now 400); still no auth, no membership check against the tenant's edge nodes, no length bound, no test; review-demo profile only, not mounted under the gateway. Reproduced: one anonymous POST rewrote another tenant's
+    api-contract-architect. FIX PROPOSED 2026-09-29 (branch `claude/build-telemetry-known-node`, owner merges): the route now refuses any `nodeId` outside `cp.listEdgeNodes()` with 404 before anything is stored, which closes the unbounded growth and bounds the poisoning to the fixture's own nodes; a KNOWN node id can still be overwritten because the router carries no principal (demo-only, not mounted under the gateway); `artifacts/api-server/src/routes/index.ts` and `artifacts/api-server/src/lib/profile.ts` now name the write; test:api asserts the unknown-id and 60,000-character-id refusals (disabling the guard fails both). RE-MEASURED 2026-09-26 (still open, reproduced live today): `artifacts/api-server/src/routes/control-plane.ts` still accepts an anonymous POST with any string nodeId of any length and `lib/control-plane/src/index.ts` stores it by nodeId, so a post under another tenant's real node id rewrites that tenant's rollup (reproduced: `9000000` decisions, denyRate `1`) and a `60000`-character nodeId is ingested; PR #456 (65edddaf, 2026-09-05) closed only the count-folding defect (malformed counts now 400); still no auth, no membership check against the tenant's edge nodes, no length bound, no test; review-demo profile only, not mounted under the gateway. Reproduced: one anonymous POST rewrote another tenant's
     rollup, moving the top hotspot to `edge_nw_general` with 9,000,000 decisions and
     a denyRate of 1. A second probe sent 200 batches with 60KB `nodeId` values and
     grew RSS from 102,864 kB to 146,128 kB — the route validates only
@@ -4781,7 +4781,7 @@ Auth chain (bearer token to tenant principal):
 11. lib/enterprise-auth/src/jwt.ts (238) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
 13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
-14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
+14. artifacts/api-server/src/lib/profile.ts (213) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
 15. artifacts/api-server/src/lib/core.ts (344) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.
 

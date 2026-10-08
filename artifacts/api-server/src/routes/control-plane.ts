@@ -103,6 +103,15 @@ router.post("/cp/v1/telemetry", (req, res) => {
     res.status(400).json({ error: "validation", message: "nodeId is required" });
     return;
   }
+  // Only a seeded edge node may report. Any other string was stored under its own
+  // key, so an anonymous caller could grow the map without bound (60KB ids) and
+  // fleetHealth / ops-intelligence would read it as a site. A KNOWN node id can
+  // still be overwritten — this router carries no principal and is demo-only
+  // (the gateway profile does not mount it) — but only among the fixture's nodes.
+  if (!cp.listEdgeNodes().some((n) => n.id === b.nodeId)) {
+    res.status(404).json({ error: "not_found", message: "Edge node not found (fixture)" });
+    return;
+  }
   // A count that is absent, null, negative, non-finite or not a number is a
   // MALFORMED report, not a measured zero. The previous `num()` folded every one
   // of those to 0, so a broken reporter (`decisions: "many"`, `null`, a missing

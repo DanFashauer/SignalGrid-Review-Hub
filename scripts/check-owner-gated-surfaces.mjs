@@ -66,6 +66,7 @@ export const SAFETY_MACHINERY = [
   // a PR touching only these classified autonomous (backlog row, 2026-10-08).
   { rule: ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)", re: /^(\.claude\/(agents|skills|commands|workflows)\/|\.mcp\.json$)/ },
   { rule: ".githooks/** (the pre-push lockfile enforcement)", re: /^\.githooks\// },
+  { rule: "artifacts/mcp-server/** (the MCP server .mcp.json launches in every session)", re: /^artifacts\/mcp-server\// },
   { rule: ".claude-plugin/** (the plugin manifest enumerating the agents, skills and commands a consumer loads)", re: /^\.claude-plugin\// },
 ];
 
@@ -176,6 +177,23 @@ function selfTest() {
     });
     t(`every TRACKED child of .claude/ is classified or a named doc-only exemption (${children.length} children; unclassified: ${unclassified.join(", ") || "none"})`, tracked !== null && children.length > 0 && unclassified.length === 0);
   }
+  // The pointee, not only the pointer (review round 2 of PR #1464): .mcp.json is gated because it
+  // wires tool servers, so the server it LAUNCHES must be gated too, or a PR editing only the
+  // server's code changes what runs in every session on the autonomous tier. Derived from the
+  // real .mcp.json so a new server entry cannot point at an unclassified path.
+  {
+    let named = null;
+    try {
+      const cfg = JSON.parse(readFileSync(join(repo, ".mcp.json"), "utf8"));
+      named = Object.values(cfg.mcpServers ?? {})
+        .flatMap((sv) => [sv.command, ...(Array.isArray(sv.args) ? sv.args : [])])
+        .filter((x) => typeof x === "string" && x.includes("/") && !x.startsWith("-"));
+    } catch { /* named stays null -> the case below fails */ }
+    const loose = (named ?? []).filter((x) => cls([x]).tier !== "owner-gated");
+    t(`every repo path .mcp.json launches is gated (${(named ?? []).length} paths; ungated: ${loose.join(", ") || "none"})`, named !== null && named.length > 0 && loose.length === 0);
+  }
+  t("the MCP server's code and tool files are SAFETY_MACHINERY", ["artifacts/mcp-server/src/index.ts", "artifacts/mcp-server/src/tools/x.ts", "artifacts/mcp-server/package.json"].every((f) => cls([f]).tier === "owner-gated"));
+  t("a look-alike (artifacts/mcp-server-docs/x.md) is not swept in", cls(["artifacts/mcp-server-docs/x.md"]).tier === "autonomous");
   t("negative control: docs/agent/x.md stays autonomous", cls(["docs/agent/x.md"]).tier === "autonomous");
   t("negative control: .claude/COMMANDS.md (doc-only exemption) stays autonomous", cls([".claude/COMMANDS.md"]).tier === "autonomous");
   t("negative control: a .mcp.json look-alike elsewhere is not swept in", cls(["docs/examples/.mcp.json"]).tier === "autonomous" && cls([".mcp.json.md"]).tier === "autonomous");

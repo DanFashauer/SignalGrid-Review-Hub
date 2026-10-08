@@ -1702,6 +1702,9 @@ export function auditAllowlist(entries, readText) {
 export function isAllowed(mutation) {
   // Resolved against the file text the mutation came from; an entry that is stale or
   // ambiguous resolves to no line and exempts NOTHING (main() reports it as a failure).
+  // A mutation without an integer lineNo matches nothing: otherwise a stale or ambiguous entry
+  // (resolved line `undefined`) would equal a missing lineNo and exempt it.
+  if (!Number.isInteger(mutation.lineNo) || typeof mutation.original !== "string") return undefined;
   return ALLOWED.find((a) => a.file === mutation.file && resolveAllowedLine(a, mutation.original).line === mutation.lineNo);
 }
 
@@ -1795,8 +1798,9 @@ function main() {
   // An allowlist entry that no longer matches any line is itself a finding: the code moved
   // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
   // entry surfaces in seconds rather than after the full sweep.
-  let staleAllowlist = 0;
-  for (const problem of auditAllowlist(ALLOWED, (f) => readFileSync(join(repoRoot, f), "utf8"))) {
+  const allowlistProblems = auditAllowlist(ALLOWED, (f) => readFileSync(join(repoRoot, f), "utf8"));
+  let staleAllowlist = allowlistProblems.length; // the count IS the audit result, not a side effect of printing
+  for (const problem of allowlistProblems) {
     const { entry } = problem;
     if (problem.kind === "missing") {
       console.error(`✗ allowlist entry references a missing file: ${entry.file}`);
@@ -1807,7 +1811,6 @@ function main() {
       console.error(`✗ AMBIGUOUS allowlist entry — lines ${problem.lines.join(", ")} of ${entry.file} all contain:\n    "${entry.line}"`);
       console.error("    An entry exempts ONE line. Lengthen it to text unique in the file.");
     }
-    staleAllowlist += 1;
   }
   // ...and the prior question the staleness loop never asked: is the exempted file
   // even IN the sweep? Checked against ALL TARGETS, never the shard — a shard is a

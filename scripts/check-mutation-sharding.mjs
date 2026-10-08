@@ -183,6 +183,14 @@ function auditAllowed(entries, readText) {
   check("fixture: a snippet two lines contain is AMBIGUOUS (lists both lines)", JSON.stringify(resolveAllowedLine({ line: "return false;" }, text).ambiguous) === "[2,3]");
   check("fixture: a snippet no line contains is STALE", resolveAllowedLine({ line: "return 42;" }, text).stale === true);
   check("fixture: a unique snippet resolves to its 1-based line", resolveAllowedLine({ line: "if (!a) return false;" }, text).line === 3);
+  check("fixture: a mutation WITHOUT lineNo is never exempted by a stale or ambiguous entry (undefined === undefined must not match)",
+    (() => {
+      const saved2 = ALLOWED.splice(0, ALLOWED.length, { file: "fx.ts", line: "return false;", reason: "ambiguous" }, { file: "fx.ts", line: "return 42;", reason: "stale" });
+      try {
+        const noLine = (sourceLine) => ({ file: "fx.ts", original: text, sourceLine });
+        return !isAllowed(noLine("return false;")) && !isAllowed(noLine("return 42;")) && !isAllowed({ file: "fx.ts", sourceLine: "return false;" });
+      } finally { ALLOWED.splice(0, ALLOWED.length, ...saved2); }
+    })());
   check("fixture: `whole` pins a bare line that is a suffix of other lines (the attest.ts catch)", resolveAllowedLine({ line: "return false;", whole: true }, text.replace("  return true;", "    return false;")).ambiguous === undefined);
   check("fixture: allowlistProblem reports ambiguous with the lines, stale, and null for exactly one", allowlistProblem({ line: "return false;" }, text)?.kind === "ambiguous" && allowlistProblem({ line: "return false;" }, text).lines.join() === "2,3" && allowlistProblem({ line: "return 42;" }, text)?.kind === "stale" && allowlistProblem({ line: "if (!a) return false;" }, text) === null);
   const fx = (lineNo) => ({ file: "fx.ts", original: text, lineNo, sourceLine: text.split("\n")[lineNo - 1].trim() });

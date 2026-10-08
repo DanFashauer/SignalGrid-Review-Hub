@@ -511,7 +511,13 @@ function selfTest() {
     // Review round 1: one significant word left after a generic noun is dropped.
     const one = probeSpecs("lessons gate");
     checks.push(["a two-word topic left with ONE significant word still gets the weak words probe", one.some((s) => s.id === "words" && s.strength === "weak")]);
-    checks.push(["LIVE: 'lessons gate' is NOT corroborated while scripts/check-lessons.mjs exists", classify(one.map((s) => ({ ...s, ...s.run() }))) !== "corroborated"]);
+    {
+      // Asserted on the WORDS probe's own hits: the topic's literal sits in tracked files, so a
+      // verdict-only check passes even when the one-word probe finds nothing (review round 2).
+      const res = one.map((s) => ({ ...s, ...s.run() }));
+      const wordHits = res.find((r) => r.id === "words")?.hits ?? [];
+      checks.push(["LIVE: 'lessons gate' is NOT corroborated, and the words probe itself names scripts/check-lessons.mjs", classify(res) !== "corroborated" && wordHits.includes("scripts/check-lessons.mjs")]);
+    }
     checks.push(["a plain single-word topic still gets no words probe", !wordsProbeApplies("android") && !wordsProbeApplies("gate check")]);
     // The two halves and the failure flag of the words probe, pinned.
     const g = { lines: ["a.txt"], failed: false, why: null };

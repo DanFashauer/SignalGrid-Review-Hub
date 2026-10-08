@@ -194,7 +194,7 @@ status_line() {
 }
 
 self_test() {
-  local self fx repo n_ok n_fail out want root cmd refresh other rc
+  local self fx repo n_ok n_fail out want got json root cmd refresh other rc
   case "$0" in /*) self=$0 ;; *) self=$PWD/$0 ;; esac
   n_ok=0
   n_fail=0
@@ -265,6 +265,35 @@ self_test() {
   expect "an unknown status counts as open" "fixture-branch | 2 open hands | 1 unread for mac" "$out"
   rm -f -- "$repo/artifacts/raised-hands/h-typo.json"
 
+  # An unreadable part is LEFT OUT, never zeroed. Hands (above) and now mail, in every shape:
+  # a torn message, a torn ack, a missing directory for each count, both missing. A directory
+  # that was READ and holds nothing is a true zero and is printed (the contrast case).
+  json=$(printf '{"model":{"display_name":"Test Model"},"workspace":{"current_dir":"%s"}}' "$repo")
+  printf '%s' '{"id":' > "$repo/artifacts/lane-messages/torn-msg.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "a torn lane-message file removes the unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/torn-msg.json"
+  printf '%s' '{"messageId":' > "$repo/artifacts/lane-messages/acks/torn-ack.json"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "a torn ack file removes the unread part too (an ack that cannot be read may have closed a message)" "fixture-branch | 1 open hand | Test Model" "$out"
+  rm -f -- "$repo/artifacts/lane-messages/acks/torn-ack.json"
+  mv "$repo/artifacts/raised-hands" "$fx/hands.away"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "the raised-hands directory absent: no open-hands part (never '0 open hands')" "fixture-branch | 1 unread for mac | Test Model" "$out"
+  mv "$repo/artifacts/lane-messages" "$fx/mail.away"
+  out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "both artifact directories absent: the branch only" "fixture-branch" "$out"
+  mv "$fx/hands.away" "$repo/artifacts/raised-hands"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "the lane-messages directory absent: no unread part (never '0 unread')" "fixture-branch | 1 open hand | Test Model" "$out"
+  mkdir "$repo/artifacts/lane-messages"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "contrast: a lane-messages directory that was read and is empty IS a true zero" "fixture-branch | 1 open hand | 0 unread for mac | Test Model" "$out"
+  rmdir "$repo/artifacts/lane-messages"
+  mv "$fx/mail.away" "$repo/artifacts/lane-messages"
+  out=$(printf '%s' "$json" | env SIGNALGRID_LANE=mac bash "$self")
+  expect "...and with everything restored the full line is back" "fixture-branch | 1 open hand | 1 unread for mac | Test Model" "$out"
+
   # directory precedence, per Claude Code's status-line docs: workspace.current_dir (where the
   # session is NOW) beats cwd, which beats workspace.project_dir (where it was launched)
   out=$(printf '{"workspace":{"current_dir":"%s"},"cwd":"%s"}' "$repo" "$fx/plain" | env SIGNALGRID_LANE=mac bash "$self")
@@ -285,7 +314,9 @@ self_test() {
   # the lane rule is lane-identity.mjs's rule: compare, so the copy cannot drift
   want=$(node -e 'import(process.argv[1]).then((m) => console.log(m.currentLane()))' -- "file://$(dirname "$self")/../lib/lane-identity.mjs" 2>/dev/null)
   out=$(printf '{"workspace":{"current_dir":"%s"}}' "$repo" | env -u SIGNALGRID_LANE bash "$self")
-  expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "fixture-branch | 1 open hand | 0 unread for ${want:-?}" "$out"
+  # compare the LABEL only: the count differs by lane (the fixture has one unread for mac, none left for cloud)
+  got=$(printf '%s' "$out" | sed -n 's/.* unread for \([a-z]*\).*/\1/p')
+  expect "the lane label with SIGNALGRID_LANE unset equals currentLane() in lane-identity.mjs" "${want:-?}" "$got"
 
   # The command .claude/settings.json REGISTERS, run the way Claude Code runs it (sh -c) with the
   # status JSON on stdin. It anchors the executable to workspace.project_dir (where Claude Code

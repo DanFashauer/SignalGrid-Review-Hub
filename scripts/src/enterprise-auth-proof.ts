@@ -285,10 +285,16 @@ for (const [label, header] of [
   check(`${label} JOSE header: the authenticator refuses and never throws`, viaAuth === "refused");
 }
 
-check(
-  "a null JWKS element does not hide a good key (valid token still accepted)",
-  verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null, ...jwks.keys] as unknown as JwkKey[] } }).ok === true,
-);
+{
+  let acceptedDespiteNull = false;
+  try {
+    acceptedDespiteNull =
+      verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null, ...jwks.keys] as unknown as JwkKey[] } }).ok === true;
+  } catch {
+    // a throw is a failed check, reported below, never an aborted run
+  }
+  check("a null JWKS element does not hide a good key (valid token still accepted)", acceptedDespiteNull);
+}
 
 // ── JWKS ROTATION SURVIVAL ───────────────────────────────────────────────────
 //

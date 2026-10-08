@@ -149,6 +149,15 @@ export function verifyJwtRs256(token: string, opts: VerifyOptions): VerifyResult
     return fail("header or payload is not a JSON object");
   }
 
+  // `alg` and `kid` are echoed into refusal messages; a non-string (an object with a
+  // hostile `toString`, say) would throw there. Refuse it before it can be stringified.
+  if (typeof header.alg !== "string") {
+    return fail("header alg is not a string");
+  }
+  if (header.kid !== undefined && typeof header.kid !== "string") {
+    return fail("header kid is not a string");
+  }
+
   // Algorithm gate FIRST — reject `none`/HMAC before touching key material.
   if (header.alg !== SUPPORTED_ALG) {
     return fail(`unsupported alg "${String(header.alg)}" (only ${SUPPORTED_ALG} is accepted)`);

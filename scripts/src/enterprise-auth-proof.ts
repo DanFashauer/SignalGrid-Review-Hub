@@ -265,6 +265,26 @@ refuses("validly signed token whose payload decodes to null", () => {
   const sig = cryptoSign("RSA-SHA256", Buffer.from(signingInput, "ascii"), privateKey);
   return verifyJwtRs256(`${signingInput}.${b64url(sig)}`, verifyOpts);
 });
+// A header that IS an object but carries an object-valued `alg`/`kid` with a hostile
+// `toString` used to throw when the refusal message stringified it (String()/template).
+for (const [label, header] of [
+  ["object-valued alg", { alg: { toString: 1 }, kid: KID }],
+  ["object-valued kid", { alg: "RS256", kid: { toString: 1 } }],
+  ["array-valued kid", { alg: "RS256", kid: [KID] }],
+  ["numeric alg", { alg: 256, kid: KID }],
+] as const) {
+  const tok = `${b64url(JSON.stringify(header))}.${validPayloadSeg}.x`;
+  refuses(`${label} JOSE header`, () => verifyJwtRs256(tok, verifyOpts));
+  let viaAuth = "threw";
+  try {
+    const out = await authenticator.authenticate(tok, NOW_MS);
+    viaAuth = out.ok ? "accepted" : "refused";
+  } catch {
+    viaAuth = "threw";
+  }
+  check(`${label} JOSE header: the authenticator refuses and never throws`, viaAuth === "refused");
+}
+
 check(
   "a null JWKS element does not hide a good key (valid token still accepted)",
   verifyJwtRs256(validToken, { ...verifyOpts, jwks: { keys: [null, ...jwks.keys] as unknown as JwkKey[] } }).ok === true,
@@ -321,6 +341,28 @@ check(
 
   await cache.get(T + 2_000 + 61_000, "still-unknown");
   check("after the cooldown lapses, exactly ONE more refetch is allowed", fetches === beforeForged + 1);
+}
+
+// ── JWKS CACHE: a null element on the fresh-hit path refuses, never throws ────
+{
+  const nullKeyFetch: JwksFetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ keys: [null, ...jwks.keys] }),
+  });
+  const nullCache = createJwksCache("https://idp.example/keys", nullKeyFetch);
+  let cacheThrew: unknown;
+  try {
+    await nullCache.get(NOW_MS, KID);
+    await nullCache.get(NOW_MS + 1_000, KID);
+    await nullCache.get(NOW_MS + 2_000, "kid-that-is-absent");
+  } catch (err) {
+    cacheThrew = err;
+  }
+  check(
+    `JWKS cache with a null element serves and misses without throwing${cacheThrew ? ` (threw ${String(cacheThrew)})` : ""}`,
+    cacheThrew === undefined,
+  );
 }
 
 function check(name: string, condition: boolean): void {

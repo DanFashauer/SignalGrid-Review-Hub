@@ -1984,6 +1984,23 @@ for (const [fromRow, fromSignal, want, why] of [
   let secondAccepted = true;
   try { retained.answerStepUp(T.operator, d1.decisionId, { credentialReference: "replay" }); } catch { secondAccepted = false; }
   check("step-up eviction (bound 2): a second answer for the retained decision is still refused (replay guard intact)", secondAccepted === false);
+
+  // Tenant isolation of the eviction: one tenant's FIFO must never touch another tenant's
+  // answers. Decisions are cloned from a real one so the store is exercised directly.
+  const template = retained.listDecisions(T.operator)[0];
+  const tenantStore = new MemoryStore({ maxDecisionsPerTenant: 1 });
+  const putAnswered = (tenantId: string, id: string): void => {
+    tenantStore.putDecision({ ...template, id, tenantId, evidenceSnapshotId: `snap_${id}` });
+    tenantStore.putStepUpAnswer({ id: `sua_${id}`, tenantId, decisionId: id, identityId: template.identityId, method: "webauthn", credentialReference: `cred_${id}`, answeredAt: "2026-01-01T00:00:00.000Z" });
+  };
+  putAnswered("tenant_atlas", "dec_atlas_1");
+  putAnswered("tenant_northwind", "dec_nw_1");
+  putAnswered("tenant_northwind", "dec_nw_2"); // evicts dec_nw_1 only
+  check("step-up eviction (tenants): one tenant's eviction removes only its own answer",
+    tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_1") === undefined
+      && tenantStore.getStepUpAnswer("tenant_northwind", "dec_nw_2")?.credentialReference === "cred_dec_nw_2");
+  check(`step-up eviction (tenants): another tenant's answer survives (collection holds 2, got ${tenantStore.stepUpAnswerCount()})`,
+    tenantStore.getStepUpAnswer("tenant_atlas", "dec_atlas_1")?.credentialReference === "cred_dec_atlas_1" && tenantStore.stepUpAnswerCount() === 2);
 }
 
 // ── MEMORY BOUND (F6): the in-process store must not grow without limit ─────────

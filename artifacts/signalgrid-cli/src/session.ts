@@ -15,7 +15,7 @@
  * fcntl to what Node offers portably), and the file itself is replaced by rename,
  * so a reader never sees half a session.
  */
-import { accessSync, closeSync, constants, existsSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CliError, EXIT, safeId, type Config } from "./client.js";
@@ -80,19 +80,28 @@ function present(p: string): boolean {
 export function readSession(path: string | null, cfg: Config): SessionData | null {
   if (!path || !present(path)) return null;
   // Only a regular file (or a link to one) is read: a FIFO would block the read forever,
-  // and a directory or device is not a session (review round 4 on PR #1321).
-  let isFile = false;
+  // and a directory or device is not a session (review round 4 on PR #1321). The type
+  // check and the read go through ONE open handle, so nothing can be swapped in between
+  // them (CodeQL js/file-system-race); O_NONBLOCK keeps the open itself from waiting on
+  // a FIFO's writer.
+  let fd: number;
   try {
-    isFile = statSync(path).isFile();
+    fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK);
   } catch {
-    isFile = false;
+    throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) cannot be opened; refusing to read it.`, EXIT.usage);
   }
-  if (!isFile) {
-    throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) is not a regular file; refusing to read it.`, EXIT.usage);
+  let text: string;
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw new CliError("session_invalid", `SIGNALGRID_CLI_SESSION (${path}) is not a regular file; refusing to read it.`, EXIT.usage);
+    }
+    text = readFileSync(fd, "utf8");
+  } finally {
+    closeSync(fd);
   }
   let data: SessionData;
   try {
-    data = JSON.parse(readFileSync(path, "utf8")) as SessionData;
+    data = JSON.parse(text) as SessionData;
   } catch {
     throw new CliError("session_invalid", `session file ${path} is not valid JSON; refusing to guess.`, EXIT.usage);
   }

@@ -542,6 +542,8 @@ jobs:
         run: node scripts/loop-state.mjs --self-test
       - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
         run: node scripts/check-raised-hands.mjs --self-test
+      - name: Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)
+        run: node scripts/check-raised-hands.mjs
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -594,11 +596,6 @@ jobs:
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
         run: node scripts/check-lane-messages.mjs --self-test
-      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
-      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
-      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
-      - name: Raised hands (stalls warn in CI; register integrity is fatal)
-        run: node scripts/raised-hands.mjs --check --warn
       - name: Raised hands self-test (the gate can fail)
         run: node scripts/raised-hands.mjs --self-test
       # DR-056 §5: the shared objective state is gated where the raised-hands register is.
@@ -774,6 +771,17 @@ jobs:
         run: node scripts/check-sim-result-provenance.mjs --self-test
       - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
         run: node scripts/check-sim-result-provenance.mjs
+      # Placed AFTER the provenance gate on purpose: the fetch below brings mainline history into this
+      # shallow checkout, which turns that gate's "unresolvable sha" (reported) into "not an ancestor" (fatal).
+      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
+      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
+      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
+      # Stalls are measured at origin/SignalGrid_Alpha, never at this branch's tree (B54b); the
+      # default checkout carries no such ref and the gate fails closed without it.
+      - name: Fetch the mainline tip (raised-hands measures stalls there)
+        run: git fetch --no-tags origin +SignalGrid_Alpha:refs/remotes/origin/SignalGrid_Alpha
+      - name: Raised hands (stalls warn in CI; register integrity is fatal)
+        run: node scripts/raised-hands.mjs --check --warn
       # A generated input validator nobody parses reads exactly like coverage.
       - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
         run: node scripts/check-api-zod-wiring.mjs --self-test

@@ -254,7 +254,21 @@ function scratchCloneChecks(ok) {
     gAt(src, "2030-01-02T00:00:00Z", "commit", "-q", "-m", "evidence touched later");
     const evLateDefault = gate(src);
     const evLateFlag = gate(src, "--require-history");
+    // An UNREADABLE answer from git (no repository at all, so `rev-parse --is-shallow-repository`
+    // prints nothing) must refuse under the flag. Only the refusal message tells that apart from
+    // the downstream "sha does not resolve" failure, which also exits 1: a probe turned into
+    // `=== "true"` treats the empty answer as "not shallow" and fails open past the refusal.
+    const nogit = join(root, "nogit");
+    mkdirSync(join(nogit, "scripts"), { recursive: true });
+    mkdirSync(join(nogit, RESULTS_DIR), { recursive: true });
+    copyFileSync(fileURLToPath(import.meta.url), join(nogit, "scripts", "check-sim-result-provenance.mjs"));
+    for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
+      writeFileSync(join(nogit, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
+    }
+    const nogitRun = run(nogit, "node", [join(nogit, "scripts", "check-sim-result-provenance.mjs"), "--require-history"]);
+    const nogitRefused = nogitRun.status === 1 && /shallow \(or unreadable\) checkout/.test(nogitRun.stderr ?? "");
     return [
+      ok("scratch clone: --require-history where git cannot answer is refused as unreadable, not run (kills the fail-open shallow probe)", nogitRefused),
       ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
       ok("scratch clone: an unknown flag exits 1 on a clean full tree, alone or beside the real flag", unknownFlag === 1 && unknownWithGood === 1),
       ok("scratch clone: a MISSPELT --require-history exits 1 on a shallow clone too (it was a silent exit 0)", shallowMisspelt === 1),

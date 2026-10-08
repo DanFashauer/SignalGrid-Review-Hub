@@ -23,7 +23,7 @@
       "state": "met",
       "measured": {
         "pct": 100,
-        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 97cef975c536; launch items fully current 28/28"
+        "reason": "20/20 bound proofs/steps current (passed, matching manifest fingerprint and, for proofs, source digest) — green on both halves, 0 day(s) old, manifest 5b15a3002124; launch items fully current 28/28"
       },
       "source": "scripts/check-readiness-figure.mjs --json (.details.evidence)"
     },
@@ -33,9 +33,9 @@
       "state": "met",
       "measured": {
         "problems": 0,
-        "open": 76,
+        "open": 52,
         "partial": 5,
-        "closed": 112
+        "closed": 137
       },
       "source": "auditBacklogOwnership(docs/COMPANY_BUILD_PLAN.md, org-roster ids)"
     },
@@ -56,42 +56,42 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "17",
-      "title": "Run the three wire-truth shifts and bind the records to the code",
-      "role": "itsm-ops-domain",
+      "rowId": "17b",
+      "title": "Drive access-governance against the Keycloak lab that already exists",
+      "role": "iam-domain",
       "executor": "skill:signalgrid-core",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-26T03:28:19.253Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     },
     {
       "rank": 2,
-      "rowId": "18",
-      "title": "Make iOS port parity behavioral, not textual",
-      "role": "mobile-native-engineer",
-      "executor": "skill:signalgrid-native",
+      "rowId": "26",
+      "title": "Role-split follow-ups from PR #222's round-9 review (post-cutoff)",
+      "role": "data-persistence-engineer",
+      "executor": "skill:signalgrid-core",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-26T03:28:19.253Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     },
     {
       "rank": 3,
-      "rowId": "24",
-      "title": "Stage the ledger-truncation article for your review",
-      "role": "proof-led-content",
-      "executor": "skill:signalgrid-scribe",
+      "rowId": "27",
+      "title": "Wire WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN or retire it",
+      "role": "security-engineer",
+      "executor": "agent:security-reviewer",
       "kind": "role",
       "source": {
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-09-27T07:42:24.296Z"
+      "firstRankedAt": "2026-10-01T16:57:45.498Z"
     }
   ],
   "needsExecutor": [
@@ -103,14 +103,6 @@
         "agent-ops-economics"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: finance-fundraising→lane, agent-ops-economics→lane"
-    },
-    {
-      "rowId": "25",
-      "title": "Bound the CI jobs and wire the Mac lane's alarm",
-      "roles": [
-        "sre"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     },
     {
       "rowId": "33",
@@ -138,31 +130,81 @@
     },
     {
       "rowId": "77",
-      "title": "",
+      "title": "There is no web accessibility standard in this repository, proven eight ways.",
       "roles": [
         "accessibility-specialist"
       ],
       "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: accessibility-specialist→lane"
-    },
-    {
-      "rowId": "164",
-      "title": "Five IGA vendors the competitive surface has never mentioned.",
-      "roles": [
-        "competitive-analyst"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: competitive-analyst→lane"
-    },
-    {
-      "rowId": "171",
-      "title": "",
-      "roles": [
-        "sre"
-      ],
-      "reason": "every named role resolves to \"lane\" (nothing dedicated) or dangles: sre→lane"
     }
   ],
-  "unmeasured": [],
+  "unmeasured": [
+    {
+      "rowId": "40",
+      "title": "Row 7's reconcile half never ran",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    },
+    {
+      "rowId": "49",
+      "title": "Assessor-facing overstatement",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    },
+    {
+      "rowId": "50",
+      "title": "Operability claims without live evidence",
+      "measuredAt": null,
+      "reason": "no re-measured stamp"
+    }
+  ],
+  "awaiting": [
+    {
+      "rowId": "17",
+      "title": "Run the two remaining wire-truth shifts and bind the records to the code",
+      "kind": "lab",
+      "blocker": "ITSM lab for the seven vendor adapters; shift-context live source",
+      "markedAt": "2026-09-29"
+    },
+    {
+      "rowId": "18",
+      "title": "Make iOS port parity behavioral, not textual",
+      "kind": "owner",
+      "blocker": "#1118 and #1121, golden-rule-1 ruling on the DecisionEngine.swift and AppWorkflows.swift re-port",
+      "markedAt": "2026-09-29"
+    },
+    {
+      "rowId": "24",
+      "title": "Stage the ledger-truncation article for your review",
+      "kind": "owner",
+      "blocker": "#1190 draft-4 review",
+      "markedAt": "2026-09-29"
+    }
+  ],
   "escalations": [
+    {
+      "id": "plan-rows-unmeasured",
+      "clears": "cloud",
+      "asks": "3 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 40, 49, 50. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-17",
+      "clears": "owner",
+      "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-18",
+      "clears": "owner",
+      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1118 and #1121, golden-rule-1 ruling on the DecisionEngine.swift and AppWorkflows.swift re-port), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
+    {
+      "id": "awaiting-owner-row-24",
+      "clears": "owner",
+      "asks": "row 24 (\"Stage the ledger-truncation article for your review\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1190 draft-4 review), checked 2026-09-29. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-01T16:57:45.498Z"
+    },
     {
       "id": "owner-real-in-hand",
       "clears": "owner",
@@ -175,13 +217,15 @@
   "report": {
     "pendingSimRequests": [],
     "badRequestFiles": [],
-    "needsExecutorCount": 8,
-    "unmeasuredCount": 0,
-    "openRows": 76
+    "needsExecutorCount": 5,
+    "unmeasuredCount": 3,
+    "awaitingCount": 3,
+    "openRows": 52,
+    "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-09-30T19:33:02.420Z",
-  "derivedAtCommit": "f079a7ee4d65f73238b375dffbcd98814b2da784",
+  "derivedAt": "2026-10-02T16:40:29.343Z",
+  "derivedAtCommit": "942ede9428d5a35cb273e1786a17ac7c4d9b4ac5",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "7794bc9b31a6b8c3446c1dc1374241f4a1f386b0ea135639bd95dde7e47dca3c"
+  "decisionAddress": "c8173365e1bb08d8eb6c066d72f1ac1284163bbda226ae20d747285dfc51f534"
 }

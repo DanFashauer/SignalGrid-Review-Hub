@@ -200,6 +200,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:link-usability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
@@ -213,6 +214,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
       "lib/integrations/src/integrations/task-exception/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:verdict-attestation",
@@ -228,10 +230,12 @@ export const TARGETS = [
     // registry guard's scoping is right for what it was written to cover; the honest
     // response is to register this by hand rather than widen a rule until it fits.
     proof: "proof:decision-continuity",
+    oneLine: true,
     files: ["lib/signalgrid-core/src/continuity.ts"],
   },
   {
     proof: "proof:service-lifecycle",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/service-lifecycle/evaluate.ts",
       "lib/integrations/src/integrations/service-lifecycle/index.ts",
@@ -239,6 +243,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:custody-beacon",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/custody-beacon/evaluate.ts",
       "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
@@ -265,6 +270,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
       "lib/integrations/src/integrations/platform-sso/index.ts",
     ],
+    oneLine: true,
   },
   {
     // The last QUEUED allow-path proof. Registered on the argument that composition
@@ -273,6 +279,7 @@ export const TARGETS = [
     // be falsifiable.
     proof: "proof:pim-activation",
     files: ["lib/pim-activation/src/evaluate.ts", "lib/pim-activation/src/normalize.ts"],
+    oneLine: true,
   },
   {
     proof: "proof:passkey-assurance",
@@ -281,6 +288,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
       "lib/integrations/src/integrations/passkey-assurance/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:change-window",
@@ -289,6 +297,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/change-window/change-window-connector.ts",
       "lib/integrations/src/integrations/change-window/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:app-protection",
@@ -332,9 +341,11 @@ export const TARGETS = [
       "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
       "lib/integrations/src/integrations/shift-context/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:caep-events",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/caep-events/format.ts",
       // resolve.ts dropped 2026-09-03: a thin createEmitterResolver binding (0 mutable
@@ -381,6 +392,7 @@ export const TARGETS = [
 
   {
     proof: "proof:challenge-capability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/challenge-capability/index.ts",
       "lib/integrations/src/integrations/challenge-capability/evaluate.ts",
@@ -390,6 +402,7 @@ export const TARGETS = [
 
   {
     proof: "proof:sse-egress",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/sse-egress/index.ts",
       "lib/integrations/src/integrations/sse-egress/evaluate.ts",
@@ -415,6 +428,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
       "lib/integrations/src/integrations/policy-binding/index.ts",
     ],
+    oneLine: true,
   },
 
   {
@@ -424,6 +438,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
       "lib/integrations/src/integrations/agent-behavior/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:agent-identity",
@@ -451,6 +466,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
       "lib/integrations/src/integrations/sso-session/index.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:access-governance",
@@ -477,6 +493,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:session-readiness",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/session-readiness/evaluate.ts",
       "lib/integrations/src/integrations/session-readiness/index.ts",
@@ -498,28 +515,33 @@ export const TARGETS = [
       "lib/integrations/src/integrations/uem/store.ts",
       "lib/integrations/src/integrations/uem/workspace-one.ts",
     ],
+    oneLine: true,
   },
   {
     proof: "proof:ot-posture",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
-      // ot-connector.ts dropped 2026-09-03: same reason as access-governance's connector
-      // — defensive parsing the mutators do not express, 0 mutations. evaluate.ts carries
-      // the mutable guards.
+      // ot-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0 mutations, but with
+      // `oneLine` on it carries 4 (its brace-less `readableString` guards).
+      "lib/integrations/src/integrations/ot-posture/ot-connector.ts",
       "lib/integrations/src/integrations/ot-posture/index.ts",
     ],
   },
   {
     proof: "proof:token-binding",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
-      // token-binding-connector.ts dropped 2026-09-03: same reason — defensive parsing the
-      // mutators do not express, 0 mutations. evaluate.ts carries the mutable guards.
+      // token-binding-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0
+      // mutations, but with `oneLine` on it carries 1.
+      "lib/integrations/src/integrations/token-binding/token-binding-connector.ts",
     ],
   },
   {
     proof: "proof:pacs-access",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
@@ -550,10 +572,17 @@ export const TARGETS = [
   },
   {
     proof: "proof:carrier-reachability",
-    files: ["lib/integrations/src/integrations/carrier/index.ts"],
+    oneLine: true,
+    // reachability-connector.ts registered 2026-10-01: the proof drives the real connector, and
+    // its one-line decision guards (normalizeReachability) are what `oneLine` sweeps.
+    files: [
+      "lib/integrations/src/integrations/carrier/index.ts",
+      "lib/integrations/src/integrations/carrier/reachability-connector.ts",
+    ],
   },
   {
     proof: "proof:credential-exposure",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
@@ -562,6 +591,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:data-protection",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
       "lib/integrations/src/integrations/data-protection/evaluate.ts",
@@ -596,6 +626,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:entitlement-binding",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/entitlement-binding/evaluate.ts",
       "lib/integrations/src/integrations/entitlement-binding/index.ts",
@@ -619,6 +650,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:identity-risk",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
@@ -652,6 +684,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:network-nac",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/network-nac/evaluate.ts",
       "lib/integrations/src/integrations/network-nac/index.ts",
@@ -698,6 +731,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/vuln-scan/index.ts",
       "lib/integrations/src/integrations/vuln-scan/vuln-connector.ts",
     ],
+    oneLine: true,
   },
 ];
 
@@ -710,6 +744,48 @@ export const TARGETS = [
 // a probe, without a sweep. A registry checkable only by the thing that consumes it
 // is a registry nobody checks.
 export const ALLOWED = [
+  {
+    file: "lib/signalgrid-core/src/continuity.ts",
+    line: 'if (policy === "incomparable" || core === "incomparable") return "incomparable";',
+    reason:
+      "Redundant by effect: `compareNumbers` never returns \"incomparable\", and when `core` is incomparable none of the later branches can match (the equal test needs core === \"equal\"; both dominance tests need core in {greater, equal} or {less, equal}), so control falls through to the final `return \"incomparable\"` — the same answer (survived `if (false)` with proof:decision-continuity green, 2026-10-01). Kept as the early exit that states the rule; same shape as the access-governance redundant-by-effect precedent.",
+  },
+  {
+    file: "lib/integrations/src/integrations/custody-beacon/custody-beacon-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (CUSTODY_BEACON_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:custody-beacon green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/network-nac/evaluate.ts",
+    line: "if (segment === null) return false;",
+    reason:
+      "Unreachable through its callers: `includesSegment` is module-private and both call sites (`policy.expected`, `policy.restricted`) sit after `if (signal.segment === null)` returns SEGMENT_UNREPORTED_UNDER_POLICY, so `segment` is never null there (survived `if (false)` with proof:network-nac green, 2026-10-01). Kept on purpose — the function's own comment records that without a null-safe helper a reordering of the caller throws inside a decision path.",
+  },
+  {
+    file: "lib/integrations/src/integrations/platform-sso/platform-sso-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (PLATFORM_SSO_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:platform-sso green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/policy-binding/policy-binding-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (POLICY_BINDING_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:policy-binding green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/pim-activation/src/normalize.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (PIM_ACTIVATION_REQUEST_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:pim-activation green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/agent-behavior/agent-behavior-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` (AGENT_BEHAVIOR_REPORT_KEYS) holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:agent-behavior green, 2026-10-01). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
   {
     file: "lib/integrations/src/integrations/access-governance/evaluate.ts",
     line: 'if (observedMs === null || referenceMs === null) return "unknown";',
@@ -741,6 +817,44 @@ export const ALLOWED = [
       "source with the same reason.",
   },
   {
+    file: "lib/integrations/src/integrations/sse-egress/sse-egress-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — the same clause, in the same " +
+      "hasUnrecognizedKey shape, as the agent-identity entry above. `known` is " +
+      "SSE_EGRESS_REPORT_KEYS, a readonly string tuple, so `known.includes(k)` on the next " +
+      "line returns true for every symbol this clause catches: a symbol-keyed report is " +
+      "malformed either way. Found surviving `if (false)` when sse-egress joined the " +
+      "brace-less sweep (2026-09-30). Not deleted because it is the type guard narrowing " +
+      "`k` from `string | symbol` to `string` for that includes() — the TS2345 the " +
+      "agent-identity deletion hit. Not pinnable from a proof, since no input separates it.",
+  },
+  {
+    file: "lib/integrations/src/integrations/challenge-capability/challenge-capability-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "INERT AT RUNTIME, LOAD-BEARING TO THE COMPILER — identical reasoning to the " +
+      "sse-egress entry above: `known` is CHALLENGE_CAPABILITY_REPORT_KEYS or " +
+      "CHALLENGE_METHOD_ENTRY_KEYS, string tuples both, so `known.includes(k)` on the next " +
+      "line answers true for any symbol and the report or entry is malformed either way. " +
+      "Found surviving `if (false)` when challenge-capability joined the brace-less sweep " +
+      "(2026-09-30); kept as the `string | symbol` → `string` narrowing that includes() needs.",
+  },
+  {
+    file: "lib/integrations/src/integrations/pacs-access/evaluate.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT — the same clause, and the same reason, as the access-governance " +
+      "entry above. `ageMs(observedMs, referenceMs, 0)` on the next line returns null when " +
+      "`seenAt` is null (observedMs) and when `nowMs` is not a finite number (referenceMs), " +
+      "and the `age === null` line immediately after answers \"unknown\" — the verdict this " +
+      "clause gives. Found surviving `if (false)` with proof:pacs-access green when the " +
+      "family joined the brace-less sweep (2026-09-30). Kept because it names the two " +
+      "unreadable-instant causes at the point of use, and because `ageMs` lives in the " +
+      "shared lib/integrations/src/utils/freshness.ts, whose null contract this family " +
+      "does not own: if that contract narrows, this guard still refuses.",
+  },
+  {
     file: "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
     line: 'typeof endpoint.signatureAgeHours === "number" &&',
     reason:
@@ -752,6 +866,12 @@ export const ALLOWED = [
       "of use, and because the SIBLING conjunct is emphatically not inert — dropping " +
       "`Number.isFinite` lets Infinity through as a reported age, which the proof now pins " +
       "with explicit Infinity/-Infinity/NaN assertions plus a finite-age non-vacuity control.",
+  },
+  {
+    file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:passkey-assurance green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
   },
   {
     file: "lib/integrations/src/integrations/passkey-assurance/passkey-assurance-connector.ts",
@@ -874,6 +994,18 @@ export const ALLOWED = [
     line: "inert-at-top: request refused by the authorizer normalizer first */ ||",
     reason:
       "Genuinely inert at the TOP-LEVEL request normalizer, verified by mutation: forcing either term to `false` and running proof:dual-control leaves it at pass. A non-plain or throwing request reaches normalizeAuthorizer(undefined) for BOTH initiator and approver before these terms matter — a string/array/undefined body via hasUnrecognizedKey throwing on a non-object ownKeys, a null body via that authorizer normalizer's own (load-bearing) !plain — so `initiator.malformed || approver.malformed` folded in at the end already marks the request malformed. Pinned by the 'a null/undefined/string/array/number request body is malformed' vectors. Kept as defence in depth; it becomes load-bearing only if the authorizer normalizer's own guards are removed, which those vectors also forbid.",
+  },
+  {
+    file: "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:change-window green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
+    file: "lib/integrations/src/integrations/change-window/change-window-connector.ts",
+    line: 'if (observedMs === null || referenceMs === null) return "unknown";',
+    reason:
+      "REDUNDANT BY EFFECT, same shape and reasoning as its access-governance twin above: `ageMs(observedMs, referenceMs, 0)` two lines down returns null for a null `seenAt` and for a non-finite `nowMs`, and the `age === null` line answers \"unknown\" for both — the verdict this clause gives. Survived `if (false)` with proof:change-window green, 2026-09-30. Kept because `ageMs` lives in lib/integrations/src/utils/freshness.ts, a shared util this family does not own: if its null contract narrows, this guard still refuses.",
   },
   {
     file: 'lib/integrations/src/integrations/change-window/evaluate.ts',
@@ -1057,6 +1189,12 @@ export const ALLOWED = [
     reason: "Documented redundant in the source: an array fails the key scan on its own `length`.",
   },
   {
+    file: "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Documented redundant in the source: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:task-exception green, 2026-09-30). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
+  },
+  {
     file: "lib/verdict-attestation/src/attest.ts",
     line: "return false;",
     reason:
@@ -1237,6 +1375,12 @@ export const ALLOWED = [
     line: "if (candidates.length === 0) {",
     reason:
       "The bootstrap backstop itself — deliberately redundant defence-in-depth with its OWN reason (BOOTSTRAP_UNGRADED), documented in the source as never firing today; it exists so a FUTURE weakened branch surfaces as ungraded instead of impersonating the branch it replaced.",
+  },
+  {
+    file: "lib/integrations/src/integrations/shift-context/shift-context-connector.ts",
+    line: 'if (typeof k === "symbol") return true;',
+    reason:
+      "Inert by construction: `known` holds only strings, so the includes() on the next line returns true for every symbol anyway (survived `if (false)` with proof:shift-context green, 2026-09-30; the symbol-keyed path is still malformed either way). Kept as the type guard narrowing `k` to string, same as its agent-identity twin.",
   },
   {
     file: "lib/integrations/src/integrations/shift-context/evaluate.ts",
@@ -1535,7 +1679,24 @@ export function shardTargets(all, index, count) {
   return bins[index].targets;
 }
 
+/** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
+ *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
+ *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
+ *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
+ *  mutates registered source files in place for the better part of an hour. */
+export function unknownArgs(argv) {
+  // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
+  // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
+  // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
+  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+}
+
 function main() {
+  const unknown = unknownArgs(process.argv.slice(2));
+  if (unknown.length > 0) {
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
+    process.exit(1);
+  }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;

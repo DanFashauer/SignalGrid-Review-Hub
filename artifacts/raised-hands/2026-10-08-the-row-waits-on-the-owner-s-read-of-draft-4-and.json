@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-the-row-waits-on-the-owner-s-read-of-draft-4-and",
+  "raisedAt": "2026-10-08T11:16:06.798Z",
+  "origin": "cloud",
+  "doing": "Staging the ledger-truncation article (PR #1190, draft 4) for the owner's review, docs/COMPANY_BUILD_PLAN.md row 24.",
+  "blockedBy": "Row 24 carries an AWAITING OWNER marker set 2026-09-29 (#1190 draft-4 review) and nothing else blocks it. The loop's escalation awaiting-owner-row-24 has been open since 2026-10-01T16:57Z (docs/agent/objective-state.json) - 6.8 days at the 2026-10-08 measurement by scripts/raised-hands.mjs --check, past the 144h limit.",
+  "need": "Owner: read PR #1190 draft 4 and say publish, revise (with what), or drop.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-24"
+  ]
+}

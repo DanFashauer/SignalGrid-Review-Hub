@@ -428,6 +428,15 @@ const STEPS = [
   { name: "Launch-proof bindings (every launch item names real, per-push proofs)", cmd: ["node", "scripts/check-launch-proof-bindings.mjs"] },
   { name: "Ungated-fetch self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-ungated-fetch.mjs", "--self-test"] },
   { name: "Ungated fetch (a health check is still a live call)", cmd: ["node", "scripts/check-ungated-fetch.mjs"] },
+  // Plan row 172: the connector-emulator smoke's evidence manifest used to TYPE six
+  // public-safety properties; it now emits this script's measurement, and this gate
+  // fails if the workflow ever types one again or a property stops holding.
+  { name: "Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs", "--self-test"] },
+  { name: "Connector-emulator evidence (the manifest asserts only what a step measured)", cmd: ["node", "scripts/check-connector-emulator-evidence.mjs"] },
+  // Plan row 171: the daily rot check (scheduled-verification.yml) runs THIS file whole
+  // instead of a hand-picked tenth of it; the gate fails if a named gate grows back there.
+  { name: "Scheduled-verification scope self-test (a hand-picked nightly gate must fail)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs", "--self-test"] },
+  { name: "Scheduled-verification scope (the daily rot check runs preflight whole)", cmd: ["node", "scripts/check-scheduled-verification-scope.mjs"] },
   // Sibling of the two assertions inside that gate. Ungated-fetch asks whether the call was
   // allowed and whether it is bounded; this asks whether it went out SIGNED. `if (secret)
   // { sign }` skipped the signature on an absent secret and reported 'sent' — a guard with
@@ -523,6 +532,8 @@ const STEPS = [
   { name: "/v1 under concurrency (correctness gated; throughput and saturation reported, never asserted)", cmd: ["pnpm", "run", "test:load"], heavy: true },
   { name: "Simulation request loop (every result binds to a request; pending is reported, never silent)", cmd: ["node", "scripts/check-sim-requests.mjs"] },
   { name: "Simulation request loop self-test (the gate can actually fail)", cmd: ["node", "scripts/check-sim-requests.mjs", "--self-test"] },
+  { name: "Resource-scan binding (an intake row citing a scan file is backed by it)", cmd: ["node", "scripts/check-resource-scan-binding.mjs"] },
+  { name: "Resource-scan binding self-test (the gate can actually fail)", cmd: ["node", "scripts/check-resource-scan-binding.mjs", "--self-test"] },
   { name: "Known-false claims (a claim proven false once is not made twice)", cmd: ["node", "scripts/check-known-false-claims.mjs"] },
   { name: "Known-false-claim self-test (the gate can actually fail)", cmd: ["node", "scripts/check-known-false-claims.mjs", "--self-test"] },
   { name: "Memory freshness (an aging 'as of' claim is named; stale is reported, registry rot is fatal)", cmd: ["node", "scripts/check-memory-freshness.mjs"] },
@@ -542,6 +553,7 @@ const STEPS = [
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
+  { name: "Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)", cmd: ["node", "scripts/check-raised-hands.mjs"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },
@@ -621,6 +633,7 @@ const STEPS = [
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
+  { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },
   // Absorbed from the base lane. It SELF-SKIPS when DATABASE_URL is unset, which is
   // exactly why it belongs here rather than on the CI-only exempt list: preflight

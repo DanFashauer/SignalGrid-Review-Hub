@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-row-17-has-been-parked-since-2026-09-29-because-",
+  "raisedAt": "2026-10-08T11:16:06.711Z",
+  "origin": "cloud",
+  "doing": "Ranking docs/COMPANY_BUILD_PLAN.md row 17 (run the two remaining wire-truth shifts and bind the records to the code) in the objective loop.",
+  "blockedBy": "Row 17 carries a BLOCKED ON LAB marker set 2026-09-29 (ITSM lab for the seven vendor adapters; shift-context live source); neither lane can provide either. The objective loop's escalation awaiting-owner-row-17 has been open since 2026-10-01T16:57Z (docs/agent/objective-state.json) - 6.8 days at the 2026-10-08 measurement by scripts/raised-hands.mjs --check, past the 144h limit.",
+  "need": "Owner, one of two: (1) grant the lane a lab - an owner-approved NON-PRODUCTION ITSM sandbox and a NON-PRODUCTION shift-context source holding synthetic data with read-only access (AGENTS.md, Repository scope: no real vendor calls, no production integrations, no tenant data; a production workforce or identity system is never acceptable); name them PRIVATELY (an environment secret in the Claude environment settings, or a direct message), never on the raised-hands issue, a PR or anything committed - the lane needs only the secret's name. (2) Decline the lab: then rule explicitly on the decision-path gap row 17 records - missing shift-context evidence reads unverified and the composed fabric still allows (lib/signalgrid-core/src/seed.ts, the day-one-quiet rule) - either accept it with a decision record (DR-020 rule; it is an allow on missing high-risk input, AGENTS.md) or order the repair without the lab. The row stays marked and visible until that ruling and this hand stays open covering it: a marked row is never ranked and re-dating its marker clears nothing (scripts/objective-loop.mjs rank()), and closing the row would hide the gap.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-17"
+  ]
+}

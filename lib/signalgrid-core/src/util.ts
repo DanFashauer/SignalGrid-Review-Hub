@@ -107,15 +107,24 @@ export function constantTimeEquals(a: string, b: string): boolean {
  * security decision (backlog row, reproduced 2026-09-26). An offset-less stamp
  * is an unknown instant, so it is NaN here — i.e. illegible, which the rest of
  * this file already resolves fail-closed (never wins as latest, cannot vouch,
- * worst-wins). Accepted: ISO-8601 date-time with `Z` or a numeric offset, and a
- * date-only form (UTC by spec). Anything else is NaN rather than left to the
- * engine's locale-dependent fallback parsers. No clock, no host zone.
+ * worst-wins).
+ *
+ * Accepted, because each NAMES AN EXACT INSTANT: a date-time with a `T`, `t` or
+ * space separator (RFC 3339 allows the space; Postgres timestamptz text uses it)
+ * and a zone of `Z`, or `+HH:MM`, `+HHMM` (ISO 8601 basic) or `+HH`; and a
+ * date-only form (UTC by spec). The stamp is rebuilt as the one ECMA-262
+ * date-time format (`YYYY-MM-DDTHH:mm[:ss[.sss]]Z|+HH:MM`) before it reaches
+ * `Date.parse`, so no engine-specific fallback parser decides anything. Still
+ * NaN: RFC 2822 text, epoch strings and anything else. No clock, no host zone.
  */
-const ZONED_ISO = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(:\d{2}(\.\d+)?)?([Zz]|[+-]\d{2}:\d{2})$/;
+const ZONED_STAMP = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:([Zz])|([+-]\d{2})(?::?(\d{2}))?)$/;
 const DATE_ONLY_ISO = /^\d{4}-\d{2}-\d{2}$/;
 export function parseObservedInstant(observedAt: string): number {
-  if (!ZONED_ISO.test(observedAt) && !DATE_ONLY_ISO.test(observedAt)) return Number.NaN;
-  return Date.parse(observedAt);
+  if (DATE_ONLY_ISO.test(observedAt)) return Date.parse(observedAt);
+  const m = ZONED_STAMP.exec(observedAt);
+  if (!m) return Number.NaN;
+  const zone = m[3] !== undefined ? "Z" : `${m[4]}:${m[5] ?? "00"}`;
+  return Date.parse(`${m[1]}T${m[2]}${zone}`);
 }
 
 /**

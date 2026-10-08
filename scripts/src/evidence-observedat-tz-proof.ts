@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildEvidence,
   classifyFreshness,
+  EVIDENCE_VALUE_DOMAINS,
   evaluatePolicy,
   fixedClock,
   runDockSync,
@@ -83,6 +84,44 @@ function accusationFor(category: "tamper_state" | "badge_binding", older: string
   return category === "tamper_state" ? ev.tamperState : ev.badgeBinding;
 }
 
+/** Every family with more than one accusing value: [category, evidence field, older (milder), newer (stronger)]. */
+const FAMILIES: ReadonlyArray<readonly [SignalCategory, string, string, string]> = [
+  ["tamper_state", "tamperState", "suspected", "confirmed"],
+  ["badge_binding", "badgeBinding", "removed", "forced"],
+  ["battery_health", "batteryHealth", "degraded", "failing"],
+  ["device_management_health", "managementHealthState", "degraded", "broken"],
+  ["charge_state", "dockChargeState", "low", "critical"],
+  ["security_baseline", "baselineCompliance", "partial", "drifted"],
+  ["dock_state", "dockState", "offline", "faulted"],
+  ["posture_freshness", "postureFreshness", "stale", "unknown"],
+];
+
+/** For each family, an OLDER parseable milder value against a NEWER stronger one stamped `newerObservedAt`. */
+function matrixFor(newerObservedAt: string): string {
+  return FAMILIES.map(([category, field, older, newer]) => {
+    const signals = [
+      sig("s_old", category, older, "2026-07-13T04:00:00.000Z"),
+      sig("s_new", category, newer, newerObservedAt),
+      sig("s_c", "device_compliance", "compliant", BASE),
+      ...healthy().filter((x) => x.category !== category),
+    ];
+    const ev = buildEvidence(identity, device, workflow, signals) as unknown as Record<string, unknown>;
+    return `${category}=${String(ev[field])}`;
+  }).join(";");
+}
+
+/** Two accusations at the SAME instant, in the given arrival order. */
+function tieFor(category: SignalCategory, field: string, first: string, second: string): string {
+  const signals = [
+    sig("s_a", category, first, "2026-07-13T12:00:00.000Z"),
+    sig("s_b", category, second, "2026-07-13T12:00:00.000Z"),
+    sig("s_c", "device_compliance", "compliant", BASE),
+    ...healthy(),
+  ];
+  const ev = buildEvidence(identity, device, workflow, signals) as unknown as Record<string, unknown>;
+  return String(ev[field]);
+}
+
 /** The freshness classifier on one stamp, at a fixed reference clock. */
 function freshnessFor(observedAt: string): string {
   return classifyFreshness(observedAt, "2026-07-13T13:00:00.000Z", 1, 24);
@@ -111,6 +150,8 @@ if (process.argv[2] === "--worker") {
   const out =
     mode === "verdict" ? verdictFor(a!, b)
     : mode === "accuse" ? accusationFor(a as "tamper_state" | "badge_binding", b!, c!, process.argv[7]!)
+    : mode === "matrix" ? matrixFor(a!)
+    : mode === "tie" ? tieFor(a as SignalCategory, b!, c!, process.argv[7]!)
     : mode === "freshness" ? freshnessFor(a!)
     : mode === "dock" ? dockFreshnessFor(a!)
     : "BAD-MODE";
@@ -216,6 +257,73 @@ check(
   new Set(dock).size === 1 && dock[0] !== "fresh" && !dock[0]!.includes("MISSING") && !dock[0]!.includes("CRASH"),
   dock.join(","),
 );
+
+
+// Zoned forms that name an exact instant are ORDERED, not discarded. A vouch at 08:00Z is later than the 07:30Z
+// accusation, so each of these must read `compliant`; one that fell to illegible could not vouch and would not.
+for (const stamp of [
+  "2026-07-13 08:00:00Z",
+  "2026-07-13 08:00:00+00",
+  "2026-07-13T08:00:00+0000",
+  "2026-07-13T10:00:00+02",
+  "2026-07-13 10:00:00+02:00",
+]) {
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp));
+  check(
+    `zoned stamp '${stamp}' is ordered by instant (later vouch wins), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|compliant"),
+    r.join(","),
+  );
+}
+
+// Every family with two accusing values: a NEWER, STRONGER accusation whose stamp cannot be ordered must not be
+// outranked by an OLDER, milder ordered one. Expected per family: the stronger value, in every zone and for every
+// stamp shape (offset-less, RFC 2822 text, and a plain explicit Z as the control).
+const strongerOf = FAMILIES.map(([category, , , newer]) => `${category}=${newer}`).join(";");
+for (const stamp of ["2026-07-13T14:50:00", "Mon, 13 Jul 2026 14:50:00 GMT", "2026-07-13T14:50:00Z"]) {
+  const r = ZONES.map((z) => inZone(z, "matrix", stamp));
+  check(
+    `all families, newer stronger accusation stamped '${stamp}': the stronger value stands, identically in every zone`,
+    new Set(r).size === 1 && r[0] === strongerOf,
+    r.join(" | "),
+  );
+}
+
+// Same-instant pairs resolve by severity, not by arrival order, in both orders.
+for (const [category, field, mild, strong] of FAMILIES.filter(([c]) => c !== "posture_freshness")) {
+  const ab = inZone("UTC", "tie", category, field, mild, strong);
+  const ba = inZone("UTC", "tie", category, field, strong, mild);
+  check(`same-instant ${category}: ${mild}+${strong} resolves to ${strong} in either arrival order`, ab === strong && ba === strong, `${ab}/${ba}`);
+}
+
+// The accusation orders are not hand-trusted: derive each member's outcome from the SHIPPED rule set, require
+// every accusing member to be listed, and require the order to be non-decreasing in outcome.
+{
+  const RANK: Record<string, number> = { allow: 0, step_up: 1, restrict: 2, deny: 3 };
+  const FIELD_OF: Record<string, string> = {
+    tamper: "tamperState", badge: "badgeBinding", battery: "batteryHealth", managementHealth: "managementHealthState",
+    charge: "dockChargeState", baseline: "baselineCompliance", dock: "dockState", custody: "custodyState",
+  };
+  const base = buildEvidence(identity, device, workflow, [sig("s_c", "device_compliance", "compliant", BASE), ...healthy()]);
+  const pv = { id: "pv_o", tenantId: "tenant_northwind", policyId: "pol_o", version: 1, status: "active" as const, rules: SHARED_DEVICE_RULES_V1, createdAt: BASE, digest: "test" };
+  const outcomeOf = (field: string, member: string) =>
+    RANK[evaluatePolicy(pv, { ...base, [field]: member } as typeof base).outcome]!;
+  const problems: string[] = [];
+  for (const [key, field] of Object.entries(FIELD_OF)) {
+    const domain = (EVIDENCE_VALUE_DOMAINS as Record<string, { members: readonly unknown[]; good: readonly unknown[]; worse?: readonly unknown[] }>)[key === "battery" ? "batteryHealth" : key];
+    if (!domain) { problems.push(`${key}: no such domain`); continue; }
+    const accusing = domain.members.filter((m) => !domain.good.includes(m)) as string[];
+    const worse = (domain.worse ?? []) as string[];
+    for (const m of accusing) if (!worse.includes(m)) problems.push(`${key}: accusing member '${m}' is not ranked`);
+    let prev = -1;
+    for (const m of worse) {
+      const r = outcomeOf(field, m);
+      if (r < prev) problems.push(`${key}: '${m}' (${r}) is ranked after a member with a harsher outcome (${prev})`);
+      prev = Math.max(prev, r);
+    }
+  }
+  check("accusation orders match the shipped rules' outcomes, and every accusing member is ranked", problems.length === 0, problems.join("; "));
+}
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "FAIL"} (${passed}/${passed + failures.length})`);
 if (failures.length > 0) { for (const f of failures) console.error(`  - ${f}`); process.exit(1); }

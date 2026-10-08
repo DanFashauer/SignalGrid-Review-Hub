@@ -1,7 +1,7 @@
 {
   "schema": "signalgrid.core-normalization-version/1",
-  "version": 26,
-  "sourcesDigest": "2cba800ff7d124b2116b365b84178e94b855ceb31e59ba419b5b80442e1aa76c",
+  "version": 27,
+  "sourcesDigest": "66cf0366b4d4b83d680b38bf0369f4d3ce431a361956853fbcc2bd6eb2dc4db4",
   "sources": [
     {
       "path": "lib/signalgrid-core/src/attach.ts",
@@ -25,7 +25,7 @@
     },
     {
       "path": "lib/signalgrid-core/src/evidence.ts",
-      "sha256": "d7da0229556a2b7c187d18babeb134236dd55e3f8b4eaf999391083c07f77ab9"
+      "sha256": "6749742ae2d645aa15b6a13a4861759a24aeb5de4ea4065abbed3f34977f908f"
     },
     {
       "path": "lib/signalgrid-core/src/policy.ts",
@@ -49,7 +49,7 @@
     },
     {
       "path": "lib/signalgrid-core/src/util.ts",
-      "sha256": "025a2a1c63bcc3660c7abf629a8a988237cde2200b6a70ef4c2a080aa20b3a75"
+      "sha256": "c81b60556fcd7ed0979da1aaa2883cc05f2f2004be00862a5fa5a1c57b26ba93"
     },
     {
       "path": "lib/signalgrid-core/src/webhooks.ts",

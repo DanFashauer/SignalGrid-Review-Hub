@@ -607,19 +607,22 @@ export const EVIDENCE_VALUE_DOMAINS = {
   compliance: { members: COMPLIANCE_STATES, good: ["compliant"] },
   boolean: { members: BOOLEAN_MEMBERS, good: [true] },
   freshness: { members: FRESHNESS_VALUES, good: ["fresh"] },
-  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"] },
-  charge: { members: CHARGE_STATES, good: ["charging", "charged"] },
-  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"] },
+  // Every family below lists ALL its accusing members, least to most severe by the outcome of the shipped rule
+  // that matches it (`proof:evidence-observedat-tz` derives that outcome from SHARED_DEVICE_RULES_V1 and fails
+  // if an order or a missing member disagrees). Members the rules treat alike sit next to each other.
+  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"], worse: ["overdue", "exception", "maintenance"] },
+  charge: { members: CHARGE_STATES, good: ["charging", "charged"], worse: ["low", "not_present", "critical"] },
+  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"], worse: ["degraded", "failing"] },
   // `worse` orders the accusing members the shipped rule set separates by outcome: a confirmed tamper
   // denies (TAMPER_CONFIRMED) and a suspected one restricts (TAMPER_SUSPECTED).
-  tamper: { members: TAMPER_STATES, good: ["none"], worse: ["suspected", "confirmed"] },
-  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"] },
-  baseline: { members: BASELINE_STATES, good: ["aligned"] },
+  tamper: { members: TAMPER_STATES, good: ["none"], worse: ["sensor_unavailable", "suspected", "confirmed"] },
+  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"], worse: ["offline", "faulted"] },
+  baseline: { members: BASELINE_STATES, good: ["aligned"], worse: ["partial", "not_assessed", "drifted"] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
   // A forced badge removal denies (BADGE_FORCED_REMOVAL) and a plain removal restricts (BADGE_REMOVED).
-  badge: { members: BADGE_STATES, good: ["present"], worse: ["removed", "forced"] },
-  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"] },
+  badge: { members: BADGE_STATES, good: ["present"], worse: ["absent", "removed", "forced"] },
+  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"], worse: ["degraded", "broken"] },
   localAuthority: { members: LOCAL_AUTHORITY_STATES, good: ["verified"] },
   attach: { members: ATTACH_READABLE, good: ["attached"] },
   // ENROLLMENT IS INVERTED ON PURPOSE, and it is the DR-043 fix over PR #753. The
@@ -704,6 +707,24 @@ function readDockEvidenceFreshness(latestByCategory: LatestByCategory): Freshnes
     }
   }
   return worst ?? "missing";
+}
+
+/**
+ * Worst-wins for the POSTURE freshness reading, ordered by what the shipped rules DO with each value, not by
+ * age: `missing` and `unknown` restrict (POSTURE_MISSING) while `stale` and `expired` only step up
+ * (POSTURE_STALE). The age ladder above puts stale above unknown, so an older parseable `stale` outranked a
+ * newer `unknown` whose stamp could not be ordered and a restrict became a step-up. The dock-wide freshness
+ * keeps the age ladder: nothing shipped rules on it per value.
+ */
+const POSTURE_SEVERITY: Record<Freshness, number> = {
+  fresh: 0,
+  stale: 1,
+  expired: 2,
+  missing: 3,
+  unknown: 4,
+};
+function worsePosture(a: Freshness, b: Freshness): Freshness {
+  return POSTURE_SEVERITY[a] >= POSTURE_SEVERITY[b] ? a : b;
 }
 
 /** Worst-wins between two freshness values, by the severity map above. */
@@ -829,7 +850,7 @@ function readFreshness(latestByCategory: LatestByCategory): Freshness {
   let ordered = reading.ordered ? asFreshness(reading.ordered.value) : undefined;
   // A same-instant twin folds worst-wins with no floor (eighth-round finding).
   for (const signal of reading.tied) {
-    ordered = worseFreshness(ordered ?? "fresh", asFreshness(signal.value));
+    ordered = worsePosture(ordered ?? "fresh", asFreshness(signal.value));
   }
   if (reading.illegible.length === 0) {
     return ordered ?? "unknown";
@@ -837,7 +858,7 @@ function readFreshness(latestByCategory: LatestByCategory): Freshness {
   // Worst-wins across ALL the illegible peers, not just the first (finding F-1).
   let worst = ordered ?? "unknown";
   for (const signal of reading.illegible) {
-    worst = worseFreshness(worst, asFreshness(signal.value));
+    worst = worsePosture(worst, asFreshness(signal.value));
   }
   return worst;
 }

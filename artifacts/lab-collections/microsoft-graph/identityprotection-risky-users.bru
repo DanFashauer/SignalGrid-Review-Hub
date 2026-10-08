@@ -1,0 +1,15 @@
+meta {
+  name: Identity Protection - risky users read
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/identityProtection/riskyUsers?$select=id,riskLevel,riskState
+  body: none
+  auth: inherit
+}
+
+docs {
+  The risk half of the launch transport (posture-connector.ts listRiskyUsers): id, riskLevel and riskState only. Identity Protection lists only the users it has flagged, so a user absent from this list has no detected risk - but only if this read succeeded. A tenant without IdentityRiskyUser.Read.All (application) answers 403, and the connector must read that as unknown risk, never none.
+}

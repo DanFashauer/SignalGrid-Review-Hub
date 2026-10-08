@@ -649,6 +649,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE 2026-09-30 (PR #1318, a2fce49e — six check-gates fixed):
+    FIX PROPOSED 2026-10-08 (branch claude/build-gate-self-tests-run, lands under DR-037): `scripts/check-gate-self-tests-run.mjs`, registered in preflight and CI; detail in the RE-MEASURED 2026-10-08 paragraph below.
     the six check-gates that had no failure control at all — no `--self-test` flag, no
     in-run control, no exported verdict — now factor their verdict into a pure function
     and run one planted-failing and one passing synthetic input through it on EVERY

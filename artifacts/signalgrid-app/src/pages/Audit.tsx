@@ -26,7 +26,7 @@ export function Audit() {
               ? "Audit ledger could not be re-read; chain unverified since the last read."
               : "Audit ledger could not be read; chain unverified."
             : data && !data.chain.valid
-              ? `Hash chain broken at sequence ${data.chain.brokenAtSeq}.`
+              ? data.chain.brokenAtSeq !== null ? `Hash chain broken at sequence ${data.chain.brokenAtSeq}.` : "Hash chain could not be fully verified."
               : ""
         }
       />
@@ -57,7 +57,7 @@ export function Audit() {
             variant="outline"
             className={`font-mono uppercase border-transparent ${data.chain.valid ? "bg-status-allow" : "bg-status-deny"}`}
           >
-            {data.chain.valid ? "chain verified" : "CHAIN BROKEN"}
+            {data.chain.valid ? "chain verified" : data.chain.brokenAtSeq !== null ? "CHAIN BROKEN" : "CHAIN UNVERIFIED"}
           </Badge>
           <span className="text-muted-foreground">
             {data.chain.length} events, every digest recomputed on this request

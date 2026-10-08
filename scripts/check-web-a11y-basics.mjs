@@ -353,7 +353,8 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     for (const f of parsed) {
       if (polls.has(f.rel)) continue;
       // A timer driving a refetch polls: setInterval, or a setTimeout loop that re-arms itself.
-      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\brefetch\w*\s*\(/.test(f.code);
+      // So does a timer invalidating or resetting queries: TanStack refetches the active ones.
+      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\b(?:refetch\w*|invalidateQueries|resetQueries)\s*\(/.test(f.code);
       if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
         // A component renders its own live region, so it does not carry polling
@@ -736,12 +737,15 @@ export function checkReducedMotion(rel, raw) {
         const decls = [...css.slice(m.index + m[0].length, i + 1).matchAll(/(?:^|[\s;{])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:\s*([^;{}]+)/g)]
           .map(([, prop, value]) => [prop, value.replace(/!\s*important/, "").trim()])
           .filter(([prop]) => !MOTION_NEUTRAL.has(prop));
-        if (decls.length && decls.every(([prop, value]) => damps(prop, value))) return [];
+        // …and it must damp every family, not just one: a block left with only
+        // `scroll-behavior: auto` lets every animation and transition run.
+        const families = new Set(decls.map(([prop]) => prop.split("-")[0]));
+        if (["animation", "transition", "scroll"].every((f) => families.has(f)) && decls.every(([prop, value]) => damps(prop, value))) return [];
         break;
       }
     }
   }
-  return [`${rel}: no @media (prefers-reduced-motion: reduce) block that damps animation, transition or scroll-behavior — WCAG 2.3.3`];
+  return [`${rel}: no @media (prefers-reduced-motion: reduce) block that damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
 function webTrees() {
@@ -1006,11 +1010,18 @@ function selfTest() {
       ['{show && <Trash2 />}', '{show && (<Trash2 />)}', '{a ? <X /> : null}', '{null}'].every((c) =>
         checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1 && checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1) &&
       ['{label}', '{a && "Save"}', '{show && <span>Save</span>}'].every((c) => checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 0)],
+    ["a reduced-motion block must damp all three motion families",
+      ["scroll-behavior: auto", "animation-duration: 0.01ms; scroll-behavior: auto", "animation: none; transition: none"].every((d) =>
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+    ["a timer that invalidates or resets queries polls",
+      ["setInterval(() => qc.invalidateQueries({ queryKey: k }), 5000)", "setTimeout(function t() { qc.resetQueries(); setTimeout(t, 5000); }, 5000)"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
     ["a reduced-motion block whose declarations do not damp motion does not count",
       ["animation-duration: 99s", "scroll-behavior: smooth", "transition-duration: 0.01ms; animation-duration: 2s", "animation-iteration-count: infinite", "transition: opacity 1s"].every((d) =>
         checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
       ["animation: none", "transition-duration: 0s !important", "scroll-behavior: auto", "animation-duration: 10ms; animation-timing-function: linear"].every((d) =>
-        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 0)],
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; ${d}; } }`).length === 0)],
     ["a live-region alert gated on cached data being absent is flagged",
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={isError && !data ? "Feed down." : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={m.error && !m.data ? "Down." : ""} />').length === 1 &&
@@ -1041,7 +1052,7 @@ function selfTest() {
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before { animation-duration: 0.01ms !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
   ];
   const bad = cases.filter(([, ok]) => !ok);
   for (const [name, ok] of cases) console.log(`${ok ? "ok" : "FAIL"}  ${name}`);

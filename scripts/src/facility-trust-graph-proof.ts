@@ -24,6 +24,8 @@ import {
   resolveClinicalAssignment,
   satisfies,
   type AccuracyClass,
+  type CrossingAction,
+  type LocationCertaintyAction,
   type ClinicalAssignmentRaw,
   type FacilityGraphDoc,
   type LocationObservationRaw,
@@ -34,6 +36,15 @@ import {
 } from "@workspace/facility-trust-graph";
 import { SIGNAL_KINDS, composeDeviceRisk, fromLocationCertainty } from "@workspace/posture-composition";
 import { enumerateGrantSafety, productOf } from "./lib/grant-safety.js";
+import { FAMILY_ACTIONS, type FamilyAction } from "@workspace/integrations/action-ladder";
+
+// This package has no dependency on @workspace/integrations, so its two action unions
+// cannot derive from FAMILY_ACTIONS directly. They are held to it here instead: if
+// either drifts, this line stops typechecking, and the `ladderRungs` figure below is
+// no longer allowed to claim the shared ladder's length.
+type SameUnion<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const ladderIsShared: SameUnion<LocationCertaintyAction, FamilyAction> & SameUnion<CrossingAction, FamilyAction> = true;
+void ladderIsShared;
 
 let passed = 0;
 const failures: string[] = [];
@@ -747,6 +758,6 @@ check("evaluator is deterministic",
   JSON.stringify(evaluateLocationCertainty(d1, MED_REQ)) === JSON.stringify(evaluateLocationCertainty(d1, MED_REQ)));
 
 const total = passed + failures.length;
-console.log(`figures=graphSpaces=${graph.derived.total},normalizedCombos=${normRes.combos},grantingCombos=${normRes.noneCount},accuracyClasses=${ACCURACY_CLASSES.length},ladderRungs=6`);
+console.log(`figures=graphSpaces=${graph.derived.total},normalizedCombos=${normRes.combos},grantingCombos=${normRes.noneCount},accuracyClasses=${ACCURACY_CLASSES.length},ladderRungs=${FAMILY_ACTIONS.length}`);
 console.log(`summary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${total})`);
 if (failures.length > 0) { console.error("Failed checks:"); for (const f of failures) console.error(`  - ${f}`); process.exitCode = 1; }

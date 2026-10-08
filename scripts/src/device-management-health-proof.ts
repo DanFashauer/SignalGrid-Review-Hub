@@ -464,11 +464,15 @@ const evaluateAndAudit = (n: NormalizedDeviceManagementHealth): ReturnType<typeo
   }
   if (n.policyDrift === "drifted" && v.reasonCode === "MANAGEMENT_STATE_UNKNOWN") driftedGeneric += 1;
   if (v.reasonCode === "MANAGEMENT_UNREACHABLE") unreachableHeadline += 1;
-  if (n.managementReachable === false) {
-    explicitUnreachable += 1;
-    // Had MANAGEMENT_UNREACHABLE been raised LAST it would headline only where nothing else
-    // is wrong: the report grants once the plane is reported reachable.
-    if (evaluateDeviceManagementHealth({ ...n, managementReachable: true }).recommendedAction === "none") raisedLastHeadline += 1;
+  if (n.managementReachable === false) explicitUnreachable += 1;
+  // Had MANAGEMENT_UNREACHABLE been raised LAST, alongside the `null` case (its original
+  // ordering), it would headline only where nothing else is wrong: a report whose
+  // reachability is not an explicit true (false, or null/absent) and which grants once the
+  // plane is reported reachable. Measured against a patched copy of the evaluator with the
+  // explicit-false block moved late, this is the figure the docs quote (9 on the pre-rootCause
+  // space; the same method gives 54 here).
+  if (n.managementReachable !== true && evaluateDeviceManagementHealth({ ...n, managementReachable: true }).recommendedAction === "none") {
+    raisedLastHeadline += 1;
   }
   // The removed consistency guard demoted on_baseline/covered to unknown for a never-checked-in
   // device, and covered for a failed/retired enrollment: its removal shrinks unknownSignals here.
@@ -517,12 +521,14 @@ check(
 );
 check("exhaustive (raw wire): some raw reports DO grant (the enumeration is not vacuous)", rawEnumRes.noneCount > 0);
 check("exhaustive (raw wire): exactly THREE channel shapes grant — each once per parseable rootCauseEvidence wire spelling — and nothing else", rawEnumRes.noneCount === 3 * ROOT_CAUSE_WIRE.length);
-// The counterfactual counters, asserted three ways. (1) `raisedLastHeadline`: flipping an
-// explicit `managementReachable: false` to true can only land on a granting report, so it
-// equals the raw grant count. (2) `counterfactualUnknownShrink`: an independent closed form
-// over the four raw domains it depends on (the removed guard's two clauses), scaled by the
-// product of the sizes of every other raw domain — it does not use normalizeReport. (3) The
-// doc sentences that quote them carry these exact figures.
+// The counterfactual counters, asserted three ways. (1) `raisedLastHeadline`: an independent
+// closed form — every report that grants with reachable=true has, for each cleanly-parsed
+// non-true spelling of the reachability key (false, null, omitted), exactly one sibling
+// report that differs only there, so the count is grants-per-true-spelling times the number
+// of those spellings. (2) `counterfactualUnknownShrink`: an independent closed form over the
+// four raw domains it depends on (the removed guard's two clauses), scaled by the product of
+// the sizes of every other raw domain — it does not use normalizeReport. (3) The doc
+// sentences that quote them carry these exact figures.
 const rawSize = (k: keyof typeof rawDomains): number => rawDomains[k].length;
 const othersProduct = (Object.keys(rawDomains) as (keyof typeof rawDomains)[])
   .filter((k) => !["mdmCheckInFreshness", "policyDrift", "complianceCoverage", "enrollmentState"].includes(k))
@@ -540,9 +546,12 @@ for (const mdm of rawDomains.mdmCheckInFreshness) {
   }
 }
 closedShrink *= othersProduct;
+const reachTrueSpellings = rawDomains.managementReachable.filter((v) => v === true).length;
+const reachCleanNonTrueSpellings = rawDomains.managementReachable.filter((v) => v === false || v === null || v === undefined).length;
+const closedRaisedLast = (rawEnumRes.noneCount / reachTrueSpellings) * reachCleanNonTrueSpellings;
 check(
-  `counterfactuals: raised-last headline (${raisedLastHeadline}) equals the grant count, and the removed-guard unknownSignals shrink (${counterfactualUnknownShrink}) equals its independent closed form (${closedShrink})`,
-  raisedLastHeadline === rawEnumRes.noneCount && counterfactualUnknownShrink === closedShrink,
+  `counterfactuals: raised-last headline (${raisedLastHeadline}) equals its independent closed form (${closedRaisedLast}), and the removed-guard unknownSignals shrink (${counterfactualUnknownShrink}) equals its independent closed form (${closedShrink})`,
+  raisedLastHeadline === closedRaisedLast && counterfactualUnknownShrink === closedShrink,
 );
 const catalog = await readFile(resolve(dirname(fileURLToPath(import.meta.url)), "../../docs/INTEGRATION_CATALOG.md"), "utf8");
 const fmt = (n: number): string => n.toLocaleString("en-US");

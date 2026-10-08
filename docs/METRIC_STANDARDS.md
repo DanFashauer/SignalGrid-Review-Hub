@@ -78,20 +78,40 @@ a re-sync does. How they keep the four rules:
   the HELP strings avoid it.
 - **Fail-closed.** `healthy` and `fresh` are the only affirmative values. Any
   value outside the vocabulary, and any count that is not a non-negative
-  number, folds into `unknown`, which reads as not healthy and not fresh.
+  number, folds into `unknown`, which reads as not healthy and not fresh. A
+  connector of an unrecognised kind cannot vouch for itself: a `healthy`
+  status on it is demoted to `unknown`, so no `kind="unknown"` series reads
+  healthy (a `degraded` or `never_synced` status keeps its label).
   Every series is written on every scrape, zeros included, so a missing
   series never stands in for a missing problem. If an inventory read throws,
   the scrape still answers 200 with `kind="unknown",status="unknown"` (or
   `freshness="unknown"`) at 1 and every affirmative series at 0: a failed
   scrape would hide the outage the metric exists to show.
   `proof:observability` pins these cases in process: an out-of-vocabulary
-  status, kind and freshness; illegible counts (NaN, negative, Infinity, a
-  string), which must reach no affirmative series and print no NaN, Infinity
-  or negative; an empty inventory; a throwing read. It plants four mutants
-  (fold `unknown` into the affirmative value; skip the zero-fill; stop
-  folding an out-of-vocabulary kind; accept an illegible count as given),
-  each of which turns it red. The `/metrics` handler's call into the core is
-  pinned by `api.test.mjs`, not by the proof.
-- **What freshness means here.** `freshness` is the value stamped on each
-  signal when it was ingested, so the gauge reports what the last sync saw,
-  not a re-evaluation against the clock at scrape time.
+  status, kind and freshness; an unrecognised kind reporting `healthy`;
+  illegible counts (NaN, negative, Infinity, a string), which must reach no
+  affirmative series and print no NaN, Infinity or negative; an empty
+  inventory; a throwing read. It plants five mutants of `metrics.ts` (fold
+  `unknown` into the affirmative value; skip the zero-fill; stop folding an
+  out-of-vocabulary kind; let an unrecognised kind keep `healthy`; accept an
+  illegible count as given), each of which turns it red.
+- **The core inventories are pinned against the held state.** The same proof
+  tallies the store's own connector and signal maps independently on the
+  seeded demo core (which holds stale and missing evidence) with a planted
+  `degraded` and `never_synced` connector, and requires both inventories and
+  the exported series to match. Three mutants of `store.ts` (report every
+  signal fresh; report every connector healthy; drop the connectors that are
+  not healthy) each turn it red. `api.test.mjs` also requires the seeded
+  stale and missing evidence to reach the gauge, and is the only check that
+  pins the `/metrics` handler's call into the core.
+- **As of the last completed sync, and not an outage detector.**
+  `freshness` is the value stamped on each signal when it was ingested, and
+  a connector's `status` changes only when a sync completes. Both gauges
+  report what the core holds, not a re-evaluation against the clock at
+  scrape time. So a source that stops answering leaves both series at their
+  last value: an estate whose posture source is unreachable keeps reading
+  `healthy` and `fresh` until a sync completes. An alert on
+  `status!="healthy"` or on `stale > 0` does not fire for that outage. The
+  underlying gaps are the open BUILD_BACKLOG rows "Estate posture must age"
+  and "A posture refresh must retract"; these series inherit them and do
+  not close them.

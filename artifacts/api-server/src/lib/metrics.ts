@@ -197,8 +197,16 @@ const processUptime = new Gauge("signalgrid_process_uptime_seconds", "Process up
 // carries a literal `unknown` that every value outside the vocabulary folds into.
 //
 // FAIL-CLOSED: `healthy` and `fresh` are the only affirmative values. `unknown`
-// is counted as not-healthy / not-fresh, and EVERY series is written on EVERY
-// scrape, zeros included, so an absent series never reads as an absent problem.
+// is counted as not-healthy / not-fresh (a connector of unrecognised kind never
+// reads healthy), and EVERY series is written on EVERY scrape, zeros included,
+// so an absent series never reads as an absent problem.
+//
+// AS OF THE LAST COMPLETED SYNC: both gauges report what the core HOLDS. A
+// connector's status changes only when a sync completes and a signal's freshness
+// is stamped at ingest, so a source that stops answering leaves these series at
+// their last value. They do not detect an outage of the source on their own
+// (docs/METRIC_STANDARDS.md; BUILD_BACKLOG "Estate posture must age" and "A
+// posture refresh must retract").
 // 4 kinds x 4 statuses + 5 freshness values is far under MAX_SERIES_PER_METRIC.
 
 /** The fold for any label value outside a declared vocabulary. */
@@ -237,11 +245,11 @@ const legibleCount = (count: unknown): number | null =>
 
 const connectorsGauge = new Gauge(
   "signalgrid_connectors",
-  "Connectors held by this process, by kind and status. Only status=healthy is affirmative; unknown counts as not healthy.",
+  "Connectors held by this process, by kind and status, as of each connector's last completed sync. Only status=healthy is affirmative; unknown counts as not healthy.",
 );
 const evidenceGauge = new Gauge(
   "signalgrid_evidence_signals",
-  "Normalized signals held by this process, by freshness. Only freshness=fresh is affirmative; unknown counts as not fresh.",
+  "Normalized signals held by this process, by freshness as stamped at ingest. Only freshness=fresh is affirmative; unknown counts as not fresh.",
 );
 
 /** Write EVERY kind x status series from the core's connector inventory. */
@@ -250,10 +258,15 @@ export function observeConnectors(rows: ReadonlyArray<{ kind: unknown; status: u
   for (const kind of CONNECTOR_KIND_LABELS) for (const status of CONNECTOR_STATUS_LABELS) acc.set(key({ kind, status }), 0);
   for (const row of rows) {
     const count = legibleCount(row?.count);
+    const kind = inVocabulary(CONNECTOR_KIND_LABELS, row.kind);
+    const status = inVocabulary(CONNECTOR_STATUS_LABELS, row.status);
+    // A connector of an unrecognised kind cannot vouch for itself: its `healthy`
+    // is demoted to `unknown`, so no series labelled kind="unknown" ever reads
+    // healthy. A non-affirmative status (degraded, never_synced) keeps its label.
     const labels =
       count === null
         ? { kind: UNKNOWN_LABEL, status: UNKNOWN_LABEL }
-        : { kind: inVocabulary(CONNECTOR_KIND_LABELS, row.kind), status: inVocabulary(CONNECTOR_STATUS_LABELS, row.status) };
+        : { kind, status: kind === UNKNOWN_LABEL && status === "healthy" ? UNKNOWN_LABEL : status };
     const k = key(labels);
     acc.set(k, (acc.get(k) ?? 0) + (count ?? 1));
   }

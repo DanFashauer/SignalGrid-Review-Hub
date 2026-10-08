@@ -2267,6 +2267,10 @@ async function run() {
       held > 0 && exported === held);
     check("evidence freshness: the core holds signals, so the freshness series are not all zero",
       FRESHNESS.reduce((n, f) => n + (fresh(text, f) ?? 0), 0) > 0);
+    // The demo seed holds stale and missing evidence. A core inventory that called
+    // every held signal fresh would zero these while the evidence is still held.
+    check("evidence freshness: the seeded stale and missing evidence reaches the gauge (not all fresh)",
+      (fresh(text, "stale") ?? 0) > 0 && (fresh(text, "missing") ?? 0) > 0);
     check("/metrics still carries no tenant-shaped text after the two new series",
       !text.includes("tenant"));
   }

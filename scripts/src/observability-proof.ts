@@ -117,6 +117,14 @@ function inventoryCases(m: MetricsModule): string[] {
   want("a kind outside the vocabulary is not dropped (the exported total is still 4)",
     KINDS.reduce((n, k) => n + STATUSES.reduce((a, st) => a + (conn(t, k, st) ?? 0), 0), 0) === 4);
 
+  // An unrecognised kind cannot vouch for itself: a legible `healthy` on it is
+  // demoted, so no series labelled kind="unknown" ever reads healthy.
+  m.observeConnectors([{ kind: "acme-badge", status: "healthy", count: 5 }]);
+  t = m.renderMetrics();
+  want("an unrecognised kind with status=healthy renders as kind=\"unknown\",status=\"unknown\" 5",
+    conn(t, "unknown", "unknown") === 5);
+  want("an unrecognised kind with status=healthy lands on NO healthy series", noAffirmative(t) && conn(t, "unknown", "healthy") === 0);
+
   // An ILLEGIBLE count (NaN, negative, Infinity, not a number) is one illegible item:
   // it folds into unknown/unknown as 1, never onto the row's own (affirmative) labels,
   // and never prints as NaN, Infinity or a negative.
@@ -169,8 +177,13 @@ const MUTANTS: Array<{ name: string; from: string; to: string }> = [
   },
   {
     name: "stop folding an out-of-vocabulary kind",
-    from: "kind: inVocabulary(CONNECTOR_KIND_LABELS, row.kind)",
-    to: "kind: String(row.kind)",
+    from: "const kind = inVocabulary(CONNECTOR_KIND_LABELS, row.kind);",
+    to: "const kind = String(row.kind);",
+  },
+  {
+    name: "let an unrecognised kind keep a healthy status",
+    from: 'kind === UNKNOWN_LABEL && status === "healthy" ? UNKNOWN_LABEL : status',
+    to: "status",
   },
   {
     name: "accept an illegible count as given",
@@ -204,8 +217,124 @@ async function inProcessInventoryProof(): Promise<void> {
   }
 }
 
+// ── the core inventories THEMSELVES, against an oracle (plan row 33) ──────────
+//
+// The cases above feed the exporter rows by hand, so they cannot see a core
+// inventory that reports the wrong values: a store that called every signal fresh
+// would leave the stale-evidence gauge at zero while stale evidence is held, and
+// every case above would stay green. These read the SAME store maps the
+// inventories read, tally them independently, and require the inventories (and
+// the exported series) to match, on the seeded demo core (which holds stale and
+// missing evidence) with a planted degraded and never_synced connector. Three
+// mutants of store.ts are then loaded from a temp copy and must each turn it red.
+const storeSource = resolve(repoRoot, "lib/signalgrid-core/src/store.ts");
+const coreSrcDir = resolve(repoRoot, "lib/signalgrid-core/src");
+
+type Row = Record<string, unknown>;
+type StoreLike = {
+  connectorInventory(): Array<{ kind: string; status: string; count: number }>;
+  signalFreshnessInventory(): Array<{ freshness: string; count: number }>;
+  putConnector(c: Row): void;
+  putSignal(s: Row): void;
+  connectors: Map<string, Row>;
+  signals: Map<string, Row>;
+};
+
+const tally = (values: string[]) => {
+  const out = new Map<string, number>();
+  for (const v of values) out.set(v, (out.get(v) ?? 0) + 1);
+  return out;
+};
+const sameCounts = (rows: Array<{ key: string; count: number }>, oracle: Map<string, number>) =>
+  rows.length === oracle.size && rows.every((r) => oracle.get(r.key) === r.count);
+
+/** Oracle cases over a store already holding the seeded rows plus the planted ones.
+ *  Returns the names of the cases that FAILED. */
+function oracleCases(store: StoreLike): string[] {
+  const failed: string[] = [];
+  const want = (name: string, ok: boolean) => { if (!ok) failed.push(name); };
+  const sigOracle = tally([...store.signals.values()].map((x) => String(x.freshness)));
+  const connOracle = tally([...store.connectors.values()].map((x) => `${String(x.kind)}|${String(x.status)}`));
+  const fInv = store.signalFreshnessInventory();
+  const cInv = store.connectorInventory();
+  want("signalFreshnessInventory matches an independent tally of the held signals",
+    sameCounts(fInv.map((r) => ({ key: r.freshness, count: r.count })), sigOracle));
+  want("connectorInventory matches an independent tally of the held connectors",
+    sameCounts(cInv.map((r) => ({ key: `${r.kind}|${r.status}`, count: r.count })), connOracle));
+  const fCount = (f: string) => fInv.find((r) => r.freshness === f)?.count ?? 0;
+  want("the seeded core holds stale evidence and the inventory reports it", fCount("stale") > 0 && fCount("stale") === (sigOracle.get("stale") ?? 0));
+  want("the seeded core holds missing evidence and the inventory reports it", fCount("missing") > 0 && fCount("missing") === (sigOracle.get("missing") ?? 0));
+  const cCount = (kind: string, status: string) => cInv.find((r) => r.kind === kind && r.status === status)?.count ?? 0;
+  want("a planted degraded connector is reported degraded", cCount("wfm-shift", "degraded") >= 1);
+  want("a planted never_synced connector is reported never_synced", cCount("dockbridge-custody", "never_synced") >= 1);
+  return failed;
+}
+
+function plant(store: StoreLike, template: Row): void {
+  store.putConnector({ ...template, id: "conn_proof_planted_degraded", kind: "wfm-shift", status: "degraded" });
+  store.putConnector({ ...template, id: "conn_proof_planted_never_synced", kind: "dockbridge-custody", status: "never_synced", lastSyncAt: null });
+}
+
+const STORE_MUTANTS: Array<{ name: string; from: string; to: string }> = [
+  { name: "report every held signal fresh", from: "const freshness = String(signal.freshness as string);", to: 'const freshness = "fresh";' },
+  { name: "report every connector healthy", from: "const status = String(connector.status as string);", to: 'const status = "healthy";' },
+  {
+    name: "drop the connectors that are not healthy",
+    from: "    for (const connector of this.connectors.values()) {\n      const kind = String(connector.kind as string);",
+    to: '    for (const connector of [...this.connectors.values()].filter((c) => c.status === "healthy")) {\n      const kind = String(connector.kind as string);',
+  },
+];
+
+async function coreInventoryProof(m: MetricsModule): Promise<void> {
+  const coreMod = (await import(coreEntry)) as { SignalGridCore: { demo(): unknown } };
+  const core = coreMod.SignalGridCore.demo() as { store: StoreLike } & Parameters<MetricsModule["refreshInventoryGauges"]>[0];
+  const store = core.store;
+  const template = [...store.connectors.values()][0];
+  check("core oracle: the demo core holds connectors to plant beside", template !== undefined);
+  if (!template) return;
+  plant(store, template);
+  const realFailures = oracleCases(store);
+  check("core oracle: the inventories match the held state on the seeded core" +
+    (realFailures.length ? ` (failed: ${realFailures.join("; ")})` : ""), realFailures.length === 0);
+
+  // Through the exporter: the exported series equal the oracle, so a wiring that
+  // dropped or relabelled a row between the core and the exposition is red too.
+  m.refreshInventoryGauges(core);
+  const t = m.renderMetrics();
+  const sigOracle = tally([...store.signals.values()].map((x) => String(x.freshness)));
+  check("core oracle: exported freshness series equal the held signals, stale and missing included",
+    FRESHNESS.every((f) => freshSeries(t, f) === (sigOracle.get(f) ?? 0)) && (freshSeries(t, "stale") ?? 0) > 0);
+  check("core oracle: the planted degraded and never_synced connectors reach the exposition",
+    (conn(t, "wfm-shift", "degraded") ?? 0) >= 1 && (conn(t, "dockbridge-custody", "never_synced") ?? 0) >= 1);
+
+  const source = readFileSync(storeSource, "utf8");
+  const dir = mkdtempSync(join(tmpdir(), "sg-store-mutant-"));
+  try {
+    for (const [i, mutant] of STORE_MUTANTS.entries()) {
+      const hits = source.split(mutant.from).length - 1;
+      check(`store mutant "${mutant.name}": its target text is present exactly once`, hits === 1);
+      if (hits !== 1) continue;
+      const rewritten = source
+        .replace(mutant.from, mutant.to)
+        .replace(/from "\.\/([a-z-]+)"/g, (_all, mod: string) => `from ${JSON.stringify(pathToFileURL(join(coreSrcDir, `${mod}.ts`)).href)}`);
+      const file = join(dir, `store-mutant-${i}.ts`);
+      writeFileSync(file, rewritten);
+      const { MemoryStore } = (await import(pathToFileURL(file).href)) as { MemoryStore: new () => StoreLike };
+      const mutantStore = new MemoryStore();
+      for (const c of store.connectors.values()) mutantStore.putConnector(c);
+      for (const x of store.signals.values()) mutantStore.putSignal(x);
+      const red = oracleCases(mutantStore);
+      console.log(`  store mutant "${mutant.name}": ${red.length} case(s) red`);
+      check(`store mutant "${mutant.name}": turns the core oracle red`, red.length > 0);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function main() {
   await inProcessInventoryProof();
+  await coreInventoryProof((await import(pathToFileURL(metricsSource).href)) as MetricsModule);
 
   const server = spawn(process.execPath, ["--enable-source-maps", serverEntry], {
     env: { ...process.env, PORT: String(PORT), DATABASE_URL: "" },

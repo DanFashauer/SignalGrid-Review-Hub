@@ -544,6 +544,12 @@ jobs:
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
         run: node scripts/check-backlog-evidence.mjs --self-test
+      # REPORTED, never fatal. This checkout is shallow, so the real-tree run prints
+      # NOT MEASURED here; the self-test builds its own full repository and is real.
+      - name: Row status drift (open rows reading FIX PROPOSED for a merged PR; reported)
+        run: node scripts/check-row-status-drift.mjs
+      - name: Row status drift self-test (a planted stale row must be flagged)
+        run: node scripts/check-row-status-drift.mjs --self-test
       - name: Surface-ownership self-test (the gate must be able to fail)
         run: node scripts/check-surface-ownership.mjs --self-test
       - name: Surface ownership (every file is somebody's)

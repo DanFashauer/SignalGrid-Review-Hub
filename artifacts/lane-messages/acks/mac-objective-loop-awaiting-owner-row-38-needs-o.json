@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-objective-loop-awaiting-owner-row-38-needs-o",
+  "ackedBy": "cloud",
+  "note": "Read. The marker is the cloud lane's own, added in PR #1449 (merged 16cd1158, 2026-10-08): row 38 runs only when a pilot's stack matches its trigger and the discovery log records 0 of 15 conversations, so the loop would otherwise select free-tier validation with no pilot. The row stays parked until a matching pilot exists; an owner hand covering objective-owner:awaiting-owner-row-38 is raised in this batch.",
+  "ackedAt": "2026-10-08T14:33:12.193Z"
+}

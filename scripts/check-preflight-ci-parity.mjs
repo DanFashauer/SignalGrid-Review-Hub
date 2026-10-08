@@ -264,7 +264,11 @@ function gatesIn(rawSource) {
         ...[...inner.matchAll(/scripts\/[a-z0-9./_-]+\.(?:mjs|sh)/g)].map((x) => x[0]),
       ];
       if (keys.length === 0) out.push(`__UNPARSEABLE_BASH_GATE__:${inner.slice(0, 60)}`);
-      else out.push(...keys);
+      // A direct `["bash", "scripts/x.sh", "--self-test"]` keeps the suffix like the
+      // `node` branch does (2026-10-08): without it the pair collapsed to one token and
+      // a workflow running `bash scripts/x.sh --self-test` could never credit it — the
+      // `invokes()` lookahead refuses a self-test line as the plain gate.
+      else out.push(...keys.map((k) => (suffix && k.startsWith("scripts/") ? k + suffix : k)));
     }
   }
   return out;
@@ -475,6 +479,15 @@ function selfTest() {
     classifyStep({ status: 0, combined: `${unread}\nmainline-workflow-streaks self-test: 32/32 passed`, envSet: false }).verdict === "ok",
   ]);
   checks.push(["a step with no `surface` prints a streak line as plain 'ok'", classifyStep({ status: 0, combined: redLine, envSet: false }).verdict === "ok"]);
+  checks.push([
+    "a direct bash script self-test keeps its --self-test suffix, and the plain bash gate does not gain one",
+    gatesIn('  { name: "X", cmd: ["bash", "scripts/mac/x.sh", "--self-test"] },\n  { name: "Y", cmd: ["bash", "scripts/mac/y.sh"] },').join() === "scripts/mac/x.sh --self-test,scripts/mac/y.sh",
+  ]);
+  checks.push([
+    "a workflow running `bash x.sh --self-test` credits the self-test token and not the plain one",
+    gateWiredIn("scripts/mac/x.sh --self-test", "  - run: bash scripts/mac/x.sh --self-test\n") === true &&
+      gateWiredIn("scripts/mac/x.sh", "  - run: bash scripts/mac/x.sh --self-test\n") === false,
+  ]);
   checks.push([
     "a STEPS entry carrying a `surface: /…/` field is still parsed by the gate extractor",
     gatesIn('  {\n    name: "X",\n    cmd: ["node", "scripts/x.mjs"],\n    selfSkipsWithout: "GITHUB_TOKEN",\n    env: { GH_TOKEN: "" },\n    surface: /red streak\\(s\\) of \\d+\\+ .* REPORTED, not fatal/,\n  },').join() === "scripts/x.mjs",

@@ -17,6 +17,7 @@
       "Read(**/.env)", "Read(**/.env.*)", "Read(~/.ssh/**)"
     ]
   },
+  "statusLine": { "type": "command", "command": "bash scripts/mac/statusline.sh" },
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" } ] }

@@ -959,6 +959,7 @@ export const ALLOWED = [
   {
     file: "lib/integrations/src/integrations/session-readiness/evaluate.ts",
     line: "state.elapsedToUsableSeconds !== null &&",
+    whole: true,
     reason:
       "Genuinely inert by JS coercion, and checkable in one line: the surrounding branch is " +
       "`budget !== null && elapsed !== null && elapsed > budget.thresholdSeconds`, and " +
@@ -991,7 +992,13 @@ export const ALLOWED = [
     // inert", which a 239-shape behavioural diff wrongly corroborated; the null-authorizer and
     // throwing-accessor cases it missed are now pinned as proof vectors.
     file: "lib/dual-control/src/normalize.ts",
-    line: "inert-at-top: request refused by the authorizer normalizer first */ ||",
+    line: "readThrew /* inert-at-top: request refused by the authorizer normalizer first */ ||",
+    reason:
+      "Genuinely inert at the TOP-LEVEL request normalizer, verified by mutation: forcing either term to `false` and running proof:dual-control leaves it at pass. A non-plain or throwing request reaches normalizeAuthorizer(undefined) for BOTH initiator and approver before these terms matter — a string/array/undefined body via hasUnrecognizedKey throwing on a non-object ownKeys, a null body via that authorizer normalizer's own (load-bearing) !plain — so `initiator.malformed || approver.malformed` folded in at the end already marks the request malformed. Pinned by the 'a null/undefined/string/array/number request body is malformed' vectors. Kept as defence in depth; it becomes load-bearing only if the authorizer normalizer's own guards are removed, which those vectors also forbid.",
+  },
+  {
+    file: "lib/dual-control/src/normalize.ts",
+    line: "!plain /* inert-at-top: request refused by the authorizer normalizer first */ ||",
     reason:
       "Genuinely inert at the TOP-LEVEL request normalizer, verified by mutation: forcing either term to `false` and running proof:dual-control leaves it at pass. A non-plain or throwing request reaches normalizeAuthorizer(undefined) for BOTH initiator and approver before these terms matter — a string/array/undefined body via hasUnrecognizedKey throwing on a non-object ownKeys, a null body via that authorizer normalizer's own (load-bearing) !plain — so `initiator.malformed || approver.malformed` folded in at the end already marks the request malformed. Pinned by the 'a null/undefined/string/array/number request body is malformed' vectors. Kept as defence in depth; it becomes load-bearing only if the authorizer normalizer's own guards are removed, which those vectors also forbid.",
   },
@@ -1076,6 +1083,7 @@ export const ALLOWED = [
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
     line: 'report.reportIntegrity === "clean" &&',
+    whole: true,
     reason:
       'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
   },
@@ -1088,6 +1096,7 @@ export const ALLOWED = [
   {
     file: 'lib/integrations/src/integrations/passkey-assurance/evaluate.ts',
     line: 'deviceHeld &&',
+    whole: true,
     reason:
       'Defence-in-depth backstop that CANNOT fire today: every non-confirmed state already pushes a raising candidate above it, so the candidate list is never empty when positivelyConfirmed is false. Kept because it is the last thing standing between a weakened branch and a surviving seed grant, and it now pushes its OWN reason code (GRANT_BACKSTOP) so a firing would be visible in the record rather than disguised as a normal branch. Same shape and same justification as the platform-sso and policy-binding backstops.',
   },
@@ -1197,6 +1206,7 @@ export const ALLOWED = [
   {
     file: "lib/verdict-attestation/src/attest.ts",
     line: "return false;",
+    whole: true,
     reason:
       "The catch in `digestsEqual` is UNREACHABLE: timingSafeEqual throws only on a length mismatch, already refused one line earlier. Kept as the rule 'an exception is not a match'. Labelled unreachable in the source.",
   },
@@ -1260,6 +1270,7 @@ export const ALLOWED = [
   {
     file: "lib/integrations/src/integrations/platform-sso/evaluate.ts",
     line: 'report.reportIntegrity === "clean" &&',
+    whole: true,
     reason:
       "A conjunct of the grant backstop's predicate — the backstop never fires today, as its own comment states; the predicate is unobservable until a branch weakens.",
   },
@@ -1634,8 +1645,30 @@ export function mutationsFor(file, opts = {}) {
   return out;
 }
 
-function isAllowed(mutation) {
-  return ALLOWED.find((a) => a.file === mutation.file && mutation.sourceLine.includes(a.line));
+/**
+ * The single 1-based line of `fileText` whose (trimmed) text contains `entry.line`:
+ * `{ line }` for exactly one, `{ stale: true }` for none, `{ ambiguous: [lines] }` for
+ * several. An allowlist entry is a per-line justification; a substring that several lines
+ * share would exempt all of them (attest.ts `return false;` exempted two real guards).
+ */
+export function resolveAllowedLine(entry, fileText) {
+  const hits = [];
+  // `whole: true` means the trimmed line must EQUAL the entry — for a line whose text is a
+  // suffix of other lines (a bare `return false;` beside `if (...) return false;`) and which
+  // cannot be lengthened without editing the code under test.
+  String(fileText).split("\n").forEach((l, i) => {
+    const t = l.trim();
+    if (entry.whole ? t === entry.line : t.includes(entry.line)) hits.push(i + 1);
+  });
+  if (hits.length === 0) return { stale: true };
+  if (hits.length > 1) return { ambiguous: hits };
+  return { line: hits[0] };
+}
+
+export function isAllowed(mutation) {
+  // Resolved against the file text the mutation came from; an entry that is stale or
+  // ambiguous resolves to no line and exempts NOTHING (main() reports it as a failure).
+  return ALLOWED.find((a) => a.file === mutation.file && resolveAllowedLine(a, mutation.original).line === mutation.lineNo);
 }
 
 /** Split TARGETS across N shards, balanced by MUTATION COUNT rather than by target
@@ -1739,9 +1772,14 @@ function main() {
       staleAllowlist += 1;
       continue;
     }
-    if (!text.includes(entry.line)) {
+    const resolved = resolveAllowedLine(entry, text);
+    if (resolved.stale) {
       console.error(`✗ STALE allowlist entry — no line matches in ${entry.file}:\n    "${entry.line}"`);
       console.error("    The code moved. Re-derive whether the justification still holds, then update or remove.");
+      staleAllowlist += 1;
+    } else if (resolved.ambiguous) {
+      console.error(`✗ AMBIGUOUS allowlist entry — lines ${resolved.ambiguous.join(", ")} of ${entry.file} all contain:\n    "${entry.line}"`);
+      console.error("    An entry exempts ONE line. Lengthen it to text unique in the file.");
       staleAllowlist += 1;
     }
   }

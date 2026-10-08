@@ -15,7 +15,12 @@
  * happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  */
-import { TARGETS, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs } from "./mutation-guard.mjs";
+import { readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, isAllowed } from "./mutation-guard.mjs";
+
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 let passed = 0;
 const failures = [];
@@ -146,6 +151,38 @@ check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used 
 check("an EMPTY --proof= / --shard= is refused (a falsy value used to select every target)", unknownArgs(["--proof="]).length === 1 && unknownArgs(["--shard="]).length === 1);
 check("a malformed value is refused: --proof==, --proof==x, --proof=a=b, --shard=1/4/9, --shard==1/4, --shard=a/b", ["--proof==", "--proof==proof:x", "--proof=a=b", "--shard=1/4/9", "--shard==1/4", "--shard=a/b"].every((a) => unknownArgs([a]).length === 1));
 check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--", "--proof=proof:x", "--shard=0/4"]).length === 0);
+
+// ── The allowlist resolves each entry to EXACTLY ONE line ─────────────────────
+//
+// `isAllowed` used to be `mutation.sourceLine.includes(entry.line)`, so an entry exempted
+// EVERY line containing its text: attest.ts `return false;` also exempted the two real
+// guards in digestsEqual (lines 42-43) that only the unreachable catch at 51 was meant to
+// cover. An allowlist entry is a per-line justification; it must name one line.
+{
+  const bad = [];
+  for (const entry of ALLOWED) {
+    let text;
+    try { text = readFileSync(join(REPO, entry.file), "utf8"); } catch { bad.push(`${entry.file} (unreadable)`); continue; }
+    const r = resolveAllowedLine(entry, text);
+    if (r.stale) bad.push(`${entry.file}: STALE "${entry.line}"`);
+    else if (r.ambiguous) bad.push(`${entry.file}: AMBIGUOUS lines ${r.ambiguous.join(",")} "${entry.line}"`);
+  }
+  check(`every real ALLOWED entry resolves to exactly one line (${ALLOWED.length} entries)${bad.length ? " — " + bad.join(" | ") : ""}`, bad.length === 0);
+  for (const b of bad) console.error(`    ${b}`);
+}
+{
+  const text = ["export function f(a, b) {", "  if (a === b) return false;", "  if (!a) return false;", "  return true;", "}"].join("\n");
+  check("fixture: a snippet two lines contain is AMBIGUOUS (lists both lines)", JSON.stringify(resolveAllowedLine({ line: "return false;" }, text).ambiguous) === "[2,3]");
+  check("fixture: a snippet no line contains is STALE", resolveAllowedLine({ line: "return 42;" }, text).stale === true);
+  check("fixture: a unique snippet resolves to its 1-based line", resolveAllowedLine({ line: "if (!a) return false;" }, text).line === 3);
+  check("fixture: `whole` pins a bare line that is a suffix of other lines (the attest.ts catch)", resolveAllowedLine({ line: "return false;", whole: true }, text.replace("  return true;", "    return false;")).ambiguous === undefined);
+  const fx = (lineNo) => ({ file: "fx.ts", original: text, lineNo, sourceLine: text.split("\n")[lineNo - 1].trim() });
+  const saved = ALLOWED.splice(0, ALLOWED.length, { file: "fx.ts", line: "if (!a) return false;", reason: "fixture" }, { file: "fx.ts", line: "return false;", reason: "fixture (ambiguous)" });
+  try {
+    check("fixture: an entry exempts only its own line, not a different line containing its text (the attest.ts shape)", !!isAllowed(fx(3)) && !isAllowed(fx(2)));
+    check("fixture: an ambiguous entry exempts NOTHING (fail closed)", !isAllowed({ ...fx(2), sourceLine: "return false;" }) );
+  } finally { ALLOWED.splice(0, ALLOWED.length, ...saved); }
+}
 
 // Reported, not gated.
 const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);

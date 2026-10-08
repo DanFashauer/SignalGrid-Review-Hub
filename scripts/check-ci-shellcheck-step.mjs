@@ -23,24 +23,32 @@
 //     with no `if`, `continue-on-error`, `defaults`, `container` or `needs`, and its decoded `run` equals
 //     the canonical lines: a guarded install (`command -v` test, then `apt-get -o
 //     DPkg::Lock::Timeout=N` on BOTH update and install, N >= 60), a fail-closed re-check ending
-//     in `exit 1`, `shellcheck --version`, and (CI lint step) the lint;
+//     in `exit 1`, `shellcheck --version`, and (CI lint step) the lint. NOTE (measured by the round-13
+//     refuter, apt 2.8.3): `-o DPkg::Lock::Timeout` makes `apt-get install` wait for the dpkg
+//     frontend lock, but `apt-get update` ignores it (it fails at once on /var/lib/apt/lists/lock),
+//     so the option on `update` is required for shape only. A concurrent `update` on the fallback
+//     path can still fail fast; that path is only reached when the runner lacks shellcheck;
 //   · NO step (an object with `run` or `uses`) and NO other decoded string in any workflow or composite
 //     action may touch an apt-family tool (apt, apt-get, apt-fast, aptitude, nala, dpkg, snap) ANYWHERE
 //     while naming shellcheck ANYWHERE in its `run`, `uses`, `with`, `env` or any other value (the
 //     install verb and statement structure are not parsed; `name:`/`id:` labels are ignored). Also
-//     flagged: a `$` variable hiding the package list on an apt-install line, and an apt-flavoured
+//     flagged: a script that runs an apt install anywhere and expands any `$` variable anywhere (whole-line
+//     comments aside; the list may arrive through a pipe, heredoc or `&&`), and an apt-flavoured
 //     `uses:` action given shellcheck. Backslash-newline is removed before matching, so `shell\` +
 //     `check` is seen. The price is a false positive for a step that installs ANOTHER package and also
 //     names shellcheck (e.g. in its env): split it or use the pinned step;
 //   · the pinned run may not contain a `${{ }}` expression (GitHub expands it before bash, even inside a
-//     comment) and its fail-closed message may hold no `$`, backtick, `"` or `#`; the job holding a pinned
+//     comment) and its fail-closed message may hold no `$`, backtick, `\`, `"` or `#`; the job holding a pinned
 //     step may not set `needs` (a failed or skipped dependency skips the job, and a skipped required
 //     check reads as passing) and may not write GITHUB_ENV or GITHUB_PATH (a later step could swap
 //     shellcheck or node);
 //   · a pinned file may not set a workflow-level `defaults:`, nor mention BASH_ENV, NODE_OPTIONS,
-//     LD_PRELOAD or BASH_FUNC_ in any key or string (environment that neutralises a step untouched);
-//   · YAML that does not parse, has a duplicate key, more than one document, an anchor, an alias
-//     or a tag FAILS (fail closed; an alias needs an anchor, so it is covered by that).
+//     LD_PRELOAD, BASH_FUNC_, SHELLCHECK_OPTS, SHELLOPTS or BASHOPTS in any key or string, nor use a
+//     `PATH` env key (environment that neutralises a step untouched). The list is a denylist, not a
+//     claim of completeness;
+//   · a WORKFLOW (anything under .github/ or with `jobs:`/`runs:`) that does not parse, has a duplicate
+//     key, more than one document, an anchor, an alias or a tag FAILS (fail closed). Any OTHER YAML
+//     file in the walk that does not parse is skipped (GitHub never executes it).
 //
 // THREAT MODEL: this is a tripwire against accidental and lazy regressions of the lock race, not
 // a sandbox against deliberate obfuscation. Out of scope, and NOT detected:
@@ -80,7 +88,7 @@ const INSTALL_BLOCK = [
   /^sudo apt-get -o DPkg::Lock::Timeout=(\d+) update -qq$/,
   /^sudo apt-get -o DPkg::Lock::Timeout=(\d+) install -y -qq shellcheck$/,
   /^fi$/,
-  /^command -v shellcheck >\/dev\/null 2>&1 \|\| \{ echo "::error::[^"#$`]*"; exit 1; \}$/,
+  /^command -v shellcheck >\/dev\/null 2>&1 \|\| \{ echo "::error::[^"#$`\\]*"; exit 1; \}$/,
   /^shellcheck --version$/,
 ];
 const LINT = /^node scripts\/check-shell\.mjs$/;
@@ -100,14 +108,16 @@ export const PINNED = [
 // a variable or array, `in''stall`, `xargs apt-get` fed `install ...`, a split across lines — all are one
 // thing to this gate: a step that touches apt/dpkg/snap and names shellcheck.
 const APT_TOOL = /\b(apt|apt-get|apt-fast|aptitude|nala|dpkg|snap)\b/;
-// A line that installs from a variable: the package list is hidden.
-const APT_INSTALL = /\b(apt(-get)?|aptitude|nala)\b.*\b(re)?(install|satisfy)\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
-// `shellcheck` as a package name: `_` and `.` may follow (shellcheck_0.10.0_amd64.deb), `-` and letters may not (shellcheck-py).
+// An apt install anywhere in a script, either order, across lines.
+const APT_INSTALL_ANY = /\b(apt(-get)?|aptitude|nala)\b[\s\S]*\b(re)?(install|satisfy)\b|\bsnap\s+install\b|\bdpkg\s+(-i|--install)\b/;
+// `shellcheck` as a package name: `_` and `.` may follow (shellcheck_0.10.0_amd64.deb, shellcheck-0.10.0-1.deb); a letter or digit directly after, or `-` + letter, may not (shellcheck-py).
 const LABEL = new Set(["name", "id"]);
-const NAME = /(?<![A-Za-z0-9-])shellcheck(?![A-Za-z0-9-])/;
+const NAME = /(?<![A-Za-z0-9-])shellcheck(?![A-Za-z0-9]|-[A-Za-z])/;
 const JOB_KNOBS = ["continue-on-error", "if", "defaults", "container", "needs"]; // `needs`: a dependency that fails or is skipped skips this job
 // Environment that can neutralise a step without touching it (looked for in every string and key of a pinned file).
-const NEUTRALISERS = /BASH_ENV|NODE_OPTIONS|LD_PRELOAD|BASH_FUNC_/;
+const NEUTRALISERS = /BASH_ENV|NODE_OPTIONS|LD_PRELOAD|BASH_FUNC_|SHELLCHECK_OPTS|SHELLOPTS|BASHOPTS/;
+// Keys only (as strings they are everywhere, e.g. `$PATH`): a `PATH` env key swaps the binary.
+const NEUTRALISER_KEYS = /^PATH$/;
 
 /** Drop a trailing `# comment` from a shell line, where the `#` is outside quotes and starts a word. */
 function stripComment(l) {
@@ -180,14 +190,15 @@ export function strayInstallsIn(text, file, exclude = new Set(), lenient = false
     const live = unit.filter(([, path]) => !exclude?.has(path.join("/")) && !LABEL.has(path[path.length - 1])); // labels do not execute
     const texts = live.flatMap(([s]) => [s, glue(s)]);
     if (texts.some((t) => APT_TOOL.test(t)) && texts.some((t) => NAME.test(t))) {
-      out.push(`${file}: a step or string that uses an apt-family tool and names shellcheck: \`${(live[0]?.[0] ?? "").replace(/\\s+/g, " ").slice(0, 120)}\``);
+      out.push(`${file}: a step or string that uses an apt-family tool and names shellcheck: \`${(live[0]?.[0] ?? "").replace(/\s+/g, " ").slice(0, 120)}\``);
     }
   }
   for (const [s, path] of strings(js)) {
     if (exclude?.has(path.join("/"))) continue;
-    for (const line of s.replace(/\\\n/g, " ").split("\n")) {
-      if (APT_INSTALL.test(line) && /\$/.test(line)) out.push(`${file}: an apt install that hides its package list behind a variable: \`${line.trim().slice(0, 120)}\``);
-    }
+    // Whole string, not per line: a pipe, heredoc, `&&` or a comment line can put the variable and the
+    // apt install on different lines of one script.
+    const g = glue(s).split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // whole-line comments do not execute
+    if (APT_INSTALL_ANY.test(g) && /\$/.test(g)) out.push(`${file}: an apt install in a script that expands a \`$\` variable (the package list may be hidden): \`${g.replace(/\s+/g, " ").trim().slice(0, 120)}\``);
   }
   return [...new Set(out)];
 }
@@ -216,7 +227,7 @@ export function verdictFor(yaml, spec) {
   const js = doc.toJS();
   const problems = [...parse];
   if (js && typeof js === "object" && !Array.isArray(js) && "defaults" in js) problems.push("workflow-level `defaults:` can change the shell of every step");
-  for (const k of keysOf(js)) if (NEUTRALISERS.test(k)) problems.push(`a key mentions ${k.match(NEUTRALISERS)[0]} (environment that can neutralise a step)`);
+  for (const k of keysOf(js)) if (NEUTRALISERS.test(k) || NEUTRALISER_KEYS.test(k)) problems.push(`a key mentions ${k.match(NEUTRALISERS)?.[0] ?? k} (environment that can neutralise a step)`);
   for (const [v] of strings(js)) if (NEUTRALISERS.test(v)) problems.push(`a string mentions ${v.match(NEUTRALISERS)[0]} (environment that can neutralise a step)`);
   const found = [];
   for (const [job, jobObj] of Object.entries(js?.jobs ?? {})) {
@@ -313,6 +324,7 @@ function selfTest() {
     ["unconditional install", good.replace("if ! command -v shellcheck >/dev/null 2>&1; then", "if true; then")],
     ["bare `apt install`", good.replace(/apt-get -o DPkg::Lock::Timeout=180/g, "apt")],
     ["command substitution in the fail-closed message", good.replace('"::error::x"', '"::error::$(true)"')],
+    ["backslash escapes the closing quote of the fail-closed message", good.replace('"::error::x"', '"::error::x\\"').replace("shellcheck --version", '# "; }; exit 0 #\nshellcheck --version')],
     ["exit 10", good.replace("exit 1;", "exit 10;")],
     ["exit 0", good.replace("exit 1;", "exit 0;")],
     ["fail-closed neutered by || echo", good.replace(/\|\| \{ echo.*\}/, '|| echo "would exit 1"')],
@@ -418,6 +430,9 @@ function selfTest() {
     ["NODE_OPTIONS neutralising node", wrap(spec.name, good).replace("  a:\n", "  a:\n    env:\n      NODE_OPTIONS: --require ./x.js\n")],
     ["LD_PRELOAD in a later step", wrap(spec.name, good) + "      - run: echo LD_PRELOAD=./x.so\n"],
     ["PATH swapped through $GITHUB_PATH in the holding job", wrap(spec.name, good) + "      - run: echo /tmp/evil >> \"$GITHUB_PATH\"\n"],
+    ["job env SHELLCHECK_OPTS softening the lint", wrap(spec.name, good).replace("  a:\n", "  a:\n    env:\n      SHELLCHECK_OPTS: --severity=error\n")],
+    ["job env PATH swapping the binary", wrap(spec.name, good).replace("  a:\n", "  a:\n    env:\n      PATH: /tmp/zz:/usr/bin\n")],
+    ["workflow env PATH swapping the binary", "env:\n  PATH: /tmp/zz:/usr/bin\n" + wrap(spec.name, good)],
     ["BASH_ENV written through $GITHUB_ENV", wrap(spec.name, good) + "      - name: x\n        run: echo BASH_ENV=./x >> $GITHUB_ENV\n"],
     ["second bare install elsewhere", wrap(spec.name, good) + "      - name: other\n        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck\n"],
   ];
@@ -436,6 +451,15 @@ function selfTest() {
   for (const [label, yaml] of extras) {
     if (verdictFor(yaml, spec).length === 0) { console.error(`✗ self-test: variant PASSED but must fail: ${label}`); bad++; }
   }
+  // A fully canonical body followed by one more command is still broken (pinned step is exact).
+  {
+    const sch = PINNED[1];
+    const goodSch = good.replace("\nnode scripts/check-shell.mjs", "");
+    if (verdictFor(wrap(sch.name, goodSch + "\nln -sf /bin/true /usr/local/bin/shellcheck", "        timeout-minutes: 5\n"), sch).length === 0) { console.error("✗ self-test: a trailing extra command after the canonical body PASSED"); bad++; }
+  }
+  // Lenient mode (non-workflow YAML) never judges a file that does not parse; strict mode reports it.
+  expect(strayInstallsIn("note: apt-get install -y shellcheck\nbad: [\n", "x/y.yml", new Set(), true).length === 0, "✗ self-test: lenient mode flagged an unparseable non-workflow file");
+  expect(strayInstallsIn("note: apt-get install -y shellcheck\nbad: [\n", ".github/workflows/x.yml", new Set(), false).length > 0, "✗ self-test: strict mode did not flag an unparseable workflow");
   // The scheduled-workflow spec: canonical passes, old bare shape fails.
   const s2 = PINNED[1];
   const sGood = good.replace("\nnode scripts/check-shell.mjs", "");
@@ -491,6 +515,12 @@ function selfTest() {
     ["nala install shellcheck", "      - run: sudo nala install -y shellcheck\n", true],
     ["apt-get reinstall shellcheck", "      - run: sudo apt-get reinstall shellcheck\n", true],
     ["a folded `- run: >` step does not swallow its sibling keys", "      - run: >\n          echo hi\n        name: apt-get\n        env: install $X\n", false],
+    ["hyphen-versioned shellcheck .deb under dpkg -i", "      - run: dpkg -i ./shellcheck-0.10.0-1.deb\n", true],
+    ["shellcheck-py under pip is NOT flagged", "      - run: apt-get install -y python3-pip && pip install shellcheck-py\n", false],
+    ["a package list piped from a variable on the NEXT line", "      - run: |\n          echo \"$P\" |\n            xargs apt-get install -y\n", true],
+    ["a package list heredoc-fed to xargs apt-get install", "      - run: |\n          xargs apt-get install -y <<EOF\n          $P\n          EOF\n", true],
+    ["a variable continued with && into an apt install", "      - run: |\n          P=$X &&\n            apt-get install -y jq\n", true],
+    ["a comment line mentioning apt install and $ is NOT flagged", "      - run: |\n          # apt-get install is slow; $HOME stays\n          echo hi\n", false],
     ["unrelated continued install is NOT flagged (desktop.yml's real shape)", "        run: |\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            patchelf\n", false],
   ];
   for (const [label, t, want] of strayCases) {
@@ -611,6 +641,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       for (const p of problems) console.error(`✗ ${p}`);
       process.exit(1);
     }
-    console.log(`✓ shellcheck steps: ${PINNED.length} pinned step(s) are canonical (preinstalled first, apt lock waited on both calls, fail-closed, version printed); no other workflow installs shellcheck`);
+    console.log(`✓ shellcheck steps: ${PINNED.length} pinned step(s) are canonical (preinstalled first, DPkg::Lock::Timeout set on both apt-get calls, fail-closed, version printed); no other workflow installs shellcheck`);
   }
 }

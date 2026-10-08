@@ -31,8 +31,9 @@
 //   - a breadth step whose `if:` is not exactly `success() || failure()` or `always()` —
 //     otherwise the first red gate hides the whole breadth lane, or a green night skips it;
 //   - a header that does not name `scripts/preflight.mjs` as what it runs.
-// It parses the job by indentation rather than with a YAML library (none is a
-// dependency here); the self-test plants each defect in a copy of the real file.
+// It parses the job by indentation rather than with a YAML parser (the pinned shellcheck
+// steps are parsed by scripts/check-ci-shellcheck-step.mjs, which uses the `yaml` package); the
+// self-test plants each defect in a copy of the real file.
 // (First two review rounds' bypasses — continue-on-error, `if: false`, an empty token,
 // a chained gate, a hidden breadth lane — are each a self-test case below.)
 import { readFileSync } from "node:fs";

@@ -31,7 +31,7 @@
 //   OWNER_RESERVED — legal, pricing, launch scope, decision records, buyer-facing
 //     copy. Correct code is not the question; these are the owner's to commit.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -59,6 +59,12 @@ export const SAFETY_MACHINERY = [
   // repo. Added on the round-1 review of PR #1450.
   { rule: ".claude/settings.json (deny list, hooks, status-line command: what runs in every session)", re: /^\.claude\/settings(\.[\w-]+)?\.json$/ },
   { rule: ".claude/hooks/** (the PreToolUse deny hook and the session hooks settings.json wires in)", re: /^\.claude\/hooks\// },
+  // The instruction and tool-wiring surface. Agent definitions fix each subagent's model and
+  // tools, skills/commands/workflows are instructions every session loads, .mcp.json wires
+  // tool servers, and .githooks/pre-push enforces the lockfile rule. Not under scripts/**, so
+  // a PR touching only these classified autonomous (backlog row, 2026-10-08).
+  { rule: ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)", re: /^(\.claude\/(agents|skills|commands|workflows)\/|\.mcp\.json$)/ },
+  { rule: ".githooks/** (the pre-push lockfile enforcement)", re: /^\.githooks\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -138,6 +144,30 @@ function selfTest() {
   t("a git a/ b/ prefixed or ./ prefixed settings.json cannot slip past", cls(["a/.claude/settings.json"]).tier === "owner-gated" && cls(["./.claude/settings.json"]).tier === "owner-gated");
   t("a settings variant (.claude/settings.local.json) is SAFETY_MACHINERY too", cls([".claude/settings.local.json"]).tier === "owner-gated");
   t("a settings.json NOT at .claude/ is not swept in (the rule is anchored)", cls(["docs/examples/.claude/settings.json"]).tier === "autonomous" && cls([".claude/settings.json.md"]).tier === "autonomous");
+  // The instruction and tool-wiring surface every session loads (backlog row, 2026-10-08):
+  // before the two rules below each of these returned {tier: "autonomous", matched: []}.
+  for (const f of [
+    ".claude/agents/x.md", ".claude/skills/a/SKILL.md", ".claude/commands/c.md",
+    ".claude/workflows/land-branch.js", ".mcp.json", ".githooks/pre-push",
+  ]) {
+    const c = cls([f]);
+    t(`${f} alone is SAFETY_MACHINERY`, c.tier === "owner-gated" && c.matched.length > 0 && c.matched.every((m) => m.category === "SAFETY_MACHINERY"));
+  }
+  t("a git a/ prefixed agent definition cannot slip past", cls(["a/.claude/agents/x.md"]).tier === "owner-gated");
+  // Derived, so a new .claude/<dir> cannot be added unclassified: every immediate child of
+  // the real .claude/ either matches a rule or is named in the small doc-only exemption list.
+  {
+    const DOC_ONLY = new Set(["COMMANDS.md", "WORKFLOWS.md"]);
+    const unclassified = readdirSync(join(repo, ".claude")).filter((name) => {
+      if (DOC_ONLY.has(name)) return false;
+      // A directory is probed with a file inside it; a file by its own path.
+      return cls([`.claude/${name}/probe.x`]).tier !== "owner-gated" && cls([`.claude/${name}`]).tier !== "owner-gated";
+    });
+    t(`every child of .claude/ is classified or a named doc-only exemption (unclassified: ${unclassified.join(", ") || "none"})`, unclassified.length === 0);
+  }
+  t("negative control: docs/agent/x.md stays autonomous", cls(["docs/agent/x.md"]).tier === "autonomous");
+  t("negative control: .claude/COMMANDS.md (doc-only exemption) stays autonomous", cls([".claude/COMMANDS.md"]).tier === "autonomous");
+  t("negative control: a .mcp.json look-alike elsewhere is not swept in", cls(["docs/examples/.mcp.json"]).tier === "autonomous" && cls([".mcp.json.md"]).tier === "autonomous");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
   t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
   t("the declared objective (DR-056) is SAFETY_MACHINERY", cls(["docs/agent/objective.json"]).tier === "owner-gated");

@@ -707,14 +707,18 @@ earlier — that is the loop working, not a reason to soften the record.
     names a self-test (a flag accepted as a no-op is not credited); a gate with no handler
     must name a control on a non-comment line, which is a FLOOR against a gate with none,
     NOT proof that its control can fail (counted as "control-only", never "self-tested").
-    Measured on the branch head: 154 gates, 128 with a handler, 119 registered, 9 run by the
+    Measured on the branch head: 155 gates, 130 with a handler, 121 registered, 9 run by the
     gate (all passed, including `scripts/check-api-collection.mjs`,
     `scripts/check-deployment-runbook.mjs` and `scripts/check-desktop-core-tests.mjs`, whose
-    self-tests ran in no step before), 26 control-only, 0 with neither. Falsified: with
+    self-tests ran in no step before), 25 control-only, 0 with neither. Falsified: with
     `return 1;` first in `selfTest()` of `scripts/check-api-collection.mjs` (and of
     `scripts/check-deployment-runbook.mjs`) in a scratch copy, the default run, preflight's
     step and CI's step stayed green and only this gate went red, naming the file.
-    Its `--self-test` plants an unregistered gate whose flag exits 1, an unregistered no-op
+    Registration is decided by `scripts/lib/workflow-invocation.mjs`, the matcher
+    `scripts/check-preflight-ci-parity.mjs` uses (command position, quotes masked, no `echo`, no
+    `continue-on-error`), and only for workflows that run on a pull request or push; path filters
+    are not read. Its `--self-test` (47 cases; 23 planted mutants of the gate each turn it red)
+    plants an unregistered gate whose flag exits 1, an unregistered no-op
     flag, and a flag-less gate whose only control sits in a comment (each exit 1), against a
     registered gate that must NOT be spawned and a gate with a real control (each exit 0).
     STILL OPEN after this, and not restated as measured: the roughly 334 structurally

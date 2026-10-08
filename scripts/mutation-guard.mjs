@@ -493,6 +493,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:session-readiness",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/session-readiness/evaluate.ts",
       "lib/integrations/src/integrations/session-readiness/index.ts",

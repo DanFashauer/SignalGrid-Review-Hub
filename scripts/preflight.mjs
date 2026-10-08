@@ -246,6 +246,7 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)", cmd: ["node", "scripts/check-untracked-ignore.mjs", "--self-test"] },
   // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
   // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
   // which prove each piece can fail in both directions.
@@ -335,6 +336,7 @@ const STEPS = [
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
+  { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
@@ -553,6 +555,7 @@ const STEPS = [
   { name: "Backlog ownership self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-ownership.mjs", "--self-test"] },
   { name: "Loop-state seam self-test (squash-of-a-merge-tree, whitespace twin and same-name-ahead fixtures can fail)", cmd: ["node", "scripts/loop-state.mjs", "--self-test"] },
   { name: "Raised-hands monitor self-test (DR-054 routing + gap detection must work)", cmd: ["node", "scripts/check-raised-hands.mjs", "--self-test"] },
+  { name: "Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)", cmd: ["node", "scripts/check-raised-hands.mjs"] },
   { name: "Backlog evidence (a row that says DONE says how you'd check)", cmd: ["node", "scripts/check-backlog-evidence.mjs"] },
   { name: "Backlog evidence self-test (the gate can actually fail)", cmd: ["node", "scripts/check-backlog-evidence.mjs", "--self-test"] },
   { name: "Surface-ownership self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-surface-ownership.mjs", "--self-test"] },

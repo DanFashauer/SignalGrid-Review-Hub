@@ -52,6 +52,13 @@ export const SAFETY_MACHINERY = [
   // json alone cannot reach goal_met; this is the second belt — a moved pointer is reviewed
   // as safety machinery, never as a doc.
   { rule: "the declared objective (DR-056 attestation pointer)", re: /^docs\/agent\/objective\.json$/ },
+  // The harness's own configuration. settings.json carries the permission deny list, the
+  // PreToolUse/Stop/SessionStart hook wiring and (2026-10-08) the statusLine command; the hook
+  // scripts are what those entries run. None of it is under scripts/**, so a PR touching only
+  // these classified autonomous while changing what runs, unattended, in every session of this
+  // repo. Added on the round-1 review of PR #1450.
+  { rule: ".claude/settings.json (deny list, hooks, status-line command: what runs in every session)", re: /^\.claude\/settings(\.[\w-]+)?\.json$/ },
+  { rule: ".claude/hooks/** (the PreToolUse deny hook and the session hooks settings.json wires in)", re: /^\.claude\/hooks\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -123,6 +130,14 @@ function selfTest() {
   t("a proof harness is SAFETY_MACHINERY", cls(["scripts/src/webauthn-verify-proof.ts"]).tier === "owner-gated");
   t("a fixtures dir is SAFETY_MACHINERY", cls(["lib/foo/fixtures/case.json"]).tier === "owner-gated");
   t("the lockfile is SAFETY_MACHINERY", cls(["pnpm-lock.yaml"]).tier === "owner-gated");
+  // The harness configuration (round-1 review of PR #1450): before the two rules these returned
+  // {tier: "autonomous", matched: []}.
+  t(".claude/settings.json alone is SAFETY_MACHINERY (deny list, hooks, status-line command)",
+    cls([".claude/settings.json"]).tier === "owner-gated" && cls([".claude/settings.json"]).matched.some((m) => m.category === "SAFETY_MACHINERY"));
+  t("a .claude/hooks/ script alone is SAFETY_MACHINERY", cls([".claude/hooks/block-dangerous.sh"]).tier === "owner-gated" && cls([".claude/hooks/new-hook.sh"]).tier === "owner-gated");
+  t("a git a/ b/ prefixed or ./ prefixed settings.json cannot slip past", cls(["a/.claude/settings.json"]).tier === "owner-gated" && cls(["./.claude/settings.json"]).tier === "owner-gated");
+  t("a settings variant (.claude/settings.local.json) is SAFETY_MACHINERY too", cls([".claude/settings.local.json"]).tier === "owner-gated");
+  t("a settings.json NOT at .claude/ is not swept in (the rule is anchored)", cls(["docs/examples/.claude/settings.json"]).tier === "autonomous" && cls([".claude/settings.json.md"]).tier === "autonomous");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
   t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
   t("the declared objective (DR-056) is SAFETY_MACHINERY", cls(["docs/agent/objective.json"]).tier === "owner-gated");

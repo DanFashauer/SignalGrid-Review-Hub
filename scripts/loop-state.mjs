@@ -19,7 +19,7 @@
 
 import { spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dirname, resolve, isAbsolute, relative, sep } from "node:path";
@@ -40,6 +40,19 @@ const rows = [];
 // no session can change teaches bypass. Until 2026-09-05 the script exited 0
 // on EVERY outcome, so the hook's gate arm could never fire at all.
 const add = (state, what, detail, gated = true) => rows.push({ state, what, detail, gated });
+
+// Read a file that may not be there, in ONE operation. `existsSync(p) ? readFileSync(p) : ...` checks and then reads, and the file can change between the two
+// (CodeQL js/file-system-race); here the read itself answers. null means ABSENT, and only ENOENT (no such file) and ENOTDIR (a parent is a file) say that: every other
+// failure (EISDIR, EACCES, EIO, ...) is thrown, so an unreadable file is never taken for a missing one (fail closed). Same outcome as before for both: a missing file read
+// as absent, a present-but-unreadable file crashed the check.
+function readIfPresent(path, encoding = "utf8") {
+  try {
+    return readFileSync(path, encoding);
+  } catch (e) {
+    if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) return null;
+    throw e;
+  }
+}
 
 // THE ONE PLACE this file starts a git that reads objects (the self-test scans the source for any other: R7-spawns).
 // Until round 7 the guards were a flag on SOME commands: `--no-replace-objects` was prepended by gitIn only, so gitRaw (the
@@ -665,7 +678,8 @@ function reappliesExactly(cwd, parent, patch, commit) {
   const idx = join(tmpdir(), `loop-state-idx-${process.pid}-${Date.now()}`);
   const env = { GIT_INDEX_FILE: idx }; // gitRun adds the guards (replace objects off) to every one of these, apply / read-tree / write-tree included
   try {
-    if (!gitRun(cwd, ["read-tree", parent], { env }).ok || !existsSync(idx)) return false;
+    if (!gitRun(cwd, ["read-tree", parent], { env }).ok) return false;
+    try { closeSync(openSync(idx, "r")); } catch { return false; } // the index read-tree wrote must be there; opening it is the check and the use in one
     if (!gitRun(cwd, ["apply", "--cached", "-"], { input: patch, env }).ok) return false;
     const tree = gitFeed(cwd, ["write-tree"], "", env);
     const want = gitIn(cwd)("rev-parse", `${commit}^{tree}`);
@@ -1404,7 +1418,7 @@ const dirty = git("status", "--porcelain").split("\n").filter(Boolean);
 add(dirty.length ? "warn" : "ok", "Working tree", dirty.length ? `${dirty.length} uncommitted file(s)` : "clean");
 
 // ── 3. Is the doctrine actually live where people can see it? ───────────────
-const readme = existsSync(resolve(repo, "README.md")) ? readFileSync(resolve(repo, "README.md"), "utf8") : "";
+const readme = readIfPresent(resolve(repo, "README.md")) ?? "";
 const retired = /Shared-Device Trust Gateway|trust fabric/i.test(readme.split("\n").slice(0, 40).join("\n"));
 add(retired ? "fail" : "ok", "Public README uses current framing",
   retired ? "still opens with retired wording — Phase 0 has not landed here" : "no retired framing in the opening");
@@ -1414,8 +1428,9 @@ add(existsSync(resolve(repo, "docs/PURPOSE.md")) ? "ok" : "fail", "docs/PURPOSE.
 // ── 4. THE NUMBER THAT MATTERS ──────────────────────────────────────────────
 // Everything above is hygiene. This is the experiment.
 const logPath = resolve(repo, "docs/agent/DISCOVERY_LOG.md");
-if (existsSync(logPath)) {
-  const log = readFileSync(logPath, "utf8");
+const discoveryLog = readIfPresent(logPath);
+if (discoveryLog !== null) {
+  const log = discoveryLog;
   const m = log.match(/Conversations logged:\s*(\d+)\s*of\s*(\d+)/i);
   const c = log.match(/Commitments:\s*(\d+)/i);
   const logged = m ? Number(m[1]) : 0;
@@ -1511,9 +1526,8 @@ for (const [label, script] of [
 // produce the warn row itself; fail-closed, never a silent skip.
 {
   const loopPath = resolve(repo, "docs/agent/LOOP.md");
-  const touched = existsSync(loopPath)
-    ? (readFileSync(loopPath, "utf8").match(/LAST TOUCHED:\s*(\d{4}-\d{2}-\d{2})/) || [])[1]
-    : undefined;
+  const loopText = readIfPresent(loopPath);
+  const touched = loopText === null ? undefined : (loopText.match(/LAST TOUCHED:\s*(\d{4}-\d{2}-\d{2})/) || [])[1];
   const newest = git("log", "-1", "--format=%cI", MAINLINE); // "" when the remote is unfetched → stateFreshness returns no-remote
   const f = stateFreshness(touched, newest);
   if (f.kind === "no-date") {
@@ -1725,7 +1739,7 @@ function selfTest() {
     check("hubNamesHoldingTip itself names no holder while a grafts file is in force, not only the verdict above it (d-G2l)", g2raw && g2n.length === 0);
     const g2r = sameNameRows([{ branch: "g1x", ...g2v }]);
     check("the fail row carries the reason and prints no invented count (d-G2c)", g2r.level === "fail" && g2r.detail.startsWith("g1x (count unreadable)") && g2r.detail.includes(graftsFile));
-    check("with the grafts file removed the same branch reads ahead by one and carries no reason (d-G2d)", !existsSync(graftsFile) && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
+    check("with the grafts file removed the same branch reads ahead by one and carries no reason (d-G2d)", graftsState(work).state === "absent" && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
     // (d-G2e) GIT_GRAFT_FILE points git at a grafts file anywhere: the guard must read what git would read
     const envGrafts = join(root, "env-grafts"); writeFileSync(envGrafts, `${g1o} ${g1t}\n`); process.env.GIT_GRAFT_FILE = envGrafts;
     let g2e; try { g2e = verdictOf("g1x"); } finally { delete process.env.GIT_GRAFT_FILE; }
@@ -1795,7 +1809,7 @@ function selfTest() {
     const otherGrafts = join(otherRepo, ".git", "info", "grafts"); mkdirSync(join(otherRepo, ".git", "info"), { recursive: true }); writeFileSync(otherGrafts, `${g1o} ${g1t}\n`);
     const gs_r = withEnv(otherGrafts, () => ({ raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }));
     check("a GIT_GRAFT_FILE naming another repository's grafts is applied by git and blocks here, with that file named (d-G2r)",
-      !existsSync(graftsFile) && gs_r.raw === true && gs_r.st.block === true && String(gs_r.v.reason).includes(otherGrafts));
+      graftsState(work).state === "absent" && gs_r.raw === true && gs_r.st.block === true && String(gs_r.v.reason).includes(otherGrafts));
     // (d-G3) a local TAG named like the branch: tag tg at a commit the Hub holds under another name, branch tg two ahead of its Hub tip
     sh("checkout", "-q", "-b", "tg", "main"); sh("push", "-q", "origin", "tg"); const tgA = cm("tgA.txt", "1\n"); sh("push", "-q", "origin", "tg:refs/heads/tg-other");
     sh("tag", "tg", tgA); cm("tgU.txt", "2\n");
@@ -2312,9 +2326,22 @@ function selfTest() {
     check("the Hub-map wording says what arrived: nothing, an empty object, or an object that is not a Map (R7-map-wording)",
       /no Hub sha map was passed/.test(dmShape(undefined)) && /no Hub sha map was passed/.test(dmShape(null)) && /an empty Hub sha map was passed/.test(dmShape({})) &&
       !/no Hub sha map was passed/.test(dmShape({})) && /the Hub sha map is not a Map/.test(dmShape({ main: dmReal.get("main") })));
+    // A loose object git wrote is read-only (0444): writing over one fails for any user but root, so a planted object replaces it by unlink-then-write (the unlink needs only the
+    // directory's write permission; an object that was not there yet is the common case and is simply created).
+    const writeLooseObject = (work, sha, rawObject) => {
+      const dir = join(work, ".git", "objects", sha.slice(0, 2)), file = join(dir, sha.slice(2));
+      mkdirSync(dir, { recursive: true });
+      try { unlinkSync(file); } catch (e) { if (!(e && (e.code === "ENOENT" || e.code === "ENOTDIR"))) throw e; }
+      writeFileSync(file, deflateSync(rawObject));
+    };
     // (5) a forged objects/info/commit-graph: a cache git trusts without checking, here giving a Hub-listed commit the unpushed tip as its parent
+    // Git writes objects/info/commit-graph read-only (0444), and a process that is not root cannot open it for writing: the forged bytes go to a sibling temp file that gets the
+    // original's mode, and a rename replaces the original, which is how git itself replaces the file and needs only the directory's write permission. Mode, inode and bytes are read
+    // from ONE open descriptor, so no stat of the path precedes its use. Returns { mode, ino } of the file it replaced (CI ran as a non-root user; this sandbox's root user hid it).
     const forgeCommitGraph = (path, child, newParent) => {
-      const b = readFileSync(path);
+      const fd = openSync(path, "r");
+      let b, mode, ino;
+      try { const st = fstatSync(fd); mode = st.mode & 0o777; ino = st.ino; b = readFileSync(fd); } finally { closeSync(fd); }
       if (b.toString("latin1", 0, 4) !== "CGPH") throw new Error("not a commit-graph file");
       const chunks = {};
       for (let i = 0; i <= b[6]; i++) chunks[b.toString("latin1", 8 + 12 * i, 12 + 12 * i)] = Number(b.readBigUInt64BE(12 + 12 * i));
@@ -2325,18 +2352,23 @@ function selfTest() {
       const gp = gen(pi) >> 34n, gc = gen(ci) >> 34n, date = gen(ci) & ((1n << 34n) - 1n), ng = gc > gp + 1n ? gc : gp + 1n;
       b.writeBigUInt64BE((ng << 34n) | date, rec(ci) + 28);
       createHash("sha1").update(b.subarray(0, b.length - 20)).digest().copy(b, b.length - 20);
-      writeFileSync(path, b);
+      const tmp = `${path}.forged-${process.pid}`;
+      writeFileSync(tmp, b, { mode }); chmodSync(tmp, mode); renameSync(tmp, path);
+      return { mode, ino };
     };
     const cg = mkFx("r7cg"), cgB = cg.f("rev-parse", "HEAD");
     cg.f("checkout", "-q", "-b", "oth"); const cgO = cg.c("o.txt", "o\n"); cg.f("push", "-q", "origin", "oth:refs/heads/other");
     cg.f("checkout", "-q", "-b", "mine", cgB); const cgT = cg.c("w.txt", "REAL unpushed\n"); cg.f("branch", "-D", "oth");
     execFileSync("git", ["-c", "commitGraph.generationVersion=1", "commit-graph", "write", "--stdin-commits", "--no-progress"], { cwd: cg.w, input: `${cgO}\n${cgT}\n${cgB}\n`, env: FX_ENV, stdio: ["pipe", "ignore", "ignore"] });
     const cgFile = join(cg.w, ".git", "objects", "info", "commit-graph"), cgHonest = cg.f("rev-list", cgT, "--not", cgO) !== "";
-    forgeCommitGraph(cgFile, cgO, cgT);
+    const cgForged = forgeCommitGraph(cgFile, cgO, cgT), cgAfter = statSync(cgFile);
     const cgLie = cg.f("rev-list", cgT, "--not", cgO) === "", cgTruthOff = cg.f("-c", "core.commitGraph=false", "rev-list", cgT, "--not", cgO) !== "";
     const cgRows = cg.rows();
     check("a forged commit-graph that makes a Hub-listed commit the child of the unpushed tip does not make the Hub hold it: every ancestry answer is read from the objects (R7-CG)",
       cgHonest && cgLie && cgTruthOff && !hubHolds(cg, cgT, "other") && hubTipState("mine", hubMapOf(cg.h), cg.w).holds === false && isOnHubBySha("mine", hubMapOf(cg.h), cg.w) === false && reported(cgRows, "mine"));
+    // The forge must leave the file exactly as read-only as git made it (and git does make it read-only): a forge that wrote in place, or chmodded it writable, only works as root.
+    check("forging the commit-graph keeps the mode git gave the file (read-only) and REPLACES the file (a new inode, no temp file left), where an in-place write needs a user who may write it (R11-CG-mode)",
+      (cgForged.mode & 0o222) === 0 && (cgAfter.mode & 0o777) === cgForged.mode && cgAfter.ino !== cgForged.ino && readdirSync(dirname(cgFile)).every((n) => !n.includes(".forged-")));
     // (6) user configuration must not change the answer: diff.ignoreSubmodules=all hides a gitlink bump from the porcelain path list and patch
     const sb = mkFx("r7sb"), sbS1 = "1".repeat(40), sbS3 = "3".repeat(40);
     sb.f("update-index", "--add", "--cacheinfo", `160000,${sbS1},sub`); sb.f("commit", "-q", "-m", "sub@s1"); const sbB = sb.f("rev-parse", "HEAD"); sb.f("push", "-q", "origin", "main");
@@ -2358,8 +2390,7 @@ function selfTest() {
     const foHub = hubAdvance(fo, "other");
     const foBody = Buffer.from(`tree ${fo.f("rev-parse", `${foT}^{tree}`)}\nparent ${foT}\nauthor t <t@t> 1 +0000\ncommitter t <t@t> 1 +0000\n\nforged\n`);
     const foObj = Buffer.concat([Buffer.from(`commit ${foBody.length}\0`), foBody]);
-    mkdirSync(join(fo.w, ".git", "objects", foHub.slice(0, 2)), { recursive: true });
-    writeFileSync(join(fo.w, ".git", "objects", foHub.slice(0, 2), foHub.slice(2)), deflateSync(foObj));
+    writeLooseObject(fo.w, foHub, foObj);
     const foRows = fo.rows();
     check("a loose object forged at a Hub-listed sha (its content does not hash to its name) is not a holder: git believes it on read, the check re-hashes the listed commits (R7-forged-object)",
       createHash("sha1").update(foObj).digest("hex") !== foHub && fo.f("cat-file", "-t", foHub) === "commit" && !hubHolds(fo, foT, "other") && !localCommits(fo.w, [foHub]).has(foHub) &&
@@ -2403,9 +2434,7 @@ function selfTest() {
       try { return fn(); } finally { for (const [k, v] of Object.entries(prior)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
     };
     const plantLoose = (fx, sha, body) => { // a loose object written under a name it does not hash to (git does not verify on read)
-      const obj = Buffer.concat([Buffer.from(`commit ${body.length}\0`), body]);
-      mkdirSync(join(fx.w, ".git", "objects", sha.slice(0, 2)), { recursive: true });
-      writeFileSync(join(fx.w, ".git", "objects", sha.slice(0, 2), sha.slice(2)), deflateSync(obj));
+      writeLooseObject(fx.w, sha, Buffer.concat([Buffer.from(`commit ${body.length}\0`), body]));
     };
     const laneOf = (fx, name, cloneArgs = []) => { // a hermetic clone of the fixture's hub, with the seam rows for it
       const dir = join(root, `${name}-lane`);
@@ -2582,7 +2611,9 @@ function selfTest() {
     const hermetic = { GIT_CONFIG_GLOBAL: cfgFile("r9-empty-global.cfg", ""), GIT_CONFIG_NOSYSTEM: "1", GIT_SSL_NO_VERIFY: null };
     const inCleanEnv = (fn, vars = {}) => withEnvVars({ ...hermetic, ...vars }, fn);
     const ctOf = (fx, tree, msg, ...parents) => execFileSync("git", ["commit-tree", tree, ...parents.flatMap((p) => ["-p", p]), "-m", msg], { cwd: fx.w, encoding: "utf8", env: FX_ENV }).trim();
-    const dropLoose = (fx, sha) => { const p = join(fx.w, ".git", "objects", sha.slice(0, 2), sha.slice(2)); const was = existsSync(p); if (was) unlinkSync(p); return was && !existsSync(p); };
+    const dropLoose = (fx, sha) => { // true when the loose object was there and is gone; the unlink is the check
+      try { unlinkSync(join(fx.w, ".git", "objects", sha.slice(0, 2), sha.slice(2))); return true; } catch (e) { if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) return false; throw e; }
+    };
     // (1) The Hub transport. A repository-scope http.proxy plus http.sslVerify=false served a listing through a TLS-terminating proxy with the URL untouched.
     const tx = mkFx("r9tx"); tx.f("config", "remote.origin.url", HUB);
     const txc = mkFx("r9txc"); txc.f("config", "remote.origin.url", HUB); // a clean repository: nothing of its own below the environment's boundary
@@ -2655,7 +2686,7 @@ function selfTest() {
       delete childEnv.GIT_SSL_NO_VERIFY;
       for (const [k, v] of Object.entries(vars)) if (v === null) delete childEnv[k]; // (null: unset)
       const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: 120000, env: childEnv });
-      return { status: r.status, out: stripAnsi(r.stdout) };
+      return { status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || "") };
     };
     const txe = mkFx("r9txe"); txe.f("config", "remote.origin.url", HUB);
     const txeClean = wholeScript(txe, "r9txe-a", { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: "", all_proxy: "", GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
@@ -2828,6 +2859,34 @@ function selfTest() {
     const incOk = inCleanEnv(() => hubTransport(inc.w), { GIT_CONFIG_GLOBAL: cfgFile("r10-global-outside.cfg", `[include]\n\tpath = ${incOutside}\n[include]\n\tpath = ${incSibling}\n`) });
     check("the environment's own shape stays a warning: a global file, and files it includes, that lie OUTSIDE the repository (even a sibling whose path begins with the repository's) are reported as trusted and are no finding (R10-tx-include-outside)",
       incOk.problems.length === 0 && incOk.trusted.some((t) => t.includes("http.proxy=http://127.0.0.1:2")) && incOk.trusted.some((t) => t.includes("http.proxy=http://127.0.0.1:3")) && transportRow(incOk).state === "warn");
+    // ══ ROUND 11 ══ CodeQL js/file-system-race: a file checked (existsSync / statSync) and then read or written. Absence is now the read's own answer (readIfPresent):
+    // ENOENT and ENOTDIR are "absent", anything else is a failure and never a silent absent.
+    const rpDir = join(root, "r11-rp"); mkdirSync(rpDir);
+    const rpFile = join(rpDir, "f.txt"); writeFileSync(rpFile, "present\n");
+    const rpCode = (fn) => { try { fn(); return "no error"; } catch (e) { return e && e.code; } };
+    check("readIfPresent reads a present file, answers null for a missing one (ENOENT) and for a path under a file (ENOTDIR), and THROWS for everything else: a directory is EISDIR, never an absent file (R11-rip)",
+      readIfPresent(rpFile) === "present\n" && readIfPresent(join(rpDir, "missing.txt")) === null && readIfPresent(join(rpFile, "child.txt")) === null &&
+      rpCode(() => readIfPresent(rpDir)) === "EISDIR" && rpCode(() => readIfPresent(join(rpDir, "missing.txt"))) === "no error" &&
+      dropLoose(skl, sklP) === false /* already dropped above: the unlink's ENOENT is "was not there", not a throw */ && rpCode(() => dropLoose({ w: rpFile }, "ab" + "c".repeat(38))) === "no error");
+    // the whole script: LOOP.md or README.md that exists but cannot be read is a crash that names the error, where a missing one is a quiet "no date" warning
+    const rpx = mkFx("r11rp"); rpx.f("config", "remote.origin.url", HUB);
+    mkdirSync(join(rpx.w, "docs", "agent"), { recursive: true }); writeFileSync(join(rpx.w, "docs", "PURPOSE.md"), "fixture\n");
+    const rpMissing = wholeScript(rpx, "r11rp-a", cleanOfTrust);
+    mkdirSync(join(rpx.w, "docs", "agent", "LOOP.md")); // present, and a directory
+    const rpDirRun = wholeScript(rpx, "r11rp-b", cleanOfTrust);
+    check("the whole script treats a missing LOOP.md as the 'no LAST TOUCHED date' warning and a LOOP.md it cannot read (a directory) as a failure naming EISDIR, not as a missing one (R11-rip-e2e)",
+      /! LOOP STATE date\s+no "LAST TOUCHED/.test(rpMissing.out) && !/EISDIR/.test(rpMissing.err) && rpDirRun.status !== 0 && /EISDIR/.test(rpDirRun.err) && !/LOOP STATE date/.test(rpDirRun.out));
+    // a planted loose object REPLACES a git-written (read-only) one rather than being written over it: the inode changes, read through descriptors (no path is checked first)
+    const lq = mkFx("r11lo"), loSha = lq.c("x.txt", "x\n", "X"), loFile = join(lq.w, ".git", "objects", loSha.slice(0, 2), loSha.slice(2));
+    const inoOf = (file) => { const fd = openSync(file, "r"); try { return fstatSync(fd).ino; } finally { closeSync(fd); } };
+    const loOld = openSync(loFile, "r"); // held open while the object is replaced, so its inode number cannot be handed straight back to the new file
+    let loIno, loIno2; try { loIno = fstatSync(loOld).ino; writeLooseObject(lq.w, loSha, Buffer.from("commit 0\0")); loIno2 = inoOf(loFile); } finally { closeSync(loOld); }
+    check("planting a loose object over one git already wrote (read-only) replaces it by unlink-then-write, so it works for a user who may not write the old file: new inode, and the content no longer hashes to its name (R11-loose-replace)",
+      loIno !== loIno2 && !localCommits(lq.w, [loSha]).has(loSha));
+    const rpProd = prodText.slice(prodText.indexOf("function readIfPresent"), prodText.indexOf("function readIfPresent") + 700);
+    check("no existsSync / statSync check is followed by a read, write or unlink of the same path in this file: the README, the discovery log and LOOP.md are read through readIfPresent, the throwaway index is opened, the self-test drops a loose object by unlinking it (R11-no-check-then-use)",
+      !/existsSync\(resolve\(repo, "README\.md"\)\)/.test(prodText) && !/existsSync\(logPath\)/.test(prodText) && !/existsSync\(loopPath\)/.test(prodText) && !/existsSync\(idx\)/.test(prodText) &&
+      !/exist[s]Sync\(graftsFile\)/.test(prodSrc) && !/const was = exist[s]Sync/.test(prodSrc) && /function readIfPresent/.test(rpProd) && /e\.code === "ENOENT" \|\| e\.code === "ENOTDIR"/.test(rpProd));
     // fail-closed: a branch identical to mainline proves nothing
     check("a branch with no diff against mainline is not cleared", landedByPatchId("main", M, work) === false);
     // STATE freshness (pure, clock-free): a fixture date older than a fixture commit

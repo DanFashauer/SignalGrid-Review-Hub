@@ -13,6 +13,7 @@
 //      not claim one.
 //   4. NO NETWORK I/O in the family, so a quarantine actuator cannot return.
 
+import { createServer, type Socket } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
@@ -248,6 +249,116 @@ check("with no REDIS_URL configured there is no fault to report, so the checks a
   quietFaults.length === 0);
 
 
+
+// BRACE-LESS GUARDS IN THE IDENTIFIER VALIDATOR (joined the brace-less sweep, wave 9).
+// `nac/identifier.ts` lines 48, 49 and 58 survived `if (false)` with this proof green: the
+// per-kind regex refuses the same hostile value a moment later, so every earlier check saw
+// `ok === false` either way. What differs is WHICH refusal answered, and the reason is what an
+// operator reads. So each guard is pinned by its reason, and by the boundary it draws.
+{
+  const reason = (v: unknown, t: "mac" | "serial" | "cert"): string | null => {
+    const r = validateNacIdentifier(v, t);
+    return r.ok ? null : r.reason;
+  };
+  for (const t of ["mac", "serial", "cert"] as const) {
+    check(`nac: an empty or all-whitespace ${t} identifier is refused as EMPTY, not as malformed`,
+      reason("", t) === "identifier is empty" && reason("   ", t) === "identifier is empty");
+    check(`nac: a ${t} identifier over 256 characters is refused as TOO LONG, not as malformed`,
+      reason("a".repeat(257), t) === "identifier exceeds 256 characters");
+  }
+  check("nac: the 256-character bound is inclusive — 256 passes the length guard and meets the kind check instead",
+    reason("a".repeat(256), "mac") === "not a well-formed MAC address" &&
+    reason("a".repeat(256), "serial") === "not a well-formed serial");
+  check("nac: a serial with a character outside [0-9a-z_-] is refused, with the serial reason",
+    ["sn 123", "sn;drop", "sn'x", "sn/../x", "ser\u00e9ial"].every((v) => reason(v, "serial") === "not a well-formed serial"));
+  check("nac: a 65-character serial is refused (the bound is 64) and a 64-character one is accepted",
+    reason("a".repeat(65), "serial") === "not a well-formed serial" && validateNacIdentifier("a".repeat(64), "serial").ok === true);
+}
+
+// THE REDIS READ-HIT PATH — `nac/store.ts` line 81 (`if (data) return ...parse(...)`) survived
+// `if (false)`: every earlier check ran with NO Redis (client null) or a CLOSED port (fault), so
+// the branch where Redis HAS the config never executed, and a store that always fell through to
+// the process-local map would have passed. Driven here against a loopback RESP server that holds
+// one value in a Map: no real Redis, no clock, no randomness (OS-assigned port).
+{
+  const kv = new Map<string, string>();
+  const sockets = new Set<Socket>();
+  const parseCommands = (buf: Buffer): { cmds: string[][]; rest: Buffer } => {
+    const cmds: string[][] = [];
+    let off = 0;
+    for (;;) {
+      if (buf[off] !== 0x2a) break; // "*"
+      let nl = buf.indexOf("\r\n", off);
+      if (nl < 0) break;
+      const n = Number.parseInt(buf.toString("utf8", off + 1, nl), 10);
+      let cur = nl + 2;
+      const args: string[] = [];
+      let complete = true;
+      for (let i = 0; i < n; i += 1) {
+        nl = buf.indexOf("\r\n", cur);
+        if (nl < 0) { complete = false; break; }
+        const len = Number.parseInt(buf.toString("utf8", cur + 1, nl), 10);
+        if (buf.length < nl + 2 + len + 2) { complete = false; break; }
+        args.push(buf.toString("utf8", nl + 2, nl + 2 + len));
+        cur = nl + 2 + len + 2;
+      }
+      if (!complete) break;
+      cmds.push(args);
+      off = cur;
+    }
+    return { cmds, rest: buf.subarray(off) };
+  };
+  const server = createServer((sock) => {
+    sockets.add(sock);
+    sock.on("close", () => sockets.delete(sock));
+    sock.on("error", () => undefined);
+    let pending: Buffer = Buffer.alloc(0);
+    sock.on("data", (chunk) => {
+      const { cmds, rest } = parseCommands(Buffer.concat([pending, typeof chunk === "string" ? Buffer.from(chunk) : chunk]));
+      pending = Buffer.from(rest);
+      for (const [cmd, ...args] of cmds) {
+        switch (cmd?.toLowerCase()) {
+          case "info": { const b = "# Server\r\nloading:0\r\n"; sock.write(`$${Buffer.byteLength(b)}\r\n${b}\r\n`); break; }
+          case "get": { const v = kv.get(args[0] ?? ""); sock.write(v === undefined ? "$-1\r\n" : `$${Buffer.byteLength(v)}\r\n${v}\r\n`); break; }
+          case "set": kv.set(args[0] ?? "", args[1] ?? ""); sock.write("+OK\r\n"); break;
+          case "quit": sock.write("+OK\r\n"); sock.end(); break;
+          default: sock.write("+OK\r\n");
+        }
+      }
+    });
+  });
+  await new Promise<void>((res) => server.listen(0, "127.0.0.1", () => res()));
+  const addr = server.address();
+  const port = typeof addr === "object" && addr ? addr.port : 0;
+  const priorUrl = process.env["REDIS_URL"];
+  process.env["REDIS_URL"] = `redis://127.0.0.1:${port}`;
+  const faults: string[] = [];
+  try {
+    __resetNacConfigForTests();
+    await setNACConfig("tenant-redis", { provider: "clearpass", enabled: false }, (m) => faults.push(m));
+    check("nac: a config written through Redis lands in the Redis store (the fake server received the SET)",
+      [...kv.keys()].length === 1 && faults.length === 0);
+    // Drop the process-local copy: the ONLY place the config now lives is Redis.
+    __resetNacConfigForTests();
+    const fromRedis = await getNACConfig("tenant-redis", (m) => faults.push(m));
+    check("nac: a config present in Redis is READ from Redis when the process-local copy is gone",
+      fromRedis?.provider === "clearpass" && fromRedis?.enabled === false && faults.length === 0);
+    check("nac: a key Redis does not hold falls through to the (empty) process-local map, as null",
+      (await getNACConfig("tenant-absent", (m) => faults.push(m))) === null && faults.length === 0);
+    // A stored value that fails the strict schema is a FAULT (audible), never a silent default.
+    kv.set([...kv.keys()][0]!, JSON.stringify({ provider: "ise", enabld: true }));
+    __resetNacConfigForTests();
+    const bad = await getNACConfig("tenant-redis", (m) => faults.push(m));
+    check("nac: a corrupt stored config is reported as a read fault and yields null, not a default-on config",
+      bad === null && faults.some((f) => f.startsWith("read failed")));
+  } finally {
+    if (priorUrl === undefined) delete process.env["REDIS_URL"];
+    else process.env["REDIS_URL"] = priorUrl;
+    for (const sk of sockets) sk.destroy();
+    await new Promise<void>((res) => server.close(() => res()));
+    __resetNacConfigForTests();
+  }
+}
 
 // CERTIFICATE-SERIAL FORMAT — the `cert` arm's format check survived mutation
 // until 2026-08-25: every identifier test here used `mac` or `serial`, so the cert

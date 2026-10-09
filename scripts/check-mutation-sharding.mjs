@@ -145,6 +145,24 @@ for (const [proof, file] of [
   check(`${proof} keeps its connector registered: ${file.split("/").pop()}`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
 }
 
+// ── Wave 7 (2026-10-09): the Graph posture connector, break-glass and response-accountability ──
+// posture-connector.ts is the connector pointed at a real tenant and sat in NO target until now;
+// the other two joined the brace-less sweep with their one-line guards pinned. Pin all three.
+for (const p of ["graph-connector", "break-glass", "response-accountability"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+for (const [proof, file] of [
+  ["proof:oauth-consent", "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts"],
+  ["proof:access-governance", "lib/integrations/src/integrations/access-governance/access-governance-connector.ts"],
+]) {
+  check(`${proof} keeps its connector registered: ${file.split("/").pop()}`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+check("brace-less sweep: proof:oauth-consent stays opted in (oneLine: true)", TARGETS.find((t) => t.proof === "proof:oauth-consent")?.oneLine === true);
+check(
+  "proof:graph-connector keeps the posture connector registered: posture-connector.ts",
+  TARGETS.find((t) => t.proof === "proof:graph-connector")?.files.includes("lib/integrations/src/integrations/graph/posture-connector.ts") === true,
+);
+
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);

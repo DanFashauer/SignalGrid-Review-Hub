@@ -68,7 +68,8 @@ function readIfPresent(path, encoding = "utf8") {
 //     Every ancestry answer here is computed from the commit objects themselves.
 //   GIT_OPTIONAL_LOCKS=0: a read-only check must not write. `git status` otherwise refreshes (and locks) the index; the live
 //     run from a session took the index lock.
-//   And what git would otherwise read from the CALLER's environment is dropped (round-7 refute, completed in round 9):
+//   And what git would otherwise read from the CALLER's environment is dropped (round-7 refute; extended in rounds 9, 11, 12, 18, 22, 23 and 24, each of which found a name the earlier lists missed. The lists below are an
+//   audit of the GIT_* names in the git binary (git 2.43) that select a file, a directory or a program, not a promise that a later git adds none; the differential self-test cases are what keep them honest):
 //     every GIT_TEST_* variable (GIT_TEST_COMMIT_GRAPH=1 forces the commit-graph back on over core.commitGraph=false, so a forged graph held a tip again);
 //     GIT_OBJECT_DIRECTORY and GIT_ALTERNATE_OBJECT_DIRECTORIES (they point the object reads at a store this check did not choose);
 //     GIT_DIR, GIT_COMMON_DIR, GIT_WORK_TREE, GIT_NAMESPACE (they point every read at a repository, a worktree or a ref namespace this
@@ -92,15 +93,26 @@ function readIfPresent(path, encoding = "utf8") {
 // program). Each is dropped from every git started here AND named in hubTransport's row (round-18 refute: GIT_SSH_COMMAND was neither, so an exported one ran in the listing of any ssh-reached Hub).
 // GIT_CONFIG joins them (round-22 refute): `git config` reads ONLY that file when it is set while `git ls-remote` ignores it, so GIT_CONFIG=/dev/null hid a global http.proxy and http.sslVerify=false from the scan
 // and the listing went through that proxy. The scan and the listing must read one configuration: it is dropped, and named in the row.
-const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH", "GIT_CONFIG"];
+// SSLKEYLOGFILE joins them (round-24 review): libcurl writes the TLS session secrets of the listing to the file it names, the GIT_TRACE_CURL of TLS.
+const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH", "GIT_CONFIG", "SSLKEYLOGFILE"];
+// The variables that redirect WHICH FILE OR DIRECTORY git reads repository state from (round-24 refute: GIT_SHALLOW_FILE named a forged shallow file that flipped real unpushed work to "landed", while
+// shallowBounds reads `git rev-parse --git-path shallow`, which ignores it): the shallow and graft files, the index, the replace-ref base, the attribute sources, the quarantine and template directories, the
+// ceiling and discovery switches, and the two paranoia switches that loosen a consistency check. Each is dropped from every git started here and from every child the check spawns, and named in the row.
+// (GIT_CEILING_DIRECTORIES is set deliberately for the listing's isolated directory and for nothing else; GIT_INDEX_FILE only by the one caller that makes a throwaway index. Both arrive as `extra`, never inherited.)
+// (GIT_GRAFT_FILE is not in it: the grafts check reads that variable itself, names it and refuses to confirm anything under it, cases d-G2*.)
+const GIT_REDIRECT_ENV = ["GIT_SHALLOW_FILE", "GIT_INDEX_FILE", "GIT_INDEX_VERSION", "GIT_REPLACE_REF_BASE", "GIT_ATTR_SOURCE", "GIT_ATTR_GLOBAL", "GIT_ATTR_SYSTEM", "GIT_ATTR_NOSYSTEM",
+  "GIT_QUARANTINE_PATH", "GIT_TEMPLATE_DIR", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_IMPLICIT_WORK_TREE", "GIT_REF_PARANOIA", "GIT_COMMIT_GRAPH_PARANOIA"];
+// The variables that reach the listing's libcurl and are TRUSTED, not verified (dropping the client-certificate ones would break a legitimate mTLS user): named in the row, never judged.
+const GIT_TLS_NAMED_ENV = ["GIT_PROXY_SSL_CAINFO", "GIT_PROXY_SSL_CAPATH", "GIT_PROXY_SSL_CERT", "GIT_PROXY_SSL_KEY", "GIT_SSL_CERT", "GIT_SSL_KEY", "GIT_SSL_CERT_TYPE", "GIT_SSL_KEY_TYPE", "GIT_SSL_VERSION",
+  "GIT_SSL_CIPHER_LIST", "GIT_HTTP_PROXY_AUTHMETHOD", "CURL_SSL_BACKEND"];
 // The tracing family writes the wire traffic of the listing (GIT_TRACE_CURL, GIT_TRACE_PACKET), the command lines and the environment to a file the CALLER names: a read-only check must not write there (round-23 review).
 const isGitTraceVar = (k) => k.startsWith("GIT_TRACE") || k === "GIT_CURL_VERBOSE";
-const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV];
+const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV];
 function gitEnv(extra) {
-  const env = { ...process.env, ...extra };
+  const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
   for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) delete env[k];
   for (const k of GIT_ENV_DROPPED) delete env[k];
-  return { ...env, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
+  return { ...env, ...extra, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
 // { ok, status, stdout, stderr }; ok is "git ran and exited 0". stdout is a string, or a Buffer with { buffer: true }.
 function gitRun(cwd, args, { input, env, buffer = false, timeout } = {}) {
@@ -212,6 +224,7 @@ function transportKey(scope, origin, kv, own = null) {
   // A credential can sit in a KEY (a url.<base> subsection named https://user:token@host/): keys are scrubbed exactly like values wherever they are printed.
   const label = `${noUserinfo(key, true)}${val === null ? "" : `=${key.startsWith("alias.") ? "(not shown)" : val}`}`;
   const where = scope === "command" ? "command line" : `${scope} ${origin.replace(/^file:/, "")}`;
+  // (http.proxySSLVerify is not a key git 2.43 reads: judging it is dead but harmless, and keeps the check right for a git that does.)
   if (isHttp && (last === "sslverify" || last === "proxysslverify")) {
     const verify = gitBoolValue(nl < 0 ? null : kv.slice(nl + 1)); // (the raw value: the display copy above has had userinfo removed)
     if (verify === undefined) return { problem: `${label} (${where}) is not a boolean git can read (git refuses it), so TLS verification cannot be judged` };
@@ -296,10 +309,11 @@ function hubTransport(cwd = repo, hub = HUB) {
   for (const k of ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]) if (env[k]) { const v = noUserinfo(env[k], true); proxies.set(v, [...(proxies.get(v) || []), k]); }
   for (const [v, ks] of proxies) trusted.push(`environment proxy ${ks.join("/")}=${v}`);
   for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
+  for (const k of GIT_TLS_NAMED_ENV) if (env[k]) trusted.push(`environment TLS ${k}=${env[k]}`); // (a client certificate, a protocol version, a cipher list, a proxy CA: trusted, not verified)
   // Where git looks for its remote helpers: named, and never passed on (gitEnv drops it), so it can swap no transport here.
   // (a command line is shown by its program alone: its arguments can carry a credential)
   const shownEnv = (k, v) => { const w = String(v).trim().split(/\s+/); return k === "GIT_SSH_COMMAND" || k === "GIT_PROXY_COMMAND" ? `${w[0]}${w.length > 1 ? " ..." : ""}` : String(v); };
-  for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
+  for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || GIT_REDIRECT_ENV.includes(k) || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
   // The configuration and the Hub URL's expansion are read in TWO places, never one (round-21 refute): the repository (what a fetch or a push of yours sees) and the directory the listing runs in (an empty
   // temporary directory, the clean environment: what the listing sees). A global `[includeIf "gitdir:<repo>/"]` that pulls in an identity insteadOf for the full Hub URL applies only inside the repository, so
   // the gate saw no rewrite there while a shorter global rewrite served the listing from another machine. The two expansions must agree (a credential in front of the same Hub is the one difference allowed),
@@ -1714,7 +1728,7 @@ if (discoveryLog !== null) {
 // Three dimensions, headline = the lowest; floor 80 / target 92–95 / goal 100. REPORTED,
 // not a seam: a low number closes outreach, it does not block a session from ending.
 {
-  const r = spawnSync(process.execPath, [resolve(repo, "scripts/check-readiness-figure.mjs"), "--json"], { cwd: repo, encoding: "utf8" });
+  const r = spawnSync(process.execPath, [resolve(repo, "scripts/check-readiness-figure.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv() });
   if (r.status !== 0) {
     add("fail", "Readiness figure", "derivation BROKEN — run node scripts/check-readiness-figure.mjs", false);
   } else {
@@ -1749,7 +1763,7 @@ for (const [label, script] of [
 ]) {
   if (!existsSync(resolve(repo, script))) { add("warn", label, "gate not on this branch"); continue; }
   try {
-    execFileSync("node", [script], { cwd: repo, stdio: "ignore" });
+    execFileSync("node", [script], { cwd: repo, stdio: "ignore", env: gitEnv() });
     add("ok", label, "green");
   } catch {
     add("fail", label, `run: node ${script}`);
@@ -1798,7 +1812,7 @@ function stateFreshness(lastTouchedISO, newestCommitISO) {
 // false — a blocker to address, not a code defect that should block a push.
 {
   try {
-    const out = execFileSync("node", [resolve(repo, "scripts/check-raised-hands.mjs"), "--json"], { cwd: repo, encoding: "utf8" });
+    const out = execFileSync("node", [resolve(repo, "scripts/check-raised-hands.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv() });
     const s = JSON.parse(out);
     if (s.open === 0) {
       add("ok", "Raised hands", "none open — every blocker resolved (DR-054)", false);
@@ -3692,6 +3706,40 @@ exit 1
     check("SSL_CERT_FILE, SSL_CERT_DIR and CURL_CA_BUNDLE are named like GIT_SSL_CAINFO, and a global http.sslCAInfo + proxy is trusted, not verified: no finding, and the warning row states that this is by design (R23-ca-contract)",
       caScan.problems.length === 0 && ["SSL_CERT_FILE=/x/ca1.pem", "SSL_CERT_DIR=/x/cadir", "CURL_CA_BUNDLE=/x/ca2.pem"].every((e) => caScan.trusted.includes(`environment CA ${e}`)) &&
       caScan.trusted.some((t) => t.includes("http.sslcainfo=/x/swapped.pem")) && transportRow(caScan).state === "warn" && transportRow(caScan).detail.includes("by design a proxy or CA bundle set by the environment's own configuration or command line") && transportRow(caScan).gated === false);
+    // ══ ROUND 24 ══ Review round 9. (1) GIT_SHALLOW_FILE and the family of variables that redirect which file git reads state from. (2) The children the check spawns. (3) SSLKEYLOGFILE and the libcurl variables.
+    const sh24 = mkFx("r24sh");
+    const sh24O = sh24.c("f.txt", "v1\n", "O"); sh24.f("push", "-q", "origin", "main");
+    sh24.f("checkout", "-q", "-b", "kside", sh24O); sh24.c("k.txt", "k\n", "K: side"); sh24.f("push", "-q", "origin", "kside");
+    sh24.f("checkout", "-q", "main"); sh24.c("f.txt", "v2 FEATURE\n", "X: feature"); const sh24Z = sh24.c("f.txt", "v1\n", "Z: revert the feature");
+    sh24.f("merge", "-q", "--no-edit", "--no-ff", "kside"); sh24.f("push", "-q", "origin", "main");
+    sh24.f("checkout", "-q", "-b", "work", sh24Z); const sh24T1 = sh24.c("f.txt", "v2 FEATURE\n", "T1: LOCAL re-apply of the reverted feature");
+    sh24.f("merge", "-q", "--no-edit", "--no-ff", "kside"); sh24.f("branch", "-D", "kside");
+    const sh24Pre = reported(sh24.rows(), "work"), sh24Forged = cfgFile("r24-forged-shallow", `${sh24T1}\n`);
+    const sh24Under = withEnvVars({ GIT_SHALLOW_FILE: sh24Forged }, () => ({ rows: sh24.rows(), content: hasLandedByContent("work", R6M, sh24.w), patch: landedByPatchId("work", R6M, sh24.w), bounds: shallowBounds(sh24.w, "refs/heads/work", R6M), scan: hubTransport(sh24.w) }));
+    const sh24RawBounds = execFileSync("git", ["rev-list", "--count", `refs/heads/work..${R6M}`], { cwd: sh24.w, encoding: "utf8", env: FX_ENV }).trim() !== execFileSync("git", ["rev-list", "--count", `refs/heads/work..${R6M}`], { cwd: sh24.w, encoding: "utf8", env: { ...FX_ENV, GIT_SHALLOW_FILE: sh24Forged } }).trim();
+    check("GIT_SHALLOW_FILE in the caller's environment, naming a forged shallow file that lists the branch's own re-apply commit, does not hide the real ancestry: a plain git's walk changes under it (the precondition), the check's gits ignore it, the work stays reported, nothing clears it as landed, and the row names the variable (R24-shallow-env)",
+      sh24Pre && sh24RawBounds && reported(sh24Under.rows, "work") && sh24Under.content === false && sh24Under.patch === false && sh24Under.bounds.off === "" && sh24Under.bounds.exclude.length === 0 &&
+      sh24Under.scan.trusted.some((t) => t === `environment GIT_SHALLOW_FILE=${sh24Forged} (not passed to any git started here)`));
+    const redirectNames = ["GIT_SHALLOW_FILE", "GIT_INDEX_FILE", "GIT_INDEX_VERSION", "GIT_REPLACE_REF_BASE", "GIT_ATTR_SOURCE", "GIT_ATTR_GLOBAL", "GIT_ATTR_SYSTEM", "GIT_ATTR_NOSYSTEM", "GIT_QUARANTINE_PATH",
+      "GIT_TEMPLATE_DIR", "GIT_CEILING_DIRECTORIES", "GIT_DISCOVERY_ACROSS_FILESYSTEM", "GIT_IMPLICIT_WORK_TREE", "GIT_REF_PARANOIA", "GIT_COMMIT_GRAPH_PARANOIA", "SSLKEYLOGFILE"];
+    const tlsNames = ["GIT_PROXY_SSL_CAINFO", "GIT_PROXY_SSL_CAPATH", "GIT_PROXY_SSL_CERT", "GIT_PROXY_SSL_KEY", "GIT_SSL_CERT", "GIT_SSL_KEY", "GIT_SSL_CERT_TYPE", "GIT_SSL_KEY_TYPE", "GIT_SSL_VERSION", "GIT_SSL_CIPHER_LIST", "GIT_HTTP_PROXY_AUTHMETHOD", "CURL_SSL_BACKEND"];
+    const redirectVars = Object.fromEntries(redirectNames.map((k) => [k, `/x/${k}`])), tlsVars = Object.fromEntries(tlsNames.map((k) => [k, `/x/${k}`]));
+    const redGit = withEnvVars({ ...redirectVars, GIT_DIR: "/x/d", GIT_OBJECT_DIRECTORY: "/x/o", GIT_KEEP_ME: "y", GIT_SSL_CERT: "/x/GIT_SSL_CERT" }, () => gitEnv()), redExtra = withEnvVars(redirectVars, () => gitEnv({ GIT_INDEX_FILE: "/own/index", GIT_CEILING_DIRECTORIES: "/own/ceiling" }));
+    const redScan = inCleanEnv(() => hubTransport(txc.w), { ...redirectVars, ...tlsVars });
+    check("every variable that redirects which file or directory git reads state from (shallow, graft, index, replace base, attribute sources, quarantine, template, ceiling, discovery, paranoia) and SSLKEYLOGFILE is dropped from every git started here, the caller's own extra values still apply, and the row names them and the libcurl TLS variables (R24-env-redirect)",
+      redirectNames.every((k) => !(k in redGit)) && !("GIT_DIR" in redGit) && !("GIT_OBJECT_DIRECTORY" in redGit) && redGit.GIT_KEEP_ME === "y" && redGit.GIT_SSL_CERT === "/x/GIT_SSL_CERT" &&
+      redExtra.GIT_INDEX_FILE === "/own/index" && redExtra.GIT_CEILING_DIRECTORIES === "/own/ceiling" && redirectNames.filter((k) => k !== "GIT_INDEX_FILE" && k !== "GIT_CEILING_DIRECTORIES").every((k) => !(k in redExtra)) &&
+      redirectNames.every((k) => redScan.trusted.includes(`environment ${k}=/x/${k} (not passed to any git started here)`)) && tlsNames.every((k) => redScan.trusted.includes(`environment TLS ${k}=/x/${k}`)) && redScan.problems.length === 0);
+    // (2) the children: stand-ins for the gate scripts the check spawns, each running a git of its own
+    const tcFx = mkLikeUe("r24tc");
+    const stub = (body) => `import { execFileSync } from "node:child_process"; execFileSync("git", ["status"], { stdio: "ignore" }); ${body}\n`;
+    for (const [name, body] of [["check-readiness-figure.mjs", `console.log(JSON.stringify({ headline: 90, floor: 80, target: [92, 95], a: 90, b: 90, c: 90 }));`], ["check-decision-vocabulary.mjs", ""], ["check-product-framing.mjs", ""], ["check-raised-hands.mjs", `console.log(JSON.stringify({ open: 0 }));`]]) {
+      mkdirSync(join(tcFx.w, "scripts"), { recursive: true }); writeFileSync(join(tcFx.w, "scripts", name), stub(body));
+    }
+    const tcTrace = Object.fromEntries([...trNames, "SSLKEYLOGFILE"].map((k) => [k, join(root, `r24-${k}.out`)]));
+    const tcRun = wholeScript(tcFx, "r24tc", { ...tcTrace, GIT_CURL_VERBOSE: "1" });
+    check("the children the check spawns (the readiness figure, the doctrine gates, the raised-hands monitor) get the cleaned environment too: with every GIT_TRACE* variable and SSLKEYLOGFILE exported, the whole check, stand-in children included, leaves no trace or key-log file (R24-trace-children)",
+      tcRun.status !== null && /Readiness \(gates outreach\)/.test(tcRun.out) && /Decision vocabulary\s+green/.test(tcRun.out) && /Raised hands\s+none open/.test(tcRun.out) && Object.values(tcTrace).every((f) => readIfPresent(f) === null));
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

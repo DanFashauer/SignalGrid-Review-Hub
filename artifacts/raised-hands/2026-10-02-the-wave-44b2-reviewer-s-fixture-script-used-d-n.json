@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-02-the-wave-44b2-reviewer-s-fixture-script-used-d-n",
+  "raisedAt": "2026-10-02T19:22:33.265Z",
+  "origin": "cloud",
+  "doing": "Running the review waves on the cloud box (44b2, #1378 round 9, 18:2xZ)",
+  "blockedBy": "The wave-44b2 reviewer's fixture script used `d=$(new X)`, so its `cd` ran in a subshell and its git writes landed in the SHARED checkout /home/user/SignalGrid-Review-Hub: ~108 junk commits moved the local branch cloud-work from c5db0b64 to fb31295f and created local branches big, side, feat, orphan, claude/x; HEAD was left on `big`. Nothing was pushed. The brain detached HEAD at c5db0b64 (working tree correct, `git status` clean). Restoring the branch (`git branch -f cloud-work c5db0b64`) was DENIED by the auto-mode classifier (Irreversible Local Destruction) and deleting the five junk branches (`git branch -D`) is blocked by the PreToolUse hook; the lane will not route around either. Until repaired, loop:state and the stop hook report the five junk branches and cloud-work +108 as 'Local work not on the Review Hub' on every turn.",
+  "need": "On the cloud box (any session with Bash on it, or an owner-granted Bash permission rule for this one): `cd /home/user/SignalGrid-Review-Hub && git branch -f cloud-work c5db0b64a64257511412305d62dcd21069f47dbd && git checkout cloud-work && git branch -D big side feat orphan claude/x` — afterwards `git status` is clean and `git diff c5db0b64 HEAD` is empty (pre-state recorded at reflog HEAD@{147}). Alternatively a one-line OK that the lane may run exactly those commands.",
+  "whoCanUnblock": "owner",
+  "domain": "cloud-lane-checkout",
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-08T10:38:33.229Z",
+  "resolvedBy": "cloud",
+  "resolution": "The same container rebuild re-cloned /home/user/SignalGrid-Review-Hub. Measured 2026-10-08T10:28Z: `git branch --list` prints only SignalGrid_Alpha and claude/signalgrid-launch-plan-emxm01, and loop:state prints no 'Local work not on the Review Hub' row. The branches big, side, feat, orphan, claude/x and the +108 cloud-work no longer exist locally; nothing had been pushed."
+}

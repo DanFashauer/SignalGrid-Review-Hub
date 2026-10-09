@@ -246,6 +246,7 @@ const STEPS = [
   { name: "MCP-ecosystem-map self-test (the gate can fail both directions)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs", "--self-test"] },
   { name: "MCP-ecosystem map (every externally-sourced family has an ecosystem row or a stated gap)", cmd: ["node", "scripts/check-mcp-ecosystem-map.mjs"] },
   { name: "Absence-check self-test (a word in a disclaimer is not the thing existing)", cmd: ["node", "scripts/agent/absence-check.mjs", "--self-test"] },
+  { name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)", cmd: ["node", "scripts/check-untracked-ignore.mjs", "--self-test"] },
   // Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push gate
   // (a feature branch legitimately differs from origin); preflight runs only the self-tests,
   // which prove each piece can fail in both directions.
@@ -335,6 +336,7 @@ const STEPS = [
   { name: "Sim-script self-check self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs", "--self-test"] },
   { name: "Sim-script self-check (a queued Mac operation must name a script that runs)", cmd: ["node", "scripts/check-sim-scripts-selfcheck.mjs"] },
   { name: "Sim-request runner self-test (a result awaiting landing on a tick branch is never re-run; refused/unreadable stays pending)", cmd: ["node", "scripts/mac/run-requests.mjs", "--self-test"] },
+  { name: "Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)", cmd: ["bash", "scripts/mac/statusline.sh", "--self-test"] },
   { name: "Swift serious violations self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-swift-serious.mjs", "--self-test"] },
   { name: "Swift serious violations (the error-severity swiftlint rules, without a Swift toolchain)", cmd: ["node", "scripts/check-swift-serious.mjs"] },
   { name: "iOS demo flags (every simulator flag the shell reads is documented, and vice versa)", cmd: ["node", "scripts/check-demo-flags-documented.mjs"] },
@@ -354,6 +356,8 @@ const STEPS = [
   // a new rule fails this until a human classifies it — which is also one more
   // mechanical guard on the breadth freeze.
   { name: "Mutation sharding partitions the registry (the daily sweep loses no target)", cmd: ["node", "scripts/check-mutation-sharding.mjs"] },
+  { name: "Scratch-git hygiene self-test (it can actually fail)", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs", "--self-test"] },
+  { name: "Scratch-repo self-tests spawn git through one hermetic helper", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs"] },
   { name: "Backlog row citations name rows that exist", cmd: ["node", "scripts/check-row-citations.mjs"] },
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
@@ -482,6 +486,7 @@ const STEPS = [
   { name: "Proof: estate-refresh (a scheduled posture re-read re-decides, and fails closed)", cmd: ["pnpm", "run", "proof:estate-refresh"] },
   { name: "Proof: secrets (one read site, fail-closed, and a rotation that actually rotates)", cmd: ["pnpm", "run", "proof:secrets"] },
   { name: "Proof: data-lifecycle (retention, erasure and DSAR leave the audit chain verifiable)", cmd: ["pnpm", "run", "proof:data-lifecycle"] },
+  { name: "DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)", cmd: ["node", "scripts/check-dmh-domains-exhaustive.mjs"] },
   { name: "Figure-guard self-test (the baseline-age report must be able to fail)", cmd: ["node", "scripts/check-proof-figures.mjs", "--self-test"] },
   { name: "Docs\u2194proof FIGURE guard (a measured number must still be one)", cmd: ["node", "scripts/check-proof-figures.mjs"] },
   { name: "Proof-count self-test (a zeroed claim scan fails via the floor)", cmd: ["node", "scripts/check-proof-counts.mjs", "--self-test"] },

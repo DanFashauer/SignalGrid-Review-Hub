@@ -291,6 +291,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
+      - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
+        run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -768,10 +770,20 @@ jobs:
       # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
       - name: "Sim-result provenance self-test (the gate can actually fail)"
         run: node scripts/check-sim-result-provenance.mjs --self-test
-      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
-        run: node scripts/check-sim-result-provenance.mjs
-      # Placed AFTER the provenance gate on purpose: the fetch below brings mainline history into this
-      # shallow checkout, which turns that gate's "unresolvable sha" (reported) into "not an ancestor" (fatal).
+      # Owning runner for commit ancestry: THIS job, on a deepened checkout. The checkout above is
+      # depth 1, where every result sha is unresolvable and the plain gate can only report it; the
+      # unshallow below makes history full, and --require-history then makes an unresolvable or
+      # non-ancestor sha fatal (it refuses to run if the checkout is still shallow). The Mac full-clone
+      # lane (mac-runner-auto, pr-mac-checks) and local preflight run the plain form.
+      - name: Deepen the checkout (sim-result provenance needs full history)
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+      - name: "Sim-result provenance (a checkable commit in this history; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs --require-history
+      # With history now full, the mainline-tip fetch below no longer changes what the provenance gate
+      # sees; it stays after it so the order that was load-bearing before the deepen is unchanged.
       # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
       # 9h turned mainline red until the next push. Stalls WARN here; register integrity
       # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
@@ -868,6 +880,8 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
+        run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.
@@ -974,6 +988,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      - name: "Scratch-git hygiene self-test (it can actually fail)"
+        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+      - name: "Scratch-repo self-tests spawn git through one hermetic helper"
+        run: node scripts/check-scratch-git-hygiene.mjs
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"
@@ -1025,6 +1043,8 @@ jobs:
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
+      - name: DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)
+        run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
         run: node scripts/check-proof-figures.mjs --self-test
       - name: Docs↔proof figure guard

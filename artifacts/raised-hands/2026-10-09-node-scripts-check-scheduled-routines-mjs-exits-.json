@@ -7,6 +7,9 @@
   "need": "owner decision: install the brain-cycle trigger or retire the row with evidence (or extend the bound)",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T02:45:18.307Z",
+  "resolvedBy": "cloud",
+  "resolution": "origin/SignalGrid_Alpha e276446d retired the brain-cycle row (#1480); check-scheduled-routines.mjs exits 0 on the merged head"
 }

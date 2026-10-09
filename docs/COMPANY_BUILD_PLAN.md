@@ -1884,8 +1884,12 @@ earlier — that is the loop working, not a reason to soften the record.
     `fonts.googleapis.com` and `fonts.gstatic.com` on each file.
     RE-COUNTED 2026-09-02: this row said **four** and named `mockup-sandbox`, which
     Ponytail cut 3 (DR-024) deleted — an open row naming a tree that no longer
-    exists reads as work outstanding that is not. Re-derived rather than reasoned:
-    `review-invariants.mjs` prints font vendor references as hit lines, not files.
+    exists reads as work outstanding that is not. Re-derived by grep: `grep -rln
+    "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*` returns
+    `artifacts/signalgrid-desktop/{index.html,dist/public/index.html}` and
+    `artifacts/signalgrid-review/{index.html,dist/public/index.html}` (4 files
+    total, two trees). The self-hosted PWA already carries no remote fonts per PR
+    #1235.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot

@@ -239,6 +239,10 @@ jobs:
       # workspace overrides). Static, so it catches that without a daemon.
       - name: "Container native base (a Dockerfile that cannot build is not a deploy path)"
         run: node scripts/check-container-native-base.mjs
+      - name: "Image build hardening (retried corepack fetch, cache strip kept, grype can fail)"
+        run: node scripts/check-image-build-hardening.mjs
+      - name: "Image build hardening self-test (the gate must be able to fail)"
+        run: node scripts/check-image-build-hardening.mjs --self-test
       - name: "Publication boundary (public repo — nothing arrives unclassified)"
         run: node scripts/check-publication-boundary.mjs
       - name: API collection (a committed request must name a served route)
@@ -284,6 +288,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
+      - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
+        run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -337,6 +343,14 @@ jobs:
         run: node scripts/check-ungated-fetch.mjs --self-test
       - name: "Ungated fetch (the live boundary covers every outbound path)"
         run: node scripts/check-ungated-fetch.mjs
+      - name: Connector-emulator evidence self-test (a planted fetch, GUID or typed claim must fail)
+        run: node scripts/check-connector-emulator-evidence.mjs --self-test
+      - name: "Connector-emulator evidence (the manifest asserts only what a step measured)"
+        run: node scripts/check-connector-emulator-evidence.mjs
+      - name: Scheduled-verification scope self-test (a hand-picked nightly gate must fail)
+        run: node scripts/check-scheduled-verification-scope.mjs --self-test
+      - name: "Scheduled-verification scope (the daily rot check runs preflight whole)"
+        run: node scripts/check-scheduled-verification-scope.mjs
       # Sibling of the gate above: that one asks whether the call was allowed and whether
       # it is bounded, this one asks whether it went out SIGNED.
       - name: Signing-unconditional self-test (the gate must be able to fail)
@@ -462,6 +476,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
+      - name: Scheduled-workflow liveness self-test (the gate must be able to fail)
+        run: node scripts/check-scheduled-workflow-liveness.mjs --self-test
+      - name: Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)
+        run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
 
@@ -498,6 +516,10 @@ jobs:
         run: node scripts/check-sim-requests.mjs
       - name: Simulation request loop self-test (the gate can fail)
         run: node scripts/check-sim-requests.mjs --self-test
+      - name: Resource-scan binding (an intake row citing a scan file is backed by it)
+        run: node scripts/check-resource-scan-binding.mjs
+      - name: Resource-scan binding self-test (the gate can fail)
+        run: node scripts/check-resource-scan-binding.mjs --self-test
       - name: Known-false claims (a claim proven false once is not made twice)
         run: node scripts/check-known-false-claims.mjs
       - name: Known-false-claim self-test (the gate can fail)
@@ -522,6 +544,8 @@ jobs:
         run: node scripts/loop-state.mjs --self-test
       - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
         run: node scripts/check-raised-hands.mjs --self-test
+      - name: Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)
+        run: node scripts/check-raised-hands.mjs
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -574,11 +598,6 @@ jobs:
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
         run: node scripts/check-lane-messages.mjs --self-test
-      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
-      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
-      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
-      - name: Raised hands (stalls warn in CI; register integrity is fatal)
-        run: node scripts/raised-hands.mjs --check --warn
       - name: Raised hands self-test (the gate can fail)
         run: node scripts/raised-hands.mjs --self-test
       # DR-056 §5: the shared objective state is gated where the raised-hands register is.
@@ -752,8 +771,29 @@ jobs:
       # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
       - name: "Sim-result provenance self-test (the gate can actually fail)"
         run: node scripts/check-sim-result-provenance.mjs --self-test
-      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
-        run: node scripts/check-sim-result-provenance.mjs
+      # Owning runner for commit ancestry: THIS job, on a deepened checkout. The checkout above is
+      # depth 1, where every result sha is unresolvable and the plain gate can only report it; the
+      # unshallow below makes history full, and --require-history then makes an unresolvable or
+      # non-ancestor sha fatal (it refuses to run if the checkout is still shallow). The Mac full-clone
+      # lane (mac-runner-auto, pr-mac-checks) and local preflight run the plain form.
+      - name: Deepen the checkout (sim-result provenance needs full history)
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+      - name: "Sim-result provenance (a checkable commit in this history; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs --require-history
+      # With history now full, the mainline-tip fetch below no longer changes what the provenance gate
+      # sees; it stays after it so the order that was load-bearing before the deepen is unchanged.
+      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
+      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
+      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
+      # Stalls are measured at origin/SignalGrid_Alpha, never at this branch's tree (B54b); the
+      # default checkout carries no such ref and the gate fails closed without it.
+      - name: Fetch the mainline tip (raised-hands measures stalls there)
+        run: git fetch --no-tags origin +SignalGrid_Alpha:refs/remotes/origin/SignalGrid_Alpha
+      - name: Raised hands (stalls warn in CI; register integrity is fatal)
+        run: node scripts/raised-hands.mjs --check --warn
       # A generated input validator nobody parses reads exactly like coverage.
       - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
         run: node scripts/check-api-zod-wiring.mjs --self-test
@@ -788,6 +828,12 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08
+      # on) citing one in plain text passes it unchecked.
+      - name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)"
+        run: node scripts/check-stamp-citations.mjs
+      - name: "Stamp-citation self-test (the gate can actually fail)"
+        run: node scripts/check-stamp-citations.mjs --self-test
       # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
       # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
       # documents and read by nothing.
@@ -841,6 +887,8 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
+        run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.
@@ -947,6 +995,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      - name: "Scratch-git hygiene self-test (it can actually fail)"
+        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+      - name: "Scratch-repo self-tests spawn git through one hermetic helper"
+        run: node scripts/check-scratch-git-hygiene.mjs
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"
@@ -998,6 +1050,8 @@ jobs:
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
+      - name: DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)
+        run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
         run: node scripts/check-proof-figures.mjs --self-test
       - name: Docs↔proof figure guard
@@ -1068,6 +1122,9 @@ jobs:
 
       - name: Enterprise auth (OIDC/JWT) proof
         run: pnpm run proof:enterprise-auth
+
+      - name: Fixture IdP (CI gateway-smoke token source) proof
+        run: pnpm run test:fixture-idp
 
       # Real cryptographic material, zero cost: a certified OIDC provider booted
       # in-process mints genuine RS256/DPoP tokens over real HTTP, and every
@@ -1646,34 +1703,38 @@ jobs:
         run: docker compose -f docker-compose.prod.yml exec -T db psql -U sg -d signalgrid -c "ALTER ROLE signalgrid_runtime WITH LOGIN PASSWORD 'ci-smoke'"
 
       - name: "Runbook step 3: recreate the api as the runtime role on the production default profile"
-        # The OIDC values are WELL-FORMED PLACEHOLDERS (a .invalid host cannot
-        # resolve), because gateway readiness now refuses an instance whose
-        # enterprise auth is unconfigured — an IdP-less gateway can
-        # authenticate nobody. This proves the configuration path; no token
-        # can verify against it, and the smoke's demo-bearer-401 assertion
-        # still holds for exactly that reason.
+        # The OIDC values point at the CI-ONLY fixture IdP (scripts/fixture-idp.compose.yml
+        # overlay, scripts/fixture-idp.mjs) on the compose network, so a signed,
+        # mapped token can verify against the packaged api. The overlay is CI
+        # only; docker-compose.prod.yml defaults are unchanged. The tenant map
+        # targets tenant_northwind because a mapped identity must bind to a
+        # tenant the core actually seeds.
         env:
           DATABASE_URL: postgres://signalgrid_runtime:ci-smoke@db:5432/signalgrid
-          OIDC_ISSUER: https://idp.ci-placeholder.invalid
+          OIDC_ISSUER: http://idp:9000
           OIDC_AUDIENCE: signalgrid-ci
-          OIDC_JWKS_URI: https://idp.ci-placeholder.invalid/jwks
-          OIDC_TENANT_MAP: '{"ci-tenant":"tenant-ci"}'
+          OIDC_JWKS_URI: http://idp:9000/jwks
+          OIDC_TENANT_MAP: '{"ci-tenant":"tenant_northwind"}'
           OIDC_ROLE_MAP: '{"ci-role":"operator"}'
-        run: docker compose -f docker-compose.prod.yml up -d --force-recreate api
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml up -d --force-recreate idp api
 
       - name: Wait for the gateway-profile API
         run: curl -sf --retry 60 --retry-delay 2 --retry-all-errors http://localhost:8080/api/healthz
 
-      - name: Smoke-test the gateway fence
+      # The fence assertions (unchanged) plus the positive path: SMOKE_IDP_URL
+      # makes the smoke mint a fixture-signed token and require 200 as the
+      # mapped tenant, with wrong-audience / expired / unmapped-role still 401.
+      - name: Smoke-test the gateway fence and the signed-token positive path
         env:
           BASE_URL: http://localhost:8080
           SMOKE_EXPECT_PROFILE: shared-device-gateway
+          SMOKE_IDP_URL: http://127.0.0.1:59000
         run: node scripts/smoke-stack.mjs
 
       - name: Stack logs (on failure)
         if: failure()
-        run: docker compose -f docker-compose.prod.yml logs --no-color
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml logs --no-color
 
       - name: Teardown
         if: always()
-        run: docker compose -f docker-compose.prod.yml down -v
+        run: docker compose -f docker-compose.prod.yml -f scripts/fixture-idp.compose.yml down -v --remove-orphans

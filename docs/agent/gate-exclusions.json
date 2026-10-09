@@ -1,0 +1,300 @@
+{
+  "schema": "signalgrid-gate-exclusions/v1",
+  "_about": "Every exclusion site in scripts/ (a named EXCLUDE/EXCLUSION/SKIP/IGNORE/EXEMPT constant, or a quoted ':!' / ':(exclude)' git pathspec) with the reason it exists. Derived and enforced by scripts/check-gate-census.mjs: a site with no entry fails, an entry whose site is gone fails. 'finding' marks an exclusion that hides in-scope content and is filed, not yet fixed (plan row 61: the three filed findings were fixed 2026-10-08, so none remains).",
+  "entries": [
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "symbol": "CONTENT_EXCLUSIONS",
+      "reason": "Names the pathspecs below as build output and generated artefacts; docs/ is deliberately NOT in it, and the pathspec entries carry the per-site reasons.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!pnpm-lock.yaml",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!Cargo.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/Cargo.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!package-lock.json",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/package-lock.json",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!yarn.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/yarn.lock",
+      "reason": "Exact lockfile name: dependency names in a lockfile would otherwise corroborate any package-shaped topic. Narrowed from the substring glob '*lock*' (plan row 61); first-party paths containing 'lock' are searched again.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!dist/**",
+      "reason": "dist/ build output restates source and would double-count every hit. Narrowed from the substring glob '*dist*' to dist/ directories only (plan row 61); '**/' needs a parent directory, so the root form has its own entry.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!**/dist/**",
+      "reason": "dist/ build output restates source and would double-count every hit. Narrowed from the substring glob '*dist*' to dist/ directories only (plan row 61); '**/' needs a parent directory, so the root form has its own entry.",
+      "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/agent/absence-check.mjs",
+      "pathspec": ":!*.map",
+      "reason": "Source maps are generated from source the probe already reads, so a hit there is a duplicate, not evidence.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-accuracy-doctrine.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output and .git, plus docs/inspiration/ — imported reference catalogues this repository does not assert (plan row 61); the self-test FATALs if docs/research/ is ever excluded again.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-assist-conformance.mjs",
+      "symbol": "SKIP",
+      "reason": "A directory-walk filter for native build output (build, target, .gradle, .build) and node_modules, which hold compiled or vendored copies rather than the authored Assist ports.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-compose-healthchecks.mjs",
+      "symbol": "EXEMPT",
+      "reason": "One compose service is an overlay on docker-compose.prod.yml's db that only publishes a loopback port for migrations; the base service carries the healthcheck.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-cross-doc-banner-parity.mjs",
+      "symbol": "EXCLUDED",
+      "reason": "Three documents whose job is to name retired documents (agent registries, the intake ledger, the decision records); citing dead surfaces is their content, and the list is printed on every run.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-decision-vocabulary.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output and the orval-generated clients under lib/api-zod/src/generated and lib/api-client-react/src/generated, which are derived from lib/api-spec — the spec the gate already reads directly.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-derived-doc-figures.mjs",
+      "symbol": "SWEEP_EXEMPT",
+      "reason": "Figures correctly owned by another gate (check-status-figures.mjs owns the STATUS.md Inventory line); each entry has its own reason and count, and the self-test refuses one that no longer matches.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-derived-doc-figures.mjs",
+      "symbol": "COUNTER_EXEMPT",
+      "reason": "One historically scoped sentence ('the 28 proof gates that existed when the audit ran') that is true in its own words; the self-test refuses the entry once it stops matching.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-doc-line-counts.mjs",
+      "symbol": "EXEMPT",
+      "reason": "docs/agent/EVIDENCE.md is a dated ledger whose line-count figures record a past read; re-measuring them would rewrite the record.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-durable-path-authorization.mjs",
+      "symbol": "EXEMPT",
+      "reason": "Empty since 2026-08-16 (session routes now authorize); the map stays so a future uncoverable surface must carry a stated reason instead of a silent skip.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-env-doc-readers.mjs",
+      "symbol": "SKIP_PREFIXES",
+      "reason": "Pasted external material (attached_assets/), vendor/, third_party/ and the vendored skill directories are not this repository's instructions; first-party skills stay in scope.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-env-doc-readers.mjs",
+      "pathspec": ":!*.md",
+      "reason": "The reader probe looks for CODE that reads a variable; markdown is the documentation being checked, so a doc naming the variable must not count as its reader.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-env-doc-readers.mjs",
+      "pathspec": ":!docs/**",
+      "reason": "Same reason as ':!*.md' for the non-markdown files under docs/: documentation cannot be the reader that proves a documented variable is live.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-env-doc-readers.mjs",
+      "pathspec": ":!scripts/check-env-doc-readers.mjs",
+      "reason": "The gate's own regexes and fixtures spell process.env.SIGNALGRID_* shapes; counting itself would make every documented variable look read.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-freshness-divergence.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output, coverage, third_party and __fixtures__; fixtures deliberately hold divergent freshness bodies and are not product code.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-gate-census.mjs",
+      "symbol": "EXEMPT",
+      "reason": "Two npm scripts that are not gates (verify:ledger-export is an operator CLI, test:stress a diagnostic with no threshold); each carries its reason in the map.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-guard-registries.mjs",
+      "symbol": "MUTATION_EXCLUDED",
+      "reason": "proof:grant-safety is the mutation harness itself, with no normalizer or evaluator to mutate, and ships its own negative controls.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-ios-policy-defaults.mjs",
+      "symbol": "SKIP_DIRS",
+      "reason": "Xcode build products (build, .build, DerivedData), Pods and .git are generated or vendored, not the authored Swift the policy-default rule governs.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-launch-claims.mjs",
+      "symbol": "CODE_LABEL_EXEMPT",
+      "reason": "Files that must spell the retired label because their job is to detect it; each entry is verified to still contain it, so a stale one is fatal (owner-only gate, not edited here).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-launch-claims.mjs",
+      "symbol": "ENGINEERING_DOCS_EXEMPT",
+      "reason": "Engineering specifications excused from the REPORTED ceiling only, never from the buyer-facing hard gate or the retired-label scans (owner-only gate, not edited here).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-markdown-links.mjs",
+      "symbol": "SKIP_PREFIXES",
+      "reason": "Pasted external material, vendor/, third_party/ and vendored skills carry links written for their upstream layout; first-party skills stay in scope.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-mcp-surface.mjs",
+      "symbol": "EXERCISE_EXEMPT",
+      "reason": "bruno_collection_run builds the api-server and runs the whole collection (~1 min), so it is exercised by the Bruno live-run step in preflight and CI instead of the fast MCP proofs.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-module-init-order.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output, coverage, third_party and .d.ts declaration files, which contain no module-scope calls to order.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-nan-fail-open.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output, .git, coverage, third_party and .next — compiled or vendored copies of source the walk already reads (confirmed by the row 61 sweep).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-package-reachability.mjs",
+      "symbol": "SKIP_DIRS",
+      "reason": "Skips node_modules and build output (dist, build, .next, coverage, .turbo) so reachability is measured over authored imports, not installed or compiled copies.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-performance-figures.mjs",
+      "symbol": "EXEMPT",
+      "reason": "Five documents that quote a figure as history, a partner-facing product limit, the gate's own specification, or a third party's quota; each entry must still absorb a hit.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-posed-bounds.mjs",
+      "symbol": "SKIP",
+      "reason": "Skips build output, coverage, .git and third_party under lib/, which are compiled or vendored copies of the evaluators the gate reads.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-posture-allow-conformance.mjs",
+      "symbol": "SKIP",
+      "reason": "A directory-walk filter for native build output and node_modules, which hold compiled or vendored copies rather than the authored posture-allow ports.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-preflight-ci-parity.mjs",
+      "symbol": "SELF_SKIP_SRC",
+      "reason": "NOT AN EXCLUSION: a self-test fixture holding the source of a self-SKIPPING proof, named for the shape it tests; registered so the census stays exhaustive (gate under open PR #1301, not edited here).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-product-sentence-drift.mjs",
+      "symbol": "EXCLUDED",
+      "reason": "docs/DECISION_RECORDS.md quotes the owner's own words, including product sentences a later DR retired; the exclusion is printed on every run.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-reason-codes.mjs",
+      "symbol": "EXEMPT_NEAR_COLLISIONS",
+      "reason": "One intended near-collision (DEVICE_NON_COMPLIANT vs DEVICE_NONCOMPLIANT): the simulator spelling is mirrored byte-for-byte by the Swift port and the core spelling is on the published /v1 vocabulary.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-remediation-allow-conformance.mjs",
+      "symbol": "SKIP",
+      "reason": "A directory-walk filter for native build output and node_modules, which hold compiled or vendored copies rather than the authored remediation-allow ports.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-send-copy-banner.mjs",
+      "symbol": "SKIP_PREFIXES",
+      "reason": "Pasted external material, vendor/, third_party/ and vendored skills are not send copy this repository authors; first-party documents stay in scope.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-surface-ownership.mjs",
+      "symbol": "EXCLUSIONS",
+      "reason": "Generated records (sim results, live evidence, lane mail, heartbeats, raised hands, run history) need no reader; each rule still names the accountable roster role and fails if it does not resolve.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-test-execution.mjs",
+      "symbol": "SKIP_DIR",
+      "reason": "Skips build output, coverage, .git and .claude/worktrees — other agents' checkouts reached only because the walk reads the filesystem, not the index.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/check-ungated-fetch.mjs",
+      "symbol": "EXEMPT",
+      "reason": "adapters/emit-gate.ts IS the emission gate, so its fetch is the boundary itself rather than a connector reaching a vendor around it.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/publication-boundary.mjs",
+      "symbol": "CONTENT_EXEMPT",
+      "reason": "The boundary's own rule file and the gate running it must contain the forbidden shapes as controls (publication boundary, not edited here).",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/src/signalgrid-core-proof.ts",
+      "symbol": "EXEMPTIONS",
+      "reason": "Named mutation-sweep cells where an ABSENT signal (a tenant with no such connector) legitimately does not tighten the verdict, because no tenant-level expectation of a signal category is modelled; each entry names its exact cells and carries its own reason, and a loosening on any other cell still fails.",
+      "date": "2026-09-30"
+    },
+    {
+      "path": "scripts/lib/untracked-ignore.mjs",
+      "symbol": "IGNORED_UNTRACKED",
+      "reason": "Known scratch and generated paths (virtualenvs, caches, node_modules, dist, build, .DS_Store) do not change which MCP code ran, so they do not mark live evidence dirty. Lockfiles are NOT scratch: an untracked uv.lock or poetry.lock changes resolved dependencies and counts as source (plan row 61; scripts/check-untracked-ignore.mjs --self-test).",
+      "date": "2026-10-08"
+    }
+  ]
+}

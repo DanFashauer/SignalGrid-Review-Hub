@@ -1170,6 +1170,9 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 

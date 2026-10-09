@@ -38,6 +38,30 @@
 //   · no silent stall (DR-054): escalate/broken must name what it is stalled on, and a NEW
 //     escalation id is mailed to the cloud once (--deliver), not every tick and not never.
 //
+// PARKING A ROW THE LOOP CANNOT BUILD (the AWAITING marker):
+//   · a plan row only the owner or a lab can unblock carries, in its STATUS SLOT — the first sentence after
+//     the role/size clause of the row's HEAD PARAGRAPH ("17. **Title** — roles, days. <marker>"; the plan
+//     is hard-wrapped, so the title and the slot often continue on an indented second line, which the read
+//     joins) —
+//       AWAITING OWNER (<blocker>, YYYY-MM-DD)     or     BLOCKED ON LAB (<blocker>, YYYY-MM-DD)
+//     upper-case, the blocker in the parentheses (no nested parentheses), the date the blocker was last
+//     checked. ONLY the slot counts: the same words in history ("no longer AWAITING OWNER", "was … until"),
+//     negated, naming another row, or in a later paragraph describe a blocker, they do not assert one. A
+//     marker with no date or an empty blocker is not a marker; a quoted or code-span marker is being
+//     discussed, not asserted (statusText's spans, blanked with a sentinel so a span between the full stop and
+//     the marker cannot be read through either). Anything the slot does not read plainly is NOT parked.
+//     WRITER CONTRACT: put the marker IN the slot — right after the first full stop that follows the title's
+//     " — " (the role/size clause; a few rows open with a bare status word there) — never appended to the end
+//     of the line, and prove the edit with `rowAwaiting(newRow.text) !== null`. The slot may sit on a later
+//     physical line than the title, so edit the line that holds that full stop.
+//   · a marker dated 0–14 days back (MEASURE_WINDOW_DAYS) PARKS the row: it goes to awaiting[], is never
+//     ranked, and raises its OWN `awaiting-owner-row-<id>` escalation (one per parked row, so a row parked
+//     after the first mail is a new id and is mailed, and each row keeps its own `since`). Checked BEFORE
+//     the re-measured stamp, so a parked row need not be restamped to stay parked.
+//   · a marker older than 14 days, or dated in the future, is an unknown input: the row goes to
+//     unmeasured[] (reason "…re-check the blocker"), not ranked. The blocker must be re-dated to stay parked.
+//   · HALF DONE rows carry work too: derive() ranks plan.partial as well as plan.open.
+//
 // WHAT THIS IS NOT: not a second readiness figure (DR-036's stays what it is, read as a permission),
 // not a model (no LLM is called; a model may propose by editing the prose the ranker reads), not
 // a second Mac routine (it is a step inside the pulse that already fires), not a merger (its output
@@ -128,6 +152,29 @@ const isIso = (s) => typeof s === "string" && !Number.isNaN(Date.parse(s));
 export function rowMeasuredAt(text) {
   const dates = [...statusText(text ?? "").matchAll(/re-?measured\s+(\d{4}-\d{2}-\d{2})/gi)].map((m) => m[1]);
   return dates.length > 0 ? dates.sort().pop() : null;
+}
+/** A row's HEAD PARAGRAPH (up to the first blank line) joined onto one line. The plan is hard-wrapped: most open rows
+ *  wrap their bold title, so the " — role" clause and the status slot start on an indented second line. */
+const headParagraph = (text) => (text ?? "").split(/\n\s*\n/)[0].replace(/\s*\n\s*/g, " ");
+/** The row's STATUS SLOT: head paragraph, title (the first bold span), " — ", the role/size clause (no full stop
+ *  inside), a full stop, then the marker `AWAITING OWNER (<blocker>, YYYY-MM-DD)` or `BLOCKED ON LAB (<blocker>,
+ *  YYYY-MM-DD)`. The slot is where every real row carries it. Anywhere else the words DESCRIBE a blocker ("no
+ *  longer AWAITING OWNER", "was … until", "NOT", another row's marker, a later paragraph) and parking on them hides
+ *  buildable work. */
+const AWAITING_SLOT = /^\d[\w-]*\.\s+\*\*(?:(?!\*\*).)+\*\*\s+—\s+[^.]*\.\s+(AWAITING OWNER|BLOCKED ON LAB)\s*\(([^()]*?),\s*(\d{4}-\d{2}-\d{2})\)/;
+/** Quoted and code spans become ONE non-space sentinel, not statusText's space: `\.\s+` reads straight through a space,
+ *  so `days. "No longer" AWAITING OWNER (...)` or `days. \`NOT\` AWAITING OWNER (...)` still parked the row. A span is
+ *  never a marker and never the gap before one. A private-use code point, so no real prose carries it. Same spans, same
+ *  order as statusText — which marks() and the stamp reader share, so it is not changed here. */
+const SPAN = "\uE000";
+const stripSpans = (s) => s.replace(/`[^`]*`/g, SPAN).replace(/"[^"]*"/g, SPAN).replace(/\u201c[^\u201d]*\u201d/g, SPAN);
+/** The marker in a row's status slot, read with quoted and code spans removed like the stamp — {kind:"owner"|"lab",
+ *  blocker, markedAt} or null. A marker outside the slot, with no date or with an empty blocker is not a marker:
+ *  unknown tightens to "not parked" (the row stays visible and ranked). Pure. */
+export function rowAwaiting(text) {
+  const m = AWAITING_SLOT.exec(stripSpans(headParagraph(text)));
+  const blocker = m?.[2].replaceAll(SPAN, " ").trim();
+  return blocker ? { kind: m[1] === "AWAITING OWNER" ? "owner" : "lab", blocker, markedAt: m[3] } : null;
 }
 export const roleNameRe = (id) => new RegExp(`(?<![\\w-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`);
 
@@ -225,7 +272,7 @@ export function evaluate({ objective, probes }) {
 /** Parse one ranked-queue row into { id, title, roles[] } — head line first, whole text as fallback. Pure. */
 export function parseQueueRow(row, roleIds) {
   const head = (row.text ?? "").split("\n")[0];
-  const title = (head.match(/^\d[\w-]*\.\s+\*\*(.+?)\*\*/) || [, ""])[1].trim();
+  const title = (headParagraph(row.text).match(/^\d[\w-]*\.\s+\*\*(.+?)\*\*/) || [, ""])[1].trim(); // a wrapped title ends on line 2
   const inHead = roleIds.filter((id) => roleNameRe(id).test(head));
   const positioned = (inHead.length > 0 ? inHead : roleIds.filter((id) => roleNameRe(id).test(row.text ?? "")))
     .map((id) => ({ id, at: (inHead.length > 0 ? head : row.text).search(roleNameRe(id)) }))
@@ -236,12 +283,12 @@ export function parseQueueRow(row, roleIds) {
 
 /**
  * rank({rows, openIds, roster, roleIds, evaluation, priorState, envKeys, nowIso})
- *   → { tasks[], needsExecutor[], escalations[], queue[] }
+ *   → { tasks[], needsExecutor[], unmeasured[], awaiting[], escalations[], queue[] }
  * Pure. Document order IS the ranking (the human-committed "Blocking items first" order); this
  * function resolves executors and closes the code edge, it never re-judges priority.
  */
 export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evaluation, priorState = null, envKeys = new Set(), nowIso, simOps = SIM_OPERATIONS, table = TASK_TABLE, objective = null }) {
-  const tasks = [], needsExecutor = [], unmeasured = [], escalations = [], queue = [];
+  const tasks = [], needsExecutor = [], unmeasured = [], awaiting = [], escalations = [], queue = [];
   const priorSince = new Map((priorState?.escalations ?? []).map((e) => [e.id, e.since]));
   const priorFirst = new Map((priorState?.tasks ?? []).map((t) => [t.rowId, t.firstRankedAt]));
   const esc = (id, clears, asks) => escalations.push({ id, clears, asks, since: isIso(priorSince.get(id)) ? priorSince.get(id) : nowIso });
@@ -250,7 +297,17 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
   for (const row of rows) {
     if (!open.has(row.id)) continue;
     const q = parseQueueRow(row, roleIds);
-    // Stamp first: a row nobody measured against the tree within the window is not ranked, whoever owns it.
+    // Marker first: a row only the owner or a lab can unblock is parked and named, never ranked — the
+    // loop cannot build it, so ranking it stalls the brain on it. A marker nobody re-checked in the
+    // window (or dated in the future) is an UNKNOWN input, and unknown tightens: named, not ranked.
+    const mark = rowAwaiting(row.text);
+    if (mark !== null) {
+      const markH = hoursBetween(mark.markedAt, nowIso);
+      if (markH < 0 || markH > MEASURE_WINDOW_DAYS * 24) unmeasured.push({ rowId: q.id, title: q.title, measuredAt: rowMeasuredAt(row.text), reason: markH < 0 ? `${mark.kind} marker ${mark.markedAt} is in the future` : `${mark.kind} marker ${mark.markedAt} is older than ${MEASURE_WINDOW_DAYS} days - re-check the blocker` });
+      else awaiting.push({ rowId: q.id, title: q.title, kind: mark.kind, blocker: mark.blocker, markedAt: mark.markedAt });
+      continue;
+    }
+    // Stamp next: a row nobody measured against the tree within the window is not ranked, whoever owns it.
     const measuredAt = rowMeasuredAt(row.text);
     const ageH = measuredAt === null ? Infinity : hoursBetween(measuredAt, nowIso);
     if (measuredAt === null || ageH < 0 || ageH > MEASURE_WINDOW_DAYS * 24) {
@@ -268,7 +325,12 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
     }
   }
   if (unmeasured.length > 0) {
-    esc("plan-rows-unmeasured", "cloud", `${unmeasured.length} open row(s) in ${PLAN_REL} carry no \`re-measured YYYY-MM-DD\` stamp within ${MEASURE_WINDOW_DAYS} days and were ranked from nothing — a row nobody measured against the tree is an unknown input: ${unmeasured.map((u) => u.rowId).join(", ")}. Measure each against the tree; close it, or restamp it with what was measured`);
+    esc("plan-rows-unmeasured", "cloud", `${unmeasured.length} open row(s) in ${PLAN_REL} carry no \`re-measured YYYY-MM-DD\` stamp within ${MEASURE_WINDOW_DAYS} days and were ranked from nothing — a row nobody measured against the tree is an unknown input: ${unmeasured.map((u) => u.rowId).join(", ")}. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)`);
+  }
+  // One escalation PER parked row: the mail-once ledger and the owner hand's `since` both key on the id, so a
+  // constant id mailed only the first parked row and a set-keyed id would reset every older row's age.
+  for (const a of awaiting) {
+    esc(`awaiting-owner-row-${a.rowId}`, "owner", `row ${a.rowId} ("${a.title}") in ${PLAN_REL} is parked, not ranked, because only the owner or a lab can unblock it: ${a.kind} (${a.blocker}), checked ${a.markedAt}. Clear the blocker, or remove its marker once cleared`);
   }
   if (tasks[0] && priorState?.tasks?.[0]?.rowId === tasks[0].rowId && hoursBetween(tasks[0].firstRankedAt, nowIso) > STALLED_TOP_DAYS * 24) {
     esc("stalled-top-task", "cloud", `row ${tasks[0].rowId} ("${tasks[0].title}") has been ranked #1 for over ${STALLED_TOP_DAYS} days with no change in ${PLAN_REL} — build it, re-rank it, or record why it waits`);
@@ -288,7 +350,7 @@ export function rank({ rows = [], openIds = [], roster = {}, roleIds = [], evalu
     if (missing.length > 0) { esc(`${c.id}-op-unrunnable`, "mac", `sim-operation "${entry.op}" needs ${missing.join(", ")} in the tick's environment and the tick does not carry it — export it in scripts/mac/lane-tick.sh (guarded on the sibling checkout existing); not queued, because a request nobody can service sits PENDING forever`); continue; }
     if (queue.length === 0) queue.push({ criterionId: c.id, op: entry.op, clears: entry.clears, id: `${REQUEST_PREFIX}${c.id}-${String(nowIso).slice(0, 10)}` });
   }
-  return { tasks, needsExecutor, unmeasured, escalations, queue };
+  return { tasks, needsExecutor, unmeasured, awaiting, escalations, queue };
 }
 
 /** The decision, and nothing else — what the content address covers. Pure. */
@@ -300,6 +362,7 @@ export function decisionAddress(state) {
     needsExecutor: (state.needsExecutor ?? []).map((n) => n.rowId),
     // Only when present: a state derived before the field existed keeps the address it was written with.
     ...(Array.isArray(state.unmeasured) && state.unmeasured.length > 0 ? { unmeasured: state.unmeasured.map((u) => u.rowId) } : {}),
+    ...(Array.isArray(state.awaiting) && state.awaiting.length > 0 ? { awaiting: state.awaiting.map((a) => a.rowId) } : {}),
     escalations: (state.escalations ?? []).map((e) => ({ id: e.id, clears: e.clears })),
     queue: (state.queue ?? []).map((q) => q.id),
   }));
@@ -309,8 +372,8 @@ export function decisionAddress(state) {
 export function finalize(evaluation, ranked) {
   let verdict = evaluation.verdict;
   const reasons = [];
-  if (verdict !== "goal_met" && ranked.tasks.length === 0 && ranked.needsExecutor.length === 0 && (ranked.unmeasured?.length ?? 0) === 0 && evaluation.probeErrors.length === 0) {
-    reasons.push("no task, no unresolvable row, no unmeasured row and no probe error — an evaluator that produced no work and no reason is broken, whatever the plan said");
+  if (verdict !== "goal_met" && ranked.tasks.length === 0 && ranked.needsExecutor.length === 0 && (ranked.unmeasured?.length ?? 0) === 0 && (ranked.awaiting?.length ?? 0) === 0 && evaluation.probeErrors.length === 0) {
+    reasons.push("no task, no unresolvable row, no unmeasured row, no awaiting row and no probe error — an evaluator that produced no work and no reason is broken, whatever the plan said");
     verdict = "broken";
   }
   if ((verdict === "escalate" || verdict === "broken") && ranked.escalations.length === 0 && evaluation.probeErrors.length === 0 && reasons.length === 0) {
@@ -410,8 +473,8 @@ export function collect() {
 export function derive(c) {
   const evaluation = evaluate({ objective: c.objective, probes: c.probes });
   const ranked = evaluation.verdict === "broken"
-    ? { tasks: [], needsExecutor: [], escalations: [], queue: [] }
-    : rank({ rows: c.rows, openIds: c.probes.plan?.open ?? [], roster: c.roster, roleIds: c.roleIds, evaluation, priorState: c.priorState, envKeys: c.envKeys, nowIso: c.nowIso, objective: c.objective });
+    ? { tasks: [], needsExecutor: [], unmeasured: [], awaiting: [], escalations: [], queue: [] }
+    : rank({ rows: c.rows, openIds: [...(c.probes.plan?.open ?? []), ...(c.probes.plan?.partial ?? [])], roster: c.roster, roleIds: c.roleIds, evaluation, priorState: c.priorState, envKeys: c.envKeys, nowIso: c.nowIso, objective: c.objective });
   const fin = finalize(evaluation, ranked);
   const state = {
     schemaVersion: 1,
@@ -419,9 +482,9 @@ export function derive(c) {
     objectiveId: c.objective?.id ?? null, objectiveSha: c.objectiveSha, rosterSha: c.rosterSha,
     verdict: fin.verdict, brokenReasons: fin.brokenReasons,
     criteria: evaluation.criteria, unmet: evaluation.unmet, unknown: evaluation.unknown,
-    tasks: ranked.tasks, needsExecutor: ranked.needsExecutor, unmeasured: ranked.unmeasured, escalations: ranked.escalations, queue: ranked.queue,
+    tasks: ranked.tasks, needsExecutor: ranked.needsExecutor, unmeasured: ranked.unmeasured, awaiting: ranked.awaiting, escalations: ranked.escalations, queue: ranked.queue,
     probeErrors: evaluation.probeErrors,
-    report: { ...c.report, needsExecutorCount: ranked.needsExecutor.length, unmeasuredCount: ranked.unmeasured.length, openRows: c.probes.plan?.open?.length ?? null },
+    report: { ...c.report, needsExecutorCount: ranked.needsExecutor.length, unmeasuredCount: ranked.unmeasured.length, awaitingCount: ranked.awaiting.length, openRows: c.probes.plan?.open?.length ?? null, partialRows: c.probes.plan?.partial?.length ?? null },
     staleAfterHours: c.staleAfterHours,
     derivedAt: c.nowIso, derivedAtCommit: c.git.head, workingTreeCleanAtEntry: c.git.workingTreeCleanAtEntry,
   };
@@ -533,9 +596,10 @@ export function checkState(state, { objectiveShaNow, rosterShaNow, headIsAncesto
     else if (Number.isFinite(nowMs) && ms > nowMs + 5 * 60e3) fatal.push(`date ${d} is in the future`);
   }
   const unmeasured = Array.isArray(state.unmeasured) ? state.unmeasured : []; // absent on a state derived before the field existed
+  const awaiting = Array.isArray(state.awaiting) ? state.awaiting : []; // likewise
   if (state.verdict === "replan" && state.tasks.length === 0) fatal.push("verdict replan with no task is a contradiction");
-  if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && unmeasured.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no unmeasured row, no probe error — a broken resolver, never a finished company");
-  if (unmeasured.length > 0) reported.push(`${unmeasured.length} open plan row(s) ranked from nothing — no re-measured stamp within ${MEASURE_WINDOW_DAYS} days: ${unmeasured.map((u) => u.rowId).join(", ")}`);
+  if (state.verdict !== "goal_met" && state.tasks.length === 0 && state.needsExecutor.length === 0 && unmeasured.length === 0 && awaiting.length === 0 && state.probeErrors.length === 0) fatal.push("no task, no unresolvable row, no unmeasured row, no awaiting row, no probe error — a broken resolver, never a finished company");
+  if (unmeasured.length > 0) reported.push(`${unmeasured.length} open plan row(s) not ranked — stamp or marker missing, older than ${MEASURE_WINDOW_DAYS} days or future-dated: ${unmeasured.map((u) => u.rowId).join(", ")}`);
   if ((state.verdict === "escalate" || state.verdict === "broken") && state.escalations.length === 0 && state.probeErrors.length === 0 && !(state.brokenReasons?.length > 0)) fatal.push("a stall that names nothing it is stalled on (DR-054)");
   if (decisionAddress(state) !== state.decisionAddress) fatal.push("decisionAddress does not match the decision content — the file was hand-edited");
   const objectiveMoved = objectiveShaNow !== state.objectiveSha;
@@ -569,7 +633,7 @@ function runCheck() {
   console.log(`objective-loop --check over ${STATE_REL}`);
   for (const r of reported) console.log(`  REPORTED — ${r}`);
   for (const f of fatal) console.log(`  ✗ ${f}`);
-  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${(state.unmeasured ?? []).length} unmeasured, ${state.escalations.length} escalation(s); decided ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h ago; reader verdict: ${readVerdict(state, { heartbeat, nowIso }).verdict}`);
+  if (state) console.log(`  verdict ${state.verdict}; ${state.tasks.length} task(s), ${state.needsExecutor.length} need an executor, ${(state.unmeasured ?? []).length} unmeasured, ${(state.awaiting ?? []).length} awaiting, ${state.escalations.length} escalation(s); decided ${hoursBetween(state.derivedAt, nowIso).toFixed(1)}h ago; reader verdict: ${readVerdict(state, { heartbeat, nowIso }).verdict}`);
   console.log(fatal.length ? `objective-loop --check FAILED: ${fatal.length} problem(s).` : "objective-loop --check passed — the committed state is well-formed, derived against the declared objective, every ranked task has a real executor, and nothing stalls silently.");
   return fatal.length ? 1 : 0;
 }
@@ -656,6 +720,81 @@ function selfTest() {
   t("stamp: with EVERY open row refused, tasks is empty and finalize is not broken — the refused rows are the named reason", allStale.tasks.length === 0 && allStale.unmeasured.length === 2 && finalize({ ...e1, probeErrors: [] }, allStale).verdict === "escalate");
   t("stamp: with no open row at all, finalize is still broken (the unmeasured list does not excuse a vacuous plan)", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], unmeasured: [], escalations: [], queue: [] }).verdict === "broken");
   t("stamp: the window is declared in code, not read from anywhere", MEASURE_WINDOW_DAYS === 14);
+  // (f3) the AWAITING marker: a row only the owner or a lab can unblock is PARKED, named, and never ranked
+  const arow = (id, marker) => ({ id, text: `${id}. **Parked** — web-engineer, days. ${marker} re-measured 2026-09-22.` }); // marker in the status slot
+  const rk = (rs) => rank({ rows: rs, openIds: rs.map((r) => r.id), roster, roleIds, evaluation: e1, envKeys: new Set(), nowIso: T0, simOps: ops, objective: goodObjective() });
+  const escAsks = (r) => r.escalations.filter((e) => /^awaiting-owner-row-/.test(e.id));
+  const named = (s, id) => new RegExp(`(?<![\\w#-])${id}(?![\\w-])`).test(s);
+  const aOwner = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)")]);
+  t("awaiting: a fresh-stamped, real-executor row marked AWAITING OWNER is parked, not ranked", !aOwner.tasks.some((x) => x.rowId === "9") && (aOwner.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "owner" && x.blocker === "#9" && x.markedAt === "2026-09-22"));
+  t("awaiting: a parked row raises its own awaiting-owner-row-<id> escalation, clearing owner, whose ask names the row and the blocker", escAsks(aOwner).length === 1 && escAsks(aOwner)[0].id === "awaiting-owner-row-9" && escAsks(aOwner)[0].clears === "owner" && named(escAsks(aOwner)[0].asks, "9") && escAsks(aOwner)[0].asks.includes("#9"));
+  const aLab = rk([arow("9", "BLOCKED ON LAB (ITSM lab, 2026-09-22)")]);
+  t("awaiting: BLOCKED ON LAB gives kind lab, and still escalates once to the owner", (aLab.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "lab" && x.blocker === "ITSM lab") && escAsks(aLab).length === 1 && escAsks(aLab)[0].clears === "owner");
+  const aOld = rk([arow("9", "AWAITING OWNER (#9, 2026-09-09)")]);
+  t("awaiting: a marker dated 15 days before the instant is NOT ranked and is named unmeasured, with its reason", !aOld.tasks.some((x) => x.rowId === "9") && (aOld.awaiting ?? []).length === 0 && aOld.unmeasured.some((u) => u.rowId === "9" && /marker .* older than 14 days/.test(u.reason)));
+  const bare = (extra) => ({ id: "9", text: `9. **Parked** — web-engineer, days. AWAITING OWNER (#9, 2026-09-22).${extra}` }); // no fresh stamp: the marker alone must park it
+  t("awaiting: the marker is checked BEFORE the stamp — a parked row with NO stamp is awaiting, not unmeasured", (rk([bare("")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare("")]).unmeasured.length === 0);
+  t("awaiting: the marker is checked BEFORE the stamp — a parked row with a STALE stamp stays awaiting, not unmeasured", (rk([bare(" re-measured 2026-08-01.")]).awaiting ?? []).some((x) => x.rowId === "9") && rk([bare(" re-measured 2026-08-01.")]).unmeasured.length === 0);
+  const aFuture = rk([arow("9", "AWAITING OWNER (#9, 2026-10-01)")]);
+  t("awaiting: a future-dated marker is NOT ranked and is named unmeasured as future", !aFuture.tasks.some((x) => x.rowId === "9") && (aFuture.awaiting ?? []).length === 0 && aFuture.unmeasured.some((u) => u.rowId === "9" && /future/.test(u.reason)));
+  t("awaiting: a marker inside backticks or quotes is being discussed, not asserted — the row is ranked", ["`AWAITING OWNER (#9, 2026-09-22)`", "\"AWAITING OWNER (#9, 2026-09-22)\""].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
+  t("awaiting: a marker with no date, or an empty blocker, is not a marker — the row is ranked", ["AWAITING OWNER (#9)", "AWAITING OWNER (, 2026-09-22)", "AWAITING OWNER (2026-09-22)"].every((m) => { const r = rk([arow("9", m)]); return r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0; }));
+  const aAll = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)"), arow("10", "BLOCKED ON LAB (Keycloak lab, 2026-09-21)")]);
+  t("awaiting: EVERY parked row is escalated, each under its own id with its kind and blocker", escAsks(aAll).length === 2 && escAsks(aAll).some((e) => e.id === "awaiting-owner-row-9" && e.asks.includes("owner (#9)")) && escAsks(aAll).some((e) => e.id === "awaiting-owner-row-10" && e.asks.includes("lab (Keycloak lab)")));
+  t("awaiting: with EVERY open row awaiting, tasks is empty and the verdict is escalate, not broken — the parked rows are the named reason", aAll.tasks.length === 0 && (aAll.awaiting ?? []).length === 2 && finalize({ ...e1, probeErrors: [] }, aAll).verdict === "escalate");
+  t("awaiting: an awaiting row is not double-counted as unmeasured or needsExecutor", aAll.unmeasured.length === 0 && aAll.needsExecutor.length === 0);
+  const head = (s) => `9. **Parked** — web-engineer, days. ${s}`;
+  t("awaiting: rowAwaiting reads the status slot only — a second marker after it never overrides it, whatever the kind or date", rowAwaiting(head("AWAITING OWNER (a, 2026-09-01). BLOCKED ON LAB (b, 2026-09-20)"))?.kind === "owner" && rowAwaiting(head("BLOCKED ON LAB (b, 2026-09-20). AWAITING OWNER (a, 2026-09-01)"))?.markedAt === "2026-09-20");
+  t("awaiting: rowAwaiting is a whole upper-case token in the slot, and absent text reads null (control: the same slot with the real marker reads)", !!rowAwaiting(head("AWAITING OWNER (x, 2026-09-22)")) && rowAwaiting(head("UNAWAITING OWNER (x, 2026-09-22)")) === null && rowAwaiting(head("awaiting owner (x, 2026-09-22)")) === null && rowAwaiting(undefined) === null);
+  t("awaiting: a marker with no row head to anchor it is not a marker", rowAwaiting("AWAITING OWNER (x, 2026-09-22)") === null);
+  // (f3b) the marker is a row ATTRIBUTE read from the status slot (the first sentence after the role/size clause on the
+  // head line), not a phrase found anywhere in the row's prose: history, negation, another row's marker and a later
+  // paragraph all describe something other than THIS row's blocker, and parking on them hides buildable work.
+  const stamped = " re-measured 2026-09-22.";
+  const slot = (s) => ({ id: "9", text: `9. **Parked** — web-engineer, days. ${s}${stamped}` });
+  const ranked9 = (r) => r.tasks.some((x) => x.rowId === "9") && (r.awaiting ?? []).length === 0 && r.unmeasured.length === 0;
+  t("awaiting: history prose is not a marker — \"no longer\", \"was … until\" and \"never\" leave the row ranked", [
+    "It is no longer AWAITING OWNER (#9, 2026-09-22), the owner ruled.", "No longer AWAITING OWNER (#9, 2026-09-22).",
+    "Was AWAITING OWNER (#9, 2026-09-22) until 2026-09-25.", "It never was AWAITING OWNER (#9, 2026-09-22).",
+  ].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: a negated marker is not a marker — NOT AWAITING OWNER leaves the row ranked", ["NOT AWAITING OWNER (#9, 2026-09-22).", "Row 9 is NOT BLOCKED ON LAB (Keycloak lab, 2026-09-22)."].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: ANOTHER row's marker named in this row's prose does not park this row", ["Row 18 is AWAITING OWNER (#1118, 2026-09-22).", "Unlike row 18, which is AWAITING OWNER (#1118, 2026-09-22), this one is buildable."].every((m) => ranked9(rk([slot(m)]))));
+  t("awaiting: a marker in a LATER paragraph or a bullet (not the slot) does not park the row", [
+    { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n\nAWAITING OWNER (#9, 2026-09-22)` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.\n\nAWAITING OWNER (#9, 2026-09-22)${stamped}` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.${stamped}\n    - AWAITING OWNER (#9, 2026-09-22)` },
+    { id: "9", text: `9. **Parked** — web-engineer, days.\n    - AWAITING OWNER (#9, 2026-09-22)${stamped}` },
+  ].every((row) => ranked9(rk([row]))));
+  // The plan is hard-wrapped: the head paragraph is several physical lines, and the slot is wherever the role clause ends.
+  const wrapped = (tail) => ({ id: "9", text: `9. **iOS: \`AppWorkflows.swift\` is missing the scoped step-up release the TS planner\n    has, so one gesture releases every held action.** — OPEN, web-engineer. ${tail}${stamped}\n    Body prose on a later line.` });
+  const wrappedPark = rk([wrapped("AWAITING OWNER (#1121 ruling, 2026-09-22).")]);
+  t("awaiting: a row whose bold title WRAPS onto a second line parks from the slot there (row 101's shape), and its escalation names the whole title", (wrappedPark.awaiting ?? []).some((x) => x.rowId === "9" && x.kind === "owner" && x.blocker === "#1121 ruling" && x.title.startsWith("iOS:") && x.title.endsWith("every held action.")) && !wrappedPark.tasks.some((x) => x.rowId === "9") && (wrappedPark.escalations.find((e) => e.id === "awaiting-owner-row-9")?.asks ?? "").includes("every held action."));
+  t("awaiting: the slot may begin the SECOND physical line of an unwrapped title (the role clause ends line 1)", (rk([{ id: "9", text: `9. **Parked** — web-engineer, days.\n    AWAITING OWNER (#9, 2026-09-22)${stamped}` }]).awaiting ?? []).some((x) => x.rowId === "9"));
+  t("awaiting: a wrapped-title row is not parked by history, negation or a later-line marker either (control: the same shape parks above)", ["It is no longer AWAITING OWNER (#9, 2026-09-22).", "NOT AWAITING OWNER (#9, 2026-09-22).", "Row 18 is AWAITING OWNER (#1118, 2026-09-22)."].every((m) => ranked9(rk([wrapped(m)]))) && ranked9(rk([{ ...wrapped(""), text: `${wrapped("").text}\n    AWAITING OWNER (#9, 2026-09-22)` }])));
+  t("awaiting: a wrapped title keeps a title in the ranked tasks too (it was \"\" for every wrapped row)", rk([wrapped("")]).tasks.some((x) => x.rowId === "9" && x.title.startsWith("iOS:")));
+  t("awaiting: a marker later on the head line (not in the status slot) does not park the row", ranked9(rk([{ id: "9", text: `9. **Parked** — web-engineer, days.${stamped} Body prose. AWAITING OWNER (#9, 2026-09-22)` }])));
+  // A quoted or code span is blanked to a SENTINEL, not a space: `\.\s+` reads straight through a space, so a span between
+  // the slot's full stop and the marker (a negation or history word, quoted) used to leave the marker looking like the slot.
+  t("awaiting: a quoted or code-span word between the full stop and the marker does not open the slot — 'No longer', `NOT` and a smart-quoted span leave the row ranked", [
+    '"No longer" AWAITING OWNER (x, 2026-09-22).', "`NOT` AWAITING OWNER (x, 2026-09-22).", "“No longer” AWAITING OWNER (x, 2026-09-22).",
+  ].every((m) => rowAwaiting(head(m)) === null && ranked9(rk([slot(m)]))));
+  // The control: the same stripping must still let a span sit INSIDE the role clause (a full stop in it) without moving the slot.
+  const spanClause = { id: "9", text: `9. **T** — web-engineer (\`a.b\`), days. AWAITING OWNER (x, 2026-09-22).${stamped}` };
+  t("awaiting: a code span with a full stop INSIDE the role clause does not move the slot — the marker after the clause still parks (fails if the stripping is removed)", rowAwaiting(spanClause.text)?.blocker === "x" && (rk([spanClause]).awaiting ?? []).some((x) => x.rowId === "9"));
+  t("awaiting: a span inside the blocker is blanked in the owner-facing blocker, never shown as the sentinel; a blocker that is only a span is not a marker", /^the\s+ruling$/.test(rowAwaiting(head("AWAITING OWNER (the `foo` ruling, 2026-09-22).")).blocker) && rowAwaiting(head("AWAITING OWNER (`foo`, 2026-09-22).")) === null);
+  const realShape = rk([{ id: "17", text: "17. **Run the three shifts** — itsm-ops-domain, web-engineer, days. BLOCKED ON LAB (ITSM lab for the seven vendor adapters; shift-context live source, 2026-09-22). RE-MEASURED 2026-09-26 (still open): the offline half landed. Also: more." }]);
+  t("awaiting: the real plan shape (many roles, marker first, a long RE-MEASURED paragraph after it) parks", (realShape.awaiting ?? []).some((x) => x.rowId === "17" && x.kind === "lab" && x.blocker === "ITSM lab for the seven vendor adapters; shift-context live source") && realShape.tasks.length === 0);
+  const awaitingId = (r, id) => r.escalations.find((e) => e.id === `awaiting-owner-row-${id}`);
+  const aNow = rk([arow("9", "AWAITING OWNER (#9, 2026-09-22)")]);
+  const aLater = rank({ rows: [arow("9", "AWAITING OWNER (#9, 2026-09-22)"), arow("10", "BLOCKED ON LAB (Keycloak lab, 2026-09-21)")], openIds: ["9", "10"], roster, roleIds, evaluation: e1, priorState: { escalations: aNow.escalations, tasks: [] }, envKeys: new Set(), nowIso: T1, simOps: ops, objective: goodObjective() });
+  t("awaiting: each parked row has its OWN escalation id (awaiting-owner-row-<id>), so a row parked after the first mail is a NEW id and is mailed", !!awaitingId(aNow, "9") && !!awaitingId(aLater, "10") && awaitingId(aNow, "10") === undefined && aLater.escalations.filter((e) => /^awaiting-owner-row-/.test(e.id)).length === 2);
+  t("awaiting: a row parked earlier keeps its own `since` when a later row parks (the 3×48h clock is per row, not reset by the set changing)", awaitingId(aLater, "9")?.since === T0 && awaitingId(aLater, "10")?.since === T1);
+  t("awaiting: each row's ask names ITS row, kind and blocker and no other parked row", named(awaitingId(aLater, "10")?.asks ?? "", "10") && (awaitingId(aLater, "10")?.asks ?? "").includes("Keycloak lab") && !named(awaitingId(aLater, "10")?.asks ?? "", "9") && awaitingId(aLater, "10")?.clears === "owner");
+  // (f4) PARTIAL rows still carry work: derive() must rank them, not only the OPEN bucket
+  const derivable = (p) => ({ objective: goodObjective(), objectiveSha: "o", rosterSha: "r", roster, roleIds, rows: [{ id: "11", text: "11. **Half built** — web-engineer, days. HALF DONE. re-measured 2026-09-22." }], priorState: null, nowIso: T0, staleAfterHours: 3, heartbeat: null, probes: probes({ plan: { problems: [], open: [], partial: [], closed: [], ...p } }), report: {}, git: { head: null, workingTreeCleanAtEntry: true }, envKeys: new Set() });
+  t("partial: a HALF DONE row with a fresh stamp and a real executor is ranked by derive()", derive(derivable({ partial: ["11"] })).tasks.some((x) => x.rowId === "11"));
+  t("derive: a null objective reads broken and does not throw (the broken branch carries every list finalize reads)", (() => { try { return derive({ ...derivable({}), objective: null }).verdict === "broken"; } catch { return false; } })());
+  t("partial: a CLOSED row is still not ranked (only open and partial carry work)", !derive(derivable({ closed: ["11"] })).tasks.some((x) => x.rowId === "11"));
   // (g) TASK_TABLE ops exist and their argv writes what the criterion reads
   for (const [cid, entry] of Object.entries(TASK_TABLE)) {
     const op = SIM_OPERATIONS[entry.op];
@@ -684,6 +823,8 @@ function selfTest() {
   t("address: a changed staleAfterHours DOES change the address (it is a decision about the decision's lifetime)", decisionAddress(mk({})) !== decisionAddress(mk({ staleAfterHours: 1e9 })));
   t("address: an absent or EMPTY unmeasured list leaves the address as it was (a state derived before the field passes unchanged)", decisionAddress(mk({})) === decisionAddress(mk({ unmeasured: [] })));
   t("address: a changed unmeasured set DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ unmeasured: [{ rowId: "8" }] })));
+  t("address: an absent or EMPTY awaiting list leaves the address as it was (a state derived before the field passes unchanged)", decisionAddress(mk({})) === decisionAddress(mk({ awaiting: [] })));
+  t("address: a non-empty awaiting set DOES change the address", decisionAddress(mk({})) !== decisionAddress(mk({ awaiting: [{ rowId: "9" }] })));
   // (l)/(m) finalize: non-vacuity and no silent stall
   t("finalize: escalate with no task, no needsExecutor and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: [], needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
   t("finalize: escalate with nothing to escalate and no probe error → broken", finalize({ ...e1, probeErrors: [] }, { tasks: r1.tasks, needsExecutor: [], escalations: [], queue: [] }).verdict === "broken");
@@ -720,8 +861,13 @@ function selfTest() {
   t("check: staleAfterHours drifting from the registry row is REPORTED", chk(good, { registryToleranceNow: 5 }).reported.some((r) => /cadenceToleranceHours/.test(r)));
   const onlyUnmeasured = { ...good, tasks: [], needsExecutor: [], unmeasured: [{ rowId: "8", title: "No stamp", measuredAt: null, reason: "no re-measured stamp" }] };
   onlyUnmeasured.decisionAddress = decisionAddress(onlyUnmeasured);
-  t("check: a state whose only work is refused rows passes, and the refusal is REPORTED with the row ids", chk(onlyUnmeasured).fatal.length === 0 && chk(onlyUnmeasured).reported.some((r) => /ranked from nothing.*\b8\b/.test(r)));
+  t("check: a state whose only work is refused rows passes, and the refusal is REPORTED with the row ids", chk(onlyUnmeasured).fatal.length === 0 && chk(onlyUnmeasured).reported.some((r) => /not ranked.*\b8\b/.test(r)));
   t("check: the same state with the unmeasured list emptied is FATAL (no task, no row, no reason)", chk({ ...onlyUnmeasured, unmeasured: [], decisionAddress: decisionAddress({ ...onlyUnmeasured, unmeasured: [] }) }).fatal.some((f) => /broken resolver/.test(f)));
+  const onlyAwaiting = { ...good, tasks: [], needsExecutor: [], unmeasured: [], awaiting: aAll.awaiting ?? [{ rowId: "9" }], escalations: aAll.escalations };
+  onlyAwaiting.decisionAddress = decisionAddress(onlyAwaiting);
+  t("check: a state with NO awaiting field is still clean (derived before the field existed)", chk(good).fatal.length === 0 && !("awaiting" in good));
+  t("check: a state whose only work is parked awaiting rows passes", chk(onlyAwaiting).fatal.length === 0);
+  t("check: the same state with the awaiting list emptied is FATAL (no task, no row, no reason)", chk({ ...onlyAwaiting, awaiting: [], decisionAddress: decisionAddress({ ...onlyAwaiting, awaiting: [] }) }).fatal.some((f) => /broken resolver/.test(f)));
   t("check: a non-positive staleAfterHours is FATAL", chk({ ...good, staleAfterHours: 0, decisionAddress: decisionAddress({ ...good, staleAfterHours: 0 }) }).fatal.some((f) => /positive/.test(f)));
   // The attestation token must not be reachable by documentation: no decision-record section on
   // disk may carry it unless objective.json names that section. A record that QUOTES the token to

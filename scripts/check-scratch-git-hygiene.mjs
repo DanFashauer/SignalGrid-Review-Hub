@@ -16,8 +16,10 @@
 //
 // DERIVED, NOT LISTED. A creator is a tracked scripts/**/*.mjs whose CODE lines (comment-only
 // lines removed) call mkdtemp and run `git` with an `init` or `clone` argument. The count is
-// re-derived on every run and printed. "Migrated" means the file imports the helper (the specifier
-// is RESOLVED, so a look-alike path does not count) AND calls scratchGit()/scratchGitOk().
+// re-derived on every run and printed. "Migrated" is judged on a TypeScript AST, not on text: the
+// file must have a top-level import of scratchGit/scratchGitOk whose specifier RESOLVES to the
+// helper, must CALL the imported name, and must not declare a second binding of it. A string, a
+// template literal or a comment can therefore never stand in for the import or the call.
 //
 // COMMENTS are removed line-wise: a line that starts with `//`, or sits inside a block comment
 // that starts a line with `/*`. Nothing is tokenised, so a regex literal or a backtick cannot
@@ -33,11 +35,12 @@
 // scanned: its own fixtures contain the tokens it looks for.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const SELF_FILE = fileURLToPath(import.meta.url);
 const HERE = dirname(SELF_FILE);
@@ -100,7 +103,6 @@ export function stripComments(text) {
 const RE_MKDTEMP = /mkdtemp/;
 const RE_GIT = /["'`]git["'`]|\bgit\s/;
 const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)\b|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
-const RE_IMPORT = /(?:^|\n)[ \t]*import\b([^;]*?)\bfrom\s*["']([^"']+)["']/g;
 const HELPER_CALLS = ["scratchGit", "scratchGitOk"];
 
 /** @param {{path:string,text:string}[]} files @returns {string[]} paths that create scratch repos */
@@ -115,23 +117,34 @@ export function scratchRepoCreators(files, { countComments = false } = {}) {
 }
 
 /**
- * True when the file imports scratchGit/scratchGitOk from the helper (specifier RESOLVED against
- * the file; the import must sit outside any template literal, judged by backtick parity, which can
- * only err toward "not migrated"), does not define a local function of that name, and calls it.
+ * True when the file really imports scratchGit/scratchGitOk from the helper and really calls it.
+ * Judged on a TypeScript AST (not text), so a string, a template literal or a comment can never
+ * stand in for either: the import must be a top-level ImportDeclaration whose specifier RESOLVES
+ * to the helper, the local name must be CALLED as a CallExpression, and the file must not declare
+ * a second binding of that name. A file that does not parse cleanly is not migrated.
  */
 export function importsHelper(f) {
-  const code = stripComments(f.text);
-  const names = new Set();
-  for (const m of code.matchAll(RE_IMPORT)) {
-    if (posix.normalize(posix.join(posix.dirname(f.path), m[2])) !== HELPER) continue;
-    const ticks = (code.slice(0, m.index).match(/`/g) ?? []).length;
-    if (ticks % 2 === 1) continue; // inside a template literal
-    for (const n of HELPER_CALLS) if (new RegExp(`\\b${n}\\b`).test(m[1])) names.add(n);
+  const sf = ts.createSourceFile(f.path, f.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  if ((sf.parseDiagnostics ?? []).length) return false;
+  const locals = new Set();
+  for (const st of sf.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    if (posix.normalize(posix.join(posix.dirname(f.path), st.moduleSpecifier.text)) !== HELPER) continue;
+    const nb = st.importClause?.namedBindings;
+    if (st.importClause?.isTypeOnly || !nb || !ts.isNamedImports(nb)) continue;
+    for (const el of nb.elements) if (!el.isTypeOnly && HELPER_CALLS.includes((el.propertyName ?? el.name).text)) locals.add(el.name.text);
   }
-  for (const n of names) {
-    if (new RegExp(`(?:function\\s+|(?:const|let|var)\\s+)${n}\\b`).test(code.replace(RE_IMPORT, ""))) names.delete(n); // local shadow
-  }
-  return [...names].some((n) => new RegExp(`\\b${n}\\s*\\(`).test(code.replace(RE_IMPORT, "")));
+  if (!locals.size) return false;
+  const declared = new Map(); // local name -> bindings other than the import itself
+  const called = new Set();
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && locals.has(node.expression.text)) called.add(node.expression.text);
+    const named = (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node)) && node.name && ts.isIdentifier(node.name) ? node.name.text : null;
+    if (named && locals.has(named)) declared.set(named, (declared.get(named) ?? 0) + 1);
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return [...locals].some((n) => called.has(n) && !declared.has(n));
 }
 
 /**
@@ -282,7 +295,7 @@ async function selfTest({ inner = false } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), "sg-scratch-hygiene-"));
   // Run from inside tmp: a helper that loses its `-C dir` must hit a scratch directory, not the caller's repo.
   const cwd0 = process.cwd();
-  process.chdir(tmp);
+
   const T = (name) => { const d = join(tmp, name); mkdirSync(join(d, "scripts/lib"), { recursive: true }); writeFileSync(join(d, "scripts/lib/scratch-git.mjs"), "export {};\n"); return d; };
   const put = (d, rel, text) => { mkdirSync(dirname(join(d, rel)), { recursive: true }); writeFileSync(join(d, rel), text); };
   const BARE = 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nspawnSync("git", ["init", "-q"], { cwd: d });\n';
@@ -329,6 +342,17 @@ async function selfTest({ inner = false } = {}) {
   check("a local scratchGit shadow does not count as migrated (exit 1)", (() => { const d = T("sh"); put(d, "scripts/x.mjs", 'import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";\nconst scratchGit = () => 0;\nscratchGit(1);\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
   check("an import and call inside a multi-line template literal do not count as migrated (exit 1)", (() => { const d = T("tl"); put(d, "scripts/x.mjs", 'const fixture = `\nimport { scratchGit } from "./lib/scratch-git.mjs";\nscratchGit(d, ["status"]);\n`;\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
 
+  const unmigrated = (name, text) => { const d = T(name); put(d, "scripts/x.mjs", text); const r = cli(d, ["--floor", "1"]); return r.status === 1 && /creators=1 migrated=0/.test(r.out); };
+  check("a stray backtick in a string before a fixture template holding the import and call is NOT migrated", unmigrated("pb", 'const hint = "wrap paths in ` quotes";\nconst fx = `\nimport { scratchGit } from "./lib/scratch-git.mjs";\nscratchGit(d, ["status"]);\n`;\n' + BARE));
+  check("an import and call inside a block comment opened mid-line are NOT migrated", unmigrated("pa", 'const keep = 1; /* migration sketch, not done yet:\nimport { scratchGit } from "./lib/scratch-git.mjs";\nscratchGit(d, ["init"]);\n*/\n' + BARE));
+  check("a real import whose name appears only inside a string is NOT migrated", unmigrated("pc", 'import { scratchGit } from "./lib/scratch-git.mjs";\nconst msg = "TODO: route through scratchGit(dir, args)";\n' + BARE));
+  check("an aliased real import that is called IS migrated", (() => { const d = T("al"); put(d, "scripts/x.mjs", 'import { scratchGit as sg } from "./lib/scratch-git.mjs";\nsg(1, ["add"]);\n' + BARE); return cli(d, ["--floor", "1"]).status === 0; })());
+  check("a real import and call after a backtick-bearing string IS migrated", (() => { const d = T("ok2"); put(d, "scripts/x.mjs", 'import { scratchGit } from "./lib/scratch-git.mjs";\nconst hint = "a ` b";\nscratchGit(1, ["add"]);\n' + BARE); return cli(d, ["--floor", "1"]).status === 0; })());
+
+  check("`cd ${d} && git init` mid-string is seen", seen("mid", 'const d = mkdtempSync("x");\nexecSync("cd " + d + " && git init -q");\n'));
+  check("a nested local scratchGit shadow of a REAL imported scratchGit is NOT migrated", unmigrated("sh2", 'import { scratchGit } from "./lib/scratch-git.mjs";\nfunction f() { const scratchGit = () => 0; return scratchGit(1); }\n' + BARE));
+  check("the self-test runs from inside its own temp dir (a helper that loses -C hits tmp, not the caller's repo)", process.cwd().startsWith(realpathSync(tmp)));
+
   // Rule mutants (in-process): break one rule; the plants for that rule must go red.
   const run = (d, pending, opts = {}) => audit(loadFiles(d, false), pending, { floor: 1, ...opts });
   const exitOf = (r) => (r.problems.length ? 1 : 0);
@@ -368,6 +392,14 @@ async function selfTest({ inner = false } = {}) {
     const applied = src !== helperSrc;
     const failures = applied ? helperBattery(await load(name.replace(/\W+/g, "_"), src), bt(name.replace(/\W+/g, "_"))) : [];
     check(`helper mutant "${name}" is applied and turns the battery red`, applied && failures.length > 0);
+  }
+
+  // The scrub list must cover everything THIS git calls repo-local (a future git that adds one fails here).
+  {
+    const gitList = spawnSync("git", ["rev-parse", "--local-env-vars"], { encoding: "utf8", timeout: 30000 }).stdout.split("\n").filter(Boolean);
+    const helper = await import(`${pathToFileURL(join(REPO, HELPER)).href}?live`);
+    const missing = gitList.filter((k) => !helper.SCRATCH_GIT_SCRUB.includes(k));
+    check(`the helper scrubs every variable \`git rev-parse --local-env-vars\` lists (${gitList.length}; missing: ${missing.join(", ") || "none"})`, gitList.length > 0 && missing.length === 0);
   }
 
   // The self-test itself must be hermetic: run it (once, nested) with the three variables exported at a decoy.
@@ -411,4 +443,4 @@ async function main(argv) {
   return 0;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === SELF_FILE) process.exit(await main(process.argv.slice(2)));
+if (process.argv[1] && realpathSync(resolve(process.argv[1])) === realpathSync(SELF_FILE)) process.exit(await main(process.argv.slice(2)));

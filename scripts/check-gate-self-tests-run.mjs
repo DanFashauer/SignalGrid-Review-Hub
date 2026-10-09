@@ -579,7 +579,7 @@ function selfTest() {
     // ── live: the detector still finds the real tree's gates, and agrees with a plain grep ──
     const live = runGate(REPO, { spawn: () => ({ status: 0, stdout: "self-test" }) });
     note("live: the real tree yields at least the floor of gates", live.counts.gates >= DEFAULT_FLOOR, `${live.counts.gates} gates`);
-    note("live: the real runners list steps and register self-tests", live.counts.registered >= 50 && live.problems.length === 0, `${live.counts.registered} registered, ${live.problems.length} problem(s)`);
+    note("live: the real runners list steps and register self-tests", live.counts.registered >= 50 && live.problems.length === 0, `${live.counts.registered} registered, ${live.problems.length} problem(s)${live.problems.length ? `: ${live.problems.slice(0, 3).join(" | ").slice(0, 600)}` : ""}`);
     note("live: the three formerly unrun self-tests are in the spawn set", ["check-api-collection.mjs", "check-deployment-runbook.mjs", "check-desktop-core-tests.mjs"].every((f) => live.spawned.includes(f)), live.spawned.join(","));
     const grepCount = readdirSync(join(REPO, "scripts")).filter((f) => /^check-.*\.mjs$/.test(f)).filter((f) => /["'`]--self-test["'`]/.test(readFileSync(join(REPO, "scripts", f), "utf8"))).length;
     note("live: the handler count equals a plain grep for a quoted --self-test literal (a comment-stripper that eats code diverges)", live.counts.withHandler === grepCount, `${live.counts.withHandler} vs grep ${grepCount}`);

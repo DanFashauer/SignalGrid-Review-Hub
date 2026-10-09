@@ -77,8 +77,55 @@ export function stripComments(text) {
     .join("\n");
 }
 
-/** String contents blanked (so `echo "cron: x"` is not a key), except quoted KEYS (`"schedule":`), which stay. */
-const blankStrings = (t) => t.replace(/("(?:[^"\\\n]|\\.)*"|'[^'\n]*')(?!\s*:)/g, '""');
+/**
+ * One LEFT-TO-RIGHT pass over the text that blanks quoted VALUES but keeps quoted KEYS (a quoted token
+ * followed by `:`). A single regex could not do this: it restarted inside a key's closing quote and fused
+ * `"schedule": [{ "cron"` into `"schedule""cron"`, hiding both keys (review round 2). A quote only opens a
+ * string at a token start (line start, whitespace, or one of `[{,:-?`), so an apostrophe inside a plain scalar
+ * (`it's`) opens nothing. A quote that never closes on its line is left as it is. A double-quoted KEY that
+ * contains a backslash (`"cr\x6fn"`) cannot be read by a text matcher at all: it is reported through
+ * `escapedKey` so the caller fails closed.
+ * @returns {{ text: string, escapedKey: boolean }}
+ */
+export function tokenizeQuotes(text) {
+  let out = "";
+  let escapedKey = false;
+  for (const line of text.split("\n")) {
+    let i = 0;
+    let res = "";
+    while (i < line.length) {
+      const c = line[i];
+      const prev = i === 0 ? " " : line[i - 1];
+      if ((c === '"' || c === "'") && /[\s[{,:\-?]/.test(prev)) {
+        let j = i + 1;
+        let closed = -1;
+        while (j < line.length) {
+          if (c === '"' && line[j] === "\\") { j += 2; continue; }
+          if (c === "'" && line[j] === "'" && line[j + 1] === "'") { j += 2; continue; }
+          if (line[j] === c) { closed = j; break; }
+          j += 1;
+        }
+        if (closed >= 0) {
+          const token = line.slice(i, closed + 1);
+          const isKey = /*M:keep-keys*/ /^\s*:/.test(line.slice(closed + 1));
+          if (isKey) {
+            if (c === '"' && token.includes("\\")) escapedKey = true;
+            res += token;
+          } else {
+            res += `${c}${c}`;
+          }
+          i = closed + 1;
+          continue;
+        }
+      }
+      res += c;
+      i += 1;
+    }
+    out += `${res}\n`;
+  }
+  return { text: out.slice(0, -1), escapedKey };
+}
+
 const SCHEDULE_KEY = /(?:^|[\s{,])["']?schedule["']?\s*:/;
 const CRON_KEY = /(?:^|[\s{,[-])["']?cron["']?\s*:/m;
 
@@ -90,7 +137,8 @@ const CRON_KEY = /(?:^|[\s{,[-])["']?cron["']?\s*:/m;
  */
 export function scheduleVerdict(rawText) {
   const text = stripComments(rawText.replace(/^\uFEFF/, "")).replace(/\r/g, "");
-  const blanked = blankStrings(text);
+  const { text: blanked, escapedKey } = tokenizeQuotes(text);
+  if (/*M:escaped-key*/ escapedKey) return "unreadable"; // a key spelled with escapes can hide `schedule`/`cron` from a text match
   const lines = blanked.split("\n");
   const onAt = lines.findIndex((l) => /^(?:on|"on"|'on')\s*:/.test(l));
   if (onAt < 0) return "unreadable";
@@ -370,6 +418,21 @@ function selfTest() {
   unreg("!!map tag on the on: key", `name: T\non: !!map\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
   unreg("a BOM before a first-line on:", `\uFEFFon:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
   unreg("CRLF line endings", `name: C\r\non:\r\n  schedule:\r\n    - cron: "0 0 * * *"\r\njobs:\r\n  a:\r\n    runs-on: x\r\n`);
+  // review round 2: a quoted `schedule` key that shares a line with another quoted string (the regex blanker mangled it)
+  const J = "jobs:\n  a:\n    runs-on: x\n";
+  unreg("flow map, every key and value double-quoted", `on: { "push": {}, "schedule": [{ "cron": "0 0 * * *" }] }\n${J}`);
+  unreg("flow map, only the schedule key quoted", `on: { push: {}, "schedule": [{ cron: "0 0 * * *" }] }\n${J}`);
+  unreg("flow map with no spaces", `on: {"schedule": [{"cron": "0 0 * * *"}]}\n${J}`);
+  unreg("flow map, single-quoted keys and values", `on: { 'push': {}, 'schedule': [{ 'cron': '0 0 * * *' }] }\n${J}`);
+  unreg('block key `"schedule": [ { "cron": … } ]` on one line', `on:\n  push: {}\n  "schedule": [ { "cron": "0 0 * * *" } ]\n${J}`);
+  unreg("block key `'schedule': [ { 'cron': … } ]` on one line", `on:\n  push: {}\n  'schedule': [ { 'cron': '0 0 * * *' } ]\n${J}`);
+  unreg("sole quoted schedule key with a quoted cron on the line", `on:\n  "schedule": [{"cron": "5 4 * * *"}]\n${J}`);
+  unreg("quoted complex keys `? \"schedule\"` / `\"cron\":`", `on:\n  push: {}\n  ? "schedule"\n  : - "cron": "0 0 * * *"\n${J}`);
+  unreg("escaped keys (`\"sch\\x65dule\"` and `\"cr\\x6fn\"`, both hidden from a text match)", `on:\n  push: {}\n  "sch\\x65dule": [{ "cr\\x6fn": "0 0 * * *" }]\n${J}`);
+  unreg("an escaped schedule key alone", `on:\n  push: {}\n  "sch\\x65dule":\n    - cron: "0 0 * * *"\n${J}`);
+  // negative controls for the tokenizer: quote characters that are NOT string openers must not swallow later keys
+  exits({ workflows: { "a.yml": `name: it's a dog's life\non:\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\n${J}` }, registry: reg() }, 1, "apostrophes inside a plain scalar do not hide a later schedule key (still found) → exit 1");
+  exits({ workflows: { "a.yml": `name: N\non: { push: {} }\nenv:\n  NOTE: "a \\"quoted\\" cron: word"\n${J}` }, registry: reg() }, 0, "negative control: an escaped-quote string containing `cron:` is not a key → exit 0");
   // a shape the matcher cannot place at all: a cron it cannot attribute to a trigger must FAIL, not pass as unscheduled
   exits({ workflows: { "a.yml": `name: U\ntriggers:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a cron the detector cannot attribute to an on: trigger → exit 1 (unreadable fails closed)");
   exits({ workflows: { "a.yml": `name: X\non:\n  push: {}\n  ? schedule\n  : - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "valid YAML complex-key `? schedule` under on: (a cron the structural read missed) → exit 1 (the cron fallback)");
@@ -424,6 +487,8 @@ function selfTest() {
         ["M:wired-ci", "false &&", "a script not run by CI is no longer reported"],
         ["M:red-watcher", "false &&", "a bogus redWatcher kind is no longer reported"],
         ["M:empty-tree", "false &&", "an empty workflows tree is no longer reported"],
+        ["M:escaped-key", "false &&", "an escaped-spelling key is no longer treated as unreadable"],
+        ["M:keep-keys", "false &&", "the tokenizer blanks quoted keys along with quoted values"],
       ];
       for (const [token, repl, what] of mutants) {
         const marker = `/*${token}*/`;

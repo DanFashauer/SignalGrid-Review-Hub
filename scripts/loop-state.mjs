@@ -313,6 +313,7 @@ function parseGitUrl(u) {
     // git url-decodes an ssh:// URL before it splits off the host (connect.c parse_connect_url), the WHATWG parser keeps the escapes in the userinfo: `ssh://evil.example%2f@github.com/<Hub>` is host github.com
     // here and evil.example there (round-19 refute). Refuse, never decode: a `%` anywhere in the authority, for every scheme, is not the Hub.
     if (s.slice(written[0].length).split("/")[0].includes("%")) return null;
+    if (/[\[\]]/.test(s.slice(written[0].length).split("/")[0])) return null; // (round 20, belt and braces: git reads a leading `[` as an IPv6 bracket; isHubUrl's allowlist is the rule)
     let url; try { url = new URL(s); } catch { return null; }
     if (url.protocol !== "https:" && url.protocol !== "ssh:") return null;
     if (url.search || url.hash || !url.hostname) return null;
@@ -325,9 +326,28 @@ function parseGitUrl(u) {
 }
 const hubIdentity = (p) => (p ? `${p.host}/${p.path.replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase()}` : null);
 // Is `u` an https, ssh or scp-style spelling of the Hub URL asked about (host and repository come from `hub`, never from a literal here: the self-test asks about a reserved-host Hub)?
+// THE RULE (round 20, after the scheme case, the percent-escape and the bracket each turned out to be a way for the parser and git to read one authority two ways): a URL is the Hub only when its
+// authority, AS WRITTEN, is one of the Hub's own spellings, decided on the raw string before and whatever any parser yields (the parser supplies the path and nothing else):
+//   https://   exactly the Hub's host, or a plain credential in front of it (user or user:password, letters digits . _ ~ - only: a bracket, a %, an @, a blank or a second colon never qualifies);
+//   ssh://     exactly git@<host>;      scp-style  exactly git@<host> before the colon.
+// No port, no other user, no brackets, no %, no blank, no case variation, no trailing dot: any other authority is NOT the Hub. The checks in parseGitUrl stay as belt and braces.
+function authorityIsHubs(u, host) {
+  const s = String(u ?? ""), m = /^([a-z][a-z0-9+.-]*):\/\/([^/]*)/.exec(s);
+  if (m) {
+    const [, scheme, auth] = m;
+    if (scheme === "ssh") return auth === `git@${host}`;
+    if (scheme !== "https") return false;
+    if (auth === host) return true;
+    const at = auth.indexOf("@");
+    return at > 0 && auth.indexOf("@", at + 1) < 0 && /^[A-Za-z0-9._~-]+(?::[A-Za-z0-9._~-]*)?$/.test(auth.slice(0, at)) && auth.slice(at + 1) === host;
+  }
+  if (s.includes("://")) return false;
+  const colon = s.indexOf(":");
+  return colon > 0 && s.slice(0, colon) === `git@${host}`;
+}
 function isHubUrl(u, hub = HUB) {
-  const want = hubIdentity(parseGitUrl(hub));
-  return want !== null && hubIdentity(parseGitUrl(u)) === want;
+  const hp = parseGitUrl(hub), want = hubIdentity(hp);
+  return want !== null && authorityIsHubs(u, hp.host) && hubIdentity(parseGitUrl(u)) === want;
 }
 // The URL without its userinfo, taken out by the parser: the same string for the Hub with and without credentials, so "only adds credentials" is a comparison, not a guess. null when unparseable.
 function urlWithoutUserinfo(u) {
@@ -340,10 +360,11 @@ function urlWithoutUserinfo(u) {
 function displayUrl(u) {
   const raw = String(u ?? ""), s = raw.trim(), blank = raw === s ? "" : " (as written, with leading or trailing whitespace)";
   const written = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(s);
-  if (written && s.slice(written[0].length).split("/")[0].includes("%")) {
-    // a percent-escape in the authority: git decodes it and the parser does not, so the parser's host is not where git goes. Show the authority AS WRITTEN (a user name with a password becomes ***), path, `?...`.
+  if (written && ((a) => /[%\[\]\s]/.test(a) || a.split("@").length > 2)(s.slice(written[0].length).split("/")[0])) {
+    // an authority with a percent-escape git decodes, a bracket git reads as IPv6, a second @ or a blank: the parser's host is not where git goes. Show the authority AS WRITTEN (user:password becomes user:***), path, `?...`.
     const rest = s.slice(written[0].length), auth = rest.split("/")[0], at = auth.lastIndexOf("@"), userinfo = at < 0 ? "" : auth.slice(0, at);
-    const shownUserinfo = at < 0 ? "" : `${userinfo.includes(":") ? "***" : userinfo}@`;
+    const bracket = /^(\[[^\]]*\])(.*)$/.exec(userinfo), [head, tail] = bracket ? [bracket[1], bracket[2]] : ["", userinfo]; // (a bracketed name is shown whole: what is inside is not a password)
+    const shownUserinfo = at < 0 ? "" : `${head}${tail.includes(":") ? `${tail.slice(0, tail.indexOf(":"))}:***` : tail}@`;
     return `${written[1]}://${shownUserinfo}${auth.slice(at + 1)}${rest.slice(auth.length).replace(/([?#]).*$/, "$1...")}${blank}`;
   }
   if (written) {
@@ -362,7 +383,7 @@ function originRow(cwd = repo, hub = HUB) {
   const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${displayUrl(pushUrl)})` : "";
   const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${displayUrl(configured)}, rewritten by url.<base>.insteadOf)` : "";
   // a URL that is not the Hub as written can print as the Hub once what precedes an @ is left out: say so, so a failing row never reads like a passing one
-  const hidden = !ok && [fetchUrl, pushUrl].some((x) => x && !isHubUrl(x, hub) && isHubUrl(displayUrl(x), hub)) ? " (not the Hub as written: text before an @ is not shown)" : "";
+  const hidden = !ok && [fetchUrl, pushUrl].some((x) => x && !isHubUrl(x, hub) && hubIdentity(parseGitUrl(displayUrl(x))) === hubIdentity(parseGitUrl(hub))) ? " (not the Hub as written: text before an @ is not shown)" : "";
   return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${displayUrl(fetchUrl) || "(no origin)"}${pushNote}${rewriteNote}${hidden}` };
 }
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
@@ -3177,7 +3198,7 @@ function selfTest() {
       .map(([name, base]) => [name, `${base}DanFashauer/SignalGrid-Review-Hub.git`, base]); // [name, the Hub URL as the lure spells it, the url.<base> that rewrites https://github.com/ to it]
     check("a URL whose real host is another machine is not the Hub whatever it hides behind ?x=@, #@ or a backslash, and anything unparseable, with a query or fragment, of another scheme or port, is not the Hub; the real spellings, with credentials, are (R16-url-parse)",
       evilShapes.every(([, u]) => parseGitUrl(u) === null && isHubUrl(u) === false) && isHubUrl(["https://ci-bot:tok", "github.com/DanFashauer/SignalGrid-Review-Hub.git"].join("@")) && // (joined, so no line of this file carries a credential in front of a real host) isHubUrl("https://tok@github.com/danfashauer/signalgrid-review-hub/") &&
-      isHubUrl("ssh://git@github.com:22/DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("git@github.com:DanFashauer/SignalGrid-Review-Hub") && isHubUrl("git@GitHub.COM:DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("https://GitHub.COM/DanFashauer/SignalGrid-Review-Hub.git") &&
+      isHubUrl("ssh://git@github.com/DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("git@github.com:DanFashauer/SignalGrid-Review-Hub") && !isHubUrl("git@GitHub.COM:DanFashauer/SignalGrid-Review-Hub.git") && !isHubUrl("https://GitHub.COM/DanFashauer/SignalGrid-Review-Hub.git") && !isHubUrl("ssh://git@github.com:22/DanFashauer/SignalGrid-Review-Hub.git") &&
       ["http://github.com/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com:8443/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com./DanFashauer/SignalGrid-Review-Hub.git", "git://github.com/DanFashauer/SignalGrid-Review-Hub.git", "file:///x/DanFashauer/SignalGrid-Review-Hub.git",
         "https://github.com/DanFashauer/SignalGrid-Review-Hub.git?x=1", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git#frag", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git extra",
         "https://github.com\\DanFashauer/SignalGrid-Review-Hub.git", "https://github.com/Dan\tFashauer/SignalGrid-Review-Hub.git", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git\u0000", "https://github.com/DanFashauer/SignalGrid-\nReview-Hub.git", "git@github.com:/DanFashauer/SignalGrid-Review-Hub.git", "", "not a url"].every((u) => !isHubUrl(u)) &&
@@ -3386,6 +3407,38 @@ exit 1
       [true, false].every((all) => noUserinfo(bare, all) === "127.0.0.1" && noUserinfo(`tok3n@127.0.0.1:3128`, all) === "127.0.0.1:3128" && noUserinfo(`http://agent:${SECRET}/${TAIL}@proxy.example:3128`, all) === "http://proxy.example:3128" && noUserinfo("git@hub.invalid:Dan/x.git", all) === "git@hub.invalid:Dan/x.git") &&
       noUserinfo("http://127.0.0.1:9/path and https://github.com/x", true) === "http://127.0.0.1:9/path and https://github.com/x" && noUserinfo("https://github.com/Dan/x@y", true) === "https://github.com/Dan/x@y" &&
       blEnv.note.includes("environment proxy HTTPS_PROXY/https_proxy=127.0.0.1") && !leaks(JSON.stringify(blEnv)) && blGlobal.trusted.some((t) => t.includes("http.proxy=127.0.0.1")) && !leaks(JSON.stringify(blGlobal)));
+    // ══ ROUND 20 ══ Review round 5 (wave 92). The class: the parser and git read one authority two ways (scheme case, percent-escape, now a bracket). The rule is an allowlist on the raw authority.
+    const GH = ["github", "com"].join("."); // (assembled: no line of this file spells a credential-shaped remote for the Hub's host)
+    const hp20 = "DanFashauer/SignalGrid-Review-Hub.git";
+    const nonHubAuthorities = [
+      ...[`[evil.example]@${GH}`, `[evil.example]:22@${GH}`, `[::1]@${GH}`, `evil.example:22@${GH}`, `a@b@${GH}`, `git:x@${GH}`, `evil.example%2f@${GH}`, `git@${GH}:22`, `git@${GH.toUpperCase()}`,
+        `git@${GH}.`, `${GH}`, `@${GH}`, "", ` git@${GH}`, `git@${GH} `, `GIT@${GH}`].map((a) => `ssh://${a}/${hp20}`),
+      ...[`${GH}.`, `${GH.toUpperCase()}`, `${GH}:443`, ` ${GH}`, `[evil.example]@${GH}`, `[evil.example]:22@${GH}`, `[::1]@${GH}`, `a@b@${GH}`, `evil.example%2f@${GH}`, "", `user:p w@${GH}`,
+        `u@${GH.replace(/^g/, "G")}`, `git@@${GH}`, `u:p:q@${GH}`, `evil.example:22@${GH}:443`].map((a) => `https://${a}/${hp20}`),
+      ...[`[evil.example]@${GH}`, `[::1]@${GH}`, `a@b@${GH}`, `git:x@${GH}`, `evil.example:22@${GH}`, `${GH}`, `GIT@${GH}`, `git@${GH.toUpperCase()}`, `git@${GH}.`, ` git@${GH}`, "", `git@${GH} `].map((a) => `${a}:${hp20}`),
+    ];
+    const hubAuthorities = [`https://github.com/${hp20}`, `https://github.com/${hp20.replace(/\.git$/, "")}`, `ssh://git@github.com/${hp20}`, `ssh://git@github.com/${hp20.replace(/\.git$/, "")}`,
+      `git@github.com:${hp20}`, `git@github.com:${hp20.replace(/\.git$/, "")}`, ["https://ci-bot:tok", `github.com/${hp20}`].join("@")];
+    check("a URL is the Hub only when its raw authority is one of the Hub's own spellings (https: exactly the host, or a plain credential in front of it; ssh: exactly git@host; scp: exactly git@host before the colon): "
+      + `${nonHubAuthorities.length} other authorities (brackets, ports, a second @, another user, case, a trailing dot, a blank, a percent, an empty one) are not the Hub, the exact spellings still are (R20-authority-allowlist)`,
+      nonHubAuthorities.every((u) => isHubUrl(u) === false) && hubAuthorities.every((u) => isHubUrl(u) === true) && nonHubAuthorities.length >= 40 &&
+      isHubUrl("https://hub.invalid/x/y.git", "https://hub.invalid/x/y.git") && !isHubUrl(`https://${GH}/x/y.git`, "https://hub.invalid/x/y.git") && isHubUrl("git@hub.invalid:x/y", "https://hub.invalid/x/y.git"));
+    const brBases = [`ssh://[evil.example]@${GH}/`, `ssh://[evil.example]:22@${GH}/`, `ssh://[::1]@${GH}/`];
+    const brScans = brBases.map((base) => inCleanEnv(() => hubTransport(ue.w), pcVars(base)));
+    const brPlain = inCleanEnv(() => gitRun(ue.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), pcVars(brBases[0])), brCalled = readIfPresent(pcLog);
+    writeFileSync(pcLog, "");
+    const brWhole = wholeScript(ue, "r20pa", pcVars(brBases[0])), brAfter = readIfPresent(pcLog);
+    check(`a global rewrite of the Hub to ssh://[evil.example]@${GH}/ (git reads the leading [ as an IPv6 bracket and runs ssh to evil.example), its :22 and [::1] twins, is a gated 'rewrites the Hub URL' finding showing the base as written; the whole check exits 1 and the ssh on PATH is never called (R20-bracket-rewrite)`,
+      brScans.every((s, i) => s.problems.some((p) => p.startsWith("git configuration rewrites the Hub URL ") && p.includes(` to ${brBases[i].replace("]:22@", "]:***@")}${hp20} (url.`)) && !s.trusted.some((t) => /same host and repository|adds credentials/.test(t))) &&
+      !brPlain.ok && !!brCalled && brCalled.includes("evil.example") && brWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to ssh:\/\/\[evil\.example\]@github\.com\//.test(brWhole.out) &&
+      !brWhole.out.includes("all present on the Review Hub") && brAfter === "");
+    const bo20 = mkFx("r20bo"), brOrigins = brBases.map((b) => `${b}${hp20}`);
+    const brShown = (u) => u.replace("]:22@", "]:***@");
+    const brFetch = brOrigins.map((u) => { bo20.f("remote", "set-url", "origin", u); return [u, originRow(bo20.w)]; });
+    bo20.f("remote", "set-url", "origin", HUB);
+    const brPush = brOrigins.map((u) => { bo20.f("remote", "set-url", "--push", "origin", u); return [u, originRow(bo20.w)]; });
+    check("an origin (fetch or push URL) with a bracketed host in its userinfo FAILS and prints the authority as written, not the host the parser would have shown (R20-bracket-origin)",
+      brFetch.every(([u, r]) => r.state === "fail" && r.detail === brShown(u)) && brPush.every(([u, r]) => r.state === "fail" && r.detail === `${poHub} (pushes to ${brShown(u)})`));
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

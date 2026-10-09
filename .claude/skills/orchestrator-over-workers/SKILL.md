@@ -254,6 +254,7 @@ conclusion, and runs no stage at all. Every other stage is dispatched:
   fails on `origin/SignalGrid_Alpha` with the same diagnostic on the same subject (file,
   figure or assertion); a nonzero exit alone does not say which check failed. A figure the
   branch itself moved is the branch's.
+- **A worker measures stalls at origin tip, never from its branch tree.** A heartbeat, mailbox or sim-request file on a branch is as old as its branch point (B19 raised a false "mac-lane-tick silent 14.4h" hand from a tree 239 commits behind); `scripts/raised-hands.mjs` reads `origin/SignalGrid_Alpha` and fails closed without it.
 - **Every path in a brief is absolute.** The Bash tool's working directory resets to the
   main checkout between calls, so a `$(pwd)`-relative write lands in the shared tree (L19).
 - **A planted mutation asserts, as its own named case, that it took effect.** A

@@ -288,6 +288,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
+      - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
+        run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -538,6 +540,8 @@ jobs:
         run: node scripts/loop-state.mjs --self-test
       - name: Raised-hands monitor self-test (DR-054 routing + gap detection must work)
         run: node scripts/check-raised-hands.mjs --self-test
+      - name: Raised hands schema (every hand file has its fields, a valid status/unblocker, id == filename)
+        run: node scripts/check-raised-hands.mjs
       - name: Backlog evidence (a row that says DONE says how you'd check)
         run: node scripts/check-backlog-evidence.mjs
       - name: Backlog evidence self-test (the gate can fail)
@@ -590,11 +594,6 @@ jobs:
         run: node scripts/check-lane-messages.mjs
       - name: Lane message self-test (the gate can fail)
         run: node scripts/check-lane-messages.mjs --self-test
-      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
-      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
-      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
-      - name: Raised hands (stalls warn in CI; register integrity is fatal)
-        run: node scripts/raised-hands.mjs --check --warn
       - name: Raised hands self-test (the gate can fail)
         run: node scripts/raised-hands.mjs --self-test
       # DR-056 §5: the shared objective state is gated where the raised-hands register is.
@@ -768,8 +767,29 @@ jobs:
       # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
       - name: "Sim-result provenance self-test (the gate can actually fail)"
         run: node scripts/check-sim-result-provenance.mjs --self-test
-      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
-        run: node scripts/check-sim-result-provenance.mjs
+      # Owning runner for commit ancestry: THIS job, on a deepened checkout. The checkout above is
+      # depth 1, where every result sha is unresolvable and the plain gate can only report it; the
+      # unshallow below makes history full, and --require-history then makes an unresolvable or
+      # non-ancestor sha fatal (it refuses to run if the checkout is still shallow). The Mac full-clone
+      # lane (mac-runner-auto, pr-mac-checks) and local preflight run the plain form.
+      - name: Deepen the checkout (sim-result provenance needs full history)
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+      - name: "Sim-result provenance (a checkable commit in this history; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs --require-history
+      # With history now full, the mainline-tip fetch below no longer changes what the provenance gate
+      # sees; it stays after it so the order that was load-bearing before the deepen is unchanged.
+      # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
+      # 9h turned mainline red until the next push. Stalls WARN here; register integrity
+      # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
+      # Stalls are measured at origin/SignalGrid_Alpha, never at this branch's tree (B54b); the
+      # default checkout carries no such ref and the gate fails closed without it.
+      - name: Fetch the mainline tip (raised-hands measures stalls there)
+        run: git fetch --no-tags origin +SignalGrid_Alpha:refs/remotes/origin/SignalGrid_Alpha
+      - name: Raised hands (stalls warn in CI; register integrity is fatal)
+        run: node scripts/raised-hands.mjs --check --warn
       # A generated input validator nobody parses reads exactly like coverage.
       - name: "api-zod wiring self-test (an orphan schema and a stale declaration must fail)"
         run: node scripts/check-api-zod-wiring.mjs --self-test
@@ -857,6 +877,8 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
+        run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.
@@ -1014,6 +1036,8 @@ jobs:
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
+      - name: DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)
+        run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
         run: node scripts/check-proof-figures.mjs --self-test
       - name: Docs↔proof figure guard

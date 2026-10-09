@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-01T09:42:36.339Z",
-  "result": "quiet, 5.3G free after the 09:40Z sweep (15M pruned from the pnpm store; no scratch file older than 24h outside the live worktrees; no docker tree). Earlier today the brain's own sweeps freed ~1.2G: nested node_modules in finished review worktrees and three plain-copy review dirs from 2026-09-26/27 (never a registered worktree). Keepalive: previous heartbeat 2026-09-30T09:50Z = 23.9h. Lesson still open: review workflows must delete their worktree's node_modules at the end (now in the wave template) and never write into the shared checkout (three pip wheels found there at 08:34Z, removed)."
+  "firedAt": "2026-10-08T10:32:27.283Z",
+  "result": "10:3xZ 2026-10-08 sweep, the first since 2026-10-02T09:47Z; the daily fires 10-03..10-07 did not run (same gap). The container was rebuilt since the last sweep: scratchpad empty, df / shows 30G free (8.1G used), pnpm store prune removed 1 package, no /var/lib/docker on this box. Nothing else to free; quiet."
 }

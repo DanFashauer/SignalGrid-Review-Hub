@@ -261,6 +261,7 @@ export function collectionRequests(filesByName) {
   for (const name of Object.keys(filesByName).sort()) {
     if (name === "collection.bru") { fatal.push(...collectionBruFindings(filesByName[name])); continue; }
     if (name.includes("/")) { fatal.push(`${name}: a request file in a subdirectory — only top-level request files are allowed (Bruno skips node_modules, .git and folder.bru)`); continue; }
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]*\.bru$/.test(name)) { fatal.push(`${name}: not a plain \`<stem>.bru\` file name — Bruno needs a non-empty extension (path.extname('.bru') is empty, so a file named exactly .bru is never run) and this gate accepts only letters, digits and hyphens in the stem`); continue; }
     if (name === "folder.bru") { fatal.push("folder.bru: a folder-level file Bruno treats specially (it can carry scripts and settings) and never runs as a request — refusing"); continue; }
     if (!name.endsWith(".bru")) continue;
     const parsed = parseBru(filesByName[name]);
@@ -586,6 +587,12 @@ function selfTest() {
   }
   b = baseBru(); b["folder.bru"] = "meta {\n  name: x\n}\n";
   checks.push(["ROUND7: a root folder.bru is FATAL", has(audit(csrc, b), "folder.bru", "folder-level")]);
+  // ---- review round 8: file names Bruno skips ----
+  for (const bad of [".bru", "-x.bru", "x y.bru", "x.BRU", "x..bru", "x_.bru"]) {
+    b = baseBru(); delete b["b.bru"]; b[bad] = bru(P.users);
+    checks.push([`ROUND8: a request file named ${JSON.stringify(bad)} is FATAL`, has(audit(csrc, b), bad, "plain")]);
+  }
+  checks.push(["ROUND8: the live request file names all pass the name rule", Object.keys(liveC.bruByName).every((n) => n === "collection.bru" || /^[A-Za-z0-9][A-Za-z0-9-]*\.bru$/.test(n))]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

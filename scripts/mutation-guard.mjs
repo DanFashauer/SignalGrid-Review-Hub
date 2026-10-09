@@ -621,9 +621,11 @@ export const TARGETS = [
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
       "lib/integrations/src/integrations/device-attestation/evaluate.ts",
-      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations. Wave 7
-      // (2026-10-09) tried it with `oneLine`: 62 mutations, 2 survivors (lines 37 and 39, the
-      // empty-string and "not found"/"unavailable" null guards) — not yet pinned, so it stays out.
+      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations; wave 7
+      // (2026-10-09) tried it with `oneLine` (62 mutations, 2 survivors at the empty-string and
+      // "not found"/"unavailable" guards of readableString) and left it out unpinned. Wave 8
+      // (2026-10-09) pinned both in device-attestation-proof.ts and registers it.
+      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
       "lib/integrations/src/integrations/device-attestation/index.ts",
       // The supervision-identity lifecycle emits the trust-precondition verdict
       // (grant / step-up / restrict) and normalizes a UEM report, so its guards are

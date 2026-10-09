@@ -526,8 +526,13 @@ async function main(): Promise<void> {
         res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
         return;
       }
-      writeFileSync(`${s10}.lock`, "");
-      res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow", evidenceSnapshotId: "ev_raced" } }));
+      if (req.method === "POST") {
+        writeFileSync(`${s10}.lock`, "");
+        res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow", evidenceSnapshotId: "ev_raced" } }));
+        return;
+      }
+      // decide now verifies the snapshot it was given before reporting the verdict.
+      res.end(JSON.stringify({ evidence: { id: "ev_raced", decisionId: "dec_raced", signalsUsed: [] }, verified: true }));
     });
     const racerPort = await listen(racer);
     liars.push(racer);
@@ -748,6 +753,85 @@ async function main(): Promise<void> {
     const syncBadJ = await viaLiar({ syncRun: { id: "", status: "" } }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
     check("connectors sync whose 2xx carries no usable run exits 1 and still names its idempotency key",
       syncBadJ.code === 1 && typeof (parse(syncBadJ.stdout)?.["error"] as Record<string, unknown> | undefined)?.["idempotencyKey"] === "string");
+
+    // decide verifies the snapshot it was handed before it reports ANY verdict (round 9).
+    // The server below answers the POST with a well-formed allow and the evidence GET with
+    // whatever the case supplies.
+    let evCase = 0;
+    const decideWith = async (evStatus: number, evBody: unknown, extraArgs: string[] = []) => {
+      const sess = join(sessionDir, `ev-case-${++evCase}.json`);
+      const srv = createServer((req, res) => {
+        res.writeHead((req.url ?? "").includes("/evidence") ? evStatus : 200, { "content-type": "application/json" });
+        if ((req.url ?? "").endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        if (req.method === "POST") return void res.end(JSON.stringify({ decision: { decisionId: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" } }));
+        res.end(JSON.stringify(evBody));
+      });
+      const port = await listen(srv);
+      liars.push(srv);
+      const r = await cli([...decideArgs, "--allow-write", "--json", ...extraArgs], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${port}/api`, SIGNALGRID_CLI_SESSION: sess });
+      return { r, sessionWritten: existsSync(sess) };
+    };
+    for (const [label, status, body] of [
+      ["a snapshot id that does not exist (404)", 404, { error: "not_found", message: "Evidence snapshot not found." }],
+      ["a snapshot of another decision", 200, { evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }],
+      ["a different snapshot than the one named", 200, { evidence: { id: "ev_other", decisionId: "dec_x", signalsUsed: [] }, verified: true }],
+      ["a snapshot whose digest does not verify", 200, { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: false }],
+    ] as const) {
+      const { r, sessionWritten } = await decideWith(status, body);
+      const j = parse(r.stdout);
+      check(`decide refuses an allow whose evidence is ${label} (exit 1, no outcome, no session, names the decision)`,
+        r.code === 1 && j?.["ok"] === false && (j?.["error"] as Record<string, unknown> | undefined)?.["decisionId"] === "dec_x" && !sessionWritten);
+    }
+    const good = await decideWith(200, { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true });
+    check("decide reports an allow whose snapshot exists, is this decision's and verifies (the check can pass)",
+      good.r.code === 0 && parse(good.r.stdout)?.["evidenceVerified"] === true && good.sessionWritten);
+
+    // A repeated value-bearing option is ambiguous: refused before anything is sent (round 9).
+    for (const [label, args] of [
+      ["--identity", [...decideArgs, "--identity", "someone.else", "--allow-write"]],
+      ["--idempotency-key", [...decideArgs, "--allow-write", "--idempotency-key", "k1", "--idempotency-key", "k2"]],
+      ["--limit", ["audit", "--limit", "1", "--limit", "2"]],
+    ] as const) {
+      seen.length = 0;
+      const r = await cli([...args], env);
+      check(`a repeated ${label} exits 2 and sends nothing`, r.code === 2 && /more than once/.test(r.stderr) && seen.length === 0);
+    }
+
+    // A refused keyed write names its key and does not promise a replay (round 9).
+    const refuser = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      }
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "internal", message: "persistence failed after evaluation" }));
+    });
+    const refuserPort = await listen(refuser);
+    liars.push(refuser);
+    for (const [label, args] of [
+      ["decide", [...decideArgs, "--allow-write", "--json"]],
+      ["connectors sync", ["connectors", "sync", "conn_x", "--allow-write", "--json"]],
+    ] as const) {
+      const r = await cli([...args], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${refuserPort}/api` });
+      const e = parse(r.stdout)?.["error"] as Record<string, unknown> | undefined;
+      check(`${label} refused with HTTP 500 exits 1, names its key, and says to reconcile before retrying`,
+        r.code === 1 && typeof e?.["idempotencyKey"] === "string" && e?.["mayHaveWritten"] === true && /never replays a refusal/.test(String(e?.["message"])) && /signalgrid audit/.test(String(e?.["message"])));
+    }
+    const readRefused = await cli(["connectors", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${refuserPort}/api` });
+    const readErr = parse(readRefused.stdout)?.["error"] as Record<string, unknown> | undefined;
+    check("a refused READ exits 1 with no idempotency key or write-recovery note (only a write may have written)",
+      readRefused.code === 1 && readErr !== undefined && !("idempotencyKey" in readErr) && !/signalgrid audit/.test(String(readErr["message"])));
+
+    // explain shows the step-up answer in human mode too, and only this decision's (round 9).
+    const stepRec = { id: "dec_x", outcome: "step_up", evidenceSnapshotId: "ev_x" };
+    const stepEv = { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true };
+    const answered = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
+    check("explain (human) shows an answered step-up's method and time",
+      answered.code === 0 && /^step-up\s+answered by webauthn at 2026-10-09T01:00:00Z/m.test(answered.stdout));
+    const unanswered = await viaLiar({ decision: stepRec, stepUp: null, ...stepEv }, ["explain", "dec_x"]);
+    check("explain (human) marks an unanswered step_up UNANSWERED", unanswered.code === 0 && /^step-up\s+UNANSWERED/m.test(unanswered.stdout));
+    const foreign = await viaLiar({ decision: stepRec, stepUp: { decisionId: "dec_other", method: "webauthn" }, ...stepEv }, ["explain", "dec_x"]);
+    check("explain refuses a step-up answer belonging to another decision (exit 1)", foreign.code === 1 && !/^outcome/m.test(foreign.stdout));
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

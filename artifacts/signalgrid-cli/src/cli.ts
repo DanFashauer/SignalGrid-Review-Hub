@@ -40,7 +40,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     usage: "signalgrid decide --identity <ref> --device <ref> --workflow <key> [--allow-write [--idempotency-key <key>]] [--json]",
     summary:
       "Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4.",
-    requests: ["GET /v1/context", "POST /v1/decisions/evaluate"],
+    requests: ["GET /v1/context", "POST /v1/decisions/evaluate", "GET /v1/decisions/:id/evidence"],
     writes: true,
   },
   explain: {
@@ -149,6 +149,30 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
       r.extra,
     );
   }
+  // A well-formed snapshot id is only a reference. Before any verdict is reported (allow
+  // above all) the snapshot is fetched and must exist, belong to this decision and pass
+  // its digest check — the same binding `explain` applies (review round 9 on PR #1321).
+  const decisionId = d["decisionId"] as string;
+  let ev: Record<string, unknown>;
+  try {
+    ({ body: ev } = await call(cfg, "GET", `/v1/decisions/${encodeURIComponent(decisionId)}/evidence`));
+  } catch (err) {
+    const e = err as CliError;
+    throw new CliError(
+      e.code ?? "unexpected",
+      `decision ${decisionId} was recorded, but its evidence snapshot could not be read (${e.message}); nothing is reported as decided.`,
+      e.exit ?? EXIT.refused,
+      { decisionId },
+    );
+  }
+  if (!boundVerdict(ev, decisionId, d["evidenceSnapshotId"] as string)) {
+    throw new CliError(
+      "evidence_unverified",
+      `decision ${decisionId} was recorded, but its evidence snapshot ${String(d["evidenceSnapshotId"])} does not verify against it; nothing is reported as decided.`,
+      EXIT.refused,
+      { decisionId },
+    );
+  }
   // The decision now EXISTS on the server. A session write that still fails (a race on
   // the lock, a disk error) must not hide it: the verdict is reported, with a warning.
   let warning: string | undefined;
@@ -160,10 +184,11 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   const reasons = Array.isArray(d["reasonCodes"]) ? (d["reasonCodes"] as unknown[]).map(str) : [];
   return {
     warning,
-    json: { ok: true, command: "decide", tenant: tenant.id, sent: true, decision: d, ...(warning ? { sessionWarning: warning } : {}) },
+    json: { ok: true, command: "decide", tenant: tenant.id, sent: true, decision: d, evidenceVerified: true, ...(warning ? { sessionWarning: warning } : {}) },
     human: [
       `outcome     ${outcome}`,
       `decision    ${str(d["decisionId"])}`,
+      `evidence    digest verifies (${str(d["evidenceSnapshotId"])})`,
       `reasons     ${reasons.join(", ") || "none"}`,
       `policy      ${str(d["policyVersionId"])}`,
       `explanation ${str(d["explanation"])}`,
@@ -205,6 +230,19 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   // A decision record that names no snapshot cannot have its evidence bound to it.
   const snapshotId = typeof d["evidenceSnapshotId"] === "string" && d["evidenceSnapshotId"] ? d["evidenceSnapshotId"] : "";
   const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId);
+  // The step-up answer is a separate record beside the decision; it is what tells a host a
+  // step_up may proceed, so it is shown in both modes — and only an answer for THIS
+  // decision counts (review round 9 on PR #1321).
+  const stepUpRaw = rec["stepUp"];
+  let stepUpLine: string;
+  if (stepUpRaw === null || stepUpRaw === undefined) {
+    stepUpLine = d["outcome"] === "step_up" ? "UNANSWERED — a host must treat this step_up as unresolved" : "none";
+  } else if (typeof stepUpRaw === "object" && !Array.isArray(stepUpRaw) && (stepUpRaw as Record<string, unknown>)["decisionId"] === id) {
+    const a = stepUpRaw as Record<string, unknown>;
+    stepUpLine = `answered by ${str(a["method"])} at ${str(a["answeredAt"])} (credential ${str(a["credentialReference"])})`;
+  } else {
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried a step-up answer that is not this decision's; nothing is reported.`, EXIT.refused);
+  }
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
   const signals = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
   return {
@@ -216,6 +254,7 @@ async function explain(cfg: Config, id: string): Promise<Out> {
       `reasons     ${Array.isArray(d["reasonCodes"]) ? (d["reasonCodes"] as unknown[]).map(str).join(", ") : "unknown"}`,
       `policy      ${str(d["policyVersionId"])}`,
       `explanation ${str(d["explanation"])}`,
+      `step-up     ${stepUpLine}`,
       `evidence    ${verified ? "digest verifies" : "DOES NOT VERIFY — treat this record as untrusted"} (${Array.isArray(signals) ? signals.length : "unknown"} signals)`,
       "",
       rules.length ? table(["rule", "reason", "outcome", "severity"], rules.map((r) => [str(r["ruleId"]), str(r["reasonCode"]), str(r["outcome"]), str(r["severity"])])) : "no matched rules reported",
@@ -504,10 +543,11 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
   if (argv[0] === "--") argv = argv.slice(1);
   let json = argv.includes("--json");
   try {
-    const { values, positionals } = parseArgs({
+    const { values, positionals, tokens } = parseArgs({
       args: argv,
       allowPositionals: true,
       strict: true,
+      tokens: true,
       options: {
         json: { type: "boolean" },
         "allow-write": { type: "boolean" },
@@ -521,6 +561,17 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     });
     const v = values as Values;
     json = v.json === true;
+    // parseArgs keeps only the LAST of a repeated option, so `--identity a --identity b`
+    // would silently become `b`. A repeated value-bearing option is ambiguous and refused
+    // before anything is read or sent (review round 9 on PR #1321).
+    const seenOpts = new Map<string, number>();
+    for (const t of tokens ?? []) {
+      if (t.kind === "option" && t.value !== undefined) seenOpts.set(t.name, (seenOpts.get(t.name) ?? 0) + 1);
+    }
+    const repeated = [...seenOpts].filter(([, n]) => n > 1).map(([name]) => `--${name}`);
+    if (repeated.length > 0) {
+      throw new CliError("usage", `option(s) given more than once: ${repeated.join(" ")}; which value was meant is ambiguous, so nothing was sent.`, EXIT.usage);
+    }
     const [command, ...rest] = positionals;
     if (v.help || !command) {
       if (!v.help) throw new CliError("usage", `no command given. ${help()}`, EXIT.usage);

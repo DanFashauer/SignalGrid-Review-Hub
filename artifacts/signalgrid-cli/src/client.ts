@@ -121,7 +121,20 @@ export function idempotencyKey(given: string | undefined): string {
  * no recognisable result — because each of them may sit behind a committed write
  * (review round 8 on PR #1321).
  */
-export function writeRecovery(key: string | undefined): { suffix: string; extra: Record<string, unknown> | undefined } {
+export function writeRecovery(
+  key: string | undefined,
+  mode: "lost" | "refused" = "lost",
+): { suffix: string; extra: Record<string, unknown> | undefined } {
+  if (key && mode === "refused") {
+    // The server replays only 2xx answers, so a refusal is never replayed: retrying with
+    // the same key can execute the write again. A refusal can still follow a partial
+    // write (a decision evaluated before a later step failed), so the operator reconciles
+    // first (review round 9 on PR #1321).
+    return {
+      suffix: ` A refusal can follow a partial write, and the server never replays a refusal, so retrying (even with --idempotency-key ${key}) can write again: check \`signalgrid audit\` for this write before retrying.`,
+      extra: { idempotencyKey: key, mayHaveWritten: true },
+    };
+  }
   return key
     ? {
         suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check \`signalgrid audit\` for the write before retrying.`,
@@ -213,7 +226,8 @@ export async function call(
   if (!res.ok) {
     const code = typeof obj["error"] === "string" ? obj["error"] : "error";
     const msg = typeof obj["message"] === "string" ? obj["message"] : "(no message)";
-    throw new CliError(code, `${method} ${path} refused: HTTP ${res.status} ${code} — ${msg}`, EXIT.refused);
+    const r = writeRecovery(key, "refused");
+    throw new CliError(code, `${method} ${path} refused: HTTP ${res.status} ${code} — ${msg}${r.suffix}`, EXIT.refused, r.extra);
   }
   return { status: res.status, body: obj };
 }

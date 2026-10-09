@@ -404,7 +404,7 @@ function selfTest() {
     R("a block-commented step (breadth)", { breadth: runnerSrc(stepsDecl(`  /* parked: ${E}, */`)) });
     R("a trailing-comment step", { preflight: `  { name: "q", cmd: ["node", "scripts/other.mjs"] }, // ${E}` });
     R("a string constant holding a whole step entry", { breadth: runnerSrc(stepsDecl(""), { pre: `const doc = '${E}';\n` }) });
-    R("a template literal holding a whole step entry", { breadth: runnerSrc(stepsDecl(""), { pre: "const doc = `" + E.replace(/"/g, '\\"') + "`;\n" }) });
+    R("a template literal holding a whole step entry", { breadth: runnerSrc(stepsDecl(""), { pre: "const doc = `" + E.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "`;\n" }) });
     R("a plain flag-less step for the gate", { preflight: `  { name: "r", cmd: ["node", "scripts/check-bad.mjs"] },` });
     R("a non-node runner naming the gate", { preflight: `  { name: "r", cmd: ["echo", "scripts/check-bad.mjs", "--self-test"] },` });
     R("a bash -c step that only echoes it", { preflight: `  { name: "r", cmd: ["bash", "-c", "echo node scripts/check-bad.mjs --self-test"] },` });

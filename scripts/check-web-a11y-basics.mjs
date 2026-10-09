@@ -967,8 +967,17 @@ export function checkReducedMotion(rel, raw) {
  */
 export function checkStylesheetLoaded(treeRel, indexHtml, readEntry) {
   if (indexHtml === null) return [`${treeRel}/index.html: missing — the gate cannot see which entry loads src/index.css (failing closed)`];
-  const html = indexHtml.replace(/<!--[\s\S]*?-->/g, "");
-  const entries = [...html.matchAll(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/?(src\/[^"']+)["'][^>]*>/g)].map((m) => m[1]);
+  // Comment spans are located, not stripped: a <script> inside one is skipped. (An
+  // unterminated `<!--` comments out the rest of the document, as in HTML.)
+  const comments = [];
+  for (let at = indexHtml.indexOf("<!--"); at >= 0; ) {
+    const end = indexHtml.indexOf("-->", at + 4);
+    comments.push([at, end < 0 ? indexHtml.length : end + 3]);
+    at = end < 0 ? -1 : indexHtml.indexOf("<!--", end + 3);
+  }
+  const commented = (i) => comments.some(([a, b]) => a <= i && i < b);
+  const entries = [...indexHtml.matchAll(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/?(src\/[^"']+)["'][^>]*>/g)]
+    .filter((m) => !commented(m.index)).map((m) => m[1]);
   if (entries.length === 0) return [`${treeRel}/index.html: no <script type="module" src="/src/…"> entry — the gate cannot see what loads src/index.css (failing closed)`];
   for (const rel of entries) {
     const entry = readEntry(rel);
@@ -1359,6 +1368,8 @@ function selfTest() {
           checkStylesheetLoaded("t", html, entry('import "./other.css";\n')).length === 1 &&
           checkStylesheetLoaded("t", html, () => null).length === 1 &&
           checkStylesheetLoaded("t", "<div></div>", entry('import "./index.css";')).length === 1 &&
+          checkStylesheetLoaded("t", `<!-- ${html} -->`, entry('import "./index.css";')).length === 1 &&
+          checkStylesheetLoaded("t", `<!-- old --><div></div>${html}`, entry('import "./index.css";')).length === 0 &&
           checkStylesheetLoaded("t", null, entry('import "./index.css";')).length === 1;
       })()],
     ["an aria-labelledby target must itself carry a name",

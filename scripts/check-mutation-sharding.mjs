@@ -151,6 +151,13 @@ for (const [proof, file] of [
 for (const p of ["graph-connector", "break-glass", "response-accountability"]) {
   check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
 }
+for (const [proof, file] of [
+  ["proof:oauth-consent", "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts"],
+  ["proof:access-governance", "lib/integrations/src/integrations/access-governance/access-governance-connector.ts"],
+]) {
+  check(`${proof} keeps its connector registered: ${file.split("/").pop()}`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+check("brace-less sweep: proof:oauth-consent stays opted in (oneLine: true)", TARGETS.find((t) => t.proof === "proof:oauth-consent")?.oneLine === true);
 check(
   "proof:graph-connector keeps the posture connector registered: posture-connector.ts",
   TARGETS.find((t) => t.proof === "proof:graph-connector")?.files.includes("lib/integrations/src/integrations/graph/posture-connector.ts") === true,

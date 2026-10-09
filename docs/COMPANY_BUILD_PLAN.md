@@ -715,10 +715,20 @@ earlier — that is the loop working, not a reason to soften the record.
     `return 1;` first in `selfTest()` of `scripts/check-api-collection.mjs` (and of
     `scripts/check-deployment-runbook.mjs`) in a scratch copy, the default run, preflight's
     step and CI's step stayed green and only this gate went red, naming the file.
-    Registration is decided by `scripts/lib/workflow-invocation.mjs`, the matcher
-    `scripts/check-preflight-ci-parity.mjs` uses (command position, quotes masked, no `echo`, no
-    `continue-on-error`; one deviation: `--self-test-not` is not `--self-test`), and only for workflows that list `pull_request` or `push` as an event (directly under a block `on:`, or a top-level key of an inline one, never a nested input name); branch and path
-    filters are not read, and a STEPS entry must sit inside the one `const STEPS = [` array (a source with any other `STEPS =` assignment fails the gate), outside every comment and string literal, and an inline `on:` holding a quote, tag, anchor or alias credits nothing. The `STEPS` declaration must end at its closing bracket with `;` and not be mutated afterwards (`.splice`, `.pop`, `.length =`, `&&=`, destructuring); every element must be a plain `{ name, cmd, … }` object literal and every other reference to `STEPS` a pure read (`for … of`, `.map(…)`, `.length`); a mutation through an alias is a stated limit. A `run:` under `with:`, `env:`, `defaults:` or a matrix `include:` is not a step, and a step list counts only as a job's `steps:` under `jobs:`. Its `--self-test` (116 cases; 57 planted mutants of the gate and two of the shared matcher each turn it red, bar two redundant guards named in the gate header)
+    What the runners iterate is read FROM the runners: `scripts/preflight.mjs` and
+    `scripts/verify-breadth.mjs` answer `--list-steps` with the list their loop runs (JSON), and the
+    gate registers a self-test only for a step whose argv is `node scripts/check-*.mjs …
+    --self-test` (or a known `pnpm run` alias), that is neither `heavy` nor `needsNativeBuild`;
+    the listing block must sit directly above the one `for (const step of STEPS)` loop, or the
+    gate fails. Stated limits: a loop body that rewrites `step.cmd`. Workflow steps are decided by
+    `scripts/lib/workflow-invocation.mjs`, the matcher `scripts/check-preflight-ci-parity.mjs`
+    uses (command position, quotes masked, no `echo`, no `continue-on-error`, no step-level
+    `shell:` other than bash or sh; `--self-test-not` is not `--self-test`; a `run:` counts only as
+    a step in a job's `steps:` under a top-level `jobs:`), and only for workflows that list
+    `pull_request` or `push` as an event (directly under a block `on:`, or a top-level key of an
+    inline one that holds no quote, tag, anchor or alias); branch and path filters, `if:` and a
+    job-level `defaults.run.shell` are not read. Its `--self-test` (124 cases; every planted
+    mutant of the gate and of the shared matcher turns it red)
     plants an unregistered gate whose flag exits 1, an unregistered no-op
     flag, and a flag-less gate whose only control sits in a comment (each exit 1), against a
     registered gate that must NOT be spawned and a gate with a real control (each exit 0).
@@ -4819,7 +4829,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (937) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (946) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

@@ -91,7 +91,7 @@ function foldScalar(first, cont, base) {
 /** Pure: is the `run:` key on line `i` a STEP's `run:` — the key of a mapping that is an item of a `steps:` list?
  *  (review round 6, PR #1460) A `run:` under `with:`, `env:`, `defaults:` or a matrix `include:` is not a step, so it
  *  can never credit a gate. A `run:` that is not a list item or step-mapping key, or whose list sits under any key but `steps:`, is NOT a step. */
-function isStepRun(lines, i, m, keyCol) {
+function isStepRun(lines, i, m, keyCol, strict) {
   let dashLine = -1;
   if (m[2]) dashLine = i;
   else {
@@ -122,12 +122,13 @@ function isStepRun(lines, i, m, keyCol) {
       return -1;
     };
     const job = parentOf(j, sInd);
-    if (job < 0) return true;
+    if (job < 0) return !strict;
     if (!/^[ \t]*[\w.-]+:[ \t]*$/.test(lines[job])) return false;
     const jobs = parentOf(job, indentOf(lines[job]));
-    return jobs < 0 ? true : /^[ \t]*jobs:[ \t]*$/.test(lines[jobs]);
+    // strict: the chain must reach a top-level `jobs:` (a top-level `steps:` key is not a job's steps)
+    return jobs < 0 ? !strict : /^[ \t]*jobs:[ \t]*$/.test(lines[jobs]) && (!strict || indentOf(lines[jobs]) === 0);
   }
-  return true; // a bare `- run:` snippet with no parent key at all (the parity self-test's fixtures); no real workflow has one
+  return !strict; // a bare `- run:` snippet with no parent key at all (the parity self-test's fixtures); never accepted in strict mode
 }
 
 /** Pure: one record per `run:` step in YAML (comments already stripped): the command text the
@@ -135,14 +136,14 @@ function isStepRun(lines, i, m, keyCol) {
  *  `false`: its failure cannot fail CI). Scalar styles follow YAML: `|` literal (lines kept,
  *  a trailing backslash joins the next), `>` folded, plain/quoted wrapped (lines fold into
  *  one). Exported for the self-test. */
-export function runSteps(text) {
+export function runSteps(text, { strict = false } = {}) {
   const lines = text.split("\n");
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const m = /^([ \t]*)(-[ \t]+)?run:[ \t]*(.*)$/.exec(lines[i]);
     if (!m) continue;
     const keyCol = m[1].length + (m[2] ? m[2].length : 0);
-    if (!isStepRun(lines, i, m, keyCol)) continue;
+    if (!isStepRun(lines, i, m, keyCol, strict)) continue;
     let inline = m[3].trim();
     const ind = /^([|>])[+-]?\d*$/.exec(inline);
     const style = ind ? ind[1] : "plain";
@@ -171,20 +172,25 @@ export function runSteps(text) {
     let end = i + 1 + cont.length;
     while (end < lines.length && (lines[end].trim() === "" || indentOf(lines[end]) >= keyCol)) end++;
     let continueOnError = false;
+    let shellOk = true;
     for (let j = start; j < end; j++) {
       const dash = j === start && start !== i ? /^[ \t]*-[ \t]+/.exec(lines[j]) : null;
       const col = dash ? dash[0].length : indentOf(lines[j]);
       const k = /^continue-on-error:[ \t]*(.*)$/.exec(lines[j].slice(dash ? dash[0].length : col));
       if (col === keyCol && k && k[1].trim().replace(/^(["'])(.*)\1$/, "$2").toLowerCase() !== "false") continueOnError = true;
+      // a step-level `shell:` other than bash/sh (`python`, `pwsh`, a custom `true {0}` template) does not run the line
+      // as a shell command, so it cannot credit a gate. A job-level `defaults.run.shell` is NOT read (a stated limit).
+      const sh = /^shell:[ \t]*(.*)$/.exec(lines[j].slice(dash ? dash[0].length : col));
+      if (col === keyCol && sh && !/^(?:bash|sh)$/.test(sh[1].trim().replace(/^(["'])(.*)\1$/, "$2"))) shellOk = false;
     }
-    out.push({ command: body, continueOnError });
+    out.push({ command: body, continueOnError, shellOk });
   }
   return out;
 }
 
 /** Pure: the command text of every `run:` step that can fail CI, one string per step. */
-export function runCommands(text) {
-  return runSteps(text).filter((st) => !st.continueOnError).map((st) => st.command);
+export function runCommands(text, opts) {
+  return runSteps(text, opts).filter((st) => !st.continueOnError && st.shellOk).map((st) => st.command);
 }
 
 /** Pure: `cmd` with every shell-quoted span (quotes included) replaced by a filler

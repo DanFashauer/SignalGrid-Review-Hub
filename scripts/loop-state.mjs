@@ -90,7 +90,9 @@ function readIfPresent(path, encoding = "utf8") {
 // finds its own helpers without them.
 // The variables that name a PROGRAM git runs for the transport, or where it looks for one: GIT_EXEC_PATH (remote helpers), GIT_PROXY_COMMAND (the git:// proxy), GIT_SSH_COMMAND and GIT_SSH (the ssh
 // program). Each is dropped from every git started here AND named in hubTransport's row (round-18 refute: GIT_SSH_COMMAND was neither, so an exported one ran in the listing of any ssh-reached Hub).
-const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH"];
+// GIT_CONFIG joins them (round-22 refute): `git config` reads ONLY that file when it is set while `git ls-remote` ignores it, so GIT_CONFIG=/dev/null hid a global http.proxy and http.sslVerify=false from the scan
+// and the listing went through that proxy. The scan and the listing must read one configuration: it is dropped, and named in the row.
+const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH", "GIT_CONFIG"];
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV];
 function gitEnv(extra) {
   const env = { ...process.env, ...extra };
@@ -253,10 +255,14 @@ function judgeExpansions(inRepo, inListing, hub = HUB) {
   return { problems, trusted };
 }
 // A fresh empty directory under the temp directory, with nothing above it a repository (GIT_CEILING_DIRECTORIES): the place the listing runs in, and the place its expansion and configuration are read.
-function inIsolatedDir(fn) {
+// GIT_CEILING_DIRECTORIES is a colon-separated list: a temp directory whose real path holds a `:` (or a NUL or newline) would silently drop the ceiling, and a repository above it could then be found (round-22
+// review). Fail closed: `refused(why)` is what the caller returns instead of running anything.
+function inIsolatedDir(fn, refused = (why) => { throw new Error(why); }) {
+  const ceiling = realpathSync(tmpdir());
+  if (/[:\0\n]/.test(ceiling)) return refused(`refusing to run git in an isolated directory: the real path of the temporary directory (${JSON.stringify(ceiling)}) holds a ":", NUL or newline, which GIT_CEILING_DIRECTORIES (a colon-separated list) cannot carry, so nothing would stop git from finding a repository above it`);
   const dir = mkdtempSync(join(tmpdir(), "loop-state-ls-"));
   try {
-    return fn(dir, { GIT_CEILING_DIRECTORIES: realpathSync(tmpdir()) });
+    return fn(dir, { GIT_CEILING_DIRECTORIES: ceiling });
   } finally {
     try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway empty directory */ }
   }
@@ -308,7 +314,8 @@ function hubTransport(cwd = repo, hub = HUB) {
     return found;
   };
   const repoCfg = readConfig(cwd, undefined, true), repoExp = gitRun(cwd, ["ls-remote", "--get-url", hub]);
-  const listing = inIsolatedDir((dir, isoEnv) => ({ cfg: readConfig(dir, isoEnv, false), exp: gitRun(dir, ["ls-remote", "--get-url", hub], { env: isoEnv }) }));
+  const listing = inIsolatedDir((dir, isoEnv) => ({ cfg: readConfig(dir, isoEnv, false), exp: gitRun(dir, ["ls-remote", "--get-url", hub], { env: isoEnv }) }),
+    (why) => ({ cfg: { problems: [], seen: new Map() }, exp: { ok: false, status: null, stdout: "", stderr: why } }));
   const seenAll = new Map(repoCfg.seen);
   for (const [k, n] of listing.cfg.seen) if (!seenAll.has(k)) seenAll.set(k, n);
   for (const pr of [...repoCfg.problems, ...listing.cfg.problems]) if (!problems.includes(pr)) problems.push(pr);
@@ -324,7 +331,7 @@ function hubTransport(cwd = repo, hub = HUB) {
 // alias.remote-<vcs> served a fake listing from repository configuration alone.) The isolation is DEFENCE IN DEPTH behind the scan: every repository-scope shape the scan enumerates is gated before the
 // listing is asked for, so the cases that pin it use what the scan cannot see (a rewrite written into .git/config AFTER the scan took its snapshot) and watch where the listing runs (R16-listhub-*).
 function listHub(hub = HUB) {
-  return inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: isoEnv }));
+  return inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: isoEnv }), (why) => ({ ok: false, error: undefined, status: null, stdout: "", stderr: why }));
 }
 function hubUrlProblem(cwd = repo, hub = HUB) {
   return hubTransport(cwd, hub).problems.join("; ");
@@ -3536,6 +3543,64 @@ exit 1
     check("the PATH is checked as written beside the authority: dot segments, doubled slashes and %-escapes on the Hub's own host are not the Hub, the plain /<owner>/<repo> spellings (with .git, without, with a trailing slash) are (R21-path-plain)",
       pathBad.every((u) => isHubUrl(u) === false) && [`https://${GH}/DanFashauer/SignalGrid-Review-Hub.git`, `https://${GH}/DanFashauer/SignalGrid-Review-Hub`, `https://${GH}/DanFashauer/SignalGrid-Review-Hub/`, `ssh://git@${GH}/DanFashauer/SignalGrid-Review-Hub.git`,
         `git@${GH}:DanFashauer/SignalGrid-Review-Hub.git`].every((u) => isHubUrl(u) === true) && !isHubUrl(`git@${GH}:/DanFashauer/SignalGrid-Review-Hub.git`) && !isHubUrl(`git@${GH}:DanFashauer/../DanFashauer/SignalGrid-Review-Hub.git`));
+    // ══ ROUND 22 ══ Review round 7. (1) GIT_CONFIG: `git config` reads only that file, `git ls-remote` ignores it. (2) The listing-directory scan is load-bearing: a RELATIVE config path resolves differently there.
+    // (3) A temp directory whose real path holds a ":" drops the ceiling.
+    const gcFx = mkLikeUe("r22gc"), rcFx = mkLikeUe("r22rc");
+    const px = join(root, "r22-proxy.mjs"), pxPort = join(root, "r22-proxy.port"), pxLog = join(root, "r22-proxy.log");
+    writeFileSync(pxLog, "");
+    writeFileSync(px, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+      `const srv = createServer((req, res) => { appendFileSync(process.argv[3], "REQ " + req.url + "\\n"); res.writeHead(502); res.end(); });`,
+      `srv.on("connect", (req, sock) => { appendFileSync(process.argv[3], "CONNECT " + req.url + "\\n"); sock.destroy(); });`,
+      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[2], String(srv.address().port)));`].join("\n") + "\n");
+    const pxChild = spawn(process.execPath, [px, pxPort, pxLog], { detached: true, stdio: "ignore" });
+    pxChild.on("error", () => { /* it never started: the port file never appears and the cases fail below */ });
+    pxChild.unref();
+    const relDir = mkdtempSync(join(tmpdir(), "loop-state-r22rel-")), relBase = basename(relDir);
+    const noProxyEnv = { HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null, NO_PROXY: null, no_proxy: null };
+    let gcPlain = null, gcBlind = null, gcLogged = null, gcWhole = null, gcAfter = null, gcScan = null, rcScans = [], rcPlain = null, rcLogged = null, rcWhole = null, rcAfter = null;
+    try {
+      for (let i = 0; i < 400 && readIfPresent(pxPort) === null; i++) spawnSync("sleep", ["0.05"]);
+      const pxNo = readIfPresent(pxPort);
+      if (pxNo !== null) {
+        const proxyCfg = `[http]\n\tproxy = http://127.0.0.1:${pxNo}\n\tsslVerify = false\n`;
+        // (1) a global proxy + sslVerify=false, and GIT_CONFIG=/dev/null in the environment
+        const gcCfg = cfgFile("r22-global-proxy.cfg", proxyCfg);
+        const rawEnv = { ...FX_ENV, GIT_CONFIG_GLOBAL: gcCfg, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG: "/dev/null" };
+        for (const k of Object.keys(noProxyEnv)) delete rawEnv[k];
+        gcBlind = spawnSync("git", ["config", "--get-regexp", "^http\\."], { cwd: gcFx.w, env: rawEnv, encoding: "utf8" });
+        gcPlain = spawnSync("git", ["ls-remote", "--heads", HUB], { cwd: root, env: rawEnv, encoding: "utf8", timeout: 60000 });
+        gcLogged = readIfPresent(pxLog);
+        writeFileSync(pxLog, "");
+        const gcVars = { GIT_CONFIG_GLOBAL: gcCfg, GIT_CONFIG: "/dev/null", PATH: process.env.PATH, ...noProxyEnv };
+        gcScan = inCleanEnv(() => hubTransport(gcFx.w), gcVars);
+        gcWhole = wholeScript(gcFx, "r22gc", gcVars);
+        gcAfter = readIfPresent(pxLog);
+        // (2) a RELATIVE global config (and HOME, XDG_CONFIG_HOME) that names a file only beside the listing's directory
+        mkdirSync(join(relDir, "home")); mkdirSync(join(relDir, "xdg", "git"), { recursive: true });
+        writeFileSync(join(relDir, "rel.cfg"), proxyCfg); writeFileSync(join(relDir, "home", ".gitconfig"), proxyCfg); writeFileSync(join(relDir, "xdg", "git", "config"), proxyCfg);
+        const relVars = [{ GIT_CONFIG_GLOBAL: `../${relBase}/rel.cfg` }, { GIT_CONFIG_GLOBAL: null, HOME: `../${relBase}/home` }, { GIT_CONFIG_GLOBAL: null, HOME: "/nonexistent-r22", XDG_CONFIG_HOME: `../${relBase}/xdg` }];
+        rcScans = relVars.map((v) => inCleanEnv(() => hubTransport(rcFx.w), { ...noProxyEnv, ...v }));
+        writeFileSync(pxLog, "");
+        rcPlain = inCleanEnv(() => inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", HUB], { env: isoEnv, timeout: 60000 })), { ...noProxyEnv, ...relVars[0] });
+        rcLogged = readIfPresent(pxLog);
+        writeFileSync(pxLog, "");
+        rcWhole = wholeScript(rcFx, "r22rc", { ...relVars[0], PATH: process.env.PATH, ...noProxyEnv });
+        rcAfter = readIfPresent(pxLog);
+      }
+    } finally { try { process.kill(pxChild.pid); } catch { /* already gone */ } rmSync(relDir, { recursive: true, force: true }); }
+    const gcGit = withEnvVars({ GIT_CONFIG: "/dev/null", GIT_CONFIG_GLOBAL: "/x/g.cfg" }, () => gitEnv());
+    check("GIT_CONFIG=/dev/null (git config reads only that file, git ls-remote ignores it) hides a global http.proxy + http.sslVerify=false from a plain `git config` and not from the check: GIT_CONFIG is dropped from every git started here and named in the row, the scan finds the sslVerify finding, the whole check exits 1 and the proxy sees no request (R22-gitconfig-env)",
+      !!gcBlind && gcBlind.stdout.trim() === "" && !!gcPlain && !!gcLogged && gcLogged.includes("CONNECT") && !("GIT_CONFIG" in gcGit) && gcGit.GIT_CONFIG_GLOBAL === "/x/g.cfg" &&
+      !!gcScan && gcScan.problems.some((p) => /^http\.sslverify=false \(global [^)]*\) turns TLS verification off$/.test(p)) && gcScan.trusted.includes("environment GIT_CONFIG=/dev/null (not passed to any git started here)") &&
+      !!gcWhole && gcWhole.status === 1 && /✗ Review Hub URL\s+http\.sslverify=false \(global [^)]*\) turns TLS verification off/.test(gcWhole.out) && !gcWhole.out.includes("all present on the Review Hub") && gcAfter === "");
+    check("a RELATIVE GIT_CONFIG_GLOBAL, HOME or XDG_CONFIG_HOME naming a proxy + sslVerify=false file that exists only beside the listing's directory is found by the scan of that directory (global scope named) and the whole check exits 1 without a request to the proxy; plain git in that directory does reach it (R22-relative-config)",
+      rcScans.length === 3 && rcScans.every((s) => s.problems.some((p) => /^http\.sslverify=false \(global [^)]*\) turns TLS verification off$/.test(p))) && !!rcPlain && !!rcLogged && rcLogged.includes("CONNECT") &&
+      !!rcWhole && rcWhole.status === 1 && /✗ Review Hub URL\s+http\.sslverify=false \(global /.test(rcWhole.out) && rcAfter === "");
+    const colonDir = join(root, "r22:tmp"); mkdirSync(colonDir);
+    const colonList = withEnvVars({ TMPDIR: colonDir }, () => listHub()), colonScan = withEnvVars({ TMPDIR: colonDir }, () => hubTransport(rcFx.w)), colonRan = withEnvVars({ TMPDIR: colonDir }, () => inIsolatedDir(() => "ran", () => "refused"));
+    check("a temporary directory whose real path holds a ':' (GIT_CEILING_DIRECTORIES is colon-separated) is refused with a finding naming the path: the listing is not run, the expansion is a failed finding, nothing is created in it; an ordinary temp directory runs (R22-ceiling-colon)",
+      colonList.ok === false && colonList.status === null && colonList.stderr.includes("refusing to run git in an isolated directory") && colonList.stderr.includes("r22:tmp") && readdirSync(colonDir).length === 0 && colonRan === "refused" &&
+      colonScan.problems.some((p) => p.startsWith("git could not expand the Hub URL where the listing is read (refusing to run git in an isolated directory") && p.includes("r22:tmp")) && inIsolatedDir(() => "ran", () => "refused") === "ran");
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

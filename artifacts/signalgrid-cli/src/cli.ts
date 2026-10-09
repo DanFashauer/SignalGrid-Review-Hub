@@ -53,7 +53,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
   signals: {
     usage: "signalgrid signals [<decisionId>] [--json]",
     summary: "List the normalized signals a decision's evidence snapshot used, with freshness and source reference.",
-    requests: ["GET /v1/context", "GET /v1/decisions/:id/evidence"],
+    requests: ["GET /v1/context", "GET /v1/decisions/:id", "GET /v1/decisions/:id/evidence"],
     writes: false,
   },
   audit: {
@@ -364,7 +364,7 @@ async function signals(cfg: Config, id: string): Promise<Out> {
  * (`truncated` not exactly false) is "the prefix read is intact" and nothing more, so it
  * is inconclusive, not valid. No verdict field, or two that disagree, is not valid either.
  */
-function chainVerdict(chain: Record<string, unknown>, source: unknown): { valid: boolean; label: string; length: unknown } {
+function chainVerdict(chain: Record<string, unknown>, source: unknown, received: number): { valid: boolean; label: string; length: unknown } {
   const hasValid = typeof chain["valid"] === "boolean";
   const hasOk = typeof chain["ok"] === "boolean";
   const len = chain["length"] ?? chain["count"];
@@ -391,6 +391,12 @@ function chainVerdict(chain: Record<string, unknown>, source: unknown): { valid:
     // The in-memory verifier keeps its anchor across eviction, so its `truncated` does not
     // weaken `valid` (lib/signalgrid-core audit.ts verifyAuditChain).
     if (!hasValid) return { valid: false, label: "UNKNOWN (an in-memory answer without its `valid` verdict)", length: len };
+    // The in-memory route answers the tenant's whole retained list beside the verdict over
+    // that same list, so the verdict's length must be the number of events received — a
+    // verdict that counts other records does not vouch for these (review round 14).
+    if (chain["valid"] === true && chain["length"] !== received) {
+      return { valid: false, label: `UNKNOWN (the verdict covers ${str(chain["length"])} events, the answer carried ${received})`, length: chain["length"] };
+    }
     return chain["valid"] === true
       ? { valid: true, label: "valid", length: chain["length"] }
       : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
@@ -426,6 +432,7 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
   // page and keeping the tail; --limit is never forwarded as the server's row limit. The
   // in-memory backend ignores the paging and answers the whole list once.
   let shown: Record<string, unknown>[] = [];
+  let received = 0;
   let chain: Record<string, unknown> | undefined;
   let source: unknown;
   for (let page = 0; ; page++) {
@@ -456,12 +463,13 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     }
     chain = pageChain as Record<string, unknown>;
     source = body["source"];
+    received += events.length;
     shown = shown.concat(events as Record<string, unknown>[]);
     if (limit) shown = shown.slice(-limit);
     // Stop on the last page, on any non-durable answer, or on the first verdict that is not valid.
-    if (source !== "durable" || events.length < AUDIT_PAGE || !chainVerdict(chain, source).valid) break;
+    if (source !== "durable" || events.length < AUDIT_PAGE || !chainVerdict(chain, source, received).valid) break;
   }
-  const verdict = chainVerdict(chain, source);
+  const verdict = chainVerdict(chain, source, received);
   return {
     exit: verdict.valid ? EXIT.ok : EXIT.refused,
     json: { ok: verdict.valid, command: "audit", tenant: tenant.id, source: source ?? null, chain, events: shown },

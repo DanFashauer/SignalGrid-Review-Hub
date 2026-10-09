@@ -876,7 +876,7 @@ async function main(): Promise<void> {
     check("audit on a durable verdict carrying `valid` but no `ok` exits 1 (the read-cap rule still applies)", durNoOk.code === 1 && /UNKNOWN|INCONCLUSIVE/.test(durNoOk.stdout));
     const noSource = await viaLiar({ events: [], chain: { valid: true, length: 0 } }, ["audit"]);
     check("audit on a verdict with no recognised source exits 1", noSource.code === 1 && /unrecognised ledger source/.test(noSource.stdout));
-    const memTrunc = await viaLiar({ events: [], chain: { valid: true, length: 3, truncated: true, evictedCount: 2 }, source: "memory" }, ["audit"]);
+    const memTrunc = await viaLiar({ events: [1, 2, 3].map((seq) => ({ seq, tenantId: TENANT, type: "decision.evaluated" })), chain: { valid: true, length: 3, truncated: true, evictedCount: 2 }, source: "memory" }, ["audit"]);
     check("audit on an in-memory verdict that kept its anchor across eviction stays valid (exit 0)", memTrunc.code === 0 && /^chain valid/.test(memTrunc.stdout));
 
     // Evidence and step-up answers must belong to the confirmed tenant.
@@ -1014,6 +1014,39 @@ async function main(): Promise<void> {
     // Listed sync runs carry a recognised status, as a single run does.
     const badStatus = await viaLiar({ syncRuns: [{ ...runRow, status: "probably_fine" }] }, ["connectors", "runs", "conn_x", "--json"]);
     check("connectors runs refuses a listed run with an unrecognised status (exit 1, ok:false)", badStatus.code === 1 && parse(badStatus.stdout)?.["ok"] === false);
+
+    // ── review round 14 on PR #1321 ──
+    // An in-memory verdict must count exactly the events it was returned beside.
+    const memEv = { seq: 1, tenantId: TENANT, type: "decision.evaluated" };
+    for (const [label, chain] of [
+      ["a length of 0 over one event", { valid: true, length: 0 }],
+      ["no length at all", { valid: true }],
+      ["a length larger than the events carried", { valid: true, length: 5 }],
+    ] as const) {
+      const r = await viaLiar({ events: [memEv], chain, source: "memory" }, ["audit", "--json"]);
+      check(`audit refuses an in-memory valid verdict with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
+    const memLimited = await viaLiar({ events: [memEv, { ...memEv, seq: 2 }], chain: { valid: true, length: 2 }, source: "memory" }, ["audit", "--limit", "1", "--json"]);
+    check("audit --limit compares the verdict to every event received, not the ones shown (exit 0, one shown)",
+      memLimited.code === 0 && (parse(memLimited.stdout)?.["events"] as unknown[] | undefined)?.length === 1);
+    // A non-2xx whose body drops mid-read is a refusal: no replay is promised.
+    const errDropper = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      }
+      res.writeHead(500, { "content-type": "application/json", "content-length": "1000" });
+      res.write('{"error":"inter');
+      setTimeout(() => res.destroy(), 50);
+    });
+    const errDropperPort = await listen(errDropper);
+    liars.push(errDropper);
+    const droppedRefusal = await cli([...decideArgs, "--allow-write", "--json", "--idempotency-key", "k_dropped"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${errDropperPort}/api` });
+    const dropErr = parse(droppedRefusal.stdout)?.["error"] as Record<string, unknown> | undefined;
+    check("a 500 whose body drops exits 3, names its key, marks it mayHaveWritten and promises no replay",
+      droppedRefusal.code === 3 && dropErr?.["idempotencyKey"] === "k_dropped" && dropErr?.["mayHaveWritten"] === true && /never replays a refusal/.test(String(dropErr?.["message"])));
+    // The generated request inventory names every request a command makes.
+    check("signals' request inventory names the decision read it now makes", /`GET \/v1\/decisions\/:id`, `GET \/v1\/decisions\/:id\/evidence`/.test(readFileSync(skillPath, "utf8").split("\n").find((l) => l.startsWith("| `signals`")) ?? ""));
 
     // A step-up answer must carry its own id and the decision's identity.
     for (const [label, su] of [

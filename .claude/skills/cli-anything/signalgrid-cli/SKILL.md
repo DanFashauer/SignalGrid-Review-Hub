@@ -27,7 +27,7 @@ Run it from the repository root with `pnpm --silent --filter @workspace/signalgr
 | --- | --- | --- | --- |
 | `decide` | yes, only with `--allow-write` | `GET /v1/context`, `POST /v1/decisions/evaluate`, `GET /v1/decisions/:id/evidence`, `GET /v1/decisions/:id` | Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4. |
 | `explain` | no | `GET /v1/context`, `GET /v1/decisions/:id`, `GET /v1/decisions/:id/evidence` | Show a recorded decision: outcome, reason codes, matched rules, the server's explanation, and whether its evidence snapshot verifies. |
-| `signals` | no | `GET /v1/context`, `GET /v1/decisions/:id/evidence` | List the normalized signals a decision's evidence snapshot used, with freshness and source reference. |
+| `signals` | no | `GET /v1/context`, `GET /v1/decisions/:id`, `GET /v1/decisions/:id/evidence` | List the normalized signals a decision's evidence snapshot used, with freshness and source reference. |
 | `audit` | no | `GET /v1/context`, `GET /v1/audit` | Show the tenant's audit events (newest last; --limit keeps the newest n) and the ledger's chain verdict. A broken or inconclusive chain exits 1. |
 | `connectors` | yes, only with `--allow-write` | `GET /v1/context`, `GET /v1/connectors`, `GET /v1/connectors/:id/sync-runs`, `POST /v1/connectors/:id/sync` | List the tenant's connectors, or one connector's sync runs. `sync` starts a sync run (a WRITE) and needs --allow-write. |
 | `skill` | no | none | Print this CLI's SKILL.md, generated from the command table (offline; no request). |

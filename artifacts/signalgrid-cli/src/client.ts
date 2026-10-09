@@ -215,12 +215,14 @@ export async function call(
   try {
     text = await res.text();
   } catch {
-    // Headers arrived but the body did not: no complete answer was received.
+    // Headers arrived but the body did not: no complete answer was received. The status
+    // DID arrive, and a non-2xx is never replayed, so it picks the recovery note (round 14).
+    const dropped = writeRecovery(key, res.ok ? "lost" : "refused");
     throw new CliError(
       "unreachable",
-      `${method} ${path}: the connection to ${cfg.display} dropped mid-answer; nothing is reported.${lost}`,
+      `${method} ${path}: the connection to ${cfg.display} dropped mid-answer; nothing is reported.${dropped.suffix}`,
       EXIT.unreachable,
-      extra,
+      dropped.extra,
     );
   }
   // A non-2xx is never replayed by the server, whatever its body: the recovery note for

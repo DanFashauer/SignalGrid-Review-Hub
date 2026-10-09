@@ -77,32 +77,63 @@ export function stripComments(text) {
     .join("\n");
 }
 
-/** Does this workflow text carry `schedule:` as a direct key of its top-level `on:`? */
-export function hasScheduleTrigger(rawText) {
-  const lines = stripComments(rawText).split("\n");
-  const onAt = lines.findIndex((l) => /^(?:on|"on"|'on'):/.test(l));
-  if (onAt < 0) return false;
-  const inline = lines[onAt].replace(/^(?:on|"on"|'on'):/, "").trim();
-  // flow form: `on: { push: ..., schedule: [...] }`
-  if (inline.startsWith("{")) return /[{,]\s*schedule\s*:/.test(inline);
-  if (inline !== "") return false; // `on: push` / `on: [push, pull_request]` — no cron is possible
-  let childIndent = null;
-  for (let i = onAt + 1; i < lines.length; i += 1) {
-    const l = lines[i];
-    if (l.trim() === "") continue;
-    const indent = l.length - l.trimStart().length;
-    if (indent === 0) break; // next top-level key: the `on:` block ended
-    if (childIndent === null) childIndent = indent;
-    if (indent === childIndent && /^schedule\s*:/.test(l.trim())) return true;
+/** String contents blanked (so `echo "cron: x"` is not a key), except quoted KEYS (`"schedule":`), which stay. */
+const blankStrings = (t) => t.replace(/("(?:[^"\\\n]|\\.)*"|'[^'\n]*')(?!\s*:)/g, '""');
+const SCHEDULE_KEY = /(?:^|[\s{,])["']?schedule["']?\s*:/;
+const CRON_KEY = /(?:^|[\s{,[-])["']?cron["']?\s*:/m;
+
+/**
+ * "scheduled" | "none" | "unreadable". FAIL CLOSED: a shape this matcher cannot place is "unreadable", which the
+ * gate reports as a problem, never "none". Handled spellings: block and flow `on:` (multi-line flow included),
+ * `on :`, quoted `"on"`/`'on'`, an anchor or tag on the key (`on: &t`, `on: !!map`), quoted `"schedule":` keys,
+ * a BOM, CRLF. Anything else that still carries a `cron:` key, or has no `on:` key at all, is unreadable.
+ */
+export function scheduleVerdict(rawText) {
+  const text = stripComments(rawText.replace(/^\uFEFF/, "")).replace(/\r/g, "");
+  const blanked = blankStrings(text);
+  const lines = blanked.split("\n");
+  const onAt = lines.findIndex((l) => /^(?:on|"on"|'on')\s*:/.test(l));
+  if (onAt < 0) return "unreadable";
+  const inline = lines[onAt].replace(/^(?:on|"on"|'on')\s*:/, "").replace(/^\s*(?:[&!][^\s]*\s*)+/, "").trim();
+  let verdict = "none";
+  if (inline.startsWith("{")) {
+    // flow map: read to the matching brace, possibly over several lines
+    let depth = 0;
+    let flow = "";
+    for (let i = onAt; i < lines.length; i += 1) {
+      const piece = i === onAt ? inline : lines[i];
+      flow += `${piece}\n`;
+      for (const c of piece) depth += c === "{" ? 1 : c === "}" ? -1 : 0;
+      if (depth <= 0) break;
+    }
+    verdict = SCHEDULE_KEY.test(flow.replace(/^\{/, " ")) ? "scheduled" : "none";
+  } else if (inline === "") {
+    let childIndent = null;
+    for (let i = onAt + 1; i < lines.length; i += 1) {
+      const l = lines[i];
+      if (l.trim() === "") continue;
+      const indent = l.length - l.trimStart().length;
+      if (indent === 0) break; // next top-level key: the `on:` block ended
+      if (childIndent === null) childIndent = indent;
+      if (indent === childIndent && /^["']?schedule["']?\s*:/.test(l.trim())) {
+        verdict = "scheduled";
+        break;
+      }
+    }
   }
-  return false;
+  // the fallback: a cron the structural read did not account for is not "unscheduled"
+  if (verdict === "none" && /*M:cron-fallback*/ CRON_KEY.test(blanked)) return "unreadable";
+  return verdict;
 }
 
-/** { "codeql.yml": true, … } for every workflow file in `dir`. */
+/** Back-compat boolean: is it positively a scheduled workflow. */
+export const hasScheduleTrigger = (rawText) => scheduleVerdict(rawText) === "scheduled";
+
+/** { "codeql.yml": "scheduled" | "none" | "unreadable", … } for every workflow file in `dir`. */
 export function scheduleMap(dir) {
   const out = new Map();
   for (const f of readdirSync(dir).filter((x) => /\.ya?ml$/.test(x)).sort()) {
-    out.set(f, hasScheduleTrigger(readFileSync(join(dir, f), "utf8")));
+    out.set(f, scheduleVerdict(readFileSync(join(dir, f), "utf8")));
   }
   return out;
 }
@@ -119,7 +150,35 @@ export function parseIsoDate(s) {
   return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? ms : null;
 }
 
-const stripJsLineComments = (t) => t.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+const stripJsComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+const escapeRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Is `script` inside some step's `cmd: [...]` array in preflight? A name: string or a comment does not count. */
+export function preflightRuns(preflightText, script) {
+  return new RegExp(`cmd\\s*:\\s*\\[[^\\]]*["'\`]${escapeRe(script)}["'\`]`).test(stripJsComments(preflightText));
+}
+
+/** Is `script` inside a `run:` body in the CI workflow? A step `name:` or a comment does not count. */
+export function ciRuns(ciText, script) {
+  const lines = stripComments(ciText).replace(/\r/g, "").split("\n");
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^(\s*)(-\s+)?run\s*:\s*(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const keyIndent = m[1].length + (m[2] ? m[2].length : 0);
+    let body = m[3];
+    if (/^[|>][+-]?\d*$/.test(body.trim())) {
+      body = "";
+      for (let j = i + 1; j < lines.length; j += 1) {
+        if (lines[j].trim() === "") continue;
+        if (lines[j].length - lines[j].trimStart().length <= keyIndent) break;
+        body += `${lines[j]}\n`;
+      }
+    }
+    if (body.includes(script)) return true;
+  }
+  return false;
+}
+
 
 /**
  * @param {object} i
@@ -135,8 +194,8 @@ export function check({ scheduled, registry, readRel, refDate }) {
   if (entries === null) return [`${REGISTRY_REL}: no \`workflows\` array — the registry is unreadable, so nothing is registered`];
 
   const refMs = parseIsoDate(refDate);
-  const preflight = stripJsLineComments(readRel(PREFLIGHT_REL) ?? "");
-  const ci = stripComments(readRel(CI_REL) ?? "");
+  const preflight = readRel(PREFLIGHT_REL) ?? "";
+  const ci = readRel(CI_REL) ?? "";
 
   const seen = new Set();
   for (const e of entries) {
@@ -147,7 +206,8 @@ export function check({ scheduled, registry, readRel, refDate }) {
     }
     if (/*M:duplicate*/ seen.has(wf)) problems.push(`${wf}: registered twice — one workflow, one watcher`);
     seen.add(wf);
-    if (/*M:stale-entry*/ scheduled.get(wf) !== true) {
+    if (scheduled.get(wf) === "unreadable") continue; // reported once, below, whether or not it is registered
+    if (/*M:stale-entry*/ scheduled.get(wf) !== "scheduled") {
       problems.push(`${wf}: registered, but ${scheduled.has(wf) ? "it no longer has a `schedule:` trigger" : "no such workflow file exists"} — delete the entry`);
       continue;
     }
@@ -171,7 +231,7 @@ export function check({ scheduled, registry, readRel, refDate }) {
       } else if (/*M:stale-date*/ (refMs - rMs) / 86_400_000 > STALE_AFTER_DAYS) {
         problems.push(`${wf}: exemption last reviewed ${w.reviewedAt}, over ${STALE_AFTER_DAYS} days before ${refDate} — re-read it and re-date it`);
       }
-      if (w.redWatcher !== undefined && !AUTO_KINDS.includes(w.redWatcher)) {
+      if (/*M:red-watcher*/ w.redWatcher !== undefined && !AUTO_KINDS.includes(w.redWatcher)) {
         problems.push(`${wf}: redWatcher ${JSON.stringify(w.redWatcher)} is not a raised-hands auto kind (${AUTO_KINDS.join(", ")})`);
       }
       continue;
@@ -182,16 +242,20 @@ export function check({ scheduled, registry, readRel, refDate }) {
     if (/*M:script-exists*/ src === null) {
       problems.push(`${wf}: ${kind} names script ${JSON.stringify(script)}, which does not exist`);
     } else {
-      if (/*M:wired*/ !preflight.includes(script)) problems.push(`${wf}: watcher script ${script} is not run by ${PREFLIGHT_REL}`);
-      if (!ci.includes(script)) problems.push(`${wf}: watcher script ${script} is not run by ${CI_REL}`);
+      if (/*M:wired*/ !preflightRuns(preflight, script)) problems.push(`${wf}: watcher script ${script} is not run by ${PREFLIGHT_REL} (a name: string or a comment is not a run)`);
+      if (/*M:wired-ci*/ !ciRuns(ci, script)) problems.push(`${wf}: watcher script ${script} is not run by ${CI_REL} (a step name: or a comment is not a run)`);
       if (/*M:names-workflow*/ !src.includes(wf)) problems.push(`${wf}: watcher script ${script} never names ${wf} — it cannot be watching it`);
     }
     if (kind === "auto-hand" && !AUTO_KINDS.includes(w.hand)) {
       problems.push(`${wf}: auto-hand names kind ${JSON.stringify(w.hand)}, which raised-hands does not detect (${AUTO_KINDS.join(", ")})`);
     }
   }
-  for (const [wf, isScheduled] of scheduled) {
-    if (/*M:unregistered*/ isScheduled && !seen.has(wf)) {
+  for (const [wf, verdict] of scheduled) {
+    if (/*M:unreadable*/ verdict === "unreadable") {
+      problems.push(`${wf}: cannot tell whether it has a \`schedule:\` trigger (no top-level \`on:\` key, or a \`cron:\` this reader cannot attribute to one) — failing closed; rewrite the trigger block in a plain form`);
+      continue;
+    }
+    if (/*M:unregistered*/ verdict === "scheduled" && !seen.has(wf)) {
       problems.push(`${wf}: has a \`schedule:\` trigger and no entry in ${REGISTRY_REL} — if it silently stops, nothing notices. Register a watcher or a dated exemption with a reason.`);
     }
   }
@@ -219,7 +283,9 @@ function run(root, refDate) {
     return { problems: [`${REGISTRY_REL}: missing or not JSON`], scheduled: new Map(), registry: null };
   }
   const scheduled = existsSync(wfDir) ? scheduleMap(wfDir) : new Map();
-  return { problems: check({ scheduled, registry, readRel, refDate }), scheduled, registry };
+  const problems = check({ scheduled, registry, readRel, refDate });
+  if (/*M:empty-tree*/ scheduled.size === 0) problems.push(".github/workflows holds no workflow files — an empty tree is not a clean tree (wrong --root, or the directory is gone)");
+  return { problems, scheduled, registry };
 }
 
 // ── self-test ────────────────────────────────────────────────────────────────
@@ -232,13 +298,15 @@ const exempt = (extra = {}) => ({ kind: "exempt", reason: GOOD_REASON, reviewedA
 const probe = { kind: "api-probe", script: "scripts/w.mjs" };
 
 /** Lay a fixture repo under a temp dir and return its root. */
-function fixture({ workflows, registry, extraFiles = {}, preflight = '[{ cmd: ["node", "scripts/w.mjs"] }]', ci = "run: node scripts/w.mjs\n" }) {
+const CI_OK = "on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - name: gate\n        run: node scripts/w.mjs\n";
+function fixture({ workflows, registry, extraFiles = {}, preflight = '[{ cmd: ["node", "scripts/w.mjs"] }]', ci = CI_OK, noWorkflowsDir = false }) {
   const root = mkdtempSync(join(realpathSync(tmpdir()), "swl-"));
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   mkdirSync(join(root, "docs/agent"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
   for (const [f, t] of Object.entries(workflows)) writeFileSync(join(root, ".github/workflows", f), t);
   writeFileSync(join(root, CI_REL), ci);
+  if (noWorkflowsDir) rmSync(join(root, ".github"), { recursive: true, force: true });
   writeFileSync(join(root, PREFLIGHT_REL), preflight);
   writeFileSync(join(root, "scripts/w.mjs"), "// watches a.yml\n");
   for (const [f, t] of Object.entries(extraFiles)) writeFileSync(join(root, f), t);
@@ -275,7 +343,7 @@ function selfTest() {
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: undefined }))) }, 1, "exempt with no reviewedAt at all → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: "2027-01-01" }))) }, 1, "exempt dated after the reference date → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), preflight: "[]" }, 1, "api-probe script not wired in preflight → exit 1");
-  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), ci: "run: echo\n" }, 1, "api-probe script not wired in CI → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), ci: "on:\n  push: {}\njobs:\n  a:\n    steps:\n      - run: echo\n" }, 1, "api-probe script not wired in CI → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), extraFiles: { "scripts/w.mjs": "// watches nothing\n" } }, 1, "api-probe script that never names the workflow → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry({ kind: "auto-hand", script: "scripts/w.mjs", hand: "no-such-kind" })) }, 1, "auto-hand naming a kind raised-hands lacks → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry({ kind: "magic" })) }, 1, "unknown watcher kind → exit 1");
@@ -288,6 +356,35 @@ function selfTest() {
   const flow = `name: F\non: { push: {}, schedule: [{ cron: "0 0 * * *" }] }\njobs:\n  a:\n    runs-on: x\n`;
   exits({ workflows: { "a.yml": flow }, registry: reg() }, 1, "flow-style `on: { schedule: … }` is detected (unregistered → exit 1)");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: { version: 1 } }, 1, "a registry with no `workflows` array → exit 1");
+
+  // ── review round 1 (fail-OPEN detector, wiring by substring, empty tree, redWatcher) ──
+  // Every shape below is VALID GitHub-workflow YAML that carries a cron. An unregistered one must go red.
+  const unreg = (name, text) => exits({ workflows: { "a.yml": text }, registry: reg() }, 1, `valid YAML shape \`${name}\` with a cron and no entry → exit 1 (never read as "not scheduled")`);
+  unreg("multi-line flow map", `name: F\non: {\n  push: {},\n  schedule: [{ cron: "0 0 * * *" }]\n}\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("flow map continued on the next line", `name: F\non: { push: {},\n  schedule: [{ cron: "0 0 * * *" }] }\njobs:\n  a:\n    runs-on: x\n`);
+  unreg('double-quoted "schedule": key', `name: Q\non:\n  push: {}\n  "schedule":\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("single-quoted 'schedule': key", `name: Q\non:\n  push: {}\n  'schedule':\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("`on :` with a space before the colon", `name: S\non :\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("quoted \"on\": key", `name: S\n"on":\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("anchor on the on: key", `name: A\non: &trig\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("!!map tag on the on: key", `name: T\non: !!map\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("a BOM before a first-line on:", `\uFEFFon:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n`);
+  unreg("CRLF line endings", `name: C\r\non:\r\n  schedule:\r\n    - cron: "0 0 * * *"\r\njobs:\r\n  a:\r\n    runs-on: x\r\n`);
+  // a shape the matcher cannot place at all: a cron it cannot attribute to a trigger must FAIL, not pass as unscheduled
+  exits({ workflows: { "a.yml": `name: U\ntriggers:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a cron the detector cannot attribute to an on: trigger → exit 1 (unreadable fails closed)");
+  exits({ workflows: { "a.yml": `name: X\non:\n  push: {}\n  ? schedule\n  : - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "valid YAML complex-key `? schedule` under on: (a cron the structural read missed) → exit 1 (the cron fallback)");
+  exits({ workflows: { "a.yml": `name: N\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a workflow with no on: key at all → exit 1 (unreadable fails closed)");
+  // negative control for the fallback: the word cron inside a quoted string / run body is not a trigger
+  exits({ workflows: { "a.yml": `name: D\non:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo "cron: nightly"\n` }, registry: reg() }, 0, "negative control: \`cron:\` inside a quoted string in a run line is not a schedule → exit 0");
+  // an empty tree is not a clean tree
+  exits({ workflows: {}, registry: reg(), noWorkflowsDir: true }, 1, "no .github/workflows directory and an empty registry → exit 1 (0 workflows is not green)");
+  // wired means RUN, not mentioned
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), preflight: '[{ name: "see scripts/w.mjs", cmd: ["node", "other.mjs"] }]' }, 1, "script named only in a preflight step's name: string is not wired → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), preflight: '[{ cmd: ["node", "other.mjs"] }] /* scripts/w.mjs */' }, 1, "script named only in a preflight block comment is not wired → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), ci: "on:\n  push: {}\njobs:\n  a:\n    steps:\n      - name: node scripts/w.mjs\n        run: echo hi\n" }, 1, "script named only in a CI step name: is not wired → exit 1");
+  // redWatcher: validated, and both directions exercised
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ redWatcher: "no-such-kind" }))) }, 1, "exempt with a redWatcher that is not an auto kind → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ redWatcher: "mac-lane-red" }))) }, 0, "control: exempt with a real redWatcher kind → exit 0");
 
   // run through a SYMLINK to the gate (macOS tmpdir is one): it must still produce its verdict, never print nothing and exit 0
   {
@@ -322,6 +419,11 @@ function selfTest() {
         ["M:wired", "false &&", "an unwired watcher script is no longer reported"],
         ["M:names-workflow", "false &&", "a watcher that never names the workflow is no longer reported"],
         ["M:duplicate", "false &&", "a duplicate entry is no longer reported"],
+        ["M:unreadable", "false &&", "an unreadable workflow shape is no longer reported"],
+        ["M:cron-fallback", "false &&", "a cron the matcher cannot place is no longer treated as unreadable"],
+        ["M:wired-ci", "false &&", "a script not run by CI is no longer reported"],
+        ["M:red-watcher", "false &&", "a bogus redWatcher kind is no longer reported"],
+        ["M:empty-tree", "false &&", "an empty workflows tree is no longer reported"],
       ];
       for (const [token, repl, what] of mutants) {
         const marker = `/*${token}*/`;
@@ -391,7 +493,7 @@ if (real(process.argv[1] ?? "") === real(fileURLToPath(import.meta.url))) {
     console.error(`✗ scheduled-workflow liveness: ${problems.length} problem(s)\n` + problems.map((p) => `    · ${p}`).join("\n"));
     process.exit(1);
   }
-  const rows = [...scheduled].filter(([, s]) => s).map(([wf]) => registry.workflows.find((e) => e.workflow === wf) ?? { workflow: wf, watcher: { kind: "UNREGISTERED" } });
+  const rows = [...scheduled].filter(([, v]) => v === "scheduled").map(([wf]) => registry.workflows.find((e) => e.workflow === wf) ?? { workflow: wf, watcher: { kind: "UNREGISTERED" } });
   console.log(`scheduled-workflow liveness: ${rows.length} scheduled workflow(s), each names its watcher (reference date ${refDate}):`);
   for (const e of rows) {
     const w = e.watcher;

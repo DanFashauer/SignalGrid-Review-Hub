@@ -42,7 +42,7 @@
       "cron": "0 6 * * 1 (weekly, macos-latest)",
       "watcher": {
         "kind": "exempt",
-        "reason": "A rehearsal of ./validate-sim-macos.sh on a throwaway hosted Mac, dispatch or weekly only. NOT covered against silence: nothing notices it skipping a week. Acceptable because the same suite runs nightly and per PR through mac-runner-auto.yml on the real Mac and in CI via preflight, so a dropped weekly leg removes a redundant rehearsal, not the only run. A RED run is covered: raised-hands kind mac-lane-red raises a hand.",
+        "reason": "A rehearsal of ./validate-sim-macos.sh on a throwaway hosted Mac, dispatch or weekly only. NOT covered against silence: nothing notices it skipping a week. Acceptable because the same harness runs in the nightly leg of mac-runner-auto.yml on the real Mac (itself an unwatched exemption, below) and preflight runs per PR there and in CI, so a dropped weekly leg removes a redundant hosted-Mac rehearsal, not the only run. A RED run is covered: raised-hands kind mac-lane-red raises a hand.",
         "reviewedAt": "2026-10-08",
         "redWatcher": "mac-lane-red"
       }

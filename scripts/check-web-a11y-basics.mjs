@@ -15,8 +15,8 @@
 // Each was fixed by hand; each is the kind of fix the next edit silently undoes.
 // One rule per defect:
 //
-//   1. LIVE REGION. A POLLING VIEW (.tsx) must render <LiveRegion …/> or an
-//      aria-live="polite|assertive" attribute ("off" is not a live region). A
+//   1. LIVE REGION. A POLLING VIEW (.tsx) must render <LiveRegion …/>, whose
+//      message and alert the gate reads; a raw aria-live element does not count. A
 //      file POLLS when it declares `refetchInterval`, drives a refetch from a
 //      timer on a schedule (setInterval; a setTimeout that re-arms itself or sits
 //      in an effect with dependencies — a one-shot delay is not polling), calls a query hook while its
@@ -228,7 +228,11 @@ export function timerPolls(code) {
   if (timeouts.unbalanced || effects.unbalanced) return true;
   for (const [a, b] of timeouts.spans) {
     const args = code.slice(code.indexOf("(", a) + 1, b - 1);
-    const first = args.match(/^\s*([A-Za-z_$][\w$]*)\s*,/)?.[1] ?? null;
+    // The callback, or the one function a zero-argument wrapper calls:
+    // `setTimeout(tick, n)`, `setTimeout(() => tick(), n)`, `setTimeout(function () { tick(); }, n)`.
+    const first = args.match(/^\s*([A-Za-z_$][\w$]*)\s*,/)?.[1]
+      ?? args.match(/^\s*(?:async\s*)?(?:\(\s*\)\s*=>|function\s*\(\s*\))\s*\{?\s*(?:void\s+|await\s+)?([A-Za-z_$][\w$]*)\s*\(\s*\)\s*;?\s*\}?\s*,/)?.[1]
+      ?? null;
     if (/\bsetTimeout\s*\(/.test(args) && REFRESH.test(args)) return true;
     const fn = first ? functionBody(code, first) : null;
     if (fn && fn.start <= a && b <= fn.end && REFRESH.test(fn.text)) return true;
@@ -446,7 +450,14 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       continue;
     }
     polling.push(f.rel);
-    if (!LIVE.test(f.code)) failures.push(`${f.rel}: polls but renders no live region (<LiveRegion> / aria-live="polite|assertive") — WCAG 4.1.3`);
+    // A polling view announces through <LiveRegion>, whose message/alert the gate can
+    // read against the view's queries. A raw `aria-live` element's text cannot be
+    // checked that way, so it does not count (failing closed).
+    if (!/<LiveRegion\b/.test(f.code)) {
+      failures.push(LIVE.test(f.code)
+        ? `${f.rel}: polls but announces through a raw aria-live element — use <LiveRegion> so the gate can check its message and alert against the polled queries (failing closed, WCAG 4.1.3)`
+        : `${f.rel}: polls but renders no <LiveRegion> — WCAG 4.1.3`);
+    }
     else failures.push(...checkUnannouncedQueries(f.rel, f.code, queryHookNames(f.code, generated).isHook, defaultPolls));
   }
   return { polling, failures };
@@ -507,10 +518,26 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
     const listHook = /Queries$/.test(m[2]) && !m[1].startsWith("[") && !m[1].startsWith("{");
     const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
     const reads = (re) => re.test(announced);
+    // Every polled query's FAILURE must reach an alert: a failed background refetch
+    // keeps the cached data, so a region reading only `data` stays silent through it.
+    const ERR = "error|isError|isRefetchError|isLoadingError|status|failureCount|failureReason";
+    const errBound = m[1].startsWith("{")
+      ? m[1].slice(1, -1).split(",").map((x) => x.trim()).filter((x) => !x.startsWith("...")).map((x) => x.split("=")[0].split(":").map((y) => y.trim()))
+        .filter(([key]) => new RegExp(`^(?:${ERR})$`).test(key)).map(([key, alias]) => alias || key)
+      : [];
+    const inAlert = (re) => re.test(alerts);
+    const failureAlerted = errBound.some((n) => inAlert(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
+      holders.some((h) => inAlert(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}(?:\\[\\d+\\])?\\??\\.(?:${ERR})(?![\\w$])`))) ||
+      (listHook && inAlert(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?![\\w$])`)) && inAlert(new RegExp(`\\??\\.(?:${ERR})(?![\\w$])`)));
     if (errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s error flag (${errorsOnlyPolite.join(", ")}) never reaches a <LiveRegion> alert — a failed refresh is not announced assertively (WCAG 4.1.3)`);
     if (direct.some((n) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
         holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`))) ||
-        (listHook && reads(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?:\\[\\d+\\])?\\??\\.`)) && reads(new RegExp(`\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) continue;
+        (listHook && reads(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?:\\[\\d+\\])?\\??\\.`)) && reads(new RegExp(`\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) {
+      // The region reads this query's result; its FAILURE must reach an alert too (one
+      // finding per query: an unread result is reported below instead).
+      if (!failureAlerted && !errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s failure state is never read by a <LiveRegion> alert — a failed background refresh keeps the cached data and is silent (WCAG 4.1.3)`);
+      continue;
+    }
     const line = code.slice(0, m.index).split("\n").length;
     failures.push(`${rel}:${line}: polled ${m[2]}() result/error (${names.join(", ") || "none bound"}) is never read by a <LiveRegion> — its updates and failures are silent (WCAG 4.1.3)`);
   }
@@ -791,7 +818,11 @@ export function hasNonBlankLabel(tag, src = "") {
     const byRef = m[1] !== undefined;
     if (spreadAfter(m.index + m[0].length)) continue;
     if (m[2] !== undefined) { const v = decodeEntities(m[3]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
-    else if (m[4] !== undefined) { const v = decodeEscapes(m[5]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
+    else if (m[4] !== undefined) {
+      // A template's interpolations may be empty at runtime: only its literal text counts.
+      const v = decodeEscapes(m[4] === "`" ? m[5].replace(/\$\{[^}]*\}/g, "") : m[5]);
+      if (!isBlank(v) && (!byRef || resolves(v))) return true;
+    }
     else if (byRef) continue; // a computed id: cannot be verified
     else {
       // An expression names the button only if it cannot come out empty. React drops
@@ -805,9 +836,52 @@ export function hasNonBlankLabel(tag, src = "") {
         else if (tag[i] === "}" && --depth === 0) { end = i; break; }
       }
       if (end < 0) return false; // unclosed: fail closed
-      if (!mayBeEmpty(tag.slice(open + 1, end))) return true;
+      // …and only if it provably renders text: a bare `{label}`, `{props.label}` or
+      // `{t("close")}` can be undefined or "" at runtime, so it names nothing the gate
+      // can prove. A literal, a template with literal text, a non-blank `|| "x"` /
+      // `?? "x"` fallback, or a ternary whose arms all are, does.
+      const expr = tag.slice(open + 1, end);
+      if (!mayBeEmpty(expr) && provablyNonBlank(expr)) return true;
     }
   }
+  return false;
+}
+
+/** Split a top-level `c ? a : b` into [c, a, b], or null. Quotes and brackets are skipped. */
+function splitTernary(t) {
+  let depth = 0, q = -1;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (ch === '"' || ch === "'" || ch === "`") { const j = t.indexOf(ch, i + 1); if (j < 0) return null; i = j; continue; }
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    else if (depth === 0 && ch === "?" && t[i + 1] !== "?" && t[i + 1] !== "." && t[i - 1] !== "?") {
+      if (q < 0) { q = i; let nest = 0;
+        for (let k = i + 1, d = 0; k < t.length; k++) {
+          const c = t[k];
+          if (c === '"' || c === "'" || c === "`") { const j = t.indexOf(c, k + 1); if (j < 0) return null; k = j; continue; }
+          if ("([{".includes(c)) d++;
+          else if (")]}".includes(c)) d--;
+          else if (d === 0 && c === "?" && t[k + 1] !== "?" && t[k + 1] !== "." && t[k - 1] !== "?") nest++;
+          else if (d === 0 && c === ":") { if (nest === 0) return [t.slice(0, q), t.slice(q + 1, k), t.slice(k + 1)]; nest--; }
+        }
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+/** Does this label expression provably evaluate to non-blank text? Anything unproven does not. */
+export function provablyNonBlank(expr) {
+  const t = expr.trim();
+  const lit = t.match(/^(["'])((?:\\.|(?!\1)[^\\])*)\1$/);
+  if (lit) return /\S/.test(lit[2]);
+  if (/^`[^`]*`$/.test(t)) return /\S/.test(t.slice(1, -1).replace(/\$\{[^}]*\}/g, ""));
+  const tern = splitTernary(t);
+  if (tern) return provablyNonBlank(tern[1]) && provablyNonBlank(tern[2]);
+  const fb = t.match(/(?:\|\||\?\?)\s*((["'`])[^"'`]*\2)\s*$/);
+  if (fb) return provablyNonBlank(fb[1]);
   return false;
 }
 
@@ -1157,7 +1231,8 @@ function selfTest() {
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"off\" />")], false).failures.length === 1],
     ["a data-aria-live attribute is not a live region",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div data-aria-live=\"polite\" />")], false).failures.length === 1 &&
-      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"polite\" />")], false).failures.length === 0],
+      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"polite\" />")], false).failures.length === 1 &&
+      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <LiveRegion message=\"\" />")], false).failures.length === 0],
     ["default-polling tree: page with a list hook and no live region fails",
       checkLiveRegions([view("t/src/pages/B.tsx", "const { data } = useListThings();")], true).failures.length === 1],
     ["non-default tree: page with a list hook is not a polling view",
@@ -1235,7 +1310,7 @@ function selfTest() {
     ["an empty or blank aria-label does not name a button",
       ['aria-label=""', 'aria-label=" "', 'aria-label={""}', "aria-label={` `}", 'aria-label="&nbsp;"', 'aria-labelledby=""'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
-      ['aria-label="Close"', "aria-label={t('close')}", 'aria-labelledby="close-label"'].every((a) => checkIconButtons("x.tsx", `<span id="close-label">Close</span><button onClick={f} ${a}><svg/></button>`).length === 0)],
+      ['aria-label="Close"', "aria-label={t('close') || 'Close'}", 'aria-labelledby="close-label"'].every((a) => checkIconButtons("x.tsx", `<span id="close-label">Close</span><button onClick={f} ${a}><svg/></button>`).length === 0)],
     ["text inside an aria-hidden child does not name a button",
       ['<span aria-hidden="true">×</span>', "<span aria-hidden>×</span>", "<span aria-hidden={true}>×</span>", '<span aria-hidden="true"><b>×</b></span>'].every((c) =>
         checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon">${c}</Button>`).length === 1) &&
@@ -1392,7 +1467,7 @@ function selfTest() {
     ["a label expression that can come out empty does not name a button",
       ['aria-label={undefined}', 'aria-label={null}', 'aria-label={open ? "Close" : undefined}', 'aria-label={open && "Close"}', 'aria-labelledby={id ?? undefined}', 'aria-label={x ? "" : "Close"}'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1 && checkIconButtons("x.tsx", `<Button size="icon" ${a}><X /></Button>`).length === 1) &&
-      ['aria-label={t("close")}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
+      ['aria-label={t("close") ?? "Close"}', 'aria-label={open ? "Close" : "Open"}', 'aria-label={`Delete rule ${i + 1}`}', 'aria-label={!known ? "Alerts, state unknown" : `Alerts, ${n} active`}'].every((a) =>
         checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
     ["the LiveRegion component keeps a polite channel and a role=alert channel without a redundant aria-live",
       checkLiveRegionComponent('<div role="status" aria-live="polite" aria-atomic="true">{m}</div><div role="alert" aria-atomic="true">{a}</div>').length === 0 &&
@@ -1429,9 +1504,9 @@ function selfTest() {
       checkLiveRegionText("x.tsx", 'const { data, isError } = useQ(); <LiveRegion message={m} alert={isError && !shell.isError ? "Filtered signals could not be refreshed." : ""} />').length === 0 &&
       checkLiveRegionText("x.tsx", 'const { data } = useQ(); <LiveRegion message={m} alert="" />').length === 0],
     ["a polled query a view binds must reach its live region",
-      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s } = useListSignals(); <LiveRegion message={s ? "x" : ""} alert="" />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s, isError: se } = useListSignals(); <LiveRegion message={s ? "x" : ""} alert={se ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message="" alert={e ? "Metrics could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
-      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics({ query: { refetchInterval: 5000 } }); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 1],
     ["a live region must read a polled query's result or error, not only its loading flags",
@@ -1439,9 +1514,9 @@ function selfTest() {
         'const q = useGetMetrics(); <LiveRegion message={q.isLoading ? "Loading" : ""} />',
         'const { isFetching: f } = useGetMetrics(); <LiveRegion message={f ? "Refreshing" : ""} />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
-      ['const { data: m, isLoading } = useGetMetrics(); <LiveRegion message={m ? `${m.total}` : ""} />',
+      ['const { data: m, isLoading, isError: e } = useGetMetrics(); <LiveRegion message={m ? `${m.total}` : ""} alert={e ? "Down." : ""} />',
         'const q = useGetMetrics(); <LiveRegion message="" alert={q.isError ? "Metrics could not be refreshed." : ""} />',
-        'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? "x" : ""} />'].every((c) =>
+        'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? "x" : ""} alert={rest.isError ? "Down." : ""} />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 0)],
     ["the reduced-motion stylesheet must be imported by index.html's module entry",
       (() => {
@@ -1462,13 +1537,13 @@ function selfTest() {
       checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["useQueries array bindings must reach the live region",
       checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
-      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="" alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["live-region markup inside a string or template literal is not a live region",
       ["const example = `<LiveRegion message={data} />`;", "const doc = '<div aria-live=\"polite\"></div>';"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `const { data } = useQuery({ refetchInterval: 5000 }); ${c} return <div/>;`)], false).failures.length === 1) &&
-      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data } = useQuery({ refetchInterval: 5000 }); return <LiveRegion message={data ? `${data.n} at ${data.updatedAt}` : ""} alert="" />;')], false).failures.length === 0],
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data, isError } = useQuery({ refetchInterval: 5000 }); return <LiveRegion message={data ? `${data.n} at ${data.updatedAt}` : ""} alert={isError ? "Down." : ""} />;')], false).failures.length === 0],
     ["a count stored in a variable first is still a count",
       checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected.` : ""} alert="" />').length === 1 &&
       checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected; last sync ${latest.id} at ${latest.lastSync}.` : ""} alert="" />').length === 0],
@@ -1484,6 +1559,21 @@ function selfTest() {
     ["a polled query's error flag must reach the alert, not only the polite message",
       checkUnannouncedQueries("x.tsx", 'const { data: s, isError: e } = useListSignals(); <LiveRegion message={s && !e ? `${s.n}` : "Count unknown."} alert="" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const { data: s, isError: e } = useListSignals(); <LiveRegion message={s ? `${s.n}` : ""} alert={e ? "Signals could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0],
+    ["a computed label the gate cannot prove non-blank does not name a button",
+      ['aria-label={label}', 'aria-label={props.label}', 'aria-label={t("close")}', 'aria-label={open ? label : "Open"}', 'aria-label={`${label}`}'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 1) &&
+      ['aria-label={label || "Close"}', 'aria-label={`Close ${name}`}', 'aria-label={open ? "Close" : `Open ${n}`}'].every((a) =>
+        checkIconButtons("x.tsx", `<button onClick={f} ${a}><svg/></button>`).length === 0)],
+    ["a refetch loop that re-arms through a wrapper callback polls",
+      ["function tick() { refetch(); setTimeout(() => tick(), 5000); } tick();",
+        "function tick() { q.refetch(); setTimeout(function () { tick(); }, 5000); } tick();"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `${c} return <div/>;`)], false).failures.length === 1) &&
+      checkLiveRegions([view("t/src/pages/T.tsx", "function show() { setOpen(true); } <button onClick={() => setTimeout(() => show(), 100)}>Open</button>; refetch(); return <div/>;")], false).failures.length === 0],
+    ["every polled query's failure must reach an alert, not only its data",
+      ['const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} />',
+        'const { data: m } = useGetMetrics(); <LiveRegion message={m ? `${m.n}` : ""} alert="" />'].every((c) =>
+        checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
+      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

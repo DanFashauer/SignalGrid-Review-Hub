@@ -206,6 +206,10 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08 on) that
+  // cites one in plain text passes it unchecked. Follow-up (d) of the PR #1456 review.
+  { name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)", cmd: ["node", "scripts/check-stamp-citations.mjs"] },
+  { name: "Stamp-citation self-test (the gate can actually fail)", cmd: ["node", "scripts/check-stamp-citations.mjs", "--self-test"] },
   // A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X the
   // control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two documents
   // and read by nothing, anywhere, for as long as the documents existed.

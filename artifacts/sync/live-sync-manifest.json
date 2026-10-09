@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 93,
-  "fingerprint": "ba775345b7d0bee7c456e12fd6e8466f7cf57eed0c099c2c882f166377c25749",
+  "manifestVersion": 94,
+  "fingerprint": "8804e9eba4ff880878c7f25acf44d8878e436048915d933743b03634c5694ae1",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -116,16 +116,16 @@
       "caep-events": 18,
       "challenge-capability": 53,
       "change-window": 79,
-      "config-scope": 58,
+      "config-scope": 59,
       "credential-exposure": 41,
       "custody-beacon": 56,
       "data-lifecycle": 31,
       "decision-continuity": 76,
-      "device-attestation": 154,
+      "device-attestation": 157,
       "device-management-health": 209,
       "device-resolver": 14,
       "dual-control": 78,
-      "emitter-discipline": 100,
+      "emitter-discipline": 139,
       "entitlement-binding": 63,
       "estate-core": 13,
       "evidence-coverage": 30,

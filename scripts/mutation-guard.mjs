@@ -568,7 +568,13 @@ export const TARGETS = [
   // gate in isolation. Built after the lesson, they needed registering, not fixing.
   {
     proof: "proof:graph-connector",
-    files: ["lib/integrations/src/integrations/graph/index.ts"],
+    oneLine: true,
+    files: [
+      "lib/integrations/src/integrations/graph/index.ts",
+      // posture-connector.ts registered 2026-10-09 (wave 7): the proof drives GraphPostureConnector
+      // directly, and its normalizers (normalizeManagement, ...) are the shipped read path against a real tenant.
+      "lib/integrations/src/integrations/graph/posture-connector.ts",
+    ],
   },
   {
     proof: "proof:carrier-reachability",

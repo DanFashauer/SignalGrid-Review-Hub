@@ -837,7 +837,7 @@ earlier — that is the loop working, not a reason to soften the record.
     working: fix the copy, never the gate). The existing negation handling means the pack's own "None held,
     none claimed" row stays legal. REMAINING: SECURITY_CONTROLS_MATRIX's status
     column still has no drift gate (days).
-50. **Operability claims without live evidence** — sre (the CI-bound half) + mac-lane-steward (live evidence is mintable only on the Mac). RE-MEASURED 2026-10-08 (still one third done): `node scripts/check-ci-job-timeouts.mjs` printed ci-job-timeouts: 37 jobs, 0 unbounded; self-test green (the row's 32-job figure is from 2026-08-23 and the workflow set has grown); the SLO-surface and mutation-sweep liveness halves remain open and the latter waits on an owner call as the row states. ONE THIRD DONE 2026-08-23.
+50. **Operability claims without live evidence** — sre (the CI-bound half) + mac-lane-steward (live evidence is mintable only on the Mac). RE-MEASURED 2026-10-08 (still one third done): `node scripts/check-ci-job-timeouts.mjs` printed ci-job-timeouts: 37 jobs, 0 unbounded; self-test green (the row's 32-job figure is from 2026-08-23 and the workflow set has grown); the SLO-surface and mutation-sweep liveness halves remain open and the latter waits on an owner call as the row states. FIX PROPOSED 2026-10-09 (branch claude/build-scheduled-workflow-liveness-registry, lands under DR-037): the liveness half's broader question (which scheduled workflows have anything noticing a silent stop) is now a static gate, `scripts/check-scheduled-workflow-liveness.mjs`, over `docs/agent/scheduled-workflow-liveness.json`; no status change here. ONE THIRD DONE 2026-08-23.
     The CI-bound half is closed and gated; the other two remain open.
     **DONE — the nine unbounded jobs.** The row's figure was exactly right: 32
     real jobs, 9 without `timeout-minutes` (a first parse of mine said 43 and
@@ -871,6 +871,7 @@ earlier — that is the loop working, not a reason to soften the record.
     committed, so nothing in this repository can answer "did the mutation sweep
     run today, and what did it measure" — only the Actions history can, and
     that is not evidence the repo carries.
+    RE-MEASURED 2026-10-09 (branch claude/build-scheduled-workflow-liveness-registry): row 53 (DONE 2026-08-23) already answers the sweep's liveness from the Actions API with nothing committed, `scripts/check-ci-liveness.mjs`; this branch adds `scripts/check-scheduled-workflow-liveness.mjs`, which derives the 6 workflows carrying `schedule:` and requires each to name a watcher or a dated exemption with a reason (1 api-probe, 5 exempt; two of the exemptions say plainly that silence of that leg is NOT watched). It writes nothing from CI and adds no routine, so the heartbeat decision below is untouched and still the owner's.
     NOT DONE, and deliberately not decided by an agent: the obvious fix is the
     heartbeat pattern the two agent routines use, but that means a scheduled
     workflow committing to the repository every day. That is a standing change

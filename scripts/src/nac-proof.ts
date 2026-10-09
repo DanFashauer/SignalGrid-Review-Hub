@@ -314,7 +314,7 @@ check("with no REDIS_URL configured there is no fault to report, so the checks a
     sock.on("error", () => undefined);
     let pending: Buffer = Buffer.alloc(0);
     sock.on("data", (chunk) => {
-      const { cmds, rest } = parseCommands(Buffer.concat([pending, chunk]));
+      const { cmds, rest } = parseCommands(Buffer.concat([pending, typeof chunk === "string" ? Buffer.from(chunk) : chunk]));
       pending = Buffer.from(rest);
       for (const [cmd, ...args] of cmds) {
         switch (cmd?.toLowerCase()) {

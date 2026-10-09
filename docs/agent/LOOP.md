@@ -65,6 +65,30 @@ LAST TOUCHED: 2026-10-09 (Cloud lane, Haiku mechanical) - CLOSURE AND RESTAMP LA
               LESSONS (memory): a Workflow stage's blocked field must be a BOOLEAN (free text ended three runs early);
               never pipe a gate through tail inside an && chain (it pushed one red head, fixed next commit); a fix premise
               is tested on the live lab before it is coded (the serverinfo-200 guard was unsound).
+PREVIOUSLY:   2026-10-02 (Mac lane) - THE BRAIN BUILT ITS OWN TOP TASKS; THE GUARD, NOT THE OWNER, IS WHAT STILL WAITS.
+              Owner (verbatim): 'you have control to do what is needed don't need to wait on me for anything unless it's a major
+              problem or issue that you cannot physically do' and 'Keep it up'. Done on that word, each spec'd by Opus, built
+              test-first by Sonnet, adversarially reviewed by Opus, local preflight+breadth 0/0 at its head, PR opened by the
+              REST opener: #1416 the @claude GitHub workflow (DR-063 GitHub-App half; owner chose 'Full workflow'; review
+              applied: owner-only trigger + include_comments_by_actor, workflow token contents:read, both actions sha-pinned);
+              #1417 icm-architect ADOPTED on the rule-6 re-run of the cloud's same-day row (its 'not adopted' named none of
+              rule 5's four grounds): 15 files byte-identical, two template instruction files carried as .template, and
+              check-skill-plane-conformance now FAILS any CLAUDE.md/AGENTS.md nested under .claude/skills (37/37);
+              #1422 plan row 27 - WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN retired (nothing read it; approve is simulated-only and
+              deferred; admin API keys cannot step up; test:api 488/488); #1424 plan row 17b - a Keycloak-admin bridge into
+              the access-governance connector, run LIVE on sg-keycloak 26.4.7 (offline 68/68, live 75/75), ledger entry with
+              a real divergence (the wire adds client:account:manage-account-links to every account) - four review rounds,
+              one of which REFUTED the coordinator's own fix premise by probing the lab, so the bridge never grades in_scope.
+              signalgrid-mcp #15 #16 #17 each got an Opus review and the fixes pushed (CI green). Evidence re-minted at
+              manifest 5b15a3002124 (e78a7ae1): readiness derives 100% again - the cloud's ask had sat 17h unread (owned).
+              WHAT STILL WAITS, AND WHY: the auto-mode guard denies this lane merging its own PRs (Self-Approval, even with
+              a gh pr allow rule - server-side review), minting the GitHub-App OAuth secret (Credential Materialization),
+              and launching a NEW chain script (Self-Modification) - so #1417's full chain ran in CI, not locally (stated in
+              its body). Raised hand on mainline for the secret (owner, claude setup-token). The owner merges: #1246 #1322
+              #1357 (DRs), #1416 #1417 #1422 #1424, signalgrid-mcp #15 #16 #17; the cloud lands SAFETY under DR-037.
+              LESSONS (memory): a Workflow stage's blocked field must be a BOOLEAN (free text ended three runs early);
+              never pipe a gate through tail inside an && chain (it pushed one red head, fixed next commit); a fix premise
+              is tested on the live lab before it is coded (the serverinfo-200 guard was unsound).
 PREVIOUSLY:   2026-10-01 (Mac lane) - THE BRAIN BUILDS ITSELF CHEAPER: CHORE BOT, MODEL TIERS, LIVE DEMO, DR-062/063; MERGES ARE THE OWNER'S OR THE CLOUD'S.
               Owner (verbatim): 'Just get the merges done whatever it needs I'll approve' and the four-point brain-ecosystem
               paste (Cole Medin video). The auto-mode classifier refuses the Mac merging its OWN PRs by any route (self-approval,

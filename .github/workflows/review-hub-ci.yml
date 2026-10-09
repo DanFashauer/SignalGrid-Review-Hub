@@ -989,6 +989,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      - name: "Scratch-git hygiene self-test (it can actually fail)"
+        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+      - name: "Scratch-repo self-tests spawn git through one hermetic helper"
+        run: node scripts/check-scratch-git-hygiene.mjs
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"

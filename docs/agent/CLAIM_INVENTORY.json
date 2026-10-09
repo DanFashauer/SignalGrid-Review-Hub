@@ -8806,7 +8806,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/components/DesktopLayout.tsx",
-   "line": "202",
+   "line": "218",
    "claim": "Status bar: \"Synthetic fixture data · read-only\".",
    "kind": "status",
    "classification": "demo-only",

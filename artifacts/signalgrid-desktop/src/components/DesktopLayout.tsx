@@ -21,7 +21,7 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
   const [location] = useLocation();
   const [time, setTime] = useState(new Date());
   const [notifOpen, setNotifOpen] = useState(false);
-  const { data: metrics } = useGetDashboardMetrics({ window: "1h" });
+  const { data: metrics, isError: metricsError } = useGetDashboardMetrics({ window: "1h" });
   const { data: signals, isError: feedUnreachable, isLoading: feedLoading } = useListLatestSignals({ limit: 5 });
 
   useEffect(() => {
@@ -44,8 +44,15 @@ export default function DesktopLayout({ children }: { children: React.ReactNode 
       {/* The shell polls the signal feed on every page: its alert count and an
           unreachable feed are announced here, not only drawn on the bell. */}
       <LiveRegion
-        message={alertsKnown ? `${anomalous.length} active ${anomalous.length === 1 ? "alert" : "alerts"}${anomalous[0] ? `; first listed: ${anomalous[0].status} ${anomalous[0].signalType} on ${anomalous[0].deviceId}, received ${new Date(anomalous[0].receivedAt).toLocaleTimeString()}` : ""}.` : ""}
-        alert={feedUnreachable ? "Signal feed unreachable — alert state unknown." : ""}
+        message={[
+          alertsKnown ? `${anomalous.length} active ${anomalous.length === 1 ? "alert" : "alerts"}${anomalous[0] ? `; first listed: ${anomalous[0].status} ${anomalous[0].signalType} on ${anomalous[0].deviceId}, received ${new Date(anomalous[0].receivedAt).toLocaleTimeString()}` : ""}.` : "",
+          // The status bar's catalog, latency and decision figures poll too.
+          metrics && !metricsError ? `Last hour: ${metrics.activeIntegrations}/${metrics.totalIntegrations} integrations active, ${metrics.totalDecisions.toLocaleString()} decisions, ${(metrics.allowRate * 100).toFixed(1)}% allow, ${Math.round(metrics.avgLatencyMs)}ms average latency.` : "",
+        ].filter(Boolean).join(" ")}
+        alert={[
+          feedUnreachable ? "Signal feed unreachable — alert state unknown." : "",
+          metricsError ? "Status-bar metrics could not be refreshed — catalog, latency and decision figures may be stale." : "",
+        ].filter(Boolean).join(" ")}
       />
 
       {/* Title bar */}

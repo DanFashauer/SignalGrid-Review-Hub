@@ -432,8 +432,43 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     }
     polling.push(f.rel);
     if (!LIVE.test(f.code)) failures.push(`${f.rel}: polls but renders no live region (<LiveRegion> / aria-live="polite|assertive") — WCAG 4.1.3`);
+    else failures.push(...checkUnannouncedQueries(f.rel, f.code, queryHookNames(f.code, generated).isHook, defaultPolls));
   }
   return { polling, failures };
+}
+
+/**
+ * A polled query a view renders but never hands to its <LiveRegion>: when that
+ * query alone changes (new values, or a failed refetch) the region's text stays
+ * byte-for-byte the same, so a screen reader hears nothing. Each polled query
+ * hook call bound to a name — `const q = useX()`, or `const { data: m, isError: e }
+ * = useX()` — must have one of its bound names read in a <LiveRegion> tag. A
+ * call polls when the tree's query defaults poll or the call sets refetchInterval.
+ * Only <LiveRegion> tags are read; a raw aria-live region is left to rule 1.
+ */
+export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
+  const tags = [];
+  for (const m of code.matchAll(/<LiveRegion\b/g)) {
+    const t = openingTag(code, m.index);
+    if (t !== null) tags.push(t);
+  }
+  if (tags.length === 0) return [];
+  const announced = tags.join("\n");
+  const failures = [];
+  const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
+  for (const m of code.matchAll(binding)) {
+    if (!isHook(m[2])) continue;
+    const { spans } = callSpans(code.slice(m.index + m[0].length - 1), /\(/g);
+    const args = spans.length ? code.slice(m.index + m[0].length - 1).slice(spans[0][0], spans[0][1]) : "";
+    if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
+    const names = m[1].startsWith("{")
+      ? m[1].slice(1, -1).split(",").map((p) => p.split("=")[0].split(":").pop().trim().replace(/^\.\.\./, "")).filter(Boolean)
+      : [m[1]];
+    if (names.some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(announced))) continue;
+    const line = code.slice(0, m.index).split("\n").length;
+    failures.push(`${rel}:${line}: polled ${m[2]}() (${names.join(", ")}) is never read by a <LiveRegion> — its updates and failures are silent (WCAG 4.1.3)`);
+  }
+  return failures;
 }
 
 /** The `{…}` expression of attribute `name` in an opening tag, "" if absent, null if unbalanced. */
@@ -1258,6 +1293,12 @@ function selfTest() {
         checkLiveRegionText("x.tsx", `const { data, isError } = useQ(); <LiveRegion message={m} ${a} />`).length === 1) &&
       checkLiveRegionText("x.tsx", 'const { data, isError } = useQ(); <LiveRegion message={m} alert={isError && !shell.isError ? "Filtered signals could not be refreshed." : ""} />').length === 0 &&
       checkLiveRegionText("x.tsx", 'const { data } = useQ(); <LiveRegion message={m} alert="" />').length === 0],
+    ["a polled query a view binds must reach its live region",
+      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s } = useListSignals(); <LiveRegion message={s ? "x" : ""} alert="" />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message="" alert={e ? "Metrics could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics({ query: { refetchInterval: 5000 } }); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 1],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

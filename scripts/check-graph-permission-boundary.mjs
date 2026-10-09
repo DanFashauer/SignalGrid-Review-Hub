@@ -47,7 +47,8 @@
 //
 //   node scripts/check-graph-permission-boundary.mjs [--self-test] [--root <dir>]
 
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { REQUEST_BLOCK } from "./check-lab-collections.mjs";
@@ -116,6 +117,18 @@ export function connectorRequests(src) {
   return [...out].sort();
 }
 
+/** Pure: `this.baseUrl` used in any form but the `${this.baseUrl}/…` template or its one constructor assignment — a read the literal scan cannot see. */
+export function unseenBaseUrlUses(src) {
+  const rest = src.replace(/\$\{this\.baseUrl\}\/[^`]*/g, "").replace(/this\.baseUrl\s*=\s/, "");
+  return [...rest.matchAll(/this\.baseUrl\b/g)].length;
+}
+
+/** Pure: the connector's default Graph base URL (what `{{baseUrl}}` must resolve to), or null. */
+export function connectorDefaultBase(src) {
+  const m = /config\.baseUrl\s*\?\?\s*"([^"]+)"/.exec(src);
+  return m ? m[1] : null;
+}
+
 /** Pure: one entry per request file ({ file, method, path }); anything but a GET on `{{baseUrl}}/…` is fatal. */
 export function collectionRequests(filesByName) {
   const fatal = [];
@@ -126,6 +139,8 @@ export function collectionRequests(filesByName) {
     if (!m) { fatal.push(`${name}: no request block (method + url) found — an unparseable request file proves nothing`); continue; }
     const method = m[1].toUpperCase();
     const url = m[2];
+    const line = /url:[ \t]*([^\n]*)/.exec(filesByName[name].slice(m.index))?.[1].trim() ?? url;
+    if (line !== url) { fatal.push(`${name}: url line \`${line}\` has content after the first space — Bruno sends the whole line, so the gate would see a narrower request than is sent`); continue; }
     if (method !== "GET") { fatal.push(`${name}: ${method} — the Graph connector is read-only; a non-GET request asserts a write the product never makes`); continue; }
     if (!url.startsWith("{{baseUrl}}/")) { fatal.push(`${name}: url ${url} does not start with {{baseUrl}}/ — it is not the connector's transport`); continue; }
     requests.push({ file: name, method, path: url.slice("{{baseUrl}}".length) });
@@ -140,10 +155,12 @@ export function permissionRecord(jsonText) {
   let doc;
   try { doc = JSON.parse(jsonText); } catch (e) { return { permissions, fatal: [`permissions.json does not parse: ${e.message}`] }; }
   if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return { permissions, fatal: ["permissions.json is not an object"] };
+  for (const k of Object.keys(doc)) if (!["$comment", "application", "delegated", "notRequested"].includes(k)) fatal.push(`permissions.json has an unknown top-level key \`${k}\` — a grant placed outside \`application\`/\`delegated\` would be invisible to this gate`);
   for (const kind of ["application", "delegated"]) {
     if (!Array.isArray(doc[kind])) { fatal.push(`permissions.json \`${kind}\` is missing or not an array — the consent record has the wrong shape`); continue; }
     doc[kind].forEach((p, i) => {
       const where = `permissions.json ${kind}[${i}]`;
+      if (kind === "delegated") fatal.push(`${where}: the connector holds an application token and consents nothing delegated — a delegated entry is a grant the code cannot justify`);
       if (p === null || typeof p !== "object" || typeof p.permission !== "string" || !p.permission) { fatal.push(`${where}: no \`permission\` string`); return; }
       if (!Array.isArray(p.usedBy)) { fatal.push(`${where} (${p.permission}): \`usedBy\` is not an array`); return; }
       const usedBy = [];
@@ -159,7 +176,7 @@ export function permissionRecord(jsonText) {
 }
 
 /** Pure audit: the connector against the lab collection and permissions.json, both directions. */
-export function auditCollection(connectorSrc, bruByName, permissionsText) {
+export function auditCollection(connectorSrc, bruByName, permissionsText, envText) {
   const fatal = [];
   const cr = connectorRequests(connectorSrc);
   const cs = connectorScopes(connectorSrc);
@@ -169,6 +186,12 @@ export function auditCollection(connectorSrc, bruByName, permissionsText) {
   const colPaths = new Set(col.requests.map((r) => r.path));
   const perms = new Set(rec.permissions.map((p) => p.permission));
   const usedBy = new Set(rec.permissions.flatMap((p) => p.usedBy));
+  const ub = unseenBaseUrlUses(connectorSrc);
+  if (ub > 0) fatal.push(`the connector uses \`this.baseUrl\` ${ub} time(s) outside the \`\${this.baseUrl}/…\` template — a read built another way (concatenation, a helper) is invisible to this gate; build it as a literal or extend the gate`);
+  const defBase = connectorDefaultBase(connectorSrc);
+  const envBase = typeof envText === "string" ? /^\s*baseUrl:[ \t]*(\S+)\s*$/m.exec(envText)?.[1] : undefined;
+  if (!defBase) fatal.push("the connector's default base URL could not be read — refusing to conclude the collection targets the same endpoint");
+  else if (envBase !== defBase) fatal.push(`environments/Sandbox.bru baseUrl is ${envBase ?? "missing"} and the connector's default is ${defBase} — the collection would send requests to a different endpoint (e.g. /beta)`);
   const usedByCount = rec.permissions.reduce((n, p) => n + p.usedBy.length, 0);
   if (cr.length < FLOORS.connectorRequests) fatal.push(`floor: the connector yields ${cr.length} request literal(s), under ${FLOORS.connectorRequests} — the parser or the connector changed shape; refusing to conclude anything`);
   if (col.requests.length < FLOORS.collectionFiles) fatal.push(`floor: the collection holds ${col.requests.length} request file(s), under ${FLOORS.collectionFiles}`);
@@ -187,22 +210,39 @@ export function auditCollection(connectorSrc, bruByName, permissionsText) {
   };
 }
 
-/** Reads the collection directory and permissions.json. Missing or unreadable is FATAL, never a skip. */
+/** Reads the collection directory (recursively, `environments/` aside) and permissions.json. Missing or unreadable is FATAL, never a skip. */
 export function loadCollection(root) {
   const fatal = [];
   const bruByName = {};
   const dir = join(root, COLLECTION_DIR);
-  let names = [];
-  try { names = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && d.name.endsWith(".bru")).map((d) => d.name); }
-  catch (e) { fatal.push(`${COLLECTION_DIR}: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the collection is the second consent record; absence is not a skip`); }
-  for (const n of names) {
-    try { bruByName[n] = readFileSync(join(dir, n), "utf8"); }
-    catch (e) { fatal.push(`${COLLECTION_DIR}/${n}: unreadable (${e.message})`); }
-  }
+  const walk = (rel) => {
+    let entries = [];
+    try { entries = readdirSync(join(dir, rel), { withFileTypes: true }); }
+    catch (e) { fatal.push(`${COLLECTION_DIR}/${rel}`.replace(/\/$/, "") + `: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the collection is the second consent record; absence is not a skip`); return; }
+    for (const d of entries) {
+      const r = rel ? `${rel}/${d.name}` : d.name;
+      if (d.isSymbolicLink()) { fatal.push(`${COLLECTION_DIR}/${r}: a symlink — the gate will not follow it, so what it points at would go unchecked`); continue; }
+      if (d.isDirectory()) { if (r !== "environments") walk(r); continue; }
+      if (!d.name.endsWith(".bru")) continue;
+      try { bruByName[r] = readFileSync(join(dir, r), "utf8"); }
+      catch (e) { fatal.push(`${COLLECTION_DIR}/${r}: unreadable (${e.message})`); }
+    }
+  };
+  walk("");
   let permissionsText = "";
   try { permissionsText = readFileSync(join(root, PERMISSIONS), "utf8"); }
   catch (e) { fatal.push(`${PERMISSIONS}: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the consent record cannot be skipped`); }
-  return { bruByName, permissionsText, fatal };
+  let envText = "";
+  try { envText = readFileSync(join(dir, "environments/Sandbox.bru"), "utf8"); }
+  catch (e) { fatal.push(`${COLLECTION_DIR}/environments/Sandbox.bru: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — {{baseUrl}} has nothing to resolve to`); }
+  return { bruByName, permissionsText, envText, fatal };
+}
+
+/** Everything the gate concludes, in one place so the self-test runs the same aggregation the CLI does. */
+export function auditAll(connectorSrc, docMd, lc) {
+  const r = auditBoundary(connectorSrc, docMd);
+  const cr = auditCollection(connectorSrc, lc.bruByName, lc.permissionsText, lc.envText);
+  return { boundary: r, counts: cr.counts, fatal: [...r.fatal, ...lc.fatal, ...cr.fatal] };
 }
 
 function selfTest() {
@@ -240,6 +280,7 @@ function selfTest() {
 
   // ---- the lab collection and permissions.json ----
   const csrc = [
+    'this.baseUrl = (config.baseUrl ?? "https://graph.microsoft.com/v1.0").replace(/\\/$/, "");',
     "const a = `${this.baseUrl}/deviceManagement/managedDevices?$top=1`;",
     "const b = `${this.baseUrl}/users?$select=id,userPrincipalName,accountEnabled`;",
     "const c = `${this.baseUrl}/deviceManagement/managedDevices`;",
@@ -258,7 +299,8 @@ function selfTest() {
     delegated: [],
   });
   const pj = (o) => JSON.stringify(o);
-  const audit = (src = csrc, b = baseBru(), p = pj(permObj())) => auditCollection(src, b, p);
+  const ENV = "vars {\n  baseUrl: https://graph.microsoft.com/v1.0\n  graphToken: x\n}\n";
+  const audit = (src = csrc, b = baseBru(), p = pj(permObj()), env = ENV) => auditCollection(src, b, p, env);
   const has = (r, ...needles) => r.fatal.some((f) => needles.every((n) => f.includes(n)));
   let c = audit();
   checks.push(["COLLECTION: the connector, four request files and a three-permission record agree (positive control)", c.fatal.length === 0 && c.counts.connectorRequests === 4 && c.counts.collectionFiles === 4 && c.counts.permissions === 3 && c.counts.usedBy === 4]);
@@ -291,16 +333,50 @@ function selfTest() {
   checks.push(["COLLECTION: unparseable permissions.json is FATAL", has(audit(csrc, baseBru(), "{not json"), "does not parse")]);
   checks.push(["COLLECTION: a wrong-shaped permissions.json is FATAL", has(audit(csrc, baseBru(), pj({ application: {} })), "not an array")]);
   const gone = loadCollection(join(repoRoot, "no-such-root"));
-  checks.push(["COLLECTION: a missing directory and a missing permissions.json are each FATAL, never a skip", gone.fatal.length === 2 && gone.fatal.every((f) => f.includes("missing"))]);
-  const two = csrc.split("\n").filter((l) => !l.includes("managedDevices`;")).join("\n").replace(/^const a.*\n/, "");
+  checks.push(["COLLECTION: a missing directory and a missing permissions.json are each FATAL, never a skip", gone.fatal.length === 3 && gone.fatal.every((f) => f.includes("missing"))]);
+  const two = csrc.split("\n").filter((l) => !l.includes("managedDevices`;") && !l.startsWith("const a")).join("\n");
   checks.push(["FLOOR: under three connector request literals is FATAL", has(audit(two), "floor", "connector yields")]);
   b = baseBru(); delete b["c.bru"]; delete b["d.bru"];
   checks.push(["FLOOR: under three request files is FATAL", has(audit(csrc, b), "floor", "request file")]);
   o = permObj(); o.application = o.application.slice(0, 1);
   checks.push(["FLOOR: under two permissions is FATAL", has(audit(csrc, baseBru(), pj(o)), "floor", "permission(s)")]);
   const liveC = loadCollection(repoRoot);
-  const liveR = auditCollection(readFileSync(join(repoRoot, CONNECTOR), "utf8"), liveC.bruByName, liveC.permissionsText);
-  checks.push(["LIVE COLLECTION: the real collection and permissions.json match the real connector", liveC.fatal.length === 0 && liveR.fatal.length === 0 && liveR.counts.connectorRequests >= 3]);
+  const liveSrc = readFileSync(join(repoRoot, CONNECTOR), "utf8");
+  const liveDoc = readFileSync(join(repoRoot, DOC), "utf8");
+  const liveAll = auditAll(liveSrc, liveDoc, liveC);
+  checks.push(["LIVE COLLECTION: the real collection and permissions.json match the real connector", liveAll.fatal.length === 0 && liveAll.counts.connectorRequests >= 3]);
+  // The CLI's own aggregation (auditAll), not just auditCollection: drift in the loaded collection must reach the exit code.
+  const driftB = { ...liveC.bruByName }; delete driftB["identityprotection-risky-users.bru"];
+  checks.push(["MAIN PATH: the aggregation the CLI exits on carries a collection finding (a dropped aggregate would pass)", auditAll(liveSrc, liveDoc, { ...liveC, bruByName: driftB }).fatal.some((f) => f.includes("riskyUsers"))]);
+  checks.push(["MAIN PATH: a loader fatal (missing folder) reaches the same aggregate", auditAll(liveSrc, liveDoc, { ...liveC, fatal: ["x: missing"] }).fatal.includes("x: missing")]);
+  // ---- review round 1 plants ----
+  o = permObj(); o.recommended = [{ permission: "Directory.Read.All", usedBy: ["GET /groups"] }];
+  checks.push(["ROUND1: a grant under an unknown top-level key of permissions.json is FATAL", has(audit(csrc, baseBru(), pj(o)), "unknown top-level key", "recommended")]);
+  checks.push(["ROUND1: a fifth read written as string concatenation is FATAL (the literal scan cannot see it)", has(audit(csrc + "\nconst e = this.baseUrl + \"/groups\";"), "this.baseUrl", "outside")]);
+  checks.push(["ROUND1: a fifth read through a graphUrl(path) helper is FATAL", has(audit(csrc + "\nprivate graphUrl(path) { return `${this.baseUrl}${path}`; }"), "this.baseUrl", "outside")]);
+  b = baseBru(); b["b.bru"] = bru(P.users + " &$expand=manager");
+  checks.push(["ROUND1: a url with content after the first space is FATAL (Bruno sends the whole line)", has(audit(csrc, b), "b.bru", "after the first space")]);
+  o = permObj(); o.delegated.push({ permission: "User.Read.All", usedBy: [`GET ${P.users}`] });
+  checks.push(["ROUND1: a delegated duplicate of an application scope is FATAL", has(audit(csrc, baseBru(), pj(o)), "delegated[0]", "application token")]);
+  checks.push(["ROUND1: Sandbox.bru pointing at /beta is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("v1.0", "beta")), "Sandbox.bru", "beta")]);
+  checks.push(["ROUND1: a missing Sandbox baseUrl is FATAL", has(audit(csrc, baseBru(), pj(permObj()), "vars {\n}\n"), "Sandbox.bru", "missing")]);
+  b = baseBru(); b["e.bru"] = "meta {\n  name: x\n}\n\ndocs {\n  nothing\n}\n";
+  checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "no request block")]);
+  b = baseBru(); b["extra/groups.bru"] = bru("/groups");
+  checks.push(["ROUND1: a nested request file is read like a top-level one (asserts more -> FATAL)", has(audit(csrc, b), "extra/groups.bru", "asserts")]);
+  {
+    // The loader itself, on a throwaway tree outside the repo: nested request files are read, `environments/` is not a request, a symlink is fatal.
+    const tmp = mkdtempSync(join(tmpdir(), "graph-boundary-"));
+    try {
+      const d = join(tmp, COLLECTION_DIR);
+      mkdirSync(join(d, "extra"), { recursive: true }); mkdirSync(join(d, "environments"), { recursive: true });
+      writeFileSync(join(d, "extra/groups.bru"), bru("/groups")); writeFileSync(join(d, "environments/Sandbox.bru"), ENV);
+      writeFileSync(join(tmp, PERMISSIONS), pj(permObj())); symlinkSync(join(d, "extra/groups.bru"), join(d, "link.bru"));
+      const l = loadCollection(tmp);
+      checks.push(["ROUND1: the loader reads a nested .bru, skips environments/, and refuses a symlink", "extra/groups.bru" in l.bruByName && !("environments/Sandbox.bru" in l.bruByName) && l.fatal.some((f) => f.includes("link.bru") && f.includes("symlink"))]);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }
+  checks.push(["ROUND1: unseenBaseUrlUses is 0 on the live connector (every read is a literal)", unseenBaseUrlUses(liveSrc) === 0]);
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);
   console.log(`\nself-test ${failed.length === 0 ? "passed" : "FAILED"} (${checks.length - failed.length}/${checks.length})`);
@@ -312,14 +388,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const ri = process.argv.indexOf("--root");
   const root = ri > -1 && process.argv[ri + 1] ? resolve(process.argv[ri + 1]) : repoRoot;
   const connectorSrc = readFileSync(join(root, CONNECTOR), "utf8");
-  const r = auditBoundary(connectorSrc, readFileSync(join(root, DOC), "utf8"));
+  const lc = loadCollection(root);
+  const all = auditAll(connectorSrc, readFileSync(join(root, DOC), "utf8"), lc);
+  const r = all.boundary;
   console.log(`Graph permission boundary — connector reads ${r.connectorEndpoints.join(", ")}; needs ${r.connectorScopes.join(", ")}`);
   console.log(`  page tables: ${r.docEndpoints.length} endpoint(s), ${r.docScopes.length} scope(s)`);
-  const lc = loadCollection(root);
-  const cr = auditCollection(connectorSrc, lc.bruByName, lc.permissionsText);
-  const n = cr.counts;
+  const n = all.counts;
   console.log(`  lab collection: ${n.connectorRequests} connector request(s), ${n.collectionFiles} collection file(s), ${n.distinctCollectionRequests} distinct collection request(s), ${n.permissions} permission(s), ${n.usedBy} usedBy entr(ies)`);
-  const fatal = [...r.fatal, ...lc.fatal, ...cr.fatal];
+  const fatal = all.fatal;
   if (fatal.length > 0) {
     console.error(`\nGraph-permission-boundary check FAILED: ${fatal.length} problem(s).`);
     for (const f of fatal) console.error(`  ✗ ${f}`);

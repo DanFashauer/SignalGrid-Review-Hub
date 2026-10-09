@@ -42,7 +42,7 @@
 //    is that the `--list-steps` block sits directly above the one `for (const step of STEPS)` loop (only
 //    `const`/`let` declarations of a LITERAL — `[]`, `{}`, `null`, a boolean or an integer — between them), so nothing can change the list between the dump and the loop; a runner
 //    whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv steps,
-//    fails the gate and credits nothing. Stated limits: an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
+//    fails the gate and credits nothing. Stated limits: the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn pipe buffer is cut off and fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
 //    other than the `heavy`/`needsNativeBuild` skips, are not modelled.
 //  · WORKFLOWS: whether a `run:` line really runs `<gate> --self-test` is decided by scripts/lib/workflow-invocation.mjs
 //    — the SAME matcher scripts/check-preflight-ci-parity.mjs uses (command position only; quotes masked; `echo`, a quoted
@@ -163,12 +163,16 @@ const RUNNER_SHAPE = new RegExp(String.raw`${LIST_BLOCK}\s*(?:(?:const|let)\s+\w
 /** Pure: does the runner source carry the `--list-steps` block directly above its one `for (const step of STEPS)` loop? */
 export function runnerShapeOk(source) {
   const live = stripComments(source);
+  const code = stripComments(source, { maskStrings: true }); // same offsets; string and template text blanked
   const loops = [...live.matchAll(/\bfor\s*\(\s*const\s+step\s+of\s+STEPS\s*\)/g)];
   const m = RUNNER_SHAPE.exec(live);
-  // the loop must be the only one, and `--list-steps` must appear exactly once: a second mention (a fake block in a
-  // template literal, or a branch that makes the listing differ from the run) is refused; a copy that is the ONLY
-  // mention fails at the runtime listing, which a string cannot print
-  return m !== null
+  if (m === null || code.length !== live.length) return false;
+  // the matched block and loop must be CODE: a copy inside a string or template literal is a decoy (the real dump
+  // could then be spelled any way, e.g. "--list-" + "steps", and the real loop changed). The loop must be the only
+  // one, and `--list-steps` may appear once as a literal. That mention rule is a blacklist on ONE spelling and is
+  // belt-and-braces only; the position check is what refuses a decoy.
+  const end = m.index + m[0].length - 1;
+  return code[m.index] === live[m.index] && code[end] === live[end]
     && loops.length === 1 && (live.match(/--list-steps/g) ?? []).length === 1;
 }
 
@@ -452,6 +456,7 @@ function selfTest() {
     ]) R(label, { breadth: `${stepsDecl(E)}\n${LIST_SRC}${stmt}${LOOP_SRC}` });
     R("a fake dump block and loop inside a template literal, real loop filtered", { breadth: `${stepsDecl(E)}\n${LIST_SRC}const __doc = \`${LIST_SRC}${LOOP_SRC}\`;\nfor (const step of STEPS.filter(() => false)) {\n}\n` });
     R("the only dump block and loop sit inside a template literal, the real loop is filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\nfor (const step of STEPS.filter(() => false)) {\n}\n` });
+    R("a decoy block and loop in a template, the real dump flag spelled \"--list-\" + \"steps\", the real loop filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\n${LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"')}for (const step of STEPS.filter(() => false)) {\n}\n` });
     R("an entry chosen by a second --list-steps test", { breadth: runnerSrc(`const STEPS = [process.argv.includes("--list-steps") ? ${E} : { name: "n", cmd: ["true"] }];`) });
     R("a runner whose dump block is missing", { breadth: `${stepsDecl(E)}\n${LOOP_SRC}` });
     R("a runner whose dump filters the list", { breadth: `${stepsDecl(E)}\n${LIST_SRC.replace("STEPS.map", "STEPS.filter(() => false).map")}${LOOP_SRC}` });

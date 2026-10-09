@@ -708,7 +708,7 @@ earlier — that is the loop working, not a reason to soften the record.
     names a self-test (a flag accepted as a no-op is not credited); a gate with no handler
     must name a control on a non-comment line, which is a FLOOR against a gate with none,
     NOT proof that its control can fail (counted as "control-only", never "self-tested").
-    Measured on the branch head: 157 gates, 131 with a handler, 122 registered, 9 run by the
+    Measured on the branch head: 158 gates, 132 with a handler, 123 registered, 9 run by the
     gate (all passed, including `scripts/check-api-collection.mjs`,
     `scripts/check-deployment-runbook.mjs` and `scripts/check-desktop-core-tests.mjs`, whose
     self-tests ran in no step before), 26 control-only, 0 with neither. Falsified: with

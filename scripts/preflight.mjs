@@ -785,7 +785,8 @@ if (nativeExclusion.excluded) {
 // source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
 // directly above the loop; the gate checks that it is.
 if (process.argv.includes("--list-steps")) {
-  console.log(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))));
+  // wait for the write to flush: process.exit() straight after a pipe write cuts the output at the 64 KiB pipe buffer
+  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\n", done));
   process.exit(0);
 }
 

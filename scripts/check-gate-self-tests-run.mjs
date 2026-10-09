@@ -42,7 +42,7 @@
 //    is that the `--list-steps` block sits directly above the one `for (const step of STEPS)` loop (only
 //    `const`/`let` declarations of a LITERAL — `[]`, `{}`, `null`, a boolean or an integer — between them), so nothing can change the list between the dump and the loop; a runner
 //    whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv steps,
-//    fails the gate and credits nothing. Stated limits: the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn pipe buffer is cut off and fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
+//    fails the gate and credits nothing. Stated limits: the position check reads strings and comments with the stripper's regex-versus-division heuristic, so a decoy hidden by a misparse (`(4) / 2; /*`) is not modelled; the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn buffer fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
 //    other than the `heavy`/`needsNativeBuild` skips, are not modelled.
 //  · WORKFLOWS: whether a `run:` line really runs `<gate> --self-test` is decided by scripts/lib/workflow-invocation.mjs
 //    — the SAME matcher scripts/check-preflight-ci-parity.mjs uses (command position only; quotes masked; `echo`, a quoted
@@ -101,7 +101,7 @@ export function stripComments(src, { maskStrings = false } = {}) {
     while (i < n) {
       if (src[i] === "\\") { out += lit(src.slice(i, i + 2)); i += 2; continue; }
       if (src[i] === "`") { out += src[i++]; return; }
-      if (src[i] === "$" && src[i + 1] === "{") { out += lit("${"); i += 2; code(true); continue; }
+      if (src[i] === "$" && src[i + 1] === "{") { out += lit("${"); i += 2; code(true); if (maskStrings && src[i - 1] === "}" && out.endsWith("}")) out = out.slice(0, -1) + FILL; continue; }
       out += lit(src[i++]);
     }
   };
@@ -157,7 +157,7 @@ export function namesControl(src) {
 
 // ── registration: who invokes `<gate> --self-test` ──────────────────────────────────────────
 
-const LIST_BLOCK = String.raw`if\s*\(\s*process\.argv\.includes\(\s*"--list-steps"\s*\)\s*\)\s*\{\s*console\.log\(JSON\.stringify\(STEPS\.map\(\(s\) => \(\{ name: s\.name, cmd: s\.cmd, heavy: s\.heavy === true, needsNativeBuild: s\.needsNativeBuild === true \}\)\)\)\);\s*process\.exit\(0\);\s*\}`;
+const LIST_BLOCK = String.raw`if\s*\(\s*process\.argv\.includes\(\s*"--list-steps"\s*\)\s*\)\s*\{\s*await new Promise\(\(done\) => process\.stdout\.write\(JSON\.stringify\(STEPS\.map\(\(s\) => \(\{ name: s\.name, cmd: s\.cmd, heavy: s\.heavy === true, needsNativeBuild: s\.needsNativeBuild === true \}\)\)\) \+ "\\n", done\)\);\s*process\.exit\(0\);\s*\}`;
 const RUNNER_SHAPE = new RegExp(String.raw`${LIST_BLOCK}\s*(?:(?:const|let)\s+\w+\s*=\s*(?:\[\s*\]|\{\s*\}|null|true|false|-?\d+)\s*;\s*)*for\s*\(\s*const\s+step\s+of\s+STEPS\s*\)`);
 
 /** Pure: does the runner source carry the `--list-steps` block directly above its one `for (const step of STEPS)` loop? */
@@ -172,7 +172,13 @@ export function runnerShapeOk(source) {
   // one, and `--list-steps` may appear once as a literal. That mention rule is a blacklist on ONE spelling and is
   // belt-and-braces only; the position check is what refuses a decoy.
   const end = m.index + m[0].length - 1;
+  // reachable: at brace depth 0 and right after a statement boundary, so not inside `if (false) { }`, a function
+  // body, or `if (x) <block>` (what precedes it is `)`/`else`, not `;` or `}`)
+  const before = code.slice(0, m.index);
+  const depth = (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length;
+  const prev = before.trimEnd().slice(-1);
   return code[m.index] === live[m.index] && code[end] === live[end]
+    && depth === 0 && (prev === "" || prev === ";" || prev === "}")
     && loops.length === 1 && (live.match(/--list-steps/g) ?? []).length === 1;
 }
 
@@ -197,7 +203,7 @@ export function selfTestFilesInListing(stdout, aliases = new Map()) {
 }
 
 function realList(root, lane) {
-  const r = spawnSync(process.execPath, [join(root, lane), "--list-steps"], { cwd: root, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL" });
+  const r = spawnSync(process.execPath, [join(root, lane), "--list-steps"], { cwd: root, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
   return { stdout: r.stdout ?? "", error: r.error ? (r.error.code ?? r.error.message) : r.status !== 0 ? `exit ${r.status}${r.signal ? ` (${r.signal})` : ""}` : null };
 }
 
@@ -369,7 +375,7 @@ const BAD_ST = `if (process.argv.includes("--self-test")) { console.log("self-te
 const NOOP_ST = `if (process.argv.includes("--self-test")) { /* accepted, then falls through to the real check */ }\nconsole.log("real check ok");\n`;
 
 // A fixture runner: the `--list-steps` block and loop exactly as scripts/preflight.mjs carries them.
-const LIST_SRC = 'if (process.argv.includes("--list-steps")) {\n  console.log(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))));\n  process.exit(0);\n}\n';
+const LIST_SRC = 'if (process.argv.includes("--list-steps")) {\n  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\\n", done));\n  process.exit(0);\n}\n';
 const LOOP_SRC = "const results = [];\nlet failed = null;\nfor (const step of STEPS) {\n}\n";
 const stepsDecl = (entries) => `const STEPS = [\n${entries}\n];`;
 const runnerSrc = (decl, { pre = "", mid = "", post = "" } = {}) => `${pre}${decl}\n${mid}${LIST_SRC}${LOOP_SRC}${post}`;
@@ -457,6 +463,11 @@ function selfTest() {
     R("a fake dump block and loop inside a template literal, real loop filtered", { breadth: `${stepsDecl(E)}\n${LIST_SRC}const __doc = \`${LIST_SRC}${LOOP_SRC}\`;\nfor (const step of STEPS.filter(() => false)) {\n}\n` });
     R("the only dump block and loop sit inside a template literal, the real loop is filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\nfor (const step of STEPS.filter(() => false)) {\n}\n` });
     R("a decoy block and loop in a template, the real dump flag spelled \"--list-\" + \"steps\", the real loop filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\n${LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"')}for (const step of STEPS.filter(() => false)) {\n}\n` });
+    const REAL_SPLIT = LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"') + "for (const step of STEPS.filter(() => false)) {\n}\n";
+    R("a decoy dump block and loop inside `if (false) { }` with the real dump spelled another way", { breadth: `${stepsDecl(E)}\nif (false) {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
+    R("a decoy dump block and loop inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
+    R("a decoy dump block and loop after a statement inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\nconst x = 1;\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
+    R("a decoy dump block and loop under a brace-free `if (false)`", { breadth: `${stepsDecl(E)}\nif (false) ${LIST_SRC}${LOOP_SRC}${REAL_SPLIT}` });
     R("an entry chosen by a second --list-steps test", { breadth: runnerSrc(`const STEPS = [process.argv.includes("--list-steps") ? ${E} : { name: "n", cmd: ["true"] }];`) });
     R("a runner whose dump block is missing", { breadth: `${stepsDecl(E)}\n${LOOP_SRC}` });
     R("a runner whose dump filters the list", { breadth: `${stepsDecl(E)}\n${LIST_SRC.replace("STEPS.map", "STEPS.filter(() => false).map")}${LOOP_SRC}` });
@@ -583,6 +594,11 @@ function selfTest() {
 
     // ── live: the detector still finds the real tree's gates, and agrees with a plain grep ──
     const live = runGate(REPO, { spawn: () => ({ status: 0, stdout: "self-test" }) });
+    for (const lane of ["scripts/preflight.mjs", "scripts/verify-breadth.mjs"]) {
+      const direct = spawnSync(process.execPath, [join(REPO, lane), "--list-steps"], { maxBuffer: 64 * 1024 * 1024 }).stdout.length;
+      const piped = spawnSync("sh", ["-c", `"$0" "$1" --list-steps | wc -c`, process.execPath, join(REPO, lane)], { encoding: "utf8" });
+      note(`live: ${lane} --list-steps survives a pipe reader (output is not cut at the 64 KiB pipe buffer)`, direct > 0 && Number(piped.stdout.trim()) === direct, `${direct} bytes direct, ${piped.stdout.trim()} piped`);
+    }
     note("live: the real tree yields at least the floor of gates", live.counts.gates >= DEFAULT_FLOOR, `${live.counts.gates} gates`);
     note("live: the real runners list steps and register self-tests", live.counts.registered >= 50 && live.problems.length === 0, `${live.counts.registered} registered, ${live.problems.length} problem(s)${live.problems.length ? `: ${live.problems.slice(0, 3).join(" | ").slice(0, 600)}` : ""}`);
     note("live: the three formerly unrun self-tests are in the spawn set", ["check-api-collection.mjs", "check-deployment-runbook.mjs", "check-desktop-core-tests.mjs"].every((f) => live.spawned.includes(f)), live.spawned.join(","));

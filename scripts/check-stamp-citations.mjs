@@ -15,19 +15,32 @@
 // STAMP_RULE_FROM or later. Older stamps are a dated record; rewriting them would
 // falsify it.
 //
-// WHAT A STAMP IS (a heuristic over prose, not a parser). A stamp runs from
-// `re-?measured YYYY-MM-DD` (case-insensitive, the form objective-loop's rowMeasuredAt
-// reads) to the EARLIEST of: a blank line, the next numbered row (`17c. **`), the next
-// `re-measured` marker, the next DATED status marker (FIX PROPOSED, NOT BUILT, CORRECTED,
+// WHAT A STAMP IS (a heuristic over prose, not a parser). A stamp starts at
+// `re-?measured YYYY-MM-DD` (case-insensitive) found in EITHER of two texts: the file as
+// written, and the file as objective-loop's rowMeasuredAt reads it (statusText's rule:
+// backtick, straight-quote and curly-quote spans removed inside each numbered row, here
+// blanked in place so offsets survive). The second catches a marker split by a span
+// ("RE-MEASURED `(head x)` 2026-10-09"), which resets a row's clock there; the first keeps
+// a stamp written inside a span, which rowMeasuredAt ignores, checked here anyway (and
+// rowMeasuredAt reads only the Global backlog's rows, this gate the whole file). It runs to
+// the EARLIEST of: a blank line or the next numbered row (`17c. **`) OUTSIDE a fenced block,
+// where a blank line followed by a fence opener does not count (the CommonMark list-item
+// shape), the next `re-measured` marker, the next DATED status marker (FIX PROPOSED, NOT BUILT, CORRECTED,
 // LANDED, DONE, AWAITING, BLOCKED, followed by a YYYY-MM-DD) or 1500 characters. A status
 // word NOT followed by a date is prose ("has LANDED", "a row still reading FIX PROPOSED")
 // and does not end the stamp: that rule cut two real stamps short (rows 28 and 61 on
 // 2026-10-08) when the word alone was the cut. The stamp's own header, the date plus an
-// optional balanced `( ... )` on the same line, is skipped before the cut is searched.
+// optional balanced `( ... )` on the same line (nested parens counted), is skipped before
+// the cut is searched. A FENCE line is three or more backticks with an info string holding
+// no backtick (or, when open, backticks only); a line that opens and closes an inline ```
+// span on itself is an ordinary line, its contents tokenised and backtick parity applied.
 //
 // WHAT COUNTS AS A VIOLATION. Every root-prefixed path-shaped token in the region (roots
 // from `git ls-files` top-level directories as check-cited-paths derives them, PLUS the
-// dot-directories it drops, such as .github and .claude):
+// dot-directories it drops, such as .github and .claude; the token class is
+// check-cited-paths' [A-Za-z0-9._/-] PLUS @ and +, which tracked files use, such as
+// `native/ios/EnterpriseShell/Services/DesignSystem+SwiftUI.swift`, and which
+// check-cited-paths never tokenises, so this gate resolves them itself):
 //   1. outside any backtick span: check-cited-paths cannot see it. FAIL.
 //   2. anywhere else (an exact span, a command span such as `node scripts/x.mjs`, a
 //      `scripts/x.mjs:12` span, a fenced block): the token is resolved against
@@ -94,7 +107,7 @@ const ROW = /^(\d+[a-z]?)\.\s/;
 const escRe = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Length of the stamp header: the marker plus, on the same line, one balanced ( ... ) and a colon. */
-function headerLength(after) {
+function headerLength(after, mutate = {}) {
   const m = /^re-?measured\s+\d{4}-\d{2}-\d{2}/i.exec(after);
   let i = m ? m[0].length : 0;
   const rest = /^\s*\(/.exec(after.slice(i));
@@ -102,15 +115,44 @@ function headerLength(after) {
     let depth = 0;
     for (let j = i + rest[0].length - 1; j < after.length && after[j] !== "\n"; j += 1) {
       if (after[j] === "(") depth += 1;
-      else if (after[j] === ")") { depth -= 1; if (depth === 0) { i = j + 1; break; } }
+      else if (after[j] === ")") { depth -= 1; if (depth === 0 || mutate.headerFirstParen) { i = j + 1; break; } }
     }
   }
   return i;
 }
 
+/**
+ * Per line: "fence" (an opening or closing fence line), "in" (inside a fenced block) or "out".
+ * An opener is three or more backticks and an info string with no backtick in it, so a line
+ * that opens AND closes an inline ``` span is an ordinary line; a closer is backticks only.
+ * `anyTripleToggles` (self-test mutant) restores the old rule: any line starting with ``` flips.
+ */
+function fenceKinds(lines, mutate = {}) {
+  let open = false;
+  return lines.map((ln) => {
+    if (mutate.anyTripleToggles ? /^\s*```/.test(ln) : open ? /^\s*`{3,}\s*$/.test(ln) : /^\s*`{3,}[^`]*$/.test(ln)) { open = !open; return "fence"; }
+    return open ? "in" : "out";
+  });
+}
+
+/**
+ * statusText's rule (check-backlog-ownership.mjs), offset-preserving: inside each numbered row,
+ * backtick spans, then straight-quoted, then curly-quoted spans have every character but a line
+ * break replaced by a space. objective-loop's rowMeasuredAt finds its stamps in that text, so a
+ * marker split by a span ("RE-MEASURED `(head x)` 2026-10-09") resets a row's clock there and
+ * must be a stamp here.
+ */
+export function maskSpans(text) {
+  const blank = (m) => m.replace(/[^\n]/g, " ");
+  return text.split(/(?=^\d+[a-z]*(?:-\d+)?\.\s+\*\*)/m)
+    .map((row) => row.replace(/`[^`]*`/g, blank).replace(/"[^"]*"/g, blank).replace(/\u201c[^\u201d]*\u201d/g, blank))
+    .join("");
+}
+
 /** Root-prefixed, extension-bearing path token; a preceding backtick is fine, parity decides. */
-export function buildTokenPattern(roots) {
-  return new RegExp(`(?<![A-Za-z0-9_-])(?<![A-Za-z0-9_-]\\/)((?:${roots.map(escRe).join("|")})\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6})`, "g");
+export function buildTokenPattern(roots, mutate = {}) {
+  const cls = mutate.narrowClass ? "A-Za-z0-9._\\/-" : "A-Za-z0-9._\\/@+-";
+  return new RegExp(`(?<![A-Za-z0-9_-])(?<![A-Za-z0-9_-]\\/)((?:${roots.map(escRe).join("|")})\\/[${cls}]+\\.[A-Za-z0-9]{1,6})`, "g");
 }
 
 /**
@@ -120,16 +162,40 @@ export function buildTokenPattern(roots) {
  * restores the old status cut that did not need a date.
  */
 export function stampRegions(text, mutate = {}) {
-  const marks = [...text.matchAll(MARKER)];
+  // Markers as written AND as rowMeasuredAt reads them (spans masked): the union, so a stamp
+  // either reader sees is checked. Same offsets in both texts, so one index identifies both.
+  const masked = mutate.rawMarkersOnly ? text : maskSpans(text);
+  const byIndex = new Map();
+  for (const m of [...text.matchAll(MARKER), ...masked.matchAll(MARKER)]) if (!byIndex.has(m.index)) byIndex.set(m.index, m);
+  const marks = [...byIndex.values()].sort((a, b) => a.index - b.index);
+  const docLines = text.split("\n");
+  const kinds = fenceKinds(docLines, mutate);
+  const lineStart = [];
+  for (let i = 0, off = 0; i < docLines.length; off += docLines[i].length + 1, i += 1) lineStart.push(off);
+  /** Offset (relative to `from`) of the newline before the first blank line or next row outside a fence, or -1. */
+  const paragraphEnd = (from) => {
+    let i = lineStart.findLastIndex((o) => o <= from);
+    for (i += 1; i < docLines.length; i += 1) {
+      if (!mutate.fenceBlankStop && kinds[i] !== "out") continue;
+      const blank = docLines[i] === "";
+      if (blank && !mutate.noFenceLookahead) {
+        let k = i;
+        while (k < docLines.length && docLines[k] === "") k += 1;
+        if (k < docLines.length && kinds[k] === "fence") { i = k - 1; continue; }
+      }
+      if (blank || /^\d+[a-z]?\. \*\*/.test(docLines[i])) return lineStart[i] - 1 - from;
+    }
+    return -1;
+  };
   const out = [];
   const status = mutate.undatedStatus ? /\b(?:FIX PROPOSED|NOT BUILT|CORRECTED|LANDED|DONE|AWAITING|BLOCKED)\b/ : STATUS;
   for (let k = 0; k < marks.length; k += 1) {
     const mk = marks[k];
     const after = text.slice(mk.index);
-    const hdrLen = mutate.noHeaderSkip ? 0 : headerLength(after);
+    const hdrSrc = /^re-?measured\s+\d{4}-\d{2}-\d{2}/i.test(after) ? after : masked.slice(mk.index);
+    const hdrLen = mutate.noHeaderSkip ? 0 : headerLength(hdrSrc, mutate);
     const stops = [
-      mutate.noBlankStop ? -1 : after.indexOf("\n\n"),
-      mutate.noBlankStop ? -1 : after.search(/\n\d+[a-z]?\. \*\*/),
+      mutate.noBlankStop ? -1 : paragraphEnd(mk.index),
       mutate.firstNewline ? after.indexOf("\n") : -1,
       mutate.paragraphOnly ? -1 : marks[k + 1] ? marks[k + 1].index - mk.index : -1,
       mutate.paragraphOnly ? -1 : (() => { const i = after.slice(hdrLen).search(status); return i < 0 ? -1 : hdrLen + i; })(),
@@ -151,15 +217,16 @@ export function stampRegions(text, mutate = {}) {
 }
 
 /** Fence marker lines blanked (so their backticks do not flip parity); returns the text and which offsets sit in a fence. */
-function fenceInfo(regionText) {
-  let fenced = false;
+function fenceInfo(regionText, mutate = {}) {
   let offset = 0;
   const ranges = [];
-  const lines = regionText.split("\n").map((ln) => {
+  const raw = regionText.split("\n");
+  const kinds = fenceKinds(raw, mutate);
+  const lines = raw.map((ln, i) => {
     const start = offset;
     offset += ln.length + 1;
-    if (/^\s*```/.test(ln)) { fenced = !fenced; return " ".repeat(ln.length); }
-    if (fenced) ranges.push([start, start + ln.length]);
+    if (kinds[i] === "fence") return " ".repeat(ln.length);
+    if (kinds[i] === "in") ranges.push([start, start + ln.length]);
     return ln;
   });
   return { text: lines.join("\n"), inFence: (i) => ranges.some(([lo, hi]) => i >= lo && i < hi) };
@@ -171,10 +238,10 @@ function fenceInfo(regionText) {
  * fenced block (which check-cited-paths cannot see either, so it is resolved, not trusted).
  * `inside` is replaceable for the mutant.
  */
-export function pathTokens(regionText, roots, inside = insideBackticks) {
-  const { text, inFence } = fenceInfo(regionText);
+export function pathTokens(regionText, roots, inside = insideBackticks, mutate = {}) {
+  const { text, inFence } = fenceInfo(regionText, mutate);
   const out = [];
-  for (const m of text.matchAll(buildTokenPattern(roots))) {
+  for (const m of text.matchAll(buildTokenPattern(roots, mutate))) {
     out.push({ path: m[1], inside: inFence(m.index) || inside(text, m.index), exact: text[m.index - 1] === "`" && text[m.index + m[1].length] === "`" });
   }
   return out;
@@ -205,7 +272,7 @@ export function check(text, roots, exists, mutate = {}, inScopeFloor = 0) {
   let tokens = 0;
   let noCommand = 0;
   for (const s of inScope) {
-    const toks = pathTokens(s.text, roots, mutate.alwaysInside ? () => true : insideBackticks);
+    const toks = pathTokens(s.text, roots, mutate.alwaysInside ? () => true : insideBackticks, mutate);
     tokens += toks.length;
     for (const t of toks) {
       if (!t.inside) violations.push({ row: s.row, line: s.line, date: s.date, token: t.path, why: "outside backticks; check-cited-paths cannot see it" });
@@ -255,8 +322,9 @@ function runCli(file) {
   return r.ok ? 0 : 1;
 }
 
-function selfTest() {
-  const real = new Set(["scripts/real.mjs", "docs/real.md", ".github/real.yml", ".claude/real.md"]);
+async function selfTest() {
+  const { rowMeasuredAt } = await import("./objective-loop.mjs");
+  const real = new Set(["scripts/real.mjs", "docs/real.md", ".github/real.yml", ".claude/real.md", "scripts/a@2x+b.png"]);
   const roots = stampRoots(real);
   const exists = (p) => real.has(p);
   const stamp = (date, body) => `1. **Row one.** RE-MEASURED ${date} (open): ${body}\n`;
@@ -297,6 +365,16 @@ function selfTest() {
     { name: "a path on the stamp's second line (same paragraph) is read", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: first line,\n    then scripts/x.mjs on the second.\n"), ok: false },
     { name: "a path after a blank line is not charged to the stamp", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: fine.\n\nunrelated scripts/x.mjs paragraph.\n"), ok: true },
     { name: "a path past the 1500-character cap is not read", text: doc(stamp("2026-10-08", `${"x ".repeat(800)}scripts/x.mjs`)), ok: true },
+    { name: "a list-item fence (blank line, then the fence) holding a nonexistent path -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran\n\n    ```bash\n    node scripts/x.mjs --smoke\n    ```\n"), ok: false },
+    { name: "a fence with an internal blank line: a nonexistent path after the blank -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08:\n```\nnode scripts/real.mjs\n\nnode scripts/x.mjs\n```\n"), ok: false },
+    { name: "a line STARTING with an inline ``` span holding a nonexistent path -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran\n```node scripts/x.mjs```\n"), ok: false },
+    { name: "a line starting with an inline ``` span does not open a fence: a later bare path -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran\n    ```node scripts/real.mjs```\n    then scripts/real.mjs bare.\n"), ok: false },
+    { name: "a backticked nonexistent path holding @ -> red", text: doc(stamp("2026-10-08", "see `scripts/NOPE@2x.png` here.")), ok: false },
+    { name: "a backticked nonexistent path holding + -> red", text: doc(stamp("2026-10-08", "see `scripts/NOPE+ui.mjs` here.")), ok: false },
+    { name: "a backticked tracked path holding @ and + -> green", text: doc(stamp("2026-10-08", "see `scripts/a@2x+b.png` here.")), ok: true },
+    { name: "a nested paren in the header: a dated status word inside it does not end the stamp", text: doc("1. **Row one.** RE-MEASURED 2026-10-08 (still open (see #12) DONE 2026-10-08 elsewhere): see scripts/x.mjs here.\n"), ok: false },
+    { name: "a marker split by a code span is a stamp (rowMeasuredAt reads it)", text: doc("1. **Row one.** RE-MEASURED `(head ddf91d60)` 2026-10-09: see scripts/x.mjs.\n"), ok: false, measured: "2026-10-09" },
+    { name: "a marker split by a quoted span is a stamp (rowMeasuredAt reads it)", text: doc('1. **Row one.** re-measured "after #1480" 2026-10-09: see scripts/x.mjs.\n'), ok: false, measured: "2026-10-09" },
     { name: "in-scope floor: one in-scope stamp under a floor of 5 -> red", text: doc(stamp("2026-10-08", "fine.")), ok: false, mention: "floor 5", floor: 5 },
     { name: "zero stamps -> red (floor)", text: "1. **Row one.** nothing measured.\n", ok: false, mention: "floor" },
   ];
@@ -309,6 +387,8 @@ function selfTest() {
     const good = verdict(c);
     say(good, c.name + (good ? ` (${r.ok ? "exit 0" : "exit 1"})` : ` (got ok=${r.ok}: ${r.errors.join(" | ")})`));
   }
+  // The split-marker cases are stamps BECAUSE objective-loop's rowMeasuredAt reads them: pin that it still does.
+  for (const c of cases.filter((x) => x.measured)) say(rowMeasuredAt(c.text) === c.measured, `rowMeasuredAt reads "${c.name}" as ${c.measured} too`);
   // Mutants: each must turn at least one planted case red.
   const mutants = [
     ["drop the date cut-off", { noCutoff: true }],
@@ -320,6 +400,12 @@ function selfTest() {
     ["ignore the sentence-start status marker", { noClauseStart: true }],
     ["skip no header", { noHeaderSkip: true }],
     ["trust an exact backtick span without resolving it", { trustExact: true }],
+    ["a blank line ends the region even inside a fence", { fenceBlankStop: true }],
+    ["a blank line before a fence ends the region", { noFenceLookahead: true }],
+    ["any line starting with ``` flips the fence state", { anyTripleToggles: true }],
+    ["end the header at the first ')'", { headerFirstParen: true }],
+    ["find markers in the raw text only (no span masking)", { rawMarkersOnly: true }],
+    ["the path-token class without @ and +", { narrowClass: true }],
   ];
   for (const [label, mutate] of mutants) say(cases.some((c) => !verdict(c, mutate)), `mutant "${label}" turns a planted case red`);
   const noDot = stampRoots(real, { noDotRoots: true });
@@ -360,7 +446,7 @@ function selfTest() {
 const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isEntry) {
   const argv = process.argv.slice(2);
-  if (argv.includes("--self-test")) process.exit(selfTest());
+  if (argv.includes("--self-test")) process.exit(await selfTest());
   const i = argv.indexOf("--file");
   const given = i >= 0 ? argv[i + 1] : undefined;
   process.exit(runCli(i >= 0 ? (given && !given.startsWith("--") ? resolve(given) : "") : join(REPO, PLAN_FILE)));

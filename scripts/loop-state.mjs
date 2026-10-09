@@ -158,7 +158,9 @@ function entryAt(cwd, ref, file) {
 //     Anything a SANDBOX can plant below that boundary (the repository's own config, an included file from it, a worktree config) is gated.
 const HTTP_HARMLESS = /\.(postbuffer|lowspeedlimit|lowspeedtime|maxrequests|minsessions|version|useragent|extraheader|cookiefile|savecookies|emptyauth|delegation|proactiveauth)$/; // (extraHeader: actions/checkout writes its token there, in the repository's own config; it cannot move the traffic, and its value is never printed)
 const gitBool = (v) => v === null || !/^(false|no|off|0|)$/i.test(String(v).trim());
-const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s]*@/ : /\/\/[^/@\s]*:[^/@\s]*@/, "//"); // credentials always; the user name too for a proxy (a token can be the user name)
+// DISPLAY ONLY: never decide with it whether a URL is the Hub (round-12 refute: its span crossed `?`, `#` and a backslash, so `https://evil.example?x=@github.com/...` lost its real host and read as the Hub). The
+// span stops at / @ whitespace ? # and a backslash, exactly the characters that end the userinfo of a URL; the decisions use parseGitUrl.
+const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s?#\\]*@/ : /\/\/[^/@\s?#\\]*:[^/@\s?#\\]*@/, "//"); // credentials always; the user name too for a proxy (a token can be the user name)
 // One configuration entry (scope, origin, "key\nvalue" as `git config --show-origin --show-scope -z` prints them) -> { problem } | { trusted } | {}.
 // Pure, so the scope rule is testable for a scope this git never prints: system, global and command line are the environment's; ANYTHING else (local, worktree,
 // and any scope a later git adds) is the repository's own and is gated.
@@ -248,17 +250,19 @@ function hubTransport(cwd = repo, hub = HUB) {
   if (!r.ok) problems.unshift(`git could not expand the Hub URL (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`);
   else {
     // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
-    const expanded = r.stdout.trim(), shown = noUserinfo(expanded, true);
-    if (shown === hub && expanded !== hub) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
-    else if (expanded !== hub && !isHubUrlLoose(expanded, hub)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
-    else if (expanded !== hub) trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
+    const expanded = r.stdout.trim(), shown = displayUrl(expanded);
+    if (expanded === hub) { /* no rewrite */ }
+    else if (!isHubUrl(expanded, hub)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
+    else if (urlWithoutUserinfo(expanded) === urlWithoutUserinfo(hub) && parseGitUrl(expanded).scheme === parseGitUrl(hub).scheme) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
+    else trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
   }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
 }
 // THE LISTING ITSELF. Every setting a repository can carry (a remote helper named by `remote.<Hub URL>.vcs`, a proxy, an insteadOf, core.sshCommand, an include) reaches `git ls-remote` through the repository
 // it runs in, and hubTransport can only name the shapes it knows. So the listing runs in a fresh empty directory (nothing above it may be a repository: GIT_CEILING_DIRECTORIES), where only the
 // environment's own configuration (global, system, GIT_CONFIG_*) and environment exist; the scan above still names what the repository carries. (Round-11 refute: remote.<Hub URL>.vcs plus an inline
-// alias.remote-<vcs> served a fake listing from repository configuration alone.)
+// alias.remote-<vcs> served a fake listing from repository configuration alone.) The isolation is DEFENCE IN DEPTH behind the scan: every repository-scope shape the scan enumerates is gated before the
+// listing is asked for, so the cases that pin it use what the scan cannot see (a rewrite written into .git/config AFTER the scan took its snapshot) and watch where the listing runs (R16-listhub-*).
 function listHub(hub = HUB) {
   const dir = mkdtempSync(join(tmpdir(), "loop-state-ls-"));
   try {
@@ -280,26 +284,49 @@ function transportRow(scan, hub = HUB) {
     detail: clean ? `listing read from ${hub}; ${scan.note}` : `listing read from ${hub} through a transport this check cannot verify; ${scan.note}`,
   };
 }
-// The spellings of a Hub URL (https, scp-style, ssh), lower case and without .git, DERIVED from the Hub URL asked about: the host and repository come from `hub`, never from a literal here
-// (the self-test asks about a reserved-host Hub, so no fixture has to put a credential on a real host).
-function hubSpellings(hub = HUB) {
-  const m = /^https:\/\/([^/]+)\/(.+?)(?:\.git)?\/*$/i.exec(String(hub || "").trim());
-  if (!m) return [];
-  const host = m[1].toLowerCase(), path = m[2].toLowerCase();
-  return [`https://${host}/${path}`, `git@${host}:${path}`, `ssh://git@${host}/${path}`];
+// IS THIS URL THE HUB: decided by PARSING, never by a pattern over the string. A regex that strips "userinfo" read `https://evil.example?x=@github.com/<Hub>.git` as the Hub (its real host is
+// evil.example: everything after the first `?` is a query), and so did `#@` and a backslash; the origin row passed, a global insteadOf was classed as "adds credentials", and the Hub LISTING was
+// fetched from the other machine (round-12 refute). parseGitUrl gives { scheme, host, path } for exactly the shapes git itself treats as an https URL, an ssh:// URL or an scp-style address, with
+// the userinfo taken out by the PARSER (the WHATWG URL for the first two), and gives null for everything else: whitespace or control characters, a backslash, a query or a fragment (a Hub URL has
+// none), a scheme that is not https or ssh, a port that is not the scheme's own, an unparseable string. null is "not the Hub" (fail closed).
+function parseGitUrl(u) {
+  const s = String(u ?? "").trim();
+  if (!s || /[\s\\?#\u0000-\u001f\u007f]/.test(s)) return null;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(s)) {
+    let url; try { url = new URL(s); } catch { return null; }
+    if (url.protocol !== "https:" && url.protocol !== "ssh:") return null;
+    if (url.search || url.hash || !url.hostname) return null;
+    if (url.port && url.port !== (url.protocol === "https:" ? "443" : "22")) return null;
+    return { scheme: url.protocol.slice(0, -1), host: url.hostname.toLowerCase(), path: url.pathname.replace(/^\/+/, "") };
+  }
+  const m = /^(?:[^@/:]+@)?([^@/:]+):([^:@]+)$/.exec(s); // scp-style [user@]host:path, no "//" and no "/" before the colon
+  if (!m || m[2].startsWith("/")) return null;
+  return { scheme: "scp", host: m[1].toLowerCase(), path: m[2] };
 }
+const hubIdentity = (p) => (p ? `${p.host}/${p.path.replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase()}` : null);
+// Is `u` an https, ssh or scp-style spelling of the Hub URL asked about (host and repository come from `hub`, never from a literal here: the self-test asks about a reserved-host Hub)?
 function isHubUrl(u, hub = HUB) {
-  return hubSpellings(hub).includes(String(u || "").trim().replace(/\/+$/, "").replace(/\.git$/i, "").toLowerCase());
+  const want = hubIdentity(parseGitUrl(hub));
+  return want !== null && hubIdentity(parseGitUrl(u)) === want;
 }
-// A URL with credentials in it (a token-bearing insteadOf is common and legitimate) is still the Hub when it is the Hub once the userinfo is taken away, and the userinfo is never printed.
-function isHubUrlLoose(u, hub = HUB) { return isHubUrl(u, hub) || isHubUrl(noUserinfo(u, true), hub); }
+// The URL without its userinfo, taken out by the parser: the same string for the Hub with and without credentials, so "only adds credentials" is a comparison, not a guess. null when unparseable.
+function urlWithoutUserinfo(u) {
+  const p = parseGitUrl(u);
+  return p ? `${p.scheme}://${p.host}/${p.path}` : null;
+}
+// A URL for a row: userinfo removed by the parser where the string parses (query and fragment KEPT, so a URL that hides another host behind `?x=@` shows it), by the display pattern otherwise.
+function displayUrl(u) {
+  const s = String(u ?? "").trim();
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(s)) { try { const x = new URL(s); return `${x.protocol}//${x.host}${x.pathname}${x.search}${x.hash}`; } catch { /* below */ } }
+  return noUserinfo(s, true);
+}
 function originRow(cwd = repo, hub = HUB) {
   const g = gitIn(cwd);
   const configured = g("config", "--get", "remote.origin.url"), fetchUrl = g("remote", "get-url", "origin"), pushUrl = g("remote", "get-url", "--push", "origin");
-  const ok = isHubUrlLoose(fetchUrl, hub) && isHubUrlLoose(pushUrl, hub);
-  const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${noUserinfo(pushUrl, true)})` : "";
-  const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${noUserinfo(configured, true)}, rewritten by url.<base>.insteadOf)` : "";
-  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${noUserinfo(fetchUrl, true) || "(no origin)"}${pushNote}${rewriteNote}` };
+  const ok = isHubUrl(fetchUrl, hub) && isHubUrl(pushUrl, hub);
+  const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${displayUrl(pushUrl)})` : "";
+  const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${displayUrl(configured)}, rewritten by url.<base>.insteadOf)` : "";
+  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${displayUrl(fetchUrl) || "(no origin)"}${pushNote}${rewriteNote}` };
 }
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
 // remote-tracking ref in a bare resolution, and every landed check below would then compare a local
@@ -1103,8 +1130,8 @@ function sameNameVerdict(branch, hubSha, hubShaMap, cwd = repo) {
 // same-named branch with real local-only work, after another lane pushed to the same name, only that warning, and the gated row read ok
 // (refute dU). So when origin/<name> exists, the local commits beyond it are counted (that needs no Hub object), and any beyond it that
 // no Hub-listed commit holds are a gated AHEAD, with the fetch remedy first since a fetch is what settles whether the Hub already has
-// them (when one does hold them they stay under the warning: nothing to gate, nothing counted clean). A count git cannot give is unreadable, and unreadable gates too. No origin/<name> at all leaves nothing to count against:
-// still the warning (the unfetched wording), never a pass. A Hub sha that IS local and still unreadable gets no fetch hint.
+// them (when one does hold them they stay under the warning: nothing to gate, nothing counted clean). A count git cannot give is unreadable, and unreadable gates too. (Round 16: the count is against the Hub's
+// listed commits alone, with or without an origin/<name>; see unknownSameName.) A Hub sha that IS local and still unreadable gets no fetch hint.
 function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   const git = gitIn(cwd);
   if (hubSha && git("cat-file", "-t", hubSha) === "commit") return { state: "unknown" };
@@ -1114,9 +1141,12 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   // With NO origin/<name> the count is made against the Hub-listed commits alone (round-7 refute SNb: a single-branch clone, whose refspec
   // is +refs/heads/main only, never gets origin/feat from a push; the early "unknown" for a missing tracking ref was a gate that needed the
   // very ref a single-branch clone does not have).
-  const label = tracked ? `origin/${branch}` : "the Hub's listed commits";
+  // ...and also WITH one (wave-78 review, p2b): a hand-made refs/remotes/origin/<own name> at the tip turned the gated ahead into the ungated warning, and a tracking ref is a name anyone can write, the
+  // branch's own included. So the count is always made against the commits the Hub LISTS that this checkout has (re-hashed); a branch that is genuinely only BEHIND the Hub stays under the warning as
+  // long as some listed commit holds its commits, and says fetch when none does.
+  const label = "the Hub's listed commits";
   const why = {};
-  const counted = commitsBeyondHub(cwd, branch, hubShaMap, tracked ? `refs/remotes/origin/${branch}` : "", why);
+  const counted = commitsBeyondHub(cwd, branch, hubShaMap, "", why);
   const beyond = Number(counted);
   if (counted === "" || !Number.isInteger(beyond)) return { state: "ahead", ahead: null, beyond: label, ...(fetch ? { fetch } : {}), ...noSha, reason: `commits beyond ${label} could not be counted${why.unproven ? ` (${why.unproven})` : ""}` };
   if (beyond === 0) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
@@ -1128,11 +1158,9 @@ function unknownSameName(branch, hubSha, hubShaMap, cwd) {
   if (st.holds) return { state: "unknown", ...(fetch ? { fetch } : {}), ...noSha };
   return { state: "ahead", ahead: beyond, beyond: label, ...(fetch ? { fetch } : {}), ...noSha };
 }
-// How many commits of the branch the Hub is not KNOWN to hold: reachable from the tip and from neither the branch's own tracking ref (the
-// ref a lagging fetch leaves behind, the premise of "behind the Hub") nor any commit the Hub LISTS that is in the store and hashes to its
-// name. Round 7 counted against origin/<name> alone, so commits the Hub already holds under another listed name inflated the count. Other
-// origin/* refs are NOT taken as evidence (a hand-made one could hide the gate); a lagging one holding the tip's older commits only
-// over-counts, which gates, with the fetch remedy. "" when git cannot count.
+// How many commits of the branch the Hub is not KNOWN to hold: reachable from the tip and from no commit the Hub LISTS that is in the store and hashes to its name (and, when a caller passes one, from
+// that tracking ref; unknownSameName no longer does: since round 16 no tracking ref is evidence). Round 7 counted against origin/<name> alone, so commits the Hub already holds under another listed name
+// inflated the count. A lagging tracking ref holding the tip's older commits only over-counts, which gates, with the fetch remedy. "" when git cannot count.
 function commitsBeyondHub(cwd, branch, hubShaMap, trackingRef, why = {}) {
   const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
   const nots = [...(trackingRef ? [trackingRef] : []), ...listed];
@@ -2212,10 +2240,10 @@ function selfTest() {
     // p1f: the only holder is mainline, and the Hub's mainline moves on (the ordinary state of the shared checkout). The same-name warn agrees with the failure row.
     const pf = mkFx("r6f");
     pf.c("m1.txt", "m1\n"); pf.f("push", "-q", "origin", "main"); pf.f("branch", "pinned", "main"); hubAdvance(pf, "main");
-    const pfRows = pf.rows(), pfU = rowOf(pfRows, T_UNPUSHED), pfW = rowOf(pfRows, T_UNKNOWN);
-    check("a branch pinned at a mainline the Hub has moved on from is a gated failure saying fetch, and the same-name warn for main says it in the same words (R6-p1f)",
+    const pfRows = pf.rows(), pfU = rowOf(pfRows, T_UNPUSHED), pfW = rowOf(pfRows, T_AHEAD);
+    check("a branch pinned at a mainline the Hub has moved on from is a gated failure saying fetch, and the same-name row for main (its commits held by no Hub-listed commit; origin/main is no evidence since round 16) is a gated failure saying it in the same words (R6-p1f)",
       !!pfU && pfU.state === "fail" && pfU.gated === true && pfU.detail.split(" — ")[0] === "pinned" && pfU.detail.includes(FETCH("main")) && !/push, or confirm the remote/.test(pfU.detail) &&
-      !!pfW && pfW.state === "warn" && pfW.gated === false && pfW.detail.includes(FETCH("main")));
+      !!pfW && pfW.state === "fail" && pfW.gated === true && pfW.detail.startsWith("main (+") && pfW.detail.includes(`main: ${FETCH("main")}`));
     pf.f("fetch", "-q", "origin");
     check("...and after the fetch the pinned branch is cleared and the warn is gone (R6-p1f-after)", (() => { const r = pf.rows(); return rowOf(r, T_CLEAN)?.state === "ok" && !rowOf(r, T_UNPUSHED) && !rowOf(r, T_UNKNOWN); })());
     // a same-named branch whose Hub tip is not fetched and which has NO tracking ref at all: still the fetch remedy, honestly worded (nothing "is behind")
@@ -2378,15 +2406,21 @@ function selfTest() {
     const du = mkU("r7u"), duRows = du.x.rows(), duA = rowOf(duRows, T_AHEAD);
     check("a same-named branch with a local-only commit, the Hub having moved the name and nothing fetched, is a GATED failure that says to fetch first (R7-dU)",
       !hubHolds(du.x, du.T, "feat") && du.x.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "1" && !!duA && duA.state === "fail" && duA.gated === true &&
-      duA.detail.startsWith("feat (+1 beyond origin/feat)") && duA.detail.includes(`feat: ${FETCH("feat")}`) && !rowOf(duRows, T_UNKNOWN));
+      duA.detail.startsWith("feat (+2 beyond the Hub's listed commits)") && duA.detail.includes(`feat: ${FETCH("feat")}`) && !rowOf(duRows, T_UNKNOWN));
     du.x.f("fetch", "-q", "origin");
     const duAfter = rowOf(du.x.rows(), T_AHEAD);
     check("...and after the fetch the diverged branch is still a gated failure, now counted against the Hub's own tip (R7-dU-after)", !!duAfter && duAfter.state === "fail" && duAfter.gated === true && duAfter.detail.startsWith("feat (+1)"));
     const dub = mkFx("r7ub");
     dub.f("checkout", "-q", "-b", "feat"); dub.c("f1.txt", "1\n"); dub.f("push", "-q", "-u", "origin", "feat"); hubAdvance(dub, "feat");
-    const dubRows = dub.rows(), dubW = rowOf(dubRows, T_UNKNOWN);
-    check("a same-named branch that is only BEHIND the Hub keeps the non-gated warning with the fetch wording and gates nothing (R7-dU-behind)",
-      dub.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "0" && !!dubW && dubW.state === "warn" && dubW.gated === false && dubW.detail.includes(FETCH("feat")) && !dubRows.some((r) => r.gated && r.state === "fail"));
+    const dubRows = dub.rows(), dubA = rowOf(dubRows, T_AHEAD);
+    // ...and the same branch when a Hub-listed commit HOLDS its commits (a pushed branch built on it): the warning with the fetch wording, nothing gated
+    const dbh = mkFx("r16bh");
+    dbh.f("checkout", "-q", "-b", "feat"); dbh.c("f1.txt", "1\n"); dbh.f("push", "-q", "-u", "origin", "feat");
+    dbh.f("checkout", "-q", "-b", "holder", "feat"); dbh.c("h.txt", "h\n"); dbh.f("push", "-q", "origin", "holder"); dbh.f("checkout", "-q", "feat"); hubAdvance(dbh, "feat");
+    const dbhRows = dbh.rows(), dbhW = rowOf(dbhRows, T_UNKNOWN);
+    check("a same-named branch that is only BEHIND an unfetched Hub tip is a gated failure saying fetch when no Hub-listed commit holds its commits (origin/<name> is no evidence), and keeps the non-gated warning with the fetch wording when one does (R7-dU-behind)",
+      dub.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "0" && !!dubA && dubA.state === "fail" && dubA.gated === true && dubA.detail.startsWith("feat (+1 beyond the Hub's listed commits)") && dubA.detail.includes(`feat: ${FETCH("feat")}`) &&
+      !!dbhW && dbhW.state === "warn" && dbhW.gated === false && dbhW.detail.includes(FETCH("feat")) && !dbhRows.some((r) => r.gated && r.state === "fail" && r.what === T_AHEAD));
     // a count git cannot give is unreadable, and unreadable gates too (the local tip has a commit below it whose parent is missing)
     const duu = mkU("r7uu");
     const duuHole = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin", "--literally"], { cwd: duu.x.w, encoding: "utf8", env: FX_ENV,
@@ -2394,13 +2428,13 @@ function selfTest() {
     duu.x.f("update-ref", "refs/heads/feat", duuHole);
     const duuA = rowOf(duu.x.rows(), T_AHEAD);
     check("when the commits beyond origin/<name> cannot be counted the same-name comparison is a gated failure 'count unreadable', not the warning (R7-dU-unreadable)",
-      !!duuA && duuA.state === "fail" && duuA.gated === true && duuA.detail.startsWith("feat (count unreadable)") && duuA.detail.includes("commits beyond origin/feat could not be counted"));
+      !!duuA && duuA.state === "fail" && duuA.gated === true && duuA.detail.startsWith("feat (count unreadable)") && duuA.detail.includes("commits beyond the Hub's listed commits could not be counted"));
     // ...and the Hub-map shapes: a Map with no sha for the name (or an empty one) is the same unanswerable comparison
     const dm = mkU("r7um"), dmReal = hubMapOf(dm.x.h);
     const dmRun = (map) => rowOf(dm.x.rows({ hubShaMap: map }), T_AHEAD);
     const dmMissing = dmRun(new Map([["main", dmReal.get("main")]])), dmEmptyStr = dmRun(new Map([["main", dmReal.get("main")], ["feat", ""]])), dmEmptyMap = dmRun(new Map());
     check("a Hub map with no sha for the branch's name, or an empty sha, or no entries at all, gates the branch with a local-only commit and names the cause (R7-map-missing)",
-      [dmMissing, dmEmptyStr, dmEmptyMap].every((a) => !!a && a.state === "fail" && a.gated === true && a.detail.startsWith("feat (+1 beyond origin/feat)") && a.detail.includes("the Hub sha map has no sha for feat")) &&
+      [dmMissing, dmEmptyStr, dmEmptyMap].every((a) => !!a && a.state === "fail" && a.gated === true && /^feat \(\+\d+ beyond the Hub's listed commits\)/.test(a.detail) && a.detail.includes("the Hub sha map has no sha for feat")) &&
       !dm.x.rows({ hubShaMap: new Map() }).some((r) => r.what === T_UNKNOWN && /feat/.test(r.detail)));
     const dmShape = (map) => { const a = rowOf(dm.x.rows({ hubShaMap: map }), T_AHEAD); return a ? a.detail : ""; };
     check("the Hub-map wording says what arrived: nothing, an empty object, or an object that is not a Map (R7-map-wording)",
@@ -2617,7 +2651,7 @@ function selfTest() {
     bc.c("a3.txt", "3\n", "held by nothing"); hubAdvance(bc, "feat");
     const bcA = rowOf(bc.rows(), T_AHEAD);
     check("the 'beyond' count leaves out commits a Hub-listed commit already holds: +1, not the +2 a count against origin/<name> alone gives (R8-beyond-count)",
-      bc.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "2" && hubHolds(bc, bcA2, "hold") && !!bcA && bcA.state === "fail" && bcA.detail.startsWith("feat (+1 beyond origin/feat)"));
+      bc.f("rev-list", "--count", "refs/remotes/origin/feat..refs/heads/feat") === "2" && hubHolds(bc, bcA2, "hold") && !!bcA && bcA.state === "fail" && bcA.detail.startsWith("feat (+1 beyond the Hub's listed commits)"));
     // (3) SNb: a single-branch clone's refspec never gives origin/feat, and another lane pushes feat
     const nb = mkFx("r8nb");
     nb.f("config", "remote.origin.fetch", "+refs/heads/main:refs/remotes/origin/main");
@@ -2761,18 +2795,18 @@ function selfTest() {
     // the whole script. Stand-in for the refuter's TLS-terminating proxy: a `git` first on PATH that answers `ls-remote --heads` with a listing of its own
     // (everything else is the real git), so the lie is on offer exactly where the proxy offered it.
     const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), fakeBin = join(root, "r9bin");
-    mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
+    mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then [ -n \"$R16_LISTED\" ] && : > \"$R16_LISTED\"; cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
     const wholeScript = (fx, name, vars = {}, opts = {}) => {
       // opts.hub: run a copy of the script whose Hub constant is another URL (a reserved host, so no fixture carries a credential for a real one)
       const hubLine = `const HUB = "${HUB}";`, copy = opts.hub ? prodSrc.replace(hubLine, `const HUB = "${opts.hub}";`) : prodSrc;
       if (opts.hub && (!prodSrc.includes(hubLine) || copy === prodSrc)) throw new Error("the Hub constant is not where the self-test expects it");
       mkdirSync(join(fx.w, "scripts"), { recursive: true }); writeFileSync(join(fx.w, "scripts", "loop-state.mjs"), copy);
       const listing = cfgFile(`${name}-listing`, `${hubMapOf(fx.h).get("main")}\trefs/heads/main\n`);
-      const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
+      const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, R16_LISTED: join(root, `${name}-listed`), GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
       delete childEnv.GIT_SSL_NO_VERIFY;
       for (const [k, v] of Object.entries(vars)) if (v === null) delete childEnv[k]; // (null: unset)
       const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: 120000, env: childEnv });
-      return { status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || "") };
+      return { status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || ""), listed: readIfPresent(join(root, `${name}-listed`)) !== null }; // listed: the Hub listing was ASKED FOR
     };
     const txe = mkFx("r9txe"); txe.f("config", "remote.origin.url", HUB);
     const txeClean = wholeScript(txe, "r9txe-a", { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: "", all_proxy: "", GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
@@ -2882,9 +2916,9 @@ function selfTest() {
     const bt = mkForged("r9bt");
     bt.f.f("branch", "other", bt.T); bt.f.f("update-ref", "refs/remotes/origin/other", bt.H2); hubAdvance(bt.f, "other");
     const btMap = hubMapOf(bt.f.h), btV = sameNameVerdict("other", btMap.get("other"), btMap, bt.f.w), btRow = rowOf(bt.f.rows(), "Local tip ahead of its same-named Hub branch");
-    check("an unfetched same-name tip hidden behind its tracking ref by a forged-name parent is a gated ahead with the count unreadable and the reason named, not the quiet 'not fetched' warning (R9-beyond-tracking)",
-      !hasObject(bt.f, btMap.get("other")) && bt.f.f("rev-list", "--count", "refs/heads/other", "^refs/remotes/origin/other") === "0" && btV.state === "ahead" && btV.ahead === null && /could not be counted \(.*hand-made object in the ancestry/.test(btV.reason) &&
-      !!btRow && btRow.gated === true && /other \(count unreadable\)/.test(btRow.detail) && btRow.detail.includes("origin/other is behind the Hub: run git fetch origin"));
+    check("an unfetched same-name tip that its own tracking ref hides behind a forged-name parent is a gated ahead counted against the Hub's listed commits, not the quiet 'not fetched' warning: the tracking ref is no evidence at all (R9-beyond-tracking)",
+      !hasObject(bt.f, btMap.get("other")) && bt.f.f("rev-list", "--count", "refs/heads/other", "^refs/remotes/origin/other") === "0" && btV.state === "ahead" && Number.isInteger(btV.ahead) && btV.ahead >= 1 && btV.beyond === "the Hub's listed commits" &&
+      !!btRow && btRow.gated === true && /^other \(\+\d+ beyond the Hub's listed commits\)/.test(btRow.detail) && btRow.detail.includes("origin/other is behind the Hub: run git fetch origin"));
 
     // (5) the environment. A GIT_DIR at a decoy hid every real branch; the other variables point reads at a repository, worktree, namespace or transport this check did not choose.
     const en = mkFx("r9en");
@@ -3077,8 +3111,15 @@ function selfTest() {
     const ozPlanted = rowOf(oz.rows(), T_AHEAD), ozRows = oz.rows();
     oz.f("update-ref", "-d", "refs/remotes/origin/X");
     const ozNoTracking = rowOf(oz.rows(), T_AHEAD);
-    check("a hand-made refs/remotes/origin/Z at the tip does not downgrade the gated 'unfetched same-name tip with local commits' to an ungated warning, with the branch's own tracking ref and in a single-branch clone without one (R12-origin-other)",
-      !!ozHonest && ozHonest.gated === true && ozHonest.detail.startsWith("X (+1 beyond origin/X)") && !!ozPlanted && ozPlanted.gated === true && ozPlanted.detail.startsWith("X (+1 beyond origin/X)") &&
+    // the branch's OWN tracking ref, hand-made at the tip (wave-78 review, p2b): Y exists on the Hub, the Hub moved it, this checkout fetched nothing, and origin/Y is written at the local tip
+    const oy = mkFx("r16oy");
+    oy.f("push", "-q", "origin", "main:refs/heads/Y"); oy.f("checkout", "-q", "-b", "Y"); oy.c("y1.txt", "REAL unpushed\n", "y1"); hubAdvance(oy, "Y");
+    const oyHonest = rowOf(oy.rows(), T_AHEAD);
+    oy.f("update-ref", "refs/remotes/origin/Y", "refs/heads/Y");
+    const oyPlanted = rowOf(oy.rows(), T_AHEAD), oyRows = oy.rows();
+    check("a hand-made refs/remotes/origin/Z at the tip, and one named like the branch itself, do not downgrade the gated 'unfetched same-name tip with local commits' to an ungated warning: only the Hub's own listing may (R12-origin-other)",
+      !!oyHonest && oyHonest.gated === true && !!oyPlanted && oyPlanted.gated === true && oyPlanted.detail.startsWith("Y (+1 beyond the Hub's listed commits)") && !oyRows.some((r) => r.what === T_UNKNOWN && /Y/.test(r.detail)) && oy.f("rev-list", "--count", "refs/remotes/origin/Y..refs/heads/Y") === "0" &&
+      !!ozHonest && ozHonest.gated === true && /^X \(\+\d+ beyond the Hub's listed commits\)/.test(ozHonest.detail) && !!ozPlanted && ozPlanted.gated === true && /^X \(\+\d+ beyond the Hub's listed commits\)/.test(ozPlanted.detail) &&
       !ozRows.some((r) => r.what === T_UNKNOWN && /X/.test(r.detail)) && !!ozNoTracking && ozNoTracking.gated === true && /^X \(\+\d+ beyond the Hub's listed commits\)/.test(ozNoTracking.detail));
     // (6) hermetic: the self-test isolates the developer's own git configuration for every fixture
     const hermProbe = mkFx("r12h");
@@ -3094,6 +3135,96 @@ function selfTest() {
       check("the whole self-test, started under a global git configuration that sets fetch.prune=true, http.sslVerify=false, merge.ff=only and a missing core.hooksPath, passes (R12-hostile-global)",
         nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
     }
+    // ══ ROUND 16 ══ Review round 2 (wave 78). (1) round 12's userinfo scrub read `https://evil.example?x=@github.com/<Hub>.git` as the Hub: the host of a URL is whatever the PARSER says.
+    const evilShapes = [["?x=@", "https://evil.example?x=@github.com/DanFashauer/SignalGrid-Review-Hub.git"], ["#@", "https://evil.example#@github.com/DanFashauer/SignalGrid-Review-Hub.git"],
+      ["backslash", "https://evil.example\\@github.com/DanFashauer/SignalGrid-Review-Hub.git"]];
+    check("a URL whose real host is another machine is not the Hub whatever it hides behind ?x=@, #@ or a backslash, and anything unparseable, with a query or fragment, of another scheme or port, is not the Hub; the real spellings, with credentials, are (R16-url-parse)",
+      evilShapes.every(([, u]) => parseGitUrl(u) === null && isHubUrl(u) === false) && isHubUrl(["https://ci-bot:tok", "github.com/DanFashauer/SignalGrid-Review-Hub.git"].join("@")) && // (joined, so no line of this file carries a credential in front of a real host) isHubUrl("https://tok@github.com/danfashauer/signalgrid-review-hub/") &&
+      isHubUrl("ssh://git@github.com:22/DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("git@github.com:DanFashauer/SignalGrid-Review-Hub") && isHubUrl("git@GitHub.COM:DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("https://GitHub.COM/DanFashauer/SignalGrid-Review-Hub.git") &&
+      ["http://github.com/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com:8443/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com./DanFashauer/SignalGrid-Review-Hub.git", "git://github.com/DanFashauer/SignalGrid-Review-Hub.git", "file:///x/DanFashauer/SignalGrid-Review-Hub.git",
+        "https://github.com/DanFashauer/SignalGrid-Review-Hub.git?x=1", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git#frag", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git extra",
+        "https://github.com\\DanFashauer/SignalGrid-Review-Hub.git", "https://github.com/Dan\tFashauer/SignalGrid-Review-Hub.git", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git\u0000", "https://github.com/DanFashauer/SignalGrid-\nReview-Hub.git", "git@github.com:/DanFashauer/SignalGrid-Review-Hub.git", "", "not a url"].every((u) => !isHubUrl(u)) &&
+      noUserinfo("https://evil.example?x=@github.com/p", true) === "https://evil.example?x=@github.com/p" && noUserinfo("https://user:pw@host/p", true) === "https://host/p");
+    const uo = mkFx("r16uo"); uo.f("config", "remote.origin.url", HUB);
+    const uoFetch = evilShapes.map(([, u]) => { uo.f("remote", "set-url", "origin", u); return originRow(uo.w); });
+    uo.f("remote", "set-url", "origin", HUB);
+    const uoPush = evilShapes.map(([, u]) => { uo.f("remote", "set-url", "--push", "origin", u); return originRow(uo.w); });
+    uo.f("remote", "set-url", "--push", "origin", HUB);
+    // a hidden FETCH URL beside an honest push URL (the fetch URL is what the listing and every fetch would use)
+    const uoSplit = evilShapes.map(([, u]) => { uo.f("remote", "set-url", "origin", u); uo.f("remote", "set-url", "--push", "origin", HUB); return originRow(uo.w); });
+    uo.f("remote", "set-url", "origin", HUB);
+    check("the origin row FAILS for a fetch URL or a push URL that hides its real host behind ?x=@, #@ or a backslash (also when only one of the two does), and shows the real host instead of the Hub's name (R16-url-origin)",
+      uoFetch.every((r) => r.state === "fail" && r.detail.startsWith("https://evil.example/") && !r.detail.startsWith("https://github.com")) && uoFetch[0].detail.includes("?x=@github.com") &&
+      uoSplit.every((r) => r.state === "fail" && r.detail.startsWith("https://evil.example/")) &&
+      uoPush.every((r) => r.state === "fail" && r.detail.startsWith("https://github.com/DanFashauer/SignalGrid-Review-Hub.git (pushes to https://evil.example/")) && originRow(uo.w).state === "ok");
+    const urGlobal = (u) => cfgFile(`r16-global-${basename(u).length}-${Math.abs([...u].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7))}.cfg`, `[url ${JSON.stringify(u.replace(/\\/g, "\\\\"))}]\n\tinsteadOf = https://github.com/\n`);
+    const urScans = evilShapes.map(([, u]) => inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: urGlobal(u.slice(0, u.indexOf("github.com/") + 11)) }));
+    const urRepo = mkFx("r16ur");
+    const urLocals = evilShapes.map(([, u]) => { const base = u.slice(0, u.indexOf("github.com/") + 11); urRepo.f("config", `url.${base}.insteadOf`, "https://github.com/"); const s = inCleanEnv(() => hubTransport(urRepo.w)); urRepo.f("config", "--unset", `url.${base}.insteadOf`); return s; });
+    check("a global or repository-scope url.<base>.insteadOf whose base hides another host behind ?x=@, #@ or a backslash is a gated 'rewrites the Hub URL' finding naming the real host, never 'adds credentials', and nothing in the trusted list claims the Hub (R16-url-rewrite)",
+      urScans.every((s) => s.problems.some((p) => /^git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && !s.trusted.some((t) => /adds credentials/.test(t))) &&
+      urLocals.every((s) => s.problems.some((p) => /^git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && s.problems.some((p) => /^repository-scope url\./.test(p)) && !s.trusted.some((t) => /adds credentials/.test(t))));
+    const ue = mkFx("r16ue"); ue.f("config", "remote.origin.url", HUB); mkdirSync(join(ue.w, "docs")); writeFileSync(join(ue.w, "docs", "PURPOSE.md"), "fixture\n");
+    const ueRewrite = wholeScript(ue, "r16ue-a", { GIT_CONFIG_GLOBAL: urGlobal(evilShapes[0][1].slice(0, evilShapes[0][1].indexOf("github.com/") + 11)) });
+    const ue2 = mkFx("r16u2"); ue2.f("config", "remote.origin.url", HUB); mkdirSync(join(ue2.w, "docs")); writeFileSync(join(ue2.w, "docs", "PURPOSE.md"), "fixture\n"); ue2.f("remote", "set-url", "origin", evilShapes[1][1]);
+    const ueOrigin = wholeScript(ue2, "r16u2-a");
+    check("the whole check, with a global rewrite of the Hub to another host behind ?x=@ (a fake Hub that answers a listing is standing by), exits 1 with a failing Hub-URL row and never ASKS for the listing; with the origin hidden behind #@ it fails the origin row and exits 1 (R16-url-e2e)",
+      ueRewrite.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(ueRewrite.out) && !ueRewrite.listed && !/all present on the Review Hub/.test(ueRewrite.out) && !/adds credentials/.test(ueRewrite.out) &&
+      ueOrigin.status === 1 && /✗ origin points at the Review Hub\s+https:\/\/evil\.example\//.test(ueOrigin.out));
+    // The refuter's end-to-end shape: a fixture Hub that REALLY answers a listing, on a local port, reachable only through a rewrite that hides the real host behind ?x=@.
+    // Precondition: the plain git, under that rewrite, reaches it. The whole check must then fail the Hub-URL row and never send it a request.
+    const lpSha = hubMapOf(ue.h).get("main"), lpPort = join(root, "r16-hub.port"), lpLog = join(root, "r16-hub.log"), lpServer = join(root, "r16-hub-server.mjs");
+    writeFileSync(lpLog, "");
+    writeFileSync(lpServer, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+      `const pkt = (s) => (s.length + 4).toString(16).padStart(4, "0") + s;`,
+      `const body = pkt("# service=git-upload-pack\\n") + "0000" + pkt(process.argv[2] + " refs/heads/main\\0multi_ack thin-pack side-band side-band-64k ofs-delta shallow no-progress include-tag multi_ack_detailed symref=HEAD:refs/heads/main object-format=sha1 agent=fixture\\n") + "0000";`,
+      `const srv = createServer((req, res) => { appendFileSync(process.argv[4], req.url + "\\n"); res.writeHead(200, { "content-type": "application/x-git-upload-pack-advertisement", "cache-control": "no-cache" }); res.end(body); });`,
+      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[3], String(srv.address().port)));`].join("\n") + "\n");
+    const lpPid = Number(spawnSync("sh", ["-c", '"$0" "$@" </dev/null >/dev/null 2>&1 & echo $!', process.execPath, lpServer, lpSha, lpPort, lpLog], { encoding: "utf8" }).stdout.trim());
+    let lpOk = false, lpListed = null, lpScan = null, lpWhole = null, lpAfter = null, lpPlain = null;
+    try {
+      for (let i = 0; i < 400 && readIfPresent(lpPort) === null; i++) spawnSync("sleep", ["0.05"]);
+      const lpPortNo = readIfPresent(lpPort);
+      if (lpPortNo !== null) {
+        const lpBase = ["http://127.0.0.1:" + lpPortNo + "?x=", "github.com/"].join("@"); // (joined, so no line of this file spells a credential in front of a real host)
+        const lpCfg = cfgFile("r16-localport-global.cfg", `[url ${JSON.stringify(lpBase)}]\n\tinsteadOf = https://github.com/\n`);
+        const lpEnv = { NO_PROXY: "127.0.0.1", no_proxy: "127.0.0.1", HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null };
+        lpPlain = inCleanEnv(() => gitRun(ue.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), { GIT_CONFIG_GLOBAL: lpCfg, ...lpEnv });
+        lpListed = readIfPresent(lpLog);
+        writeFileSync(lpLog, ""); // from here on, ANY request is the check's own
+        lpScan = inCleanEnv(() => hubTransport(ue.w), { GIT_CONFIG_GLOBAL: lpCfg, ...lpEnv });
+        lpWhole = wholeScript(ue, "r16lp-a", { GIT_CONFIG_GLOBAL: lpCfg, PATH: process.env.PATH, ...lpEnv });
+        lpAfter = readIfPresent(lpLog);
+        lpOk = true;
+      }
+    } finally { try { process.kill(lpPid); } catch { /* already gone */ } }
+    check("a fixture Hub on a local port that answers a real listing, reached only through a global rewrite hiding the host behind ?x=@, is reachable by plain git (the precondition), is a gated 'rewrites the Hub URL' finding, and the whole check exits 1 without sending it one request (R16-url-localport)",
+      lpOk && !!lpPlain && lpPlain.ok && lpPlain.stdout.includes(lpSha) && !!lpListed && lpListed.length > 0 &&
+      !!lpScan && lpScan.problems.some((p) => /^git configuration rewrites the Hub URL .* to http:\/\/127\.0\.0\.1:\d+\//.test(p)) &&
+      !!lpWhole && lpWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lpWhole.out) && !lpWhole.out.includes("all present on the Review Hub") && lpAfter === "");
+    // (3) listHub's isolation. Where it runs is probed (an empty directory made for the call, under the temp directory, with the ceiling set), and a rewrite written into .git/config AFTER the scan took its snapshot
+    // (a shape no scan can see) is followed by a listing made inside the repository and not by listHub.
+    const lhSeen = [], lhReal = gitRun;
+    gitRun = (cwd2, args2, opts2 = {}) => {
+      if (args2[0] === "ls-remote" && args2.includes("--heads")) {
+        let entries = null; try { entries = readdirSync(cwd2); } catch { /* absent */ }
+        lhSeen.push({ cwd: cwd2, entries, ceiling: opts2.env && opts2.env.GIT_CEILING_DIRECTORIES });
+      }
+      return lhReal(cwd2, args2, opts2);
+    };
+    try { inCleanEnv(() => listHub(), unreachable); } finally { gitRun = lhReal; }
+    const lh = mkFx("r16lh"), lhFake = join(root, "r16-fakehub.git");
+    execFileSync("git", ["init", "-q", "--bare", lhFake], { env: FX_ENV }); lh.f("push", "-q", lhFake, "main:refs/heads/fakeonly");
+
+    const lhScan = inCleanEnv(() => hubTransport(lh.w)); // the scan's snapshot: clean
+    lh.f("config", `url.file://${lhFake}.insteadOf`, HUB); // ...and only now the repository rewrites the Hub URL to a fake hub
+    const lhHere = process.cwd(); process.chdir(lh.w);
+    let lhIn, lhIso; try { lhIn = inCleanEnv(() => gitRun(lh.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), unreachable); lhIso = inCleanEnv(() => listHub(), unreachable); } finally { process.chdir(lhHere); }
+    check("listHub runs in an empty directory made for the call under the temp directory, with GIT_CEILING_DIRECTORIES at it, and removes it (R16-listhub-where)",
+      lhSeen.length === 1 && lhSeen[0].entries !== null && lhSeen[0].entries.length === 0 && dirname(lhSeen[0].cwd) === tmpdir() && /^loop-state-ls-[A-Za-z0-9]{6}$/.test(basename(lhSeen[0].cwd)) &&
+      lhSeen[0].ceiling === realpathSync(tmpdir()) && lhSeen[0].cwd !== repo && lhSeen[0].cwd !== process.cwd() && !existsSync(lhSeen[0].cwd));
+    check("a rewrite of the Hub URL written into .git/config after the scan's snapshot (a shape no scan enumerates) serves a fake listing to a listing made inside the repository and not to listHub (R16-listhub-isolation)",
+      lhScan.problems.length === 0 && lhIn.ok && lhIn.stdout.includes("refs/heads/fakeonly") && !String(lhIso.stdout).includes("fakeonly") && !String(lhIso.stdout).includes(lh.f("rev-parse", "main")));
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

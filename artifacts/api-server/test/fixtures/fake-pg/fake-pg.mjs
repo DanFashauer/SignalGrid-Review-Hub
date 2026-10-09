@@ -9,6 +9,8 @@
 //   SIGNALGRID_FAKE_PG_PAGE_DELAY_MS   each page answers after this many ms (a walk that takes time)
 //   SIGNALGRID_FAKE_PG_READ_LOG        a file that gets one line per page read (how many walks ran)
 //   SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ  a page starting at or past this seq THROWS (a database error mid-walk)
+//   SIGNALGRID_FAKE_PG_TENANT_DELAY_MS the tenant-scoped read answers after this many ms (the window
+//                                      BEFORE the route reaches the walk)
 import { appendFileSync, readFileSync } from "node:fs";
 
 const seedPath = process.env.SIGNALGRID_FAKE_PG_SEED;
@@ -18,6 +20,7 @@ const table = readFileSync(seedPath, "utf8").split("\n").filter(Boolean).map((li
 const pageDelayMs = Number(process.env.SIGNALGRID_FAKE_PG_PAGE_DELAY_MS ?? 0);
 const readLog = process.env.SIGNALGRID_FAKE_PG_READ_LOG;
 const failAfterSeq = process.env.SIGNALGRID_FAKE_PG_FAIL_AFTER_SEQ;
+const tenantDelayMs = Number(process.env.SIGNALGRID_FAKE_PG_TENANT_DELAY_MS ?? 0);
 
 const norm = (sql) => sql.replace(/\s+/g, " ").trim();
 const result = (rows) => ({ rows, rowCount: rows.length });
@@ -41,6 +44,7 @@ async function query(sqlIn, params = []) {
   }
   if (sql === "SELECT id, ts, request_id, actor, event_type, target, meta, tenant_id, prev_hash, hash FROM public.audit_ledger WHERE tenant_id = $1 ORDER BY seq ASC OFFSET $2 LIMIT $3") {
     const [tenantId, offset, limit] = params;
+    if (tenantDelayMs > 0) await new Promise((r) => setTimeout(r, tenantDelayMs));
     return result(table.filter((r) => r.tenant_id === tenantId).slice(Number(offset), Number(offset) + Number(limit)));
   }
   if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK" || sql === "SELECT pg_advisory_xact_lock($1)") return result([]);

@@ -451,6 +451,10 @@ router.post("/v1/connectors/:id/sync", async (req: Request, res: Response, next:
 let ledgerWalk: { promise: Promise<LedgerVerification>; controller: AbortController; waiters: number } | null = null;
 
 function sharedLedgerWalk(res: Response): Promise<LedgerVerification> {
+  // A client that left before the handler got here (during auth or the tenant read) will never fire
+  // 'close' again, so it would join as a waiter nothing can remove and keep the walk alive for nobody.
+  // Refuse instead: no walk is started or joined for a response that is already gone.
+  if (res.destroyed || res.closed) return Promise.reject(new Error("audit: client disconnected before the ledger walk"));
   if (!ledgerWalk) {
     const controller = new AbortController();
     const walk = {

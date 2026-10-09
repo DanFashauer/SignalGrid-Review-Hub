@@ -2070,6 +2070,7 @@ async function run() {
     let server7b;
     let server7c;
     let server7d;
+    let server7e;
     try {
       // Mint the seed with the ONE implementation of the chain (@workspace/audit's
       // appendAuditRecord over its in-memory backend), bundled on the fly so this
@@ -2220,11 +2221,49 @@ async function run() {
       const afterAbortBody = await afterAbortRes.json().catch(() => null);
       check("durable audit: the next request after an aborted walk gets a fresh, whole verdict",
         afterAbortRes.status === 200 && afterAbortBody?.chain?.ok === true && afterAbortBody.chain.count === SEEDED);
+
+      // One waiter leaving must NOT abort a walk another waiter still needs: A starts
+      // the walk, B joins it, A disconnects mid-walk — B still gets the whole verdict.
+      const acA = new AbortController();
+      const waiterA = getAudit(PORT7D, { signal: acA.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 100));
+      const waiterB = getAudit(PORT7D).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+      await new Promise((r) => setTimeout(r, 150));
+      acA.abort();
+      await waiterA;
+      const resultB = await waiterB;
+      check("durable audit: a walk survives one waiter disconnecting while another still waits",
+        resultB.status === 200 && resultB.body?.chain?.ok === true && resultB.body.chain.count === SEEDED);
+      server7d.kill("SIGTERM");
+      server7d = undefined;
+
+      // EARLY DISCONNECT: a client that leaves before the route reaches the walk (here,
+      // during a tenant read held for 400ms) must not start one — nobody would ever be
+      // left to abort it. Its request never joins, so no page is read at all.
+      const earlyLogFile = pathResolve(work, "reads-early.log");
+      await writeFile(earlyLogFile, "");
+      const PORT7E = await freePort();
+      const bootedE = await bootFakePg(PORT7E, seed, {
+        SIGNALGRID_FAKE_PG_PAGE_DELAY_MS: "60",
+        SIGNALGRID_FAKE_PG_TENANT_DELAY_MS: "400",
+        SIGNALGRID_FAKE_PG_READ_LOG: earlyLogFile,
+      });
+      server7e = bootedE.child;
+      const acEarly = new AbortController();
+      const early = getAudit(PORT7E, { signal: acEarly.signal }).catch(() => "aborted");
+      await new Promise((r) => setTimeout(r, 150));
+      acEarly.abort();
+      await early;
+      await new Promise((r) => setTimeout(r, 1500)); // past the tenant read and a whole walk
+      const earlyReads = (await readFile(earlyLogFile, "utf8")).split("\n").filter(Boolean).length;
+      check("durable audit: a client gone BEFORE the walk starts no walk (0 page reads)",
+        bootedE.up === true && earlyReads === 0);
     } finally {
       server7a?.kill("SIGTERM");
       server7b?.kill("SIGTERM");
       server7c?.kill("SIGTERM");
       server7d?.kill("SIGTERM");
+      server7e?.kill("SIGTERM");
       await rm(work, { recursive: true, force: true });
     }
   }

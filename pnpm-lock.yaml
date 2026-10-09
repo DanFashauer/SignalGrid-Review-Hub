@@ -1152,9 +1152,15 @@ importers:
       fast-check:
         specifier: ^4.10.0
         version: 4.10.0
+      markdown-it:
+        specifier: 14.3.0
+        version: 14.3.0
       oidc-provider:
         specifier: 9.11.3
         version: 9.11.3
+      parse5:
+        specifier: 7.3.0
+        version: 7.3.0
       tsx:
         specifier: 'catalog:'
         version: 4.23.12

@@ -17,7 +17,7 @@
 // reports where they disagree. It is deliberately read-only: it changes nothing,
 // so it is safe to run half-awake on a Sunday.
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -3136,8 +3136,8 @@ function selfTest() {
         nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
     }
     // ══ ROUND 16 ══ Review round 2 (wave 78). (1) round 12's userinfo scrub read `https://evil.example?x=@github.com/<Hub>.git` as the Hub: the host of a URL is whatever the PARSER says.
-    const evilShapes = [["?x=@", "https://evil.example?x=@github.com/DanFashauer/SignalGrid-Review-Hub.git"], ["#@", "https://evil.example#@github.com/DanFashauer/SignalGrid-Review-Hub.git"],
-      ["backslash", "https://evil.example\\@github.com/DanFashauer/SignalGrid-Review-Hub.git"]];
+    const evilShapes = [["?x=@", "https://evil.example?x=@github.com/"], ["#@", "https://evil.example#@github.com/"], ["backslash", "https://evil.example\\@github.com/"]]
+      .map(([name, base]) => [name, `${base}DanFashauer/SignalGrid-Review-Hub.git`, base]); // [name, the Hub URL as the lure spells it, the url.<base> that rewrites https://github.com/ to it]
     check("a URL whose real host is another machine is not the Hub whatever it hides behind ?x=@, #@ or a backslash, and anything unparseable, with a query or fragment, of another scheme or port, is not the Hub; the real spellings, with credentials, are (R16-url-parse)",
       evilShapes.every(([, u]) => parseGitUrl(u) === null && isHubUrl(u) === false) && isHubUrl(["https://ci-bot:tok", "github.com/DanFashauer/SignalGrid-Review-Hub.git"].join("@")) && // (joined, so no line of this file carries a credential in front of a real host) isHubUrl("https://tok@github.com/danfashauer/signalgrid-review-hub/") &&
       isHubUrl("ssh://git@github.com:22/DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("git@github.com:DanFashauer/SignalGrid-Review-Hub") && isHubUrl("git@GitHub.COM:DanFashauer/SignalGrid-Review-Hub.git") && isHubUrl("https://GitHub.COM/DanFashauer/SignalGrid-Review-Hub.git") &&
@@ -3153,19 +3153,26 @@ function selfTest() {
     // a hidden FETCH URL beside an honest push URL (the fetch URL is what the listing and every fetch would use)
     const uoSplit = evilShapes.map(([, u]) => { uo.f("remote", "set-url", "origin", u); uo.f("remote", "set-url", "--push", "origin", HUB); return originRow(uo.w); });
     uo.f("remote", "set-url", "origin", HUB);
+    // The row's detail is "<fetch URL>" or "<fetch URL> (pushes to <push URL>)": each is parsed and its HOST compared for equality (a prefix or substring test on a host name is exactly the shape that lets another host follow it).
+    const shownUrls = (detail) => {
+      const m = /^(\S+)(?: \(pushes to (\S+)\))?$/.exec(detail);
+      if (!m) return null;
+      try { return { fetch: new URL(m[1]), push: m[2] ? new URL(m[2]) : null }; } catch { return null; }
+    };
+    const uoShown = [uoFetch, uoSplit, uoPush].map((rows) => rows.map((r) => shownUrls(r.detail)));
     check("the origin row FAILS for a fetch URL or a push URL that hides its real host behind ?x=@, #@ or a backslash (also when only one of the two does), and shows the real host instead of the Hub's name (R16-url-origin)",
-      uoFetch.every((r) => r.state === "fail" && r.detail.startsWith("https://evil.example/") && !r.detail.startsWith("https://github.com")) && uoFetch[0].detail.includes("?x=@github.com") &&
-      uoSplit.every((r) => r.state === "fail" && r.detail.startsWith("https://evil.example/")) &&
-      uoPush.every((r) => r.state === "fail" && r.detail.startsWith("https://github.com/DanFashauer/SignalGrid-Review-Hub.git (pushes to https://evil.example/")) && originRow(uo.w).state === "ok");
+      uoFetch.every((r, i) => r.state === "fail" && !!uoShown[0][i] && uoShown[0][i].push === null && uoShown[0][i].fetch.host === "evil.example") && !!uoShown[0][0] && uoShown[0][0].fetch.search === "?x=@github.com/DanFashauer/SignalGrid-Review-Hub.git" &&
+      uoSplit.every((r, i) => r.state === "fail" && !!uoShown[1][i] && uoShown[1][i].fetch.host === "evil.example" && !!uoShown[1][i].push && uoShown[1][i].push.host === "github.com") &&
+      uoPush.every((r, i) => r.state === "fail" && !!uoShown[2][i] && uoShown[2][i].fetch.host === "github.com" && uoShown[2][i].fetch.pathname === "/DanFashauer/SignalGrid-Review-Hub.git" && !!uoShown[2][i].push && uoShown[2][i].push.host === "evil.example") && originRow(uo.w).state === "ok");
     const urGlobal = (u) => cfgFile(`r16-global-${basename(u).length}-${Math.abs([...u].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7))}.cfg`, `[url ${JSON.stringify(u.replace(/\\/g, "\\\\"))}]\n\tinsteadOf = https://github.com/\n`);
-    const urScans = evilShapes.map(([, u]) => inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: urGlobal(u.slice(0, u.indexOf("github.com/") + 11)) }));
+    const urScans = evilShapes.map(([, , base]) => inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: urGlobal(base) }));
     const urRepo = mkFx("r16ur");
-    const urLocals = evilShapes.map(([, u]) => { const base = u.slice(0, u.indexOf("github.com/") + 11); urRepo.f("config", `url.${base}.insteadOf`, "https://github.com/"); const s = inCleanEnv(() => hubTransport(urRepo.w)); urRepo.f("config", "--unset", `url.${base}.insteadOf`); return s; });
+    const urLocals = evilShapes.map(([, , base]) => { urRepo.f("config", `url.${base}.insteadOf`, "https://github.com/"); const s = inCleanEnv(() => hubTransport(urRepo.w)); urRepo.f("config", "--unset", `url.${base}.insteadOf`); return s; });
     check("a global or repository-scope url.<base>.insteadOf whose base hides another host behind ?x=@, #@ or a backslash is a gated 'rewrites the Hub URL' finding naming the real host, never 'adds credentials', and nothing in the trusted list claims the Hub (R16-url-rewrite)",
       urScans.every((s) => s.problems.some((p) => /^git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && !s.trusted.some((t) => /adds credentials/.test(t))) &&
       urLocals.every((s) => s.problems.some((p) => /^git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(p)) && s.problems.some((p) => /^repository-scope url\./.test(p)) && !s.trusted.some((t) => /adds credentials/.test(t))));
     const ue = mkFx("r16ue"); ue.f("config", "remote.origin.url", HUB); mkdirSync(join(ue.w, "docs")); writeFileSync(join(ue.w, "docs", "PURPOSE.md"), "fixture\n");
-    const ueRewrite = wholeScript(ue, "r16ue-a", { GIT_CONFIG_GLOBAL: urGlobal(evilShapes[0][1].slice(0, evilShapes[0][1].indexOf("github.com/") + 11)) });
+    const ueRewrite = wholeScript(ue, "r16ue-a", { GIT_CONFIG_GLOBAL: urGlobal(evilShapes[0][2]) });
     const ue2 = mkFx("r16u2"); ue2.f("config", "remote.origin.url", HUB); mkdirSync(join(ue2.w, "docs")); writeFileSync(join(ue2.w, "docs", "PURPOSE.md"), "fixture\n"); ue2.f("remote", "set-url", "origin", evilShapes[1][1]);
     const ueOrigin = wholeScript(ue2, "r16u2-a");
     check("the whole check, with a global rewrite of the Hub to another host behind ?x=@ (a fake Hub that answers a listing is standing by), exits 1 with a failing Hub-URL row and never ASKS for the listing; with the origin hidden behind #@ it fails the origin row and exits 1 (R16-url-e2e)",
@@ -3180,7 +3187,10 @@ function selfTest() {
       `const body = pkt("# service=git-upload-pack\\n") + "0000" + pkt(process.argv[2] + " refs/heads/main\\0multi_ack thin-pack side-band side-band-64k ofs-delta shallow no-progress include-tag multi_ack_detailed symref=HEAD:refs/heads/main object-format=sha1 agent=fixture\\n") + "0000";`,
       `const srv = createServer((req, res) => { appendFileSync(process.argv[4], req.url + "\\n"); res.writeHead(200, { "content-type": "application/x-git-upload-pack-advertisement", "cache-control": "no-cache" }); res.end(body); });`,
       `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[3], String(srv.address().port)));`].join("\n") + "\n");
-    const lpPid = Number(spawnSync("sh", ["-c", '"$0" "$@" </dev/null >/dev/null 2>&1 & echo $!', process.execPath, lpServer, lpSha, lpPort, lpLog], { encoding: "utf8" }).stdout.trim());
+    const lpChild = spawn(process.execPath, [lpServer, lpSha, lpPort, lpLog], { detached: true, stdio: "ignore" }); // no shell, no command string: the program and its arguments are separate
+    lpChild.on("error", () => { /* it never started: the port file never appears and the case fails below */ });
+    lpChild.unref();
+    const lpPid = lpChild.pid;
     let lpOk = false, lpListed = null, lpScan = null, lpWhole = null, lpAfter = null, lpPlain = null;
     try {
       for (let i = 0; i < 400 && readIfPresent(lpPort) === null; i++) spawnSync("sleep", ["0.05"]);

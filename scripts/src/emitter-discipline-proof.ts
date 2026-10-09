@@ -39,10 +39,11 @@ import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
 import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
 import { REDIRECT_REFUSED } from "@workspace/integrations/emit-gate/redirect";
-import { WEBHOOK_URL_REFUSALS } from "@workspace/integrations/emit-gate/url-guard";
+import { WEBHOOK_URL_REFUSALS, validateWebhookUrl } from "@workspace/integrations/emit-gate/url-guard";
 import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
 import { verifySignedWebhook } from "@workspace/integrations/webhooks";
-import { VENDOR_ERROR_TEXT_LIMIT } from "@workspace/integrations/emit-gate/bounded-text";
+import { VENDOR_ERROR_TEXT_LIMIT, boundedText } from "@workspace/integrations/emit-gate/bounded-text";
+import { redirectRefusal } from "@workspace/integrations/emit-gate/redirect";
 
 let passed = 0;
 const failures: string[] = [];
@@ -554,6 +555,52 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
     if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
   }
+}
+
+// ---- The shared outbound guards, driven directly (wave 8, 2026-10-09) -------------
+// url-guard, bounded-text and redirect are imported by every emitter family; they are
+// registered under this proof in scripts/mutation-guard.mjs with the brace-less sweep on, so
+// EACH refusing clause is pinned by an input only that clause refuses. Without this block the
+// family tests above reach them only through whichever hostnames those tests happened to use.
+{
+  const live = { live: true };
+  const refusedAs = (u: string, reason: string, opts = live): boolean => {
+    const v = validateWebhookUrl(u, opts);
+    return v.valid === false && v.error === reason;
+  };
+  check("url-guard: a plain-http target is refused at a live tier, naming HTTPS",
+    refusedAs("http://hook.example.com/x", WEBHOOK_URL_REFUSALS.httpsRequired));
+  check("url-guard: …and the same http target is NOT refused off a live tier (the clause is the live one)",
+    validateWebhookUrl("http://hook.example.com/x", { live: false }).valid === true);
+  check("url-guard: an https public host is valid", validateWebhookUrl("https://hook.example.com/x", live).valid === true);
+  const loopbacks = ["https://localhost/x", "https://app.localhost/x", "https://0.0.0.0/x", "https://[::]/x", "https://[::1]/x", "https://127.0.0.1/x"];
+  for (const u of loopbacks) {
+    check(`url-guard: loopback/unspecified ${u} is refused as loopback`, refusedAs(u, WEBHOOK_URL_REFUSALS.loopback));
+  }
+  const privates = ["https://10.1.2.3/x", "https://192.168.1.1/x", "https://172.16.0.1/x", "https://172.31.255.1/x",
+    "https://100.64.0.1/x", "https://100.127.0.1/x", "https://169.254.169.254/x", "https://[fc00::1]/x", "https://[fd12::1]/x", "https://[fe80::1]/x"];
+  for (const u of privates) {
+    check(`url-guard: private/link-local ${u} is refused as privateRange`, refusedAs(u, WEBHOOK_URL_REFUSALS.privateRange));
+  }
+  check("url-guard: the range edges just outside RFC1918/6598 stay valid (172.15, 172.32, 100.63, 100.128)",
+    ["https://172.15.0.1/x", "https://172.32.0.1/x", "https://100.63.0.1/x", "https://100.128.0.1/x"].every((u) => validateWebhookUrl(u, live).valid === true));
+  check("url-guard: an unparseable URL is refused as invalidUrl", refusedAs("not a url", WEBHOOK_URL_REFUSALS.invalidUrl));
+}
+{
+  check("bounded-text: a non-string yields the empty string, not a throw or the value",
+    boundedText(undefined as unknown as string) === "" && boundedText(42 as unknown as string) === "");
+  check("bounded-text: text at or under the limit is returned untouched",
+    boundedText("abc", 3) === "abc" && boundedText("", 3) === "");
+  check("bounded-text: text over the limit is cut and the cut is STATED with the full length",
+    boundedText("abcdef", 3) === "abc… [truncated, 6 characters total]");
+}
+{
+  check("redirect: a missing, null or empty Location reads as 'no Location header', never echoed",
+    [undefined, null, ""].every((l) => redirectRefusal(302, l).includes("no Location header")));
+  check("redirect: an unparseable Location is reported as unparseable and not echoed verbatim",
+    redirectRefusal(302, "http://[bad").includes("an unparseable Location header") && !redirectRefusal(302, "http://[bad").includes("[bad"));
+  check("redirect: a parseable Location names only its host, not its path",
+    (() => { const r = redirectRefusal(307, "https://evil.example/secret/path?q=1"); return r.includes('Location host "evil.example"') && !r.includes("secret"); })());
 }
 
 // Determinism: two identical resolutions produce identical fixture logs.

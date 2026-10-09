@@ -309,6 +309,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:emitter-discipline",
+    oneLine: true,
     files: [
       // Ponytail cut 4 (2026-09-02) folded the six near-identical emitter bodies into
       // one factory. Each family's resolve.ts is now a thin binding — config literals
@@ -318,6 +319,12 @@ export const TARGETS = [
       // resolveItsmEmitter; register THAT. Fixed 2026-09-03 after the sweep flagged the
       // five empty bindings and the whole daily sweep went red.
       "lib/integrations/src/integrations/adapters/emitter-resolver.ts",
+      // The shared outbound guards the proof imports (emit-gate/url-guard, bounded-text,
+      // redirect). Registered 2026-10-09 (wave 8) with `oneLine`: url-guard is the SSRF-class
+      // check and bounded-text's two guards are brace-less.
+      "lib/integrations/src/integrations/adapters/url-guard.ts",
+      "lib/integrations/src/integrations/adapters/bounded-text.ts",
+      "lib/integrations/src/integrations/adapters/redirect.ts",
     ],
   },
 

@@ -149,6 +149,13 @@ export function namesControl(src) {
 
 // ── registration: who invokes `<gate> --self-test` ──────────────────────────────────────────
 
+/** Pure: how many `STEPS = …` assignments the source holds outside comments and string literals (any shape:
+ *  a declaration, a reassignment, `x.STEPS = …`). The registration scan trusts a source only when this is
+ *  exactly 1, so a parked or later-reassigned list cannot stand in for the array the runner iterates. */
+export function stepsAssignments(source) {
+  return (stripComments(source, { maskStrings: true }).match(/\bSTEPS\s*=(?!=)/g) ?? []).length;
+}
+
 /** Pure: gate file names invoked WITH `--self-test` by STEPS-style `{ name: "…", cmd: [...] }`
  *  entries (preflight.mjs / verify-breadth.mjs), comments stripped by the scanner above.
  *  `pnpm run <alias>` resolves through `aliases`. `bash -c` strings credit nothing. */
@@ -161,7 +168,8 @@ export function selfTestFilesInSteps(source, aliases = new Map()) {
   if (masked.length !== live.length) return out; // the two views must align; if not, credit nothing
   // Only the `STEPS = [ … ]` array counts: an object literal elsewhere in the file (dead code, a parked list)
   // is not a step. Brackets are counted on the masked view, so a bracket in a string cannot unbalance it.
-  const open = /\bSTEPS\s*=\s*\[/.exec(masked);
+  if (stepsAssignments(source) !== 1) return out; // ambiguous or absent: credit nothing (runGate reports it)
+  const open = /^(?:export\s+)?(?:const|let|var)\s+STEPS\s*=\s*\[/m.exec(masked);
   if (!open) return out;
   let depth = 0, end = -1;
   for (let k = open.index + open[0].length - 1; k < masked.length; k++) {
@@ -193,10 +201,11 @@ export function gateAliases(pkgScripts) {
 
 /** Pure: the event names in an inline `on:` value — a scalar (`push`), a flow sequence (`[push, pull_request]`)
  *  or the TOP-LEVEL keys of a flow mapping (`{ push: {…}, workflow_dispatch: { inputs: { push: … } } }`; nested keys
- *  do not count). Anything else yields no event, which is the tight answer. */
+ *  do not count). A value holding a quote, or anything else, yields no event, which is the tight answer. */
 export function inlineEvents(value) {
   const v = value.trim();
-  const unq = (x) => x.trim().replace(/^(["'])(.*)\1$/, "$2");
+  if (/["']/.test(v)) return []; // a quoted string can hide a structural character; the tight answer is no event at all
+  const unq = (x) => x.trim();
   if (v.startsWith("[") || v.startsWith("{")) {
     const mapping = v.startsWith("{");
     const out = [];
@@ -308,6 +317,8 @@ export function runGate(root, { floor = DEFAULT_FLOOR, spawn = realSpawn } = {})
     if (!existsSync(p)) { if (lane.endsWith("preflight.mjs")) problems.push(`${lane} is missing — no registration can be read`); continue; }
     const text = readFileSync(p, "utf8");
     if (lane.endsWith("preflight.mjs") && /\bcmd:\s*\[/.test(stripComments(text))) stepSources++;
+    const n = stepsAssignments(text);
+    if (n !== 1) problems.push(`${lane} holds ${n} \`STEPS =\` assignments, expected exactly 1 — the registration scan cannot tell which list the runner iterates`);
     for (const f of selfTestFilesInSteps(text, aliases)) registered.add(f);
   }
   const wfDir = join(root, ".github", "workflows");
@@ -398,6 +409,14 @@ function selfTest() {
     R("a plain flag-less workflow run", { workflow: stepOf("node scripts/check-bad.mjs") });
     R("a plain flag-less `pnpm run <alias>` workflow run", { pkg: { gz: "node scripts/check-bad.mjs" }, workflow: stepOf("pnpm run gz") });
     R("a run of --self-test-not", { workflow: stepOf("node scripts/check-bad.mjs --self-test-not") });
+    R("a `parked.STEPS = [` assignment ahead of the real STEPS", { breadth: `parked.STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nconst STEPS = [];\n` });
+    R("a reassigned STEPS (let STEPS = [entry]; STEPS = [])", { breadth: `let STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nSTEPS = [];\n` });
+    R("a lone `cfg.STEPS = [` list (no declaration)", { breadth: `cfg.STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n` });
+    red("a second STEPS assignment is reported even when every gate is fine", mkTree("red-steps2", { "check-good.mjs": GOOD_ST }, { breadth: "const STEPS = [];\nSTEPS = [];\n" }), "verify-breadth.mjs", /STEPS =/);
+    R("a function-local STEPS ahead of the real one", { breadth: `function f() {\n  const STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n}\nconst STEPS = [];\n` });
+    R("an inline flow mapping whose description holds `}, push: {`", { workflow: stepOf(CMD), on: "on: { workflow_dispatch: { description: '}, push: {' } }\n" });
+    R("an inline flow mapping holding a quoted `x, push: y`", { workflow: stepOf(CMD), on: 'on: { workflow_dispatch: "x, push: y" }\n' });
+    R("a quoted `\"on\":` key in a dispatch-only workflow", { workflow: stepOf(CMD), on: '"on":\n  workflow_dispatch:\n' });
     R("an inline flow-mapping `on:` whose dispatch input is named push", { workflow: stepOf(CMD), on: "on: { workflow_dispatch: { inputs: { push: { type: boolean } } } }\n" });
     R("a PARKED_STEPS array ahead of STEPS", { breadth: `const PARKED_STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nconst STEPS = [];\n` });
     R("an object literal outside the STEPS array (breadth)", { breadth: `const STEPS = [];\nconst RETIRED = [{ name: "parked", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n` });
@@ -459,6 +478,8 @@ function selfTest() {
     note("pure: a regex literal after `)` holding /* does not hide a handler", hasHandler('if (x) /[/*]/.test(y);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: a regex literal after `else return` holding /* does not hide a handler", hasHandler('else return /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: inline on: values read scalars, sequences and only TOP-LEVEL mapping keys", JSON.stringify(inlineEvents("push")) === '["push"]' && JSON.stringify(inlineEvents("[push, pull_request]")) === '["push","pull_request"]' && JSON.stringify(inlineEvents("{ workflow_dispatch: { inputs: { push: {} } } }")) === '["workflow_dispatch"]' && JSON.stringify(inlineEvents("{ push: { branches: [a, b] }, workflow_dispatch: {} }")) === '["push","workflow_dispatch"]' && runsOnChange("on: { push: {} }\n") && !runsOnChange("on: { workflow_dispatch: { inputs: { pull_request: {} } } }\n"));
+    note("pure: a STEPS count of exactly one is required (declaration + reassignment = 2)", stepsAssignments("const STEPS = [];\n") === 1 && stepsAssignments("let STEPS = [];\nSTEPS = [];\n") === 2 && stepsAssignments("// STEPS = []\nconst s = 'STEPS = 1';\nconst STEPS = [];\n") === 1);
+    note("pure: a quote in an inline on: value yields no event", inlineEvents("{ workflow_dispatch: { description: '}, push: {' } }").length === 0 && inlineEvents('[\"push\"]').length === 0);
     note("pure: runsOnChange reads only direct children of on:", !runsOnChange("on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n") && runsOnChange("on:\n  push:\n    branches: [a]\n"));
     note("pure: a regex after a bare else holding /* does not hide a handler", hasHandler('if (a) b(); else /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: a character class holding // does not end the regex early", hasHandler('const r = /[//*]/; if (a.includes("--self-test")) f();\n/* end */\n'));

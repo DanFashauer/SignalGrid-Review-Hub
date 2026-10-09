@@ -39,7 +39,7 @@
 //   node scripts/check-scheduled-workflow-liveness.mjs --root <dir> [--ref-date YYYY-MM-DD]   # fixtures
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -289,6 +289,19 @@ function selfTest() {
   exits({ workflows: { "a.yml": flow }, registry: reg() }, 1, "flow-style `on: { schedule: … }` is detected (unregistered → exit 1)");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: { version: 1 } }, 1, "a registry with no `workflows` array → exit 1");
 
+  // run through a SYMLINK to the gate (macOS tmpdir is one): it must still produce its verdict, never print nothing and exit 0
+  {
+    const root = fixture({ workflows: { "a.yml": SCHED_WF(), "b.yml": SCHED_WF() }, registry: reg(entry(exempt())) });
+    try {
+      const link = join(root, "linked-gate.mjs");
+      symlinkSync(fileURLToPath(import.meta.url), link);
+      const r = spawnSync(process.execPath, [link, "--root", root, "--ref-date", REF], { encoding: "utf8" });
+      note("run through a symlinked path: an unregistered workflow is still exit 1 with the gate's verdict", r.status === 1 && r.stderr.startsWith("✗ scheduled-workflow liveness:"), `exit ${r.status}, stdout ${JSON.stringify(r.stdout.slice(0, 40))}`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
   // pure-function spot checks
   note("parseIsoDate rejects 2026-02-31", parseIsoDate("2026-02-31") === null);
   note("parseIsoDate rejects 2026-2-3", parseIsoDate("2026-2-3") === null);
@@ -322,6 +335,15 @@ function selfTest() {
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
         note(`mutant ${token} (${what}) turns the self-test red`, r.status === 1, `exit ${r.status}`);
       }
+      // a mutant of the entry guard: compare unresolved paths (the macOS tmpdir fail-open)
+      const rp = "if (real(process.argv[1] ?? " + '"") === real(fileURLToPath(import.meta.url))) {';
+      if (src.split(rp).length - 1 !== 1) note("mutant realpath: marker appears exactly once", false);
+      else {
+        const file = join(tmp, "realpath.mjs");
+        writeFileSync(file, src.replace(rp, 'if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {').replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
+        const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
+        note("mutant realpath (entry guard without real paths) turns the self-test red", r.status === 1, `exit ${r.status}`);
+      }
       // a mutant of the comment stripper: the decoy in a comment must stop being ignored
       const cm = 'c === "#" && (i === 0 || /\\s/.test(line[i - 1]))';
       if (src.split(cm).length - 1 !== 1) note("mutant comments: marker appears exactly once", false);
@@ -347,7 +369,17 @@ function selfTest() {
 
 // ── main ─────────────────────────────────────────────────────────────────────
 
-if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+// Real paths on BOTH sides: macOS tmpdir is a symlink (/var -> /private/var), argv[1] keeps the link and
+// import.meta.url does not, so a plain comparison made the gate print nothing and exit 0 when run from a
+// temp copy (the PR Mac-only preflight caught it on 2026-10-09). A guard that fails open is the defect here.
+const real = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+};
+if (real(process.argv[1] ?? "") === real(fileURLToPath(import.meta.url))) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(selfTest());
   const rootAt = argv.indexOf("--root");

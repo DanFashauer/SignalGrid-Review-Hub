@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve, isAbsolute, relative, sep, basename } from "node:path";
+import { dirname, resolve, isAbsolute, relative, sep, basename, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -151,7 +151,11 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //         passed as an EMPTY value, which git reads as "no filter" (apply_filter returns at once on an empty command); a repository whose driver is `required` then makes status fail, which is a gated row, never clean.
 //     Also bounded in TIME (GIT_LIMITS): no spawn can hang the check. A git that times out is recorded and becomes ONE gated row, "could not be read: git <cmd> timed out after N s", whatever the caller of gitRun did with the
 //     empty answer (timeoutRow). LOOP_STATE_GIT_TIMEOUT_MS can only SHORTEN a bound (a smaller bound times out more, which tightens); the self-test uses it. The children this script starts (readiness figure, doctrine gates, raised-hands
-//     monitor) get the childMs bound. Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
+//     monitor) get the childMs bound.
+//   PATH TRANSPORT HELPERS (round 27; the table above is about names git reads and keys it runs, this row about FILES it finds): for a scheme with no native transport git runs `git-remote-<scheme>`, looked up in its OWN
+//     helper directory first and then on PATH, so a `git-remote-https` on PATH is the transport itself for a git that ships none and is never run for one that does (measured, git 2.43.0). PATH is scanned before the
+//     Hub listing (pathHelperProblems): a file `git-remote-<s>` whose <s>, compared CASE-INSENSITIVELY on every filesystem (it is one file on macOS and two elsewhere), is one of git's transports or the Hub's scheme, is a
+//     gated problem unless git's own helper directory holds that helper (also compared case-insensitively); an unreadable helper directory means "ships none". Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
@@ -388,6 +392,38 @@ function inIsolatedDir(fn, refused = (why) => { throw new Error(why); }) {
     try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway empty directory */ }
   }
 }
+// ROUND 27. A TRANSPORT HELPER ON PATH. For a URL whose scheme git has no native transport for, git runs `git-remote-<scheme>`, looked up in ITS OWN helper directory (`git --exec-path`) FIRST and then on PATH. So a
+// `git-remote-https` file on PATH is harmless while this git ships its own https helper (measured: git 2.43.0 here, the PATH file is never run, the real transport is) and is the transport the moment this git ships none
+// (a git built without libcurl, a minimal image): the listing would then be served by whatever the file prints. The same file under another spelling (`git-remote-HTTPS`) is the same file on a case-insensitive
+// filesystem (macOS) and a different one elsewhere, so every comparison here is case-INSENSITIVE on every filesystem. Before the Hub listing, every PATH directory is scanned for `git-remote-<s>` where <s>, lower-cased, is one
+// of git's own transports (TRANSPORT_SCHEMES) or the scheme of the Hub URL / its expansion; it is a gated problem (the listing is not started) unless this git's own helper directory holds a helper of that name,
+// compared case-insensitively too, which git runs first. An exec directory git cannot name or list means "ships none" (fail closed). ssh / git / file have no helper in any git: a PATH file by that name is how a URL
+// written `SSH://` would be served, so it is a problem wherever it lives. (Round-27 coordinator diagnosis of the Mac failure, R18-scheme-e2e, said the PATH file hijacks the real https transport on a case-insensitive
+// filesystem; the code read shows the opposite: git's own helper wins there, which made the case's PRECONDITION unreachable on macOS. The scan is still right for a git that ships no helper.)
+const TRANSPORT_SCHEMES = ["https", "http", "ssh", "git", "file", "ftp", "ftps", "ext", "fd"];
+function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, cwd = process.cwd() } = {}) {
+  const want = new Set([...TRANSPORT_SCHEMES, ...schemes.map((s) => String(s).toLowerCase()).filter(Boolean)]);
+  const ownNames = (() => { // what this git ships, lower-cased; null = could not be listed
+    if (!execDir) return null;
+    try { return new Set(readdirSync(execDir).map((n) => n.toLowerCase().replace(/\.exe$/, ""))); } catch { return null; }
+  })();
+  const problems = [], notes = [], seen = new Set();
+  for (const raw of String(pathVar).split(delimiter)) {
+    const dir = raw === "" ? cwd : raw; // an empty PATH entry is the current directory
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    let names;
+    try { names = readdirSync(dir); } catch { notes.push(`PATH directory ${dir} could not be listed`); continue; }
+    for (const n of names) {
+      const m = /^git-remote-(.+?)(?:\.exe)?$/i.exec(n);
+      if (!m || !want.has(m[1].toLowerCase())) continue;
+      const s = m[1].toLowerCase(), native = s === "ssh" || s === "git" || s === "file";
+      if (!native && ownNames && ownNames.has(`git-remote-${s}`)) continue; // git's own helper is found first: this file is never run for ${s}://
+      problems.push(`a transport helper on PATH shadows git's own ${s} transport: ${join(dir, n)} (${native ? `${s}:// has no helper in any git, but the same scheme written in another case is served by it` : ownNames ? `this git ships no git-remote-${s} of its own, so this file is the one git runs for ${s}://` : "this git's own helper directory could not be read, so it is taken to ship none"}; compared case-insensitively on every filesystem)`);
+    }
+  }
+  return { problems, notes };
+}
 function hubTransport(cwd = repo, hub = HUB) {
   const problems = [], trusted = [];
   const env = process.env;
@@ -445,6 +481,13 @@ function hubTransport(cwd = repo, hub = HUB) {
   const judged = judgeExpansions(repoExp, listing.exp, hub);
   problems.unshift(...judged.problems);
   for (const t of judged.trusted) if (!trusted.includes(t)) trusted.push(t);
+  { // the PATH helper scan (round 27): the Hub's scheme and the scheme of each expansion git applied, beside git's own transports
+    const execR = gitRun(cwd, ["--exec-path"]);
+    const schemes = [hub, String(repoExp.stdout || "").trim(), String(listing.exp.stdout || "").trim()].map((u) => { const q = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(u); return q ? q[1] : ""; }); // (as WRITTEN: an upper-case scheme is exactly what parseGitUrl refuses)
+    const scan = pathHelperProblems(schemes, { execDir: execR.ok ? execR.stdout.trim() : null });
+    for (const pr of scan.problems) if (!problems.includes(pr)) problems.push(pr);
+    for (const nt of scan.notes) if (!trusted.includes(nt)) trusted.push(nt);
+  }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
 }
 // THE LISTING ITSELF. Every setting a repository can carry (a remote helper named by `remote.<Hub URL>.vcs`, a proxy, an insteadOf, core.sshCommand, an include) reaches `git ls-remote` through the repository
@@ -3649,8 +3692,11 @@ done
     const hxCalled = readIfPresent(hxLog);
     writeFileSync(hxLog, ""); // from here on, ANY call is the check's own
     const hxWhole = wholeScript(ue, "r18hx", hxVars), hxAfter = readIfPresent(hxLog);
-    check("a global rewrite to HTTPS://github.com/ with a git-remote-HTTPS helper on PATH that answers a listing: plain git reaches the helper (the precondition), and the whole check exits 1 on the gated rewrite row and never calls it (R18-scheme-e2e)",
-      hxPlain.ok && hxPlain.stdout.includes(hxSha) && !!hxCalled && hxCalled.trim() !== "" &&
+    // PLATFORM-AWARE (round 27). Precondition: plain git, under the rewrite, reaches the fixture's git-remote-HTTPS. On a case-sensitive filesystem it does (git-remote-HTTPS is a file of its own and git's helper
+    // directory has no such name). On a CASE-INSENSITIVE one (macOS, the Mac job's first completed run) git's own directory is searched first and holds git-remote-https, which IS git-remote-HTTPS there: git runs its
+    // own https transport, the fixture helper is unreachable, and the precondition cannot be built. Either way the guarded answer is the same and is asserted: the gated rewrite row, exit 1, the helper never called.
+    checkWithPrecondition("a global rewrite to HTTPS://github.com/ with a git-remote-HTTPS helper on PATH that answers a listing: where plain git reaches the helper (case-sensitive filesystem) that is the precondition, where git's own https helper answers to that name (case-insensitive filesystem) the precondition is not on offer; either way the whole check exits 1 on the gated rewrite row and never calls the helper (R18-scheme-e2e)",
+      hxPlain.ok && hxPlain.stdout.includes(hxSha) && !!hxCalled && hxCalled.trim() !== "", "this filesystem is case-insensitive, so git's own git-remote-https is also git-remote-HTTPS and git runs it before the fixture's helper",
       hxWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to HTTPS:\/\/github\.com\//.test(hxWhole.out) && !hxWhole.out.includes("all present on the Review Hub") && !/adds credentials/.test(hxWhole.out) && hxAfter === "");
     // (2) A display prints less: everything before the LAST @ ahead of the next / is userinfo, whatever it holds.
     const SECRET = "sEcr3t", TAIL = "Z9", leaks = (t) => String(t).includes(SECRET) || String(t).includes(TAIL);
@@ -4177,6 +4223,47 @@ exit 1
     check("the self-test's summary names every failed case on a line of its own, every precondition the platform did not offer, and ends with the verdict, so a short tail names what failed (R26-summary)",
       sumLines.join("\n") === "FAILED: case two\nprecondition not on offer on this platform: a cap git did not honour (case three)\nself-test: 1 case(s) with a precondition not reproducible on this platform, listed above; each still asserted the guarded answer\nself-test FAILED (2/3)" &&
       selfTestSummaryLines([["a", true]], []).join("\n") === "self-test passed (1/1)");
+    }
+    // ══ ROUND 27 ══ A transport helper on PATH. See pathHelperProblems: git looks in its OWN helper directory first, so a PATH file named like git's own transport is a hijack only for a git that ships no such helper.
+    {
+      const caseDir = join(root, "r27-case"); mkdirSync(caseDir); writeFileSync(join(caseDir, "r27-a"), "x\n");
+      const caseInsensitiveFs = existsSync(join(caseDir, "r27-A")); // this filesystem treats r27-a and r27-A as one file
+      const mkDir = (name, files) => { const d = join(root, name); mkdirSync(d); for (const f of files) writeFileSync(join(d, f), "#!/bin/sh\necho called >> \"$R27_LOG\"\nexit 1\n", { mode: 0o755 }); return d; };
+      const execNone = mkDir("r27-exec-none", []), execOwn = mkDir("r27-exec-own", ["git-remote-https", "git-remote-http"]), execOwnUpper = mkDir("r27-exec-own-upper", ["git-remote-HTTPS"]);
+      const lower = mkDir("r27-path-lower", ["git-remote-https"]), upper = mkDir("r27-path-upper", ["git-remote-HTTPS"]), nativeDir = mkDir("r27-path-ssh", ["git-remote-ssh"]), plainDir = mkDir("r27-path-plain", ["git-remote-nosuchscheme", "git-lfs"]);
+      const scan = (pathVar, execDir, schemes = ["https"]) => pathHelperProblems(schemes, { pathVar, execDir });
+      const shadowText = (s, f) => `a transport helper on PATH shadows git's own ${s} transport: ${f} (`;
+      const u1 = scan(lower, execNone), u2 = scan(lower, execOwn), u3 = scan(lower, null), u4 = scan(nativeDir, execOwn, ["ssh"]), u5 = scan(plainDir, execNone, ["nosuchscheme"]), u6 = scan(`${plainDir}:${lower}`, execNone);
+      check("a git-remote-https on PATH is a gated problem naming the file when this git ships no https helper of its own (it is the one git would run), nothing when git's own comes first, a problem when git's helper directory cannot be read (fail closed), and a git-remote-ssh is a problem wherever git's helpers live; an unrelated helper name is no problem unless it is the Hub's own scheme (R27-helper-shadow-unit)",
+        u1.problems.length === 1 && u1.problems[0].startsWith(shadowText("https", join(lower, "git-remote-https"))) && /this file is the one git runs for https:\/\//.test(u1.problems[0]) && u2.problems.length === 0 &&
+        u3.problems.length === 1 && /could not be read, so it is taken to ship none/.test(u3.problems[0]) && u4.problems.length === 1 && u4.problems[0].includes(join(nativeDir, "git-remote-ssh")) && u5.problems.length === 1 && u6.problems.length === 1 && u6.notes.length === 0 &&
+        scan(join(root, "r27-no-such-dir"), execNone).notes.length === 1);
+      // the case-variant: the comparison is case-INSENSITIVE on every filesystem, for the PATH file and for git's own directory alike
+      const c1 = scan(upper, execNone), c2 = scan(upper, execOwn), c3 = scan(lower, execOwnUpper), c4 = scan(upper, execOwnUpper);
+      check("a git-remote-HTTPS on PATH is the same finding as git-remote-https, on this filesystem and on a case-sensitive one alike (the comparison is case-insensitive by design), and git's own helper is matched case-insensitively too (R27-helper-shadow-case-unit)",
+        c1.problems.length === 1 && c1.problems[0].startsWith(shadowText("https", join(upper, "git-remote-HTTPS"))) && /compared case-insensitively on every filesystem/.test(c1.problems[0]) && c2.problems.length === 0 && c3.problems.length === 0 && c4.problems.length === 0);
+      check("the header's audit names the PATH helper scan with its reason, and the transports it compares against are git's nine (https http ssh git file ftp ftps ext fd) (R27-audit-path-helper)",
+        prodText.includes("PATH TRANSPORT HELPERS (round 27") && prodText.includes("compared CASE-INSENSITIVELY on every filesystem") && JSON.stringify(TRANSPORT_SCHEMES) === JSON.stringify(["https", "http", "ssh", "git", "file", "ftp", "ftps", "ext", "fd"]));
+      // end to end: a git that ships no https helper (its --exec-path is an empty directory, answered by a stand-in git first on PATH), a helper by each name on PATH, the whole check
+      const standIn = join(root, "r27-standin-bin"); mkdirSync(standIn);
+      writeFileSync(join(standIn, "git"), `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "--exec-path" ]; then echo "$R27_EXEC"; exit 0; fi\ndone\nexec "$R27_NEXT" "$@"\n`, { mode: 0o755 });
+      for (const [tag, helperDir, helperName] of [["R27-helper-shadow", lower, "git-remote-https"], ["R27-helper-shadow-case", upper, "git-remote-HTTPS"]]) {
+        const log = join(root, `${tag}.log`); writeFileSync(log, "");
+        const hx = mkLikeUe(tag.toLowerCase());
+        const reachedPlain = (() => { // plain git, whose helper directory holds no https helper, asked for an https:// URL
+          spawnSync("git", ["ls-remote", "--heads", "https://127.0.0.1:9/x.git"], { cwd: hx.w, env: { ...FX_ENV, GIT_EXEC_PATH: execNone, PATH: `${helperDir}:${process.env.PATH}`, R27_LOG: log }, stdio: "ignore", timeout: 20000, killSignal: "SIGKILL" });
+          const hit = (readIfPresent(log) || "") !== ""; writeFileSync(log, ""); return hit;
+        })();
+        const run = wholeScript(hx, tag.toLowerCase(), { PATH: `${standIn}:${helperDir}:${fakeBin}:${process.env.PATH}`, R27_EXEC: execNone, R27_NEXT: join(fakeBin, "git"), R27_LOG: log }, { timeout: 90000 });
+        const guarded = run.error === null && run.status === 1 && new RegExp(`✗ Review Hub URL\\s+a transport helper on PATH shadows git's own https transport: ${join(helperDir, helperName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(run.out) && !run.out.includes("all present on the Review Hub") && (readIfPresent(log) || "") === "";
+        if (tag === "R27-helper-shadow") {
+          checkWithPrecondition("a git-remote-https helper on PATH, with a git that ships no https helper: plain git reaches it for an https:// URL (the precondition: its marker), and the whole check refuses with a gated 'a transport helper on PATH shadows git's own https transport' row, exits 1, and never calls it (R27-helper-shadow)",
+            reachedPlain, "git did not run the PATH helper for https:// even with an empty helper directory", guarded);
+        } else {
+          checkWithPrecondition(`a git-remote-HTTPS helper on PATH: ${caseInsensitiveFs ? "this filesystem is case-INSENSITIVE, so it is also git-remote-https and plain git reaches it for an https:// URL (the precondition)" : "this filesystem is case-sensitive, so plain git does NOT reach it for https:// (the precondition is not on offer) and the check STILL refuses, because the comparison is case-insensitive by design"}; the whole check exits 1 on the gated shadow row and never calls it (R27-helper-shadow-case)`,
+            reachedPlain, "this filesystem is case-sensitive: git-remote-HTTPS is a different file from git-remote-https, which git does not run for https://", guarded);
+        }
+      }
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.

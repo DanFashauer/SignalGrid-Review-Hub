@@ -14,6 +14,7 @@ import {
   DeliveryLog,
   DeliveryLogSchema,
   DLQEntry,
+  DLQEntrySchema,
   CreateWebhookRequest,
   CreateWebhookSchema,
   UpdateWebhookRequest,
@@ -341,21 +342,32 @@ export async function getDeliveryLogs(
 }
 
 /**
- * Add to DLQ
+ * Add to DLQ.
+ *
+ * `attempts` is the number of deliveries the caller ACTUALLY made, and it is
+ * required. This used to hardcode 6 ("after max retries") whatever the caller's
+ * `maxAttempts` was, so a dispatcher configured for four attempts dead-lettered a
+ * record claiming six — a number nobody counted, in the artefact an operator reads
+ * to reconstruct what happened. A non-integer or negative count is refused rather
+ * than written: this record is evidence, and the schema requires an integer.
  */
 export async function addToDLQ(
   webhookId: string,
   eventId: string,
   payload: unknown,
-  error: string
+  error: string,
+  attempts: number
 ): Promise<DLQEntry> {
+  if (!Number.isInteger(attempts) || attempts < 0) {
+    throw new Error(`addToDLQ: attempts must be the observed non-negative integer count, got ${String(attempts)}`);
+  }
   const r = getRedis();
   const entry: DLQEntry = {
     id: generateId(),
     webhookId,
     eventId,
     payload: payload as DLQEntry['payload'],
-    attempts: 6, // After max retries
+    attempts,
     lastError: boundedText(error, VENDOR_ERROR_TEXT_LIMIT),
     failedAt: now(),
   };
@@ -370,6 +382,24 @@ export async function addToDLQ(
   }
 
   return entry;
+}
+
+/**
+ * Read the DLQ, newest first. Read-only; exists so the record addToDLQ writes can
+ * be checked against what the dispatcher actually did, not merely written.
+ */
+export async function listDLQ(limit = 20): Promise<DLQEntry[]> {
+  // Same answer on both backends: `lrange(key, 0, -1)` would return EVERYTHING for a
+  // limit of 0 while the memory slice returns nothing.
+  if (!Number.isInteger(limit) || limit <= 0) return [];
+  const r = getRedis();
+
+  if (r) {
+    const entries = await r.lrange(DLQ_PREFIX, 0, limit - 1);
+    return entries.map(e => DLQEntrySchema.parse(JSON.parse(e)));
+  }
+
+  return memoryStore.dlq.slice(0, limit);
 }
 
 // Note: retryFromDLQ can be implemented if needed

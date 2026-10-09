@@ -88,7 +88,10 @@ function readIfPresent(path, encoding = "utf8") {
 // cleared REAL work as squash-landed. That check no longer reads file text at all (see hasLandedByContent); this is the second lock.
 // GIT_EXEC_PATH and GIT_REMOTE*: where git looks for its remote helpers (git-remote-<vcs>) is the caller's to set, so a transport can be swapped under every command here (round-11 refute); git
 // finds its own helpers without them.
-const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_PROXY_COMMAND", "GIT_SSL_NO_VERIFY", "GIT_EXEC_PATH"];
+// The variables that name a PROGRAM git runs for the transport, or where it looks for one: GIT_EXEC_PATH (remote helpers), GIT_PROXY_COMMAND (the git:// proxy), GIT_SSH_COMMAND and GIT_SSH (the ssh
+// program). Each is dropped from every git started here AND named in hubTransport's row (round-18 refute: GIT_SSH_COMMAND was neither, so an exported one ran in the listing of any ssh-reached Hub).
+const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH"];
+const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV];
 function gitEnv(extra) {
   const env = { ...process.env, ...extra };
   for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE")) delete env[k];
@@ -158,9 +161,15 @@ function entryAt(cwd, ref, file) {
 //     Anything a SANDBOX can plant below that boundary (the repository's own config, an included file from it, a worktree config) is gated.
 const HTTP_HARMLESS = /\.(postbuffer|lowspeedlimit|lowspeedtime|maxrequests|minsessions|version|useragent|extraheader|cookiefile|savecookies|emptyauth|delegation|proactiveauth)$/; // (extraHeader: actions/checkout writes its token there, in the repository's own config; it cannot move the traffic, and its value is never printed)
 const gitBool = (v) => v === null || !/^(false|no|off|0|)$/i.test(String(v).trim());
-// DISPLAY ONLY: never decide with it whether a URL is the Hub (round-12 refute: its span crossed `?`, `#` and a backslash, so `https://evil.example?x=@github.com/...` lost its real host and read as the Hub). The
-// span stops at / @ whitespace ? # and a backslash, exactly the characters that end the userinfo of a URL; the decisions use parseGitUrl.
-const noUserinfo = (v, all = false) => String(v).replace(all ? /\/\/[^/@\s?#\\]*@/ : /\/\/[^/@\s?#\\]*:[^/@\s?#\\]*@/, "//"); // credentials always; the user name too for a proxy (a token can be the user name)
+// DISPLAY ONLY: never decide with it whether a URL is the Hub (round-12 refute: a span that crossed `?`, `#` and a backslash made `https://evil.example?x=@github.com/...` lose its real host and read as the Hub;
+// the decisions use parseGitUrl). Here the opposite error is the one to avoid: a password may contain a raw `?`, `#` or backslash (round-15 refute: `http://agent:pw?x9@127.0.0.1:9` printed whole), so
+// everything between `//` and the LAST `@` before the next `/` (or the end) is the userinfo, whatever it contains, and is not printed. The scp-style form `user:secret@host:path` loses everything up to its last
+// `@` too, unless that is exactly `git@` (the conventional user, no secret; it is how the Hub's own ssh spelling reads). `all` false keeps a plain user name (`ssh://git@host/`) and removes any userinfo that has a
+// `:` or a `?`, `#` or backslash in it; `all` true (a proxy, a key) removes every one, for a token can be the user name.
+const noUserinfo = (v, all = false) => {
+  const s = String(v).replace(/\/\/([^/]*)@/g, (m, userinfo) => (all || /[:?#\\]/.test(userinfo) ? "//" : m));
+  return s.includes("://") ? s : s.replace(/^(url\.)?([^/\s]*)@(?=[^/@\s:]+:)/, (m, key, userinfo) => (userinfo === "git" ? m : key || ""));
+};
 // One configuration entry (scope, origin, "key\nvalue" as `git config --show-origin --show-scope -z` prints them) -> { problem } | { trusted } | {}.
 // Pure, so the scope rule is testable for a scope this git never prints: system, global and command line are the environment's; ANYTHING else (local, worktree,
 // and any scope a later git adds) is the repository's own and is gated.
@@ -227,7 +236,9 @@ function hubTransport(cwd = repo, hub = HUB) {
   for (const [v, ks] of proxies) trusted.push(`environment proxy ${ks.join("/")}=${v}`);
   for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
   // Where git looks for its remote helpers: named, and never passed on (gitEnv drops it), so it can swap no transport here.
-  for (const k of Object.keys(env)) if (k === "GIT_EXEC_PATH" || k.startsWith("GIT_REMOTE")) trusted.push(`environment ${k}=${env[k]} (not passed to any git started here)`);
+  // (a command line is shown by its program alone: its arguments can carry a credential)
+  const shownEnv = (k, v) => { const w = String(v).trim().split(/\s+/); return k === "GIT_SSH_COMMAND" || k === "GIT_PROXY_COMMAND" ? `${w[0]}${w.length > 1 ? " ..." : ""}` : String(v); };
+  for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || k.startsWith("GIT_REMOTE")) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
   // The configuration, with scope and origin. Exit 1 is "no key matched" (a clean answer); anything else is a configuration git could not read.
   const cfg = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|core\\.sshcommand$|url\\.|alias\\.remote-|remote\\.)"]);
   if (!cfg.ok && !(cfg.status === 1 && !String(cfg.stdout).trim())) {
@@ -250,7 +261,7 @@ function hubTransport(cwd = repo, hub = HUB) {
   if (!r.ok) problems.unshift(`git could not expand the Hub URL (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`);
   else {
     // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
-    const expanded = r.stdout.trim(), shown = displayUrl(expanded);
+    const expanded = r.stdout.replace(/\n$/, ""), shown = displayUrl(expanded); // as git printed it: a leading blank is part of the URL
     if (expanded === hub) { /* no rewrite */ }
     else if (!isHubUrl(expanded, hub)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
     else if (urlWithoutUserinfo(expanded) === urlWithoutUserinfo(hub) && parseGitUrl(expanded).scheme === parseGitUrl(hub).scheme) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
@@ -289,10 +300,14 @@ function transportRow(scan, hub = HUB) {
 // fetched from the other machine (round-12 refute). parseGitUrl gives { scheme, host, path } for exactly the shapes git itself treats as an https URL, an ssh:// URL or an scp-style address, with
 // the userinfo taken out by the PARSER (the WHATWG URL for the first two), and gives null for everything else: whitespace or control characters, a backslash, a query or a fragment (a Hub URL has
 // none), a scheme that is not https or ssh, a port that is not the scheme's own, an unparseable string. null is "not the Hub" (fail closed).
+// And only AS WRITTEN, the way git reads it (round-18 refute): the WHATWG parser lower-cases the scheme, but git's native-transport test is case-sensitive, so `HTTPS://github.com/<Hub>` makes git run a helper called
+// git-remote-HTTPS found on PATH (and `SSH://` one called git-remote-SSH): not the Hub. Likewise the string is not trimmed: a leading blank makes git read a relative path, and the old trim hid a rewrite to one.
 function parseGitUrl(u) {
-  const s = String(u ?? "").trim();
+  const s = String(u ?? "");
   if (!s || /[\s\\?#\u0000-\u001f\u007f]/.test(s)) return null;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(s)) {
+  const written = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(s);
+  if (written) {
+    if (written[1] !== written[1].toLowerCase()) return null;
     let url; try { url = new URL(s); } catch { return null; }
     if (url.protocol !== "https:" && url.protocol !== "ssh:") return null;
     if (url.search || url.hash || !url.hostname) return null;
@@ -314,19 +329,30 @@ function urlWithoutUserinfo(u) {
   const p = parseGitUrl(u);
   return p ? `${p.scheme}://${p.host}/${p.path}` : null;
 }
-// A URL for a row: userinfo removed by the parser where the string parses (query and fragment KEPT, so a URL that hides another host behind `?x=@` shows it), by the display pattern otherwise.
+// A URL for a row, printing LESS rather than more. Where the string parses, the PARSER's host, path and scheme as written are shown (so a URL that hides another host behind `?x=@` shows the host it goes to),
+// the userinfo is whatever the parser took, and a query or fragment is shown only as `?...` / `#...` (text there may be a mis-encoded credential); when that text holds an `@` the port is left out too, for a
+// password that starts with digits would read as one. Everything else goes through noUserinfo. A URL with a leading or trailing blank says so.
 function displayUrl(u) {
-  const s = String(u ?? "").trim();
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(s)) { try { const x = new URL(s); return `${x.protocol}//${x.host}${x.pathname}${x.search}${x.hash}`; } catch { /* below */ } }
-  return noUserinfo(s, true);
+  const raw = String(u ?? ""), s = raw.trim(), blank = raw === s ? "" : " (as written, with leading or trailing whitespace)";
+  const written = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(s);
+  if (written) {
+    try {
+      const x = new URL(s), ambiguous = `${x.search}${x.hash}`.includes("@");
+      return `${written[1]}://${ambiguous ? x.hostname : x.host}${x.pathname}${x.search ? "?..." : ""}${x.hash ? "#..." : ""}${blank}`;
+    } catch { /* below */ }
+  }
+  return `${noUserinfo(s, true)}${blank}`;
 }
 function originRow(cwd = repo, hub = HUB) {
-  const g = gitIn(cwd);
-  const configured = g("config", "--get", "remote.origin.url"), fetchUrl = g("remote", "get-url", "origin"), pushUrl = g("remote", "get-url", "--push", "origin");
+  // the URLs as git prints them, only the final newline removed (gitIn trims, and a leading blank is part of the URL)
+  const asWritten = (...a) => { const r = gitRun(cwd, a); return r.ok ? r.stdout.replace(/\n$/, "") : ""; };
+  const configured = asWritten("config", "--get", "remote.origin.url"), fetchUrl = asWritten("remote", "get-url", "origin"), pushUrl = asWritten("remote", "get-url", "--push", "origin");
   const ok = isHubUrl(fetchUrl, hub) && isHubUrl(pushUrl, hub);
   const pushNote = pushUrl && pushUrl !== fetchUrl ? ` (pushes to ${displayUrl(pushUrl)})` : "";
   const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${displayUrl(configured)}, rewritten by url.<base>.insteadOf)` : "";
-  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${displayUrl(fetchUrl) || "(no origin)"}${pushNote}${rewriteNote}` };
+  // a URL that is not the Hub as written can print as the Hub once what precedes an @ is left out: say so, so a failing row never reads like a passing one
+  const hidden = !ok && [fetchUrl, pushUrl].some((x) => x && !isHubUrl(x, hub) && isHubUrl(displayUrl(x), hub)) ? " (not the Hub as written: text before an @ is not shown)" : "";
+  return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${displayUrl(fetchUrl) || "(no origin)"}${pushNote}${rewriteNote}${hidden}` };
 }
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
 // remote-tracking ref in a bare resolution, and every landed check below would then compare a local
@@ -3144,7 +3170,7 @@ function selfTest() {
       ["http://github.com/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com:8443/DanFashauer/SignalGrid-Review-Hub.git", "https://github.com./DanFashauer/SignalGrid-Review-Hub.git", "git://github.com/DanFashauer/SignalGrid-Review-Hub.git", "file:///x/DanFashauer/SignalGrid-Review-Hub.git",
         "https://github.com/DanFashauer/SignalGrid-Review-Hub.git?x=1", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git#frag", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git extra",
         "https://github.com\\DanFashauer/SignalGrid-Review-Hub.git", "https://github.com/Dan\tFashauer/SignalGrid-Review-Hub.git", "https://github.com/DanFashauer/SignalGrid-Review-Hub.git\u0000", "https://github.com/DanFashauer/SignalGrid-\nReview-Hub.git", "git@github.com:/DanFashauer/SignalGrid-Review-Hub.git", "", "not a url"].every((u) => !isHubUrl(u)) &&
-      noUserinfo("https://evil.example?x=@github.com/p", true) === "https://evil.example?x=@github.com/p" && noUserinfo("https://user:pw@host/p", true) === "https://host/p");
+      noUserinfo("https://user:pw@host/p", true) === "https://host/p");
     const uo = mkFx("r16uo"); uo.f("config", "remote.origin.url", HUB);
     const uoFetch = evilShapes.map(([, u]) => { uo.f("remote", "set-url", "origin", u); return originRow(uo.w); });
     uo.f("remote", "set-url", "origin", HUB);
@@ -3161,7 +3187,7 @@ function selfTest() {
     };
     const uoShown = [uoFetch, uoSplit, uoPush].map((rows) => rows.map((r) => shownUrls(r.detail)));
     check("the origin row FAILS for a fetch URL or a push URL that hides its real host behind ?x=@, #@ or a backslash (also when only one of the two does), and shows the real host instead of the Hub's name (R16-url-origin)",
-      uoFetch.every((r, i) => r.state === "fail" && !!uoShown[0][i] && uoShown[0][i].push === null && uoShown[0][i].fetch.host === "evil.example") && !!uoShown[0][0] && uoShown[0][0].fetch.search === "?x=@github.com/DanFashauer/SignalGrid-Review-Hub.git" &&
+      uoFetch.every((r, i) => r.state === "fail" && !!uoShown[0][i] && uoShown[0][i].push === null && uoShown[0][i].fetch.host === "evil.example") && !!uoShown[0][0] && uoShown[0][0].fetch.search === "?..." &&
       uoSplit.every((r, i) => r.state === "fail" && !!uoShown[1][i] && uoShown[1][i].fetch.host === "evil.example" && !!uoShown[1][i].push && uoShown[1][i].push.host === "github.com") &&
       uoPush.every((r, i) => r.state === "fail" && !!uoShown[2][i] && uoShown[2][i].fetch.host === "github.com" && uoShown[2][i].fetch.pathname === "/DanFashauer/SignalGrid-Review-Hub.git" && !!uoShown[2][i].push && uoShown[2][i].push.host === "evil.example") && originRow(uo.w).state === "ok");
     const urGlobal = (u) => cfgFile(`r16-global-${basename(u).length}-${Math.abs([...u].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7))}.cfg`, `[url ${JSON.stringify(u.replace(/\\/g, "\\\\"))}]\n\tinsteadOf = https://github.com/\n`);
@@ -3210,7 +3236,7 @@ function selfTest() {
     } finally { try { process.kill(lpPid); } catch { /* already gone */ } }
     check("a fixture Hub on a local port that answers a real listing, reached only through a global rewrite hiding the host behind ?x=@, is reachable by plain git (the precondition), is a gated 'rewrites the Hub URL' finding, and the whole check exits 1 without sending it one request (R16-url-localport)",
       lpOk && !!lpPlain && lpPlain.ok && lpPlain.stdout.includes(lpSha) && !!lpListed && lpListed.length > 0 &&
-      !!lpScan && lpScan.problems.some((p) => /^git configuration rewrites the Hub URL .* to http:\/\/127\.0\.0\.1:\d+\//.test(p)) &&
+      !!lpScan && lpScan.problems.some((p) => /^git configuration rewrites the Hub URL .* to http:\/\/127\.0\.0\.1\/\?\.\.\. \(url\./.test(p)) &&
       !!lpWhole && lpWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lpWhole.out) && !lpWhole.out.includes("all present on the Review Hub") && lpAfter === "");
     // (3) listHub's isolation. Where it runs is probed (an empty directory made for the call, under the temp directory, with the ceiling set), and a rewrite written into .git/config AFTER the scan took its snapshot
     // (a shape no scan can see) is followed by a listing made inside the repository and not by listHub.
@@ -3235,6 +3261,80 @@ function selfTest() {
       lhSeen[0].ceiling === realpathSync(tmpdir()) && lhSeen[0].cwd !== repo && lhSeen[0].cwd !== process.cwd() && !existsSync(lhSeen[0].cwd));
     check("a rewrite of the Hub URL written into .git/config after the scan's snapshot (a shape no scan enumerates) serves a fake listing to a listing made inside the repository and not to listHub (R16-listhub-isolation)",
       lhScan.problems.length === 0 && lhIn.ok && lhIn.stdout.includes("refs/heads/fakeonly") && !String(lhIso.stdout).includes("fakeonly") && !String(lhIso.stdout).includes(lh.f("rev-parse", "main")));
+    // ══ ROUND 18 ══ Review round 3 (wave 88). (1) A URL is the Hub only with its scheme written as git reads it, and only as written. (2) A display prints less. (3) The ssh program of the environment.
+    const caseShapes = ["HTTPS://github.com/DanFashauer/SignalGrid-Review-Hub.git", "Https://github.com/DanFashauer/SignalGrid-Review-Hub.git", "hTTps://github.com/DanFashauer/SignalGrid-Review-Hub.git",
+      "SSH://git@github.com/DanFashauer/SignalGrid-Review-Hub.git", "Ssh://git@github.com/DanFashauer/SignalGrid-Review-Hub.git"];
+    check("a URL is the Hub only when its scheme is written in lower case exactly as git reads it (HTTPS:// makes git run git-remote-HTTPS from PATH, SSH:// git-remote-SSH), and only as written: a leading or trailing blank makes it another URL (R18-scheme-parse)",
+      caseShapes.every((u) => parseGitUrl(u) === null && isHubUrl(u) === false) && isHubUrl(HUB) && isHubUrl("ssh://git@github.com/DanFashauer/SignalGrid-Review-Hub.git") &&
+      [" ", "\t", "\n"].every((b) => [`${b}${HUB}`, `${HUB}${b}`].every((u) => parseGitUrl(u) === null && isHubUrl(u) === false)));
+    const csScans = ["HTTPS://github.com/", "SSH://git@github.com/", " https://github.com/"].map((base) => inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: urGlobal(base) }));
+    const bo = mkFx("r18bo"); bo.f("config", "remote.origin.url", ` ${HUB}`);
+    const boRow = originRow(bo.w);
+    check("a global rewrite of the Hub to HTTPS://github.com/, to SSH://git@github.com/ or to a URL with a leading blank is a gated 'rewrites the Hub URL' finding that shows the scheme and the blank as written, never 'adds credentials'; an origin with a leading blank fails (R18-scheme-rewrite)",
+      csScans.every((s) => !s.trusted.some((t) => /adds credentials|same host and repository/.test(t))) &&
+      /^git configuration rewrites the Hub URL .* to HTTPS:\/\/github\.com\/DanFashauer\//.test(csScans[0].problems[0] || "") && /^git configuration rewrites the Hub URL .* to SSH:\/\/github\.com\/DanFashauer\//.test(csScans[1].problems[0] || "") &&
+      /^git configuration rewrites the Hub URL .* to https:\/\/github\.com\/DanFashauer\/.* \(as written, with leading or trailing whitespace\)/.test(csScans[2].problems[0] || "") &&
+      boRow.state === "fail" && boRow.detail.includes("(as written, with leading or trailing whitespace)"));
+    // The refuter's end-to-end shape: git runs git-remote-HTTPS for HTTPS://. A helper of that name on PATH logs every call and answers a real listing. Precondition: plain git, under the rewrite, reaches it.
+    const hxBin = join(root, "r18bin"), hxLog = join(root, "r18-helper.log"), hxSha = hubMapOf(ue.h).get("main");
+    mkdirSync(hxBin); writeFileSync(hxLog, "");
+    writeFileSync(join(hxBin, "git-remote-HTTPS"), String.raw`#!/bin/sh
+echo "$@" >> "$R18_HELPER_LOG"
+while read -r line; do
+  case "$line" in
+    capabilities) printf 'fetch\n\n' ;;
+    list*) printf '%s refs/heads/main\n\n' "$R18_SHA" ;;
+    "") exit 0 ;;
+  esac
+done
+`, { mode: 0o755 });
+    const hxVars = { GIT_CONFIG_GLOBAL: urGlobal("HTTPS://github.com/"), PATH: `${hxBin}:${process.env.PATH}`, R18_HELPER_LOG: hxLog, R18_SHA: hxSha };
+    const hxPlain = inCleanEnv(() => gitRun(ue.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), hxVars);
+    const hxCalled = readIfPresent(hxLog);
+    writeFileSync(hxLog, ""); // from here on, ANY call is the check's own
+    const hxWhole = wholeScript(ue, "r18hx", hxVars), hxAfter = readIfPresent(hxLog);
+    check("a global rewrite to HTTPS://github.com/ with a git-remote-HTTPS helper on PATH that answers a listing: plain git reaches the helper (the precondition), and the whole check exits 1 on the gated rewrite row and never calls it (R18-scheme-e2e)",
+      hxPlain.ok && hxPlain.stdout.includes(hxSha) && !!hxCalled && hxCalled.trim() !== "" &&
+      hxWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to HTTPS:\/\/github\.com\//.test(hxWhole.out) && !hxWhole.out.includes("all present on the Review Hub") && !/adds credentials/.test(hxWhole.out) && hxAfter === "");
+    // (2) A display prints less: everything before the LAST @ ahead of the next / is userinfo, whatever it holds.
+    const SECRET = "sEcr3t", TAIL = "Z9", leaks = (t) => String(t).includes(SECRET) || String(t).includes(TAIL);
+    const pwShapes = [["?", `http://agent:${SECRET}?${TAIL}@127.0.0.1:9`], ["#", `http://agent:${SECRET}#${TAIL}@127.0.0.1:9`], ["backslash", `http://agent:${SECRET}\\${TAIL}@127.0.0.1:9`]];
+    check("a credential that holds a raw ?, # or backslash is not printed by the display helpers (noUserinfo with and without all, displayUrl), every URL of a string is scrubbed, a plain user name survives only where it is not asked to go, and an scp-style user:secret@host:path loses its userinfo (R18-display-unit)",
+      pwShapes.every(([, u]) => noUserinfo(u, true) === "http://127.0.0.1:9" && noUserinfo(u) === "http://127.0.0.1:9" && displayUrl(u) === "http://127.0.0.1:9") &&
+      displayUrl(`http://agent:12?${TAIL}@127.0.0.1:9`) === "http://agent/?..." && displayUrl("https://evil.example#frag/x") === "https://evil.example/#..." &&
+      noUserinfo("url.https://a:b?c@h1/.insteadof=https://d:e#f@h2/", true) === "url.https://h1/.insteadof=https://h2/" &&
+      noUserinfo("ssh://git@hub.invalid/x") === "ssh://git@hub.invalid/x" && noUserinfo("ssh://git@hub.invalid/x", true) === "ssh://hub.invalid/x" && noUserinfo("ssh://git:tok@hub.invalid/x") === "ssh://hub.invalid/x" &&
+      [true, false].every((all) => noUserinfo(`user:${SECRET}@hub.invalid:Dan/x.git`, all) === "hub.invalid:Dan/x.git" && noUserinfo("tok3n@hub.invalid:Dan/x.git", all) === "hub.invalid:Dan/x.git" &&
+        noUserinfo("git@hub.invalid:Dan/x.git", all) === "git@hub.invalid:Dan/x.git" && noUserinfo(`url.user:${SECRET}@hub.invalid:.insteadof`, all) === "url.hub.invalid:.insteadof" && noUserinfo("url.git@hub.invalid:.insteadof", all) === "url.git@hub.invalid:.insteadof") &&
+      displayUrl(`user:${SECRET}@hub.invalid:Dan/SignalGrid-Review-Hub.git`) === "hub.invalid:Dan/SignalGrid-Review-Hub.git");
+    const drvEnv = pwShapes.map(([, u]) => inCleanEnv(() => hubTransport(txc.w), { HTTPS_PROXY: u, https_proxy: u, ALL_PROXY: null, all_proxy: null }));
+    const drvGlobal = pwShapes.map(([, u]) => inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile(`r18-proxy-${u.length}-${u.charCodeAt(u.indexOf(SECRET) + SECRET.length)}.cfg`, `[http]\n\tproxy = ${JSON.stringify(u)}\n`) }));
+    const drp = mkFx("r18rp");
+    const drvLocal = pwShapes.map(([, u]) => { drp.f("config", "http.proxy", u); return inCleanEnv(() => hubTransport(drp.w)); });
+    const credHub = (cred) => ["https://" + cred, "github.com/DanFashauer/SignalGrid-Review-Hub.git"].join("@");
+    const drvOrigin = [[`ci:${SECRET}?${TAIL}`], [`ci:${SECRET}#${TAIL}`], [`ci:${SECRET}\\${TAIL}`]].map(([cred]) => { bo.f("config", "remote.origin.url", credHub(cred)); return originRow(bo.w); });
+    bo.f("config", "remote.origin.url", [`user:${SECRET}`, "github.com:DanFashauer/SignalGrid-Review-Hub.git"].join("@")); // (joined: no line of this file carries a credential in front of the Hub's host)
+    const drvScp = originRow(bo.w);
+    check("the rows built from a credential with a raw ?, # or backslash print none of it: the environment proxy, a global http.proxy, a repository-scope http.proxy finding, and an origin that is not the Hub as written (which says so, since it prints as the Hub) (R18-display-rows)",
+      drvEnv.every((s) => s.note.includes("environment proxy HTTPS_PROXY/https_proxy=http://127.0.0.1:9") && !leaks(JSON.stringify(s))) &&
+      drvGlobal.every((s) => s.problems.length === 0 && s.trusted.some((t) => t.includes("http.proxy=http://127.0.0.1:9")) && !leaks(JSON.stringify(s))) &&
+      drvLocal.every((s) => s.problems.some((p) => /^repository-scope http\.proxy=http:\/\/127\.0\.0\.1:9 \(local /.test(p)) && !leaks(JSON.stringify(s))) &&
+      drvOrigin.every((r) => r.state === "fail" && !leaks(r.detail) && !!shownUrls(r.detail.split(" (")[0]) && shownUrls(r.detail.split(" (")[0]).fetch.host === "github.com" && r.detail.includes("not the Hub as written")) &&
+      drvScp.state === "fail" && !leaks(drvScp.detail) && drvScp.detail.startsWith("github.com:DanFashauer/SignalGrid-Review-Hub.git") && drvScp.detail.includes("not the Hub as written"));
+    // (3) GIT_SSH_COMMAND, GIT_SSH and GIT_PROXY_COMMAND: reported in the row, never passed on.
+    const sshVars = { GIT_SSH_COMMAND: "/x/evil-ssh -i /x/key", GIT_SSH: "/x/evil-ssh2", GIT_PROXY_COMMAND: "/x/evil-proxy --token t0k3n", GIT_KEEP_ME: "y" };
+    const sshGitEnv = withEnvVars(sshVars, () => gitEnv()), sshScan = inCleanEnv(() => hubTransport(txc.w), sshVars);
+    check("GIT_SSH_COMMAND, GIT_SSH and GIT_PROXY_COMMAND are named in the transport row as trusted-not-verified (a command by its program alone) and are absent from the environment of every git started here (R18-ssh-env)",
+      ["GIT_SSH_COMMAND", "GIT_SSH", "GIT_PROXY_COMMAND"].every((k) => !(k in sshGitEnv)) && sshGitEnv.GIT_KEEP_ME === "y" && sshScan.problems.length === 0 &&
+      sshScan.trusted.includes("environment GIT_SSH_COMMAND=/x/evil-ssh ... (not passed to any git started here)") && sshScan.trusted.includes("environment GIT_SSH=/x/evil-ssh2 (not passed to any git started here)") &&
+      sshScan.trusted.includes("environment GIT_PROXY_COMMAND=/x/evil-proxy ... (not passed to any git started here)") && !JSON.stringify(sshScan).includes("t0k3n") && transportRow(sshScan).state === "warn");
+    const sshMark = join(root, "r18-ssh-ran"), sshProg = join(root, "r18-ssh.sh"), sshHub = "ssh://r18.invalid/hub.git";
+    writeFileSync(sshProg, `#!/bin/sh\n: > "${sshMark}"\nexit 1\n`, { mode: 0o755 });
+    spawnSync("git", ["ls-remote", "--heads", sshHub], { env: { ...FX_ENV, GIT_SSH_COMMAND: sshProg, GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1" }, encoding: "utf8", timeout: 60000 });
+    const sshRanPlain = readIfPresent(sshMark) !== null;
+    rmSync(sshMark, { force: true });
+    inCleanEnv(() => listHub(sshHub), { GIT_SSH_COMMAND: sshProg });
+    check("an exported GIT_SSH_COMMAND is run by a plain git on an ssh URL (the precondition) and is never run by the listing (R18-ssh-listing)", sshRanPlain && readIfPresent(sshMark) === null);
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

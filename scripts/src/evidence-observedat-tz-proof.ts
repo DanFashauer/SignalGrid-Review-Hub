@@ -296,6 +296,50 @@ for (const [category, field, mild, strong] of FAMILIES.filter(([c]) => c !== "po
   check(`same-instant ${category}: ${mild}+${strong} resolves to ${strong} in either arrival order`, ab === strong && ba === strong, `${ab}/${ba}`);
 }
 
+// Impossible calendar or clock values are NOT instants. `Date.parse` rolls "2026-02-30" over to March 2, so a
+// vouch carrying one would outrank a valid March 1 accusation and read `compliant`. Every one of these must be
+// illegible (cannot vouch) in every zone, including the `Z` form that mainline already rolled over.
+for (const stamp of [
+  "2026-02-30T08:00:00+00",
+  "2026-02-30T08:00:00Z",
+  "2026-02-30",
+  "2026-02-29T08:00:00Z",
+  "2026-13-01T08:00:00Z",
+  "2026-03-02T24:00:00Z",
+  "2026-03-02T08:60:00Z",
+  "2026-03-02T08:00:60Z",
+  "2026-03-02T08:00:00+24:00",
+  "2026-03-02T08:00:00+00:60",
+]) {
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp, "2026-03-01T00:00:00Z"));
+  check(
+    `impossible stamp '${stamp}' is illegible (cannot vouch past a valid March 1 accusation), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|non_compliant"),
+    r.join(","),
+  );
+}
+// Control: the valid neighbours of those stamps still order by instant (2026-03-02 is a real, later date).
+for (const stamp of ["2026-03-02T08:00:00+00", "2026-03-02", "2024-02-29T08:00:00Z"]) {
+  const accused = stamp.startsWith("2024") ? "2024-02-28T00:00:00Z" : "2026-03-01T00:00:00Z";
+  const r = ZONES.map((z) => inZone(z, "verdict", stamp, accused));
+  check(
+    `valid stamp '${stamp}' is ordered by instant (later vouch wins), identically in every zone`,
+    new Set(r).size === 1 && r[0]!.endsWith("|compliant"),
+    r.join(","),
+  );
+}
+
+// Accusing values the shipped rules treat ALIKE sit in one tier and TIE: the first arrival stands (as on mainline),
+// because a tenant's own active policy may tell them apart and collapsing them to the later-listed one loses that.
+{
+  const ab = inZone("UTC", "tie", "custody_state", "custodyState", "overdue", "maintenance");
+  const ba = inZone("UTC", "tie", "custody_state", "custodyState", "maintenance", "overdue");
+  check("same-instant custody overdue+maintenance (same shipped outcome): the FIRST arrival stands, in either order", ab === "overdue" && ba === "maintenance", `${ab}/${ba}`);
+  const cd = inZone("UTC", "tie", "charge_state", "dockChargeState", "low", "not_present");
+  const dc = inZone("UTC", "tie", "charge_state", "dockChargeState", "not_present", "low");
+  check("same-instant charge low+not_present (same shipped outcome): the FIRST arrival stands, in either order", cd === "low" && dc === "not_present", `${cd}/${dc}`);
+}
+
 // The accusation orders are not hand-trusted: derive each member's outcome from the SHIPPED rule set, require
 // every accusing member to be listed, and require the order to be non-decreasing in outcome.
 {
@@ -313,14 +357,16 @@ for (const [category, field, mild, strong] of FAMILIES.filter(([c]) => c !== "po
     const domain = (EVIDENCE_VALUE_DOMAINS as Record<string, { members: readonly unknown[]; good: readonly unknown[]; worse?: readonly unknown[] }>)[key === "battery" ? "batteryHealth" : key];
     if (!domain) { problems.push(`${key}: no such domain`); continue; }
     const accusing = domain.members.filter((m) => !domain.good.includes(m)) as string[];
-    const worse = (domain.worse ?? []) as string[];
-    for (const m of accusing) if (!worse.includes(m)) problems.push(`${key}: accusing member '${m}' is not ranked`);
-    let prev = -1;
-    for (const m of worse) {
-      const r = outcomeOf(field, m);
-      if (r < prev) problems.push(`${key}: '${m}' (${r}) is ranked after a member with a harsher outcome (${prev})`);
-      prev = Math.max(prev, r);
-    }
+    const tiers = (domain.worse ?? []) as unknown as string[][];
+    const listed = tiers.flat();
+    for (const m of accusing) if (!listed.includes(m)) problems.push(`${key}: accusing member '${m}' is not ranked`);
+    let prevTier = -1;
+    tiers.forEach((tier, i) => {
+      const ranks = tier.map((m) => outcomeOf(field, m));
+      if (new Set(ranks).size > 1) problems.push(`${key}: tier ${i} [${tier.join(",")}] mixes outcomes ${ranks.join(",")}`);
+      if (ranks[0]! <= prevTier) problems.push(`${key}: tier ${i} [${tier.join(",")}] (${ranks[0]}) does not outrank the tier before it (${prevTier})`);
+      prevTier = Math.max(prevTier, ...ranks);
+    });
   }
   check("accusation orders match the shipped rules' outcomes, and every accusing member is ranked", problems.length === 0, problems.join("; "));
 }

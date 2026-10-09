@@ -4774,7 +4774,7 @@ Decision core (the verdict mechanism):
 2. lib/signalgrid-core/src/decision.ts (216) — where allow/step_up/restrict/deny is actually computed.
 3. lib/signalgrid-core/src/policy.ts (850) — policy resolution feeding the verdict; the largest logic file in the core.
 4. lib/signalgrid-core/src/resolution.ts (576) — signal-to-assurance resolution; the file where 'unknown raises assurance, never lowers it' must hold.
-5. lib/signalgrid-core/src/evidence.ts (864) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
+5. lib/signalgrid-core/src/evidence.ts (868) — mints the WHY behind /v1/decisions/{id}/evidence; the product's entire claim is that its answers are explainable.
 6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
@@ -4796,7 +4796,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (937) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (938) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

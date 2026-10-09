@@ -112,19 +112,34 @@ export function constantTimeEquals(a: string, b: string): boolean {
  * Accepted, because each NAMES AN EXACT INSTANT: a date-time with a `T`, `t` or
  * space separator (RFC 3339 allows the space; Postgres timestamptz text uses it)
  * and a zone of `Z`, or `+HH:MM`, `+HHMM` (ISO 8601 basic) or `+HH`; and a
- * date-only form (UTC by spec). The stamp is rebuilt as the one ECMA-262
- * date-time format (`YYYY-MM-DDTHH:mm[:ss[.sss]]Z|+HH:MM`) before it reaches
- * `Date.parse`, so no engine-specific fallback parser decides anything. Still
- * NaN: RFC 2822 text, epoch strings and anything else. No clock, no host zone.
+ * date-only form (UTC by spec). Every calendar and clock field must be a real
+ * value: `Date.parse` rolls "2026-02-30" over to March 2 and "24:00" to the next
+ * day, so an impossible stamp is NaN instead of a different instant. The stamp
+ * is rebuilt as the one ECMA-262 date-time format
+ * (`YYYY-MM-DDTHH:mm[:ss[.sss]]Z|+HH:MM`) before it reaches `Date.parse`, so no
+ * engine-specific fallback parser decides anything. Still NaN: RFC 2822 text,
+ * epoch strings and anything else. No clock, no host zone.
  */
-const ZONED_STAMP = /^(\d{4}-\d{2}-\d{2})[Tt ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:([Zz])|([+-]\d{2})(?::?(\d{2}))?)$/;
-const DATE_ONLY_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const ZONED_STAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?(?:([Zz])|([+-])(\d{2})(?::?(\d{2}))?))?$/;
 export function parseObservedInstant(observedAt: string): number {
-  if (DATE_ONLY_ISO.test(observedAt)) return Date.parse(observedAt);
   const m = ZONED_STAMP.exec(observedAt);
   if (!m) return Number.NaN;
-  const zone = m[3] !== undefined ? "Z" : `${m[4]}:${m[5] ?? "00"}`;
-  return Date.parse(`${m[1]}T${m[2]}${zone}`);
+  const [, y, mo, d, hh, mi, ss, frac, z, sign, oh, om] = m;
+  const hasTime = hh !== undefined;
+  // A date-time needs a zone; a bare date is UTC by spec. A time with no zone is the host-local case.
+  if (hasTime && z === undefined && oh === undefined) return Number.NaN;
+  // `Date.parse` rolls impossible values over ("2026-02-30" is March 2, "24:00" is the next day), so a reading
+  // carrying one would be ordered as a different instant than the one it states. Require every field to
+  // round-trip through the calendar; otherwise it names no instant and is illegible.
+  const cal = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (cal.getUTCFullYear() !== Number(y) || cal.getUTCMonth() !== Number(mo) - 1 || cal.getUTCDate() !== Number(d)) {
+    return Number.NaN;
+  }
+  if (hasTime && (Number(hh) > 23 || Number(mi) > 59 || (ss !== undefined && Number(ss) > 59))) return Number.NaN;
+  if (oh !== undefined && (Number(oh) > 23 || (om !== undefined && Number(om) > 59))) return Number.NaN;
+  if (!hasTime) return Date.parse(`${y}-${mo}-${d}`);
+  const zone = z !== undefined ? "Z" : `${sign}${oh}:${om ?? "00"}`;
+  return Date.parse(`${y}-${mo}-${d}T${hh}:${mi}${ss !== undefined ? `:${ss}${frac ?? ""}` : ""}${zone}`);
 }
 
 /**

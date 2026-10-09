@@ -390,23 +390,25 @@ function groupLatest(signals: NormalizedSignal[]): LatestByCategory {
 function severityOf<T extends string | boolean>(
   value: T | undefined,
   good: readonly T[],
-  worse: readonly T[] = [],
+  worse: readonly (readonly T[])[] = [],
 ): number {
   if (value === undefined) return 1;
   if (good.includes(value)) return 0;
-  // A family may name its accusing members from least to most severe (`worse`). A listed member ranks
-  // above an unlisted accusation and above the listed members before it, so two DIFFERENT accusations
-  // (an older "suspected" against a later "confirmed" whose stamp cannot be ordered) resolve to the
-  // worse one whatever order they arrived in, instead of tying at 2 and letting the ordered one stand.
-  const rank = worse.indexOf(value);
-  return rank < 0 ? 2 : 2 + (rank + 1) / 10;
+  // A family may name its accusing members in TIERS, least to most severe. Members of one tier are treated
+  // alike by the shipped rules, so they TIE (the first arrival stands, as before): collapsing them to the
+  // later-listed member would discard a distinction a tenant's own active policy may draw. A member in a
+  // higher tier outranks every member of a lower tier and of an unlisted accusation, so two DIFFERENT
+  // accusations (an older "suspected" against a later "confirmed" whose stamp cannot be ordered) resolve to
+  // the worse one whatever order they arrived in, instead of tying at 2 and letting the ordered one stand.
+  const tier = worse.findIndex((members) => members.includes(value));
+  return tier < 0 ? 2 : 2 + (tier + 1) / 10;
 }
 
 function resolveWorst<T extends string | boolean>(
   reading: CategoryReading | undefined,
   parse: (value: NormalizedSignal["value"]) => T | undefined,
   good: readonly T[],
-  worse: readonly T[] = [],
+  worse: readonly (readonly T[])[] = [],
 ): T | undefined {
   if (!reading) {
     return undefined;
@@ -607,22 +609,24 @@ export const EVIDENCE_VALUE_DOMAINS = {
   compliance: { members: COMPLIANCE_STATES, good: ["compliant"] },
   boolean: { members: BOOLEAN_MEMBERS, good: [true] },
   freshness: { members: FRESHNESS_VALUES, good: ["fresh"] },
-  // Every family below lists ALL its accusing members, least to most severe by the outcome of the shipped rule
-  // that matches it (`proof:evidence-observedat-tz` derives that outcome from SHARED_DEVICE_RULES_V1 and fails
-  // if an order or a missing member disagrees). Members the rules treat alike sit next to each other.
-  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"], worse: ["overdue", "exception", "maintenance"] },
-  charge: { members: CHARGE_STATES, good: ["charging", "charged"], worse: ["low", "not_present", "critical"] },
-  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"], worse: ["degraded", "failing"] },
+  // Every family below lists ALL its accusing members in TIERS, least to most severe by the outcome of the
+  // shipped rule that matches them. Members the rules treat alike share a tier and TIE (the first arrival
+  // stands); only members the rules separate are ordered. `proof:evidence-observedat-tz` derives each outcome
+  // from SHARED_DEVICE_RULES_V1 and fails if a tier mixes outcomes, tiers do not strictly rise, or an accusing
+  // member is missing. The orders follow the SHIPPED rules, not a tenant's active policy.
+  custody: { members: CUSTODY_STATES, good: ["checked_in", "checked_out"], worse: [["overdue", "exception", "maintenance"]] },
+  charge: { members: CHARGE_STATES, good: ["charging", "charged"], worse: [["low", "not_present"], ["critical"]] },
+  batteryHealth: { members: BATTERY_HEALTH_STATES, good: ["healthy"], worse: [["degraded"], ["failing"]] },
   // `worse` orders the accusing members the shipped rule set separates by outcome: a confirmed tamper
   // denies (TAMPER_CONFIRMED) and a suspected one restricts (TAMPER_SUSPECTED).
-  tamper: { members: TAMPER_STATES, good: ["none"], worse: ["sensor_unavailable", "suspected", "confirmed"] },
-  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"], worse: ["offline", "faulted"] },
-  baseline: { members: BASELINE_STATES, good: ["aligned"], worse: ["partial", "not_assessed", "drifted"] },
+  tamper: { members: TAMPER_STATES, good: ["none"], worse: [["sensor_unavailable"], ["suspected"], ["confirmed"]] },
+  dock: { members: DOCK_STATES, good: ["occupied", "empty", "reserved"], worse: [["offline"], ["faulted"]] },
+  baseline: { members: BASELINE_STATES, good: ["aligned"], worse: [["partial", "not_assessed"], ["drifted"]] },
   benchmarkSelection: { members: BENCHMARK_SELECTION_STATES, good: ["confirmed"] },
   shiftContext: { members: SHIFT_CONTEXT_STATES, good: ["confirmed"] },
   // A forced badge removal denies (BADGE_FORCED_REMOVAL) and a plain removal restricts (BADGE_REMOVED).
-  badge: { members: BADGE_STATES, good: ["present"], worse: ["absent", "removed", "forced"] },
-  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"], worse: ["degraded", "broken"] },
+  badge: { members: BADGE_STATES, good: ["present"], worse: [["absent"], ["removed"], ["forced"]] },
+  managementHealth: { members: MANAGEMENT_HEALTH_STATES, good: ["healthy"], worse: [["degraded"], ["broken"]] },
   localAuthority: { members: LOCAL_AUTHORITY_STATES, good: ["verified"] },
   attach: { members: ATTACH_READABLE, good: ["attached"] },
   // ENROLLMENT IS INVERTED ON PURPOSE, and it is the DR-043 fix over PR #753. The
@@ -814,7 +818,7 @@ function readPresentOrNotApplicable<T extends string>(
 function readEnum<T extends string>(
   latestByCategory: LatestByCategory,
   category: NormalizedSignal["category"],
-  domain: { readonly members: readonly T[]; readonly good: readonly T[]; readonly worse?: readonly T[] },
+  domain: { readonly members: readonly T[]; readonly good: readonly T[]; readonly worse?: readonly (readonly T[])[] },
 ): T | undefined {
   return resolveWorst(
     latestByCategory.get(category),

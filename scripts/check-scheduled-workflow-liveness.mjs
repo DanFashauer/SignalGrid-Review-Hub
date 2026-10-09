@@ -579,7 +579,7 @@ function selfTest() {
     pin("parser: a scalar root is unreadable", "hello\n", "unreadable");
     pin("parser: an empty document is unreadable", "", "unreadable");
     pin("parser: a mapping with no `on` key is unreadable", `name: N\n${J2}`, "unreadable");
-    pin("parser: a `<<:` merge key whose merged map carries `schedule` is scheduled (merge)", `x: &x\n${cronBlock.replace(/^  /gm, "  ")}on:\n  <<: *x\n  push: {}\n${J2}`, "scheduled");
+    pin("parser: a `<<:` merge key whose merged map carries `schedule` is scheduled (merge)", `x: &x\n${cronBlock}on:\n  <<: *x\n  push: {}\n${J2}`, "scheduled");
   }
 
   // pure-function spot checks

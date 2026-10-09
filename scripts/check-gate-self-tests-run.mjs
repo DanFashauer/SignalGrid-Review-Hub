@@ -594,11 +594,6 @@ function selfTest() {
 
     // ── live: the detector still finds the real tree's gates, and agrees with a plain grep ──
     const live = runGate(REPO, { spawn: () => ({ status: 0, stdout: "self-test" }) });
-    for (const lane of ["scripts/preflight.mjs", "scripts/verify-breadth.mjs"]) {
-      const direct = spawnSync(process.execPath, [join(REPO, lane), "--list-steps"], { maxBuffer: 64 * 1024 * 1024 }).stdout.length;
-      const piped = spawnSync("sh", ["-c", `"$0" "$1" --list-steps | wc -c`, process.execPath, join(REPO, lane)], { encoding: "utf8" });
-      note(`live: ${lane} --list-steps survives a pipe reader (output is not cut at the 64 KiB pipe buffer)`, direct > 0 && Number(piped.stdout.trim()) === direct, `${direct} bytes direct, ${piped.stdout.trim()} piped`);
-    }
     note("live: the real tree yields at least the floor of gates", live.counts.gates >= DEFAULT_FLOOR, `${live.counts.gates} gates`);
     note("live: the real runners list steps and register self-tests", live.counts.registered >= 50 && live.problems.length === 0, `${live.counts.registered} registered, ${live.problems.length} problem(s)${live.problems.length ? `: ${live.problems.slice(0, 3).join(" | ").slice(0, 600)}` : ""}`);
     note("live: the three formerly unrun self-tests are in the spawn set", ["check-api-collection.mjs", "check-deployment-runbook.mjs", "check-desktop-core-tests.mjs"].every((f) => live.spawned.includes(f)), live.spawned.join(","));

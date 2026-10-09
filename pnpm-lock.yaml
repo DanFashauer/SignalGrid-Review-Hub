@@ -462,6 +462,12 @@ importers:
 
   artifacts/signalgrid-mobile-pwa:
     devDependencies:
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(vite@8.2.1(@types/node@25.6.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -1152,6 +1158,9 @@ importers:
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
 
 packages:
 

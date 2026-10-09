@@ -650,6 +650,12 @@ const DECLARED_LOCALE_COMPARE = new Map([
   //              serves would get this gate switched off — which is how it lost its
   //              scope in the first place.
   const SHIPPED_TREES = ["artifacts/signalgrid-web/", "artifacts/signalgrid-app/"];
+  // RATCHET — demo-only trees already migrated to @fontsource. They are not served,
+  // but once self-hosted a returning vendor fetch is a regression, not a backlog
+  // item, so they are GATED like a served tree. The PWA joined 2026-09-30 (build
+  // plan row 108): it is the one surface where a third-party font blocks first
+  // paint on bad hospital wifi, the exact condition it exists for.
+  const SELF_HOSTED_DEMO_TREES = ["artifacts/signalgrid-mobile-pwa/"];
   const isWebSource = (f) =>
     f.endsWith(".html") || f.endsWith(".ts") || f.endsWith(".tsx") || f.endsWith(".css");
   const inArtifactWebTree = (f) => f.startsWith("artifacts/") && isWebSource(f) && !f.includes("/dist/");
@@ -657,7 +663,7 @@ const DECLARED_LOCALE_COMPARE = new Map([
     inArtifactWebTree(f) ||
     (f.startsWith("docs/") && f.endsWith(".html")) ||
     (f.startsWith("site/") && f.endsWith(".html")));
-  const shipped = (f) => SHIPPED_TREES.some((t) => f.startsWith(t)) || f.startsWith("docs/") || f.startsWith("site/");
+  const shipped = (f) => [...SHIPPED_TREES, ...SELF_HOSTED_DEMO_TREES].some((t) => f.startsWith(t)) || f.startsWith("docs/") || f.startsWith("site/");
   const hits = [];
   const reported = [];
   for (const f of scan) {
@@ -673,10 +679,10 @@ const DECLARED_LOCALE_COMPARE = new Map([
   if (reported.length) {
     console.log(`  ⚠ third-party vendor host in ${reported.length} DEMO-ONLY web file(s) — not served, so reported:`);
     for (const r of reported) console.log(`      ${r}`);
-    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web and signalgrid-app do.");
+    console.log("      Fix by self-hosting (@fontsource), as signalgrid-web, signalgrid-app and signalgrid-mobile-pwa do.");
   }
-  if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED artifact — ${hits.join(", ")}. Self-host it instead.`);
-  else ok(`Public-safe web: no third-party vendor host in any SERVED web artifact (${scan.length} files scanned across every web tree)`);
+  if (hits.length) bad(`Public-safe web: third-party vendor host in a SERVED or already-self-hosted artifact — ${hits.join(", ")}. Self-host it instead.`);
+  else ok(`Public-safe web: no third-party vendor host in any SERVED or already-self-hosted web artifact (${scan.length} files scanned across every web tree)`);
 }
 
 // ── An unearned attestation claim may not become load-bearing ────────────────

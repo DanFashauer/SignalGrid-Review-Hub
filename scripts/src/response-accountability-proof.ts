@@ -9,9 +9,9 @@
 //   4. Routing is deterministic and its holes are visible.
 //   5. The gate refuses, each condition isolated. No network I/O.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   deriveAcknowledgement,
   deriveResolutionTimeliness,
@@ -539,31 +539,19 @@ const healthy: NormalizedResponseRecord = {
 
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/response-accountability");
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|ioredis|redis)['"]/i,
-    /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|ioredis|redis)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
-  const offenders: string[] = [];
-  for (const f of files) {
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      if (banned.some((re) => re.test(line))) offenders.push(`${f.slice(dir.length + 1)}:${i + 1}`);
-    });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders } = scanForVendorCalls(dir);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   check(`no vendor-API call in any response-accountability source (${files.length} files, recursive)`,
-    offenders.length === 0);
-  check("...and the scan can actually fire — it detects a planted call",
-    banned.some((re) => re.test('await fetch("https://x", { method: "POST" })')));
+    files.length > 0 && offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
 }
 
 console.log(`\nsummary=${failures.length === 0 ? "pass" : "fail"} (${passed}/${passed + failures.length})`);

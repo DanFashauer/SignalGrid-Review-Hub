@@ -100,6 +100,49 @@ export function constantTimeEquals(a: string, b: string): boolean {
 }
 
 /**
+ * The instant an `observedAt` names, or NaN when it names none the host cannot
+ * disagree about. A date-time with no zone designator ("2026-07-13T08:00:00")
+ * is parsed by `Date.parse` as HOST-LOCAL time (ECMA-262), so the same wire
+ * input ordered differently under TZ=UTC and TZ=Asia/Tokyo and flipped a
+ * security decision (backlog row, reproduced 2026-09-26). An offset-less stamp
+ * is an unknown instant, so it is NaN here — i.e. illegible, which the rest of
+ * this file already resolves fail-closed (never wins as latest, cannot vouch,
+ * worst-wins).
+ *
+ * Accepted, because each NAMES AN EXACT INSTANT: a date-time with a `T`, `t` or
+ * space separator (RFC 3339 allows the space; Postgres timestamptz text uses it)
+ * and a zone of `Z`, or `+HH:MM`, `+HHMM` (ISO 8601 basic) or `+HH`; and a
+ * date-only form (UTC by spec). Every calendar and clock field must be a real
+ * value: `Date.parse` rolls "2026-02-30" over to March 2 and "24:00" to the next
+ * day, so an impossible stamp is NaN instead of a different instant. The stamp
+ * is rebuilt as the one ECMA-262 date-time format
+ * (`YYYY-MM-DDTHH:mm[:ss[.sss]]Z|+HH:MM`) before it reaches `Date.parse`, so no
+ * engine-specific fallback parser decides anything. Still NaN: RFC 2822 text,
+ * epoch strings and anything else. No clock, no host zone.
+ */
+const ZONED_STAMP = /^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?(?:([Zz])|([+-])(\d{2})(?::?(\d{2}))?))?$/;
+export function parseObservedInstant(observedAt: string): number {
+  const m = ZONED_STAMP.exec(observedAt);
+  if (!m) return Number.NaN;
+  const [, y, mo, d, hh, mi, ss, frac, z, sign, oh, om] = m;
+  const hasTime = hh !== undefined;
+  // A date-time needs a zone; a bare date is UTC by spec. A time with no zone is the host-local case.
+  if (hasTime && z === undefined && oh === undefined) return Number.NaN;
+  // `Date.parse` rolls impossible values over ("2026-02-30" is March 2, "24:00" is the next day), so a reading
+  // carrying one would be ordered as a different instant than the one it states. Require every field to
+  // round-trip through the calendar; otherwise it names no instant and is illegible.
+  const cal = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (cal.getUTCFullYear() !== Number(y) || cal.getUTCMonth() !== Number(mo) - 1 || cal.getUTCDate() !== Number(d)) {
+    return Number.NaN;
+  }
+  if (hasTime && (Number(hh) > 23 || Number(mi) > 59 || (ss !== undefined && Number(ss) > 59))) return Number.NaN;
+  if (oh !== undefined && (Number(oh) > 23 || (om !== undefined && Number(om) > 59))) return Number.NaN;
+  if (!hasTime) return Date.parse(`${y}-${mo}-${d}`);
+  const zone = z !== undefined ? "Z" : `${sign}${oh}:${om ?? "00"}`;
+  return Date.parse(`${y}-${mo}-${d}T${hh}:${mi}${ss !== undefined ? `:${ss}${frac ?? ""}` : ""}${zone}`);
+}
+
+/**
  * Classify posture freshness from an observation time relative to the
  * evaluation clock. Fail-safe: unpariseable or future timestamps are "unknown",
  * never "fresh".
@@ -113,8 +156,10 @@ export function classifyFreshness(
   if (!observedAtIso) {
     return "missing";
   }
-  const observedMs = Date.parse(observedAtIso);
-  const nowMs = Date.parse(nowIso);
+  // An offset-less stamp is an unknown instant (parseObservedInstant), so it is "unknown" here too: reading it
+  // host-local made the same dock feed fresh in one zone and stale in another.
+  const observedMs = parseObservedInstant(observedAtIso);
+  const nowMs = parseObservedInstant(nowIso);
   // freshness: local-by-design — same rule, but this package cannot import @workspace/integrations without a new workspace dependency and a lockfile regeneration; folded copy pending that change — signalgrid-core is the BASE package with zero dependencies; the shared helper would have to move here, not be imported (tolerance 0, future reads `unknown`)
   if (Number.isNaN(observedMs) || Number.isNaN(nowMs) || observedMs > nowMs) {
     return "unknown";

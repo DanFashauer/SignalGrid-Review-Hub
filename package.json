@@ -117,6 +117,7 @@
     "proof:event-contract": "pnpm --filter @workspace/scripts run proof:event-contract",
     "proof:evidence-adapter": "pnpm --filter @workspace/scripts run proof:evidence-adapter",
     "proof:evidence-coverage": "pnpm --filter @workspace/scripts run proof:evidence-coverage",
+    "proof:evidence-observedat-tz": "pnpm --filter @workspace/scripts run proof:evidence-observedat-tz",
     "proof:fabric-evals": "pnpm --filter @workspace/scripts run proof:fabric-evals",
     "proof:fabric-scenario": "pnpm --filter @workspace/scripts run proof:fabric-scenario",
     "proof:facility-trust-graph": "pnpm --filter @workspace/scripts run proof:facility-trust-graph",

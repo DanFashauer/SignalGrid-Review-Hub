@@ -451,11 +451,12 @@ export const TARGETS = [
   },
   {
     proof: "proof:oauth-consent",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
-      // oauth-consent-connector.ts dropped 2026-09-03: read-only normalize/transport in
-      // typeof/allowlist/ternary shapes the mutators do not express, 0 mutations — a false
-      // coverage claim. evaluate.ts carries this family's mutable guards.
+      // oauth-consent-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
+      // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guard.
+      "lib/integrations/src/integrations/oauth-consent/oauth-consent-connector.ts",
       "lib/integrations/src/integrations/oauth-consent/index.ts",
     ],
   },
@@ -473,15 +474,15 @@ export const TARGETS = [
     oneLine: true,
     files: [
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
-      // access-governance-connector.ts dropped 2026-09-03: its normalize/transport is
-      // defensive parsing (typeof / allowlist / ternary) the mutators do not express, so
-      // it registered 0 mutations — a false coverage claim. The proof still asserts its
-      // behaviour; evaluate.ts carries this family's mutable decision guards.
+      // access-governance-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
+      // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guards.
+      "lib/integrations/src/integrations/access-governance/access-governance-connector.ts",
       "lib/integrations/src/integrations/access-governance/index.ts",
     ],
   },
   {
     proof: "proof:break-glass",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/break-glass/evaluate.ts",
       "lib/integrations/src/integrations/break-glass/index.ts",
@@ -568,7 +569,13 @@ export const TARGETS = [
   // gate in isolation. Built after the lesson, they needed registering, not fixing.
   {
     proof: "proof:graph-connector",
-    files: ["lib/integrations/src/integrations/graph/index.ts"],
+    oneLine: true,
+    files: [
+      "lib/integrations/src/integrations/graph/index.ts",
+      // posture-connector.ts registered 2026-10-09 (wave 7): the proof drives GraphPostureConnector
+      // directly, and its normalizers (normalizeManagement, ...) are the shipped read path against a real tenant.
+      "lib/integrations/src/integrations/graph/posture-connector.ts",
+    ],
   },
   {
     proof: "proof:carrier-reachability",
@@ -606,9 +613,9 @@ export const TARGETS = [
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
       "lib/integrations/src/integrations/device-attestation/evaluate.ts",
-      // device-attestation-connector.ts dropped 2026-09-03: same reason — defensive
-      // parsing the mutators do not express, 0 mutations. evaluate.ts carries the
-      // mutable guards.
+      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations. Wave 7
+      // (2026-10-09) tried it with `oneLine`: 62 mutations, 2 survivors (lines 37 and 39, the
+      // empty-string and "not found"/"unavailable" null guards) — not yet pinned, so it stays out.
       "lib/integrations/src/integrations/device-attestation/index.ts",
       // The supervision-identity lifecycle emits the trust-precondition verdict
       // (grant / step-up / restrict) and normalizes a UEM report, so its guards are
@@ -701,6 +708,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:response-accountability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/response-accountability/evaluate.ts",
       "lib/integrations/src/integrations/response-accountability/index.ts",

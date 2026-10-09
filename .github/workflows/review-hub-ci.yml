@@ -480,6 +480,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
+      - name: Scheduled-workflow liveness self-test (the gate must be able to fail)
+        run: node scripts/check-scheduled-workflow-liveness.mjs --self-test
+      - name: Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)
+        run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
 

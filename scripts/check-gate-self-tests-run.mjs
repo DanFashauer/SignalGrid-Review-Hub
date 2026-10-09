@@ -166,19 +166,15 @@ export function runnerShapeOk(source) {
   const code = stripComments(source, { maskStrings: true }); // same offsets; string and template text blanked
   const loops = [...live.matchAll(/\bfor\s*\(\s*const\s+step\s+of\s+STEPS\s*\)/g)];
   const m = RUNNER_SHAPE.exec(live);
-  if (m === null || code.length !== live.length) return false;
-  // the matched block and loop must be CODE: a copy inside a string or template literal is a decoy (the real dump
-  // could then be spelled any way, e.g. "--list-" + "steps", and the real loop changed). The loop must be the only
-  // one, and `--list-steps` may appear once as a literal. That mention rule is a blacklist on ONE spelling and is
-  // belt-and-braces only; the position check is what refuses a decoy.
-  const end = m.index + m[0].length - 1;
-  // reachable: at brace depth 0 and right after a statement boundary, so not inside `if (false) { }`, a function
-  // body, or `if (x) <block>` (what precedes it is `)`/`else`, not `;` or `}`)
+  if (m === null) return false;
+  // reachable CODE, not a decoy: at brace depth 0 and right after a statement boundary, read on the string-masked text,
+  // so a block inside a string or template literal (whose text is blanked), a function, `if (false) { }` or a
+  // brace-free `if` is refused (what precedes it is blanked, `{`, `)` or `else`, not `;` or `}`). The loop must be the
+  // only one, and `--list-steps` may appear once as a literal (belt-and-braces; it blocks that one spelling).
   const before = code.slice(0, m.index);
   const depth = (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length;
   const prev = before.trimEnd().slice(-1);
-  return code[m.index] === live[m.index] && code[end] === live[end]
-    && depth === 0 && (prev === "" || prev === ";" || prev === "}")
+  return depth === 0 && (prev === "" || prev === ";" || prev === "}")
     && loops.length === 1 && (live.match(/--list-steps/g) ?? []).length === 1;
 }
 
@@ -464,6 +460,7 @@ function selfTest() {
     R("the only dump block and loop sit inside a template literal, the real loop is filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\nfor (const step of STEPS.filter(() => false)) {\n}\n` });
     R("a decoy block and loop in a template, the real dump flag spelled \"--list-\" + \"steps\", the real loop filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\n${LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"')}for (const step of STEPS.filter(() => false)) {\n}\n` });
     const REAL_SPLIT = LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"') + "for (const step of STEPS.filter(() => false)) {\n}\n";
+    R("a decoy block and loop inside a template literal whose text starts with `;`, the real dump spelled another way", { breadth: `${stepsDecl(E)}\nconst __doc = \`;\n${LIST_SRC}${LOOP_SRC}\`;\n${REAL_SPLIT}` });
     R("a decoy dump block and loop inside `if (false) { }` with the real dump spelled another way", { breadth: `${stepsDecl(E)}\nif (false) {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop after a statement inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\nconst x = 1;\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });

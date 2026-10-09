@@ -828,6 +828,12 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08
+      # on) citing one in plain text passes it unchecked.
+      - name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)"
+        run: node scripts/check-stamp-citations.mjs
+      - name: "Stamp-citation self-test (the gate can actually fail)"
+        run: node scripts/check-stamp-citations.mjs --self-test
       # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
       # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
       # documents and read by nothing.

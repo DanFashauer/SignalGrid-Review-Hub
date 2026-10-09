@@ -43,12 +43,20 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   connector: ["connector:read", "connector:sync"],
 };
 
+/**
+ * True only for one of the five roles in the matrix. Own-property lookup, never
+ * `in` or a raw index: `constructor`, `__proto__` and `toString` are inherited
+ * members of every object and must NOT read as known roles.
+ */
+export function isKnownRole(role: unknown): role is Role {
+  return typeof role === "string" && Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, role);
+}
+
 function roleHasPermission(role: Role, permission: Permission): boolean {
-  // Own-property lookup, never a raw index: a role string that arrived across
-  // a process boundary (a durable principal row, a seed file) and is not in
-  // the table must resolve to NO permissions, not to a prototype member or a
-  // thrown TypeError from `.includes` on `undefined`.
-  if (!Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS, role)) return false;
+  // A role string that arrived across a process boundary (a durable principal
+  // row, a seed file) and is not in the table must resolve to NO permissions,
+  // not to a prototype member or a thrown TypeError from `.includes` on `undefined`.
+  if (!isKnownRole(role)) return false;
   return ROLE_PERMISSIONS[role].includes(permission);
 }
 

@@ -237,7 +237,7 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
  * no snapshot, or a verified snapshot belonging to another decision, is not a verified
  * record of this one (review round 4 on PR #1321).
  */
-function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: string | null, tenantId: string): boolean {
+function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: string, tenantId: string): boolean {
   const snap = ev["evidence"];
   if (!snap || typeof snap !== "object" || Array.isArray(snap)) return false;
   const s = snap as Record<string, unknown>;
@@ -245,9 +245,9 @@ function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotI
   // evidence is not evidence for this one (review round 10 on PR #1321).
   if (s["tenantId"] !== tenantId) return false;
   if (s["decisionId"] !== decisionId) return false;
-  // `null` only where no decision record was read (`signals`); a record that names no
-  // snapshot id is never a reason to skip the comparison (review round 5).
-  if (snapshotId !== null && (typeof s["id"] !== "string" || s["id"] !== snapshotId)) return false;
+  // Every caller reads the decision record first; a record that names no snapshot id is
+  // never a reason to skip the comparison (review rounds 5 and 13).
+  if (typeof s["id"] !== "string" || s["id"] !== snapshotId) return false;
   return ev["verified"] === true;
 }
 
@@ -329,12 +329,21 @@ async function explain(cfg: Config, id: string): Promise<Out> {
 
 async function signals(cfg: Config, id: string): Promise<Out> {
   const tenant = await confirmTenant(cfg);
+  // The snapshot is bound to the one the RECORDED decision names, as in explain: a verified
+  // snapshot of the right decision id but another snapshot is not this decision's evidence
+  // (review round 13 on PR #1321).
+  const { body: rec } = await call(cfg, "GET", `/v1/decisions/${encodeURIComponent(id)}`);
+  const d = rec["decision"] as Record<string, unknown> | undefined;
+  if (!isObj(d) || d["tenantId"] !== tenant.id || (d["id"] ?? d["decisionId"]) !== id) {
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried no record of that decision in the confirmed tenant; nothing is reported.`, EXIT.refused);
+  }
+  const snapshotId = isSafeId(d["evidenceSnapshotId"]) ? d["evidenceSnapshotId"] : "";
   const { body: ev } = await call(cfg, "GET", `/v1/decisions/${encodeURIComponent(id)}/evidence`);
   const list = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
   if (!Array.isArray(list)) {
     throw new CliError("malformed_answer", "the evidence snapshot named no signalsUsed list; nothing is reported.", EXIT.refused);
   }
-  const verified = boundVerdict(ev, id, null, tenant.id);
+  const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId, tenant.id);
   const rows = (list as Record<string, unknown>[]).map((s) => [
     str(s["category"]), str(s["subjectType"]), str(s["value"]), str(s["freshness"]), str(s["observedAt"]), str(s["sourceReference"]),
   ]);
@@ -367,6 +376,15 @@ function chainVerdict(chain: Record<string, unknown>, source: unknown): { valid:
     if (!hasOk) return { valid: false, label: "UNKNOWN (a durable answer without its `ok` verdict)", length: len };
     if (chain["ok"] !== true) return { valid: false, label: `BROKEN at index ${str(chain["brokenAtIndex"])}`, length: chain["count"] };
     if (chain["truncated"] !== false) return { valid: false, label: "INCONCLUSIVE (the server's verifier stopped at its read cap)", length: chain["count"] };
+    // A verdict that names no ledger vouches for nothing: the count, head hash and scope the
+    // route attaches (lib/audit LedgerVerification + scope) identify what was verified, and
+    // are what the page-to-page pin compares (review round 13 on PR #1321).
+    const count = chain["count"];
+    const head = chain["headHash"];
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0 || typeof head !== "string" || (count > 0 && head === "") ||
+        chain["scope"] !== "global-ledger") {
+      return { valid: false, label: "UNKNOWN (a durable verdict without its count, head hash and scope)", length: count };
+    }
     return { valid: true, label: "valid", length: chain["count"] ?? chain["length"] };
   }
   if (source === "memory") {
@@ -487,8 +505,9 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     if (!Array.isArray(runs)) throw new CliError("malformed_answer", "no syncRuns list in the answer; nothing is reported.", EXIT.refused);
     // Every row must be a run OF this connector in the confirmed tenant, with a well-formed
     // id — the binding `connectors sync` applies to its one run (review round 12).
-    if (!runs.every((r) => isObj(r) && isSafeId(r["id"]) && r["connectorId"] === cid && r["tenantId"] === tenant.id)) {
-      throw new CliError("malformed_answer", `GET /v1/connectors/${cid}/sync-runs listed a run that is not a well-formed run of ${cid} in this tenant; nothing is reported.`, EXIT.refused);
+    if (!runs.every((r) => isObj(r) && isSafeId(r["id"]) && r["connectorId"] === cid && r["tenantId"] === tenant.id &&
+        typeof r["status"] === "string" && SYNC_STATUSES.has(r["status"]))) {
+      throw new CliError("malformed_answer", `GET /v1/connectors/${cid}/sync-runs listed a run that is not a well-formed run of ${cid} in this tenant with a recognised status; nothing is reported.`, EXIT.refused);
     }
     return {
       json: { ok: true, command: "connectors runs", tenant: tenant.id, connectorId: cid, syncRuns: runs },

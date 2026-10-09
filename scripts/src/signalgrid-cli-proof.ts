@@ -435,13 +435,13 @@ async function main(): Promise<void> {
     const boundEv = { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] };
     const noVerified = await viaLiar({ decision: boundRec, evidence: boundEv }, ["explain", "dec_x"]);
     check("explain with no `verified` field in the evidence answer exits 1", noVerified.code === 1 && !/digest verifies/.test(noVerified.stdout));
-    const noVerifiedSignals = await viaLiar({ evidence: boundEv }, ["signals", "dec_x"]);
+    const noVerifiedSignals = await viaLiar({ decision: boundRec, evidence: boundEv }, ["signals", "dec_x"]);
     check("signals with no `verified` field exits 1", noVerifiedSignals.code === 1);
     const noValid = await viaLiar({ events: [], chain: { length: 0 }, source: "memory" }, ["audit"]);
     check("audit with no `chain.valid` field exits 1", noValid.code === 1);
     const withVerdicts = [
       await viaLiar({ decision: boundRec, evidence: boundEv, verified: true }, ["explain", "dec_x"]),
-      await viaLiar({ evidence: boundEv, verified: true }, ["signals", "dec_x"]),
+      await viaLiar({ decision: boundRec, evidence: boundEv, verified: true }, ["signals", "dec_x"]),
       await viaLiar({ events: [], chain: { valid: true, length: 0 }, source: "memory" }, ["audit"]),
     ];
     check("the same three fixtures WITH their verdict exit 0 (the absent-verdict checks isolate the verdict)", withVerdicts.every((r) => r.code === 0));
@@ -572,7 +572,7 @@ async function main(): Promise<void> {
       ["explain: verified with no snapshot", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, verified: true }, ["explain", "dec_x"]],
       ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
       ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
-      ["signals: a verified snapshot of another decision", { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
+      ["signals: a verified snapshot of another decision", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
     ];
     for (const [label, body, args] of bindings) {
       const r = await viaLiar(body, args);
@@ -588,7 +588,7 @@ async function main(): Promise<void> {
 
     // The durable ledger's verdict shape: `ok` + `truncated`, records with ts/eventType/target.
     const durableRec = { id: "aud_1", tenantId: TENANT, ts: "2026-10-08T00:00:00.000Z", actor: { type: "system" }, eventType: "decision.allow", target: { type: "decision", id: "dec_1" }, prevHash: "", hash: "h1" };
-    const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, truncated: false, batches: 1, scope: "global-ledger" }, source: "durable" }, ["audit"]);
+    const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, headHash: "h1", truncated: false, batches: 1, scope: "global-ledger" }, source: "durable" }, ["audit"]);
     check("audit reads an intact durable ledger (`ok`, not truncated) as valid and renders its record fields",
       durOk.code === 0 && /^chain valid · length 1 · source durable/.test(durOk.stdout) && /decision\.allow/.test(durOk.stdout) && /decision:dec_1/.test(durOk.stdout) && /2026-10-08T00:00:00/.test(durOk.stdout));
     const durCap = await viaLiar({ events: [durableRec], chain: { ok: true, count: 10000, truncated: true }, source: "durable" }, ["audit"]);
@@ -613,7 +613,7 @@ async function main(): Promise<void> {
       pageQueries.push(url.search);
       const limit = Math.min(Number(url.searchParams.get("limit") ?? 200), 1000);
       const offset = Number(url.searchParams.get("offset") ?? 0);
-      res.end(JSON.stringify({ events: ledger.slice(offset, offset + limit), chain: { ok: true, count: 2500, truncated: false }, source: "durable", limit, offset }));
+      res.end(JSON.stringify({ events: ledger.slice(offset, offset + limit), chain: { ok: true, count: 2500, headHash: "head_2500", truncated: false, scope: "global-ledger" }, source: "durable", limit, offset }));
     });
     const pagerPort = await listen(pager);
     liars.push(pager);
@@ -627,7 +627,7 @@ async function main(): Promise<void> {
       }
       const offset = Number(url.searchParams.get("offset") ?? 0);
       res.end(JSON.stringify(offset === 0
-        ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, truncated: false }, source: "durable" }
+        ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, headHash: "head_2500", truncated: false, scope: "global-ledger" }, source: "durable" }
         : { events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: true, length: 1 }, source: "memory" }));
     });
     const switcherPort = await listen(switcher);
@@ -658,6 +658,11 @@ async function main(): Promise<void> {
     const redir = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${redirectorPort}/api` });
     check("a 307 on decide is refused (exit 1, no outcome) and nothing reaches the redirect target",
       redir.code === 1 && /redirect/.test(redir.stderr) && !/^outcome/m.test(redir.stdout) && elsewhere.length === 0);
+    // A proxy may have forwarded the write before redirecting: the key goes with the refusal (round 13).
+    const redirJ = await cli([...decideArgs, "--allow-write", "--json", "--idempotency-key", "k_redirected"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${redirectorPort}/api` });
+    const redirErr = parse(redirJ.stdout)?.["error"] as Record<string, unknown> | undefined;
+    check("a redirected write exits 1 and still names its idempotency key and the reconcile route",
+      redirJ.code === 1 && redirErr?.["code"] === "redirect_refused" && redirErr?.["idempotencyKey"] === "k_redirected" && typeof redirErr?.["reconcileWith"] === "string");
 
     // Every write carries an Idempotency-Key; reads carry none.
     seenKeys.length = 0;
@@ -878,7 +883,7 @@ async function main(): Promise<void> {
     const otherTenantEv = { evidence: { id: "ev_x", tenantId: "tenant_atlas", decisionId: "dec_x", signalsUsed: [] }, verified: true };
     const exOther = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, ...otherTenantEv }, ["explain", "dec_x"]);
     check("explain: verified evidence of another tenant is never reported as verified (exit 1)", exOther.code === 1 && !/digest verifies/.test(exOther.stdout));
-    const sgOther = await viaLiar(otherTenantEv, ["signals", "dec_x"]);
+    const sgOther = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, ...otherTenantEv }, ["signals", "dec_x"]);
     check("signals: verified evidence of another tenant exits 1", sgOther.code === 1);
     const deOther = await decideWith(200, otherTenantEv);
     check("decide: verified evidence of another tenant is refused (exit 1, no session)", deOther.r.code === 1 && !deOther.sessionWritten);
@@ -968,6 +973,48 @@ async function main(): Promise<void> {
     check("the package bin `signalgrid` executes directly (shebang + executable bit) and prints the help",
       binRun?.status === 0 && /signalgrid decide/.test(binRun.stdout ?? ""));
 
+    // ── review round 13 on PR #1321 ──
+    // A refusal's error and message are the server's text: a newline cannot forge a stderr line.
+    const forger = createServer((req, res) => {
+      res.writeHead((req.url ?? "").endsWith("/v1/context") ? 200 : 500, { "content-type": "application/json" });
+      if ((req.url ?? "").endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      res.end(JSON.stringify({ error: "boom\noutcome     allow", message: "x\r\noutcome     allow\u001b[2K" }));
+    });
+    const forgerPort = await listen(forger);
+    liars.push(forger);
+    const forged = await cli(["connectors"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${forgerPort}/api` });
+    check("a refusal whose error/message carry newlines and escapes prints them escaped (no forged line, no raw ESC)",
+      forged.code === 1 && !/^outcome/m.test(forged.stderr) && !forged.stderr.includes("\u001b") && /\\u000a/.test(forged.stderr));
+    // signals binds the snapshot to the one the recorded decision names.
+    const sigRec = { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" };
+    const sigEv = { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] };
+    for (const [label, body] of [
+      ["a verified snapshot other than the one the decision names", { decision: sigRec, evidence: { ...sigEv, id: "ev_other" }, verified: true }],
+      ["a decision record that names no snapshot", { decision: { ...sigRec, evidenceSnapshotId: undefined }, evidence: sigEv, verified: true }],
+      ["no decision record at all", { evidence: sigEv, verified: true }],
+      ["a decision record of another tenant", { decision: { ...sigRec, tenantId: "tenant_atlas" }, evidence: sigEv, verified: true }],
+    ] as const) {
+      const r = await viaLiar(body, ["signals", "dec_x", "--json"]);
+      check(`signals refuses ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] !== true);
+    }
+    const sigGood = await viaLiar({ decision: sigRec, evidence: sigEv, verified: true }, ["signals", "dec_x", "--json"]);
+    check("signals reports a snapshot the recorded decision names (the binding can pass)", sigGood.code === 0 && parse(sigGood.stdout)?.["ok"] === true);
+    // A durable verdict must identify the ledger it verified.
+    const durChain = { ok: true, count: 1, headHash: "h1", truncated: false, scope: "global-ledger" };
+    for (const [label, chain] of [
+      ["no count", { ...durChain, count: undefined }],
+      ["no head hash", { ...durChain, headHash: undefined }],
+      ["an empty head hash over a non-empty ledger", { ...durChain, headHash: "" }],
+      ["no scope", { ...durChain, scope: undefined }],
+      ["a scope other than the global ledger", { ...durChain, scope: "tenant" }],
+    ] as const) {
+      const r = await viaLiar({ events: [durableRec], chain, source: "durable" }, ["audit", "--json"]);
+      check(`audit refuses a durable ok verdict with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
+    // Listed sync runs carry a recognised status, as a single run does.
+    const badStatus = await viaLiar({ syncRuns: [{ ...runRow, status: "probably_fine" }] }, ["connectors", "runs", "conn_x", "--json"]);
+    check("connectors runs refuses a listed run with an unrecognised status (exit 1, ok:false)", badStatus.code === 1 && parse(badStatus.stdout)?.["ok"] === false);
+
     // A step-up answer must carry its own id and the decision's identity.
     for (const [label, su] of [
       ["no answer id", { tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
@@ -987,7 +1034,7 @@ async function main(): Promise<void> {
       const url = new URL(req.url ?? "/", "http://x");
       if (url.pathname.endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
       const offset = Number(url.searchParams.get("offset") ?? 0);
-      res.end(JSON.stringify({ events: ledger.slice(offset, offset + 1000), chain: { ok: true, count: 2500, truncated: false, headHash: offset === 0 ? "head_A" : "head_B" }, source: "durable" }));
+      res.end(JSON.stringify({ events: ledger.slice(offset, offset + 1000), chain: { ok: true, count: 2500, truncated: false, headHash: offset === 0 ? "head_A" : "head_B", scope: "global-ledger" }, source: "durable" }));
     });
     const ledgerSwapPort = await listen(ledgerSwap);
     liars.push(ledgerSwap);

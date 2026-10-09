@@ -45,6 +45,10 @@ export interface Config {
   display: string;
 }
 
+/** Server-supplied text in a message: control characters escaped, never printed (round 12). */
+const clean = (v: string): string =>
+  v.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 /**
@@ -190,10 +194,13 @@ export async function call(
   } catch (err) {
     const c = (err as { cause?: { code?: string; message?: string; errors?: Array<{ code?: string }> } }).cause;
     if (/redirect/i.test(c?.message ?? "")) {
+      // The redirect is an answer to a request that WAS sent: a proxy may have forwarded a
+      // keyed write upstream before redirecting, so the key goes with the refusal (round 13).
       throw new CliError(
         "redirect_refused",
-        `${method} ${path}: ${cfg.display} answered with a redirect, which the CLI never follows; nothing is reported.`,
+        `${method} ${path}: ${cfg.display} answered with a redirect, which the CLI never follows; nothing is reported.${lost}`,
         EXIT.refused,
+        extra,
       );
     }
     const cause = c?.code ?? c?.errors?.[0]?.code ?? (err as Error).name;
@@ -235,8 +242,10 @@ export async function call(
   }
   const obj = parsed as Record<string, unknown>;
   if (!res.ok) {
-    const code = typeof obj["error"] === "string" ? obj["error"] : "error";
-    const msg = typeof obj["message"] === "string" ? obj["message"] : "(no message)";
+    // Both fields are the server's text and land in stderr: escaped like every other
+    // server-supplied value, so a newline cannot forge a line (review round 13).
+    const code = typeof obj["error"] === "string" ? clean(obj["error"]) : "error";
+    const msg = typeof obj["message"] === "string" ? clean(obj["message"]) : "(no message)";
     const r = writeRecovery(key, "refused");
     throw new CliError(code, `${method} ${path} refused: HTTP ${res.status} ${code} — ${msg}${r.suffix}`, EXIT.refused, r.extra);
   }

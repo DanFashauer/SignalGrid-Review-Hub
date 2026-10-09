@@ -1,6 +1,6 @@
 {
-  "manifestVersion": 93,
-  "fingerprint": "ba775345b7d0bee7c456e12fd6e8466f7cf57eed0c099c2c882f166377c25749",
+  "manifestVersion": 94,
+  "fingerprint": "6fdc37764c75aee10545001cc073431c120295988bf11c6388d2506215ab087e",
   "body": {
     "schema": "signalgrid-live-sync-manifest/v1",
     "contract": {
@@ -138,7 +138,7 @@
       "mcp-answer-discipline": 55,
       "mcp-server": 11,
       "mobile-app-catalog": 19,
-      "nac": 46,
+      "nac": 59,
       "network-nac": 64,
       "oauth-consent": 74,
       "ot-posture": 47,

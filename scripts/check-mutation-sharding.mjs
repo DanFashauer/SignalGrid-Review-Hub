@@ -163,6 +163,25 @@ check(
   TARGETS.find((t) => t.proof === "proof:graph-connector")?.files.includes("lib/integrations/src/integrations/graph/posture-connector.ts") === true,
 );
 
+// ── Wave 9 (2026-10-09): nac, edr-threat, location-services, peripheral-control and incident-playbook ──
+// join the brace-less sweep, the two nac connectors are re-registered (de-registered 2026-08-25
+// because the mutator could not reach their brace-less guards; it can now), and the three
+// families' mock transports the proofs DRIVE are registered under their existing targets.
+for (const p of ["nac", "edr-threat", "location-services", "peripheral-control", "incident-playbook"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+for (const [proof, file] of [
+  ["proof:nac", "lib/integrations/src/integrations/nac/cisco-ise.ts"],
+  ["proof:nac", "lib/integrations/src/integrations/nac/aruba-clearpass.ts"],
+  ["proof:edr-threat", "lib/integrations/src/integrations/edr-threat/mock-transport.ts"],
+  ["proof:location-services", "lib/integrations/src/integrations/location-services/mock-transport.ts"],
+  ["proof:peripheral-control", "lib/integrations/src/integrations/peripheral-control/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/estate.ts"],
+]) {
+  check(`${proof} keeps ${file.split("/").slice(-2).join("/")} registered`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+
 // ── Wave 8 (2026-10-09): the shared adapter guards, emitter-discipline, the attestation connector ──
 // url-guard (the outbound SSRF-class check), bounded-text, redirect and vendor-values are imported by
 // every emitter family and sat in NO target; emitter-discipline joined the brace-less sweep with all

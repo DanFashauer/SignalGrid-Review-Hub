@@ -1888,14 +1888,15 @@ earlier — that is the loop working, not a reason to soften the record.
     `grep -rln "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*` returns
     `signalgrid-review/index.html`, `signalgrid-mobile-pwa/{index.html,src/index.css}`
     and `signalgrid-desktop/index.html` — three trees, four files.
-    RE-COUNTED 2026-10-09: the same command,
-    `grep -rln "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*`, now
+    RE-COUNTED 2026-10-09: over tracked files only, so a clean clone and a tree
+    holding ignored build output print the same thing,
+    `git grep -ln "fonts.googleapis\|fonts.gstatic" -- 'artifacts/signalgrid-*'`
     prints two files, `artifacts/signalgrid-desktop/index.html` and
     `artifacts/signalgrid-review/index.html` (exit 0) — the mobile-PWA tree
     dropped out when PR #1235 self-hosted it. `node scripts/review-invariants.mjs`
     prints `third-party vendor host in 4 DEMO-ONLY web file(s)` and then four
-    lines, one per (file, host) pair, so its "4" counts hits, not files: two
-    files, four hits.
+    lines, one per (file, host) pair on those same two files, so its "4" counts
+    hits, not files: two files, four hits.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot

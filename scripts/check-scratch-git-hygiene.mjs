@@ -295,7 +295,7 @@ async function selfTest({ inner = false } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), "sg-scratch-hygiene-"));
   // Run from inside tmp: a helper that loses its `-C dir` must hit a scratch directory, not the caller's repo.
   const cwd0 = process.cwd();
-
+  process.chdir(tmp);
   const T = (name) => { const d = join(tmp, name); mkdirSync(join(d, "scripts/lib"), { recursive: true }); writeFileSync(join(d, "scripts/lib/scratch-git.mjs"), "export {};\n"); return d; };
   const put = (d, rel, text) => { mkdirSync(dirname(join(d, rel)), { recursive: true }); writeFileSync(join(d, rel), text); };
   const BARE = 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nspawnSync("git", ["init", "-q"], { cwd: d });\n';

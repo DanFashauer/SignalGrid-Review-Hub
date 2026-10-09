@@ -223,16 +223,43 @@ export function canonicalFindings(blocks) {
   return out;
 }
 
+/**
+ * Pure: collection.bru is a Bruno-evaluated sink (a script block there rewrites every request and carries the bearer token), so it goes
+ * through the strict reader and must be exactly an `auth { mode: bearer }` block and an `auth:bearer { token: {{graphToken}} }` block.
+ * Indented block names, which Bruno accepts and a column-0 regex would miss, are text outside any block here and so refused.
+ */
+export function collectionBruFindings(text) {
+  const out = [];
+  const p = parseBru(text);
+  out.push(...p.fatal.map((f) => `collection.bru: ${f}`));
+  const names = p.blocks.map((bl) => bl.name);
+  if (names.join() !== "auth,auth:bearer") out.push(`collection.bru: blocks [${names.join(", ")}] — exactly auth then auth:bearer are allowed (a collection-level script could rewrite every request and carry the token off-host)`);
+  for (const bl of p.blocks) {
+    const want = bl.name === "auth" ? [["mode", "bearer"]] : [["token", "{{graphToken}}"]];
+    if (JSON.stringify(bl.entries) !== JSON.stringify(want)) out.push(`collection.bru: block \`${bl.name}\` entries ${JSON.stringify(bl.entries)} differ from ${JSON.stringify(want)}`);
+  }
+  return out;
+}
+
+/** Pure: bruno.json may carry only version, name, type and an `ignore` list of node_modules/.git — a `proxy`, `scripts` or `presets` key can reroute traffic. */
+export function brunoJsonFindings(text) {
+  if (typeof text !== "string") return ["bruno.json is missing — the collection manifest cannot be skipped"];
+  let doc;
+  try { doc = JSON.parse(text); } catch (e) { return [`bruno.json does not parse: ${e.message}`]; }
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return ["bruno.json is not an object"];
+  const out = [];
+  for (const k of Object.keys(doc)) if (!["version", "name", "type", "ignore"].includes(k)) out.push(`bruno.json has key \`${k}\` — only version, name, type and ignore are allowed (proxy/scripts/presets/clientCertificates can reroute or rewrite traffic)`);
+  if (doc.ignore !== undefined && !(Array.isArray(doc.ignore) && doc.ignore.every((x) => ["node_modules", ".git"].includes(x)))) out.push("bruno.json `ignore` may list only node_modules and .git (an ignored request file would escape this gate)");
+  for (const k of ["version", "name", "type"]) if (doc[k] !== undefined && typeof doc[k] !== "string") out.push(`bruno.json \`${k}\` is not a string`);
+  return out;
+}
+
 /** Pure: one entry per request file ({ file, method, path }); anything but a GET on `{{baseUrl}}/…` is fatal. */
 export function collectionRequests(filesByName) {
   const fatal = [];
   const requests = [];
   for (const name of Object.keys(filesByName).sort()) {
-    if (name === "collection.bru") {
-      const odd = [...filesByName[name].matchAll(/^([A-Za-z][\w:-]*)\s*\{/gm)].map((b) => b[1]).filter((b) => !["auth", "auth:bearer"].includes(b));
-      if (odd.length > 0) fatal.push(`collection.bru: block(s) ${odd.join(", ")} — only auth blocks are allowed (a collection-level script could rewrite every request)`);
-      continue;
-    }
+    if (name === "collection.bru") { fatal.push(...collectionBruFindings(filesByName[name])); continue; }
     if (!name.endsWith(".bru")) continue;
     const parsed = parseBru(filesByName[name]);
     if (parsed.fatal.length > 0) { fatal.push(...parsed.fatal.map((f) => `${name}: ${f}`)); continue; }
@@ -290,13 +317,13 @@ export function permissionRecord(jsonText) {
 }
 
 /** Pure audit: the connector against the lab collection and permissions.json, both directions. */
-export function auditCollection(connectorSrc, bruByName, permissionsText, envText) {
+export function auditCollection(connectorSrc, bruByName, permissionsText, envText, brunoText) {
   const fatal = [];
   const cr = connectorRequests(connectorSrc);
   const cs = connectorScopes(connectorSrc);
   const col = collectionRequests(bruByName);
   const rec = permissionRecord(permissionsText);
-  fatal.push(...col.fatal, ...rec.fatal);
+  fatal.push(...col.fatal, ...rec.fatal, ...brunoJsonFindings(brunoText));
   const colPaths = new Set(col.requests.map((r) => r.path));
   const perms = new Set(rec.permissions.map((p) => p.permission));
   const usedBy = new Set(rec.permissions.flatMap((p) => p.usedBy));
@@ -360,13 +387,16 @@ export function loadCollection(root) {
   let envText = "";
   try { envText = readFileSync(join(dir, "environments/Sandbox.bru"), "utf8"); }
   catch (e) { fatal.push(`${COLLECTION_DIR}/environments/Sandbox.bru: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — {{baseUrl}} has nothing to resolve to`); }
-  return { bruByName, permissionsText, envText, fatal };
+  let brunoText;
+  try { brunoText = readFileSync(join(dir, "bruno.json"), "utf8"); }
+  catch (e) { fatal.push(`${COLLECTION_DIR}/bruno.json: ${e.code === "ENOENT" ? "missing" : `unreadable (${e.message})`} — the collection manifest cannot be skipped`); }
+  return { bruByName, permissionsText, envText, brunoText, fatal };
 }
 
 /** Everything the gate concludes, in one place so the self-test runs the same aggregation the CLI does. */
 export function auditAll(connectorSrc, docMd, lc) {
   const r = auditBoundary(connectorSrc, docMd);
-  const cr = auditCollection(connectorSrc, lc.bruByName, lc.permissionsText, lc.envText);
+  const cr = auditCollection(connectorSrc, lc.bruByName, lc.permissionsText, lc.envText, lc.brunoText);
   return { boundary: r, counts: cr.counts, fatal: [...r.fatal, ...lc.fatal, ...cr.fatal] };
 }
 
@@ -414,7 +444,7 @@ function selfTest() {
   ].join("\n");
   const P = { probe: "/deviceManagement/managedDevices?$top=1", users: "/users?$select=id,userPrincipalName,accountEnabled", dev: "/deviceManagement/managedDevices", risky: "/identityProtection/riskyUsers?$select=id,riskLevel,riskState" };
   const bru = (path, method = "get", base = "{{baseUrl}}") => `meta {\n  name: x\n}\n\n${method} {\n  url: ${base}${path}\n  body: none\n  auth: inherit\n}\n\ndocs {\n  x\n}\n`;
-  const baseBru = () => ({ "a.bru": bru(P.probe), "b.bru": bru(P.users), "c.bru": bru(P.dev), "d.bru": bru(P.risky), "collection.bru": "auth {\n  mode: bearer\n}\n" });
+  const baseBru = () => ({ "a.bru": bru(P.probe), "b.bru": bru(P.users), "c.bru": bru(P.dev), "d.bru": bru(P.risky), "collection.bru": "auth {\n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" });
   const permObj = () => ({
     application: [
       { permission: "DeviceManagementManagedDevices.Read.All", usedBy: [`GET ${P.probe}`, `GET ${P.dev}`], why: "x" },
@@ -425,7 +455,8 @@ function selfTest() {
   });
   const pj = (o) => JSON.stringify(o);
   const ENV = "vars {\n  baseUrl: https://graph.microsoft.com/v1.0\n  graphToken: x\n}\n";
-  const audit = (src = csrc, b = baseBru(), p = pj(permObj()), env = ENV) => auditCollection(src, b, p, env);
+  const BRUNO = JSON.stringify({ version: "1", name: "x", type: "collection", ignore: ["node_modules", ".git"] });
+  const audit = (src = csrc, b = baseBru(), p = pj(permObj()), env = ENV, br = BRUNO) => auditCollection(src, b, p, env, br);
   const has = (r, ...needles) => r.fatal.some((f) => needles.every((n) => f.includes(n)));
   let c = audit();
   checks.push(["COLLECTION: the connector, four request files and a three-permission record agree (positive control)", c.fatal.length === 0 && c.counts.connectorRequests === 4 && c.counts.collectionFiles === 4 && c.counts.permissions === 3 && c.counts.usedBy === 4]);
@@ -458,7 +489,7 @@ function selfTest() {
   checks.push(["COLLECTION: unparseable permissions.json is FATAL", has(audit(csrc, baseBru(), "{not json"), "does not parse")]);
   checks.push(["COLLECTION: a wrong-shaped permissions.json is FATAL", has(audit(csrc, baseBru(), pj({ application: {} })), "not an array")]);
   const gone = loadCollection(join(repoRoot, "no-such-root"));
-  checks.push(["COLLECTION: a missing directory and a missing permissions.json are each FATAL, never a skip", gone.fatal.length === 3 && gone.fatal.every((f) => f.includes("missing"))]);
+  checks.push(["COLLECTION: a missing directory and a missing permissions.json are each FATAL, never a skip", gone.fatal.length === 4 && gone.fatal.every((f) => f.includes("missing"))]);
   const two = csrc.split("\n").filter((l) => !l.includes("managedDevices`;") && !l.startsWith("const a")).join("\n");
   checks.push(["FLOOR: under three connector request literals is FATAL", has(audit(two), "floor", "connector yields")]);
   b = baseBru(); delete b["c.bru"]; delete b["d.bru"];
@@ -526,6 +557,22 @@ function selfTest() {
     ["an unknown meta key", (t) => t.replace("name: x", "name: x\n  tags: y"), "meta key"],
     ["a backtick in a meta name", (t) => t.replace("name: x", "name: `x`"), "braces, backticks"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND5: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
+  // ---- review round 6: the other Bruno-evaluated sinks, collection.bru and bruno.json ----
+  for (const [label, edit, needle] of [
+    ["an indented script:pre-request block in collection.bru", (t) => t + "\n\tscript:pre-request {\n  req.setUrl('x');\n}\n", "outside any block"],
+    ["a space-indented script block in collection.bru", (t) => t + "\n  script:pre-request {\n  x\n}\n", "outside any block"],
+    ["a column-0 script block in collection.bru", (t) => t + "\nscript:pre-request {\n  x: y\n}\n", "exactly auth then auth:bearer"],
+    ["a changed token in collection.bru", (t) => t.replace("{{graphToken}}", "evil"), "differ from"],
+    ["a changed auth mode in collection.bru", (t) => t.replace("mode: bearer", "mode: none"), "differ from"],
+  ]) { b = baseBru(); b["collection.bru"] = edit(b["collection.bru"]); checks.push([`ROUND6: ${label} is FATAL`, has(audit(csrc, b), "collection.bru", needle)]); }
+  for (const [label, doc, needle] of [
+    ["a proxy block in bruno.json", { version: "1", name: "x", type: "collection", proxy: { enabled: true, hostname: "evil" } }, "proxy"],
+    ["a scripts key in bruno.json", { version: "1", name: "x", type: "collection", scripts: { moduleWhitelist: ["fs"] } }, "scripts"],
+    ["an ignore list that hides a request file", { version: "1", name: "x", type: "collection", ignore: ["node_modules", "users-select.bru"] }, "ignore"],
+    ["a non-string name in bruno.json", { version: "1", name: 7, type: "collection" }, "not a string"],
+  ]) checks.push([`ROUND6: ${label} is FATAL`, has(audit(csrc, baseBru(), pj(permObj()), ENV, JSON.stringify(doc)), "bruno.json", needle)]);
+  checks.push(["ROUND6: an unparseable bruno.json is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV, "{nope"), "bruno.json", "does not parse")]);
+  checks.push(["ROUND6: a missing bruno.json is FATAL", has(auditCollection(csrc, baseBru(), pj(permObj()), ENV), "bruno.json", "missing")]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

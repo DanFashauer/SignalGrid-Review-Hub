@@ -260,6 +260,8 @@ export function collectionRequests(filesByName) {
   const requests = [];
   for (const name of Object.keys(filesByName).sort()) {
     if (name === "collection.bru") { fatal.push(...collectionBruFindings(filesByName[name])); continue; }
+    if (name.includes("/")) { fatal.push(`${name}: a request file in a subdirectory — only top-level request files are allowed (Bruno skips node_modules, .git and folder.bru)`); continue; }
+    if (name === "folder.bru") { fatal.push("folder.bru: a folder-level file Bruno treats specially (it can carry scripts and settings) and never runs as a request — refusing"); continue; }
     if (!name.endsWith(".bru")) continue;
     const parsed = parseBru(filesByName[name]);
     if (parsed.fatal.length > 0) { fatal.push(...parsed.fatal.map((f) => `${name}: ${f}`)); continue; }
@@ -373,7 +375,11 @@ export function loadCollection(root) {
     for (const d of entries) {
       const r = rel ? `${rel}/${d.name}` : d.name;
       if (d.isSymbolicLink()) { fatal.push(`${COLLECTION_DIR}/${r}: a symlink — the gate will not follow it, so what it points at would go unchecked`); continue; }
-      if (d.isDirectory()) { walk(r); continue; }
+      if (d.isDirectory()) {
+        // Bruno hides node_modules, .git, any path containing node_modules, and collection.bru/folder.bru at depth; the gate would still count what is inside. Only environments/ may exist.
+        if (r !== "environments") { fatal.push(`${COLLECTION_DIR}/${r}/: a subdirectory — Bruno skips some directories (node_modules, .git) and treats folder.bru specially, so a request file inside could be counted here and never sent; only environments/ is allowed`); continue; }
+        walk(r); continue;
+      }
       if (rel === "environments") { if (d.name !== "Sandbox.bru") fatal.push(`${COLLECTION_DIR}/${r}: a second environment file — only Sandbox.bru is read, so a different baseUrl here would go unchecked`); continue; }
       if (!d.name.endsWith(".bru")) { if (!["README.md", "bruno.json", "permissions.json"].includes(r)) fatal.push(`${COLLECTION_DIR}/${r}: an unrecognised file — a request format this gate does not read (e.g. .yml) would be invisible to it`); continue; }
       try { bruByName[r] = readFileSync(join(dir, r), "utf8"); }
@@ -519,7 +525,7 @@ function selfTest() {
   b = baseBru(); b["e.bru"] = "meta {\n  name: x\n}\n\ndocs {\n  nothing\n}\n";
   checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "method block")]);
   b = baseBru(); b["extra/groups.bru"] = bru("/groups");
-  checks.push(["ROUND1: a nested request file is read like a top-level one (asserts more -> FATAL)", has(audit(csrc, b), "extra/groups.bru", "asserts")]);
+  checks.push(["ROUND1: a request file in a subdirectory is FATAL", has(audit(csrc, b), "extra/groups.bru", "subdirectory")]);
   // ---- review round 2 plants ----
   const chokeBase = csrc + "\n";
   checks.push(["ROUND2: the live connector has no choke-point violation", chokePointViolations(liveSrc).length === 0]);
@@ -573,6 +579,13 @@ function selfTest() {
   ]) checks.push([`ROUND6: ${label} is FATAL`, has(audit(csrc, baseBru(), pj(permObj()), ENV, JSON.stringify(doc)), "bruno.json", needle)]);
   checks.push(["ROUND6: an unparseable bruno.json is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV, "{nope"), "bruno.json", "does not parse")]);
   checks.push(["ROUND6: a missing bruno.json is FATAL", has(auditCollection(csrc, baseBru(), pj(permObj()), ENV), "bruno.json", "missing")]);
+  // ---- review round 7: files Bruno never runs must not be counted ----
+  for (const where of ["node_modules/b.bru", "xnode_modulesx/b.bru", ".git/b.bru", "sub/collection.bru", "sub/b.bru"]) {
+    b = baseBru(); delete b["b.bru"]; b[where] = bru(P.users);
+    checks.push([`ROUND7: ${where} (hidden or nested for Bruno, counted by a naive walk) is FATAL`, has(audit(csrc, b), where, "subdirectory")]);
+  }
+  b = baseBru(); b["folder.bru"] = "meta {\n  name: x\n}\n";
+  checks.push(["ROUND7: a root folder.bru is FATAL", has(audit(csrc, b), "folder.bru", "folder-level")]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],
@@ -621,7 +634,7 @@ function selfTest() {
       writeFileSync(join(d, "extra/groups.bru"), bru("/groups")); writeFileSync(join(d, "environments/Sandbox.bru"), ENV);
       writeFileSync(join(tmp, PERMISSIONS), pj(permObj())); symlinkSync(join(d, "extra/groups.bru"), join(d, "link.bru"));
       const l = loadCollection(tmp);
-      checks.push(["ROUND1: the loader reads a nested .bru, skips environments/, and refuses a symlink", "extra/groups.bru" in l.bruByName && !("environments/Sandbox.bru" in l.bruByName) && l.fatal.some((f) => f.includes("link.bru") && f.includes("symlink"))]);
+      checks.push(["ROUND1: the loader refuses a subdirectory and a symlink, and skips environments/", !("environments/Sandbox.bru" in l.bruByName) && l.fatal.some((f) => f.includes("extra") && f.includes("subdirectory")) && l.fatal.some((f) => f.includes("link.bru") && f.includes("symlink"))]);
     } finally { rmSync(tmp, { recursive: true, force: true }); }
   }
   checks.push(["ROUND1: unseenBaseUrlUses is 0 on the live connector (every read is a literal)", unseenBaseUrlUses(liveSrc) === 0]);

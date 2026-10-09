@@ -175,6 +175,10 @@ for (const f of ["url-guard", "bounded-text", "redirect", "vendor-values", "emit
 check("proof:device-attestation keeps its connector registered: device-attestation-connector.ts",
   TARGETS.find((t) => t.proof === "proof:device-attestation")?.files.includes("lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts") === true);
 
+check("proof:config-scope keeps the tenant-key guard registered and opted in: store-scope.ts",
+  TARGETS.find((t) => t.proof === "proof:config-scope")?.files.includes("lib/integrations/src/integrations/store-scope.ts") === true
+  && TARGETS.find((t) => t.proof === "proof:config-scope")?.oneLine === true);
+
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);

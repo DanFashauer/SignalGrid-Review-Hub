@@ -634,6 +634,13 @@ export const TARGETS = [
     ],
   },
   {
+    // Wave 8 (2026-10-09), stretch. store-scope.ts is the tenant-key guard every connector config store
+    // keys through; no TARGET named it. config-scope-proof drives all three exports directly.
+    proof: "proof:config-scope",
+    oneLine: true,
+    files: ["lib/integrations/src/integrations/store-scope.ts"],
+  },
+  {
     proof: "proof:edr-threat",
     files: [
       "lib/integrations/src/integrations/edr-threat/edr-connector.ts",

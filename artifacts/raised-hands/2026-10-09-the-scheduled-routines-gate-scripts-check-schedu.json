@@ -7,6 +7,9 @@
   "need": "install the brain-cycle trigger, or retire its row with evidence, in docs/agent/scheduled-routines.json",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T02:44:52.941Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1480 retired the brain-cycle row on mainline (e276446d); the Scheduled routines gate passes"
 }

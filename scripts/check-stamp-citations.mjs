@@ -54,7 +54,7 @@
 // REPORTED, NEVER FAILED: in-scope stamps with no backticked command (node, pnpm, git,
 // grep, sed, ... ; the count is printed by the gate, 3 of 51 on 2026-10-09). A rule
 // demanding one would reject history.
-import { existsSync, statSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -233,13 +233,22 @@ function trackedFiles() {
 }
 
 function runCli(file) {
-  if (!file || !existsSync(file) || statSync(file).isDirectory()) { console.error(`stamp-citations: ${file || "(no file given)"} not readable; failing closed`); return 1; }
+  // One read, no existence check first: a check-then-read pair is a race (CodeQL
+  // js/file-system-race), and the read itself reports a missing file or a directory.
+  let text;
+  try {
+    if (!file) throw new Error("no file given");
+    text = readFileSync(file, "utf8");
+  } catch {
+    console.error(`stamp-citations: ${file || "(no file given)"} not readable; failing closed`);
+    return 1;
+  }
   let tracked;
   try { tracked = trackedFiles(); } catch (e) { console.error(`stamp-citations: git ls-files failed (${String(e.message).split("\n")[0]}); failing closed`); return 1; }
   const roots = stampRoots(tracked);
   const bad = preconditionError(tracked, roots);
   if (bad) { console.error(`stamp-citations: ${bad}; failing closed`); return 1; }
-  const r = check(readFileSync(file, "utf8"), roots, (p) => tracked.has(p), {}, IN_SCOPE_FLOOR);
+  const r = check(text, roots, (p) => tracked.has(p), {}, IN_SCOPE_FLOOR);
   console.log(`stamp-citations: ${r.stamps} stamps, ${r.inScope} dated ${STAMP_RULE_FROM} or later, ${r.tokens} path tokens checked, ${r.violations.length} violations`);
   console.log(`report only: ${r.noCommand} of ${r.inScope} in-scope stamps carry no backticked command in the ${CMD_WINDOW} characters after the marker`);
   for (const e of r.errors) console.error(`  FAIL ${e}`);
@@ -335,6 +344,10 @@ function selfTest() {
     }
     const noArg = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--file"], { encoding: "utf8" });
     say(noArg.status === 1 && noArg.stderr.includes("failing closed"), "CLI: --file with no argument -> exit 1 with a stated failure");
+    for (const [label, target] of [["a missing file", join(dir, "absent.md")], ["a directory", dir]]) {
+      const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--file", target], { encoding: "utf8" });
+      say(r.status === 1 && r.stderr.includes("failing closed"), `CLI: --file naming ${label} -> exit 1 with a stated failure`);
+    }
     const noGit = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { encoding: "utf8", env: { ...process.env, GIT_DIR: "/nonexistent" } });
     say(noGit.status === 1 && noGit.stderr.includes("failing closed"), "CLI: unreadable git state -> exit 1 with a stated failure");
   } finally {

@@ -115,6 +115,22 @@ export function idempotencyKey(given: string | undefined): string {
 }
 
 /**
+ * What a write that got no usable answer must still tell the operator: the key that
+ * recovers it, and the limits of that recovery. Used on EVERY post-send failure of a
+ * keyed write — no answer, a dropped body, a body that is not JSON, a 2xx that carries
+ * no recognisable result — because each of them may sit behind a committed write
+ * (review round 8 on PR #1321).
+ */
+export function writeRecovery(key: string | undefined): { suffix: string; extra: Record<string, unknown> | undefined } {
+  return key
+    ? {
+        suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check \`signalgrid audit\` for the write before retrying.`,
+        extra: { idempotencyKey: key },
+      }
+    : { suffix: "", extra: undefined };
+}
+
+/**
  * Every request the CLI makes. `method` other than GET is a write, and every write
  * carries an Idempotency-Key (artifacts/api-server/src/middlewares/idempotency.ts).
  * When a write gets no answer, the server may still have recorded it, so the error
@@ -135,10 +151,7 @@ export async function call(
   key?: string,
 ): Promise<Answer> {
   if (method !== "GET" && !key) throw new CliError("unexpected", `${method} ${path} without an idempotency key; nothing was sent.`, EXIT.usage);
-  const lost = key
-    ? ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check \`signalgrid audit\` for the write before retrying.`
-    : "";
-  const extra = key ? { idempotencyKey: key } : undefined;
+  const { suffix: lost, extra } = writeRecovery(key);
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl}${path}`, {
@@ -188,12 +201,13 @@ export async function call(
   } catch {
     throw new CliError(
       "malformed_answer",
-      `${method} ${path} answered HTTP ${res.status} with a body that is not JSON; nothing is reported.`,
+      `${method} ${path} answered HTTP ${res.status} with a body that is not JSON; nothing is reported.${lost}`,
       EXIT.refused,
+      extra,
     );
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new CliError("malformed_answer", `${method} ${path} answered with JSON that is not an object.`, EXIT.refused);
+    throw new CliError("malformed_answer", `${method} ${path} answered with JSON that is not an object; nothing is reported.${lost}`, EXIT.refused, extra);
   }
   const obj = parsed as Record<string, unknown>;
   if (!res.ok) {

@@ -18,7 +18,7 @@
  *      SIGNALGRID_BASE_URL.
  */
 import { parseArgs } from "node:util";
-import { call, CliError, confirmTenant, EXIT, idempotencyKey, isSafeId, readConfig, safeId, type Config } from "./client.js";
+import { call, CliError, confirmTenant, EXIT, idempotencyKey, isSafeId, readConfig, safeId, writeRecovery, type Config } from "./client.js";
 import { checkSessionWritable, readSession, sessionPath, writeSession } from "./session.js";
 
 /** The four words a host app obeys (lib/signalgrid-core/src/types.ts DecisionOutcome). */
@@ -140,10 +140,13 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   // An EvaluateResult always names its evidence snapshot; a verdict with no evidence
   // binding is not a decision the CLI reports, however well-formed the outcome (round 6).
   if (!d || typeof outcome !== "string" || !OUTCOMES.has(outcome) || !isSafeId(d["decisionId"]) || !isSafeId(d["evidenceSnapshotId"])) {
+    // The 2xx means the server may have recorded a decision: the key goes with the refusal.
+    const r = writeRecovery(key);
     throw new CliError(
       "malformed_answer",
-      "POST /v1/decisions/evaluate answered without a recognisable outcome, decision id and evidence snapshot id; nothing is reported as decided.",
+      `POST /v1/decisions/evaluate answered without a recognisable outcome, decision id and evidence snapshot id; nothing is reported as decided.${r.suffix}`,
       EXIT.refused,
+      r.extra,
     );
   }
   // The decision now EXISTS on the server. A session write that still fails (a race on
@@ -343,7 +346,8 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     // A well-formed id and a recognised status, or nothing is reported (review round 7): an
     // empty or newline-bearing id would otherwise pass as an answer and rewrite the output.
     if (!run || !isSafeId(run["id"]) || typeof run["status"] !== "string" || !SYNC_STATUSES.has(run["status"])) {
-      throw new CliError("malformed_answer", `POST ${path} carried no sync run with a well-formed id and a recognised status; nothing is reported.`, EXIT.refused);
+      const r = writeRecovery(key);
+      throw new CliError("malformed_answer", `POST ${path} carried no sync run with a well-formed id and a recognised status; nothing is reported.${r.suffix}`, EXIT.refused, r.extra);
     }
     return {
       json: { ok: true, command: "connectors sync", tenant: tenant.id, sent: true, syncRun: run },
@@ -455,6 +459,34 @@ function help(): string {
  * anything is sent: a stray operand is a typo, and a typo must never ride along on a
  * write that mints a decision (review round 5 on PR #1321).
  */
+/** Each command's own options; anything else given to it is refused (review round 8). */
+const OPTIONS: Record<string, readonly string[]> = {
+  decide: ["json", "help", "identity", "device", "workflow", "allow-write", "idempotency-key"],
+  explain: ["json", "help"],
+  signals: ["json", "help"],
+  audit: ["json", "help", "limit"],
+  connectors: ["json", "help"],
+  skill: ["json", "help"],
+};
+
+/**
+ * parseArgs knows every command's options at once, so an option that belongs to another
+ * command would otherwise be accepted and ignored — riding along on a write it was never
+ * part of. Checked before configuration is read or anything is sent.
+ */
+function checkOptions(command: string, rest: string[], v: Values): void {
+  const allowed = new Set(OPTIONS[command]);
+  // `--allow-write` and `--idempotency-key` belong to `connectors sync` alone.
+  if (command === "connectors" && rest[0] === "sync") {
+    allowed.add("allow-write");
+    allowed.add("idempotency-key");
+  }
+  const stray = Object.keys(v).filter((k) => (v as Record<string, unknown>)[k] !== undefined && !allowed.has(k));
+  if (stray.length > 0) {
+    throw new CliError("usage", `option(s) not accepted by ${command}: ${stray.map((k) => `--${k}`).join(" ")}. Usage: ${COMMANDS[command]!.usage}; nothing was sent.`, EXIT.usage);
+  }
+}
+
 function checkArity(command: string, rest: string[]): void {
   const ok =
     command === "explain" || command === "signals" ? rest.length <= 1
@@ -502,6 +534,7 @@ export async function main(argv: string[], env: NodeJS.ProcessEnv): Promise<{ st
     // An own-property check: `in` would accept inherited keys such as "constructor".
     if (!Object.hasOwn(COMMANDS, command)) throw new CliError("usage", `unknown command "${command}". Run signalgrid --help.`, EXIT.usage);
     checkArity(command, rest);
+    checkOptions(command, rest, v);
     if (command === "skill") {
       const md = renderSkillMd();
       return { stdout: json ? `${JSON.stringify({ ok: true, command: "skill", skillMd: md }, null, 2)}\n` : md, stderr: "", exit: EXIT.ok };

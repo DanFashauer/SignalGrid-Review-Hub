@@ -322,7 +322,7 @@ async function main(): Promise<void> {
       check(`a remote https base URL (${remote.split("/")[2]}) is refused before any request (exit 2)`,
         r.code === 2 && /loopback/.test(String((parse(r.stdout)?.["error"] as Record<string, unknown> | undefined)?.["message"])));
     }
-    for (const [label, body] of [["no verdict", {}], ["a word outside the four", { decision: { decisionId: "dec_x", outcome: "probably_fine" } }]] as const) {
+    for (const [label, body] of [["no verdict", {}], ["a word outside the four", { decision: { decisionId: "dec_x", outcome: "probably_fine", evidenceSnapshotId: "ev_x" } }]] as const) {
       const liar = await startLiar(body);
       liars.push(liar.server);
       const r = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${liar.port}/api` });
@@ -441,7 +441,9 @@ async function main(): Promise<void> {
       unbound.code === 1 && !/^outcome/m.test(unbound.stdout) && !existsSync(unboundSession));
 
     // decide refuses a decision id the server should never mint.
-    const badId = await viaLiar({ decision: { decisionId: "../x", outcome: "allow" } }, [...decideArgs, "--allow-write"]);
+    // Well-formed in every other respect (an evidence snapshot id included), so the id
+    // shape alone is what refuses it (round 8).
+    const badId = await viaLiar({ decision: { decisionId: "../x", outcome: "allow", evidenceSnapshotId: "ev_x" } }, [...decideArgs, "--allow-write"]);
     check("decide refuses a server-minted decision id outside the id shape (exit 1)", badId.code === 1 && !/^outcome/m.test(badId.stdout));
 
     // A body that drops mid-read is no answer at all: exit 3, never a partial success.
@@ -695,6 +697,57 @@ async function main(): Promise<void> {
       const r = await cli([name], env);
       check(`"${name}" is an unknown command (exit 2, nothing sent)`, r.code === 2 && /unknown command/.test(r.stderr) && seen.length === 0);
     }
+
+    // Each command's option set is exact: an option belonging to another command is
+    // refused before anything is sent, above all on a write (round 8).
+    for (const [label, args] of [
+      ["decide with --limit and --allow-write", [...decideArgs, "--limit", "3", "--allow-write"]],
+      ["connectors sync with --workflow and --allow-write", ["connectors", "sync", connId, "--workflow", "typo", "--allow-write"]],
+      ["connectors (list) with --allow-write", ["connectors", "--allow-write"]],
+      ["explain with --identity", ["explain", seedId, "--identity", "x"]],
+    ] as const) {
+      seen.length = 0;
+      const r = await cli([...args], env);
+      check(`${label} exits 2 and sends nothing`, r.code === 2 && /not accepted by/.test(r.stderr) && seen.length === 0);
+    }
+
+    // A session file holding valid JSON that is not an object is a configuration error (round 8).
+    for (const [label, text] of [["null", "null"], ["an array", "[]"], ["a number", "7"]] as const) {
+      const f = join(sessionDir, `json-${label.replace(/\W/g, "")}.json`);
+      writeFileSync(f, text);
+      seen.length = 0;
+      const r = await cli(["explain", "--json"], { ...env, SIGNALGRID_CLI_SESSION: f });
+      check(`a session file holding ${label} exits 2 (session_invalid) and requests nothing`,
+        r.code === 2 && (parse(r.stdout)?.["error"] as Record<string, unknown> | undefined)?.["code"] === "session_invalid" && seen.length === 0);
+    }
+
+    // A keyed write that gets an answer the CLI cannot read still names its key (round 8).
+    const garbler = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end("<html>proxy error page</html>");
+    });
+    const garblerPort = await listen(garbler);
+    liars.push(garbler);
+    for (const [label, args] of [
+      ["decide", [...decideArgs, "--allow-write", "--json"]],
+      ["connectors sync", ["connectors", "sync", "conn_x", "--allow-write", "--json"]],
+    ] as const) {
+      const r = await cli([...args], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${garblerPort}/api` });
+      const e = parse(r.stdout)?.["error"] as Record<string, unknown> | undefined;
+      check(`${label} whose 2xx body is not JSON exits 1 and still names its idempotency key`,
+        r.code === 1 && e?.["code"] === "malformed_answer" && typeof e?.["idempotencyKey"] === "string" && String(e?.["message"]).includes("--idempotency-key"));
+    }
+    const unboundJ = await viaLiar({ decision: { decisionId: "dec_x", outcome: "allow" } }, [...decideArgs, "--allow-write", "--json"]);
+    check("decide whose 2xx carries no evidence binding exits 1 and still names its idempotency key",
+      unboundJ.code === 1 && typeof (parse(unboundJ.stdout)?.["error"] as Record<string, unknown> | undefined)?.["idempotencyKey"] === "string");
+    const syncBadJ = await viaLiar({ syncRun: { id: "", status: "" } }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
+    check("connectors sync whose 2xx carries no usable run exits 1 and still names its idempotency key",
+      syncBadJ.code === 1 && typeof (parse(syncBadJ.stdout)?.["error"] as Record<string, unknown> | undefined)?.["idempotencyKey"] === "string");
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

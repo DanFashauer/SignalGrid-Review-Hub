@@ -99,12 +99,18 @@ export function readSession(path: string | null, cfg: Config): SessionData | nul
   } finally {
     closeSync(fd);
   }
-  let data: SessionData;
+  let parsed: unknown;
   try {
-    data = JSON.parse(text) as SessionData;
+    parsed = JSON.parse(text);
   } catch {
     throw new CliError("session_invalid", `session file ${path} is not valid JSON; refusing to guess.`, EXIT.usage);
   }
+  // Valid JSON is not yet a session: `null`, an array or a scalar is refused as the same
+  // configuration error, never read field by field into a TypeError (review round 8).
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CliError("session_invalid", `session file ${path} does not hold a session object; refusing to guess.`, EXIT.usage);
+  }
+  const data = parsed as SessionData;
   // A session minted against another server or tenant does not apply here.
   if (data.version !== 1 || data.baseUrl !== cfg.baseUrl || data.tenant !== cfg.tenant) return null;
   if (data.lastDecisionId !== null) safeId(String(data.lastDecisionId), "the session's last decision id");

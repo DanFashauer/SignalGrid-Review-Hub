@@ -233,7 +233,7 @@ const probe = { kind: "api-probe", script: "scripts/w.mjs" };
 
 /** Lay a fixture repo under a temp dir and return its root. */
 function fixture({ workflows, registry, extraFiles = {}, preflight = '[{ cmd: ["node", "scripts/w.mjs"] }]', ci = "run: node scripts/w.mjs\n" }) {
-  const root = mkdtempSync(join(tmpdir(), "swl-"));
+  const root = mkdtempSync(join(realpathSync(tmpdir()), "swl-"));
   mkdirSync(join(root, ".github/workflows"), { recursive: true });
   mkdirSync(join(root, "docs/agent"), { recursive: true });
   mkdirSync(join(root, "scripts"), { recursive: true });
@@ -310,7 +310,7 @@ function selfTest() {
   // mutants of the gate itself: each must turn the self-test red
   if (!process.argv.includes("--no-mutants")) {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
-    const tmp = mkdtempSync(join(tmpdir(), "swl-mut-"));
+    const tmp = mkdtempSync(join(realpathSync(tmpdir()), "swl-mut-"));
     try {
       const kindsUrl = pathToFileURL(join(here, "lib/raised-hand-kinds.mjs")).href;
       const mutants = [
@@ -333,7 +333,7 @@ function selfTest() {
         const file = join(tmp, `${token.replace(/\W/g, "_")}.mjs`);
         writeFileSync(file, src.replace(marker, repl).replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
-        note(`mutant ${token} (${what}) turns the self-test red`, r.status === 1, `exit ${r.status}`);
+        note(`mutant ${token} (${what}) turns the self-test red`, r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }
       // a mutant of the entry guard: compare unresolved paths (the macOS tmpdir fail-open)
       const rp = "if (real(process.argv[1] ?? " + '"") === real(fileURLToPath(import.meta.url))) {';
@@ -342,7 +342,7 @@ function selfTest() {
         const file = join(tmp, "realpath.mjs");
         writeFileSync(file, src.replace(rp, 'if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {').replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
-        note("mutant realpath (entry guard without real paths) turns the self-test red", r.status === 1, `exit ${r.status}`);
+        note("mutant realpath (entry guard without real paths) turns the self-test red", r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }
       // a mutant of the comment stripper: the decoy in a comment must stop being ignored
       const cm = 'c === "#" && (i === 0 || /\\s/.test(line[i - 1]))';
@@ -351,7 +351,7 @@ function selfTest() {
         const file = join(tmp, "comments.mjs");
         writeFileSync(file, src.replace(cm, "false").replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
-        note("mutant comments (comment stripping disabled) turns the self-test red", r.status === 1, `exit ${r.status}`);
+        note("mutant comments (comment stripping disabled) turns the self-test red", r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }
     } finally {
       rmSync(tmp, { recursive: true, force: true });

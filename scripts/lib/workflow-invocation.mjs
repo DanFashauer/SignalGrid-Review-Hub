@@ -88,6 +88,33 @@ function foldScalar(first, cont, base) {
   return out;
 }
 
+/** Pure: is the `run:` key on line `i` a STEP's `run:` — the key of a mapping that is an item of a `steps:` list?
+ *  (review round 6, PR #1460) A `run:` under `with:`, `env:`, `defaults:` or a matrix `include:` is not a step, so it
+ *  can never credit a gate. A `run:` that is not a list item or step-mapping key, or whose list sits under any key but `steps:`, is NOT a step. */
+function isStepRun(lines, i, m, keyCol) {
+  let dashLine = -1;
+  if (m[2]) dashLine = i;
+  else {
+    for (let j = i - 1; j >= 0; j--) {
+      if (lines[j].trim() === "" || indentOf(lines[j]) >= keyCol) continue;
+      const d = /^[ \t]*-[ \t]+/.exec(lines[j]);
+      if (d && d[0].length === keyCol) dashLine = j;
+      break;
+    }
+  }
+  if (dashLine < 0) return false;
+  const dashCol = indentOf(lines[dashLine]);
+  for (let j = dashLine - 1; j >= 0; j--) {
+    const l = lines[j];
+    if (l.trim() === "") continue;
+    const ind = indentOf(l);
+    if (ind > dashCol) continue;
+    if (ind === dashCol && /^[ \t]*-([ \t]|$)/.test(l)) continue; // a sibling list item
+    return /^[ \t]*steps:[ \t]*$/.test(l);
+  }
+  return true; // a bare `- run:` snippet with no parent key at all (the parity self-test's fixtures); no real workflow has one
+}
+
 /** Pure: one record per `run:` step in YAML (comments already stripped): the command text the
  *  shell receives, and whether the step is `continue-on-error` (anything but a literal
  *  `false`: its failure cannot fail CI). Scalar styles follow YAML: `|` literal (lines kept,
@@ -100,6 +127,7 @@ export function runSteps(text) {
     const m = /^([ \t]*)(-[ \t]+)?run:[ \t]*(.*)$/.exec(lines[i]);
     if (!m) continue;
     const keyCol = m[1].length + (m[2] ? m[2].length : 0);
+    if (!isStepRun(lines, i, m, keyCol)) continue;
     let inline = m[3].trim();
     const ind = /^([|>])[+-]?\d*$/.exec(inline);
     const style = ind ? ind[1] : "plain";

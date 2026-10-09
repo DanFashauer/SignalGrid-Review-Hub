@@ -153,7 +153,30 @@ export function namesControl(src) {
  *  a declaration, a reassignment, `x.STEPS = …`). The registration scan trusts a source only when this is
  *  exactly 1, so a parked or later-reassigned list cannot stand in for the array the runner iterates. */
 export function stepsAssignments(source) {
-  return (stripComments(source, { maskStrings: true }).match(/\bSTEPS\s*=(?!=)/g) ?? []).length;
+  const m = stripComments(source, { maskStrings: true });
+  const plain = (m.match(/\bSTEPS\s*(?:\*\*|&&|\|\||\?\?|<<|>>>?|[-+*\/%&|^])?=(?!=)/g) ?? []).length;
+  const destructured = (m.match(/[\[{,]\s*STEPS\s*[\]},]\s*=(?!=)/g) ?? []).length; // [STEPS] = … / ({ STEPS } = …)
+  return plain + destructured;
+}
+
+/** Pure: why the `STEPS` list cannot be trusted as the list the runner iterates — empty when it can. The
+ *  declaration must end at its closing bracket with `;` (so `.filter(…)`/`.slice(…)` post-processing is out)
+ *  and nothing may mutate it afterwards (`.splice`, `.pop`, `.length = …`, …). Reads (`.map`, `for…of`) are fine.
+ *  Stated limit: a list changed through an ALIAS (`const s = STEPS; s.length = 0`) is not seen. */
+export function stepsMutations(source) {
+  const m = stripComments(source, { maskStrings: true });
+  const out = [];
+  const open = /^(?:export\s+)?(?:const|let|var)\s+STEPS\s*=\s*\[/m.exec(m);
+  if (open) {
+    let depth = 0, end = -1;
+    for (let k = open.index + open[0].length - 1; k < m.length; k++) {
+      if (m[k] === "[") depth++;
+      else if (m[k] === "]" && --depth === 0) { end = k; break; }
+    }
+    if (end < 0 || !/^\s*;/.test(m.slice(end + 1))) out.push("the STEPS declaration does not end at its closing bracket with `;` (post-processed?)");
+  }
+  if (/\bSTEPS\s*\.\s*(?:splice|pop|shift|unshift|push|sort|reverse|fill|copyWithin)\b|\bSTEPS\s*\.\s*length\s*=(?!=)/.test(m)) out.push("STEPS is mutated after its declaration");
+  return out;
 }
 
 /** Pure: gate file names invoked WITH `--self-test` by STEPS-style `{ name: "…", cmd: [...] }`
@@ -168,7 +191,7 @@ export function selfTestFilesInSteps(source, aliases = new Map()) {
   if (masked.length !== live.length) return out; // the two views must align; if not, credit nothing
   // Only the `STEPS = [ … ]` array counts: an object literal elsewhere in the file (dead code, a parked list)
   // is not a step. Brackets are counted on the masked view, so a bracket in a string cannot unbalance it.
-  if (stepsAssignments(source) !== 1) return out; // ambiguous or absent: credit nothing (runGate reports it)
+  if (stepsAssignments(source) !== 1 || stepsMutations(source).length > 0) return out; // ambiguous, absent or altered: credit nothing (runGate reports it)
   const open = /^(?:export\s+)?(?:const|let|var)\s+STEPS\s*=\s*\[/m.exec(masked);
   if (!open) return out;
   let depth = 0, end = -1;
@@ -201,10 +224,10 @@ export function gateAliases(pkgScripts) {
 
 /** Pure: the event names in an inline `on:` value — a scalar (`push`), a flow sequence (`[push, pull_request]`)
  *  or the TOP-LEVEL keys of a flow mapping (`{ push: {…}, workflow_dispatch: { inputs: { push: … } } }`; nested keys
- *  do not count). A value holding a quote, or anything else, yields no event, which is the tight answer. */
+ *  do not count). A value holding a quote, tag (`!`), anchor (`&`) or alias (`*`), or anything else, yields no event, which is the tight answer. */
 export function inlineEvents(value) {
   const v = value.trim();
-  if (/["']/.test(v)) return []; // a quoted string can hide a structural character; the tight answer is no event at all
+  if (/["'!&*]/.test(v)) return []; // quotes, tags, anchors and aliases can hide a structural character; the tight answer is no event at all
   const unq = (x) => x.trim();
   if (v.startsWith("[") || v.startsWith("{")) {
     const mapping = v.startsWith("{");
@@ -319,6 +342,7 @@ export function runGate(root, { floor = DEFAULT_FLOOR, spawn = realSpawn } = {})
     if (lane.endsWith("preflight.mjs") && /\bcmd:\s*\[/.test(stripComments(text))) stepSources++;
     const n = stepsAssignments(text);
     if (n !== 1) problems.push(`${lane} holds ${n} \`STEPS =\` assignments, expected exactly 1 — the registration scan cannot tell which list the runner iterates`);
+    for (const why of stepsMutations(text)) problems.push(`${lane}: ${why} — the registration scan cannot trust the list`);
     for (const f of selfTestFilesInSteps(text, aliases)) registered.add(f);
   }
   const wfDir = join(root, ".github", "workflows");
@@ -379,7 +403,7 @@ function selfTest() {
     const r = self(root);
     note(`RED: ${label}`, r.status === 1 && (file ? out(r).includes(file) : true) && (extra ? extra.test(out(r)) : true), `exit ${r.status}`);
   };
-  const stepOf = (f) => `  - name: s\n    run: ${f}\n`;
+  const stepOf = (f) => `      - name: s\n        run: ${f}\n`;
   const CMD = "node scripts/check-bad.mjs --self-test";
 
   try {
@@ -409,6 +433,20 @@ function selfTest() {
     R("a plain flag-less workflow run", { workflow: stepOf("node scripts/check-bad.mjs") });
     R("a plain flag-less `pnpm run <alias>` workflow run", { pkg: { gz: "node scripts/check-bad.mjs" }, workflow: stepOf("pnpm run gz") });
     R("a run of --self-test-not", { workflow: stepOf("node scripts/check-bad.mjs --self-test-not") });
+    R("a `with:` child keyed run:", { workflow: `      - uses: actions/github-script@v7\n        with:\n          run: ${CMD}\n` });
+    R("an `env:` child keyed run:", { workflow: `      - name: x\n        env:\n          run: ${CMD}\n        run: echo ok\n` });
+    R("a matrix include entry keyed run:", { workflow: `  b:\n    strategy:\n      matrix:\n        include:\n          - run: ${CMD}\n` });
+    R("a `defaults: run:` mapping", { workflow: `  b:\n    defaults:\n      run:\n        shell: bash\n    steps:\n      - run: echo ${CMD}\n` });
+    const E = '{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }';
+    red("a post-processed STEPS list is reported even when every gate is fine", mkTree("red-steps-mut", { "check-good.mjs": GOOD_ST }, { breadth: "const STEPS = [].filter(() => true);\n" }), "verify-breadth.mjs", /post-processed/);
+    red("a mutated STEPS list is reported even when every gate is fine", mkTree("red-steps-mut2", { "check-good.mjs": GOOD_ST }, { breadth: "const STEPS = [];\nSTEPS.pop();\n" }), "verify-breadth.mjs", /mutated/);
+    R("a STEPS list post-processed with .filter(() => false)", { breadth: `const STEPS = [${E}].filter(() => false);\n` });
+    R("a STEPS list emptied with .length = 0", { breadth: `const STEPS = [${E}];\nSTEPS.length = 0;\n` });
+    R("a STEPS list emptied with .splice(0)", { breadth: `const STEPS = [${E}];\nSTEPS.splice(0);\n` });
+    R("a STEPS list popped", { breadth: `const STEPS = [${E}];\nSTEPS.pop();\n` });
+    R("a STEPS list cleared with &&=", { breadth: `let STEPS = [${E}];\nSTEPS &&= [];\n` });
+    R("a STEPS list destructured over", { breadth: `let STEPS = [${E}];\n[STEPS] = [[]];\n` });
+    R("an inline `on:` whose unquoted verbatim tag hides a push key", { workflow: stepOf(CMD), on: "on: { workflow_dispatch: !<a,push:> x }\n" });
     R("a `parked.STEPS = [` assignment ahead of the real STEPS", { breadth: `parked.STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nconst STEPS = [];\n` });
     R("a reassigned STEPS (let STEPS = [entry]; STEPS = [])", { breadth: `let STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\nSTEPS = [];\n` });
     R("a lone `cfg.STEPS = [` list (no declaration)", { breadth: `cfg.STEPS = [{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }];\n` });
@@ -479,6 +517,9 @@ function selfTest() {
     note("pure: a regex literal after `else return` holding /* does not hide a handler", hasHandler('else return /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));
     note("pure: inline on: values read scalars, sequences and only TOP-LEVEL mapping keys", JSON.stringify(inlineEvents("push")) === '["push"]' && JSON.stringify(inlineEvents("[push, pull_request]")) === '["push","pull_request"]' && JSON.stringify(inlineEvents("{ workflow_dispatch: { inputs: { push: {} } } }")) === '["workflow_dispatch"]' && JSON.stringify(inlineEvents("{ push: { branches: [a, b] }, workflow_dispatch: {} }")) === '["push","workflow_dispatch"]' && runsOnChange("on: { push: {} }\n") && !runsOnChange("on: { workflow_dispatch: { inputs: { pull_request: {} } } }\n"));
     note("pure: a STEPS count of exactly one is required (declaration + reassignment = 2)", stepsAssignments("const STEPS = [];\n") === 1 && stepsAssignments("let STEPS = [];\nSTEPS = [];\n") === 2 && stepsAssignments("// STEPS = []\nconst s = 'STEPS = 1';\nconst STEPS = [];\n") === 1);
+    note("pure: stepsMutations flags post-processing and mutation, not reads", stepsMutations("const STEPS = [].filter(() => 1);\n").length === 1 && stepsMutations("const STEPS = [];\nSTEPS.splice(0);\n").length === 1 && stepsMutations("const STEPS = [];\nfor (const s of STEPS) f(s);\nconst n = new Set(STEPS.map((s) => s.cmd));\n").length === 0);
+    note("pure: stepsAssignments counts compound and destructuring assignment", stepsAssignments("let STEPS = [];\nSTEPS ??= [];\n") === 2 && stepsAssignments("let STEPS = [];\n({ STEPS } = x);\n") === 2);
+    note("pure: a tag, anchor or alias in an inline on: value yields no event", inlineEvents("{ workflow_dispatch: !<a,push:> x }").length === 0 && inlineEvents("{ push: &a {} }").length === 0 && inlineEvents("{ push: *a }").length === 0);
     note("pure: a quote in an inline on: value yields no event", inlineEvents("{ workflow_dispatch: { description: '}, push: {' } }").length === 0 && inlineEvents('[\"push\"]').length === 0);
     note("pure: runsOnChange reads only direct children of on:", !runsOnChange("on:\n  workflow_dispatch:\n    inputs:\n      push:\n        type: boolean\n") && runsOnChange("on:\n  push:\n    branches: [a]\n"));
     note("pure: a regex after a bare else holding /* does not hide a handler", hasHandler('if (a) b(); else /[/*]/.test(s);\nif (a.includes("--self-test")) f();\n/* end */\n'));

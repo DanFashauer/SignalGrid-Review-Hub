@@ -505,6 +505,11 @@ function selfTest() {
   checks.push(["KNOWN GAP: `bash scripts/mac/x.sh --self-test || true` is still credited", sh("  - run: bash scripts/mac/x.sh --self-test || true\n") === true]);
   checks.push(["KNOWN GAP: a heredoc body naming the script is still credited", sh("  - run: |\n      cat <<'EOF'\n      bash scripts/mac/x.sh --self-test\n      EOF\n") === true]);
   checks.push(["KNOWN GAP: a step `if: false` condition is still credited", sh("  - if: false\n    run: bash scripts/mac/x.sh --self-test\n") === true]);
+  const stepCount = (yaml) => runSteps(yaml).length;
+  checks.push(["a `run:` under `with:` is not a step", stepCount("jobs:\n  j:\n    steps:\n      - uses: x\n        with:\n          run: echo a\n") === 0]);
+  checks.push(["a `run:` under `env:` is not a step", stepCount("jobs:\n  j:\n    steps:\n      - name: x\n        env:\n          run: echo a\n") === 0]);
+  checks.push(["a matrix `include:` entry keyed `run:` is not a step", stepCount("jobs:\n  j:\n    strategy:\n      matrix:\n        include:\n          - run: echo a\n") === 0]);
+  checks.push(["a real step's `run:` is still a step", stepCount("jobs:\n  j:\n    steps:\n      - name: x\n        run: echo a\n      - run: echo b\n") === 2]);
   checks.push(["KNOWN GAP: a job-level `continue-on-error: true` is still credited", sh("jobs:\n  j:\n    continue-on-error: true\n    steps:\n      - run: bash scripts/mac/x.sh --self-test\n") === true]);
   checks.push(["maskQuoted keeps length, blanks quoted spans and leaves the rest", (() => { const m = maskQuoted(`a "b | c" 'd; e' f`); return m.length === 18 && m.startsWith("a ") && !m.includes("|") && !m.includes(";") && m.endsWith(" f"); })()]);
   checks.push([

@@ -229,6 +229,38 @@ function repoOwnership(cwd) {
   };
   return { owned, fileOf, via };
 }
+// The judgment of what git expands the Hub URL to, in the repository and in the directory the listing runs in (each a gitRun result). Pure, so the rule is testable without a configuration.
+// { problems, trusted }: a failed expansion, a disagreement between the two (the only one allowed is a credential in front of the same Hub), and each expansion that is not the Hub.
+function judgeExpansions(inRepo, inListing, hub = HUB) {
+  const problems = [], trusted = [];
+  const failed = (r, where) => `git could not expand the Hub URL${where} (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`;
+  if (!inRepo.ok) problems.push(failed(inRepo, ""));
+  if (!inListing.ok) problems.push(failed(inListing, " where the listing is read"));
+  const a = inRepo.ok ? String(inRepo.stdout).replace(/\n$/, "") : null, b = inListing.ok ? String(inListing.stdout).replace(/\n$/, "") : null; // as git printed it: a leading blank is part of the URL
+  const sameHub = a !== null && b !== null && isHubUrl(a, hub) && isHubUrl(b, hub) && urlWithoutUserinfo(a) === urlWithoutUserinfo(b);
+  const disagreement = a !== null && b !== null && a !== b && !sameHub ? `git expands the Hub URL ${hub} to ${displayUrl(a) || "(nothing)"} in the repository but to ${displayUrl(b) || "(nothing)"} where the listing is read (an empty directory, the clean environment): a configuration that applies in only one of the two places (an includeIf, a gitdir or hasconfig test), so the listing is not asked for` : "";
+  const classify = (expanded, where) => {
+    // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
+    const shown = displayUrl(expanded);
+    if (expanded === hub) { /* no rewrite */ }
+    else if (!isHubUrl(expanded, hub)) problems.push(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf${where}), so the listing would be read from there and not from the Hub`);
+    else if (urlWithoutUserinfo(expanded) === urlWithoutUserinfo(hub) && parseGitUrl(expanded).scheme === parseGitUrl(hub).scheme) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
+    else trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
+  };
+  if (a !== null) classify(a, ""); // (the repository's own rewrite first: it is the one a reader of the row looks for)
+  if (disagreement) problems.push(disagreement);
+  if (b !== null && b !== a) classify(b, "; read where the listing is");
+  return { problems, trusted };
+}
+// A fresh empty directory under the temp directory, with nothing above it a repository (GIT_CEILING_DIRECTORIES): the place the listing runs in, and the place its expansion and configuration are read.
+function inIsolatedDir(fn) {
+  const dir = mkdtempSync(join(tmpdir(), "loop-state-ls-"));
+  try {
+    return fn(dir, { GIT_CEILING_DIRECTORIES: realpathSync(tmpdir()) });
+  } finally {
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway empty directory */ }
+  }
+}
 function hubTransport(cwd = repo, hub = HUB) {
   const problems = [], trusted = [];
   const env = process.env;
@@ -241,34 +273,49 @@ function hubTransport(cwd = repo, hub = HUB) {
   // (a command line is shown by its program alone: its arguments can carry a credential)
   const shownEnv = (k, v) => { const w = String(v).trim().split(/\s+/); return k === "GIT_SSH_COMMAND" || k === "GIT_PROXY_COMMAND" ? `${w[0]}${w.length > 1 ? " ..." : ""}` : String(v); };
   for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || k.startsWith("GIT_REMOTE")) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
-  // The configuration, with scope and origin. Exit 1 is "no key matched" (a clean answer); anything else is a configuration git could not read.
-  const cfg = gitRun(cwd, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|core\\.sshcommand$|url\\.|alias\\.remote-|remote\\.)"]);
-  if (!cfg.ok && !(cfg.status === 1 && !String(cfg.stdout).trim())) {
-    problems.push(`git could not read its configuration (${String(cfg.stderr).split("\n").find(Boolean) || `exit ${cfg.status}`}), so no proxy / TLS / rewrite setting could be checked`);
-  } else {
+  // The configuration and the Hub URL's expansion are read in TWO places, never one (round-21 refute): the repository (what a fetch or a push of yours sees) and the directory the listing runs in (an empty
+  // temporary directory, the clean environment: what the listing sees). A global `[includeIf "gitdir:<repo>/"]` that pulls in an identity insteadOf for the full Hub URL applies only inside the repository, so
+  // the gate saw no rewrite there while a shorter global rewrite served the listing from another machine. The two expansions must agree (a credential in front of the same Hub is the one difference allowed),
+  // anything else is a gated finding naming both, and the keys of both places are scanned.
+  const readConfig = (dir, cfgEnv, isRepo) => {
+    const found = { problems: [], seen: new Map() };
+    const cfg = gitRun(dir, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^(http\\.|core\\.gitproxy$|core\\.sshcommand$|url\\.|alias\\.remote-|remote\\.)"], { env: cfgEnv });
+    if (!cfg.ok && !(cfg.status === 1 && !String(cfg.stdout).trim())) {
+      found.problems.push(`git could not read its configuration (${String(cfg.stderr).split("\n").find(Boolean) || `exit ${cfg.status}`}), so no proxy / TLS / rewrite setting could be checked`);
+      return found;
+    }
     const t = String(cfg.stdout).split("\0"); // scope \0 origin \0 key \n value \0, repeated
-    const seen = new Map();
-    const own = repoOwnership(cwd);
+    const own = isRepo ? repoOwnership(dir) : null; // (the listing's directory is no repository: scope alone decides there, and no local scope exists)
     // FLOOR: a repository has at least a worktree or a git dir. Fewer means git could not name them, and then no key can be recognised as read from a file inside the repository
     // (the origin test above would match nothing and say nothing): that is a finding, not a pass.
-    if (own.owned.length < 1) problems.push("git could not name the repository's own paths (rev-parse failed), so a setting read from a file inside it cannot be told from the environment's");
+    if (own && own.owned.length < 1) found.problems.push("git could not name the repository's own paths (rev-parse failed), so a setting read from a file inside it cannot be told from the environment's");
     for (let i = 0; i + 2 < t.length; i += 3) {
       const f = transportKey(t[i], t[i + 1], t[i + 2], own);
-      if (f.problem) problems.push(f.problem);
-      else if (f.trusted) seen.set(f.trusted, (seen.get(f.trusted) || 0) + 1);
+      if (f.problem) found.problems.push(f.problem);
+      else if (f.trusted) found.seen.set(f.trusted, (found.seen.get(f.trusted) || 0) + 1);
     }
-    for (const [k, n] of seen) trusted.push(`${k}${n > 1 ? ` (x${n})` : ""}`);
-  }
-  const r = gitRun(cwd, ["ls-remote", "--get-url", hub]);
-  if (!r.ok) problems.unshift(`git could not expand the Hub URL (${String(r.stderr).split("\n").find(Boolean) || `exit ${r.status}`})`);
-  else {
-    // userinfo is never printed (a token-bearing insteadOf is common and legitimate), and a rewrite whose result is the Hub URL once the credentials are removed is no finding
-    const expanded = r.stdout.replace(/\n$/, ""), shown = displayUrl(expanded); // as git printed it: a leading blank is part of the URL
-    if (expanded === hub) { /* no rewrite */ }
-    else if (!isHubUrl(expanded, hub)) problems.unshift(`git configuration rewrites the Hub URL ${hub} to ${shown || "(nothing)"} (url.<base>.insteadOf), so the listing would be read from there and not from the Hub`);
-    else if (urlWithoutUserinfo(expanded) === urlWithoutUserinfo(hub) && parseGitUrl(expanded).scheme === parseGitUrl(hub).scheme) trusted.push("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)");
-    else trusted.push(`a url.<base>.insteadOf rewrites the Hub URL to ${shown} (same host and repository)`);
-  }
+    if (isRepo) { // an include whose condition depends on the STATE of the repository (the branch checked out, a remote's URL) is not the same configuration in every state: the scan sees one of them
+      const inc = gitRun(dir, ["config", "--show-origin", "--show-scope", "-z", "--get-regexp", "^includeif\\..*\\.path$"]);
+      const u = String(inc.ok ? inc.stdout : "").split("\0");
+      for (let i = 0; i + 2 < u.length; i += 3) {
+        const key = u[i + 2].split("\n")[0], cond = key.slice("includeif.".length, key.lastIndexOf("."));
+        if (!/^(onbranch|hasconfig):/i.test(cond)) continue;
+        const local = !["system", "global", "command"].includes(u[i]), where = `${u[i]} ${u[i + 1].replace(/^file:/, "")}`;
+        if (local) found.problems.push(`repository-scope includeIf "${cond}" (${where}) pulls in configuration that applies only in some states of the repository, so what was scanned is not all that can apply`);
+        else found.seen.set(`${where}: includeIf "${cond}" (configuration that applies only in some states of the repository is not evaluated here)`, 1);
+      }
+    }
+    return found;
+  };
+  const repoCfg = readConfig(cwd, undefined, true), repoExp = gitRun(cwd, ["ls-remote", "--get-url", hub]);
+  const listing = inIsolatedDir((dir, isoEnv) => ({ cfg: readConfig(dir, isoEnv, false), exp: gitRun(dir, ["ls-remote", "--get-url", hub], { env: isoEnv }) }));
+  const seenAll = new Map(repoCfg.seen);
+  for (const [k, n] of listing.cfg.seen) if (!seenAll.has(k)) seenAll.set(k, n);
+  for (const pr of [...repoCfg.problems, ...listing.cfg.problems]) if (!problems.includes(pr)) problems.push(pr);
+  for (const [k, n] of seenAll) trusted.push(`${k}${n > 1 ? ` (x${n})` : ""}`);
+  const judged = judgeExpansions(repoExp, listing.exp, hub);
+  problems.unshift(...judged.problems);
+  for (const t of judged.trusted) if (!trusted.includes(t)) trusted.push(t);
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
 }
 // THE LISTING ITSELF. Every setting a repository can carry (a remote helper named by `remote.<Hub URL>.vcs`, a proxy, an insteadOf, core.sshCommand, an include) reaches `git ls-remote` through the repository
@@ -277,12 +324,7 @@ function hubTransport(cwd = repo, hub = HUB) {
 // alias.remote-<vcs> served a fake listing from repository configuration alone.) The isolation is DEFENCE IN DEPTH behind the scan: every repository-scope shape the scan enumerates is gated before the
 // listing is asked for, so the cases that pin it use what the scan cannot see (a rewrite written into .git/config AFTER the scan took its snapshot) and watch where the listing runs (R16-listhub-*).
 function listHub(hub = HUB) {
-  const dir = mkdtempSync(join(tmpdir(), "loop-state-ls-"));
-  try {
-    return gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: { GIT_CEILING_DIRECTORIES: realpathSync(tmpdir()) } });
-  } finally {
-    try { rmSync(dir, { recursive: true, force: true }); } catch { /* a throwaway empty directory */ }
-  }
+  return inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: isoEnv }));
 }
 function hubUrlProblem(cwd = repo, hub = HUB) {
   return hubTransport(cwd, hub).problems.join("; ");
@@ -345,9 +387,19 @@ function authorityIsHubs(u, host) {
   const colon = s.indexOf(":");
   return colon > 0 && s.slice(0, colon) === `git@${host}`;
 }
+// The PATH too, as written (round-21 review): /<owner>/<repo>, optionally a trailing slash, segments of letters digits . _ - only, none of them `.` or `..`, no %, no empty segment. The WHATWG parser
+// normalises `//owner/repo`, `/../owner/repo` and `/%2e%2e/owner/repo` into the Hub's path; git hands the string on as written.
+function pathIsPlain(u) {
+  const s = String(u ?? ""), m = /^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/.*)?$/.exec(s);
+  if (!m && s.includes("://")) return false;
+  const path = m ? m[1] ?? "" : s.slice(s.indexOf(":") + 1);
+  if (m && !path.startsWith("/")) return false;
+  const segments = (m ? path.slice(1) : path).replace(/\/$/, "").split("/");
+  return segments.length === 2 && segments.every((x) => /^[A-Za-z0-9._-]+$/.test(x) && x !== "." && x !== "..");
+}
 function isHubUrl(u, hub = HUB) {
   const hp = parseGitUrl(hub), want = hubIdentity(hp);
-  return want !== null && authorityIsHubs(u, hp.host) && hubIdentity(parseGitUrl(u)) === want;
+  return want !== null && authorityIsHubs(u, hp.host) && pathIsPlain(u) && hubIdentity(parseGitUrl(u)) === want;
 }
 // The URL without its userinfo, taken out by the parser: the same string for the Hub with and without credentials, so "only adds credentials" is a comparison, not a guess. null when unparseable.
 function urlWithoutUserinfo(u) {
@@ -3439,6 +3491,51 @@ exit 1
     const brPush = brOrigins.map((u) => { bo20.f("remote", "set-url", "--push", "origin", u); return [u, originRow(bo20.w)]; });
     check("an origin (fetch or push URL) with a bracketed host in its userinfo FAILS and prints the authority as written, not the host the parser would have shown (R20-bracket-origin)",
       brFetch.every(([u, r]) => r.state === "fail" && r.detail === brShown(u)) && brPush.every(([u, r]) => r.state === "fail" && r.detail === `${poHub} (pushes to ${brShown(u)})`));
+    // ══ ROUND 21 ══ Review round 6 (wave 95). The URL the gate judged was not the URL the listing fetched: the expansion and the scan ran in the repository, the listing in an empty directory.
+    const mkLikeUe = (name) => { const fx = mkFx(name); fx.f("config", "remote.origin.url", HUB); mkdirSync(join(fx.w, "docs")); writeFileSync(join(fx.w, "docs", "PURPOSE.md"), "fixture\n"); return fx; };
+    const im = mkLikeUe("r21im"), imReal = realpathSync(im.w), imTail = "SignalGrid-Review-Hub.git";
+    const imMask = cfgFile("r21-mask.cfg", `[url ${JSON.stringify(HUB)}]\n\tinsteadOf = ${HUB}\n`);
+    const imGlobal = cfgFile("r21-global-mask.cfg", `[includeIf "gitdir:${imReal}/"]\n\tpath = ${imMask}\n[url "ssh://evil.example/DanFashauer/"]\n\tinsteadOf = https://github.com/DanFashauer/\n`);
+    const imVars = { GIT_CONFIG_GLOBAL: imGlobal, PATH: `${pcBin}:${process.env.PATH}`, R19_SSH_LOG: pcLog };
+    writeFileSync(pcLog, "");
+    const imInRepo = inCleanEnv(() => gitRun(im.w, ["ls-remote", "--get-url", HUB]), imVars).stdout.trim();
+    const imInEmpty = inCleanEnv(() => inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--get-url", HUB], { env: isoEnv })), imVars).stdout.trim();
+    inCleanEnv(() => inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", HUB], { env: isoEnv, timeout: 60000 })), imVars);
+    const imCalled = readIfPresent(pcLog);
+    writeFileSync(pcLog, "");
+    const imScan = inCleanEnv(() => hubTransport(im.w), imVars), imWhole = wholeScript(im, "r21im", imVars), imAfter = readIfPresent(pcLog);
+    check("a global includeIf gitdir mask that makes the Hub URL expand to itself inside the repository, beside a shorter global rewrite that applies in an empty directory: plain git in the repository keeps the Hub, plain git in an empty directory reaches the fake ssh (the precondition); the scan names both expansions, the whole check exits 1 on that row and the fake is never called (R21-includeif-mask)",
+      imInRepo === HUB && imInEmpty === `ssh://evil.example/DanFashauer/${imTail}` && !!imCalled && imCalled.includes("evil.example") &&
+      imScan.problems.some((p) => p.startsWith(`git expands the Hub URL ${HUB} to ${HUB} in the repository but to ssh://evil.example/DanFashauer/${imTail} where the listing is read`)) &&
+      imWhole.status === 1 && /✗ Review Hub URL\s+git expands the Hub URL .* in the repository but to ssh:\/\/evil\.example\//.test(imWhole.out) && !imWhole.out.includes("all present on the Review Hub") && imAfter === "");
+    const ih = mkLikeUe("r21ih"), credBase = ["https://ci:tok", "github.com/"].join("@");
+    const ihFile = cfgFile("r21-cred.cfg", `[url ${JSON.stringify(credBase)}]\n\tinsteadOf = https://github.com/\n`);
+    const ihGlobal = cfgFile("r21-global-cred.cfg", `[includeIf "gitdir:${realpathSync(ih.w)}/"]\n\tpath = ${ihFile}\n`);
+    const ihScan = inCleanEnv(() => hubTransport(ih.w), { GIT_CONFIG_GLOBAL: ihGlobal }), ihWhole = wholeScript(ih, "r21ih", { GIT_CONFIG_GLOBAL: ihGlobal });
+    check("an includeIf that only adds a credential to the Hub URL inside the repository is still 'adds credentials (not shown)': no finding, the listing is read from the Hub, and the credential is never printed (R21-includeif-honest)",
+      ihScan.problems.length === 0 && ihScan.trusted.includes("a url.<base>.insteadOf adds credentials to the Hub URL (not shown)") && !JSON.stringify(ihScan).includes("tok") && ihWhole.listed === true && !/✗ Review Hub URL/.test(ihWhole.out) && !ihWhole.out.includes("tok@"));
+    const okExp = (x) => ({ ok: true, stdout: `${x}\n`, stderr: "", status: 0 }), badExp = { ok: false, stdout: "", stderr: "fatal: no\n", status: 128 };
+    const evil1 = `ssh://evil.example/DanFashauer/${imTail}`, evil2 = `ssh://other.example/DanFashauer/${imTail}`, credHub21 = ["https://ci:tok", `github.com/DanFashauer/${imTail}`].join("@");
+    const jEqual = judgeExpansions(okExp(HUB), okExp(HUB), HUB), jMask = judgeExpansions(okExp(HUB), okExp(evil1), HUB), jCred = judgeExpansions(okExp(credHub21), okExp(HUB), HUB);
+    const jSame = judgeExpansions(okExp(evil1), okExp(evil1), HUB), jTwo = judgeExpansions(okExp(evil1), okExp(evil2), HUB), jIso = judgeExpansions(okExp(HUB), badExp, HUB), jRepo = judgeExpansions(badExp, okExp(HUB), HUB);
+    check("the two expansions must agree: equal is silent; a credential in front of the same Hub on one side is the one difference allowed ('adds credentials'); anything else is a gated disagreement naming both, plus each expansion that is not the Hub; a failed expansion in either place is a finding that says where (R21-judge-unit)",
+      jEqual.problems.length === 0 && jEqual.trusted.length === 0 &&
+      jMask.problems.length === 2 && jMask.problems[0].includes(`to ${HUB} in the repository but to ${evil1} where the listing is read`) && jMask.problems[1].includes("rewrites the Hub URL") && jMask.problems[1].includes("read where the listing is") &&
+      jCred.problems.length === 0 && jCred.trusted.length === 1 && jCred.trusted[0].includes("adds credentials") && !JSON.stringify(jCred).includes("tok") &&
+      jSame.problems.length === 1 && jSame.problems[0].includes("rewrites the Hub URL") && jTwo.problems.length === 3 && jTwo.problems[1].includes(`to ${evil1} in the repository but to ${evil2} where`) &&
+      jIso.problems.length === 1 && jIso.problems[0].startsWith("git could not expand the Hub URL where the listing is read") && jRepo.problems.length === 1 && jRepo.problems[0].startsWith("git could not expand the Hub URL (fatal: no)"));
+    const stGlobal = inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r21-state.cfg", `[includeIf "onbranch:main"]\n\tpath = ${imMask}\n[includeIf "hasconfig:remote.*.url:*"]\n\tpath = ${imMask}\n[includeIf "gitdir:/nowhere/"]\n\tpath = ${imMask}\n`) });
+    const stRepo = mkFx("r21st"); stRepo.f("config", "includeif.onbranch:main.path", imMask);
+    const stLocal = inCleanEnv(() => hubTransport(stRepo.w));
+    check("an includeIf whose condition depends on the state of the repository (onbranch, hasconfig) is named in the row when the environment carries it and is a gated finding when the repository does; a gitdir condition is not (the two expansions cover it) (R21-includeif-state)",
+      stGlobal.problems.length === 0 && stGlobal.trusted.some((t) => t.includes('includeIf "onbranch:main"')) && stGlobal.trusted.some((t) => t.includes('includeIf "hasconfig:remote.*.url:*"')) && !stGlobal.trusted.some((t) => t.includes("gitdir")) &&
+      stLocal.problems.some((p) => p.startsWith('repository-scope includeIf "onbranch:main"')));
+    const pathBad = ["//DanFashauer/SignalGrid-Review-Hub.git", "/../DanFashauer/SignalGrid-Review-Hub.git", "/%2e%2e/DanFashauer/SignalGrid-Review-Hub.git", "/DanFashauer//SignalGrid-Review-Hub.git",
+      "/DanFashauer/./SignalGrid-Review-Hub.git", "/x/../DanFashauer/SignalGrid-Review-Hub.git", "/DanFashauer/SignalGrid-Review-Hub.git/.", "/DanFashauer/SignalGrid-Review-Hub.git/..", "/DanFashauer/SignalGrid%2DReview-Hub.git",
+      "/DanFashauer/SignalGrid-Review-Hub.git//", "/./DanFashauer/SignalGrid-Review-Hub.git", "/"].map((p) => `https://${GH}${p}`);
+    check("the PATH is checked as written beside the authority: dot segments, doubled slashes and %-escapes on the Hub's own host are not the Hub, the plain /<owner>/<repo> spellings (with .git, without, with a trailing slash) are (R21-path-plain)",
+      pathBad.every((u) => isHubUrl(u) === false) && [`https://${GH}/DanFashauer/SignalGrid-Review-Hub.git`, `https://${GH}/DanFashauer/SignalGrid-Review-Hub`, `https://${GH}/DanFashauer/SignalGrid-Review-Hub/`, `ssh://git@${GH}/DanFashauer/SignalGrid-Review-Hub.git`,
+        `git@${GH}:DanFashauer/SignalGrid-Review-Hub.git`].every((u) => isHubUrl(u) === true) && !isHubUrl(`git@${GH}:/DanFashauer/SignalGrid-Review-Hub.git`) && !isHubUrl(`git@${GH}:DanFashauer/../DanFashauer/SignalGrid-Review-Hub.git`));
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

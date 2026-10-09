@@ -4,54 +4,57 @@
 //   node scripts/check-stamp-citations.mjs --file <path>    # gate another copy (falsification)
 //   node scripts/check-stamp-citations.mjs --self-test      # prove the gate can fail
 //
-// WHY. `check-cited-paths.mjs` proves a cited path exists, but ONLY when the path is the
-// entire content of a backtick span (its pattern is backtick + path + backtick). A stamp
-// that writes `scripts/fixture-idp-NOPE.mjs` in plain text passes with exit 0 (PR #1456
-// round-1 mutant M5a). Round 1 of this PR showed the same hole one step further: a path
-// inside a COMMAND span (`node scripts/NOPE.mjs`, `grep -n x lib/NOPE.ts`) or carrying a
-// `:N` suffix is also invisible to check-cited-paths (51 of the 118 in-scope tokens at
-// the time), so "backtick it" does not make it checkable.
-//
-// THE RULE (the fail-closed choice, round 1 finding b). This gate does not lean on
-// check-cited-paths for stamps. For every root-prefixed path token in an in-scope stamp it
-// (1) fails a token outside backticks (the style rule: the path must be findable by the
-// reader and by the other gates), and (2) checks the token's existence ITSELF against
-// `git ls-files`, wherever the token sits: bare, in an exact span, in a command span, with
-// a `:N` suffix. Requiring exact path-only spans instead would have rewritten 51 dated
-// evidence commands; checking existence here closes the hole without touching the record.
-// Roots are check-cited-paths' roots PLUS the tracked dot-directories (.github, .claude,
-// ...) which deriveRoots drops, so a nonexistent `.github/workflows/NOPE.yml` is caught.
-// A tracked-file set that is empty, or roots missing `scripts`/`docs`, fail the run: an
-// unreadable git state tightens the answer, it does not skip the check.
-//
-// A stamp is dated STAMP_RULE_FROM or later. Older stamps are a dated record; rewriting
-// them would falsify it.
+// WHY. `check-cited-paths.mjs` proves a cited path exists, but only when the path is
+// wrapped in backticks (its pattern requires them). A stamp that writes
+// `scripts/fixture-idp-NOPE.mjs` in plain text therefore passes with exit 0, while the
+// backticked twin exits 1 (PR #1456 round-1 review, mutant M5a). A `re-measured DATE`
+// stamp is the evidence that resets a plan row's 14-day clock, so its citations are the
+// ones that must be checkable. The existing "unbackticked citations" report in
+// check-cited-paths deliberately fails on nothing ("a style gate wearing a correctness
+// gate's clothes"); this gate is narrower on purpose: ONLY stamps, ONLY dated
+// STAMP_RULE_FROM or later. Older stamps are a dated record; rewriting them would
+// falsify it.
 //
 // WHAT A STAMP IS (a heuristic over prose, not a parser). A stamp runs from
-// `re-measured YYYY-MM-DD` (case-insensitive, hyphen optional: the clock reader
-// objective-loop.mjs accepts `remeasured`) to the EARLIEST of: a blank line, the next
-// numbered row (`17c. **`), the next `re-measured` marker, the next status MARKER, or 1500
-// characters. A status marker is a status phrase at the START of a sentence or clause
-// (start of text, or after `.` `;` `:` `!` `?` or a dash): `FIX PROPOSED <date>`,
-// `NOT BUILT`, `CORRECTED`, `LANDED`, `DONE`, `AWAITING OWNER (`, `BLOCKED ON LAB (`.
-// The same word inside prose ("PR #1455 has LANDED", "still reading FIX PROPOSED for a
-// merged PR") is NOT a marker and no longer cuts the stamp (round 1 finding a: it cut
-// rows 61 and 170 short). The stamp's own header, the date plus one BALANCED parenthetical
-// of any length and nesting and an optional `:` and one status word, is skipped before
-// looking for a marker, so a long "(DONE, ...)" header never truncates the region (row 28
-// was cut to 24 characters). A header parenthesis that never closes is not skipped: its
-// contents stay in the region. A neighbouring sentence ("FIX PROPOSED 2026-10-08 ... x")
-// is not charged to the stamp.
+// `re-?measured YYYY-MM-DD` (case-insensitive, the form objective-loop's rowMeasuredAt
+// reads) to the EARLIEST of: a blank line, the next numbered row (`17c. **`), the next
+// `re-measured` marker, the next DATED status marker (FIX PROPOSED, NOT BUILT, CORRECTED,
+// LANDED, DONE, AWAITING, BLOCKED, followed by a YYYY-MM-DD) or 1500 characters. A status
+// word NOT followed by a date is prose ("has LANDED", "a row still reading FIX PROPOSED")
+// and does not end the stamp: that rule cut two real stamps short (rows 28 and 61 on
+// 2026-10-08) when the word alone was the cut. The stamp's own header, the date plus an
+// optional balanced `( ... )` on the same line, is skipped before the cut is searched.
 //
-// WHAT IT CAN MISS. A path after a marker phrase this list does not know, or written as a
-// placeholder with a glob. The region is cut at 1500 characters. A path that exists only
-// in an OPEN PR is written WITHOUT a directory prefix and with the PR number in the same
-// sentence ("fixture-idp.mjs (PR #1500)"); that convention is enforced by omission, not by
-// a mechanism.
+// WHAT COUNTS AS A VIOLATION. Every root-prefixed path-shaped token in the region (roots
+// from `git ls-files` top-level directories as check-cited-paths derives them, PLUS the
+// dot-directories it drops, such as .github and .claude):
+//   1. outside any backtick span: check-cited-paths cannot see it. FAIL.
+//   2. anywhere else (an exact span, a command span such as `node scripts/x.mjs`, a
+//      `scripts/x.mjs:12` span, a fenced block): the token is resolved against
+//      `git ls-files` by this gate itself, and a token that is not a tracked file FAILS.
+//      The exact-span shortcut ("check-cited-paths sees it") was dropped: it does not see
+//      dot-directory roots (.github, .claude), its ALLOW list (/dist/, /build/, ...), or a
+//      fenced block, so trusting the backtick let a nonexistent path through there.
+// Backtick parity is computed over the whole region (the fence lines themselves blanked),
+// so a span hard-wrapped across lines does not flip parity on its continuation line.
 //
-// REPORTED, NEVER FAILED: in-scope stamps with no backticked evidence command (any of
-// node/pnpm/grep/sed/ls/... counts); a rule demanding one would reject history.
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+// WHAT IT CAN MISS. A path in a stamp's trailing sentence after a DATED status marker, a
+// path past the 1500-character cap, a path with no extension or a directory-only citation,
+// a path under a root that has no tracked file, and a path written as a file that EXISTS
+// but is not the one meant (existence is all this checks). Open-PR-only paths are written without
+// a directory prefix (below) and are therefore not seen. The report-only "no backticked
+// command" count covers none of that.
+//
+// CONVENTION (already PR #1456's practice). A path that exists only in an OPEN PR is
+// written WITHOUT a directory prefix and with the PR number in the same sentence
+// ("fixture-idp.mjs (PR #1500)"), never as a backticked or root-prefixed token:
+// check-cited-paths would fail the backticked form, and this gate the bare prefixed one.
+// That is a convention enforced by omission, not a mechanism.
+//
+// REPORTED, NEVER FAILED: in-scope stamps with no backticked command (node, pnpm, git,
+// grep, sed, ... ; the count is printed by the gate, 3 of 51 on 2026-10-09). A rule
+// demanding one would reject history.
+import { existsSync, statSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,8 +63,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 // check-cited-paths shells out to git at import time; a broken checkout must read as a
 // stated failure, not a stack trace that happens to exit 1.
 let deriveRoots;
+let insideBackticks;
 try {
-  ({ deriveRoots } = await import("./check-cited-paths.mjs"));
+  ({ deriveRoots, insideBackticks } = await import("./check-cited-paths.mjs"));
 } catch (e) {
   console.error(`stamp-citations: cannot load check-cited-paths (${String(e.message).split("\n")[0]}); failing closed`);
   process.exit(1);
@@ -71,75 +75,67 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const STAMP_RULE_FROM = "2026-10-08";
 export const PLAN_FILE = "docs/COMPANY_BUILD_PLAN.md";
 export const STAMP_FLOOR = 40;
+const IN_SCOPE_FLOOR = 10;
 const MAX_REGION = 1500;
 const CMD_WINDOW = 1200;
 
-const PHRASES = "FIX PROPOSED|NOT BUILT|CORRECTED|LANDED|DONE|AWAITING|BLOCKED";
-const STATUS = new RegExp(`\\b(?:${PHRASES})\\b`, "g");
+const STATUS = /\b(?:FIX PROPOSED|NOT BUILT|CORRECTED|LANDED|DONE|AWAITING|BLOCKED)\b(?=\s+\d{4}-\d{2}-\d{2})/;
+// An UNDATED status phrase is a marker only at the start of a sentence or clause ("measured. NOT BUILT:",
+// "; AWAITING OWNER ("), never inside prose ("has LANDED"); a DATED one (STATUS) is a marker anywhere.
+const PHRASE = /\b(?:FIX PROPOSED|NOT BUILT|CORRECTED|LANDED|DONE|AWAITING|BLOCKED)\b/g;
+const CLAUSE_START = /(?:[.;:!?]|\s[\u2014\u2013-])\s*$/;
+function clauseMarker(after, hdrLen) {
+  for (const m of after.slice(hdrLen).matchAll(PHRASE)) if (!/^[\s:\u2014\u2013-]*$/.test(after.slice(hdrLen, hdrLen + m.index)) && CLAUSE_START.test(after.slice(0, hdrLen + m.index))) return hdrLen + m.index;
+  return -1;
+}
 const MARKER = /re-?measured\s+(\d{4}-\d{2}-\d{2})/gi;
-const HEAD_DATE = /^re-?measured\s+\d{4}-\d{2}-\d{2}/i;
-const HEAD_TAIL = new RegExp(`^\\s*(?:[:\\u2014\\u2013-]\\s*)?(?:${PHRASES})?`);
-// A status phrase is a MARKER only at the start of a sentence or clause.
-const CLAUSE_START = /(?:[.;:!?]|\s[—–-])\s*$/;
 const ROW = /^(\d+[a-z]?)\.\s/;
 
 const escRe = (r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Root-prefixed, extension-bearing path token; a leading `./` is allowed, a longer prefix is not. */
+/** Length of the stamp header: the marker plus, on the same line, one balanced ( ... ) and a colon. */
+function headerLength(after) {
+  const m = /^re-?measured\s+\d{4}-\d{2}-\d{2}/i.exec(after);
+  let i = m ? m[0].length : 0;
+  const rest = /^\s*\(/.exec(after.slice(i));
+  if (rest) {
+    let depth = 0;
+    for (let j = i + rest[0].length - 1; j < after.length && after[j] !== "\n"; j += 1) {
+      if (after[j] === "(") depth += 1;
+      else if (after[j] === ")") { depth -= 1; if (depth === 0) { i = j + 1; break; } }
+    }
+  }
+  return i;
+}
+
+/** Root-prefixed, extension-bearing path token; a preceding backtick is fine, parity decides. */
 export function buildTokenPattern(roots) {
-  return new RegExp(`(?:(?<![A-Za-z0-9_/.-])|(?<=(?<![A-Za-z0-9_/.-])\\.\\/))((?:${roots.map(escRe).join("|")})\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6})`, "g");
-}
-
-/** Index of the `)` matching the `(` at `open`, or -1 when it never closes inside the paragraph. */
-function balancedClose(text, open) {
-  let depth = 0;
-  for (let i = open; i < text.length; i += 1) {
-    if (text[i] === "\n" && text[i + 1] === "\n") return -1;
-    if (text[i] === "(") depth += 1;
-    else if (text[i] === ")") { depth -= 1; if (depth === 0) return i; }
-  }
-  return -1;
-}
-
-/** Length of the stamp's own header: date, one balanced parenthetical of any length, `:`/dash, one status word. */
-export function headerLength(after) {
-  let i = HEAD_DATE.exec(after)?.[0].length ?? 0;
-  const ws = /^\s*/.exec(after.slice(i))[0].length;
-  if (after[i + ws] === "(") {
-    const close = balancedClose(after, i + ws);
-    if (close > 0) i = close + 1; // an unclosed "(" is NOT skipped: its contents stay in the region
-  }
-  return i + HEAD_TAIL.exec(after.slice(i))[0].length;
-}
-
-/** Index in `after` of the first status marker past the header, or -1. */
-function markerIndex(after, hdrLen) {
-  for (const m of after.slice(hdrLen).matchAll(STATUS)) {
-    const at = hdrLen + m.index;
-    if (CLAUSE_START.test(after.slice(0, at))) return at;
-  }
-  return -1;
+  return new RegExp(`(?<![A-Za-z0-9_-])(?<![A-Za-z0-9_-]\\/)((?:${roots.map(escRe).join("|")})\\/[A-Za-z0-9._\\/-]+\\.[A-Za-z0-9]{1,6})`, "g");
 }
 
 /**
- * Pure: every stamp in `text`: { date, row, line, text } with the region cut as the header
- * above says. `mutate` is for the self-test only.
+ * Pure: every stamp in `text`: { date, row, line, text, window }. `mutate` is for the
+ * self-test only: paragraphOnly drops the marker/status cuts, firstNewline ends at the
+ * first line break, noBlankStop drops the blank-line and next-row stops, undatedStatus
+ * restores the old status cut that did not need a date.
  */
 export function stampRegions(text, mutate = {}) {
   const marks = [...text.matchAll(MARKER)];
   const out = [];
+  const status = mutate.undatedStatus ? /\b(?:FIX PROPOSED|NOT BUILT|CORRECTED|LANDED|DONE|AWAITING|BLOCKED)\b/ : STATUS;
   for (let k = 0; k < marks.length; k += 1) {
     const mk = marks[k];
     const after = text.slice(mk.index);
-    const hdrLen = headerLength(after);
-    const para = after.indexOf(mutate.firstNewline ? "\n" : "\n\n");
-    const stops = mutate.noStops ? [] : [
-      para,
-      after.search(/\n\d+[a-z]?\. \*\*/),
+    const hdrLen = mutate.noHeaderSkip ? 0 : headerLength(after);
+    const stops = [
+      mutate.noBlankStop ? -1 : after.indexOf("\n\n"),
+      mutate.noBlankStop ? -1 : after.search(/\n\d+[a-z]?\. \*\*/),
+      mutate.firstNewline ? after.indexOf("\n") : -1,
       mutate.paragraphOnly ? -1 : marks[k + 1] ? marks[k + 1].index - mk.index : -1,
-      mutate.paragraphOnly ? -1 : markerIndex(after, hdrLen),
+      mutate.paragraphOnly ? -1 : (() => { const i = after.slice(hdrLen).search(status); return i < 0 ? -1 : hdrLen + i; })(),
+      mutate.paragraphOnly || mutate.undatedStatus || mutate.noClauseStart ? -1 : clauseMarker(after, hdrLen),
     ].filter((x) => x > 0);
-    const end = Math.min(after.length, mutate.maxRegion ?? MAX_REGION, ...stops);
+    const end = Math.min(after.length, MAX_REGION, ...stops);
     const before = text.slice(0, mk.index);
     const lineNo = before.split("\n").length;
     let row = null;
@@ -154,74 +150,96 @@ export function stampRegions(text, mutate = {}) {
   return out;
 }
 
-/**
- * Pure: every root-prefixed path token in `region` with { path, spanned }. `spanned` is true
- * when the token sits inside a backtick span (parity over the WHOLE region, so a span that
- * is hard-wrapped across lines stays one span) or inside a fenced block.
- */
-export function tokensIn(region, roots) {
-  const fenced = new Array(region.length).fill(false);
-  let pos = 0;
-  let inFence = false;
-  for (const ln of region.split("\n")) {
-    const isFence = /^\s*```/.test(ln);
-    if (isFence) inFence = !inFence;
-    if (isFence || inFence) fenced.fill(true, pos, pos + ln.length);
-    pos += ln.length + 1;
-  }
-  const inSpan = new Array(region.length).fill(false);
-  let open = -1;
-  for (let i = 0; i < region.length; i += 1) {
-    if (region[i] !== "`" || fenced[i]) continue;
-    if (open === -1) open = i;
-    else { inSpan.fill(true, open, i + 1); open = -1; }
-  }
-  return [...region.matchAll(buildTokenPattern(roots))].map((m) => ({
-    path: m[1],
-    spanned: inSpan[m.index] || fenced[m.index],
-  }));
+/** Fence marker lines blanked (so their backticks do not flip parity); returns the text and which offsets sit in a fence. */
+function fenceInfo(regionText) {
+  let fenced = false;
+  let offset = 0;
+  const ranges = [];
+  const lines = regionText.split("\n").map((ln) => {
+    const start = offset;
+    offset += ln.length + 1;
+    if (/^\s*```/.test(ln)) { fenced = !fenced; return " ".repeat(ln.length); }
+    if (fenced) ranges.push([start, start + ln.length]);
+    return ln;
+  });
+  return { text: lines.join("\n"), inFence: (i) => ranges.some(([lo, hi]) => i >= lo && i < hi) };
 }
 
-const CMD_SPAN = /`(?:node|pnpm|npm|npx|bash|sh|git|grep|rg|sed|awk|wc|cat|head|tail|ls|jq|find|curl|diff|python3?|\.\/)\b[^`]*`/;
-
 /**
- * Pure: the whole check over `text`. `ctx` = { roots, tracked: Set<string> }. A token is a
- * violation when it is outside backticks, or when it does not exist in `tracked`.
+ * Pure: path tokens in `regionText` as { path, inside }: `inside` is backtick parity over
+ * the whole region (a hard-wrapped span stays one span), and is true for a token in a
+ * fenced block (which check-cited-paths cannot see either, so it is resolved, not trusted).
+ * `inside` is replaceable for the mutant.
  */
-export function check(text, ctx, mutate = {}) {
-  const { roots, tracked } = ctx;
+export function pathTokens(regionText, roots, inside = insideBackticks) {
+  const { text, inFence } = fenceInfo(regionText);
+  const out = [];
+  for (const m of text.matchAll(buildTokenPattern(roots))) {
+    out.push({ path: m[1], inside: inFence(m.index) || inside(text, m.index), exact: text[m.index - 1] === "`" && text[m.index + m[1].length] === "`" });
+  }
+  return out;
+}
+
+/** Pure: root-prefixed path tokens outside any backtick span or fence. */
+export function unbackticked(regionText, roots, inside = insideBackticks) {
+  return pathTokens(regionText, roots, inside).filter((t) => !t.inside).map((t) => t.path);
+}
+
+const CMD_SPAN = /`(?:node|pnpm|npm|npx|bash|sh|git|gh|grep|rg|sed|awk|wc|cat|head|tail|ls|find|jq|curl|python3?|\.\/)\s[^`]*`/;
+
+/** Roots for the gate: check-cited-paths' own, plus the tracked dot-directories it drops. */
+export function stampRoots(tracked, mutate = {}) {
+  const roots = new Set(deriveRoots(REPO));
+  for (const f of mutate.noDotRoots ? [] : tracked) {
+    const slash = f.indexOf("/");
+    if (slash > 1 && f.startsWith(".")) roots.add(f.slice(0, slash));
+  }
+  return [...roots].sort();
+}
+
+/** Pure: the whole check over `text`. `exists(path)` says whether a token is a tracked file. */
+export function check(text, roots, exists, mutate = {}, inScopeFloor = 0) {
   const stamps = stampRegions(text, mutate);
   const inScope = mutate.noCutoff ? stamps : stamps.filter((s) => s.date >= STAMP_RULE_FROM);
   const violations = [];
   let tokens = 0;
   let noCommand = 0;
   for (const s of inScope) {
-    for (const t of tokensIn(s.text, roots)) {
-      tokens += 1;
-      if (!t.spanned && !mutate.acceptBare) violations.push({ row: s.row, line: s.line, date: s.date, token: t.path, why: "outside backticks, the reader and check-cited-paths cannot rely on it" });
-      if (!mutate.assumeExists && !tracked.has(t.path)) violations.push({ row: s.row, line: s.line, date: s.date, token: t.path, why: "no such tracked file (this gate checks existence itself: check-cited-paths only sees a path-only span)" });
+    const toks = pathTokens(s.text, roots, mutate.alwaysInside ? () => true : insideBackticks);
+    tokens += toks.length;
+    for (const t of toks) {
+      if (!t.inside) violations.push({ row: s.row, line: s.line, date: s.date, token: t.path, why: "outside backticks; check-cited-paths cannot see it" });
+      else if (!(mutate.trustExact && t.exact) && !exists(t.path)) violations.push({ row: s.row, line: s.line, date: s.date, token: t.path, why: "not a tracked file (inside a span or fence, where check-cited-paths does not resolve it)" });
     }
     if (!CMD_SPAN.test(s.window)) noCommand += 1;
   }
   const errors = [];
   if (stamps.length < STAMP_FLOOR) errors.push(`only ${stamps.length} stamps found, floor ${STAMP_FLOOR}: the matcher has stopped matching`);
-  if (!roots.includes("scripts") || !roots.includes("docs")) errors.push(`roots lack scripts/docs (${roots.join(",")}): git state unreadable, failing closed`);
-  if (tracked.size === 0) errors.push("git ls-files returned nothing: failing closed");
+  if (inScope.length < inScopeFloor) errors.push(`only ${inScope.length} stamps dated ${STAMP_RULE_FROM} or later, floor ${inScopeFloor}: the date cut-off or the matcher has excluded everything`);
   for (const v of violations) errors.push(`row ${v.row} (line ${v.line}, stamp ${v.date}): ${v.token}: ${v.why}`);
   return { stamps: stamps.length, inScope: inScope.length, tokens, violations, noCommand, errors, ok: errors.length === 0 };
 }
 
-/** Tracked files and the roots to cite them from (deriveRoots' plus tracked dot-directories). */
-function repoContext() {
-  const tracked = new Set(execFileSync("git", ["ls-files"], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 }).split("\n").filter(Boolean));
-  const roots = new Set(deriveRoots(REPO));
-  for (const f of tracked) { const top = f.split("/")[0]; if (top.startsWith(".") && f.includes("/")) roots.add(top); }
-  return { roots: [...roots].sort(), tracked };
+/** Pure: why the derived inputs cannot be trusted, or null. */
+export function preconditionError(tracked, roots) {
+  if (tracked.size < 100) return `only ${tracked.size} tracked files`;
+  if (!roots.includes("scripts") || !roots.includes("docs")) return `derived roots ${roots.join(",")} lack scripts/docs`;
+  return null;
+}
+
+function trackedFiles() {
+  const out = execFileSync("git", ["ls-files"], { cwd: REPO, encoding: "utf8", maxBuffer: 1 << 28 });
+  return new Set(out.split("\n").filter(Boolean));
 }
 
 function runCli(file) {
-  if (!existsSync(file)) { console.error(`stamp-citations: ${file} not readable; failing closed`); return 1; }
-  const r = check(readFileSync(file, "utf8"), repoContext());
+  if (!file || !existsSync(file) || statSync(file).isDirectory()) { console.error(`stamp-citations: ${file || "(no file given)"} not readable; failing closed`); return 1; }
+  let tracked;
+  try { tracked = trackedFiles(); } catch (e) { console.error(`stamp-citations: git ls-files failed (${String(e.message).split("\n")[0]}); failing closed`); return 1; }
+  const roots = stampRoots(tracked);
+  const bad = preconditionError(tracked, roots);
+  if (bad) { console.error(`stamp-citations: ${bad}; failing closed`); return 1; }
+  const r = check(readFileSync(file, "utf8"), roots, (p) => tracked.has(p), {}, IN_SCOPE_FLOOR);
   console.log(`stamp-citations: ${r.stamps} stamps, ${r.inScope} dated ${STAMP_RULE_FROM} or later, ${r.tokens} path tokens checked, ${r.violations.length} violations`);
   console.log(`report only: ${r.noCommand} of ${r.inScope} in-scope stamps carry no backticked command in the ${CMD_WINDOW} characters after the marker`);
   for (const e of r.errors) console.error(`  FAIL ${e}`);
@@ -229,91 +247,96 @@ function runCli(file) {
 }
 
 function selfTest() {
-  const roots = ["docs", "scripts", ".github"];
-  const tracked = new Set(["scripts/x.mjs", "scripts/y.mjs", "docs/y.md", ".github/ci.yml"]);
-  const ctx = { roots, tracked };
-  const stamp = (date, body, head = "(open):") => `1. **Row one.** RE-MEASURED ${date} ${head} ${body}\n`;
+  const real = new Set(["scripts/real.mjs", "docs/real.md", ".github/real.yml", ".claude/real.md"]);
+  const roots = stampRoots(real);
+  const exists = (p) => real.has(p);
+  const stamp = (date, body) => `1. **Row one.** RE-MEASURED ${date} (open): ${body}\n`;
   const filler = Array.from({ length: STAMP_FLOOR }, (_, i) => `${i + 2}. **Pad ${i}.** RE-MEASURED 2026-01-01: padding.\n`).join("\n");
   const doc = (s) => `${s}\n${filler}`;
-  const long = "x".repeat(250);
+  const longHdr = `(${"DONE, a long verdict, ".repeat(12)}and more)`;
   const cases = [
-    { name: "bare real path in a 2026-10-08 stamp -> red, names the row", text: doc(stamp("2026-10-08", "see scripts/x.mjs for it.")), ok: false, mention: "row 1" },
-    { name: "the same path backticked -> green", text: doc(stamp("2026-10-08", "see `scripts/x.mjs` for it.")), ok: true },
-    { name: "a 2026-09-26 stamp with a bare path -> green (before the start date)", text: doc(stamp("2026-09-26", "see scripts/x.mjs for it.")), ok: true },
+    { name: "unbackticked path in a 2026-10-08 stamp -> red, names the row", text: doc(stamp("2026-10-08", "see scripts/x.mjs for it.")), ok: false, mention: "row 1" },
+    { name: "the same path backticked, tracked -> green", text: doc(stamp("2026-10-08", "see `scripts/real.mjs` for it.")), ok: true },
+    { name: "an unbackticked path that IS tracked -> still red (visibility, not existence)", text: doc(stamp("2026-10-08", "see scripts/real.mjs for it.")), ok: false },
+    { name: "a 2026-09-26 stamp with an unbackticked path -> green (before the start date)", text: doc(stamp("2026-09-26", "see scripts/x.mjs for it.")), ok: true },
     { name: "a bare basename with no root prefix -> green", text: doc(stamp("2026-10-08", "see x.mjs (PR #1500) for it.")), ok: true },
-    { name: "a path in the FIX PROPOSED sentence after the stamp -> not charged", text: doc(stamp("2026-10-08", "done. FIX PROPOSED 2026-10-08 (branch b): scripts/x.mjs lands.")), ok: true },
+    { name: "a path in the dated FIX PROPOSED sentence after the stamp -> not charged", text: doc(stamp("2026-10-08", "done. FIX PROPOSED 2026-10-08 (branch b): scripts/x.mjs lands.")), ok: true },
     { name: "a stamp opening with its verdict still reads its body", text: doc(stamp("2026-10-08", "DONE, see scripts/y.mjs.")), ok: false },
-    { name: "inline code span with two backticks on the line -> green", text: doc(stamp("2026-10-08", "see `scripts/x.mjs` and `docs/y.md`.")), ok: true },
-    { name: "a fenced block holding a real path -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08:\n```\nscripts/x.mjs\n```\n"), ok: true },
+    { name: "a LONG parenthesised verdict header does not truncate the stamp", text: doc(`1. **Row one.** RE-MEASURED 2026-10-08 ${longHdr}: see scripts/x.mjs.\n`), ok: false },
+    { name: "an unclosed parenthesis in the header does not truncate the stamp", text: doc("1. **Row one.** RE-MEASURED 2026-10-08 (DONE, scripts/x.mjs here\n"), ok: false },
+    { name: "a sentence-start 'NOT BUILT:' with no date still ends the stamp -> not charged", text: doc(stamp("2026-10-08", "measured. NOT BUILT: scripts/NOPE.mjs is proposed.")), ok: true, mutant: "clauseStart" },
+    { name: "a sentence-start 'AWAITING OWNER (' ends the stamp -> not charged", text: doc(stamp("2026-10-08", "measured; AWAITING OWNER (scripts/NOPE.mjs).")), ok: true, mutant: "clauseStart" },
+    { name: "a sentence-start 'BLOCKED ON LAB (' ends the stamp -> not charged", text: doc(stamp("2026-10-08", "measured. BLOCKED ON LAB (scripts/NOPE.mjs).")), ok: true, mutant: "clauseStart" },
+    { name: "a status word used as prose (no date after it) does not end the stamp", text: doc(stamp("2026-10-08", "PR #1455 has LANDED, then scripts/x.mjs was read.")), ok: false },
+    { name: "inline code span holding tracked paths -> green", text: doc(stamp("2026-10-08", "see `scripts/real.mjs` and `docs/real.md`.")), ok: true },
+    { name: "a fenced block holding a tracked path -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08:\n```\nnode scripts/real.mjs --smoke\n```\n"), ok: true },
+    { name: "a fenced block holding a nonexistent path -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08:\n```\nnode scripts/x.mjs --smoke\n```\n"), ok: false },
+    { name: "an EXACT span on a nonexistent dot-directory path -> red", text: doc(stamp("2026-10-08", "see `.github/NOPE.yml` here.")), ok: false },
+    { name: "an EXACT span on a nonexistent .claude path -> red", text: doc(stamp("2026-10-08", "see `.claude/NOPE.md` here.")), ok: false },
+    { name: "an EXACT span on a nonexistent path under a dist directory -> red", text: doc(stamp("2026-10-08", "see `scripts/dist/NOPE.mjs` here.")), ok: false },
+    { name: "an exact span on a tracked .claude path -> green", text: doc(stamp("2026-10-08", "see `.claude/real.md` here.")), ok: true },
+    { name: "a header that holds a dated status word does not end the stamp early", text: doc("1. **Row one.** RE-MEASURED 2026-10-08 (DONE 2026-10-08, scripts/x.mjs): body.\n"), ok: false },
+    { name: "a nonexistent path inside a command span -> red", text: doc(stamp("2026-10-08", "ran `node scripts/NOPE.mjs`.")), ok: false },
+    { name: "a tracked path inside a command span -> green", text: doc(stamp("2026-10-08", "ran `node scripts/real.mjs --json`.")), ok: true },
+    { name: "a nonexistent path with a :N suffix in a span -> red", text: doc(stamp("2026-10-08", "see `scripts/NOPE.mjs:12`.")), ok: false },
+    { name: "a nonexistent dot-directory path -> red", text: doc(stamp("2026-10-08", "see .github/NOPE.yml here.")), ok: false },
+    { name: "a dot-directory path that is tracked, backticked -> green", text: doc(stamp("2026-10-08", "see `.github/real.yml` here.")), ok: true },
+    { name: "a ./-prefixed bare path -> red", text: doc(stamp("2026-10-08", "read ./scripts/x.mjs here.")), ok: false },
+    { name: "a hard-wrapped span holding a tracked path is not a false positive", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/real.mjs\n    --json` fine.\n"), ok: true },
+    { name: "a bare path after a hard-wrapped span is still caught", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/real.mjs\n    --json` then scripts/x.mjs here.\n"), ok: false },
+    { name: "the un-hyphenated Remeasured form is a stamp too", text: doc("1. **Row one.** Remeasured 2026-10-09: read scripts/x.mjs.\n"), ok: false },
+    { name: "a path on the stamp's second line (same paragraph) is read", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: first line,\n    then scripts/x.mjs on the second.\n"), ok: false },
+    { name: "a path after a blank line is not charged to the stamp", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: fine.\n\nunrelated scripts/x.mjs paragraph.\n"), ok: true },
+    { name: "a path past the 1500-character cap is not read", text: doc(stamp("2026-10-08", `${"x ".repeat(800)}scripts/x.mjs`)), ok: true },
+    { name: "in-scope floor: one in-scope stamp under a floor of 5 -> red", text: doc(stamp("2026-10-08", "fine.")), ok: false, mention: "floor 5", floor: 5 },
     { name: "zero stamps -> red (floor)", text: "1. **Row one.** nothing measured.\n", ok: false, mention: "floor" },
-    // round 1 finding (b): existence checked by this gate, wherever the token sits
-    { name: "NOPE path in an exact span -> red", text: doc(stamp("2026-10-08", "see `scripts/NOPE.mjs`.")), ok: false, mention: "no such tracked file" },
-    { name: "NOPE path inside a command span -> red (check-cited-paths exit 0 on this)", text: doc(stamp("2026-10-08", "ran `node scripts/NOPE.mjs`.")), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "NOPE path with a :N suffix in a span -> red", text: doc(stamp("2026-10-08", "see `scripts/NOPE.mjs:12`.")), ok: false, mention: "no such tracked file" },
-    { name: "real path in a command span -> green", text: doc(stamp("2026-10-08", "ran `node scripts/x.mjs --json`.")), ok: true },
-    { name: "real path with ./ prefix in a span -> green", text: doc(stamp("2026-10-08", "ran `./scripts/x.mjs`.")), ok: true },
-    { name: "bare ./scripts/NOPE.mjs -> red", text: doc(stamp("2026-10-08", "read ./scripts/NOPE.mjs here.")), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "NOPE under a dot-root (.github) -> red", text: doc(stamp("2026-10-08", "see `.github/NOPE.yml`.")), ok: false, mention: ".github/NOPE.yml" },
-    { name: "real path under a dot-root -> green", text: doc(stamp("2026-10-08", "see `.github/ci.yml`.")), ok: true },
-    // round 1 finding (a): the region is not cut short
-    { name: "row 28 shape: a long (DONE, ...) header, then a bare NOPE path -> red", text: doc(stamp("2026-10-08", `then scripts/NOPE.mjs`, `(DONE, ${long} \`scripts/x.mjs\`, ${long})`)), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "row 28 shape: a header with a nested (...) and a bare NOPE path inside it -> red", text: doc(stamp("2026-10-08", "tail.", `(DONE, a (nested) scripts/NOPE.mjs, ${long})`)), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "an unclosed header paren keeps its contents in the region -> red", text: doc(stamp("2026-10-08", "scripts/NOPE.mjs is here.", "(DONE, unclosed")), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "row 61 shape: 'has LANDED' in prose does not cut the stamp -> red on the NOPE after it", text: doc(stamp("2026-10-08", "the open draft PR #1455 has LANDED (merge abc); node scripts/NOPE.mjs scanned 316.")), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "row 170 shape: 'FIX PROPOSED' in prose does not cut the stamp -> red", text: doc(stamp("2026-10-08", "an open row still reading FIX PROPOSED for a merged PR; see scripts/NOPE.mjs.")), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "a marker at a sentence start ('. NOT BUILT: ...') still ends the stamp -> green", text: doc(stamp("2026-10-08", "measured. NOT BUILT: scripts/NOPE.mjs is proposed.")), ok: true },
-    { name: "'; AWAITING OWNER (' ends the stamp -> green", text: doc(stamp("2026-10-08", "measured; AWAITING OWNER (scripts/NOPE.mjs).")), ok: true },
-    { name: "'. BLOCKED ON LAB (' ends the stamp -> green", text: doc(stamp("2026-10-08", "measured. BLOCKED ON LAB (scripts/NOPE.mjs).")), ok: true },
-    { name: "'Remeasured' without the hyphen is a stamp -> red", text: doc("1. **Row one.** Remeasured 2026-10-09: read scripts/NOPE.mjs here.\n"), ok: false, mention: "scripts/NOPE.mjs" },
-    // multi-line stamps and the region stops
-    { name: "second line of the same paragraph is read -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: first line,\n   then bare scripts/NOPE.mjs here.\n"), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "a code span hard-wrapped over a line break keeps parity: real path green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/x.mjs\n   --json` ok, and `docs/y.md`.\n"), ok: true },
-    { name: "a code span hard-wrapped over a line break, then a bare NOPE -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/x.mjs\n   --json` ok, read scripts/NOPE.mjs here.\n"), ok: false, mention: "scripts/NOPE.mjs" },
-    { name: "text after a blank line is not the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok.\n\nAnother paragraph with scripts/NOPE.mjs bare.\n"), ok: true },
-    { name: "a path past the 1500-character cap is not read", text: doc(`1. **Row one.** RE-MEASURED 2026-10-08: ${"y".repeat(1600)} scripts/NOPE.mjs bare.\n`), ok: true },
-    { name: "the next numbered row is not the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok.\n2. **Row two.** see scripts/NOPE.mjs bare.\n"), ok: true },
-    { name: "the next re-measured marker (older date) ends the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok. RE-MEASURED 2026-09-01: see scripts/NOPE.mjs bare."), ok: true },
   ];
   let pass = 0;
   let total = 0;
   const say = (ok, label) => { total += 1; if (ok) pass += 1; console.log(`  ${ok ? "ok  " : "FAIL"} ${label}`); };
-  const good = (c, r) => r.ok === c.ok && (!c.mention || r.errors.some((e) => e.includes(c.mention)));
+  const verdict = (c, mutate, rts = roots) => { const r = check(c.text, rts, exists, mutate, c.floor ?? 0); return r.ok === c.ok && (!c.mention || r.errors.some((e) => e.includes(c.mention))); };
   for (const c of cases) {
-    const r = check(c.text, ctx);
-    const g = good(c, r);
-    say(g, c.name + (g ? ` (${r.ok ? "exit 0" : "exit 1"})` : ` (got ok=${r.ok}: ${r.errors.join(" | ")})`));
+    const r = check(c.text, roots, exists, {}, c.floor ?? 0);
+    const good = verdict(c);
+    say(good, c.name + (good ? ` (${r.ok ? "exit 0" : "exit 1"})` : ` (got ok=${r.ok}: ${r.errors.join(" | ")})`));
   }
   // Mutants: each must turn at least one planted case red.
   const mutants = [
     ["drop the date cut-off", { noCutoff: true }],
-    ["end the region at the paragraph only (no marker cuts)", { paragraphOnly: true }],
-    ["never report a bare path", { acceptBare: true }],
-    ["assume every path exists", { assumeExists: true }],
-    ["cut each region at its first newline", { firstNewline: true }],
-    ["remove every region stop", { noStops: true }],
-    ["cap the region at 15 characters", { maxRegion: 15 }],
+    ["end the region at the paragraph only (no marker/status cut)", { paragraphOnly: true }],
+    ["treat every path as inside a backtick span", { alwaysInside: true }],
+    ["end the region at the first line break", { firstNewline: true }],
+    ["drop the blank-line and next-row stops", { noBlankStop: true }],
+    ["cut at an undated status word", { undatedStatus: true }],
+    ["ignore the sentence-start status marker", { noClauseStart: true }],
+    ["skip no header", { noHeaderSkip: true }],
+    ["trust an exact backtick span without resolving it", { trustExact: true }],
   ];
-  for (const [label, mutate] of mutants) {
-    const red = cases.some((c) => !good(c, check(c.text, ctx, mutate)));
-    say(red, `mutant "${label}" turns a planted case red`);
-  }
-  // Fail-closed context: no tracked files, or missing roots, is red.
-  say(!check(doc(stamp("2026-10-08", "ok.")), { roots, tracked: new Set() }).ok, "empty tracked set -> red");
-  say(!check(doc(stamp("2026-10-08", "ok.")), { roots: ["src"], tracked }).ok, "roots without scripts/docs -> red");
-  // The shipped CLI exit codes, through a scratch file.
+  for (const [label, mutate] of mutants) say(cases.some((c) => !verdict(c, mutate)), `mutant "${label}" turns a planted case red`);
+  const noDot = stampRoots(real, { noDotRoots: true });
+  say(cases.some((c) => !verdict(c, {}, noDot)), `mutant "stampRoots drops the dot-directory roots" turns a planted case red`);
+  say(preconditionError(new Set(["scripts/a.mjs"]), roots) !== null, "precondition: a handful of tracked files is refused");
+  say(preconditionError(new Set(Array.from({ length: 200 }, (_, i) => `x/${i}.md`)), ["x"]) !== null, "precondition: roots without scripts and docs are refused");
+  say(preconditionError(new Set(Array.from({ length: 200 }, (_, i) => `x/${i}.md`)), roots) === null, "precondition: a plausible tree is accepted");
+  // The shipped CLI exit codes, through a scratch file, against this repository's tracked files.
   const dir = mkdtempSync(join(tmpdir(), "stamp-citations-"));
   try {
     for (const [label, body, want] of [
-      ["CLI: bare real path", "see scripts/check-cited-paths.mjs", 1],
+      ["CLI: unbackticked real path", "see scripts/check-cited-paths.mjs", 1],
       ["CLI: backticked real path", "see `scripts/check-cited-paths.mjs`", 0],
-      ["CLI: command-span NOPE path", "ran `node scripts/check-launch-claims-NOPE.mjs`", 1],
-      ["CLI: NOPE path with :N suffix", "see `scripts/check-launch-claims-NOPE.mjs:12`", 1],
+      ["CLI: command span with a nonexistent path", "ran `node scripts/check-stamp-NOPE.mjs`", 1],
+      ["CLI: command span with a real path", "ran `node scripts/check-cited-paths.mjs --json`", 0],
     ]) {
       const f = join(dir, "plan.md");
-      writeFileSync(f, doc(stamp("2026-10-08", body)));
+      const inScopePad = Array.from({ length: IN_SCOPE_FLOOR }, (_, i) => `${i + 100}. **Pad ${i}.** RE-MEASURED 2026-10-08: nothing cited.\n`).join("\n");
+      writeFileSync(f, `${doc(stamp("2026-10-08", body))}\n${inScopePad}`);
       const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--file", f], { encoding: "utf8" });
       say(r.status === want, `${label} -> exit ${want}`);
     }
+    const noArg = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--file"], { encoding: "utf8" });
+    say(noArg.status === 1 && noArg.stderr.includes("failing closed"), "CLI: --file with no argument -> exit 1 with a stated failure");
+    const noGit = spawnSync(process.execPath, [fileURLToPath(import.meta.url)], { encoding: "utf8", env: { ...process.env, GIT_DIR: "/nonexistent" } });
+    say(noGit.status === 1 && noGit.stderr.includes("failing closed"), "CLI: unreadable git state -> exit 1 with a stated failure");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -326,5 +349,6 @@ if (isEntry) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(selfTest());
   const i = argv.indexOf("--file");
-  process.exit(runCli(i >= 0 ? resolve(argv[i + 1] ?? "") : join(REPO, PLAN_FILE)));
+  const given = i >= 0 ? argv[i + 1] : undefined;
+  process.exit(runCli(i >= 0 ? (given && !given.startsWith("--") ? resolve(given) : "") : join(REPO, PLAN_FILE)));
 }

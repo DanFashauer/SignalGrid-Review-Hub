@@ -56,7 +56,16 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
-import { deriveRoots } from "./check-cited-paths.mjs";
+
+// check-cited-paths shells out to git at import time; a broken checkout must read as a
+// stated failure, not a stack trace that happens to exit 1.
+let deriveRoots;
+try {
+  ({ deriveRoots } = await import("./check-cited-paths.mjs"));
+} catch (e) {
+  console.error(`stamp-citations: cannot load check-cited-paths (${String(e.message).split("\n")[0]}); failing closed`);
+  process.exit(1);
+}
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const STAMP_RULE_FROM = "2026-10-08";
@@ -261,6 +270,7 @@ function selfTest() {
     { name: "a code span hard-wrapped over a line break keeps parity: real path green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/x.mjs\n   --json` ok, and `docs/y.md`.\n"), ok: true },
     { name: "a code span hard-wrapped over a line break, then a bare NOPE -> red", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ran `node scripts/x.mjs\n   --json` ok, read scripts/NOPE.mjs here.\n"), ok: false, mention: "scripts/NOPE.mjs" },
     { name: "text after a blank line is not the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok.\n\nAnother paragraph with scripts/NOPE.mjs bare.\n"), ok: true },
+    { name: "a path past the 1500-character cap is not read", text: doc(`1. **Row one.** RE-MEASURED 2026-10-08: ${"y".repeat(1600)} scripts/NOPE.mjs bare.\n`), ok: true },
     { name: "the next numbered row is not the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok.\n2. **Row two.** see scripts/NOPE.mjs bare.\n"), ok: true },
     { name: "the next re-measured marker (older date) ends the stamp -> green", text: doc("1. **Row one.** RE-MEASURED 2026-10-08: ok. RE-MEASURED 2026-09-01: see scripts/NOPE.mjs bare."), ok: true },
   ];

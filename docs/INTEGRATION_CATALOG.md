@@ -199,7 +199,7 @@ The assurance model is the whole point — a cryptographic proof outranks any se
 
 **The supervision-identity lifecycle — "device trust" as a precondition** (`supervision-identity.ts`, same family, a distinct surface). Hardware attestation says what the Secure Enclave *proves* about the device; it says nothing about whether the **organization still holds the device's supervision identity** — the runbooks' "device trust", without which no management command runs, and whose loss is a named root cause of shared-device failures (`docs/research/SHARED_DEVICE_CUSTODY_GROUND_TRUTH.md`). This surface grades that lifecycle as read from the UEM, fail-closed: another org's identity, a lost identity, a lost enrollment, never enrolled, or affirmatively unsupervised → `restrict` (this org can run nothing on it); supervised-and-bound but answering no command → `step_up`; any axis unknown or a malformed report → `step_up`. The one grant — supervised, bound to *this* org, enrolled, answering commands, clean parse — is pinned by equality over all 288 lifecycle states, every non-grant is a hold or a containment (never merely `monitor`/`alert`/`escalate`), and a 13-fixture corpus falsifies each branch on its own.
 
-Proven fully offline by `pnpm run proof:device-attestation` (154 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
+Proven fully offline by `pnpm run proof:device-attestation` (157 checks, no network, no keys). Live calls are gated exactly like every other connector: fixture mode unless a beta/prod tier sets `SIGNALGRID_LIVE_INTEGRATIONS=true` and a bridge token. The trust boundary is deliberate: an upstream read-only bridge performs the X.509 chain verification to Apple's Enterprise Attestation Root and decodes the leaf OIDs; **SignalGrid consumes that already-verified record** — it normalizes and decides on it, and does not itself perform the crypto, issue certificates, or mint attestations. Every signal is read-only, and this is not an Apple partnership or certification claim.
 
 ## SSO session-binding — the shared-device identity dimension (built, fixture-backed)
 
@@ -505,7 +505,7 @@ in one place.
   emitter records what WOULD have been sent with a literal `delivered: false` on every entry —
   after the syslog family was found returning `status:'sent'` for events it silently dropped,
   the surface is shaped so that claim is unrepresentable. Routing (`response-accountability`)
-  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (100 checks).
+  stays a verdict; emission stays an act behind this gate. `proof:emitter-discipline` (139 checks).
 
 - **CAEP / Shared Signals session-signal emitter** — the sixth family, and the outbound half of
   continuous access evaluation (intake ledger row 17, built on the owner's keep-going): telling
@@ -717,7 +717,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   model catalog, neither of which is a UEM read. The axis is also proved **carried, not
   graded** — swapping only `cellularHardware` across all 1,440 swept states changes no
   verdict, because a device's radio is not a management-posture fact.
-- **`proof:nac` (46 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
+- **`proof:nac` (59 checks)** — Cisco ISE and Aruba ClearPass endpoint identity,
   read-only. Hostile-identifier cases are asserted against the **filter builder**, not
   merely the validator, and fixture lookups are scoped to the identifier kind so a
   certificate query cannot be answered by a MAC match. The normalizers now take **no
@@ -769,7 +769,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   check with a door beside it. Source faults are reported rather than swallowed: a
   bare `catch { return null }` made an unreachable UEM indistinguishable from "no such
   device".
-- **`proof:config-scope` (58 checks)** — tenant scoping for the connector
+- **`proof:config-scope` (59 checks)** — tenant scoping for the connector
   *configuration* stores. Both `uem/store.ts` and `nac/store.ts` keyed their entry on a
   flat constant (`"uem:config"`, `"nac:config"`) in a repository where every other
   persisted reader is keyed on `(id, tenant_id)`. **Severity, stated honestly: nothing

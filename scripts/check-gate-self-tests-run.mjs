@@ -40,9 +40,9 @@
 //    Source cannot be made to look like a step without being one, so comments, strings, spreads, ternaries,
 //    `.filter`, `.length = 0`, `Object.assign`, aliases and the rest need no rule of their own. What IS checked statically
 //    is that the `--list-steps` block sits directly above the one `for (const step of STEPS)` loop (only
-//    `const`/`let` declarations between them), so nothing can change the list between the dump and the loop; a runner
+//    `const`/`let` declarations of a LITERAL — `[]`, `{}`, `null`, a boolean or an integer — between them), so nothing can change the list between the dump and the loop; a runner
 //    whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv steps,
-//    fails the gate and credits nothing. Stated limits: a loop body that rewrites `step.cmd`, and any runner logic
+//    fails the gate and credits nothing. Stated limits: a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
 //    other than the `heavy`/`needsNativeBuild` skips, are not modelled.
 //  · WORKFLOWS: whether a `run:` line really runs `<gate> --self-test` is decided by scripts/lib/workflow-invocation.mjs
 //    — the SAME matcher scripts/check-preflight-ci-parity.mjs uses (command position only; quotes masked; `echo`, a quoted
@@ -158,7 +158,7 @@ export function namesControl(src) {
 // ── registration: who invokes `<gate> --self-test` ──────────────────────────────────────────
 
 const LIST_BLOCK = String.raw`if\s*\(\s*process\.argv\.includes\(\s*"--list-steps"\s*\)\s*\)\s*\{\s*console\.log\(JSON\.stringify\(STEPS\.map\(\(s\) => \(\{ name: s\.name, cmd: s\.cmd, heavy: s\.heavy === true, needsNativeBuild: s\.needsNativeBuild === true \}\)\)\)\);\s*process\.exit\(0\);\s*\}`;
-const RUNNER_SHAPE = new RegExp(String.raw`${LIST_BLOCK}\s*(?:(?:const|let)\s+\w+\s*=\s*[^;{}]*;\s*)*for\s*\(\s*const\s+step\s+of\s+STEPS\s*\)`);
+const RUNNER_SHAPE = new RegExp(String.raw`${LIST_BLOCK}\s*(?:(?:const|let)\s+\w+\s*=\s*(?:\[\s*\]|\{\s*\}|null|true|false|-?\d+)\s*;\s*)*for\s*\(\s*const\s+step\s+of\s+STEPS\s*\)`);
 
 /** Pure: does the runner source carry the `--list-steps` block directly above its one `for (const step of STEPS)` loop? */
 export function runnerShapeOk(source) {
@@ -437,6 +437,13 @@ function selfTest() {
       ["a destructuring over STEPS", `let STEPS = [${E}];`, "[STEPS] = [[]];\n"],
     ]) R(label, { breadth: runnerSrc(decl, { mid }) });
     R("a mutation placed AFTER the dump and before the loop", { breadth: `${stepsDecl(E)}\n${LIST_SRC}STEPS.length = 0;\n${LOOP_SRC}` });
+    for (const [label, stmt] of [
+      ["a `const x = STEPS.splice(0);` between dump and loop", "const x = STEPS.splice(0);\n"],
+      ["a `const x = STEPS.shift();` between dump and loop", "const x = STEPS.shift();\n"],
+      ["a `const x = process.exit(0);` between dump and loop", "const x = process.exit(0);\n"],
+      ["a brace-free `.map(s => s.cmd = ...)` between dump and loop", "const x = STEPS.map(s => s.cmd = [\"true\"]);\n"],
+      ["a bare `STEPS.pop();` statement between dump and loop", "STEPS.pop();\n"],
+    ]) R(label, { breadth: `${stepsDecl(E)}\n${LIST_SRC}${stmt}${LOOP_SRC}` });
     R("a runner whose dump block is missing", { breadth: `${stepsDecl(E)}\n${LOOP_SRC}` });
     R("a runner whose dump filters the list", { breadth: `${stepsDecl(E)}\n${LIST_SRC.replace("STEPS.map", "STEPS.filter(() => false).map")}${LOOP_SRC}` });
     R("a runner whose loop iterates a different list", { breadth: `${stepsDecl(E)}\n${LIST_SRC}${LOOP_SRC.replace("of STEPS)", "of STEPS.slice(1))")}` });

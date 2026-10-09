@@ -274,7 +274,9 @@ export function collectionRequests(filesByName) {
     const methodBlocks = parsed.blocks.filter((bl) => METHODS.includes(bl.name));
     if (methodBlocks.length !== 1) { fatal.push(`${name}: ${methodBlocks.length} method block(s) — exactly one is required (Bruno merges every http block and the last wins, so a second block hides the request this gate sees)`); continue; }
     if (parsed.blocks.filter((bl) => bl.name === "meta").length !== 1) { fatal.push(`${name}: not exactly one meta block`); continue; }
-    if (parsed.blocks.filter((bl) => bl.name === "docs").length > 1) { fatal.push(`${name}: more than one docs block`); continue; }
+    const docsBlocks = parsed.blocks.filter((bl) => bl.name === "docs");
+    if (docsBlocks.length !== 1) { fatal.push(`${name}: ${docsBlocks.length} docs block(s) — exactly one is required`); continue; }
+    if (!(docsBlocks[0].lines ?? []).some((l) => l.trim() !== "")) { fatal.push(`${name}: the docs block has no non-blank content — Bruno 4.0.0 rejects a request file with an empty docs block ("Skipping invalid file") and never sends it, so the gate must not count it`); continue; }
     const mb = methodBlocks[0];
     const method = mb.name.toUpperCase();
     const keys = mb.entries.map(([k]) => k);
@@ -593,6 +595,14 @@ function selfTest() {
     checks.push([`ROUND8: a request file named ${JSON.stringify(bad)} is FATAL`, has(audit(csrc, b), bad, "plain")]);
   }
   checks.push(["ROUND8: the live request file names all pass the name rule", Object.keys(liveC.bruByName).every((n) => n === "collection.bru" || /^[A-Za-z0-9][A-Za-z0-9-]*\.bru$/.test(n))]);
+  // ---- review round 9: a request file Bruno rejects as invalid is never sent ----
+  for (const [label, edit] of [
+    ["an empty docs block (`docs {` then `}`)", (t) => t.replace("docs {\n  x\n}", "docs {\n}")],
+    ["a docs block with one empty line", (t) => t.replace("docs {\n  x\n}", "docs {\n\n}")],
+    ["a docs block of whitespace only", (t) => t.replace("docs {\n  x\n}", "docs {\n  \n}")],
+    ["no docs block at all", (t) => t.replace("\ndocs {\n  x\n}\n", "\n")],
+    ["two docs blocks", (t) => t + "\ndocs {\n  y\n}\n"],
+  ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND9: ${label} is FATAL`, has(audit(csrc, b), "b.bru", "docs")]); }
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

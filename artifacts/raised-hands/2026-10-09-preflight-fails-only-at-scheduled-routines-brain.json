@@ -7,6 +7,9 @@
   "need": "PR #1480 merged to SignalGrid_Alpha, then I merge it in, re-run preflight, push",
   "whoCanUnblock": "cloud lane",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T08:49:10.017Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1480 merged to SignalGrid_Alpha at 2026-10-09T02:43:48Z (e276446d) and was merged into this branch; the Scheduled routines gate passes"
 }

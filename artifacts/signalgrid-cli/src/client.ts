@@ -121,6 +121,14 @@ export function idempotencyKey(given: string | undefined): string {
  * no recognisable result — because each of them may sit behind a committed write
  * (review round 8 on PR #1321).
  */
+/**
+ * Who can reconcile a possibly-committed write. The roles that WRITE (operator evaluates,
+ * connector syncs) do not hold audit:read (lib/signalgrid-core/src/auth.ts), so the note
+ * names the credential that can look, rather than sending the writer to a 403
+ * (review round 11 on PR #1321).
+ */
+const RECONCILE = "signalgrid audit with a credential holding audit:read (owner, admin or auditor)";
+
 export function writeRecovery(
   key: string | undefined,
   mode: "lost" | "refused" = "lost",
@@ -131,14 +139,14 @@ export function writeRecovery(
     // write (a decision evaluated before a later step failed), so the operator reconciles
     // first (review round 9 on PR #1321).
     return {
-      suffix: ` A refusal can follow a partial write, and the server never replays a refusal, so retrying (even with --idempotency-key ${key}) can write again: check \`signalgrid audit\` for this write before retrying.`,
-      extra: { idempotencyKey: key, mayHaveWritten: true },
+      suffix: ` A refusal can follow a partial write, and the server never replays a refusal, so retrying (even with --idempotency-key ${key}) can write again: check the tenant's audit log (\`signalgrid audit\`) with a credential that holds audit:read (owner, admin or auditor — operator and connector keys do not) before retrying.`,
+      extra: { idempotencyKey: key, mayHaveWritten: true, reconcileWith: RECONCILE },
     };
   }
   return key
     ? {
-        suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check \`signalgrid audit\` for the write before retrying.`,
-        extra: { idempotencyKey: key },
+        suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check the tenant's audit log (\`signalgrid audit\`) with a credential that holds audit:read (owner, admin or auditor — operator and connector keys do not) before retrying.`,
+        extra: { idempotencyKey: key, reconcileWith: RECONCILE },
       }
     : { suffix: "", extra: undefined };
 }

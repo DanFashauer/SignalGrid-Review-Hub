@@ -339,14 +339,14 @@ async function main(): Promise<void> {
     };
     const viaLiar = (body: unknown, args: string[]) => viaLiarEnv(body, args, {});
     const oov = await viaLiar(
-      { decision: { id: "dec_x", outcome: "probably_fine" }, evidence: { signalsUsed: [] }, verified: true },
+      { decision: { id: "dec_x", tenantId: TENANT, outcome: "probably_fine" }, evidence: { signalsUsed: [] }, verified: true },
       ["explain", "dec_x"],
     );
     check("explain refuses a recorded outcome outside the four words (exit 1, no outcome line)",
       oov.code === 1 && !/^outcome/m.test(oov.stdout) && /no recognisable outcome/.test(oov.stderr));
     // Well-bound in every respect except the flag, so these checks isolate `verified` (round 7).
     const unverified = {
-      decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" },
+      decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" },
       evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [{ category: "identity_state" }] },
       verified: false,
     };
@@ -359,7 +359,7 @@ async function main(): Promise<void> {
     const sgU = await viaLiar(unverified, ["signals", "dec_x"]);
     check("signals on evidence that does not verify exits 1 and says so",
       sgU.code === 1 && /DOES NOT VERIFY/.test(sgU.stdout));
-    const broken = await viaLiar({ events: [{ seq: 1, type: "decision.evaluated" }], chain: { valid: false, brokenAtSeq: 1, length: 1 }, source: "memory" }, ["audit"]);
+    const broken = await viaLiar({ events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: false, brokenAtSeq: 1, length: 1 }, source: "memory" }, ["audit"]);
     check("audit on a broken ledger chain exits 1 and names the break",
       broken.code === 1 && /BROKEN at seq 1/.test(broken.stdout));
     const brokenJ = await viaLiar({ events: [], chain: { valid: false, brokenAtSeq: 1, length: 1 } }, ["audit", "--json"]);
@@ -427,7 +427,7 @@ async function main(): Promise<void> {
     }
 
     // An ABSENT verdict field is not a passing one.
-    const noVerified = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { signalsUsed: [] } }, ["explain", "dec_x"]);
+    const noVerified = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow" }, evidence: { signalsUsed: [] } }, ["explain", "dec_x"]);
     check("explain with no `verified` field in the evidence answer exits 1", noVerified.code === 1);
     const noVerifiedSignals = await viaLiar({ evidence: { signalsUsed: [] } }, ["signals", "dec_x"]);
     check("signals with no `verified` field exits 1", noVerifiedSignals.code === 1);
@@ -531,8 +531,12 @@ async function main(): Promise<void> {
         res.end(JSON.stringify({ decision: { decisionId: "dec_raced", outcome: "allow", evidenceSnapshotId: "ev_raced" } }));
         return;
       }
-      // decide now verifies the snapshot it was given before reporting the verdict.
-      res.end(JSON.stringify({ evidence: { id: "ev_raced", tenantId: TENANT, decisionId: "dec_raced", signalsUsed: [] }, verified: true }));
+      // decide now verifies the snapshot it was given, then reads the decision back.
+      if ((req.url ?? "").includes("/evidence")) {
+        res.end(JSON.stringify({ evidence: { id: "ev_raced", tenantId: TENANT, decisionId: "dec_raced", signalsUsed: [] }, verified: true }));
+        return;
+      }
+      res.end(JSON.stringify({ decision: { id: "dec_raced", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_raced" } }));
     });
     const racerPort = await listen(racer);
     liars.push(racer);
@@ -553,25 +557,25 @@ async function main(): Promise<void> {
     // ── review round 4 on PR #1321 ──
     // `verified: true` counts only for a snapshot bound to THIS decision.
     const bindings: Array<[string, unknown, string[]]> = [
-      ["explain: verified with no snapshot", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, verified: true }, ["explain", "dec_x"]],
-      ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
-      ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["explain: verified with no snapshot", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, verified: true }, ["explain", "dec_x"]],
+      ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
       ["signals: a verified snapshot of another decision", { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
     ];
     for (const [label, body, args] of bindings) {
       const r = await viaLiar(body, args);
       check(`${label} exits 1 and never says it verifies`, r.code === 1 && !/digest verifies|evidence verifies/.test(r.stdout));
     }
-    const bound = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    const bound = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
     check("explain: a verified snapshot bound to the decision exits 0 (the binding check can pass)", bound.code === 0 && /digest verifies/.test(bound.stdout));
-    const noSnapshotId = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { id: "ev_any", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    const noSnapshotId = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow" }, evidence: { id: "ev_any", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
     check("explain: a decision record that names no evidenceSnapshotId is never reported as verified (exit 1)",
       noSnapshotId.code === 1 && !/digest verifies/.test(noSnapshotId.stdout));
-    const otherDecision = await viaLiar({ decision: { id: "dec_other", outcome: "allow" } }, ["explain", "dec_x"]);
+    const otherDecision = await viaLiar({ decision: { id: "dec_other", tenantId: TENANT, outcome: "allow" } }, ["explain", "dec_x"]);
     check("explain refuses a record of a different decision than the one asked for", otherDecision.code === 1 && !/^outcome/m.test(otherDecision.stdout));
 
     // The durable ledger's verdict shape: `ok` + `truncated`, records with ts/eventType/target.
-    const durableRec = { id: "aud_1", ts: "2026-10-08T00:00:00.000Z", actor: { type: "system" }, eventType: "decision.allow", target: { type: "decision", id: "dec_1" }, prevHash: "", hash: "h1" };
+    const durableRec = { id: "aud_1", tenantId: TENANT, ts: "2026-10-08T00:00:00.000Z", actor: { type: "system" }, eventType: "decision.allow", target: { type: "decision", id: "dec_1" }, prevHash: "", hash: "h1" };
     const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, truncated: false, batches: 1, scope: "global-ledger" }, source: "durable" }, ["audit"]);
     check("audit reads an intact durable ledger (`ok`, not truncated) as valid and renders its record fields",
       durOk.code === 0 && /^chain valid · length 1 · source durable/.test(durOk.stdout) && /decision\.allow/.test(durOk.stdout) && /decision:dec_1/.test(durOk.stdout) && /2026-10-08T00:00:00/.test(durOk.stdout));
@@ -612,7 +616,7 @@ async function main(): Promise<void> {
       const offset = Number(url.searchParams.get("offset") ?? 0);
       res.end(JSON.stringify(offset === 0
         ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, truncated: false }, source: "durable" }
-        : { events: [{ seq: 1, type: "decision.evaluated" }], chain: { valid: true, length: 1 }, source: "memory" }));
+        : { events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: true, length: 1 }, source: "memory" }));
     });
     const switcherPort = await listen(switcher);
     liars.push(switcher);
@@ -758,13 +762,15 @@ async function main(): Promise<void> {
     // The server below answers the POST with a well-formed allow and the evidence GET with
     // whatever the case supplies.
     let evCase = 0;
-    const decideWith = async (evStatus: number, evBody: unknown, extraArgs: string[] = []) => {
+    const storedOk = { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" } };
+    const decideWith = async (evStatus: number, evBody: unknown, extraArgs: string[] = [], storedBody: unknown = storedOk) => {
       const sess = join(sessionDir, `ev-case-${++evCase}.json`);
       const srv = createServer((req, res) => {
         res.writeHead((req.url ?? "").includes("/evidence") ? evStatus : 200, { "content-type": "application/json" });
         if ((req.url ?? "").endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
         if (req.method === "POST") return void res.end(JSON.stringify({ decision: { decisionId: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" } }));
-        res.end(JSON.stringify(evBody));
+        if ((req.url ?? "").includes("/evidence")) return void res.end(JSON.stringify(evBody));
+        res.end(JSON.stringify(storedBody));
       });
       const port = await listen(srv);
       liars.push(srv);
@@ -823,9 +829,9 @@ async function main(): Promise<void> {
       readRefused.code === 1 && readErr !== undefined && !("idempotencyKey" in readErr) && !/signalgrid audit/.test(String(readErr["message"])));
 
     // explain shows the step-up answer in human mode too, and only this decision's (round 9).
-    const stepRec = { id: "dec_x", outcome: "step_up", evidenceSnapshotId: "ev_x" };
+    const stepRec = { id: "dec_x", tenantId: TENANT, identityId: "idn_1", outcome: "step_up", evidenceSnapshotId: "ev_x" };
     const stepEv = { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true };
-    const answered = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
+    const answered = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
     check("explain (human) shows an answered step-up's method and time",
       answered.code === 0 && /^step-up\s+answered by webauthn at 2026-10-09T01:00:00Z/m.test(answered.stdout));
     const unanswered = await viaLiar({ decision: stepRec, stepUp: null, ...stepEv }, ["explain", "dec_x"]);
@@ -844,7 +850,7 @@ async function main(): Promise<void> {
 
     // Evidence and step-up answers must belong to the confirmed tenant.
     const otherTenantEv = { evidence: { id: "ev_x", tenantId: "tenant_atlas", decisionId: "dec_x", signalsUsed: [] }, verified: true };
-    const exOther = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, ...otherTenantEv }, ["explain", "dec_x"]);
+    const exOther = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" }, ...otherTenantEv }, ["explain", "dec_x"]);
     check("explain: verified evidence of another tenant is never reported as verified (exit 1)", exOther.code === 1 && !/digest verifies/.test(exOther.stdout));
     const sgOther = await viaLiar(otherTenantEv, ["signals", "dec_x"]);
     check("signals: verified evidence of another tenant exits 1", sgOther.code === 1);
@@ -854,10 +860,10 @@ async function main(): Promise<void> {
     // A step-up answer must be whole to count as answered.
     for (const [label, su] of [
       ["only a decision id", { decisionId: "dec_x" }],
-      ["another tenant", { id: "su_1", tenantId: "tenant_atlas", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
-      ["an unknown method", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "sms", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
-      ["an unparseable time", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "soon" }],
-      ["no credential reference", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["another tenant", { id: "su_1", tenantId: "tenant_atlas", identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["an unknown method", { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "sms", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["an unparseable time", { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "soon" }],
+      ["no credential reference", { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "", answeredAt: "2026-10-09T01:00:00Z" }],
     ] as const) {
       const r = await viaLiar({ decision: stepRec, stepUp: su, ...stepEv }, ["explain", "dec_x"]);
       check(`explain refuses a step-up answer with ${label} (exit 1, never "answered")`, r.code === 1 && !/answered by/.test(r.stdout));
@@ -890,6 +896,73 @@ async function main(): Promise<void> {
     }
     const ownRun = await viaLiar({ syncRun: { id: "run_1", status: "success", connectorId: "conn_x", tenantId: TENANT } }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
     check("connectors sync reports a run of the requested connector in this tenant (the check can pass)", ownRun.code === 0 && parse(ownRun.stdout)?.["ok"] === true);
+
+    // ── review round 11 on PR #1321 ──
+    // decide reads the recorded decision back: outcome, snapshot and tenant must match.
+    const goodEv = { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true };
+    for (const [label, stored] of [
+      ["a stored deny behind an evaluate answer of allow", { decision: { id: "dec_x", tenantId: TENANT, outcome: "deny", evidenceSnapshotId: "ev_x" } }],
+      ["a stored decision naming another snapshot", { decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_other" } }],
+      ["a stored decision of another tenant", { decision: { id: "dec_x", tenantId: "tenant_atlas", outcome: "allow", evidenceSnapshotId: "ev_x" } }],
+    ] as const) {
+      const { r, sessionWritten } = await decideWith(200, goodEv, [], stored);
+      check(`decide refuses ${label} (exit 1, no session, names the decision)`,
+        r.code === 1 && (parse(r.stdout)?.["error"] as Record<string, unknown> | undefined)?.["decisionId"] === "dec_x" && !sessionWritten);
+    }
+
+    // explain refuses a decision record outside the confirmed tenant.
+    const foreignRec = await viaLiar({ decision: { id: "dec_x", tenantId: "tenant_atlas", outcome: "allow", evidenceSnapshotId: "ev_x" }, ...goodEv }, ["explain", "dec_x"]);
+    check("explain refuses a decision record of another tenant (exit 1, no outcome)", foreignRec.code === 1 && !/^outcome/m.test(foreignRec.stdout));
+
+    // A step-up answer must carry its own id and the decision's identity.
+    for (const [label, su] of [
+      ["no answer id", { tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["another identity", { id: "su_1", tenantId: TENANT, identityId: "idn_other", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+    ] as const) {
+      const r = await viaLiar({ decision: stepRec, stepUp: su, ...stepEv }, ["explain", "dec_x"]);
+      check(`explain refuses a step-up answer with ${label} (exit 1, never "answered")`, r.code === 1 && !/answered by/.test(r.stdout));
+    }
+
+    // audit never shows an event of another tenant.
+    const foreignEv = await viaLiar({ events: [{ seq: 1, tenantId: "tenant_atlas", type: "decision.evaluated", actor: "x", subject: "y" }], chain: { valid: true, length: 1 }, source: "memory" }, ["audit", "--json"]);
+    check("audit refuses an event outside the confirmed tenant (exit 1, nothing shown)", foreignEv.code === 1 && parse(foreignEv.stdout)?.["events"] === undefined);
+
+    // Two pages of one durable source that are not one ledger are refused.
+    const ledgerSwap = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      const url = new URL(req.url ?? "/", "http://x");
+      if (url.pathname.endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      res.end(JSON.stringify({ events: ledger.slice(offset, offset + 1000), chain: { ok: true, count: 2500, truncated: false, headHash: offset === 0 ? "head_A" : "head_B" }, source: "durable" }));
+    });
+    const ledgerSwapPort = await listen(ledgerSwap);
+    liars.push(ledgerSwap);
+    const swapped = await cli(["audit", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${ledgerSwapPort}/api` });
+    check("audit refuses pages whose chain verdict differs (two ledgers, or one that moved mid-read)", swapped.code === 1 && parse(swapped.stdout)?.["ok"] === false);
+
+    // A line break in any server text cannot forge an output line.
+    const forgeSrv = createServer((req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      if ((req.url ?? "").endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      if (req.method === "POST") return void res.end(JSON.stringify({ decision: { decisionId: "dec_x", outcome: "deny", evidenceSnapshotId: "ev_x", explanation: "blocked\noutcome     allow", reasonCodes: ["r1\noutcome     allow"], policyVersionId: "pv\noutcome     allow" } }));
+      if ((req.url ?? "").includes("/evidence")) return void res.end(JSON.stringify(goodEv));
+      res.end(JSON.stringify({ decision: { id: "dec_x", tenantId: TENANT, outcome: "deny", evidenceSnapshotId: "ev_x" } }));
+    });
+    const forgePort = await listen(forgeSrv);
+    liars.push(forgeSrv);
+    const forgedRun = await cli([...decideArgs, "--allow-write"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${forgePort}/api`, SIGNALGRID_CLI_SESSION: join(sessionDir, "forge.json") });
+    check("a line break in a server field cannot forge an outcome line (exactly one, and it is the recorded deny)",
+      forgedRun.code === 0 && (forgedRun.stdout.match(/^outcome/gm) ?? []).length === 1 && /^outcome\s+deny$/m.test(forgedRun.stdout));
+
+    // An explicitly empty decision id is refused, never replaced by the session's.
+    seen.length = 0;
+    const emptyId = await cli(["explain", ""], { ...env, SIGNALGRID_CLI_SESSION: sessionFile });
+    check("explain \"\" exits 2 and never falls back to the session's decision", emptyId.code === 2 && /not a well-formed id/.test(emptyId.stderr) && seen.length === 0);
+
+    // The reconcile note names a credential that can actually read the audit log.
+    check("a lost or refused write's recovery note names the roles that hold audit:read",
+      /audit:read \(owner, admin or auditor/.test(String((parse(htmlRefused.stdout)?.["error"] as Record<string, unknown> | undefined)?.["message"])) &&
+      typeof (parse(htmlRefused.stdout)?.["error"] as Record<string, unknown> | undefined)?.["reconcileWith"] === "string");
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

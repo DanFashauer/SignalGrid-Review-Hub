@@ -25,7 +25,7 @@ Run it from the repository root with `pnpm --silent --filter @workspace/signalgr
 
 | Command | Writes? | Requests | What it does |
 | --- | --- | --- | --- |
-| `decide` | yes, only with `--allow-write` | `GET /v1/context`, `POST /v1/decisions/evaluate`, `GET /v1/decisions/:id/evidence` | Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4. |
+| `decide` | yes, only with `--allow-write` | `GET /v1/context`, `POST /v1/decisions/evaluate`, `GET /v1/decisions/:id/evidence`, `GET /v1/decisions/:id` | Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4. |
 | `explain` | no | `GET /v1/context`, `GET /v1/decisions/:id`, `GET /v1/decisions/:id/evidence` | Show a recorded decision: outcome, reason codes, matched rules, the server's explanation, and whether its evidence snapshot verifies. |
 | `signals` | no | `GET /v1/context`, `GET /v1/decisions/:id/evidence` | List the normalized signals a decision's evidence snapshot used, with freshness and source reference. |
 | `audit` | no | `GET /v1/context`, `GET /v1/audit` | Show the tenant's audit events (newest last; --limit keeps the newest n) and the ledger's chain verdict. A broken or inconclusive chain exits 1. |
@@ -47,6 +47,6 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass `--allow-write` only when the task says to mint a decision or start a sync.
-- A write that exits 3 may still have been recorded. Its error names an idempotency key (`error.idempotencyKey` under `--json`); re-running the same command with `--idempotency-key <key>` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check `signalgrid audit` for the write before retrying.
+- A write that exits 3 may still have been recorded. Its error names an idempotency key (`error.idempotencyKey` under `--json`); re-running the same command with `--idempotency-key <key>` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check `signalgrid audit` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - `--json` prints one JSON object on stdout for every exit, errors included.

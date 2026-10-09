@@ -40,7 +40,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     usage: "signalgrid decide --identity <ref> --device <ref> --workflow <key> [--allow-write [--idempotency-key <key>]] [--json]",
     summary:
       "Ask /v1 for a decision. WRITES (a decision record and an audit event), so without --allow-write it prints the request it would send and exits 4.",
-    requests: ["GET /v1/context", "POST /v1/decisions/evaluate", "GET /v1/decisions/:id/evidence"],
+    requests: ["GET /v1/context", "POST /v1/decisions/evaluate", "GET /v1/decisions/:id/evidence", "GET /v1/decisions/:id"],
     writes: true,
   },
   explain: {
@@ -92,7 +92,15 @@ function table(headers: string[], rows: string[][]): string {
   return [line(headers), line(widths.map((w) => "-".repeat(w))), ...rows.map(line)].join("\n");
 }
 
-const str = (v: unknown): string => (v === undefined || v === null ? "unknown" : typeof v === "string" ? v : JSON.stringify(v));
+/**
+ * Every server-supplied value is rendered through here, and control characters are escaped
+ * rather than printed: a line break in an explanation or a reason code must never forge an
+ * extra `outcome` line in human output (review round 11 on PR #1321).
+ */
+const str = (v: unknown): string => {
+  const s = v === undefined || v === null ? "unknown" : typeof v === "string" ? v : JSON.stringify(v);
+  return s.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+};
 
 function writeRefused(command: string, method: string, path: string, body: unknown): Out {
   return {
@@ -112,7 +120,9 @@ function need(value: string | undefined, flag: string): string {
 }
 
 function decisionIdArg(positional: string | undefined, cfg: Config, env: NodeJS.ProcessEnv): string {
-  if (positional) return safeId(positional, "the decision id");
+  // An explicitly given id — even an empty one from an unset variable — is validated, never
+  // silently replaced by the session's last decision (review round 11 on PR #1321).
+  if (positional !== undefined) return safeId(positional, "the decision id");
   const last = readSession(sessionPath(env), cfg)?.lastDecisionId;
   if (last) return safeId(last, "the session's last decision id");
   throw new CliError("usage", "a decision id is required (no session holds a last decision).", EXIT.usage);
@@ -173,6 +183,26 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
       { decisionId },
     );
   }
+  // The snapshot digest covers the evidence, not the outcome: the RECORDED decision is read
+  // back and must carry the same outcome and snapshot, in this tenant, before the verdict
+  // the evaluate answer named is reported (review round 11 on PR #1321).
+  let stored: Record<string, unknown> | undefined;
+  try {
+    const { body: recBody } = await call(cfg, "GET", `/v1/decisions/${encodeURIComponent(decisionId)}`);
+    stored = recBody["decision"] as Record<string, unknown> | undefined;
+  } catch (err) {
+    const e = err as CliError;
+    throw new CliError(e.code ?? "unexpected", `decision ${decisionId} was recorded, but it could not be read back (${e.message}); nothing is reported as decided.`, e.exit ?? EXIT.refused, { decisionId });
+  }
+  if (!stored || (stored["id"] ?? stored["decisionId"]) !== decisionId || stored["outcome"] !== outcome ||
+      stored["evidenceSnapshotId"] !== d["evidenceSnapshotId"] || stored["tenantId"] !== tenant.id) {
+    throw new CliError(
+      "decision_mismatch",
+      `decision ${decisionId} as recorded does not match the evaluate answer (outcome, snapshot or tenant); nothing is reported as decided.`,
+      EXIT.refused,
+      { decisionId },
+    );
+  }
   // The decision now EXISTS on the server. A session write that still fails (a race on
   // the lock, a disk error) must not hide it: the verdict is reported, with a warning.
   let warning: string | undefined;
@@ -221,10 +251,14 @@ function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotI
  * credential reference. A partial record is malformed input, never "answered" — it is
  * what tells a host a step_up may proceed (review round 10 on PR #1321).
  */
-function isCompleteStepUp(raw: unknown, decisionId: string, tenantId: string): boolean {
+function isCompleteStepUp(raw: unknown, decisionId: string, tenantId: string, identityId: unknown): boolean {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
   const a = raw as Record<string, unknown>;
+  // The answer's own id and the identity it was signed by (the decision's identity, never
+  // one the request named) bind it to this challenge (review round 11 on PR #1321).
   return (
+    isSafeId(a["id"]) &&
+    typeof identityId === "string" && identityId.length > 0 && a["identityId"] === identityId &&
     a["decisionId"] === decisionId &&
     a["tenantId"] === tenantId &&
     a["method"] === "webauthn" &&
@@ -245,6 +279,10 @@ async function explain(cfg: Config, id: string): Promise<Out> {
     throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried no recognisable outcome; nothing is reported.`, EXIT.refused);
   }
   // The record must be the one asked for, or its outcome is some other decision's.
+  // …and it must be this tenant's record (review round 11 on PR #1321).
+  if (d["tenantId"] !== tenant.id) {
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} answered with a decision outside the confirmed tenant; nothing is reported.`, EXIT.refused);
+  }
   if ((d["id"] ?? d["decisionId"]) !== id) {
     throw new CliError("malformed_answer", `GET /v1/decisions/${id} answered with a different decision; nothing is reported.`, EXIT.refused);
   }
@@ -258,7 +296,7 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   let stepUpLine: string;
   if (stepUpRaw === null || stepUpRaw === undefined) {
     stepUpLine = d["outcome"] === "step_up" ? "UNANSWERED — a host must treat this step_up as unresolved" : "none";
-  } else if (isCompleteStepUp(stepUpRaw, id, tenant.id)) {
+  } else if (isCompleteStepUp(stepUpRaw, id, tenant.id, d["identityId"])) {
     const a = stepUpRaw as Record<string, unknown>;
     stepUpLine = `answered by ${str(a["method"])} at ${str(a["answeredAt"])} (credential ${str(a["credentialReference"])})`;
   } else {
@@ -341,7 +379,7 @@ function auditRow(e: Record<string, unknown>): string[] {
   const ref = (v: unknown): string => {
     if (v && typeof v === "object" && !Array.isArray(v)) {
       const o = v as Record<string, unknown>;
-      return [o["type"], o["id"]].filter((x) => typeof x === "string").join(":") || "unknown";
+      return str([o["type"], o["id"]].filter((x) => typeof x === "string").join(":") || "unknown");
     }
     return str(v);
   };
@@ -381,6 +419,16 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     // described, so a source change refuses rather than merging the two (review round 7).
     if (page > 0 && body["source"] !== source) {
       throw new CliError("malformed_answer", "GET /v1/audit changed backend between pages; no single chain verdict covers the events, so nothing is reported.", EXIT.refused);
+    }
+    // The same source is not the same ledger: every page must carry the first page's chain
+    // verdict exactly (scope, count, head hash), or two ledgers — or one that moved mid-read —
+    // would be stitched under one verdict (review round 11 on PR #1321).
+    if (page > 0 && JSON.stringify(pageChain) !== JSON.stringify(chain)) {
+      throw new CliError("malformed_answer", "GET /v1/audit answered a later page from a different or changed ledger; no single chain verdict covers the events, so nothing is reported.", EXIT.refused);
+    }
+    // Every event must be this tenant's: a foreign record is never appended or shown.
+    if ((events as unknown[]).some((e) => !e || typeof e !== "object" || (e as Record<string, unknown>)["tenantId"] !== tenant.id)) {
+      throw new CliError("malformed_answer", "GET /v1/audit carried an event outside the confirmed tenant; nothing is reported.", EXIT.refused);
     }
     chain = pageChain as Record<string, unknown>;
     source = body["source"];
@@ -496,7 +544,7 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass \`--allow-write\` only when the task says to mint a decision or start a sync.
-- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-running the same command with \`--idempotency-key <key>\` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check \`signalgrid audit\` for the write before retrying.
+- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-running the same command with \`--idempotency-key <key>\` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check \`signalgrid audit\` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - \`--json\` prints one JSON object on stdout for every exit, errors included.
 `;

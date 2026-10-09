@@ -482,7 +482,7 @@ in one place.
   graded against a bound the caller poses — a replayed snapshot never grants when the caller stamps the age at evaluation time. Fail-closed;
   the sweep of all 4,320 combos pins the single grant and 230,400 raw wire reports grant
   exactly twice (the two spellings of a clear ledger); the family stays deferred in the
-  launch profile — built, not claimed. `proof:rtls-custody` (223 checks).
+  launch profile — built, not claimed. `proof:rtls-custody` (227 checks).
 
 - **Platform SSO** ([PLATFORM_SSO.md](PLATFORM_SSO.md)) — "passwordless" and "satisfies MFA"
   are not automatic; the **method** decides the credential's worth. Only a user-registered
@@ -784,7 +784,7 @@ proof reports — the numbers below are therefore evidence, not claims.
   deployment without `REDIS_URL` set, which is this package's documented default. The
   id rule is an **allowlist** (`/^[A-Za-z0-9._-]{1,128}$/`), so the characters nobody
   thought of are refused by default rather than enumerated by someone who tried.
-- **`proof:network-nac` (64 checks)** — 802.1X / NAC access posture, read-only. The
+- **`proof:network-nac` (68 checks)** — 802.1X / NAC access posture, read-only. The
   device's network SEGMENT is now evaluated against an operator-supplied policy rather
   than merely carried: an unexpected VLAN steps up, a segment the operator marked
   high-consequence (management / security / OT) restricts, and a policy that cannot be

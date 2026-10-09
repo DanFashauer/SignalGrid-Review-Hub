@@ -203,6 +203,7 @@ export const TARGETS = [
     proof: "proof:link-usability",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/link-usability/mock-transport.ts",
       "lib/integrations/src/integrations/link-usability/evaluate.ts",
       "lib/integrations/src/integrations/link-usability/link-usability-connector.ts",
       "lib/integrations/src/integrations/link-usability/index.ts",
@@ -211,6 +212,7 @@ export const TARGETS = [
   {
     proof: "proof:task-exception",
     files: [
+      "lib/integrations/src/integrations/task-exception/mock-transport.ts",
       "lib/integrations/src/integrations/task-exception/evaluate.ts",
       "lib/integrations/src/integrations/task-exception/task-exception-connector.ts",
       "lib/integrations/src/integrations/task-exception/index.ts",
@@ -453,6 +455,7 @@ export const TARGETS = [
     proof: "proof:agent-identity",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/agent-identity/mock-transport.ts",
       "lib/integrations/src/integrations/agent-identity/evaluate.ts",
       "lib/integrations/src/integrations/agent-identity/agent-identity-connector.ts",
       "lib/integrations/src/integrations/agent-identity/index.ts",
@@ -462,6 +465,7 @@ export const TARGETS = [
     proof: "proof:oauth-consent",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/oauth-consent/mock-transport.ts",
       "lib/integrations/src/integrations/oauth-consent/evaluate.ts",
       // oauth-consent-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
       // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guard.
@@ -472,6 +476,7 @@ export const TARGETS = [
   {
     proof: "proof:sso-session",
     files: [
+      "lib/integrations/src/integrations/sso-session/mock-transport.ts",
       "lib/integrations/src/integrations/sso-session/evaluate.ts",
       "lib/integrations/src/integrations/sso-session/sso-session-connector.ts",
       "lib/integrations/src/integrations/sso-session/index.ts",
@@ -482,6 +487,7 @@ export const TARGETS = [
     proof: "proof:access-governance",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/access-governance/mock-transport.ts",
       "lib/integrations/src/integrations/access-governance/evaluate.ts",
       // access-governance-connector.ts dropped 2026-09-03 for 0 braced mutations; re-registered
       // 2026-10-09 (wave 7) now that `oneLine` reaches its brace-less guards.
@@ -531,6 +537,7 @@ export const TARGETS = [
     proof: "proof:ot-posture",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/ot-posture/mock-transport.ts",
       "lib/integrations/src/integrations/ot-posture/evaluate.ts",
       // ot-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0 mutations, but with
       // `oneLine` on it carries 4 (its brace-less `readableString` guards).
@@ -542,6 +549,7 @@ export const TARGETS = [
     proof: "proof:token-binding",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/token-binding/mock-transport.ts",
       "lib/integrations/src/integrations/token-binding/index.ts",
       "lib/integrations/src/integrations/token-binding/evaluate.ts",
       // token-binding-connector.ts re-registered 2026-10-01: dropped 2026-09-03 for 0
@@ -553,6 +561,7 @@ export const TARGETS = [
     proof: "proof:pacs-access",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/pacs-access/mock-transport.ts",
       "lib/integrations/src/integrations/pacs-access/evaluate.ts",
       "lib/integrations/src/integrations/pacs-access/pacs-access-connector.ts",
       "lib/integrations/src/integrations/pacs-access/index.ts",
@@ -602,6 +611,7 @@ export const TARGETS = [
     proof: "proof:credential-exposure",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/credential-exposure/mock-transport.ts",
       "lib/integrations/src/integrations/credential-exposure/credential-connector.ts",
       "lib/integrations/src/integrations/credential-exposure/evaluate.ts",
       "lib/integrations/src/integrations/credential-exposure/index.ts",
@@ -611,6 +621,7 @@ export const TARGETS = [
     proof: "proof:data-protection",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/data-protection/mock-transport.ts",
       "lib/integrations/src/integrations/data-protection/dlp-connector.ts",
       "lib/integrations/src/integrations/data-protection/evaluate.ts",
       "lib/integrations/src/integrations/data-protection/index.ts",
@@ -620,6 +631,7 @@ export const TARGETS = [
     proof: "proof:device-attestation",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/device-attestation/mock-transport.ts",
       // `evaluate.ts` grants the TOP assurance tier for this family and was not
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
@@ -681,6 +693,7 @@ export const TARGETS = [
     proof: "proof:identity-risk",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/identity-risk/mock-transport.ts",
       "lib/integrations/src/integrations/identity-risk/evaluate.ts",
       "lib/integrations/src/integrations/identity-risk/identity-connector.ts",
       "lib/integrations/src/integrations/identity-risk/index.ts",
@@ -700,6 +713,7 @@ export const TARGETS = [
     proof: "proof:macos-posture",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/macos-posture/mock-transport.ts",
       "lib/integrations/src/integrations/macos-posture/evaluate.ts",
       "lib/integrations/src/integrations/macos-posture/index.ts",
       "lib/integrations/src/integrations/macos-posture/macos-connector.ts",
@@ -720,6 +734,7 @@ export const TARGETS = [
     proof: "proof:network-nac",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/network-nac/mock-transport.ts",
       "lib/integrations/src/integrations/network-nac/evaluate.ts",
       "lib/integrations/src/integrations/network-nac/index.ts",
       "lib/integrations/src/integrations/network-nac/network-connector.ts",
@@ -747,6 +762,7 @@ export const TARGETS = [
     proof: "proof:rtls-custody",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/rtls-custody/mock-transport.ts",
       "lib/integrations/src/integrations/rtls-custody/evaluate.ts",
       "lib/integrations/src/integrations/rtls-custody/index.ts",
       "lib/integrations/src/integrations/rtls-custody/rtls-connector.ts",

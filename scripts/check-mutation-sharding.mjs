@@ -198,6 +198,17 @@ check("proof:config-scope keeps the tenant-key guard registered and opted in: st
   TARGETS.find((t) => t.proof === "proof:config-scope")?.files.includes("lib/integrations/src/integrations/store-scope.ts") === true
   && TARGETS.find((t) => t.proof === "proof:config-scope")?.oneLine === true);
 
+// ── Wave 10 (2026-10-09): the per-family mock transports ──
+// Each family's `mock-transport.ts` is the fake the family proof drives its connector through; its
+// non-GET / bad-token / unknown-path guards sit on the offline allow path and sat in NO target.
+// Every one is registered under its own family proof (already `oneLine`) with its survivors pinned.
+// local-authority is NOT in this list: its proof never references the factory, so a mutant there
+// could not be killed and the file stays unregistered (listed in BUILD_BACKLOG L2107).
+for (const f of ["credential-exposure", "data-protection", "identity-risk", "network-nac", "rtls-custody", "access-governance", "macos-posture", "oauth-consent", "ot-posture", "pacs-access", "sso-session", "task-exception", "token-binding", "link-usability", "agent-identity", "device-attestation"]) {
+  const file = `lib/integrations/src/integrations/${f}/mock-transport.ts`;
+  check(`proof:${f} keeps its mock transport registered: ${f}/mock-transport.ts`, TARGETS.find((t) => t.proof === `proof:${f}`)?.files.includes(file) === true);
+}
+
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);

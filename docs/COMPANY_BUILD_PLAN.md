@@ -1885,7 +1885,17 @@ earlier — that is the loop working, not a reason to soften the record.
     RE-COUNTED 2026-09-02: this row said **four** and named `mockup-sandbox`, which
     Ponytail cut 3 (DR-024) deleted — an open row naming a tree that no longer
     exists reads as work outstanding that is not. Re-derived rather than reasoned:
-    `review-invariants.mjs` prints font vendor references as hit lines, not files.
+    `grep -rln "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*` returns
+    `signalgrid-review/index.html`, `signalgrid-mobile-pwa/{index.html,src/index.css}`
+    and `signalgrid-desktop/index.html` — three trees, four files.
+    RE-COUNTED 2026-10-09: the same command,
+    `grep -rln "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*`, now
+    prints two files, `artifacts/signalgrid-desktop/index.html` and
+    `artifacts/signalgrid-review/index.html` (exit 0) — the mobile-PWA tree
+    dropped out when PR #1235 self-hosted it. `node scripts/review-invariants.mjs`
+    prints `third-party vendor host in 4 DEMO-ONLY web file(s)` and then four
+    lines, one per (file, host) pair, so its "4" counts hits, not files: two
+    files, four hits.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot

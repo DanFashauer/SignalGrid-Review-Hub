@@ -7,6 +7,9 @@
   "need": "Owner decision: install the brain-cycle trigger (explicit go) or retire its row in the scheduled-routines registry with evidence, or extend the awaiting-activation bound",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T03:04:30.185Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1480 landed on mainline; the Scheduled routines step passes again (check-scheduled-routines exits 0 at e276446d, and on this branch after merging it)"
 }

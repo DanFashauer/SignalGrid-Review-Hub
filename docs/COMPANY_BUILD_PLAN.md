@@ -1878,10 +1878,10 @@ earlier — that is the loop working, not a reason to soften the record.
     the gate weakened.
     STILL OPEN — web-engineer: two demo-only web files still load remote fonts and
     are reported on every run: `signalgrid-review/index.html` and
-    `signalgrid-desktop/index.html` (plus `signalgrid-mobile-pwa/src/index.css`).
-    Same fix, already proven three times (`signalgrid-web`, `signalgrid-app`,
-    `signalgrid-mobile-pwa`). Font vendor hits (4 total): `fonts.googleapis.com` and
-    `fonts.gstatic.com` on each file.
+    `signalgrid-desktop/index.html`. Same fix, already proven three times
+    (`signalgrid-web`, `signalgrid-app`, `signalgrid-mobile-pwa`; the PWA is
+    already self-hosted per PR #1235). Font vendor hits (4 total):
+    `fonts.googleapis.com` and `fonts.gstatic.com` on each file.
     RE-COUNTED 2026-09-02: this row said **four** and named `mockup-sandbox`, which
     Ponytail cut 3 (DR-024) deleted — an open row naming a tree that no longer
     exists reads as work outstanding that is not. Re-derived rather than reasoned:

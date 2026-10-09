@@ -2003,7 +2003,7 @@
    "claim": "Included feature: \"Security-baseline (CIS) row\".",
    "kind": "capability",
    "classification": "demo-only",
-   "evidence": "Rendered only in demo-only surfaces — artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx:610 (demo_only, scripts/launch-profile.mjs:479-485) and artifacts/signalgrid-desktop/src/pages/Signals.tsx:31 (demo_only, :487-489). No `security_baseline` signal kind exists (lib/posture-composition/src/types.ts:50-92).",
+   "evidence": "Rendered only in demo-only surfaces — artifacts/signalgrid-review/src/components/sections/OperatorConsoleSection.tsx:610 (demo_only, scripts/launch-profile.mjs:479-485) and artifacts/signalgrid-desktop/src/pages/Signals.tsx:43 (demo_only, :487-489). No `security_baseline` signal kind exists (lib/posture-composition/src/types.ts:50-92).",
    "action": "rewrite"
   },
   {
@@ -9003,7 +9003,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Signals.tsx",
-   "line": "27, 28",
+   "line": "39, 40",
    "claim": "Page heading \"Signals\" with subtitle \"SIGNAL FEED (FIXTURE)\".",
    "kind": "status",
    "classification": "demo-only",
@@ -9012,7 +9012,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Signals.tsx",
-   "line": "29-32",
+   "line": "41-44",
    "claim": "Disclaimer text asserts the decision core evaluates four named dimensions: \"identity, device posture, DockBridge custody, CIS baseline\".",
    "kind": "capability",
    "classification": "deferred",
@@ -9021,7 +9021,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Signals.tsx",
-   "line": "29-32",
+   "line": "41-44",
    "claim": "Count implied by the same sentence: four signal dimensions are evaluated by the decision core today.",
    "kind": "count",
    "classification": "unsubstantiated",

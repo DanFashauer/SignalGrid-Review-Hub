@@ -446,6 +446,9 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
  * call polls when the tree's query defaults poll or the call sets refetchInterval.
  * Only <LiveRegion> tags are read; a raw aria-live region is left to rule 1.
  */
+const REFRESHED_KEYS = "data|error|isError|isRefetchError|isLoadingError|status|dataUpdatedAt|errorUpdatedAt|failureCount|failureReason";
+const REFRESHED = new RegExp(`^(?:${REFRESHED_KEYS})$`);
+
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
@@ -461,12 +464,24 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
     const { spans } = callSpans(code.slice(m.index + m[0].length - 1), /\(/g);
     const args = spans.length ? code.slice(m.index + m[0].length - 1).slice(spans[0][0], spans[0][1]) : "";
     if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
-    const names = m[1].startsWith("{")
-      ? m[1].slice(1, -1).split(",").map((p) => p.split("=")[0].split(":").pop().trim().replace(/^\.\.\./, "")).filter(Boolean)
-      : [m[1]];
-    if (names.some((n) => new RegExp(`(?<![\\w$])${escapeRegExp(n)}(?![\\w$])`).test(announced))) continue;
+    // Only state a background refetch changes counts: the result and its error.
+    // `isLoading`/`isPending` stay false while a poll refetches, so a region reading
+    // only them stays silent through new data and through a failed refresh.
+    const direct = [];   // names bound straight to result/error state
+    const holders = [];  // whole query objects (`q`, `...rest`): must read `q.data`, `q.error`, …
+    if (m[1].startsWith("{")) {
+      for (const part of m[1].slice(1, -1).split(",").map((x) => x.trim()).filter(Boolean)) {
+        if (part.startsWith("...")) { holders.push(part.slice(3).trim()); continue; }
+        const [key, alias] = part.split("=")[0].split(":").map((x) => x.trim());
+        if (REFRESHED.test(key)) direct.push(alias || key);
+      }
+    } else holders.push(m[1]);
+    const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
+    const reads = (re) => re.test(announced);
+    if (direct.some((n) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
+        holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) continue;
     const line = code.slice(0, m.index).split("\n").length;
-    failures.push(`${rel}:${line}: polled ${m[2]}() (${names.join(", ")}) is never read by a <LiveRegion> — its updates and failures are silent (WCAG 4.1.3)`);
+    failures.push(`${rel}:${line}: polled ${m[2]}() result/error (${names.join(", ") || "none bound"}) is never read by a <LiveRegion> — its updates and failures are silent (WCAG 4.1.3)`);
   }
   return failures;
 }
@@ -510,10 +525,13 @@ export function checkLiveRegionText(rel, raw) {
     if (/\[0\]/.test(message) && !identity) {
       failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
     }
-    // A capped decision list can take a new record and drop an old one with the
-    // same outcome: its counts do not change, so counts alone announce nothing.
-    if (/\.length\b/.test(message) && /\b(?:decisions?|(?:audit )?events?|alerts?)\b/i.test(message) && !identity) {
-      failures.push(`${rel}:${line}: <LiveRegion> message counts decisions, audit events or alerts without naming a record (id or time) — a new decision that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
+    // A polled collection can take a new record and drop an old one, or change a
+    // record in place, while every count stays the same: counts alone announce
+    // nothing. A message built from a count must also read a record's identity or
+    // time (`.id`, `.createdAt`, `.evaluatedAt`, `.recordedAt`, `.receivedAt`, `.updatedAt`).
+    const namesRecord = /\??\.(?:id|createdAt|evaluatedAt|recordedAt|receivedAt|updatedAt)\b/.test(message);
+    if (/\.length\b/.test(message) && !namesRecord) {
+      failures.push(`${rel}:${line}: <LiveRegion> message is built from a count without naming a record (id or time) — a replaced or changed record that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
     }
   }
   return failures;
@@ -939,6 +957,27 @@ export function checkReducedMotion(rel, raw) {
  * found WITHOUT looking at its stylesheet: a new package whose stylesheet is
  * missing or named differently must fail here, not drop out of the scan.
  */
+/**
+ * The reduced-motion rule only reaches the rendered UI if the app loads
+ * src/index.css. Follow index.html's module entry (`<script type="module"
+ * src="/src/…">`) and require that entry to import "./index.css" itself, as a
+ * static side-effect import outside comments. `readEntry(rel)` returns the
+ * entry's source or null. A tree with no readable index.html or entry, or an
+ * entry that does not import the stylesheet, fails closed. Returns failures.
+ */
+export function checkStylesheetLoaded(treeRel, indexHtml, readEntry) {
+  if (indexHtml === null) return [`${treeRel}/index.html: missing — the gate cannot see which entry loads src/index.css (failing closed)`];
+  const html = indexHtml.replace(/<!--[\s\S]*?-->/g, "");
+  const entries = [...html.matchAll(/<script\b[^>]*\btype=["']module["'][^>]*\bsrc=["']\/?(src\/[^"']+)["'][^>]*>/g)].map((m) => m[1]);
+  if (entries.length === 0) return [`${treeRel}/index.html: no <script type="module" src="/src/…"> entry — the gate cannot see what loads src/index.css (failing closed)`];
+  for (const rel of entries) {
+    const entry = readEntry(rel);
+    if (entry === null) return [`${treeRel}/${rel}: index.html's entry is not readable — failing closed`];
+    if (/^\s*import\s+["']\.\/index\.css["']\s*;?\s*$/m.test(stripComments(entry))) return [];
+  }
+  return [`${treeRel}/${entries.join(", ")}: the entry does not \`import "./index.css"\` — the reduced-motion rule never reaches the rendered UI (WCAG 2.3.3)`];
+}
+
 export function webTreeCandidates(base, dirs, has) {
   const trees = [];
   const missing = [];
@@ -975,6 +1014,8 @@ function run() {
     const treeRel = relative(repo, tree);
     const css = join(tree, "src", "index.css");
     failures.push(...checkReducedMotion(relative(repo, css), readFileSync(css, "utf8")));
+    const readOrNull = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
+    failures.push(...checkStylesheetLoaded(treeRel, readOrNull(join(tree, "index.html")), (rel) => readOrNull(join(tree, rel))));
     const files = sourceFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), src: readFileSync(p, "utf8") }));
     const qd = queryDefaults(files);
     for (const rel of qd.unparsed) failures.push(`${rel}: a query-defaults call the gate cannot close — failing closed`);
@@ -1240,10 +1281,11 @@ function selfTest() {
           run('import { state } from "../lib/poll"; return <div>{state}</div>;') &&
           run('import * as P from "../lib/poll"; return <div>{P.state}</div>;');
       })()],
-    ["a decision-list announcement names its newest record",
+    ["a count-based announcement names a record (id or time)",
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.length} decisions shown.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.length} decisions shown, newest ${d[0].id}.` : ""} />').length === 0 &&
-      checkLiveRegionText("x.tsx", '<LiveRegion message={s ? `${s.length} signals.` : ""} />').length === 0],
+      checkLiveRegionText("x.tsx", '<LiveRegion message={s ? `${s.length} signals.` : ""} />').length === 1 &&
+      checkLiveRegionText("x.tsx", '<LiveRegion message={p ? `${p.length} policies, latest change ${latest?.name} at ${latest?.updatedAt}.` : ""} />').length === 0],
     ["a page does not re-alert an outage its layout shell already announces",
       checkSharedAlerts([view("t/src/components/AppLayout.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable — state unknown." : ""} />'),
         view("t/src/pages/S.tsx", '<LiveRegion message="" alert={e ? "Signal feed unreachable; count unknown." : ""} />')]).length === 1 &&
@@ -1299,6 +1341,26 @@ function selfTest() {
       checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics({ query: { refetchInterval: 5000 } }); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 1],
+    ["a live region must read a polled query's result or error, not only its loading flags",
+      ['const { data, isLoading } = useGetMetrics(); <LiveRegion message={isLoading ? "Loading" : ""} />',
+        'const q = useGetMetrics(); <LiveRegion message={q.isLoading ? "Loading" : ""} />',
+        'const { isFetching: f } = useGetMetrics(); <LiveRegion message={f ? "Refreshing" : ""} />'].every((c) =>
+        checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
+      ['const { data: m, isLoading } = useGetMetrics(); <LiveRegion message={m ? `${m.total}` : ""} />',
+        'const q = useGetMetrics(); <LiveRegion message="" alert={q.isError ? "Metrics could not be refreshed." : ""} />',
+        'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? "x" : ""} />'].every((c) =>
+        checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 0)],
+    ["the reduced-motion stylesheet must be imported by index.html's module entry",
+      (() => {
+        const html = '<div id="root"></div><script type="module" src="/src/main.tsx"></script>';
+        const entry = (src) => (rel) => (rel === "src/main.tsx" ? src : null);
+        return checkStylesheetLoaded("t", html, entry('import React from "react";\nimport "./index.css";\n')).length === 0 &&
+          checkStylesheetLoaded("t", html, entry('import React from "react";\n// import "./index.css";\n')).length === 1 &&
+          checkStylesheetLoaded("t", html, entry('import "./other.css";\n')).length === 1 &&
+          checkStylesheetLoaded("t", html, () => null).length === 1 &&
+          checkStylesheetLoaded("t", "<div></div>", entry('import "./index.css";')).length === 1 &&
+          checkStylesheetLoaded("t", null, entry('import "./index.css";')).length === 1;
+      })()],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

@@ -4,7 +4,7 @@ import { normalizeChain, chainAlert } from "./auditChain.ts";
 
 test("a whole, intact in-memory chain is verified", () => {
   const c = normalizeChain({ valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: 0 });
-  assert.deepEqual(c, { valid: true, partial: false, unverified: null, brokenAtSeq: null, brokenAtLedgerIndex: null, length: 7 });
+  assert.deepEqual(c, { valid: true, partial: false, unverified: null, brokenAtSeq: null, brokenAtLedgerIndex: null, scope: "tenant", length: 7 });
   assert.equal(chainAlert(c), "");
 });
 
@@ -22,7 +22,7 @@ test("an in-memory break names its tenant sequence", () => {
 
 test("a clean durable ledger is verified, not broken at sequence undefined", () => {
   const c = normalizeChain({ ok: true, count: 12, truncated: false, batches: 1 });
-  assert.deepEqual(c, { valid: true, partial: false, unverified: null, brokenAtSeq: null, brokenAtLedgerIndex: null, length: 12 });
+  assert.deepEqual(c, { valid: true, partial: false, unverified: null, brokenAtSeq: null, brokenAtLedgerIndex: null, scope: "global-ledger", length: 12 });
 });
 
 test("a durable break keeps its zero-based global ledger index apart from audit sequences", () => {
@@ -54,6 +54,17 @@ test("an incomplete or contradictory verdict is never 'intact'", () => {
     { valid: true, truncated: false },                     // no length
     { ok: true, truncated: false },                        // no count
     { valid: true, ok: false, length: 7, count: 7, truncated: false }, // both shapes at once
+  ]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.valid, false);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
+});
+
+test("a success that also names a break location is unverified, never 'intact'", () => {
+  for (const raw of [
+    { valid: true, brokenAtSeq: 3, length: 7, truncated: false },
+    { ok: true, brokenAtIndex: 4, count: 7, truncated: false },
   ]) {
     const c = normalizeChain(raw);
     assert.equal(c.valid, false);

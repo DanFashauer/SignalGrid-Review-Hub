@@ -5,10 +5,13 @@ import { LiveRegion } from "@/components/LiveRegion";
 
 export default function PoliciesPage() {
   const { data, isLoading, isError } = useListPolicies();
+  // A poll can change a policy in place (fail mode, rules, active) without
+  // changing the count: announce the most recently updated one, by name and time.
+  const latest = data?.policies.reduce<(typeof data.policies)[number] | undefined>((a, b) => (!a || b.updatedAt > a.updatedAt ? b : a), undefined);
 
   return (
     <div className="p-6 space-y-4">
-      <LiveRegion message={data ? `${data.policies.length} policies.` : ""} alert={isError ? "Policies could not be loaded." : ""} />
+      <LiveRegion message={data ? `${data.policies.length} policies, ${data.policies.filter((p) => p.active).length} active${latest ? `; last changed: ${latest.name} (${latest.active ? "active" : "inactive"}, ${latest.failMode}, ${latest.rules.length} rules) at ${new Date(latest.updatedAt).toLocaleTimeString()}` : ""}.` : ""} alert={isError ? "Policies could not be loaded." : ""} />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Policies</h1>
         <p className="text-xs font-mono text-muted-foreground mt-0.5">ACCESS CONTROL POLICY ENGINE</p>

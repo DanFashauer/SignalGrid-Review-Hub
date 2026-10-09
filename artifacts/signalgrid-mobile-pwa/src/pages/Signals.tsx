@@ -14,13 +14,15 @@ export default function Signals() {
   }, {
     query: { refetchInterval: 30_000, queryKey: ["signals", filter] },
   });
+  // The feed can replace a signal without changing either count: name the newest one.
+  const newest = data?.signals.reduce<(typeof data.signals)[number] | undefined>((a, b) => (!a || b.receivedAt > a.receivedAt ? b : a), undefined);
 
   const types = ["all", "identity", "device-posture", "session-context", "operational-signals", "network-posture", "physical-access"] as const;
 
   return (
     <div className="h-full w-full flex flex-col pt-safe bg-background">
       <LiveRegion
-        message={data ? `${filter} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+        message={data ? `${filter} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical${newest ? `; newest: ${newest.status} ${newest.signalType} on ${newest.deviceId}, received ${new Date(newest.receivedAt).toLocaleTimeString()}` : ""}.` : ""}
         alert={isError ? "Signal feed unreachable; critical signal count unknown." : ""}
       />
       <header className="px-4 py-3 shrink-0 bg-background z-10 border-b border-border/50">

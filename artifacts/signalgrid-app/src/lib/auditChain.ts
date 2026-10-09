@@ -27,6 +27,10 @@ export interface ChainVerdict {
   brokenAtSeq: number | null;
   /** Zero-based global durable-ledger position of the break, or null. */
   brokenAtLedgerIndex: number | null;
+  /** What `length` counts. The memory core verifies the tenant's own chain; the
+   *  durable verifier walks the GLOBAL ledger (every tenant's records), while the
+   *  events beside it are this tenant's page — the two counts are not one scope. */
+  scope: "tenant" | "global-ledger" | "unknown";
   length: number;
 }
 
@@ -35,19 +39,23 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : n
 export function normalizeChain(raw: unknown): ChainVerdict {
   const c = (raw ?? {}) as Record<string, unknown>;
   const partial = c.truncated !== false;
+  const unverifiedVerdict: ChainVerdict = { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, scope: "unknown", length: 0 };
   // Only a complete, unambiguous verifier shape is believed: a verdict missing its
   // length/count or its truncated flag, or carrying both shapes' verdicts at once
-  // (`valid` AND `ok`), is unverified — never "intact" by default.
+  // (`valid` AND `ok`), is unverified — never "intact" by default. So is a success
+  // that names a break location (`valid: true` with a numeric `brokenAtSeq`, or
+  // `ok: true` with a numeric `brokenAtIndex`): one of the two fields is wrong.
   const memory = typeof c.valid === "boolean" && num(c.length) !== null && typeof c.truncated === "boolean" && !("ok" in c);
   const durable = typeof c.ok === "boolean" && num(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
-  if (!memory && !durable) return { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };
   if (memory && typeof c.valid === "boolean") {
-    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, length: num(c.length) ?? 0 };
+    if (c.valid && c.brokenAtSeq != null) return unverifiedVerdict;
+    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: num(c.length) ?? 0 };
   }
   if (durable && typeof c.ok === "boolean") {
-    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), length: num(c.count) ?? 0 };
+    if (c.ok && c.brokenAtIndex != null) return unverifiedVerdict;
+    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), scope: "global-ledger", length: num(c.count) ?? 0 };
   }
-  return { valid: false, partial: true, unverified: "unknown", brokenAtSeq: null, brokenAtLedgerIndex: null, length: 0 };
+  return unverifiedVerdict;
 }
 
 /** Where the break is, in the verifier's own terms; "" when none was located. */

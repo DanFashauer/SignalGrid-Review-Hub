@@ -21,6 +21,8 @@ const STATUS_COLOR: Record<string, string> = {
 export default function SignalsPage() {
   const [typeFilter, setTypeFilter] = useState<typeof TYPES[number]["value"]>(undefined);
   const { data, isLoading, isError } = useListLatestSignals({ limit: 100, signalType: typeFilter });
+  // The feed can replace a signal without changing either count: name the newest one.
+  const newest = data?.signals.reduce<(typeof data.signals)[number] | undefined>((a, b) => (!a || b.receivedAt > a.receivedAt ? b : a), undefined);
   // The DesktopLayout shell reads the same feed with { limit: 5 } — a different query
   // key, so this filtered request can fail while the shell's succeeds. Reading the
   // shell's key shares its cache entry (no extra request); the page alerts only
@@ -30,7 +32,7 @@ export default function SignalsPage() {
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
-        message={data ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
+        message={data ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical${newest ? `; newest: ${newest.status} ${newest.signalType} on ${newest.deviceId}, received ${new Date(newest.receivedAt).toLocaleTimeString()}` : ""}.` : ""}
         alert={isError && !shellFeed.isError ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} signals could not be refreshed — this list may be stale.` : ""}
       />
       <div>

@@ -20,7 +20,7 @@ export function Audit() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
-        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.chain.length} events in the chain, ${data.events.length} shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
+        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.chain.scope === "tenant" ? `${data.chain.length} events in this tenant's chain` : `${data.chain.length} records in the global ledger (all tenants)`}, ${data.events.length} of this tenant's events shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
         alert={
           error
             ? data
@@ -61,7 +61,7 @@ export function Audit() {
             {!data.chain.valid ? (chainBreak(data.chain) ? "CHAIN BROKEN" : "CHAIN UNVERIFIED") : data.chain.partial ? "PARTIALLY VERIFIED" : "chain verified"}
           </Badge>
           <span className="text-muted-foreground">
-            {data.chain.length} events, every digest recomputed on this request
+            {data.chain.length} {data.chain.scope === "global-ledger" ? "global-ledger (all tenants) " : ""}events, every digest recomputed on this request
             {chainBreak(data.chain) ? ` — broken at ${chainBreak(data.chain)}` : data.chain.partial ? ` — ${chainGap(data.chain)}` : ""}
           </span>
         </div>

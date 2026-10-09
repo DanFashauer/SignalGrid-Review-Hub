@@ -86,6 +86,19 @@ test("an eviction count that contradicts truncation, or is malformed, is unverif
   assert.equal(normalizeChain({ valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: 0 }).valid, true);
 });
 
+test("a length or count that is not a non-negative integer is unverified", () => {
+  for (const raw of [
+    { valid: true, brokenAtSeq: null, length: -1, truncated: false },
+    { valid: true, brokenAtSeq: null, length: 2.5, truncated: false },
+    { ok: true, count: 1.5, truncated: false },
+    { ok: true, count: -3, truncated: false },
+  ]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.valid, false);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
+});
+
 test("an unrecognised shape is unverified", () => {
   for (const raw of [undefined, null, {}, { ok: "yes" }]) {
     const c = normalizeChain(raw);

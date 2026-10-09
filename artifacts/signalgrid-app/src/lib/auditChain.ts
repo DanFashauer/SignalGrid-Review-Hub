@@ -35,6 +35,8 @@ export interface ChainVerdict {
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/** A count of records: a non-negative integer, or null. -1 or 1.5 is malformed, not a count. */
+const count = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
 export function normalizeChain(raw: unknown): ChainVerdict {
   const c = (raw ?? {}) as Record<string, unknown>;
@@ -45,8 +47,8 @@ export function normalizeChain(raw: unknown): ChainVerdict {
   // (`valid` AND `ok`), is unverified — never "intact" by default. So is a success
   // that names a break location (`valid: true` with a numeric `brokenAtSeq`, or
   // `ok: true` with a numeric `brokenAtIndex`): one of the two fields is wrong.
-  const memory = typeof c.valid === "boolean" && num(c.length) !== null && typeof c.truncated === "boolean" && !("ok" in c);
-  const durable = typeof c.ok === "boolean" && num(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
+  const memory = typeof c.valid === "boolean" && count(c.length) !== null && typeof c.truncated === "boolean" && !("ok" in c);
+  const durable = typeof c.ok === "boolean" && count(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
   if (memory && typeof c.valid === "boolean") {
     if (c.valid && c.brokenAtSeq != null) return unverifiedVerdict;
     // `evictedCount` > 0 means older events were discarded: it contradicts
@@ -55,11 +57,11 @@ export function normalizeChain(raw: unknown): ChainVerdict {
       const ev = c.evictedCount;
       if (typeof ev !== "number" || !Number.isInteger(ev) || ev < 0 || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
     }
-    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: num(c.length) ?? 0 };
+    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: count(c.length) ?? 0 };
   }
   if (durable && typeof c.ok === "boolean") {
     if (c.ok && c.brokenAtIndex != null) return unverifiedVerdict;
-    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), scope: "global-ledger", length: num(c.count) ?? 0 };
+    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), scope: "global-ledger", length: count(c.count) ?? 0 };
   }
   return unverifiedVerdict;
 }

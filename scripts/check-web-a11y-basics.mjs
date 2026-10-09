@@ -472,6 +472,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
   }
   if (tags.length === 0) return [];
   const announced = tags.join("\n");
+  const alerts = tags.map((t) => attrExpression(t, "alert") ?? "").join("\n");
   const failures = [];
   const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
   for (const m of code.matchAll(binding)) {
@@ -482,6 +483,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
     // Only state a background refetch changes counts: the result and its error.
     // `isLoading`/`isPending` stay false while a poll refetches, so a region reading
     // only them stays silent through new data and through a failed refresh.
+    const errorsOnlyPolite = [];
     const direct = [];   // names bound straight to result/error state
     const holders = [];  // whole query objects (`q`, `...rest`): must read `q.data`, `q.error`, …
     if (m[1].startsWith("{")) {
@@ -489,6 +491,11 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
         if (part.startsWith("...")) { holders.push(part.slice(3).trim()); continue; }
         const [key, alias] = part.split("=")[0].split(":").map((x) => x.trim());
         if (REFRESHED.test(key)) direct.push(alias || key);
+        // A bound error flag must reach the ALERT: read only by the polite message,
+        // a failed refresh changes a sentence nobody is interrupted for.
+        if (/^(?:error|isError|isRefetchError|isLoadingError)$/.test(key) && !new RegExp(`(?<![\\w$.])${escapeRegExp(alias || key)}(?![\\w$])`).test(alerts)) {
+          errorsOnlyPolite.push(alias || key);
+        }
       }
     } else if (m[1].startsWith("[")) {
       // `const [metrics, decisions] = useQueries(…)`: each element is a whole query result.
@@ -500,6 +507,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
     const listHook = /Queries$/.test(m[2]) && !m[1].startsWith("[") && !m[1].startsWith("{");
     const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
     const reads = (re) => re.test(announced);
+    if (errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s error flag (${errorsOnlyPolite.join(", ")}) never reaches a <LiveRegion> alert — a failed refresh is not announced assertively (WCAG 4.1.3)`);
     if (direct.some((n) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
         holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`))) ||
         (listHook && reads(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?:\\[\\d+\\])?\\??\\.`)) && reads(new RegExp(`\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) continue;
@@ -774,9 +782,14 @@ export function hasNonBlankLabel(tag, src = "") {
     const text = buttonText(src, at.index + tag.length, at[1]);
     return text !== null && !isBlank(text) && !isGlyphOnly(text);
   });
+  // A spread AFTER the naming attribute (`aria-label="Close" {...props}`) is applied
+  // last, so an empty or undefined `props["aria-label"]` erases the name. A label
+  // followed by a spread names nothing the gate can prove.
+  const spreadAfter = (i) => /\{\s*\.\.\./.test(tag.slice(i));
   // `(?<![\w-])` so `data-aria-label` is not read as a label.
   for (const m of tag.matchAll(/(?<![\w-])aria-label(ledby)?\s*=\s*(?:(["'])([\s\S]*?)\2|\{\s*(["'`])((?:\\[\s\S]|(?!\4)[^\\])*)\4\s*\}|\{)/g)) {
     const byRef = m[1] !== undefined;
+    if (spreadAfter(m.index + m[0].length)) continue;
     if (m[2] !== undefined) { const v = decodeEntities(m[3]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
     else if (m[4] !== undefined) { const v = decodeEscapes(m[5]); if (!isBlank(v) && (!byRef || resolves(v))) return true; }
     else if (byRef) continue; // a computed id: cannot be verified
@@ -907,10 +920,30 @@ export function checkChartMotion(rel, raw) {
 export function checkScrollMotion(rel, raw) {
   const src = stripComments(raw);
   const failures = [];
-  for (const m of src.matchAll(/\bbehavior\s*:\s*["'`]smooth["'`]/g)) {
-    const line = src.slice(0, m.index).split("\n").length;
-    failures.push(`${rel}:${line}: behavior: "smooth" in JS ignores prefers-reduced-motion — choose it from the preference (WCAG 2.3.3)`);
+  const lineOf = (i) => src.slice(0, i).split("\n").length;
+  for (const m of src.matchAll(/(?<![\w$.-])behavior\s*:/g)) {
+    // The value runs to the next `,` or `}` outside brackets.
+    let end = m.index + m[0].length;
+    for (let depth = 0; end < src.length; end++) {
+      const ch = src[end];
+      if ("([{".includes(ch)) depth++;
+      else if (")]}".includes(ch)) { if (depth === 0) break; depth--; }
+      else if (ch === "," && depth === 0) break;
+    }
+    const value = src.slice(m.index + m[0].length, end).trim();
+    if (/^["'`](?:auto|instant)["'`]$/.test(value)) continue;
+    if (/^["'`]smooth["'`]$/.test(value)) {
+      failures.push(`${rel}:${lineOf(m.index)}: behavior: "smooth" in JS ignores prefers-reduced-motion — choose it from the preference (WCAG 2.3.3)`);
+      continue;
+    }
+    // A computed value passes only as `<reduced-motion test> ? "auto" : "smooth"` (or
+    // its negation with the arms swapped): the preference must pick the non-smooth arm.
+    const t = value.match(/^(!?)\s*([^?]+?)\s*\?\s*(["'`])(\w+)\3\s*:\s*(["'`])(\w+)\5$/);
+    const fromPreference = t && /reduce/i.test(t[2]) && (t[1] ? t[6] !== "smooth" : t[4] !== "smooth");
+    if (!fromPreference) failures.push(`${rel}:${lineOf(m.index)}: scroll behavior \`${value}\` is not chosen from prefers-reduced-motion — the gate cannot prove reduced-motion users get "auto" (failing closed, WCAG 2.3.3)`);
   }
+  // Shorthand `{ behavior }` hides where the value came from: fail closed.
+  for (const m of src.matchAll(/[{,]\s*behavior\s*(?=[,}])/g)) failures.push(`${rel}:${lineOf(m.index)}: shorthand \`{ behavior }\` hides the scroll behavior's value — write \`behavior: <reduced> ? "auto" : "smooth"\` (failing closed, WCAG 2.3.3)`);
   return failures;
 }
 
@@ -1439,6 +1472,18 @@ function selfTest() {
     ["a count stored in a variable first is still a count",
       checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected.` : ""} alert="" />').length === 1 &&
       checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected; last sync ${latest.id} at ${latest.lastSync}.` : ""} alert="" />').length === 0],
+    ["a computed scroll behavior must be chosen from the reduced-motion preference",
+      ['window.scrollTo({ top, behavior: enabled ? "smooth" : "auto" });', 'window.scrollTo({ top, behavior: b });', 'el.scrollIntoView({ behavior });',
+        'window.scrollTo({ top, behavior: reduced ? "smooth" : "auto" });'].every((c) => checkScrollMotion("x.tsx", c).length === 1) &&
+      ['window.scrollTo({ top, behavior: prefersReducedMotion() ? "auto" : "smooth" });', 'window.scrollTo({ top, behavior: !reduced ? "smooth" : "auto" });',
+        'window.scrollTo({ top, behavior: "auto" });'].every((c) => checkScrollMotion("x.tsx", c).length === 0)],
+    ["a spread after the label can erase it",
+      checkIconButtons("x.tsx", '<button aria-label="Close" {...props}><X /></button>').length === 1 &&
+      checkIconButtons("x.tsx", '<button {...props} aria-label="Close"><X /></button>').length === 0 &&
+      checkIconButtons("x.tsx", '<Button size="icon" aria-label="Close" {...rest}><X /></Button>').length === 1],
+    ["a polled query's error flag must reach the alert, not only the polite message",
+      checkUnannouncedQueries("x.tsx", 'const { data: s, isError: e } = useListSignals(); <LiveRegion message={s && !e ? `${s.n}` : "Count unknown."} alert="" />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: s, isError: e } = useListSignals(); <LiveRegion message={s ? `${s.n}` : ""} alert={e ? "Signals could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

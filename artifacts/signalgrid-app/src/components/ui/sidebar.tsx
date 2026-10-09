@@ -287,7 +287,6 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
       tabIndex={-1}
       onClick={toggleSidebar}
       title="Toggle Sidebar"
@@ -301,6 +300,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         className
       )}
       {...props}
+      // After the spread, so a caller's empty or undefined aria-label cannot erase the name.
+      aria-label={props["aria-label"] || "Toggle Sidebar"}
     />
   )
 }

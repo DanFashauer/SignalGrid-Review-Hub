@@ -11,6 +11,10 @@ export default function DashboardPage() {
   const { data: series, isError: seriesError } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
   const { data: decisions, isError: decisionsError } = useListDecisions({ limit: 10 });
   const { data: signals, isError: signalsError } = useListLatestSignals({ limit: 8 });
+  // The DesktopLayout shell reads the feed with { limit: 5 }, a different query key:
+  // this { limit: 8 } request can fail while the shell's succeeds. Reading the shell's
+  // key shares its cache entry; the page alerts only when the shell is not already.
+  const shellFeed = useListLatestSignals({ limit: 5 });
 
   const METRICS = [
     { label: "TOTAL DECISIONS", value: metrics?.totalDecisions.toLocaleString() ?? "–" },
@@ -27,13 +31,13 @@ export default function DashboardPage() {
             ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals && !signalsError ? `${signals.signals.filter((s) => s.status === "critical").length} critical signals.` : "Critical signal count unknown."}`
             : ""
         }
-        alert={
-          // The DesktopLayout shell owns the signal-feed outage alert:
-          // one assertive announcement per outage, not one per region.
-          decisionsError
-            ? "Decisions could not be loaded."
-            : metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : ""
-        }
+        alert={[
+          decisionsError ? "Decisions could not be loaded." : "",
+          metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : "",
+          // The DesktopLayout shell owns the signal-feed outage alert: one assertive
+          // announcement per outage, so this one speaks only when the shell is not.
+          signalsError && !shellFeed.isError ? "Dashboard signal list could not be refreshed; critical signal count unknown." : "",
+        ].filter(Boolean).join(" ")}
       />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Overview</h1>

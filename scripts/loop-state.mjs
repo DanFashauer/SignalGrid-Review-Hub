@@ -26,6 +26,8 @@ import { dirname, resolve, isAbsolute, relative, sep, basename } from "node:path
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
+// The real fs calls the self-test's guarded wrappers (selfTest, "fixture root") delegate to. Declared here, before the self-test dispatch, so the wrappers can shadow the imports inside selfTest().
+const fsUnlink = unlinkSync, fsRm = rmSync, fsRename = renameSync;
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const HUB = "https://github.com/DanFashauer/SignalGrid-Review-Hub.git";
@@ -2056,6 +2058,18 @@ function selfTestSummaryLines(checks, notOnOffer) {
 // with a bare "hub" remote, and proves each shape the seam must catch or clear.
 function selfTest() {
   const root = mkdtempSync(join(tmpdir(), "loop-state-selftest-"));
+  // THE SELF-TEST CAN ONLY DESTROY WHAT IT MADE (round 26). On 2026-10-09 the sandbox's /dev/null became a regular file in the middle of a self-test run, and nothing could say whether this suite was
+  // the cause. Every unlink, recursive remove and rename the self-test does now goes through a guard that refuses, before touching anything, a path that is not under the fixture root (or a temp
+  // directory this self-test itself made and registered in allowedRoots). The three names are shadowed here, so every call below is guarded without being rewritten; production code is not.
+  const allowedRoots = [root, realpathSync(root)];
+  const underFixtureRoot = (p) => {
+    const abs = resolve(String(p));
+    if (!allowedRoots.some((r) => abs === r || abs.startsWith(r + sep))) throw new Error(`self-test refuses to touch a path outside its fixture root: ${abs}`);
+    return abs;
+  };
+  const unlinkSync = (p, ...a) => fsUnlink(underFixtureRoot(p), ...a);
+  const rmSync = (p, ...a) => fsRm(underFixtureRoot(p), ...a);
+  const renameSync = (from, to, ...a) => fsRename(underFixtureRoot(from), underFixtureRoot(to), ...a);
   // HERMETIC (round-11 review): a developer's own global or system git configuration (fetch.prune, http.sslVerify=false, merge.ff=only, core.hooksPath) turned the self-test red, and one that
   // happened to agree with a fixture could turn a case green for the wrong reason. Every git the self-test starts, fixtures and the script copies it runs alike, sees an EMPTY global
   // configuration and no system one, and no GIT_SSL_NO_VERIFY. (The environment's own GIT_CONFIG_COUNT entries stay: they are command-line scope and several cases read them.)
@@ -3806,7 +3820,7 @@ exit 1
     const pxChild = spawn(process.execPath, [px, pxPort, pxLog], { detached: true, stdio: "ignore" });
     pxChild.on("error", () => { /* it never started: the port file never appears and the cases fail below */ });
     pxChild.unref();
-    const relDir = mkdtempSync(join(tmpdir(), "loop-state-r22rel-")), relBase = basename(relDir);
+    const relDir = mkdtempSync(join(tmpdir(), "loop-state-r22rel-")), relBase = basename(relDir); allowedRoots.push(relDir, realpathSync(relDir)); // (a temp directory of its own, beside the fixture root)
     const noProxyEnv = { HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null, NO_PROXY: null, no_proxy: null };
     let gcPlain = null, gcBlind = null, gcLogged = null, gcWhole = null, gcAfter = null, gcScan = null, rcScans = [], rcPlain = null, rcLogged = null, rcWhole = null, rcAfter = null;
     try {
@@ -4148,6 +4162,16 @@ exit 1
     const measured = ["GIT_CURL_FTP_NO_EPSV", "GIT_HTTP_LOW_SPEED_LIMIT", "GIT_HTTP_LOW_SPEED_TIME", "GIT_HTTP_MAX_REQUESTS", "GIT_HTTP_USER_AGENT", "GIT_PROXY_SSL_CERT_PASSWORD_PROTECTED", "GIT_SMART_HTTP", "GIT_SSL_CERT_PASSWORD_PROTECTED"];
     check("the environment audit's header names the measured figure and the command that measures it (not '160-odd'), and each of the eight names no list carried is classed with its reason (R26-audit-figure)",
       !prodText.includes("160-odd") && prodText.includes("| wc -l` printed 181 for git 2.43.0") && prodText.includes("strings -a git git-remote-http git-http-fetch | grep -E '^GIT_[A-Z0-9_]+$' | sort -u | wc -l") && measured.every((n) => prodText.includes(n)) && prodText.includes("TRANSPORT TUNING"));
+    // (9) the self-test can only destroy what it made. The probes use a SENTINEL in a temp directory of their own outside the fixture root (never a real system path), so a guard that failed would cost a sentinel.
+    const outside = mkdtempSync(join(tmpdir(), "loop-state-r26-outside-")), sentinel = join(outside, "sentinel"), inside = join(root, "r26-guard-inside");
+    writeFileSync(sentinel, "must survive\n"); writeFileSync(inside, "mine\n");
+    const refused = (fn) => { try { fn(); return false; } catch (e) { return /outside its fixture root/.test(String(e && e.message)); } };
+    const guardRefusals = [refused(() => unlinkSync(sentinel)), refused(() => rmSync(outside, { recursive: true, force: true })), refused(() => renameSync(sentinel, join(root, "r26-guard-moved"))), refused(() => renameSync(inside, join(outside, "moved"))),
+      refused(() => underFixtureRoot("/dev/null")), refused(() => underFixtureRoot(join(root, "..", "elsewhere"))), refused(() => underFixtureRoot(`${root}-sibling`)), refused(() => underFixtureRoot("relative-to-cwd-not-root"))];
+    const survived = readIfPresent(sentinel) === "must survive\n" && readIfPresent(inside) === "mine\n" && readIfPresent(join(outside, "moved")) === null && readIfPresent(join(root, "r26-guard-moved")) === null;
+    unlinkSync(inside); fsRm(outside, { recursive: true, force: true });
+    check("every unlink, recursive remove and rename the self-test does is refused BEFORE it touches a path outside the fixture root (a sentinel in a temp directory of its own, a rename in either direction, /dev/null, a `..` escape, a sibling that only shares the prefix, a relative path), and still works inside the root (R26-fixture-root)",
+      guardRefusals.every(Boolean) && survived && underFixtureRoot(join(root, "a", "b")) === join(root, "a", "b") && underFixtureRoot(root) === root && !existsSync(inside) && !existsSync(outside) && /const unlinkSync = \(p, \.\.\.a\) => fsUnlink\(underFixtureRoot\(p\), \.\.\.a\)/.test(prodSrc));
     // (8) the summary a tail survives
     const sumLines = selfTestSummaryLines([["case one", true], ["case two", false], ["case three", true]], [["case three", "a cap git did not honour"]]);
     check("the self-test's summary names every failed case on a line of its own, every precondition the platform did not offer, and ends with the verdict, so a short tail names what failed (R26-summary)",

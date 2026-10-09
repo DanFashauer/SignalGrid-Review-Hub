@@ -228,6 +228,7 @@
     "esbuild": "0.28.2",
     "fast-check": "^4.10.0",
     "oidc-provider": "9.11.3",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "yaml": "2.9.0"
   }
 }

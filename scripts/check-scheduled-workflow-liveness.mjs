@@ -43,6 +43,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpath
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseDocument } from "yaml";
 import { AUTO_KINDS } from "./lib/raised-hand-kinds.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -65,7 +66,9 @@ export function stripComments(text) {
       for (let i = 0; i < line.length; i += 1) {
         const c = line[i];
         if (q) {
-          if (c === q) q = null;
+          if (q === '"' && c === "\\") i += 1; // an escaped character never closes the string
+          else if (q === "'" && c === "'" && line[i + 1] === "'") i += 1; // '' is an escaped apostrophe
+          else if (c === q) q = null;
         } else if (c === '"' || c === "'") {
           q = c;
         } else if (c === "#" && (i === 0 || /\s/.test(line[i - 1]))) {
@@ -135,7 +138,7 @@ const CRON_KEY = /(?:^|[\s{,[-])["']?cron["']?\s*:/m;
  * `on :`, quoted `"on"`/`'on'`, an anchor or tag on the key (`on: &t`, `on: !!map`), quoted `"schedule":` keys,
  * a BOM, CRLF. Anything else that still carries a `cron:` key, or has no `on:` key at all, is unreadable.
  */
-export function scheduleVerdict(rawText) {
+export function textVerdict(rawText) {
   const text = stripComments(rawText.replace(/^\uFEFF/, "")).replace(/\r/g, "");
   const { text: blanked, escapedKey } = tokenizeQuotes(text);
   if (/*M:escaped-key*/ escapedKey) return "unreadable"; // a key spelled with escapes can hide `schedule`/`cron` from a text match
@@ -172,6 +175,43 @@ export function scheduleVerdict(rawText) {
   // the fallback: a cron the structural read did not account for is not "unscheduled"
   if (verdict === "none" && /*M:cron-fallback*/ CRON_KEY.test(blanked)) return "unreadable";
   return verdict;
+}
+
+/**
+ * The authoritative reader: the `yaml` package (a real YAML 1.2 parser, pinned in scripts/package.json). Anchors,
+ * tags, escapes, flow and block forms, merge keys and quoting are the parser's business, not a regex's: three
+ * review rounds found three more spellings a text matcher read as "no schedule". A parse error, a duplicate key,
+ * several documents, a non-mapping root or no `on` key at all is "unreadable" (fatal), never "none".
+ * `on` may arrive as the string "on" or as the boolean `true` (YAML 1.1), so both are read.
+ * @returns {"scheduled" | "none" | "unreadable"}
+ */
+export function parserVerdict(rawText) {
+  let js;
+  try {
+    const doc = parseDocument(rawText, { merge: true, uniqueKeys: true });
+    if (/*M:parse-error*/ doc.errors.length > 0) return "unreadable";
+    js = doc.toJS({ maxAliasCount: 100 });
+  } catch {
+    return "unreadable";
+  }
+  if (js === null || typeof js !== "object" || Array.isArray(js)) return "unreadable";
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const triggers = [has(js, "on") ? js.on : undefined, has(js, "true") ? js.true : undefined].filter((v) => v !== undefined);
+  if (triggers.length === 0) return "unreadable";
+  const scheduled = triggers.some((t) => t !== null && typeof t === "object" && !Array.isArray(t) && /*M:parser-schedule*/ has(t, "schedule"));
+  return scheduled ? "scheduled" : "none";
+}
+
+/**
+ * "scheduled" | "none" | "unreadable". The parser decides; the older text reader is a SECOND OPINION that can only
+ * tighten: when the parser says "none" and the text reader sees a schedule, or a cron it cannot place, the two
+ * disagree and a disagreement is not "no schedule" (fail closed: "unreadable").
+ */
+export function scheduleVerdict(rawText) {
+  const parsed = parserVerdict(rawText);
+  if (parsed !== "none") return parsed;
+  if (/*M:disagree*/ textVerdict(rawText) !== "none") return "unreadable";
+  return "none";
 }
 
 /** Back-compat boolean: is it positively a scheduled workflow. */
@@ -430,6 +470,15 @@ function selfTest() {
   unreg("quoted complex keys `? \"schedule\"` / `\"cron\":`", `on:\n  push: {}\n  ? "schedule"\n  : - "cron": "0 0 * * *"\n${J}`);
   unreg("escaped keys (`\"sch\\x65dule\"` and `\"cr\\x6fn\"`, both hidden from a text match)", `on:\n  push: {}\n  "sch\\x65dule": [{ "cr\\x6fn": "0 0 * * *" }]\n${J}`);
   unreg("an escaped schedule key alone", `on:\n  push: {}\n  "sch\\x65dule":\n    - cron: "0 0 * * *"\n${J}`);
+  // review round 3: a stray quote inside a PLAIN scalar, and a backslash-escaped quote before a `#`
+  unreg("a stray apostrophe in a plain scalar before the schedule key", `on: { push: {branches: [don 't]}, schedule: [{ cron: "0 0 * * *" }], y: it's }\n${J}`);
+  unreg("the same with every key quoted", `on: { "push": {"branches": [don 't]}, "schedule": [{ "cron": "0 0 * * *" }], "y": it's }\n${J}`);
+  unreg("a stray double quote in a plain scalar, closed later on the line", `on: { push: {branches: [say "hi]}, schedule: [{ cron: "0 0 * * *" }], y: bye" }\n${J}`);
+  unreg('a backslash-escaped quote before a `#` inside a quoted key', `on: { "a\\" #": 1, "schedule": [{ "cron": "0 0 * * *" }] }\n${J}`);
+  exits({ workflows: { "a.yml": `on: [push\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "YAML that does not parse → exit 1 (unreadable, never \"none\")");
+  exits({ workflows: { "a.yml": `on:\n  push: {}\non:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a duplicate on: key (a parser error) → exit 1 (unreadable)");
+  exits({ workflows: { "a.yml": `on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: |\n          echo it's fine\n          echo don 't\n` }, registry: reg() }, 0, "negative control: stray apostrophes in a run body of an unscheduled workflow → exit 0");
+  exits({ workflows: { "a.yml": `on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: |\n          cron: not-a-trigger\n` }, registry: reg() }, 1, "the parser reads a run body, the text reader sees a cron it cannot place: they disagree → exit 1 (a disagreement fails closed)");
   // negative controls for the tokenizer: quote characters that are NOT string openers must not swallow later keys
   exits({ workflows: { "a.yml": `name: it's a dog's life\non:\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\n${J}` }, registry: reg() }, 1, "apostrophes inside a plain scalar do not hide a later schedule key (still found) → exit 1");
   exits({ workflows: { "a.yml": `name: N\non: { push: {} }\nenv:\n  NOTE: "a \\"quoted\\" cron: word"\n${J}` }, registry: reg() }, 0, "negative control: an escaped-quote string containing `cron:` is not a key → exit 0");
@@ -438,7 +487,7 @@ function selfTest() {
   exits({ workflows: { "a.yml": `name: X\non:\n  push: {}\n  ? schedule\n  : - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "valid YAML complex-key `? schedule` under on: (a cron the structural read missed) → exit 1 (the cron fallback)");
   exits({ workflows: { "a.yml": `name: N\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a workflow with no on: key at all → exit 1 (unreadable fails closed)");
   // negative control for the fallback: the word cron inside a quoted string / run body is not a trigger
-  exits({ workflows: { "a.yml": `name: D\non:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo "cron: nightly"\n` }, registry: reg() }, 0, "negative control: \`cron:\` inside a quoted string in a run line is not a schedule → exit 0");
+  exits({ workflows: { "a.yml": `name: D\non:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: 'echo "cron: nightly"'\n` }, registry: reg() }, 0, "negative control: \`cron:\` inside a quoted string in a run line is not a schedule → exit 0");
   // an empty tree is not a clean tree
   exits({ workflows: {}, registry: reg(), noWorkflowsDir: true }, 1, "no .github/workflows directory and an empty registry → exit 1 (0 workflows is not green)");
   // wired means RUN, not mentioned
@@ -473,6 +522,9 @@ function selfTest() {
     const tmp = mkdtempSync(join(realpathSync(tmpdir()), "swl-mut-"));
     try {
       const kindsUrl = pathToFileURL(join(here, "lib/raised-hand-kinds.mjs")).href;
+      const yamlUrl = import.meta.resolve("yaml");
+      // a mutant lives in a temp dir: point its two non-relative-safe imports at the real files
+      const prep = (code) => code.replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)).replace('from "yaml"', `from ${JSON.stringify(yamlUrl)}`);
       const mutants = [
         ["M:unregistered", "false &&", "an unregistered scheduled workflow is no longer reported"],
         ["M:stale-entry", "false &&", "a registry entry for an unscheduled workflow is no longer reported"],
@@ -489,6 +541,9 @@ function selfTest() {
         ["M:empty-tree", "false &&", "an empty workflows tree is no longer reported"],
         ["M:escaped-key", "false &&", "an escaped-spelling key is no longer treated as unreadable"],
         ["M:keep-keys", "false &&", "the tokenizer blanks quoted keys along with quoted values"],
+        ["M:parse-error", "false &&", "a YAML parse error is no longer treated as unreadable"],
+        ["M:parser-schedule", "false &&", "the parser no longer reports a schedule key"],
+        ["M:disagree", "false &&", "a disagreement between the two readers is no longer fatal"],
       ];
       for (const [token, repl, what] of mutants) {
         const marker = `/*${token}*/`;
@@ -498,7 +553,7 @@ function selfTest() {
           continue;
         }
         const file = join(tmp, `${token.replace(/\W/g, "_")}.mjs`);
-        writeFileSync(file, src.replace(marker, repl).replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
+        writeFileSync(file, prep(src.replace(marker, repl)));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
         note(`mutant ${token} (${what}) turns the self-test red`, r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }
@@ -507,7 +562,7 @@ function selfTest() {
       if (src.split(rp).length - 1 !== 1) note("mutant realpath: marker appears exactly once", false);
       else {
         const file = join(tmp, "realpath.mjs");
-        writeFileSync(file, src.replace(rp, 'if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {').replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
+        writeFileSync(file, prep(src.replace(rp, 'if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {')));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
         note("mutant realpath (entry guard without real paths) turns the self-test red", r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }
@@ -516,7 +571,7 @@ function selfTest() {
       if (src.split(cm).length - 1 !== 1) note("mutant comments: marker appears exactly once", false);
       else {
         const file = join(tmp, "comments.mjs");
-        writeFileSync(file, src.replace(cm, "false").replace('"./lib/raised-hand-kinds.mjs"', JSON.stringify(kindsUrl)));
+        writeFileSync(file, prep(src.replace(cm, "false")));
         const r = spawnSync(process.execPath, [file, "--self-test", "--no-mutants"], { encoding: "utf8" });
         note("mutant comments (comment stripping disabled) turns the self-test red", r.status === 1 && r.stdout.includes("self-test FAILED"), `exit ${r.status}${r.status === 1 ? "" : ", mutant did not run to a verdict"}`);
       }

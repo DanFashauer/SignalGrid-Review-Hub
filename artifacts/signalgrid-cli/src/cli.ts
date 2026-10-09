@@ -165,7 +165,7 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
       { decisionId },
     );
   }
-  if (!boundVerdict(ev, decisionId, d["evidenceSnapshotId"] as string)) {
+  if (!boundVerdict(ev, decisionId, d["evidenceSnapshotId"] as string, tenant.id)) {
     throw new CliError(
       "evidence_unverified",
       `decision ${decisionId} was recorded, but its evidence snapshot ${String(d["evidenceSnapshotId"])} does not verify against it; nothing is reported as decided.`,
@@ -201,15 +201,36 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
  * no snapshot, or a verified snapshot belonging to another decision, is not a verified
  * record of this one (review round 4 on PR #1321).
  */
-function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: string | null): boolean {
+function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotId: string | null, tenantId: string): boolean {
   const snap = ev["evidence"];
   if (!snap || typeof snap !== "object" || Array.isArray(snap)) return false;
   const s = snap as Record<string, unknown>;
+  // The snapshot must belong to the tenant /v1/context confirmed: another tenant's verified
+  // evidence is not evidence for this one (review round 10 on PR #1321).
+  if (s["tenantId"] !== tenantId) return false;
   if (s["decisionId"] !== decisionId) return false;
   // `null` only where no decision record was read (`signals`); a record that names no
   // snapshot id is never a reason to skip the comparison (review round 5).
   if (snapshotId !== null && (typeof s["id"] !== "string" || s["id"] !== snapshotId)) return false;
   return ev["verified"] === true;
+}
+
+/**
+ * A step-up answer counts only when it is whole: this decision's, this tenant's, the one
+ * method the core issues (core StepUpAnswer.method), a parseable answer time and a
+ * credential reference. A partial record is malformed input, never "answered" — it is
+ * what tells a host a step_up may proceed (review round 10 on PR #1321).
+ */
+function isCompleteStepUp(raw: unknown, decisionId: string, tenantId: string): boolean {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const a = raw as Record<string, unknown>;
+  return (
+    a["decisionId"] === decisionId &&
+    a["tenantId"] === tenantId &&
+    a["method"] === "webauthn" &&
+    typeof a["answeredAt"] === "string" && !Number.isNaN(Date.parse(a["answeredAt"])) &&
+    typeof a["credentialReference"] === "string" && a["credentialReference"].length > 0
+  );
 }
 
 async function explain(cfg: Config, id: string): Promise<Out> {
@@ -229,7 +250,7 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   }
   // A decision record that names no snapshot cannot have its evidence bound to it.
   const snapshotId = typeof d["evidenceSnapshotId"] === "string" && d["evidenceSnapshotId"] ? d["evidenceSnapshotId"] : "";
-  const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId);
+  const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId, tenant.id);
   // The step-up answer is a separate record beside the decision; it is what tells a host a
   // step_up may proceed, so it is shown in both modes — and only an answer for THIS
   // decision counts (review round 9 on PR #1321).
@@ -237,11 +258,11 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   let stepUpLine: string;
   if (stepUpRaw === null || stepUpRaw === undefined) {
     stepUpLine = d["outcome"] === "step_up" ? "UNANSWERED — a host must treat this step_up as unresolved" : "none";
-  } else if (typeof stepUpRaw === "object" && !Array.isArray(stepUpRaw) && (stepUpRaw as Record<string, unknown>)["decisionId"] === id) {
+  } else if (isCompleteStepUp(stepUpRaw, id, tenant.id)) {
     const a = stepUpRaw as Record<string, unknown>;
     stepUpLine = `answered by ${str(a["method"])} at ${str(a["answeredAt"])} (credential ${str(a["credentialReference"])})`;
   } else {
-    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried a step-up answer that is not this decision's; nothing is reported.`, EXIT.refused);
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried a step-up answer that is incomplete or not this decision's; nothing is reported.`, EXIT.refused);
   }
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
   const signals = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
@@ -269,7 +290,7 @@ async function signals(cfg: Config, id: string): Promise<Out> {
   if (!Array.isArray(list)) {
     throw new CliError("malformed_answer", "the evidence snapshot named no signalsUsed list; nothing is reported.", EXIT.refused);
   }
-  const verified = boundVerdict(ev, id, null);
+  const verified = boundVerdict(ev, id, null, tenant.id);
   const rows = (list as Record<string, unknown>[]).map((s) => [
     str(s["category"]), str(s["subjectType"]), str(s["value"]), str(s["freshness"]), str(s["observedAt"]), str(s["sourceReference"]),
   ]);
@@ -290,21 +311,29 @@ async function signals(cfg: Config, id: string): Promise<Out> {
  * (`truncated` not exactly false) is "the prefix read is intact" and nothing more, so it
  * is inconclusive, not valid. No verdict field, or two that disagree, is not valid either.
  */
-function chainVerdict(chain: Record<string, unknown>): { valid: boolean; label: string; length: unknown } {
+function chainVerdict(chain: Record<string, unknown>, source: unknown): { valid: boolean; label: string; length: unknown } {
   const hasValid = typeof chain["valid"] === "boolean";
   const hasOk = typeof chain["ok"] === "boolean";
-  if (!hasValid && !hasOk) return { valid: false, label: "UNKNOWN (no verdict field)", length: undefined };
-  if (hasValid && hasOk && chain["valid"] !== chain["ok"]) return { valid: false, label: "CONTRADICTORY (valid and ok disagree)", length: chain["length"] ?? chain["count"] };
-  // Each shape's own rule applies whenever its field is present — a durable verdict
-  // carrying a compatibility `valid` field is still capped by `truncated` (round 6).
-  if (hasOk) {
+  const len = chain["length"] ?? chain["count"];
+  if (hasValid && hasOk && chain["valid"] !== chain["ok"]) return { valid: false, label: "CONTRADICTORY (valid and ok disagree)", length: len };
+  // The answer's `source` decides which schema it must carry — never the fields that happen
+  // to be present: a durable verdict without `ok` (a compatibility `valid` alone) would
+  // otherwise slip past the read-cap rule (review round 10 on PR #1321).
+  if (source === "durable") {
+    if (!hasOk) return { valid: false, label: "UNKNOWN (a durable answer without its `ok` verdict)", length: len };
     if (chain["ok"] !== true) return { valid: false, label: `BROKEN at index ${str(chain["brokenAtIndex"])}`, length: chain["count"] };
     if (chain["truncated"] !== false) return { valid: false, label: "INCONCLUSIVE (the server's verifier stopped at its read cap)", length: chain["count"] };
     return { valid: true, label: "valid", length: chain["count"] ?? chain["length"] };
   }
-  return chain["valid"] === true
-    ? { valid: true, label: "valid", length: chain["length"] }
-    : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
+  if (source === "memory") {
+    // The in-memory verifier keeps its anchor across eviction, so its `truncated` does not
+    // weaken `valid` (lib/signalgrid-core audit.ts verifyAuditChain).
+    if (!hasValid) return { valid: false, label: "UNKNOWN (an in-memory answer without its `valid` verdict)", length: len };
+    return chain["valid"] === true
+      ? { valid: true, label: "valid", length: chain["length"] }
+      : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
+  }
+  return { valid: false, label: `UNKNOWN (unrecognised ledger source ${str(source)})`, length: len };
 }
 
 /** One audit event as a table row, from either record shape (core AuditEvent or lib/audit AuditRecord). */
@@ -358,9 +387,9 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     shown = shown.concat(events as Record<string, unknown>[]);
     if (limit) shown = shown.slice(-limit);
     // Stop on the last page, on any non-durable answer, or on the first verdict that is not valid.
-    if (source !== "durable" || events.length < AUDIT_PAGE || !chainVerdict(chain).valid) break;
+    if (source !== "durable" || events.length < AUDIT_PAGE || !chainVerdict(chain, source).valid) break;
   }
-  const verdict = chainVerdict(chain);
+  const verdict = chainVerdict(chain, source);
   return {
     exit: verdict.valid ? EXIT.ok : EXIT.refused,
     json: { ok: verdict.valid, command: "audit", tenant: tenant.id, source: source ?? null, chain, events: shown },
@@ -384,9 +413,11 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     const run = body["syncRun"] as Record<string, unknown> | undefined;
     // A well-formed id and a recognised status, or nothing is reported (review round 7): an
     // empty or newline-bearing id would otherwise pass as an answer and rewrite the output.
-    if (!run || !isSafeId(run["id"]) || typeof run["status"] !== "string" || !SYNC_STATUSES.has(run["status"])) {
+    // …and it must be a run OF the connector asked for, in the confirmed tenant (round 10).
+    if (!run || !isSafeId(run["id"]) || typeof run["status"] !== "string" || !SYNC_STATUSES.has(run["status"]) ||
+        run["connectorId"] !== cid || run["tenantId"] !== tenant.id) {
       const r = writeRecovery(key);
-      throw new CliError("malformed_answer", `POST ${path} carried no sync run with a well-formed id and a recognised status; nothing is reported.${r.suffix}`, EXIT.refused, r.extra);
+      throw new CliError("malformed_answer", `POST ${path} carried no sync run of ${cid} in this tenant with a well-formed id and a recognised status; nothing is reported.${r.suffix}`, EXIT.refused, r.extra);
     }
     return {
       json: { ok: true, command: "connectors sync", tenant: tenant.id, sent: true, syncRun: run },

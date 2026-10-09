@@ -208,19 +208,22 @@ export async function call(
       extra,
     );
   }
+  // A non-2xx is never replayed by the server, whatever its body: the recovery note for
+  // an unreadable answer follows the STATUS, not the parse (review round 10 on PR #1321).
+  const recovery = writeRecovery(key, res.ok ? "lost" : "refused");
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new CliError(
       "malformed_answer",
-      `${method} ${path} answered HTTP ${res.status} with a body that is not JSON; nothing is reported.${lost}`,
+      `${method} ${path} answered HTTP ${res.status} with a body that is not JSON; nothing is reported.${recovery.suffix}`,
       EXIT.refused,
-      extra,
+      recovery.extra,
     );
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new CliError("malformed_answer", `${method} ${path} answered with JSON that is not an object; nothing is reported.${lost}`, EXIT.refused, extra);
+    throw new CliError("malformed_answer", `${method} ${path} answered HTTP ${res.status} with JSON that is not an object; nothing is reported.${recovery.suffix}`, EXIT.refused, recovery.extra);
   }
   const obj = parsed as Record<string, unknown>;
   if (!res.ok) {

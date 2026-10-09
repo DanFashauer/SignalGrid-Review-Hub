@@ -347,7 +347,7 @@ async function main(): Promise<void> {
     // Well-bound in every respect except the flag, so these checks isolate `verified` (round 7).
     const unverified = {
       decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" },
-      evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [{ category: "identity_state" }] },
+      evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [{ category: "identity_state" }] },
       verified: false,
     };
     const exU = await viaLiar(unverified, ["explain", "dec_x"]);
@@ -532,7 +532,7 @@ async function main(): Promise<void> {
         return;
       }
       // decide now verifies the snapshot it was given before reporting the verdict.
-      res.end(JSON.stringify({ evidence: { id: "ev_raced", decisionId: "dec_raced", signalsUsed: [] }, verified: true }));
+      res.end(JSON.stringify({ evidence: { id: "ev_raced", tenantId: TENANT, decisionId: "dec_raced", signalsUsed: [] }, verified: true }));
     });
     const racerPort = await listen(racer);
     liars.push(racer);
@@ -554,17 +554,17 @@ async function main(): Promise<void> {
     // `verified: true` counts only for a snapshot bound to THIS decision.
     const bindings: Array<[string, unknown, string[]]> = [
       ["explain: verified with no snapshot", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, verified: true }, ["explain", "dec_x"]],
-      ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
-      ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
-      ["signals: a verified snapshot of another decision", { evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
+      ["explain: a verified snapshot of another decision", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["explain: a snapshot that is not the decision's", { decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_other", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]],
+      ["signals: a verified snapshot of another decision", { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }, ["signals", "dec_x"]],
     ];
     for (const [label, body, args] of bindings) {
       const r = await viaLiar(body, args);
       check(`${label} exits 1 and never says it verifies`, r.code === 1 && !/digest verifies|evidence verifies/.test(r.stdout));
     }
-    const bound = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    const bound = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
     check("explain: a verified snapshot bound to the decision exits 0 (the binding check can pass)", bound.code === 0 && /digest verifies/.test(bound.stdout));
-    const noSnapshotId = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { id: "ev_any", decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
+    const noSnapshotId = await viaLiar({ decision: { id: "dec_x", outcome: "allow" }, evidence: { id: "ev_any", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }, ["explain", "dec_x"]);
     check("explain: a decision record that names no evidenceSnapshotId is never reported as verified (exit 1)",
       noSnapshotId.code === 1 && !/digest verifies/.test(noSnapshotId.stdout));
     const otherDecision = await viaLiar({ decision: { id: "dec_other", outcome: "allow" } }, ["explain", "dec_x"]);
@@ -581,7 +581,7 @@ async function main(): Promise<void> {
     check("audit on a broken durable ledger exits 1 and names the break", durBroken.code === 1 && /BROKEN at index 0/.test(durBroken.stdout));
     const dualCapped = await viaLiar({ events: [], chain: { valid: true, ok: true, truncated: true, count: 10000 }, source: "durable" }, ["audit"]);
     check("audit on agreeing valid/ok fields whose verifier stopped at its cap exits 1 (truncation still applies)", dualCapped.code === 1 && /INCONCLUSIVE/.test(dualCapped.stdout));
-    const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false } }, ["audit"]);
+    const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false }, source: "durable" }, ["audit"]);
     check("audit on two verdict fields that disagree exits 1", contra.code === 1);
 
     // Durable paging is oldest-first: `--limit 3` must still be the NEWEST three.
@@ -773,16 +773,16 @@ async function main(): Promise<void> {
     };
     for (const [label, status, body] of [
       ["a snapshot id that does not exist (404)", 404, { error: "not_found", message: "Evidence snapshot not found." }],
-      ["a snapshot of another decision", 200, { evidence: { id: "ev_x", decisionId: "dec_other", signalsUsed: [] }, verified: true }],
-      ["a different snapshot than the one named", 200, { evidence: { id: "ev_other", decisionId: "dec_x", signalsUsed: [] }, verified: true }],
-      ["a snapshot whose digest does not verify", 200, { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: false }],
+      ["a snapshot of another decision", 200, { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_other", signalsUsed: [] }, verified: true }],
+      ["a different snapshot than the one named", 200, { evidence: { id: "ev_other", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true }],
+      ["a snapshot whose digest does not verify", 200, { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: false }],
     ] as const) {
       const { r, sessionWritten } = await decideWith(status, body);
       const j = parse(r.stdout);
       check(`decide refuses an allow whose evidence is ${label} (exit 1, no outcome, no session, names the decision)`,
         r.code === 1 && j?.["ok"] === false && (j?.["error"] as Record<string, unknown> | undefined)?.["decisionId"] === "dec_x" && !sessionWritten);
     }
-    const good = await decideWith(200, { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true });
+    const good = await decideWith(200, { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true });
     check("decide reports an allow whose snapshot exists, is this decision's and verifies (the check can pass)",
       good.r.code === 0 && parse(good.r.stdout)?.["evidenceVerified"] === true && good.sessionWritten);
 
@@ -824,14 +824,72 @@ async function main(): Promise<void> {
 
     // explain shows the step-up answer in human mode too, and only this decision's (round 9).
     const stepRec = { id: "dec_x", outcome: "step_up", evidenceSnapshotId: "ev_x" };
-    const stepEv = { evidence: { id: "ev_x", decisionId: "dec_x", signalsUsed: [] }, verified: true };
-    const answered = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
+    const stepEv = { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true };
+    const answered = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
     check("explain (human) shows an answered step-up's method and time",
       answered.code === 0 && /^step-up\s+answered by webauthn at 2026-10-09T01:00:00Z/m.test(answered.stdout));
     const unanswered = await viaLiar({ decision: stepRec, stepUp: null, ...stepEv }, ["explain", "dec_x"]);
     check("explain (human) marks an unanswered step_up UNANSWERED", unanswered.code === 0 && /^step-up\s+UNANSWERED/m.test(unanswered.stdout));
     const foreign = await viaLiar({ decision: stepRec, stepUp: { decisionId: "dec_other", method: "webauthn" }, ...stepEv }, ["explain", "dec_x"]);
     check("explain refuses a step-up answer belonging to another decision (exit 1)", foreign.code === 1 && !/^outcome/m.test(foreign.stdout));
+
+    // ── review round 10 on PR #1321 ──
+    // The answer's `source` decides the verdict schema, not whichever fields are present.
+    const durNoOk = await viaLiar({ events: [], chain: { valid: true, truncated: true, count: 10000 }, source: "durable" }, ["audit"]);
+    check("audit on a durable verdict carrying `valid` but no `ok` exits 1 (the read-cap rule still applies)", durNoOk.code === 1 && /UNKNOWN|INCONCLUSIVE/.test(durNoOk.stdout));
+    const noSource = await viaLiar({ events: [], chain: { valid: true, length: 0 } }, ["audit"]);
+    check("audit on a verdict with no recognised source exits 1", noSource.code === 1 && /unrecognised ledger source/.test(noSource.stdout));
+    const memTrunc = await viaLiar({ events: [], chain: { valid: true, length: 3, truncated: true, evictedCount: 2 }, source: "memory" }, ["audit"]);
+    check("audit on an in-memory verdict that kept its anchor across eviction stays valid (exit 0)", memTrunc.code === 0 && /^chain valid/.test(memTrunc.stdout));
+
+    // Evidence and step-up answers must belong to the confirmed tenant.
+    const otherTenantEv = { evidence: { id: "ev_x", tenantId: "tenant_atlas", decisionId: "dec_x", signalsUsed: [] }, verified: true };
+    const exOther = await viaLiar({ decision: { id: "dec_x", outcome: "allow", evidenceSnapshotId: "ev_x" }, ...otherTenantEv }, ["explain", "dec_x"]);
+    check("explain: verified evidence of another tenant is never reported as verified (exit 1)", exOther.code === 1 && !/digest verifies/.test(exOther.stdout));
+    const sgOther = await viaLiar(otherTenantEv, ["signals", "dec_x"]);
+    check("signals: verified evidence of another tenant exits 1", sgOther.code === 1);
+    const deOther = await decideWith(200, otherTenantEv);
+    check("decide: verified evidence of another tenant is refused (exit 1, no session)", deOther.r.code === 1 && !deOther.sessionWritten);
+
+    // A step-up answer must be whole to count as answered.
+    for (const [label, su] of [
+      ["only a decision id", { decisionId: "dec_x" }],
+      ["another tenant", { id: "su_1", tenantId: "tenant_atlas", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["an unknown method", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "sms", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
+      ["an unparseable time", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "soon" }],
+      ["no credential reference", { id: "su_1", tenantId: TENANT, decisionId: "dec_x", method: "webauthn", credentialReference: "", answeredAt: "2026-10-09T01:00:00Z" }],
+    ] as const) {
+      const r = await viaLiar({ decision: stepRec, stepUp: su, ...stepEv }, ["explain", "dec_x"]);
+      check(`explain refuses a step-up answer with ${label} (exit 1, never "answered")`, r.code === 1 && !/answered by/.test(r.stdout));
+    }
+
+    // A non-2xx with a body that is not JSON is a refusal: never promised a replay.
+    const htmlRefuser = createServer((req, res) => {
+      if ((req.url ?? "").endsWith("/v1/context")) {
+        res.writeHead(200, { "content-type": "application/json" });
+        return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+      }
+      res.writeHead(502, { "content-type": "text/html" });
+      res.end("<html>bad gateway</html>");
+    });
+    const htmlRefuserPort = await listen(htmlRefuser);
+    liars.push(htmlRefuser);
+    const htmlRefused = await cli([...decideArgs, "--allow-write", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${htmlRefuserPort}/api` });
+    const htmlErr = parse(htmlRefused.stdout)?.["error"] as Record<string, unknown> | undefined;
+    check("decide answered HTTP 502 with HTML names its key, flags mayHaveWritten and promises no replay",
+      htmlRefused.code === 1 && typeof htmlErr?.["idempotencyKey"] === "string" && htmlErr?.["mayHaveWritten"] === true &&
+      /never replays a refusal/.test(String(htmlErr?.["message"])) && !/replays the recorded answer/.test(String(htmlErr?.["message"])));
+
+    // A sync run must be of the connector asked for, in the confirmed tenant.
+    for (const [label, run] of [
+      ["another connector", { id: "run_1", status: "success", connectorId: "conn_other", tenantId: TENANT }],
+      ["another tenant", { id: "run_1", status: "success", connectorId: "conn_x", tenantId: "tenant_atlas" }],
+    ] as const) {
+      const r = await viaLiar({ syncRun: run }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
+      check(`connectors sync refuses a run of ${label} (exit 1)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
+    const ownRun = await viaLiar({ syncRun: { id: "run_1", status: "success", connectorId: "conn_x", tenantId: TENANT } }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
+    check("connectors sync reports a run of the requested connector in this tenant (the check can pass)", ownRun.code === 0 && parse(ownRun.stdout)?.["ok"] === true);
 
     // ── help and the generated SKILL.md ──
     const help = await cli(["--help"], {});

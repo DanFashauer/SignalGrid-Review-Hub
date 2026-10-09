@@ -109,8 +109,8 @@
       ],
       "activated": "2026-08-19",
       "produced": "timeouts on unbounded jobs; concurrency groups on three workflows",
-      "nextAction": "check-ci-liveness.mjs now gates one sweep job's last success. The estate runs more scheduled workflows than that one, and a schedule that silently stops is the same outage in every one of them. Extend liveness to each scheduled workflow, or record which are exempt and why.",
-      "nextActionDate": "2026-08-24"
+      "nextAction": "Scheduled-workflow liveness is registered (docs/agent/scheduled-workflow-liveness.json, gate scripts/check-scheduled-workflow-liveness.mjs: 6 scheduled workflows, 1 api-probe, 5 dated exemptions). Next: the nightly leg of mac-runner-auto.yml and the weekly mac-lane.yml have NO silent-stop watcher; give mac-runner-auto an api-probe in check-ci-liveness.mjs with a tolerance for a Mac that is legitimately asleep, then drop its exemption.",
+      "nextActionDate": "2026-10-09"
     },
     {
       "id": "mobile-native-engineer",

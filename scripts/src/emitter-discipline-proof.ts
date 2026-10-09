@@ -44,6 +44,7 @@ import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
 import { verifySignedWebhook } from "@workspace/integrations/webhooks";
 import { VENDOR_ERROR_TEXT_LIMIT, boundedText } from "@workspace/integrations/emit-gate/bounded-text";
 import { redirectRefusal } from "@workspace/integrations/emit-gate/redirect";
+import { asNonEmptyString, asPositiveNumber, asVendorInstant, VendorFieldInvalid } from "@workspace/integrations/emit-gate/vendor-values";
 
 let passed = 0;
 const failures: string[] = [];
@@ -601,6 +602,40 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     redirectRefusal(302, "http://[bad").includes("an unparseable Location header") && !redirectRefusal(302, "http://[bad").includes("[bad"));
   check("redirect: a parseable Location names only its host, not its path",
     (() => { const r = redirectRefusal(307, "https://evil.example/secret/path?q=1"); return r.includes('Location host "evil.example"') && !r.includes("secret"); })());
+}
+
+// ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------
+// vendor-values.ts is what the servicenow/bmc-helix/ivanti/manageengine/sentinel adapters read a
+// token, lifetime or instant through. Each throw is pinned by the DETAIL it names (which also
+// pins shapeOf's branches), so a guard flipped off cannot hide behind a later guard's throw.
+{
+  const detailOf = (fn: () => unknown): string => {
+    try { fn(); return "RETURNED"; }
+    catch (err) { return err instanceof VendorFieldInvalid ? `${err.field}|${err.detail}` : "OTHER"; }
+  };
+  check("vendor-values: a non-string token is refused naming 'absent' for undefined",
+    detailOf(() => asNonEmptyString(undefined, "access_token")) === "access_token|expected a string, received absent");
+  check("vendor-values: …'null' for null", detailOf(() => asNonEmptyString(null, "access_token")).endsWith("received null"));
+  check("vendor-values: …'an array of N' for an array", detailOf(() => asNonEmptyString([1, 2], "f")).endsWith("received an array of 2"));
+  check("vendor-values: …'a number' for a number (never echoing it)", detailOf(() => asNonEmptyString(7, "f")).endsWith("received a number"));
+  check("vendor-values: whitespace-only is empty and refused", detailOf(() => asNonEmptyString("   ", "f")).includes("only whitespace"));
+  check("vendor-values: a real token is returned untouched", asNonEmptyString("tok-1", "f") === "tok-1");
+  check("vendor-values: a non-numeric lifetime is refused as not-a-finite-number, naming its shape",
+    detailOf(() => asPositiveNumber("abc", "expires_in")).includes("expected a finite number, received a 3-character string")
+    && detailOf(() => asPositiveNumber("", "expires_in")).includes("received an empty string")
+    && detailOf(() => asPositiveNumber(NaN, "expires_in")).includes("expected a finite number")
+    && detailOf(() => asPositiveNumber(Infinity, "expires_in")).includes("expected a finite number"));
+  check("vendor-values: zero and negative lifetimes are refused as non-positive (finite, so past the first guard)",
+    detailOf(() => asPositiveNumber(0, "expires_in")).includes("expected a positive number, received 0")
+    && detailOf(() => asPositiveNumber(-5, "expires_in")).includes("expected a positive number, received -5"));
+  check("vendor-values: 3600 and the decimal string \"3600\" are both accepted", asPositiveNumber(3600, "f") === 3600 && asPositiveNumber("3600", "f") === 3600);
+  check("vendor-values: a non-instant type is refused naming its shape",
+    detailOf(() => asVendorInstant(undefined, "created")).includes("expected an instant, received absent")
+    && detailOf(() => asVendorInstant({}, "created")).includes("expected an instant, received a object"));
+  check("vendor-values: an unparseable instant string is refused as unparseable",
+    detailOf(() => asVendorInstant("not a date", "created")).includes("unparseable") && detailOf(() => asVendorInstant(NaN, "created")).includes("unparseable"));
+  check("vendor-values: an ISO instant and an epoch number both normalise to ISO-8601",
+    asVendorInstant("2026-01-01T00:00:00Z", "f") === "2026-01-01T00:00:00.000Z" && asVendorInstant(0, "f") === "1970-01-01T00:00:00.000Z");
 }
 
 // Determinism: two identical resolutions produce identical fixture logs.

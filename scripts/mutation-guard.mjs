@@ -325,6 +325,7 @@ export const TARGETS = [
       "lib/integrations/src/integrations/adapters/url-guard.ts",
       "lib/integrations/src/integrations/adapters/bounded-text.ts",
       "lib/integrations/src/integrations/adapters/redirect.ts",
+      "lib/integrations/src/integrations/adapters/vendor-values.ts",
     ],
   },
 

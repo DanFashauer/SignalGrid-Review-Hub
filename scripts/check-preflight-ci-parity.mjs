@@ -569,16 +569,20 @@ export const REQUIRED_RUN_FLAGS = new Map([
 ]);
 
 /** Pure: does some run: step invoke `node <script>` in command position with `flag` as a
- *  whole argument? Comments are stripped and quotes masked (as gateWiredIn does), so a
- *  comment, an `echo`, a quoted string or a misspelling (`--require-histroy`,
- *  `--require-history-x`) does not carry the flag. */
+ *  whole argument, on an invocation that is NOT the `--self-test` run? Comments are
+ *  stripped and quotes masked (as gateWiredIn does), so a comment, an `echo`, a quoted
+ *  string or a misspelling (`--require-histroy`, `--require-history-x`) does not carry
+ *  the flag. Each invocation's whole argument list is judged: the flag on the
+ *  `--self-test` line (before or after it) is the self-test, not the real run, and must
+ *  not let CI drop the flag from the plain run. */
 export function runLineCarriesFlag(script, flag, rawWorkflowText) {
   const commands = runCommands(stripYamlComments(rawWorkflowText)).map(maskQuoted);
-  const re = new RegExp(
-    `${SEP}${ENV}node[ \\t]+${escapeRe(script)}(?:[ \\t]+[^\\s;&|()]+)*?[ \\t]+${escapeRe(flag)}(?![\\w=-])`,
-    "m",
-  );
-  return re.test(commands.join("\n"));
+  const re = new RegExp(`${SEP}${ENV}node[ \\t]+${escapeRe(script)}((?:[ \\t]+[^\\s;&|()]+)*)`, "gm");
+  for (const m of commands.join("\n").matchAll(re)) {
+    const args = m[1].split(/\s+/).filter(Boolean);
+    if (args.includes(flag) && !args.includes("--self-test")) return true;
+  }
+  return false;
 }
 
 /** True when a workflow invokes this gate by path OR by any npm-script alias —
@@ -615,7 +619,9 @@ function selfTest() {
   checks.push(["required flag: a misspelt flag does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-histroy\n") === false]);
   checks.push(["required flag: a longer flag does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-history-x\n") === false]);
   checks.push(["required flag: the flag in a comment or an echo does not carry it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs # --require-history\n  - run: echo node scripts/check-sim-result-provenance.mjs --require-history\n") === false]);
-  checks.push(["required flag: the flag on the --self-test step does not carry it for the plain run", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --self-test\n") === false]);
+  checks.push(["required flag: the flag on the --self-test step does not carry it for the plain run", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --self-test --require-history\n") === false]);
+  checks.push(["required flag: the flag before --self-test does not carry it either", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-history --self-test\n") === false]);
+  checks.push(["required flag: a --self-test step does not mask the real run line that carries it", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --self-test\n  - run: node scripts/check-sim-result-provenance.mjs --require-history\n") === true]);
   checks.push(["required flag: the real run line is credited", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --require-history\n") === true]);
   checks.push(["required flag: the flag may come after another argument", runLineCarriesFlag(PV, PF, "  - run: node scripts/check-sim-result-provenance.mjs --x --require-history\n") === true]);
   checks.push(["required flag: LIVE positive control — every REQUIRED_RUN_FLAGS entry is carried by the real workflows", [...REQUIRED_RUN_FLAGS].every(([sc, { flag }]) => runLineCarriesFlag(sc, flag, blob))]);

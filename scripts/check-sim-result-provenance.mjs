@@ -265,7 +265,11 @@ function scratchCloneChecks(ok) {
     for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
       writeFileSync(join(nogit, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
     }
-    const nogitRun = run(nogit, "node", [join(nogit, "scripts", "check-sim-result-provenance.mjs"), "--require-history"]);
+    // GIT_CEILING_DIRECTORIES stops git walking up from nogit into an enclosing repository (a TMPDIR
+    // that sits inside one), which would answer "not shallow" for the wrong repo and hide the refusal.
+    const nogitRun = spawnSync("node", [join(nogit, "scripts", "check-sim-result-provenance.mjs"), "--require-history"], {
+      cwd: nogit, encoding: "utf8", env: { ...cleanEnv, GIT_CEILING_DIRECTORIES: root },
+    });
     const nogitRefused = nogitRun.status === 1 && /shallow \(or unreadable\) checkout/.test(nogitRun.stderr ?? "");
     return [
       ok("scratch clone: --require-history where git cannot answer is refused as unreadable, not run (kills the fail-open shallow probe)", nogitRefused),

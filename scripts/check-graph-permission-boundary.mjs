@@ -161,8 +161,8 @@ export function connectorDefaultBase(src) {
 }
 
 /**
- * Pure: a strict reader for the Bruno file shape this collection uses. A block opens at column 0 with `name {` and closes at column 0 with
- * `}`; anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
+ * Pure: a strict reader for the Bruno file shape this collection uses. A block opens at column 0 with `name {` and closes at the first line that starts with
+ * `}` (nothing may follow it); anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
  * { blocks: [{ name, entries: [[key, value]] }], fatal }. Indented text inside `docs` is prose and is never read as a block.
  */
 export function parseBru(text) {
@@ -175,7 +175,11 @@ export function parseBru(text) {
       const m = /^([A-Za-z][\w:-]*)\s*\{\s*$/.exec(line);
       if (!m) { fatal.push(`line ${i + 1} is outside any block (${JSON.stringify(line.slice(0, 40))}) — an unrecognised construct`); continue; }
       cur = { name: m[1], entries: [] };
-    } else if (/^\}\s*$/.test(line)) { blocks.push(cur); cur = null; }
+    } else if (line.startsWith("}")) {
+      // Bruno ends a block at any newline followed by `}`, whatever follows it on the line; so must this reader, or `}post {` hides a second http block.
+      if (line.slice(1).trim() !== "") fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
+      blocks.push(cur); cur = null;
+    }
     else if (cur.name !== "docs" && line.trim() !== "") {
       const kv = /^\s+([A-Za-z][\w-]*):[ \t]*(.*?)\s*$/.exec(line);
       if (!kv) fatal.push(`line ${i + 1} in \`${cur.name}\` is not a \`key: value\` line`);
@@ -471,6 +475,13 @@ function selfTest() {
     ["text outside any block", (t) => t + "\nstray line\n", "outside any block"],
     ["a duplicate url key in the method block", (t) => t.replace("body: none", "url: {{baseUrl}}" + wide + "\n  body: none"), "method block keys"],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND3: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
+  // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
+  for (const [label, edit, needle] of [
+    ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],
+    ["`}get {` at column 0 with a widened $select", (t) => t.replace(/\}\s*$/, "}get {\n  url: {{baseUrl}}" + wide + "\n}\n"), "text after a closing brace"],
+    ["`}` followed by text inside docs", (t) => t.replace("docs {\n  x\n}", "docs {\n  x\n}trailing"), "text after a closing brace"],
+    ["a column-0 `}` line in the middle of docs (the block ends there; the rest is stray)", (t) => t.replace("docs {\n  x\n}", "docs {\n  x\n}\n  get {\n    url: {{baseUrl}}" + wide + "\n  }\n}"), "outside any block"],
+  ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND4: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
   checks.push(["ROUND3: two baseUrl entries in Sandbox.bru are FATAL (the last wins in Bruno)", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("  graphToken", "  baseUrl: https://graph.microsoft.com/beta\n  graphToken")), "2 baseUrl entries")]);
   checks.push(["ROUND3: a non-vars block in Sandbox.bru is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV + "\nscript:pre-request {\n  x: y\n}\n"), "only vars blocks")]);
   checks.push(["ROUND3: a ReadWrite scope the connector names but permissions.json lacks is FATAL (scope shape is not only .Read.All)", has(audit(csrc + "\n// also Device.ReadWrite.All"), "Device.ReadWrite.All", "under-provisions")]);

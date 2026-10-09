@@ -183,7 +183,8 @@ export function parseBru(text) {
       blocks.push(cur); cur = null;
     }
     else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
-    else if (cur.name !== "docs" && line.trim() !== "") {
+    else if (cur.name !== "docs" && line.trim() === "") { fatal.push(`line ${i + 1} in \`${cur.name}\` is blank or whitespace-only — Bruno 4.0.0 rejects some of these ("Expected :") and skips the file, so none is accepted`); }
+    else if (cur.name !== "docs") {
       const kv = /^\s+([A-Za-z][\w-]*):[ \t]*(.*?)\s*$/.exec(line);
       if (!kv) fatal.push(`line ${i + 1} in \`${cur.name}\` is not a \`key: value\` line`);
       else cur.entries.push([kv[1], kv[2]]);
@@ -618,6 +619,17 @@ function selfTest() {
   checks.push(["ROUND10: a method block missing body is FATAL (exactly url, body, auth)", has(audit(csrc, b), "b.bru", "method block keys")]);
   b = baseBru(); b["b.bru"] = b["b.bru"].replace("  auth: inherit\n", "");
   checks.push(["ROUND10: a method block missing auth is FATAL", has(audit(csrc, b), "b.bru", "method block keys")]);
+  // ---- review round 11: a whitespace line inside a dictionary block ----
+  const wsCases = [
+    ["a whitespace line before the first meta entry", (t) => t.replace("meta {\n", "meta {\n  \n")],
+    ["an empty line before the first meta entry", (t) => t.replace("meta {\n", "meta {\n\n")],
+    ["a whitespace line before the first method entry", (t) => t.replace("get {\n", "get {\n  \n")],
+    ["a whitespace line between meta entries", (t) => t.replace("name: x\n", "name: x\n  \n")],
+    ["a whitespace line at the end of the method block", (t) => t.replace("auth: inherit\n", "auth: inherit\n  \n")],
+  ];
+  for (const [label, edit] of wsCases) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND11: ${label} is FATAL`, has(audit(csrc, b), "b.bru", "whitespace-only")]); }
+  checks.push(["ROUND11: a whitespace line inside collection.bru auth is FATAL", has(audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  \n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }), "collection.bru", "whitespace-only")]);
+  checks.push(["ROUND11: a whitespace line inside Sandbox.bru vars is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("vars {\n", "vars {\n  \n")), "Sandbox.bru", "whitespace-only")]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

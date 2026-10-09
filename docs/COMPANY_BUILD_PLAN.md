@@ -729,7 +729,7 @@ earlier — that is the loop working, not a reason to soften the record.
     inline one that holds no quote, tag, anchor or alias); branch and path filters, `if:` and a
     job-level `defaults.run.shell` are not read, and a `run:` line that shells out `|| true`, `false &&`,
     `; exit 0` or a heredoc body that merely contains the command is still credited (the parity gate's
-    known limits, widened by the same matcher). Its `--self-test` (129 cases; every planted
+    known limits, widened by the same matcher), and a runner entry whose value depends on `process.env` or other runtime state that differs between the `--list-steps` run and the real run is not modelled (a second `--list-steps` mention in the runner is refused). Its `--self-test` (132 cases; every planted
     mutant of the gate and of the shared matcher turns it red except the spawn timeout option and
     the `r.error` check, which are equivalent by construction)
     plants an unregistered gate whose flag exits 1, an unregistered no-op

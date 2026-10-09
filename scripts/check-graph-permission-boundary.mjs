@@ -44,6 +44,9 @@
 // — that is Microsoft's published fact, not derivable from the connector (part b,
 // the msgraph-metadata OpenAPI cross-diff, would catch a wrong pairing), nor (b) that
 // the request answers on a real tenant (the live-tenant milestone).
+// Request files are read by a strict column-0 block parser (parseBru), not a regex over the whole file: Bruno merges every http block and
+// the LAST wins, so exactly one method block, no stray text and one url key are required, and the result must agree with check-lab-collections'
+// REQUEST_BLOCK. Sandbox.bru must carry exactly one baseUrl.
 // Known residual (LOW): the connector scan is anchored on the rawGet/getAllPages choke point, so a read that bypasses both (a new
 // fetch path) is caught only by the single-transport-call rule; Bruno constructs outside meta/method/docs blocks are refused, not interpreted.
 //
@@ -69,9 +72,12 @@ export function connectorEndpoints(src) {
   return [...out].sort();
 }
 
+/** A Graph permission name: `Name.Read`, `Name.ReadWrite.All`, `Name.Read.All`, … (not only `.Read.All`, so a wider scope cannot hide). */
+const SCOPE = "[A-Z][A-Za-z0-9-]*\\.(?:Read|ReadWrite|ReadBasic|Write)(?:\\.[A-Za-z]+)?";
+
 /** Pure: distinct `Something.Read.All` scopes the connector names (comments included — they are the contract). */
 export function connectorScopes(src) {
-  return [...new Set([...src.matchAll(/\b([A-Za-z][A-Za-z0-9-]*\.Read\.All)\b/g)].map((m) => m[1]))].sort();
+  return [...new Set([...src.matchAll(new RegExp(`\\b(${SCOPE})\\b`, "g"))].map((m) => m[1]))].sort();
 }
 
 /** Pure: backticked `/path` cells in the page's tables, query strings stripped. */
@@ -88,7 +94,7 @@ export function docEndpoints(md) {
 export function docScopes(md) {
   const out = new Set();
   for (const line of md.split("\n")) {
-    const m = /^\|\s*`([A-Za-z][A-Za-z0-9-]*\.Read\.All)`\s*\|/.exec(line);
+    const m = new RegExp(`^\\|\\s*\`(${SCOPE})\`\\s*\\|`).exec(line);
     if (m) out.add(m[1]);
   }
   return [...out].sort();
@@ -154,6 +160,32 @@ export function connectorDefaultBase(src) {
   return m ? m[1] : null;
 }
 
+/**
+ * Pure: a strict reader for the Bruno file shape this collection uses. A block opens at column 0 with `name {` and closes at column 0 with
+ * `}`; anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
+ * { blocks: [{ name, entries: [[key, value]] }], fatal }. Indented text inside `docs` is prose and is never read as a block.
+ */
+export function parseBru(text) {
+  const fatal = [];
+  const blocks = [];
+  let cur = null;
+  for (const [i, line] of text.split("\n").entries()) {
+    if (cur === null) {
+      if (line.trim() === "") continue;
+      const m = /^([A-Za-z][\w:-]*)\s*\{\s*$/.exec(line);
+      if (!m) { fatal.push(`line ${i + 1} is outside any block (${JSON.stringify(line.slice(0, 40))}) — an unrecognised construct`); continue; }
+      cur = { name: m[1], entries: [] };
+    } else if (/^\}\s*$/.test(line)) { blocks.push(cur); cur = null; }
+    else if (cur.name !== "docs" && line.trim() !== "") {
+      const kv = /^\s+([A-Za-z][\w-]*):[ \t]*(.*?)\s*$/.exec(line);
+      if (!kv) fatal.push(`line ${i + 1} in \`${cur.name}\` is not a \`key: value\` line`);
+      else cur.entries.push([kv[1], kv[2]]);
+    }
+  }
+  if (cur !== null) fatal.push(`block \`${cur.name}\` is never closed`);
+  return { blocks, fatal };
+}
+
 /** Pure: one entry per request file ({ file, method, path }); anything but a GET on `{{baseUrl}}/…` is fatal. */
 export function collectionRequests(filesByName) {
   const fatal = [];
@@ -165,15 +197,24 @@ export function collectionRequests(filesByName) {
       continue;
     }
     if (!name.endsWith(".bru")) continue;
-    const m = REQUEST_BLOCK.exec(filesByName[name]);
-    if (!m) { fatal.push(`${name}: no request block (method + url) found — an unparseable request file proves nothing`); continue; }
-    const method = m[1].toUpperCase();
-    const url = m[2];
-    const line = /url:[ \t]*([^\n]*)/.exec(filesByName[name].slice(m.index))?.[1].trim() ?? url;
-    if (line !== url) { fatal.push(`${name}: url line \`${line}\` has content after the first space — Bruno sends the whole line, so the gate would see a narrower request than is sent`); continue; }
-    const blocks = [...filesByName[name].matchAll(/^([A-Za-z][\w:-]*)\s*\{/gm)].map((b) => b[1]);
-    const odd = blocks.filter((b) => !["meta", "get", "post", "put", "delete", "patch", "docs"].includes(b));
-    if (odd.length > 0) { fatal.push(`${name}: Bruno block(s) ${odd.map((b) => `\`${b}\``).join(", ")} can change what is sent (query, vars, script, headers, body) and this gate reads only \`url:\` — refusing`); continue; }
+    const parsed = parseBru(filesByName[name]);
+    if (parsed.fatal.length > 0) { fatal.push(...parsed.fatal.map((f) => `${name}: ${f}`)); continue; }
+    const METHODS = ["get", "post", "put", "delete", "patch", "head", "options"];
+    const odd = parsed.blocks.filter((bl) => !["meta", "docs", ...METHODS].includes(bl.name));
+    if (odd.length > 0) { fatal.push(`${name}: Bruno block(s) ${odd.map((bl) => `\`${bl.name}\``).join(", ")} can change what is sent (query, vars, script, headers, body) and this gate reads only \`url:\` — refusing`); continue; }
+    const methodBlocks = parsed.blocks.filter((bl) => METHODS.includes(bl.name));
+    if (methodBlocks.length !== 1) { fatal.push(`${name}: ${methodBlocks.length} method block(s) — exactly one is required (Bruno merges every http block and the last wins, so a second block hides the request this gate sees)`); continue; }
+    if (parsed.blocks.filter((bl) => bl.name === "meta").length !== 1) { fatal.push(`${name}: not exactly one meta block`); continue; }
+    if (parsed.blocks.filter((bl) => bl.name === "docs").length > 1) { fatal.push(`${name}: more than one docs block`); continue; }
+    const mb = methodBlocks[0];
+    const method = mb.name.toUpperCase();
+    const keys = mb.entries.map(([k]) => k);
+    if (new Set(keys).size !== keys.length || keys.some((k) => !["url", "body", "auth"].includes(k))) { fatal.push(`${name}: method block keys [${keys.join(", ")}] — only one each of url, body, auth are allowed`); continue; }
+    const url = (mb.entries.find(([k]) => k === "url") ?? [])[1];
+    if (typeof url !== "string" || url === "") { fatal.push(`${name}: the method block has no url`); continue; }
+    if (/\s/.test(url)) { fatal.push(`${name}: url \`${url}\` has whitespace inside — Bruno sends the whole line, so the gate would see a narrower request than is sent`); continue; }
+    const lm = REQUEST_BLOCK.exec(filesByName[name]);
+    if (!lm || lm[1].toUpperCase() !== method || lm[2] !== url) { fatal.push(`${name}: the strict parse (${method} ${url}) and check-lab-collections' REQUEST_BLOCK (${lm ? `${lm[1].toUpperCase()} ${lm[2]}` : "no match"}) disagree — the two gates must read the same request`); continue; }
     if (method !== "GET") { fatal.push(`${name}: ${method} — the Graph connector is read-only; a non-GET request asserts a write the product never makes`); continue; }
     if (!url.startsWith("{{baseUrl}}/")) { fatal.push(`${name}: url ${url} does not start with {{baseUrl}}/ — it is not the connector's transport`); continue; }
     requests.push({ file: name, method, path: url.slice("{{baseUrl}}".length) });
@@ -224,7 +265,16 @@ export function auditCollection(connectorSrc, bruByName, permissionsText, envTex
   if (ub > 0) fatal.push(`the connector uses \`this.baseUrl\` ${ub} time(s) outside the \`\${this.baseUrl}/…\` template — a read built another way (concatenation, a helper) is invisible to this gate; build it as a literal or extend the gate`);
   for (const v of chokePointViolations(connectorSrc)) fatal.push(`connector read the gate cannot transcribe: ${v}`);
   const defBase = connectorDefaultBase(connectorSrc);
-  const envBase = typeof envText === "string" ? /^\s*baseUrl:[ \t]*(\S+)\s*$/m.exec(envText)?.[1] : undefined;
+  let envBase;
+  if (typeof envText === "string") {
+    const pe = parseBru(envText);
+    for (const f of pe.fatal) fatal.push(`environments/Sandbox.bru: ${f}`);
+    const odd = pe.blocks.filter((bl) => !["vars", "vars:secret"].includes(bl.name));
+    if (odd.length > 0) fatal.push(`environments/Sandbox.bru: block(s) ${odd.map((bl) => bl.name).join(", ")} — only vars blocks are allowed`);
+    const bases = pe.blocks.flatMap((bl) => bl.entries.filter(([k]) => k === "baseUrl").map(([, v]) => v));
+    if (bases.length > 1) fatal.push(`environments/Sandbox.bru: ${bases.length} baseUrl entries — Bruno keeps the last, so the first cannot be the one checked`);
+    envBase = bases.length === 1 ? bases[0] : undefined;
+  }
   if (!defBase) fatal.push("the connector's default base URL could not be read — refusing to conclude the collection targets the same endpoint");
   else if (envBase !== defBase) fatal.push(`environments/Sandbox.bru baseUrl is ${envBase ?? "missing"} and the connector's default is ${defBase} — the collection would send requests to a different endpoint (e.g. /beta)`);
   const usedByCount = rec.permissions.reduce((n, p) => n + p.usedBy.length, 0);
@@ -391,13 +441,13 @@ function selfTest() {
   checks.push(["ROUND1: a fifth read written as string concatenation is FATAL (the literal scan cannot see it)", has(audit(csrc + "\nconst e = this.baseUrl + \"/groups\";"), "this.baseUrl", "outside")]);
   checks.push(["ROUND1: a fifth read through a graphUrl(path) helper is FATAL", has(audit(csrc + "\nprivate graphUrl(path) { return `${this.baseUrl}${path}`; }"), "this.baseUrl", "outside")]);
   b = baseBru(); b["b.bru"] = bru(P.users + " &$expand=manager");
-  checks.push(["ROUND1: a url with content after the first space is FATAL (Bruno sends the whole line)", has(audit(csrc, b), "b.bru", "after the first space")]);
+  checks.push(["ROUND1: a url with content after the first space is FATAL (Bruno sends the whole line)", has(audit(csrc, b), "b.bru", "whitespace inside")]);
   o = permObj(); o.delegated.push({ permission: "User.Read.All", usedBy: [`GET ${P.users}`] });
   checks.push(["ROUND1: a delegated duplicate of an application scope is FATAL", has(audit(csrc, baseBru(), pj(o)), "delegated[0]", "application token")]);
   checks.push(["ROUND1: Sandbox.bru pointing at /beta is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("v1.0", "beta")), "Sandbox.bru", "beta")]);
   checks.push(["ROUND1: a missing Sandbox baseUrl is FATAL", has(audit(csrc, baseBru(), pj(permObj()), "vars {\n}\n"), "Sandbox.bru", "missing")]);
   b = baseBru(); b["e.bru"] = "meta {\n  name: x\n}\n\ndocs {\n  nothing\n}\n";
-  checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "no request block")]);
+  checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "method block")]);
   b = baseBru(); b["extra/groups.bru"] = bru("/groups");
   checks.push(["ROUND1: a nested request file is read like a top-level one (asserts more -> FATAL)", has(audit(csrc, b), "extra/groups.bru", "asserts")]);
   // ---- review round 2 plants ----
@@ -409,6 +459,23 @@ function selfTest() {
     ["bracket access to baseUrl", 'return this.rawGet(`${this["baseUrl"]}/groups`);'],
     ["an absolute URL handed to rawGet", 'return this.rawGet("https://graph.microsoft.com/v1.0/groups");'],
   ]) checks.push([`ROUND2: ${label} is FATAL`, has(audit(chokeBase + extra), "cannot transcribe")]);
+  // ---- review round 3 plants: Bruno merges every http block and the LAST wins; the gate must not read the first ----
+  const blk = (m, url) => `\n${m} {\n  url: ${url}\n  body: none\n  auth: inherit\n}\n`;
+  const wide = P.users + ",mail,jobTitle";
+  for (const [label, edit, needle] of [
+    ["a second POST block appended", (t) => t + blk("post", "{{baseUrl}}/users"), "method block"],
+    ["a second GET block with a widened $select", (t) => t + blk("get", "{{baseUrl}}" + wide), "method block"],
+    ["a PATCH block after the GET", (t) => t + blk("patch", "{{baseUrl}}/users/x"), "method block"],
+    ["a decoy GET inside the meta name above a widened real block", (t) => t.replace("name: x", "name: get { url: {{baseUrl}}" + P.users + " }").replace(P.users, wide), "disagree"],
+    ["a multi-line decoy GET inside docs above a DELETE-only request", (t) => `meta {\n  name: x\n}\n\ndelete {\n  url: {{baseUrl}}/users/0\n}\n\ndocs {\n  get {\n    url: {{baseUrl}}${P.users}\n  }\n}\n`, "DELETE"],
+    ["text outside any block", (t) => t + "\nstray line\n", "outside any block"],
+    ["a duplicate url key in the method block", (t) => t.replace("body: none", "url: {{baseUrl}}" + wide + "\n  body: none"), "method block keys"],
+  ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND3: ${label} is FATAL`, has(audit(csrc, b), "b.bru", needle)]); }
+  checks.push(["ROUND3: two baseUrl entries in Sandbox.bru are FATAL (the last wins in Bruno)", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("  graphToken", "  baseUrl: https://graph.microsoft.com/beta\n  graphToken")), "2 baseUrl entries")]);
+  checks.push(["ROUND3: a non-vars block in Sandbox.bru is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV + "\nscript:pre-request {\n  x: y\n}\n"), "only vars blocks")]);
+  checks.push(["ROUND3: a ReadWrite scope the connector names but permissions.json lacks is FATAL (scope shape is not only .Read.All)", has(audit(csrc + "\n// also Device.ReadWrite.All"), "Device.ReadWrite.All", "under-provisions")]);
+  checks.push(["ROUND3: a bare .Read scope (User.Read) is seen", connectorScopes("// User.Read and Mail.ReadBasic.All").join() === "Mail.ReadBasic.All,User.Read"]);
+  checks.push(["ROUND3: the page parser sees a ReadWrite scope row too", docScopes("| `Device.ReadWrite.All` | x |").join() === "Device.ReadWrite.All"]);
   checks.push(["ROUND2: a second transport call site is FATAL", has(audit(chokeBase + "return this.transport(req);\nreturn this.transport(req2);"), "transport is invoked")]);
   for (const blk of ["params:query { $expand: manager }", "vars:pre-request { baseUrl: https://graph.microsoft.com/beta }", 'script:pre-request { req.setUrl("x") }', "headers { x: y }"]) {
     b = baseBru(); b["b.bru"] = b["b.bru"] + "\n" + blk.replace(/ \{.*$/, " {\n  k: v\n}\n");

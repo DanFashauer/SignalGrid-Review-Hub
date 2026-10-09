@@ -49,6 +49,12 @@ export function normalizeChain(raw: unknown): ChainVerdict {
   const durable = typeof c.ok === "boolean" && num(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
   if (memory && typeof c.valid === "boolean") {
     if (c.valid && c.brokenAtSeq != null) return unverifiedVerdict;
+    // `evictedCount` > 0 means older events were discarded: it contradicts
+    // `truncated: false`, and a count that is not a non-negative integer is malformed.
+    if ("evictedCount" in c) {
+      const ev = c.evictedCount;
+      if (typeof ev !== "number" || !Number.isInteger(ev) || ev < 0 || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
+    }
     return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: num(c.length) ?? 0 };
   }
   if (durable && typeof c.ok === "boolean") {

@@ -72,6 +72,20 @@ test("a success that also names a break location is unverified, never 'intact'",
   }
 });
 
+test("an eviction count that contradicts truncation, or is malformed, is unverified", () => {
+  for (const raw of [
+    { valid: true, brokenAtSeq: null, length: 500, truncated: false, evictedCount: 40 },
+    { valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: -1 },
+    { valid: true, brokenAtSeq: null, length: 7, truncated: true, evictedCount: 1.5 },
+    { valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: "0" },
+  ]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.valid, false);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
+  assert.equal(normalizeChain({ valid: true, brokenAtSeq: null, length: 7, truncated: false, evictedCount: 0 }).valid, true);
+});
+
 test("an unrecognised shape is unverified", () => {
   for (const raw of [undefined, null, {}, { ok: "yes" }]) {
     const c = normalizeChain(raw);

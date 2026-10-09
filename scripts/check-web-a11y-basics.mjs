@@ -145,6 +145,21 @@ export function callsQueryHook(code, generated = new Set()) {
 const LIVE = /<LiveRegion\b|(?<![\w-])aria-live=\{?\s*["'`](polite|assertive)["'`]/;
 const DEFAULTS_CALL = /new\s+QueryClient\s*\(|\.setDefaultOptions\s*\(|\.setQueryDefaults\s*\(/g;
 
+/**
+ * Blank every string or template literal whose text holds live-region markup
+ * (`<LiveRegion`, `aria-live=`): documentation or fixture text is not rendered,
+ * so it must neither satisfy rule 1 nor be read as the region's attributes.
+ * Newlines are kept so line numbers stay true. A literal the scanner pairs wrongly
+ * can only blank a real region, which then fails — the error is fail-closed.
+ */
+export function blankMarkupStrings(code) {
+  const MARKUP = /<LiveRegion\b|(?<![\w-])aria-live\s*=/;
+  const blank = (t) => (MARKUP.test(t) ? t.replace(/[^\n]/g, " ") : t);
+  return code
+    .replace(/`(?:[^`\\]|\\[\s\S])*`/g, blank)
+    .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, blank);
+}
+
 /** Remove JSX `{/* … *\/}`, block and line comments (a `//` after `:` is a URL). */
 export function stripComments(src) {
   // Keep the newlines a comment spanned, so reported line numbers stay true.
@@ -358,7 +373,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
   // Only the LiveRegion component itself is exempt. App.tsx is read like any
   // file: its QueryClient construction is removed below, the rest is a view.
   const skip = (rel) => /\/LiveRegion\.tsx$/.test(rel);
-  const parsed = files.filter((f) => !skip(f.rel)).map((f) => ({ ...f, code: withoutDefaultsCalls(stripComments(f.src)) }));
+  const parsed = files.filter((f) => !skip(f.rel)).map((f) => ({ ...f, code: blankMarkupStrings(withoutDefaultsCalls(stripComments(f.src))) }));
   const rels = new Set(parsed.map((f) => f.rel));
   for (const f of parsed) for (const why of opaqueHookExports(f.code)) failures.push(`${f.rel}: ${why} — the gate cannot follow it; failing closed`);
   const polls = new Set();
@@ -458,7 +473,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
   if (tags.length === 0) return [];
   const announced = tags.join("\n");
   const failures = [];
-  const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
+  const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
   for (const m of code.matchAll(binding)) {
     if (!isHook(m[2])) continue;
     const { spans } = callSpans(code.slice(m.index + m[0].length - 1), /\(/g);
@@ -475,11 +490,19 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
         const [key, alias] = part.split("=")[0].split(":").map((x) => x.trim());
         if (REFRESHED.test(key)) direct.push(alias || key);
       }
+    } else if (m[1].startsWith("[")) {
+      // `const [metrics, decisions] = useQueries(…)`: each element is a whole query result.
+      for (const el of m[1].slice(1, -1).split(",").map((x) => x.trim().replace(/^\.\.\./, "").split("=")[0].trim())) if (/^[A-Za-z_$][\w$]*$/.test(el)) holders.push(el);
+      if (holders.length === 0) holders.push("(unbound element)");
     } else holders.push(m[1]);
+    // An identifier bound to a list of queries (`const results = useQueries(…)`) is read
+    // through an element: `results[0].data`, or `results.some((r) => r.isError)`.
+    const listHook = /Queries$/.test(m[2]) && !m[1].startsWith("[") && !m[1].startsWith("{");
     const names = [...direct, ...holders.map((h) => `${h}.data|error`)];
     const reads = (re) => re.test(announced);
     if (direct.some((n) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
-        holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) continue;
+        holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`))) ||
+        (listHook && reads(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?:\\[\\d+\\])?\\??\\.`)) && reads(new RegExp(`\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) continue;
     const line = code.slice(0, m.index).split("\n").length;
     failures.push(`${rel}:${line}: polled ${m[2]}() result/error (${names.join(", ") || "none bound"}) is never read by a <LiveRegion> — its updates and failures are silent (WCAG 4.1.3)`);
   }
@@ -505,7 +528,7 @@ function attrExpression(tag, name) {
  * same outcome otherwise produce the same text, and unchanged text is not announced.
  */
 export function checkLiveRegionText(rel, raw) {
-  const src = stripComments(raw);
+  const src = blankMarkupStrings(stripComments(raw));
   const failures = [];
   for (const m of src.matchAll(/<LiveRegion\b/g)) {
     const line = src.slice(0, m.index).split("\n").length;
@@ -912,7 +935,9 @@ export function checkReducedMotion(rel, raw) {
   const re = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/g;
   let m;
   let ok = false;
+  let unimportant = false;
   const reversals = [];
+  const blocks = []; // [start, end) of every reduced-motion block
   while ((m = re.exec(css))) {
     let depth = 0;
     for (let i = m.index + m[0].length - 1; i < css.length; i++) {
@@ -937,9 +962,14 @@ export function checkReducedMotion(rel, raw) {
             // none`/`-name: none`/near-zero `-duration` (an iteration count of 1 still
             // runs a one-shot entrance animation in full), likewise for transition.
             const own = new Set([...r[2].matchAll(/(?:^|[\s;])(animation(?:-name|-duration)?|transition(?:-property|-duration)?|scroll-behavior)\s*:/g)].map((d) => d[1].split("-")[0]));
+            // …and win the cascade: a universal selector has the lowest specificity,
+            // so any `.x { animation: … }` beats it unless every damper is !important.
+            const motion = [...r[2].matchAll(/(?:^|[\s;])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:\s*([^;{}]+)/g)];
+            if (!motion.filter((d) => !MOTION_NEUTRAL.has(d[1])).every((d) => /!\s*important\s*$/.test(d[2].trim()))) { unimportant = true; return false; }
             return ["animation", "transition", "scroll"].every((f) => own.has(f));
           });
         if (universal) ok = true;
+        blocks.push([m.index, i + 1]);
         // Every block's motion declarations must damp: a later block that re-enables
         // motion (`.spinner { animation: spin 2s infinite !important }`) reverses the first.
         for (const [prop, value] of decls) if (!damps(prop, value)) reversals.push(`${prop}: ${value}`);
@@ -948,6 +978,23 @@ export function checkReducedMotion(rel, raw) {
     }
   }
   if (reversals.length) return [`${rel}: a prefers-reduced-motion block re-enables motion (${reversals.join("; ")}) — WCAG 2.3.3`];
+  // An !important motion declaration OUTSIDE the block (`.spinner { animation: spin
+  // 2s infinite !important }`) is as important as the universal damper and more
+  // specific, so it wins the cascade for reduced-motion users too. @keyframes
+  // bodies hold frames, not the element's animation, and are skipped.
+  const skipped = [...blocks];
+  for (const k of css.matchAll(/@(?:-webkit-)?keyframes\b[^{]*\{/g)) {
+    for (let i = k.index + k[0].length - 1, depth = 0; i < css.length; i++) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}" && --depth === 0) { skipped.push([k.index, i + 1]); break; }
+    }
+  }
+  const overrides = [...css.matchAll(/(?:^|[\s;{])((?:animation|transition)(?:-[\w-]+)?|scroll-behavior)\s*:\s*([^;{}]+)/g)]
+    .filter((d) => !skipped.some(([a, b]) => a <= d.index && d.index < b))
+    .filter((d) => /!\s*important/.test(d[2]) && !MOTION_NEUTRAL.has(d[1]) && !damps(d[1], d[2].replace(/!\s*important/, "").trim()))
+    .map((d) => `${d[1]}: ${d[2].trim()}`);
+  if (overrides.length) return [`${rel}: an !important motion declaration outside the reduced-motion block overrides it for reduced-motion users (${overrides.join("; ")}) — WCAG 2.3.3`];
+  if (!ok && unimportant) return [`${rel}: the reduced-motion universal (*) rule's dampers are not all !important — any more specific rule re-enables motion — WCAG 2.3.3`];
   if (ok) return [];
   return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
@@ -1263,15 +1310,15 @@ function selfTest() {
     ["a reduced-motion block must damp all three motion families",
       ["scroll-behavior: auto", "animation-duration: 0.01ms; scroll-behavior: auto", "animation: none; transition: none"].every((d) =>
         checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["a timer that invalidates or resets queries polls",
       ["setInterval(() => qc.invalidateQueries({ queryKey: k }), 5000)", "setTimeout(function t() { qc.resetQueries(); setTimeout(t, 5000); }, 5000)"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
     ["a reduced-motion block whose declarations do not damp motion does not count",
       ["animation-duration: 99s", "scroll-behavior: smooth", "transition-duration: 0.01ms; animation-duration: 2s", "animation-iteration-count: infinite", "transition: opacity 1s"].every((d) =>
         checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
-      ["animation: none", "transition-duration: 0s !important", "scroll-behavior: auto", "animation-duration: 10ms; animation-timing-function: linear"].every((d) =>
-        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; ${d}; } }`).length === 0)],
+      ["animation: none !important", "transition-duration: 0s !important", "scroll-behavior: auto !important", "animation-duration: 10ms !important; animation-timing-function: linear"].every((d) =>
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; ${d}; } }`).length === 0)],
     ["a live-region alert gated on cached data being absent is flagged",
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={isError && !data ? "Feed down." : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={m.error && !m.data ? "Down." : ""} />').length === 1 &&
@@ -1326,7 +1373,7 @@ function selfTest() {
     ["the universal rule itself must damp all three motion families",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { color: red; } .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; } .x { transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["a refetch passed to a timer as its callback polls",
       ["setInterval(refetch, 5000)", "setTimeout(function tick() { refetchAll(); setTimeout(tick, 5000); }, 5000)", "const id = setInterval(refetchFeed, 3000)"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
@@ -1372,6 +1419,19 @@ function selfTest() {
           checkStylesheetLoaded("t", `<!-- old --><div></div>${html}`, entry('import "./index.css";')).length === 0 &&
           checkStylesheetLoaded("t", null, entry('import "./index.css";')).length === 1;
       })()],
+    ["reduced motion must win the cascade: !important dampers, and no !important motion outside the block",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
+      checkReducedMotion("a.css", ".spinner { animation: spin 2s infinite !important; } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 1 &&
+      checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+    ["useQueries array bindings must reach the live region",
+      checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="" alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
+    ["live-region markup inside a string or template literal is not a live region",
+      ["const example = `<LiveRegion message={data} />`;", "const doc = '<div aria-live=\"polite\"></div>';"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `const { data } = useQuery({ refetchInterval: 5000 }); ${c} return <div/>;`)], false).failures.length === 1) &&
+      checkLiveRegions([view("t/src/pages/T.tsx", 'const { data } = useQuery({ refetchInterval: 5000 }); return <LiveRegion message={data ? `${data.n} at ${data.updatedAt}` : ""} alert="" />;')], false).failures.length === 0],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
@@ -1390,10 +1450,10 @@ function selfTest() {
       checkChartMotion("c.tsx", 'import { Area } from "recharts"; <Area {...props} isAnimationActive={false} />').length === 0],
     ["a later reduced-motion block that re-enables motion fails",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } } @media (prefers-reduced-motion: reduce) { .spinner { animation: spin 2s infinite !important; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } } @media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["an iteration count alone does not damp the animation family",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-iteration-count: 1; transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms; animation-iteration-count: 1; transition-duration: 0s; scroll-behavior: auto; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; } }").length === 0],
     ["an alert count names a record",
       checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts, first ${a[0]?.receivedAt}.` : ""} />').length === 0],
@@ -1402,7 +1462,7 @@ function selfTest() {
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],
     ["a reduced-motion block must reach every element through a universal rule",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none; transition: none; scroll-behavior: auto; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
     ["stylesheet with reduced-motion passes",

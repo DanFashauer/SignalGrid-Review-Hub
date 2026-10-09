@@ -551,9 +551,13 @@ export function checkLiveRegionText(rel, raw) {
     // A polled collection can take a new record and drop an old one, or change a
     // record in place, while every count stays the same: counts alone announce
     // nothing. A message built from a count must also read a record's identity or
-    // time (`.id`, `.createdAt`, `.evaluatedAt`, `.recordedAt`, `.receivedAt`, `.updatedAt`).
-    const namesRecord = /\??\.(?:id|createdAt|evaluatedAt|recordedAt|receivedAt|updatedAt)\b/.test(message);
-    if (/\.length\b/.test(message) && !namesRecord) {
+    // time (`.id`, `.createdAt`, `.evaluatedAt`, `.recordedAt`, `.receivedAt`, `.updatedAt`, `.lastSync`).
+    const namesRecord = /\??\.(?:id|createdAt|evaluatedAt|recordedAt|receivedAt|updatedAt|lastSync)\b/.test(message);
+    // A count computed beforehand (`const connected = xs.filter(…).length`) is still a
+    // count: a message reading only such aliases is count-based too.
+    const countAliases = [...src.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*[^;\n]*\.length\b/g)].map((a) => a[1]);
+    const countBased = /\.length\b/.test(message) || countAliases.some((a) => new RegExp(`(?<![\\w$.])${escapeRegExp(a)}(?![\\w$])`).test(message));
+    if (countBased && !namesRecord) {
       failures.push(`${rel}:${line}: <LiveRegion> message is built from a count without naming a record (id or time) — a replaced or changed record that leaves the counts unchanged is not announced (WCAG 4.1.3)`);
     }
   }
@@ -1432,6 +1436,9 @@ function selfTest() {
       ["const example = `<LiveRegion message={data} />`;", "const doc = '<div aria-live=\"polite\"></div>';"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `const { data } = useQuery({ refetchInterval: 5000 }); ${c} return <div/>;`)], false).failures.length === 1) &&
       checkLiveRegions([view("t/src/pages/T.tsx", 'const { data } = useQuery({ refetchInterval: 5000 }); return <LiveRegion message={data ? `${data.n} at ${data.updatedAt}` : ""} alert="" />;')], false).failures.length === 0],
+    ["a count stored in a variable first is still a count",
+      checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected.` : ""} alert="" />').length === 1 &&
+      checkLiveRegionText("x.tsx", 'const connected = data?.items.filter((i) => i.ok).length ?? 0; <LiveRegion message={data ? `${connected} connected; last sync ${latest.id} at ${latest.lastSync}.` : ""} alert="" />').length === 0],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

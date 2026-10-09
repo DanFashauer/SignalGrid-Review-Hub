@@ -482,6 +482,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:break-glass",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/break-glass/evaluate.ts",
       "lib/integrations/src/integrations/break-glass/index.ts",
@@ -707,6 +708,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:response-accountability",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/response-accountability/evaluate.ts",
       "lib/integrations/src/integrations/response-accountability/index.ts",

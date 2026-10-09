@@ -405,10 +405,13 @@ function fixture({ workflows, registry, extraFiles = {}, preflight = '[{ cmd: ["
 function selfTest() {
   const results = [];
   const note = (name, ok, detail = "") => results.push([name, ok, detail]);
-  const exits = (opts, expect, name) => {
+  // In-process by default (a spawn per case made the self-test take minutes once the YAML parser loaded); the cases
+  // flagged `spawn` go through a real child process so the exit code and the printed verdict are still proven end to end.
+  const exits = (opts, expect, name, { spawn = false } = {}) => {
     const root = fixture(opts);
     try {
-      const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", root, "--ref-date", REF], { encoding: "utf8" });
+      const args = ["--root", root, "--ref-date", REF];
+      const r = spawn ? spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...args], { encoding: "utf8" }) : cli(args);
       // the exit code AND the gate's own verdict line: a crash also exits 1 and proves nothing
       const verdict = expect === 0 ? /^scheduled-workflow liveness: \d+ scheduled/.test(r.stdout) : r.stderr.startsWith("✗ scheduled-workflow liveness:");
       note(name, r.status === expect && verdict, `exit ${r.status}, wanted ${expect}${r.status !== expect || !verdict ? `: ${(r.stderr || r.stdout).trim().split("\n")[0]}` : ""}`);
@@ -420,14 +423,14 @@ function selfTest() {
   const reg = (...workflows) => ({ version: 1, workflows });
 
   // the control: a green fixture must exit 0, or every red below proves nothing
-  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)) }, 0, "control: scheduled + api-probe wired + names workflow → exit 0");
-  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt())) }, 0, "control: scheduled + dated exemption with a reason → exit 0");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)) }, 0, "control: scheduled + api-probe wired + names workflow → exit 0", { spawn: true });
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt())) }, 0, "control: scheduled + dated exemption with a reason → exit 0", { spawn: true });
   // (a)…(f) from the spec, each end to end through the CLI
-  exits({ workflows: { "a.yml": SCHED_WF(), "b.yml": SCHED_WF() }, registry: reg(entry(exempt())) }, 1, "(a) scheduled workflow with no registry entry → exit 1");
-  exits({ workflows: { "a.yml": PLAIN_WF }, registry: reg(entry(exempt())) }, 1, "(b) registry entry for a workflow with no schedule → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF(), "b.yml": SCHED_WF() }, registry: reg(entry(exempt())) }, 1, "(a) scheduled workflow with no registry entry → exit 1", { spawn: true });
+  exits({ workflows: { "a.yml": PLAIN_WF }, registry: reg(entry(exempt())) }, 1, "(b) registry entry for a workflow with no schedule → exit 1", { spawn: true });
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reason: "" }))) }, 1, "(c) exempt without a reason → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: "2026-05-01" }))) }, 1, "(d) exempt with a stale reviewedAt → exit 1");
-  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry({ kind: "api-probe", script: "scripts/nope.mjs" })) }, 1, "(e) watcher naming a script that does not exist → exit 1");
+  exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry({ kind: "api-probe", script: "scripts/nope.mjs" })) }, 1, "(e) watcher naming a script that does not exist → exit 1", { spawn: true });
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: undefined }))) }, 1, "exempt with no reviewedAt at all → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: "2027-01-01" }))) }, 1, "exempt dated after the reference date → exit 1");
   exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(probe)), preflight: "[]" }, 1, "api-probe script not wired in preflight → exit 1");
@@ -479,6 +482,8 @@ function selfTest() {
   exits({ workflows: { "a.yml": `on:\n  push: {}\non:\n  schedule:\n    - cron: "0 0 * * *"\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a duplicate on: key (a parser error) → exit 1 (unreadable)");
   exits({ workflows: { "a.yml": `on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: |\n          echo it's fine\n          echo don 't\n` }, registry: reg() }, 0, "negative control: stray apostrophes in a run body of an unscheduled workflow → exit 0");
   exits({ workflows: { "a.yml": `on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: |\n          cron: not-a-trigger\n` }, registry: reg() }, 1, "the parser reads a run body, the text reader sees a cron it cannot place: they disagree → exit 1 (a disagreement fails closed)");
+  exits({ workflows: { "a.yml": `on:\n  push: {}\n  "x\\x41": 1\njobs:\n  a:\n    runs-on: x\n` }, registry: reg() }, 1, "a key spelled with an escape: the second reader cannot read it, so the readers disagree → exit 1");
+  exits({ workflows: { "a.yml": `on:\n  push: {}\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: |\n          "cron": not-a-trigger\n` }, registry: reg() }, 1, "a quoted \`\"cron\":\` line in a run body: the second reader sees a cron key the parser does not → exit 1");
   // negative controls for the tokenizer: quote characters that are NOT string openers must not swallow later keys
   exits({ workflows: { "a.yml": `name: it's a dog's life\non:\n  push: {}\n  schedule:\n    - cron: "0 0 * * *"\n${J}` }, registry: reg() }, 1, "apostrophes inside a plain scalar do not hide a later schedule key (still found) → exit 1");
   exits({ workflows: { "a.yml": `name: N\non: { push: {} }\nenv:\n  NOTE: "a \\"quoted\\" cron: word"\n${J}` }, registry: reg() }, 0, "negative control: an escaped-quote string containing `cron:` is not a key → exit 0");
@@ -601,23 +606,31 @@ const real = (p) => {
     return resolve(p);
   }
 };
-if (real(process.argv[1] ?? "") === real(fileURLToPath(import.meta.url))) {
-  const argv = process.argv.slice(2);
-  if (argv.includes("--self-test")) process.exit(selfTest());
+/** The whole command, in-process: { status, stdout, stderr }. A crash is NOT caught here: it must stay loud. */
+export function cli(argv) {
   const rootAt = argv.indexOf("--root");
   const root = rootAt >= 0 ? resolve(argv[rootAt + 1] ?? ".") : resolve(here, "..");
   const refAt = argv.indexOf("--ref-date");
   const refDate = refAt >= 0 ? argv[refAt + 1] : headDate(root);
   const { problems, scheduled, registry } = run(root, refDate);
   if (problems.length > 0) {
-    console.error(`✗ scheduled-workflow liveness: ${problems.length} problem(s)\n` + problems.map((p) => `    · ${p}`).join("\n"));
-    process.exit(1);
+    return { status: 1, stdout: "", stderr: `✗ scheduled-workflow liveness: ${problems.length} problem(s)\n` + problems.map((p) => `    · ${p}`).join("\n") + "\n" };
   }
   const rows = [...scheduled].filter(([, v]) => v === "scheduled").map(([wf]) => registry.workflows.find((e) => e.workflow === wf) ?? { workflow: wf, watcher: { kind: "UNREGISTERED" } });
-  console.log(`scheduled-workflow liveness: ${rows.length} scheduled workflow(s), each names its watcher (reference date ${refDate}):`);
+  let stdout = `scheduled-workflow liveness: ${rows.length} scheduled workflow(s), each names its watcher (reference date ${refDate}):\n`;
   for (const e of rows) {
     const w = e.watcher;
     const how = w.kind === "exempt" ? `exempt (reviewed ${w.reviewedAt}${w.redWatcher ? `, red covered by hand ${w.redWatcher}` : ""})` : w.kind === "auto-hand" ? `auto-hand ${w.hand} via ${w.script}` : `api-probe via ${w.script}`;
-    console.log(`  ${e.workflow.padEnd(28)} ${how}`);
+    stdout += `  ${e.workflow.padEnd(28)} ${how}\n`;
   }
+  return { status: 0, stdout, stderr: "" };
+}
+
+if (real(process.argv[1] ?? "") === real(fileURLToPath(import.meta.url))) {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--self-test")) process.exit(selfTest());
+  const r = cli(argv);
+  process.stdout.write(r.stdout);
+  process.stderr.write(r.stderr);
+  process.exit(r.status);
 }

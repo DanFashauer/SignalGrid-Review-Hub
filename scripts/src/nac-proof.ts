@@ -13,9 +13,9 @@
 //      not claim one.
 //   4. NO NETWORK I/O in the family, so a quarantine actuator cannot return.
 
-import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { classifyVendorCallLine, scanForVendorCalls, vendorCallScanSelfTest } from "./lib/no-vendor-call.js";
 import {
   clearPassStatus,
   lookupNacFixture,
@@ -167,102 +167,38 @@ check("no fixture carries a wall-clock timestamp",
 {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = resolve(here, "../../lib/integrations/src/integrations/nac");
-  // RECURSIVE. The previous scan used a flat readdirSync, so a subdirectory could
-  // hold anything at all and the guarantee would still print green.
-  const walk = (d: string): string[] =>
-    readdirSync(d, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith(".ts") ? [join(d, e.name)] : []);
-  const files = walk(dir);
-  const offenders: string[] = [];
-
-  // WHAT THIS BANS, and the claim is now narrowed to what it actually checks.
-  //
-  // THE OLD VERSION PRINTED A FALSE GUARANTEE. It said "no network I/O in any
-  // source" while matching only fetch/axios/got/undici/https.request and a mutating
-  // `method:` literal. Adversarial review found `nac/store.ts` doing
-  // `await import("ioredis")` and opening a TCP connection to Redis — real network
-  // I/O, invisible to every pattern in the list. The scan was reporting success over
-  // something it had stopped looking at, which this repo's own guard-registry header
-  // calls WORSE than no guard.
-  //
-  // Two changes. (1) The claim is now "no VENDOR-API call", which is the property
-  // that actually matters here — Redis is configuration storage, not a device
-  // actuator, and banning it outright would be theatre. (2) The pattern list gained
-  // dynamic import of network clients, node:net/http/https/tls, XHR, WebSocket and
-  // aliased fetch, so the next thing that sneaks in has fewer doors.
-  // The two client-module patterns are named because the store.ts exemption below is
-  // scoped to THEM and to nothing else; an anonymous array index would be a fossil the
-  // first reordering breaks.
-  const CLIENT_MODULE_REQUIRE = /\brequire\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i;
-  const CLIENT_MODULE_IMPORT = /\bimport\s*\(\s*['"](?:axios|got|undici|node-fetch|superagent|request|ioredis|redis|pg|mysql2|mongodb)['"]/i;
-  const banned = [
-    /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/i,
-    /\b(?:const|let|var)\s+\w+\s*=\s*fetch\b/i,            // aliased fetch
-    CLIENT_MODULE_REQUIRE,
-    CLIENT_MODULE_IMPORT,
-    /\bfrom\s+['"](?:axios|got|undici|node-fetch|superagent|request)['"]/i,
-    /\bfrom\s+['"]node:(?:net|http|https|tls|dgram)['"]/i,
-    /\bhttps?\.(?:request|get)\s*\(/i,
-    /\bnet\.(?:connect|createConnection)\s*\(/i,
-    /method:\s*['"](?:POST|PUT|PATCH|DELETE)['"]/i,
-  ];
   // store.ts is EXEMPT and named, not silently skipped. It talks to Redis to persist
   // which NAC provider is configured — configuration storage, not a vendor API call
-  // and not a device action. Listing it here is the honest form: the exemption is
-  // visible, scoped to one file, and a reader can disagree with it.
-  //
-  // THE EXEMPTION IS SCOPED TO THE REASON, NOT TO THE FILE. It used to be
-  // `allowed(rel)`, evaluated BEFORE the pattern test, which switched all nine
-  // patterns off for store.ts — `fetch(` and `method: "POST"` included. A live ISE ANC
-  // quarantine call planted in store.ts was invisible and this section printed green,
-  // in the family whose entire subject is that an actuator cannot return. Now a line in
-  // an exempted file is skipped only when EVERY banned pattern it matches is one of the
-  // two client-module patterns AND the module it names is a Redis client; anything else
-  // in that file is an offender like anywhere else, and each skip is printed.
+  // and not a device action. THE EXEMPTION IS SCOPED TO THE REASON, NOT TO THE FILE:
+  // it used to switch all nine patterns off for store.ts, and a live ISE ANC quarantine
+  // call planted there was invisible. A line in an exempted file is now skipped only
+  // when it loads a Redis client and matches nothing else; each skip is printed.
   const CONFIG_STORAGE_FILES = new Set(["store.ts"]);
-  const REDIS_CLIENT_MODULE = /\b(?:require|import)\s*\(\s*['"](?:ioredis|redis)['"]\s*\)/i;
-  const CONFIG_STORAGE_PATTERNS = new Set<RegExp>([CLIENT_MODULE_REQUIRE, CLIENT_MODULE_IMPORT]);
-  const exempted: string[] = [];
-  /** "clean" = no banned pattern; "exempt" = config-storage Redis client only; "offender" = everything else. */
-  const classify = (rel: string, line: string): "clean" | "exempt" | "offender" => {
-    const hits = banned.filter((re) => re.test(line));
-    if (hits.length === 0) return "clean";
-    if (
-      CONFIG_STORAGE_FILES.has(rel) &&
-      REDIS_CLIENT_MODULE.test(line) &&
-      hits.every((re) => CONFIG_STORAGE_PATTERNS.has(re))
-    ) return "exempt";
-    return "offender";
-  };
-  for (const f of files) {
-    const rel = f.slice(dir.length + 1);
-    readFileSync(f, "utf8").split("\n").forEach((line, i) => {
-      const t = line.trim();
-      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
-      const verdict = classify(rel, line);
-      if (verdict === "exempt") exempted.push(`${rel}:${i + 1}`);
-      else if (verdict === "offender") offenders.push(`${rel}:${i + 1}`);
-    });
-  }
+  // The scan is the SHARED one (scripts/src/lib/no-vendor-call.ts, row 119): five
+  // proofs carried five copies of this pattern list and one drifted permissive.
+  // RECURSIVE over every file, with a non-empty floor — a scan of nothing is green.
+  const { files, offenders, exempted } = scanForVendorCalls(dir, CONFIG_STORAGE_FILES);
   if (offenders.length) console.log(`      offenders: ${offenders.join(", ")}`);
   // REPORTED, not gated: every line the config-storage exemption swallowed, so a reader
   // can see exactly what the claim below does not cover.
   console.log(`      config-storage exemptions taken (REPORTED): ${exempted.length ? exempted.join(", ") : "none"}`);
   check(`no VENDOR-API call in any nac/ source — an actuator cannot return (${files.length} files scanned recursively)`,
-    offenders.length === 0);
-  // NON-VACUITY: the scan must be able to FAIL. Without this, deleting the pattern
-  // list would leave the assertion green and nobody would notice.
-  check("...and the scan actually detects a planted vendor call",
-    banned.some((re) => re.test(`await fetch("https://vendor/api", { method: "POST" })`)) &&
-    banned.some((re) => re.test(`const { Redis } = await import("ioredis");`)));
-  // SELF-TEST of the EXEMPTION, run through the same `classify` the loop uses. The old
-  // whole-file form passes the check above and fails this one: it grades the planted ISE
-  // quarantine call in store.ts "clean".
+    files.length > 0 && offenders.length === 0);
+  // NON-VACUITY: the scan must be able to FAIL — against one planted control PER
+  // PATTERN CLASS, not a single `fetch(`. The shared self-test also requires the drifted
+  // six-pattern list to fail those controls (scripts/src/lib/no-vendor-call.ts, row 119).
+  const selfTest = vendorCallScanSelfTest();
+  check(`...and the scan actually detects a planted vendor call of every pattern class${selfTest.length ? `: ${selfTest.join("; ")}` : ""}`,
+    selfTest.length === 0);
+  // SELF-TEST of the EXEMPTION, run through the same classifier the scan uses. The old
+  // whole-file form grades the planted ISE quarantine call in store.ts "clean".
+  const classify = (rel: string, line: string) => classifyVendorCallLine(rel, line, CONFIG_STORAGE_FILES);
   check("...and the store.ts exemption is scoped to the REASON: a planted vendor call in the EXEMPT file is still an offender",
     classify("store.ts", `  await fetch("https://ise.vendor/ers/config/ancendpoint/apply", { method: "POST" });`) === "offender" &&
     classify("store.ts", `  await adapter.quarantineEndpoint(mac, { method: "POST" });`) === "offender" &&
     classify("index.ts", `  await fetch("https://ise.vendor/ers/config/ancendpoint/apply", { method: "POST" });`) === "offender" &&
     classify("index.ts", `  const { Redis } = await import("ioredis");`) === "offender" &&
+    classify("store.ts", `  const r = await import("redis"); const a = require("axios");`) === "offender" &&
     classify("store.ts", `  const { Redis } = await import("ioredis");`) === "exempt");
 }
 

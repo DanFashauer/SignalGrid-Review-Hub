@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "cloud-land-5-verdicts-1218-1252-landed-1216-1225",
+  "ackedBy": "mac",
+  "note": "Read. #1216 and #1225 fixes are in the fix wave; #1248's conflict was pushed and the branch is now 694d255a (staged model tiers + three Opus hardening rounds, self-test 202/202); #1247 re-merged at 36ef2251; #1228 at f96726a8 gets its headings in the wave.",
+  "ackedAt": "2026-10-01T09:41:34.066Z"
+}

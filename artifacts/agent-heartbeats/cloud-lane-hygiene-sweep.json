@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-09-29T09:51:01.497Z",
-  "result": "freed ~13 MB (617 scratchpad files older than 24h; helper scripts kept) + pnpm store prune (60 files, 1 package) | 5.5G free of 252G after the sweep (5.5G before); no docker daemon or /var/lib/docker on this host; scratchpad worktrees left in place (git worktrees, outside this routine's remit); owner not escalated (free space well above 1GB); keepalive delivery: the previous heartbeat (2026-09-28T09:48:24Z) was about 24h old"
+  "firedAt": "2026-10-08T10:32:27.283Z",
+  "result": "10:3xZ 2026-10-08 sweep, the first since 2026-10-02T09:47Z; the daily fires 10-03..10-07 did not run (same gap). The container was rebuilt since the last sweep: scratchpad empty, df / shows 30G free (8.1G used), pnpm store prune removed 1 package, no /var/lib/docker on this box. Nothing else to free; quiet."
 }

@@ -26,7 +26,8 @@
 // desynchronise it and hide real code (an earlier tokenising version did, in 3 tracked files). The
 // cost is the safe direction: a trailing `// ...` or a block comment opened mid-line still counts
 // as code, so it can yield a false creator (a migration or a PENDING row), never a missed one.
-// Limit: a template literal whose own line starts with `//` or `/*` is read as a comment.
+// Limit: a template literal that holds a line-start `/*` and a LATER line ending in `*/` is read as
+// a comment, and a creator between them goes unseen; the floor (8) is what stands behind that.
 //
 // WHAT IT DOES NOT PROVE. That a migrated script's own self-test passes under every git
 // configuration; nor does the helper scrub GIT_CONFIG_GLOBAL / GIT_CONFIG_NOSYSTEM on purpose (see
@@ -35,7 +36,7 @@
 // scanned: its own fixtures contain the tokens it looks for.
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { posix } from "node:path";
@@ -62,7 +63,6 @@ const REQUIRED_SCRUB = [
  * the next PR that touches it, and then drop its entry (a stale entry FAILS).
  */
 export const PENDING = {
-  "scripts/agent/absence-check.mjs": { pr: "#1464", reason: "open PR rewrites this file; migrate when it lands" },
   "scripts/check-cited-paths.mjs": { pr: "#1356", reason: "open PR touches this file; migrate when it lands" },
   "scripts/check-launch-proof-bindings.mjs": { pr: "#1337", reason: "open PR touches this file; its :738 helper already passes commit.gpgsign=false" },
   "scripts/check-sim-scripts-selfcheck.mjs": { pr: "#1225", reason: "open PR touches this file; migrate when it lands" },
@@ -70,17 +70,24 @@ export const PENDING = {
   "scripts/loop-state.mjs": { pr: "branch claude/loop-state-20261008-gap (cloud lane)", reason: "branch claude/loop-state-20261008-gap (cloud lane), landing under review" },
 };
 
-/** The text with comment-only lines blanked (line count preserved). See the header for the rule. */
+/**
+ * The text with comment-only lines blanked (line count preserved). A line-start `//` blanks that
+ * line. A line-start `/*` opens a block comment only if some line at or below it CLOSES it with a
+ * `*\/` that ends the line (what a real block comment does); a `*\/` inside a glob string such as
+ * "scripts/**\/*.mjs" does not close anything, so a stray `/*` can never swallow real code up to it.
+ */
 export function stripComments(text) {
-  let inBlock = false;
   const lines = text.split("\n");
-  // A `/*` that is never closed anywhere below is not a comment (it is a template literal or a
-  // regex); reading it as one would hide the rest of the file. It stays code.
-  const closesBelow = (from) => lines.slice(from).some((l) => l.includes("*/"));
+  const closesLine = (l, from = 0) => {
+    const i = l.indexOf("*/", from);
+    return i >= 0 && (l.slice(i + 2).trim() === "" || l.slice(i + 2).trimStart().startsWith("//")) ? i : -1;
+  };
+  const closesBelow = (from) => lines.slice(from).some((l) => closesLine(l) >= 0);
+  let inBlock = false;
   return lines.map((raw, i) => {
     let l = raw;
     if (inBlock) {
-      const end = l.indexOf("*/");
+      const end = closesLine(l);
       if (end < 0) return "";
       inBlock = false;
       l = l.slice(end + 2);
@@ -88,7 +95,7 @@ export function stripComments(text) {
     const t = l.trimStart();
     if (t.startsWith("//")) return "";
     if (t.startsWith("/*")) {
-      const end = t.indexOf("*/", 2);
+      const end = closesLine(t, 2);
       if (end < 0) {
         if (!closesBelow(i + 1)) return l;
         inBlock = true;
@@ -129,6 +136,7 @@ export function importsHelper(f) {
   const locals = new Set();
   for (const st of sf.statements) {
     if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    if (!st.moduleSpecifier.text.startsWith(".")) continue; // a bare specifier is a package, not a path
     if (posix.normalize(posix.join(posix.dirname(f.path), st.moduleSpecifier.text)) !== HELPER) continue;
     const nb = st.importClause?.namedBindings;
     if (st.importClause?.isTypeOnly || !nb || !ts.isNamedImports(nb)) continue;
@@ -139,7 +147,7 @@ export function importsHelper(f) {
   const called = new Set();
   const visit = (node) => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && locals.has(node.expression.text)) called.add(node.expression.text);
-    const named = (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node)) && node.name && ts.isIdentifier(node.name) ? node.name.text : null;
+    const named = (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isParameter(node) || ts.isClassDeclaration(node) || ts.isBindingElement(node)) && node.name && ts.isIdentifier(node.name) ? node.name.text : null;
     if (named && locals.has(named)) declared.set(named, (declared.get(named) ?? 0) + 1);
     ts.forEachChild(node, visit);
   };
@@ -352,6 +360,14 @@ async function selfTest({ inner = false } = {}) {
   check("`cd ${d} && git init` mid-string is seen", seen("mid", 'const d = mkdtempSync("x");\nexecSync("cd " + d + " && git init -q");\n'));
   check("a nested local scratchGit shadow of a REAL imported scratchGit is NOT migrated", unmigrated("sh2", 'import { scratchGit } from "./lib/scratch-git.mjs";\nfunction f() { const scratchGit = () => 0; return scratchGit(1); }\n' + BARE));
   check("the self-test runs from inside its own temp dir (a helper that loses -C hits tmp, not the caller's repo)", process.cwd().startsWith(realpathSync(tmp)));
+
+  check("a destructured parameter that shadows the imported name is NOT migrated", unmigrated("ds1", 'import { scratchGit } from "./lib/scratch-git.mjs";\nfunction f({ scratchGit }) { return scratchGit(1); }\nf({ scratchGit: () => 0 });\n' + BARE));
+  check("a for-of array pattern that shadows the imported name is NOT migrated", unmigrated("ds2", 'import { scratchGit } from "./lib/scratch-git.mjs";\nfor (const [scratchGit] of [[() => 0]]) scratchGit(1);\n' + BARE));
+  check("a bare specifier `lib/scratch-git.mjs` is NOT migrated", unmigrated("bs", 'import { scratchGit } from "lib/scratch-git.mjs";\nscratchGit(1);\n' + BARE));
+  check("a real import and call in a file with a syntax error is NOT migrated", unmigrated("se", 'import { scratchGit } from "./lib/scratch-git.mjs";\nscratchGit(1, ["add"]);\nconst broken = ;\n' + BARE));
+  check("an unclosed line-start `/*` inside a template, with a glob string holding `*/` later, does not hide a creator", seen("gl", 'const css = `\n/* fixture\n`;\n' + BARE + 'const GLOB = "scripts/**/*.mjs";\n'));
+  check("`cd ${d} && git -C d -c a=b init` (unquoted, with -C and -c) is seen", seen("mid2", 'const d = mkdtempSync("x");\nexecSync("cd " + d + " && git -C d -c a=b init -q");\n'));
+  check("a symlinked absolute invocation of the gate still runs (entry guard compares real paths)", (() => { const d = T("sy"); put(d, "scripts/x.mjs", BARE); const lnk = join(tmp, "lnk"); symlinkSync(REPO, lnk); const pf = join(d, "pending.json"); writeFileSync(pf, "{}"); const r2 = spawnSync(process.execPath, [join(lnk, "scripts", "check-scratch-git-hygiene.mjs"), "--root", d, "--pending-file", pf, "--floor", "1"], { encoding: "utf8", timeout: 60000 }); return r2.status === 1 && /creators=1/.test(r2.stdout); })());
 
   // Rule mutants (in-process): break one rule; the plants for that rule must go red.
   const run = (d, pending, opts = {}) => audit(loadFiles(d, false), pending, { floor: 1, ...opts });

@@ -190,14 +190,17 @@ function scratchCloneChecks(ok) {
     if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
     return r;
   };
+  // The gate imports the shared helper, so every scratch copy of the gate carries the helper too.
+  const copyGateInto = (dir) => {
+    copyFileSync(fileURLToPath(import.meta.url), join(dir, "scripts", "check-sim-result-provenance.mjs"));
+    mkdirSync(join(dir, "scripts", "lib"), { recursive: true });
+    copyFileSync(fileURLToPath(new URL("./lib/scratch-git.mjs", import.meta.url)), join(dir, "scripts", "lib", "scratch-git.mjs"));
+  };
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });
     mkdirSync(join(src, RESULTS_DIR), { recursive: true });
-    copyFileSync(fileURLToPath(import.meta.url), join(src, "scripts", "check-sim-result-provenance.mjs"));
-    // The copied gate imports the shared helper, so the helper travels with it.
-    mkdirSync(join(src, "scripts", "lib"), { recursive: true });
-    copyFileSync(fileURLToPath(new URL("./lib/scratch-git.mjs", import.meta.url)), join(src, "scripts", "lib", "scratch-git.mjs"));
+    copyGateInto(src);
     g(src, "init", "-q");
     writeFileSync(join(src, "root.txt"), "root\n");
     g(src, "add", "-A");
@@ -272,7 +275,7 @@ function scratchCloneChecks(ok) {
     const nogit = join(root, "nogit");
     mkdirSync(join(nogit, "scripts"), { recursive: true });
     mkdirSync(join(nogit, RESULTS_DIR), { recursive: true });
-    copyFileSync(fileURLToPath(import.meta.url), join(nogit, "scripts", "check-sim-result-provenance.mjs"));
+    copyGateInto(nogit);
     for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
       writeFileSync(join(nogit, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
     }

@@ -55,7 +55,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIRRORED, NOT_A_GATE, classifyCiJobs, enumerateCiJobs, readCiWorkflows } from "./lib/ci-jobs.mjs";
 import { classifyStep } from "./lib/preflight-verdict.mjs";
-import { gateWiredIn, maskQuoted, runCommands, runSteps, stripYamlComments } from "./lib/workflow-invocation.mjs";
+import { ENV, SEP, gateWiredIn, maskQuoted, runCommands, runSteps, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WORKFLOW_DIR = join(repo, ".github/workflows");

@@ -216,8 +216,8 @@ export function maskQuoted(cmd) {
   return out;
 }
 
-const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
-const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
+export const SEP = String.raw`(?:^[ \t]*|(?:&&|\|\||[;|&(])[ \t]*)`; // line start, or right after a command separator
+export const ENV = String.raw`(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"\n]*"|'[^'\n]*'|\S*)[ \t]+)*`; // FOO=1 BAR="x y" prefixes
 // Runner flags are limited to e u x v f: `-n` (parse only), `-c` (the next word is a command
 // string) and the rest do not run the script as a script.
 const SHELL_RUNNER = String.raw`(?:(?:bash|sh|source|\.)[ \t]+(?:-[euxvf]+[ \t]+)*)?(?:\./)?`;

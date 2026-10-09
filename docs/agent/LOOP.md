@@ -56,16 +56,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-09 (Cloud lane, Haiku mechanical) - CLOSURE AND RESTAMP LAP.
-              Closed with evidence: backlog L19 (device-management-health proof, PR #1444 2da20f42),
-              plan row 61 (gate-exclusion sweep findings, PR #1455 b25b5ed3). Restamped rows 29, 43, 80, 180
-              to 2026-10-09 before 14-day lapse (2026-10-14/2026-10-15). All acceptance gates green
-              (check-backlog-evidence, check-backlog-ownership, verify:breadth). PR #1490 (draft).
-              No blockers. Next: owner or human review.
-              LESSONS (memory): a Workflow stage's blocked field must be a BOOLEAN (free text ended three runs early);
-              never pipe a gate through tail inside an && chain (it pushed one red head, fixed next commit); a fix premise
-              is tested on the live lab before it is coded (the serverinfo-200 guard was unsound).
-PREVIOUSLY:   2026-10-02 (Mac lane) - THE BRAIN BUILT ITS OWN TOP TASKS; THE GUARD, NOT THE OWNER, IS WHAT STILL WAITS.
+LAST TOUCHED: 2026-10-02 (Mac lane) - THE BRAIN BUILT ITS OWN TOP TASKS; THE GUARD, NOT THE OWNER, IS WHAT STILL WAITS.
               Owner (verbatim): 'you have control to do what is needed don't need to wait on me for anything unless it's a major
               problem or issue that you cannot physically do' and 'Keep it up'. Done on that word, each spec'd by Opus, built
               test-first by Sonnet, adversarially reviewed by Opus, local preflight+breadth 0/0 at its head, PR opened by the

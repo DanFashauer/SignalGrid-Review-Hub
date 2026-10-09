@@ -163,6 +163,25 @@ check(
   TARGETS.find((t) => t.proof === "proof:graph-connector")?.files.includes("lib/integrations/src/integrations/graph/posture-connector.ts") === true,
 );
 
+// ── Wave 9 (2026-10-09): nac, edr-threat, location-services, peripheral-control and incident-playbook ──
+// join the brace-less sweep, the two nac connectors are re-registered (de-registered 2026-08-25
+// because the mutator could not reach their brace-less guards; it can now), and the three
+// families' mock transports the proofs DRIVE are registered under their existing targets.
+for (const p of ["nac", "edr-threat", "location-services", "peripheral-control", "incident-playbook"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+for (const [proof, file] of [
+  ["proof:nac", "lib/integrations/src/integrations/nac/cisco-ise.ts"],
+  ["proof:nac", "lib/integrations/src/integrations/nac/aruba-clearpass.ts"],
+  ["proof:edr-threat", "lib/integrations/src/integrations/edr-threat/mock-transport.ts"],
+  ["proof:location-services", "lib/integrations/src/integrations/location-services/mock-transport.ts"],
+  ["proof:peripheral-control", "lib/integrations/src/integrations/peripheral-control/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/estate.ts"],
+]) {
+  check(`${proof} keeps ${file.split("/").slice(-2).join("/")} registered`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);

@@ -188,6 +188,7 @@ export const TARGETS = [
     // Routing decides which humans see a finding. A finding sent to the wrong queue is
     // functionally a finding nobody got.
     proof: "proof:incident-playbook",
+    oneLine: true,
     files: ["lib/incident-playbook/src/map.ts"],
   },
   {
@@ -571,7 +572,9 @@ export const TARGETS = [
     proof: "proof:graph-connector",
     oneLine: true,
     files: [
+      "lib/integrations/src/integrations/graph/estate.ts",
       "lib/integrations/src/integrations/graph/index.ts",
+      "lib/integrations/src/integrations/graph/mock-transport.ts",
       // posture-connector.ts registered 2026-10-09 (wave 7): the proof drives GraphPostureConnector
       // directly, and its normalizers (normalizeManagement, ...) are the shipped read path against a real tenant.
       "lib/integrations/src/integrations/graph/posture-connector.ts",
@@ -625,10 +628,12 @@ export const TARGETS = [
   },
   {
     proof: "proof:edr-threat",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/edr-threat/edr-connector.ts",
       "lib/integrations/src/integrations/edr-threat/evaluate.ts",
       "lib/integrations/src/integrations/edr-threat/index.ts",
+      "lib/integrations/src/integrations/edr-threat/mock-transport.ts",
     ],
   },
   {
@@ -666,10 +671,12 @@ export const TARGETS = [
   },
   {
     proof: "proof:location-services",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/location-services/evaluate.ts",
       "lib/integrations/src/integrations/location-services/index.ts",
       "lib/integrations/src/integrations/location-services/location-connector.ts",
+      "lib/integrations/src/integrations/location-services/mock-transport.ts",
     ],
   },
   {
@@ -683,7 +690,10 @@ export const TARGETS = [
   },
   {
     proof: "proof:nac",
+    oneLine: true,
     files: [
+      "lib/integrations/src/integrations/nac/aruba-clearpass.ts",
+      "lib/integrations/src/integrations/nac/cisco-ise.ts",
       "lib/integrations/src/integrations/nac/identifier.ts",
       "lib/integrations/src/integrations/nac/index.ts",
       "lib/integrations/src/integrations/nac/store.ts",
@@ -700,9 +710,11 @@ export const TARGETS = [
   },
   {
     proof: "proof:peripheral-control",
+    oneLine: true,
     files: [
       "lib/integrations/src/integrations/peripheral-control/evaluate.ts",
       "lib/integrations/src/integrations/peripheral-control/index.ts",
+      "lib/integrations/src/integrations/peripheral-control/mock-transport.ts",
       "lib/integrations/src/integrations/peripheral-control/peripheral-connector.ts",
     ],
   },

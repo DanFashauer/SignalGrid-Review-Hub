@@ -39,6 +39,7 @@
 import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { scratchGit, scratchGitEnv } from "./lib/scratch-git.mjs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,21 +173,34 @@ function liveFacts() {
 function scratchCloneChecks(ok) {
   const root = mkdtempSync(join(tmpdir(), "prov-selftest-"));
   // A caller that exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would otherwise point every
-  // git call below (the `reset --hard` especially) at ITS repository instead of the scratch one.
-  const { GIT_DIR: _d, GIT_WORK_TREE: _w, GIT_INDEX_FILE: _i, ...cleanEnv } = process.env;
+  // git call below (the `reset --hard` especially) at ITS repository instead of the scratch one;
+  // the shared helper scrubs them and turns signing off.
+  const cleanEnv = scratchGitEnv();
   const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8", env: cleanEnv });
-  const g = (cwd, ...args) =>
-    run(cwd, "git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
+  // Fixture setup must fail at the failing line: a swallowed `reset`/`add`/`commit` would let a
+  // later check pass or fail for the wrong reason.
+  const g = (cwd, ...args) => {
+    const r = scratchGit(cwd, args);
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
   // Commit at a fixed time, so a scratch case can make one file's last touch LATER than another's.
-  const gAt = (cwd, when, ...args) =>
-    spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
-      cwd, encoding: "utf8", env: { ...cleanEnv, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
-    });
+  const gAt = (cwd, when, ...args) => {
+    const r = scratchGit(cwd, args, { env: { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } });
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
+  // The gate imports the shared helper, so every scratch copy of the gate carries the helper too.
+  const copyGateInto = (dir) => {
+    copyFileSync(fileURLToPath(import.meta.url), join(dir, "scripts", "check-sim-result-provenance.mjs"));
+    mkdirSync(join(dir, "scripts", "lib"), { recursive: true });
+    copyFileSync(fileURLToPath(new URL("./lib/scratch-git.mjs", import.meta.url)), join(dir, "scripts", "lib", "scratch-git.mjs"));
+  };
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });
     mkdirSync(join(src, RESULTS_DIR), { recursive: true });
-    copyFileSync(fileURLToPath(import.meta.url), join(src, "scripts", "check-sim-result-provenance.mjs"));
+    copyGateInto(src);
     g(src, "init", "-q");
     writeFileSync(join(src, "root.txt"), "root\n");
     g(src, "add", "-A");
@@ -204,6 +218,9 @@ function scratchCloneChecks(ok) {
 
     const cleanDefault = gate(src);
     const cleanFlag = gate(src, "--require-history");
+    // An unknown flag is refused, not ignored: `--require-histroy` used to run as the plain gate.
+    const unknownFlag = gate(src, "--require-histroy");
+    const unknownWithGood = gate(src, "--require-history", "--bogus");
     writeFileSync(join(src, RESULTS_DIR, "r0.json"), JSON.stringify({ provenance: { commit: "b".repeat(40) } }));
     g(src, "add", "-A");
     g(src, "commit", "-q", "-m", "ghost sha");
@@ -217,6 +234,7 @@ function scratchCloneChecks(ok) {
     g(root, "clone", "-q", "--depth", "2", `file://${src}`, shallow);
     const shallowDefault = gate(shallow);
     const shallowFlag = gate(shallow, "--require-history");
+    const shallowMisspelt = gate(shallow, "--require-histroy");
 
     // A sha that RESOLVES but sits on a side branch (not an ancestor of HEAD): the live
     // `merge-base --is-ancestor <commit> HEAD` is the only thing that can fail this.
@@ -250,8 +268,28 @@ function scratchCloneChecks(ok) {
     gAt(src, "2030-01-02T00:00:00Z", "commit", "-q", "-m", "evidence touched later");
     const evLateDefault = gate(src);
     const evLateFlag = gate(src, "--require-history");
+    // An UNREADABLE answer from git (no repository at all, so `rev-parse --is-shallow-repository`
+    // prints nothing) must refuse under the flag. Only the refusal message tells that apart from
+    // the downstream "sha does not resolve" failure, which also exits 1: a probe turned into
+    // `=== "true"` treats the empty answer as "not shallow" and fails open past the refusal.
+    const nogit = join(root, "nogit");
+    mkdirSync(join(nogit, "scripts"), { recursive: true });
+    mkdirSync(join(nogit, RESULTS_DIR), { recursive: true });
+    copyGateInto(nogit);
+    for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
+      writeFileSync(join(nogit, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
+    }
+    // GIT_CEILING_DIRECTORIES stops git walking up from nogit into an enclosing repository (a TMPDIR
+    // that sits inside one), which would answer "not shallow" for the wrong repo and hide the refusal.
+    const nogitRun = spawnSync("node", [join(nogit, "scripts", "check-sim-result-provenance.mjs"), "--require-history"], {
+      cwd: nogit, encoding: "utf8", env: { ...cleanEnv, GIT_CEILING_DIRECTORIES: root },
+    });
+    const nogitRefused = nogitRun.status === 1 && /shallow \(or unreadable\) checkout/.test(nogitRun.stderr ?? "");
     return [
+      ok("scratch clone: --require-history where git cannot answer is refused as unreadable, not run (kills the fail-open shallow probe)", nogitRefused),
       ok("scratch clone: a full, clean tree passes with and without --require-history", cleanDefault === 0 && cleanFlag === 0),
+      ok("scratch clone: an unknown flag exits 1 on a clean full tree, alone or beside the real flag", unknownFlag === 1 && unknownWithGood === 1),
+      ok("scratch clone: a MISSPELT --require-history exits 1 on a shallow clone too (it was a silent exit 0)", shallowMisspelt === 1),
       ok("scratch clone: an unresolvable 40-hex sha exits 0 without the flag (reported)", ghostDefault === 0),
       ok("scratch clone: the same sha exits 1 under --require-history", ghostFlag === 1),
       ok("scratch clone: --require-history on a SHALLOW clone exits 1 (full history is checked, not assumed)", shallowDefault === 0 && shallowFlag === 1),
@@ -264,16 +302,41 @@ function scratchCloneChecks(ok) {
 }
 
 /**
- * A caller that exports GIT_INDEX_FILE ALONE (a git pre-commit hook does) must not have its
- * index written by the scratch repository. GIT_DIR would mask this, since it breaks the scratch
- * cases first; so only GIT_INDEX_FILE is set, at a decoy repository, and the decoy's index is
- * hashed before and after. Removing GIT_INDEX_FILE from the scrub makes the scratch `git add -A`
- * write into the decoy index and the hash changes.
+ * A caller that exports one of GIT_INDEX_FILE / GIT_DIR / GIT_WORK_TREE (a git hook does; a pre-commit
+ * hook in a LINKED worktree exports GIT_DIR) must not have ITS repository written by the scratch
+ * repository. Each variable is exported ALONE at a decoy repository and the decoy is fingerprinted
+ * before and after: index bytes, HEAD, branch refs, the object count and the worktree files. Removing
+ * that variable from the scrub in scratchCloneChecks makes the scratch `init`/`add`/`commit`/`reset
+ * --hard` land in the decoy, so the fingerprint moves (or the inner cases go red). CI's own
+ * environment exports none of them, which is why dropping one from the scrub passed 22/22 until
+ * each had its own decoy case.
  */
-function decoyIndexCheck(ok) {
+const DECOY_VARS = [
+  ["GIT_INDEX_FILE", (decoy) => join(decoy, ".git", "index")],
+  ["GIT_DIR", (decoy) => join(decoy, ".git")],
+  ["GIT_WORK_TREE", (decoy) => decoy],
+];
+
+function decoyFingerprint(decoy) {
+  const h = createHash("sha1");
+  const feed = (label, path) => {
+    h.update(`${label}\0`);
+    try { h.update(readFileSync(path)); } catch { h.update("<absent>"); }
+  };
+  feed("index", join(decoy, ".git", "index"));
+  feed("HEAD", join(decoy, ".git", "HEAD"));
+  const heads = join(decoy, ".git", "refs", "heads");
+  for (const f of existsSync(heads) ? readdirSync(heads).sort() : []) feed(`ref:${f}`, join(heads, f));
+  const objs = join(decoy, ".git", "objects");
+  h.update(`objects:${existsSync(objs) ? readdirSync(objs).filter((d) => /^[0-9a-f]{2}$/.test(d)).flatMap((d) => readdirSync(join(objs, d)).map((o) => d + o)).sort().join(",") : ""}`);
+  for (const f of readdirSync(decoy).filter((n) => n !== ".git").sort()) feed(`work:${f}`, join(decoy, f));
+  return h.digest("hex");
+}
+
+function decoyEnvCheck(ok, name, valueFor) {
   const decoy = mkdtempSync(join(tmpdir(), "prov-decoy-"));
-  const had = Object.prototype.hasOwnProperty.call(process.env, "GIT_INDEX_FILE");
-  const prior = process.env.GIT_INDEX_FILE;
+  const had = Object.prototype.hasOwnProperty.call(process.env, name);
+  const prior = process.env[name];
   try {
     const dg = (...args) =>
       spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
@@ -283,19 +346,17 @@ function decoyIndexCheck(ok) {
     writeFileSync(join(decoy, "decoy.txt"), "decoy\n");
     dg("add", "-A");
     dg("commit", "-q", "-m", "decoy");
-    const indexPath = join(decoy, ".git", "index");
-    const sha1 = () => createHash("sha1").update(readFileSync(indexPath)).digest("hex");
-    const before = sha1();
-    process.env.GIT_INDEX_FILE = indexPath;
+    const before = decoyFingerprint(decoy);
+    process.env[name] = valueFor(decoy);
     const inner = scratchCloneChecks(ok);
-    const after = sha1();
+    const after = decoyFingerprint(decoy);
     return ok(
-      "scratch clone: GIT_INDEX_FILE exported alone at a decoy repo leaves the decoy index byte-identical and the scratch cases green",
+      `scratch clone: ${name} exported alone at a decoy repo leaves the decoy byte-identical and the scratch cases green`,
       before === after && inner.every((c) => c.cond),
     );
   } finally {
-    if (had) process.env.GIT_INDEX_FILE = prior;
-    else delete process.env.GIT_INDEX_FILE;
+    if (had) process.env[name] = prior;
+    else delete process.env[name];
     rmSync(decoy, { recursive: true, force: true });
   }
 }
@@ -381,7 +442,7 @@ function selfTest() {
     ),
   ];
   checks.push(...scratchCloneChecks(ok));
-  checks.push(decoyIndexCheck(ok));
+  for (const [name, valueFor] of DECOY_VARS) checks.push(decoyEnvCheck(ok, name, valueFor));
   let bad = 0;
   for (const c of checks) {
     console.log(`  ${c.cond ? "ok" : "FAIL"} — ${c.name}`);
@@ -389,6 +450,16 @@ function selfTest() {
   }
   console.log(`\nself-test: ${checks.length - bad}/${checks.length}`);
   process.exit(bad === 0 ? 0 : 1);
+}
+
+// An unknown argument is refused, never ignored: `--require-histroy` used to run as the plain
+// gate (and exit 0 even on a shallow checkout), so a typo silently dropped the very check the
+// flag exists for.
+const KNOWN_ARGS = new Set(["--self-test", "--require-history"]);
+const unknownArgs = process.argv.slice(2).filter((a) => !KNOWN_ARGS.has(a));
+if (unknownArgs.length > 0) {
+  console.error(`sim-result provenance: unknown argument(s) ${unknownArgs.map((a) => JSON.stringify(a)).join(", ")} — known: ${[...KNOWN_ARGS].join(", ")}. Refusing to run as the plain gate.`);
+  process.exit(1);
 }
 
 if (process.argv.includes("--self-test")) selfTest();

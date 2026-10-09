@@ -420,6 +420,10 @@ const STEPS = [
   { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
   { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
+  // Every `schedule:` workflow names what would notice it STOPPED, or carries a dated exemption
+  // with a reason (sre roster item; row 53's follow-on). Static: reads YAML + the registry only.
+  { name: "Scheduled-workflow liveness self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs", "--self-test"] },
+  { name: "Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },

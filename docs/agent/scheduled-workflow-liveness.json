@@ -1,0 +1,60 @@
+{
+  "$comment": "One entry per .github/workflows file that carries a `schedule:` trigger, naming what would notice it STOPPED (not what would notice it going red - scripts/check-mainline-workflow-streaks.mjs reads red streaks, and the raised-hands `mac-lane-red` kind reads a red mac-lane run; neither sees silence). Enforced by scripts/check-scheduled-workflow-liveness.mjs: an unregistered scheduled workflow, an entry for one that no longer schedules, an exemption with no reason or no reviewedAt, an exemption not re-dated within 90 days of the HEAD commit, or a watcher script that is missing / unwired / never names the workflow, is fatal. Kinds: api-probe (a script that asks the Actions API for the job's last success, plan row 53's design; CI commits nothing), auto-hand (a raised-hands auto-stall kind, `hand`, detected by `script`), exempt (`reason` + `reviewedAt`; optional `redWatcher` names the auto-hand kind that covers a RED run). A heartbeat file committed by CI, or a new scheduled-routines.json row, is NOT an option here - plan row 50 reserves that call for the owner.",
+  "version": 1,
+  "workflows": [
+    {
+      "workflow": "scheduled-verification.yml",
+      "cron": "17 7 * * * (daily)",
+      "watcher": {
+        "kind": "api-probe",
+        "script": "scripts/check-ci-liveness.mjs"
+      }
+    },
+    {
+      "workflow": "codeql.yml",
+      "cron": "17 7 * * 1 (weekly)",
+      "watcher": {
+        "kind": "exempt",
+        "reason": "Also triggers on every push to SignalGrid_Alpha and every pull_request, so the scan keeps running on activity even if the weekly cron is dropped; the schedule only adds an idle-week rescan for newly published queries. A red run is read by check-mainline-workflow-streaks.mjs (CodeQL is in WATCHED). Silence of the weekly leg alone is acceptable: the push leg is the dependable one.",
+        "reviewedAt": "2026-10-08"
+      }
+    },
+    {
+      "workflow": "supply-chain.yml",
+      "cron": "17 7 * * 1 (weekly)",
+      "watcher": {
+        "kind": "exempt",
+        "reason": "Also triggers on every push to SignalGrid_Alpha and every pull_request, so secret scanning and the SBOM keep running on activity; the weekly cron only re-scans an idle repository. A red run is read by check-mainline-workflow-streaks.mjs (Supply Chain is in WATCHED). Silence of the weekly leg alone is acceptable: the push leg is the dependable one.",
+        "reviewedAt": "2026-10-08"
+      }
+    },
+    {
+      "workflow": "raised-hands.yml",
+      "cron": "23 * * * * (hourly, best-effort)",
+      "watcher": {
+        "kind": "exempt",
+        "reason": "Its own header records the cron as best-effort (13 runs at 2-6h gaps, 2026-09-26) and names `push` to SignalGrid_Alpha as the dependable trigger: the Mac tick heartbeat moves mainline about every 25 minutes. If the cron stops, the push trigger still renders the page; if pushes stop too, the mac-lane-tick routine heartbeat stall (raised-hands `heartbeat` kind) is itself the alarm. A red run is read by check-mainline-workflow-streaks.mjs.",
+        "reviewedAt": "2026-10-08"
+      }
+    },
+    {
+      "workflow": "mac-lane.yml",
+      "cron": "0 6 * * 1 (weekly, macos-latest)",
+      "watcher": {
+        "kind": "exempt",
+        "reason": "A rehearsal of ./validate-sim-macos.sh on a throwaway hosted Mac, dispatch or weekly only. NOT covered against silence: nothing notices it skipping a week. Acceptable because the same suite runs nightly and per PR through mac-runner-auto.yml on the real Mac and in CI via preflight, so a dropped weekly leg removes a redundant rehearsal, not the only run. A RED run is covered: raised-hands kind mac-lane-red raises a hand.",
+        "reviewedAt": "2026-10-08",
+        "redWatcher": "mac-lane-red"
+      }
+    },
+    {
+      "workflow": "mac-runner-auto.yml",
+      "cron": "0 8 * * * (daily, self-hosted Mac)",
+      "watcher": {
+        "kind": "exempt",
+        "reason": "NOT covered against silence of the NIGHTLY leg alone: no probe reads it. Acceptable for now because the same workflow runs pr-mac-checks on every pull request into SignalGrid_Alpha, so a dead runner or dropped workflow shows as a stuck PR check within hours, and the Mac's own launchd tick (mac-lane-tick heartbeat) is watched by raised-hands. Residual risk: the nightly-only heavy jobs (full harness, darwin web build, live containers, MCP lane) could stop without a PR in flight. An api-probe for it is the follow-up; it needs a tolerance for a Mac that is legitimately asleep, which is a judgment call recorded in the PR.",
+        "reviewedAt": "2026-10-08"
+      }
+    }
+  ]
+}

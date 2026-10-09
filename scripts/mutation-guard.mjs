@@ -310,6 +310,7 @@ export const TARGETS = [
   },
   {
     proof: "proof:emitter-discipline",
+    oneLine: true,
     files: [
       // Ponytail cut 4 (2026-09-02) folded the six near-identical emitter bodies into
       // one factory. Each family's resolve.ts is now a thin binding — config literals
@@ -319,6 +320,13 @@ export const TARGETS = [
       // resolveItsmEmitter; register THAT. Fixed 2026-09-03 after the sweep flagged the
       // five empty bindings and the whole daily sweep went red.
       "lib/integrations/src/integrations/adapters/emitter-resolver.ts",
+      // The shared outbound guards the proof imports (emit-gate/url-guard, bounded-text,
+      // redirect). Registered 2026-10-09 (wave 8) with `oneLine`: url-guard is the SSRF-class
+      // check and bounded-text's two guards are brace-less.
+      "lib/integrations/src/integrations/adapters/url-guard.ts",
+      "lib/integrations/src/integrations/adapters/bounded-text.ts",
+      "lib/integrations/src/integrations/adapters/redirect.ts",
+      "lib/integrations/src/integrations/adapters/vendor-values.ts",
     ],
   },
 
@@ -616,15 +624,24 @@ export const TARGETS = [
       // mutated at all: the registration named `index.ts`, which re-exports it.
       // Mutation operates on files, so a barrel buys nothing.
       "lib/integrations/src/integrations/device-attestation/evaluate.ts",
-      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations. Wave 7
-      // (2026-10-09) tried it with `oneLine`: 62 mutations, 2 survivors (lines 37 and 39, the
-      // empty-string and "not found"/"unavailable" null guards) — not yet pinned, so it stays out.
+      // device-attestation-connector.ts dropped 2026-09-03 for 0 braced mutations; wave 7
+      // (2026-10-09) tried it with `oneLine` (62 mutations, 2 survivors at the empty-string and
+      // "not found"/"unavailable" guards of readableString) and left it out unpinned. Wave 8
+      // (2026-10-09) pinned both in device-attestation-proof.ts and registers it.
+      "lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts",
       "lib/integrations/src/integrations/device-attestation/index.ts",
       // The supervision-identity lifecycle emits the trust-precondition verdict
       // (grant / step-up / restrict) and normalizes a UEM report, so its guards are
       // mutable decision logic that must be swept — registered with the module.
       "lib/integrations/src/integrations/device-attestation/supervision-identity.ts",
     ],
+  },
+  {
+    // Wave 8 (2026-10-09), stretch. store-scope.ts is the tenant-key guard every connector config store
+    // keys through; no TARGET named it. config-scope-proof drives all three exports directly.
+    proof: "proof:config-scope",
+    oneLine: true,
+    files: ["lib/integrations/src/integrations/store-scope.ts"],
   },
   {
     proof: "proof:edr-threat",

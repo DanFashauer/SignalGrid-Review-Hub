@@ -182,6 +182,22 @@ for (const [proof, file] of [
   check(`${proof} keeps ${file.split("/").slice(-2).join("/")} registered`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
 }
 
+// ── Wave 8 (2026-10-09): the shared adapter guards, emitter-discipline, the attestation connector ──
+// url-guard (the outbound SSRF-class check), bounded-text, redirect and vendor-values are imported by
+// every emitter family and sat in NO target; emitter-discipline joined the brace-less sweep with all
+// of their survivors pinned in its proof. The attestation connector's two survivors are pinned too.
+check("brace-less sweep: proof:emitter-discipline stays opted in (oneLine: true)", TARGETS.find((t) => t.proof === "proof:emitter-discipline")?.oneLine === true);
+for (const f of ["url-guard", "bounded-text", "redirect", "vendor-values", "emitter-resolver"]) {
+  const file = `lib/integrations/src/integrations/adapters/${f}.ts`;
+  check(`proof:emitter-discipline keeps the shared adapter guard registered: ${f}.ts`, TARGETS.find((t) => t.proof === "proof:emitter-discipline")?.files.includes(file) === true);
+}
+check("proof:device-attestation keeps its connector registered: device-attestation-connector.ts",
+  TARGETS.find((t) => t.proof === "proof:device-attestation")?.files.includes("lib/integrations/src/integrations/device-attestation/device-attestation-connector.ts") === true);
+
+check("proof:config-scope keeps the tenant-key guard registered and opted in: store-scope.ts",
+  TARGETS.find((t) => t.proof === "proof:config-scope")?.files.includes("lib/integrations/src/integrations/store-scope.ts") === true
+  && TARGETS.find((t) => t.proof === "proof:config-scope")?.oneLine === true);
+
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);

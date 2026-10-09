@@ -99,6 +99,22 @@ test("a length or count that is not a non-negative integer is unverified", () =>
   }
 });
 
+test("a break location that is not a real position is unverified, not a confirmed break", () => {
+  for (const raw of [
+    { valid: false, brokenAtSeq: -1, length: 7, truncated: false },
+    { valid: false, brokenAtSeq: 0, length: 7, truncated: false },
+    { valid: false, brokenAtSeq: 8, length: 7, truncated: false },
+    { ok: false, brokenAtIndex: 1.5, count: 7, truncated: false },
+    { ok: false, brokenAtIndex: 7, count: 7, truncated: false },
+  ]) {
+    const c = normalizeChain(raw);
+    assert.equal(c.brokenAtSeq, null);
+    assert.equal(c.brokenAtLedgerIndex, null);
+    assert.equal(chainAlert(c), "Hash chain could not be verified.");
+  }
+  assert.equal(chainAlert(normalizeChain({ valid: false, brokenAtSeq: 7, length: 7, truncated: false })), "Hash chain broken at sequence 7.");
+});
+
 test("an unrecognised shape is unverified", () => {
   for (const raw of [undefined, null, {}, { ok: "yes" }]) {
     const c = normalizeChain(raw);

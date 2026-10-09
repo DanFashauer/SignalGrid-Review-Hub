@@ -26,11 +26,19 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6 max-w-screen-xl">
       <LiveRegion
-        message={
+        message={[
           decisions?.decisions[0]
             ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals && !signalsError ? `${signals.signals.filter((s) => s.status === "critical").length} critical signals.` : "Critical signal count unknown."}`
-            : ""
-        }
+            : "",
+          // The metric tiles and the volume chart poll too: a refresh that changes only
+          // them must change this text.
+          metrics && !metricsError
+            ? `24 hours: ${metrics.totalDecisions.toLocaleString()} decisions, ${(metrics.allowRate * 100).toFixed(1)}% allow, ${(metrics.restrictDenyRate * 100).toFixed(1)}% deny or restrict, ${Math.round(metrics.avgLatencyMs)}ms average latency.`
+            : "",
+          series?.series?.length && !seriesError
+            ? `Latest hour (${new Date(series.series[series.series.length - 1].timestamp).toLocaleTimeString()}): ${series.series[series.series.length - 1].allow} allow, ${series.series[series.series.length - 1].stepUp} step-up, ${series.series[series.series.length - 1].restrict} restrict, ${series.series[series.series.length - 1].deny} deny.`
+            : "",
+        ].filter(Boolean).join(" ")}
         alert={[
           decisionsError ? "Decisions could not be loaded." : "",
           metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : "",

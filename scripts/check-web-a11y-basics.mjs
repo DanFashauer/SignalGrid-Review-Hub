@@ -442,6 +442,21 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
       }
     }
   }
+  // Queries a layout shell (components/*Layout*.tsx, on screen on every page) binds
+  // AND speaks in its own <LiveRegion> message: a page binding the same hook with the
+  // same arguments shares the cache entry, and need not announce it a second time.
+  const shellSpoken = new Set();
+  for (const f of parsed) {
+    if (!/\/components\/[^/]*Layout[^/]*\.tsx$/.test(f.rel) || !polls.has(f.rel)) continue;
+    const isHook = queryHookNames(f.code, generated).isHook;
+    const unspoken = new Set(checkUnannouncedQueries(f.rel, f.code, isHook, defaultPolls)
+      .filter((x) => /data never reaches|is never read by a <LiveRegion> —/.test(x)).map((x) => Number(x.split(":")[1])));
+    for (const b of f.code.matchAll(/\b(?:const|let|var)\s+(?:\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(\([^()]*(?:\([^()]*\)[^()]*)*\))/g)) {
+      if (!isHook(b[1])) continue;
+      if (unspoken.has(f.code.slice(0, b.index).split("\n").length)) continue;
+      shellSpoken.add(`${b[1]}${b[2].replace(/\s+/g, "")}`);
+    }
+  }
   const polling = [];
   for (const f of parsed) {
     if (!polls.has(f.rel)) continue;
@@ -458,7 +473,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
         ? `${f.rel}: polls but announces through a raw aria-live element — use <LiveRegion> so the gate can check its message and alert against the polled queries (failing closed, WCAG 4.1.3)`
         : `${f.rel}: polls but renders no <LiveRegion> — WCAG 4.1.3`);
     }
-    else failures.push(...checkUnannouncedQueries(f.rel, f.code, queryHookNames(f.code, generated).isHook, defaultPolls));
+    else failures.push(...checkUnannouncedQueries(f.rel, f.code, queryHookNames(f.code, generated).isHook, defaultPolls, shellSpoken));
   }
   return { polling, failures };
 }
@@ -475,7 +490,7 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
 const REFRESHED_KEYS = "data|error|isError|isRefetchError|isLoadingError|status|dataUpdatedAt|errorUpdatedAt|failureCount|failureReason";
 const REFRESHED = new RegExp(`^(?:${REFRESHED_KEYS})$`);
 
-export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
+export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set()) {
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
     const t = openingTag(code, m.index);
@@ -484,6 +499,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
   if (tags.length === 0) return [];
   const announced = tags.join("\n");
   const alerts = tags.map((t) => attrExpression(t, "alert") ?? "").join("\n");
+  const messages = tags.map((t) => attrExpression(t, "message") ?? "").join("\n");
   const failures = [];
   const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
   for (const m of code.matchAll(binding)) {
@@ -533,9 +549,38 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls) {
     if (direct.some((n) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
         holders.some((h) => reads(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`))) ||
         (listHook && reads(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?:\\[\\d+\\])?\\??\\.`)) && reads(new RegExp(`\\??\\.(?:${REFRESHED_KEYS})(?![\\w$])`)))) {
-      // The region reads this query's result; its FAILURE must reach an alert too (one
-      // finding per query: an unread result is reported below instead).
-      if (!failureAlerted && !errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s failure state is never read by a <LiveRegion> alert — a failed background refresh keeps the cached data and is silent (WCAG 4.1.3)`);
+      // The region reads this query. Its RESULT must reach the polite message — a
+      // successful refresh that changes only this query's data is otherwise silent —
+      // and its FAILURE must reach an alert. One finding per query.
+      const RESULT = "data|dataUpdatedAt";
+      const resultAliases = m[1].startsWith("{")
+        ? m[1].slice(1, -1).split(",").map((x) => x.trim()).filter((x) => !x.startsWith("...")).map((x) => x.split("=")[0].split(":").map((y) => y.trim()))
+          .filter(([key]) => new RegExp(`^(?:${RESULT})$`).test(key)).map(([key, alias]) => alias || key)
+        : [];
+      // A value derived from the result (`const anomalous = signals?.signals.filter(…)`)
+      // carries it: follow `const X = …alias…` to a fixpoint.
+      const derived = new Set([...resultAliases, ...holders]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const d of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)/g)) {
+          if (derived.has(d[1])) continue;
+          if ([...derived].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(d[2]))) { derived.add(d[1]); grew = true; }
+        }
+      }
+      for (const n of derived) if (!holders.includes(n)) resultAliases.push(n);
+      const inMessage = (re) => re.test(messages);
+      const resultSpoken = resultAliases.some((n) => inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
+        holders.some((h) => inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}(?:\\[\\d+\\])?\\??\\.(?:${RESULT})(?![\\w$])`))) ||
+        (listHook && inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?![\\w$])`)) && inMessage(new RegExp(`\\??\\.(?:${RESULT})(?![\\w$])`)));
+      // A query the layout shell binds with the same arguments is the shell's to speak
+      // (one announcement per update); the page may read it for its failure state only.
+      const signature = `${m[2]}${args.replace(/\s+/g, "")}`;
+      if (!resultSpoken && shellSpoken.has(signature)) {
+        if (!failureAlerted && !errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s failure state is never read by a <LiveRegion> alert — a failed background refresh keeps the cached data and is silent (WCAG 4.1.3)`);
+        continue;
+      }
+      if (!resultSpoken) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s data never reaches a <LiveRegion> message — a successful refresh that changes only this query is not announced (WCAG 4.1.3)`);
+      else if (!failureAlerted && !errorsOnlyPolite.length) failures.push(`${rel}:${code.slice(0, m.index).split("\n").length}: polled ${m[2]}()'s failure state is never read by a <LiveRegion> alert — a failed background refresh keeps the cached data and is silent (WCAG 4.1.3)`);
       continue;
     }
     const line = code.slice(0, m.index).split("\n").length;
@@ -738,6 +783,9 @@ function buttonText(src, openEnd, tagName = "button") {
   if (body === null) return null;
   body = body.replace(/\{\s*(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1\s*\}/g, (m, _q, inner) =>
     isBlank(decodeEscapes(inner)) ? "" : m);
+  // An icon button: the body renders an <svg> or a component (`<X />`, `<Trash2 />`)
+  // beside its text; a lowercase wrapper (`<span>`, `<div>`) only holds text.
+  const hasTag = /<(?:svg|img|[A-Z][\w.]*)\b/.test(body);
   // `<>` and `</>` (fragments) are tags too: openingTag on `<>` returns "<".
   for (let i = body.search(/<[A-Za-z/>]/); i >= 0; i = body.search(/<[A-Za-z/>]/)) {
     const tag = openingTag(body, i);
@@ -747,6 +795,11 @@ function buttonText(src, openEnd, tagName = "button") {
   // With its tags gone, an expression child whose only renderable operand was a
   // tag — `{show && <Trash2 />}`, `{a ? <X /> : null}`, `{null}` — renders no text.
   body = body.replace(/\{([^{}]*)\}/g, (m, inner) => (emptyExpression(inner) ? "" : m));
+  // In an icon button, an expression child is text only if it provably renders non-blank
+  // text (the same rule as a computed aria-label): `<X />{label}` or `<X />{show && label}`
+  // can be left with only the icon when the value is undefined, false or "". A button
+  // with no icon is a text button (rule 2 covers icon-only buttons), so its text stays.
+  if (hasTag) body = body.replace(/\{([^{}]*)\}/g, (m, inner) => (provablyNonBlank(inner) ? " TEXT " : ""));
   return decodeEntities(body);
 }
 
@@ -1116,6 +1169,28 @@ export function checkReducedMotion(rel, raw) {
  * missing or named differently must fail here, not drop out of the scan.
  */
 /**
+ * Framer Motion animates from JavaScript, so the stylesheet's reduced-motion block
+ * does not reach it. A tree that animates with framer-motion (or motion/react) must
+ * wrap its app root (src/App.tsx or src/main.tsx) in `<MotionConfig reducedMotion="user">`
+ * (or "always"), and nothing may set `reducedMotion="never"` or a value the gate
+ * cannot read. `files` is [{ rel, src }]. Returns failures.
+ */
+export function checkFramerMotion(treeRel, files) {
+  const MOTION_IMPORT = /from\s*["'](?:framer-motion|motion\/react)["']/;
+  const animates = files.filter((f) => { const c = stripComments(f.src); return MOTION_IMPORT.test(c) && /<motion\.|\bmotion\(|\buseAnimate\b|\banimate\(/.test(c); });
+  if (animates.length === 0) return [];
+  const failures = [];
+  for (const f of files) {
+    for (const m of stripComments(f.src).matchAll(/\breducedMotion\s*=\s*(\{[^}]*\}|["'][^"']*["'])/g)) {
+      if (!/^["'](?:user|always)["']$/.test(m[1])) failures.push(`${f.rel}: reducedMotion=${m[1]} — framer-motion animations ignore prefers-reduced-motion unless it is "user" or "always" (WCAG 2.3.3)`);
+    }
+  }
+  const root = files.some((f) => /\/src\/(?:App|main)\.tsx$/.test(f.rel) && /<MotionConfig\b[^>]*\breducedMotion\s*=\s*["'](?:user|always)["']/.test(stripComments(f.src)));
+  if (!root) failures.push(`${treeRel}: animates with framer-motion (${animates.length} file(s), e.g. ${animates[0].rel}) but no <MotionConfig reducedMotion="user"> wraps src/App.tsx or src/main.tsx — CSS reduced-motion rules do not stop JS animation (WCAG 2.3.3)`);
+  return failures;
+}
+
+/**
  * The reduced-motion rule only reaches the rendered UI if the app loads
  * src/index.css. Follow index.html's module entry (`<script type="module"
  * src="/src/…">`) and require that entry to import "./index.css" itself, as a
@@ -1183,6 +1258,8 @@ function run() {
     failures.push(...checkReducedMotion(relative(repo, css), readFileSync(css, "utf8")));
     const readOrNull = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
     failures.push(...checkStylesheetLoaded(treeRel, readOrNull(join(tree, "index.html")), (rel) => readOrNull(join(tree, rel))));
+    const treeFiles = sourceFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), src: readFileSync(p, "utf8") }));
+    failures.push(...checkFramerMotion(treeRel, treeFiles));
     const files = sourceFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), src: readFileSync(p, "utf8") }));
     const qd = queryDefaults(files);
     for (const rel of qd.unparsed) failures.push(`${rel}: a query-defaults call the gate cannot close — failing closed`);
@@ -1505,7 +1582,7 @@ function selfTest() {
       checkLiveRegionText("x.tsx", 'const { data } = useQ(); <LiveRegion message={m} alert="" />').length === 0],
     ["a polled query a view binds must reach its live region",
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s, isError: se } = useListSignals(); <LiveRegion message={s ? "x" : ""} alert={se ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1 &&
-      checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message="" alert={e ? "Metrics could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message={m ? `${m.n}` : ""} alert={e ? "Metrics could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics({ query: { refetchInterval: 5000 } }); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 1],
@@ -1515,7 +1592,7 @@ function selfTest() {
         'const { isFetching: f } = useGetMetrics(); <LiveRegion message={f ? "Refreshing" : ""} />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
       ['const { data: m, isLoading, isError: e } = useGetMetrics(); <LiveRegion message={m ? `${m.total}` : ""} alert={e ? "Down." : ""} />',
-        'const q = useGetMetrics(); <LiveRegion message="" alert={q.isError ? "Metrics could not be refreshed." : ""} />',
+        'const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} alert={q.isError ? "Metrics could not be refreshed." : ""} />',
         'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? "x" : ""} alert={rest.isError ? "Down." : ""} />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 0)],
     ["the reduced-motion stylesheet must be imported by index.html's module entry",
@@ -1539,7 +1616,7 @@ function selfTest() {
       checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
-      checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="" alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
+      checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message={results.map((r) => r.data?.n).join(", ")} alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["live-region markup inside a string or template literal is not a live region",
       ["const example = `<LiveRegion message={data} />`;", "const doc = '<div aria-live=\"polite\"></div>';"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `const { data } = useQuery({ refetchInterval: 5000 }); ${c} return <div/>;`)], false).failures.length === 1) &&
@@ -1574,6 +1651,26 @@ function selfTest() {
         'const { data: m } = useGetMetrics(); <LiveRegion message={m ? `${m.n}` : ""} alert="" />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
       checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
+    ["an icon button's text from an expression must provably render",
+      ['<X />{label}', '<X />{show && label}', '<svg/>{t.label}', '<Trash2 /><span>{name}</span>'].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 1) &&
+      ['<X />Save', '<X />{"Save"}', '<X />{`Delete ${n}`}', '{t.label}', '<span>{label}</span>'].every((c) =>
+        checkIconButtons("x.tsx", `<button onClick={f}>${c}</button>`).length === 0)],
+    ["each polled query's data must reach the polite message; its error alone in the alert is not enough",
+      checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message="" alert={e ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: s, isError: e } = useListSignals(); const hot = s?.items.filter((i) => i.hot); <LiveRegion message={hot ? `${hot.length} hot, newest ${hot[0]?.id}` : ""} alert={e ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const shell = useListSignals({ limit: 5 }); <LiveRegion message="" alert={shell.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true, new Set(["useListSignals({limit:5})"])).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const shell = useListSignals({ limit: 5 }); <LiveRegion message="" alert={shell.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1],
+    ["framer-motion animations must sit under MotionConfig reducedMotion=\"user\" at the app root",
+      (() => {
+        const anim = { rel: "t/src/pages/Home.tsx", src: 'import { motion } from "framer-motion"; <motion.div animate={{ x: 10 }} />' };
+        const app = (attr) => ({ rel: "t/src/App.tsx", src: `import { MotionConfig } from "framer-motion"; <MotionConfig ${attr}><Router /></MotionConfig>` });
+        return checkFramerMotion("t", [anim, app('reducedMotion="user"')]).length === 0 &&
+          checkFramerMotion("t", [anim, app('reducedMotion="never"')]).length === 2 &&
+          checkFramerMotion("t", [anim, app("reducedMotion={mode}")]).length === 2 &&
+          checkFramerMotion("t", [anim]).length === 1 &&
+          checkFramerMotion("t", [{ rel: "t/src/App.tsx", src: "<div/>" }]).length === 0;
+      })()],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

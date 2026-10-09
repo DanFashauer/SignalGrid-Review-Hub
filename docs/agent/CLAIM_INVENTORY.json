@@ -8910,12 +8910,12 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
-   "line": "128",
+   "line": "136",
    "claim": "Card header \"Recent decisions (fixture)\".",
    "kind": "status",
    "classification": "demo-only",
    "action": "keep",
-   "evidence": "MITIGATION PRESENT and inline — the correct pattern; the neighbouring \"Signal Feed\" card at :142 is missing the same parenthetical."
+   "evidence": "MITIGATION PRESENT and inline — the correct pattern; the neighbouring \"Signal Feed\" card at :150 is missing the same parenthetical."
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",

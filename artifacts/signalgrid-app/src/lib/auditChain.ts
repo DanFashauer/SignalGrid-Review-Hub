@@ -34,7 +34,6 @@ export interface ChainVerdict {
   length: number;
 }
 
-const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 /** A count of records: a non-negative integer, or null. -1 or 1.5 is malformed, not a count. */
 const count = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -51,17 +50,28 @@ export function normalizeChain(raw: unknown): ChainVerdict {
   const durable = typeof c.ok === "boolean" && count(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
   if (memory && typeof c.valid === "boolean") {
     if (c.valid && c.brokenAtSeq != null) return unverifiedVerdict;
+    // A located break must be a real position: a one-based tenant sequence within the
+    // chain. -1, 0, 1.5 or past `length` is malformed, not a confirmed break.
+    if (!c.valid && c.brokenAtSeq != null) {
+      const seq = count(c.brokenAtSeq);
+      if (seq === null || seq < 1 || seq > (count(c.length) ?? 0)) return unverifiedVerdict;
+    }
     // `evictedCount` > 0 means older events were discarded: it contradicts
     // `truncated: false`, and a count that is not a non-negative integer is malformed.
     if ("evictedCount" in c) {
       const ev = c.evictedCount;
       if (typeof ev !== "number" || !Number.isInteger(ev) || ev < 0 || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
     }
-    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : num(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: count(c.length) ?? 0 };
+    return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : count(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: count(c.length) ?? 0 };
   }
   if (durable && typeof c.ok === "boolean") {
     if (c.ok && c.brokenAtIndex != null) return unverifiedVerdict;
-    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : num(c.brokenAtIndex), scope: "global-ledger", length: count(c.count) ?? 0 };
+    // A zero-based ledger index must fall inside what the verifier read.
+    if (!c.ok && c.brokenAtIndex != null) {
+      const idx = count(c.brokenAtIndex);
+      if (idx === null || idx >= (count(c.count) ?? 0)) return unverifiedVerdict;
+    }
+    return { valid: c.ok, partial, unverified: partial ? (c.truncated === true ? "later" : "unknown") : null, brokenAtSeq: null, brokenAtLedgerIndex: c.ok ? null : count(c.brokenAtIndex), scope: "global-ledger", length: count(c.count) ?? 0 };
   }
   return unverifiedVerdict;
 }

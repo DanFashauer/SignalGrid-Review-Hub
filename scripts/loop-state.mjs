@@ -93,10 +93,12 @@ function readIfPresent(path, encoding = "utf8") {
 // GIT_CONFIG joins them (round-22 refute): `git config` reads ONLY that file when it is set while `git ls-remote` ignores it, so GIT_CONFIG=/dev/null hid a global http.proxy and http.sslVerify=false from the scan
 // and the listing went through that proxy. The scan and the listing must read one configuration: it is dropped, and named in the row.
 const GIT_TRANSPORT_ENV = ["GIT_EXEC_PATH", "GIT_PROXY_COMMAND", "GIT_SSH_COMMAND", "GIT_SSH", "GIT_CONFIG"];
+// The tracing family writes the wire traffic of the listing (GIT_TRACE_CURL, GIT_TRACE_PACKET), the command lines and the environment to a file the CALLER names: a read-only check must not write there (round-23 review).
+const isGitTraceVar = (k) => k.startsWith("GIT_TRACE") || k === "GIT_CURL_VERBOSE";
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV];
 function gitEnv(extra) {
   const env = { ...process.env, ...extra };
-  for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE")) delete env[k];
+  for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) delete env[k];
   for (const k of GIT_ENV_DROPPED) delete env[k];
   return { ...env, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
@@ -162,7 +164,22 @@ function entryAt(cwd, ref, file) {
 //     the machine's own trust boundary: the cloud sandbox's proxy and CA are exactly such environment entries, and failing on them would fail on every real run.
 //     Anything a SANDBOX can plant below that boundary (the repository's own config, an included file from it, a worktree config) is gated.
 const HTTP_HARMLESS = /\.(postbuffer|lowspeedlimit|lowspeedtime|maxrequests|minsessions|version|useragent|extraheader|cookiefile|savecookies|emptyauth|delegation|proactiveauth)$/; // (extraHeader: actions/checkout writes its token there, in the repository's own config; it cannot move the traffic, and its value is never printed)
-const gitBool = (v) => v === null || !/^(false|no|off|0|)$/i.test(String(v).trim());
+// git_config_bool, exactly (config.c, git 2.43): a key with no value is true; "" is false; true/yes/on and false/no/off in any case; otherwise git_parse_int: strtoimax with base 0 (decimal, 0x hex, 0 octal, a
+// leading blank, a sign), an optional k/m/g suffix (case-insensitive, x1024 each), the whole string consumed, in range; non-zero is true. Anything else git refuses ("bad boolean config value"): undefined.
+// Round-23 refute: the old reading (false/no/off/0/empty) took 00, 0x0, -0, +0, 0k and 000g for TRUE, so sslVerify=00 passed the scan while git read it as off.
+function gitBoolValue(raw) {
+  if (raw === null) return true;
+  const s = String(raw);
+  if (s === "") return false;
+  if (/^(true|yes|on)$/i.test(s)) return true;
+  if (/^(false|no|off)$/i.test(s)) return false;
+  const m = /^[ \t\n\v\f\r]*([+-]?)(?:0[xX]([0-9a-fA-F]+)|(0[0-7]*)|([1-9][0-9]*))([kKmMgG]?)$/.exec(s);
+  if (!m) return undefined;
+  let n = m[2] !== undefined ? BigInt(`0x${m[2]}`) : m[3] !== undefined ? BigInt(`0o${m[3]}`) : BigInt(m[4]);
+  if (m[1] === "-") n = -n;
+  n *= { "": 1n, k: 1024n, m: 1048576n, g: 1073741824n }[m[5].toLowerCase()];
+  return n > 9223372036854775807n || n < -9223372036854775808n ? undefined : n !== 0n;
+}
 // DISPLAY ONLY: never decide with it whether a URL is the Hub (round-12 refute: a span that crossed `?`, `#` and a backslash made `https://evil.example?x=@github.com/...` lose its real host and read as the Hub;
 // the decisions use parseGitUrl). Here the opposite error is the one to avoid: a password may contain a raw `?`, `#` or backslash (round-15 refute: `http://agent:pw?x9@127.0.0.1:9` printed whole), so
 // everything between `//` and the LAST `@` before the next `/` (or the end) is the userinfo, whatever it contains, and is not printed. The scp-style form `user:secret@host:path` loses everything up to its last
@@ -195,7 +212,11 @@ function transportKey(scope, origin, kv, own = null) {
   // A credential can sit in a KEY (a url.<base> subsection named https://user:token@host/): keys are scrubbed exactly like values wherever they are printed.
   const label = `${noUserinfo(key, true)}${val === null ? "" : `=${key.startsWith("alias.") ? "(not shown)" : val}`}`;
   const where = scope === "command" ? "command line" : `${scope} ${origin.replace(/^file:/, "")}`;
-  if (isHttp && (last === "sslverify" || last === "proxysslverify") && !gitBool(val)) return { problem: `${label} (${where}) turns TLS verification off` };
+  if (isHttp && (last === "sslverify" || last === "proxysslverify")) {
+    const verify = gitBoolValue(nl < 0 ? null : kv.slice(nl + 1)); // (the raw value: the display copy above has had userinfo removed)
+    if (verify === undefined) return { problem: `${label} (${where}) is not a boolean git can read (git refuses it), so TLS verification cannot be judged` };
+    if (verify === false) return { problem: `${label} (${where}) turns TLS verification off` };
+  }
   const relevant = isUrl || isProxyCmd || isHelper || (isHttp && !HTTP_HARMLESS.test(key));
   if (local && relevant) return { problem: `repository-scope ${label} (${where}) can redirect or weaken the Hub transport` };
   const file = own ? own.fileOf(origin) : "";
@@ -274,11 +295,11 @@ function hubTransport(cwd = repo, hub = HUB) {
   const proxies = new Map(); // one entry per value: HTTPS_PROXY and https_proxy are nearly always the same
   for (const k of ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]) if (env[k]) { const v = noUserinfo(env[k], true); proxies.set(v, [...(proxies.get(v) || []), k]); }
   for (const [v, ks] of proxies) trusted.push(`environment proxy ${ks.join("/")}=${v}`);
-  for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
+  for (const k of ["GIT_SSL_CAINFO", "GIT_SSL_CAPATH", "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE"]) if (env[k]) trusted.push(`environment CA ${k}=${env[k]}`);
   // Where git looks for its remote helpers: named, and never passed on (gitEnv drops it), so it can swap no transport here.
   // (a command line is shown by its program alone: its arguments can carry a credential)
   const shownEnv = (k, v) => { const w = String(v).trim().split(/\s+/); return k === "GIT_SSH_COMMAND" || k === "GIT_PROXY_COMMAND" ? `${w[0]}${w.length > 1 ? " ..." : ""}` : String(v); };
-  for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || k.startsWith("GIT_REMOTE")) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
+  for (const k of Object.keys(env)) if (GIT_TRANSPORT_ENV.includes(k) || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) trusted.push(`environment ${k}=${shownEnv(k, env[k])} (not passed to any git started here)`);
   // The configuration and the Hub URL's expansion are read in TWO places, never one (round-21 refute): the repository (what a fetch or a push of yours sees) and the directory the listing runs in (an empty
   // temporary directory, the clean environment: what the listing sees). A global `[includeIf "gitdir:<repo>/"]` that pulls in an identity insteadOf for the full Hub URL applies only inside the repository, so
   // the gate saw no rewrite there while a shorter global rewrite served the listing from another machine. The two expansions must agree (a credential in front of the same Hub is the one difference allowed),
@@ -343,7 +364,8 @@ function transportRow(scan, hub = HUB) {
   const clean = scan.trusted.length === 0;
   return {
     state: clean ? "ok" : "warn", what: "Review Hub transport", gated: false,
-    detail: clean ? `listing read from ${hub}; ${scan.note}` : `listing read from ${hub} through a transport this check cannot verify; ${scan.note}`,
+    // (the contract, stated: a proxy or a CA bundle that the environment's own configuration or command line sets is trusted and reported, not verified; only a switch that turns verification off is a finding)
+    detail: clean ? `listing read from ${hub}; ${scan.note}` : `listing read from ${hub} through a transport this check cannot verify; ${scan.note}; by design a proxy or CA bundle set by the environment's own configuration or command line (http.proxy, http.sslCAInfo, GIT_SSL_CAINFO, SSL_CERT_FILE) is trusted, not verified`,
   };
 }
 // IS THIS URL THE HUB: decided by PARSING, never by a pattern over the string. A regex that strips "userinfo" read `https://evil.example?x=@github.com/<Hub>.git` as the Hub (its real host is
@@ -3059,7 +3081,7 @@ function selfTest() {
       /spawnSync\("git", \["-c", "core\.commitGraph=false", "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
     // ══ ROUND 10 ══ The round-9 refuter's two ranked items: the trusted-not-verified row must not look like a clean pass, and a key whose ORIGIN file lies inside the
     // repository is the repository's own whatever scope git names. Each case FAILS on a1b43b42.
-    const cleanOfTrust = { GIT_CONFIG_COUNT: null, GIT_SSL_CAINFO: null, GIT_SSL_CAPATH: null, HTTPS_PROXY: null, https_proxy: null, ALL_PROXY: null, all_proxy: null };
+    const cleanOfTrust = { GIT_CONFIG_COUNT: null, GIT_SSL_CAINFO: null, GIT_SSL_CAPATH: null, SSL_CERT_FILE: null, SSL_CERT_DIR: null, CURL_CA_BUNDLE: null, HTTPS_PROXY: null, https_proxy: null, ALL_PROXY: null, all_proxy: null };
     const cloudShape = { HTTPS_PROXY: "http://127.0.0.1:40381", https_proxy: "http://127.0.0.1:40381", GIT_SSL_CAINFO: "/root/.ccr/ca-bundle.crt" }; // what the cloud sandbox always sets
     const cloudScan = inCleanEnv(() => hubTransport(txc.w), { ...cloudShape, GIT_CONFIG_GLOBAL: gProxy });
     const cloudRow = transportRow(cloudScan);
@@ -3601,6 +3623,75 @@ exit 1
     check("a temporary directory whose real path holds a ':' (GIT_CEILING_DIRECTORIES is colon-separated) is refused with a finding naming the path: the listing is not run, the expansion is a failed finding, nothing is created in it; an ordinary temp directory runs (R22-ceiling-colon)",
       colonList.ok === false && colonList.status === null && colonList.stderr.includes("refusing to run git in an isolated directory") && colonList.stderr.includes("r22:tmp") && readdirSync(colonDir).length === 0 && colonRan === "refused" &&
       colonScan.problems.some((p) => p.startsWith("git could not expand the Hub URL where the listing is read (refusing to run git in an isolated directory") && p.includes("r22:tmp")) && inIsolatedDir(() => "ran", () => "refused") === "ran");
+    // ══ ROUND 23 ══ Review round 8. The scan read a config VALUE differently from git: (1) git_config_bool's grammar, (2) the tracing family, (3) the stated contract for a CA/proxy swap.
+    const bv = (raw) => gitBoolValue(raw);
+    const falseAll = ["", "0", "00", "0x0", "0X0", "-0x0", "-0", "+0", "0g", "0M", "000k", "false", "No", "OFF", " 0", "-0k"], trueAll = [null, "1", "0x1", "2k", "yes", "On", "true", "-1", "010", "1g", "+5", "0x10", "1K"];
+    const badAll = ["maybe", "0z", "08", "0x", "k", "1.5", "--1", "9223372036854775808", "9223372036854775807k", "1kk", "tru", "0 0"];
+    check("every boolean the scan judges is read with git_config_bool's grammar: text booleans, then an integer in base 0 (decimal, hex, octal, a sign, a leading blank) with an optional k/m/g suffix, zero false and non-zero true, anything else unparseable (R23-bool-unit)",
+      falseAll.every((v) => bv(v) === false) && trueAll.every((v) => bv(v) === true) && badAll.every((v) => bv(v) === undefined));
+    const bScopes = {
+      global: (v) => ({ GIT_CONFIG_GLOBAL: cfgFile(`r23-bool-${Buffer.from(String(v)).toString("hex")}.cfg`, `[http]\n\tsslVerify = ${v}\n`) }),
+      parameters: (v) => ({ GIT_CONFIG_PARAMETERS: `'http.sslverify'='${v}'` }),
+      count: (v) => ({ GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "http.sslVerify", GIT_CONFIG_VALUE_0: v }),
+    };
+    const bScan = (scope, v) => inCleanEnv(() => hubTransport(txc.w), bScopes[scope](v));
+    const sslRe = /^http\.sslverify=\S+ \((global [^)]*|command line)\) turns TLS verification off$/, badRe = /^http\.sslverify=\S+ \((global [^)]*|command line)\) is not a boolean git can read/;
+    const bFalse = Object.keys(bScopes).map((sc) => ["00", "0x0", "-0", "+0", "0k"].map((v) => bScan(sc, v)));
+    const bFalseMore = ["0X0", "-0x0", "0g", "0M", "000k"].map((v) => bScan("global", v));
+    const bTrue = Object.keys(bScopes).map((sc) => ["1", "0x1", "2k"].map((v) => bScan(sc, v)));
+    const bBad = Object.keys(bScopes).map((sc) => ["maybe", "0z"].map((v) => bScan(sc, v)));
+    check("00, 0x0, -0, +0 and 0k (and 0X0, -0x0, 0g, 0M, 000k) as http.sslVerify gate with the sslverify finding at global scope and at command scope (GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT); 1, 0x1 and 2k count as true; 'maybe' and '0z' gate as not a boolean (R23-bool-scan)",
+      bFalse.flat().every((s) => s.problems.some((p) => sslRe.test(p))) && bFalseMore.every((s) => s.problems.some((p) => sslRe.test(p))) && bTrue.flat().every((s) => !s.problems.some((p) => /sslverify/.test(p))) &&
+      bBad.flat().every((s) => s.problems.some((p) => badRe.test(p)) && !s.problems.some((p) => sslRe.test(p))) &&
+      inCleanEnv(() => hubTransport(txc.w), { GIT_CONFIG_GLOBAL: cfgFile("r23-psv.cfg", "[http]\n\tproxySSLVerify = 0x0\n") }).problems.some((p) => /^http\.proxysslverify=0x0 \(global [^)]*\) turns TLS verification off$/.test(p)));
+    // end to end: a logging proxy; the listing would go through it if a switch were read as "on"
+    const bpx = join(root, "r23-proxy.mjs"), bpxPort = join(root, "r23-proxy.port"), bpxLog = join(root, "r23-proxy.log");
+    writeFileSync(bpxLog, "");
+    writeFileSync(bpx, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+      `const srv = createServer((req, res) => { appendFileSync(process.argv[3], "REQ " + req.url + "\\n"); res.writeHead(502); res.end(); });`,
+      `srv.on("connect", (req, sock) => { appendFileSync(process.argv[3], "CONNECT " + req.url + "\\n"); sock.destroy(); });`,
+      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[2], String(srv.address().port)));`].join("\n") + "\n");
+    const bpxChild = spawn(process.execPath, [bpx, bpxPort, bpxLog], { detached: true, stdio: "ignore" });
+    bpxChild.on("error", () => { /* it never started: the port file never appears and the case fails below */ });
+    bpxChild.unref();
+    const bxFx = mkLikeUe("r23bx");
+    let bxPlain = null, bxLogged = null, bxGlobal = null, bxGlobalAfter = null, bxParams = null, bxParamsAfter = null;
+    const bxNoProxy = { HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null, NO_PROXY: null, no_proxy: null };
+    try {
+      for (let i = 0; i < 400 && readIfPresent(bpxPort) === null; i++) spawnSync("sleep", ["0.05"]);
+      const bpxNo = readIfPresent(bpxPort);
+      if (bpxNo !== null) {
+        const proxyUrl = `http://127.0.0.1:${bpxNo}`, bxCfg = cfgFile("r23-e2e.cfg", `[http]\n\tproxy = ${proxyUrl}\n\tsslVerify = 00\n`);
+        const rawEnv = { ...FX_ENV, GIT_CONFIG_GLOBAL: bxCfg, GIT_CONFIG_NOSYSTEM: "1" };
+        for (const k of Object.keys(bxNoProxy)) delete rawEnv[k];
+        bxPlain = spawnSync("git", ["ls-remote", "--heads", HUB], { cwd: root, env: rawEnv, encoding: "utf8", timeout: 60000 });
+        bxLogged = readIfPresent(bpxLog);
+        writeFileSync(bpxLog, "");
+        bxGlobal = wholeScript(bxFx, "r23bxa", { GIT_CONFIG_GLOBAL: bxCfg, PATH: process.env.PATH, ...bxNoProxy });
+        bxGlobalAfter = readIfPresent(bpxLog);
+        bxParams = wholeScript(bxFx, "r23bxb", { GIT_CONFIG_PARAMETERS: `'http.proxy'='${proxyUrl}' 'http.sslverify'='0x0'`, PATH: process.env.PATH, ...bxNoProxy });
+        bxParamsAfter = readIfPresent(bpxLog);
+      }
+    } finally { try { process.kill(bpxChild.pid); } catch { /* already gone */ } }
+    check("end to end, with a logging proxy: http.sslVerify=00 in the global file (plain git reaches the proxy, the precondition) and http.sslVerify=0x0 on the command line each make the whole check exit 1 on the sslverify finding with no request at the proxy (R23-bool-e2e)",
+      !!bxPlain && !!bxLogged && bxLogged.includes("CONNECT") && !!bxGlobal && bxGlobal.status === 1 && /✗ Review Hub URL\s+http\.sslverify=00 \(global /.test(bxGlobal.out) && bxGlobalAfter === "" &&
+      !!bxParams && bxParams.status === 1 && /✗ Review Hub URL\s+http\.sslverify=0x0 \(command line\) turns TLS verification off/.test(bxParams.out) && bxParamsAfter === "");
+    // (2) the tracing family writes the listing's traffic to a file the caller names
+    const trNames = ["GIT_TRACE", "GIT_TRACE2", "GIT_TRACE2_EVENT", "GIT_TRACE2_PERF", "GIT_TRACE_PACKET", "GIT_TRACE_CURL", "GIT_TRACE_SETUP", "GIT_TRACE_PERFORMANCE"];
+    const trFiles = Object.fromEntries(trNames.map((k) => [k, join(root, `r23-${k}.out`)])), trVars = { ...trFiles, GIT_CURL_VERBOSE: "1" };
+    const trPlain = spawnSync("git", ["ls-remote", "--heads", HUB], { cwd: root, env: { ...FX_ENV, ...trVars, HTTPS_PROXY: "http://127.0.0.1:9", https_proxy: "http://127.0.0.1:9", GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1" }, encoding: "utf8", timeout: 60000 });
+    const trPre = [trFiles.GIT_TRACE, trFiles.GIT_TRACE2_EVENT].map((f) => readIfPresent(f) !== null);
+    for (const f of Object.values(trFiles)) rmSync(f, { force: true });
+    const trGit = withEnvVars({ ...trVars, GIT_KEEP_ME: "y" }, () => gitEnv()), trScan = inCleanEnv(() => hubTransport(txc.w), trVars);
+    inCleanEnv(() => { listHub(); originRow(txc.w); }, { ...trVars, ...unreachable });
+    check("GIT_TRACE, GIT_TRACE2, GIT_TRACE2_EVENT, GIT_TRACE2_PERF, GIT_TRACE_PACKET, GIT_TRACE_CURL, GIT_TRACE_SETUP, GIT_TRACE_PERFORMANCE and GIT_CURL_VERBOSE are dropped from every git the check starts and named in the row: a plain git writes the trace files (the precondition), the check's gits write none (R23-trace-env)",
+      trPlain.status !== undefined && trPre.every(Boolean) && trNames.every((k) => readIfPresent(trFiles[k]) === null) && [...trNames, "GIT_CURL_VERBOSE"].every((k) => !(k in trGit)) && trGit.GIT_KEEP_ME === "y" &&
+      [...trNames, "GIT_CURL_VERBOSE"].every((k) => trScan.trusted.some((t) => t.startsWith(`environment ${k}=`) && t.endsWith("(not passed to any git started here)"))) && trScan.problems.length === 0);
+    // (3) the contract: a CA bundle or proxy of the environment is named, trusted, and the row says it is not verified by design
+    const caScan = inCleanEnv(() => hubTransport(txc.w), { SSL_CERT_FILE: "/x/ca1.pem", SSL_CERT_DIR: "/x/cadir", CURL_CA_BUNDLE: "/x/ca2.pem", GIT_CONFIG_GLOBAL: cfgFile("r23-ca.cfg", "[http]\n\tsslCAInfo = /x/swapped.pem\n\tproxy = http://127.0.0.1:9\n") });
+    check("SSL_CERT_FILE, SSL_CERT_DIR and CURL_CA_BUNDLE are named like GIT_SSL_CAINFO, and a global http.sslCAInfo + proxy is trusted, not verified: no finding, and the warning row states that this is by design (R23-ca-contract)",
+      caScan.problems.length === 0 && ["SSL_CERT_FILE=/x/ca1.pem", "SSL_CERT_DIR=/x/cadir", "CURL_CA_BUNDLE=/x/ca2.pem"].every((e) => caScan.trusted.includes(`environment CA ${e}`)) &&
+      caScan.trusted.some((t) => t.includes("http.sslcainfo=/x/swapped.pem")) && transportRow(caScan).state === "warn" && transportRow(caScan).detail.includes("by design a proxy or CA bundle set by the environment's own configuration or command line") && transportRow(caScan).gated === false);
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;

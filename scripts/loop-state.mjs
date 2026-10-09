@@ -110,7 +110,10 @@ const isGitTraceVar = (k) => k.startsWith("GIT_TRACE") || k === "GIT_CURL_VERBOS
 // Resource caps a caller can set to make git FAIL (round-25 refute: GIT_MMAP_LIMIT=1k made rev-parse, status, rev-list and merge-base exit 128 and a gated row went silent), and the diff-context switch.
 const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"];
 //
-// THE AUDIT, as a table (round 25; the 160-odd GIT_* names `strings` finds in git 2.43's binaries, classified; a reviewer diffs against this instead of re-deriving it).
+// THE AUDIT, as a table (round 25; figure corrected in round 26: the GIT_* names `strings` finds in the git binaries, classified; a reviewer diffs against this instead of re-deriving it).
+//   MEASURED, not remembered: `strings -a git git-remote-http git-http-fetch | grep -E '^GIT_[A-Z0-9_]+$' | sort -u | wc -l` printed 181 for git 2.43.0 (the figure the first version of this table gave was
+//   wrong, and eight names were in no list: they are classed below). A git 2.54.0 built without libcurl prints 188 (no http helpers, so the transport names are absent from that count, and 35 names are new, most of them internal
+//   enumerators that only look like environment names; the new ones git READS from the environment are GIT_ADVICE, GIT_DEFAULT_REF_FORMAT, GIT_REFERENCE_BACKEND and GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE, all verdict-neutral, classed below). The count moves with the git; the command above is the measure.
 //   DROPPED from every git started here and every child it spawns (gitEnv):
 //     where git looks: GIT_DIR GIT_COMMON_DIR GIT_WORK_TREE GIT_NAMESPACE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES, and GIT_REDIRECT_ENV (shallow file, index file and version, replace base, attribute
 //       sources, quarantine and template directories, ceiling and discovery switches, implicit work tree, the two paranoia switches);
@@ -131,6 +134,22 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //     pathspec use passes --literal-pathspecs itself; a clash makes git fail, which reads as no history: not landed), GIT_NOTES_* (no notes read), GIT_FLUSH GIT_FORCE_THREADS GIT_PROGRESS_DELAY
 //     GIT_PRINT_SHA1_ELLIPSIS GIT_DISABLE_UNTRACKED_CACHE GIT_FORCE_UNTRACKED_CACHE GIT_BASENAME_FACTOR GIT_USER_AGENT GIT_OVERRIDE_VIRTUAL_HOST (performance and presentation), GIT_SHELL_PATH GIT_EXT_SERVICE*
 //     GIT_TRANSLOOP_DEBUG GIT_TRANSPORT_HELPER_DEBUG GIT_TEXTDOMAINDIR GIT_PREFIX GIT_SSH_VARIANT (only reached through a program already dropped), GIT_ALLOW_NULL_SHA1 (a hash-format allowance).
+//     ROUND 26 (the eight names no list carried): GIT_CURL_FTP_NO_EPSV GIT_HTTP_LOW_SPEED_LIMIT GIT_HTTP_LOW_SPEED_TIME GIT_HTTP_MAX_REQUESTS GIT_HTTP_USER_AGENT GIT_PROXY_SSL_CERT_PASSWORD_PROTECTED GIT_SMART_HTTP
+//       GIT_SSL_CERT_PASSWORD_PROTECTED. All are TRANSPORT TUNING for the Hub listing's libcurl: none selects a program, a file or a server (those are the names dropped or named above), so the worst a caller can do with one is make
+//       the listing slow or fail, and a failed listing is a gated row ("could not list the Hub's branches"). Passed on, verdict-neutral. And the git 2.54 additions: GIT_ADVICE (switches hints off or on: presentation),
+//       GIT_DEFAULT_REF_FORMAT and GIT_REFERENCE_BACKEND (choose a ref format when a repository is CREATED; nothing here creates one), GIT_EXTERNAL_DIFF_TRUST_EXIT_CODE (a diff program's exit code; every diff here is --no-ext-diff).
+//   WHAT CONFIGURATION CAN MAKE A READ-ONLY GIT RUN (round 26; the environment table above is about names git reads, this one about KEYS, and the two are not the same audit). A repository's own config, an included file, or
+//     the kept GIT_CONFIG_COUNT / KEY / VALUE entries can name a program that an ordinary read starts: core.fsmonitor (the `git status` this check runs asks it which files changed, and a program that never answers hung the
+//     check with no output and no verdict, round-11 refute), core.hooksPath and the hooks themselves (post-index-change after an index write, reference-transaction), credential.helper (any git that reaches a remote),
+//     filter.<driver>.clean / smudge / process (`git status` runs the clean filter of every stat-dirty file whose attribute names a driver). Handled in gitRun, for every git started here:
+//       GIT_EXEC_OFF: core.fsmonitor=false, core.hooksPath=/dev/null (no hook is found), advice.graftFileDeprecated=false (not executing: git 2.54 prints a six-line hint to stderr every time it reads a grafts file,
+//         which flooded the self-test's tail and polluted any row that quotes git's first stderr line; the check reads the grafts file ITSELF in graftsState and does not depend on git honouring it);
+//       GIT_CREDENTIAL_OFF: credential.helper= (reset to none) on every git except the Hub listing, which runs in an isolated directory where only the machine's own configuration exists;
+//       the filter drivers: for a subcommand that can apply attributes (GIT_ATTRIBUTE_DRIVEN) the drivers are read (`git config -z --get-regexp`, which runs nothing) and each filter.<d>.clean / smudge / process is
+//         passed as an EMPTY value, which git reads as "no filter" (apply_filter returns at once on an empty command); a repository whose driver is `required` then makes status fail, which is a gated row, never clean.
+//     Also bounded in TIME (GIT_LIMITS): no spawn can hang the check. A git that times out is recorded and becomes ONE gated row, "could not be read: git <cmd> timed out after N s", whatever the caller of gitRun did with the
+//     empty answer (timeoutRow). LOOP_STATE_GIT_TIMEOUT_MS can only SHORTEN a bound (a smaller bound times out more, which tightens); the self-test uses it. The children this script starts (readiness figure, doctrine gates, raised-hands
+//     monitor) get the childMs bound. Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
@@ -138,15 +157,57 @@ function gitEnv(extra) {
   for (const k of GIT_ENV_DROPPED) delete env[k];
   return { ...env, ...extra, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
 }
-// { ok, status, stdout, stderr }; ok is "git ran and exited 0". stdout is a string, or a Buffer with { buffer: true }.
+// The bounds on every spawn, in milliseconds (round 26: nothing but the Hub listing had one, so a git that never returned hung the whole check with no verdict). localMs: a git on this repository; hubMs: the listing (60 s, as always);
+// childMs: a node child this check runs. LOOP_STATE_GIT_TIMEOUT_MS can only lower them (see the audit above).
+const GIT_LIMITS = { localMs: 120000, hubMs: 60000, childMs: 300000 };
+{ const k = Number(process.env.LOOP_STATE_GIT_TIMEOUT_MS); if (Number.isInteger(k) && k > 0) for (const f of Object.keys(GIT_LIMITS)) GIT_LIMITS[f] = Math.min(GIT_LIMITS[f], k); }
+// What configuration can make a read-only git run (the audit table above, "WHAT CONFIGURATION CAN MAKE A READ-ONLY GIT RUN"): passed as -c on every git, so it beats the repository's config, an included file and GIT_CONFIG_COUNT.
+const GIT_EXEC_OFF = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "advice.graftFileDeprecated=false"];
+const GIT_CREDENTIAL_OFF = ["-c", "credential.helper="];
+// The subcommands that can apply attributes (clean / smudge / process filters) to a file. Everything else this script runs is plumbing over objects and refs. An UNKNOWN subcommand is not in the plain set, so it is treated as driven: unknown tightens.
+const GIT_PLAIN_SUBCOMMANDS = new Set(["rev-parse", "rev-list", "for-each-ref", "symbolic-ref", "cat-file", "ls-tree", "ls-remote", "merge-base", "config", "worktree", "read-tree", "write-tree", "commit-tree", "reflog", "diff-tree", "show", "log"]);
+const gitTimeouts = []; // { cmd, ms } for every spawn that hit its bound; timeoutRow() turns them into the one gated row
+function gitSubcommand(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = String(args[i]);
+    if (a === "-C" || a === "-c") { i++; continue; }
+    if (!a.startsWith("-")) return a;
+  }
+  return "";
+}
+// The row for every git that timed out ("" when none did). It is gated: the answer that git would have given is unknown, and unknown is not clean.
+function timeoutRow() {
+  if (!gitTimeouts.length) return null;
+  const seen = [...new Map(gitTimeouts.map((t) => [`${t.cmd}|${t.ms}`, t])).values()];
+  return { state: "fail", what: "A git timed out", detail: `could not be read: ${seen.map((t) => `git ${t.cmd} timed out after ${t.ms / 1000} s`).join("; ")} - what it would have answered is unknown, and unknown is not clean`, gated: true };
+}
+// One short sentence for a failed git, for a row: its first stderr line, else the timeout, else the exit status.
+function gitWhy(r) {
+  if (r.timedOut) return `timed out after ${r.timedMs / 1000} s`;
+  return String(r.stderr).split("\n").find((l) => l && !l.startsWith("hint:")) || `exit ${r.status}`;
+}
+// { ok, status, stdout, stderr, timedOut }; ok is "git ran and exited 0". stdout is a string, or a Buffer with { buffer: true }.
 function gitRun(cwd, args, { input, env, buffer = false, timeout } = {}) {
   const dir = resolve(cwd);
-  const r = spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args], {
-    cwd: dir, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024, ...(timeout ? { timeout } : {}),
+  const sub = gitSubcommand(args);
+  const network = sub === "ls-remote";
+  const ms = timeout ?? (network ? GIT_LIMITS.hubMs : GIT_LIMITS.localMs);
+  // The filter drivers this repository names, as empty values (see the audit): read with `config`, which runs nothing. Unreadable is a failure, never "none".
+  let driversOff = [];
+  if (sub && !GIT_PLAIN_SUBCOMMANDS.has(sub)) {
+    const d = gitRun(dir, ["config", "-z", "--get-regexp", "^filter\\..*\\.(clean|smudge|process)$"], { timeout: ms });
+    if (d.timedOut) return { ...d, error: d.error };
+    if (!d.ok && d.status !== 1) return { ok: false, error: new Error("filter drivers unreadable"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: `could not read the filter drivers: ${gitWhy(d)}`, timedOut: false };
+    for (const rec of String(d.stdout).split("\0").filter(Boolean)) driversOff.push("-c", `${rec.split("\n")[0]}=`);
+  }
+  const r = spawnSync("git", ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, ...(network ? [] : GIT_CREDENTIAL_OFF), ...driversOff, "-C", dir, ...args], {
+    cwd: dir, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024, timeout: ms, killSignal: "SIGKILL",
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   });
+  const timedOut = Boolean(r.error && r.error.code === "ETIMEDOUT");
+  if (timedOut) gitTimeouts.push({ cmd: sub || String(args[0] ?? ""), ms });
   const ok = !r.error && r.status === 0;
-  return { ok, error: r.error, status: r.error ? null : r.status, stdout: r.stdout ?? (buffer ? Buffer.alloc(0) : ""), stderr: String(r.stderr ?? "") };
+  return { ok, error: r.error, status: r.error ? null : r.status, stdout: r.stdout ?? (buffer ? Buffer.alloc(0) : ""), stderr: String(r.stderr ?? ""), timedOut, timedMs: ms };
 }
 const gitIn = (cwd) => (...a) => {
   const r = gitRun(cwd, a);
@@ -390,7 +451,7 @@ function hubTransport(cwd = repo, hub = HUB) {
 // alias.remote-<vcs> served a fake listing from repository configuration alone.) The isolation is DEFENCE IN DEPTH behind the scan: every repository-scope shape the scan enumerates is gated before the
 // listing is asked for, so the cases that pin it use what the scan cannot see (a rewrite written into .git/config AFTER the scan took its snapshot) and watch where the listing runs (R16-listhub-*).
 function listHub(hub = HUB) {
-  return inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", hub], { timeout: 60000, env: isoEnv }), (why) => ({ ok: false, error: undefined, status: null, stdout: "", stderr: why }));
+  return inIsolatedDir((dir, isoEnv) => gitRun(dir, ["ls-remote", "--heads", hub], { timeout: GIT_LIMITS.hubMs, env: isoEnv }), (why) => ({ ok: false, error: undefined, status: null, stdout: "", stderr: why }));
 }
 function hubUrlProblem(cwd = repo, hub = HUB) {
   return hubTransport(cwd, hub).problems.join("; ");
@@ -986,7 +1047,8 @@ function aheadOfHub(branch, hubSha, cwd = repo) {
   // "at or behind the Hub" is a ZERO, and a zero is earned (commitsNotHeldBy): a forged commit in the chain between the tip and the Hub's tip
   // made real unpushed work read same (round-8 refute P3). The reason makes sameNameVerdict a gated AHEAD with the count unreadable, as a grafts file does.
   if (c.unproven) return { state: "unknown", reason: c.unproven };
-  if (c.count === null) return { state: "unknown" };
+  // ...and so does a count git could not give (a parent object absent, a damaged store): a reason makes sameNameVerdict a gated AHEAD with the count unreadable, never the ungated warning mislabelled "Hub tip is not fetched locally" (round-11 review, LOW).
+  if (c.count === null) return { state: "unknown", reason: c.unreadable || "the commits ahead of the Hub tip could not be counted" };
   return { state: c.count > 0 ? "ahead" : "same", ahead: c.count };
 }
 // How many commits of `tip` NONE of `nots` reaches, where a ZERO has to be earned. `rev-list --count tip ^nots` trusts every parent line it reads, and
@@ -1001,7 +1063,8 @@ function commitsNotHeldBy(cwd, tip, nots) {
   if (grafted) return { count: null, unproven: grafted };
   const r = gitRun(cwd, ["rev-list", "--count", "--stdin"], { input: `${tip}\n${nots.map((s) => `^${s}`).join("\n")}\n` });
   const n = r.ok ? Number(r.stdout.trim()) : NaN;
-  if (!Number.isInteger(n)) return { count: null };
+  // A count git could not give carries the reason (round 26: aheadOfHub returned `unknown` with none, and the same-name row fell to the ungated "not fetched locally" warning for a git that FAILED, where the detached-HEAD row gates the same null).
+  if (!Number.isInteger(n)) return { count: null, unreadable: `git rev-list could not count the commits (${gitWhy(r)})` };
   if (n > 0) return { count: n };
   const tipSha = gitIn(cwd)("rev-parse", "--verify", "-q", `${tip}^{commit}`);
   if (tipSha && chainIsReal(cwd, tipSha, nots)) return { count: 0 };
@@ -1362,21 +1425,107 @@ function commitsBeyondHub(cwd, branch, hubShaMap, trackingRef, why = {}) {
 // row decides whether that is on the Hub) and a commit the Hub LISTS (re-hashed by localCommits), never a tag and never a tracking ref. A zero is earned
 // (commitsNotHeldBy: the chain between HEAD and the commit that holds it is re-hashed). A HEAD that a tracking ref holds while the Hub lists that
 // name at a sha this checkout lacks is the stale-fetch case: the row says run a fetch (behindCauses), it does not stop gating.
-function detachedHeadWork(cwd, hubShaMap) {
-  const sym = gitRun(cwd, ["symbolic-ref", "-q", "HEAD"]);
-  if (sym.ok) return null;
-  // `symbolic-ref -q` exits 1 for a detached HEAD and anything else for a git that FAILED; a HEAD that cannot be named is not "no detached work" (round-25 refute: a failing git turned this gated row into silence)
-  if (sym.status !== 1) return { head: null, count: null, unreadable: String(sym.stderr).split("\n").find(Boolean) || `exit ${sym.status}` };
-  const headR = gitRun(cwd, ["rev-parse", "--verify", "-q", "HEAD^{commit}"]);
-  const head = headR.ok ? headR.stdout.trim() : "";
-  if (!head) return { head: null, count: null, unreadable: String(headR.stderr).split("\n").find(Boolean) || `HEAD does not name a commit (exit ${headR.status})` };
-  const refs = gitIn(cwd)("for-each-ref", "--format=%(objectname)", "refs/heads");
-  const listed = hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : [];
-  const nots = [...new Set([...(refs ? refs.split("\n") : []), ...listed])].filter(Boolean);
+// ROUND 26 (review round 11). Three more shapes of "work held only by a HEAD", one root: a HEAD is not only the main worktree's, and not only a detached one.
+//   (1) HEAD as a SYMBOLIC REF to a ref OUTSIDE refs/heads (refs/tags/x, refs/remotes/origin/SignalGrid_Alpha, any name): `git commit` writes through it, the commit lands on that ref, `for-each-ref refs/heads` never lists it and
+//       `symbolic-ref -q HEAD` exits 0, which this function used to read as "attached to a branch, nothing detached". A symref is attached to a BRANCH only when its target is under refs/heads/ (and then the branch
+//       listing has it, whatever the target of THAT is). Any other target is resolved and its commits are counted exactly like detached work, the target ref named; a target that does not resolve is an unreadable HEAD (gated).
+//   (2) every LINKED worktree has a HEAD of its own (`git worktree add --detach`); they are read from git's own list (`worktree list --porcelain -z`, which also prints `branch <ref>` for a symbolic HEAD of any target and an
+//       all-zero HEAD for one that does not resolve), and a list git cannot give is itself a gated finding.
+// Returns { own: finding|null, linked: [finding] }; a finding is { head, count, unproven?, fetch?, unreadable?, symref?, where?, agent? } (where: the worktree's path, for a linked one).
+function worktreeEntries(cwd) {
+  const r = gitRun(cwd, ["worktree", "list", "--porcelain", "-z"]);
+  if (!r.ok) return { ok: false, why: gitWhy(r), list: [] };
+  const list = [];
+  for (const block of String(r.stdout).split("\0\0")) {
+    const fields = block.split("\0").filter(Boolean);
+    if (!fields.length) continue;
+    const e = { path: "", sha: "", ref: "", detached: false, bare: false, prunable: false };
+    for (const f of fields) {
+      if (f.startsWith("worktree ")) e.path = f.slice("worktree ".length);
+      else if (f.startsWith("HEAD ")) e.sha = f.slice("HEAD ".length);
+      else if (f.startsWith("branch ")) e.ref = f.slice("branch ".length);
+      else if (f === "detached") e.detached = true;
+      else if (f === "bare") e.bare = true;
+      else if (f === "prunable" || f.startsWith("prunable ")) e.prunable = true;
+    }
+    if (!e.path) return { ok: false, why: "a worktree entry with no path", list: [] };
+    list.push(e);
+  }
+  return { ok: true, why: "", list };
+}
+function realOrSame(p) { try { return realpathSync(p); } catch { return resolve(p); } }
+// What a HEAD at `head` carries that nothing holds: a local branch or a commit the Hub LISTS (the evidence below). null = nothing; a zero is earned (commitsNotHeldBy).
+function headCarries(cwd, hubShaMap, head, ctx) {
+  const nots = ctx.nots;
   const c = commitsNotHeldBy(cwd, head, nots);
   if (c.count === 0) return null;
-  const behind = hubShaMap instanceof Map ? behindCauses(cwd, head, hubShaMap, new Set(listed), "") : [];
+  const behind = hubShaMap instanceof Map ? behindCauses(cwd, head, hubShaMap, ctx.listed, "") : [];
   return { head, count: c.count, ...(c.unproven ? { unproven: c.unproven } : {}), ...(behind.length ? { fetch: fetchHint(behind[0].name) } : {}) };
+}
+function detachedHeadWork(cwd, hubShaMap) {
+  let ctx = null; // the evidence, computed once: every HEAD asks the same question of the same refs
+  const evidence = () => {
+    if (ctx) return ctx;
+    const refs = gitIn(cwd)("for-each-ref", "--format=%(objectname)", "refs/heads");
+    const listed = new Set(hubShaMap instanceof Map ? [...localCommits(cwd, [...hubShaMap.values()].filter((s) => typeof s === "string"))] : []);
+    return (ctx = { listed, nots: [...new Set([...(refs ? refs.split("\n") : []), ...listed])].filter(Boolean) });
+  };
+  const out = { own: null, linked: [] };
+  // ── this checkout's own HEAD
+  const sym = gitRun(cwd, ["symbolic-ref", "-q", "HEAD"]);
+  let symref = "";
+  if (sym.ok) {
+    symref = sym.stdout.trim();
+    // attached to a branch: its own row decides (the listing enumerates refs/heads, a branch that is itself a symref to a tag included)
+    if (symref.startsWith("refs/heads/")) symref = "attached";
+  } else if (sym.status !== 1) {
+    // `symbolic-ref -q` exits 1 for a detached HEAD and anything else for a git that FAILED; a HEAD that cannot be named is not "no detached work" (round-25 refute: a failing git turned this gated row into silence)
+    out.own = { head: null, count: null, unreadable: gitWhy(sym) };
+  }
+  if (!out.own && symref !== "attached") {
+    const what = symref ? `${symref}^{commit}` : "HEAD^{commit}";
+    const headR = gitRun(cwd, ["rev-parse", "--verify", "-q", what]);
+    const head = headR.ok ? headR.stdout.trim() : "";
+    if (!head) out.own = { head: null, count: null, ...(symref ? { symref } : {}), unreadable: String(headR.stderr).split("\n").find(Boolean) || (symref ? `${symref} does not name a commit (exit ${headR.status})` : `HEAD does not name a commit (exit ${headR.status})`) };
+    else out.own = headCarries(cwd, hubShaMap, head, evidence());
+    if (out.own && symref) out.own.symref = symref;
+  }
+  // ── every other worktree of the repository
+  const wl = worktreeEntries(cwd);
+  if (!wl.ok) { out.linked.push({ head: null, count: null, where: "(worktree list)", unreadable: `git worktree list failed: ${wl.why}` }); return out; }
+  let self = "";
+  const top = gitRun(cwd, ["rev-parse", "--show-toplevel"]);
+  if (top.ok) self = realOrSame(top.stdout.trim());
+  const byHead = new Map(); // sha -> finding or null, so a hundred worktrees on one commit cost one count
+  for (const e of wl.list) {
+    if (e.bare || (self && realOrSame(e.path) === self)) continue;
+    if (e.ref.startsWith("refs/heads/")) continue;
+    const base = { where: e.path, ...(e.ref ? { symref: e.ref } : {}), ...(e.prunable ? { prunable: true } : {}), agent: e.path.includes("/.claude/worktrees/") };
+    if (!e.sha || /^0+$/.test(e.sha)) { out.linked.push({ ...base, head: null, count: null, unreadable: e.ref ? `${e.ref} does not resolve to a commit` : "HEAD does not resolve to a commit" }); continue; }
+    if (!byHead.has(e.sha)) {
+      const v = gitRun(cwd, ["rev-parse", "--verify", "-q", `${e.sha}^{commit}`]);
+      byHead.set(e.sha, v.ok ? headCarries(cwd, hubShaMap, v.stdout.trim(), evidence()) : { head: null, count: null, unreadable: `${e.sha.slice(0, 12)} is not a commit in this repository (${gitWhy(v)})` });
+    }
+    const f = byHead.get(e.sha);
+    if (f) out.linked.push({ ...f, ...base, ...(f.unreadable ? { agent: false } : {}) });
+  }
+  return out;
+}
+// The rows for what detachedHeadWork found. The checkout's own HEAD keeps its title; the others (linked worktrees) are ONE row naming each, gated except an AGENT worktree's HEAD with commits (a checkout under
+// .claude/worktrees/ belongs to a live agent: the same reported-never-fatal rule as its branches, branchesInAgentWorktrees); an unreadable one is gated wherever it lives.
+function describeHead(f) {
+  const tip = f.symref ? `symbolic ref ${f.symref}, outside refs/heads` : "detached";
+  if (f.unreadable !== undefined) return `${f.where ? `worktree ${f.where}: HEAD` : "HEAD"} is ${f.symref ? `a symbolic ref to ${f.symref} and` : "detached and"} unreadable: ${f.unreadable} — what it carries cannot be told, and unknown is not clean`;
+  return `${f.where ? `worktree ${f.where}: ` : ""}HEAD (${tip} at ${f.head.slice(0, 12)}) carries ${f.count === null ? "commits that could not be counted" : `${f.count} commit(s)`} no local branch or Hub-listed commit holds${f.unproven ? ` (${f.unproven})` : ""}${f.fetch ? ` (${f.fetch})` : ""} — make a branch and push it, or confirm it is scratch`;
+}
+function detachedHeadRows(found) {
+  const rows = [];
+  if (found.own) rows.push({ state: "fail", what: "Detached HEAD work not on the Review Hub", detail: describeHead(found.own), gated: true });
+  const gatedL = found.linked.filter((f) => !f.agent), agentL = found.linked.filter((f) => f.agent);
+  const list = (fs) => `${fs.slice(0, 5).map(describeHead).join("; ")}${fs.length > 5 ? `; +${fs.length - 5} more` : ""}`;
+  if (gatedL.length) rows.push({ state: "fail", what: "Linked worktree HEAD work not on the Review Hub", detail: list(gatedL), gated: true });
+  if (agentL.length) rows.push({ state: "warn", what: "Agent-worktree HEADs carrying commits", detail: `${list(agentL)} — reported, never fatal: they belong to a live agent's isolated checkout`, gated: false });
+  return rows;
 }
 // "a, b — <remedy>; c — <remedy>": the branches grouped by the remedy each needs, so one cause reads one way everywhere.
 // pairs: [[branch, remedy or ""]]; the ones with no remedy of their own go first under `plainRemedy`.
@@ -1500,21 +1649,22 @@ function unpushedCandidates(localBranches, hubBranches, ephemeral, scratchExclud
   return localBranches.filter((b) => !hubBranches.includes(b) && !ephemeral.includes(b) && !scratchExcluded.includes(b));
 }
 
-function branchesInAgentWorktrees() {
-  const out = git("worktree", "list", "--porcelain");
-  if (!out) return [];
+// ROUND 26 (review round 11, LOW): the exemption used to be "any worktree whose PATH contains /.claude/worktrees/", read from `worktree list`'s first entry too, so a repository that itself lives under such a path (its
+// MAIN worktree) had its own checked-out branch excluded from the gated unpushed row. The Agent tool's isolated checkouts are LINKED worktrees by construction (`git worktree add`), so the exemption is now
+// restricted to linked worktrees: the first entry of git's list is the main worktree and is never exempt, whatever its path says. (The path remains a name the caller chooses for a linked worktree, as the
+// branch-name rule always was; the row text says so, and the exemption is reported on its own warning line.)
+function branchesInAgentWorktrees(cwd = repo) {
+  const wl = worktreeEntries(cwd);
+  if (!wl.ok) return [];
   const found = new Set();
   const agentPaths = [];
-  let path = "";
-  for (const line of out.split("\n")) {
-    if (line.startsWith("worktree ")) {
-      path = line.slice("worktree ".length);
-      // The Agent tool's isolated checkouts live under `.claude/worktrees/`.
-      if (path.includes("/.claude/worktrees/")) agentPaths.push(path);
-    } else if (line.startsWith("branch refs/heads/") && path.includes("/.claude/worktrees/")) {
-      found.add(line.slice("branch refs/heads/".length));
-    }
-  }
+  wl.list.forEach((e, i) => {
+    if (i === 0) return; // the main worktree
+    // The Agent tool's isolated checkouts live under `.claude/worktrees/`.
+    if (!e.path.includes("/.claude/worktrees/")) return;
+    agentPaths.push(e.path);
+    if (e.ref.startsWith("refs/heads/")) found.add(e.ref.slice("refs/heads/".length));
+  });
 
   // The checked-out branch is only the one an agent is on RIGHT NOW. An agent that
   // builds several branches — three successive attack reproductions, say — leaves
@@ -1523,7 +1673,8 @@ function branchesInAgentWorktrees() {
   // worktree ever checked out is recoverable from it. That is the full set an agent
   // created, not just its current one.
   for (const p of agentPaths) {
-    const log = git("-C", p, "reflog", "show", "--format=%gs", "HEAD");
+    const lg = gitRun(p, ["reflog", "show", "--format=%gs", "HEAD"]);
+    const log = lg.ok ? lg.stdout.trim() : "";
     if (!log) continue;
     for (const line of log.split("\n")) {
       const m = /^checkout: moving from (\S+) to (\S+)$/.exec(line.trim());
@@ -1635,11 +1786,7 @@ function branchSeamRows({ listing, hubBranches, hubShaMap, ephemeral, scratchExc
     row("warn", "Same-named branches whose Hub tip is not fetched locally",
       remedyGroups(unknownV.map((v) => [v.branch, v.fetch || v.reason || ""]), "cannot tell ahead from behind; reported, not counted clean"), false);
   }
-  const dh = detachedHeadWork(cwd, hubShaMap);
-  if (dh) {
-    row("fail", "Detached HEAD work not on the Review Hub",
-      dh.unreadable !== undefined ? `HEAD is detached and unreadable: ${dh.unreadable} — what it carries cannot be told, and unknown is not clean` : `HEAD (detached at ${dh.head.slice(0, 12)}) carries ${dh.count === null ? "commits that could not be counted" : `${dh.count} commit(s)`} no local branch or Hub-listed commit holds${dh.unproven ? ` (${dh.unproven})` : ""}${dh.fetch ? ` (${dh.fetch})` : ""} — make a branch and push it, or confirm it is scratch`);
-  }
+  for (const r of detachedHeadRows(detachedHeadWork(cwd, hubShaMap))) row(r.state, r.what, r.detail, r.gated);
   // REPORTED, never fatal — the lane-message rule, for the same reason. The work is not lost (the worktree
   // belongs to a live agent, and anything real is pushed from it), but an agent branch carrying commits
   // beyond mainline is still worth a session's eyes, so it is named rather than swallowed by the exclusion above.
@@ -1666,7 +1813,7 @@ if (hubBranches.length && listing.ok) {
   // Ephemeral by NAME (the Agent tool's own) or by LOCATION (anything checked out
   // in an agent worktree). Named in the output either way: the exclusion is
   // visible, never silent.
-  const inWorktrees = branchesInAgentWorktrees();
+  const inWorktrees = branchesInAgentWorktrees(repo);
   const ephemeral = localBranches.filter(
     (b) => b.startsWith("worktree-agent-") || inWorktrees.includes(b),
   );
@@ -1702,10 +1849,14 @@ if (hubBranches.length && listing.ok) {
 }
 
 // ── 2. Uncommitted work — the other way things get lost ─────────────────────
-const statusR = gitRun(repo, ["status", "--porcelain"]);
-const dirty = statusR.ok ? statusR.stdout.split("\n").filter(Boolean) : [];
-if (!statusR.ok) add("fail", "Working tree", `could not be read (git status failed: ${String(statusR.stderr).split("\n").find(Boolean) || `exit ${statusR.status}`}) — unknown is not clean`);
-else add(dirty.length ? "warn" : "ok", "Working tree", dirty.length ? `${dirty.length} uncommitted file(s)` : "clean");
+// A FUNCTION, so the self-test runs the very row the live script prints (a git that fails or times out is "could not be read", never "clean").
+function workingTreeRow(cwd) {
+  const statusR = gitRun(cwd, ["status", "--porcelain"]);
+  if (!statusR.ok) return { state: "fail", what: "Working tree", detail: `could not be read (git status failed: ${gitWhy(statusR)}) — unknown is not clean`, gated: true };
+  const dirty = statusR.stdout.split("\n").filter(Boolean);
+  return { state: dirty.length ? "warn" : "ok", what: "Working tree", detail: dirty.length ? `${dirty.length} uncommitted file(s)` : "clean", gated: true };
+}
+{ const w = workingTreeRow(repo); add(w.state, w.what, w.detail, w.gated); }
 
 // ── 3. Is the doctrine actually live where people can see it? ───────────────
 const readme = readIfPresent(resolve(repo, "README.md")) ?? "";
@@ -1765,9 +1916,9 @@ if (discoveryLog !== null) {
 // Three dimensions, headline = the lowest; floor 80 / target 92–95 / goal 100. REPORTED,
 // not a seam: a low number closes outreach, it does not block a session from ending.
 {
-  const r = spawnSync(process.execPath, [resolve(repo, "scripts/check-readiness-figure.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv() });
+  const r = spawnSync(process.execPath, [resolve(repo, "scripts/check-readiness-figure.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv(), timeout: GIT_LIMITS.childMs, killSignal: "SIGKILL" });
   if (r.status !== 0) {
-    add("fail", "Readiness figure", "derivation BROKEN — run node scripts/check-readiness-figure.mjs", false);
+    add("fail", "Readiness figure", `derivation BROKEN${r.error && r.error.code === "ETIMEDOUT" ? ` (timed out after ${GIT_LIMITS.childMs / 1000} s)` : ""} — run node scripts/check-readiness-figure.mjs`, false);
   } else {
     const j = JSON.parse(r.stdout.trim().split("\n").pop());
     add(j.headline >= j.floor ? "ok" : "warn", "Readiness (gates outreach)",
@@ -1800,10 +1951,10 @@ for (const [label, script] of [
 ]) {
   if (!existsSync(resolve(repo, script))) { add("warn", label, "gate not on this branch"); continue; }
   try {
-    execFileSync("node", [script], { cwd: repo, stdio: "ignore", env: gitEnv() });
+    execFileSync("node", [script], { cwd: repo, stdio: "ignore", env: gitEnv(), timeout: GIT_LIMITS.childMs, killSignal: "SIGKILL" });
     add("ok", label, "green");
-  } catch {
-    add("fail", label, `run: node ${script}`);
+  } catch (e) {
+    add("fail", label, `${e && e.code === "ETIMEDOUT" ? `could not be read: timed out after ${GIT_LIMITS.childMs / 1000} s — ` : ""}run: node ${script}`);
   }
 }
 
@@ -1849,7 +2000,7 @@ function stateFreshness(lastTouchedISO, newestCommitISO) {
 // false — a blocker to address, not a code defect that should block a push.
 {
   try {
-    const out = execFileSync("node", [resolve(repo, "scripts/check-raised-hands.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv() });
+    const out = execFileSync("node", [resolve(repo, "scripts/check-raised-hands.mjs"), "--json"], { cwd: repo, encoding: "utf8", env: gitEnv(), timeout: GIT_LIMITS.childMs, killSignal: "SIGKILL" });
     const s = JSON.parse(out);
     if (s.open === 0) {
       add("ok", "Raised hands", "none open — every blocker resolved (DR-054)", false);
@@ -1866,6 +2017,8 @@ function stateFreshness(lastTouchedISO, newestCommitISO) {
 }
 
 // ── report ──────────────────────────────────────────────────────────────────
+// A git that hit its bound is ONE gated row here, whatever the caller that started it did with the empty answer (round 26: nothing but the Hub listing had a bound, and a hang produced no verdict at all).
+{ const t = timeoutRow(); if (t) add(t.state, t.what, t.detail, t.gated); }
 const icon = { ok: `${G}✓${X}`, warn: `${Y}!${X}`, fail: `${R}✗${X}` };
 for (const r of rows) console.log(`  ${icon[r.state]} ${r.what.padEnd(42)} ${D}${r.detail}${X}`);
 
@@ -1886,6 +2039,17 @@ console.log(
 process.exitCode = gatedFails.length ? 1 : 0;
 
 
+// The closing lines of the self-test, pure so a case can pin them: one line per failed case, one per precondition the platform did not offer, the verdict LAST.
+function selfTestSummaryLines(checks, notOnOffer) {
+  const failedCases = checks.filter(([, ok]) => !ok);
+  return [
+    ...failedCases.map(([name]) => `FAILED: ${name}`),
+    ...notOnOffer.map(([name, why]) => `precondition not on offer on this platform: ${why} (${name})`),
+    ...(notOnOffer.length ? [`self-test: ${notOnOffer.length} case(s) with a precondition not reproducible on this platform, listed above; each still asserted the guarded answer`] : []),
+    failedCases.length ? `self-test FAILED (${checks.length - failedCases.length}/${checks.length})` : `self-test passed (${checks.length}/${checks.length})`,
+  ];
+}
+
 // ── Self-test: the landed and ahead checks can actually fail ────────────────
 // Builds a throwaway repository under the system temp dir (never inside this checkout —
 // an untracked file here flips provenance.workingTreeClean on every later sim result),
@@ -1897,7 +2061,10 @@ function selfTest() {
   // configuration and no system one, and no GIT_SSL_NO_VERIFY. (The environment's own GIT_CONFIG_COUNT entries stay: they are command-line scope and several cases read them.)
   const callerGitEnv = Object.fromEntries(["GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_SSL_NO_VERIFY"].map((k) => [k, process.env[k]]));
   const emptyGlobalConfig = join(root, "empty-global.gitconfig");
-  writeFileSync(emptyGlobalConfig, "");
+  // "Empty" in everything that changes an answer. The two advice switches are presentation only: git 2.54 prints a six-line hint to stderr every time it reads a grafts file, and the fixtures read
+  // grafts files hundreds of times; the hints buried the one line a Mac run needed in its tail (round 26). GIT_ADVICE=0 (git 2.46+) is the same switch for a git that has it.
+  writeFileSync(emptyGlobalConfig, "[advice]\n\tgraftFileDeprecated = false\n\tdetachedHead = false\n");
+  const callerAdvice = process.env.GIT_ADVICE; process.env.GIT_ADVICE = "0";
   process.env.GIT_CONFIG_GLOBAL = emptyGlobalConfig; process.env.GIT_CONFIG_NOSYSTEM = "1"; delete process.env.GIT_SSL_NO_VERIFY;
   const work = join(root, "work"), hub = join(root, "hub.git");
   const g = gitIn(work);
@@ -1913,6 +2080,14 @@ function selfTest() {
   const verdictOf = (b, map = hubMap()) => sameNameVerdict(b, map.get(b), map, work);
   const checks = [];
   const check = (name, ok) => { checks.push([name, ok]); console.log(`  ${ok ? "ok  " : "FAIL"} — self-test: ${name}`); };
+  // A case whose PRECONDITION is a platform behaviour (a resource cap that makes git fail, a corrupt file that makes it exit non-zero): when the platform does not offer it, the case says so by name, in the
+  // summary, and STILL asserts the guarded answer (the check under test is not excused). Never a silent pass, never a failure of the check under test.
+  const notOnOffer = [];
+  const checkWithPrecondition = (name, offered, reason, guarded) => {
+    if (offered) return check(name, guarded);
+    notOnOffer.push([name, reason]);
+    return check(`${name} [precondition not on offer on this platform: ${reason}; the guarded answer is asserted without it]`, guarded);
+  };
   try {
     execFileSync("git", ["init", "-q", "--bare", hub]);
     execFileSync("git", ["init", "-q", "-b", "main", work]);
@@ -2027,13 +2202,16 @@ function selfTest() {
     writeFileSync(graftsFile, `${g1o} ${g1t}\n${g1b} ${g1t}\n`);
     const g2v = verdictOf("g1x"), g2a = aheadOfHub("g1x", hubMap().get("g1x"), work);
     const g2raw = raw("for-each-ref", "--contains", g1t, "--format=%(refname:lstrip=3)", "refs/remotes/origin").split("\n").includes("g1o");
+    // git 2.54 DEPRECATES the grafts file ("a future Git version" removes it): a case whose precondition is "git applies this graft" says so by name when a git does not, and STILL asserts the guarded answer, which does not depend on git
+    // (graftsState reads the file itself and any non-empty file blocks). Round 26; the Mac runner has git 2.54.
+    const graftCheck = (name, applied, guarded) => checkWithPrecondition(name, applied, "this git does not apply a grafts file (deprecated since git 2.54, to be removed)", guarded);
     const g2n = hubNamesHoldingTip("g1x", hubMap(), work); // called directly, under the grafts file
     unlinkSync(graftsFile);
-    check("a grafts file that makes origin/g1o a parent of the unpushed tip is not confirmed, and the row reason names the file (d-G2)",
-      g2raw && g2v.state === "ahead" && g2v.ahead === null && String(g2v.reason).includes(graftsFile) && /graft file present/.test(g2v.reason));
+    graftCheck("a grafts file that makes origin/g1o a parent of the unpushed tip is not confirmed, and the row reason names the file (d-G2)", g2raw,
+      g2v.state === "ahead" && g2v.ahead === null && String(g2v.reason).includes(graftsFile) && /graft file present/.test(g2v.reason));
     check("aheadOfHub under a grafts file reads unknown with the file named, never same (d-G2b)",
       g2a.state === "unknown" && String(g2a.reason).includes(graftsFile));
-    check("hubNamesHoldingTip itself names no holder while a grafts file is in force, not only the verdict above it (d-G2l)", g2raw && g2n.length === 0);
+    graftCheck("hubNamesHoldingTip itself names no holder while a grafts file is in force, not only the verdict above it (d-G2l)", g2raw, g2n.length === 0);
     const g2r = sameNameRows([{ branch: "g1x", ...g2v }]);
     check("the fail row carries the reason and prints no invented count (d-G2c)", g2r.level === "fail" && g2r.detail.startsWith("g1x (count unreadable)") && g2r.detail.includes(graftsFile));
     check("with the grafts file removed the same branch reads ahead by one and carries no reason (d-G2d)", graftsState(work).state === "absent" && verdictOf("g1x").ahead === 1 && !verdictOf("g1x").reason);
@@ -2064,8 +2242,8 @@ function selfTest() {
     writeFileSync(graftsFile, `${g1o} ${g1t}\n`);
     const g2iBefore = rawApplied();
     const g2i = withEnv("", () => ({ raw: rawApplied(), st: graftsState(work), blk: graftsBlock(work), v: verdictOf("g1x") })); unlinkSync(graftsFile);
-    check("GIT_GRAFT_FILE='' disables grafts in git over a real info/grafts file; here it is no block and says grafts are disabled (d-G2i)",
-      g2iBefore === true && g2i.raw === false && g2i.st.state === "disabled" && g2i.blk === "" && /GIT_GRAFT_FILE=''/.test(g2i.st.note) && g2i.v.state === "ahead" && g2i.v.ahead === 1 && !g2i.v.reason);
+    graftCheck("GIT_GRAFT_FILE='' disables grafts in git over a real info/grafts file; here it is no block and says grafts are disabled (d-G2i)", g2iBefore === true,
+      g2i.raw === false && g2i.st.state === "disabled" && g2i.blk === "" && /GIT_GRAFT_FILE=''/.test(g2i.st.note) && g2i.v.state === "ahead" && g2i.v.ahead === 1 && !g2i.v.reason);
     // (d-G2j) git's own off switches: /dev/null, and a path that does not exist (while a real info/grafts sits at the default place)
     writeFileSync(graftsFile, `${g1o} ${g1t}\n`);
     const g2j = ["/dev/null", join(root, "no-such-grafts")].map((v) => withEnv(v, () => ({ raw: rawApplied(), blk: graftsBlock(work) }))); unlinkSync(graftsFile);
@@ -2074,8 +2252,8 @@ function selfTest() {
     // relative to the caller, so only git's own answer finds the file (the raw env value resolved against the subdirectory and read "none")
     const relGrafts = join(work, "rel-grafts"), subDir = join(work, "sub"); mkdirSync(subDir); writeFileSync(relGrafts, `${g1o} ${g1t}\n`);
     const g2k = withEnv("rel-grafts", () => ({ raw: rawApplied(subDir), fromSub: graftsBlock(subDir), fromTop: graftsBlock(work) })); unlinkSync(relGrafts); rmSync(subDir, { recursive: true });
-    check("a relative GIT_GRAFT_FILE asked from a subdirectory finds the file git applies, and names it (d-G2k)",
-      g2k.raw === true && g2k.fromSub.includes(relGrafts) && g2k.fromTop.includes(relGrafts));
+    graftCheck("a relative GIT_GRAFT_FILE asked from a subdirectory finds the file git applies, and names it (d-G2k)", g2k.raw === true,
+      g2k.fromSub.includes(relGrafts) && g2k.fromTop.includes(relGrafts));
     // (d-G2m..r) the remaining shapes graftsState's comment lists, each compared with git ITSELF through rawApplied(). A mutant that
     // treats a symlinked grafts file as absent (lstat instead of stat) passes every case above and fails d-G2n.
     const gs_m0 = rawApplied(); // the absent baseline: no file at the default place, git applies none
@@ -2087,8 +2265,8 @@ function selfTest() {
     // (d-G2n) a SYMLINK to a real grafts file: git follows it and APPLIES the graft, so it must block
     const linkTarget = join(root, "grafts-link-target"); writeFileSync(linkTarget, `${g1o} ${g1t}\n`); symlinkSync(linkTarget, graftsFile);
     const gs_n = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
-    check("a symlink to a grafts file is followed by git and blocks here, with the file named (d-G2n)",
-      gs_n.raw === true && gs_n.st.block === true && gs_n.st.state === "present" && gs_n.v.state === "ahead" && gs_n.v.ahead === null && String(gs_n.v.reason).includes(graftsFile));
+    graftCheck("a symlink to a grafts file is followed by git and blocks here, with the file named (d-G2n)", gs_n.raw === true,
+      gs_n.st.block === true && gs_n.st.state === "present" && gs_n.v.state === "ahead" && gs_n.v.ahead === null && String(gs_n.v.reason).includes(graftsFile));
     // (d-G2o) a whitespace-only file: git applies none, and here a file with content blocks (documented, conservative)
     writeFileSync(graftsFile, "  \n\t\n\n");
     const gs_o = { raw: rawApplied(), st: graftsState(work) }; unlinkSync(graftsFile);
@@ -2096,17 +2274,17 @@ function selfTest() {
     // (d-G2p) CRLF line endings: git still reads the line, so it must block
     writeFileSync(graftsFile, `${g1o} ${g1t}\r\n`);
     const gs_p = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
-    check("a CRLF grafts file is applied by git and blocks here (d-G2p)", gs_p.raw === true && gs_p.st.block === true && gs_p.v.state === "ahead" && gs_p.v.ahead === null);
+    graftCheck("a CRLF grafts file is applied by git and blocks here (d-G2p)", gs_p.raw === true, gs_p.st.block === true && gs_p.v.state === "ahead" && gs_p.v.ahead === null);
     // (d-G2q) a comment line followed by a real graft line: git applies the graft, so it must block
     writeFileSync(graftsFile, `# a comment\n${g1o} ${g1t}\n`);
     const gs_q = { raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }; unlinkSync(graftsFile);
-    check("a comment line followed by a graft line is applied by git and blocks here (d-G2q)", gs_q.raw === true && gs_q.st.block === true && gs_q.v.state === "ahead" && gs_q.v.ahead === null);
+    graftCheck("a comment line followed by a graft line is applied by git and blocks here (d-G2q)", gs_q.raw === true, gs_q.st.block === true && gs_q.v.state === "ahead" && gs_q.v.ahead === null);
     // (d-G2r) GIT_GRAFT_FILE naming ANOTHER repository's grafts file, while this repository has none of its own
     const otherRepo = join(root, "other-repo"); execFileSync("git", ["init", "-q", otherRepo]);
     const otherGrafts = join(otherRepo, ".git", "info", "grafts"); mkdirSync(join(otherRepo, ".git", "info"), { recursive: true }); writeFileSync(otherGrafts, `${g1o} ${g1t}\n`);
     const gs_r = withEnv(otherGrafts, () => ({ raw: rawApplied(), st: graftsState(work), v: verdictOf("g1x") }));
-    check("a GIT_GRAFT_FILE naming another repository's grafts is applied by git and blocks here, with that file named (d-G2r)",
-      graftsState(work).state === "absent" && gs_r.raw === true && gs_r.st.block === true && String(gs_r.v.reason).includes(otherGrafts));
+    graftCheck("a GIT_GRAFT_FILE naming another repository's grafts is applied by git and blocks here, with that file named (d-G2r)", gs_r.raw === true,
+      graftsState(work).state === "absent" && gs_r.st.block === true && String(gs_r.v.reason).includes(otherGrafts));
     // (d-G3) a local TAG named like the branch: tag tg at a commit the Hub holds under another name, branch tg two ahead of its Hub tip
     sh("checkout", "-q", "-b", "tg", "main"); sh("push", "-q", "origin", "tg"); const tgA = cm("tgA.txt", "1\n"); sh("push", "-q", "origin", "tg:refs/heads/tg-other");
     sh("tag", "tg", tgA); cm("tgU.txt", "2\n");
@@ -2727,7 +2905,7 @@ function selfTest() {
     const prodSrc = readFileSync(fileURLToPath(import.meta.url), "utf8"), prodText = prodSrc.slice(0, prodSrc.indexOf("\nfunction selfTest()"));
     // quote-agnostic (round-7 refute: a single-quoted stray was not found): any quote, execFile / spawn / exec forms, only the two allowed argument lists pass
     const strayGit = (text) => [...text.matchAll(/\b(?:execFileSync|spawnSync|execFile|spawn)\(\s*(["'`])git\1\s*,\s*(\[[^\]]{0,60})?/g)].map((m) => m[2] || "")
-      .filter((a) => !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]\s*,\s*["'`]-C["'`]/.test(a))
+      .filter((a) => !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]\s*,\s*\.\.\.GIT_EXEC_OFF\s*,/.test(a))
       .concat([...text.matchAll(/\b(?:exec|execSync)\(\s*(["'`])\s*git\b/g)].map((m) => m[0]));
     const stray = strayGit(prodText);
     check("no git is started outside gitRun (the Hub listing included since round 9), and gitEnv forces replace objects off and optional locks off whatever the caller passes (R7-spawns)",
@@ -2909,7 +3087,7 @@ function selfTest() {
     check("the stray-git scanner is quote-agnostic: double, single and backtick quotes, execFile, spawn and exec forms are all found, the two allowed forms are not (R8-spawns-scan)",
       strayGit(`execFileSync('git', ['rev-parse'])`).length === 1 && strayGit("spawnSync(`git`, [`log`])").length === 1 && strayGit(`execFile("git", ["log"], cb)`).length === 1 &&
       strayGit(`spawn('git',['status'])`).length === 1 && strayGit(`execSync("git status")`).length === 1 && strayGit(`execFileSync('git', ['ls-remote', '--heads'])`).length === 1 &&
-      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args])`).length === 0 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 1 && strayGit(prodText).length === 0);
+      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, "-C", dir, ...args])`).length === 0 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args])`).length === 1 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 1 && strayGit(prodText).length === 0);
     // ══ ROUND 9 ══ The round-8 refuter's fixtures (the proxy repository, dDetach, dShallowKL, dProbe P3, dEnv), rebuilt beside the rows they must change.
     // Each case builds the lie first (a precondition inside its own check) and then asks the guarded answer; each FAILS on the round-8 file.
     const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
@@ -2995,8 +3173,8 @@ function selfTest() {
       const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, R16_LISTED: join(root, `${name}-listed`), GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
       delete childEnv.GIT_SSL_NO_VERIFY;
       for (const [k, v] of Object.entries(vars)) if (v === null) delete childEnv[k]; // (null: unset)
-      const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: 120000, env: childEnv });
-      return { status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || ""), listed: readIfPresent(join(root, `${name}-listed`)) !== null }; // listed: the Hub listing was ASKED FOR
+      const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: opts.timeout ?? 120000, killSignal: "SIGKILL", env: childEnv });
+      return { error: r.error ? r.error.code || String(r.error) : null, status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || ""), listed: readIfPresent(join(root, `${name}-listed`)) !== null }; // listed: the Hub listing was ASKED FOR
     };
     const txe = mkFx("r9txe"); txe.f("config", "remote.origin.url", HUB);
     const txeClean = wholeScript(txe, "r9txe-a", { HTTPS_PROXY: "http://agent:pw123@127.0.0.1:9", https_proxy: "http://agent:pw123@127.0.0.1:9", ALL_PROXY: "", all_proxy: "", GIT_SSL_CAINFO: "/etc/agent/ca.pem" });
@@ -3129,7 +3307,7 @@ function selfTest() {
     const relCwd = relative(process.cwd(), en.w);
     check("every git is pinned to the repository asked about, and a relative path to it is resolved once, never compounded by -C beside the spawn's cwd (R9-env-pin)",
       !isAbsolute(relCwd) && gitRun(relCwd, ["rev-parse", "--show-toplevel"]).stdout.trim() === realpathSync(en.w) && gitRun(join(root, "no-repo-here"), ["rev-parse", "--git-dir"]).ok === false &&
-      /spawnSync\("git", \["-c", "core\.commitGraph=false", "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
+      /spawnSync\("git", \["-c", "core\.commitGraph=false", \.\.\.GIT_EXEC_OFF, \.\.\.\(network \? \[\] : GIT_CREDENTIAL_OFF\), \.\.\.driversOff, "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
     // ══ ROUND 10 ══ The round-9 refuter's two ranked items: the trusted-not-verified row must not look like a clean pass, and a key whose ORIGIN file lies inside the
     // repository is the repository's own whatever scope git names. Each case FAILS on a1b43b42.
     const cleanOfTrust = { GIT_CONFIG_COUNT: null, GIT_SSL_CAINFO: null, GIT_SSL_CAPATH: null, SSL_CERT_FILE: null, SSL_CERT_DIR: null, CURL_CA_BUNDLE: null, HTTPS_PROXY: null, https_proxy: null, ALL_PROXY: null, all_proxy: null };
@@ -3786,8 +3964,9 @@ exit 1
     mkdirSync(join(gd.w, ".git", "info"), { recursive: true }); writeFileSync(gdGraftsPath, gdGraftLine);
     const gdFile = { raw: gdCount({}), row: rowOf(gd.rows(), T_DET) }; rmSync(gdGraftsPath);
     const gdEnv = withEnvVars({ GIT_GRAFT_FILE: gdOuter }, () => ({ raw: gdCount({ GIT_GRAFT_FILE: gdOuter }), row: rowOf(gd.rows(), T_DET) }));
-    check("a graft line that makes the Hub's mainline commit a child of unpushed detached work hides it from a plain count (the precondition) but not from the check: the detached-HEAD row stays a GATED failure and names the graft file, for .git/info/grafts and for GIT_GRAFT_FILE (R25-graft-detached)",
-      !!gdPre && gdPre.gated === true && gdCount({}) === "1" && gdFile.raw === "0" && gdEnv.raw === "0" &&
+    checkWithPrecondition("a graft line that makes the Hub's mainline commit a child of unpushed detached work hides it from a plain count (the precondition) but not from the check: the detached-HEAD row stays a GATED failure and names the graft file, for .git/info/grafts and for GIT_GRAFT_FILE (R25-graft-detached)",
+      gdCount({}) === "1" && gdFile.raw === "0" && gdEnv.raw === "0", "this git does not apply a grafts file (deprecated since git 2.54, to be removed), so a plain count does not read 0 under it",
+      !!gdPre && gdPre.gated === true &&
       !!gdFile.row && gdFile.row.state === "fail" && gdFile.row.gated === true && gdFile.row.detail.includes("graft file present") && gdFile.row.detail.includes(gdGraftsPath) &&
       !!gdEnv.row && gdEnv.row.state === "fail" && gdEnv.row.gated === true && gdEnv.row.detail.includes("graft file present") && gdEnv.row.detail.includes(gdOuter));
     const gs = mkFx("r25gs");
@@ -3799,8 +3978,9 @@ exit 1
     mkdirSync(join(gs.w, ".git", "info"), { recursive: true }); writeFileSync(gsGrafts, gsLine);
     const gsFile = { raw: gsCount({}), row: rowOf(gs.rows(), T_AHEAD), warn: rowOf(gs.rows(), T_UNKNOWN) }; rmSync(gsGrafts);
     const gsEnv = withEnvVars({ GIT_GRAFT_FILE: gsOuter }, () => ({ raw: gsCount({ GIT_GRAFT_FILE: gsOuter }), row: rowOf(gs.rows(), T_AHEAD), warn: rowOf(gs.rows(), T_UNKNOWN) }));
-    check("a same-named branch whose Hub tip is not fetched, with a graft that makes a Hub-listed commit a child of its tip: a plain count reads 0 (the precondition), and the row stays a GATED 'ahead' naming the graft file, never the quiet 'not fetched' warning, for .git/info/grafts and GIT_GRAFT_FILE (R25-graft-samename)",
-      !!gsPre && gsPre.gated === true && /^feat \(\+\d+ beyond the Hub's listed commits\)/.test(gsPre.detail) && gsFile.raw === "0" && gsEnv.raw === "0" &&
+    checkWithPrecondition("a same-named branch whose Hub tip is not fetched, with a graft that makes a Hub-listed commit a child of its tip: a plain count reads 0 (the precondition), and the row stays a GATED 'ahead' naming the graft file, never the quiet 'not fetched' warning, for .git/info/grafts and GIT_GRAFT_FILE (R25-graft-samename)",
+      gsFile.raw === "0" && gsEnv.raw === "0", "this git does not apply a grafts file (deprecated since git 2.54, to be removed), so a plain count does not read 0 under it",
+      !!gsPre && gsPre.gated === true && /^feat \(\+\d+ beyond the Hub's listed commits\)/.test(gsPre.detail) &&
       !!gsFile.row && gsFile.row.state === "fail" && gsFile.row.gated === true && /feat \(count unreadable\)/.test(gsFile.row.detail) && gsFile.row.detail.includes("graft file present") && gsFile.row.detail.includes(gsGrafts) && !gsFile.warn &&
       !!gsEnv.row && gsEnv.row.state === "fail" && gsEnv.row.gated === true && /feat \(count unreadable\)/.test(gsEnv.row.detail) && gsEnv.row.detail.includes("graft file present") && gsEnv.row.detail.includes(gsOuter) && !gsEnv.warn);
     // the primitives themselves refuse under a graft, so a caller that forgets the guard is still safe (defence in depth behind the two paths above)
@@ -3822,8 +4002,9 @@ exit 1
     const mmPlain = spawnSync("git", ["rev-parse", "HEAD"], { cwd: mm.w, encoding: "utf8", env: { ...FX_ENV, GIT_ALLOC_LIMIT: "1k" } });
     const mmPlain2 = spawnSync("git", ["rev-list", "--count", "HEAD"], { cwd: mm.w, encoding: "utf8", env: { ...FX_ENV, GIT_MMAP_LIMIT: "1k" } });
     const mmRun = wholeScript(mm, "r25mm", { GIT_MMAP_LIMIT: "1k", GIT_ALLOC_LIMIT: "1k" });
-    check("GIT_ALLOC_LIMIT=1k (rev-parse) and GIT_MMAP_LIMIT=1k (rev-list, on a packed repository) in the caller's environment make a plain git fail (the precondition) and do not silence the detached-HEAD row: the check's gits ignore them, the work is reported as a GATED failure (R25-caps-env)",
-      mmPlain.status !== 0 && mmPlain2.status !== 0 && mmRun.status === 1 && /✗ Detached HEAD work not on the Review Hub\s+HEAD \(detached at [0-9a-f]{12}\) carries 1 commit\(s\)/.test(mmRun.out) &&
+    checkWithPrecondition("GIT_ALLOC_LIMIT=1k (rev-parse) and GIT_MMAP_LIMIT=1k (rev-list, on a packed repository) in the caller's environment make a plain git fail (the precondition) and do not silence the detached-HEAD row: the check's gits ignore them, the work is reported as a GATED failure (R25-caps-env)",
+      mmPlain.status !== 0 && mmPlain2.status !== 0, "this platform's git does not fail under GIT_ALLOC_LIMIT=1k / GIT_MMAP_LIMIT=1k (the caps are platform and build dependent)",
+      mmRun.status === 1 && /✗ Detached HEAD work not on the Review Hub\s+HEAD \(detached at [0-9a-f]{12}\) carries 1 commit\(s\)/.test(mmRun.out) &&
       !("GIT_MMAP_LIMIT" in withEnvVars({ GIT_MMAP_LIMIT: "1k", GIT_ALLOC_LIMIT: "1k", GIT_DIFF_OPTS: "-u0", GIT_KEEP_ME: "y" }, () => gitEnv())) && !("GIT_ALLOC_LIMIT" in withEnvVars({ GIT_ALLOC_LIMIT: "1k" }, () => gitEnv())) &&
       !("GIT_DIFF_OPTS" in withEnvVars({ GIT_DIFF_OPTS: "-u0" }, () => gitEnv())) && withEnvVars({ GIT_KEEP_ME: "y" }, () => gitEnv()).GIT_KEEP_ME === "y" &&
       ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"].every((k) => inCleanEnv(() => hubTransport(txc.w), { [k]: "1k" }).trusted.includes(`environment ${k}=1k (not passed to any git started here)`)));
@@ -3831,6 +4012,148 @@ exit 1
     const wtRun = wholeScript(wt, "r25wt", {});
     check("a git that fails while the working tree is read is a GATED 'could not be read' row, never 'clean' (a corrupt index: git status exits 128) (R25-status-failure)",
       wtRun.status === 1 && /✗ Working tree\s+could not be read \(git status failed: /.test(wtRun.out) && !/✓ Working tree\s+clean/.test(wtRun.out));
+    {
+    // ══ ROUND 26 ══ Review round 11. (1) A HEAD that is a symbolic ref to a ref outside refs/heads, and the HEAD of every linked worktree. (2) A read-only git that RUNS a program (core.fsmonitor, hooks, filters) or never returns:
+    // every git neutralised and bounded, a timeout a gated row. (3) A same-name count git cannot give. (4) The agent-worktree exemption is for linked worktrees. (5) The audit's figure. (6) A summary that survives a tail.
+    const T_LINKED = "Linked worktree HEAD work not on the Review Hub", T_AGENT_HEAD = "Agent-worktree HEADs carrying commits";
+    const x26 = (fx, msg = "X: unpushed work") => ctOf(fx, fx.f("rev-parse", "HEAD^{tree}"), msg, fx.f("rev-parse", "HEAD"));
+    const symOf = (fx) => spawnSync("git", ["symbolic-ref", "-q", "HEAD"], { cwd: fx.w, encoding: "utf8", env: FX_ENV });
+    // (1a) HEAD -> a tag: `git commit` writes through the symref, the commit lands on the tag, refs/heads never lists it
+    const sy = mkFx("r26sy"); const syL = sy.f("rev-parse", "HEAD");
+    sy.f("update-ref", "refs/tags/sneaky", syL); sy.f("symbolic-ref", "HEAD", "refs/tags/sneaky"); const syW = sy.c("w.txt", "REAL work committed through a symbolic HEAD\n", "work on a tag");
+    const syRow = rowOf(sy.rows(), T_DET);
+    check("a HEAD that is a symbolic ref to a TAG carries a commit no branch row sees (`symbolic-ref -q HEAD` exits 0, refs/heads lists only main, the commit is on the tag: the precondition), and the check gates it: a failing row naming the target ref and the commit (R26-symref-tag)",
+      symOf(sy).status === 0 && symOf(sy).stdout.trim() === "refs/tags/sneaky" && sy.f("for-each-ref", "--format=%(refname)", "refs/heads") === "refs/heads/main" && sy.f("rev-parse", "refs/tags/sneaky") === syW &&
+      !!syRow && syRow.state === "fail" && syRow.gated === true && syRow.detail.includes("symbolic ref refs/tags/sneaky, outside refs/heads") && syRow.detail.includes(syW.slice(0, 12)) && /carries 1 commit\(s\)/.test(syRow.detail));
+    // (1b) the Hub's own tracking ref
+    const st = mkFx("r26st"); const stL = st.f("rev-parse", "HEAD");
+    st.f("update-ref", "refs/remotes/origin/SignalGrid_Alpha", stL); st.f("symbolic-ref", "HEAD", "refs/remotes/origin/SignalGrid_Alpha"); const stW = st.c("w.txt", "REAL work committed onto the tracking ref\n", "work on the tracking ref");
+    const stRow = rowOf(st.rows(), T_DET);
+    check("a HEAD that is a symbolic ref to the Hub's own tracking ref (refs/remotes/origin/SignalGrid_Alpha) carrying an unheld commit is a gated failure naming that ref (R26-symref-tracking)",
+      symOf(st).status === 0 && st.f("rev-parse", "refs/remotes/origin/SignalGrid_Alpha") === stW && !!stRow && stRow.state === "fail" && stRow.gated === true && stRow.detail.includes("refs/remotes/origin/SignalGrid_Alpha") && /carries 1 commit\(s\)/.test(stRow.detail));
+    // (1c) a symbolic HEAD whose target does not exist (not an unborn BRANCH, which is the normal state of a new repository)
+    const sm = mkFx("r26sm"); sm.f("symbolic-ref", "HEAD", "refs/tags/nowhere");
+    const smRow = rowOf(sm.rows(), T_DET);
+    check("a HEAD that is a symbolic ref to a ref that does not exist is a GATED unreadable row naming the ref, never 'no detached work' (R26-symref-missing)",
+      symOf(sm).status === 0 && !!smRow && smRow.state === "fail" && smRow.gated === true && smRow.detail.startsWith("HEAD is a symbolic ref to refs/tags/nowhere and unreadable: ") && smRow.detail.includes("unknown is not clean"));
+    // (1d) what must NOT be reported: an attached HEAD, an unborn branch, a symref whose target is a commit the Hub holds
+    const sc = mkFx("r26sc"); const scL = sc.f("rev-parse", "HEAD"); const scAttached = rowOf(sc.rows(), T_DET);
+    sc.f("update-ref", "refs/tags/held", scL); sc.f("symbolic-ref", "HEAD", "refs/tags/held"); const scHeld = rowOf(sc.rows(), T_DET);
+    sc.f("symbolic-ref", "HEAD", "refs/heads/unborn-branch"); const scUnborn = rowOf(sc.rows(), T_DET);
+    check("no false alarm: an attached HEAD, an unborn branch, and a symbolic ref to a tag at a commit the Hub lists each produce no detached-HEAD row (R26-symref-controls)", !scAttached && !scHeld && !scUnborn);
+    // (2) the HEAD of a LINKED worktree
+    const lw = mkFx("r26lw"); const lwX = x26(lw); const lwDir = join(root, "r26lw-wt"); lw.f("worktree", "add", "--detach", lwDir, lwX);
+    const lwSym = spawnSync("git", ["-C", lwDir, "symbolic-ref", "-q", "HEAD"], { encoding: "utf8", env: FX_ENV });
+    const lwRows = lw.rows(), lwRow = rowOf(lwRows, T_LINKED), lwInside = lw.rows({ cwd: lwDir });
+    check("a linked worktree on a detached HEAD at an unheld commit (`git worktree add --detach`: its own `symbolic-ref -q HEAD` exits 1, the main worktree is attached: the precondition) is a gated failure naming the worktree and the commit; run FROM that worktree the same commit is the checkout's own detached-HEAD row and is not reported twice (R26-linked-detached)",
+      lwSym.status === 1 && !rowOf(lwRows, T_DET) && !!lwRow && lwRow.state === "fail" && lwRow.gated === true && lwRow.detail.includes(realpathSync(lwDir)) && lwRow.detail.includes(lwX.slice(0, 12)) &&
+      !!rowOf(lwInside, T_DET) && rowOf(lwInside, T_DET).gated === true && rowOf(lwInside, T_DET).detail.includes(lwX.slice(0, 12)) && !rowOf(lwInside, T_LINKED));
+    const l2 = mkFx("r26l2"); const l2L = l2.f("rev-parse", "HEAD"), l2X = x26(l2), l2Dir = join(root, "r26l2-wt"); l2.f("worktree", "add", "--detach", l2Dir, l2L);
+    execFileSync("git", ["-C", l2Dir, "update-ref", "refs/tags/zz", l2X], { env: FX_ENV }); execFileSync("git", ["-C", l2Dir, "symbolic-ref", "HEAD", "refs/tags/zz"], { env: FX_ENV });
+    const l2Row = rowOf(l2.rows(), T_LINKED);
+    check("a linked worktree whose HEAD is a symbolic ref to a tag holding an unheld commit is a gated failure naming the ref (R26-linked-symref)",
+      !!l2Row && l2Row.gated === true && l2Row.detail.includes(realpathSync(l2Dir)) && l2Row.detail.includes("symbolic ref refs/tags/zz, outside refs/heads") && /carries 1 commit\(s\)/.test(l2Row.detail));
+    const l3 = mkFx("r26l3"); const l3L = l3.f("rev-parse", "HEAD"), l3Dir = join(root, "r26l3-wt"); l3.f("worktree", "add", "--detach", l3Dir, l3L);
+    writeFileSync(join(l3.w, ".git", "worktrees", "r26l3-wt", "HEAD"), "1234567890123456789012345678901234567890\n");
+    const l3Row = rowOf(l3.rows(), T_LINKED);
+    check("a linked worktree whose HEAD cannot be read (a sha in no object store) is a GATED unreadable row naming it, never silence (R26-linked-unreadable)",
+      !!l3Row && l3Row.state === "fail" && l3Row.gated === true && l3Row.detail.includes(realpathSync(l3Dir)) && l3Row.detail.includes("unreadable") && l3Row.detail.includes("unknown is not clean"));
+    mkdirSync(join(root, ".claude", "worktrees"), { recursive: true });
+    const l4 = mkFx("r26l4"); const l4L = l4.f("rev-parse", "HEAD"), l4X = x26(l4), l4Dir = join(root, ".claude", "worktrees", "r26l4-agent"), l4Held = join(root, "r26l4-held");
+    l4.f("worktree", "add", "--detach", l4Dir, l4X); l4.f("worktree", "add", "--detach", l4Held, l4L);
+    const l4Rows = l4.rows(), l4Agent = rowOf(l4Rows, T_AGENT_HEAD);
+    check("an AGENT worktree's detached HEAD with commits (a linked checkout under .claude/worktrees/) is the reported-never-fatal warning, the same rule as its branches, and a linked worktree at a commit the Hub holds is no row at all (R26-linked-agent)",
+      !!l4Agent && l4Agent.state === "warn" && l4Agent.gated === false && l4Agent.detail.includes(realpathSync(l4Dir)) && !rowOf(l4Rows, T_LINKED) && !rowOf(l4Rows, T_DET) && !JSON.stringify(l4Rows).includes(realpathSync(l4Held)));
+    // a worktree list git cannot give is a finding of its own, and exempts nothing
+    const wf = mkFx("r26wf"); const wfRealRun = gitRun; let wfRows, wfExempt;
+    gitRun = (cwd2, args2, opts2 = {}) => (gitSubcommand(args2) === "worktree" ? { ok: false, error: undefined, status: 128, stdout: "", stderr: "fatal: simulated failure of the worktree list\n", timedOut: false, timedMs: 0 } : wfRealRun(cwd2, args2, opts2));
+    try { wfRows = wf.rows(); wfExempt = branchesInAgentWorktrees(wf.w); } finally { gitRun = wfRealRun; }
+    const wfRow = rowOf(wfRows, T_LINKED);
+    check("a `git worktree list` that fails is a GATED row saying the other worktrees' HEADs could not be read, and exempts no branch as an agent worktree's (R26-worktree-list-failure)",
+      !!wfRow && wfRow.state === "fail" && wfRow.gated === true && wfRow.detail.includes("git worktree list failed: fatal: simulated failure of the worktree list") && wfExempt.length === 0);
+    // (4) the agent-worktree exemption is for LINKED worktrees: a repository that lives under such a path is not exempt by its own path
+    const ea = mkFx(".claude/worktrees/r26ea"); ea.f("checkout", "-q", "-b", "mine"); ea.c("m.txt", "REAL unpushed work\n", "mine");
+    const eaLinked = join(root, ".claude", "worktrees", "r26ea-linked"); ea.f("worktree", "add", "-q", "-b", "linkedbr", eaLinked);
+    const eaRun = wholeScript(ea, "r26ea", {});
+    check("a repository whose MAIN worktree lives under .claude/worktrees/ is not exempt by its path: its checked-out unpushed branch is in the gated unpushed row (the whole check exits 1), while a LINKED worktree under that path still exempts its branch (R26-agent-path-main)",
+      !branchesInAgentWorktrees(ea.w).includes("mine") && branchesInAgentWorktrees(ea.w).includes("linkedbr") && eaRun.status === 1 && /✗ Local work not on the Review Hub\s+mine\b/.test(eaRun.out) && !/Agent-worktree branches carrying commits\s+mine/.test(eaRun.out));
+    // (3) a same-name count git cannot give
+    const sn = mkFx("r26sn"); sn.f("checkout", "-q", "-b", "feat"); const snT = sn.c("f.txt", "1\n", "feat"); sn.f("push", "-q", "origin", "feat");
+    const snBroken = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin", "--literally"], { cwd: sn.w, input: `tree ${sn.f("rev-parse", "HEAD^{tree}")}\nparent ${"1".repeat(40)}\nauthor t <t@t> 0 +0000\ncommitter t <t@t> 0 +0000\n\nbroken ancestry\n`, encoding: "utf8", env: FX_ENV }).trim();
+    sn.f("update-ref", "refs/heads/feat", snBroken);
+    const snPlain = spawnSync("git", ["rev-list", "--count", "refs/heads/feat", `^${snT}`], { cwd: sn.w, encoding: "utf8", env: FX_ENV });
+    const snRows = sn.rows(), snAhead = rowOf(snRows, T_AHEAD);
+    check("a same-named branch whose ancestry is broken (a parent object absent: a plain `rev-list --count` fails, the precondition) is a GATED 'count unreadable' row carrying git's reason, never the ungated 'Hub tip is not fetched locally' warning (R26-samename-unreadable)",
+      snPlain.status !== 0 && !!snAhead && snAhead.state === "fail" && snAhead.gated === true && /feat \(count unreadable\)/.test(snAhead.detail) && /git rev-list could not count/.test(snAhead.detail) && !rowOf(snRows, T_UNKNOWN));
+    // (5) a read-only git that RUNS a program. The programs are POSIX sh scripts with an absolute shebang; each leaves a marker if it runs and sleeps if it is allowed to.
+    const progMarker = (name) => join(root, `r26-${name}.ran`);
+    const prog = (name, secs) => { const p = join(root, `r26-${name}.sh`); writeFileSync(p, `#!/bin/sh\n: >> "${progMarker(name)}"\nsleep ${secs}\n`, { mode: 0o755 }); return p; };
+    const fsEnv = prog("fsm-env", 8), fsCfg = prog("fsm-cfg", 8), fsPlain = prog("fsm-plain", 8);
+    const fsx = mkLikeUe("r26fs"); fsx.f("checkout", "-q", "-b", "work"); fsx.c("w.txt", "REAL unpushed work\n", "work");
+    spawnSync("git", ["status", "--porcelain"], { cwd: fsx.w, encoding: "utf8", env: { ...FX_ENV, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor", GIT_CONFIG_VALUE_0: fsPlain }, timeout: 3000, killSignal: "SIGKILL" });
+    const fsRunEnv = wholeScript(fsx, "r26fs-env", { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor", GIT_CONFIG_VALUE_0: fsEnv, LOOP_STATE_GIT_TIMEOUT_MS: "4000" }, { timeout: 90000 });
+    fsx.f("config", "core.fsmonitor", fsCfg);
+    const fsRunCfg = wholeScript(fsx, "r26fs-cfg", { LOOP_STATE_GIT_TIMEOUT_MS: "4000" }, { timeout: 90000 });
+    const fsOk = (run, name) => run.error === null && run.status === 1 && /✗ Local work not on the Review Hub\s+work\b/.test(run.out) && /(✓|!) Working tree/.test(run.out) && readIfPresent(progMarker(name)) === null && !/A git timed out/.test(run.out);
+    checkWithPrecondition("core.fsmonitor naming a program, set through the kept GIT_CONFIG_COUNT/KEY/VALUE environment (no repository write) or in the repository's own config, is NEUTRALISED: the program never runs (no marker), the check finishes inside its wrapper bound with the unpushed-work row and a read working tree, where an un-neutralised `git status` runs it and hangs (R26-fsmonitor)",
+      readIfPresent(progMarker("fsm-plain")) !== null, "this git did not run a core.fsmonitor program for `git status` (the hang is not reproducible here)",
+      fsOk(fsRunEnv, "fsm-env") && fsOk(fsRunCfg, "fsm-cfg"));
+    // the -c set itself, read back through git: the repository's config, the environment's and the hook path all lose to it
+    const eo = mkFx("r26eo"); const hookDir = join(root, "r26-hooks"); mkdirSync(hookDir);
+    const credProg = join(root, "r26-cred.sh"); writeFileSync(credProg, `#!/bin/sh\n: >> "${progMarker("cred")}"\n`, { mode: 0o755 });
+    writeFileSync(join(hookDir, "post-index-change"), `#!/bin/sh\n: >> "${progMarker("hook")}"\n`, { mode: 0o755 });
+    eo.f("config", "core.fsmonitor", fsCfg); eo.f("config", "core.hooksPath", hookDir); eo.f("config", "credential.helper", `!${credProg}`);
+    const eoGet = (key, extraEnv) => withEnvVars(extraEnv || {}, () => gitRun(eo.w, ["config", "--get", key]).stdout.trim());
+    const hookIdx = join(root, "r26-hook-index"), credIn = "protocol=https\nhost=example.invalid\n\n";
+    spawnSync("git", ["read-tree", "HEAD"], { cwd: eo.w, env: { ...FX_ENV, GIT_INDEX_FILE: hookIdx }, stdio: "ignore" });
+    spawnSync("git", ["credential", "fill"], { cwd: eo.w, input: credIn, env: { ...FX_ENV, GIT_TERMINAL_PROMPT: "0" }, stdio: ["pipe", "ignore", "ignore"] });
+    const hookPlainRan = readIfPresent(progMarker("hook")) !== null, credPlainRan = readIfPresent(progMarker("cred")) !== null;
+    for (const m of ["hook", "cred"]) if (readIfPresent(progMarker(m)) !== null) unlinkSync(progMarker(m));
+    gitRun(eo.w, ["read-tree", "HEAD"], { env: { GIT_INDEX_FILE: hookIdx } });
+    gitRun(eo.w, ["credential", "fill"], { input: credIn, env: { GIT_TERMINAL_PROMPT: "0" } });
+    checkWithPrecondition("every git started here is run with core.fsmonitor=false, core.hooksPath=/dev/null and credential.helper reset, whatever the repository's config or GIT_CONFIG_COUNT says: read back through git, and a post-index-change hook that a plain read-tree runs and a credential helper that a plain `credential fill` runs (the preconditions) never run under gitRun (R26-exec-off)",
+      hookPlainRan && credPlainRan, "this git ran no post-index-change hook for read-tree and/or no credential helper for `credential fill`",
+      eoGet("core.fsmonitor") === "false" && eoGet("core.fsmonitor", { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor", GIT_CONFIG_VALUE_0: fsEnv }) === "false" && eoGet("core.hooksPath") === "/dev/null" &&
+      gitRun(eo.w, ["config", "--get-all", "credential.helper"]).stdout.endsWith("\n\n") && eo.f("config", "--get", "core.fsmonitor") === fsCfg && readIfPresent(progMarker("hook")) === null && readIfPresent(progMarker("cred")) === null &&
+      JSON.stringify(GIT_EXEC_OFF) === JSON.stringify(["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "advice.graftFileDeprecated=false"]) && JSON.stringify(GIT_CREDENTIAL_OFF) === JSON.stringify(["-c", "credential.helper="]));
+    // the filter drivers: a clean filter named in the repository's config runs in a plain `git status` on a stat-dirty file and not in the check's
+    const fl = mkFx("r26fl"); fl.put(".gitattributes", "*.dat filter=evil\n"); fl.put("a.dat", "x\n"); fl.f("add", "-A"); fl.f("commit", "-q", "-m", "dat");
+    const flProg = join(root, "r26-clean.sh"); writeFileSync(flProg, `#!/bin/sh\n: >> "${progMarker("filter")}"\ncat\n`, { mode: 0o755 });
+    fl.f("config", "filter.evil.clean", flProg); fl.put("a.dat", "y\n");
+    spawnSync("git", ["status", "--porcelain"], { cwd: fl.w, env: FX_ENV, stdio: "ignore" });
+    const flPlainRan = readIfPresent(progMarker("filter")) !== null; if (flPlainRan) unlinkSync(progMarker("filter"));
+    const flRow = workingTreeRow(fl.w), flRan = readIfPresent(progMarker("filter")) !== null;
+    fl.f("config", "filter.evil.required", "true"); const flReq = workingTreeRow(fl.w);
+    checkWithPrecondition("a filter.<driver>.clean named in the repository's config does not run in the check's `git status` (no marker; the row still reports the modified file), and a REQUIRED driver, which then fails the status, is a gated 'could not be read' row, never 'clean' (R26-filter-off)",
+      flPlainRan, "this git did not run the clean filter for a plain `git status` on a stat-dirty file",
+      !flRan && flRow.state === "warn" && /1 uncommitted file/.test(flRow.detail) && flReq.state === "fail" && flReq.gated === true && /could not be read/.test(flReq.detail));
+    // (6) TIME: every spawn has a bound, a git that exceeds it is ONE gated row, and a bound can only be shortened
+    const slowGit = (dir, next) => { mkdirSync(dir); writeFileSync(join(dir, "git"), `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "status" ]; then sleep 4; : > "${progMarker("slow-done")}"; exit 0; fi\ndone\nexec "${next}" "$@"\n`, { mode: 0o755 }); return dir; };
+    const toBin = slowGit(join(root, "r26-timeout-bin"), realGit), toBin2 = slowGit(join(root, "r26-timeout-bin2"), join(fakeBin, "git"));
+    const tx = mkFx("r26to"); tx.put("dirty.txt", "x\n");
+    const toSaved = GIT_LIMITS.localMs; GIT_LIMITS.localMs = 600; const toBefore = gitTimeouts.length;
+    let toRow, toRowFinal;
+    try { withEnvVars({ PATH: `${toBin}:${process.env.PATH}` }, () => { toRow = workingTreeRow(tx.w); toRowFinal = timeoutRow(); }); } finally { GIT_LIMITS.localMs = toSaved; }
+    const toRecorded = gitTimeouts.splice(toBefore);
+    check("a git that outlives its bound is killed and reads as a GATED 'could not be read: git status timed out after 0.6 s', never 'clean' and never silence; it is recorded once for the closing 'A git timed out' row; the slow git never finished (R26-timeout)",
+      toRow.state === "fail" && toRow.gated === true && toRow.detail.includes("git status failed: timed out after 0.6 s") && toRecorded.length === 1 && toRecorded[0].cmd === "status" && toRecorded[0].ms === 600 &&
+      !!toRowFinal && toRowFinal.state === "fail" && toRowFinal.gated === true && toRowFinal.detail === "could not be read: git status timed out after 0.6 s - what it would have answered is unknown, and unknown is not clean" && readIfPresent(progMarker("slow-done")) === null && gitTimeouts.length === toBefore);
+    const toRun = wholeScript(tx, "r26to-e2e", { PATH: `${toBin2}:${fakeBin}:${process.env.PATH}`, LOOP_STATE_GIT_TIMEOUT_MS: "1500" }, { timeout: 90000 });
+    check("the whole check, with a `git status` that never returns and a bound shortened to 1.5 s, finishes with exit 1, a gated 'Working tree could not be read ... timed out' row and the closing 'A git timed out' row (R26-timeout-e2e)",
+      toRun.error === null && toRun.status === 1 && /✗ Working tree\s+could not be read \(git status failed: timed out after 1\.5 s\)/.test(toRun.out) && /✗ A git timed out\s+could not be read: git status timed out after 1\.5 s/.test(toRun.out) && readIfPresent(progMarker("slow-done")) === null);
+    check("the bounds are named (localMs 120 s, the Hub listing's hubMs 60 s as always, childMs for the children), LOOP_STATE_GIT_TIMEOUT_MS can only lower them, and every spawn passes its bound (R26-bounds)",
+      GIT_LIMITS.localMs <= 120000 && GIT_LIMITS.hubMs <= 60000 && GIT_LIMITS.childMs <= 300000 && /const GIT_LIMITS = \{ localMs: 120000, hubMs: 60000, childMs: 300000 \}/.test(prodText) && /Math\.min\(GIT_LIMITS\[f\], k\)/.test(prodText) &&
+      /timeout: ms, killSignal: "SIGKILL"/.test(prodText) && (prodText.match(/timeout: GIT_LIMITS\.childMs, killSignal: "SIGKILL"/g) || []).length === 3);
+    // (7) the audit's figure is a measured one and the eight names are classed
+    const measured = ["GIT_CURL_FTP_NO_EPSV", "GIT_HTTP_LOW_SPEED_LIMIT", "GIT_HTTP_LOW_SPEED_TIME", "GIT_HTTP_MAX_REQUESTS", "GIT_HTTP_USER_AGENT", "GIT_PROXY_SSL_CERT_PASSWORD_PROTECTED", "GIT_SMART_HTTP", "GIT_SSL_CERT_PASSWORD_PROTECTED"];
+    check("the environment audit's header names the measured figure and the command that measures it (not '160-odd'), and each of the eight names no list carried is classed with its reason (R26-audit-figure)",
+      !prodText.includes("160-odd") && prodText.includes("| wc -l` printed 181 for git 2.43.0") && prodText.includes("strings -a git git-remote-http git-http-fetch | grep -E '^GIT_[A-Z0-9_]+$' | sort -u | wc -l") && measured.every((n) => prodText.includes(n)) && prodText.includes("TRANSPORT TUNING"));
+    // (8) the summary a tail survives
+    const sumLines = selfTestSummaryLines([["case one", true], ["case two", false], ["case three", true]], [["case three", "a cap git did not honour"]]);
+    check("the self-test's summary names every failed case on a line of its own, every precondition the platform did not offer, and ends with the verdict, so a short tail names what failed (R26-summary)",
+      sumLines.join("\n") === "FAILED: case two\nprecondition not on offer on this platform: a cap git did not honour (case three)\nself-test: 1 case(s) with a precondition not reproducible on this platform, listed above; each still asserted the guarded answer\nself-test FAILED (2/3)" &&
+      selfTestSummaryLines([["a", true]], []).join("\n") === "self-test passed (1/1)");
+    }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.
     const ixSeen = [], realGitRun = gitRun;
@@ -3936,9 +4259,13 @@ exit 1
     check(`self-test harness ran without throwing (${e && e.message ? e.message.split("\n")[0] : e})`, false);
   } finally {
     for (const [k, v] of Object.entries(callerGitEnv)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    if (callerAdvice === undefined) delete process.env.GIT_ADVICE; else process.env.GIT_ADVICE = callerAdvice;
     try { rmSync(root, { recursive: true, force: true }); } catch { /* temp dir */ }
   }
-  const failed = checks.filter(([, ok]) => !ok).length;
-  console.log(failed ? `self-test FAILED (${checks.length - failed}/${checks.length})` : `self-test passed (${checks.length}/${checks.length})`);
+  const failedCases = checks.filter(([, ok]) => !ok);
+  const failed = failedCases.length;
+  // THE SUMMARY, last, so a short tail of the output names what failed (round 26: the Mac job's tail was the last thirty lines of a flood of git hints and named nothing). One line per failed case, one per
+  // precondition the platform did not offer, then the verdict.
+  for (const l of selfTestSummaryLines(checks, notOnOffer)) console.log(l);
   return failed ? 1 : 0;
 }

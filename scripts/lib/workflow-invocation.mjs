@@ -110,7 +110,22 @@ function isStepRun(lines, i, m, keyCol) {
     const ind = indentOf(l);
     if (ind > dashCol) continue;
     if (ind === dashCol && /^[ \t]*-([ \t]|$)/.test(l)) continue; // a sibling list item
-    return /^[ \t]*steps:[ \t]*$/.test(l);
+    if (!/^[ \t]*steps:[ \t]*$/.test(l)) return false;
+    // `steps:` must be a job's key: its parent a job id, whose parent is `jobs:` (a `steps:` under `with:` or inside
+    // a script body is not). A bare snippet with no parent at all is accepted (the parity self-test's fixtures).
+    const sInd = indentOf(l);
+    const parentOf = (from, below) => {
+      for (let k = from - 1; k >= 0; k--) {
+        if (lines[k].trim() === "") continue;
+        if (indentOf(lines[k]) < below) return k;
+      }
+      return -1;
+    };
+    const job = parentOf(j, sInd);
+    if (job < 0) return true;
+    if (!/^[ \t]*[\w.-]+:[ \t]*$/.test(lines[job])) return false;
+    const jobs = parentOf(job, indentOf(lines[job]));
+    return jobs < 0 ? true : /^[ \t]*jobs:[ \t]*$/.test(lines[jobs]);
   }
   return true; // a bare `- run:` snippet with no parent key at all (the parity self-test's fixtures); no real workflow has one
 }

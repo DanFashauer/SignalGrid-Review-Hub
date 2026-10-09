@@ -159,10 +159,20 @@ export function stepsAssignments(source) {
   return plain + destructured;
 }
 
+/** A plain STEPS element: `{ name: "…", cmd: ["…", …], <key>: <literal | identifier | regex | flat object of those> … }`
+ *  on the string-masked view. */
+const STEP_LIT = String.raw`(?:true|false|"\u0001*"|'\u0001*'|\`\u0001*\`|\d+|[A-Za-z_$][\w$]*|\/(?:[^\/\n\\]|\\.)+\/[a-z]*)`;
+const STEP_KEY = String.raw`[A-Za-z_$][\w$]*`;
+const STEP_FLAT = String.raw`\{\s*(?:${STEP_KEY}\s*:\s*${STEP_LIT}\s*,?\s*)*\}`;
+const STEP_ELEMENT = new RegExp(String.raw`^\s*\{\s*name:\s*(["'\`])\u0001*\1\s*,\s*cmd:\s*\[[^\[\]{}()?&|=<>]*\](?:\s*,\s*${STEP_KEY}\s*:\s*(?:${STEP_LIT}|${STEP_FLAT}))*\s*,?\s*\}\s*$`);
+
 /** Pure: why the `STEPS` list cannot be trusted as the list the runner iterates — empty when it can. The
  *  declaration must end at its closing bracket with `;` (so `.filter(…)`/`.slice(…)` post-processing is out)
  *  and nothing may mutate it afterwards (`.splice`, `.pop`, `.length = …`, …). Reads (`.map`, `for…of`) are fine.
- *  Stated limit: a list changed through an ALIAS (`const s = STEPS; s.length = 0`) is not seen. */
+ *  Stated limit: a list changed through an ALIAS (`const s = STEPS; s.length = 0`) is not seen.
+ *  Defense in depth: the `stepsAssignments === 1` check and the line-start anchor in `selfTestFilesInSteps` are subsumed
+ *  by the reference whitelist above (mutants of either change no verdict); they stay so that a later loosening of one
+ *  layer does not silently loosen the answer. */
 export function stepsMutations(source) {
   const m = stripComments(source, { maskStrings: true });
   const out = [];
@@ -174,8 +184,33 @@ export function stepsMutations(source) {
       else if (m[k] === "]" && --depth === 0) { end = k; break; }
     }
     if (end < 0 || !/^\s*;/.test(m.slice(end + 1))) out.push("the STEPS declaration does not end at its closing bracket with `;` (post-processed?)");
+    else {
+      // Every element must be a plain `{ name: "…", cmd: ["…", …], <key>: <literal | flat object> … }` object: no spread,
+      // ternary, arrow function, `&&`, nested object that could be an entry, or any expression that might not run.
+      const body = m.slice(open.index + open[0].length, end);
+      const els = [];
+      let d = 0, cur = "";
+      for (const c of body) {
+        if ("{[(".includes(c)) d++;
+        if ("}])".includes(c)) d--;
+        if (c === "," && d === 0) { els.push(cur); cur = ""; } else cur += c;
+      }
+      if (cur.trim() !== "") els.push(cur);
+      const bad = els.filter((e) => e.trim() !== "" && !STEP_ELEMENT.test(e));
+      if (bad.length > 0) out.push(`${bad.length} STEPS element(s) are not plain \`{ name, cmd, … }\` object literals (a spread, conditional, arrow function or other expression might never run)`);
+    }
   }
-  if (/\bSTEPS\s*\.\s*(?:splice|pop|shift|unshift|push|sort|reverse|fill|copyWithin)\b|\bSTEPS\s*\.\s*length\s*=(?!=)/.test(m)) out.push("STEPS is mutated after its declaration");
+  // Every reference to STEPS other than its declaration must be a pure read: `of STEPS)`, or a read-only method/length.
+  const refs = [...m.matchAll(/\bSTEPS\b/g)].filter((x) => x.index !== (open ? open.index + open[0].search(/STEPS/) : -1));
+  const readOk = (i) => {
+    const before = m.slice(Math.max(0, i - 12), i);
+    const after = m.slice(i + 5, i + 5 + 40);
+    if (/\bof\s+$/.test(before) && /^\s*\)/.test(after)) return true;
+    if (/^\s*\.\s*(?:map|filter|forEach|some|every|find|findIndex|reduce|flatMap|slice|includes|entries|keys|values|at)\s*\(/.test(after)) return !/\?\s*\.\s*$/.test(before);
+    if (/^\s*\.\s*length\b/.test(after)) return !/^\s*\.\s*length\s*(?:--|\+\+|[-+*\/%&|^]?=(?!=)|\*\*=|&&=|\|\|=|\?\?=)/.test(after);
+    return false;
+  };
+  if (refs.some((r) => !readOk(r.index))) out.push("STEPS is referenced other than as a read (mutated, aliased, indexed or passed on)");
   return out;
 }
 
@@ -440,6 +475,25 @@ function selfTest() {
     const E = '{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }';
     red("a post-processed STEPS list is reported even when every gate is fine", mkTree("red-steps-mut", { "check-good.mjs": GOOD_ST }, { breadth: "const STEPS = [].filter(() => true);\n" }), "verify-breadth.mjs", /post-processed/);
     red("a mutated STEPS list is reported even when every gate is fine", mkTree("red-steps-mut2", { "check-good.mjs": GOOD_ST }, { breadth: "const STEPS = [];\nSTEPS.pop();\n" }), "verify-breadth.mjs", /mutated/);
+    for (const [label, decl] of [
+      ["a false-ternary spread element", `const STEPS = [...(false ? [${E}] : [])];\n`],
+      ["an arrow-function element", `const STEPS = [() => (${E})];\n`],
+      ["a `false && entry` element", `const STEPS = [false && ${E}];\n`],
+      ["a conditional entry", `const STEPS = [process.argv.length > 99 ? ${E} : null];\n`],
+      ["an entry nested in another object", `const STEPS = [{ wrap: ${E} }];\n`],
+      ["a `.length -= 1` mutation", `const STEPS = [${E}];\nSTEPS.length -= 1;\n`],
+      ["a `.length--` mutation", `const STEPS = [${E}];\nSTEPS.length--;\n`],
+      ["a `STEPS[0] = null` write", `const STEPS = [${E}];\nSTEPS[0] = null;\n`],
+      ["a `delete STEPS[0]`", `const STEPS = [${E}];\ndelete STEPS[0];\n`],
+      ["an `Object.assign(STEPS, [])`", `const STEPS = [${E}];\nObject.assign(STEPS, []);\n`],
+      ["a `STEPS?.splice(0)`", `const STEPS = [${E}];\nSTEPS?.splice(0);\n`],
+      ["a bracket-notation splice", `const STEPS = [${E}];\nSTEPS["splice"](0);\n`],
+      ["a bracket-notation length write", `const STEPS = [${E}];\nSTEPS["length"] = 0;\n`],
+      ["a `Reflect.set(STEPS, ...)`", `const STEPS = [${E}];\nReflect.set(STEPS, "length", 0);\n`],
+      ["an `Array.prototype.splice.call(STEPS, 0)`", `const STEPS = [${E}];\nArray.prototype.splice.call(STEPS, 0);\n`],
+    ]) R(label, { breadth: decl });
+    R("a `steps:` key nested under `with:`", { workflow: `      - uses: actions/github-script@v7\n        with:\n          steps:\n            - run: ${CMD}\n` });
+    R("a `steps:` line inside a script body", { workflow: `      - uses: actions/github-script@v7\n        with:\n          script: |\n            steps:\n              - run: ${CMD}\n` });
     R("a STEPS list post-processed with .filter(() => false)", { breadth: `const STEPS = [${E}].filter(() => false);\n` });
     R("a STEPS list emptied with .length = 0", { breadth: `const STEPS = [${E}];\nSTEPS.length = 0;\n` });
     R("a STEPS list emptied with .splice(0)", { breadth: `const STEPS = [${E}];\nSTEPS.splice(0);\n` });
@@ -499,6 +553,11 @@ function selfTest() {
     m = join(tmp, "m4");
     green("a gate registered through a package.json alias (preflight and workflow) is NOT spawned", "green1d", { "check-alias.mjs": trapFor(m), "check-alias2.mjs": trapFor(join(tmp, "m4b")) }, { pkg: { gx: "node scripts/check-alias.mjs", gy: "node scripts/check-alias2.mjs" }, preflight: `  { name: "r", cmd: ["pnpm", "run", "gx", "--self-test"] },`, workflow: stepOf("pnpm run gy --self-test") }, m);
     green("a spawned self-test runs with the tree root as its cwd", "green-cwd", { "check-cwd.mjs": `import { existsSync } from "node:fs";\nif (process.argv.includes("--self-test")) { if (!existsSync("fixture-marker.txt")) process.exit(1); console.log("self-test ok (cwd)"); }\n` });
+    {
+      const m5 = join(tmp, "m5");
+      const read = `const STEPS = [\n  { name: "r", cmd: ["node", "scripts/check-regread.mjs", "--self-test"], heavy: true, env: { A: "b", C: repo }, surface: /x\\(s\\) \\d+/ },\n];\nfor (const s of STEPS) f(s);\nconst n = new Set(STEPS.map((s) => s.cmd[2]));\nconsole.log(STEPS.length);\n`;
+      green("a STEPS list with extra literal keys that is only read is registered and NOT spawned", "green-read", { "check-regread.mjs": trapFor(m5) }, { breadth: read }, m5);
+    }
     green("a flag-less gate with a control on a code line passes", "green2", { "check-ctl.mjs": `const planted = "bad";\nif (!planted) process.exit(1);\nconsole.log("real check ok");\n` });
     let r = green("an unregistered gate whose --self-test exits 0 and names itself passes (and is spawned)", "green3", { "check-good.mjs": GOOD_ST });
     note("GREEN: …and the printed counts say it was run here", /1 run by this gate \(1 passed\)/.test(r.stdout), r.stdout.split("\n")[0]);

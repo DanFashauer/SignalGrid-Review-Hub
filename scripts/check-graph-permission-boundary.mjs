@@ -44,11 +44,14 @@
 // — that is Microsoft's published fact, not derivable from the connector (part b,
 // the msgraph-metadata OpenAPI cross-diff, would catch a wrong pairing), nor (b) that
 // the request answers on a real tenant (the live-tenant milestone).
+// Known residual (LOW): the connector scan is anchored on the rawGet/getAllPages choke point, so a read that bypasses both (a new
+// fetch path) is caught only by the single-transport-call rule; Bruno constructs outside meta/method/docs blocks are refused, not interpreted.
 //
 //   node scripts/check-graph-permission-boundary.mjs [--self-test] [--root <dir>]
 
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { REQUEST_BLOCK } from "./check-lab-collections.mjs";
@@ -123,6 +126,28 @@ export function unseenBaseUrlUses(src) {
   return [...rest.matchAll(/this\.baseUrl\b/g)].length;
 }
 
+/**
+ * Pure: reads the literal scan cannot see, anchored on the choke point. Every `this.rawGet(` / `this.getAllPages(` call must be handed a
+ * `${this.baseUrl}/…` literal (the one pager call `this.rawGet(url)` excepted), no other absolute URL may appear, and the transport is
+ * invoked in exactly one place. Returns human-readable violations.
+ */
+export function chokePointViolations(src) {
+  const out = [];
+  let pager = 0;
+  for (const m of src.matchAll(/this\.(rawGet|getAllPages)\s*(?:<[^>]*>)?\s*\(\s*([\s\S]{0,40})/g)) {
+    const arg = m[2];
+    if (arg.startsWith("`${this.baseUrl}/")) continue;
+    if (m[1] === "rawGet" && /^url\s*\)/.test(arg)) { pager += 1; continue; }
+    out.push(`this.${m[1]}(${arg.split("\n")[0].trim()}…) is not handed a \`\${this.baseUrl}/…\` literal`);
+  }
+  if (pager > 1) out.push(`${pager} pager calls \`this.rawGet(url)\` — only the one @odata.nextLink follow-up is allowed`);
+  const abs = [...src.matchAll(/https?:\/\/[^\s"'`)]+/g)].length;
+  if (abs > 1) out.push(`${abs} absolute http(s) URLs in the connector — only the one default base URL is allowed`);
+  const tr = [...src.matchAll(/this\.transport\s*\(/g)].length;
+  if (tr > 1) out.push(`the transport is invoked in ${tr} places — every read must funnel through rawGet`);
+  return out;
+}
+
 /** Pure: the connector's default Graph base URL (what `{{baseUrl}}` must resolve to), or null. */
 export function connectorDefaultBase(src) {
   const m = /config\.baseUrl\s*\?\?\s*"([^"]+)"/.exec(src);
@@ -134,13 +159,21 @@ export function collectionRequests(filesByName) {
   const fatal = [];
   const requests = [];
   for (const name of Object.keys(filesByName).sort()) {
-    if (!name.endsWith(".bru") || name === "collection.bru") continue;
+    if (name === "collection.bru") {
+      const odd = [...filesByName[name].matchAll(/^([A-Za-z][\w:-]*)\s*\{/gm)].map((b) => b[1]).filter((b) => !["auth", "auth:bearer"].includes(b));
+      if (odd.length > 0) fatal.push(`collection.bru: block(s) ${odd.join(", ")} — only auth blocks are allowed (a collection-level script could rewrite every request)`);
+      continue;
+    }
+    if (!name.endsWith(".bru")) continue;
     const m = REQUEST_BLOCK.exec(filesByName[name]);
     if (!m) { fatal.push(`${name}: no request block (method + url) found — an unparseable request file proves nothing`); continue; }
     const method = m[1].toUpperCase();
     const url = m[2];
     const line = /url:[ \t]*([^\n]*)/.exec(filesByName[name].slice(m.index))?.[1].trim() ?? url;
     if (line !== url) { fatal.push(`${name}: url line \`${line}\` has content after the first space — Bruno sends the whole line, so the gate would see a narrower request than is sent`); continue; }
+    const blocks = [...filesByName[name].matchAll(/^([A-Za-z][\w:-]*)\s*\{/gm)].map((b) => b[1]);
+    const odd = blocks.filter((b) => !["meta", "get", "post", "put", "delete", "patch", "docs"].includes(b));
+    if (odd.length > 0) { fatal.push(`${name}: Bruno block(s) ${odd.map((b) => `\`${b}\``).join(", ")} can change what is sent (query, vars, script, headers, body) and this gate reads only \`url:\` — refusing`); continue; }
     if (method !== "GET") { fatal.push(`${name}: ${method} — the Graph connector is read-only; a non-GET request asserts a write the product never makes`); continue; }
     if (!url.startsWith("{{baseUrl}}/")) { fatal.push(`${name}: url ${url} does not start with {{baseUrl}}/ — it is not the connector's transport`); continue; }
     requests.push({ file: name, method, path: url.slice("{{baseUrl}}".length) });
@@ -162,6 +195,7 @@ export function permissionRecord(jsonText) {
       const where = `permissions.json ${kind}[${i}]`;
       if (kind === "delegated") fatal.push(`${where}: the connector holds an application token and consents nothing delegated — a delegated entry is a grant the code cannot justify`);
       if (p === null || typeof p !== "object" || typeof p.permission !== "string" || !p.permission) { fatal.push(`${where}: no \`permission\` string`); return; }
+      for (const k of Object.keys(p)) if (!["permission", "usedBy", "why"].includes(k)) fatal.push(`${where} (${p.permission}): unknown key \`${k}\` — a grant outside \`permission\` would be invisible to this gate`);
       if (!Array.isArray(p.usedBy)) { fatal.push(`${where} (${p.permission}): \`usedBy\` is not an array`); return; }
       const usedBy = [];
       for (const u of p.usedBy) {
@@ -188,6 +222,7 @@ export function auditCollection(connectorSrc, bruByName, permissionsText, envTex
   const usedBy = new Set(rec.permissions.flatMap((p) => p.usedBy));
   const ub = unseenBaseUrlUses(connectorSrc);
   if (ub > 0) fatal.push(`the connector uses \`this.baseUrl\` ${ub} time(s) outside the \`\${this.baseUrl}/…\` template — a read built another way (concatenation, a helper) is invisible to this gate; build it as a literal or extend the gate`);
+  for (const v of chokePointViolations(connectorSrc)) fatal.push(`connector read the gate cannot transcribe: ${v}`);
   const defBase = connectorDefaultBase(connectorSrc);
   const envBase = typeof envText === "string" ? /^\s*baseUrl:[ \t]*(\S+)\s*$/m.exec(envText)?.[1] : undefined;
   if (!defBase) fatal.push("the connector's default base URL could not be read — refusing to conclude the collection targets the same endpoint");
@@ -210,7 +245,7 @@ export function auditCollection(connectorSrc, bruByName, permissionsText, envTex
   };
 }
 
-/** Reads the collection directory (recursively, `environments/` aside) and permissions.json. Missing or unreadable is FATAL, never a skip. */
+/** Reads the collection directory (recursively; `environments/` holds only Sandbox.bru, which is not a request) and permissions.json. Missing or unreadable is FATAL, never a skip. */
 export function loadCollection(root) {
   const fatal = [];
   const bruByName = {};
@@ -222,8 +257,9 @@ export function loadCollection(root) {
     for (const d of entries) {
       const r = rel ? `${rel}/${d.name}` : d.name;
       if (d.isSymbolicLink()) { fatal.push(`${COLLECTION_DIR}/${r}: a symlink — the gate will not follow it, so what it points at would go unchecked`); continue; }
-      if (d.isDirectory()) { if (r !== "environments") walk(r); continue; }
-      if (!d.name.endsWith(".bru")) continue;
+      if (d.isDirectory()) { walk(r); continue; }
+      if (rel === "environments") { if (d.name !== "Sandbox.bru") fatal.push(`${COLLECTION_DIR}/${r}: a second environment file — only Sandbox.bru is read, so a different baseUrl here would go unchecked`); continue; }
+      if (!d.name.endsWith(".bru")) { if (!["README.md", "bruno.json", "permissions.json"].includes(r)) fatal.push(`${COLLECTION_DIR}/${r}: an unrecognised file — a request format this gate does not read (e.g. .yml) would be invisible to it`); continue; }
       try { bruByName[r] = readFileSync(join(dir, r), "utf8"); }
       catch (e) { fatal.push(`${COLLECTION_DIR}/${r}: unreadable (${e.message})`); }
     }
@@ -364,6 +400,42 @@ function selfTest() {
   checks.push(["ROUND1: an unparseable request file is FATAL, not skipped", has(audit(csrc, b), "e.bru", "no request block")]);
   b = baseBru(); b["extra/groups.bru"] = bru("/groups");
   checks.push(["ROUND1: a nested request file is read like a top-level one (asserts more -> FATAL)", has(audit(csrc, b), "extra/groups.bru", "asserts")]);
+  // ---- review round 2 plants ----
+  const chokeBase = csrc + "\n";
+  checks.push(["ROUND2: the live connector has no choke-point violation", chokePointViolations(liveSrc).length === 0]);
+  for (const [label, extra] of [
+    ["a hard-coded absolute URL handed to getAllPages", 'return this.getAllPages("https://graph.microsoft.com/v1.0/groups?$select=id");'],
+    ["a destructured baseUrl read", "const { baseUrl } = this; return this.rawGet(`${baseUrl}/groups`);"],
+    ["bracket access to baseUrl", 'return this.rawGet(`${this["baseUrl"]}/groups`);'],
+    ["an absolute URL handed to rawGet", 'return this.rawGet("https://graph.microsoft.com/v1.0/groups");'],
+  ]) checks.push([`ROUND2: ${label} is FATAL`, has(audit(chokeBase + extra), "cannot transcribe")]);
+  checks.push(["ROUND2: a second transport call site is FATAL", has(audit(chokeBase + "return this.transport(req);\nreturn this.transport(req2);"), "transport is invoked")]);
+  for (const blk of ["params:query { $expand: manager }", "vars:pre-request { baseUrl: https://graph.microsoft.com/beta }", 'script:pre-request { req.setUrl("x") }', "headers { x: y }"]) {
+    b = baseBru(); b["b.bru"] = b["b.bru"] + "\n" + blk.replace(/ \{.*$/, " {\n  k: v\n}\n");
+    checks.push([`ROUND2: a ${blk.split(" ")[0]} block in a request is FATAL`, has(audit(csrc, b), "b.bru", blk.split(" ")[0])]);
+  }
+  b = baseBru(); b["collection.bru"] += "\nscript:pre-request {\n  x\n}\n";
+  checks.push(["ROUND2: a script block in collection.bru is FATAL", has(audit(csrc, b), "collection.bru", "script:pre-request")]);
+  o = permObj(); o.application[0].alsoGrants = ["Directory.Read.All"];
+  checks.push(["ROUND2: an extra key inside a permission entry is FATAL", has(audit(csrc, baseBru(), pj(o)), "alsoGrants")]);
+  {
+    // The CLI's own exit code, on throwaway copies outside the repo: clean -> 0, drifted -> 1.
+    const tmp = mkdtempSync(join(tmpdir(), "graph-boundary-cli-"));
+    try {
+      for (const f of [CONNECTOR, DOC, COLLECTION_DIR]) { mkdirSync(dirname(join(tmp, f)), { recursive: true }); cpSync(join(repoRoot, f), join(tmp, f), { recursive: true }); }
+      const run = () => spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--root", tmp], { encoding: "utf8" });
+      const clean = run().status;
+      rmSync(join(tmp, COLLECTION_DIR, "identityprotection-risky-users.bru"));
+      const drift = run().status;
+      checks.push(["ROUND2: the CLI exits 0 on a clean copy and 1 on a drifted one (the exit branch itself)", clean === 0 && drift === 1]);
+      cpSync(join(repoRoot, COLLECTION_DIR, "identityprotection-risky-users.bru"), join(tmp, COLLECTION_DIR, "identityprotection-risky-users.bru"));
+      writeFileSync(join(tmp, COLLECTION_DIR, "extra.yml"), "x: y\n");
+      checks.push(["ROUND2: a non-.bru request file (extra.yml) in the collection makes the CLI exit 1", run().status === 1]);
+      rmSync(join(tmp, COLLECTION_DIR, "extra.yml"));
+      writeFileSync(join(tmp, COLLECTION_DIR, "environments/Beta.bru"), "vars {\n  baseUrl: https://graph.microsoft.com/beta\n}\n");
+      checks.push(["ROUND2: a second environment file makes the CLI exit 1", run().status === 1]);
+    } finally { rmSync(tmp, { recursive: true, force: true }); }
+  }
   {
     // The loader itself, on a throwaway tree outside the repo: nested request files are read, `environments/` is not a request, a symlink is fatal.
     const tmp = mkdtempSync(join(tmpdir(), "graph-boundary-"));

@@ -7,6 +7,9 @@
   "need": "Owner decision: install the brain-cycle account trigger, or retire its row in docs/agent/scheduled-routines.json with evidence. Every PR's Mac-only check stays red until then.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
-  "routedTo": null
+  "status": "resolved",
+  "routedTo": null,
+  "resolvedAt": "2026-10-09T01:24:43.372Z",
+  "resolvedBy": "cloud",
+  "resolution": "Fixed by #1480's retire-brain-cycle-row change, ported into this branch by merge; check-scheduled-routines now passes"
 }

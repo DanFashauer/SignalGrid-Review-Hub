@@ -44,7 +44,7 @@ const HERE = dirname(SELF_FILE);
 const REPO = resolve(HERE, "..");
 const SELF = "scripts/check-scratch-git-hygiene.mjs";
 const HELPER = "scripts/lib/scratch-git.mjs";
-const DEFAULT_FLOOR = 8; // the census is 11; fail under 8 (check-walker-floors idiom)
+const DEFAULT_FLOOR = 8; // the census is 12 (11 at db962ad1); fail under 8 (check-walker-floors idiom)
 
 /** Git's own list of repo-location variables (`git rev-parse --local-env-vars`); the helper must scrub all. */
 const REQUIRED_SCRUB = [
@@ -99,9 +99,9 @@ export function stripComments(text) {
 
 const RE_MKDTEMP = /mkdtemp/;
 const RE_GIT = /["'`]git["'`]|\bgit\s/;
-const RE_INITCLONE = /["'`](?:git\s+(?:-C\s+\S+\s+)?)?(?:init|clone)\b|\bgit\s+(?:-C\s+\S+\s+)?(?:init|clone)\b/;
-const RE_IMPORT = /(?:^|\n)[ \t]*import\b[^;]*?\bfrom\s*["']([^"']+)["']/g;
-const RE_USES = /\bscratchGit(?:Ok)?\s*\(/;
+const RE_INITCLONE = /["'`](?:git\s+(?:-[cC]\s+\S+\s+)*)?(?:init|clone)\b|\bgit\s+(?:-[cC]\s+\S+\s+)*(?:init|clone)\b/;
+const RE_IMPORT = /(?:^|\n)[ \t]*import\b([^;]*?)\bfrom\s*["']([^"']+)["']/g;
+const HELPER_CALLS = ["scratchGit", "scratchGitOk"];
 
 /** @param {{path:string,text:string}[]} files @returns {string[]} paths that create scratch repos */
 export function scratchRepoCreators(files, { countComments = false } = {}) {
@@ -114,14 +114,24 @@ export function scratchRepoCreators(files, { countComments = false } = {}) {
   return out.sort();
 }
 
-/** True when the file imports the helper (specifier resolved against the file) and calls it. */
+/**
+ * True when the file imports scratchGit/scratchGitOk from the helper (specifier RESOLVED against
+ * the file; the import must sit outside any template literal, judged by backtick parity, which can
+ * only err toward "not migrated"), does not define a local function of that name, and calls it.
+ */
 export function importsHelper(f) {
   const code = stripComments(f.text);
-  let imported = false;
+  const names = new Set();
   for (const m of code.matchAll(RE_IMPORT)) {
-    if (posix.normalize(posix.join(posix.dirname(f.path), m[1])) === HELPER) imported = true;
+    if (posix.normalize(posix.join(posix.dirname(f.path), m[2])) !== HELPER) continue;
+    const ticks = (code.slice(0, m.index).match(/`/g) ?? []).length;
+    if (ticks % 2 === 1) continue; // inside a template literal
+    for (const n of HELPER_CALLS) if (new RegExp(`\\b${n}\\b`).test(m[1])) names.add(n);
   }
-  return imported && RE_USES.test(code);
+  for (const n of names) {
+    if (new RegExp(`(?:function\\s+|(?:const|let|var)\\s+)${n}\\b`).test(code.replace(RE_IMPORT, ""))) names.delete(n); // local shadow
+  }
+  return [...names].some((n) => new RegExp(`\\b${n}\\s*\\(`).test(code.replace(RE_IMPORT, "")));
 }
 
 /**
@@ -168,7 +178,7 @@ function walkMjs(root, dir = join(root, "scripts"), acc = []) {
 
 function loadFiles(root, useGit) {
   const paths = useGit
-    ? execFileSync("git", ["ls-files", "--", "scripts"], { cwd: root, encoding: "utf8", timeout: 60000 }).split("\n").filter((p) => p.endsWith(".mjs"))
+    ? execFileSync("git", ["ls-files", "-z", "--", "scripts"], { cwd: root, encoding: "utf8", timeout: 60000 }).split("\0").filter((p) => p.endsWith(".mjs"))
     : walkMjs(root);
   return paths.map((path) => ({ path, text: readFileSync(join(root, path), "utf8") }));
 }
@@ -264,12 +274,15 @@ export function helperBattery(mod, root) {
 
 // ───────────────────────── self-test ─────────────────────────
 
-async function selfTest() {
+async function selfTest({ inner = false } = {}) {
   // The self-test runs mutated, scrub-less helper copies; an ambient GIT_* must not reach them.
   for (const k of REQUIRED_SCRUB) delete process.env[k];
   const results = [];
   const check = (name, ok) => { results.push([name, ok]); console.log(`  ${ok ? "✓" : "✗"} ${name}`); };
   const tmp = mkdtempSync(join(tmpdir(), "sg-scratch-hygiene-"));
+  // Run from inside tmp: a helper that loses its `-C dir` must hit a scratch directory, not the caller's repo.
+  const cwd0 = process.cwd();
+  process.chdir(tmp);
   const T = (name) => { const d = join(tmp, name); mkdirSync(join(d, "scripts/lib"), { recursive: true }); writeFileSync(join(d, "scripts/lib/scratch-git.mjs"), "export {};\n"); return d; };
   const put = (d, rel, text) => { mkdirSync(dirname(join(d, rel)), { recursive: true }); writeFileSync(join(d, rel), text); };
   const BARE = 'import { mkdtempSync } from "node:fs";\nconst d = mkdtempSync("x");\nspawnSync("git", ["init", "-q"], { cwd: d });\n';
@@ -308,6 +321,14 @@ async function selfTest() {
   check("a PENDING row without a reason fails (exit 1)", (() => { const d = T("p1"); put(d, "scripts/x.mjs", BARE); return cli(d, ["--floor", "1"], { "scripts/x.mjs": { pr: "#1" } }).status === 1; })());
   check("a PENDING entry for a file that stopped matching the detector fails (exit 1)", (() => { const d = T("p2"); put(d, "scripts/x.mjs", "export const x = 1;\n"); return cli(d, ["--floor", "0"], { "scripts/x.mjs": row }).status === 1; })());
 
+  check("a `clone` creator is seen", seen("c1", 'const d = mkdtempSync("x");\nspawnSync("git", ["clone", "-q", "a", "b"], { cwd: d });\n'));
+  check("`git -c k=v -C ${d} init` in a template is seen", seen("e4", 'const d = mkdtempSync("x");\nexecSync(`git -c core.x=1 -C ${d} init -q`);\n'));
+  check("a doc block comment before a creator does not hide it (inBlock resets)", seen("b1", "/**\n * a doc block\n */\n" + BARE));
+  check("a non-ASCII path is read (git ls-files -z)", (() => { const d = mkdtempSync(join(tmp, "na-")); mkdirSync(join(d, "scripts"), { recursive: true }); plain(d, ["init", "-q"]); writeFileSync(join(d, "scripts", "créateur.mjs"), BARE); plain(d, ["add", "-A"]); const r = spawnSync("git", ["ls-files", "-z", "--", "scripts"], { cwd: d, encoding: "utf8" }); return r.stdout.split("\0").includes("scripts/créateur.mjs") && loadFiles(d, true).some((f) => f.path === "scripts/créateur.mjs"); })());
+  check("a PENDING row with a reason but no pr fails (exit 1)", (() => { const d = T("p3"); put(d, "scripts/x.mjs", BARE); return cli(d, ["--floor", "1"], { "scripts/x.mjs": { reason: "r" } }).status === 1; })());
+  check("a local scratchGit shadow does not count as migrated (exit 1)", (() => { const d = T("sh"); put(d, "scripts/x.mjs", 'import { SCRATCH_GIT_SCRUB } from "./lib/scratch-git.mjs";\nconst scratchGit = () => 0;\nscratchGit(1);\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
+  check("an import and call inside a multi-line template literal do not count as migrated (exit 1)", (() => { const d = T("tl"); put(d, "scripts/x.mjs", 'const fixture = `\nimport { scratchGit } from "./lib/scratch-git.mjs";\nscratchGit(d, ["status"]);\n`;\n' + BARE); return cli(d, ["--floor", "1"]).status === 1; })());
+
   // Rule mutants (in-process): break one rule; the plants for that rule must go red.
   const run = (d, pending, opts = {}) => audit(loadFiles(d, false), pending, { floor: 1, ...opts });
   const exitOf = (r) => (r.problems.length ? 1 : 0);
@@ -336,6 +357,7 @@ async function selfTest() {
     ["commit.gpgsign override deleted", (s) => s.replace('"-c", "commit.gpgsign=false",', "")],
     ["hooks override deleted", (s) => s.replace('"-c", "core.hooksPath=/dev/null",', "")],
     ["identity pin deleted", (s) => s.replace("...SCRATCH_IDENTITY, ", "")],
+    ["-C dir dropped (git acts on the caller's cwd)", (s) => s.replace('["-C", dir, ...scratchGitArgs(args)]', "[...scratchGitArgs(args)]")],
     ["opts.env ignored", (s) => s.replace("...SCRATCH_IDENTITY, ...extra }", "...SCRATCH_IDENTITY }")],
     ["opts.input ignored", (s) => s.replace("...(opts?.input === undefined ? {} : { input: opts.input }),", "")],
     ["scrubProcessGitEnv made a no-op", (s) => s.replace("export function scrubProcessGitEnv(env = process.env) {\n  for (const k of SCRATCH_GIT_SCRUB) delete env[k];", "export function scrubProcessGitEnv(env = process.env) {\n  void env;")],
@@ -349,16 +371,17 @@ async function selfTest() {
   }
 
   // The self-test itself must be hermetic: run it (once, nested) with the three variables exported at a decoy.
-  if (!process.env.SG_HYGIENE_INNER) {
+  if (!inner) {
     const decoy = victimRepo(tmp);
     const before = snap(decoy);
-    const r = spawnSync(process.execPath, [SELF_FILE, "--self-test"], {
+    const r = spawnSync(process.execPath, [SELF_FILE, "--self-test", "--inner"], {
       encoding: "utf8", timeout: 600000,
-      env: { ...process.env, SG_HYGIENE_INNER: "1", GIT_DIR: join(decoy, ".git"), GIT_WORK_TREE: decoy, GIT_INDEX_FILE: join(decoy, ".git", "index") },
+      env: { ...process.env, GIT_DIR: join(decoy, ".git"), GIT_WORK_TREE: decoy, GIT_INDEX_FILE: join(decoy, ".git", "index") },
     });
     check("the self-test under GIT_DIR+GIT_WORK_TREE+GIT_INDEX_FILE passes and leaves the decoy repo untouched", r.status === 0 && snap(decoy) === before);
   }
 
+  process.chdir(cwd0);
   rmSync(tmp, { recursive: true, force: true });
   const failed = results.filter(([, ok]) => !ok).length;
   console.log(`self-test: ${results.length - failed}/${results.length} passed`);
@@ -366,7 +389,7 @@ async function selfTest() {
 }
 
 async function main(argv) {
-  if (argv.includes("--self-test")) return selfTest();
+  if (argv.includes("--self-test")) return selfTest({ inner: argv.includes("--inner") });
   const arg = (name) => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1]; };
   const has = (name) => argv.includes(name);
   if ((has("--root") && !arg("--root")) || (has("--pending-file") && !arg("--pending-file"))) { console.error("✗ --root / --pending-file need a value"); return 2; }

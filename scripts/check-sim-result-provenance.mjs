@@ -177,9 +177,19 @@ function scratchCloneChecks(ok) {
   // the shared helper scrubs them and turns signing off.
   const cleanEnv = scratchGitEnv();
   const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8", env: cleanEnv });
-  const g = (cwd, ...args) => scratchGit(cwd, args);
+  // Fixture setup must fail at the failing line: a swallowed `reset`/`add`/`commit` would let a
+  // later check pass or fail for the wrong reason.
+  const g = (cwd, ...args) => {
+    const r = scratchGit(cwd, args);
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
   // Commit at a fixed time, so a scratch case can make one file's last touch LATER than another's.
-  const gAt = (cwd, when, ...args) => scratchGit(cwd, args, { env: { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } });
+  const gAt = (cwd, when, ...args) => {
+    const r = scratchGit(cwd, args, { env: { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } });
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });

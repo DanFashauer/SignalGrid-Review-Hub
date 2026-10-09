@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "signalgrid": "./src/bin.ts" },
+  "bin": { "signalgrid": "./bin/signalgrid.mjs" },
   "scripts": {
     "start": "tsx src/bin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"

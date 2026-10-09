@@ -102,6 +102,8 @@ const str = (v: unknown): string => {
   return s.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 };
 
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
 function writeRefused(command: string, method: string, path: string, body: unknown): Out {
   return {
     exit: EXIT.writeNotAllowed,
@@ -163,6 +165,10 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
   // above all) the snapshot is fetched and must exist, belong to this decision and pass
   // its digest check — the same binding `explain` applies (review round 9 on PR #1321).
   const decisionId = d["decisionId"] as string;
+  // Every failure past this point follows a 2xx write: the decision exists, so each one
+  // carries the idempotency key and its recovery note, never only the id (round 12).
+  const post = writeRecovery(key);
+  const postExtra = { decisionId, ...post.extra };
   let ev: Record<string, unknown>;
   try {
     ({ body: ev } = await call(cfg, "GET", `/v1/decisions/${encodeURIComponent(decisionId)}/evidence`));
@@ -170,17 +176,17 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
     const e = err as CliError;
     throw new CliError(
       e.code ?? "unexpected",
-      `decision ${decisionId} was recorded, but its evidence snapshot could not be read (${e.message}); nothing is reported as decided.`,
+      `decision ${decisionId} was recorded, but its evidence snapshot could not be read (${e.message}); nothing is reported as decided.${post.suffix}`,
       e.exit ?? EXIT.refused,
-      { decisionId },
+      postExtra,
     );
   }
   if (!boundVerdict(ev, decisionId, d["evidenceSnapshotId"] as string, tenant.id)) {
     throw new CliError(
       "evidence_unverified",
-      `decision ${decisionId} was recorded, but its evidence snapshot ${String(d["evidenceSnapshotId"])} does not verify against it; nothing is reported as decided.`,
+      `decision ${decisionId} was recorded, but its evidence snapshot ${String(d["evidenceSnapshotId"])} does not verify against it; nothing is reported as decided.${post.suffix}`,
       EXIT.refused,
-      { decisionId },
+      postExtra,
     );
   }
   // The snapshot digest covers the evidence, not the outcome: the RECORDED decision is read
@@ -192,15 +198,15 @@ async function decide(getCfg: () => Config, v: Values, env: NodeJS.ProcessEnv): 
     stored = recBody["decision"] as Record<string, unknown> | undefined;
   } catch (err) {
     const e = err as CliError;
-    throw new CliError(e.code ?? "unexpected", `decision ${decisionId} was recorded, but it could not be read back (${e.message}); nothing is reported as decided.`, e.exit ?? EXIT.refused, { decisionId });
+    throw new CliError(e.code ?? "unexpected", `decision ${decisionId} was recorded, but it could not be read back (${e.message}); nothing is reported as decided.${post.suffix}`, e.exit ?? EXIT.refused, postExtra);
   }
   if (!stored || (stored["id"] ?? stored["decisionId"]) !== decisionId || stored["outcome"] !== outcome ||
       stored["evidenceSnapshotId"] !== d["evidenceSnapshotId"] || stored["tenantId"] !== tenant.id) {
     throw new CliError(
       "decision_mismatch",
-      `decision ${decisionId} as recorded does not match the evaluate answer (outcome, snapshot or tenant); nothing is reported as decided.`,
+      `decision ${decisionId} as recorded does not match the evaluate answer (outcome, snapshot or tenant); nothing is reported as decided.${post.suffix}`,
       EXIT.refused,
-      { decisionId },
+      postExtra,
     );
   }
   // The decision now EXISTS on the server. A session write that still fails (a race on
@@ -479,6 +485,11 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
     const { body } = await call(cfg, "GET", `/v1/connectors/${encodeURIComponent(cid)}/sync-runs`);
     const runs = body["syncRuns"];
     if (!Array.isArray(runs)) throw new CliError("malformed_answer", "no syncRuns list in the answer; nothing is reported.", EXIT.refused);
+    // Every row must be a run OF this connector in the confirmed tenant, with a well-formed
+    // id — the binding `connectors sync` applies to its one run (review round 12).
+    if (!runs.every((r) => isObj(r) && isSafeId(r["id"]) && r["connectorId"] === cid && r["tenantId"] === tenant.id)) {
+      throw new CliError("malformed_answer", `GET /v1/connectors/${cid}/sync-runs listed a run that is not a well-formed run of ${cid} in this tenant; nothing is reported.`, EXIT.refused);
+    }
     return {
       json: { ok: true, command: "connectors runs", tenant: tenant.id, connectorId: cid, syncRuns: runs },
       human: table(["run", "status", "startedAt", "records", "signals"], (runs as Record<string, unknown>[]).map((r) => [str(r["id"]), str(r["status"]), str(r["startedAt"]), str(r["recordsProcessed"]), str(r["signalsNormalized"])])),
@@ -490,6 +501,11 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
   const { body } = await call(cfg, "GET", "/v1/connectors");
   const list = body["connectors"];
   if (!Array.isArray(list)) throw new CliError("malformed_answer", "GET /v1/connectors carried no connectors list; nothing is reported.", EXIT.refused);
+  // A connector row of another tenant (or none) is never shown, in either output mode: its
+  // scope and credential reference are that tenant's (review round 12).
+  if (!list.every((c) => isObj(c) && isSafeId(c["id"]) && c["tenantId"] === tenant.id)) {
+    throw new CliError("malformed_answer", "GET /v1/connectors listed a connector that is not a well-formed connector of this tenant; nothing is reported.", EXIT.refused);
+  }
   return {
     json: { ok: true, command: "connectors", tenant: tenant.id, connectors: list },
     human: table(["id", "kind", "mode", "status", "lastSyncAt"], (list as Record<string, unknown>[]).map((c) => [str(c["id"]), str(c["kind"]), str(c["mode"]), str(c["status"]), str(c["lastSyncAt"])])),

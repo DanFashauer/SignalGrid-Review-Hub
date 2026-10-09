@@ -369,13 +369,16 @@ async function main(): Promise<void> {
       emptyRun.code === 1 && !/^sync run /m.test(emptyRun.stdout));
     // A run id and status must be well-formed and recognised, not merely strings (round 7).
     for (const [label, run] of [
-      ["an empty id and status", { id: "", status: "" }],
-      ["an id carrying a newline", { id: "run_1\noutcome     allow", status: "success" }],
-      ["an unrecognised status", { id: "run_1", status: "probably_fine" }],
+      // Each run is bound to the connector and tenant, so only the named field is malformed (round 12).
+      ["an empty id and status", { id: "", status: "", connectorId: "conn_x", tenantId: TENANT }],
+      ["an id carrying a newline", { id: "run_1\noutcome     allow", status: "success", connectorId: "conn_x", tenantId: TENANT }],
+      ["an unrecognised status", { id: "run_1", status: "probably_fine", connectorId: "conn_x", tenantId: TENANT }],
     ] as const) {
       const r = await viaLiar({ syncRun: run }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
       check(`connectors sync refuses a sync run with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
     }
+    const wellFormedRun = await viaLiar({ syncRun: { id: "run_1", status: "success", connectorId: "conn_x", tenantId: TENANT } }, ["connectors", "sync", "conn_x", "--allow-write", "--json"]);
+    check("connectors sync accepts a well-formed, bound run (the malformed-field checks above can pass)", wellFormedRun.code === 0 && parse(wellFormedRun.stdout)?.["ok"] === true);
 
     // The write path's tenant check: the wrong credential must not mint a decision.
     seen.length = 0;
@@ -427,12 +430,21 @@ async function main(): Promise<void> {
     }
 
     // An ABSENT verdict field is not a passing one.
-    const noVerified = await viaLiar({ decision: { id: "dec_x", tenantId: TENANT, outcome: "allow" }, evidence: { signalsUsed: [] } }, ["explain", "dec_x"]);
-    check("explain with no `verified` field in the evidence answer exits 1", noVerified.code === 1);
-    const noVerifiedSignals = await viaLiar({ evidence: { signalsUsed: [] } }, ["signals", "dec_x"]);
+    // Each fixture is otherwise valid — every binding present — so only the verdict is absent (round 12).
+    const boundRec = { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" };
+    const boundEv = { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] };
+    const noVerified = await viaLiar({ decision: boundRec, evidence: boundEv }, ["explain", "dec_x"]);
+    check("explain with no `verified` field in the evidence answer exits 1", noVerified.code === 1 && !/digest verifies/.test(noVerified.stdout));
+    const noVerifiedSignals = await viaLiar({ evidence: boundEv }, ["signals", "dec_x"]);
     check("signals with no `verified` field exits 1", noVerifiedSignals.code === 1);
-    const noValid = await viaLiar({ events: [], chain: { length: 0 } }, ["audit"]);
+    const noValid = await viaLiar({ events: [], chain: { length: 0 }, source: "memory" }, ["audit"]);
     check("audit with no `chain.valid` field exits 1", noValid.code === 1);
+    const withVerdicts = [
+      await viaLiar({ decision: boundRec, evidence: boundEv, verified: true }, ["explain", "dec_x"]),
+      await viaLiar({ evidence: boundEv, verified: true }, ["signals", "dec_x"]),
+      await viaLiar({ events: [], chain: { valid: true, length: 0 }, source: "memory" }, ["audit"]),
+    ];
+    check("the same three fixtures WITH their verdict exit 0 (the absent-verdict checks isolate the verdict)", withVerdicts.every((r) => r.code === 0));
 
     // decide refuses a verdict with no evidence binding, and writes no session for it (round 6).
     const unboundSession = join(sessionDir, "unbound.json");
@@ -785,8 +797,21 @@ async function main(): Promise<void> {
     ] as const) {
       const { r, sessionWritten } = await decideWith(status, body);
       const j = parse(r.stdout);
-      check(`decide refuses an allow whose evidence is ${label} (exit 1, no outcome, no session, names the decision)`,
-        r.code === 1 && j?.["ok"] === false && (j?.["error"] as Record<string, unknown> | undefined)?.["decisionId"] === "dec_x" && !sessionWritten);
+      const e = j?.["error"] as Record<string, unknown> | undefined;
+      check(`decide refuses an allow whose evidence is ${label} (exit 1, no outcome, no session, names the decision and its idempotency key)`,
+        r.code === 1 && j?.["ok"] === false && e?.["decisionId"] === "dec_x" && typeof e?.["idempotencyKey"] === "string" && !sessionWritten);
+    }
+    // The key survives every post-write verification failure, the operator's own included (round 12).
+    const goodEvBody = { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true };
+    for (const [label, status, evBody, stored] of [
+      ["the evidence read is refused", 500, { error: "boom", message: "x" }, storedOk],
+      ["the read-back decision does not match", 200, goodEvBody, { decision: { ...storedOk.decision, outcome: "deny" } }],
+      ["the read-back names no decision", 200, goodEvBody, {}],
+    ] as const) {
+      const { r } = await decideWith(status, evBody, ["--idempotency-key", "k_post_write"], stored);
+      const e = parse(r.stdout)?.["error"] as Record<string, unknown> | undefined;
+      check(`decide keeps --idempotency-key in the error when ${label} after the write`,
+        r.code === 1 && e?.["idempotencyKey"] === "k_post_write" && e?.["decisionId"] === "dec_x" && /k_post_write/.test(String(e?.["message"])));
     }
     const good = await decideWith(200, { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [] }, verified: true });
     check("decide reports an allow whose snapshot exists, is this decision's and verifies (the check can pass)",
@@ -836,7 +861,8 @@ async function main(): Promise<void> {
       answered.code === 0 && /^step-up\s+answered by webauthn at 2026-10-09T01:00:00Z/m.test(answered.stdout));
     const unanswered = await viaLiar({ decision: stepRec, stepUp: null, ...stepEv }, ["explain", "dec_x"]);
     check("explain (human) marks an unanswered step_up UNANSWERED", unanswered.code === 0 && /^step-up\s+UNANSWERED/m.test(unanswered.stdout));
-    const foreign = await viaLiar({ decision: stepRec, stepUp: { decisionId: "dec_other", method: "webauthn" }, ...stepEv }, ["explain", "dec_x"]);
+    // A complete, valid answer whose ONLY defect is the decision it answers (round 12).
+    const foreign = await viaLiar({ decision: stepRec, stepUp: { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_other", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }, ...stepEv }, ["explain", "dec_x"]);
     check("explain refuses a step-up answer belonging to another decision (exit 1)", foreign.code === 1 && !/^outcome/m.test(foreign.stdout));
 
     // ── review round 10 on PR #1321 ──
@@ -913,6 +939,34 @@ async function main(): Promise<void> {
     // explain refuses a decision record outside the confirmed tenant.
     const foreignRec = await viaLiar({ decision: { id: "dec_x", tenantId: "tenant_atlas", outcome: "allow", evidenceSnapshotId: "ev_x" }, ...goodEv }, ["explain", "dec_x"]);
     check("explain refuses a decision record of another tenant (exit 1, no outcome)", foreignRec.code === 1 && !/^outcome/m.test(foreignRec.stdout));
+
+    // ── review round 12 on PR #1321 ──
+    // Listed rows are bound like the single answers: a foreign or unbound row refuses the whole list.
+    const connRow = { id: "conn_x", tenantId: TENANT, kind: "idp", mode: "fixture", status: "active", lastSyncAt: null, permissionScope: "read", credentialRef: "ref" };
+    const runRow = { id: "run_1", tenantId: TENANT, connectorId: "conn_x", status: "success", startedAt: "t", recordsProcessed: 1, signalsNormalized: 1 };
+    for (const [label, body, args] of [
+      ["a connector of another tenant", { connectors: [connRow, { ...connRow, id: "conn_y", tenantId: "tenant_atlas" }] }, ["connectors", "--json"]],
+      ["a connector naming no tenant", { connectors: [{ ...connRow, tenantId: undefined }] }, ["connectors", "--json"]],
+      ["a sync run of another connector", { syncRuns: [runRow, { ...runRow, id: "run_2", connectorId: "conn_y" }] }, ["connectors", "runs", "conn_x", "--json"]],
+      ["a sync run of another tenant", { syncRuns: [{ ...runRow, tenantId: "tenant_atlas" }] }, ["connectors", "runs", "conn_x", "--json"]],
+      ["a sync run with a malformed id", { syncRuns: [{ ...runRow, id: "run_1\nx" }] }, ["connectors", "runs", "conn_x", "--json"]],
+    ] as const) {
+      const r = await viaLiar(body, [...args]);
+      const j = parse(r.stdout);
+      check(`${args[0]}${args[1] === "runs" ? " runs" : ""} refuses a list holding ${label} (exit 1, ok:false, no rows shown)`,
+        r.code === 1 && j?.["ok"] === false && !("connectors" in (j ?? {})) && !("syncRuns" in (j ?? {})));
+    }
+    const boundLists = [
+      await viaLiar({ connectors: [connRow] }, ["connectors", "--json"]),
+      await viaLiar({ syncRuns: [runRow] }, ["connectors", "runs", "conn_x", "--json"]),
+    ];
+    check("connectors and connectors runs accept lists of bound rows (the row checks can pass)", boundLists.every((r) => r.code === 0 && parse(r.stdout)?.["ok"] === true));
+
+    // The package's bin is runnable as installed: pnpm's shim executes the target file itself.
+    const binTarget = (JSON.parse(readFileSync(resolve(cliDir, "package.json"), "utf8")) as { bin?: Record<string, string> }).bin?.["signalgrid"];
+    const binRun = binTarget ? spawnSync(resolve(cliDir, binTarget), ["--help"], { cwd: tmpdir(), env: { PATH: process.env["PATH"] ?? "" }, encoding: "utf8" }) : undefined;
+    check("the package bin `signalgrid` executes directly (shebang + executable bit) and prints the help",
+      binRun?.status === 0 && /signalgrid decide/.test(binRun.stdout ?? ""));
 
     // A step-up answer must carry its own id and the decision's identity.
     for (const [label, su] of [

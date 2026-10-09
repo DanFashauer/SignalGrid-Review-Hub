@@ -1886,10 +1886,11 @@ earlier — that is the loop working, not a reason to soften the record.
     Ponytail cut 3 (DR-024) deleted — an open row naming a tree that no longer
     exists reads as work outstanding that is not. Re-derived by grep: `grep -rln
     "fonts.googleapis\|fonts.gstatic" artifacts/signalgrid-*` returns
-    `artifacts/signalgrid-desktop/{index.html,dist/public/index.html}` and
-    `artifacts/signalgrid-review/{index.html,dist/public/index.html}` (4 files
-    total, two trees). The self-hosted PWA already carries no remote fonts per PR
-    #1235.
+    `artifacts/signalgrid-desktop/index.html` and `artifacts/signalgrid-review/index.html`
+    (two tracked files, two trees). The gate also reports the built-output copies in
+    `dist/public/` (four host pairs total when built locally), but a clean checkout
+    sees only the two tracked sources. The self-hosted PWA already carries no remote
+    fonts per PR #1235.
 
 71. **Five of eight security reference tests cannot fail against broken code.**
     — FIXED 2026-09-02 by porting and deleting; see the disposition at the foot

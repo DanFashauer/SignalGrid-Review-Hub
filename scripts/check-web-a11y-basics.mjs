@@ -18,7 +18,8 @@
 //   1. LIVE REGION. A POLLING VIEW (.tsx) must render <LiveRegion …/> or an
 //      aria-live="polite|assertive" attribute ("off" is not a live region). A
 //      file POLLS when it declares `refetchInterval`, drives a refetch from a
-//      timer (setInterval, or a setTimeout loop), calls a query hook while its
+//      timer on a schedule (setInterval; a setTimeout that re-arms itself or sits
+//      in an effect with dependencies — a one-shot delay is not polling), calls a query hook while its
 //      tree's query defaults poll, or uses a hook or value a polling file
 //      exports — by name, by an `import { X as Y }` alias, or as the default
 //      import of a polling module (to a fixpoint). A component export (a
@@ -174,6 +175,60 @@ function callSpans(src, re) {
   return { spans, unbalanced };
 }
 
+const REFRESH = /\b(?:refetch\w*|invalidateQueries|resetQueries)\b/;
+
+/** The balanced `{ … }` body of the function `name` declares, or null. */
+function functionBody(code, name) {
+  const decl = new RegExp(`(?:\\bfunction\\s*\\*?\\s*${escapeRegExp(name)}\\s*\\(|\\b(?:const|let|var)\\s+${escapeRegExp(name)}\\s*=)`).exec(code);
+  if (!decl) return null;
+  const rest = code.slice(decl.index);
+  const brace = rest.indexOf("{");
+  const stop = rest.search(/;|\n\s*\n/);
+  // An expression-bodied arrow (`const t = () => refetch();`) has no block: its statement is its body.
+  if (brace < 0 || (stop >= 0 && stop < brace)) return { start: decl.index, end: decl.index + (stop < 0 ? rest.length : stop), text: rest.slice(0, stop < 0 ? undefined : stop) };
+  let depth = 0;
+  for (let i = brace; i < rest.length; i++) {
+    if (rest[i] === "{") depth++;
+    else if (rest[i] === "}" && --depth === 0) return { start: decl.index, end: decl.index + i + 1, text: rest.slice(0, i + 1) };
+  }
+  return { start: decl.index, end: code.length, text: rest };
+}
+
+/**
+ * True when a timer drives a refetch (or invalidates/resets queries, which
+ * TanStack refetches) on a RECURRING schedule. `setInterval` recurs by itself:
+ * with a refetch anywhere in the file it polls — its callback may be a named
+ * helper, so the whole file is read (fail-closed). A `setTimeout` recurs only
+ * when it re-arms: inline (`setTimeout(function t() { …; setTimeout(t, n); }, n)`),
+ * from a named function that schedules itself, or from an effect that has
+ * dependencies (or none), which arms it again on each re-render the refetch
+ * causes. A one-shot `setTimeout(refetch, 100)` — in a handler, or an effect
+ * with `[]` — updates nothing on a schedule and is not polling.
+ */
+export function timerPolls(code) {
+  if (!REFRESH.test(code)) return false;
+  if (/\bsetInterval\s*\(/.test(code)) return true;
+  const timeouts = callSpans(code, /\bsetTimeout\s*\(/g);
+  const effects = callSpans(code, /\buse(?:Layout)?Effect\s*\(/g);
+  if (timeouts.unbalanced || effects.unbalanced) return true;
+  for (const [a, b] of timeouts.spans) {
+    const args = code.slice(code.indexOf("(", a) + 1, b - 1);
+    const first = args.match(/^\s*([A-Za-z_$][\w$]*)\s*,/)?.[1] ?? null;
+    if (/\bsetTimeout\s*\(/.test(args) && REFRESH.test(args)) return true;
+    const fn = first ? functionBody(code, first) : null;
+    if (fn && fn.start <= a && b <= fn.end && REFRESH.test(fn.text)) return true;
+    // A callback the gate cannot read (imported, or a parameter) may refetch: fail closed.
+    const fires = REFRESH.test(args) || (first !== null && (fn === null || REFRESH.test(fn.text)));
+    if (!fires) continue;
+    for (const [ea, eb] of effects.spans) {
+      if (!(ea < a && b <= eb)) continue;
+      const deps = code.slice(code.indexOf("(", ea) + 1, eb - 1).match(/,\s*\[([^\]]*)\]\s*$/);
+      if (!deps || deps[1].trim() !== "") return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Query defaults for one tree, read from every file. `files` is [{ rel, src }].
  * Returns { polls, constructions, providers, unparsed: [rel…] }.
@@ -293,8 +348,8 @@ export function opaqueHookExports(code) {
  * Rule 1 over one tree's files. `files` is [{ rel, src }]; `defaultPolls` from
  * queryDefaults. Returns { polling (views), failures }.
  *
- * A file POLLS when it declares refetchInterval, drives a refetch from
- * setInterval, calls a query hook in a default-polling tree, or uses anything
+ * A file POLLS when it declares refetchInterval, drives a refetch from a
+ * recurring timer (timerPolls), calls a query hook in a default-polling tree, or uses anything
  * a polling file exports — by its exported name, by an `import { X as Y }`
  * alias, or as the default import of a polling module. Iterated to a fixpoint.
  */
@@ -352,10 +407,8 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     changed = false;
     for (const f of parsed) {
       if (polls.has(f.rel)) continue;
-      // A timer driving a refetch polls: setInterval, or a setTimeout loop that re-arms itself.
-      // So does a timer invalidating or resetting queries: TanStack refetches the active ones.
-      // `setInterval(refetch, 5000)` passes the function itself, so no `(` follows it.
-      const intervalRefetch = /\bset(Interval|Timeout)\s*\(/.test(f.code) && /\b(?:refetch\w*|invalidateQueries|resetQueries)\b/.test(f.code);
+      // A timer driving a refetch on a recurring schedule polls (timerPolls).
+      const intervalRefetch = timerPolls(f.code);
       if (/\brefetchInterval\b/.test(f.code) || intervalRefetch || (defaultPolls && callsQueryHook(f.code, generated)) || usesPolling(f)) {
         polls.add(f.rel);
         // A component renders its own live region, so it does not carry polling
@@ -413,6 +466,11 @@ export function checkLiveRegionText(rel, raw) {
     // `!data`, `!v1Decisions`, `!metrics.data` — a missing VALUE, not a flag (`!isLoading`)
     // or a member test (`!data.chain.valid`).
     if (/&&\s*!\s*(?:(?!(?:is|has)[A-Z])[\w$]+|[\w$.?]+\??\.data)(?![\w$?.(])/.test(alert)) failures.push(`${rel}:${line}: <LiveRegion> alert is suppressed while cached data remains (\`&& !…\`) — a failed refetch after the first load is silent (WCAG 4.1.3)`);
+    // An alert that can never say anything (`alert=""`, or none) while the file reads a
+    // query's error flag drops that failure: the cached text stays and nothing is announced.
+    if (/^\s*(?:(["'`])\1)?\s*$/.test(alert) && /\b(?:isError|error)\b/.test(src.replace(/<LiveRegion\b[\s\S]*?\/>/g, ""))) {
+      failures.push(`${rel}:${line}: <LiveRegion> alert is always empty while this file reads a query error — a failed request is never announced (WCAG 4.1.3)`);
+    }
     const identity = /\[(?:0|[^\]]*\.length\s*-\s*1)\]\??\.(?:id|createdAt|evaluatedAt|recordedAt|receivedAt)\b/.test(message);
     if (/\[0\]/.test(message) && !identity) {
       failures.push(`${rel}:${line}: <LiveRegion> message names the latest record without its identity (id or time) — a new record with the same outcome is not announced (WCAG 4.1.3)`);
@@ -1186,6 +1244,20 @@ function selfTest() {
     ["a refetch passed to a timer as its callback polls",
       ["setInterval(refetch, 5000)", "setTimeout(function tick() { refetchAll(); setTimeout(tick, 5000); }, 5000)", "const id = setInterval(refetchFeed, 3000)"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
+    ["only a RECURRING timer refetch polls; a one-shot delay does not",
+      ["<button onClick={() => setTimeout(refetch, 100)}>Retry</button>",
+        "useEffect(() => { const t = setTimeout(() => q.refetch(), 100); return () => clearTimeout(t); }, []);"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `${c} return <div/>;`)], false).failures.length === 0) &&
+      ["useEffect(() => { const t = setTimeout(refetch, 5000); return () => clearTimeout(t); }, [data]);",
+        "useEffect(() => { setTimeout(refetch, 5000); });",
+        "function tick() { refetch(); setTimeout(tick, 5000); } tick();",
+        "const tick = () => { qc.invalidateQueries(); setTimeout(tick, 5000); };"].every((c) =>
+        checkLiveRegions([view("t/src/pages/T.tsx", `${c} return <div/>;`)], false).failures.length === 1)],
+    ["an alert that is always empty while the file reads a query error is flagged",
+      ['alert=""', "alert={\"\"}", ""].every((a) =>
+        checkLiveRegionText("x.tsx", `const { data, isError } = useQ(); <LiveRegion message={m} ${a} />`).length === 1) &&
+      checkLiveRegionText("x.tsx", 'const { data, isError } = useQ(); <LiveRegion message={m} alert={isError && !shell.isError ? "Filtered signals could not be refreshed." : ""} />').length === 0 &&
+      checkLiveRegionText("x.tsx", 'const { data } = useQ(); <LiveRegion message={m} alert="" />').length === 0],
     ["an aria-labelledby target must itself carry a name",
       checkIconButtons("x.tsx", '<span id="close"></span><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&
       checkIconButtons("x.tsx", '<span id="close" /><button onClick={f} aria-labelledby="close"><svg/></button>').length === 1 &&

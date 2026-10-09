@@ -21,12 +21,17 @@ const STATUS_COLOR: Record<string, string> = {
 export default function SignalsPage() {
   const [typeFilter, setTypeFilter] = useState<typeof TYPES[number]["value"]>(undefined);
   const { data, isLoading, isError } = useListLatestSignals({ limit: 100, signalType: typeFilter });
+  // The DesktopLayout shell reads the same feed with { limit: 5 } — a different query
+  // key, so this filtered request can fail while the shell's succeeds. Reading the
+  // shell's key shares its cache entry (no extra request); the page alerts only
+  // when the shell is NOT already announcing the outage: one alert per outage.
+  const shellFeed = useListLatestSignals({ limit: 5 });
 
   return (
     <div className="p-6 space-y-4">
       <LiveRegion
         message={data ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} filter: ${data.signals.length} signals, ${data.signals.filter((s) => s.status === "critical").length} critical.` : ""}
-        alert="" /* the DesktopLayout shell announces a feed outage: one alert per outage */
+        alert={isError && !shellFeed.isError ? `${TYPES.find((t) => t.value === typeFilter)?.label ?? "ALL"} signals could not be refreshed — this list may be stale.` : ""}
       />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Signals</h1>

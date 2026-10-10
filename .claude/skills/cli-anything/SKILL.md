@@ -60,6 +60,11 @@ template does not:
 | 6. Validate | Every figure the CLI prints comes from a proof or a live answer, never a constant. |
 | 7. Publish | Nothing is published outside the tree; the launch profile and the publication boundary govern what may be said to ship. |
 
+The first harness built this way is `artifacts/signalgrid-cli` (`decide`, `explain`,
+`signals`, `audit`, `connectors`; read-only unless `--allow-write`). Its generated skill
+is `.claude/skills/cli-anything/signalgrid-cli/SKILL.md`, regenerated with
+`signalgrid skill` and held equal to the generator by `pnpm run proof:signalgrid-cli`.
+
 This is a build item, recorded in `docs/BUILD_BACKLOG.md`, not a claim: nothing about
 it changes how green is certified, so no decision record beyond DR-040 is needed.
 

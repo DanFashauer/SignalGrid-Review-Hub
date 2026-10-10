@@ -645,6 +645,11 @@ const STEPS = [
   { name: "OIDC middleware test (the PRODUCTION auth branch actually executes)", cmd: ["pnpm", "run", "test:oidc"] },
   { name: "Bruno collection live run (the committed contract, executed both profiles)", cmd: ["node", "scripts/run-bruno-collection.mjs"] },
   { name: "Proof: observability (metrics endpoint)", cmd: ["pnpm", "run", "proof:observability"] },
+  // The `signalgrid` CLI (artifacts/signalgrid-cli, DR-040) over the real /v1 API:
+  // every subcommand in both output modes, no write without --allow-write (a
+  // recording proxy sees every request), and fail-closed exits for a missing token,
+  // an unreachable server and a verdict-less 200. Needs the api-server build above.
+  { name: "Proof: signalgrid CLI (read-only by default, fail-closed, dual output)", cmd: ["pnpm", "run", "proof:signalgrid-cli"] },
   { name: "Proof: enterprise-auth (OIDC/JWT)", cmd: ["pnpm", "run", "proof:enterprise-auth"] },
   { name: "Proof: fixture-idp (the deploy-stack smoke's token source)", cmd: ["pnpm", "run", "test:fixture-idp"] },
   { name: "Proof: webauthn-verify", cmd: ["pnpm", "run", "proof:webauthn-verify"] },

@@ -9,15 +9,16 @@ application token.
 
 ## What is in it — and why exactly this
 
-The three requests are the launch connector's REAL transport, transcribed
+The four requests are the launch connector's REAL transport, transcribed
 from `lib/integrations/src/integrations/graph/posture-connector.ts` — not
 from the research report's wider proposal and not from memory:
 
-| Request | Source line | Permission (application, least-privilege) |
+| Request | Source method | Permission (application, least-privilege) |
 | --- | --- | --- |
-| `GET /deviceManagement/managedDevices?$top=1` | :75 (health probe) | `DeviceManagementManagedDevices.Read.All` |
-| `GET /deviceManagement/managedDevices` (paged) | :92 | `DeviceManagementManagedDevices.Read.All` |
-| `GET /users?$select=id,userPrincipalName,accountEnabled` | :85 | `User.Read.All` |
+| `GET /deviceManagement/managedDevices?$top=1` | `healthCheck` (health probe) | `DeviceManagementManagedDevices.Read.All` |
+| `GET /deviceManagement/managedDevices` (paged) | `listManagedDevices` | `DeviceManagementManagedDevices.Read.All` |
+| `GET /users?$select=id,userPrincipalName,accountEnabled` | `listUsers` | `User.Read.All` |
+| `GET /identityProtection/riskyUsers?$select=id,riskLevel,riskState` | `listRiskyUsers` | `IdentityRiskyUser.Read.All` |
 
 The machine form of that permission list is `permissions.json` beside this
 file — the record a tenant admin consents from, and the record an assessor
@@ -31,8 +32,13 @@ The owner's research report proposed compliance policies
 them, so this collection does not contain them — a request here asserts
 "the product uses this", and it must not assert more than
 `posture-connector.ts` does. When the connector grows a call, the request
-lands here in the same commit (the collection tracks the transport, both
-directions by review).
+lands here in the same commit. That is now enforced, not left to review:
+`scripts/check-graph-permission-boundary.mjs` holds this folder and
+`permissions.json` to the connector in both directions (every request the
+connector makes has a file here with the exact path and query, nothing here
+is a request the connector does not make, and the permission set equals the
+scopes the connector names). It does not prove that a request needs the
+permission paired with it, or that it answers on a real tenant.
 
 Cross-diffing this subset against `microsoftgraph/msgraph-metadata`'s
 OpenAPI remains open on backlog row 30 — the full metadata artifact is too

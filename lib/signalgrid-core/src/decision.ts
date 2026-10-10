@@ -93,7 +93,7 @@ export function evaluateDecision(
   );
   const signalsUsed: NormalizedSignal[] = [...identitySignals, ...deviceSignals];
 
-  const evidence = buildEvidence(identity, device, workflow, signalsUsed);
+  const evidence = buildEvidence(identity, device, workflow, signalsUsed, createdAt);
   const evaluation = evaluatePolicy(version, evidence);
 
   // Per-evaluation sequence keeps ids unique when the same scenario is

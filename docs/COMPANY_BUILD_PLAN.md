@@ -2433,6 +2433,11 @@ earlier — that is the loop working, not a reason to soften the record.
     clock-tolerance boundary and cross-tenant denial) both executed clean. No
     secret, plaintext-password comparison or unparameterised query exists on this
     surface; logging carries IDs only, never tokens or key material.
+    CORRECTION 2026-10-01 (PR #1220): the "no sibling of the original NaN
+    fail-open family remains" sentence above was false. `verifyJwtRs256` accepted an
+    expired token when `nowMs` or `clockToleranceSec` was NaN (and, for the
+    tolerance, Infinity or any large finite value). Fixed at the library boundary
+    in #1220; the sentence is left as written so the miss stays visible.
 
 83. **An OLDER, more permissive reading from a second connector silently erases a
     newer one — and the outcome flips deny to allow.** — FIXED 2026-08-25,
@@ -4795,9 +4800,9 @@ Decision core (the verdict mechanism):
 
 Auth chain (bearer token to tenant principal):
 10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.
-11. lib/enterprise-auth/src/jwt.ts (238) — token verification.
+11. lib/enterprise-auth/src/jwt.ts (272) — token verification.
 12. lib/enterprise-auth/src/claims.ts (99) — claims-to-principal mapping; tenant derivation lives here.
-13. lib/enterprise-auth/src/jwks.ts (90) — key fetch/cache; wrong caching means accepting rotated-out keys.
+13. lib/enterprise-auth/src/jwks.ts (131) — key fetch/cache; wrong caching means accepting rotated-out keys.
 14. artifacts/api-server/src/lib/profile.ts (210) — the review-demo vs shared-device-gateway fence; a classification bug mounts demo surfaces in production.
 15. artifacts/api-server/src/lib/core.ts (344) — the seam where HTTP hands to the decision core.
 16. artifacts/api-server/src/middlewares/idempotency.ts (109) — durable-write dedupe on the decision path.

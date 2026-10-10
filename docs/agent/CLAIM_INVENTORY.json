@@ -11033,7 +11033,7 @@
    "claim": "\"Every verdict of the day sits in the audit ledger, tamper-evident\"",
    "kind": "retention",
    "classification": "launch",
-   "evidence": "lib/api-spec/v1-openapi.yaml:426-439 /v1/audit (durable Postgres ledger → `source: durable`; otherwise the in-memory demo ledger, whose `chain.truncated`/`evictedCount` report eviction — \"every verdict of the day\" holds only for the durable ledger or within the memory bound); DR-025 docs/DECISION_RECORDS.md:1358; scripts/launch-profile.mjs:350-357",
+   "evidence": "lib/api-spec/v1-openapi.yaml:426-439 /v1/audit (durable Postgres ledger → `source: durable`, whose `chain` is the whole-ledger walk `verifyLedgerFull` — no 10,000-row cap; an intact verdict (`chain.ok: true`) read every row to the end, a broken one stops at the first broken batch and names `brokenAtIndex`, and `chain.truncated` is `false` either way because there is no read cap (artifacts/api-server/src/routes/v1.ts, `GET /v1/audit` durable branch; pinned past the cap with a tamper at row 10,000 by `pnpm --filter @workspace/api-server run test:api`); otherwise the in-memory demo ledger, whose `chain.truncated`/`evictedCount` report eviction — \"every verdict of the day\" holds only for the durable ledger or within the memory bound); DR-025 docs/DECISION_RECORDS.md:1358; scripts/launch-profile.mjs:350-357",
    "action": "keep",
    "source": "re-extraction 2026-09-06 (the 2026-08-21 rows for this surface were resolved by the anchor gate)"
   },

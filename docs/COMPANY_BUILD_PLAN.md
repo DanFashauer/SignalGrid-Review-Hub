@@ -4791,7 +4791,7 @@ Decision core (the verdict mechanism):
 6. lib/signalgrid-core/src/store.ts (574) — in-memory store semantics behind every tenant-scoped read; a cross-tenant leak would live here.
 7. lib/signalgrid-simulator/src/decisionEngine.ts (361) — parity source the iOS port is byte-faithful to; a defect here ships on two platforms at once.
 8. lib/posture-composition/src/compose.ts (80) — composes signal kinds into posture; tiny, but every launch signal passes through it.
-9. lib/posture-composition/src/adapters.ts (640) — maps connector output into composition; a silent mis-map fails open.
+9. lib/posture-composition/src/adapters.ts (676) — maps connector output into composition; a silent mis-map fails open.
 
 Auth chain (bearer token to tenant principal):
 10. artifacts/api-server/src/middlewares/context.ts (222) — THE /v1 auth middleware; OIDC/demo-key fork; unread while neighbor rateLimit.ts was audited.

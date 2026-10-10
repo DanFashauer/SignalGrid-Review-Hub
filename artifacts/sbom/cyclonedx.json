@@ -18823,20 +18823,6 @@
     {
       "type": "library",
       "name": "thread-stream",
-      "version": "3.1.0",
-      "bom-ref": "pkg:npm/thread-stream@3.1.0",
-      "purl": "pkg:npm/thread-stream@3.1.0",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "thread-stream",
       "version": "4.2.0",
       "bom-ref": "pkg:npm/thread-stream@4.2.0",
       "purl": "pkg:npm/thread-stream@4.2.0",

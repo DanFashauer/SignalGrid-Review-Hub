@@ -2809,6 +2809,30 @@ async function run() {
     check("estate refresh: an interval below the 30s floor refuses at boot",
       tooFastExit !== "still-running" && tooFastExit !== 0);
 
+    // Above Node's timer ceiling: setInterval clamps a delay past 2^31-1 ms to 1ms, so a
+    // "monthly" 2592000 would have fired the refresh ~1000x a second. Refuse, never clamp.
+    for (const tooSlow of ["2592000", "2147484"]) {
+      const tooSlowChild = spawn("node", [serverEntry], {
+        env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: tooSlow }),
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      const tooSlowExit = await exitOf(tooSlowChild);
+      check(`estate refresh: ${tooSlow}s is past setInterval's 2^31-1 ms ceiling and refuses at boot`,
+        tooSlowExit !== "still-running" && tooSlowExit !== 0);
+    }
+    // The ceiling itself (2147483s = 2147483000ms <= 2^31-1) is honoured, not refused.
+    const atCeiling = spawn("node", [serverEntry], {
+      env: estateEnv({ SIGNALGRID_ESTATE_REFRESH_SECONDS: "2147483" }),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    try {
+      check("estate refresh: the largest interval Node can honour (2147483s) still boots",
+        await waitReady(PORT12));
+    } finally {
+      atCeiling.kill("SIGTERM");
+      await exitOf(atCeiling);
+    }
+
     // Set on a DEMO core: there is no estate connector to refresh, so a server that
     // booted anyway would report a loop that could never run.
     const demoRefresh = spawn("node", [serverEntry], {

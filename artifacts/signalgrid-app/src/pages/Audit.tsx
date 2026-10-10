@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { AssuranceBadge } from "@/components/AssuranceBadge";
 import { formatDate } from "@/lib/format";
 import { getAuditV1 } from "@/lib/v1";
+import { chainAlert, chainBreak, chainGap } from "@/lib/auditChain";
+import { LiveRegion } from "@/components/LiveRegion";
 
 /**
  * The tamper-evident audit ledger from `/v1/audit` — the record a regulated
@@ -17,6 +19,18 @@ export function Audit() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <LiveRegion
+        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.chain.scope === "tenant" ? `${data.chain.length} events in this tenant's chain` : `${data.chain.length} records in the global ledger (all tenants)`}, ${data.events.length} of this tenant's events shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
+        alert={
+          error
+            ? data
+              ? "Audit ledger could not be re-read; chain unverified since the last read."
+              : "Audit ledger could not be read; chain unverified."
+            : data
+              ? chainAlert(data.chain)
+              : ""
+        }
+      />
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Audit</h1>
         <p className="text-muted-foreground mt-1 font-mono text-sm">
@@ -37,18 +51,18 @@ export function Audit() {
       {data && (
         <div
           className={`border rounded p-4 font-mono text-sm flex items-center gap-3 ${
-            data.chain.valid ? "border-border bg-card/50" : "border-destructive bg-destructive/10"
+            data.chain.valid && !data.chain.partial ? "border-border bg-card/50" : "border-destructive bg-destructive/10"
           }`}
         >
           <Badge
             variant="outline"
-            className={`font-mono uppercase border-transparent ${data.chain.valid ? "bg-status-allow" : "bg-status-deny"}`}
+            className={`font-mono uppercase border-transparent ${data.chain.valid && !data.chain.partial ? "bg-status-allow" : "bg-status-deny"}`}
           >
-            {data.chain.valid ? "chain verified" : "CHAIN BROKEN"}
+            {!data.chain.valid ? (chainBreak(data.chain) ? "CHAIN BROKEN" : "CHAIN UNVERIFIED") : data.chain.partial ? "PARTIALLY VERIFIED" : "chain verified"}
           </Badge>
           <span className="text-muted-foreground">
-            {data.chain.length} events, every digest recomputed on this request
-            {data.chain.brokenAtSeq !== null ? ` — broken at seq ${data.chain.brokenAtSeq}` : ""}
+            {data.chain.length} {data.chain.scope === "global-ledger" ? "global-ledger (all tenants) " : ""}events, every digest recomputed on this request
+            {chainBreak(data.chain) ? ` — broken at ${chainBreak(data.chain)}` : data.chain.partial ? ` — ${chainGap(data.chain)}` : ""}
           </span>
         </div>
       )}

@@ -2,12 +2,19 @@ import React from "react";
 import { useGetDashboardMetrics, useGetDecisionSeries, useListDecisions, useListLatestSignals } from "@workspace/api-client-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { outcomeTone } from "../lib/outcome-tone";
+import { LiveRegion } from "@/components/LiveRegion";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 
 export default function DashboardPage() {
-  const { data: metrics, isLoading } = useGetDashboardMetrics({ window: "24h" });
-  const { data: series } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
-  const { data: decisions } = useListDecisions({ limit: 10 });
-  const { data: signals } = useListLatestSignals({ limit: 8 });
+  const reduceMotion = usePrefersReducedMotion();
+  const { data: metrics, isLoading, isError: metricsError } = useGetDashboardMetrics({ window: "24h" });
+  const { data: series, isError: seriesError } = useGetDecisionSeries({ window: "24h", granularity: "hour" });
+  const { data: decisions, isError: decisionsError } = useListDecisions({ limit: 10 });
+  const { data: signals, isError: signalsError } = useListLatestSignals({ limit: 8 });
+  // The DesktopLayout shell reads the feed with { limit: 5 }, a different query key:
+  // this { limit: 8 } request can fail while the shell's succeeds. Reading the shell's
+  // key shares its cache entry; the page alerts only when the shell is not already.
+  const shellFeed = useListLatestSignals({ limit: 5 });
 
   const METRICS = [
     { label: "TOTAL DECISIONS", value: metrics?.totalDecisions.toLocaleString() ?? "–" },
@@ -18,6 +25,28 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6 max-w-screen-xl">
+      <LiveRegion
+        message={[
+          decisions?.decisions[0]
+            ? `Most recent decision: ${decisions.decisions[0].outcome.replace("_", " ")}, record ${decisions.decisions[0].id.slice(-6)} at ${new Date(decisions.decisions[0].evaluatedAt).toLocaleTimeString()}. ${signals && !signalsError ? `${signals.signals.filter((s) => s.status === "critical").length} critical signals.` : "Critical signal count unknown."}`
+            : "",
+          // The metric tiles and the volume chart poll too: a refresh that changes only
+          // them must change this text.
+          metrics && !metricsError
+            ? `24 hours: ${metrics.totalDecisions.toLocaleString()} decisions, ${(metrics.allowRate * 100).toFixed(1)}% allow, ${(metrics.restrictDenyRate * 100).toFixed(1)}% deny or restrict, ${Math.round(metrics.avgLatencyMs)}ms average latency.`
+            : "",
+          series?.series?.length && !seriesError
+            ? `Latest hour (${new Date(series.series[series.series.length - 1].timestamp).toLocaleTimeString()}): ${series.series[series.series.length - 1].allow} allow, ${series.series[series.series.length - 1].stepUp} step-up, ${series.series[series.series.length - 1].restrict} restrict, ${series.series[series.series.length - 1].deny} deny.`
+            : "",
+        ].filter(Boolean).join(" ")}
+        alert={[
+          decisionsError ? "Decisions could not be loaded." : "",
+          metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : "",
+          // The DesktopLayout shell owns the signal-feed outage alert: one assertive
+          // announcement per outage, so this one speaks only when the shell is not.
+          signalsError && !shellFeed.isError ? "Dashboard signal list could not be refreshed; critical signal count unknown." : "",
+        ].filter(Boolean).join(" ")}
+      />
       <div>
         <h1 className="text-xl font-bold tracking-tight">Overview</h1>
         <p className="text-xs font-mono text-muted-foreground mt-0.5">24H SYSTEM TELEMETRY (FIXTURE)</p>
@@ -56,10 +85,10 @@ export default function DashboardPage() {
                 <XAxis dataKey="timestamp" tickFormatter={t => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} stroke="hsl(var(--muted-foreground))" fontSize={10} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
                 <Tooltip contentStyle={{ backgroundColor: "hsl(var(--popover))", borderColor: "hsl(var(--border))", fontSize: 12 }} labelFormatter={t => new Date(t).toLocaleString()} />
-                <Area type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#ga)" stackId="1" />
-                <Area type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.4} fill="hsl(var(--decision-review))" stackId="1" />
-                <Area type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.25} fill="hsl(var(--decision-deny))" stackId="1" />
-                <Area type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#gd)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="allow" stroke="hsl(var(--decision-allow))" fillOpacity={1} fill="url(#ga)" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="stepUp" stroke="hsl(var(--decision-review))" fillOpacity={0.4} fill="hsl(var(--decision-review))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="restrict" stroke="hsl(var(--decision-deny))" strokeDasharray="4 2" fillOpacity={0.25} fill="hsl(var(--decision-deny))" stackId="1" />
+                <Area isAnimationActive={!reduceMotion} type="monotone" dataKey="deny" stroke="hsl(var(--decision-deny))" fillOpacity={1} fill="url(#gd)" stackId="1" />
               </AreaChart>
             </ResponsiveContainer>
           ) : (

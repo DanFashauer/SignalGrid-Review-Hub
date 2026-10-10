@@ -6,10 +6,20 @@
 // (requires the api-server to be built; preflight builds it beforehand.)
 
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
+import type { AddressInfo } from "node:net";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PORT = 5388;
+// OS-assigned port, as `live-idp-proof.ts` does — a fixed port collides with the
+// SAME fixed port bound by another tree or tick on the same host.
+const PORT = await new Promise<number>((res) => {
+  const probe = createServer();
+  probe.listen(0, "127.0.0.1", () => {
+    const p = (probe.address() as AddressInfo).port;
+    probe.close(() => res(p));
+  });
+});
 const BASE = `http://localhost:${PORT}/api`;
 const METRICS = `http://localhost:${PORT}/metrics`;
 const TOKEN = "sgk_demo_northwind_operator";

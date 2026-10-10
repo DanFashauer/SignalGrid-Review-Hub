@@ -1192,6 +1192,17 @@ async function run() {
   // else — no enrollment, tampered signature, replayed challenge, request-body
   // flags, cross-tenant credentials — must hold or 403, never release.
   const authenticator = makeStepUpAuthenticator("localhost", "http://localhost:3000");
+
+  // Route-level audit rows are witnessed at /metrics (the ledger has no HTTP route; see
+  // "admin actions leave an audit trail" below). The webauthn lib's OWN rows are not
+  // counted there, so a delta in this counter is exactly the route's refusal rows.
+  const auditCount = async (eventType) => {
+    const text = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    // A plain prefix match, no regex built from the event name: nothing to escape.
+    const prefix = `signalgrid_audit_events_total{event_type="${eventType}"} `;
+    const line = text.split("\n").find((l) => l.startsWith(prefix));
+    return line ? Number(line.slice(prefix.length)) : 0;
+  };
   const suIdentity = "nurse.baseline_drift";
   const suDevice = "ipad-ward-06";
 
@@ -1396,6 +1407,30 @@ async function run() {
   check("step-up challenge refuses a read-only auditor → 403 (no decision:evaluate)",
     auditorChallenge.status === 403 && auditorChallenge.json?.challengeId === undefined);
 
+  // AUTHORIZATION BEFORE WEBAUTHN on the COMPLETION route (backlog: "complete-step-up
+  // runs WebAuthn verification before the decision:evaluate authorization check").
+  // The mint sibling above refuses an auditor before touching WebAuthn; completion must
+  // run the SAME check first. An auditor (decision:read, no decision:evaluate) submits
+  // the legitimate holder's validly-signed assertion against the holder's pending
+  // challenge. It must be refused on authorization, and because verify fetches-and-
+  // deletes the challenge and advances the counter, the holder's own completion below
+  // (the SAME challenge and the SAME assertion) succeeding is the proof that WebAuthn
+  // was never reached. Before the fix the auditor's attempt consumed the challenge and
+  // the holder got "Unknown or expired".
+  const refusalsBeforeWorkflow = await auditCount("security.webauthn.step_up.failure");
+  const auditorComplete = await req("POST", "/v1/app-workflows/complete-step-up", {
+    token: KEYS.auditor,
+    body: {
+      integrationId: "bcma", identityRef: suIdentity, deviceRef: suDevice, actionKey: "controlled.administer",
+      challengeId: chalGood.json.challengeId, assertion: goodAssertion,
+    },
+  });
+  check("complete-step-up refuses a read-only auditor on decision:evaluate → 403, no plan",
+    auditorComplete.status === 403 && auditorComplete.json?.plan === undefined &&
+    /decision:evaluate/.test(auditorComplete.json?.message ?? ""));
+  check("...and the refused attempt is audited as a step-up FAILURE (refused, never success)",
+    (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeWorkflow + 1);
+
   const completed = await req("POST", "/v1/app-workflows/complete-step-up", {
     token: KEYS.operator,
     body: {
@@ -1403,6 +1438,8 @@ async function run() {
       challengeId: chalGood.json.challengeId, assertion: goodAssertion,
     },
   });
+  check("the holder's challenge SURVIVED the auditor's attempt (same challenge + assertion still complete → 200)",
+    completed.status === 200);
   check("verified assertion releases the BOUND action (no longer held)",
     completed.status === 200 && completed.json?.stepUp?.released === true &&
     completed.json?.stepUp?.actionKey === "controlled.administer" &&
@@ -1561,10 +1598,35 @@ async function run() {
     // THE ANSWER. A fresh challenge (the tampered attempt consumed the last one),
     // a genuinely signed UV assertion.
     const goodChallenge = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up/challenge`, { token: KEYS.operator, body: {} });
+    const goodDecisionAssertion = authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 });
+
+    // AUTHORIZATION BEFORE WEBAUTHN on the decision answer route, exactly as the mint
+    // sibling (/step-up/challenge) runs it. An auditor holds decision:read — enough to
+    // read the decision — but not decision:evaluate. Its attempt with the holder's
+    // validly-signed assertion must be refused BEFORE verify, so the holder's answer
+    // below (same challenge, same assertion) still succeeds; before the fix the auditor
+    // consumed the challenge, advanced the counter and left a success row in the ledger.
+    const refusalsBeforeDecision = await auditCount("security.webauthn.step_up.failure");
+    const successBeforeDecision = await auditCount("security.webauthn.step_up.success");
+    const auditorAnswer = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
+      token: KEYS.auditor,
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
+    });
+    check("decision step-up answer refuses a read-only auditor on decision:evaluate → 403, nothing recorded",
+      auditorAnswer.status === 403 && auditorAnswer.json?.stepUp === undefined &&
+      /decision:evaluate/.test(auditorAnswer.json?.message ?? ""));
+    check("...and the refused attempt is audited as a step-up FAILURE, with no success row",
+      (await auditCount("security.webauthn.step_up.failure")) === refusalsBeforeDecision + 1 &&
+      (await auditCount("security.webauthn.step_up.success")) === successBeforeDecision);
+    const unansweredAfterAuditor = await req("GET", `/v1/decisions/${stepUpDecisionId}`, { token: KEYS.operator });
+    check("...and the decision is STILL unanswered after the auditor's refusal", unansweredAfterAuditor.json?.stepUp === null);
+
     const answered = await req("POST", `/v1/decisions/${stepUpDecisionId}/step-up`, {
       token: KEYS.operator,
-      body: { challengeId: goodChallenge.json.challengeId, assertion: authenticator.assertion(goodChallenge.json.publicKey.challenge, { signCount: 50 }) },
+      body: { challengeId: goodChallenge.json.challengeId, assertion: goodDecisionAssertion },
     });
+    check("the holder's decision challenge SURVIVED the auditor's attempt (same challenge + assertion → 200)",
+      answered.status === 200);
     check("a verified assertion ANSWERS the step_up → 200 with the recorded answer",
       answered.status === 200 && answered.json?.stepUp?.decisionId === stepUpDecisionId &&
       answered.json?.stepUp?.method === "webauthn" && typeof answered.json?.stepUp?.answeredAt === "string");

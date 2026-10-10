@@ -2378,7 +2378,25 @@ earlier — that is the loop working, not a reason to soften the record.
 
 82. **A credential REVOCATION can be silently undone by a concurrent enrolment —
     the one mutator in the store without the lock its neighbours carry.** — OPEN,
-    security-engineer. Found by the first read of `lib/webauthn/**` and
+    security-engineer. FIX PROPOSED 2026-09-30 (branch
+    claude/build-webauthn-revocation-race, owner merges): the defect as filed NO
+    LONGER REPRODUCES. `removeCredential` in `lib/webauthn/src/webauthn/store.ts`
+    already shares `withUserLock` and its fenced writes with `addCredential`.
+    `POST /v1/step-up/enroll/revoke` in `artifacts/api-server/src/routes/v1.ts` now
+    calls it, so the row is LIVE rather than latent. `proof:enrollment-race` passed
+    15/15 on a real Redis before any change. What was missing was a check that forces
+    the ordering. The twelve-way race only shows the bad ordering did not happen on
+    that run. Added `forcedRow82Orderings` to
+    `scripts/src/webauthn-enrollment-race-proof.ts`: it forces both orders on a real
+    Redis (enrolment reads → revocation → enrolment writes, and the mirror order). It
+    uses no timers or randomness; each step waits on an event from the store itself.
+    Falsified: with `removeCredential` put back to the unlocked
+    getUser → splice → saveUser in a scratch edit, ordering A reports `revoked=true`
+    and still leaves `cred-800` in the record, and ordering B loses the enrolment.
+    Items 2 and 3 below were already handled (the attestation policy gate in
+    `lib/webauthn/src/webauthn/verify.ts`; `hasValidStepUpSession` is marked
+    `@deprecated` in `lib/webauthn/src/stepUpStore.ts`, and deleting it is an owner
+    cut). Human compliance review still required. Found by the first read of `lib/webauthn/**` and
     `lib/enterprise-auth/**`, and INDEPENDENTLY CONFIRMED before filing.
     · `addCredential` (`store.ts:166-239`) takes a per-user `SET NX PX` Redis lock
       before its read-modify-write, and carries a long comment explaining exactly

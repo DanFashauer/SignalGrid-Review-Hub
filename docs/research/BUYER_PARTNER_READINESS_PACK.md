@@ -1,6 +1,6 @@
 # Buyer / Partner Readiness Pack
 
-SignalGrid connects the systems a building already runs - access control, identity, device management, location, applications, ticketing - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2, verbatim; it owns the product sentence, and no category label is ratified — DR-019/DR-020). Limited GA evaluates device posture, device-management health, and local authority; credential-reader events, custody, network context, and location are deferred signal families, proven in fixtures and Beyond Limited GA.
+SignalGrid connects the systems a company already runs - access control, identity, device management, location, applications, ticketing, the legacy ones never built to talk to each other included - into one grid that decides and acts on the person's behalf (`docs/PURPOSE.md` §2, verbatim; it owns the product sentence, and no category label is ratified — DR-019/DR-020). Limited GA evaluates device posture, device-management health, and local authority; credential-reader events, custody, network context, and location are deferred signal families, proven in fixtures and Beyond Limited GA.
 
 ## Product thesis
 

@@ -2182,7 +2182,15 @@ async function run() {
   check("session end → 200 and the session is no longer active", ended.status === 200 && ended.json?.session?.status !== "active");
   // The one that would actually hurt: an ended session must not be revivable, or
   // "end" is advisory rather than an control.
+  const refreshAuditCount = async () => {
+    const t = await (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const m = t.match(/signalgrid_audit_events_total\{event_type="session\.refresh"\} (\d+)/);
+    return m ? Number(m[1]) : 0;
+  };
+  const refreshAuditBefore = await refreshAuditCount();
   const refreshAfterEnd = await req("POST", `/v1/sessions/${sessionId}/refresh`, { token: KEYS.operator, body: { ttlSeconds: 900 } });
+  check("a refresh that did not happen appends no session.refresh audit row",
+    (await refreshAuditCount()) === refreshAuditBefore);
   // 404, specifically — not merely "not a 200 with active". The store used to hand
   // the ENDED session object back and the route answered 200 with status "ended"
   // plus a session.refresh audit row for a refresh that never happened; the old

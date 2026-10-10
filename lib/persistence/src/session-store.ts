@@ -296,11 +296,15 @@ export class PostgresSessionStore implements SessionStore {
     if (!current || current.status !== "active") return null;
     const lastSeenAt = new Date(nowMs).toISOString();
     const expiresAt = new Date(nowMs + ttlSeconds * 1000).toISOString();
-    await this.pool.query(
-      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4",
+    // The status guard makes the UPDATE the arbiter: an end() that committed after
+    // the read above matches no row, so the losing refresh returns null (the route
+    // answers 404 and appends no session.refresh audit row) instead of echoing an
+    // `active` session that is already ended.
+    const res = await this.pool.query(
+      "UPDATE public.sessions SET last_seen_at = $1, expires_at = $2 WHERE id = $3 AND tenant_id = $4 AND status = 'active' RETURNING *",
       [lastSeenAt, expiresAt, id, tenantId],
     );
-    return { ...current, lastSeenAt, expiresAt };
+    return res.rows[0] ? this.rowToSession(res.rows[0]) : null;
   }
 
   async end(tenantId: string, id: string): Promise<Session | null> {

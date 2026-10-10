@@ -33,6 +33,20 @@ A SAFETY_MACHINERY PR (`scripts/**`, `.github/workflows/**`, fixtures) may be
 merged under the same five conditions, and the PR body must say so under "Owner
 decision needed" as "merged under DR-037" with the check-run id.
 
+A DECISION_PATH PR may be merged by a lane under DR-061 (owner-directed
+2026-09-29, in force once its PR is merged) only when, on the CURRENT head, the
+same five conditions hold AND an adversarial review by an Opus-tier agent that did
+not author the change found no unresolved blocking finding AND the body quotes an
+executed counterexample (the command, its failing line on the base, its passing
+line on the head). The body says "DECISION_PATH: merged under DR-061 with check
+run <id>". DR-061 rule 2's paths stay the owner's merge whatever their category:
+`docs/DECISION_RECORDS.md`, `docs/agent/objective.json`, the launch profile, the
+launch-claims gate and its two ceiling ratchets, the publication boundary, every
+path `scripts/check-owner-gated-surfaces.mjs` classifies OWNER_RESERVED (pricing,
+positioning, the buyer-facing site and outreach among them), CLAUDE.md's golden
+rules, and `DecisionEngine.swift` / `AppWorkflows.swift` outside a literal re-port
+the owner has ruled on in a record. A PR touching any of them is the owner's whole.
+
 ## Native client and shared-vector PRs
 
 The gating check runs only the static conformance gate (`review-hub-ci.yml`'s

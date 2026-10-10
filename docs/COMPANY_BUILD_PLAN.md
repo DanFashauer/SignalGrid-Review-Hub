@@ -650,6 +650,7 @@ earlier — that is the loop working, not a reason to soften the record.
     `clears` in `resolution.ts` — while the sibling `summaryForWorker` is
     rendered twice, which is what makes the operator one conspicuous.
 43. **Falsifiability is enforced only for the connector tier** — devex-tooling-engineer. HALF DONE 2026-09-30 (PR #1318, a2fce49e — six check-gates fixed):
+    FIX PROPOSED 2026-10-08 (branch claude/build-gate-self-tests-run, lands under DR-037): `scripts/check-gate-self-tests-run.mjs`, registered in preflight and CI; detail in the RE-MEASURED 2026-10-08 paragraph below.
     the six check-gates that had no failure control at all — no `--self-test` flag, no
     in-run control, no exported verdict — now factor their verdict into a pure function
     and run one planted-failing and one passing synthetic input through it on EVERY
@@ -697,14 +698,49 @@ earlier — that is the loop working, not a reason to soften the record.
     functions that cannot return falsy). Only the fourteen above were verified
     by falsification, so the rest stays a reported figure until someone plants
     a defect against it. Also open: mutation coverage still does not reach the
-    verdict core, and 21 of 50 check-gates carry no self-test.
-    RE-MEASURED 2026-09-30 (`grep -L -- '--self-test' scripts/check-*.mjs | wc -l`
-    at `SignalGrid_Alpha` 3a59d864): that figure was stale — 25 of 150 take no
-    `--self-test` flag (26 before #1274 gave `scripts/check-module-init-order.mjs` one).
-    Most of those carry an in-run control instead; the six that had neither (0–2
-    comment-only hits for self-test/control/planted/falsif) are the ones fixed above.
-    This is a dated measurement, not a held figure: no gate re-derives it, so re-run
-    the grep rather than trusting the number.
+    verdict core (the check-gate self-test half is re-derived below).
+    RE-MEASURED 2026-10-08 (at `SignalGrid_Alpha` 44885201): a re-derived figure now, not a
+    dated grep. `node scripts/check-gate-self-tests-run.mjs` prints it on every run and
+    fails on the defect: of the `scripts/check-*.mjs` gates it finds, those with a quoted
+    `--self-test` handler on a non-comment line are split into the ones a
+    `scripts/preflight.mjs` step or a workflow `run:` line invokes as `<gate> --self-test`
+    and the ones nobody does; the second kind it SPAWNS, requiring exit 0 AND stdout that
+    names a self-test (a flag accepted as a no-op is not credited); a gate with no handler
+    must name a control on a non-comment line, which is a FLOOR against a gate with none,
+    NOT proof that its control can fail (counted as "control-only", never "self-tested").
+    Measured on the branch head: 159 gates, 133 with a handler, 124 registered, 9 run by the
+    gate (all passed, including `scripts/check-api-collection.mjs`,
+    `scripts/check-deployment-runbook.mjs` and `scripts/check-desktop-core-tests.mjs`, whose
+    self-tests ran in no step before), 26 control-only, 0 with neither. Falsified: with
+    `return 1;` first in `selfTest()` of `scripts/check-api-collection.mjs` (and of
+    `scripts/check-deployment-runbook.mjs`) in a scratch copy, the default run, preflight's
+    step and CI's step stayed green and only this gate went red, naming the file.
+    What the runners iterate is read FROM the runners: `scripts/preflight.mjs` and
+    `scripts/verify-breadth.mjs` answer `--list-steps` with the list their loop runs (JSON), and the
+    gate registers a self-test only for a step whose argv is `node scripts/check-*.mjs …
+    --self-test` (or a known `pnpm run` alias), that is neither `heavy` nor `needsNativeBuild`;
+    the listing block must sit directly above the one `for (const step of STEPS)` loop, or the
+    gate fails. Stated limits: a loop body that rewrites `step.cmd`. Workflow steps are decided by
+    `scripts/lib/workflow-invocation.mjs`, the matcher `scripts/check-preflight-ci-parity.mjs`
+    uses (command position, quotes masked, no `echo`, no `continue-on-error`, no step-level
+    `shell:` other than bash or sh; `--self-test-not` is not `--self-test`; a `run:` counts only as
+    a step in a job's `steps:` under a top-level `jobs:`), and only for workflows that list
+    `pull_request` or `push` as an event (directly under a block `on:`, or a top-level key of an
+    inline one that holds no quote, tag, anchor or alias); branch and path filters, `if:` and a
+    job-level `defaults.run.shell` are not read, and a `run:` line that shells out `|| true`, `false &&`,
+    `; exit 0` or a heredoc body that merely contains the command is still credited (the parity gate's
+    known limits, widened by the same matcher), and a runner entry whose value depends on `process.env` or other runtime state that differs between the `--list-steps` run and the real run is not modelled (a second verbatim `--list-steps` mention in the runner is refused, which is a blacklist on one spelling; a decoy dump block in a string or template, in a function or `if` block, or under a brace-free `if`, is refused by a code-position check — top level, right after a statement boundary — whose string and comment parse is the stripper's regex-versus-division heuristic, so a decoy hidden by a misparse is a stated limit; the runners flush their `--list-steps` write before exiting because a pipe cut it at 64 KiB on macOS, and the shape check requires the awaited-write form, so reverting the flush turns it red; a behavioural pipe test needs a shell, which CodeQL flags, so there is none). Its `--self-test` (137 cases; every planted
+    mutant of the gate and of the shared matcher turns it red except the spawn timeout option and
+    the `r.error` check, which are equivalent by construction)
+    plants an unregistered gate whose flag exits 1, an unregistered no-op
+    flag, and a flag-less gate whose only control sits in a comment (each exit 1), against a
+    registered gate that must NOT be spawned and a gate with a real control (each exit 0).
+    STILL OPEN after this, and not restated as measured: the roughly 334 structurally
+    unfailable assertions in `scripts/src/signalgrid-grid-proof.ts` (no gate counts
+    tautological assertions; sweeping them means planting defects in the simulator),
+    mutation coverage of the verdict core (`scripts/mutation-guard.mjs` TARGETS registers no
+    `lib/signalgrid-simulator` or `lib/signalgrid-core/src/engine.ts` file; a separate row),
+    and retirement of the `tests/load` k6 drivers (the owner's).
     The unexecuted-test half is now DISPOSITIONED rather than merely known.
     Reading the eight `tests/security-reference/` suites settled what they were:
     Vitest specs against the retired DEV Next.js server — `/api/session/start`,
@@ -4809,7 +4845,7 @@ Served surface and durable path:
 20. lib/persistence/src/session-store.ts (332) — durable session writes and tenant scoping.
 
 Meta-gates (what green means) and launch connectors:
-21. scripts/preflight.mjs (945) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
+21. scripts/preflight.mjs (957) — the per-push lane CI mirrors; a gate mis-registered here disappears quietly.
 22. scripts/launch-profile.mjs (876) — the 180-item (2026-09-06; `node scripts/check-launch-profile.mjs` prints the live total) classification every launch claim trusts; audit each 'launch' reason against source.
 23. scripts/check-guard-registries.mjs (206) — the registry-drift detector; a hole here makes gaps silent by construction.
 24. lib/integrations/src/integrations/local-authority/evaluate.ts (190) — launch family; device-reported authority, the frontline half of the product.

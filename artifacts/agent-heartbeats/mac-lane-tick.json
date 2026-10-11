@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-11T00:00:15.879Z",
-  "result": "acted: ran 0 sim request(s); results on mac/tick-20261011T000008Z; objective: escalate; unread=5 oldest=2d to mac; raised-hands=15 overdue=9"
+  "firedAt": "2026-10-11T00:05:25.209Z",
+  "result": "quiet; objective: escalate; unread=5 oldest=2d to mac; raised-hands=15 overdue=9"
 }

@@ -22,7 +22,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync, accessSync, constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { dirname, resolve, isAbsolute, relative, sep, basename, delimiter } from "node:path";
+import { dirname, resolve, isAbsolute, relative, sep, basename, delimiter, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -168,7 +168,17 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //     entries only (gitEnv): the readiness, doctrine-gate and raised-hands children, each started by process.execPath and not by name, and any git they run by name. The coverage module section 4b imports starts git by name
 //     in THIS process, so absolutePathOnly() narrows process.env.PATH the same way for as long as it runs and then puts it back. A PATH with no absolute entry is passed on as NO PATH (an empty one is read by exec as the current
 //     directory). Known divergence from exec: a git whose script interpreter is missing is picked by gitOnPath but skipped by execvp, which is a false red (every git call fails closed), never a false green.
-//     Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
+//     Not covered by the KEY audit above (GIT_EXEC_OFF, the filter drivers, the credential helper), and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of
+//     them reads a key that runs a program) are not handed those -c keys. They DO get the absolute PATH entries only, as the paragraph above says: the key audit is the only thing that module is outside.
+//   WHAT "ABSOLUTE" MEANS HERE (round 32; the round-30 and round-31 rules were written as `path.isAbsolute`, which is LEXICAL): one predicate, isTrustedAbsoluteEntry, decides it everywhere a PATH entry is classified
+//     (absolutePathEntries and so gitEnv and absolutePathOnly, gitOnPath and so gitProgram and the shadow gate, pathHelperProblems). An entry is trusted only if it is absolute AND it does not name a place the kernel resolves
+//     PER PROCESS: anything under /proc/ (/proc/self/cwd, /proc/self/cwd/.., /proc/<pid>/cwd/.., /proc/self/fd/N, /proc/self/root, /proc/thread-self) or under /dev/fd (and /dev/stdin, /dev/stdout, /dev/stderr, which are
+//     links into it). `/proc/self/cwd/../x` is absolute to path.isAbsolute, but the kernel reads it against the working directory of whichever process looks it up, so a git planted there ran on the check's own path (round-31 review:
+//     exit 0 and a green transport row in the Opus-p4 fixture, 31 planted calls). The rule is compared on the entry AS WRITTEN and again on its lexically normalised form (path.posix.normalize collapses `..`, so
+//     `/tmp/../proc/self/cwd` and `//proc/self/cwd` are caught by the second, and `/proc/self/cwd/../..` by the first), case-insensitively. A per-process entry is treated like a relative one: never handed to any process,
+//     never where a git is found, scanned for a shadowing git and for git-remote helpers (as `/proc/self/cwd<rest>` read against the directory each lookup would run in, and as written for any other spelling, which only
+//     this process can read: an entry this process cannot read is skipped like a missing directory, because nothing started here uses it). NOT a rule, and said so: an ABSOLUTE entry that is not under those prefixes is
+//     trusted wherever it points (an absolute symlink whose target looks relative, an entry that equals the repository root): that is the user's own choice of a directory, not a lookup that moves with the process.
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
@@ -185,7 +195,24 @@ function gitEnv(extra) {
 // found a git planted at $TMPDIR/x while every repository-side call found nothing at ../x and used the real one, and the planted git answered the listing (Opus round-29 refute: green row, exit 0, and no missing helper needed).
 // The program is now found once per PATH value through the ABSOLUTE entries only (the first one holding an executable file named git, as exec would), gitRun starts it by that absolute path, and gitEnv hands every git a
 // PATH with only the absolute entries (git still finds its own helpers). A non-absolute entry that holds a git AHEAD of that one is a gated finding (hubTransport): the user's own git, run from the repository, would run it.
-function absolutePathEntries(pathVar) { return String(pathVar).split(delimiter).filter((e) => isAbsolute(e)).join(delimiter); }
+// ROUND 32. The one predicate for "this PATH entry names the same place for every process" (see the header). `isAbsolute` alone is lexical: /proc/self/cwd/../x is absolute to it and resolves, in each process that looks, against THAT process's own
+// working directory. The raw spelling is compared first (a normalised `/proc/self/cwd/../..` has lost the evidence), then the lexically normalised one (`/tmp/../proc/self/cwd`, `//proc/self/cwd`, `/./dev/fd/3`).
+const PER_PROCESS_ROOTS = ["/proc", "/dev/fd", "/dev/stdin", "/dev/stdout", "/dev/stderr"];
+function isPerProcessSpelling(p) { const q = p.toLowerCase(); return PER_PROCESS_ROOTS.some((r) => q === r || q.startsWith(`${r}/`)); }
+function isTrustedAbsoluteEntry(entry) {
+  const raw = String(entry);
+  return isAbsolute(raw) && !isPerProcessSpelling(raw) && !isPerProcessSpelling(posix.normalize(raw));
+}
+// Where a lookup that starts in `base` reads a PATH entry that is not trusted: a relative one joined to it (by concatenation, as the kernel follows `..` through a symlink); `/proc/self/cwd<rest>` as `base<rest>` (that IS
+// the lookup's working directory); any other per-process spelling as written, which is how THIS process reads it (the only process there is any evidence about).
+const CWD_ENTRY = /^\/+proc\/+(?:self|thread-self)\/+cwd(\/.*)?$/;
+function entryMovesWithCwd(raw) { return !isAbsolute(raw) || CWD_ENTRY.test(raw); } // (what the lookup's own working directory decides; any other per-process spelling is read as written)
+function untrustedEntryDir(raw, base) {
+  const m = CWD_ENTRY.exec(raw);
+  if (m) return `${base}${m[1] ?? ""}`;
+  return isAbsolute(raw) ? raw : `${base}${sep}${raw}`;
+}
+function absolutePathEntries(pathVar) { return String(pathVar).split(delimiter).filter((e) => isTrustedAbsoluteEntry(e)).join(delimiter); }
 // ROUND 31. The same rule for THIS process while a module it imports runs: section 4b imports check-surface-review-coverage.mjs, which starts git BY NAME (ls-files, log, rev-parse, cat-file) with process.env.PATH.
 // absolutePathOnly() leaves only the absolute entries there (the key gone, not empty, when there is none) and returns what puts it back exactly.
 function absolutePathOnly() {
@@ -199,9 +226,9 @@ function isExecutableFile(file) { try { if (!statSync(file).isFile()) return fal
 function gitOnPath(pathVar = process.env.PATH ?? "", cwd = null) {
   const shadows = [];
   for (const raw of String(pathVar).split(delimiter)) {
-    const absolute = isAbsolute(raw);
+    const absolute = isTrustedAbsoluteEntry(raw); // (round 32: not path.isAbsolute; an entry that resolves per process is read like a relative one)
     if (!absolute && cwd === null) continue;
-    const dir = absolute ? raw : `${cwd}${sep}${raw}`; // (concatenated, not path.resolve: the kernel follows `..` through a symlink as exec does)
+    const dir = absolute ? raw : untrustedEntryDir(raw, cwd); // (concatenated, not path.resolve: the kernel follows `..` through a symlink as exec does)
     const file = `${dir}${dir.endsWith(sep) ? "" : sep}${GIT_FILE}`;
     if (!isExecutableFile(file)) continue;
     if (absolute) return { bin: file, shadows };
@@ -471,13 +498,13 @@ function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir
     // git the repository. Never this process's. So it is joined to each by plain concatenation, NOT path.resolve (the kernel then follows `..` through a symlink exactly as exec does: the parent of the link's target).
     // ROUND 30. Both are read (repoDir is the user's side, which round 29 had dropped; every git started HERE gets only absolute entries, so the listing side is belt and braces). With no listing directory the entry is
     // also a note (the row is a warning), never silence.
-    const relative = !isAbsolute(raw);
-    if (relative && listingDir === null) {
-      const nt = `PATH entry ${JSON.stringify(raw)} is not absolute and the directory the Hub listing runs in is not known, so it was not scanned there`;
+    const relative = !isTrustedAbsoluteEntry(raw); // (round 32: a per-process entry such as /proc/self/cwd/../x is read in each directory, like a relative one)
+    if (relative && listingDir === null && entryMovesWithCwd(raw)) {
+      const nt = `PATH entry ${JSON.stringify(raw)} ${isAbsolute(raw) ? "is read against the working directory of whichever process looks it up" : "is not absolute"} and the directory the Hub listing runs in is not known, so it was not scanned there`;
       if (!notes.includes(nt)) notes.push(nt);
     }
     for (const base of relative ? [listingDir, repoDir].filter((b) => b !== null) : [null]) {
-      const dir = relative ? `${base}${sep}${raw}` : raw;
+      const dir = relative ? untrustedEntryDir(raw, base) : raw;
       if (seen.has(dir)) continue;
       seen.add(dir);
       let names;
@@ -2230,10 +2257,10 @@ function selfTest() {
   // A case whose PRECONDITION is a platform behaviour (a resource cap that makes git fail, a corrupt file that makes it exit non-zero): when the platform does not offer it, the case says so by name, in the
   // summary, and STILL asserts the guarded answer (the check under test is not excused). Never a silent pass, never a failure of the check under test.
   const notOnOffer = [];
-  const checkWithPrecondition = (name, offered, reason, guarded) => {
-    if (offered) return check(name, guarded);
+  const checkWithPrecondition = (name, offered, reason, guarded, detail) => {
+    if (offered) return check(name, guarded, detail);
     notOnOffer.push([name, reason]);
-    return check(`${name} [precondition not on offer on this platform: ${reason}; the guarded answer is asserted without it]`, guarded);
+    return check(`${name} [precondition not on offer on this platform: ${reason}; the guarded answer is asserted without it]`, guarded, detail);
   };
   try {
     execFileSync("git", ["init", "-q", "--bare", hub]);
@@ -3313,6 +3340,7 @@ function selfTest() {
     mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then [ -n \"$R16_LISTED\" ] && : > \"$R16_LISTED\"; cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
     const wholeScript = (fx, name, vars = {}, opts = {}) => {
       // opts.hub: run a copy of the script whose Hub constant is another URL (a reserved host, so no fixture carries a credential for a real one)
+      // opts.execArgv: node options for the checked process only (never NODE_OPTIONS, which would reach its children); opts.stdio: its stdio, an extra descriptor included (round 32)
       const hubLine = `const HUB = "${HUB}";`, copy = opts.hub ? prodSrc.replace(hubLine, `const HUB = "${opts.hub}";`) : prodSrc;
       if (opts.hub && (!prodSrc.includes(hubLine) || copy === prodSrc)) throw new Error("the Hub constant is not where the self-test expects it");
       mkdirSync(join(fx.w, "scripts"), { recursive: true }); writeFileSync(join(fx.w, "scripts", "loop-state.mjs"), copy);
@@ -3320,7 +3348,7 @@ function selfTest() {
       const childEnv = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, R9_REAL_GIT: realGit, R9_FAKE_LISTING: listing, R16_LISTED: join(root, `${name}-listed`), GIT_CONFIG_GLOBAL: hermetic.GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM: "1", ...vars };
       delete childEnv.GIT_SSL_NO_VERIFY;
       for (const [k, v] of Object.entries(vars)) if (v === null) delete childEnv[k]; // (null: unset)
-      const r = spawnSync(process.execPath, [join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: opts.timeout ?? 120000, killSignal: "SIGKILL", env: childEnv });
+      const r = spawnSync(process.execPath, [...(opts.execArgv ?? []), join(fx.w, "scripts", "loop-state.mjs")], { cwd: fx.w, encoding: "utf8", timeout: opts.timeout ?? 120000, killSignal: "SIGKILL", env: childEnv, ...(opts.stdio ? { stdio: opts.stdio } : {}) });
       return { error: r.error ? r.error.code || String(r.error) : null, status: r.status, out: stripAnsi(r.stdout), err: String(r.stderr || ""), listed: readIfPresent(join(root, `${name}-listed`)) !== null }; // listed: the Hub listing was ASKED FOR
     };
     const txe = mkFx("r9txe"); txe.f("config", "remote.origin.url", HUB);
@@ -4567,6 +4595,119 @@ exit 1
       // (6) what the header and the code claim
       check("the header states the scope of the rule as it is (gitRun starts git by an absolute path; every other process gets a PATH of absolute entries only; the one known divergence from exec is named), and no node child is started by name (R31-audit-scope)",
         prodText.includes("ROUND 31") && prodText.includes("absolutePathOnly()") && prodText.includes("a git whose script interpreter is missing") && !/(?:execFileSync|spawnSync|execFile|spawn)\(\s*["'`]node["'`]/.test(prodText) && prodText.includes("found through the absolute PATH entries only"));
+    }
+    // ══ ROUND 32 ══ "Absolute" is not lexical. Round 31 kept a PATH entry iff path.isAbsolute(entry), but /proc/self/cwd/../x, /proc/<pid>/cwd/.., /proc/self/fd/N, /dev/fd/N and /proc/self/root are absolute to that test and
+    // are resolved by the KERNEL per process: a git planted behind `/proc/self/cwd/../x` was found by the check's own lookup and ran on its own path (round-31 review: exit 0 and a green transport row in the Opus-p4 fixture,
+    // 31 planted calls). One predicate, isTrustedAbsoluteEntry, now decides it everywhere a PATH entry is classified; the cases below pin each site (the entry lists, the program lookup, the helper scan, the whole script),
+    // and the call-site restore of section 4b, which no round-31 case could see go missing. Stubs here are planted `git` files only: an absolute shebang and builtins or absolute paths inside, never a program by name.
+    {
+      const rroot = realpathSync(root);
+      const mk = (name) => { const d = join(rroot, name); mkdirSync(d); return d; };
+      const asPath = (...d) => d.join(delimiter);
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const plantGit = (dir) => { const f = join(dir, "git"); writeFileSync(f, "#!/bin/sh\necho called >> \"$R32_LOG\"\nexit 1\n", { mode: 0o755 }); return f; };
+      const fds = [];
+      const dirFd = (dir) => { const fd = openSync(dir, "r"); fds.push(fd); return fd; };
+      try {
+        const absA = mk("r32-abs-a"), absB = mk("r32-abs-b"), gA = plantGit(absA);
+        // (1) the predicate: what counts as the same place for every process
+        const linkTarget = mk("r32-link-target"), linkHome = mk("r32-link-home"), gLink = plantGit(linkTarget); symlinkSync("../r32-link-target", join(linkHome, "alink"));
+        const trustedEntries = ["/usr/bin", "/", "/tmp/x/../y", "/tmp/proc/self/cwd", "/procfoo/bin", "/dev/fdx", "/dev", "/devices/fd/3", join(linkHome, "alink"), rroot];
+        const perProcess = ["/proc", "/proc/self", "/proc/self/cwd", "/proc/self/cwd/", "/proc/self/cwd/../x", "/proc/self/cwd/../../x", "/proc/thread-self/cwd/..", "/proc/self/root/usr/bin", "/proc/self/fd/3",
+          `/proc/${process.pid}/cwd/../x`, "/proc/1/root", "/dev/fd", "/dev/fd/3", "/dev/stdin", "/dev/stdout", "/dev/stderr", "//proc/self/cwd", "/./proc/self/cwd/../x", "/tmp/../proc/self/cwd/../x",
+          "/usr/../dev/fd/3", "/PROC/self/cwd", "/Dev/FD/3", "/dev/fd/../fd/3", "/proc/./self/cwd"];
+        const notAbsolute = ["", ".", "..", "../x", "rel/dir", "proc/self/cwd", "dev/fd/3"];
+        const wrongOnes = [...trustedEntries.filter((e) => !isTrustedAbsoluteEntry(e)), ...perProcess.filter((e) => isTrustedAbsoluteEntry(e)), ...notAbsolute.filter((e) => isTrustedAbsoluteEntry(e))];
+        check("an entry is trusted only if it is absolute AND not a place the kernel resolves per process: /proc/self/cwd/.. , /proc/<pid>/.. , /proc/self/fd/N , /proc/self/root , /dev/fd/N and the spellings that reach them (doubled or dotted slashes, `..` out of another directory, other case) are not; an ordinary absolute entry is, an absolute symlink whose target looks relative and the repository root included (R32-trusted-entry-unit)",
+          wrongOnes.length === 0 && gitOnPath(join(linkHome, "alink"), null).bin === join(linkHome, "alink", "git") && gitOnPath(join(linkHome, "alink"), null).bin !== gLink,
+          () => JSON.stringify({ wrongOnes }));
+        // (2) the lists every process is handed, and the program every git is started by: planted git reached from THIS process through each spelling
+        const planted = mk("r32-planted"), gPlanted = plantGit(planted), fdPl = dirFd(planted);
+        const viaCwd = `/proc/self/cwd/${relative(process.cwd(), planted)}`, viaPid = `/proc/${process.pid}/cwd/${relative(process.cwd(), planted)}`, viaFd = `/dev/fd/${fdPl}`;
+        const reach = (e) => { try { return statSync(`${e}/git`).isFile(); } catch { return false; } };
+        const mixed = asPath(absA, viaCwd, viaFd, viaPid, "/dev/stdin", "/proc/self/cwd", absB), only = asPath(viaCwd, viaFd, viaPid);
+        const lists = withEnvVars({ PATH: mixed }, () => ({ env: gitEnv().PATH, prog: gitProgram(), inside: (() => { const back = absolutePathOnly(), seen = process.env.PATH; back(); return seen; })() }));
+        const listsNone = withEnvVars({ PATH: only }, () => ({ has: "PATH" in gitEnv(), prog: gitProgram(), hasInside: (() => { const back = absolutePathOnly(), seen = "PATH" in process.env; back(); return seen; })() }));
+        checkWithPrecondition("the planted git is reachable from this process through all three spellings (the precondition: /proc/self/cwd/<relative path>, /proc/<pid>/cwd/<relative path> and /dev/fd/<open directory>), and none of them is handed to any process or used to find the git: gitEnv and absolutePathOnly keep absA:absB, gitProgram is absA's git, and a PATH of those three alone is no PATH and no git (R32-entries-unit)",
+          reach(viaCwd) && reach(viaPid) && reach(viaFd), "this platform does not resolve /proc/self/cwd, /proc/<pid>/cwd and /dev/fd/N to a directory",
+          lists.env === asPath(absA, absB) && lists.inside === asPath(absA, absB) && lists.prog === gA && listsNone.has === false && listsNone.hasInside === false && listsNone.prog === null,
+          () => JSON.stringify({ lists, listsNone }));
+        // (3) the shadow gate: a per-process entry is read like a relative one, in the directory the lookup would run in
+        const parent = mk("r32-parent"), repoDir = join(parent, "repo"), plantedDir = join(parent, "planted"); mkdirSync(repoDir); mkdirSync(plantedDir);
+        const gUnder = plantGit(plantedDir), gUp = plantGit(parent), gHere = plantGit(repoDir), fdUnder = dirFd(plantedDir);
+        const named = (r, file) => r.shadows.length === 1 && r.shadows[0] === file;
+        const g = {
+          rel: gitOnPath(asPath("/proc/self/cwd/../planted", absA, absB), repoDir), here: gitOnPath(asPath("/proc/self/cwd", absA), repoDir), slash: gitOnPath(asPath("/proc/self/cwd/", absA), repoDir),
+          up: gitOnPath(asPath("/proc/self/cwd/..", absA), repoDir), thread: gitOnPath(asPath("/proc/thread-self/cwd/../planted", absA), repoDir), doubled: gitOnPath(asPath("//proc//self//cwd/../planted", absA), repoDir),
+          pid: gitOnPath(asPath(`/proc/${process.pid}/cwd/${relative(process.cwd(), plantedDir)}`, absA), repoDir), fd: gitOnPath(asPath(`/dev/fd/${fdUnder}`, absA), repoDir),
+          absFirst: gitOnPath(asPath(absA, "/proc/self/cwd/../planted"), repoDir), only: gitOnPath("/proc/self/cwd/../planted", repoDir), noCwd: gitOnPath(asPath("/proc/self/cwd/../planted", absA), null),
+        };
+        check("a git behind a per-process PATH entry ahead of the first trusted one is a shadow naming the file, resolved where the lookup would run: /proc/self/cwd/../planted , /proc/self/cwd , /proc/self/cwd/ , /proc/self/cwd/.. , /proc/thread-self , the doubled-slash spelling from the repository directory, /proc/<pid>/cwd/.. and /dev/fd/N as this process reads them; behind a trusted git it is none, with no PATH to be read against it is none, and with no trusted git at all it is the finding with no program (R32-git-resolve-unit)",
+          g.rel.bin === gA && named(g.rel, gUnder) && g.here.bin === gA && named(g.here, gHere) && named(g.slash, gHere) && named(g.up, gUp) && named(g.thread, gUnder) && named(g.doubled, gUnder) && named(g.pid, gUnder) && named(g.fd, gUnder) &&
+          g.absFirst.bin === gA && g.absFirst.shadows.length === 0 && g.only.bin === null && named(g.only, gUnder) && g.noCwd.bin === gA && g.noCwd.shadows.length === 0,
+          () => JSON.stringify(g));
+        // in process: hubTransport reports each spelling as the gated finding, and every git it (and gitRun) starts is still the real one: the planted git is never run
+        const fxG = mk("r32-git-inproc"), fxGw = join(fxG, "work"); execFileSync("git", ["init", "-q", "-b", "main", fxGw], { env: FX_ENV }); const gBox = plantGit(fxG), fdBox = dirFd(fxG);
+        const inproc = ["/proc/self/cwd/..", `/proc/${process.pid}/cwd/${relative(process.cwd(), fxG)}`, `/dev/fd/${fdBox}`].map((entry, i) => {
+          const logP = join(rroot, `r32-inproc-${i}.log`);
+          return withEnvVars({ PATH: `${entry}${delimiter}${process.env.PATH ?? ""}`, R32_LOG: logP }, () => inCleanEnv(() => ({ entry, t: hubTransport(fxGw), run: gitRun(fxGw, ["rev-parse", "--git-dir"]), prog: gitProgram(), ran: (readIfPresent(logP) || "") !== "" }), cleanOfTrust));
+        });
+        check("hubTransport turns a git planted behind /proc/self/cwd/.. , /proc/<pid>/cwd/<path> or /dev/fd/N into a gated problem naming it, and the git it and gitRun start is still the real one by an absolute path: the planted one is never run (R32-git-resolve-gated)",
+          inproc.every((x) => x.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && x.run.ok === true && isAbsolute(x.prog) && x.prog !== gBox && x.ran === false),
+          () => JSON.stringify(inproc.map((x) => ({ entry: x.entry, problems: x.t.problems.map((p) => p.slice(0, 120)), ok: x.run.ok, prog: x.prog, ran: x.ran }))));
+        // (4) the helper scan: the same entries are read in the repository directory and in the listing's, like `../planted` (round 30)
+        const execNone = mk("r32-exec-none");
+        const both = (name) => { const t = mk(`r32-${name}`), tmpd = join(t, "tmpdir"), iso = join(tmpd, "loop-state-ls-fixed"), repo2 = join(t, "repo"); mkdirSync(tmpd); mkdirSync(iso); mkdirSync(repo2); return { t, tmpd, iso, repo2 }; };
+        const planth = (dir, name = "git-remote-https") => { const f = join(dir, name); writeFileSync(f, "x\n", { mode: 0o755 }); return f; };
+        const scanBoth = (pathVar, w, extra = {}) => pathHelperProblems(["https"], { pathVar, execDir: execNone, listingDir: w.iso, repoDir: w.repo2, ...extra });
+        const hasOne = (r, file) => r.problems.length === 1 && r.problems[0].includes(`: ${file} (`) && r.notes.length === 0;
+        const bRel = both("both-rel"); mkdirSync(join(bRel.t, "planted")); const fRel = planth(join(bRel.t, "planted"));
+        const bDot = both("both-dot"), fDot = planth(bDot.repo2);
+        const bFd = both("both-fd"), fdHelper = dirFd(bFd.t), fFd = planth(bFd.t);
+        const bNone = both("both-none");
+        const hRel = scanBoth(asPath("/proc/self/cwd/../planted", absA), bRel), hDot = scanBoth(asPath("/proc/self/cwd", absA), bDot), hFd = scanBoth(asPath(`/dev/fd/${fdHelper}`, absA), bFd);
+        const hNone = scanBoth(asPath("/proc/self/cwd/..", "/proc/self/cwd/../planted", "/dev/fd/9999", "/proc/self/nonesuch", absA), bNone);
+        const hNoListing = scanBoth(asPath("/proc/self/cwd/../planted", `/dev/fd/${fdHelper}`, absA), bNone, { listingDir: null });
+        check("a per-process PATH entry is scanned for git-remote helpers like a relative one: /proc/self/cwd/../planted and /proc/self/cwd are read against the repository directory and the listing's, /dev/fd/N as this process reads it; nothing planted is no problem and no note; with no listing directory the cwd-relative form is a note naming the entry and the /dev/fd one is not (R32-path-helper-unit)",
+          hasOne(hRel, fRel) && hasOne(hDot, fDot) && hasOne(hFd, fFd) && hNone.problems.length === 0 && hNone.notes.length === 0 && hNoListing.notes.length === 1 && hNoListing.notes[0].includes("\"/proc/self/cwd/../planted\"") && hNoListing.problems.length === 1 && hNoListing.problems[0].includes(`: ${fFd} (`),
+          () => JSON.stringify({ hRel, hDot, hFd, hNone, hNoListing }));
+        // (5) the whole script (the Opus-p4 shape): TMPDIR = the fixture's directory, a git planted there that answers the Hub listing with one of its own, found through the per-process entry, stock git behind it.
+        // The planted git is never run (its marker stays empty), the transport is not the green row, the listing is not read, and the check exits 1 on the gated row naming that file.
+        const e2eCase = (tag, entryOf, runOpts = {}) => {
+          const fx = mkLikeUe(`r32-${tag}`), box = dirname(fx.w), dirX = join(box, `r32${tag}`); mkdirSync(dirX); giveCoverage(fx);
+          const log = join(rroot, `r32-${tag}.log`); writeFileSync(log, "");
+          writeFileSync(join(dirX, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R32_LOG\"\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then /bin/cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R32_NEXT\" \"$@\"\n", { mode: 0o755 });
+          const run = wholeScript(fx, `r32-${tag}`, { ...cleanOfTrust, TMPDIR: box, PATH: [entryOf(dirX), fakeBin, process.env.PATH ?? ""].join(delimiter), R32_LOG: log, R32_NEXT: realGit }, { timeout: 120000, ...runOpts(dirX) });
+          const shown = join(realpathSync(box), `r32${tag}`, "git");
+          const ok = run.error === null && run.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${esc(shown)}`).test(run.out) && !/✓ Review Hub transport/.test(run.out) && !run.listed &&
+            /Review coverage\s+\d+ of \d+ surfaces read/.test(run.out) && (readIfPresent(log) || "") === "";
+          return { ok, detail: () => JSON.stringify({ status: run.status, listed: run.listed, marker: (readIfPresent(log) || "").split("\n").slice(0, 3), rows: run.out.split("\n").filter((l) => /Review Hub|unpushed/.test(l)).slice(0, 4) }) };
+        };
+        const eCwd = e2eCase("cwd", () => "/proc/self/cwd/../r32cwd", () => ({}));
+        const ePid = e2eCase("pid", (dirX) => `/proc/${process.pid}/cwd/${relative(process.cwd(), dirX)}`, () => ({}));
+        let eFd; { let fdE2e = null; try { eFd = e2eCase("fd", () => "/dev/fd/3", (dirX) => { fdE2e = openSync(dirX, "r"); return { stdio: ["pipe", "pipe", "pipe", fdE2e] }; }); } finally { if (fdE2e !== null) closeSync(fdE2e); } }
+        check("a git planted behind `/proc/self/cwd/../r32cwd` (the Opus-p4 shape: TMPDIR = the fixture's directory, the planted git answers the Hub listing with its own), stock git behind it: the whole check exits 1 on a gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R32-cwd-e2e)", eCwd.ok, eCwd.detail);
+        check("the same through `/proc/<pid>/cwd/<path>` (the pid of the self-test, which any process can read) (R32-pid-e2e)", ePid.ok, ePid.detail);
+        check("the same through `/dev/fd/3`, a directory descriptor the check inherited from its parent (R32-fd-e2e)", eFd.ok, eFd.detail);
+        // (6) the restore at the call site of section 4b: the process's PATH after the whole run is byte-identical to what it was handed (an unset one stays unset), seen from an exit hook loaded into the checked process only
+        const pre = join(rroot, "r32-pathout.cjs");
+        writeFileSync(pre, "const fs = require(\"node:fs\");\nprocess.on(\"exit\", () => { try { fs.writeFileSync(process.env.R32_PATHOUT, JSON.stringify({ has: \"PATH\" in process.env, path: process.env.PATH ?? null })); } catch { /* the case then fails on the missing file */ } });\n");
+        const restoreRun = (tag, pathValue) => {
+          const fx = mkLikeUe(`r32-${tag}`); giveCoverage(fx);
+          const out = join(rroot, `r32-${tag}.json`);
+          const run = wholeScript(fx, `r32-${tag}`, { ...cleanOfTrust, PATH: pathValue, R32_PATHOUT: out }, { timeout: 120000, execArgv: ["--require", pre] });
+          let seen = null; try { seen = JSON.parse(readIfPresent(out) || "null"); } catch { /* stays null */ }
+          return { run, seen, window: /Review coverage/.test(run.out), real: /✓ Review coverage\s+\d+ of \d+ surfaces read/.test(run.out) };
+        };
+        const relPath = asPath(".", "", "../r32-no-such", "rel/dir", process.env.PATH ?? ""), kept = restoreRun("restore-rel", relPath), unset = restoreRun("restore-unset", null), emptyPath = restoreRun("restore-empty", "");
+        check("the coverage window of section 4b runs with a PATH of absolute entries only and puts the process's PATH back byte for byte afterwards: a PATH holding relative and empty entries comes out as written, an unset PATH comes out unset (not empty, not the string \"undefined\"), an empty one comes out empty; the coverage row was produced in each (a real count in the first), so the window really ran (R32-restore-callsite)",
+          kept.real && kept.seen !== null && kept.seen.has === true && kept.seen.path === relPath && unset.window && unset.seen !== null && unset.seen.has === false && emptyPath.window && emptyPath.seen !== null && emptyPath.seen.has === true && emptyPath.seen.path === "",
+          () => JSON.stringify({ kept: kept.seen, wantPath: relPath, unset: unset.seen, empty: emptyPath.seen, windows: [kept.real, unset.window, emptyPath.window] }));
+        // (7) what the header and the code claim
+        check("the header states the per-process rule and the trust boundary (an absolute entry is trusted wherever it points), the round-26 'not covered' sentence is scoped to the key audit and says the module does get the absolute PATH entries, the PATH entry lists all go through isTrustedAbsoluteEntry (no `.filter((e) => isAbsolute(e))` is left), and the restore is a finally at the call site (R32-audit-scope)",
+          prodText.includes("WHAT \"ABSOLUTE\" MEANS HERE (round 32") && prodText.includes("isTrustedAbsoluteEntry") && prodText.includes("trusted wherever it points") && prodText.includes("Not covered by the KEY audit above") && !prodText.includes("Not covered, and said so:") &&
+          prodText.includes("They DO get the absolute PATH entries only") && !/filter\(\(e\) => isAbsolute\(e\)\)/.test(prodText) && prodText.includes("} finally {\n  restoreCoveragePath();\n}"));
+      } finally { for (const fd of fds) { try { closeSync(fd); } catch { /* already closed */ } } }
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.

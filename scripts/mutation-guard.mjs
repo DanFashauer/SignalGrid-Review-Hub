@@ -1908,6 +1908,34 @@ export function unitName(unit) {
   return `${unit.proof}${unit.slice ? `[${unit.slice.index}/${unit.slice.count}]` : ""}`;
 }
 
+/** The units a run of `--proof=<only>` `--shard=<i>/<n>` is to sweep, by name, from the ARGUMENTS and the registry alone.
+ *  main() does not pass its own `targets` in: that variable is what the loop walks, so a statement that shortens or
+ *  rewrites it (a unit dropped on a time budget, on a cost-drift warning, or on the runner's environment) cannot also
+ *  rewrite the list the loop is held to. Throws on a shard main() would already have refused. */
+export function expectedUnitNames(all, only, shardArg) {
+  const pool = only ? all.filter((t) => t.proof === only) : all;
+  if (shardArg === undefined) return pool.map(unitName);
+  const [i, n] = shardArg.split("/").map((x) => Number.parseInt(x, 10));
+  return shardTargets(pool, i, n).map(unitName);
+}
+
+/** What is wrong with the units a run actually got to, against the ones it was to sweep. A unit counts when it reached
+ *  its written-vs-plan check (`counted`) or failed its baseline (`failedBaseline`, reported on its own and fatal on its
+ *  own): anything else was skipped, and a skip is silent by construction (the count that would have seen it never
+ *  started). A unit swept that is not expected, or counted twice, is as wrong as one missing. One line per problem. */
+export function unitAccountingProblems(expected, counted, failedBaseline) {
+  const problems = [];
+  const accounted = new Set([...counted, ...failedBaseline]);
+  for (const unit of expected) if (!accounted.has(unit)) problems.push(`UNIT-SKIPPED ${unit}: never reached its count check`);
+  const seen = new Set();
+  for (const unit of [...counted, ...failedBaseline]) {
+    if (!expected.includes(unit)) problems.push(`UNIT-UNEXPECTED ${unit}: swept, but this --proof/--shard does not select it`);
+    else if (seen.has(unit)) problems.push(`UNIT-UNEXPECTED ${unit}: reached its count check twice`);
+    seen.add(unit);
+  }
+  return problems;
+}
+
 /** One planned mutation as `--plan` prints it, fields in this fixed order. `ordinal` is the position
  *  in the TARGET (the selector's number), `line` the 1-based source line. */
 export function placementOf(unit, file, ordinal, mutation) {
@@ -2021,8 +2049,14 @@ export function unknownArgs(argv) {
  *  After each unit's sweep main() compares the mutations it wrote with the selector's `swept` for that unit
  *  and fails the sweep (exit 1, a `WRITTEN-vs-PLAN` line) on a difference: a statement between the plan and
  *  the write that skips or re-selects mutations leaves the plan intact, and this count is what sees it. In
- *  `--plan` the placements count in place of writes. A whole unit dropped before the loop is not visible to
- *  this count; the sharding gate's stubbed sweep and its pin on how often main() forks on the plan flag are. */
+ *  `--plan` the placements count in place of writes.
+ *
+ *  A count only sees a unit that was started, so the units are accounted for as well: the names this run is to
+ *  sweep are computed from the arguments before the loop (`expectedUnitNames`, never from `targets`), each unit that
+ *  reaches its count check is recorded and printed as `unit-done <unit> written=<n> planned=<m>`, and a unit that is
+ *  neither counted nor a recorded baseline failure ends the run as `✗ UNIT-SKIPPED <unit>` (exit 1). That is the
+ *  net under a `continue` that drops a unit on a time budget, on the cost-drift warning, or on the runner's
+ *  environment, none of which a stub that answers in microseconds will ever take. */
 function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
@@ -2034,7 +2068,7 @@ function main() {
   const planOnly = process.argv.includes("--plan");
   const log = planOnly ? console.error : console.log;
   const placements = [];
-  let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
+  let targets = only ? TARGETS.filter((t) => t.proof === only) : [...TARGETS];
   if (targets.length === 0) {
     console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
     process.exit(1);
@@ -2063,6 +2097,8 @@ function main() {
       return;
     }
   }
+
+  const expectedUnits = expectedUnitNames(TARGETS, only, shardArg);
 
   log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
 
@@ -2106,6 +2142,8 @@ function main() {
   const zeroMutation = [];
   const baselineFailures = [];
   const writeMismatches = [];
+  const countedUnits = [];
+  const failedBaselineUnits = [];
 
   // Registered load of everything this run will sweep, on the pristine tree (the end-of-run
   // line below must not re-count mutations after the loop has been writing to the files).
@@ -2122,6 +2160,7 @@ function main() {
       const baselineSeconds = (performance.now() - targetStart) / 1000;
       if (!base.ok) {
         baselineFailures.push(base);
+        failedBaselineUnits.push(unitName(target));
         console.error(
           `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
             `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
@@ -2208,6 +2247,8 @@ function main() {
       console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`);
       process.exitCode = 1;
     }
+    countedUnits.push(unitName(target));
+    log(`unit-done ${unitName(target)} written=${accounted} planned=${swept}`);
     timings.push({
       proof: target.proof,
       slice: target.slice,
@@ -2216,6 +2257,14 @@ function main() {
       registered: swept * runSecondsOf(target),
     });
   }
+
+  // THE NET UNDER THE LOOP. The count above runs once a unit has been started; a unit that never was (skipped on a
+  // time budget, on a cost-drift warning, on the runner's environment) has no count to fail, which is how a shard can
+  // sweep 462 of 475 mutations and exit 0. `expectedUnits` was computed from the arguments before the loop, not from
+  // `targets`, and every unit in it must have reached its count or be a recorded baseline failure.
+  const unitProblems = unitAccountingProblems(expectedUnits, countedUnits, failedBaselineUnits);
+  for (const problem of unitProblems) console.error(`✗ ${problem}`);
+  if (unitProblems.length > 0) process.exitCode = 1;
 
   if (planOnly) {
     process.stdout.write(`${planDocument(only, shardArg, placements)}\n`);
@@ -2273,6 +2322,12 @@ function main() {
   if (writeMismatches.length > 0) {
     console.error("\nMutation guard FAILED — the sweep did not write what the plan selected, so the counts above are over a different set than the one the shards were balanced for:\n");
     for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);
+    process.exit(1);
+  }
+
+  if (unitProblems.length > 0) {
+    console.error("\nMutation guard FAILED — the sweep did not cover the units it was to cover, so the counts above are over fewer (or other) units than the shards were balanced for:\n");
+    for (const problem of unitProblems) console.error(`  ✗ ${problem}`);
     process.exit(1);
   }
 

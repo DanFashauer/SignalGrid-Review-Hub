@@ -36,16 +36,31 @@
  *        as they were while the sweep ran 1021, 1832 and 1977 of 2026 mutations, every shard rc 0;
  *     d. main()'s text is the second net (comments stripped): the statements that write, count,
  *        run and restore a mutation are pinned to follow the plan stop with nothing between, and
- *        the number of places main() forks on the plan flag is pinned. At runtime each unit's
- *        written count is checked against the selector's own (the one net no text pin gives).
+ *        the number of places main() forks on the plan flag, leaves a unit or the run early
+ *        (continue, break, return, throw, exit) or touches the list the loop walks is pinned.
+ *        At runtime each unit's written count is checked against the selector's own (the one
+ *        net no text pin gives), and each UNIT is accounted for: the names a run is to sweep are
+ *        computed from its arguments before the loop, every unit that reaches its count prints
+ *        `unit-done <unit> written=<n> planned=<m>`, and one that never did is named
+ *        `UNIT-SKIPPED` (exit 1). A unit skipped on a time budget, a cost-drift warning or the
+ *        runner's environment has no count to fail and takes none of the stub's paths, so this
+ *        gate compares the SET of units that printed a line with the units each shard holds, in
+ *        the plan and in the stubbed sweep;
+ *     e. one mutant is made to SURVIVE its proof in the stubbed sweep, the one branch a
+ *        kill-everything stub never takes: it must be reported, not counted as known-inert, and
+ *        end the sweep with exit 1.
  *     Each has fixture mutants that must go red, and a fixture that cannot be built fails the gate
  *     by name instead of passing or crashing it.
  *
- *     Every child runs under scripts/lib/no-write-preload.mjs (a write under the repository, or a
- *     spawned process, throws), the registered guard files are hashed before the first child and
- *     after the last, and each child has a time limit that stops the pool at the first hang. The
- *     workflow's run line is refused if it passes `--plan` or any flag but `--shard=`/`--proof=`
- *     (every shard would be a green no-op).
+ *     Every child runs under scripts/lib/no-write-preload.mjs (a write, a permission or time
+ *     change, a hard link, a spawned process, a worker thread, `process.binding`, `execve` or
+ *     `dlopen` under or from the repository throws), `git status --untracked-files=all` and a hash
+ *     of every file it names are compared before the first child and after the last (the whole
+ *     tree, with the differing paths named: the preload lists the routes known, this is the net
+ *     under the rest), and each child has a time limit that stops the pool at the first hang. The
+ *     workflow's sweep step must be exactly one `run:` line whose only expression is
+ *     `${{ matrix.shard }}`, with only `name` and `run` on the step and nothing in the job or
+ *     before it that could change what runs (every shard would otherwise be a green no-op).
  *
  * (2) a target that registers a cost heavier than one unit is in fact sliced;
  *
@@ -55,14 +70,15 @@
  *     THE SHARDS ARE BALANCED BY COST). An unregistered cost is invisible to this gate by
  *     construction; the sweep's own COST DRIFT line is the net for that.
  */
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { isBuiltin } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf } from "./mutation-guard.mjs";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf, expectedUnitNames, unitAccountingProblems } from "./mutation-guard.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -353,22 +369,64 @@ const PIN_PLAN_STOP = foldPin(`for (const { ordinal, mutation } of owned) {
 const PIN_NO_BASELINE = "if (!planOnly) { const base = baselineProbe(target.proof, runProof);";
 // The runtime net (what a unit actually wrote must equal what the selector planned) and its report.
 const PIN_COUNT_INIT = foldPin("const swept = plan.swept; const placedBefore = placements.length; let writtenInUnit = 0;");
-const PIN_COUNT_CHECK = foldPin("const accounted = writtenInUnit + (placements.length - placedBefore); if (accounted !== swept) { const line = `${unitName(target)}: ${accounted} mutations written, the selector planned ${swept}`; writeMismatches.push(line); console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`); process.exitCode = 1; }");
+const PIN_COUNT_CHECK = foldPin("const accounted = writtenInUnit + (placements.length - placedBefore); if (accounted !== swept) { const line = `${unitName(target)}: ${accounted} mutations written, the selector planned ${swept}`; writeMismatches.push(line); console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`); process.exitCode = 1; } countedUnits.push(unitName(target)); log(`unit-done ${unitName(target)} written=${accounted} planned=${swept}`);");
 const PIN_MISMATCH_EXIT = foldPin("if (writeMismatches.length > 0) { console.error(\"\\nMutation guard FAILED — the sweep did not write what the plan selected, so the counts above are over a different set than the one the shards were balanced for:\\n\"); for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`); process.exit(1); }");
-const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE, PIN_COUNT_INIT, PIN_COUNT_CHECK, PIN_MISMATCH_EXIT];
-// A new plan/sweep fork has to be reviewed, so the number of places main() names the plan flag, and reads
-// its arguments and environment, is pinned. `planOnly` today: the declaration, the log alias, the empty-shard
-// guard, the baseline guard, the loop stop and the final print. (`if (!planOnly) owned.splice(0, 1);` before
-// the owned loop swept 1832 of 2026; `if (!planOnly) targets = targets.slice(1);` dropped every shard's
-// device-management-health slice while --plan still showed 13/12/12/12; a second `process.argv.includes("--plan")`
-// under another name would escape a count of the first.)
-const FORK_COUNTS = { planOnly: 6, "process.argv": 4, "process.env": 1 };
-const forkCountsOf = (body) => ({
-  planOnly: (body.match(/\bplanOnly\b/g) ?? []).length,
-  "process.argv": (body.match(/\bprocess\.argv\b/g) ?? []).length,
-  "process.env": (body.match(/\bprocess\.env\b/g) ?? []).length,
-});
+// The net under the count: a unit that never started has no count to fail. The names a run is to sweep come from
+// the arguments, before the loop and not from `targets`; each unit that reaches its count (or fails its baseline) is
+// recorded; what is neither is named and ends the run before the survivor report. The loop head, the list it walks,
+// the baseline failure's record and the verdict handling are pinned too, because a statement that rewrites any of
+// them can drop a unit (or a mutation's verdict) without touching the count.
+const PIN_TARGETS_INIT = "let targets = only ? TARGETS.filter((t) => t.proof === only) : [...TARGETS];";
+const PIN_EXPECTED = "const expectedUnits = expectedUnitNames(TARGETS, only, shardArg);";
+const PIN_LOOP_HEAD = "for (const target of targets) {";
+const PIN_BASELINE_FAIL = foldPin("baselineFailures.push(base); failedBaselineUnits.push(unitName(target));");
+const PIN_UNIT_PROBLEMS = foldPin("const unitProblems = unitAccountingProblems(expectedUnits, countedUnits, failedBaselineUnits); for (const problem of unitProblems) console.error(`✗ ${problem}`); if (unitProblems.length > 0) process.exitCode = 1;");
+const PIN_UNIT_EXIT = foldPin("if (unitProblems.length > 0) { console.error(\"\\nMutation guard FAILED — the sweep did not cover the units it was to cover, so the counts above are over fewer (or other) units than the shards were balanced for:\\n\"); for (const problem of unitProblems) console.error(`  ✗ ${problem}`); process.exit(1); }");
+const PIN_VERDICT = foldPin(`if (verdict === "killed") { killed += 1; } else if (verdict === "hung") { hung += 1; console.log(\`   ⚠ HANG  \${file}:\${mutation.lineNo}  \${mutation.describe}\`); console.log("           (detected, but its CI failure mode is a job timeout rather than a red assertion)"); } else { const entry = isAllowed(mutation); if (entry) { allowed += 1; } else { survivors.push(mutation); console.log(\`   ✗ SURVIVED  \${file}:\${mutation.lineNo}  \${mutation.describe}\`); } }`);
+const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE, PIN_COUNT_INIT, PIN_COUNT_CHECK, PIN_MISMATCH_EXIT, PIN_TARGETS_INIT, PIN_EXPECTED, PIN_LOOP_HEAD, PIN_BASELINE_FAIL, PIN_UNIT_PROBLEMS, PIN_UNIT_EXIT, PIN_VERDICT];
+// A new plan/sweep fork, and a new way to leave a unit (or the run) early, has to be reviewed, so the number of
+// places main() names the plan flag, reads its arguments and environment, skips, breaks, returns, throws or exits,
+// and touches the list the loop walks, is pinned. `planOnly` today: the declaration, the log alias, the empty-shard
+// guard, the baseline guard, the loop stop and the final print. (`if (!planOnly) owned.splice(0, 1);` before the owned
+// loop swept 1832 of 2026; `if (!planOnly) targets = targets.slice(1);` dropped every shard's device-management-health
+// slice while --plan still showed 13/12/12/12; a second `process.argv.includes("--plan")` under another name would
+// escape a count of the first.) The rest were found the same way, by a plant that left every other net green:
+//   continue: the baseline failure and the plan stop. `if (baselineSeconds > 40) continue;` skipped a unit when its
+//     baseline ran long (device-management-health, 30-46 s on a runner), and `continue;` after the cost-drift warning
+//     skipped a drifted proof: a shard swept 462 of 475 and another swept `mutations=0`, both exiting 0.
+//   break, return, throw, process.exit(, process.exitCode: a time budget that ends the loop, or the run, early.
+//   targets (assigned, and named at all), TARGETS (the registry itself): `targets = targets.slice(1)` keyed on the
+//     runner's environment, and `targets.splice(0, 1)`, which an assignment count does not see.
+//   try, catch: a catch around the unit's body that swallows what drops it.
+//   if, else, for, while, switch, ?:, &&, ||: any new branch or loop, which is how a unit's body is wrapped in a condition
+//     (`if (<runner state>) { ...the sweep... }`) without a `continue`, a `break` or a second name for the list.
+//   countedUnits, failedBaselineUnits, expectedUnits, unitProblems: a skipped unit recorded as done, or the list it is
+//     held to shortened.
+const FORK_COUNTS = {
+  planOnly: 6, "process.argv": 4, "process.env": 1,
+  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 8, "process.exitCode": 3,
+  "targets =": 2, targets: 16, TARGETS: 8,
+  if: 24, else: 5, for: 11, while: 0, switch: 0, "?": 9, "&&": 1, "||": 0,
+  countedUnits: 3, failedBaselineUnits: 3, expectedUnits: 2, unitProblems: 5,
+};
+const FORK_PATTERNS = {
+  planOnly: /\bplanOnly\b/g, "process.argv": /\bprocess\.argv\b/g, "process.env": /\bprocess\.env\b/g,
+  continue: /\bcontinue\b/g, break: /\bbreak\b/g, return: /\breturn\b/g, throw: /\bthrow\b/g, try: /\btry\s*\{/g, catch: /\bcatch\b/g,
+  "process.exit(": /\bprocess\.exit\(/g, "process.exitCode": /\bprocess\.exitCode\b/g,
+  "targets =": /\btargets\s*[-+*/|&]?=(?![=>])/g, targets: /\btargets\b/g, TARGETS: /\bTARGETS\b/g,
+  if: /\bif\s*\(/g, else: /\belse\b/g, for: /\bfor\s*\(/g, while: /\bwhile\s*\(/g, switch: /\bswitch\s*\(/g, "?": /\?(?![.?])/g, "&&": /&&/g, "||": /\|\|/g,
+  countedUnits: /\bcountedUnits\b/g, failedBaselineUnits: /\bfailedBaselineUnits\b/g, expectedUnits: /\bexpectedUnits\b/g, unitProblems: /\bunitProblems\b/g,
+};
+const forkCountsOf = (body) => Object.fromEntries(Object.entries(FORK_PATTERNS).map(([name, re]) => [name, (body.match(re) ?? []).length]));
 const forksPinned = (body) => { const got = forkCountsOf(body); return body !== "" && Object.entries(FORK_COUNTS).every(([name, n]) => got[name] === n); };
+// Outside main() the file may not learn the environment or load code by a route the counts above cannot see: a
+// module-level `typeof process["en" + "v"].NOWRITE_ALLOW === "string"` read in one place and acted on in main() as
+// `if (!UNDER_GATE) targets = targets.slice(1)` kept a runner-only skip out of every net but the `targets =` count.
+// (The environment is read once in the whole file, in main(), for GITHUB_ACTIONS.)
+const AMBIENT_COUNTS = { "process[": 0, "process.env": 1, globalThis: 0, getBuiltinModule: 0, eval: 0, "new Function": 0, "import(": 0, "require(": 0 };
+const AMBIENT_PATTERNS = { "process[": /\bprocess\s*\[/g, "process.env": /\bprocess\.env\b/g, globalThis: /\bglobalThis\b/g, getBuiltinModule: /getBuiltinModule/g, eval: /\beval\s*\(/g, "new Function": /\bnew\s+Function\b/g, "import(": /\bimport\s*\(/g, "require(": /\brequire\s*\(/g };
+const ambientCountsOf = (src) => { const text = stripComments(src); return Object.fromEntries(Object.entries(AMBIENT_PATTERNS).map(([name, re]) => [name, (text.match(re) ?? []).length])); };
+const ambientPinned = (src) => { const got = ambientCountsOf(src); return Object.entries(AMBIENT_COUNTS).every(([name, n]) => got[name] === n); };
 function mainSweepsWithSelector(src) {
   const body = mainBody(src);
   // The words below may appear only inside the pinned statements (the plan records the selector's
@@ -378,13 +436,18 @@ function mainSweepsWithSelector(src) {
     && (body.match(/selectSliceMutations\(/g) ?? []).length === 1
     && MAIN_PINS.every((p) => body.includes(p))
     && forksPinned(body)
+    && ambientPinned(src)
     && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(rest);
 }
 const planModeStopsBeforeMutation = (src) => { const body = mainBody(src); return body.includes(PIN_PLAN_STOP) && body.includes(PIN_NO_BASELINE); };
-check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, keeps no ownership filter or counter of its own, goes from the plan stop straight to the write, the count, the proof run and the restore with nothing between, and checks what each unit wrote against what the selector planned", mainSweepsWithSelector(GUARD_SRC));
+check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, keeps no ownership filter or counter of its own, goes from the plan stop straight to the write, the count, the proof run and the restore with nothing between, checks what each unit wrote against what the selector planned, records every unit that reached that check, holds the run to the units its arguments select (computed before the loop, not from `targets`), and hands the verdict of each mutation to the survivor list", mainSweepsWithSelector(GUARD_SRC));
 {
   const got = forkCountsOf(mainBody(GUARD_SRC));
-  check(`main() (comments stripped) names planOnly exactly ${FORK_COUNTS.planOnly} times (found ${got.planOnly}) and reads process.argv ${FORK_COUNTS["process.argv"]} (found ${got["process.argv"]}) and process.env ${FORK_COUNTS["process.env"]} times (found ${got["process.env"]}): a statement that runs only in a real sweep, or a second reading of the plan flag, must edit this pin in review`, forksPinned(mainBody(GUARD_SRC)));
+  const off = Object.entries(FORK_COUNTS).filter(([name, n]) => got[name] !== n).map(([name, n]) => `${name} ${got[name]} (pinned ${n})`);
+  check(`main() (comments stripped) holds ${Object.keys(FORK_COUNTS).length} counts of the places it forks on the plan flag, reads its arguments and environment, leaves a unit or the run early (continue ${FORK_COUNTS.continue}, break ${FORK_COUNTS.break}, return ${FORK_COUNTS.return}, throw ${FORK_COUNTS.throw}, try ${FORK_COUNTS.try}, catch ${FORK_COUNTS.catch}, process.exit( ${FORK_COUNTS["process.exit("]}) and touches the list the loop walks (\`targets =\` ${FORK_COUNTS["targets ="]}, \`targets\` ${FORK_COUNTS.targets}, \`TARGETS\` ${FORK_COUNTS.TARGETS}): a statement that runs only in a real sweep, or drops a unit on a time budget, a warning or the runner's environment, must edit this pin in review${off.length ? ` — OFF: ${off.join(", ")}` : ""}`, forksPinned(mainBody(GUARD_SRC)));
+  const amb = ambientCountsOf(GUARD_SRC);
+  const ambOff = Object.entries(AMBIENT_COUNTS).filter(([name, n]) => amb[name] !== n).map(([name, n]) => `${name} ${amb[name]} (pinned ${n})`);
+  check(`mutation-guard.mjs (comments stripped, whole file) reads the environment in exactly one place and reaches modules by no computed route (process.env ${AMBIENT_COUNTS["process.env"]}, process[ ${AMBIENT_COUNTS["process["]}, globalThis, getBuiltinModule, eval, new Function, import(), require() all ${AMBIENT_COUNTS.eval})${ambOff.length ? ` — OFF: ${ambOff.join(", ")}` : ""}`, ambientPinned(GUARD_SRC));
 }
 check("main()'s --plan mode takes no baseline and records each placement INSTEAD of writing the mutation (the condition for spawning it below)", planModeStopsBeforeMutation(GUARD_SRC));
 const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
@@ -418,9 +481,88 @@ for (const [name, from, to] of [
   ["the unit's planned count is rewritten before it is compared (a short sweep would then match it)", "    const swept = plan.swept;\n", "    const swept = plan.swept - 1;\n"],
   ["the written-vs-plan check of each unit is switched off", "if (accounted !== swept) {", "if (false) {"],
   ["the written-vs-plan failure no longer ends the sweep", "for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);\n    process.exit(1);", "for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);"],
+  // A unit skipped on TIME or on the RUNNER, which the stubbed sweep (it answers in microseconds, in an environment the
+  // gate builds) cannot take and the count cannot see, because the unit is skipped before its count starts. Each of the
+  // first four was measured through main() with a 600 ms delay on the device-management-health proof run: shard 0 swept
+  // 462 of 475, the slice 0 of 13, and a drifted proof printed `mutations=0 ... Mutation guard passed`, every exit 0.
+  ["n1: a unit is skipped when its baseline runs long (30-46 s for device-management-health on a runner; the stub never does)", "      if (!base.ok) {\n", "      if (baselineSeconds > 40) continue;\n      if (!base.ok) {\n"],
+  ["n2: a unit is skipped after the cost-drift warning (the 2026-10-09 failure class, silent again)", "console.log(`::warning title=Mutation sweep cost drift::${note}`);\n", "console.log(`::warning title=Mutation sweep cost drift::${note}`);\n        continue;\n"],
+  ["n3: the first unit is dropped when an environment variable the gate sets is absent (a runner-only skip)", "    const slicedUnits = targets.filter", "    if (typeof process.env.NOWRITE_ALLOW !== \"string\") targets = targets.slice(1);\n    const slicedUnits = targets.filter"],
+  ["n3b: the first unit is dropped without an assignment (an in-place splice of the list the loop walks)", "    const slicedUnits = targets.filter", "    if (process.argv.length > 99) targets.splice(0, 1);\n    const slicedUnits = targets.filter"],
+  ["n3e: the registry itself is shortened in place (the list the unit accounting is computed from)", "    const slicedUnits = targets.filter", "    if (process.argv.length > 99) TARGETS.splice(0, 1);\n    const slicedUnits = targets.filter"],
+  ["n3f: the unit's body is wrapped in a catch that swallows what drops it", "    if (!planOnly) {\n      // See baselineProbe()", "    try { if (target.proof === \"x\") continue; } catch { /* swallowed */ }\n    if (!planOnly) {\n      // See baselineProbe()"],
+  ["n13: a new condition where no pin looks (nothing pinned is near it)", "  const timings = [];\n", "  const timings = [];\n  if (process.argv.length > 99) { timings.length = 0; }\n"],
+  ["n3c: the loop walks a filtered copy of the list (no assignment, no new name)", "for (const target of targets) {", "for (const target of targets.filter((t) => t.proof !== \"proof:device-management-health\")) {"],
+  ["n4: a unit is cut short on an in-unit time budget (the count sees this one in a slow run)", "          writeFileSync(mutation.abs, mutation.original);\n        }\n", "          writeFileSync(mutation.abs, mutation.original);\n        }\n        if (writtenInUnit * runSecondsOf(target) > 120) break;\n"],
+  ["n5: the sweep ends early with exit 0 on a total time budget", "    if (!planOnly) {\n      // See baselineProbe()", "    if (timings.length > 20) return;\n    if (!planOnly) {\n      // See baselineProbe()"],
+  ["n6: the sweep exits 0 on a total time budget", "    if (!planOnly) {\n      // See baselineProbe()", "    if (timings.length > 20) process.exit(0);\n    if (!planOnly) {\n      // See baselineProbe()"],
+  ["n7: a unit that is skipped is recorded as done (the unit accounting is satisfied by its own record)", "      if (!base.ok) {\n", "      if (baselineSeconds > 40) { countedUnits.push(unitName(target)); continue; }\n      if (!base.ok) {\n"],
+  ["n8: the list the loop is held to is shortened after it is computed", "  log(\"Mutation guard — every registered guard must be falsifiable by its own proof\\n\");\n", "  if (process.argv.length > 99) expectedUnits.pop();\n  log(\"Mutation guard — every registered guard must be falsifiable by its own proof\\n\");\n"],
+  ["n9: the unit accounting no longer sets the exit code", "if (unitProblems.length > 0) process.exitCode = 1;", ""],
+  ["n10: the unit accounting no longer ends the sweep before the survivor report", "for (const problem of unitProblems) console.error(`  ✗ ${problem}`);\n    process.exit(1);", "for (const problem of unitProblems) console.error(`  ✗ ${problem}`);"],
+  ["n11: a mutation that survives its proof is counted as known-inert", "            survivors.push(mutation);\n", "            allowed += 1;\n"],
+  ["n12: a unit's baseline failure is no longer recorded for the unit accounting", "        failedBaselineUnits.push(unitName(target));\n", ""],
+  ["n3d: the environment is read at module level through a computed key (nothing in main() names it)", "\nfunction main() {", "\nconst UNDER_GATE = typeof process[\"en\" + \"v\"].NOWRITE_ALLOW === \"string\";\nfunction main() {"],
 ]) {
   const mutant = fixtureText(GUARD_SRC, name, from, to);
   if (mutant !== undefined) check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
+}
+
+// ── The unit accounting main() ends a run on ──────────────────────────────────────────────────
+//
+// `expectedUnitNames` (what a run is to sweep, from its arguments) and `unitAccountingProblems` (what is wrong with the units it
+// got to) decide whether a run that skipped a unit exits 0. Both are checked on the real exports, and the second also on mutants of
+// its own text: a stub that never skips a unit cannot show either of them failing.
+{
+  const names = (xs) => xs.map(unitName);
+  const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const dmhProof = "proof:device-management-health";
+  const expectedOk =
+    sameList(expectedUnitNames(TARGETS, undefined, undefined), names(TARGETS))
+    && [1, 2, 3, 4].every((n) => {
+      const seen = new Map();
+      for (let i = 0; i < n; i += 1) {
+        const got = expectedUnitNames(TARGETS, undefined, `${i}/${n}`);
+        if (!sameList(got, names(shardTargets(TARGETS, i, n)))) return false;
+        for (const u of got) seen.set(u, (seen.get(u) ?? 0) + 1);
+      }
+      return seen.size === names(Array.from({ length: n }, (_, i) => shardTargets(TARGETS, i, n)).flat()).length && [...seen.values()].every((c) => c === 1);
+    })
+    && sameList(expectedUnitNames(TARGETS, dmhProof, "1/4"), names(shardTargets(TARGETS.filter((t) => t.proof === dmhProof), 1, 4)))
+    && sameList(expectedUnitNames(TARGETS, TARGETS[0].proof, undefined), [TARGETS[0].proof]);
+  check("expectedUnitNames gives, from the arguments alone, exactly the units main() will walk: every unit of the registry for no shard, each shard's own units (all of them, once, over the shards of 1 to 4), and the one proof's slice for --proof with --shard", expectedOk);
+  const kind = (p) => p.split(":")[0];
+  const accounts = (fn) => {
+    const run = (expected, counted, failed) => fn(expected, counted, failed).map(kind).join("|");
+    return run(["a", "b"], ["a", "b"], []) === ""
+      && run(["a", "b"], ["a"], []) === "UNIT-SKIPPED b"
+      && run(["a", "b"], ["a"], ["b"]) === ""
+      && run(["a", "b"], [], []) === "UNIT-SKIPPED a|UNIT-SKIPPED b"
+      && run(["a"], ["a", "c"], []) === "UNIT-UNEXPECTED c"
+      && run(["a"], ["a", "a"], []) === "UNIT-UNEXPECTED a"
+      && run(["a"], [], ["z"]) === "UNIT-SKIPPED a|UNIT-UNEXPECTED z";
+  };
+  check("unitAccountingProblems names a unit that never reached its count (UNIT-SKIPPED), accepts one that failed its baseline, and names a unit that was swept but not selected or counted twice (UNIT-UNEXPECTED)", accounts(unitAccountingProblems));
+  const accountingText = GUARD_SRC.slice(GUARD_SRC.indexOf("export function unitAccountingProblems("));
+  const accountingEnd = accountingText.indexOf("\n}\n");
+  const accountingFn = accountingEnd < 0 ? undefined : accountingText.slice(0, accountingEnd + 3);
+  const loadFn = async (code) => (await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`)).unitAccountingProblems;
+  let controlFn;
+  try { controlFn = accountingFn === undefined ? undefined : await loadFn(accountingFn); } catch { /* the check below says it did not load */ }
+  check("control: unitAccountingProblems' own text, extracted and loaded back as a module, passes the same battery (so a red below is the mutant, not the harness)", controlFn !== undefined && accounts(controlFn));
+  for (const [name, from, to] of [
+    ["a unit that never reached its count is no longer named", "if (!accounted.has(unit)) problems.push(", "if (false) problems.push("],
+    ["a unit that failed its baseline is no longer accounted for", "new Set([...counted, ...failedBaseline])", "new Set(counted)"],
+    ["every expected unit counts as accounted for", "new Set([...counted, ...failedBaseline])", "new Set(expected)"],
+    ["a unit swept without being selected is no longer named", "if (!expected.includes(unit)) problems.push(", "if (false) problems.push("],
+    ["a unit counted twice is no longer named", "else if (seen.has(unit))", "else if (false)"],
+  ]) {
+    const text = accountingFn === undefined ? undefined : fixtureText(accountingFn, name, from, to);
+    if (text === undefined) continue;
+    let verdict = true;
+    try { verdict = accounts(await loadFn(text)); } catch (err) { check(`fixture could not be built (the mutant does not load: ${errText(err)}): ${name}`, false); continue; }
+    check(`fixture mutant of unitAccountingProblems is detected, the gate goes red: ${name}`, text !== accountingFn && verdict === false);
+  }
 }
 
 // main() RUN. Each shard of each shard count is planned by the real entrypoint and compared, in
@@ -443,8 +585,8 @@ for (const [name, from, to] of [
 // write, rename or removal under the repository, or a spawned process, throws, after a marker line on stderr
 // that this gate also fails on (a throw swallowed by a catch is still seen). Before, that was a text pin alone,
 // and one plan-mode `writeFileSync` that got past the pins left all 185 registered guard files (deliberately
-// broken security guards) mutated on disk after a single gate run. As a second net the registered files are
-// hashed before the first child and after the last, and any that moved fail the gate by name. Each child has
+// broken security guards) mutated on disk after a single gate run. As a second net the WHOLE working tree is compared
+// before the first child and after the last (see treeSnapshot), and any path that moved fails the gate by name. Each child has
 // a time limit and the first to run out stops the rest from starting, so a hang fails the gate in about a
 // minute instead of after the whole pool had waited its turn (608 s measured, 16 children at 120 s each).
 const GUARD_PATH = join(REPO, "scripts/mutation-guard.mjs");
@@ -455,10 +597,49 @@ const DENIED_MARKER = "NO-WRITE-DENIED";
 const REPORT_MARKER = "SWEEP-STUB-REPORT";
 const CHILD_TIMEOUT_SECONDS = 60;
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
-const REGISTERED_FILES = [...new Set([...TARGETS.flatMap((t) => t.files), "scripts/mutation-guard.mjs"])].sort();
-const hashFiles = (root, files) => new Map(files.map((f) => { try { return [f, sha256(readFileSync(join(root, f)))]; } catch { return [f, "unreadable"]; } }));
-const movedFiles = (before, after) => [...before.keys()].filter((f) => before.get(f) !== after.get(f));
-const digestOf = (hashes) => sha256([...hashes].map(([f, h]) => `${f} ${h}`).join("\n")).slice(0, 16);
+// THE TREE NET. What `git status` names in the WHOLE working tree (tracked files changed, files untracked, files gone, mode
+// changes), plus a hash of every file it names, taken before the first child and after the last. The earlier net hashed the
+// 185 registered guard files and nothing else: a child that wrote anywhere else (a new file in lib/, a file outside it)
+// left the gate green, and one that wrote a registered file turned the gate red but left the file modified. A file that was
+// already modified when the gate started (work in progress) is hashed too, so modifying it again still moves. Not covered,
+// and said so: paths git ignores, and a change to a file's mtime alone; the preload refuses both by path, whatever git thinks.
+// `GIT_OPTIONAL_LOCKS=0` keeps the check from writing the index itself, and the ceiling stops git from finding a repository
+// above the one it was asked about (a scratch copy of the tree is its own repository, or it is not one and the net says so).
+const contentHash = (abs) => {
+  try {
+    const st = lstatSync(abs);
+    if (st.isSymbolicLink()) return `link ${sha256(readlinkSync(abs))}`;
+    if (st.isDirectory()) return "dir";
+    return `${(st.mode & 0o777).toString(8)} ${sha256(readFileSync(abs))}`;
+  } catch { return "absent"; }
+};
+const treeSnapshot = (root) => {
+  let raw;
+  try {
+    raw = execFileSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd: root, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_CEILING_DIRECTORIES: dirname(root) }, maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  } catch (err) {
+    return { error: String(err?.stderr?.toString() || err?.message || err).trim().split("\n")[0] };
+  }
+  const entries = new Map();
+  const parts = raw.toString("utf8").split("\0");
+  for (let k = 0; k < parts.length; k += 1) {
+    if (parts[k] === "") continue;
+    const code = parts[k].slice(0, 2);
+    const path = parts[k].slice(3);
+    if (/[RC]/.test(code)) k += 1; // the entry after a rename or a copy is the path it came from
+    entries.set(path, `${code}|${contentHash(join(root, path))}`);
+  }
+  return { entries };
+};
+const treeChanges = (before, after) =>
+  [...new Set([...before.entries.keys(), ...after.entries.keys()])].sort()
+    .filter((f) => before.entries.get(f) !== after.entries.get(f))
+    .map((f) => {
+      const was = before.entries.get(f)?.split("|")[0];
+      const now = after.entries.get(f)?.split("|")[0];
+      return `${f} (${was === undefined ? "clean" : `git status "${was}"`} -> ${now === undefined ? "clean" : `git status "${now}"`}${was === now ? ", content changed" : ""})`;
+    });
+const digestOf = (snapshot) => sha256([...snapshot.entries].sort().map(([f, h]) => `${f} ${h}`).join("\n")).slice(0, 16);
 const spawnGuard = (preloads, args, env = {}) => new Promise((done) => {
   execFile(process.execPath, [...preloads.flatMap((p) => ["--import", p]), GUARD_PATH, ...args], { cwd: REPO, env: { ...process.env, ...env, NOWRITE_ALLOW: "" }, maxBuffer: 64 * 1024 * 1024, timeout: CHILD_TIMEOUT_SECONDS * 1000, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
     let doc = null;
@@ -467,7 +648,7 @@ const spawnGuard = (preloads, args, env = {}) => new Promise((done) => {
   });
 });
 const runPlan = (args, env) => spawnGuard([PRELOAD_NOWRITE], ["--plan", ...args], env);
-const runStubSweep = (args) => spawnGuard([PRELOAD_NOWRITE, PRELOAD_STUB], args);
+const runStubSweep = (args, env) => spawnGuard([PRELOAD_NOWRITE, PRELOAD_STUB], args, env);
 // The first child to hit its time limit is remembered; the pool starts no more after it.
 let firstHung;
 const watched = (label, fn) => async () => {
@@ -493,12 +674,61 @@ const firstDifference = (got, want) => {
   return k === undefined ? "" : ` (first difference at placement ${k}: ${briefly(got[k])} vs expected ${briefly(want[k])})`;
 };
 const proofOfUnit = (unit) => unit.replace(/\[\d+\/\d+\]$/, "");
+// Every unit a run finished prints `unit-done <unit> written=<n> planned=<m>` (stdout in a sweep, stderr in --plan). The units
+// that print one must be exactly the units the shard holds, none missing and none twice, and each must have written what the
+// selector planned for it. A skipped unit has no count to fail, so a run that swept 462 of 475 mutations and exited 0 is
+// visible only as a unit that never printed a line.
+const UNIT_DONE = /^unit-done (\S+) written=(\d+) planned=(\d+)$/gm;
+const unitsDoneIn = (text) => [...text.matchAll(UNIT_DONE)].map((m) => ({ unit: m[1], written: Number(m[2]), planned: Number(m[3]) }));
+const unitAccount = (text, registry, i, n, planUnits = []) => {
+  const done = unitsDoneIn(text);
+  const held = shardTargets(registry, i, n).map((u) => ({ unit: unitName(u), swept: selectSliceMutations(u, perFileOf(u)).swept }));
+  const names = (xs) => JSON.stringify(xs.map((x) => x.unit).sort());
+  const missing = held.filter((h) => !done.some((d) => d.unit === h.unit)).map((h) => h.unit);
+  const notPlanned = planUnits.filter((u) => !done.some((d) => d.unit === u));
+  const counted = done.every((d) => d.written === d.planned && d.planned === held.find((h) => h.unit === d.unit)?.swept);
+  return { ok: names(done) === names(held) && counted && notPlanned.length === 0, done: done.length, held: held.length, missing, text: `${done.length} of ${held.length} units finished${missing.length ? ` (never finished: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? `, +${missing.length - 3} more` : ""})` : counted ? "" : " (a unit wrote other than it planned)"}` };
+};
 const PLAN_COUNTS = [1, 2, 3, 4];
 const dmhTarget = TARGETS.find((t) => t.proof === "proof:device-management-health");
 
 // Fixtures for the two safety nets, before anything is spawned against the real tree.
 // (1) The write-denying preload, a COPY of it rooted in a scratch directory (it takes its root from its own
-//     location), against a child that tries every kind of write at a file under that root.
+//     location), against a child that tries one way after another to change something under that root: the
+//     content-changing calls, the metadata-only ones (chmod, utimes, and the descriptor and handle forms of both),
+//     a hard link out of the tree, and the routes AROUND the patched functions (a worker thread, the runtime's
+//     `fs` binding, execve, dlopen, a bare ChildProcess, a diagnostic report). A worker alone wrote a new file
+//     into lib/ with the gate at 167/167. Only the last probe, a write outside the root, may succeed.
+const NOWRITE_PROBES = [
+  ["writeFileSync", "fs.writeFileSync(victim, \"x\")"],
+  ["promises.writeFile", "await fsp.writeFile(victim, \"x\")"],
+  ["createWriteStream", "fs.createWriteStream(victim)"],
+  ["renameSync", "fs.renameSync(victim, `${victim}.b`)"],
+  ["rmSync", "fs.rmSync(victim)"],
+  ["spawnSync", "spawnSync(\"true\")"],
+  ["chmodSync", "fs.chmodSync(victim, 0o755)"],
+  ["utimesSync", "fs.utimesSync(victim, 1, 1)"],
+  ["fchmodSync on a read-only descriptor", "fs.fchmodSync(fs.openSync(victim, \"r\"), 0o755)"],
+  ["FileHandle.chmod on a read-only handle", "await (await fsp.open(victim, \"r\")).chmod(0o755)"],
+  ["hard link out of the tree", "fs.linkSync(victim, `${free}.link`)"],
+  ["new Worker", "new Worker(\"1\", { eval: true })"],
+  ["process.binding", "process.binding(\"fs\")"],
+  // (execve is Node 22.15 and later, and node:sqlite 22.5 and later: a probe for a call this Node does not have would only report that it threw.)
+  ...(typeof process.execve === "function" ? [["process.execve", "process.execve(process.execPath, [process.execPath, \"-e\", \"1\"], process.env)"]] : []),
+  ["process.dlopen", "process.dlopen({ exports: {} }, \"/nonexistent.node\")"],
+  ["new ChildProcess", "new ChildProcess()"],
+  ["process.report.writeReport", "process.report.writeReport(victim)"],
+  ["v8.writeHeapSnapshot", "(await import(\"node:v8\")).writeHeapSnapshot(victim)"],
+  ["v8.setFlagsFromString", "(await import(\"node:v8\")).setFlagsFromString(\"--no-prof\")"],
+  ["trace_events.createTracing", "(await import(\"node:trace_events\")).createTracing({ categories: [\"node.perf\"] })"],
+  ["module.register (the hooks thread)", "(await import(\"node:module\")).register(\"data:text/javascript,\", import.meta.url)"],
+  ["a Uint8Array as the path", "fs.writeFileSync(new TextEncoder().encode(victim), \"x\")"],
+  ["a URL-shaped plain object as the path", "fs.writeFileSync({ href: `file://${victim}`, protocol: \"file:\", hostname: \"\", pathname: victim }, \"x\")"],
+  ["a unix socket bound in the tree", "await new Promise((ok, no) => { const s = net.createServer(); s.on(\"error\", no); s.listen(`${victim}.sock`, () => s.close(ok)); })"],
+  ...(isBuiltin("node:sqlite") ? [["new DatabaseSync (SQLite creates the file)", "new ((await import(\"node:sqlite\")).DatabaseSync)(`${victim}.db`)"]] : []),
+  ["new WASI with the tree preopened", "new ((await import(\"node:wasi\")).WASI)({ version: \"preview1\", preopens: { \"/sandbox\": victim.slice(0, victim.lastIndexOf(\"/\")) } })"],
+  ["write outside the root", "fs.writeFileSync(free, \"ok\")"],
+];
 {
   const root = mkdtempSync(join(tmpdir(), "sg-nowrite-"));
   const outside = mkdtempSync(join(tmpdir(), "sg-nowrite-out-"));
@@ -506,46 +736,84 @@ const dmhTarget = TARGETS.find((t) => t.proof === "proof:device-management-healt
     mkdirSync(join(root, "scripts/lib"), { recursive: true });
     copyFileSync(PRELOAD_NOWRITE_PATH, join(root, "scripts/lib/no-write-preload.mjs"));
     writeFileSync(join(root, "victim.txt"), "keep");
+    chmodSync(join(root, "victim.txt"), 0o644);
+    utimesSync(join(root, "victim.txt"), 1000, 1000);
+    const stat0 = statSync(join(root, "victim.txt"));
     writeFileSync(join(root, "child.mjs"), [
       "import fs from \"node:fs\";",
       "import fsp from \"node:fs/promises\";",
-      "import { spawnSync } from \"node:child_process\";",
+      "import net from \"node:net\";",
+      "import { ChildProcess, spawnSync } from \"node:child_process\";",
+      "import { Worker } from \"node:worker_threads\";",
       "const [victim, free] = process.argv.slice(2);",
       "const out = [];",
-      "for (const [name, fn] of [[\"writeFileSync\", () => fs.writeFileSync(victim, \"x\")], [\"promises.writeFile\", () => fsp.writeFile(victim, \"x\")], [\"createWriteStream\", () => fs.createWriteStream(victim)], [\"renameSync\", () => fs.renameSync(victim, `${victim}.b`)], [\"rmSync\", () => fs.rmSync(victim)], [\"spawnSync\", () => spawnSync(\"true\")], [\"outside\", () => fs.writeFileSync(free, \"ok\")]]) {",
-      "  try { await fn(); out.push(`${name}:allowed`); } catch { out.push(`${name}:denied`); }",
+      `for (const [name, fn] of [${NOWRITE_PROBES.map(([name, code]) => `[${JSON.stringify(name)}, async () => { ${code}; }]`).join(", ")}]) {`,
+      // Only the preload's own refusal counts as denied: a call that threw for any other reason (a path that does not exist, a
+      // bad argument) proves nothing about the guard, and is reported as it is.
+      "  try { await fn(); out.push(`${name}:allowed`); } catch (err) { out.push(`${name}:${String(err?.message ?? err).includes(\"NO-WRITE-DENIED\") ? \"denied\" : \"threw\"}`); }",
       "}",
-      "console.log(out.join(\",\"));",
+      "console.log(out.join(\"|\"));",
     ].join("\n"));
     const r = await new Promise((done) => execFile(process.execPath, ["--import", pathToFileURL(join(root, "scripts/lib/no-write-preload.mjs")).href, join(root, "child.mjs"), join(root, "victim.txt"), join(outside, "free.txt")], { env: { ...process.env, NOWRITE_ALLOW: "" }, timeout: 30_000, killSignal: "SIGKILL" }, (err, stdout, stderr) => done({ stdout: stdout.trim(), stderr })));
-    check("fixture: the write-denying preload refuses writeFileSync, promises.writeFile, createWriteStream, renameSync, rmSync and a spawned process under its root, marks stderr, leaves the file as it was, and still lets a write outside its root through",
-      r.stdout === "writeFileSync:denied,promises.writeFile:denied,createWriteStream:denied,renameSync:denied,rmSync:denied,spawnSync:denied,outside:allowed"
-      && r.stderr.includes(DENIED_MARKER) && readFileSync(join(root, "victim.txt"), "utf8") === "keep");
+    const stat1 = statSync(join(root, "victim.txt"));
+    const want = NOWRITE_PROBES.map(([name], k) => `${name}:${k === NOWRITE_PROBES.length - 1 ? "allowed" : "denied"}`).join("|");
+    check(`fixture: the write-denying preload refuses all ${NOWRITE_PROBES.length - 1} probes under its root (content writes, chmod and utimes, descriptor and handle forms, a hard link out, a worker thread, process.binding, execve, dlopen, ChildProcess, module.register, a diagnostic report, heap snapshot or trace file, a unix socket, WASI, a path given as a Uint8Array or a URL-shaped object, a spawned process), marks stderr, leaves the file's content, mode and mtime as they were, creates nothing, and still lets a write outside its root through${r.stdout === want ? "" : ` — got ${r.stdout.split("|").filter((x, k) => x !== want.split("|")[k]).join(" | ") || r.stdout.slice(0, 200)}`}`,
+      r.stdout === want && r.stderr.includes(DENIED_MARKER)
+      && readFileSync(join(root, "victim.txt"), "utf8") === "keep" && stat1.mode === stat0.mode && stat1.mtimeMs === stat0.mtimeMs
+      && readdirSync(root).sort().join() === "child.mjs,scripts,victim.txt" && readdirSync(outside).sort().join() === "free.txt");
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
   }
 }
-// (2) The before/after comparison of the registered files names a file that moved.
+// (2) The tree comparison names what moved. A scratch repository: a file added, one edited, one edited AGAIN while it was
+//     already modified, one removed, one made executable, one nested in a new directory; and a directory that is not a
+//     repository is reported rather than read as clean.
 {
-  const dir = mkdtempSync(join(tmpdir(), "sg-hash-"));
+  const dir = mkdtempSync(join(tmpdir(), "sg-tree-"));
+  const notRepo = mkdtempSync(join(tmpdir(), "sg-tree-none-"));
+  const git = (...args) => execFileSync("git", ["-c", "user.name=gate", "-c", "user.email=gate@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...args], { cwd: dir, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_CEILING_DIRECTORIES: dirname(dir) }, stdio: ["ignore", "pipe", "pipe"] });
   try {
+    git("init", "-q");
     writeFileSync(join(dir, "a.ts"), "one");
     writeFileSync(join(dir, "b.ts"), "two");
-    const before = hashFiles(dir, ["a.ts", "b.ts"]);
-    const unchanged = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
-    writeFileSync(join(dir, "b.ts"), "TWO");
-    const rewritten = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
-    rmSync(join(dir, "a.ts"));
-    const removed = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
-    check("fixture: the before/after hash comparison reports nothing when no file moved and names a file that was rewritten or removed",
-      unchanged.length === 0 && rewritten.join() === "b.ts" && removed.join() === "a.ts,b.ts");
+    git("add", "-A");
+    git("commit", "-q", "-m", "fixture");
+    const named = (before) => treeChanges(before, treeSnapshot(dir)).map((x) => x.split(" ")[0]).join();
+    const clean = treeSnapshot(dir);
+    const unchanged = named(clean);
+    writeFileSync(join(dir, "c.ts"), "new");
+    const added = named(clean);
+    const withC = treeSnapshot(dir);
+    writeFileSync(join(dir, "c.ts"), "NEW");
+    const addedThenEdited = named(withC);
+    rmSync(join(dir, "c.ts"));
+    writeFileSync(join(dir, "a.ts"), "ONE");
+    const edited = named(clean);
+    const dirty = treeSnapshot(dir);
+    writeFileSync(join(dir, "a.ts"), "ONE AGAIN");
+    const editedAgain = named(dirty);
+    writeFileSync(join(dir, "a.ts"), "one");
+    rmSync(join(dir, "b.ts"));
+    const removed = named(clean);
+    writeFileSync(join(dir, "b.ts"), "two");
+    chmodSync(join(dir, "b.ts"), 0o755);
+    const madeExecutable = named(clean);
+    chmodSync(join(dir, "b.ts"), 0o644);
+    mkdirSync(join(dir, "d/e"), { recursive: true });
+    writeFileSync(join(dir, "d/e/f.ts"), "nested");
+    const nested = named(clean);
+    const settled = (() => { rmSync(join(dir, "d"), { recursive: true }); return named(clean); })();
+    check("fixture: the tree comparison reports nothing for an untouched tree and names a file that was added, edited, edited again while already modified, removed, made executable, or created in a new directory, and nothing once they are put back",
+      unchanged === "" && added === "c.ts" && addedThenEdited === "c.ts" && edited === "a.ts" && editedAgain === "a.ts" && removed === "b.ts" && madeExecutable === "b.ts" && nested === "d/e/f.ts" && settled === "");
+    check("fixture: a directory that is not a repository is reported by the tree net, never read as a clean tree", treeSnapshot(notRepo).error !== undefined);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+    rmSync(notRepo, { recursive: true, force: true });
   }
 }
 
-const HASH_BEFORE = hashFiles(REPO, REGISTERED_FILES);
+const TREE_BEFORE = treeSnapshot(REPO);
 if (!planModeStopsBeforeMutation(GUARD_SRC)) {
   check("main()'s real --plan places every mutation exactly once (NOT RUN: its stop before the mutation is not pinned, and running it could sweep)", false);
 } else {
@@ -561,9 +829,10 @@ if (!planModeStopsBeforeMutation(GUARD_SRC)) {
       const run = runs[k];
       const want = expectedPlan(j.registry, j.i, j.n);
       const got = run.doc?.placements ?? [];
+      const units = unitAccount(run.stderr, j.registry, j.i, j.n);
       const ok = run.rc === 0 && !run.denied && run.doc !== null && run.doc.shard === `${j.i}/${j.n}` && run.doc.proof === (j.only ?? null)
-        && run.doc.count === got.length && JSON.stringify(got) === JSON.stringify(want);
-      if (!ok) console.error(`    plan ${j.args.join(" ")}: rc=${run.rc}, ${run.denied ? `a write or spawn was attempted and refused (${run.stderr.split("\n").find((l) => l.includes(DENIED_MARKER)) ?? DENIED_MARKER})` : run.doc === null ? `stdout is not JSON (${run.stderr.trim().split("\n").pop() ?? ""})` : `${got.length} placements vs ${want.length} expected${firstDifference(got, want)}`}`);
+        && run.doc.count === got.length && JSON.stringify(got) === JSON.stringify(want) && units.ok;
+      if (!ok) console.error(`    plan ${j.args.join(" ")}: rc=${run.rc}, ${run.denied ? `a write or spawn was attempted and refused (${run.stderr.split("\n").find((l) => l.includes(DENIED_MARKER)) ?? DENIED_MARKER})` : run.doc === null ? `stdout is not JSON (${run.stderr.trim().split("\n").pop() ?? ""})` : `${got.length} placements vs ${want.length} expected${firstDifference(got, want)}; ${units.text}`}`);
       return { ...j, got, want, ok };
     });
     // A mutation is keyed by its identity (proof, file, line, mutator), never by the ordinal main()
@@ -632,12 +901,14 @@ if (!planModeStopsBeforeMutation(GUARD_SRC)) {
           const written = (report?.writes ?? []).map((w) => `${w.file}|${w.sha256}`);
           const summary = `mutations=${planned.length} killed=${planned.length} hung=0 known-inert=0 survivors=0`;
           const runsWanted = shardTargets(j.registry, j.i, 4).length + planned.length;
+          const planUnits = [...new Set((judged.find((p) => p.n === 4 && p.i === j.i && p.only === j.only)?.got ?? []).map((p) => p.unit))];
+          const units = unitAccount(run.stdout, j.registry, j.i, 4, planUnits);
           const ok = run.rc === 0 && !run.denied && report !== null && planned.length > 0 && JSON.stringify(written) === JSON.stringify(planned)
-            && report.dirty === 0 && report.proofRuns === runsWanted && run.stdout.includes(summary);
+            && report.dirty === 0 && report.proofRuns === runsWanted && run.stdout.includes(summary) && units.ok;
           if (!ok) {
             const x = Array.from({ length: Math.max(written.length, planned.length) }, (_, y) => y).find((y) => written[y] !== planned[y]);
             const brief = (w) => (w === undefined ? "none" : `${w.split("|")[0].split("/").pop()} ${w.split("|")[1].slice(0, 8)}`);
-            console.error(`    stubbed sweep ${j.args.join(" ")}: rc=${run.rc}, ${report === null ? `no report (${run.stderr.trim().split("\n").pop() ?? ""})` : `${written.length} written vs ${planned.length} planned${x === undefined ? "" : ` (first difference at ${x}: ${brief(written[x])} vs planned ${brief(planned[x])})`}, dirty=${report.dirty}, proof runs=${report.proofRuns} (expected ${runsWanted})`}${run.stdout.includes(summary) ? "" : `, no \`${summary}\``}`);
+            console.error(`    stubbed sweep ${j.args.join(" ")}: rc=${run.rc}, ${report === null ? `no report (${run.stderr.trim().split("\n").pop() ?? ""})` : `${written.length} written vs ${planned.length} planned${x === undefined ? "" : ` (first difference at ${x}: ${brief(written[x])} vs planned ${brief(planned[x])})`}, dirty=${report.dirty}, proof runs=${report.proofRuns} (expected ${runsWanted})`}${run.stdout.includes(summary) ? "" : `, no \`${summary}\``}; ${units.text}`);
           }
           return { ...j, written, ok };
         });
@@ -646,19 +917,51 @@ if (!planModeStopsBeforeMutation(GUARD_SRC)) {
           ...(dmhTarget ? [[dmhTarget.proof, sweepJudged.filter((j) => j.only === dmhTarget.proof), totalOf(dmhTarget)]] : []),
         ]) {
           const writtenTotal = mine.reduce((n, j) => n + j.written.length, 0);
-          check(`main()'s REAL sweep of ${what} with the disk and the proof stubbed, shards 0..3 of 4, writes exactly the mutations each shard's --plan lists, in order, restores every one, runs the proof once per mutation and once per unit for its baseline, and exits 0 (${mine.map((j) => j.written.length).join("+")} = ${writtenTotal} of ${registered} written)`,
+          check(`main()'s REAL sweep of ${what} with the disk and the proof stubbed, shards 0..3 of 4, writes exactly the mutations each shard's --plan lists, in order, restores every one, runs the proof once per mutation and once per unit for its baseline, finishes every unit its shard holds (a \`unit-done\` line each, written = planned), and exits 0 (${mine.map((j) => j.written.length).join("+")} = ${writtenTotal} of ${registered} written)`,
             mine.length === 4 && mine.every((j) => j.ok) && writtenTotal === registered);
+        }
+        // The one branch of main() a kill-everything stub never takes: a mutant that SURVIVES its proof. The smallest target with
+        // a few mutations is swept with the first of them that is not on the allowlist answering `pass`. It must be reported
+        // as a survivor (not counted as known-inert, not lost), the sweep must exit 1 on it, and every write must be restored.
+        // (Counting each survivor as known-inert made main() unable to fail on a survivor at all, with the gate at 167/167.)
+        {
+          const smallest = [...TARGETS].filter((t) => totalOf(t) >= 3).sort((a, b) => totalOf(a) - totalOf(b) || (a.proof < b.proof ? -1 : 1))[0];
+          const flat = smallest === undefined ? [] : mutationsByFile(smallest).flatMap((f) => f.mutations);
+          const at = flat.findIndex((m) => !isAllowed(m));
+          if (smallest === undefined || at < 0) {
+            check("main()'s REAL sweep with one mutant surviving its proof (NOT RUN: no registered target has three mutations with one off the allowlist)", false);
+          } else {
+            const run = await watched(`sweep --proof=${smallest.proof} (stubbed, mutant ${at + 1} survives)`, () => runStubSweep([`--proof=${smallest.proof}`], { SWEEP_STUB_SURVIVE: String(at + 1) }))();
+            if (firstHung !== undefined) {
+              hungCheck("main()'s stubbed sweep with a surviving mutant", [run]);
+            } else {
+              const reportLine = run.stderr.split("\n").find((l) => l.startsWith(`${REPORT_MARKER} `));
+              let report = null;
+              try { report = reportLine === undefined ? null : JSON.parse(reportLine.slice(REPORT_MARKER.length + 1)); } catch { /* no report: the check says so */ }
+              const want = `mutations=${flat.length} killed=${flat.length - 1} hung=0 known-inert=0 survivors=1`;
+              const survivor = `✗ SURVIVED  ${flat[at].file}:${flat[at].lineNo}`;
+              const ok = run.rc === 1 && !run.denied && report !== null && report.dirty === 0 && report.writes.length === flat.length
+                && run.stdout.includes(want) && run.stdout.includes(survivor) && run.stderr.includes("unfalsifiable by their own proof");
+              if (!ok) console.error(`    stubbed sweep --proof=${smallest.proof} (mutant ${at + 1} survives): rc=${run.rc}, ${report === null ? "no report" : `${report.writes.length} written, dirty=${report.dirty}`}, ${run.stdout.includes(want) ? "" : `no \`${want}\`, `}${run.stdout.includes(survivor) ? "" : `no \`${survivor}\`, `}${run.stderr.includes("unfalsifiable by their own proof") ? "" : "no survivor report"}`);
+              check(`main()'s REAL sweep of ${smallest.proof} (${flat.length} mutations) with the disk and the proof stubbed and mutation ${at + 1} answering "pass": reports it as a survivor (\`survivors=1\`, \`known-inert=0\`), prints the survivor report and exits 1, with every write restored`, ok);
+            }
+          }
         }
       }
     }
   }
 }
-// Whatever the children did, the files they could have mutated are the files they started with.
+// Whatever the children did, the tree they ran in is the tree they started with: the same paths named by `git status`, with the
+// same content, before the first child and after the last.
 {
-  const after = hashFiles(REPO, REGISTERED_FILES);
-  const moved = movedFiles(HASH_BEFORE, after);
-  for (const f of moved) console.error(`    MOVED by a spawned child: ${f}`);
-  check(`the ${REGISTERED_FILES.length - 1} registered guard files and the guard itself hash identically before and after every spawned child (digest ${digestOf(HASH_BEFORE)} before, ${digestOf(after)} after)${moved.length ? ` — MOVED: ${moved.slice(0, 4).join(", ")}${moved.length > 4 ? `, +${moved.length - 4} more` : ""}` : ""}`, moved.length === 0);
+  const after = treeSnapshot(REPO);
+  if (TREE_BEFORE.error !== undefined || after.error !== undefined) {
+    check(`the working tree is the same before the first spawned child and after the last (NOT RUN: \`git status\` failed — ${TREE_BEFORE.error ?? after.error})`, false);
+  } else {
+    const moved = treeChanges(TREE_BEFORE, after);
+    for (const m of moved) console.error(`    CHANGED by a spawned child: ${m}`);
+    check(`the whole working tree is the same before the first spawned child and after the last: \`git status --untracked-files=all\` names ${TREE_BEFORE.entries.size} paths before and ${after.entries.size} after, each with the same content (digest ${digestOf(TREE_BEFORE)} before, ${digestOf(after)} after)${moved.length ? ` — CHANGED: ${moved.slice(0, 4).join("; ")}${moved.length > 4 ? `; +${moved.length - 4} more` : ""}` : ""}`, moved.length === 0);
+  }
 }
 
 // The function's own text, mutated, loaded as a module and run through the SAME coverage() the real
@@ -725,39 +1028,103 @@ if (selectorExtracted) {
 // shard count and its matrix are READ from scheduled-verification.yml rather than copied here. A
 // matrix that lacks a shard the run line divides by leaves that shard swept by no runner.
 const REFUSE_FRACTION = 0.8;
-const sweepJob = parseYaml(readFileSync(join(REPO, ".github/workflows/scheduled-verification.yml"), "utf8"))?.jobs?.["mutation-sweep"];
-const runLine = (sweepJob?.steps ?? []).map((st) => st?.run).find((r) => typeof r === "string" && r.includes("mutation-guard.mjs"));
-const shardsInRun = Number.parseInt(runLine?.match(/--shard=\$\{\{\s*matrix\.shard\s*\}\}\/(\d+)\b/)?.[1] ?? "", 10);
+const WORKFLOW_TEXT = readFileSync(join(REPO, ".github/workflows/scheduled-verification.yml"), "utf8");
+const WORKFLOW = parseYaml(WORKFLOW_TEXT);
+const sweepJob = WORKFLOW?.jobs?.["mutation-sweep"];
+// The sweep step is ONE line and nothing else. `--plan` is accepted by the script (it is how this gate observes main()), and
+// on the run line it turns every shard into a green no-op: a JSON plan, exit 0, no proof run. A flag spelled out was refused
+// first, then eight other shapes turned out to reach the same place without ever writing `--plan` on the line: another
+// expression (`${{ vars.X }}`), a shell variable (`F=--plan; ... $F`), an `env:` block read as `$SWEEP_ARGS`, a `|` block with a
+// backslash continuation, `if: false`, `|| true`, `continue-on-error: true`, and `NODE_OPTIONS=--import=<the stub preload>` (which
+// turns the daily sweep into a faked, all-killed run). So the step is held to exactly the line below with only `name` and `run`,
+// the job may not continue on error, be skipped, or carry defaults or an environment that sets NODE_OPTIONS, and no earlier step
+// may write to GITHUB_ENV or GITHUB_PATH (an environment the later step would inherit). The expression `${{ matrix.shard }}` is the
+// only one the line may hold. Exactly one step may name mutation-guard at all.
+const SWEEP_RUN = /^node scripts\/mutation-guard\.mjs --shard=\$\{\{ matrix\.shard \}\}\/(\d+)$/;
+const REFUSED_ENVIRONMENT = /NODE_OPTIONS|GITHUB_ENV|GITHUB_PATH|--import\b|--require\b|--loader\b|--experimental-loader\b/;
+const sweepStepsOf = (job) => (Array.isArray(job?.steps) ? job.steps : []).flatMap((st, k) => (JSON.stringify(st ?? null).includes("mutation-guard") ? [k] : []));
+function sweepProblems(workflow) {
+  const job = workflow?.jobs?.["mutation-sweep"];
+  if (job === undefined || job === null || typeof job !== "object") return ["there is no mutation-sweep job"];
+  const problems = [];
+  const steps = Array.isArray(job.steps) ? job.steps : [];
+  const naming = sweepStepsOf(job);
+  if (naming.length !== 1) problems.push(`${naming.length} steps name mutation-guard (exactly one runs the sweep)`);
+  const step = steps[naming[0]];
+  if (step !== undefined) {
+    const keys = Object.keys(step ?? {}).sort().join(",");
+    if (keys !== "name,run") problems.push(`the sweep step carries {${keys}} (only name and run)`);
+    if (typeof step?.run !== "string" || !SWEEP_RUN.test(step.run)) problems.push(`the sweep step's run is not exactly one line \`node scripts/mutation-guard.mjs --shard=\${{ matrix.shard }}/N\` (${JSON.stringify(step?.run)})`);
+  }
+  if (job["continue-on-error"] !== undefined && job["continue-on-error"] !== false) problems.push(`the job sets continue-on-error: ${JSON.stringify(job["continue-on-error"])}`);
+  if (job.if !== undefined) problems.push(`the job carries \`if: ${JSON.stringify(job.if)}\``);
+  for (const [where, value] of [["workflow", workflow.defaults], ["job", job.defaults]]) if (value !== undefined) problems.push(`the ${where} sets defaults (a shell or working directory changes how the line runs)`);
+  for (const [where, value] of [["workflow", workflow.env], ["job", job.env]]) {
+    const hit = REFUSED_ENVIRONMENT.exec(JSON.stringify(value ?? null));
+    if (hit !== null) problems.push(`the ${where} env sets ${hit[0]}`);
+  }
+  for (const k of naming.length > 0 ? Array.from({ length: naming[0] }, (_, x) => x) : []) {
+    const hit = REFUSED_ENVIRONMENT.exec(JSON.stringify({ run: steps[k]?.run ?? null, env: steps[k]?.env ?? null, with: steps[k]?.with ?? null }));
+    if (hit !== null) problems.push(`step ${k + 1} (${steps[k]?.name ?? "unnamed"}) before the sweep touches ${hit[0]}`);
+    // A local (composite) action runs steps this file does not show, and any of them may write GITHUB_ENV.
+    if (typeof steps[k]?.uses === "string" && steps[k].uses.startsWith("./")) problems.push(`step ${k + 1} (${steps[k]?.name ?? "unnamed"}) before the sweep uses the local action ${steps[k].uses}, whose steps this file does not show`);
+  }
+  return problems;
+}
+const realSweepProblems = sweepProblems(WORKFLOW);
+const sweepStep = sweepJob?.steps?.[sweepStepsOf(sweepJob)[0]];
+const shardsInRun = Number.parseInt(SWEEP_RUN.exec(typeof sweepStep?.run === "string" ? sweepStep.run : "")?.[1] ?? "", 10);
 const timeoutMinutes = sweepJob?.["timeout-minutes"];
 const workflowOk = Number.isInteger(shardsInRun) && shardsInRun >= 1 && Number.isInteger(timeoutMinutes) && timeoutMinutes > 0;
 check(`workflow: the mutation-sweep job runs \`--shard=<matrix>/N\` (N=${shardsInRun}) and bounds itself with timeout-minutes (${timeoutMinutes})`, workflowOk);
 const matrixShards = sweepJob?.strategy?.matrix?.shard;
 check(`workflow: matrix.shard is exactly 0..${shardsInRun - 1} (a shard the matrix lacks is swept by no runner)`,
   workflowOk && Array.isArray(matrixShards) && matrixShards.length === shardsInRun && matrixShards.every((v, i) => v === i));
-// The run line may carry `--shard=` and `--proof=` and nothing else. `--plan` is accepted by the script (it is how
-// this gate observes main()), and on the run line it turns every shard into a green no-op: a JSON plan, exit 0, no
-// proof run. Before `--plan` existed any extra flag exited 1 through unknownArgs, so the gate has to refuse the one
-// flag the script now accepts. Only the command that runs mutation-guard.mjs is read (a multi-line `run:` may hold
-// others), and the substring test on that command is a second net for a flag spelled across a template expression.
-const guardCommandsOf = (run) => String(run ?? "").split("\n").flatMap((l) => {
-  const at = l.indexOf("mutation-guard.mjs");
-  return at < 0 ? [] : [l.slice(at + "mutation-guard.mjs".length)];
-});
-const refusedRunFlags = (run) => [...new Set(guardCommandsOf(run).flatMap((cmd) => [
-  ...cmd.split(/&&|\|\||;|\|/)[0].split(/\s+/).filter((t) => t.startsWith("-") && t !== "--" && !/^--(shard|proof)=\S+$/.test(t)),
-  ...(cmd.includes("--plan") ? ["--plan"] : []),
-]))];
-check(`workflow: the mutation-sweep run line passes no flag but --shard=/--proof= and never --plan${refusedRunFlags(runLine).length ? ` — it passes ${refusedRunFlags(runLine).join(" ")}` : ""}`, runLine !== undefined && refusedRunFlags(runLine).length === 0);
+check(`workflow: the mutation-sweep step is exactly one run line with \`\${{ matrix.shard }}\` as its only expression and only name and run beside it, the job neither continues on error, is skipped, nor carries defaults or an environment that changes it, and nothing before it writes GITHUB_ENV or GITHUB_PATH${realSweepProblems.length ? ` — ${realSweepProblems.join("; ")}` : ""}`, realSweepProblems.length === 0);
 {
-  const refused = (run) => refusedRunFlags(run).join();
-  check("fixture: the run-line check refuses --plan (before the shard, after it, or spelled through a template expression), --help and -h, and passes the real run line and a --proof= line beside another command",
-    refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4") === ""
-    && refused("node scripts/mutation-guard.mjs --plan --shard=${{ matrix.shard }}/4") === "--plan"
-    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 --plan") === "--plan"
-    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4${{ '--plan' }}") === "--plan"
-    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 --help") === "--help"
-    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 -h") === "-h"
-    && refused("pnpm install --frozen-lockfile\nnode scripts/mutation-guard.mjs --proof=proof:x --shard=0/4") === "");
+  const STEP = /^      - name: Mutation sweep \(shard \$\{\{ matrix\.shard \}\} of \d+\)\n        run: node scripts\/mutation-guard\.mjs --shard=\$\{\{ matrix\.shard \}\}\/\d+\n/m.exec(WORKFLOW_TEXT)?.[0];
+  const head = "      - name: Mutation sweep (shard ${{ matrix.shard }} of 4)\n";
+  const line = "node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4";
+  check("fixture: the real sweep step can be found in the workflow text, so the shapes below are built from it", STEP !== undefined);
+  if (STEP !== undefined) {
+    const withStep = (text) => parseYaml(WORKFLOW_TEXT.replace(STEP, () => text));
+    const edited = (edit) => { const wf = structuredClone(WORKFLOW); edit(wf.jobs["mutation-sweep"], wf); return wf; };
+    const earlier = (run) => edited((job) => { job.steps.splice(1, 0, { name: "Earlier step", run }); });
+    check("fixture: the sweep-step check passes the real step and, so a pass means something, the unedited workflow rebuilt from its own text", sweepProblems(WORKFLOW).length === 0 && sweepProblems(withStep(STEP)).length === 0);
+    for (const [shape, wf] of [
+      // The eight shapes that were green before, then the old ones and the job-level and earlier-step routes.
+      ["another expression on the line (`${{ vars.SWEEP_FLAGS }}`)", withStep(`${head}        run: ${line} \${{ vars.SWEEP_FLAGS }}\n`)],
+      ["a shell variable (`F=--plan; node ... $F`)", withStep(`${head}        run: F=--plan; ${line} $F\n`)],
+      ["an `env:` block read as `$SWEEP_ARGS`", withStep(`${head}        env:\n          SWEEP_ARGS: --plan\n        run: ${line} $SWEEP_ARGS\n`)],
+      ["a `|` block with a backslash continuation", withStep(`${head}        run: |\n          node scripts/mutation-guard.mjs \\\n            --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`if: false` on the step", withStep(`${head}        if: false\n        run: ${line}\n`)],
+      ["`if: false` on the step followed by a step that runs `--plan`", withStep(`${head}        if: false\n        run: ${line}\n      - name: Mutation plan\n        run: node scripts/mutation-guard.mjs --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`|| true` on the line", withStep(`${head}        run: ${line} || true\n`)],
+      ["`continue-on-error: true` on the step", withStep(`${head}        continue-on-error: true\n        run: ${line}\n`)],
+      ["`NODE_OPTIONS=--import=<the stub preload>` in the step's env", withStep(`${head}        env:\n          NODE_OPTIONS: --import=./scripts/lib/sweep-stub-preload.mjs\n        run: ${line}\n`)],
+      ["`--plan` before the shard", withStep(`${head}        run: node scripts/mutation-guard.mjs --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`--plan` after the shard", withStep(`${head}        run: ${line} --plan\n`)],
+      ["`--plan` spelled through a template expression", withStep(`${head}        run: ${line}\${{ '--plan' }}\n`)],
+      ["`--plan` in a `>` folded scalar", withStep(`${head}        run: >\n          node scripts/mutation-guard.mjs\n          --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`&& ... --plan` after the real command", withStep(`${head}        run: ${line} && node scripts/mutation-guard.mjs --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`--help` and `-h` on the line", withStep(`${head}        run: ${line} --help -h\n`)],
+      ["the real line in a `|` block (a trailing newline: not one run line)", withStep(`${head}        run: |\n          ${line}\n`)],
+      ["a second step that runs `--plan` after the real one", withStep(`${STEP}      - name: Mutation sweep, again\n        run: node scripts/mutation-guard.mjs --plan --shard=\${{ matrix.shard }}/4\n`)],
+      ["`shell: bash -c true {0}` on the step", withStep(`${head}        shell: bash -c true {0}\n        run: ${line}\n`)],
+      ["`NODE_OPTIONS` in the job's env", edited((job) => { job.env = { NODE_OPTIONS: "--import=./scripts/lib/sweep-stub-preload.mjs" }; })],
+      ["`NODE_OPTIONS` in the workflow's env", edited((job, wf) => { wf.env = { NODE_OPTIONS: "--require ./x.cjs" }; })],
+      ["`continue-on-error: true` on the job", edited((job) => { job["continue-on-error"] = true; })],
+      ["`continue-on-error: ${{ true }}` on the job (an expression is not `false`)", edited((job) => { job["continue-on-error"] = "${{ true }}"; })],
+      ["`if: false` on the job", edited((job) => { job.if = false; })],
+      ["`defaults.run.shell` on the job", edited((job) => { job.defaults = { run: { shell: "bash -c true {0}" } }; })],
+      ["an earlier step that writes NODE_OPTIONS to GITHUB_ENV", earlier("echo \"NODE_OPTIONS=--import=./x.mjs\" >> $GITHUB_ENV")],
+      ["an earlier step that writes to GITHUB_PATH", earlier("echo \"$PWD/fake-bin\" >> $GITHUB_PATH")],
+      ["an earlier step that uses a local action (its steps are not in this file)", edited((job) => { job.steps.splice(1, 0, { name: "Local setup", uses: "./.github/actions/setup" }); })],
+    ]) {
+      const problems = sweepProblems(wf);
+      check(`fixture: the sweep-step check refuses ${shape}`, problems.length > 0);
+    }
+  }
 }
 const LANE_N = workflowOk ? shardsInRun : 4;
 const BOUND_SECONDS = (workflowOk ? timeoutMinutes : 40) * 60;

@@ -45,7 +45,19 @@ jobs:
     # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
     # against a Proxy returning a fresh prototype each call) fails red instead of
     # silently consuming the default job timeout.
-    timeout-minutes: 20
+    #
+    # THE BOUND CARRIES A MARGIN RULE (set 2026-10-15): bound = 2 x the longest
+    # GREEN run measured, rounded UP to the next 5 minutes. The 2x is the floor of
+    # the "two to three times observed runtime" that scripts/check-ci-job-timeouts.mjs
+    # states for every job; a bound at the run time is a flaky gate. Longest green
+    # run of this job on 2026-10-15: 19m15s (job 116448397928), so 2 x 19m15s =
+    # 38m30s, which rounds up to 40. The previous bound, 20, sat 45 seconds above
+    # that run and killed a green one at step 410 of 413 (job 116440190841,
+    # cancelled at 20m05s with every step before it green), a red check on a branch
+    # that broke nothing. A true hang is still caught here, now at 40 minutes
+    # rather than 20. Re-derive this number from the longest green run whenever
+    # one passes half of it.
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v7

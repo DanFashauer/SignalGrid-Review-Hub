@@ -2099,26 +2099,20 @@ PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATI
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud lane (2026-10-15, as of 15:02Z). Every item is named by its PR and branch, and the QUEUE paragraph above carries its
-              evidence; nothing here depends on a sha that only the cloud container holds. Land #1516 (docs/outage-record-20261015, this
-              record; round 3 answers the Codex findings and the round-2 LOW) once local preflight+breadth are green on its head and a
-              Sonnet re-check ships. Re-run #1470's landing round (claude/build-graph-collection-transport-parity) on origin's 832041dc once
-              its gating check is green: the branch's worker answered the Opus refutation of bddf469f (comment 6194392948) at 14:46:20Z. #1460
-              (claude/build-gate-self-tests-run, origin 19e51b66): close the round-15 fix-needed in one push, since its gating job ran
-              19m43s against the 20-minute bound (#1460 comment 6194671942). #1468 (claude/loop-state-20261008-gap): origin carries
-              round 27 at c57cdc0d with its gating failure in PR comment 6085117608; rounds 28 to 31 exist only in the cloud container's
-              worktree and are not a hand-off until local preflight+breadth pass on the round's head and it is pushed (CLAUDE.md "Before you
-              push"), so a rebuilt container restarts from c57cdc0d and that comment, not from a local round. #1490
-              (claude/build-closure-restamp-lap-20261009, origin bf7b2e53): the Sonnet round-8 review of the push that restored the three
-              #1464 closures (comment 6195026102), then its landing. The CI validation-job timeout fix
-              (claude/build-ci-validation-job-timeout) is unpushed: push it once its preflight+breadth pass, since a rebuilt container
-              loses it otherwise. B83 takeover of #1504 (claude/build-url-guard-redirect-hand-mutant-pins, origin c7d6a6b0, partial) and
-              the B84 re-dispatch. Backlog rows A and B
-              (docs/BUILD_BACKLOG.md, section "The 2026-10-09 to 2026-10-15 outage - follow-ups") when a builder slot is free. THROTTLE: at
-              most three concurrent workers until the owner decides the budget; at the 14:10Z fire the local pool stood at five (H/S/O
-              0/4/1), over the cap, recorded and not excused on #1517's heartbeat (d87ce8bd; on mainline as 38003303), so no new local worker
-              starts until the pool drains below three; the units queued at that fire were this record's round 3, #1490 round 8 and #1468
-              round 31's review.
+NEXT ACTION: cloud lane (2026-10-15, as of 22:30Z). Every item is named by its PR and branch; nothing here depends on a sha that only
+              the cloud container holds. In this order:
+              1. #1460 (claude/build-gate-self-tests-run, origin 19e51b66): round 18, a worker merging mainline 64d0ca6d or later, adding a regex-literal
+              mention arm with its fixture and the row-43 sentences; then the Opus landing re-refute, marking it ready, the DR-037 line and the merge.
+              2. The mutation-sweep shard-3 root-cause branch (claude/build-mutation-sweep-shard3-rootcause, local tip 32383a01, unpushed): round 5, a
+              local Sonnet builder answering the Opus round-4 re-check's two MEDIUMs and one LOW; then the Opus re-check, a mainline merge, local preflight
+              and breadth, the push, the PR, its gating check and the merge.
+              3. This docs batch (claude/docs-batch-20261015-landings, branched from 64d0ca6d): Sonnet review, local preflight and breadth, push, PR,
+              gating check and merge; it lands after items 1 and 2.
+              4. The wave harvest, in this order: #1370 round-16 review, #1333 round-26 review, then the conflicted SAFETY_MACHINERY PRs #1504 #1398 #1378
+              #1349 #1230 #1309 #1369 #1390 #1308 by size.
+              5. Waiting on the owner: 20 DECISION_PATH Hub PRs; 3 OWNER_RESERVED; #1337 (the launch-claims gate); Mac decision-record PRs #1357 #1322
+              #1246; 9 Dependabot PRs; signalgrid-mcp #15 #16 #17; the owner attestation for row 17.
+              THROTTLE: at most three concurrent workers until the owner decides the budget (the owner hand, open at 22:09Z).
 PREVIOUSLY:   owner: merge #1246 #1322 #1357, #1416 #1417 #1422 #1424, signalgrid-mcp #15 #16 #17; mint the GitHub-App
               secret once (claude setup-token + gh secret set in both repos). cloud: land the SAFETY set under DR-037; the
               DECISION_PATH set once #1246 lands. mac: re-mint on the next manifest move; build the loop's next tasks[] row

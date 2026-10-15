@@ -62,7 +62,8 @@ edited for behaviour. Verified 2026-09-04.
    **DO** `cargo test --manifest-path native/desktop/core/Cargo.toml` (likewise
    `firmware/dock/core`, `native/desktop/app`), and CI's triple: `cargo fmt --check`,
    `cargo clippy --all-targets -- -D warnings`, `cargo test`. `cargo test -- --nocapture`
-   surfaces the `eprintln!` summary `44 shared conformance cases pass (5 of them proceedable)`.
+   surfaces the `eprintln!` summary `N shared conformance cases pass (M of them proceedable)` —
+   N is `cases.length` in `native/shared/assist-wire-conformance.json`; read both off the run, never off this page.
 9. **SAYS** sheet snippets: `let mut a: u32 = 8;` (never mutated), `print!(…)`, `return x;` as
    the last statement, `S_string`, parentheses around a cast.
    **BREAKS** `desktop.yml` / `firmware.yml` run clippy with `-D warnings`; pasting these into a

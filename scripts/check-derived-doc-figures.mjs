@@ -69,6 +69,17 @@ import { collectionRequestFiles, registeredRoutePairCount } from "./check-api-co
 import { connectorEndpoints } from "./check-graph-permission-boundary.mjs";
 import { wireTruthFigures } from "./check-wire-truth-ledger.mjs";
 
+/**
+ * Cases in the shared Assist-wire conformance fixture. The OpenAPI description of
+ * /v1/assist/evaluate and the comment above its route in v1.ts both said "42" while
+ * the fixture carried 44, then 75 (plan row 29): the count lives in the fixture.
+ */
+const ASSIST_VECTORS = "native/shared/assist-wire-conformance.json";
+export function assistConformanceCaseCount(root = ROOT) {
+  const cases = JSON.parse(read(ASSIST_VECTORS, root)).cases;
+  return Array.isArray(cases) ? cases.length : 0;
+}
+
 /** The connector tree the redirect census walks. */
 const INTEGRATIONS = "lib/integrations/src/integrations";
 
@@ -576,6 +587,11 @@ export const FIGURES = [
   { id: "wire-truth-checked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /and (\d+) of the tree's \d+ signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).checked, from: "distinct ledger dimensions that are directories under lib/integrations/src/integrations/" },
   { id: "wire-truth-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /of the tree's (\d+) signal dimensions have a live check/, derive: (root) => wireTruthFigures(root).dimensions, from: "directories under lib/integrations/src/integrations/ except adapters/" },
   { id: "wire-truth-unchecked-dimensions", doc: "docs/COMPANY_BUILD_PLAN.md", re: /have a live check and (\d+) have none/, derive: (root) => wireTruthFigures(root).uncheckedCount, from: "dimension directories no entry in docs/agent/wire-truth-ledger.json names", zeroValid: "every dimension gaining a live check is the goal this count tracks, so 0 is a finished state, not a broken parser" },
+  // docs/COMPANY_BUILD_PLAN.md row 29: the Assist-wire vector count, re-typed in the
+  // contract and in the route that serves it.
+  { id: "assist-conformance-vectors-openapi", doc: "lib/api-spec/v1-openapi.yaml", re: /Bound by the (\d+) shared conformance vectors/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
+  { id: "assist-conformance-vectors-plan", doc: "docs/COMPANY_BUILD_PLAN.md", re: /the fixture now holds `(\d+)`, non-ASCII/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
+  { id: "assist-conformance-vectors-route", doc: "artifacts/api-server/src/routes/v1.ts", re: /The (\d+) shared conformance vectors \(native\/shared\/assist-wire-conformance\.json\)/, derive: assistConformanceCaseCount, from: `cases.length in ${ASSIST_VECTORS}` },
 ];
 
 // ── Two rows considered on 2026-09-02 and deliberately NOT added ─────────────────────

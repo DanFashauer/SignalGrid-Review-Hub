@@ -56,20 +56,18 @@ jobs:
     # time is a flaky gate. The longest completed green run of this job from
     # 2026-09-15 to 2026-10-15 is 19m46s (job 113907256410, 2026-10-09), so the
     # previous bound, 20, sat 14 seconds above it. That bound cancelled three
-    # runs in which no step had failed: two mid-step (jobs 116440190841 and
-    # 110943968637, both at 20m05s) and one stall after the work (job
-    # 113452376076, 2026-10-08, 24m26s, every one of its 404 steps done by
-    # 14m58s). The two mid-step runs were job 116440190841 (2026-10-15, 6 s into
-    # its final step, the Decision-throughput saturation gate, every earlier
-    # step green) and job 110943968637 (2026-10-02, attempt 1, 32 steps short of
-    # the end after a 4m16s Playwright install; its re-run went green in
-    # 14m44s), each a red check on a branch that broke nothing. 2 x 20m05s =
-    # 40m10s, which rounds up to 45. A third job, 113452376076 (2026-10-08),
-    # carries the same annotation at 24m26s, but every one of its 404 steps had
-    # finished by 14m58s and the runner then sat idle for 9m28s; a stall after
-    # the work is not a run length, so it is not counted. A true hang is still
-    # caught here, now at 45 minutes rather than 20. Re-derive this number from
-    # the longest run whenever one passes half of it (22m30s).
+    # runs in which no step had failed, each a red check on a branch that broke
+    # nothing: two mid-step, both at 20m05s (job 116440190841, 2026-10-15, 6 s
+    # into its final step, the Decision-throughput saturation gate, every earlier
+    # step green; and job 110943968637, 2026-10-02, attempt 1, 32 steps short of
+    # the end after a 4m16s Playwright install, whose re-run went green in
+    # 14m44s), and one stall after the work (job 113452376076, 2026-10-08,
+    # 24m26s: all 404 of its steps were done by 14m58s, when "Complete job"
+    # finished, and the runner then sat idle for 9m28s until the cancel). A
+    # stall after the work is not a run length, so it is not counted. 2 x 20m05s
+    # = 40m10s, which rounds up to 45. A true hang is still caught here, now at
+    # 45 minutes rather than 20. Re-derive this number from the longest run
+    # whenever one passes half of it (22m30s).
     timeout-minutes: 45
     steps:
       - name: Checkout

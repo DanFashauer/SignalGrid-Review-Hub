@@ -56,7 +56,28 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
+LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
+              THE FREEZE; READINESS 100%, OUTREACH OPEN; ONE OWNER CRITERION UNMET. Docs batch on claude/docs-batch-20261015-landings from 64d0ca6d.
+              LANDINGS AFTER THE FREEZE POINT (e6acacc7, 12:31:32Z), merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`
+              (product PRs have their own 2026-10-15 EVIDENCE entries; the lane PRs are one grouped entry): #1515 355ff646 (12:39:09Z, the Mac tick's heartbeat clears the
+              mac-lane-tick cover); #1505 04f97ddc (13:26:43Z, 16 mock transports registered; gating 116438358653); #1517 38003303 (14:41:13Z,
+              forward-build heartbeat); #1490 dcdfcac4 (15:20:02Z, closure and restamp lap; gating 116492282545, Mac-only 116492279875); #1518 ab5ba4d3
+              (15:37:21Z, tick PR, sim results 0 requests); #1520 66b776ca (15:54:12Z, the evidence re-mint request); #1519 2b6fa3e2 (15:54:57Z, lane
+              mail); #1521 9b2f999d (16:36:58Z, lane mail); #1522 67d083b8 (17:10:21Z, tick PR, carries the re-mint: mintedAt 2026-10-15T16:33:53.511Z);
+              #1523 62040a76 (17:45:06Z, steward heartbeat); #1516 9d280d96 (18:22:34Z, the outage record); #1525 0e0b859a (18:33:06Z, lane mail);
+              #1526 67ff76eb (19:44:07Z, lane mail); #1524 df4ea3b8 (20:06:16Z, validation bound 20 to 45; gating 116631935708); #1527 9e7fc18b (20:44:06Z,
+              lane mail); #1468 760d5032 (20:55:41Z, loop-state and the review-wave helper; gating 116655818855, Mac-only 116655817446); #1528 8023bc7d
+              (21:53:19Z, lane mail); #1470 64d0ca6d (22:07:46Z, Graph collection matches the connector's reads; gating 116687433426, Mac-only 116687433354).
+              MAINLINE TIP: 64d0ca6d is this branch's base. origin/SignalGrid_Alpha has since moved to 708e97ef (22:09:12Z, a Mac lane heartbeat pushed
+              direct, not a PR; `git rev-parse origin/SignalGrid_Alpha` in the docs worktree after a fetch).
+              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at 64d0ca6d): "HEADLINE 100%  → OUTREACH OPEN — readiness
+              100% meets the 92–95% target (goal 100%)". (a) 100%; (b) 100%, proofs current 20/20, launch items 28/28, 0 day(s) old; (c) 100%, scenarios 15/15,
+              live operations 8/8. The check needs scripts/node_modules, which the docs worktree links read-only from the main checkout; without it the
+              check prints "Readiness derivation BROKEN" and exits 1.
+              OBJECTIVE LOOP (`node scripts/objective-loop.mjs --json`, derives and writes nothing, at 64d0ca6d): verdict escalate. Met: readiness-floor,
+              evidence-fresh, plan-owned. UNMET, the one owner criterion: owner-real-in-hand (attestedIn null; no attestation token in the decision record
+              the objective names). Five rows await the owner or a lab; pendingSimRequests none.
+              PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
               WENT DARK FOR 5d17h; ONE REGISTRY ROW'S 30-DAY BOUND TURNED EVERY NEW VALIDATION RED; THE BRAIN RETIRED THE ROW AND THE
               LANES LAND AGAIN.
               OUTAGE (recorded from the owner hand, not re-measured here: the limit type, the instants, 5d17h, the 211 fires, the 10:12Z
@@ -2030,7 +2051,9 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON:   16 open hands at origin/SignalGrid_Alpha 38003303 (15:02Z; counted by status over the 31 files in artifacts/raised-hands/,
+BLOCKED ON:   16 open hands (`pnpm run hands`, read 2026-10-15 22:09Z in the docs worktree: "Raised hands — 16 open", 14 "Needs you (Dan)",
+              2 "Needs the Mac lane", measured at origin/SignalGrid_Alpha 708e97ef; the subjects match the list below one for one).
+              Earlier count, 15:02Z: 16 open hands at origin/SignalGrid_Alpha 38003303 (counted by status over the 31 files in artifacts/raised-hands/,
               and `pnpm run hands` prints the live list and is the authority, this block being a copy). The tree this record was written
               on (e6acacc7) holds 17: #1515 (merged 355ff646 at 12:39:09Z) resolved the 17th, the mac-lane-tick cover, after that base.
               OWNER clears 14 (ids are file stems):

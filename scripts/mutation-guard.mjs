@@ -74,7 +74,8 @@
 // heavier than MAX_UNIT_SECONDS is cut into mutation SLICES that different runners take.
 // The partition is deterministic (registered numbers only, never a clock), so independent
 // runners still agree on it; `check-mutation-sharding.mjs` proves it covers every MUTATION
-// exactly once and refuses a split whose registered load nears the job's own timeout.
+// exactly once, by running the SAME `selectSliceMutations` that main() sweeps with (not a model
+// of it), and refuses a split whose registered load nears the job's own timeout.
 // A registered cost can go stale (that is how this happened), so each run prints the
 // measured baseline beside it and flags a proof that outgrew its registration.
 
@@ -89,9 +90,17 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  *  registry without running the gate. */
 const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href;
 
-/** Per-proof wall-clock ceiling. Generous enough for the largest enumeration
- *  (device-management-health runs 1.35M raw reports twice in ~11s) and tight enough that
- *  a hang is detected in seconds rather than at a CI job's timeout. */
+/** Per-proof wall-clock ceiling. It was sized when the largest proof took seconds, and that
+ *  proof no longer does: device-management-health now enumerates 9,483,264 raw reports (1,354,752
+ *  before commit bb1a41fd9 put rootCauseEvidence into its exhaustive domains) and one unmutated
+ *  run takes 31 to 47 s. Measured: 31.4 s locally at bb1a41fd9 and 33.2 s at the fix head;
+ *  30.5 s (2026-10-13) and 46.6 s (2026-10-15) as the sweep runner's own baselines, so 90 s is
+ *  1.93x the slow draw. A mutant can cost more than the baseline (one measured 64 s in a local
+ *  run; not re-measured), so a mutant on the slow draw can still reach this ceiling and read
+ *  "hung". In the sweep that is counted and non-fatal, and a BASELINE over it fails loudly.
+ *  check-pr-gate-falsification.mjs shares runProof and treats "hung" as INCONCLUSIVE, which
+ *  stops a merge authorization for a PR touching a file this proof covers. The value is not
+ *  changed here; the comment is the part that was wrong. */
 const PROOF_TIMEOUT_MS = 90_000;
 
 /** What one run of a proof costs, in seconds, when its TARGETS entry registers nothing.
@@ -1856,6 +1865,42 @@ export function sliceSize(total, slice) {
   return total > slice.index ? Math.ceil((total - slice.index) / slice.count) : 0;
 }
 
+/** Every file of a target with the mutations `mutationsFor` finds in it, in the target's registry
+ *  file order (the order the ordinal runs in). `read` is injectable so a caller that walks the same
+ *  files many times, the sharding gate, can parse each once; the sweep passes nothing. */
+export function mutationsByFile(target, read = mutationsFor) {
+  return target.files.map((file) => ({ file, mutations: read(file, { oneLine: target.oneLine === true }) }));
+}
+
+/** THE selection of what one schedulable unit (a target, or one slice of it) sweeps, and the only
+ *  place the ordinal is accumulated and the slice filter applied. `perFile` is
+ *  `mutationsByFile(target)`. Returns, per file in order, `{ file, allCount, owned }`: `allCount`
+ *  is the WHOLE file's mutation count (the zero-mutation check must look at the file, never the
+ *  slice), `owned` the `{ ordinal, mutation }` pairs this unit sweeps, where `ordinal` is the
+ *  0-based position in the TARGET and runs on across files by the whole count, never the filtered
+ *  one. Also `total` (the target's mutations) and `swept` (how many this unit owns).
+ *
+ *  Pure and exported because main() sweeps with exactly this and the sharding gate runs exactly
+ *  this over every real unit at several shard counts: a gate that re-implemented the ownership
+ *  loop covered a model, and three one-token regressions in main()'s own copy of it (the slice
+ *  ignored; the ordinal advanced by the filtered count, which silently skips and repeats
+ *  mutations with every shard green; the zero check on the filtered count) all stayed green. */
+export function selectSliceMutations(target, perFile) {
+  const files = [];
+  let ordinal = 0;
+  let swept = 0;
+  for (const { file, mutations: all } of perFile) {
+    const owned = [];
+    for (let i = 0; i < all.length; i += 1) {
+      if (sliceOwns(target.slice, ordinal + i)) owned.push({ ordinal: ordinal + i, mutation: all[i] });
+    }
+    files.push({ file, allCount: all.length, owned });
+    ordinal += all.length;
+    swept += owned.length;
+  }
+  return { files, total: ordinal, swept };
+}
+
 /** How many slices a target needs so none holds more than `maxUnitSeconds` of registered work:
  *  one for an ordinary target, never more than one per mutation (an empty slice would run a
  *  baseline for nothing). */
@@ -2059,16 +2104,14 @@ function main() {
       console.log(`   ⚠ COST DRIFT  ${note}`);
       if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
     }
-    let ordinal = 0;
-    let swept = 0;
-    for (const file of target.files) {
-      const allInFile = mutationsFor(file, { oneLine: target.oneLine === true });
-      // A slice sweeps only its residue class of the TARGET's mutations (ordinal runs on across
-      // files); the zero-mutation check below still looks at the whole file, never the slice.
-      const mutations = allInFile.filter((_, i) => sliceOwns(target.slice, ordinal + i));
-      ordinal += allInFile.length;
-      swept += mutations.length;
-      console.log(`   ${file} — ${mutations.length} mutations${target.slice ? ` (of ${allInFile.length} in the file)` : ""}`);
+    // WHAT this unit sweeps is chosen by the exported selector, the one the sharding gate proves
+    // covers every mutation exactly once; main() adds no filter and no counter of its own. A slice
+    // sweeps only its residue class of the TARGET's mutations; the zero-mutation check below looks
+    // at the whole file (allCount), never at the slice.
+    const plan = selectSliceMutations(target, mutationsByFile(target));
+    const swept = plan.swept;
+    for (const { file, allCount, owned } of plan.files) {
+      console.log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
       // quiet one: the run says "every registered guard is falsifiable", which is
       // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
@@ -2079,10 +2122,10 @@ function main() {
       // UnifiedAction` — with no branching to falsify, so the entry bought nothing while
       // looking like coverage. The entry was removed; this makes the next one impossible
       // rather than a thing someone has to notice.
-      if (allInFile.length === 0) {
+      if (allCount === 0) {
         zeroMutation.push(`${target.proof} → ${file}`);
       }
-      for (const mutation of mutations) {
+      for (const { mutation } of owned) {
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
         let verdict;

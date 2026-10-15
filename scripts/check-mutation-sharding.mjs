@@ -17,7 +17,12 @@
  *
  * What IS gated is narrower, deterministic, and read from the registry and the workflow
  * (never from a clock): (1) the split covers every MUTATION exactly once, not merely every
- * target, because a heavy target is cut into slices; (2) a target that registers a cost
+ * target, because a heavy target is cut into slices, and it is proven by running the SAME
+ * `selectSliceMutations` that mutation-guard's main() sweeps with over every real unit (a gate
+ * that re-implemented the ownership loop covered a model of it: three one-token regressions in
+ * main()'s own copy stayed green, one of them a silent skip), with main()'s call to it pinned
+ * as source text and fixture mutants of both the call and the function that must go red;
+ * (2) a target that registers a cost
  * heavier than one unit is in fact sliced; (3) no shard's REGISTERED load exceeds 80% of the
  * sweep job's own `timeout-minutes`. (3) exists because the sweep was balanced by mutation
  * count while one proof cost 45x the others per mutation, and shard 3 sat over its 40-minute
@@ -29,7 +34,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted } from "./mutation-guard.mjs";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations } from "./mutation-guard.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -43,33 +48,68 @@ console.log("Mutation sharding — the split must lose nothing\n");
 // The unit of "swept exactly once" is the MUTATION, not the target. A heavy target is cut into
 // slices (mutation-guard.mjs, WHY THE SHARDS ARE BALANCED BY COST), so a sharder that dropped
 // or repeated one slice would lose or double part of a target while every target still
-// "appears". A mutation is keyed `proof#position`, the position `sliceOwns` filters on.
+// "appears". A mutation is keyed by its IDENTITY (its place in the target's file list, its file, line
+// and mutator), never by the ordinal the selector reports: a selector that counts wrongly reports
+// shifted ordinals, which can still look like a clean partition of their own numbers while real
+// mutations are skipped and repeated. The reported ordinal is checked separately, against the true
+// position.
+//
+// WHAT IS SWEPT is decided by `selectSliceMutations` (ordinal accumulation, slice filter, whole-file
+// count), the function mutation-guard's main() calls. This gate runs THAT over the real files, not a
+// loop of its own: it once re-implemented the ownership rule, and three regressions in main()'s copy
+// of it (slice ignored; ordinal advanced by the filtered count, so mutations were skipped and repeated
+// with every shard exiting 0; zero check on the filtered count) all left it at 123/123.
 const unitKey = (u) => `${u.proof}${u.slice ? `[${u.slice.index}/${u.slice.count}]` : ""}`;
 const TOTALS = new Map(TARGETS.map((t) => [t.proof, mutationTotal(t)]));
 const totalOf = (t) => TOTALS.get(t.proof) ?? mutationTotal(t);
-function coverage(registry, n, totals = totalOf, maxUnitSeconds) {
+// Each (file, opt-in) is parsed ONCE and shared by every call below. The selector only counts and
+// indexes what it is given, so the cache keeps the identifying fields and drops the whole-file text
+// each mutation carries (2000+ copies of 185 files).
+const PARSED = new Map();
+const parseOnce = (file, opts) => {
+  const key = `${opts?.oneLine === true ? 1 : 0}|${file}`;
+  if (!PARSED.has(key)) PARSED.set(key, mutationsFor(file, opts).map((m) => ({ file: m.file, lineNo: m.lineNo, mutator: m.mutator })));
+  return PARSED.get(key);
+};
+const perFileOf = (u) => mutationsByFile(u, parseOnce);
+function coverage(registry, n, totals = totalOf, maxUnitSeconds, select = selectSliceMutations) {
   const hits = new Map();
   const proofs = new Set();
   let units = 0;
+  let allCountsWhole = true;
+  let ordinalsTrue = true;
   for (let i = 0; i < n; i += 1) {
     for (const u of shardTargets(registry, i, n, maxUnitSeconds)) {
       units += 1;
       proofs.add(u.proof);
-      for (let o = 0, t = totals(u); o < t; o += 1) {
-        if (sliceOwns(u.slice, o)) hits.set(`${u.proof}#${o}`, (hits.get(`${u.proof}#${o}`) ?? 0) + 1);
-      }
+      const perFile = perFileOf(u);
+      const plan = select(u, perFile);
+      // The zero-mutation check looks at the WHOLE file, so its count must not shrink to the slice.
+      if (plan.files.length !== perFile.length) allCountsWhole = false;
+      let before = 0;
+      plan.files.forEach((f, k) => {
+        if (f.allCount !== perFile[k]?.mutations.length) allCountsWhole = false;
+        for (const { ordinal, mutation } of f.owned) {
+          const id = `${u.proof}#${k}:${mutation.file}:${mutation.lineNo}:${mutation.mutator}`;
+          hits.set(id, (hits.get(id) ?? 0) + 1);
+          if (ordinal !== before + (perFile[k]?.mutations.indexOf(mutation) ?? -1)) ordinalsTrue = false;
+        }
+        before += perFile[k]?.mutations.length ?? 0;
+      });
     }
   }
   const expected = registry.reduce((sum, t) => sum + totals(t), 0);
   const placed = [...hits.values()].reduce((a, b) => a + b, 0);
-  return { units, expected, placed, distinct: hits.size, once: [...hits.values()].every((c) => c === 1), proofsPlaced: proofs.size };
+  return { units, expected, placed, distinct: hits.size, once: [...hits.values()].every((c) => c === 1), proofsPlaced: proofs.size, allCountsWhole, ordinalsTrue };
 }
 check(`registry proof names are unique (${TARGETS.length} entries, ${TOTALS.size} names) — the partition keys on them`, TOTALS.size === TARGETS.length);
 for (const n of [1, 2, 3, 4, 8, TARGETS.length, TARGETS.length + 3]) {
   const c = coverage(TARGETS, n);
   check(`N=${n}: every target is placed and each of its ${c.expected} mutations is swept exactly once (${c.placed} placements, ${c.distinct} distinct, ${c.units} units)`,
-    c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === TARGETS.length);
+    c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === TARGETS.length && c.allCountsWhole && c.ordinalsTrue);
 }
+check("mutationsByFile agrees with mutationTotal on every registered target (the selector is fed the files the sharder weighs)",
+  TARGETS.every((t) => perFileOf(t).length === t.files.length && perFileOf(t).reduce((n, f) => n + f.mutations.length, 0) === TOTALS.get(t.proof)));
 
 // DETERMINISM IS LOAD-BEARING and easy to miss. Each shard runs in its own CI job
 // on its own runner, and each computes the partition independently from the same
@@ -141,7 +181,7 @@ check("costDrifted flags a proof that outgrew its registration and stays quiet t
     for (const n of [1, 2, 3, 4, 5, 7]) {
       const c = coverage(reg, n, mutationTotal);
       check(`fixture N=${n}: a sliced target loses and repeats no mutation (${c.placed}/${c.expected} placements, ${c.distinct} distinct, ${c.units} units)`,
-        c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === reg.length);
+        c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === reg.length && c.allCountsWhole && c.ordinalsTrue);
     }
     const placed4 = Array.from({ length: 4 }, (_, i) => shardTargets(reg, i, 4).map((u) => ({ i, u }))).flat();
     const heavyUnits = placed4.filter((x) => x.u.proof === "proof:fx-heavy");
@@ -156,6 +196,87 @@ check("costDrifted flags a proof that outgrew its registration and stays quiet t
         const off = Array.from({ length: 4 }, (_, i) => shardTargets(reg, i, 4, Number.POSITIVE_INFINITY)).flat().filter((u) => u.proof === "proof:fx-heavy");
         return off.length === 1 && off[0].slice === undefined && unitWeight(off[0], baseTotal) === baseTotal * r;
       })());
+  }
+}
+
+// ── main() sweeps with the selector proven above, and a mutant of either goes red ────────────
+//
+// Two ways to break the selection survive a gate that proves only the arithmetic: the function
+// itself (checked above on the real registry, and below on mutants of its own text), and the
+// CALLER, main(), which can ignore the slice or keep a private filter and counter. The caller is
+// pinned as source text, the way the workflow is read below, because main() cannot be run here (it
+// mutates source for the better part of an hour).
+const GUARD_SRC = readFileSync(join(REPO, "scripts/mutation-guard.mjs"), "utf8");
+function mainBody(src) {
+  const start = src.indexOf("\nfunction main() {");
+  const end = src.indexOf("\nif (IS_MAIN) main();", start);
+  return start < 0 || end < 0 ? "" : src.slice(start, end);
+}
+function mainSweepsWithSelector(src) {
+  const body = mainBody(src);
+  return body !== ""
+    && (body.match(/selectSliceMutations\(/g) ?? []).length === 1
+    && body.includes("const plan = selectSliceMutations(target, mutationsByFile(target));")
+    && body.includes("for (const { file, allCount, owned } of plan.files) {")
+    && body.includes("for (const { mutation } of owned) {")
+    && body.includes("if (allCount === 0) {")
+    && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(body);
+}
+check("main() sweeps with the exported selector, passes the unit's own slice, zero-checks the WHOLE file, and keeps no ownership filter or counter of its own", mainSweepsWithSelector(GUARD_SRC));
+const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
+const MAIN_CALL = "const plan = selectSliceMutations(target, mutationsByFile(target));";
+for (const [name, from, to] of [
+  ["main() ignores the slice (the selector is called without it)", MAIN_CALL, "const plan = selectSliceMutations({ ...target, slice: undefined }, mutationsByFile(target));"],
+  ["main() bypasses the selector and filters by itself", MAIN_CALL, "const plan = { files: mutationsByFile(target).map(({ file, mutations }) => ({ file, allCount: mutations.length, owned: mutations.filter((_, i) => sliceOwns(target.slice, i)).map((mutation) => ({ mutation })) })), swept: 0 };"],
+  ["main() computes the selection and then walks every mutation of the file instead of what it owns", "for (const { file, allCount, owned } of plan.files) {", "for (const { file, mutations: all } of mutationsByFile(target)) { const allCount = all.length; const owned = all.map((mutation) => ({ mutation }));"],
+  ["main() zero-checks the slice instead of the whole file", "if (allCount === 0) {", "if (owned.length === 0) {"],
+]) {
+  const mutant = withReplaced(GUARD_SRC, from, to);
+  check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== undefined && mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
+}
+
+// The function's own text, mutated, loaded as a module and run through the SAME coverage() the real
+// registry gets. The fixture registry is built from real files and holds one target spread over
+// SEVERAL files and cut into three slices, because the ordinal only matters when it has to carry
+// across a file boundary and a slice only matters when the target is cut.
+const fnText = (src, name) => {
+  const start = src.indexOf(`export function ${name}(`);
+  const end = src.indexOf("\n}\n", start);
+  return start < 0 || end < 0 ? undefined : src.slice(start, end + 3);
+};
+const loadSelector = async (code) => (await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`)).selectSliceMutations;
+const SELECTOR_TEXT = [fnText(GUARD_SRC, "sliceOwns"), fnText(GUARD_SRC, "selectSliceMutations")];
+const selectorExtracted = SELECTOR_TEXT.every((x) => typeof x === "string");
+check("the selector and the ownership rule it calls can be extracted from mutation-guard.mjs", selectorExtracted);
+if (selectorExtracted) {
+  const seen = new Set();
+  const smallFiles = TARGETS.flatMap((t) => t.files.filter((f) => !seen.has(f) && seen.add(f) && t.oneLine !== true && parseOnce(f, {}).length >= 3 && parseOnce(f, {}).length <= 40));
+  const fxFiles = smallFiles.slice(0, 3);
+  const fxTotal = fxFiles.reduce((n, f) => n + parseOnce(f, {}).length, 0);
+  check(`fixture: three real multi-mutation files exist to span a target (${fxFiles.length} files, ${fxTotal} mutations)`, fxFiles.length === 3 && fxTotal >= 9 && fxTotal <= 300);
+  if (fxFiles.length === 3 && fxTotal >= 9 && fxTotal <= 300) {
+    const multi = { proof: "proof:fx-multi", files: fxFiles, runSeconds: Math.ceil((2.5 * MAX_UNIT_SECONDS) / fxTotal) };
+    const fxReg = [multi, ...TARGETS.filter((t) => t.runSeconds === undefined).slice(0, 3)];
+    const selectorHolds = (select) =>
+      [1, 2, 3, 4, 5, 7].every((n) => {
+        const c = coverage(fxReg, n, mutationTotal, undefined, select);
+        return c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === fxReg.length && c.allCountsWhole && c.ordinalsTrue;
+      });
+    const sliced = shardTargets(fxReg, 0, 1).filter((u) => u.proof === "proof:fx-multi");
+    check(`fixture: the multi-file target is cut into ${sliced.length} slices, so the ordinal has to carry across files`, sliced.length === 3 && sliced.every((u) => u.slice !== undefined));
+    check("the real selector loses and repeats no mutation, reports true ordinals and keeps each file's whole count, on the multi-file fixture", selectorHolds(selectSliceMutations));
+    const control = await loadSelector(SELECTOR_TEXT.join("\n"));
+    check("control: the selector's own text, extracted and loaded back as a module, passes the same battery (so a red below is the mutant, not the harness)", selectorHolds(control));
+    for (const [name, from, to] of [
+      ["the ordinal advances by the FILTERED count (mutations skipped and repeated, every shard exits 0)", "ordinal += all.length;", "ordinal += owned.length;"],
+      ["the slice is ignored (every unit sweeps the whole target)", "sliceOwns(target.slice, ordinal + i)", "sliceOwns(undefined, ordinal + i)"],
+      ["allCount is the FILTERED count (a file with mutations the slice does not own reads as empty)", "allCount: all.length", "allCount: owned.length"],
+      ["the reported ordinal restarts in each file (its numbers stop being positions in the target)", "owned.push({ ordinal: ordinal + i, mutation: all[i] })", "owned.push({ ordinal: i, mutation: all[i] })"],
+    ]) {
+      const text = withReplaced(SELECTOR_TEXT[1], from, to);
+      const mutant = text === undefined ? undefined : await loadSelector([SELECTOR_TEXT[0], text].join("\n"));
+      check(`fixture mutant of the selector is detected, the gate goes red: ${name}`, mutant !== undefined && text !== SELECTOR_TEXT[1] && selectorHolds(mutant) === false);
+    }
   }
 }
 

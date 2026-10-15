@@ -158,6 +158,8 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //     gated problem unless git's own helper directory holds that helper (also compared case-insensitively); an unreadable helper directory means "ships none".
 //     PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28; a runner's PATH names directories that do not exist): an entry whose listing fails with ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG names nothing exec could look in, so it is skipped
 //     without a word and the clean row stays the green one (a missing one is never a note); any other failure to list an entry (EACCES, EIO) is a directory that exists and may hold a helper, so it is a note and the row is a warning.
+//     ENTRIES THAT ARE NOT ABSOLUTE (round 29; relative, `.`, `..`, empty): exec reads them against the directory git runs in, which for the Hub listing is the isolated directory under the temp directory, so they are scanned THERE
+//     (a `..` scans the temp directory itself, a `../x` the temp directory's x) and are never silent; with that directory unavailable each is a note naming it.
 //     Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
@@ -404,11 +406,12 @@ function inIsolatedDir(fn, refused = (why) => { throw new Error(why); }) {
 // written `SSH://` would be served, so it is a problem wherever it lives. (Round-27 coordinator diagnosis of the Mac failure, R18-scheme-e2e, said the PATH file hijacks the real https transport on a case-insensitive
 // filesystem; the code read shows the opposite: git's own helper wins there, which made the case's PRECONDITION unreachable on macOS. The scan is still right for a git that ships no helper.)
 const TRANSPORT_SCHEMES = ["https", "http", "ssh", "git", "file", "ftp", "ftps", "ext", "fd"];
-// ROUND 28. The errors that say a PATH entry is not a directory at all: it names nothing exec could look in, so there is nothing to scan and nothing to report. A GitHub runner's PATH lists directories that do not
+// ROUND 28. The errors that say a PATH entry is not a directory at all: it names nothing exec could look in, so there is nothing to scan and nothing to report. (True only of the entry as exec reads it: round 28 read a
+// relative one against this process and went silent while git, in the listing's directory, ran the helper at that spelling; round 29 resolves it where git does, see the loop below.) A GitHub runner's PATH lists directories that do not
 // exist; round 27 recorded each as "trusted, not verified" (a note), the clean Hub row turned into a warning and R10-tx-clean failed (CI check run 113919440642, c57cdc0d). Any OTHER failure (EACCES, EIO, no code at all)
 // is a directory that exists and cannot be listed: it may hold a helper this scan cannot see, so it stays a note and the row is never the green one. A missing one is never a note.
 const NOT_A_DIRECTORY = new Set(["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"]);
-function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, cwd = process.cwd(), listDir = readdirSync } = {}) {
+function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, listingDir = null, listDir = readdirSync } = {}) {
   const want = new Set([...TRANSPORT_SCHEMES, ...schemes.map((s) => String(s).toLowerCase()).filter(Boolean)]);
   const ownNames = (() => { // what this git ships, lower-cased; null = could not be listed
     if (!execDir) return null;
@@ -416,17 +419,27 @@ function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir
   })();
   const problems = [], notes = [], seen = new Set();
   for (const raw of String(pathVar).split(delimiter)) {
-    const dir = raw === "" ? cwd : raw; // an empty PATH entry is the current directory
+    // ROUND 29. exec resolves a PATH entry that is not absolute (relative, `.`, `..`, the empty entry) against the directory git was started in, which for the Hub listing is the isolated directory (inIsolatedDir), never
+    // this process's. So it is joined to that directory by plain concatenation, NOT path.resolve: the kernel then follows `..` through a symlink exactly as exec does (the parent of the link's target, not of the link).
+    // With no such directory to resolve against the entry cannot be scanned, and an entry nobody scanned is a note (the row is a warning), never silence.
+    const relative = !isAbsolute(raw);
+    if (relative && listingDir === null) {
+      const nt = `PATH entry ${JSON.stringify(raw)} is not absolute and the directory the Hub listing runs in is not known, so it was not scanned`;
+      if (!notes.includes(nt)) notes.push(nt);
+      continue;
+    }
+    const dir = relative ? `${listingDir}${sep}${raw}` : raw;
     if (seen.has(dir)) continue;
     seen.add(dir);
     let names;
-    try { names = listDir(dir); } catch (e) { if (!NOT_A_DIRECTORY.has(e?.code)) notes.push(`PATH directory ${dir} could not be listed (${e?.code ?? "no error code"})`); continue; }
+    try { names = listDir(dir); } catch (e) { if (!NOT_A_DIRECTORY.has(e?.code)) notes.push(`PATH directory ${relative ? `${JSON.stringify(raw)} (relative to the directory the Hub listing runs in)` : dir} could not be listed (${e?.code ?? "no error code"})`); continue; }
+    const shownDir = relative ? (() => { try { return realpathSync.native(dir); } catch { return dir; } })() : dir; // (a relative entry is shown where it really is, not as the throwaway directory it was written against)
     for (const n of names) {
       const m = /^git-remote-(.+?)(?:\.exe)?$/i.exec(n);
       if (!m || !want.has(m[1].toLowerCase())) continue;
       const s = m[1].toLowerCase(), native = s === "ssh" || s === "git" || s === "file";
       if (!native && ownNames && ownNames.has(`git-remote-${s}`)) continue; // git's own helper is found first: this file is never run for ${s}://
-      problems.push(`a transport helper on PATH shadows git's own ${s} transport: ${join(dir, n)} (${native ? `${s}:// has no helper in any git, but the same scheme written in another case is served by it` : ownNames ? `this git ships no git-remote-${s} of its own, so this file is the one git runs for ${s}://` : "this git's own helper directory could not be read, so it is taken to ship none"}; compared case-insensitively on every filesystem)`);
+      problems.push(`a transport helper on PATH shadows git's own ${s} transport: ${join(shownDir, n)} (${native ? `${s}:// has no helper in any git, but the same scheme written in another case is served by it` : ownNames ? `this git ships no git-remote-${s} of its own, so this file is the one git runs for ${s}://` : "this git's own helper directory could not be read, so it is taken to ship none"}; compared case-insensitively on every filesystem)`);
     }
   }
   return { problems, notes };
@@ -491,7 +504,9 @@ function hubTransport(cwd = repo, hub = HUB) {
   { // the PATH helper scan (round 27): the Hub's scheme and the scheme of each expansion git applied, beside git's own transports
     const execR = gitRun(cwd, ["--exec-path"]);
     const schemes = [hub, String(repoExp.stdout || "").trim(), String(listing.exp.stdout || "").trim()].map((u) => { const q = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(u); return q ? q[1] : ""; }); // (as WRITTEN: an upper-case scheme is exactly what parseGitUrl refuses)
-    const scan = pathHelperProblems(schemes, { execDir: execR.ok ? execR.stdout.trim() : null });
+    // (round 29: the entries that are not absolute are read in a directory made the way the listing's is, under the same temp directory; refused there, as it is for the listing, they are notes)
+    const execDir = execR.ok ? execR.stdout.trim() : null;
+    const scan = inIsolatedDir((dir) => pathHelperProblems(schemes, { execDir, listingDir: realpathSync(dir) }), () => pathHelperProblems(schemes, { execDir, listingDir: null }));
     for (const pr of scan.problems) if (!problems.includes(pr)) problems.push(pr);
     for (const nt of scan.notes) if (!trusted.includes(nt)) trusted.push(nt);
   }
@@ -2143,7 +2158,11 @@ function selfTest() {
   const cm = (f, text) => { put(f, text); sh("add", "-A"); sh("commit", "-q", "-m", f); return g("rev-parse", "HEAD"); };
   const verdictOf = (b, map = hubMap()) => sameNameVerdict(b, map.get(b), map, work);
   const checks = [];
-  const check = (name, ok) => { checks.push([name, ok]); console.log(`  ${ok ? "ok  " : "FAIL"} — self-test: ${name}`); };
+  // `detail` (optional, a function so nothing is built on a pass) is printed under a FAILING case: a failure seen only on a runner (R10-tx-clean, round 27) must say in the log what the row actually rendered.
+  const check = (name, ok, detail) => {
+    checks.push([name, ok]); console.log(`  ${ok ? "ok  " : "FAIL"} — self-test: ${name}`);
+    if (!ok && typeof detail === "function") { let d; try { d = detail(); } catch (e) { d = `(detail unavailable: ${e && e.message})`; } console.log(`        detail: ${d}`); }
+  };
   // A case whose PRECONDITION is a platform behaviour (a resource cap that makes git fail, a corrupt file that makes it exit non-zero): when the platform does not offer it, the case says so by name, in the
   // summary, and STILL asserts the guarded answer (the check under test is not excused). Never a silent pass, never a failure of the check under test.
   const notOnOffer = [];
@@ -3392,7 +3411,8 @@ function selfTest() {
     const cleanRun = wholeScript(txw2, "r10warn-b", cleanOfTrust);
     check("a listing read with no proxy, no CA override and no rewrite at any scope renders the green row, whose text says nothing was configured (R10-tx-clean)",
       cleanScan.problems.length === 0 && cleanScan.trusted.length === 0 && cleanRow.state === "ok" && cleanRow.gated === false && cleanRow.detail === `listing read from ${HUB}; no proxy, CA or URL rewrite configured; direct` &&
-      cleanRun.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(cleanRun.out) && !/! Review Hub transport/.test(cleanRun.out));
+      cleanRun.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(cleanRun.out) && !/! Review Hub transport/.test(cleanRun.out),
+      () => JSON.stringify({ problems: cleanScan.problems, trusted: cleanScan.trusted, row: cleanRow, status: cleanRun.status, runRow: (cleanRun.out.match(/^.*Review Hub transport.*$/m) || [""])[0], PATH: process.env.PATH }));
     // (2) a repository-owned file pulled in by a GLOBAL include.path
     const inc = mkFx("r10inc"); inc.f("config", "remote.origin.url", HUB);
     const incEvil = join(inc.w, "repoevil.cfg"); writeFileSync(incEvil, "[http]\n\tproxy = http://127.0.0.1:1\n");
@@ -4301,9 +4321,68 @@ exit 1
       const clean28Run = wholeScript(txw2, "r28-clean", { ...cleanOfTrust, PATH: runnerPath(fakeBin) });
       check("a runner-shaped PATH (entries that are missing or not directories, ahead of the real ones) leaves the clean Hub row clean: no problem, nothing trusted, the green row whose text says nothing was configured, and the whole script renders that row and exits 0 (R28-tx-clean-runner-path)",
         clean28.problems.length === 0 && clean28.trusted.length === 0 && clean28Row.state === "ok" && clean28Row.gated === false && clean28Row.detail === `listing read from ${HUB}; no proxy, CA or URL rewrite configured; direct` &&
-        clean28Run.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(clean28Run.out) && !/! Review Hub transport/.test(clean28Run.out));
-      check("the header's PATH-helper row says which PATH entries are skipped and which are noted, and the code skips exactly the four errors that mean 'not a directory' (R28-audit-path-absent)",
-        prodText.includes("PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28") && prodText.includes("ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG") && prodText.includes("a missing one is never a note") && JSON.stringify([...NOT_A_DIRECTORY].sort()) === JSON.stringify(["ELOOP", "ENAMETOOLONG", "ENOENT", "ENOTDIR"]));
+        clean28Run.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(clean28Run.out) && !/! Review Hub transport/.test(clean28Run.out),
+        () => JSON.stringify({ problems: clean28.problems, trusted: clean28.trusted, row: clean28Row, status: clean28Run.status, runRow: (clean28Run.out.match(/^.*Review Hub transport.*$/m) || [""])[0] }));
+      const skipped = ["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"].map((c) => scan28(asPath(noList, tools), execOwn, { listDir: failing(c) })), noted = ["EACCES", "EPERM", "EIO", "EMFILE"].map((c) => scan28(asPath(noList, tools), execOwn, { listDir: failing(c) }));
+      check("the header's PATH-helper row says which PATH entries are skipped and which are noted, and the behaviour matches it: each of the four errors that mean 'not a directory' (ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG) is skipped without a note, each of EACCES, EPERM, EIO, EMFILE is exactly one note (R28-audit-path-absent)",
+        prodText.includes("PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28") && prodText.includes("ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG") && prodText.includes("a missing one is never a note") &&
+        skipped.every((r) => r.problems.length === 0 && r.notes.length === 0) && noted.every((r) => r.problems.length === 0 && r.notes.length === 1));
+    }
+    // ══ ROUND 29 ══ A PATH entry that is not absolute is resolved by git against the directory the Hub listing runs in, not against this process's. Round 28 read `../x` against the repository, saw ENOENT and went silent,
+    // while git in $TMPDIR/loop-state-ls-XXXX ran $TMPDIR/x/git-remote-https: the whole script exited 0 with the green row (Opus round-28 refute; round 27 had said "PATH directory ../x could not be listed"). The scan now resolves
+    // every non-absolute entry (relative, `.`, `..`, empty) against the same kind of directory the listing runs in (inIsolatedDir) and scans THAT, like an absolute one; when that directory cannot be made it is a note.
+    {
+      const rroot = realpathSync(root); // fixtures live under the real path, so a printed path compares equal where the temp directory is a symlink
+      const mk = (name) => { const d = join(rroot, name); mkdirSync(d); return d; };
+      const plant = (dir, name = "git-remote-https") => { writeFileSync(join(dir, name), "#!/bin/sh\necho called >> \"$R29_LOG\"\nexit 1\n", { mode: 0o755 }); return join(dir, name); };
+      const asPath = (...d) => d.join(delimiter);
+      const execNone = mk("r29-exec-none"), execOwn = mk("r29-exec-own"), tools = mk("r29-tools"), shadowAbs = mk("r29-shadow-abs");
+      plant(execOwn); plant(shadowAbs);
+      // a stand-in for the temp directory: <t> is $TMPDIR, <t>/loop-state-ls-fixed the directory the listing would run in
+      const world = (name) => { const t = mk(`r29-${name}`), iso = join(t, "loop-state-ls-fixed"); mkdirSync(iso); return { t, iso }; };
+      const scan29 = (pathVar, iso, execDir = execNone, extra = {}) => pathHelperProblems(["https"], { pathVar, execDir, listingDir: iso, ...extra });
+      const names = (r, file) => r.problems.length === 1 && r.problems[0].includes(`: ${file} (`) && r.notes.length === 0;
+      const wUpX = world("up-x"), planted = join(wUpX.t, "planted"); mkdirSync(planted); const fUpX = plant(planted);
+      const wUp = world("up"), fUp = plant(wUp.t), wDot = world("dot"), fDot = plant(wDot.iso), wEmpty = world("empty"), fEmpty = plant(wEmpty.iso);
+      const wLink = world("link"), elsewhere = join(wLink.t, "elsewhere"); mkdirSync(elsewhere); mkdirSync(join(elsewhere, "deep")); const fLink = plant(elsewhere); symlinkSync(join(elsewhere, "deep"), join(wLink.iso, "via-link"));
+      const hit = [scan29(asPath("../planted", tools), wUpX.iso), scan29(asPath("..", tools), wUp.iso), scan29(asPath(".", tools), wDot.iso), scan29(asPath("", tools), wEmpty.iso), scan29(asPath("via-link/..", tools), wLink.iso)];
+      check("a relative PATH entry is resolved against the directory the listing runs in, not this process's: `../planted`, `..`, `.` and the empty entry each find a helper planted where GIT would look and report it as exactly one gated problem naming that file, and `via-link/..` follows the kernel (the parent of the link's TARGET) as exec does (R29-path-relative-unit)",
+        names(hit[0], fUpX) && names(hit[1], fUp) && names(hit[2], fDot) && names(hit[3], fEmpty) && names(hit[4], fLink));
+      const wNone = world("none"); mkdirSync(join(wNone.t, "planted"));
+      const quiet = ["../planted", "..", ".", "", "../no-such-dir", "plain/relative"].map((e) => scan29(asPath(e, tools), wNone.iso));
+      const relNull = scan29(asPath("../planted", "..", shadowAbs, tools), null);
+      check("the same relative entries with nothing planted (and a missing one and a plain one) are no problem and no note: resolved against the right directory, a missing entry is a true 'nothing exec could look in'; when the listing's directory is unknown, each relative entry is exactly one note naming it and an absolute entry is still scanned (R29-path-relative-quiet-unit)",
+        quiet.every((r) => r.problems.length === 0 && r.notes.length === 0) && relNull.notes.length === 2 && relNull.notes[0].includes(JSON.stringify("../planted")) && relNull.notes[1].includes(JSON.stringify("..")) && relNull.problems.length === 1 && relNull.problems[0].includes(join(shadowAbs, "git-remote-https")));
+      // ENAMETOOLONG, driven by the filesystem and not only by the seam: git cannot use an entry whose component is longer than the filesystem allows either
+      const tooLong = "a".repeat(300), tlAbs = join(rroot, tooLong), wTl = world("toolong");
+      const tlErr = (() => { try { readdirSync(tlAbs); return "no error"; } catch (e) { return e && e.code; } })();
+      const tl = [scan29(asPath(tlAbs, tools), wTl.iso), scan29(asPath(tooLong, tools), wTl.iso), scan29(asPath(tlAbs, tooLong, shadowAbs, tools), wTl.iso)];
+      checkWithPrecondition("an over-long PATH entry (a 300-character component, absolute and relative) is skipped without a note, alone or beside a real shadowing helper, which is still the one gated problem (R29-path-toolong-unit)",
+        tlErr === "ENAMETOOLONG", `this filesystem answers a 300-character component with ${tlErr}, not ENAMETOOLONG`,
+        tl[0].problems.length === 0 && tl[0].notes.length === 0 && tl[1].problems.length === 0 && tl[1].notes.length === 0 && tl[2].problems.length === 1 && tl[2].problems[0].includes(join(shadowAbs, "git-remote-https")) && tl[2].notes.length === 0);
+      // end to end, in process: hubTransport makes its own isolated directory under $TMPDIR (a fixture directory here) and resolves `../r29-native` there; git-remote-ssh is a problem whatever git ships
+      const tmp29 = mk("r29-tmpdir"), nat = join(tmp29, "r29-native"); mkdirSync(nat); const fNat = plant(nat, "git-remote-ssh");
+      const relPath = (e) => `${e}${delimiter}${process.env.PATH ?? ""}`;
+      const inproc = withEnvVars({ TMPDIR: tmp29 }, () => inCleanEnv(() => hubTransport(txc.w), { ...cleanOfTrust, PATH: relPath("../r29-native") }));
+      const inprocNone = withEnvVars({ TMPDIR: tmp29 }, () => inCleanEnv(() => hubTransport(txc.w), { ...cleanOfTrust, PATH: relPath("../r29-not-there") })), inprocNoneRow = transportRow(inprocNone);
+      check("hubTransport scans a relative PATH entry where its listing would run: `../r29-native` holding git-remote-ssh under $TMPDIR is exactly one gated problem naming that file, and `../r29-not-there` leaves the clean row green with the text that says nothing was configured (R29-tx-relative-inproc)",
+        inproc.problems.length === 1 && inproc.problems[0].includes(`: ${fNat} (`) && inprocNone.problems.length === 0 && inprocNone.trusted.length === 0 && inprocNoneRow.state === "ok" && inprocNoneRow.detail === `listing read from ${HUB}; no proxy, CA or URL rewrite configured; direct`);
+      // end to end, the whole script (Opus's shape): a git that ships no https helper (stand-in answering --exec-path), `../r29-helper` on PATH, a git-remote-https planted at $TMPDIR/r29-helper, no proxy or CA
+      const helperDir = join(tmp29, "r29-helper"); mkdirSync(helperDir); plant(helperDir);
+      const log29 = join(rroot, "r29.log"); writeFileSync(log29, "");
+      const standIn = mk("r29-standin-bin");
+      writeFileSync(join(standIn, "git"), `#!/bin/sh\nfor a in "$@"; do\n  if [ "$a" = "--exec-path" ]; then echo "$R29_EXEC"; exit 0; fi\ndone\nexec "$R29_NEXT" "$@"\n`, { mode: 0o755 });
+      const reachedPlain = (() => { // plain git, started in a fresh directory under $TMPDIR with an empty helper directory, asked for an https:// URL with `../r29-helper` on PATH
+        const iso = mkdtempSync(join(tmp29, "loop-state-ls-"));
+        spawnSync(realGit, ["ls-remote", "--heads", "https://127.0.0.1:9/x.git"], { cwd: iso, env: { ...FX_ENV, GIT_EXEC_PATH: execNone, PATH: relPath("../r29-helper"), R29_LOG: log29 }, stdio: "ignore", timeout: 20000, killSignal: "SIGKILL" });
+        const ran = (readIfPresent(log29) || "") !== ""; writeFileSync(log29, ""); return ran;
+      })();
+      const hx = mkLikeUe("r29-rel-e2e");
+      const run29 = wholeScript(hx, "r29-rel-e2e", { ...cleanOfTrust, TMPDIR: tmp29, PATH: [standIn, fakeBin, "../r29-helper", process.env.PATH ?? ""].join(delimiter), R29_EXEC: execNone, R29_NEXT: join(fakeBin, "git"), R29_LOG: log29 }, { timeout: 90000 });
+      const shownHelper = join(tmp29, "r29-helper", "git-remote-https").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      checkWithPrecondition("a relative PATH entry `../r29-helper` with a git-remote-https planted at $TMPDIR/r29-helper, a git that ships no https helper, and no proxy or CA: plain git started in the listing's directory runs the helper (the precondition: its marker), and the whole check exits 1 on a gated 'a transport helper on PATH shadows git's own https transport' row naming that file, never calls it, and never prints the green row (R29-tx-relative-e2e)",
+        reachedPlain, "git did not run the relative PATH helper from the directory it was started in",
+        run29.error === null && run29.status === 1 && new RegExp(`✗ Review Hub URL\\s+a transport helper on PATH shadows git's own https transport: ${shownHelper}`).test(run29.out) && !/✓ Review Hub transport/.test(run29.out) && !run29.out.includes("all present on the Review Hub") && (readIfPresent(log29) || "") === "");
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.

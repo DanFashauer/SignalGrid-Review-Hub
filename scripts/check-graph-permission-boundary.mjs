@@ -162,7 +162,7 @@ export function connectorDefaultBase(src) {
 
 /**
  * Pure: a strict reader for the Bruno file shape this collection uses. A block opens at column 0 with `name {` and closes at the first line that starts with
- * `}` (nothing may follow it); anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
+ * `}` (only space, tab or CR may follow it, which Bruno accepts; any other text is refused because this reader cannot place it); anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
  * { blocks: [{ name, entries: [[key, value]] }], fatal }. Indented text inside `docs` is prose and is never read as a block.
  */
 /** ASCII blank only (space, tab, CR). `String.prototype.trim()` and `\s` also treat NBSP, U+2028, U+3000, U+FEFF… as blank; Bruno's grammar does not, and skips the file. */
@@ -184,7 +184,7 @@ export function parseBru(text, { bareOpen = false } = {}) {
     } else if (line.startsWith("}")) {
       // Bruno ends a block at any newline followed by `}`, whatever follows it on the line; so must this reader, or `}post {` hides a second http block.
       // Space, tab and CR after `}` are accepted by Bruno (BruFile is a syntactic rule); anything else is text the reader cannot place.
-      if (!ASCII_BLANK.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno ends the block at \`}\` and would read the rest as a new construct`);
+      if (!ASCII_BLANK.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — only space, tab or CR may follow a closing brace here; any other text (a comment, NBSP, a second block) is refused because this reader cannot place it`);
       blocks.push(cur); cur = null;
     }
     else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
@@ -657,7 +657,7 @@ function selfTest() {
     ["a CRLF copy with one header ending CR CR LF", (t) => t.replace(/\n/g, "\r\n").replace("get {\r\n", "get {\r\r\n")],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND13: ${label} is FATAL`, audit(csrc, b).fatal.length > 0]); }
   // Round 14: the opening brace of collection.bru / Sandbox.bru takes NOTHING but an optional CR; the closing brace takes space/tab/CR (Bruno accepts them).
-  for (const tail of [" ", "\t", "  ", " \r", "\t\r"]) {
+  for (const tail of [" ", "\t", "  ", " \r", "\t\r", "\r\r"]) {
     const nm = JSON.stringify(tail);
     checks.push([`ROUND14: ${nm} after \`auth {\` in collection.bru is FATAL`, audit(csrc, { ...baseBru(), "collection.bru": "auth {" + tail + "\n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }).fatal.length > 0]);
     checks.push([`ROUND14: ${nm} after \`auth:bearer {\` in collection.bru is FATAL`, audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  mode: bearer\n}\n\nauth:bearer {" + tail + "\n  token: {{graphToken}}\n}\n" }).fatal.length > 0]);

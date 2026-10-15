@@ -7,11 +7,14 @@
   "need": "This change to land. The first lane-deliver batch after it carries the forward-build-cycle, mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats and clears this hand.",
   "whoCanUnblock": "cloud lane",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "heartbeat:forward-build-cycle"
   ],
   "takenBy": "cloud",
-  "takenAt": "2026-10-15T11:11:06.195Z"
+  "takenAt": "2026-10-15T11:11:06.195Z",
+  "resolvedAt": "2026-10-15T12:05:53.540Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1513 landed the dependabot-queue-review retirement; this batch carries the forward-build-cycle, mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats through lane-deliver, whose scheduled-routines gate passes again."
 }

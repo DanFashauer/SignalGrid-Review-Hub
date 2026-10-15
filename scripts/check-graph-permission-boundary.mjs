@@ -168,7 +168,7 @@ export function connectorDefaultBase(src) {
 /** ASCII blank only (space, tab, CR). `String.prototype.trim()` and `\s` also treat NBSP, U+2028, U+3000, U+FEFF… as blank; Bruno's grammar does not, and skips the file. */
 const ASCII_BLANK = /^[ \t\r]*$/;
 
-export function parseBru(text) {
+export function parseBru(text, { bareOpen = false } = {}) {
   const fatal = [];
   const blocks = [];
   let cur = null;
@@ -177,12 +177,14 @@ export function parseBru(text) {
   for (const [i, line] of text.split("\n").entries()) {
     if (cur === null) {
       if (ASCII_BLANK.test(line)) continue;
-      const m = /^([A-Za-z][\w:-]*)[ \t]*\{[ \t]*\r?$/.exec(line);
+      // Request files: `dictionary = st* "{" st* pairlist? tagend`, so spaces/tabs may follow `{`. `collection.bru` and `environments/*.bru` (collectionBruToJson, envToJson): no `st*` after `{`, and Bruno 4.0.0 exits 1 on `auth {<sp>`.
+      const m = (bareOpen ? /^([A-Za-z][\w:-]*)[ \t]*\{\r?$/ : /^([A-Za-z][\w:-]*)[ \t]*\{[ \t]*\r?$/).exec(line);
       if (!m) { fatal.push(`line ${i + 1} is outside any block (${JSON.stringify(line.slice(0, 40))}) — an unrecognised construct`); continue; }
       cur = { name: m[1], entries: [] };
     } else if (line.startsWith("}")) {
       // Bruno ends a block at any newline followed by `}`, whatever follows it on the line; so must this reader, or `}post {` hides a second http block.
-      if (!/^\r?$/.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
+      // Space, tab and CR after `}` are accepted by Bruno (BruFile is a syntactic rule); anything else is text the reader cannot place.
+      if (!ASCII_BLANK.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno ends the block at \`}\` and would read the rest as a new construct`);
       blocks.push(cur); cur = null;
     }
     else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
@@ -236,7 +238,7 @@ export function canonicalFindings(blocks) {
  */
 export function collectionBruFindings(text) {
   const out = [];
-  const p = parseBru(text);
+  const p = parseBru(text, { bareOpen: true });
   out.push(...p.fatal.map((f) => `collection.bru: ${f}`));
   const names = p.blocks.map((bl) => bl.name);
   if (names.join() !== "auth,auth:bearer") out.push(`collection.bru: blocks [${names.join(", ")}] — exactly auth then auth:bearer are allowed (a collection-level script could rewrite every request and carry the token off-host)`);
@@ -344,10 +346,10 @@ export function auditCollection(connectorSrc, bruByName, permissionsText, envTex
   const defBase = connectorDefaultBase(connectorSrc);
   let envBase;
   if (typeof envText === "string") {
-    const pe = parseBru(envText);
+    const pe = parseBru(envText, { bareOpen: true });
     for (const f of pe.fatal) fatal.push(`environments/Sandbox.bru: ${f}`);
-    const odd = pe.blocks.filter((bl) => !["vars", "vars:secret"].includes(bl.name));
-    if (odd.length > 0) fatal.push(`environments/Sandbox.bru: block(s) ${odd.map((bl) => bl.name).join(", ")} — only vars blocks are allowed`);
+    const odd = pe.blocks.filter((bl) => bl.name !== "vars");
+    if (odd.length > 0) fatal.push(`environments/Sandbox.bru: block(s) ${odd.map((bl) => bl.name).join(", ")} — only vars blocks are allowed (vars:secret takes a bracket list in Bruno, not a brace block)`);
     const bases = pe.blocks.flatMap((bl) => bl.entries.filter(([k]) => k === "baseUrl").map(([, v]) => v));
     if (bases.length > 1) fatal.push(`environments/Sandbox.bru: ${bases.length} baseUrl entries — Bruno keeps the last, so the first cannot be the one checked`);
     envBase = bases.length === 1 ? bases[0] : undefined;
@@ -654,11 +656,25 @@ function selfTest() {
     ["`get {` followed by two CRs", (t) => t.replace("get {\n", "get {\r\r\n")],
     ["a CRLF copy with one header ending CR CR LF", (t) => t.replace(/\n/g, "\r\n").replace("get {\r\n", "get {\r\r\n")],
   ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND13: ${label} is FATAL`, audit(csrc, b).fatal.length > 0]); }
-  for (const tail of [" ", "\t", "\r\r", " \r"]) {
+  // Round 14: the opening brace of collection.bru / Sandbox.bru takes NOTHING but an optional CR; the closing brace takes space/tab/CR (Bruno accepts them).
+  for (const tail of [" ", "\t", "  ", " \r", "\t\r"]) {
     const nm = JSON.stringify(tail);
-    checks.push([`ROUND13: ${nm} after a closing brace in collection.bru is FATAL`, has(audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  mode: bearer\n}" + tail + "\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }), "collection.bru", "closing brace")]);
-    checks.push([`ROUND13: ${nm} after a closing brace in Sandbox.bru is FATAL`, has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("\n}\n", "\n}" + tail + "\n")), "Sandbox.bru", "closing brace")]);
+    checks.push([`ROUND14: ${nm} after \`auth {\` in collection.bru is FATAL`, audit(csrc, { ...baseBru(), "collection.bru": "auth {" + tail + "\n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }).fatal.length > 0]);
+    checks.push([`ROUND14: ${nm} after \`auth:bearer {\` in collection.bru is FATAL`, audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  mode: bearer\n}\n\nauth:bearer {" + tail + "\n  token: {{graphToken}}\n}\n" }).fatal.length > 0]);
+    checks.push([`ROUND14: ${nm} after \`vars {\` in Sandbox.bru is FATAL`, audit(csrc, baseBru(), pj(permObj()), ENV.replace("vars {\n", "vars {" + tail + "\n")).fatal.length > 0]);
   }
+  for (const tail of [" ", "\t", "\r\r", " \r", " \t"]) {
+    const nm = JSON.stringify(tail);
+    checks.push([`ROUND14: ${nm} after a closing brace in collection.bru passes (Bruno accepts it)`, audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  mode: bearer\n}" + tail + "\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }).fatal.length === 0]);
+    checks.push([`ROUND14: ${nm} after a closing brace in Sandbox.bru passes (Bruno accepts it)`, audit(csrc, baseBru(), pj(permObj()), ENV.replace("\n}\n", "\n}" + tail + "\n")).fatal.length === 0]);
+    b = baseBru(); b["b.bru"] = b["b.bru"].replace("}\n\nget {", "}" + tail + "\n\nget {");
+    checks.push([`ROUND14: ${nm} after a closing brace in a request file passes (Bruno accepts it)`, audit(csrc, b).fatal.length === 0]);
+  }
+  for (const tail of [" ", "\t", " \r"]) {
+    b = baseBru(); b["b.bru"] = b["b.bru"].replace("get {\n", "get {" + tail + "\n");
+    checks.push([`ROUND14: ${JSON.stringify(tail)} after \`get {\` in a request file passes (Bruno sends it; positive control)`, audit(csrc, b).fatal.length === 0]);
+  }
+  checks.push(["ROUND14: `vars:secret {` in Sandbox.bru is FATAL (Bruno wants `vars:secret [`)", has(audit(csrc, baseBru(), pj(permObj()), ENV + "\nvars:secret {\n  x: y\n}\n"), "Sandbox.bru", "vars")]);
   b = baseBru(); b["b.bru"] = b["b.bru"].replace(/\n/g, "\r\n");
   checks.push(["ROUND13: a clean CRLF copy of a request file still passes (positive control)", audit(csrc, b).fatal.length === 0]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----

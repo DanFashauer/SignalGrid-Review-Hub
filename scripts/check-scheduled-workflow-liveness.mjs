@@ -54,6 +54,8 @@ const KINDS = ["api-probe", "auto-hand", "exempt"];
 /** An exemption not re-read in this long is a fossil. Measured against the HEAD commit date. */
 export const STALE_AFTER_DAYS = 90;
 const MIN_REASON_CHARS = 40;
+/** Warn (non-fatal) when the oldest exemption lapses within this many days of the reference date. */
+export const LAPSE_WARN_DAYS = 14;
 
 // ── reading the YAML ─────────────────────────────────────────────────────────
 
@@ -188,16 +190,16 @@ export function textVerdict(rawText) {
 export function parserVerdict(rawText) {
   let js;
   try {
-    const doc = parseDocument(rawText, { merge: true, uniqueKeys: true });
+    const doc = parseDocument(rawText, { merge: /*M:merge*/ true, uniqueKeys: /*M:unique-keys*/ true });
     if (/*M:parse-error*/ doc.errors.length > 0) return "unreadable";
-    js = doc.toJS({ maxAliasCount: 100 });
+    js = doc.toJS({ maxAliasCount: /*M:alias-cap*/ 100 });
   } catch {
-    return "unreadable";
+    return /*M:catch*/ "unreadable";
   }
-  if (js === null || typeof js !== "object" || Array.isArray(js)) return "unreadable";
+  if (js === null || typeof js !== "object" || Array.isArray(js)) return /*M:non-mapping*/ "unreadable";
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-  const triggers = [has(js, "on") ? js.on : undefined, has(js, "true") ? js.true : undefined].filter((v) => v !== undefined);
-  if (triggers.length === 0) return "unreadable";
+  const triggers = [has(js, "on") ? js.on : undefined, /*M:js-true*/ has(js, "true") ? js.true : undefined].filter((v) => v !== undefined);
+  if (triggers.length === 0) return /*M:no-on*/ "unreadable";
   const scheduled = triggers.some((t) => t !== null && typeof t === "object" && !Array.isArray(t) && /*M:parser-schedule*/ has(t, "schedule"));
   return scheduled ? "scheduled" : "none";
 }
@@ -376,6 +378,27 @@ function run(root, refDate) {
   return { problems, scheduled, registry };
 }
 
+/**
+ * The earliest exemption lapse, derived from the registry (never typed): the oldest valid `reviewedAt` plus
+ * STALE_AFTER_DAYS. The gate is fatal for any reference date AFTER that day, so every PR starts failing then.
+ * @returns {{ workflow: string, date: string, daysLeft: number } | null} null when there is nothing to age or the
+ *          reference date is unknown (the fatal path already reports an unknown date)
+ */
+export function earliestLapse(registry, refDate) {
+  const refMs = parseIsoDate(refDate);
+  if (refMs === null || !Array.isArray(registry?.workflows)) return null;
+  let best = null;
+  for (const e of registry.workflows) {
+    if (e?.watcher?.kind !== "exempt") continue;
+    const rMs = parseIsoDate(e.watcher.reviewedAt);
+    if (rMs === null) continue;
+    if (best === null || rMs < best.rMs) best = { workflow: e.workflow, rMs };
+  }
+  if (best === null) return null;
+  const lapseMs = best.rMs + STALE_AFTER_DAYS * 86_400_000;
+  return { workflow: best.workflow, date: new Date(lapseMs).toISOString().slice(0, 10), daysLeft: Math.round((lapseMs - refMs) / 86_400_000) };
+}
+
 // ── self-test ────────────────────────────────────────────────────────────────
 
 const SCHED_WF = (extra = "") => `name: X\non:\n  push:\n    branches: [main]\n  schedule:\n    - cron: "17 7 * * 1"\n${extra}jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n`;
@@ -516,6 +539,49 @@ function selfTest() {
     }
   }
 
+  // ── exemption clock: the lapse date is derived and REPORTED; the 90-day limit stays fatal ──
+  {
+    const lapseRun = (reviewedAt, name, want, { warn }) => {
+      const root = fixture({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt }))) });
+      try {
+        const r = cli(["--root", root, "--ref-date", REF]);
+        const hasWarn = r.stdout.includes("warning: the exemption for a.yml lapses");
+        const hasLine = r.stdout.includes(`earliest exemption lapse: ${want}`);
+        note(name, r.status === 0 && hasLine && hasWarn === warn, `exit ${r.status}, line ${hasLine}, warning ${hasWarn}, wanted warning ${warn}`);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    };
+    lapseRun("2026-07-20", "an exemption lapsing within 14 days prints the lapse date and a warning and still exits 0", "2026-10-18", { warn: true });
+    lapseRun("2026-10-01", "an exemption with time left prints the lapse date and no warning", "2026-12-30", { warn: false });
+    lapseRun("2026-07-11", "the last good day (exactly 90 days) still exits 0 and warns", "2026-10-09", { warn: true });
+    exits({ workflows: { "a.yml": SCHED_WF() }, registry: reg(entry(exempt({ reviewedAt: "2026-07-10" }))) }, 1, "91 days is fatal: the warning never loosens the limit → exit 1");
+    // the oldest of several exemptions sets the date
+    note("earliestLapse picks the oldest reviewedAt of several", earliestLapse({ workflows: [{ workflow: "b.yml", watcher: { kind: "exempt", reviewedAt: "2026-09-01" } }, { workflow: "a.yml", watcher: { kind: "exempt", reviewedAt: "2026-08-01" } }, { workflow: "p.yml", watcher: { kind: "api-probe" } }] }, REF)?.workflow === "a.yml");
+    note("earliestLapse is null with nothing to age and with an unknown reference date", earliestLapse({ workflows: [{ workflow: "p.yml", watcher: { kind: "api-probe" } }] }, REF) === null && earliestLapse({ workflows: [{ workflow: "a.yml", watcher: { kind: "exempt", reviewedAt: "2026-08-01" } }] }, "not-a-date") === null);
+  }
+
+  // ── review-round survivors: direct unit cases on the exported parser, one isolating each mutant ──
+  {
+    const J2 = "jobs:\n  a:\n    runs-on: x\n";
+    const cronBlock = '  schedule:\n    - cron: "0 0 * * *"\n';
+    const pin = (name, text, want) => {
+      const got = parserVerdict(text);
+      note(name, got === want, `parserVerdict returned ${JSON.stringify(got)}, wanted ${JSON.stringify(want)}`);
+    };
+    const aliases = (n) => `[${Array(n).fill("*a").join(", ")}]`;
+    pin("parser: an alias bomb over the 100-alias cap is unreadable (not read as a harmless workflow)", `on:\n  push: {}\nx: &a [1, 2, 3]\ny: ${aliases(101)}\n${J2}`, "unreadable");
+    pin("parser: control — 50 aliases of the same anchor are under the cap and read normally", `on:\n  push: {}\nx: &a [1, 2, 3]\ny: ${aliases(50)}\n${J2}`, "none");
+    pin("parser: a throwing toJS is unreadable, never none (the catch)", `on:\n  push: {}\nx: &a [1, 2, 3]\ny: ${aliases(101)}\n`, "unreadable");
+    pin("parser: a duplicate key whose LAST value is harmless is unreadable (uniqueKeys)", `on:\n  schedule:\n    - cron: "0 0 * * *"\non:\n  push: {}\n${J2}`, "unreadable");
+    pin("parser: YAML 1.1 style `true:` key is read as the trigger block", `true:\n${cronBlock}${J2}`, "scheduled");
+    pin("parser: an array root is unreadable", "- on\n- push\n", "unreadable");
+    pin("parser: a scalar root is unreadable", "hello\n", "unreadable");
+    pin("parser: an empty document is unreadable", "", "unreadable");
+    pin("parser: a mapping with no `on` key is unreadable", `name: N\n${J2}`, "unreadable");
+    pin("parser: a `<<:` merge key whose merged map carries `schedule` is scheduled (merge)", `x: &x\n${cronBlock}on:\n  <<: *x\n  push: {}\n${J2}`, "scheduled");
+  }
+
   // pure-function spot checks
   note("parseIsoDate rejects 2026-02-31", parseIsoDate("2026-02-31") === null);
   note("parseIsoDate rejects 2026-2-3", parseIsoDate("2026-2-3") === null);
@@ -549,6 +615,14 @@ function selfTest() {
         ["M:parse-error", "false &&", "a YAML parse error is no longer treated as unreadable"],
         ["M:parser-schedule", "false &&", "the parser no longer reports a schedule key"],
         ["M:disagree", "false &&", "a disagreement between the two readers is no longer fatal"],
+        ["M:catch", '"none" ||', "a parser exception reads as no schedule instead of unreadable"],
+        ["M:unique-keys", "false &&", "the parser tolerates a duplicate key"],
+        ["M:js-true", "false &&", "the YAML 1.1 boolean `true:` trigger key is no longer read"],
+        ["M:non-mapping", '"none" ||', "an array, scalar or empty root reads as no schedule"],
+        ["M:no-on", '"none" ||', "a workflow with no `on` key reads as no schedule"],
+        ["M:merge", "false &&", "YAML merge keys are no longer resolved"],
+        ["M:alias-cap", "-1 ||", "the alias-expansion cap is lifted"],
+        ["M:lapse-warn", "false &&", "the exemption-lapse warning is no longer printed"],
       ];
       for (const [token, repl, what] of mutants) {
         const marker = `/*${token}*/`;
@@ -622,6 +696,11 @@ export function cli(argv) {
     const w = e.watcher;
     const how = w.kind === "exempt" ? `exempt (reviewed ${w.reviewedAt}${w.redWatcher ? `, red covered by hand ${w.redWatcher}` : ""})` : w.kind === "auto-hand" ? `auto-hand ${w.hand} via ${w.script}` : `api-probe via ${w.script}`;
     stdout += `  ${e.workflow.padEnd(28)} ${how}\n`;
+  }
+  const lapse = earliestLapse(registry, refDate);
+  if (lapse !== null) {
+    stdout += `earliest exemption lapse: ${lapse.date} (${lapse.workflow}, ${lapse.daysLeft} day(s) after the reference date; every PR whose HEAD commit is dated after it fails this gate until the exemption is re-read and re-dated)\n`;
+    if (/*M:lapse-warn*/ lapse.daysLeft <= LAPSE_WARN_DAYS) stdout += `warning: the exemption for ${lapse.workflow} lapses ${lapse.date}, within ${LAPSE_WARN_DAYS} days — re-read it and re-date its reviewedAt now, or every PR fails after that date\n`;
   }
   return { status: 0, stdout, stderr: "" };
 }

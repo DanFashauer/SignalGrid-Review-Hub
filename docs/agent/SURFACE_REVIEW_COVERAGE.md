@@ -25,7 +25,7 @@ any good. Source of truth: `docs/agent/SURFACE_REVIEW_COVERAGE.json`. Regenerate
 | `.claude/commands` | tree | 12 | read | 2 | 2026-09-13 | cloud lane (firsthand author + Codex #704 adversarial review across successive rounds, every finding verified against the files and addressed on this branch) | docs/DECISION_RECORDS.md | 25 | 0 |
 | `.claude/hooks` | tree | 3 | read | 2 | 2026-09-05 | cloud lane (five independent audit agents + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 11 | 0 |
 | `.claude/skills` | tree | 812 | read | 5 | 2026-09-20 | cloud lane (DR-053 stage 1 by a separate Opus-tier agent, stage 2 firsthand) | docs/agent/RESOURCE_INTAKE.md | 37 | 1 |
-| `.claude/workflows` | tree | 5 | **partial** | 1 | 2026-10-15 | cloud lane (Sonnet reviewers in detached worktrees + Opus landing refute, 2026-10-14/15) | #1468 | 2 | 5 |
+| `.claude/workflows` | tree | 5 | **partial** | 1 | 2026-10-15 | cloud lane (Sonnet reviewers in detached worktrees + Opus landing refute, 2026-10-15) | #1468 | 5 | 6 |
 | `.githooks` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/*` | loose files | 2 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |
 | `.github/codeql` | tree | 1 | read | 1 | 2026-09-05 | cloud lane (independent audit + firsthand read of every edit site) | docs/agent/EVIDENCE.md | 0 | 0 |

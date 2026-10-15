@@ -45,6 +45,38 @@
 // severity changes. Those carry an allowlist entry with a reason, mirroring how the
 // source files already label them. An allowlist entry that stops matching is itself a
 // failure: it means the code moved and the justification was not revisited.
+//
+// WHY THE SHARDS ARE BALANCED BY COST AND NOT BY MUTATION COUNT (measured 2026-10-15).
+//
+// The daily sweep is split across four runners, and the split used to balance MUTATION
+// COUNT. That is only the time a shard takes if every mutation costs the same, and one does
+// not: a mutation costs one run of the target's proof, and the proofs differ by a factor of
+// twenty to forty. Bisected (same lib/, proof file at each commit): commit bb1a41fd9
+// (2026-10-08 11:11Z, "device-management-health domains exhaustive by construction") put
+// `rootCauseEvidence` into the exhaustive domains, so the proof's raw-wire enumeration went
+// from 1,354,752 to 9,483,264 reports and one run from 4.8s (its parent) to 31.9s; the four
+// later commits to the same proof (counterfactual counters, ~2.6s) are 8% of the rise. That
+// proof has 49 mutations. It landed in the 2026-10-09 sweep and not the 2026-10-08 one. The runner's
+// own log of the one shard-3 run that finished (2026-10-13, run 38419147070, 30m16s,
+// `hung=0`): device-management-health took 25.2 min (baseline 30.5s, 49 mutations at 30.9s
+// each, 83% of the shard) and the other 448 mutations took about 5 min between them (~0.7s
+// each). The count-balanced split filed that target under "49 mutations". Shard 3 was
+// cancelled at the 40-minute job bound on six of the seven scheduled runs from 2026-10-09
+// (the seventh took 30m33s), and nothing was hung: the proof is just slow, once per
+// mutation, and the runner varies by half. On the cancelled 2026-10-15 run (38736534439) the
+// same target had a 46.6s baseline and 45s per mutation: ~37 min for the target ALONE,
+// nearly the whole bound, so weighting it properly is not enough and it must be SLICED.
+// Re-partitioning by count could not fix it either: once the registry grew the target
+// moved to shard 1 and carried the same ~25-37 min with it.
+//
+// So a TARGETS entry may register `runSeconds` (what one unmutated run of its proof costs;
+// default DEFAULT_RUN_SECONDS), the sharder balances mutations x runSeconds, and any target
+// heavier than MAX_UNIT_SECONDS is cut into mutation SLICES that different runners take.
+// The partition is deterministic (registered numbers only, never a clock), so independent
+// runners still agree on it; `check-mutation-sharding.mjs` proves it covers every MUTATION
+// exactly once and refuses a split whose registered load nears the job's own timeout.
+// A registered cost can go stale (that is how this happened), so each run prints the
+// measured baseline beside it and flags a proof that outgrew its registration.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -61,6 +93,23 @@ const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(`fi
  *  (device-management-health runs 1.35M raw reports twice in ~11s) and tight enough that
  *  a hang is detected in seconds rather than at a CI job's timeout. */
 const PROOF_TIMEOUT_MS = 90_000;
+
+/** What one run of a proof costs, in seconds, when its TARGETS entry registers nothing.
+ *  Calibrated to the sweep's RUNNER, on its SLOW draw, because that is the machine whose
+ *  40-minute bound matters: an ordinary target took 0.67s per mutation on the 2026-10-13
+ *  shard-3 run and 1.04s on the slower 2026-10-15 run (benchmark-selection's 73 mutations:
+ *  49s, then 76s), `pnpm run` start-up included. (A 4-core dev box measured the same
+ *  proofs at a median 1.5s, 90th percentile 2.5s, heaviest ordinary 4.2s; only the ratio to
+ *  the one outlier matters, and it is similar.) The sharder weighs a target by mutations x
+ *  this, so a target that registers nothing is weighed exactly as the old mutation-count
+ *  split weighed it. */
+export const DEFAULT_RUN_SECONDS = 1;
+
+/** The most registered work (mutations x runSeconds) the sharder puts in one schedulable
+ *  unit. A target heavier than this is cut into slices so its mutations can run on
+ *  different runners. The costs are registered at the slow runner's pace, so ten minutes
+ *  keeps any one unit a quarter of the sweep job's 40-minute bound even on that draw. */
+export const MAX_UNIT_SECONDS = 600;
 
 // ── what to mutate ────────────────────────────────────────────────────────────
 //
@@ -192,7 +241,18 @@ export const TARGETS = [
     files: ["lib/incident-playbook/src/map.ts"],
   },
   {
+    // The only registered proof that is expensive per RUN: its raw-wire pass enumerates
+    // 9,483,264 reports twice. A killed mutant still runs to its summary line, so a mutation
+    // costs about a run. Measured on the runner: 30.9s per mutation on 2026-10-13 (baseline
+    // 30.5s) and 45s on the slower 2026-10-15 draw (baseline 46.6s); 34.4s unmutated on a
+    // 4-core dev box; 4.8s before bb1a41fd9 put `rootCauseEvidence` in the domains (7x
+    // the space). 49 mutations x 45s ~= 37 min, which with the other targets of its shard
+    // overran the 40-minute job bound from 2026-10-09. Registered at the slow pace (like the
+    // default) so the sharder cuts it into slices that run on different runners.
+    // Re-measure whenever its enumeration grows: the sweep prints the baseline wall and
+    // flags one far above this number.
     proof: "proof:device-management-health",
+    runSeconds: 45,
     files: [
       "lib/integrations/src/integrations/device-management-health/evaluate.ts",
       "lib/integrations/src/integrations/device-management-health/device-management-health-connector.ts",
@@ -1766,45 +1826,113 @@ export function isAllowed(mutation) {
   return ALLOWED.find((a) => a.file === mutation.file && resolveAllowedLine(a, mutation.original).line === mutation.lineNo);
 }
 
-/** Split TARGETS across N shards, balanced by MUTATION COUNT rather than by target
- *  count. The two are wildly different: one family can carry more mutations than
- *  ten others together, so an even split of targets is a lopsided split of work,
- *  and the slowest shard sets the wall clock. Counting is cheap — `mutationsFor`
- *  parses text and runs no proof — so the balance is computed from the real
- *  numbers instead of assumed.
+/** Registered cost of one unmutated run of this target's proof, in seconds. An absent
+ *  `runSeconds` is the default; a PRESENT but unusable one throws, because falling back to
+ *  the default would make exactly the target someone tried to flag as heavy look ordinary. */
+export function runSecondsOf(target) {
+  if (target.runSeconds === undefined) return DEFAULT_RUN_SECONDS;
+  if (typeof target.runSeconds !== "number" || !Number.isFinite(target.runSeconds) || target.runSeconds <= 0) {
+    throw new Error(`${target.proof}: runSeconds must be a positive finite number, got ${String(target.runSeconds)}`);
+  }
+  return target.runSeconds;
+}
+
+/** Mutations a target has across all its files, counted on the pristine tree. */
+export function mutationTotal(target) {
+  return target.files.reduce((n, f) => n + mutationsFor(f, { oneLine: target.oneLine === true }).length, 0);
+}
+
+/** A slice `{ index, count }` owns the mutations whose 0-based position in the TARGET (counted
+ *  across its files in registry order, each file's mutations in line order) is congruent to
+ *  `index` modulo `count`. No slice means the whole target. Residue classes partition the
+ *  positions, so the slices of one target cover every mutation exactly once. */
+export function sliceOwns(slice, ordinal) {
+  return slice === undefined || ordinal % slice.count === slice.index;
+}
+
+/** How many of a target's `total` mutations a slice owns (all of them for no slice). */
+export function sliceSize(total, slice) {
+  if (slice === undefined) return total;
+  return total > slice.index ? Math.ceil((total - slice.index) / slice.count) : 0;
+}
+
+/** How many slices a target needs so none holds more than `maxUnitSeconds` of registered work:
+ *  one for an ordinary target, never more than one per mutation (an empty slice would run a
+ *  baseline for nothing). */
+export function sliceCount(total, runSeconds, maxUnitSeconds = MAX_UNIT_SECONDS) {
+  return Math.max(1, Math.min(total, Math.ceil((total * runSeconds) / maxUnitSeconds)));
+}
+
+/** Registered work in one unit (a target, or one slice of it), in seconds. */
+export function unitWeight(unit, total = mutationTotal(unit)) {
+  return sliceSize(total, unit.slice) * runSecondsOf(unit);
+}
+
+/** Split TARGETS across N shards, balanced by REGISTERED COST (mutations x `runSeconds`)
+ *  rather than by mutation count or by target count. Mutation count is only the time a
+ *  shard takes if every mutation costs the same, and one proof costs 20x the others
+ *  (see the header: that is what overran the sweep's 40-minute bound). A target heavier than
+ *  MAX_UNIT_SECONDS comes back as several `{ ...target, slice }` units, each owning a residue
+ *  class of its mutations, and the runner that gets a slice sweeps only those. Counting is
+ *  cheap, `mutationsFor` parses text and runs no proof, so the balance is computed from the
+ *  real numbers instead of assumed.
  *
- *  Exported and self-tested because a sharder that silently DROPS a target would
- *  make the sweep report success over work it never did — the exact failure mode
+ *  Exported and self-tested because a sharder that silently DROPS a target (or one slice of
+ *  one) would make the sweep report success over work it never did: the exact failure mode
  *  this whole script exists to prevent, reintroduced at the scheduling layer.
+ *  No clock and no measured time enters the partition: every runner computes it
+ *  independently from the registry and they must all get the same answer.
  */
-export function shardTargets(all, index, count) {
+export function shardTargets(all, index, count, maxUnitSeconds = MAX_UNIT_SECONDS) {
   if (!Number.isInteger(index) || !Number.isInteger(count) || count < 1 || index < 0 || index >= count) {
     throw new Error(`--shard expects i/N with 0 <= i < N and N >= 1, got ${index}/${count}`);
   }
-  const weighted = all.map((t) => ({
-    target: t,
-    weight: t.files.reduce((n, f) => n + mutationsFor(f, { oneLine: t.oneLine === true }).length, 0),
-  }));
-  // Longest-processing-time first: heaviest target into the currently lightest bin.
+  // `maxUnitSeconds` exists so the sharding gate can switch slicing OFF (Infinity) and show
+  // that the oversize shape it guards against really overruns; the sweep never passes it.
+  if (typeof maxUnitSeconds !== "number" || Number.isNaN(maxUnitSeconds) || maxUnitSeconds <= 0) {
+    throw new Error(`maxUnitSeconds must be a positive number, got ${String(maxUnitSeconds)}`);
+  }
+  const units = [];
+  for (const target of all) {
+    const total = mutationTotal(target);
+    const perRun = runSecondsOf(target);
+    const pieces = sliceCount(total, perRun, maxUnitSeconds);
+    for (let k = 0; k < pieces; k += 1) {
+      const unit = pieces === 1 ? target : { ...target, slice: { index: k, count: pieces } };
+      units.push({ target: unit, weight: sliceSize(total, unit.slice) * perRun });
+    }
+  }
+  // Longest-processing-time first: heaviest unit into the currently lightest bin.
   // CODEPOINT tie-break, never `localeCompare`. This sort decides WHICH SHARD each
-  // target lands in, so its result is the sweep's partition of the work. ICU
+  // unit lands in, so its result is the sweep's partition of the work. ICU
   // collation differs between builds and locales, so two runners could order equal
   // weights differently and a target could move shards between runs — or, with the
   // shard count changed at the same time, be swept twice while another is swept not
   // at all. The one sort in this file that must be identical everywhere was the one
-  // that followed the machine.
-  weighted.sort(
+  // that followed the machine. (Slices of one target tie on weight and proof, so the
+  // slice index is the last key.)
+  units.sort(
     (a, b) =>
       b.weight - a.weight ||
-      (a.target.proof < b.target.proof ? -1 : a.target.proof > b.target.proof ? 1 : 0),
+      (a.target.proof < b.target.proof ? -1 : a.target.proof > b.target.proof ? 1 : 0) ||
+      (a.target.slice?.index ?? 0) - (b.target.slice?.index ?? 0),
   );
   const bins = Array.from({ length: count }, () => ({ load: 0, targets: [] }));
-  for (const w of weighted) {
+  for (const u of units) {
     const lightest = bins.reduce((min, b) => (b.load < min.load ? b : min), bins[0]);
-    lightest.load += w.weight;
-    lightest.targets.push(w.target);
+    lightest.load += u.weight;
+    lightest.targets.push(u.target);
   }
   return bins[index].targets;
+}
+
+/** True when a proof's measured unmutated run is far above the cost registered for it, so the
+ *  sharder is under-weighing it (the state that cost a week of cancelled shards). Reported,
+ *  never fatal: a wall-clock threshold on a shared runner is a flaky gate. The 8s floor keeps
+ *  an ordinary proof that hiccups from 1s to 4s quiet, and the 1.75x ratio is wider than the
+ *  runner's own 1.5x swing between draws (DMH baseline 30.5s on 2026-10-13, 46.6s on 10-15). */
+export function costDrifted(measuredSeconds, registeredSeconds) {
+  return measuredSeconds > registeredSeconds * 1.75 && measuredSeconds - registeredSeconds >= 8;
 }
 
 /** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
@@ -1842,7 +1970,13 @@ function main() {
       console.error(`Mutation guard FAILED: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
-    console.log(`Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets.`);
+    const slicedUnits = targets.filter((t) => t.slice !== undefined).length;
+    const registeredLoad = targets.reduce((sum, t) => sum + unitWeight(t), 0);
+    console.log(
+      `Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets` +
+        (slicedUnits ? ` (${slicedUnits} of them a slice of a target too heavy for one runner)` : "") +
+        `; registered load ~${(registeredLoad / 60).toFixed(1)} min (mutations x runSeconds, not a measurement).`,
+    );
     if (targets.length === 0) {
       // Not an error: with more shards than targets, an empty shard is correct and
       // must stay GREEN, or the lane fails for a scheduling choice rather than a defect.
@@ -1893,11 +2027,18 @@ function main() {
   const zeroMutation = [];
   const baselineFailures = [];
 
+  // Registered load of everything this run will sweep, on the pristine tree (the end-of-run
+  // line below must not re-count mutations after the loop has been writing to the files).
+  const registeredTotal = targets.reduce((n, t) => n + unitWeight(t), 0);
+  const sweepStart = performance.now();
+  const timings = [];
   for (const target of targets) {
-    console.log(`── ${target.proof}`);
+    console.log(`── ${target.proof}${target.slice ? ` (slice ${target.slice.index + 1} of ${target.slice.count})` : ""}`);
+    const targetStart = performance.now();
     // See baselineProbe(): without this, a harness that cannot run the proof at all
     // reports a 100% kill rate and the sweep's verdict is printed over nothing.
     const base = baselineProbe(target.proof, runProof);
+    const baselineSeconds = (performance.now() - targetStart) / 1000;
     if (!base.ok) {
       baselineFailures.push(base);
       console.error(
@@ -1906,10 +2047,28 @@ function main() {
       );
       continue;
     }
-    console.log(`   baseline: ${target.proof} passes unmutated — a kill below is a real kill`);
+    const registeredSeconds = runSecondsOf(target);
+    console.log(
+      `   baseline: ${target.proof} passes unmutated in ${baselineSeconds.toFixed(1)}s ` +
+        `(registered ${registeredSeconds}s) — a kill below is a real kill`,
+    );
+    if (costDrifted(baselineSeconds, registeredSeconds)) {
+      const note =
+        `${target.proof} took ${baselineSeconds.toFixed(1)}s unmutated but ${registeredSeconds}s is registered, so the sharder ` +
+        `under-weighs it; set runSeconds: ${Math.ceil(baselineSeconds)} on its TARGETS entry (see WHY THE SHARDS ARE BALANCED BY COST)`;
+      console.log(`   ⚠ COST DRIFT  ${note}`);
+      if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
+    }
+    let ordinal = 0;
+    let swept = 0;
     for (const file of target.files) {
-      const mutations = mutationsFor(file, { oneLine: target.oneLine === true });
-      console.log(`   ${file} — ${mutations.length} mutations`);
+      const allInFile = mutationsFor(file, { oneLine: target.oneLine === true });
+      // A slice sweeps only its residue class of the TARGET's mutations (ordinal runs on across
+      // files); the zero-mutation check below still looks at the whole file, never the slice.
+      const mutations = allInFile.filter((_, i) => sliceOwns(target.slice, ordinal + i));
+      ordinal += allInFile.length;
+      swept += mutations.length;
+      console.log(`   ${file} — ${mutations.length} mutations${target.slice ? ` (of ${allInFile.length} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
       // quiet one: the run says "every registered guard is falsifiable", which is
       // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
@@ -1920,7 +2079,7 @@ function main() {
       // UnifiedAction` — with no branching to falsify, so the entry bought nothing while
       // looking like coverage. The entry was removed; this makes the next one impossible
       // rather than a thing someone has to notice.
-      if (mutations.length === 0) {
+      if (allInFile.length === 0) {
         zeroMutation.push(`${target.proof} → ${file}`);
       }
       for (const mutation of mutations) {
@@ -1951,6 +2110,13 @@ function main() {
         }
       }
     }
+    timings.push({
+      proof: target.proof,
+      slice: target.slice,
+      mutations: swept,
+      seconds: (performance.now() - targetStart) / 1000,
+      registered: swept * registeredSeconds,
+    });
   }
 
   console.log(
@@ -1962,6 +2128,16 @@ function main() {
   // the guard's historical markers already recognise).
   console.log(
     `figures=mutations=${total},killed=${killed},inert=${allowed},survivors=${survivors.length}`,
+  );
+  // WHERE THE TIME WENT, per target, beside what the sharder was told to expect. The sweep used
+  // to print no timing at all, so a proof that got 7x slower was invisible until a job hit its
+  // bound; this is the line that would have shown it on the first run. REPORTED, never fatal.
+  const wallSeconds = (performance.now() - sweepStart) / 1000;
+  const slowest = [...timings].sort((a, b) => b.seconds - a.seconds).slice(0, 3);
+  console.log(
+    `wall=${(wallSeconds / 60).toFixed(1)}min registered=${(registeredTotal / 60).toFixed(1)}min ` +
+      `slowest: ${slowest.map((t) => `${t.proof.replace(/^proof:/, "")}${t.slice ? `[${t.slice.index + 1}/${t.slice.count}]` : ""}=${(t.seconds / 60).toFixed(1)}min/${t.mutations}m (registered ${(t.registered / 60).toFixed(1)}min)`).join(", ")}` +
+      " (REPORTED, never fatal — compare wall to the job's timeout-minutes)",
   );
   // The brace-less ratchet, REPORTED on every run and never fatal: which targets have
   // joined the one-line sweep and which have not. A target that has not joined has

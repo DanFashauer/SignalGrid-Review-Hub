@@ -11,14 +11,25 @@
  * nobody re-runs it to check the split; this runs in milliseconds because
  * `mutationsFor` parses text and executes no proof.
  *
- * Balance is REPORTED, never gated. The spread depends on how lumpy the registry
- * happens to be, and a threshold on it would fail the build for a defensible
+ * The SPREAD between shards is REPORTED, never gated. It depends on how lumpy the
+ * registry happens to be, and a threshold on it would fail the build for a defensible
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
+ *
+ * What IS gated is narrower, deterministic, and read from the registry and the workflow
+ * (never from a clock): (1) the split covers every MUTATION exactly once, not merely every
+ * target, because a heavy target is cut into slices; (2) a target that registers a cost
+ * heavier than one unit is in fact sliced; (3) no shard's REGISTERED load exceeds 80% of the
+ * sweep job's own `timeout-minutes`. (3) exists because the sweep was balanced by mutation
+ * count while one proof cost 45x the others per mutation, and shard 3 sat over its 40-minute
+ * bound for a week (see mutation-guard.mjs, WHY THE SHARDS ARE BALANCED BY COST). An unregistered
+ * cost is invisible to this gate by construction; the sweep's own COST DRIFT line is the net
+ * for that.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed } from "./mutation-guard.mjs";
+import { parse as parseYaml } from "yaml";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted } from "./mutation-guard.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -28,12 +39,36 @@ const check = (name, ok) => { if (ok) { passed += 1; console.log(`  ok — ${nam
 
 console.log("Mutation sharding — the split must lose nothing\n");
 
+//
+// The unit of "swept exactly once" is the MUTATION, not the target. A heavy target is cut into
+// slices (mutation-guard.mjs, WHY THE SHARDS ARE BALANCED BY COST), so a sharder that dropped
+// or repeated one slice would lose or double part of a target while every target still
+// "appears". A mutation is keyed `proof#position`, the position `sliceOwns` filters on.
+const unitKey = (u) => `${u.proof}${u.slice ? `[${u.slice.index}/${u.slice.count}]` : ""}`;
+const TOTALS = new Map(TARGETS.map((t) => [t.proof, mutationTotal(t)]));
+const totalOf = (t) => TOTALS.get(t.proof) ?? mutationTotal(t);
+function coverage(registry, n, totals = totalOf, maxUnitSeconds) {
+  const hits = new Map();
+  const proofs = new Set();
+  let units = 0;
+  for (let i = 0; i < n; i += 1) {
+    for (const u of shardTargets(registry, i, n, maxUnitSeconds)) {
+      units += 1;
+      proofs.add(u.proof);
+      for (let o = 0, t = totals(u); o < t; o += 1) {
+        if (sliceOwns(u.slice, o)) hits.set(`${u.proof}#${o}`, (hits.get(`${u.proof}#${o}`) ?? 0) + 1);
+      }
+    }
+  }
+  const expected = registry.reduce((sum, t) => sum + totals(t), 0);
+  const placed = [...hits.values()].reduce((a, b) => a + b, 0);
+  return { units, expected, placed, distinct: hits.size, once: [...hits.values()].every((c) => c === 1), proofsPlaced: proofs.size };
+}
+check(`registry proof names are unique (${TARGETS.length} entries, ${TOTALS.size} names) — the partition keys on them`, TOTALS.size === TARGETS.length);
 for (const n of [1, 2, 3, 4, 8, TARGETS.length, TARGETS.length + 3]) {
-  const seen = [];
-  for (let i = 0; i < n; i += 1) seen.push(...shardTargets(TARGETS, i, n).map((t) => t.proof));
-  const unique = new Set(seen);
-  check(`N=${n}: every target appears, exactly once (${seen.length} placements, ${unique.size} distinct)`,
-    seen.length === TARGETS.length && unique.size === TARGETS.length);
+  const c = coverage(TARGETS, n);
+  check(`N=${n}: every target is placed and each of its ${c.expected} mutations is swept exactly once (${c.placed} placements, ${c.distinct} distinct, ${c.units} units)`,
+    c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === TARGETS.length);
 }
 
 // DETERMINISM IS LOAD-BEARING and easy to miss. Each shard runs in its own CI job
@@ -52,9 +87,9 @@ for (const n of [1, 2, 3, 4, 8, TARGETS.length, TARGETS.length + 3]) {
 // order-independence is not a property correctness needs here. Stated because a
 // check named "determinism" invites being read as proving more than it does.
 for (const n of [3, 4]) {
-  const once = shardTargets(TARGETS, 1, n).map((t) => t.proof).join("|");
-  const again = shardTargets(TARGETS, 1, n).map((t) => t.proof).join("|");
-  const third = shardTargets([...TARGETS], 1, n).map((t) => t.proof).join("|");
+  const once = shardTargets(TARGETS, 1, n).map(unitKey).join("|");
+  const again = shardTargets(TARGETS, 1, n).map(unitKey).join("|");
+  const third = shardTargets([...TARGETS], 1, n).map(unitKey).join("|");
   check(`N=${n}: shard 1 is identical across independent computations, in order`,
     once === again && once === third);
 }
@@ -64,6 +99,115 @@ for (const [i, n] of [[0, 0], [2, 2], [-1, 3], [1.5, 3]]) {
   let threw = false;
   try { shardTargets(TARGETS, i, n); } catch { threw = true; }
   check(`rejects --shard=${i}/${n} rather than silently sweeping a subset`, threw);
+}
+
+// ── The split balances REGISTERED COST, and a target heavier than one unit is SLICED ─────────
+//
+// Balanced by mutation COUNT, the sweep put a proof that costs ~45s per mutation (the 9.5M-report
+// enumeration of device-management-health) beside ordinary ones at ~1s, called the result "49
+// mutations", and shard 3 sat over its 40-minute bound for a week with hung=0. The cost is now a
+// registered number (`runSeconds`), the split weighs mutations x runSeconds, and a target above
+// MAX_UNIT_SECONDS is cut into residue-class slices. Everything below is pure arithmetic over the
+// registry and the workflow file: no proof runs and no clock is read.
+const threw = (fn) => { try { fn(); return false; } catch { return true; } };
+check("sliceOwns: no slice owns every position; a slice owns exactly its residue class",
+  sliceOwns(undefined, 0) && sliceOwns(undefined, 99)
+  && [1, 4, 7].every((o) => sliceOwns({ index: 1, count: 3 }, o))
+  && [0, 2, 3, 5].every((o) => !sliceOwns({ index: 1, count: 3 }, o)));
+check("sliceSize: 10 mutations in 3 slices hold 4+3+3, a slice past the total holds none, no slice holds all",
+  [0, 1, 2].map((k) => sliceSize(10, { index: k, count: 3 })).join() === "4,3,3" && sliceSize(2, { index: 2, count: 3 }) === 0 && sliceSize(10, undefined) === 10);
+check("sliceCount: exactly one unit of registered work stays whole, a heavy target is cut to fit, never into more pieces than mutations, an empty one stays whole",
+  sliceCount(10, MAX_UNIT_SECONDS / 10) === 1 && sliceCount(10, (2.5 * MAX_UNIT_SECONDS) / 10) === 3 && sliceCount(5, 10 * MAX_UNIT_SECONDS) === 5 && sliceCount(0, 45) === 1);
+check("runSecondsOf: absent is the default; zero, negative, NaN, Infinity, null and a string THROW instead of quietly reading as ordinary",
+  runSecondsOf({ proof: "p" }) === DEFAULT_RUN_SECONDS && runSecondsOf({ proof: "p", runSeconds: 45 }) === 45
+  && [0, -1, Number.NaN, Number.POSITIVE_INFINITY, null, "45"].every((v) => threw(() => runSecondsOf({ proof: "p", runSeconds: v }))));
+check("shardTargets refuses a unit ceiling that is not a positive number (0, -1, NaN, a string)",
+  [0, -1, Number.NaN, "600"].every((v) => threw(() => shardTargets(TARGETS, 0, 4, v))));
+check("costDrifted flags a proof that outgrew its registration and stays quiet through the runner's own swing (30.5s vs 46.6s baselines of one proof) and a 1s proof that hiccups to 4s",
+  costDrifted(12, 1) && costDrifted(100, 45) && !costDrifted(46.6, 45) && !costDrifted(30.5, 45) && !costDrifted(70, 45) && !costDrifted(4.2, 1));
+
+// A fixture registry built from REAL registered files (mutationsFor reads them), one target
+// registered heavy, one the same size registered nothing, and three ordinary fillers.
+{
+  const base = TARGETS.find((t) => t.runSeconds === undefined && TOTALS.get(t.proof) >= 6 && TOTALS.get(t.proof) <= 300);
+  const baseTotal = base ? TOTALS.get(base.proof) : 0;
+  check(`fixture base exists: an ordinary target with 6..300 mutations (${base?.proof}, ${baseTotal})`, base !== undefined);
+  if (base) {
+    const r = Math.ceil((2.5 * MAX_UNIT_SECONDS) / baseTotal);
+    const heavy = { ...base, proof: "proof:fx-heavy", runSeconds: r };
+    const unregistered = { ...base, proof: "proof:fx-unregistered" };
+    const fillers = TARGETS.filter((t) => t.proof !== base.proof && t.runSeconds === undefined).slice(0, 3);
+    const reg = [heavy, unregistered, ...fillers];
+    for (const n of [1, 2, 3, 4, 5, 7]) {
+      const c = coverage(reg, n, mutationTotal);
+      check(`fixture N=${n}: a sliced target loses and repeats no mutation (${c.placed}/${c.expected} placements, ${c.distinct} distinct, ${c.units} units)`,
+        c.once && c.placed === c.expected && c.distinct === c.expected && c.proofsPlaced === reg.length);
+    }
+    const placed4 = Array.from({ length: 4 }, (_, i) => shardTargets(reg, i, 4).map((u) => ({ i, u }))).flat();
+    const heavyUnits = placed4.filter((x) => x.u.proof === "proof:fx-heavy");
+    check(`fixture: the heavy target (${baseTotal} mutations x ${r}s = ${baseTotal * r}s) is cut into 3 slices, each at most one unit ceiling plus a mutation (${MAX_UNIT_SECONDS + r}s), on different shards`,
+      heavyUnits.length === 3
+      && heavyUnits.every((x) => unitWeight(x.u, baseTotal) <= MAX_UNIT_SECONDS + r)
+      && new Set(heavyUnits.map((x) => x.i)).size === 3);
+    check("fixture negative control: the same files registering NO cost stay one whole unit, so it is the registered cost that causes slicing, not the file's size",
+      placed4.filter((x) => x.u.proof === "proof:fx-unregistered").length === 1 && placed4.find((x) => x.u.proof === "proof:fx-unregistered").u.slice === undefined);
+    check("fixture negative control: with slicing switched off (unit ceiling Infinity) the heavy target is ONE unit of its full registered work",
+      (() => {
+        const off = Array.from({ length: 4 }, (_, i) => shardTargets(reg, i, 4, Number.POSITIVE_INFINITY)).flat().filter((u) => u.proof === "proof:fx-heavy");
+        return off.length === 1 && off[0].slice === undefined && unitWeight(off[0], baseTotal) === baseTotal * r;
+      })());
+  }
+}
+
+// ── The sweep's own bound, read from the workflow ────────────────────────────────────────────
+// The split is only as good as its fit to the job it runs in, so the job's `timeout-minutes`, its
+// shard count and its matrix are READ from scheduled-verification.yml rather than copied here. A
+// matrix that lacks a shard the run line divides by leaves that shard swept by no runner.
+const REFUSE_FRACTION = 0.8;
+const sweepJob = parseYaml(readFileSync(join(REPO, ".github/workflows/scheduled-verification.yml"), "utf8"))?.jobs?.["mutation-sweep"];
+const runLine = (sweepJob?.steps ?? []).map((st) => st?.run).find((r) => typeof r === "string" && r.includes("mutation-guard.mjs"));
+const shardsInRun = Number.parseInt(runLine?.match(/--shard=\$\{\{\s*matrix\.shard\s*\}\}\/(\d+)\b/)?.[1] ?? "", 10);
+const timeoutMinutes = sweepJob?.["timeout-minutes"];
+const workflowOk = Number.isInteger(shardsInRun) && shardsInRun >= 1 && Number.isInteger(timeoutMinutes) && timeoutMinutes > 0;
+check(`workflow: the mutation-sweep job runs \`--shard=<matrix>/N\` (N=${shardsInRun}) and bounds itself with timeout-minutes (${timeoutMinutes})`, workflowOk);
+const matrixShards = sweepJob?.strategy?.matrix?.shard;
+check(`workflow: matrix.shard is exactly 0..${shardsInRun - 1} (a shard the matrix lacks is swept by no runner)`,
+  workflowOk && Array.isArray(matrixShards) && matrixShards.length === shardsInRun && matrixShards.every((v, i) => v === i));
+const LANE_N = workflowOk ? shardsInRun : 4;
+const BOUND_SECONDS = (workflowOk ? timeoutMinutes : 40) * 60;
+const loadsOf = (registry, n, totals, maxUnitSeconds) =>
+  Array.from({ length: n }, (_, i) => shardTargets(registry, i, n, maxUnitSeconds).reduce((sum, u) => sum + unitWeight(u, totals(u)), 0));
+const laneLoads = loadsOf(TARGETS, LANE_N, totalOf);
+const heaviest = Math.max(...laneLoads);
+check(`the registered load of every shard stays within ${REFUSE_FRACTION * 100}% of the job's ${BOUND_SECONDS / 60}-minute bound (heaviest ${(heaviest / 60).toFixed(1)} min = ${((heaviest / BOUND_SECONDS) * 100).toFixed(0)}%) — beyond that a slow runner draw cancels it; add a shard or register a cost`,
+  heaviest <= REFUSE_FRACTION * BOUND_SECONDS);
+
+// What the real registry must keep doing: the one proof measured 45x the others stays registered
+// and stays sliced across runners. Lowering the number, or deleting it, is the regression.
+{
+  const dmh = TARGETS.find((t) => t.proof === "proof:device-management-health");
+  check("proof:device-management-health keeps its measured run cost registered (runSeconds >= 30: 30.9s per mutation on the fastest runner draw, 45s on the slow one)",
+    dmh !== undefined && typeof dmh.runSeconds === "number" && dmh.runSeconds >= 30);
+  const dmhPlaced = Array.from({ length: LANE_N }, (_, i) => shardTargets(TARGETS, i, LANE_N).filter((u) => u.proof === "proof:device-management-health").map(() => i)).flat();
+  check(`at N=${LANE_N} proof:device-management-health is cut into slices (${dmhPlaced.length}) that land on ${new Set(dmhPlaced).size} different shards, none holding more than a unit ceiling's worth`,
+    dmhPlaced.length >= 2 && new Set(dmhPlaced).size >= 2
+    && Array.from({ length: LANE_N }, (_, i) => shardTargets(TARGETS, i, LANE_N)).flat().filter((u) => u.slice).every((u) => unitWeight(u, totalOf(u)) <= MAX_UNIT_SECONDS + runSecondsOf(u)));
+}
+
+// TEETH for the bound rule, on a fixture, so it does not depend on how today's registry happens to
+// fall: a target whose registered work alone is 1.2x the job's bound is exactly the shape that
+// cancelled shard 3. Unsliced, no split of it can fit; sliced, every shard stays within the rule.
+{
+  const base = TARGETS.find((t) => t.runSeconds === undefined && TOTALS.get(t.proof) >= 6 && TOTALS.get(t.proof) <= 300);
+  if (base) {
+    const baseTotal = TOTALS.get(base.proof);
+    const oversize = { ...base, proof: "proof:fx-oversize", runSeconds: Math.ceil((1.2 * BOUND_SECONDS) / baseTotal) };
+    const fx = [oversize, ...TARGETS.filter((t) => t.proof !== base.proof && t.runSeconds === undefined).slice(0, 3)];
+    const unsliced = Math.max(...loadsOf(fx, LANE_N, mutationTotal, Number.POSITIVE_INFINITY));
+    const sliced = Math.max(...loadsOf(fx, LANE_N, mutationTotal));
+    check(`bound rule has teeth: an unsliced 1.2x-the-bound target puts ${(unsliced / 60).toFixed(0)} min on one shard (over the ${BOUND_SECONDS / 60}-minute bound), and the real sharder holds the heaviest shard to ${(sliced / 60).toFixed(0)} min (within ${REFUSE_FRACTION * 100}%)`,
+      unsliced > BOUND_SECONDS && sliced <= REFUSE_FRACTION * BOUND_SECONDS);
+  }
 }
 
 // ── The mutators must still fire on the shapes they exist to catch ────────────
@@ -268,14 +412,16 @@ function auditAllowed(entries, readText) {
 }
 
 // Reported, not gated.
-const N = Number.parseInt(process.env.MUTATION_SHARDS ?? "4", 10);
-const weight = (t) => t.files.reduce((n, f) => n + mutationsFor(f).length, 0);
-const loads = Array.from({ length: N }, (_, i) => shardTargets(TARGETS, i, N).reduce((sum, t) => sum + weight(t), 0));
-const totalMutations = TARGETS.reduce((n, t) => n + weight(t), 0);
-// Report the quantity the sharder actually balances on. An earlier version of this
-// line reported FILES per shard while `shardTargets` balanced MUTATIONS — a real
-// number answering a different question than the one the reader would take it for.
-console.log(`\n  balance at N=${N}, by MUTATIONS per shard: ${loads.join(" · ")}`);
+const N = Number.parseInt(process.env.MUTATION_SHARDS ?? String(LANE_N), 10);
+const secondsPerShard = loadsOf(TARGETS, N, totalOf);
+const mutationsPerShard = Array.from({ length: N }, (_, i) => shardTargets(TARGETS, i, N).reduce((sum, u) => sum + sliceSize(totalOf(u), u.slice), 0));
+const totalMutations = [...TOTALS.values()].reduce((a, b) => a + b, 0);
+// Report the quantity the sharder actually balances on: REGISTERED MINUTES (mutations x
+// runSeconds). An earlier version reported FILES per shard while the sharder balanced MUTATIONS,
+// then MUTATIONS counted without the brace-less opt-in (1594) while the sharder counted 2026 —
+// each a real number answering a different question than the one the reader would take it for.
+console.log(`\n  balance at N=${N}, by REGISTERED MINUTES per shard: ${secondsPerShard.map((x) => (x / 60).toFixed(1)).join(" · ")} (the job's bound is ${BOUND_SECONDS / 60} min, refused above ${REFUSE_FRACTION * 100}%)`);
+console.log(`  by MUTATIONS per shard: ${mutationsPerShard.join(" · ")}`);
 console.log(`  ${TARGETS.length} targets · ${TARGETS.reduce((n, t) => n + t.files.length, 0)} files · ${totalMutations} mutations`);
 
 const total = passed + failures.length;

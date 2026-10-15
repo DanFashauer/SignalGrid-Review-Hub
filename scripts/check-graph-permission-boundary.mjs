@@ -165,6 +165,9 @@ export function connectorDefaultBase(src) {
  * `}` (nothing may follow it); anything else outside a block, an unterminated block, or a non-`key: value` line inside a non-docs block is a fatal. Returns
  * { blocks: [{ name, entries: [[key, value]] }], fatal }. Indented text inside `docs` is prose and is never read as a block.
  */
+/** ASCII blank only (space, tab, CR). `String.prototype.trim()` and `\s` also treat NBSP, U+2028, U+3000, U+FEFF… as blank; Bruno's grammar does not, and skips the file. */
+const ASCII_BLANK = /^[ \t\r]*$/;
+
 export function parseBru(text) {
   const fatal = [];
   const blocks = [];
@@ -173,19 +176,19 @@ export function parseBru(text) {
   if (text.includes("'''")) fatal.push("contains a triple-quote multiline value, which this reader does not model (Bruno would swallow the following closing braces) - refusing");
   for (const [i, line] of text.split("\n").entries()) {
     if (cur === null) {
-      if (line.trim() === "") continue;
-      const m = /^([A-Za-z][\w:-]*)\s*\{\s*$/.exec(line);
+      if (ASCII_BLANK.test(line)) continue;
+      const m = /^([A-Za-z][\w:-]*)[ \t]*\{[ \t\r]*$/.exec(line);
       if (!m) { fatal.push(`line ${i + 1} is outside any block (${JSON.stringify(line.slice(0, 40))}) — an unrecognised construct`); continue; }
       cur = { name: m[1], entries: [] };
     } else if (line.startsWith("}")) {
       // Bruno ends a block at any newline followed by `}`, whatever follows it on the line; so must this reader, or `}post {` hides a second http block.
-      if (line.slice(1).trim() !== "") fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
+      if (!ASCII_BLANK.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
       blocks.push(cur); cur = null;
     }
     else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
-    else if (cur.name !== "docs" && line.trim() === "") { fatal.push(`line ${i + 1} in \`${cur.name}\` is blank or whitespace-only — Bruno 4.0.0 rejects some of these ("Expected :") and skips the file, so none is accepted`); }
+    else if (cur.name !== "docs" && ASCII_BLANK.test(line)) { fatal.push(`line ${i + 1} in \`${cur.name}\` is blank or whitespace-only — Bruno 4.0.0 rejects some of these ("Expected :") and skips the file, so none is accepted`); }
     else if (cur.name !== "docs") {
-      const kv = /^\s+([A-Za-z][\w-]*):[ \t]*(.*?)\s*$/.exec(line);
+      const kv = /^[ \t]+([A-Za-z][\w-]*):[ \t]*(.*?)[ \t\r]*$/.exec(line);
       if (!kv) fatal.push(`line ${i + 1} in \`${cur.name}\` is not a \`key: value\` line`);
       else cur.entries.push([kv[1], kv[2]]);
     }
@@ -205,7 +208,7 @@ export function canonicalFindings(blocks) {
   const bare = /^[^{}`"]*$/;
   for (const bl of blocks) {
     if (bl.name === "docs") {
-      for (const l of bl.lines ?? []) if (l.trim() !== "" && (!/^ {2}/.test(l) || !bare.test(l))) out.push(`docs line ${JSON.stringify(l.slice(0, 40))} is not indented prose free of braces, backticks and double quotes`);
+      for (const l of bl.lines ?? []) if (!ASCII_BLANK.test(l) && (!/^ {2}/.test(l) || !bare.test(l))) out.push(`docs line ${JSON.stringify(l.slice(0, 40))} is not indented prose free of braces, backticks and double quotes`);
     } else if (bl.name === "meta") {
       const mk = bl.entries.map(([k]) => k).sort().join();
       if (mk !== "name,seq,type") out.push(`meta keys [${mk}] — exactly name, type and seq, each once, are required (Bruno 4.0.0 skips a request file whose meta block has no entries as invalid)`);
@@ -279,7 +282,7 @@ export function collectionRequests(filesByName) {
     if (parsed.blocks.filter((bl) => bl.name === "meta").length !== 1) { fatal.push(`${name}: not exactly one meta block`); continue; }
     const docsBlocks = parsed.blocks.filter((bl) => bl.name === "docs");
     if (docsBlocks.length !== 1) { fatal.push(`${name}: ${docsBlocks.length} docs block(s) — exactly one is required`); continue; }
-    if (!(docsBlocks[0].lines ?? []).some((l) => l.trim() !== "")) { fatal.push(`${name}: the docs block has no non-blank content — Bruno 4.0.0 rejects a request file with an empty docs block ("Skipping invalid file") and never sends it, so the gate must not count it`); continue; }
+    if (!(docsBlocks[0].lines ?? []).some((l) => !ASCII_BLANK.test(l))) { fatal.push(`${name}: the docs block has no non-blank content — Bruno 4.0.0 rejects a request file with an empty docs block ("Skipping invalid file") and never sends it, so the gate must not count it`); continue; }
     const mb = methodBlocks[0];
     const method = mb.name.toUpperCase();
     const keys = mb.entries.map(([k]) => k);
@@ -630,6 +633,19 @@ function selfTest() {
   for (const [label, edit] of wsCases) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND11: ${label} is FATAL`, has(audit(csrc, b), "b.bru", "whitespace-only")]); }
   checks.push(["ROUND11: a whitespace line inside collection.bru auth is FATAL", has(audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  \n  mode: bearer\n}\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }), "collection.bru", "whitespace-only")]);
   checks.push(["ROUND11: a whitespace line inside Sandbox.bru vars is FATAL", has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("vars {\n", "vars {\n  \n")), "Sandbox.bru", "whitespace-only")]);
+  // ---- landing round: Unicode whitespace is not blank to Bruno ----
+  const UNI = ["\u00a0", "\u2028", "\u3000", "\ufeff", "\u2003", "\u200b", "\u0085", "\u000b", "\u000c", "\u202f"];
+  for (const u of UNI) {
+    const tag = `U+${u.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
+    const mk = (edit) => { const bb = baseBru(); bb["b.bru"] = edit(bb["b.bru"]); return audit(csrc, bb).fatal.length > 0; };
+    checks.push([`LANDING: ${tag} alone on a line between blocks is FATAL`, mk((t) => t.replace("}\n\nget {", `}\n${u}\nget {`))]);
+    checks.push([`LANDING: ${tag} before a block header is FATAL`, mk((t) => t.replace("get {", `${u}get {`))]);
+    checks.push([`LANDING: ${tag} between a block name and its brace is FATAL`, mk((t) => t.replace("get {", `get${u}{`))]);
+    checks.push([`LANDING: ${tag} after a closing brace is FATAL`, mk((t) => t.replace("}\n\nget {", `}${u}\n\nget {`))]);
+    checks.push([`LANDING: ${tag} as the only indent of a meta entry is FATAL`, mk((t) => t.replace("  name: x", `${u}name: x`))]);
+    checks.push([`LANDING: ${tag} as the only indent of a method-block entry is FATAL`, mk((t) => t.replace("  body: none", `${u}body: none`))]);
+    checks.push([`LANDING: ${tag} only inside a docs block is FATAL (not non-blank content)`, mk((t) => t.replace("docs {\n  x\n}", `docs {\n${u}\n}`))]);
+  }
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

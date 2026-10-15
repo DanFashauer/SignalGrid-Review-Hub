@@ -170,15 +170,23 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //     directory). Known divergence from exec: a git whose script interpreter is missing is picked by gitOnPath but skipped by execvp, which is a false red (every git call fails closed), never a false green.
 //     Not covered by the KEY audit above (GIT_EXEC_OFF, the filter drivers, the credential helper), and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of
 //     them reads a key that runs a program) are not handed those -c keys. They DO get the absolute PATH entries only, as the paragraph above says: the key audit is the only thing that module is outside.
-//   WHAT "ABSOLUTE" MEANS HERE (round 32; the round-30 and round-31 rules were written as `path.isAbsolute`, which is LEXICAL): one predicate, isTrustedAbsoluteEntry, decides it everywhere a PATH entry is classified
-//     (absolutePathEntries and so gitEnv and absolutePathOnly, gitOnPath and so gitProgram and the shadow gate, pathHelperProblems). An entry is trusted only if it is absolute AND it does not name a place the kernel resolves
-//     PER PROCESS: anything under /proc/ (/proc/self/cwd, /proc/self/cwd/.., /proc/<pid>/cwd/.., /proc/self/fd/N, /proc/self/root, /proc/thread-self) or under /dev/fd (and /dev/stdin, /dev/stdout, /dev/stderr, which are
-//     links into it). `/proc/self/cwd/../x` is absolute to path.isAbsolute, but the kernel reads it against the working directory of whichever process looks it up, so a git planted there ran on the check's own path (round-31 review:
-//     exit 0 and a green transport row in the Opus-p4 fixture, 31 planted calls). The rule is compared on the entry AS WRITTEN and again on its lexically normalised form (path.posix.normalize collapses `..`, so
-//     `/tmp/../proc/self/cwd` and `//proc/self/cwd` are caught by the second, and `/proc/self/cwd/../..` by the first), case-insensitively. A per-process entry is treated like a relative one: never handed to any process,
-//     never where a git is found, scanned for a shadowing git and for git-remote helpers (as `/proc/self/cwd<rest>` read against the directory each lookup would run in, and as written for any other spelling, which only
-//     this process can read: an entry this process cannot read is skipped like a missing directory, because nothing started here uses it). NOT a rule, and said so: an ABSOLUTE entry that is not under those prefixes is
-//     trusted wherever it points (an absolute symlink whose target looks relative, an entry that equals the repository root): that is the user's own choice of a directory, not a lookup that moves with the process.
+//   WHAT "ABSOLUTE" MEANS HERE (round 32, corrected in ROUND 33; the round-30 and round-31 rules were written as `path.isAbsolute`, which is LEXICAL): one predicate, isTrustedAbsoluteEntry, decides it everywhere a PATH entry
+//     is classified (absolutePathEntries and so gitEnv and absolutePathOnly, gitOnPath and so gitProgram and the shadow gate, pathHelperProblems). An entry is trusted only if its SPELLING passes three tests: it is absolute;
+//     it has no `..` segment; and it is not under a root the kernel resolves PER PROCESS: anything under /proc/ (/proc/self/cwd, /proc/self/cwd/.., /proc/<pid>/cwd/.., /proc/self/fd/N, /proc/self/root, /proc/thread-self) or
+//     under /dev/fd (and /dev/stdin, /dev/stdout, /dev/stderr, which are links into it), compared case-insensitively, on the spelling as written and again with `//` and `/./` collapsed. `/proc/self/cwd/../x` is absolute to
+//     path.isAbsolute, but the kernel reads it against the working directory of whichever process looks it up, so a git planted there ran on the check's own path (round-31 review: exit 0 and a green transport row in the
+//     Opus-p4 fixture, 31 planted calls).
+//   WHY NO `..` AT ALL (ROUND 33; the round-32 review found the per-process roots alone were not enough): posix.normalize collapses `..` WITHOUT following anything, and the kernel follows a symlink before it applies the `..` after it
+//     (when the `..` after /dev/fd comes, the directory is already /proc/self/fd), so the two read different places exactly where it matters. `/dev//fd/../cwd/../x` normalises to `/dev/x` and is read as the parent of the working
+//     directory; `/dev/./fd/../cwd/../x`, `/tmp/../dev/fd/../cwd/../x` and `/var/run/../proc/self/cwd/../x` (/var/run is a link to /run) are the same place, and a git planted behind any of them was THE git (same fixture: exit 0,
+//     31 planted calls, each with gitRun's own argv). No comparison of a spelling that has a `..` in it can say where the kernel reads it, and the collapsed text is no evidence either way, so an absolute entry with a `..` segment is
+//     untrusted whatever it collapses to. The price is a false red, never a false green: `/tmp/x/../y` holding a git ahead of the first plain entry is a gated row naming that file.
+//   WHAT THE RULE GUARANTEES, AND WHAT IT DOES NOT: it guarantees that nothing in the TEXT of a trusted entry is resolved against the process that reads it: no per-process root, and no `..` whose meaning depends on a link in front of it.
+//     WHAT IT DOES NOT guarantee is where a trusted entry POINTS: an absolute symlink is trusted wherever it points (a link at /x/bin whose target is /proc/self/cwd/../y, or a relative target), and so is a link in the MIDDLE of an
+//     absolute path that has no `..` in it, a directory the user does not own, and an entry that equals the repository root; the rule says nothing of mount namespaces or of a path that changes between this check and a later run.
+//     That is the user's own choice of a directory, not a spelling that moves with the process, and the rule does not second-guess it. An untrusted entry (relative, per-process, or with a `..`) is treated like a relative one: never
+//     handed to any process, never where a git is found, scanned for a shadowing git and for git-remote helpers (a relative one and `/proc/self/cwd<rest>` as `base<rest>`, read against the directory each lookup would run in; any
+//     other, `..` through /dev/fd or /var/run included, as written, which is how only THIS process can read it: an entry this process cannot read is skipped like a missing directory, because nothing started here uses it).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
@@ -196,15 +204,20 @@ function gitEnv(extra) {
 // The program is now found once per PATH value through the ABSOLUTE entries only (the first one holding an executable file named git, as exec would), gitRun starts it by that absolute path, and gitEnv hands every git a
 // PATH with only the absolute entries (git still finds its own helpers). A non-absolute entry that holds a git AHEAD of that one is a gated finding (hubTransport): the user's own git, run from the repository, would run it.
 // ROUND 32. The one predicate for "this PATH entry names the same place for every process" (see the header). `isAbsolute` alone is lexical: /proc/self/cwd/../x is absolute to it and resolves, in each process that looks, against THAT process's own
-// working directory. The raw spelling is compared first (a normalised `/proc/self/cwd/../..` has lost the evidence), then the lexically normalised one (`/tmp/../proc/self/cwd`, `//proc/self/cwd`, `/./dev/fd/3`).
+// working directory. The per-process roots are compared on the spelling as written (a collapsed `/proc/self/cwd/../..` has lost the evidence) and again with `//` and `/./` collapsed (`//proc/self/cwd`, `/./dev/fd/3`), case-insensitively.
+// ROUND 33. `..` is not lexical either: an absolute entry with any `..` segment is untrusted (see the header). The kernel follows /dev/fd (a link to /proc/self/fd) before the `..` after it and posix.normalize does not, so
+// `/dev//fd/../cwd/../x` is `/dev/x` to the one and the parent of the working directory to the other; round 32 trusted it, and `/dev/./fd/../cwd/../x`, `/tmp/../dev/fd/../cwd/../x` and `/var/run/../proc/self/cwd/../x` with it.
+// The segments are looked for in the spelling as written, where `//` and `/./` cannot hide one; the collapsed form is used for the roots only.
 const PER_PROCESS_ROOTS = ["/proc", "/dev/fd", "/dev/stdin", "/dev/stdout", "/dev/stderr"];
 function isPerProcessSpelling(p) { const q = p.toLowerCase(); return PER_PROCESS_ROOTS.some((r) => q === r || q.startsWith(`${r}/`)); }
+const PATH_SEGMENT = process.platform === "win32" ? /[\\/]+/ : /\/+/; // (win32 reads both separators; elsewhere a backslash is an ordinary character in a name)
+function hasDotDotSegment(p) { return p.split(PATH_SEGMENT).includes(".."); }
 function isTrustedAbsoluteEntry(entry) {
   const raw = String(entry);
-  return isAbsolute(raw) && !isPerProcessSpelling(raw) && !isPerProcessSpelling(posix.normalize(raw));
+  return isAbsolute(raw) && !hasDotDotSegment(raw) && !isPerProcessSpelling(raw) && !isPerProcessSpelling(posix.normalize(raw));
 }
 // Where a lookup that starts in `base` reads a PATH entry that is not trusted: a relative one joined to it (by concatenation, as the kernel follows `..` through a symlink); `/proc/self/cwd<rest>` as `base<rest>` (that IS
-// the lookup's working directory); any other per-process spelling as written, which is how THIS process reads it (the only process there is any evidence about).
+// the lookup's working directory); any other untrusted absolute spelling (another per-process root, or a `..` anywhere) as written, which is how THIS process reads it (the only process there is any evidence about).
 const CWD_ENTRY = /^\/+proc\/+(?:self|thread-self)\/+cwd(\/.*)?$/;
 function entryMovesWithCwd(raw) { return !isAbsolute(raw) || CWD_ENTRY.test(raw); } // (what the lookup's own working directory decides; any other per-process spelling is read as written)
 function untrustedEntryDir(raw, base) {
@@ -2197,13 +2210,16 @@ console.log(
 process.exitCode = gatedFails.length ? 1 : 0;
 
 
-// The closing lines of the self-test, pure so a case can pin them: one line per failed case, one per precondition the platform did not offer, the verdict LAST.
-function selfTestSummaryLines(checks, notOnOffer) {
+// The closing lines of the self-test, pure so a case can pin them: one line per failed case, one per precondition the platform did not offer, one per SKIPPED case (round 33: a case with nothing to assert without a platform behaviour; it ran
+// nothing, so it is in neither number of the verdict and is said not to be a pass), the verdict LAST.
+function selfTestSummaryLines(checks, notOnOffer, skipped = []) {
   const failedCases = checks.filter(([, ok]) => !ok);
   return [
     ...failedCases.map(([name]) => `FAILED: ${name}`),
     ...notOnOffer.map(([name, why]) => `precondition not on offer on this platform: ${why} (${name})`),
     ...(notOnOffer.length ? [`self-test: ${notOnOffer.length} case(s) with a precondition not reproducible on this platform, listed above; each still asserted the guarded answer`] : []),
+    ...skipped.map(([name, why]) => `SKIPPED, not run, not a pass: ${why} (${name})`),
+    ...(skipped.length ? [`self-test: ${skipped.length} case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below`] : []),
     failedCases.length ? `self-test FAILED (${checks.length - failedCases.length}/${checks.length})` : `self-test passed (${checks.length}/${checks.length})`,
   ];
 }
@@ -2261,6 +2277,14 @@ function selfTest() {
     if (offered) return check(name, guarded, detail);
     notOnOffer.push([name, reason]);
     return check(`${name} [precondition not on offer on this platform: ${reason}; the guarded answer is asserted without it]`, guarded, detail);
+  };
+  // A case with NOTHING to assert without its platform behaviour (round 33: the kernel resolving /proc/<pid>/cwd and /dev/fd/N to a directory; where it does not, the answer is not a weaker one but "the planted file cannot be reached at all"):
+  // checkWithPrecondition would assert the guarded answer anyway and fail there. This one is SKIPPED when the platform does not offer it: printed by name with the reason, listed in the summary, and in NEITHER number of the verdict. A skip is not a pass.
+  const skipped = [];
+  const checkIfOffered = (name, offered, reason, guarded, detail) => {
+    if (offered) return check(name, guarded, detail);
+    skipped.push([name, reason]);
+    console.log(`  skip — self-test: ${name} [not run: ${reason}]`);
   };
   try {
     execFileSync("git", ["init", "-q", "--bare", hub]);
@@ -4612,13 +4636,14 @@ exit 1
         const absA = mk("r32-abs-a"), absB = mk("r32-abs-b"), gA = plantGit(absA);
         // (1) the predicate: what counts as the same place for every process
         const linkTarget = mk("r32-link-target"), linkHome = mk("r32-link-home"), gLink = plantGit(linkTarget); symlinkSync("../r32-link-target", join(linkHome, "alink"));
-        const trustedEntries = ["/usr/bin", "/", "/tmp/x/../y", "/tmp/proc/self/cwd", "/procfoo/bin", "/dev/fdx", "/dev", "/devices/fd/3", join(linkHome, "alink"), rroot];
+        const trustedEntries = ["/usr/bin", "/", "/tmp/proc/self/cwd", "/procfoo/bin", "/dev/fdx", "/dev", "/devices/fd/3", "/tmp/..hidden/bin", "/tmp/a..b/c", "/tmp/.../x", "/tmp/x./y", "/tmp/./x", "/tmp//x", join(linkHome, "alink"), rroot];
         const perProcess = ["/proc", "/proc/self", "/proc/self/cwd", "/proc/self/cwd/", "/proc/self/cwd/../x", "/proc/self/cwd/../../x", "/proc/thread-self/cwd/..", "/proc/self/root/usr/bin", "/proc/self/fd/3",
           `/proc/${process.pid}/cwd/../x`, "/proc/1/root", "/dev/fd", "/dev/fd/3", "/dev/stdin", "/dev/stdout", "/dev/stderr", "//proc/self/cwd", "/./proc/self/cwd/../x", "/tmp/../proc/self/cwd/../x",
-          "/usr/../dev/fd/3", "/PROC/self/cwd", "/Dev/FD/3", "/dev/fd/../fd/3", "/proc/./self/cwd"];
+          "/usr/../dev/fd/3", "/PROC/self/cwd", "/Dev/FD/3", "/dev/fd/../fd/3", "/proc/./self/cwd",
+          "/dev//fd/../cwd/../xx", "/dev/./fd/../cwd/../xx", "/tmp/../dev/fd/../cwd/../xx", "/var/run/../proc/self/cwd/../xx", "/dev/pts/../fd/../cwd/../x", "/dev/../dev/fd/../cwd/../x", "/dev//fd/..", "/dev//stdin/../x"];
         const notAbsolute = ["", ".", "..", "../x", "rel/dir", "proc/self/cwd", "dev/fd/3"];
         const wrongOnes = [...trustedEntries.filter((e) => !isTrustedAbsoluteEntry(e)), ...perProcess.filter((e) => isTrustedAbsoluteEntry(e)), ...notAbsolute.filter((e) => isTrustedAbsoluteEntry(e))];
-        check("an entry is trusted only if it is absolute AND not a place the kernel resolves per process: /proc/self/cwd/.. , /proc/<pid>/.. , /proc/self/fd/N , /proc/self/root , /dev/fd/N and the spellings that reach them (doubled or dotted slashes, `..` out of another directory, other case) are not; an ordinary absolute entry is, an absolute symlink whose target looks relative and the repository root included (R32-trusted-entry-unit)",
+        check("an entry is trusted only if it is absolute AND not a place the kernel resolves per process: /proc/self/cwd/.. , /proc/<pid>/.. , /proc/self/fd/N , /proc/self/root , /dev/fd/N and the spellings that reach them (doubled or dotted slashes, `..` out of another directory, other case) are not; an ordinary absolute entry is, an absolute symlink whose target looks relative and the repository root included; `/tmp/x/../y` was in the trusted list until round 33 and is not any more, because an absolute entry with ANY `..` segment is untrusted whatever it collapses to (R32-trusted-entry-unit)",
           wrongOnes.length === 0 && gitOnPath(join(linkHome, "alink"), null).bin === join(linkHome, "alink", "git") && gitOnPath(join(linkHome, "alink"), null).bin !== gLink,
           () => JSON.stringify({ wrongOnes }));
         // (2) the lists every process is handed, and the program every git is started by: planted git reached from THIS process through each spelling
@@ -4642,19 +4667,24 @@ exit 1
           pid: gitOnPath(asPath(`/proc/${process.pid}/cwd/${relative(process.cwd(), plantedDir)}`, absA), repoDir), fd: gitOnPath(asPath(`/dev/fd/${fdUnder}`, absA), repoDir),
           absFirst: gitOnPath(asPath(absA, "/proc/self/cwd/../planted"), repoDir), only: gitOnPath("/proc/self/cwd/../planted", repoDir), noCwd: gitOnPath(asPath("/proc/self/cwd/../planted", absA), null),
         };
-        check("a git behind a per-process PATH entry ahead of the first trusted one is a shadow naming the file, resolved where the lookup would run: /proc/self/cwd/../planted , /proc/self/cwd , /proc/self/cwd/ , /proc/self/cwd/.. , /proc/thread-self , the doubled-slash spelling from the repository directory, /proc/<pid>/cwd/.. and /dev/fd/N as this process reads them; behind a trusted git it is none, with no PATH to be read against it is none, and with no trusted git at all it is the finding with no program (R32-git-resolve-unit)",
-          g.rel.bin === gA && named(g.rel, gUnder) && g.here.bin === gA && named(g.here, gHere) && named(g.slash, gHere) && named(g.up, gUp) && named(g.thread, gUnder) && named(g.doubled, gUnder) && named(g.pid, gUnder) && named(g.fd, gUnder) &&
+        check("a git behind a per-process PATH entry ahead of the first trusted one is a shadow naming the file, resolved where the lookup would run: /proc/self/cwd/../planted , /proc/self/cwd , /proc/self/cwd/ , /proc/self/cwd/.. , /proc/thread-self and the doubled-slash spelling from the repository directory (string-mapped, no /proc needed); behind a trusted git it is none, with no PATH to be read against it is none, and with no trusted git at all it is the finding with no program (R32-git-resolve-unit)",
+          g.rel.bin === gA && named(g.rel, gUnder) && g.here.bin === gA && named(g.here, gHere) && named(g.slash, gHere) && named(g.up, gUp) && named(g.thread, gUnder) && named(g.doubled, gUnder) &&
           g.absFirst.bin === gA && g.absFirst.shadows.length === 0 && g.only.bin === null && named(g.only, gUnder) && g.noCwd.bin === gA && g.noCwd.shadows.length === 0,
           () => JSON.stringify(g));
+        checkIfOffered("the same for /proc/<pid>/cwd/<path> and /dev/fd/N as this process reads them (the precondition: the planted git is reachable from this process through both) (R33-git-resolve-kernel-unit)",
+          reach(`/proc/${process.pid}/cwd/${relative(process.cwd(), plantedDir)}`) && reach(`/dev/fd/${fdUnder}`), "this platform does not resolve /proc/<pid>/cwd and /dev/fd/N to a directory",
+          named(g.pid, gUnder) && named(g.fd, gUnder), () => JSON.stringify({ pid: g.pid, fd: g.fd }));
         // in process: hubTransport reports each spelling as the gated finding, and every git it (and gitRun) starts is still the real one: the planted git is never run
         const fxG = mk("r32-git-inproc"), fxGw = join(fxG, "work"); execFileSync("git", ["init", "-q", "-b", "main", fxGw], { env: FX_ENV }); const gBox = plantGit(fxG), fdBox = dirFd(fxG);
         const inproc = ["/proc/self/cwd/..", `/proc/${process.pid}/cwd/${relative(process.cwd(), fxG)}`, `/dev/fd/${fdBox}`].map((entry, i) => {
           const logP = join(rroot, `r32-inproc-${i}.log`);
           return withEnvVars({ PATH: `${entry}${delimiter}${process.env.PATH ?? ""}`, R32_LOG: logP }, () => inCleanEnv(() => ({ entry, t: hubTransport(fxGw), run: gitRun(fxGw, ["rev-parse", "--git-dir"]), prog: gitProgram(), ran: (readIfPresent(logP) || "") !== "" }), cleanOfTrust));
         });
-        check("hubTransport turns a git planted behind /proc/self/cwd/.. , /proc/<pid>/cwd/<path> or /dev/fd/N into a gated problem naming it, and the git it and gitRun start is still the real one by an absolute path: the planted one is never run (R32-git-resolve-gated)",
-          inproc.every((x) => x.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && x.run.ok === true && isAbsolute(x.prog) && x.prog !== gBox && x.ran === false),
-          () => JSON.stringify(inproc.map((x) => ({ entry: x.entry, problems: x.t.problems.map((p) => p.slice(0, 120)), ok: x.run.ok, prog: x.prog, ran: x.ran }))));
+        const gated = (x) => x.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && x.run.ok === true && isAbsolute(x.prog) && x.prog !== gBox && x.ran === false;
+        const gatedDetail = (xs) => () => JSON.stringify(xs.map((x) => ({ entry: x.entry, problems: x.t.problems.map((p) => p.slice(0, 120)), ok: x.run.ok, prog: x.prog, ran: x.ran })));
+        check("hubTransport turns a git planted behind /proc/self/cwd/.. into a gated problem naming it, and the git it and gitRun start is still the real one by an absolute path: the planted one is never run (R32-git-resolve-gated)", gated(inproc[0]), gatedDetail([inproc[0]]));
+        checkIfOffered("the same for /proc/<pid>/cwd/<path> and /dev/fd/N (the precondition: the planted git is reachable from this process through both) (R33-git-resolve-kernel-gated)",
+          reach(`/proc/${process.pid}/cwd/${relative(process.cwd(), fxG)}`) && reach(`/dev/fd/${fdBox}`), "this platform does not resolve /proc/<pid>/cwd and /dev/fd/N to a directory", gated(inproc[1]) && gated(inproc[2]), gatedDetail([inproc[1], inproc[2]]));
         // (4) the helper scan: the same entries are read in the repository directory and in the listing's, like `../planted` (round 30)
         const execNone = mk("r32-exec-none");
         const both = (name) => { const t = mk(`r32-${name}`), tmpd = join(t, "tmpdir"), iso = join(tmpd, "loop-state-ls-fixed"), repo2 = join(t, "repo"); mkdirSync(tmpd); mkdirSync(iso); mkdirSync(repo2); return { t, tmpd, iso, repo2 }; };
@@ -4666,29 +4696,34 @@ exit 1
         const bFd = both("both-fd"), fdHelper = dirFd(bFd.t), fFd = planth(bFd.t);
         const bNone = both("both-none");
         const hRel = scanBoth(asPath("/proc/self/cwd/../planted", absA), bRel), hDot = scanBoth(asPath("/proc/self/cwd", absA), bDot), hFd = scanBoth(asPath(`/dev/fd/${fdHelper}`, absA), bFd);
-        const hNone = scanBoth(asPath("/proc/self/cwd/..", "/proc/self/cwd/../planted", "/dev/fd/9999", "/proc/self/nonesuch", absA), bNone);
-        const hNoListing = scanBoth(asPath("/proc/self/cwd/../planted", `/dev/fd/${fdHelper}`, absA), bNone, { listingDir: null });
-        check("a per-process PATH entry is scanned for git-remote helpers like a relative one: /proc/self/cwd/../planted and /proc/self/cwd are read against the repository directory and the listing's, /dev/fd/N as this process reads it; nothing planted is no problem and no note; with no listing directory the cwd-relative form is a note naming the entry and the /dev/fd one is not (R32-path-helper-unit)",
-          hasOne(hRel, fRel) && hasOne(hDot, fDot) && hasOne(hFd, fFd) && hNone.problems.length === 0 && hNone.notes.length === 0 && hNoListing.notes.length === 1 && hNoListing.notes[0].includes("\"/proc/self/cwd/../planted\"") && hNoListing.problems.length === 1 && hNoListing.problems[0].includes(`: ${fFd} (`),
-          () => JSON.stringify({ hRel, hDot, hFd, hNone, hNoListing }));
+        const hNone = scanBoth(asPath("/proc/self/cwd/..", "/proc/self/cwd/../planted", absA), bNone), hNoneK = scanBoth(asPath("/dev/fd/9999", "/proc/self/nonesuch", absA), bNone);
+        const hNoListing = scanBoth(asPath("/proc/self/cwd/../planted", absA), bNone, { listingDir: null }), hNoListingFd = scanBoth(asPath("/proc/self/cwd/../planted", `/dev/fd/${fdHelper}`, absA), bNone, { listingDir: null });
+        check("a per-process PATH entry is scanned for git-remote helpers like a relative one: /proc/self/cwd/../planted and /proc/self/cwd are read against the repository directory and the listing's (string-mapped, no /proc needed); nothing planted is no problem and no note; with no listing directory the cwd-relative form is a note naming the entry (R32-path-helper-unit)",
+          hasOne(hRel, fRel) && hasOne(hDot, fDot) && hNone.problems.length === 0 && hNone.notes.length === 0 && hNoListing.notes.length === 1 && hNoListing.notes[0].includes("\"/proc/self/cwd/../planted\"") && hNoListing.problems.length === 0,
+          () => JSON.stringify({ hRel, hDot, hNone, hNoListing }));
+        checkIfOffered("a /dev/fd/N PATH entry is scanned as this process reads it (the precondition: the helper planted in that directory is reachable through /dev/fd/N): found; an entry that names nothing (/dev/fd/9999, /proc/self/nonesuch) is no problem and no note; with no listing directory the /dev/fd one raises no note of its own (R33-path-helper-kernel-unit)",
+          (() => { try { return statSync(`/dev/fd/${fdHelper}/git-remote-https`).isFile(); } catch { return false; } })(), "this platform does not resolve /dev/fd/N to a directory",
+          hasOne(hFd, fFd) && hNoneK.problems.length === 0 && hNoneK.notes.length === 0 && hNoListingFd.notes.length === 1 && hNoListingFd.problems.length === 1 && hNoListingFd.problems[0].includes(`: ${fFd} (`),
+          () => JSON.stringify({ hFd, hNoneK, hNoListingFd }));
         // (5) the whole script (the Opus-p4 shape): TMPDIR = the fixture's directory, a git planted there that answers the Hub listing with one of its own, found through the per-process entry, stock git behind it.
         // The planted git is never run (its marker stays empty), the transport is not the green row, the listing is not read, and the check exits 1 on the gated row naming that file.
         const e2eCase = (tag, entryOf, runOpts = {}) => {
           const fx = mkLikeUe(`r32-${tag}`), box = dirname(fx.w), dirX = join(box, `r32${tag}`); mkdirSync(dirX); giveCoverage(fx);
           const log = join(rroot, `r32-${tag}.log`); writeFileSync(log, "");
           writeFileSync(join(dirX, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R32_LOG\"\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then /bin/cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R32_NEXT\" \"$@\"\n", { mode: 0o755 });
-          const run = wholeScript(fx, `r32-${tag}`, { ...cleanOfTrust, TMPDIR: box, PATH: [entryOf(dirX), fakeBin, process.env.PATH ?? ""].join(delimiter), R32_LOG: log, R32_NEXT: realGit }, { timeout: 120000, ...runOpts(dirX) });
+          const run = wholeScript(fx, `r32-${tag}`, { ...cleanOfTrust, TMPDIR: box, PATH: [entryOf(dirX, fx.w), fakeBin, process.env.PATH ?? ""].join(delimiter), R32_LOG: log, R32_NEXT: realGit }, { timeout: 120000, ...runOpts(dirX) });
           const shown = join(realpathSync(box), `r32${tag}`, "git");
           const ok = run.error === null && run.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${esc(shown)}`).test(run.out) && !/✓ Review Hub transport/.test(run.out) && !run.listed &&
             /Review coverage\s+\d+ of \d+ surfaces read/.test(run.out) && (readIfPresent(log) || "") === "";
           return { ok, detail: () => JSON.stringify({ status: run.status, listed: run.listed, marker: (readIfPresent(log) || "").split("\n").slice(0, 3), rows: run.out.split("\n").filter((l) => /Review Hub|unpushed/.test(l)).slice(0, 4) }) };
         };
         const eCwd = e2eCase("cwd", () => "/proc/self/cwd/../r32cwd", () => ({}));
-        const ePid = e2eCase("pid", (dirX) => `/proc/${process.pid}/cwd/${relative(process.cwd(), dirX)}`, () => ({}));
-        let eFd; { let fdE2e = null; try { eFd = e2eCase("fd", () => "/dev/fd/3", (dirX) => { fdE2e = openSync(dirX, "r"); return { stdio: ["pipe", "pipe", "pipe", fdE2e] }; }); } finally { if (fdE2e !== null) closeSync(fdE2e); } }
+        const offeredPid = reach(viaPid), offeredFd = reach(viaFd); // (round 33: a platform that cannot resolve them has no planted git to find, so these two are not run there at all)
+        const ePid = offeredPid ? e2eCase("pid", (dirX) => `/proc/${process.pid}/cwd/${relative(process.cwd(), dirX)}`, () => ({})) : null;
+        let eFd = null; if (offeredFd) { let fdE2e = null; try { eFd = e2eCase("fd", () => "/dev/fd/3", (dirX) => { fdE2e = openSync(dirX, "r"); return { stdio: ["pipe", "pipe", "pipe", fdE2e] }; }); } finally { if (fdE2e !== null) closeSync(fdE2e); } }
         check("a git planted behind `/proc/self/cwd/../r32cwd` (the Opus-p4 shape: TMPDIR = the fixture's directory, the planted git answers the Hub listing with its own), stock git behind it: the whole check exits 1 on a gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R32-cwd-e2e)", eCwd.ok, eCwd.detail);
-        check("the same through `/proc/<pid>/cwd/<path>` (the pid of the self-test, which any process can read) (R32-pid-e2e)", ePid.ok, ePid.detail);
-        check("the same through `/dev/fd/3`, a directory descriptor the check inherited from its parent (R32-fd-e2e)", eFd.ok, eFd.detail);
+        checkIfOffered("the same through `/proc/<pid>/cwd/<path>` (the pid of the self-test, which any process can read; the precondition: /proc/<pid>/cwd resolves to a directory here) (R32-pid-e2e)", offeredPid, "this platform does not resolve /proc/<pid>/cwd to a directory", ePid !== null && ePid.ok, ePid && ePid.detail);
+        checkIfOffered("the same through `/dev/fd/3`, a directory descriptor the check inherited from its parent (the precondition: /dev/fd/N resolves to a directory here) (R32-fd-e2e)", offeredFd, "this platform does not resolve /dev/fd/N to a directory", eFd !== null && eFd.ok, eFd && eFd.detail);
         // (6) the restore at the call site of section 4b: the process's PATH after the whole run is byte-identical to what it was handed (an unset one stays unset), seen from an exit hook loaded into the checked process only
         const pre = join(rroot, "r32-pathout.cjs");
         writeFileSync(pre, "const fs = require(\"node:fs\");\nprocess.on(\"exit\", () => { try { fs.writeFileSync(process.env.R32_PATHOUT, JSON.stringify({ has: \"PATH\" in process.env, path: process.env.PATH ?? null })); } catch { /* the case then fails on the missing file */ } });\n");
@@ -4707,6 +4742,34 @@ exit 1
         check("the header states the per-process rule and the trust boundary (an absolute entry is trusted wherever it points), the round-26 'not covered' sentence is scoped to the key audit and says the module does get the absolute PATH entries, the PATH entry lists all go through isTrustedAbsoluteEntry (no `.filter((e) => isAbsolute(e))` is left), and the restore is a finally at the call site (R32-audit-scope)",
           prodText.includes("WHAT \"ABSOLUTE\" MEANS HERE (round 32") && prodText.includes("isTrustedAbsoluteEntry") && prodText.includes("trusted wherever it points") && prodText.includes("Not covered by the KEY audit above") && !prodText.includes("Not covered, and said so:") &&
           prodText.includes("They DO get the absolute PATH entries only") && !/filter\(\(e\) => isAbsolute\(e\)\)/.test(prodText) && prodText.includes("} finally {\n  restoreCoveragePath();\n}"));
+        // ══ ROUND 33 ══ Review round 32. `..` is not lexical either: posix.normalize collapses `/dev//fd/../cwd/../x` to `/dev/x` without following anything, and the kernel follows the /dev/fd link first, so the entry reads as the parent of the
+        // working directory of whichever process looks. Round 32 compared the raw spelling and the normalised one and let `/dev//fd/../cwd/../x`, `/dev/./fd/../cwd/../x`, `/tmp/../dev/fd/../cwd/../x` and `/var/run/../proc/self/cwd/../x` through
+        // (reviewer's Opus-p4 fixture: exit 0, a green transport row, 31 planted-git calls each carrying gitRun's argv). An absolute entry with any `..` segment is now untrusted.
+        const dotted = mk("r33-dotted"), dottedA = join(dotted, "a"), dottedP = join(dotted, "planted"); mkdirSync(dottedA); mkdirSync(dottedP); const gDotted = plantGit(dottedP);
+        const dotdotEntries = [`${dottedA}/../planted`, `${dotted}/../r33-dotted/planted`, "/tmp/x/../y", "/usr/bin/..", "/..", "/a/b/../../c", "/tmp//../x", "/tmp/./../x", "/usr/bin/../bin/",
+          "/dev//fd/../cwd/../xx", "/dev/./fd/../cwd/../xx", "/tmp/../dev/fd/../cwd/../xx", "/var/run/../proc/self/cwd/../xx"];
+        const dotdotWrong = dotdotEntries.filter((e) => isTrustedAbsoluteEntry(e));
+        const dotdotLists = withEnvVars({ PATH: asPath(absA, `${dottedA}/../planted`, "/tmp/x/../y", absB) }, () => ({ env: gitEnv().PATH, prog: gitProgram(), inside: (() => { const back = absolutePathOnly(), seen = process.env.PATH; back(); return seen; })() }));
+        const dotdotGit = gitOnPath(asPath(`${dottedA}/../planted`, absA), repoDir), dotdotNone = gitOnPath(`${dottedA}/../planted`, null), dotdotBehind = gitOnPath(asPath(absA, `${dottedA}/../planted`), repoDir);
+        const bDd = both("both-dotdot"); mkdirSync(join(bDd.t, "hplanted")); const fDd = planth(join(bDd.t, "hplanted")), hDd = scanBoth(asPath(`${bDd.repo2}/../hplanted`, absA), bDd);
+        check("an absolute PATH entry with a `..` segment, however it collapses (a plain `/tmp/x/../y`, `//` or `/./` in front of it, a `..` that steps out of /dev/fd or /var/run), is untrusted: handed to no process, not where the git is found, a git behind it ahead of the first trusted one is a shadow naming the file as the kernel resolves it (behind a trusted git it is none), and a helper behind it is still found by the helper scan (R33-dotdot-unit)",
+          dotdotWrong.length === 0 && dotdotLists.env === asPath(absA, absB) && dotdotLists.inside === asPath(absA, absB) && dotdotLists.prog === gA && dotdotGit.bin === gA && named(dotdotGit, gDotted) &&
+          dotdotNone.bin === null && dotdotNone.shadows.length === 0 && dotdotBehind.bin === gA && dotdotBehind.shadows.length === 0 && hasOne(hDd, fDd),
+          () => JSON.stringify({ dotdotWrong, dotdotLists, dotdotGit, dotdotNone, dotdotBehind, hDd }));
+        // the whole script, a plain absolute entry with `..` (no /proc, no /dev/fd: the shape every platform has) and the same through the /dev/fd link (the reviewer's spelling, where the kernel offers it)
+        const eDotdot = e2eCase("dotdot", (dirX, wdir) => `${wdir}/../${basename(dirX)}`, () => ({}));
+        const offeredDd = reach(`/dev//fd/../cwd/${relative(process.cwd(), planted)}`);
+        const eDd = offeredDd ? e2eCase("dd", () => "/dev//fd/../cwd/../r32dd", () => ({})) : null;
+        check("a git planted behind `<repository>/../r32dotdot` (an absolute entry with a `..`, stock git behind it): the whole check exits 1 on the gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R33-dotdot-e2e)", eDotdot.ok, eDotdot.detail);
+        checkIfOffered("the same through `/dev//fd/../cwd/../r32dd` (the reviewer's spelling: /dev/fd is a link to /proc/self/fd, so the `..` steps to /proc/self and `cwd/..` is the parent of the repository; posix.normalize reads it as /dev/r32dd; the precondition: the kernel resolves it from this process) (R33-dev-fd-dotdot-e2e)",
+          offeredDd, "this platform does not resolve /dev//fd/../cwd/.. to the working directory's parent", eDd !== null && eDd.ok, eDd && eDd.detail);
+        const sumSk = selfTestSummaryLines([["case one", true], ["case two", false]], [["case three", "a cap git did not honour"]], [["case four", "no /proc here"]]);
+        check("the self-test's summary also names every SKIPPED case (one with nothing to assert without a platform behaviour: it ran nothing, so it is in neither number of the verdict, and it says it is not a pass), after the failed cases and the preconditions and before the verdict; with none skipped the lines are what they were (R33-skip-summary)",
+          sumSk.join("\n") === "FAILED: case two\nprecondition not on offer on this platform: a cap git did not honour (case three)\nself-test: 1 case(s) with a precondition not reproducible on this platform, listed above; each still asserted the guarded answer\nSKIPPED, not run, not a pass: no /proc here (case four)\nself-test: 1 case(s) SKIPPED, listed above; a skip asserted nothing and is in neither number below\nself-test FAILED (1/2)" &&
+          selfTestSummaryLines([["a", true]], [], []).join("\n") === "self-test passed (1/1)" && selfTestSummaryLines([["a", true]], []).join("\n") === "self-test passed (1/1)");
+        check("the header says what the per-process rule guarantees and what it does not: an absolute entry with a `..` segment is untrusted (the kernel follows a symlink such as /dev/fd or /var/run before it applies the `..` after it, so a lexical collapse is not where it reads), the sentence that claimed more is gone, and an absolute symlink is still trusted wherever it points (R33-audit-scope)",
+          prodText.includes("ROUND 33") && prodText.includes("WHAT THE RULE GUARANTEES") && prodText.includes("WHAT IT DOES NOT") && prodText.includes("no `..` segment") && prodText.includes("before it applies the `..`") &&
+          !prodText.includes("does not name a place the kernel resolves PER PROCESS") && !prodText.includes("The rule is compared on the entry AS WRITTEN and again on its lexically normalised form") && prodText.includes("trusted wherever it points") && prodText.includes("isTrustedAbsoluteEntry"));
       } finally { for (const fd of fds) { try { closeSync(fd); } catch { /* already closed */ } } }
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
@@ -4821,6 +4884,6 @@ exit 1
   const failed = failedCases.length;
   // THE SUMMARY, last, so a short tail of the output names what failed (round 26: the Mac job's tail was the last thirty lines of a flood of git hints and named nothing). One line per failed case, one per
   // precondition the platform did not offer, then the verdict.
-  for (const l of selfTestSummaryLines(checks, notOnOffer)) console.log(l);
+  for (const l of selfTestSummaryLines(checks, notOnOffer, skipped)) console.log(l);
   return failed ? 1 : 0;
 }

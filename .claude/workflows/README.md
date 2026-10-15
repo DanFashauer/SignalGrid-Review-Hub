@@ -124,10 +124,13 @@ Invoke with the Workflow tool, `name: "signalgrid-review-wave"`, and this
 | `alpha` | yes | The `origin/SignalGrid_Alpha` sha the review is measured against. |
 | `stamp` | yes | A label for the wave, folded into the log line and the returned object. |
 
-It returns `{ stamp, results: [{ pr, round, review, refute }] }`; a reviewer
-that died returns `review: null` and the script logs it as DEAD rather than
-filtering it away (DR-054). The journal under the run's transcript directory
-holds every agent's raw return value.
+It returns `{ stamp, results: [{ pr, round, review, refute }], states }`; a
+reviewer that died returns `review: null` and a routed refuter that died returns
+`refute: null`, and the script logs each as DEAD (and any `blocked: true` from
+either as BLOCKED) rather than filtering it away (DR-054). `states` carries the
+same call per PR (`review` / `refute`: `ok`, `DEAD`, `BLOCKED`, `not routed`,
+`not run`), and anything but `ok` or `not routed` is not landable. The journal
+under the run's transcript directory holds every agent's raw return value.
 
 ### helpers/
 
@@ -135,13 +138,20 @@ Session-independent copies of the two scripts the coordinator runs around the
 wave, kept in the tree because a container rebuild wiped the scratchpad copies
 on 2026-10-08 and they had to be rewritten from memory:
 
-- `helpers/review-wave-verdict.py <journal.jsonl> <wave> [out_dir]` — turns
-  the wave's journal into one `c<PR>w<wave>.md` verdict comment per PR: the
-  reviewer's verdict, the refuter's upheld/refuted call (the refuter's
+- `helpers/review-wave-verdict.py <journal.jsonl> <wave> [out_dir] [--prs 1444,1445]`
+  — turns the wave's journal into one `c<PR>w<wave>.md` verdict comment per PR:
+  the reviewer's verdict, the refuter's upheld/refuted call (the refuter's
   counter-verdict wins when it refutes), findings with the command and exit
-  code behind each, and the "Next" paragraph for that verdict. It replaces
-  `@claude` with `@ claude` so a posted comment never summons the GitHub
-  workflow. Run it with `python3 -I`; the coordinator posts the file with
+  code behind each, and the "Next" paragraph for that verdict. It fails closed
+  (DR-054): a reviewer or refuter that is missing, null, dead, blocked or
+  schema-invalid makes the verdict `blocked`, never `ship` — the file names the
+  agent and why, never carries the DR-037 landing sentence, and the exit code is
+  2; a ship on a SAFETY_MACHINERY, DECISION_PATH or OWNER_RESERVED tier with no
+  refute is blocked too. `--prs` lists the PRs the wave was given, so one whose
+  reviewer never started still gets a blocked row. `--self-test` runs its
+  cases on synthetic journals. It replaces `@claude` with `@ claude` so a
+  posted comment never summons the GitHub workflow. Run it with `python3 -I`;
+  the coordinator posts the file with
   `gh api -X POST …/issues/<PR>/comments -F body=@<file>`.
 - `helpers/land-first-half.sh <PR> <branch> <expected-head>` — the first half
   of a DR-037 landing for a `ship` verdict, used when the `land-branch`
@@ -149,8 +159,11 @@ on 2026-10-08 and they had to be rewritten from memory:
   detach a worktree at `<scratch>/wt-<PR>`, merge `origin/SignalGrid_Alpha`,
   regenerate the sync manifest and the coverage page on a clean index (each as
   its own commit), run preflight then breadth into `<scratch>/land-<PR>-*.log`,
-  and push `HEAD:refs/heads/<branch>` ONLY when both logs carry their literal
-  PASSED line. Needs `SIGNALGRID_SCRATCH` (absolute scratchpad path) and
+  and push `HEAD:refs/heads/<branch>` ONLY when both exit 0 (their captured
+  exit codes decide it, never what a log says). It runs under `set -euo
+  pipefail`, refuses a worktree that is not clean before anything is checked
+  out or `git add -A` runs (exit 9), and stops with exit 10 when a generator
+  fails. Needs `SIGNALGRID_SCRATCH` (absolute scratchpad path) and
   optionally `SIGNALGRID_REPO`. The second half — re-read the head, wait for
   the gating check on it, merge with the full sha, post the landing record —
   stays with the coordinator; this script never merges.

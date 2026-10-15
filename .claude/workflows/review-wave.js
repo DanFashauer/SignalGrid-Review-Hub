@@ -68,4 +68,12 @@ const results = await pipeline(
 )
 const dead = prs.filter((p, i) => !results[i] || !results[i].review)
 if (dead.length) log(`DEAD reviewers (no result): ${dead.map((p) => '#' + p.pr).join(' ')}`)
-return { stamp, results }
+// DR-054: a refuter that was routed and returned nothing, or either agent reporting blocked=true, is surfaced exactly as a dead reviewer is, and passed on in `states` (the verdict helper turns any of them into `blocked`, never ship).
+const states = prs.map((p, i) => {
+  const x = results[i] || {}
+  const review = !x.review ? 'DEAD' : x.review.blocked ? 'BLOCKED' : 'ok'
+  const refute = !p.refute ? 'not routed' : !x.review ? 'not run' : !x.refute ? 'DEAD' : x.refute.blocked ? 'BLOCKED' : 'ok'
+  return { pr: p.pr, round: p.round, review, refute }
+})
+for (const s of states) if (s.review !== 'ok' || !['ok', 'not routed'].includes(s.refute)) log(`#${s.pr} r${s.round}: reviewer ${s.review}, refuter ${s.refute} - NOT landable, the verdict is blocked`)
+return { stamp, results, states }

@@ -112,7 +112,11 @@
 //     it flags only when the call TEXT carries a good class, and `Object.create(null)` filled by later
 //     assignment is silent; `new Map(…)` is silent (an `Object.entries(x).forEach(([k, v]) => { T[k] = v })` write flags). A nested sub-map is followed at every depth: used as a value (alias, call
 //     argument, `Object.values/entries`, destructure, spread of a map that holds one) it escapes; only indexing it further is a read.
-//     Depth caps FAIL OPEN: a const alias chain of 7+ hops and a chain of 9+ nested components are not
+//     A const is judged by what it is BOUND to, recursively (`const X = pick()` is unreadable, a const bound to
+//     a literal is readable); a getter on an absent-key entry must return a readable value on EVERY return path.
+//     A name rebound by a hoisted `var`, a `switch` case-clause const, or a binding named `undefined` is unreadable.
+//     A template with only a substitution (`${pick()}`) is read as non-good, like `text-${c}-400`.
+//     Depth caps FAIL OPEN: a const alias chain of 7+ hops and a chain of 10+ nested components declared leaf-first (a root-first chain propagates in one pass) are not
 //     followed. A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
 //     read (`T.x = pick()`, a parameter, an import, `Object.assign(T, { x: pick() })`) is treated as possibly good-state; a spread this
 //     cannot resolve (`...(c ? BASE : {})`, `...getBase()`, `...cfg.base`, a `let` source) is treated as carrying a possibly good-state entry. A map's WRITES are a whitelist:
@@ -798,10 +802,25 @@ function analyzeSourceFile(relPath, text) {
         scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
     return false;
   };
+  const declaresVar = (scope, name) => { // does `var <name>` appear in this scope (not inside a nested function)?
+    let found = false;
+    const v = (n) => {
+      if (found) return;
+      if (n !== scope && ts.isFunctionLike(n)) return;
+      if (ts.isVariableDeclarationList(n) && !(n.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) &&
+          n.declarations.some((d) => ts.isIdentifier(d.name) && d.name.text === name)) { found = true; return; }
+      ts.forEachChild(n, v);
+    };
+    v(scope);
+    return found;
+  };
   const resolveConstInit = (id, accept = RESOLVABLE_INIT) => {
     for (let cur = id.parent; cur; cur = cur.parent) {
       if (bindsNameOpaquely(cur, id.text)) return null;
-      const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements : null;
+      // a `var X` anywhere in this function / module scope (hoisted, even inside an `if`) rebinds the name
+      if ((ts.isFunctionLike(cur) || ts.isSourceFile(cur)) && declaresVar(cur, id.text)) return null;
+      const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements
+        : ts.isCaseBlock(cur) ? cur.clauses.flatMap((cl) => [...cl.statements]) : null; // a `switch` case clause scopes its declarations
       if (!stmts) continue;
       for (const st of stmts) {
         if (!ts.isVariableStatement(st)) continue;
@@ -865,6 +884,16 @@ function analyzeSourceFile(relPath, text) {
     return null;
   };
   // A value this can judge: a literal, a const it resolves, or a non-class constant. Anything else (a call, a parameter, a member read) may be a good class.
+  const undefinedShadowed = (() => { // a parameter / variable / binding NAMED `undefined` makes the identifier unreadable
+    let hit = false;
+    const v = (n) => {
+      if (hit) return;
+      if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name) && n.name.text === "undefined") { hit = true; return; }
+      ts.forEachChild(n, v);
+    };
+    v(sf);
+    return hit;
+  })();
   const readableValue = (e, seen = new Set()) => {
     const rv = unwrapExpr(e);
     if (ts.isIdentifier(rv) && rv.text !== "undefined") { // a const is judged by what it is bound to, not by being a const
@@ -874,7 +903,7 @@ function analyzeSourceFile(relPath, text) {
       return readableValue(ci, seen);
     }
     return ts.isStringLiteralLike(rv) || ts.isTemplateExpression(rv) || ts.isNumericLiteral(rv) || rv.kind === K.NullKeyword || rv.kind === K.TrueKeyword ||
-      rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && rv.text === "undefined");
+      rv.kind === K.FalseKeyword || ts.isVoidExpression(rv) || (ts.isIdentifier(rv) && rv.text === "undefined" && !undefinedShadowed);
   };
   const ABSENT_ENTRY_KEYS = new Set(["undefined", "null", "", "[object object]", "__proto__"]);
   // Entries of a map: all of them (`lit === null`, a dynamic key) or the one literal key. A shorthand
@@ -894,6 +923,7 @@ function analyzeSourceFile(relPath, text) {
       if (!(lit === null || key === null || key === lit)) continue;
       // an absent-key (`undefined`, `null`, `""`, `__proto__`) or unreadable-key entry whose VALUE this cannot read may be a good class
       if (ts.isPropertyAssignment(p) && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase())) && !readableValue(p.initializer)) escapedMapRefs.add(p.initializer);
+      if (ts.isShorthandPropertyAssignment(p) && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase())) && !readableValue(p.name)) escapedMapRefs.add(p.name); // `{ __proto__ }` over a const this cannot read
       if (ts.isGetAccessor(p) && p.body && (key === null || ABSENT_ENTRY_KEYS.has(key.toLowerCase()))) { // a getter on an absent key: what it returns must be readable
         const rets = [];
         const rv = (n) => { if (ts.isReturnStatement(n)) { if (n.expression) rets.push(n.expression); return; } if (ts.isFunctionLike(n)) return; ts.forEachChild(n, rv); };
@@ -2371,6 +2401,14 @@ BUG_R6.push(
   ["map literal: getter on null returning cfg.cls", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get null() { return cfg.cls; } };`, "T[q.data?.s] ?? T.default")],
   ["const alias chain of 6 hops still resolves the map", mkMap(`const A0 = { ok: "${EMER}" }; const A1 = A0; const A2 = A1; const A3 = A2; const A4 = A3; const A5 = A4; const A6 = A5;`, "A6.ok")],
   ["map write: T.undefined = A with a cyclic const chain", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const A = B; const B = A; T.undefined = A;`, "T[q.data?.s] ?? T.default")],
+  ["getter on an unreadable computed key returning pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get [kfn()]() { return pick(); } };`, "T[q.data?.s] ?? T.default")],
+  ["getter on undefined with a readable first return and an unreadable second", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { if (c) { return "text-slate-500"; } return cfg.cls; } };`, "T[q.data?.s] ?? T.default")],
+  ["getter on UNDEFINED hit by a toUpperCase key", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get UNDEFINED() { return pick(); } };`, "T[String(q.data?.s).toUpperCase()] ?? T.default")],
+  ["name rebound by a hoisted var inside an if", mkMap(`const X = "text-slate-500"; if (c) { var X = pick(); } const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
+  ["name bound by a switch case-clause const", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function f() { switch (k) { case 1: const X = pick(); T.undefined = X; } }`, "T[q.data?.s] ?? T.default")],
+  ["T.undefined = undefined with a parameter named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function s(undefined) { T.undefined = undefined; } s(pick());`, "T[q.data?.s] ?? T.default")],
+  ["map literal value undefined with a binding named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: undefined }; function Page2(undefined) { return undefined; }`, "T[q.data?.s] ?? T.default")],
+  ["shorthand { __proto__ } over a const this cannot read", mkMap(`const __proto__ = pick(); const T = { ok: "text-red-400", default: "text-slate-400", __proto__ };`, "T[q.data?.s] ?? T.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2397,8 +2435,21 @@ OK_R6.push(
   ["control: absent-key entry bound through a const to a readable literal", mkMap(`const X = "text-slate-500"; const Y = X; const T = { ok: "text-red-400", default: "text-slate-400", undefined: Y };`, "T[q.data?.s] ?? T.default")],
   ["control: writes of true / false / undefined / a numeric const", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const N = 3; T.undefined = true; T.null = false; T[\"\"] = undefined; T.undefined = N;`, "T[q.data?.s] ?? T.default")],
   ["control: getter on undefined returning a readable literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { return "text-slate-500"; } };`, "T[q.data?.s] ?? T.default")],
+  ["twin: getter on an unreadable computed key returning a readable literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get [kfn()]() { return "text-slate-500"; } };`, "T[q.data?.s] ?? T.default")],
+  ["twin: getter with two readable returns", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { if (c) { return "text-slate-500"; } return "text-slate-400"; } };`, "T[q.data?.s] ?? T.default")],
+  ["twin: getter on UNDEFINED returning a readable literal", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get UNDEFINED() { return "text-slate-500"; } };`, "T[String(q.data?.s).toUpperCase()] ?? T.default")],
+  ["twin: a var-free module const bound to a literal stays readable", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
+  ["a const alias chain of 7 hops FAILS OPEN (documented limit)", mkMap(`const A0 = { ok: "${EMER}" }; const A1 = A0; const A2 = A1; const A3 = A2; const A4 = A3; const A5 = A4; const A6 = A5; const A7 = A6;`, "A7.ok")],
+  ["a template with only a substitution is read as non-good (documented)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: \`\${pick()}\` };`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
+
+
+const compChain = (n) => propsFixture(Array.from({ length: n }, (_, i) => i < n - 1
+  ? `function C${i + 1}(props) { return <C${i + 2} items={props.items} />; }`
+  : `function C${i + 1}({ items }) { return ${EMERALD_ITEMS}; }`).reverse().join("\n"), "<C1 items={items} />"); // declared leaf-first: each pass of the fixpoint moves the taint one hop
+BUG_R6.push(["component chain of 9, declared leaf-first, still follows the props", compChain(9)]);
+OK_R6.push(["component chain of 10, declared leaf-first, FAILS OPEN (documented limit)", compChain(10)]);
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {

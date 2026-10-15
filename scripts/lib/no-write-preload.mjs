@@ -1,4 +1,4 @@
-// A Node preload (`node --import <this file> …`) for children the sharding gate spawns: the child may
+// A Node preload (`node --import <this file> …`, or `--import=<this file>` in NODE_OPTIONS as the gate does) for children the sharding gate spawns: the child may
 // READ the repository and print, and nothing else. Any attempt to write, rename, remove, create or
 // re-permission something under the repository, to start another process or thread, or to reach the
 // runtime's own bindings, throws, after one marker line on stderr that the gate also fails on, so a
@@ -21,10 +21,13 @@
 // `process._linkedBinding` (the runtime's own `fs` and `spawn_sync`), `process.execve` and
 // `process.dlopen` (another program or a native addon in this process), `child_process.ChildProcess`
 // (constructable on its own), `module.register` (the loader-hooks thread is a worker that never loaded this
-// file), a unix socket bound inside the repository, `process.report.writeReport`, `v8.writeHeapSnapshot` and
+// file), a unix socket bound inside the repository, `process.report.writeReport` and every `process.report` setting (the runtime writes
+// `report.*.json` into the working directory on a signal or an uncaught exception once `reportOnSignal` or `reportOnUncaughtException`
+// is set), `v8.writeHeapSnapshot` and
 // the v8 and trace_events switches that make the runtime write a file on its own, and `wasi.WASI` (a
 // WebAssembly module with the repository pre-opened) and `sqlite.DatabaseSync` (opening a database creates its file). Paths are read in every spelling the fs functions
-// accept: a string, any Uint8Array, a URL, and a plain object shaped like one. That is a list of the routes
+// accept: a string, any Uint8Array, a URL, and a plain object shaped like one, resolved through symlinks that point at something that does
+// not exist yet (a dangling link outside the repository whose target is a new file inside it is a write to the repository). That is a list of the routes
 // known, and the tree check in check-mutation-sharding.mjs (`git status` before the first child and
 // after the last) is the net under whatever it does not name.
 //
@@ -40,13 +43,43 @@ import traceEvents from "node:trace_events";
 import v8 from "node:v8";
 import wt from "node:worker_threads";
 import Module, { syncBuiltinESMExports } from "node:module";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const DENIED_MARKER = "NO-WRITE-DENIED";
+// Where a path really lands, whether or not it exists yet. An existing path is `realpath`. One that does not exist is walked a component at a time
+// from the root: a component that is a SYMLINK is followed (a link to something that is missing too, a link to a link, to a depth of MAX_LINK_HOPS),
+// one that is absent is kept as written, and `..` is taken from the real directory reached so far. So `/tmp/link -> <repo>/new-file` lands in the
+// repository, and so do `/tmp/dir-link/new-file` and `/tmp/dir-link/../new-file`. Two shortcuts used to let a write through: resolving only the missing
+// path's DIRECTORY (a dangling link outside the repository whose target is a new file inside it was a way to create that file), and normalising `..`
+// as text before looking (`/tmp/link-to-a-repository-directory/../file` named `/tmp/file`, outside, for a file the system opens inside the repository).
+// A walk that runs past the hop limit (a loop of links) is reported as the repository root: the write would fail with ELOOP anyway, and a path that
+// cannot be placed is treated as inside.
+// `realpath.native` is realpath(3): the JS `realpathSync` normalises `..` as text before it looks, which is the shortcut above. Both are taken now, so
+// the program under test replacing them on `fs` later does not change where a path is judged to land.
+const MAX_LINK_HOPS = 40;
+const realpath = fs.realpathSync.native;
+const readlink = fs.readlinkSync;
+const partsOf = (s) => s.split(sep).filter((part) => part !== "");
 const realish = (p) => {
-  try { return fs.realpathSync(p); } catch { /* does not exist yet: resolve its directory instead */ }
-  try { return resolve(fs.realpathSync(dirname(p)), p.slice(dirname(p).length + 1)); } catch { return p; }
+  try { return realpath(p); } catch { /* absent, or a link to something absent: walk it */ }
+  let rest = partsOf(p.startsWith(sep) ? p : `${process.cwd()}${sep}${p}`);
+  let at = sep;
+  let hops = 0;
+  while (rest.length > 0) {
+    const name = rest[0];
+    rest = rest.slice(1);
+    if (name === ".") continue;
+    if (name === "..") { at = dirname(at); continue; } // `at` holds no link, so its parent is the directory the system would reach
+    const next = join(at, name);
+    let link;
+    try { link = readlink(next); } catch { at = next; continue; } // not a link (a file, a directory, or absent): keep it
+    hops += 1;
+    if (hops > MAX_LINK_HOPS) return ROOT;
+    if (link.startsWith(sep)) at = sep;
+    rest = [...partsOf(link), ...rest];
+  }
+  try { return realpath(at); } catch { return at; }
 };
 const ROOT = realish(resolve(dirname(fileURLToPath(import.meta.url)), "../.."));
 const ALLOW = (process.env.NOWRITE_ALLOW ?? "").split(":").filter((x) => x !== "").map((x) => realish(resolve(x)));
@@ -66,7 +99,7 @@ const pathOf = (p) => {
 export const underRepo = (p) => {
   const s = pathOf(p);
   if (s === undefined) return false;
-  const abs = realish(resolve(s));
+  const abs = realish(s);
   return inside(abs, ROOT) && !ALLOW.some((a) => inside(abs, a));
 };
 const deny = (what, p) => {
@@ -163,7 +196,19 @@ forbid(v8, "v8", "setHeapSnapshotNearHeapLimit");
 forbid(v8, "v8", "setFlagsFromString");
 forbid(traceEvents, "trace_events", "createTracing");
 forbid(Module, "module", "register");
-if (process.report) forbid(process.report, "process.report", "writeReport");
+if (process.report) {
+  forbid(process.report, "process.report", "writeReport");
+  // The runtime writes `report.<date>.json` on its own, into `report.directory` (the working directory unless set), when `reportOnSignal`,
+  // `reportOnUncaughtException` or `reportOnFatalError` is on: setting one and raising the signal (or throwing) is a write the functions
+  // above never see. The settings are accessor properties; their setters are refused (a read stays possible), so none of them can be changed.
+  for (const name of Object.getOwnPropertyNames(process.report)) {
+    const descriptor = Object.getOwnPropertyDescriptor(process.report, name);
+    if (typeof descriptor?.set !== "function") continue;
+    const refused = function refused(value) { return deny(`process.report.${name} =`, String(value)); };
+    try { Object.defineProperty(process.report, name, { ...descriptor, set: refused }); } catch { /* checked below */ }
+    if (Object.getOwnPropertyDescriptor(process.report, name)?.set !== refused) throw new Error(`${DENIED_MARKER}: cannot refuse process.report.${name} (the setter cannot be replaced)`);
+  }
+}
 // A unix socket is a file in the directory it is bound in.
 const listen = net.Server.prototype.listen;
 net.Server.prototype.listen = function guardedListen(...args) {

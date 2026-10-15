@@ -2049,7 +2049,10 @@ export function unknownArgs(argv) {
  *  After each unit's sweep main() compares the mutations it wrote with the selector's `swept` for that unit
  *  and fails the sweep (exit 1, a `WRITTEN-vs-PLAN` line) on a difference: a statement between the plan and
  *  the write that skips or re-selects mutations leaves the plan intact, and this count is what sees it. In
- *  `--plan` the placements count in place of writes.
+ *  `--plan` the placements count in place of writes. That count agrees with itself when the selector returns
+ *  nothing (0 planned, 0 written), so each unit's `swept` is also held to `sliceSize(mutationTotal(target),
+ *  target.slice)`, which depends on the target and the slice alone (a `PLAN-vs-SIZE` line, exit 1 before the
+ *  survivor report): a selector that returns an empty or short selection fails it whatever it keyed on.
  *
  *  A count only sees a unit that was started, so the units are accounted for as well: the names this run is to
  *  sweep are computed from the arguments before the loop (`expectedUnitNames`, never from `targets`), each unit that
@@ -2142,6 +2145,7 @@ function main() {
   const zeroMutation = [];
   const baselineFailures = [];
   const writeMismatches = [];
+  const sizeMismatches = [];
   const countedUnits = [];
   const failedBaselineUnits = [];
 
@@ -2188,6 +2192,16 @@ function main() {
     const swept = plan.swept;
     const placedBefore = placements.length;
     let writtenInUnit = 0;
+    // THE ARITHMETIC NET, independent of the selector: how many mutations a slice holds is a function of the target's
+    // mutation count and the slice alone. A selector that returns an empty or short selection, on a time budget or on the
+    // runner's environment, makes the written-vs-plan count below agree with itself (0 written, 0 planned); this one does not.
+    const sized = sliceSize(mutationTotal(target), target.slice);
+    if (plan.swept !== sized) {
+      const line = `${unitName(target)}: selector planned ${plan.swept}, the slice arithmetic says ${sized}`;
+      sizeMismatches.push(line);
+      console.error(`   ✗ PLAN-vs-SIZE ${line}`);
+      process.exitCode = 1;
+    }
     for (const { file, allCount, owned } of plan.files) {
       log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
@@ -2316,6 +2330,12 @@ function main() {
         "resolve) and sweep again. Reporting a kill rate measured through a broken runner is the\n" +
         "exact unfalsifiable-guard defect this file exists to find.",
     );
+    process.exit(1);
+  }
+
+  if (sizeMismatches.length > 0) {
+    console.error("\nMutation guard FAILED — a unit's selection is not the size its slice holds, so the counts above are over a different set than the one the shards were balanced for:\n");
+    for (const m of sizeMismatches) console.error(`  ✗ PLAN-vs-SIZE ${m}`);
     process.exit(1);
   }
 

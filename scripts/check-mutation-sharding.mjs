@@ -37,9 +37,15 @@
  *     d. main()'s text is the second net (comments stripped): the statements that write, count,
  *        run and restore a mutation are pinned to follow the plan stop with nothing between, and
  *        the number of places main() forks on the plan flag, leaves a unit or the run early
- *        (continue, break, return, throw, exit) or touches the list the loop walks is pinned.
+ *        (continue, break, return, throw, exit) or touches the list the loop walks is pinned, and
+ *        every read of the clock, the process (arguments, environment, identity, platform, any
+ *        member) and the machine is counted over the WHOLE file, helpers included, because a skip
+ *        in `selectSliceMutations` or `shardTargets` keyed on a time budget or on an empty
+ *        `process.execArgv` is read by none of main()'s own counts.
  *        At runtime each unit's written count is checked against the selector's own (the one
- *        net no text pin gives), and each UNIT is accounted for: the names a run is to sweep are
+ *        net no text pin gives), the selector's own count against the slice ARITHMETIC (the
+ *        registry's mutation count and the slice: `PLAN-vs-SIZE`, because a selector that
+ *        returns nothing agrees with its own zero), and each UNIT is accounted for: the names a run is to sweep are
  *        computed from its arguments before the loop, every unit that reaches its count prints
  *        `unit-done <unit> written=<n> planned=<m>`, and one that never did is named
  *        `UNIT-SKIPPED` (exit 1). A unit skipped on a time budget, a cost-drift warning or the
@@ -54,13 +60,19 @@
  *
  *     Every child runs under scripts/lib/no-write-preload.mjs (a write, a permission or time
  *     change, a hard link, a spawned process, a worker thread, `process.binding`, `execve` or
- *     `dlopen` under or from the repository throws), `git status --untracked-files=all` and a hash
+ *     `dlopen` under or from the repository throws; a path is judged where it LANDS, through
+ *     symlinks to files that do not exist yet and `..` after a link; every `process.report`
+ *     setting is refused), loaded through NODE_OPTIONS so that the child sees the empty
+ *     `process.execArgv` a CI step gives it, `git status --untracked-files=all` and a hash
  *     of every file it names are compared before the first child and after the last (the whole
  *     tree, with the differing paths named: the preload lists the routes known, this is the net
  *     under the rest), and each child has a time limit that stops the pool at the first hang. The
  *     workflow's sweep step must be exactly one `run:` line whose only expression is
  *     `${{ matrix.shard }}`, with only `name` and `run` on the step and nothing in the job or
- *     before it that could change what runs (every shard would otherwise be a green no-op).
+ *     before it that could change what runs (every shard would otherwise be a green no-op): the
+ *     job holds `name`, `runs-on` (the literal ubuntu-latest), `timeout-minutes`, `strategy`
+ *     (`fail-fast` and a matrix of `shard` alone, a plain list of 0..N-1) and `steps`, with an
+ *     `env` only as a plain mapping of literals, and no `needs`, `container`, `services`, `if`.
  *
  * (2) a target that registers a cost heavier than one unit is in fact sliced;
  *
@@ -282,7 +294,9 @@ check("costDrifted flags a proof that outgrew its registration and stays quiet t
 const GUARD_SRC = readFileSync(join(REPO, "scripts/mutation-guard.mjs"), "utf8");
 // Comments removed, everything else kept, so a pin cannot be satisfied (or tripped) by a comment. Not
 // a parser: it knows quotes, nested template literals and regex literals, which is what main() holds.
-function stripComments(src) {
+// `blankStrings` also blanks the inside of '...' and "..." strings (not of template literals, whose `${}` holds code): the
+// ambient counts below count code, and a word in a message or an allowlist reason is not a read of the clock.
+function stripComments(src, blankStrings = false) {
   let out = "";
   let i = 0;
   let prev = "";
@@ -310,7 +324,7 @@ function stripComments(src) {
     if (c === "'" || c === '"') {
       let j = i + 1;
       while (j < src.length && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
-      out += src.slice(i, j + 1); i = j + 1; prev = c;
+      out += blankStrings ? `${c}${src.slice(i + 1, j).replace(/[^\n]/g, " ")}${src.slice(j, j + 1)}` : src.slice(i, j + 1); i = j + 1; prev = c;
       continue;
     }
     if (c === "`") { out += c; i += 1; scanTemplate(); continue; }
@@ -343,7 +357,8 @@ function stripComments(src) {
 check("fixture: stripComments drops line and block comments and keeps '//', '/*' and quotes inside strings, nested templates and regex literals",
   stripComments("a(); // it's gone\nb(\"//\", '/* kept */'); /* x\ny */ c();").replace(/ +/g, " ") === "a(); \nb(\"//\", '/* kept */'); \n c();"
   && stripComments("`a ${b ? `c // ${d}` : \"//\"} // text` // tail") === "`a ${b ? `c // ${d}` : \"//\"} // text` "
-  && stripComments("s.replace(/^p:/, \"\") // tail\nx = a / b; // t") === "s.replace(/^p:/, \"\") \nx = a / b; ");
+  && stripComments("s.replace(/^p:/, \"\") // tail\nx = a / b; // t") === "s.replace(/^p:/, \"\") \nx = a / b; "
+  && stripComments("a('word', \"word.call()\", `${word.call()} text`, \"it\\\"s\") // tail", true) === "a('    ', \"           \", `${word.call()} text`, \"     \") ");
 // Whitespace is folded to single spaces after the comments go, so a pin reads one statement per
 // string and is neither tripped by a reformat nor satisfied by a comment.
 function mainBody(src) {
@@ -383,7 +398,13 @@ const PIN_BASELINE_FAIL = foldPin("baselineFailures.push(base); failedBaselineUn
 const PIN_UNIT_PROBLEMS = foldPin("const unitProblems = unitAccountingProblems(expectedUnits, countedUnits, failedBaselineUnits); for (const problem of unitProblems) console.error(`✗ ${problem}`); if (unitProblems.length > 0) process.exitCode = 1;");
 const PIN_UNIT_EXIT = foldPin("if (unitProblems.length > 0) { console.error(\"\\nMutation guard FAILED — the sweep did not cover the units it was to cover, so the counts above are over fewer (or other) units than the shards were balanced for:\\n\"); for (const problem of unitProblems) console.error(`  ✗ ${problem}`); process.exit(1); }");
 const PIN_VERDICT = foldPin(`if (verdict === "killed") { killed += 1; } else if (verdict === "hung") { hung += 1; console.log(\`   ⚠ HANG  \${file}:\${mutation.lineNo}  \${mutation.describe}\`); console.log("           (detected, but its CI failure mode is a job timeout rather than a red assertion)"); } else { const entry = isAllowed(mutation); if (entry) { allowed += 1; } else { survivors.push(mutation); console.log(\`   ✗ SURVIVED  \${file}:\${mutation.lineNo}  \${mutation.describe}\`); } }`);
-const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE, PIN_COUNT_INIT, PIN_COUNT_CHECK, PIN_MISMATCH_EXIT, PIN_TARGETS_INIT, PIN_EXPECTED, PIN_LOOP_HEAD, PIN_BASELINE_FAIL, PIN_UNIT_PROBLEMS, PIN_UNIT_EXIT, PIN_VERDICT];
+// The arithmetic net under the selector. Both nets above agree with themselves when the selector returns NOTHING: the unit writes 0 of 0 planned, prints its
+// `unit-done` line, and the unit accounting is satisfied. So each unit's planned count is also held to `sliceSize(mutationTotal(target), target.slice)`, which
+// depends on the target and the slice alone, and a difference ends the run before the survivor report. (A condition on elapsed time at the top of the exported
+// selector that returns an empty selection swept 13 of 475 mutations in a CI-shaped run, every later unit printing `written=0 planned=0`, rc 0.)
+const PIN_SIZE_CHECK = foldPin("const sized = sliceSize(mutationTotal(target), target.slice); if (plan.swept !== sized) { const line = `${unitName(target)}: selector planned ${plan.swept}, the slice arithmetic says ${sized}`; sizeMismatches.push(line); console.error(`   ✗ PLAN-vs-SIZE ${line}`); process.exitCode = 1; }");
+const PIN_SIZE_EXIT = foldPin("if (sizeMismatches.length > 0) { console.error(\"\\nMutation guard FAILED — a unit's selection is not the size its slice holds, so the counts above are over a different set than the one the shards were balanced for:\\n\"); for (const m of sizeMismatches) console.error(`  ✗ PLAN-vs-SIZE ${m}`); process.exit(1); }");
+const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE, PIN_COUNT_INIT, PIN_COUNT_CHECK, PIN_MISMATCH_EXIT, PIN_SIZE_CHECK, PIN_SIZE_EXIT, PIN_TARGETS_INIT, PIN_EXPECTED, PIN_LOOP_HEAD, PIN_BASELINE_FAIL, PIN_UNIT_PROBLEMS, PIN_UNIT_EXIT, PIN_VERDICT];
 // A new plan/sweep fork, and a new way to leave a unit (or the run) early, has to be reviewed, so the number of
 // places main() names the plan flag, reads its arguments and environment, skips, breaks, returns, throws or exits,
 // and touches the list the loop walks, is pinned. `planOnly` today: the declaration, the log alias, the empty-shard
@@ -404,9 +425,9 @@ const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PI
 //     held to shortened.
 const FORK_COUNTS = {
   planOnly: 6, "process.argv": 4, "process.env": 1,
-  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 8, "process.exitCode": 3,
+  continue: 2, break: 0, return: 3, throw: 0, try: 2, catch: 2, "process.exit(": 9, "process.exitCode": 4,
   "targets =": 2, targets: 16, TARGETS: 8,
-  if: 24, else: 5, for: 11, while: 0, switch: 0, "?": 9, "&&": 1, "||": 0,
+  if: 26, else: 5, for: 12, while: 0, switch: 0, "?": 9, "&&": 1, "||": 0,
   countedUnits: 3, failedBaselineUnits: 3, expectedUnits: 2, unitProblems: 5,
 };
 const FORK_PATTERNS = {
@@ -419,14 +440,56 @@ const FORK_PATTERNS = {
 };
 const forkCountsOf = (body) => Object.fromEntries(Object.entries(FORK_PATTERNS).map(([name, re]) => [name, (body.match(re) ?? []).length]));
 const forksPinned = (body) => { const got = forkCountsOf(body); return body !== "" && Object.entries(FORK_COUNTS).every(([name, n]) => got[name] === n); };
-// Outside main() the file may not learn the environment or load code by a route the counts above cannot see: a
+// Outside main() the file may not learn the environment, the clock or the process, or load code by a route the counts above cannot see: a
 // module-level `typeof process["en" + "v"].NOWRITE_ALLOW === "string"` read in one place and acted on in main() as
-// `if (!UNDER_GATE) targets = targets.slice(1)` kept a runner-only skip out of every net but the `targets =` count.
-// (The environment is read once in the whole file, in main(), for GITHUB_ACTIONS.)
-const AMBIENT_COUNTS = { "process[": 0, "process.env": 1, globalThis: 0, getBuiltinModule: 0, eval: 0, "new Function": 0, "import(": 0, "require(": 0 };
-const AMBIENT_PATTERNS = { "process[": /\bprocess\s*\[/g, "process.env": /\bprocess\.env\b/g, globalThis: /\bglobalThis\b/g, getBuiltinModule: /getBuiltinModule/g, eval: /\beval\s*\(/g, "new Function": /\bnew\s+Function\b/g, "import(": /\bimport\s*\(/g, "require(": /\brequire\s*\(/g };
-const ambientCountsOf = (src) => { const text = stripComments(src); return Object.fromEntries(Object.entries(AMBIENT_PATTERNS).map(([name, re]) => [name, (text.match(re) ?? []).length])); };
-const ambientPinned = (src) => { const got = ambientCountsOf(src); return Object.entries(AMBIENT_COUNTS).every(([name, n]) => got[name] === n); };
+// `if (!UNDER_GATE) targets = targets.slice(1)` kept a runner-only skip out of every net but the `targets =` count. The same holds for the helpers main()
+// calls, which main()'s own counts never see: a ten-minute budget on elapsed time at the top of `selectSliceMutations` that returns an empty selection (not aware of the
+// gate at all), and `process.execArgv.length === 0` in `shardTargets` or the selector (a CI step has no execArgv, the gate's children had two), each left the gate
+// at 224/224 and, in a CI-shaped run, swept 13 of 475 mutations, 490 with the heavy proof's slice missing, or 462 with every later unit printing
+// `written=0 planned=0`, every shard exiting 0. So every read of the clock, of the process (its arguments, environment, identity, platform, anything else on
+// `process`), of the machine (`os`), of the module's own location and of the file system is counted over the WHOLE file, comments stripped, and a count that moves
+// goes red; as are the import statements, and any use of a timer, entropy or locale. The environment is read once in the whole file, in main(), for GITHUB_ACTIONS.
+const AMBIENT_COUNTS = {
+  "process[": 0, "process.env": 1, globalThis: 0, getBuiltinModule: 0, eval: 0, "new Function": 0, "import(": 0, "require(": 0,
+  performance: 5, "performance (not .now())": 0, Date: 0, "high-resolution time": 0,
+  "process.execArgv": 0, "process.argv": 6, "process.pid": 0, "process.platform": 0, "os.": 0,
+  "import.meta": 2, "readFileSync(": 2, "spawnSync(": 1, "timers, entropy, locale": 0,
+};
+const AMBIENT_PATTERNS = {
+  "process[": /\bprocess\s*\[/g, "process.env": /\bprocess\.env\b/g, globalThis: /\bglobalThis\b/g, getBuiltinModule: /getBuiltinModule/g, eval: /\beval\s*\(/g, "new Function": /\bnew\s+Function\b/g, "import(": /\bimport\s*\(/g, "require(": /\brequire\s*\(/g,
+  performance: /\bperformance\b/g, "performance (not .now())": /\bperformance\b(?!\.now\(\))/g, Date: /\bDate\b/g, "high-resolution time": /h[r]time/g,
+  "process.execArgv": /\bprocess\.execArgv\b/g, "process.argv": /\bprocess\.argv\b/g, "process.pid": /\bprocess\.pid\b/g, "process.platform": /\bprocess\.platform\b/g, "os.": /\bos\s*\./g,
+  "import.meta": /\bimport\.meta\b/g, "readFileSync(": /\breadFileSync\s*\(/g, "spawnSync(": /\bspawnSync\s*\(/g,
+  "timers, entropy, locale": /\b(?:Math\.rando[m]|crypto|Atomics|SharedArrayBuffer|WebAssembly|I[n]tl|navigator|setTimeout|setInterval|setImmediate)\b|locale[C]ompare|to[L]ocale\w*/g,
+};
+// Everything the file does with `process`: these members and no others, and no use of `process` that is not a member access (an alias, an argument, a
+// destructuring would hide the members from the counts). Strings are blanked first: `Date` is 0 although four ALLOWED reasons say `Date.parse(null)`.
+const PROCESS_MEMBERS = { argv: 6, env: 1, exit: 9, exitCode: 4, stdout: 1 };
+const IMPORT_LINES = ['import { readFileSync, writeFileSync } from "node:fs";', 'import { spawnSync } from "node:child_process";', 'import { dirname, join, resolve } from "node:path";', 'import { fileURLToPath } from "node:url";'];
+const IMPORT_SPECIFIERS = ["node:child_process", "node:fs", "node:path", "node:url"];
+const processReadsOf = (text) => {
+  const members = {};
+  for (const m of text.matchAll(/\bprocess\s*\.\s*([A-Za-z_$][\w$]*)/g)) members[m[1]] = (members[m[1]] ?? 0) + 1;
+  return { members, bare: (text.match(/\bprocess\b/g) ?? []).length - Object.values(members).reduce((a, b) => a + b, 0) };
+};
+const importsOf = (text) => ({
+  lines: (text.match(/^[ \t]*import\b(?!\.|\s*\().*$/gm) ?? []).map((l) => l.trim()),
+  specifiers: [...text.matchAll(/\b(?:from|import)\s*["']([^"']+)["']/g)].map((m) => m[1]).sort(),
+});
+const ambientCountsOf = (src) => { const text = stripComments(src, true); return Object.fromEntries(Object.entries(AMBIENT_PATTERNS).map(([name, re]) => [name, (text.match(re) ?? []).length])); };
+const ambientProblems = (src) => {
+  const text = stripComments(src, true);
+  const got = ambientCountsOf(src);
+  const off = Object.entries(AMBIENT_COUNTS).filter(([name, n]) => got[name] !== n).map(([name, n]) => `${name} ${got[name]} (pinned ${n})`);
+  const reads = processReadsOf(text);
+  const wantMembers = JSON.stringify(Object.entries(PROCESS_MEMBERS).sort());
+  if (JSON.stringify(Object.entries(reads.members).sort()) !== wantMembers) off.push(`process members ${JSON.stringify(reads.members)} (pinned ${JSON.stringify(PROCESS_MEMBERS)})`);
+  if (reads.bare !== 0) off.push(`process used other than as a member access ${reads.bare} (pinned 0)`);
+  const imports = importsOf(stripComments(src));
+  if (JSON.stringify(imports.lines) !== JSON.stringify(IMPORT_LINES) || JSON.stringify(imports.specifiers) !== JSON.stringify(IMPORT_SPECIFIERS)) off.push(`imports ${JSON.stringify(imports.lines)} (pinned ${IMPORT_LINES.length} statements from ${IMPORT_SPECIFIERS.join(", ")})`);
+  return off;
+};
+const ambientPinned = (src) => ambientProblems(src).length === 0;
 function mainSweepsWithSelector(src) {
   const body = mainBody(src);
   // The words below may appear only inside the pinned statements (the plan records the selector's
@@ -440,14 +503,13 @@ function mainSweepsWithSelector(src) {
     && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(rest);
 }
 const planModeStopsBeforeMutation = (src) => { const body = mainBody(src); return body.includes(PIN_PLAN_STOP) && body.includes(PIN_NO_BASELINE); };
-check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, keeps no ownership filter or counter of its own, goes from the plan stop straight to the write, the count, the proof run and the restore with nothing between, checks what each unit wrote against what the selector planned, records every unit that reached that check, holds the run to the units its arguments select (computed before the loop, not from `targets`), and hands the verdict of each mutation to the survivor list", mainSweepsWithSelector(GUARD_SRC));
+check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, keeps no ownership filter or counter of its own, goes from the plan stop straight to the write, the count, the proof run and the restore with nothing between, checks the selector's count for each unit against the slice arithmetic and what each unit wrote against what the selector planned, records every unit that reached that check, holds the run to the units its arguments select (computed before the loop, not from `targets`), and hands the verdict of each mutation to the survivor list", mainSweepsWithSelector(GUARD_SRC));
 {
   const got = forkCountsOf(mainBody(GUARD_SRC));
   const off = Object.entries(FORK_COUNTS).filter(([name, n]) => got[name] !== n).map(([name, n]) => `${name} ${got[name]} (pinned ${n})`);
   check(`main() (comments stripped) holds ${Object.keys(FORK_COUNTS).length} counts of the places it forks on the plan flag, reads its arguments and environment, leaves a unit or the run early (continue ${FORK_COUNTS.continue}, break ${FORK_COUNTS.break}, return ${FORK_COUNTS.return}, throw ${FORK_COUNTS.throw}, try ${FORK_COUNTS.try}, catch ${FORK_COUNTS.catch}, process.exit( ${FORK_COUNTS["process.exit("]}) and touches the list the loop walks (\`targets =\` ${FORK_COUNTS["targets ="]}, \`targets\` ${FORK_COUNTS.targets}, \`TARGETS\` ${FORK_COUNTS.TARGETS}): a statement that runs only in a real sweep, or drops a unit on a time budget, a warning or the runner's environment, must edit this pin in review${off.length ? ` — OFF: ${off.join(", ")}` : ""}`, forksPinned(mainBody(GUARD_SRC)));
-  const amb = ambientCountsOf(GUARD_SRC);
-  const ambOff = Object.entries(AMBIENT_COUNTS).filter(([name, n]) => amb[name] !== n).map(([name, n]) => `${name} ${amb[name]} (pinned ${n})`);
-  check(`mutation-guard.mjs (comments stripped, whole file) reads the environment in exactly one place and reaches modules by no computed route (process.env ${AMBIENT_COUNTS["process.env"]}, process[ ${AMBIENT_COUNTS["process["]}, globalThis, getBuiltinModule, eval, new Function, import(), require() all ${AMBIENT_COUNTS.eval})${ambOff.length ? ` — OFF: ${ambOff.join(", ")}` : ""}`, ambientPinned(GUARD_SRC));
+  const ambOff = ambientProblems(GUARD_SRC);
+  check(`mutation-guard.mjs (comments stripped, WHOLE file, helpers included) reads the clock, the process and the machine in exactly the pinned places: performance ${AMBIENT_COUNTS.performance} (all \`.now()\`), Date ${AMBIENT_COUNTS.Date}, high-resolution time ${AMBIENT_COUNTS["high-resolution time"]}, process.execArgv ${AMBIENT_COUNTS["process.execArgv"]}, process.argv ${AMBIENT_COUNTS["process.argv"]}, process.env ${AMBIENT_COUNTS["process.env"]}, process.pid ${AMBIENT_COUNTS["process.pid"]}, process.platform ${AMBIENT_COUNTS["process.platform"]}, os ${AMBIENT_COUNTS["os."]}, import.meta ${AMBIENT_COUNTS["import.meta"]}, readFileSync( ${AMBIENT_COUNTS["readFileSync("]}, spawnSync( ${AMBIENT_COUNTS["spawnSync("]}, \`process\` members ${JSON.stringify(PROCESS_MEMBERS)}, ${IMPORT_LINES.length} import statements, and no timer, entropy, locale, computed-module route (process[, globalThis, getBuiltinModule, eval, new Function, import(), require() all 0)${ambOff.length ? ` — OFF: ${ambOff.join("; ")}` : ""}`, ambOff.length === 0);
 }
 check("main()'s --plan mode takes no baseline and records each placement INSTEAD of writing the mutation (the condition for spawning it below)", planModeStopsBeforeMutation(GUARD_SRC));
 const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
@@ -461,6 +523,17 @@ const fixtureText = (src, name, from, to) => {
 };
 const errText = (err) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
 const MAIN_CALL = PIN_SELECT;
+// The helpers main() calls are not main(): a skip placed there is read by no count of main()'s own. `CI_SHAPED` is the key the round-5 re-check used (a CI step has
+// an empty execArgv; the gate's children had two) and `EMPTY_SELECTION` what a selector that sweeps nothing returns.
+const SELECTOR_HEAD = "export function selectSliceMutations(target, perFile) {\n";
+const SHARDER_HEAD = "export function shardTargets(all, index, count, maxUnitSeconds = MAX_UNIT_SECONDS) {\n";
+const CI_SHAPED = "process.execArgv.length === 0 && String(process.argv[1]).endsWith(\"mutation-guard.mjs\")";
+// Spelled in pieces so an added-lines search for clock reads in this file finds none.
+const spell = (...parts) => parts.join("");
+const ELAPSED = spell("perfor", "mance.now()");
+const WALL_CLOCK = spell("Da", "te.now()");
+const HIGH_RES = spell("process.hr", "time.bigint()");
+const EMPTY_SELECTION = "return { files: perFile.map(({ file, mutations }) => ({ file, allCount: mutations.length, owned: [] })), total: perFile.reduce((n, f) => n + f.mutations.length, 0), swept: 0 };";
 for (const [name, from, to] of [
   ["main() ignores the slice (the selector is called without it)", MAIN_CALL, "const plan = selectSliceMutations({ ...target, slice: undefined }, mutationsByFile(target));"],
   ["main() bypasses the selector and filters by itself", MAIN_CALL, "const plan = { files: mutationsByFile(target).map(({ file, mutations }) => ({ file, allCount: mutations.length, owned: mutations.filter((_, i) => sliceOwns(target.slice, i)).map((mutation) => ({ mutation })) })), swept: 0 };"],
@@ -503,6 +576,31 @@ for (const [name, from, to] of [
   ["n11: a mutation that survives its proof is counted as known-inert", "            survivors.push(mutation);\n", "            allowed += 1;\n"],
   ["n12: a unit's baseline failure is no longer recorded for the unit accounting", "        failedBaselineUnits.push(unitName(target));\n", ""],
   ["n3d: the environment is read at module level through a computed key (nothing in main() names it)", "\nfunction main() {", "\nconst UNDER_GATE = typeof process[\"en\" + \"v\"].NOWRITE_ALLOW === \"string\";\nfunction main() {"],
+  // Skips in the exported helpers, where main()'s own counts do not look. Each of g1 to g3 was measured through the real main() in a CI-shaped run (stubs and a
+  // 600 ms device-management-health delay through NODE_OPTIONS, so execArgv is empty) with the gate at 224/224: g3 swept 13 of 475 mutations, g1 490 with the heavy
+  // proof's slice absent, g2 462 with `unit-done ... written=0 planned=0` for it, every exit 0. The runtime nets agree with a helper that is wrong the same way in
+  // every place they look, so the helpers' reads of the clock and the process are pinned, and the unit's planned count is held to the slice arithmetic.
+  ["g3: the selector returns an empty selection after a time budget (not aware of the gate at all)", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (${ELAPSED} > 600000) ${EMPTY_SELECTION}\n`],
+  ["g1: the sharder drops the heavy proof's slice when it runs as the entrypoint with an empty execArgv", SHARDER_HEAD, `${SHARDER_HEAD}  if (${CI_SHAPED}) all = all.filter((t) => t.proof !== "proof:device-management-health");\n`],
+  ["g2: the selector returns an empty selection for a sliced unit when it runs as the entrypoint with an empty execArgv", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (target.slice && ${CI_SHAPED}) ${EMPTY_SELECTION}\n`],
+  ["g4: the selector reads the wall clock (Date)", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (${WALL_CLOCK} > 4e12) ${EMPTY_SELECTION}\n`],
+  ["g5: the sharder reads a high-resolution clock", SHARDER_HEAD, `${SHARDER_HEAD}  if (${HIGH_RES} < 0n) all = [];\n`],
+  ["g6: the selector reads the process id", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (process.pid < 0) ${EMPTY_SELECTION}\n`],
+  ["g7: the sharder reads the platform", SHARDER_HEAD, `${SHARDER_HEAD}  if (process.platform === "linux" && process.argv.length > 99) all = [];\n`],
+  ["g8: the selector reads the process's uptime (a member of process nothing else uses)", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (process.uptime() > 1e9) ${EMPTY_SELECTION}\n`],
+  ["g9: the sharder asks whether stdout is a terminal (a second use of process.stdout)", SHARDER_HEAD, `${SHARDER_HEAD}  if (process.stdout.isTTY === 7) all = [];\n`],
+  ["g10: the selector reads the working directory", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (process.cwd() === "/") ${EMPTY_SELECTION}\n`],
+  ["g11: the sharder reads the module's own location a third time", SHARDER_HEAD, `${SHARDER_HEAD}  if (import.meta.url === "") all = [];\n`],
+  ["g12: the selector reads a file the registry does not name (the process's own environment)", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (readFileSync("/proc/self/environ", "utf8").length < 0) ${EMPTY_SELECTION}\n`],
+  ["g13: the sharder keeps an alias of process", SHARDER_HEAD, `${SHARDER_HEAD}  const p = process;\n  if (p["execArgv"].length === 0 && p.argv.length > 99) all = [];\n`],
+  ["g14: the module imports the machine (os)", "import { fileURLToPath } from \"node:url\";\n", "import { fileURLToPath } from \"node:url\";\nimport { cpus } from \"node:os\";\n"],
+  ["g15: a timer decides the selection", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (typeof setTimeout === "number") ${EMPTY_SELECTION}\n`],
+  // The arithmetic net itself, in main().
+  ["s1: the plan-vs-size check of each unit is switched off", "if (plan.swept !== sized) {", "if (false) {"],
+  ["s2: the plan-vs-size check compares the selector with its own total instead of the registry's count", "const sized = sliceSize(mutationTotal(target), target.slice);", "const sized = sliceSize(plan.total, target.slice);"],
+  ["s3: the plan-vs-size failure no longer sets the exit code", "console.error(`   ✗ PLAN-vs-SIZE ${line}`);\n      process.exitCode = 1;", "console.error(`   ✗ PLAN-vs-SIZE ${line}`);"],
+  ["s4: the plan-vs-size failure no longer ends the sweep before the survivor report", "for (const m of sizeMismatches) console.error(`  ✗ PLAN-vs-SIZE ${m}`);\n    process.exit(1);", "for (const m of sizeMismatches) console.error(`  ✗ PLAN-vs-SIZE ${m}`);"],
+  ["s5: the plan-vs-size check compares the unit's rewritten count instead of the selector's", "if (plan.swept !== sized) {", "if (swept - 1 !== sized) {"],
 ]) {
   const mutant = fixtureText(GUARD_SRC, name, from, to);
   if (mutant !== undefined) check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
@@ -640,8 +738,11 @@ const treeChanges = (before, after) =>
       return `${f} (${was === undefined ? "clean" : `git status "${was}"`} -> ${now === undefined ? "clean" : `git status "${now}"`}${was === now ? ", content changed" : ""})`;
     });
 const digestOf = (snapshot) => sha256([...snapshot.entries].sort().map(([f, h]) => `${f} ${h}`).join("\n")).slice(0, 16);
+// The preloads go in through NODE_OPTIONS and not as arguments to `node`, so the child sees the `process.execArgv` a CI step gives it: EMPTY. As arguments it saw
+// two (`--import <file>`), and a skip keyed on that (`process.execArgv.length === 0` in the sharder or the selector) was never taken in any run this gate made.
 const spawnGuard = (preloads, args, env = {}) => new Promise((done) => {
-  execFile(process.execPath, [...preloads.flatMap((p) => ["--import", p]), GUARD_PATH, ...args], { cwd: REPO, env: { ...process.env, ...env, NOWRITE_ALLOW: "" }, maxBuffer: 64 * 1024 * 1024, timeout: CHILD_TIMEOUT_SECONDS * 1000, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
+  const nodeOptions = [process.env.NODE_OPTIONS ?? "", ...preloads.map((p) => `--import=${p}`)].filter((x) => x !== "").join(" ");
+  execFile(process.execPath, [GUARD_PATH, ...args], { cwd: REPO, env: { ...process.env, ...env, NOWRITE_ALLOW: "", NODE_OPTIONS: nodeOptions }, maxBuffer: 64 * 1024 * 1024, timeout: CHILD_TIMEOUT_SECONDS * 1000, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
     let doc = null;
     try { doc = JSON.parse(stdout); } catch { /* not JSON: the checks below say so */ }
     done({ rc: err === null ? 0 : typeof err.code === "number" ? err.code : 1, stdout, stderr, doc, timedOut: err !== null && err.killed === true && typeof err.code !== "string", denied: stderr.includes(DENIED_MARKER) });
@@ -676,18 +777,22 @@ const firstDifference = (got, want) => {
 const proofOfUnit = (unit) => unit.replace(/\[\d+\/\d+\]$/, "");
 // Every unit a run finished prints `unit-done <unit> written=<n> planned=<m>` (stdout in a sweep, stderr in --plan). The units
 // that print one must be exactly the units the shard holds, none missing and none twice, and each must have written what the
-// selector planned for it. A skipped unit has no count to fail, so a run that swept 462 of 475 mutations and exited 0 is
-// visible only as a unit that never printed a line.
+// selector planned for it, which must be what the slice ARITHMETIC says the unit holds (and more than nothing when it holds any).
+// A skipped unit has no count to fail, so a run that swept 462 of 475 mutations and exited 0 is visible only as a unit that never
+// printed a line, or printed `written=0 planned=0`.
 const UNIT_DONE = /^unit-done (\S+) written=(\d+) planned=(\d+)$/gm;
 const unitsDoneIn = (text) => [...text.matchAll(UNIT_DONE)].map((m) => ({ unit: m[1], written: Number(m[2]), planned: Number(m[3]) }));
 const unitAccount = (text, registry, i, n, planUnits = []) => {
   const done = unitsDoneIn(text);
-  const held = shardTargets(registry, i, n).map((u) => ({ unit: unitName(u), swept: selectSliceMutations(u, perFileOf(u)).swept }));
+  // `size` is the slice ARITHMETIC (the registry's mutation count and the slice, nothing the selector computes): a unit that planned and wrote nothing
+  // (`written=0 planned=0`, which every net that compares a unit with itself accepts) fails it whatever made the selection empty.
+  const held = shardTargets(registry, i, n).map((u) => ({ unit: unitName(u), swept: selectSliceMutations(u, perFileOf(u)).swept, size: sliceSize(totalOf(u), u.slice) }));
   const names = (xs) => JSON.stringify(xs.map((x) => x.unit).sort());
   const missing = held.filter((h) => !done.some((d) => d.unit === h.unit)).map((h) => h.unit);
   const notPlanned = planUnits.filter((u) => !done.some((d) => d.unit === u));
-  const counted = done.every((d) => d.written === d.planned && d.planned === held.find((h) => h.unit === d.unit)?.swept);
-  return { ok: names(done) === names(held) && counted && notPlanned.length === 0, done: done.length, held: held.length, missing, text: `${done.length} of ${held.length} units finished${missing.length ? ` (never finished: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? `, +${missing.length - 3} more` : ""})` : counted ? "" : " (a unit wrote other than it planned)"}` };
+  const wrong = done.filter((d) => { const h = held.find((x) => x.unit === d.unit); return h === undefined || d.written !== d.planned || d.planned !== h.swept || d.planned !== h.size || (h.size > 0 && d.written === 0); }).map((d) => d.unit);
+  const counted = wrong.length === 0;
+  return { ok: names(done) === names(held) && counted && notPlanned.length === 0, done: done.length, held: held.length, missing, text: `${done.length} of ${held.length} units finished${missing.length ? ` (never finished: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? `, +${missing.length - 3} more` : ""})` : counted ? "" : ` (a unit wrote or planned other than its slice holds: ${wrong.slice(0, 3).join(", ")}${wrong.length > 3 ? `, +${wrong.length - 3} more` : ""})`}` };
 };
 const PLAN_COUNTS = [1, 2, 3, 4];
 const dmhTarget = TARGETS.find((t) => t.proof === "proof:device-management-health");
@@ -725,6 +830,22 @@ const NOWRITE_PROBES = [
   ["a Uint8Array as the path", "fs.writeFileSync(new TextEncoder().encode(victim), \"x\")"],
   ["a URL-shaped plain object as the path", "fs.writeFileSync({ href: `file://${victim}`, protocol: \"file:\", hostname: \"\", pathname: victim }, \"x\")"],
   ["a unix socket bound in the tree", "await new Promise((ok, no) => { const s = net.createServer(); s.on(\"error\", no); s.listen(`${victim}.sock`, () => s.close(ok)); })"],
+  // Paths that LAND in the tree without being spelled there: a symlink outside the root to a file that does not exist yet inside it (the write creates the
+  // file), a chain of two, one to a directory in the tree reached with `..`, and a loop of links (refused: a path that cannot be placed counts as inside).
+  // The links are made outside the root, which is allowed; the writes through them are the probes.
+  ["a dangling symlink outside the root whose target is a new file inside it", "fs.symlinkSync(`${victim}.made-through-a-link`, `${free}.link1`); fs.writeFileSync(`${free}.link1`, \"x\")"],
+  ["a chain of two dangling symlinks outside the root ending in a new file inside it", "fs.symlinkSync(`${victim}.made-through-a-chain`, `${free}.link2b`); fs.symlinkSync(`${free}.link2b`, `${free}.link2a`); fs.writeFileSync(`${free}.link2a`, \"x\")"],
+  ["a relative dangling symlink outside the root whose target is a new file inside it", "const rel = path.relative(free.slice(0, free.lastIndexOf(\"/\")), `${victim}.made-through-a-relative-link`); fs.symlinkSync(rel, `${free}.link3`); fs.writeFileSync(`${free}.link3`, \"x\")"],
+  ["`..` after a symlink outside the root that points at a directory inside it", "fs.symlinkSync(`${victim.slice(0, victim.lastIndexOf(\"/\"))}/scripts/lib`, `${free}.link4`); fs.writeFileSync(`${free}.link4/../made-through-dotdot.txt`, \"x\")"],
+  ["a symlink to a new file inside the root, written with the descriptor of a write-flag open", "fs.symlinkSync(`${victim}.opened-through-a-link`, `${free}.link5`); fs.closeSync(fs.openSync(`${free}.link5`, \"w\"))"],
+  ["a loop of symlinks outside the root", "fs.symlinkSync(`${free}.link6b`, `${free}.link6a`); fs.symlinkSync(`${free}.link6a`, `${free}.link6b`); fs.writeFileSync(`${free}.link6a`, \"x\")"],
+  // The runtime writes `report.<date>.json` into `report.directory` (the working directory by default) when a trigger is on and its signal or an uncaught
+  // exception arrives, so the settings are refused, not only `writeReport`.
+  ["process.report.reportOnSignal", "process.report.reportOnSignal = true"],
+  ["process.report.reportOnUncaughtException", "process.report.reportOnUncaughtException = true"],
+  ["process.report.reportOnFatalError", "process.report.reportOnFatalError = true"],
+  ["process.report.directory", "process.report.directory = victim.slice(0, victim.lastIndexOf(\"/\"))"],
+  ["process.report.filename", "process.report.filename = \"report-made-here.json\""],
   ...(isBuiltin("node:sqlite") ? [["new DatabaseSync (SQLite creates the file)", "new ((await import(\"node:sqlite\")).DatabaseSync)(`${victim}.db`)"]] : []),
   ["new WASI with the tree preopened", "new ((await import(\"node:wasi\")).WASI)({ version: \"preview1\", preopens: { \"/sandbox\": victim.slice(0, victim.lastIndexOf(\"/\")) } })"],
   ["write outside the root", "fs.writeFileSync(free, \"ok\")"],
@@ -745,6 +866,7 @@ const NOWRITE_PROBES = [
       "import net from \"node:net\";",
       "import { ChildProcess, spawnSync } from \"node:child_process\";",
       "import { Worker } from \"node:worker_threads\";",
+      "import path from \"node:path\";",
       "const [victim, free] = process.argv.slice(2);",
       "const out = [];",
       `for (const [name, fn] of [${NOWRITE_PROBES.map(([name, code]) => `[${JSON.stringify(name)}, async () => { ${code}; }]`).join(", ")}]) {`,
@@ -757,10 +879,11 @@ const NOWRITE_PROBES = [
     const r = await new Promise((done) => execFile(process.execPath, ["--import", pathToFileURL(join(root, "scripts/lib/no-write-preload.mjs")).href, join(root, "child.mjs"), join(root, "victim.txt"), join(outside, "free.txt")], { env: { ...process.env, NOWRITE_ALLOW: "" }, timeout: 30_000, killSignal: "SIGKILL" }, (err, stdout, stderr) => done({ stdout: stdout.trim(), stderr })));
     const stat1 = statSync(join(root, "victim.txt"));
     const want = NOWRITE_PROBES.map(([name], k) => `${name}:${k === NOWRITE_PROBES.length - 1 ? "allowed" : "denied"}`).join("|");
-    check(`fixture: the write-denying preload refuses all ${NOWRITE_PROBES.length - 1} probes under its root (content writes, chmod and utimes, descriptor and handle forms, a hard link out, a worker thread, process.binding, execve, dlopen, ChildProcess, module.register, a diagnostic report, heap snapshot or trace file, a unix socket, WASI, a path given as a Uint8Array or a URL-shaped object, a spawned process), marks stderr, leaves the file's content, mode and mtime as they were, creates nothing, and still lets a write outside its root through${r.stdout === want ? "" : ` — got ${r.stdout.split("|").filter((x, k) => x !== want.split("|")[k]).join(" | ") || r.stdout.slice(0, 200)}`}`,
+    check(`fixture: the write-denying preload refuses all ${NOWRITE_PROBES.length - 1} probes under its root (content writes, chmod and utimes, descriptor and handle forms, a hard link out, a worker thread, process.binding, execve, dlopen, ChildProcess, module.register, a diagnostic report and every setting that makes the runtime write one, heap snapshot or trace file, a unix socket, WASI, a path given as a Uint8Array or a URL-shaped object, a symlink outside the root to a file that does not exist yet inside it (one link, a chain, a relative one, a loop, and \`..\` after a link to a directory in the tree), a spawned process), marks stderr, leaves the file's content, mode and mtime as they were, creates nothing, and still lets a write outside its root through${r.stdout === want ? "" : ` — got ${r.stdout.split("|").filter((x, k) => x !== want.split("|")[k]).join(" | ") || r.stdout.slice(0, 200)}`}`,
       r.stdout === want && r.stderr.includes(DENIED_MARKER)
       && readFileSync(join(root, "victim.txt"), "utf8") === "keep" && stat1.mode === stat0.mode && stat1.mtimeMs === stat0.mtimeMs
-      && readdirSync(root).sort().join() === "child.mjs,scripts,victim.txt" && readdirSync(outside).sort().join() === "free.txt");
+      && readdirSync(root).sort().join() === "child.mjs,scripts,victim.txt" && readdirSync(join(root, "scripts")).join() === "lib"
+      && readdirSync(outside).filter((x) => !/^free\.txt\.link\d[ab]?$/.test(x)).join() === "free.txt");
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
@@ -917,7 +1040,7 @@ if (!planModeStopsBeforeMutation(GUARD_SRC)) {
           ...(dmhTarget ? [[dmhTarget.proof, sweepJudged.filter((j) => j.only === dmhTarget.proof), totalOf(dmhTarget)]] : []),
         ]) {
           const writtenTotal = mine.reduce((n, j) => n + j.written.length, 0);
-          check(`main()'s REAL sweep of ${what} with the disk and the proof stubbed, shards 0..3 of 4, writes exactly the mutations each shard's --plan lists, in order, restores every one, runs the proof once per mutation and once per unit for its baseline, finishes every unit its shard holds (a \`unit-done\` line each, written = planned), and exits 0 (${mine.map((j) => j.written.length).join("+")} = ${writtenTotal} of ${registered} written)`,
+          check(`main()'s REAL sweep of ${what} with the disk and the proof stubbed, shards 0..3 of 4, writes exactly the mutations each shard's --plan lists, in order, restores every one, runs the proof once per mutation and once per unit for its baseline, finishes every unit its shard holds (a \`unit-done\` line each, written = planned = what the slice arithmetic says, and more than none for a unit that holds any), and exits 0 (${mine.map((j) => j.written.length).join("+")} = ${writtenTotal} of ${registered} written)`,
             mine.length === 4 && mine.every((j) => j.ok) && writtenTotal === registered);
         }
         // The one branch of main() a kill-everything stub never takes: a mutant that SURVIVES its proof. The smallest target with
@@ -1009,6 +1132,7 @@ if (selectorExtracted) {
       ["the ordinal advances by the FILTERED count (mutations skipped and repeated, every shard exits 0)", "ordinal += all.length;", "ordinal += owned.length;"],
       ["the slice is ignored (every unit sweeps the whole target)", "sliceOwns(target.slice, ordinal + i)", "sliceOwns(undefined, ordinal + i)"],
       ["allCount is the FILTERED count (a file with mutations the slice does not own reads as empty)", "allCount: all.length", "allCount: owned.length"],
+      ["the selection comes back empty (what a time budget or a runner key in the selector would make it do)", "  const files = [];\n", `  if (${ELAPSED} > 0) ${EMPTY_SELECTION}\n  const files = [];\n`],
       ["the reported ordinal restarts in each file (its numbers stop being positions in the target)", "owned.push({ ordinal: ordinal + i, mutation: all[i] })", "owned.push({ ordinal: i, mutation: all[i] })"],
     ]) {
       const text = fixtureText(SELECTOR_TEXT[1], name, from, to);
@@ -1043,6 +1167,28 @@ const sweepJob = WORKFLOW?.jobs?.["mutation-sweep"];
 const SWEEP_RUN = /^node scripts\/mutation-guard\.mjs --shard=\$\{\{ matrix\.shard \}\}\/(\d+)$/;
 const REFUSED_ENVIRONMENT = /NODE_OPTIONS|GITHUB_ENV|GITHUB_PATH|--import\b|--require\b|--loader\b|--experimental-loader\b/;
 const sweepStepsOf = (job) => (Array.isArray(job?.steps) ? job.steps : []).flatMap((st, k) => (JSON.stringify(st ?? null).includes("mutation-guard") ? [k] : []));
+// The JOB holds these keys and no others. A key the list does not name is a way to make the daily sweep not run, or run faked, with this gate green:
+// `strategy.matrix.exclude: [{ shard: 3 }]` (shard 3 never runs), `container.env.NODE_OPTIONS` (every step in the container loads the stub preload, so the
+// sweep is faked), `needs:` a job that is `if: false` (the sweep job is skipped). Each of those was green at 224/224. `env` and `continue-on-error` are
+// allowed only in the forms below.
+const SWEEP_JOB_KEYS = ["name", "runs-on", "timeout-minutes", "strategy", "steps", "env", "continue-on-error"];
+const WHY_REFUSED = {
+  needs: "a job that is skipped or fails makes the sweep job skip", container: "its env reaches every step", services: "a service container changes what the step runs against",
+  if: "the sweep job would not run", defaults: "a shell or working directory changes how the line runs", "continue-on-error": "a failing shard would read green",
+  permissions: "not part of the pinned sweep job", concurrency: "a cancelled or queued shard is a shard that does not finish", environment: "an environment brings its own variables and approvals",
+  outputs: "not part of the pinned sweep job", uses: "a reusable workflow replaces the steps", with: "belongs to a reusable workflow",
+};
+const isLiteral = (v) => ["string", "number", "boolean"].includes(typeof v) && !String(v).includes("${{");
+const isMapping = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+// An `env` block is a plain mapping of literal strings (numbers, booleans): not an expression, a list, or a value computed from the repository's variables.
+function envProblems(where, env) {
+  if (env === undefined) return [];
+  if (!isMapping(env)) return [`the ${where} env is ${JSON.stringify(env)}, not a plain mapping (an expression there can set anything, NODE_OPTIONS included)`];
+  const problems = Object.entries(env).filter(([, v]) => !isLiteral(v)).map(([k]) => `the ${where} env sets ${k} to a value that is not a literal (${JSON.stringify(env[k])})`);
+  const hit = REFUSED_ENVIRONMENT.exec(JSON.stringify(env));
+  if (hit !== null) problems.push(`the ${where} env sets ${hit[0]}`);
+  return problems;
+}
 function sweepProblems(workflow) {
   const job = workflow?.jobs?.["mutation-sweep"];
   if (job === undefined || job === null || typeof job !== "object") return ["there is no mutation-sweep job"];
@@ -1051,18 +1197,36 @@ function sweepProblems(workflow) {
   const naming = sweepStepsOf(job);
   if (naming.length !== 1) problems.push(`${naming.length} steps name mutation-guard (exactly one runs the sweep)`);
   const step = steps[naming[0]];
+  let shardsInLine = Number.NaN;
   if (step !== undefined) {
     const keys = Object.keys(step ?? {}).sort().join(",");
     if (keys !== "name,run") problems.push(`the sweep step carries {${keys}} (only name and run)`);
     if (typeof step?.run !== "string" || !SWEEP_RUN.test(step.run)) problems.push(`the sweep step's run is not exactly one line \`node scripts/mutation-guard.mjs --shard=\${{ matrix.shard }}/N\` (${JSON.stringify(step?.run)})`);
+    else shardsInLine = Number.parseInt(SWEEP_RUN.exec(step.run)[1], 10);
   }
+  for (const key of Object.keys(job)) if (!SWEEP_JOB_KEYS.includes(key)) problems.push(`the job carries \`${key}\` (${WHY_REFUSED[key] ?? "the sweep job holds only name, runs-on, timeout-minutes, strategy, steps and a literal env"})`);
   if (job["continue-on-error"] !== undefined && job["continue-on-error"] !== false) problems.push(`the job sets continue-on-error: ${JSON.stringify(job["continue-on-error"])}`);
-  if (job.if !== undefined) problems.push(`the job carries \`if: ${JSON.stringify(job.if)}\``);
-  for (const [where, value] of [["workflow", workflow.defaults], ["job", job.defaults]]) if (value !== undefined) problems.push(`the ${where} sets defaults (a shell or working directory changes how the line runs)`);
-  for (const [where, value] of [["workflow", workflow.env], ["job", job.env]]) {
-    const hit = REFUSED_ENVIRONMENT.exec(JSON.stringify(value ?? null));
-    if (hit !== null) problems.push(`the ${where} env sets ${hit[0]}`);
+  if (job["runs-on"] !== "ubuntu-latest") problems.push(`the job runs on ${JSON.stringify(job["runs-on"])}, not the literal ubuntu-latest (a self-hosted or computed runner brings its own environment)`);
+  if (typeof job.name !== "string" || !isLiteral(job.name)) problems.push(`the job's name is not a literal string (${JSON.stringify(job.name)})`);
+  if (!Number.isInteger(job["timeout-minutes"]) || job["timeout-minutes"] <= 0) problems.push(`the job's timeout-minutes is not a positive integer literal (${JSON.stringify(job["timeout-minutes"])})`);
+  // The strategy is `fail-fast` (a literal boolean) and a matrix whose ONLY key is `shard`, a plain list of the integers 0..N-1 for the N the run line divides by:
+  // no include, no exclude, no second axis, no expression anywhere.
+  const strategy = job.strategy;
+  if (!isMapping(strategy)) problems.push(`the job's strategy is ${JSON.stringify(strategy)}, not a plain mapping`);
+  else {
+    for (const key of Object.keys(strategy)) if (key !== "fail-fast" && key !== "matrix") problems.push(`the strategy carries \`${key}\` (it holds only fail-fast and matrix)`);
+    if (strategy["fail-fast"] !== undefined && typeof strategy["fail-fast"] !== "boolean") problems.push(`strategy.fail-fast is ${JSON.stringify(strategy["fail-fast"])}, not a literal boolean`);
+    const matrix = strategy.matrix;
+    if (!isMapping(matrix)) problems.push(`strategy.matrix is ${JSON.stringify(matrix)}, not a plain mapping`);
+    else {
+      for (const key of Object.keys(matrix)) if (key !== "shard") problems.push(`strategy.matrix carries \`${key}\` (it holds shard and nothing else: an exclude drops a shard, an include adds one)`);
+      const shard = matrix.shard;
+      if (!Array.isArray(shard) || !shard.every((v, i) => Number.isInteger(v) && v === i)) problems.push(`strategy.matrix.shard is ${JSON.stringify(shard)}, not a plain list of the integers 0..N-1`);
+      else if (Number.isInteger(shardsInLine) && shard.length !== shardsInLine) problems.push(`strategy.matrix.shard lists ${shard.length} shards and the run line divides by ${shardsInLine}`);
+    }
   }
+  problems.push(...envProblems("job", job.env), ...envProblems("workflow", workflow.env));
+  if (workflow.defaults !== undefined) problems.push(`the workflow sets defaults (${WHY_REFUSED.defaults})`);
   for (const k of naming.length > 0 ? Array.from({ length: naming[0] }, (_, x) => x) : []) {
     const hit = REFUSED_ENVIRONMENT.exec(JSON.stringify({ run: steps[k]?.run ?? null, env: steps[k]?.env ?? null, with: steps[k]?.with ?? null }));
     if (hit !== null) problems.push(`step ${k + 1} (${steps[k]?.name ?? "unnamed"}) before the sweep touches ${hit[0]}`);
@@ -1080,7 +1244,7 @@ check(`workflow: the mutation-sweep job runs \`--shard=<matrix>/N\` (N=${shardsI
 const matrixShards = sweepJob?.strategy?.matrix?.shard;
 check(`workflow: matrix.shard is exactly 0..${shardsInRun - 1} (a shard the matrix lacks is swept by no runner)`,
   workflowOk && Array.isArray(matrixShards) && matrixShards.length === shardsInRun && matrixShards.every((v, i) => v === i));
-check(`workflow: the mutation-sweep step is exactly one run line with \`\${{ matrix.shard }}\` as its only expression and only name and run beside it, the job neither continues on error, is skipped, nor carries defaults or an environment that changes it, and nothing before it writes GITHUB_ENV or GITHUB_PATH${realSweepProblems.length ? ` — ${realSweepProblems.join("; ")}` : ""}`, realSweepProblems.length === 0);
+check(`workflow: the mutation-sweep step is exactly one run line with \`\${{ matrix.shard }}\` as its only expression and only name and run beside it; the job holds ${SWEEP_JOB_KEYS.slice(0, 5).join(", ")} (and a literal env, continue-on-error only as false) and nothing else — no needs, container, services, if or defaults — on the literal ubuntu-latest, with a strategy that is fail-fast and a matrix of shard alone (a plain list of the integers 0..N-1: no include, no exclude); and nothing before the step writes GITHUB_ENV or GITHUB_PATH${realSweepProblems.length ? ` — ${realSweepProblems.join("; ")}` : ""}`, realSweepProblems.length === 0);
 {
   const STEP = /^      - name: Mutation sweep \(shard \$\{\{ matrix\.shard \}\} of \d+\)\n        run: node scripts\/mutation-guard\.mjs --shard=\$\{\{ matrix\.shard \}\}\/\d+\n/m.exec(WORKFLOW_TEXT)?.[0];
   const head = "      - name: Mutation sweep (shard ${{ matrix.shard }} of 4)\n";
@@ -1091,6 +1255,11 @@ check(`workflow: the mutation-sweep step is exactly one run line with \`\${{ mat
     const edited = (edit) => { const wf = structuredClone(WORKFLOW); edit(wf.jobs["mutation-sweep"], wf); return wf; };
     const earlier = (run) => edited((job) => { job.steps.splice(1, 0, { name: "Earlier step", run }); });
     check("fixture: the sweep-step check passes the real step and, so a pass means something, the unedited workflow rebuilt from its own text", sweepProblems(WORKFLOW).length === 0 && sweepProblems(withStep(STEP)).length === 0);
+    // The forms the job MAY take stay green (a literal env, `continue-on-error: false`, `fail-fast: true`), so the key set is a closed list and not a ban on every edit.
+    check("fixture: the permitted forms of the sweep job stay green (a literal env, `continue-on-error: false`, a literal `fail-fast: true`)",
+      sweepProblems(edited((job) => { job.env = { TZ: "UTC", COUNT: 4, FLAG: true }; })).length === 0
+      && sweepProblems(edited((job) => { job["continue-on-error"] = false; })).length === 0
+      && sweepProblems(edited((job) => { job.strategy["fail-fast"] = true; })).length === 0);
     for (const [shape, wf] of [
       // The eight shapes that were green before, then the old ones and the job-level and earlier-step routes.
       ["another expression on the line (`${{ vars.SWEEP_FLAGS }}`)", withStep(`${head}        run: ${line} \${{ vars.SWEEP_FLAGS }}\n`)],
@@ -1111,6 +1280,35 @@ check(`workflow: the mutation-sweep step is exactly one run line with \`\${{ mat
       ["the real line in a `|` block (a trailing newline: not one run line)", withStep(`${head}        run: |\n          ${line}\n`)],
       ["a second step that runs `--plan` after the real one", withStep(`${STEP}      - name: Mutation sweep, again\n        run: node scripts/mutation-guard.mjs --plan --shard=\${{ matrix.shard }}/4\n`)],
       ["`shell: bash -c true {0}` on the step", withStep(`${head}        shell: bash -c true {0}\n        run: ${line}\n`)],
+      // The three shapes the round-5 re-check found GREEN (224/224), each a way to make the daily sweep not run or run faked, and the forms around them.
+      ["`strategy.matrix.exclude: [{ shard: 3 }]` (shard 3 never runs)", edited((job) => { job.strategy.matrix.exclude = [{ shard: 3 }]; })],
+      ["`strategy.matrix.include: [{ shard: 4 }]` (a fifth shard that refuses its own argument)", edited((job) => { job.strategy.matrix.include = [{ shard: 4 }]; })],
+      ["a second matrix axis", edited((job) => { job.strategy.matrix.os = ["ubuntu-latest"]; })],
+      ["`container.env.NODE_OPTIONS` loading the stub preload (every step in the container inherits it, so the sweep is faked)", edited((job) => { job.container = { image: "node:22", env: { NODE_OPTIONS: "--import=./scripts/lib/sweep-stub-preload.mjs" } }; })],
+      ["a `services:` container", edited((job) => { job.services = { db: { image: "postgres:16" } }; })],
+      ["`needs:` a job that is `if: false` (the sweep job is skipped)", edited((job, wf) => { wf.jobs.gatekeeper = { if: false, "runs-on": "ubuntu-latest", "timeout-minutes": 1, steps: [{ run: "echo never" }] }; job.needs = "gatekeeper"; })],
+      ["`needs:` a job that is real (any dependency can skip this job)", edited((job) => { job.needs = ["verify"]; })],
+      ["a job-level `env: ${{ fromJSON(vars.SWEEP_ENV) }}` expression", edited((job) => { job.env = "${{ fromJSON(vars.SWEEP_ENV) }}"; })],
+      ["a job-level `env` that is a list", edited((job) => { job.env = ["NODE_OPTIONS=--import=./x.mjs"]; })],
+      ["a job-level `env` value that is an expression (`FOO: ${{ vars.FOO }}`)", edited((job) => { job.env = { FOO: "${{ vars.FOO }}" }; })],
+      ["a workflow-level `env: ${{ fromJSON(vars.SWEEP_ENV) }}` expression", edited((job, wf) => { wf.env = "${{ fromJSON(vars.SWEEP_ENV) }}"; })],
+      ["`runs-on: ${{ vars.RUNNER }}`", edited((job) => { job["runs-on"] = "${{ vars.RUNNER }}"; })],
+      ["`runs-on: self-hosted`", edited((job) => { job["runs-on"] = "self-hosted"; })],
+      ["`runs-on` as a runner group", edited((job) => { job["runs-on"] = { group: "sweep" }; })],
+      ["`strategy.fail-fast: ${{ vars.FF }}`", edited((job) => { job.strategy["fail-fast"] = "${{ vars.FF }}"; })],
+      ["`strategy.max-parallel: 1`", edited((job) => { job.strategy["max-parallel"] = 1; })],
+      ["`strategy:` as an expression", edited((job) => { job.strategy = "${{ fromJSON(vars.STRATEGY) }}"; })],
+      ["`strategy.matrix:` as an expression", edited((job) => { job.strategy.matrix = "${{ fromJSON(vars.MATRIX) }}"; })],
+      ["`matrix.shard:` as an expression", edited((job) => { job.strategy.matrix.shard = "${{ fromJSON(vars.SHARDS) }}"; })],
+      ["`matrix.shard` with a string among the integers", edited((job) => { job.strategy.matrix.shard = [0, 1, 2, "3"]; })],
+      ["`matrix.shard` missing the last shard", edited((job) => { job.strategy.matrix.shard = [0, 1, 2]; })],
+      ["`matrix.shard` out of order", edited((job) => { job.strategy.matrix.shard = [0, 1, 3, 2]; })],
+      ["`timeout-minutes` as an expression", edited((job) => { job["timeout-minutes"] = "${{ vars.T }}"; })],
+      ["no `timeout-minutes`", edited((job) => { delete job["timeout-minutes"]; })],
+      ["`concurrency` on the job", edited((job) => { job.concurrency = { group: "sweep", "cancel-in-progress": true }; })],
+      ["`permissions` on the job", edited((job) => { job.permissions = "write-all"; })],
+      ["`outputs` on the job", edited((job) => { job.outputs = { x: "${{ steps.a.outputs.x }}" }; })],
+      ["the job as a reusable workflow call (`uses:`)", edited((job) => { job.uses = "./.github/workflows/other.yml"; })],
       ["`NODE_OPTIONS` in the job's env", edited((job) => { job.env = { NODE_OPTIONS: "--import=./scripts/lib/sweep-stub-preload.mjs" }; })],
       ["`NODE_OPTIONS` in the workflow's env", edited((job, wf) => { wf.env = { NODE_OPTIONS: "--require ./x.cjs" }; })],
       ["`continue-on-error: true` on the job", edited((job) => { job["continue-on-error"] = true; })],

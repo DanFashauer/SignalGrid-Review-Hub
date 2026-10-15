@@ -1,5 +1,5 @@
-// A Node preload for the sharding gate's stub-driven sweep (`node --import no-write-preload.mjs --import
-// <this file> mutation-guard.mjs --proof=… --shard=…`): the REAL main() runs its real sweep path, but
+// A Node preload for the sharding gate's stub-driven sweep (`NODE_OPTIONS="--import=no-write-preload.mjs
+// --import=<this file>" node mutation-guard.mjs --proof=… --shard=…`, so the guard sees the empty `process.execArgv` a CI step gives it): the REAL main() runs its real sweep path, but
 // the disk and the proof are stubbed, so nothing is mutated and no proof runs.
 //   - `writeFileSync` on an existing file under the repository is RECORDED, not performed. A write whose
 //     text differs from the file on disk is a mutation; one equal to it is the restore. Any other write

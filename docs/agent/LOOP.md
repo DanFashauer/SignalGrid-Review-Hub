@@ -58,17 +58,21 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               that does what it claims, real in hand for partners before GTM.
 LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
               WENT DARK FOR 5d17h; ONE REGISTRY ROW'S 30-DAY BOUND TURNED EVERY PR RED; THE BRAIN RETIRED THE ROW AND THE LANES LAND AGAIN.
-              OUTAGE: the account's weekly Claude usage limit (type seven_day) ran out at about 16:40Z on 2026-10-09 and reset at 10:00Z
-              on 2026-10-15. The cloud brain and every worker session were dark for 5d17h. In-flight workers L1501, L1468r27, B83, B84 and
-              the #1468 round-28 builder died with the limit error. 211 routine fires queued; the brain resumed at 10:12Z on 2026-10-15
-              and treated the backlog as one current fire per routine.
+              OUTAGE (recorded from the owner hand, not re-measured here: the limit type, the instants, 5d17h, the 211 fires, the 10:12Z
+              resume and the worker labels): the account's weekly Claude usage limit (type seven_day) ran out at about 16:40Z on
+              2026-10-09 and reset at 10:00Z on 2026-10-15. The cloud brain and every worker session were dark for 5d17h. In-flight
+              workers L1501, L1468r27, B83, B84 and the #1468 round-28 builder died with the limit error. 211 routine fires queued; the
+              brain resumed at 10:12Z on 2026-10-15 and treated the backlog as one current fire per routine.
               THE REPO-WIDE RED: scripts/check-scheduled-routines.mjs was FATAL on mainline from 2026-10-12T00:00Z. The
               dependabot-queue-review row had sat awaiting-activation since 2026-09-12 and crossed the registry's 30-day bound inside the
               outage. That gate runs in CI's validation job ("Typecheck, build, and proof scaffold") and inside every lane-deliver
               heartbeat delivery, so every PR's gating check went red (tick PRs #1509-#1512 failed at the step "Scheduled routines";
-              #1508 had passed on 2026-10-11) and no heartbeat, cloud or Mac, could land. The Mac tick itself stayed alive (one tick PR a
-              day, about 00:03Z). The row's contract forbade the cloud lane from creating the trigger without an explicit owner go, which
-              was never recorded.
+              #1508 had passed on 2026-10-11) and no NEW lane-deliver heartbeat delivery could pass the gate after 2026-10-12T00:00Z.
+              Mainline's tip did not move between f3dccd957 (the last Mac heartbeat, 2026-10-11T23:42:56Z) and the merge of #1506 as
+              764cb99d at 10:22:23Z on 2026-10-15; #1506 is a forward-build heartbeat PR opened 2026-10-09T16:34:20Z whose gating
+              check was green before the bound. The Mac tick kept opening tick PRs (one a day, 00:00-00:04Z). The owner hand also names the
+              raised-hands gate as red repo-wide (recorded from the hand, not re-measured here). The row's contract forbade the cloud
+              lane from creating the trigger without an explicit owner go, which was never recorded.
               THE FIX AND THE LANDINGS (all 2026-10-15 UTC): #1513 (head b4dd1176, merged 1c2c6b94 at 12:04Z, gating check run
               116403912993; local preflight 400 gates ok rc=0 and breadth 58 ok rc=0, quoted in its body) retired the row with evidence,
               in the shape of #1480. It raised four hands - owner: the budget decision, plus an explicit go or decline for a NEW Dependabot
@@ -76,19 +80,26 @@ LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z
               2026-10-02T16:07Z at e78a7ae1); cloud: a heartbeat:mac-lane-tick cover; cloud: a heartbeat:forward-build-cycle cover - and
               resolved the 2026-10-09 /dev/null hand. Four review rounds (Sonnet review + Opus refute), round 4 ship. L23 records that
               its first two commits were edited on the wrong tier (DR-060). A Codex P1 finding about account telemetry in the owner hand
-              was checked against AGENTS.md L27-L31 and answered, not changed (thread resolved).
-              The Mac tick's own heartbeat then landed on mainline at 7dc78829 (12:09Z, firedAt 12:09:32Z), which confirms the inference
-              from the CI record: the tick was alive and only this gate refused its heartbeat.
+              was checked against AGENTS.md L27-L31 and answered, not changed (thread PRRT_kwDOSpuy-s6swUbP resolved).
+              The Mac tick's own heartbeat then landed on mainline at 7dc78829 (12:09Z, firedAt 12:09:32Z), which is consistent with the
+              inference from the CI record that the tick was alive and only this gate refused its heartbeat. Measured: tick PRs arrived
+              daily; the last Mac heartbeat before it landed at 2026-10-11T23:42:56Z, 17 minutes before the bound; 7dc78829 landed 5
+              minutes after the fix. A tick that resumed on its own 25-minute cadence would look the same, and the Mac's own log is not
+              readable from the cloud.
               #1514 (29854dc, merged 845468d6 at 12:27Z, gating 116412325370) delivered the forward-build-cycle,
               mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats and cleared the forward-build hand. Its Mac-only check
               was red for a measurement artifact (below).
-              #1501 (29f0749e, merged e6acacc7 at 12:31Z) landed under DR-037 as SAFETY_MACHINERY: gating check run 113898621289, review
-              round 1 ship (Sonnet + Opus refute upheld, comment 6084802068), its one CodeQL thread resolved. On the merged tree the
-              coverage gate, the preflight-CI parity gate (459 gates, 0 unwired), the sync-manifest check and the PR's own self-tests
-              (109/109, 63/63) passed.
-              #1515 (efdc9a2) clears the mac-lane-tick hand inside its stale-cover grace (3h from raisedAt 10:52:44Z, to 13:52:44Z): open,
-              gating pending when this record was briefed; merged as 355ff646 at 12:39:09Z (gating check run 116420704196), after the
-              freeze point, so it is the first event of the next record.
+              #1501 (29f0749e, merged e6acacc7 at 12:31Z) landed under DR-037 as SAFETY_MACHINERY: gating check run 113898621289
+              (completed 2026-10-09T15:58:12Z, almost six days before the merge and before the bound was crossed), review round 1 ship
+              (Sonnet + Opus refute upheld, comment 6084802068), its one CodeQL thread resolved (PRRT_kwDOSpuy-s6q0x6w). On the merged
+              tree the surface-review coverage gate (scripts/check-surface-review-coverage.mjs, "Surface-read-coverage gate passed";
+              re-run on the merged tree by the coordinator at 12:29Z, recorded, and again for this record), the preflight-CI parity gate
+              (459 gates, 0 unwired), the sync-manifest check and the PR's own self-tests (109/109, 63/63) passed.
+              AFTER THE FREEZE POINT (the first events of the next record): #1515 (efdc9a2) clears the mac-lane-tick hand inside its
+              stale-cover grace (3h from raisedAt 10:52:44Z, to 13:52:44Z): open, gating pending when this record was briefed; merged as
+              355ff646 at 12:39:09Z (gating check run 116420704196). #1505 (head a0b465d1) merged as 04f97ddc at 13:26:43Z (gating check
+              run 116438358653, completed 13:24:45Z): SAFETY_MACHINERY under DR-037, Opus landing refute upheld (comment 6193179269),
+              live-sync manifest version 95 to 96.
               THE MEASUREMENT ARTIFACT (comment 6191838619 on #1514): scripts/raised-hands.mjs measures stalls at origin/SignalGrid_Alpha
               (TIP_REF) and never reads the branch's own tree for stalls, while it reads hands from the branch tree. A lane-mail PR that
               both delivers the heartbeat ending a stall and clears the hand covering it therefore reads "stall, no hand" in the fatal
@@ -97,11 +108,12 @@ LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z
               Open backlog row in docs/BUILD_BACKLOG.md, not a push to #1514.
               THROTTLE until the owner decides the budget (the owner hand): the brain runs at most 3 concurrent workers, Sonnet reviews,
               Opus refute only for DR-037 landings.
-              QUEUE: #1468 round 28 (38270f72, missing PATH entries skipped) was REFUTED by Opus - a relative PATH entry such as ../x is
-              ENOENT to the scan but $TMPDIR/x to git, so a planted helper ran unseen; round 29 is being built. #1505 round-1 review: ship
-              with four LOWs posted (comment 6191983369); Opus refute at its landing round. Owner queue unchanged: #1463 #1459 #1440 #1443
-              #1442 #1445 #1441 #1439 #1438 #1338 #1337 #1330 #1321 #1265; nine Dependabot PRs #1379, #1381-#1387, #1495 with no routine
-              watching them; signalgrid-mcp #15 #16 #17 are clean and the owner's to merge.
+              QUEUE (as of 12:48Z): #1468 round 28 (38270f72, local, unpushed; missing PATH entries skipped) was REFUTED by Opus - a
+              relative PATH entry such as ../x is ENOENT to the scan but $TMPDIR/x to git, so a planted helper ran unseen; round 29 is
+              being built. #1505 round-1 review: ship with four LOWs posted (comment 6191983369); it landed after the freeze (above).
+              Owner queue unchanged: #1463 #1459 #1440 #1443 #1442 #1445 #1441 #1439 #1438 #1338 #1337 #1330 #1321 #1265; nine
+              Dependabot PRs #1379, #1381-#1387, #1495 with no routine watching them; signalgrid-mcp #15 #16 #17 are clean and the
+              owner's to merge.
               LESSON: L23 (wrong tier) and L24 (an awaiting-activation row with a hard bound and no fallback; pending on its backlog row).
               Window detail: docs/agent/EVIDENCE.md, the three "## 2026-10-15" entries.
 TIERS THIS SESSION: the coordinating session edited #1513's first two commits (2f5c8809, 50bb19d7) itself, on the wrong tier (L23);
@@ -1996,7 +2008,7 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
 BLOCKED ON: owner - the budget decision and the explicit go or decline for a NEW Dependabot queue-review row (the owner hand on the
               raised-hands issue); the 14 owner-queue PRs #1463 #1459 #1440 #1443 #1442 #1445 #1441 #1439 #1438 #1338 #1337 #1330 #1321
               #1265; signalgrid-mcp #15 #16 #17. Mac - a session to ack the five cloud-to-mac mails and re-mint live evidence (minted
-              2026-10-02T16:07Z, e78a7ae1; the ask is in the unread mail and the mac-lane hand). Nothing else blocks the cloud lane.
+              2026-10-02T16:07Z, e78a7ae1; the ask is in the unread mail and the mac-lane hand). No other blocker is recorded.
 PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATION_2026-09-12.md,
               'The founder's queue'): Screen Recording for Terminal; 'yes' to the
               branch cleanup; pick the FIRST of
@@ -2012,10 +2024,10 @@ PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATI
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud lane (2026-10-15): land #1468 round 29 (556d0776: relative PATH entries resolved in the listing dir) once local
-              preflight+breadth and the Sonnet+Opus re-review are green - push, CI gating + Mac check, DR-037 landing note. Land #1505
-              after B82 closes the four LOWs (comment 6192144150) and the Opus refute at its landing round. #1490 round 8 after B78r2
-              restores the three #1464 closures (comment 6192173775). Wake B68 (#1460 round 14) and B74 (#1470 round 12) by PR comment
+NEXT ACTION: cloud lane (2026-10-15, as of 12:48Z, less #1505, which landed after the freeze - above): land #1468 round 29 (556d0776,
+              local, unpushed: relative PATH entries resolved in the listing dir) once local preflight+breadth and the Sonnet+Opus
+              re-review are green - push, CI gating + Mac check, DR-037 landing note. #1490 round 8 after B78r2 restores the three #1464
+              closures (comment 6192173775). Wake B68 (#1460 round 14) and B74 (#1470 round 12) by PR comment
               as the 3-worker throttle frees slots; B83 takeover of #1504 (partial c7d6a6b0) and B84 re-dispatch under the same throttle.
               Backlog rows A and B (docs/BUILD_BACKLOG.md, section "The 2026-10-09 to 2026-10-15 outage - follow-ups") when a builder
               slot is free.

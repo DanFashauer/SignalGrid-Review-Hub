@@ -203,7 +203,7 @@ check("proof:config-scope keeps the tenant-key guard registered and opted in: st
 // non-GET / bad-token / unknown-path guards sit on the offline allow path and sat in NO target.
 // Every one is registered under its own family proof (already `oneLine`) with its survivors pinned.
 // local-authority is NOT in this list: its proof never references the factory, so a mutant there
-// could not be killed and the file stays unregistered (listed in BUILD_BACKLOG L2107).
+// could not be killed and the file stays unregistered (listed on the BUILD_BACKLOG row "61 files under lib/integrations/src/integrations").
 for (const f of ["credential-exposure", "data-protection", "identity-risk", "network-nac", "rtls-custody", "access-governance", "macos-posture", "oauth-consent", "ot-posture", "pacs-access", "sso-session", "task-exception", "token-binding", "link-usability", "agent-identity", "device-attestation"]) {
   const file = `lib/integrations/src/integrations/${f}/mock-transport.ts`;
   check(`proof:${f} keeps its mock transport registered: ${f}/mock-transport.ts`, TARGETS.find((t) => t.proof === `proof:${f}`)?.files.includes(file) === true);

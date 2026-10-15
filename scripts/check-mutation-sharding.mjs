@@ -20,8 +20,15 @@
  * target, because a heavy target is cut into slices, and it is proven by running the SAME
  * `selectSliceMutations` that mutation-guard's main() sweeps with over every real unit (a gate
  * that re-implemented the ownership loop covered a model of it: three one-token regressions in
- * main()'s own copy stayed green, one of them a silent skip), with main()'s call to it pinned
- * as source text and fixture mutants of both the call and the function that must go red;
+ * main()'s own copy stayed green, one of them a silent skip), AND by running main() ITSELF in its
+ * `--plan` mode (its own target resolution, shard split and selection, stopping where the first
+ * mutation would be written) for shard counts 1 to 4 and comparing what it plans with the selector's
+ * own run and with the registry's totals: a pin on main()'s source text was satisfied by a comment,
+ * a dead branch, or a statement that rewrote the selection afterwards, and a dropped
+ * `targets = shardTargets(...)` assignment was not pinned at all, so what main() DOES is observed
+ * and its text is only a second net (comments stripped), with fixture mutants of the call and of
+ * the function that must go red, and a fixture that cannot be built failing the gate by name
+ * instead of passing or crashing it;
  * (2) a target that registers a cost
  * heavier than one unit is in fact sliced; (3) no shard's REGISTERED load exceeds 80% of the
  * sweep job's own `timeout-minutes`. (3) exists because the sweep was balanced by mutation
@@ -30,11 +37,12 @@
  * cost is invisible to this gate by construction; the sweep's own COST DRIFT line is the net
  * for that.
  */
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
-import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations } from "./mutation-guard.mjs";
+import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf } from "./mutation-guard.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -59,7 +67,7 @@ console.log("Mutation sharding — the split must lose nothing\n");
 // loop of its own: it once re-implemented the ownership rule, and three regressions in main()'s copy
 // of it (slice ignored; ordinal advanced by the filtered count, so mutations were skipped and repeated
 // with every shard exiting 0; zero check on the filtered count) all left it at 123/123.
-const unitKey = (u) => `${u.proof}${u.slice ? `[${u.slice.index}/${u.slice.count}]` : ""}`;
+const unitKey = unitName;
 const TOTALS = new Map(TARGETS.map((t) => [t.proof, mutationTotal(t)]));
 const totalOf = (t) => TOTALS.get(t.proof) ?? mutationTotal(t);
 // Each (file, opt-in) is parsed ONCE and shared by every call below. The selector only counts and
@@ -110,6 +118,26 @@ for (const n of [1, 2, 3, 4, 8, TARGETS.length, TARGETS.length + 3]) {
 }
 check("mutationsByFile agrees with mutationTotal on every registered target (the selector is fed the files the sharder weighs)",
   TARGETS.every((t) => perFileOf(t).length === t.files.length && perFileOf(t).reduce((n, f) => n + f.mutations.length, 0) === TOTALS.get(t.proof)));
+// The two checks above hand mutationsByFile the gate's OWN reader. main() passes none: it takes the
+// DEFAULT, so a default that quietly drops the brace-less sweep (432 of 2026 mutations, every shard
+// exiting 0) or reads every file as empty never reached the gate. This one calls it exactly as main()
+// does, with no reader, on every registered target, and compares with the cached parse and with TOTALS.
+{
+  const bad = [];
+  let readTotal = 0;
+  for (const t of TARGETS) {
+    const real = mutationsByFile(t);
+    const here = real.reduce((n, f) => n + f.mutations.length, 0);
+    readTotal += here;
+    const same = real.length === t.files.length
+      && real.every((f, k) => f.file === t.files[k]
+        && JSON.stringify(f.mutations.map((m) => [m.lineNo, m.mutator])) === JSON.stringify(parseOnce(t.files[k], { oneLine: t.oneLine === true }).map((m) => [m.lineNo, m.mutator])));
+    if (!same || here !== TOTALS.get(t.proof)) bad.push(t.proof);
+  }
+  const registered = [...TOTALS.values()].reduce((a, b) => a + b, 0);
+  check(`mutationsByFile with NO reader (its default, the call main() makes) returns the registered mutations of every target, brace-less sweep included (${readTotal} of ${registered} mutations, ${TARGETS.length} targets)${bad.length ? ` — differs for ${bad.slice(0, 4).join(", ")}${bad.length > 4 ? `, +${bad.length - 4} more` : ""}` : ""}`,
+    bad.length === 0 && readTotal === registered);
+}
 
 // DETERMINISM IS LOAD-BEARING and easy to miss. Each shard runs in its own CI job
 // on its own runner, and each computes the partition independently from the same
@@ -203,36 +231,217 @@ check("costDrifted flags a proof that outgrew its registration and stays quiet t
 //
 // Two ways to break the selection survive a gate that proves only the arithmetic: the function
 // itself (checked above on the real registry, and below on mutants of its own text), and the
-// CALLER, main(), which can ignore the slice or keep a private filter and counter. The caller is
-// pinned as source text, the way the workflow is read below, because main() cannot be run here (it
-// mutates source for the better part of an hour).
+// CALLER, main(), which can ignore the slice, keep a private filter and counter, rewrite the
+// selection afterwards, or drop the assignment of its shard split. main() cannot be RUN here in
+// full (it mutates source for the better part of an hour), so it is checked two ways.
+//
+// 1. It is run as far as it is safe to: `--plan` takes main()'s own path (target resolution, shard
+//    split, selection, the loops over files and owned mutations) and records each placement at the
+//    statement that would otherwise write the mutation, then stops. A comment holding the call, a
+//    dead branch, a splice into `owned` after the selector, a discarded shard split: all of those
+//    change what main() plans, and the plan is compared below with the selector's own run.
+// 2. Its source text is pinned, comments stripped, as a second net: the pins also keep the plan
+//    mode honest (it must stop before the baseline and before a mutation is written, which is what
+//    makes spawning it safe).
 const GUARD_SRC = readFileSync(join(REPO, "scripts/mutation-guard.mjs"), "utf8");
+// Comments removed, everything else kept, so a pin cannot be satisfied (or tripped) by a comment. Not
+// a parser: it knows quotes, nested template literals and regex literals, which is what main() holds.
+function stripComments(src) {
+  let out = "";
+  let i = 0;
+  let prev = "";
+  const subst = [];
+  const scanTemplate = () => {
+    while (i < src.length) {
+      const c = src[i];
+      if (c === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
+      if (c === "`") { out += c; i += 1; prev = "`"; return; }
+      if (c === "$" && src[i + 1] === "{") { out += "${"; i += 2; subst.push(0); prev = "{"; return; }
+      out += c; i += 1;
+    }
+  };
+  while (i < src.length) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (c === "/" && d === "/") { while (i < src.length && src[i] !== "\n") i += 1; continue; }
+    if (c === "/" && d === "*") {
+      const close = src.indexOf("*/", i + 2);
+      const stop = close < 0 ? src.length : close + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, " ");
+      i = stop;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
+      out += src.slice(i, j + 1); i = j + 1; prev = c;
+      continue;
+    }
+    if (c === "`") { out += c; i += 1; scanTemplate(); continue; }
+    if (c === "{" && subst.length > 0) subst[subst.length - 1] += 1;
+    if (c === "}" && subst.length > 0) {
+      if (subst[subst.length - 1] === 0) { subst.pop(); out += c; i += 1; scanTemplate(); continue; }
+      subst[subst.length - 1] -= 1;
+    }
+    if (c === "/" && (prev === "" || "(,=:[!&|?{;".includes(prev))) {
+      let j = i + 1;
+      let inClass = false;
+      while (j < src.length && src[j] !== "\n" && (inClass || src[j] !== "/")) {
+        if (src[j] === "\\") j += 1;
+        else if (src[j] === "[") inClass = true;
+        else if (src[j] === "]") inClass = false;
+        j += 1;
+      }
+      if (src[j] === "/") {
+        j += 1;
+        while (j < src.length && /[a-z]/.test(src[j])) j += 1;
+        out += src.slice(i, j); i = j; prev = ")";
+        continue;
+      }
+    }
+    out += c; i += 1;
+    if (!/\s/.test(c)) prev = c;
+  }
+  return out;
+}
+check("fixture: stripComments drops line and block comments and keeps '//', '/*' and quotes inside strings, nested templates and regex literals",
+  stripComments("a(); // it's gone\nb(\"//\", '/* kept */'); /* x\ny */ c();").replace(/ +/g, " ") === "a(); \nb(\"//\", '/* kept */'); \n c();"
+  && stripComments("`a ${b ? `c // ${d}` : \"//\"} // text` // tail") === "`a ${b ? `c // ${d}` : \"//\"} // text` "
+  && stripComments("s.replace(/^p:/, \"\") // tail\nx = a / b; // t") === "s.replace(/^p:/, \"\") \nx = a / b; ");
+// Whitespace is folded to single spaces after the comments go, so a pin reads one statement per
+// string and is neither tripped by a reformat nor satisfied by a comment.
 function mainBody(src) {
   const start = src.indexOf("\nfunction main() {");
   const end = src.indexOf("\nif (IS_MAIN) main();", start);
-  return start < 0 || end < 0 ? "" : src.slice(start, end);
+  return start < 0 || end < 0 ? "" : stripComments(src.slice(start, end)).replace(/\s+/g, " ");
 }
+const PIN_SELECT = "const plan = selectSliceMutations(target, mutationsByFile(target));";
+const PIN_SHARD = "targets = shardTargets(targets, i, n);";
+const PIN_FILES = "for (const { file, allCount, owned } of plan.files) {";
+const PIN_ZERO = "if (allCount === 0) {";
+const PIN_PLAN_STOP = "for (const { ordinal, mutation } of owned) { if (planOnly) { placements.push(placementOf(target, file, ordinal, mutation)); continue; }";
+const PIN_NO_BASELINE = "if (!planOnly) { const base = baselineProbe(target.proof, runProof);";
+const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE];
 function mainSweepsWithSelector(src) {
   const body = mainBody(src);
+  // The words below may appear only inside the pinned statements (the plan records the selector's
+  // own ordinal); anywhere else they are a private ownership filter or counter.
+  const rest = MAIN_PINS.reduce((b, pin) => b.split(pin).join(""), body);
   return body !== ""
     && (body.match(/selectSliceMutations\(/g) ?? []).length === 1
-    && body.includes("const plan = selectSliceMutations(target, mutationsByFile(target));")
-    && body.includes("for (const { file, allCount, owned } of plan.files) {")
-    && body.includes("for (const { mutation } of owned) {")
-    && body.includes("if (allCount === 0) {")
-    && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(body);
+    && MAIN_PINS.every((pin) => body.includes(pin))
+    && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(rest);
 }
-check("main() sweeps with the exported selector, passes the unit's own slice, zero-checks the WHOLE file, and keeps no ownership filter or counter of its own", mainSweepsWithSelector(GUARD_SRC));
+const planModeStopsBeforeMutation = (src) => { const body = mainBody(src); return body.includes(PIN_PLAN_STOP) && body.includes(PIN_NO_BASELINE); };
+check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, and keeps no ownership filter or counter of its own", mainSweepsWithSelector(GUARD_SRC));
+check("main()'s --plan mode takes no baseline and records each placement INSTEAD of writing the mutation (the condition for spawning it below)", planModeStopsBeforeMutation(GUARD_SRC));
 const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
-const MAIN_CALL = "const plan = selectSliceMutations(target, mutationsByFile(target));";
+// A fixture mutant is a replacement in the real text. When the text it replaces has MOVED, nothing was
+// mutated: that is a broken fixture, not a mutant that went undetected, and it must fail by its own
+// name (an earlier version fell through to "the mutant is not detected" or to an uncaught throw).
+const fixtureText = (src, name, from, to) => {
+  const text = withReplaced(src, from, to);
+  if (text === undefined) check(`fixture text not found — update the pin (the text it replaces moved or is no longer unique): ${name}`, false);
+  return text;
+};
+const errText = (err) => (err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+const MAIN_CALL = PIN_SELECT;
 for (const [name, from, to] of [
   ["main() ignores the slice (the selector is called without it)", MAIN_CALL, "const plan = selectSliceMutations({ ...target, slice: undefined }, mutationsByFile(target));"],
   ["main() bypasses the selector and filters by itself", MAIN_CALL, "const plan = { files: mutationsByFile(target).map(({ file, mutations }) => ({ file, allCount: mutations.length, owned: mutations.filter((_, i) => sliceOwns(target.slice, i)).map((mutation) => ({ mutation })) })), swept: 0 };"],
-  ["main() computes the selection and then walks every mutation of the file instead of what it owns", "for (const { file, allCount, owned } of plan.files) {", "for (const { file, mutations: all } of mutationsByFile(target)) { const allCount = all.length; const owned = all.map((mutation) => ({ mutation }));"],
-  ["main() zero-checks the slice instead of the whole file", "if (allCount === 0) {", "if (owned.length === 0) {"],
+  ["main() computes the selection and then walks every mutation of the file instead of what it owns", PIN_FILES, "for (const { file, mutations: all } of mutationsByFile(target)) { const allCount = all.length; const owned = all.map((mutation) => ({ mutation }));"],
+  ["main() zero-checks the slice instead of the whole file", PIN_ZERO, "if (owned.length === 0) {"],
+  ["main() discards the shard split (every shard sweeps the whole registry)", PIN_SHARD, "shardTargets(targets, i, n);"],
+  ["main()'s plan mode falls through to the mutation instead of stopping", "placements.push(placementOf(target, file, ordinal, mutation));\n          continue;", "placements.push(placementOf(target, file, ordinal, mutation));"],
+  ["main()'s plan mode takes the baseline", "if (!planOnly) {\n      // See baselineProbe()", "if (true) {\n      // See baselineProbe()"],
 ]) {
-  const mutant = withReplaced(GUARD_SRC, from, to);
-  check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== undefined && mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
+  const mutant = fixtureText(GUARD_SRC, name, from, to);
+  if (mutant !== undefined) check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
+}
+
+// main() RUN. Each shard of each shard count is planned by the real entrypoint and compared, in
+// order, with what the selector gives for the same shard, then the shards of one count are checked
+// to cover every registered mutation exactly once. The run that the CI shard job makes
+// (`--proof=<heavy proof> --shard=i/4`) is planned too. Planning parses text and runs no proof.
+const GUARD_PATH = join(REPO, "scripts/mutation-guard.mjs");
+const runPlan = (args, env = {}) => new Promise((done) => {
+  execFile(process.execPath, [GUARD_PATH, "--plan", ...args], { cwd: REPO, env: { ...process.env, ...env }, maxBuffer: 64 * 1024 * 1024, timeout: 120_000 }, (err, stdout, stderr) => {
+    let doc = null;
+    try { doc = JSON.parse(stdout); } catch { /* not JSON: the checks below say so */ }
+    done({ rc: err === null ? 0 : typeof err.code === "number" ? err.code : 1, stdout, stderr, doc });
+  });
+});
+const inPool = async (jobs, limit) => {
+  const out = new Array(jobs.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, jobs.length) }, async () => {
+    while (next < jobs.length) { const k = next; next += 1; out[k] = await jobs[k](); }
+  }));
+  return out;
+};
+const expectedPlan = (registry, i, n) =>
+  shardTargets(registry, i, n).flatMap((u) => selectSliceMutations(u, perFileOf(u)).files.flatMap((f) => f.owned.map(({ ordinal, mutation }) => placementOf(u, f.file, ordinal, mutation))));
+const briefly = (p) => (p === undefined ? "none" : `${p.unit} ${p.file.split("/").pop()}:${p.line} ${p.mutator} #${p.ordinal}`);
+const firstDifference = (got, want) => {
+  const k = Array.from({ length: Math.max(got.length, want.length) }, (_, x) => x).find((x) => JSON.stringify(got[x]) !== JSON.stringify(want[x]));
+  return k === undefined ? "" : ` (first difference at placement ${k}: ${briefly(got[k])} vs expected ${briefly(want[k])})`;
+};
+const proofOfUnit = (unit) => unit.replace(/\[\d+\/\d+\]$/, "");
+const PLAN_COUNTS = [1, 2, 3, 4];
+const dmhTarget = TARGETS.find((t) => t.proof === "proof:device-management-health");
+if (!planModeStopsBeforeMutation(GUARD_SRC)) {
+  check("main()'s real --plan places every mutation exactly once (NOT RUN: its stop before the mutation is not pinned, and running it could sweep)", false);
+} else {
+  const jobs = [
+    ...PLAN_COUNTS.flatMap((n) => Array.from({ length: n }, (_, i) => ({ n, i, args: [`--shard=${i}/${n}`], registry: TARGETS }))),
+    ...(dmhTarget ? Array.from({ length: 4 }, (_, i) => ({ n: 4, i, args: [`--proof=${dmhTarget.proof}`, `--shard=${i}/4`], registry: [dmhTarget], only: dmhTarget.proof })) : []),
+  ];
+  const runs = await inPool(jobs.map((j) => () => runPlan(j.args)), 4);
+  const judged = jobs.map((j, k) => {
+    const run = runs[k];
+    const want = expectedPlan(j.registry, j.i, j.n);
+    const got = run.doc?.placements ?? [];
+    const ok = run.rc === 0 && run.doc !== null && run.doc.shard === `${j.i}/${j.n}` && run.doc.proof === (j.only ?? null)
+      && run.doc.count === got.length && JSON.stringify(got) === JSON.stringify(want);
+    if (!ok) console.error(`    plan ${j.args.join(" ")}: rc=${run.rc}, ${run.doc === null ? `stdout is not JSON (${run.stderr.trim().split("\n").pop() ?? ""})` : `${got.length} placements vs ${want.length} expected${firstDifference(got, want)}`}`);
+    return { ...j, got, want, ok };
+  });
+  // A mutation is keyed by its identity (proof, file, line, mutator), never by the ordinal main()
+  // reports: a wrong ordinal must not be able to make a repeated mutation look like a distinct one.
+  const onceAndTotal = (set, expected) => {
+    const seen = new Map();
+    for (const p of set) {
+      const id = `${proofOfUnit(p.unit)}|${p.file}|${p.line}|${p.mutator}`;
+      seen.set(id, (seen.get(id) ?? 0) + 1);
+    }
+    return { placed: set.length, distinct: seen.size, ok: set.length === expected && seen.size === expected && [...seen.values()].every((c) => c === 1) };
+  };
+  for (const n of PLAN_COUNTS) {
+    const mine = judged.filter((j) => j.n === n && j.only === undefined);
+    const expected = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
+    const u = onceAndTotal(mine.flatMap((j) => j.got), expected);
+    check(`N=${n}: main()'s real --plan, shards 0..${n - 1}, plans exactly what the selector gives and every registered mutation exactly once (${u.placed} placements, ${u.distinct} distinct, ${expected} registered)`,
+      mine.length === n && mine.every((j) => j.ok) && u.ok);
+  }
+  const quarter = judged.find((j) => j.n === 4 && j.i === 0 && j.only === undefined);
+  const whole = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
+  check(`main()'s --plan for shard 0/4 is a strict subset of the sweep (${quarter?.got.length} of ${whole} mutations, ${expectedPlan(TARGETS, 0, 4).length} expected), so the shard split is in effect`,
+    quarter !== undefined && quarter.ok && quarter.got.length > 0 && quarter.got.length < whole);
+  if (dmhTarget) {
+    const mine = judged.filter((j) => j.only === dmhTarget.proof);
+    const u = onceAndTotal(mine.flatMap((j) => j.got), totalOf(dmhTarget));
+    check(`main()'s real --plan for the CI slice command (--proof=${dmhTarget.proof} --shard=i/4) holds ${mine.map((j) => j.got.length).join("+")} = ${u.placed} of ${totalOf(dmhTarget)} mutations, each once`,
+      mine.length === 4 && mine.every((j) => j.ok) && u.ok);
+  }
+  // The split is computed independently on every runner, so the REAL entrypoint must not depend on the
+  // machine: same bytes under a different locale and time zone.
+  const shardOne = judged.find((j) => j.n === 4 && j.i === 1 && j.only === undefined);
+  const [plainRun, utcRun, farRun] = [runs[judged.indexOf(shardOne)], ...(await Promise.all([
+    runPlan(["--shard=1/4"], { LC_ALL: "C", LANG: "C", TZ: "UTC" }),
+    runPlan(["--shard=1/4"], { LC_ALL: "tr_TR.UTF-8", LANG: "tr_TR.UTF-8", TZ: "Pacific/Kiritimati" }),
+  ]))];
+  check("main()'s --plan is byte-identical under LC_ALL=C TZ=UTC and under LC_ALL=tr_TR.UTF-8 TZ=Pacific/Kiritimati (independent runners each compute the split)",
+    plainRun.rc === 0 && utcRun.rc === 0 && farRun.rc === 0 && plainRun.stdout !== "" && utcRun.stdout === plainRun.stdout && farRun.stdout === plainRun.stdout);
 }
 
 // The function's own text, mutated, loaded as a module and run through the SAME coverage() the real
@@ -264,18 +473,32 @@ if (selectorExtracted) {
       });
     const sliced = shardTargets(fxReg, 0, 1).filter((u) => u.proof === "proof:fx-multi");
     check(`fixture: the multi-file target is cut into ${sliced.length} slices, so the ordinal has to carry across files`, sliced.length === 3 && sliced.every((u) => u.slice !== undefined));
-    check("the real selector loses and repeats no mutation, reports true ordinals and keeps each file's whole count, on the multi-file fixture", selectorHolds(selectSliceMutations));
-    const control = await loadSelector(SELECTOR_TEXT.join("\n"));
-    check("control: the selector's own text, extracted and loaded back as a module, passes the same battery (so a red below is the mutant, not the harness)", selectorHolds(control));
+    // A battery that THROWS on a selector is a verdict on that selector, never a crash of the gate: a
+    // mutant that throws is detected (it does not do the job), the real selector and the control that
+    // throw are failures with the reason printed.
+    const verdictOf = (select) => {
+      try { return { holds: selectorHolds(select) }; } catch (err) { return { holds: false, threw: errText(err) }; }
+    };
+    const real = verdictOf(selectSliceMutations);
+    check(`the real selector loses and repeats no mutation, reports true ordinals and keeps each file's whole count, on the multi-file fixture${real.threw ? ` — it threw: ${real.threw}` : ""}`, real.holds);
+    let control;
+    let controlError = "";
+    try { control = verdictOf(await loadSelector(SELECTOR_TEXT.join("\n"))); } catch (err) { controlError = errText(err); }
+    check(`control: the selector's own text, extracted and loaded back as a module, passes the same battery (so a red below is the mutant, not the harness)${controlError ? ` — it did not load: ${controlError}` : control?.threw ? ` — it threw: ${control.threw}` : ""}`, control?.holds === true);
     for (const [name, from, to] of [
       ["the ordinal advances by the FILTERED count (mutations skipped and repeated, every shard exits 0)", "ordinal += all.length;", "ordinal += owned.length;"],
       ["the slice is ignored (every unit sweeps the whole target)", "sliceOwns(target.slice, ordinal + i)", "sliceOwns(undefined, ordinal + i)"],
       ["allCount is the FILTERED count (a file with mutations the slice does not own reads as empty)", "allCount: all.length", "allCount: owned.length"],
       ["the reported ordinal restarts in each file (its numbers stop being positions in the target)", "owned.push({ ordinal: ordinal + i, mutation: all[i] })", "owned.push({ ordinal: i, mutation: all[i] })"],
     ]) {
-      const text = withReplaced(SELECTOR_TEXT[1], from, to);
-      const mutant = text === undefined ? undefined : await loadSelector([SELECTOR_TEXT[0], text].join("\n"));
-      check(`fixture mutant of the selector is detected, the gate goes red: ${name}`, mutant !== undefined && text !== SELECTOR_TEXT[1] && selectorHolds(mutant) === false);
+      const text = fixtureText(SELECTOR_TEXT[1], name, from, to);
+      if (text === undefined) continue;
+      let verdict;
+      try { verdict = verdictOf(await loadSelector([SELECTOR_TEXT[0], text].join("\n"))); } catch (err) {
+        check(`fixture could not be built (the mutant does not load: ${errText(err)}): ${name}`, false);
+        continue;
+      }
+      check(`fixture mutant of the selector is detected, the gate goes red${verdict.threw ? ` (by a throw: ${verdict.threw})` : ""}: ${name}`, text !== SELECTOR_TEXT[1] && verdict.holds === false);
     }
   }
 }
@@ -479,7 +702,7 @@ check("unknown flags are refused (--help, a bare -h, a space-separated --proof)"
 check("a bare positional is refused (`mutation-guard.mjs proof:ot-posture` used to sweep everything)", unknownArgs(["proof:ot-posture"]).length === 1);
 check("an EMPTY --proof= / --shard= is refused (a falsy value used to select every target)", unknownArgs(["--proof="]).length === 1 && unknownArgs(["--shard="]).length === 1);
 check("a malformed value is refused: --proof==, --proof==x, --proof=a=b, --shard=1/4/9, --shard==1/4, --shard=a/b", ["--proof==", "--proof==proof:x", "--proof=a=b", "--shard=1/4/9", "--shard==1/4", "--shard=a/b"].every((a) => unknownArgs([a]).length === 1));
-check("known flags and pnpm's forwarded bare -- are accepted", unknownArgs(["--", "--proof=proof:x", "--shard=0/4"]).length === 0);
+check("known flags (--proof=, --shard=, --plan) and pnpm's forwarded bare -- are accepted; --plan takes no value", unknownArgs(["--", "--proof=proof:x", "--shard=0/4", "--plan"]).length === 0 && unknownArgs(["--plan=1"]).length === 1 && unknownArgs(["--Plan"]).length === 1);
 
 // ── The allowlist resolves each entry to EXACTLY ONE line ─────────────────────
 //

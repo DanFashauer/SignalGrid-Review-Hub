@@ -75,7 +75,9 @@
 // The partition is deterministic (registered numbers only, never a clock), so independent
 // runners still agree on it; `check-mutation-sharding.mjs` proves it covers every MUTATION
 // exactly once, by running the SAME `selectSliceMutations` that main() sweeps with (not a model
-// of it), and refuses a split whose registered load nears the job's own timeout.
+// of it) and by running main() itself with `--plan` (its own selection, stopping before the
+// first mutation is written; no proof runs), and refuses a split whose registered load nears
+// the job's own timeout.
 // A registered cost can go stale (that is how this happened), so each run prints the
 // measured baseline beside it and flags a proof that outgrew its registration.
 
@@ -1901,6 +1903,23 @@ export function selectSliceMutations(target, perFile) {
   return { files, total: ordinal, swept };
 }
 
+/** The schedulable unit's name: its proof, plus `[index/count]` when it is one slice of a target. */
+export function unitName(unit) {
+  return `${unit.proof}${unit.slice ? `[${unit.slice.index}/${unit.slice.count}]` : ""}`;
+}
+
+/** One planned mutation as `--plan` prints it, fields in this fixed order. `ordinal` is the position
+ *  in the TARGET (the selector's number), `line` the 1-based source line. */
+export function placementOf(unit, file, ordinal, mutation) {
+  return { unit: unitName(unit), file, ordinal, mutator: mutation.mutator, line: mutation.lineNo };
+}
+
+/** The `--plan` document: one placement per line, so a diff of two plans reads line by line. Pure,
+ *  and the only thing `--plan` writes to stdout, which is why it parses as JSON whole. */
+export function planDocument(proof, shard, placements) {
+  return `{"proof":${JSON.stringify(proof ?? null)},"shard":${JSON.stringify(shard ?? null)},"count":${placements.length},"placements":[\n${placements.map((p) => JSON.stringify(p)).join(",\n")}\n]}`;
+}
+
 /** How many slices a target needs so none holds more than `maxUnitSeconds` of registered work:
  *  one for an ordinary target, never more than one per mutation (an empty slice would run a
  *  baseline for nothing). */
@@ -1980,7 +1999,8 @@ export function costDrifted(measuredSeconds, registeredSeconds) {
   return measuredSeconds > registeredSeconds * 1.75 && measuredSeconds - registeredSeconds >= 8;
 }
 
-/** Arguments this script understands: `--proof=<name>` and `--shard=<i>/<n>`, and
+/** Arguments this script understands: `--proof=<name>`, `--shard=<i>/<n>` and `--plan` (print
+ *  what would be swept and stop; see main()), and
  *  the bare `--` that `pnpm run guard:mutations -- --proof=...` forwards (ignored). Anything
  *  else is refused — `--help`, a typo, a bare positional (`... proof:ot-posture`), or an
  *  EMPTY `--proof=` (whose falsy value used to fall through to a FULL sweep). Each of those
@@ -1989,17 +2009,25 @@ export function unknownArgs(argv) {
   // Validate the VALUE main() will parse (`split("=")[1]`), not just the raw token: `--proof==`
   // and `--proof==x` have a non-empty token but an empty parsed value, which selected EVERY
   // target. A value may therefore hold no second `=`; a shard is exactly `<int>/<int>`.
-  return argv.filter((a) => a !== "--" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
+  return argv.filter((a) => a !== "--" && a !== "--plan" && !/^--proof=[^=]+$/.test(a) && !/^--shard=\d+\/\d+$/.test(a));
 }
 
+/** `--plan`: run main()'s own target resolution, shard split and selection, then stop where the first
+ *  mutation would be written. Nothing is mutated, no proof runs, no baseline is taken; stdout is the
+ *  `planDocument` JSON and nothing else (the human lines go to stderr). It exists so the sharding gate
+ *  can observe what main() actually sweeps instead of reading main()'s source: the placements are
+ *  recorded at the statement that would otherwise run the mutation. */
 function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
-    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>]`);
+    console.error(`Mutation guard: unknown argument(s) ${unknown.join(" ")}. Usage: node scripts/mutation-guard.mjs [--proof=proof:<name>] [--shard=<i>/<n>] [--plan]`);
     process.exit(1);
   }
   const only = process.argv.find((a) => a.startsWith("--proof="))?.split("=")[1];
   const shardArg = process.argv.find((a) => a.startsWith("--shard="))?.split("=")[1];
+  const planOnly = process.argv.includes("--plan");
+  const log = planOnly ? console.error : console.log;
+  const placements = [];
   let targets = only ? TARGETS.filter((t) => t.proof === only) : TARGETS;
   if (targets.length === 0) {
     console.error(`No target matches --proof=${only}. Known: ${TARGETS.map((t) => t.proof).join(", ")}`);
@@ -2017,12 +2045,12 @@ function main() {
     }
     const slicedUnits = targets.filter((t) => t.slice !== undefined).length;
     const registeredLoad = targets.reduce((sum, t) => sum + unitWeight(t), 0);
-    console.log(
+    log(
       `Shard ${i + 1} of ${n} — ${targets.length} of ${TARGETS.length} registered targets` +
         (slicedUnits ? ` (${slicedUnits} of them a slice of a target too heavy for one runner)` : "") +
         `; registered load ~${(registeredLoad / 60).toFixed(1)} min (mutations x runSeconds, not a measurement).`,
     );
-    if (targets.length === 0) {
+    if (targets.length === 0 && !planOnly) {
       // Not an error: with more shards than targets, an empty shard is correct and
       // must stay GREEN, or the lane fails for a scheduling choice rather than a defect.
       console.log("This shard has no targets. Nothing to sweep.\n");
@@ -2030,7 +2058,7 @@ function main() {
     }
   }
 
-  console.log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
+  log("Mutation guard — every registered guard must be falsifiable by its own proof\n");
 
   // An allowlist entry that no longer matches any line is itself a finding: the code moved
   // and the justification was never revisited. Checked BEFORE any mutation runs, so a stale
@@ -2078,31 +2106,33 @@ function main() {
   const sweepStart = performance.now();
   const timings = [];
   for (const target of targets) {
-    console.log(`── ${target.proof}${target.slice ? ` (slice ${target.slice.index + 1} of ${target.slice.count})` : ""}`);
+    log(`── ${target.proof}${target.slice ? ` (slice ${target.slice.index + 1} of ${target.slice.count})` : ""}`);
     const targetStart = performance.now();
-    // See baselineProbe(): without this, a harness that cannot run the proof at all
-    // reports a 100% kill rate and the sweep's verdict is printed over nothing.
-    const base = baselineProbe(target.proof, runProof);
-    const baselineSeconds = (performance.now() - targetStart) / 1000;
-    if (!base.ok) {
-      baselineFailures.push(base);
-      console.error(
-        `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
-          `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
+    if (!planOnly) {
+      // See baselineProbe(): without this, a harness that cannot run the proof at all
+      // reports a 100% kill rate and the sweep's verdict is printed over nothing.
+      const base = baselineProbe(target.proof, runProof);
+      const baselineSeconds = (performance.now() - targetStart) / 1000;
+      if (!base.ok) {
+        baselineFailures.push(base);
+        console.error(
+          `   ✗ BASELINE  ${target.proof} reads "${base.verdict}" UNMUTATED — every mutation below would ` +
+            `read the same, so this sweep cannot tell a kill from a broken harness. Not swept.`,
+        );
+        continue;
+      }
+      const registeredSeconds = runSecondsOf(target);
+      console.log(
+        `   baseline: ${target.proof} passes unmutated in ${baselineSeconds.toFixed(1)}s ` +
+          `(registered ${registeredSeconds}s) — a kill below is a real kill`,
       );
-      continue;
-    }
-    const registeredSeconds = runSecondsOf(target);
-    console.log(
-      `   baseline: ${target.proof} passes unmutated in ${baselineSeconds.toFixed(1)}s ` +
-        `(registered ${registeredSeconds}s) — a kill below is a real kill`,
-    );
-    if (costDrifted(baselineSeconds, registeredSeconds)) {
-      const note =
-        `${target.proof} took ${baselineSeconds.toFixed(1)}s unmutated but ${registeredSeconds}s is registered, so the sharder ` +
-        `under-weighs it; set runSeconds: ${Math.ceil(baselineSeconds)} on its TARGETS entry (see WHY THE SHARDS ARE BALANCED BY COST)`;
-      console.log(`   ⚠ COST DRIFT  ${note}`);
-      if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
+      if (costDrifted(baselineSeconds, registeredSeconds)) {
+        const note =
+          `${target.proof} took ${baselineSeconds.toFixed(1)}s unmutated but ${registeredSeconds}s is registered, so the sharder ` +
+          `under-weighs it; set runSeconds: ${Math.ceil(baselineSeconds)} on its TARGETS entry (see WHY THE SHARDS ARE BALANCED BY COST)`;
+        console.log(`   ⚠ COST DRIFT  ${note}`);
+        if (process.env.GITHUB_ACTIONS === "true") console.log(`::warning title=Mutation sweep cost drift::${note}`);
+      }
     }
     // WHAT this unit sweeps is chosen by the exported selector, the one the sharding gate proves
     // covers every mutation exactly once; main() adds no filter and no counter of its own. A slice
@@ -2111,7 +2141,7 @@ function main() {
     const plan = selectSliceMutations(target, mutationsByFile(target));
     const swept = plan.swept;
     for (const { file, allCount, owned } of plan.files) {
-      console.log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
+      log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
       // quiet one: the run says "every registered guard is falsifiable", which is
       // vacuously true of a file with no guards in it. Someone reading TARGETS sees the
@@ -2125,7 +2155,11 @@ function main() {
       if (allCount === 0) {
         zeroMutation.push(`${target.proof} → ${file}`);
       }
-      for (const { mutation } of owned) {
+      for (const { ordinal, mutation } of owned) {
+        if (planOnly) {
+          placements.push(placementOf(target, file, ordinal, mutation));
+          continue;
+        }
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
         let verdict;
@@ -2158,8 +2192,13 @@ function main() {
       slice: target.slice,
       mutations: swept,
       seconds: (performance.now() - targetStart) / 1000,
-      registered: swept * registeredSeconds,
+      registered: swept * runSecondsOf(target),
     });
+  }
+
+  if (planOnly) {
+    process.stdout.write(`${planDocument(only, shardArg, placements)}\n`);
+    return;
   }
 
   console.log(

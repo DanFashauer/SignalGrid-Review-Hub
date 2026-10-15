@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-15-the-mac-tick-is-alive-tick-prs-1509-1512-one-per",
+  "raisedAt": "2026-10-15T10:52:44.318Z",
+  "origin": "cloud",
+  "doing": "Steward cycle: reading the Mac tick heartbeat.",
+  "blockedBy": "The Mac tick is alive (tick PRs #1509-#1512, one per day at about 00:03Z through 2026-10-15) but its heartbeat has not landed since 2026-10-11T23:42:53Z: lane-deliver runs check-scheduled-routines on every heartbeat delivery, and that gate went FATAL at 2026-10-12T00:00Z when the dependabot-queue-review row passed its 30-day awaiting-activation bound, so every Mac heartbeat delivery since has been refused. Nothing on the Mac is broken.",
+  "need": "This change to land (it retires the row). The Mac's next tick then delivers its heartbeat, and the first cloud lane-deliver batch after that heartbeat lands clears this hand; it must be cleared within the 3h stale-cover grace once the stall is gone.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:mac-lane-tick"
+  ]
+}

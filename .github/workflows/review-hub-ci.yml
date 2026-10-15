@@ -47,17 +47,22 @@ jobs:
     # silently consuming the default job timeout.
     #
     # THE BOUND CARRIES A MARGIN RULE (set 2026-10-15): bound = 2 x the longest
-    # GREEN run measured, rounded UP to the next 5 minutes. The 2x is the floor of
-    # the "two to three times observed runtime" that scripts/check-ci-job-timeouts.mjs
-    # states for every job; a bound at the run time is a flaky gate. Longest green
-    # run of this job on 2026-10-15: 19m15s (job 116448397928), so 2 x 19m15s =
-    # 38m30s, which rounds up to 40. The previous bound, 20, sat 45 seconds above
-    # that run and killed a green one at step 410 of 413 (job 116440190841,
-    # cancelled at 20m05s with every step before it green), a red check on a branch
-    # that broke nothing. A true hang is still caught here, now at 40 minutes
-    # rather than 20. Re-derive this number from the longest green run whenever
-    # one passes half of it.
-    timeout-minutes: 40
+    # run measured, rounded UP to the next 5 minutes, where a run the bound itself
+    # killed counts at the time it was killed (its true length is not less). The
+    # 2x is the floor of the "two to three times observed runtime" that
+    # scripts/check-ci-job-timeouts.mjs states for every job; a bound at the run
+    # time is a flaky gate. The longest completed green run of this job from
+    # 2026-09-15 to 2026-10-15 is 19m46s (job 113907256410, 2026-10-09), so the
+    # previous bound, 20, sat 14 seconds above it. That bound cancelled two runs
+    # in which no step had failed, each at 20m05s: job 116440190841 (2026-10-15,
+    # 6 s into its final step, the Decision-throughput saturation gate, every
+    # earlier step green) and job 110943968637 (2026-10-02, attempt 1, 32 steps
+    # short of the end after a 4m16s Playwright install; its re-run went green
+    # in 14m44s), each a red check on a branch that broke nothing. 2 x 20m05s =
+    # 40m10s, which rounds up to 45. A true hang is still caught here, now at 45
+    # minutes rather than 20. Re-derive this number from the longest run whenever
+    # one passes half of it (22m30s).
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1162,8 +1167,8 @@ jobs:
       # passed — every gate and all 31 assertions of proof:live-idp — so the job
       # reported `cancelled` for a reason that had nothing to do with the branch.
       #
-      # A mirror flake is transient, so retry; but an unbounded step that eats a
-      # 20-minute budget and reports an ambiguous status is the same defect this
+      # A mirror flake is transient, so retry; but an unbounded step that eats the
+      # job's whole budget and reports an ambiguous status is the same defect this
       # workflow's concurrency comment already complains about — a result nobody
       # can tell apart from a real regression. The step timeout makes it fail
       # FAST and legibly instead.

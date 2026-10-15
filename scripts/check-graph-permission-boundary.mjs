@@ -177,12 +177,12 @@ export function parseBru(text) {
   for (const [i, line] of text.split("\n").entries()) {
     if (cur === null) {
       if (ASCII_BLANK.test(line)) continue;
-      const m = /^([A-Za-z][\w:-]*)[ \t]*\{[ \t\r]*$/.exec(line);
+      const m = /^([A-Za-z][\w:-]*)[ \t]*\{[ \t]*\r?$/.exec(line);
       if (!m) { fatal.push(`line ${i + 1} is outside any block (${JSON.stringify(line.slice(0, 40))}) — an unrecognised construct`); continue; }
       cur = { name: m[1], entries: [] };
     } else if (line.startsWith("}")) {
       // Bruno ends a block at any newline followed by `}`, whatever follows it on the line; so must this reader, or `}post {` hides a second http block.
-      if (!ASCII_BLANK.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
+      if (!/^\r?$/.test(line.slice(1))) fatal.push(`line ${i + 1}: text after a closing brace (${JSON.stringify(line.slice(0, 40))}) — Bruno would read it as a new block`);
       blocks.push(cur); cur = null;
     }
     else if (cur.name === "docs") { (cur.lines ??= []).push(line); }
@@ -646,6 +646,21 @@ function selfTest() {
     checks.push([`LANDING: ${tag} as the only indent of a method-block entry is FATAL`, mk((t) => t.replace("  body: none", `${u}body: none`))]);
     checks.push([`LANDING: ${tag} only inside a docs block is FATAL (not non-blank content)`, mk((t) => t.replace("docs {\n  x\n}", `docs {\n${u}\n}`))]);
   }
+  // ---- round 13: what may follow `{` and `}` is spaces/tabs then ONE optional CR (Bruno: st* then nl = \"\\r\"? \"\\n\") ----
+  for (const [label, edit] of [
+    ["`meta {` followed by two CRs", (t) => t.replace("meta {\n", "meta {\r\r\n")],
+    ["`meta {` followed by CR, space, CR", (t) => t.replace("meta {\n", "meta {\r \r\n")],
+    ["`get {` followed by CR then a tab", (t) => t.replace("get {\n", "get {\r\t\n")],
+    ["`get {` followed by two CRs", (t) => t.replace("get {\n", "get {\r\r\n")],
+    ["a CRLF copy with one header ending CR CR LF", (t) => t.replace(/\n/g, "\r\n").replace("get {\r\n", "get {\r\r\n")],
+  ]) { b = baseBru(); b["b.bru"] = edit(b["b.bru"]); checks.push([`ROUND13: ${label} is FATAL`, audit(csrc, b).fatal.length > 0]); }
+  for (const tail of [" ", "\t", "\r\r", " \r"]) {
+    const nm = JSON.stringify(tail);
+    checks.push([`ROUND13: ${nm} after a closing brace in collection.bru is FATAL`, has(audit(csrc, { ...baseBru(), "collection.bru": "auth {\n  mode: bearer\n}" + tail + "\n\nauth:bearer {\n  token: {{graphToken}}\n}\n" }), "collection.bru", "closing brace")]);
+    checks.push([`ROUND13: ${nm} after a closing brace in Sandbox.bru is FATAL`, has(audit(csrc, baseBru(), pj(permObj()), ENV.replace("\n}\n", "\n}" + tail + "\n")), "Sandbox.bru", "closing brace")]);
+  }
+  b = baseBru(); b["b.bru"] = b["b.bru"].replace(/\n/g, "\r\n");
+  checks.push(["ROUND13: a clean CRLF copy of a request file still passes (positive control)", audit(csrc, b).fatal.length === 0]);
   // ---- review round 4: Bruno ends a block (docs included) at any newline + `}` whatever follows it ----
   for (const [label, edit, needle] of [
     ["`}post {` at column 0 closing docs and opening a second http block", (t) => t.replace(/\}\s*$/, "}post {\n  url: {{baseUrl}}/users\n}\n"), "text after a closing brace"],

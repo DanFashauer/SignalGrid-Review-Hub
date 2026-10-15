@@ -19,7 +19,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, unlinkSync, rmSync, mkdirSync, statSync, symlinkSync, utimesSync, realpathSync, openSync, closeSync, fstatSync, renameSync, chmodSync, readdirSync, accessSync, constants } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dirname, resolve, isAbsolute, relative, sep, basename, delimiter } from "node:path";
@@ -56,7 +56,7 @@ function readIfPresent(path, encoding = "utf8") {
   }
 }
 
-// THE ONE PLACE this file starts a git that reads objects (the self-test scans the source for any other: R7-spawns).
+// THE ONE PLACE this file starts a git that reads objects (the self-test scans the source for any other: R7-spawns), by the absolute path gitProgram() found (round 30).
 // Until round 7 the guards were a flag on SOME commands: `--no-replace-objects` was prepended by gitIn only, so gitRaw (the
 // diffs landedByPatchId and the path list read), gitFeed and the apply / read-tree / write-tree spawns of reappliesExactly ran
 // with refs/replace/* ON, and `git replace <tip> <a mainline squash>` made a branch with REAL unpushed work read "exact hunks
@@ -159,14 +159,46 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //     PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28; a runner's PATH names directories that do not exist): an entry whose listing fails with ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG names nothing exec could look in, so it is skipped
 //     without a word and the clean row stays the green one (a missing one is never a note); any other failure to list an entry (EACCES, EIO) is a directory that exists and may hold a helper, so it is a note and the row is a warning.
 //     ENTRIES THAT ARE NOT ABSOLUTE (round 29; relative, `.`, `..`, empty): exec reads them against the directory git runs in, which for the Hub listing is the isolated directory under the temp directory, so they are scanned THERE
-//     (a `..` scans the temp directory itself, a `../x` the temp directory's x) and are never silent; with that directory unavailable each is a note naming it.
+//     (a `..` scans the temp directory itself, a `../x` the temp directory's x) and are never silent; with that directory unavailable (inIsolatedDir refuses only for a ":", NUL or newline in the real temp path) each is a note naming it.
+//   THE git PROGRAM (round 30; gitRun started `git` by name, so a non-absolute PATH entry was read against the directory it worked in): the program is found through the ABSOLUTE PATH entries only (gitProgram: the first executable
+//     file named git, as exec finds it), started by that absolute path, and every git gets a PATH with only the absolute entries (gitEnv; it still finds its own helpers). The Hub listing's isolated git therefore never sees a relative
+//     entry. A non-absolute entry that holds a git AHEAD of that one, or a git-remote helper, resolved against the REPOSITORY directory (the user's own git) as well as the listing's, is a gated problem and the listing is not read;
+//     the listing-directory scan of the same entries stays as belt and braces. No absolute git at all is a gated problem too (nothing could be read). A node child gets the same PATH (gitEnv).
 //     Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
   for (const k of Object.keys(env)) if (k.startsWith("GIT_TEST_") || k.startsWith("GIT_REMOTE") || isGitTraceVar(k)) delete env[k];
   for (const k of GIT_ENV_DROPPED) delete env[k];
-  return { ...env, ...extra, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
+  const merged = { ...env, ...extra, GIT_NO_REPLACE_OBJECTS: "1", GIT_OPTIONAL_LOCKS: "0" };
+  if (typeof merged.PATH === "string") merged.PATH = absolutePathEntries(merged.PATH); // (round 30: no git started here, and no node child, is handed a PATH entry it would read against its own working directory)
+  return merged;
+}
+// ROUND 30. THE git PROGRAM. gitRun used to spawn `git` BY NAME with cwd = the directory it works in, so a PATH entry that is not absolute (`../x`, `.`, `..`, empty) was looked up THERE: the Hub listing's isolated directory
+// found a git planted at $TMPDIR/x while every repository-side call found nothing at ../x and used the real one, and the planted git answered the listing (Opus round-29 refute: green row, exit 0, and no missing helper needed).
+// The program is now found once per PATH value through the ABSOLUTE entries only (the first one holding an executable file named git, as exec would), gitRun starts it by that absolute path, and gitEnv hands every git a
+// PATH with only the absolute entries (git still finds its own helpers). A non-absolute entry that holds a git AHEAD of that one is a gated finding (hubTransport): the user's own git, run from the repository, would run it.
+function absolutePathEntries(pathVar) { return String(pathVar).split(delimiter).filter((e) => isAbsolute(e)).join(delimiter); }
+function isExecutableFile(file) { try { if (!statSync(file).isFile()) return false; accessSync(file, constants.X_OK); return true; } catch { return false; } }
+// { bin, shadows }: bin = the first absolute entry's git (null if none); shadows = the non-absolute entries holding a git ahead of it, resolved against `cwd` (null: the relative entries are not looked at), shown where they really are.
+function gitOnPath(pathVar = process.env.PATH ?? "", cwd = null) {
+  const shadows = [];
+  for (const raw of String(pathVar).split(delimiter)) {
+    const absolute = isAbsolute(raw);
+    if (!absolute && cwd === null) continue;
+    const dir = absolute ? raw : `${cwd}${sep}${raw}`; // (concatenated, not path.resolve: the kernel follows `..` through a symlink as exec does)
+    const file = `${dir}${dir.endsWith(sep) ? "" : sep}git`;
+    if (!isExecutableFile(file)) continue;
+    if (absolute) return { bin: file, shadows };
+    let real = dir; try { real = realpathSync.native(dir); } catch { /* shown as written */ }
+    shadows.push(join(real, "git"));
+  }
+  return { bin: null, shadows };
+}
+const GIT_PROGRAMS = new Map();
+function gitProgram(pathVar = process.env.PATH ?? "") {
+  if (!GIT_PROGRAMS.has(pathVar)) GIT_PROGRAMS.set(pathVar, gitOnPath(pathVar, null).bin);
+  return GIT_PROGRAMS.get(pathVar);
 }
 // The bounds on every spawn, in milliseconds (round 26: nothing but the Hub listing had one, so a git that never returned hung the whole check with no verdict). localMs: a git on this repository; hubMs: the listing (60 s, as always);
 // childMs: a node child this check runs. LOOP_STATE_GIT_TIMEOUT_MS can only lower them (see the audit above).
@@ -211,7 +243,8 @@ function gitRun(cwd, args, { input, env, buffer = false, timeout } = {}) {
     if (!d.ok && d.status !== 1) return { ok: false, error: new Error("filter drivers unreadable"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: `could not read the filter drivers: ${gitWhy(d)}`, timedOut: false };
     for (const rec of String(d.stdout).split("\0").filter(Boolean)) driversOff.push("-c", `${rec.split("\n")[0]}=`);
   }
-  const r = spawnSync("git", ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, ...(network ? [] : GIT_CREDENTIAL_OFF), ...driversOff, "-C", dir, ...args], {
+  if (gitProgram() === null) return { ok: false, error: new Error("no git in an absolute PATH entry"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: "git was not found in any absolute PATH entry", timedOut: false };
+  const r = spawnSync(gitProgram(), ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, ...(network ? [] : GIT_CREDENTIAL_OFF), ...driversOff, "-C", dir, ...args], {
     cwd: dir, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024, timeout: ms, killSignal: "SIGKILL",
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
   });
@@ -411,7 +444,7 @@ const TRANSPORT_SCHEMES = ["https", "http", "ssh", "git", "file", "ftp", "ftps",
 // exist; round 27 recorded each as "trusted, not verified" (a note), the clean Hub row turned into a warning and R10-tx-clean failed (CI check run 113919440642, c57cdc0d). Any OTHER failure (EACCES, EIO, no code at all)
 // is a directory that exists and cannot be listed: it may hold a helper this scan cannot see, so it stays a note and the row is never the green one. A missing one is never a note.
 const NOT_A_DIRECTORY = new Set(["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"]);
-function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, listingDir = null, listDir = readdirSync } = {}) {
+function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, listingDir = null, repoDir = null, listDir = readdirSync } = {}) {
   const want = new Set([...TRANSPORT_SCHEMES, ...schemes.map((s) => String(s).toLowerCase()).filter(Boolean)]);
   const ownNames = (() => { // what this git ships, lower-cased; null = could not be listed
     if (!execDir) return null;
@@ -419,27 +452,30 @@ function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir
   })();
   const problems = [], notes = [], seen = new Set();
   for (const raw of String(pathVar).split(delimiter)) {
-    // ROUND 29. exec resolves a PATH entry that is not absolute (relative, `.`, `..`, the empty entry) against the directory git was started in, which for the Hub listing is the isolated directory (inIsolatedDir), never
-    // this process's. So it is joined to that directory by plain concatenation, NOT path.resolve: the kernel then follows `..` through a symlink exactly as exec does (the parent of the link's target, not of the link).
-    // With no such directory to resolve against the entry cannot be scanned, and an entry nobody scanned is a note (the row is a warning), never silence.
+    // ROUND 29. exec resolves a PATH entry that is not absolute (relative, `.`, `..`, the empty entry) against the directory git was started in: for the Hub listing the isolated directory (inIsolatedDir), for the user's own
+    // git the repository. Never this process's. So it is joined to each by plain concatenation, NOT path.resolve (the kernel then follows `..` through a symlink exactly as exec does: the parent of the link's target).
+    // ROUND 30. Both are read (repoDir is the user's side, which round 29 had dropped; every git started HERE gets only absolute entries, so the listing side is belt and braces). With no listing directory the entry is
+    // also a note (the row is a warning), never silence.
     const relative = !isAbsolute(raw);
     if (relative && listingDir === null) {
-      const nt = `PATH entry ${JSON.stringify(raw)} is not absolute and the directory the Hub listing runs in is not known, so it was not scanned`;
+      const nt = `PATH entry ${JSON.stringify(raw)} is not absolute and the directory the Hub listing runs in is not known, so it was not scanned there`;
       if (!notes.includes(nt)) notes.push(nt);
-      continue;
     }
-    const dir = relative ? `${listingDir}${sep}${raw}` : raw;
-    if (seen.has(dir)) continue;
-    seen.add(dir);
-    let names;
-    try { names = listDir(dir); } catch (e) { if (!NOT_A_DIRECTORY.has(e?.code)) notes.push(`PATH directory ${relative ? `${JSON.stringify(raw)} (relative to the directory the Hub listing runs in)` : dir} could not be listed (${e?.code ?? "no error code"})`); continue; }
-    const shownDir = relative ? (() => { try { return realpathSync.native(dir); } catch { return dir; } })() : dir; // (a relative entry is shown where it really is, not as the throwaway directory it was written against)
-    for (const n of names) {
-      const m = /^git-remote-(.+?)(?:\.exe)?$/i.exec(n);
-      if (!m || !want.has(m[1].toLowerCase())) continue;
-      const s = m[1].toLowerCase(), native = s === "ssh" || s === "git" || s === "file";
-      if (!native && ownNames && ownNames.has(`git-remote-${s}`)) continue; // git's own helper is found first: this file is never run for ${s}://
-      problems.push(`a transport helper on PATH shadows git's own ${s} transport: ${join(shownDir, n)} (${native ? `${s}:// has no helper in any git, but the same scheme written in another case is served by it` : ownNames ? `this git ships no git-remote-${s} of its own, so this file is the one git runs for ${s}://` : "this git's own helper directory could not be read, so it is taken to ship none"}; compared case-insensitively on every filesystem)`);
+    for (const base of relative ? [listingDir, repoDir].filter((b) => b !== null) : [null]) {
+      const dir = relative ? `${base}${sep}${raw}` : raw;
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      let names;
+      try { names = listDir(dir); } catch (e) { if (!NOT_A_DIRECTORY.has(e?.code)) notes.push(`PATH directory ${relative ? `${JSON.stringify(raw)} (relative to ${base === repoDir ? "the repository" : "the directory the Hub listing runs in"})` : dir} could not be listed (${e?.code ?? "no error code"})`); continue; }
+      const shownDir = relative ? (() => { try { return realpathSync.native(dir); } catch { return dir; } })() : dir; // (a relative entry is shown where it really is, not as the throwaway directory it was written against)
+      for (const n of names) {
+        const m = /^git-remote-(.+?)(?:\.exe)?$/i.exec(n);
+        if (!m || !want.has(m[1].toLowerCase())) continue;
+        const s = m[1].toLowerCase(), native = s === "ssh" || s === "git" || s === "file";
+        if (!native && ownNames && ownNames.has(`git-remote-${s}`)) continue; // git's own helper is found first: this file is never run for ${s}://
+        const pr = `a transport helper on PATH shadows git's own ${s} transport: ${join(shownDir, n)} (${native ? `${s}:// has no helper in any git, but the same scheme written in another case is served by it` : ownNames ? `this git ships no git-remote-${s} of its own, so this file is the one git runs for ${s}://` : "this git's own helper directory could not be read, so it is taken to ship none"}; compared case-insensitively on every filesystem)`;
+        if (!problems.includes(pr)) problems.push(pr); // (the same directory reached from both sides is one finding)
+      }
     }
   }
   return { problems, notes };
@@ -504,11 +540,20 @@ function hubTransport(cwd = repo, hub = HUB) {
   { // the PATH helper scan (round 27): the Hub's scheme and the scheme of each expansion git applied, beside git's own transports
     const execR = gitRun(cwd, ["--exec-path"]);
     const schemes = [hub, String(repoExp.stdout || "").trim(), String(listing.exp.stdout || "").trim()].map((u) => { const q = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(u); return q ? q[1] : ""; }); // (as WRITTEN: an upper-case scheme is exactly what parseGitUrl refuses)
-    // (round 29: the entries that are not absolute are read in a directory made the way the listing's is, under the same temp directory; refused there, as it is for the listing, they are notes)
-    const execDir = execR.ok ? execR.stdout.trim() : null;
-    const scan = inIsolatedDir((dir) => pathHelperProblems(schemes, { execDir, listingDir: realpathSync(dir) }), () => pathHelperProblems(schemes, { execDir, listingDir: null }));
+    // (round 29: the entries that are not absolute are read in a directory made the way the listing's is, under the same temp directory. inIsolatedDir refuses only when the real path of the temp directory holds a ":", NUL or
+    // newline (a TMPDIR that does not exist throws, and the check exits 1, as it did before); then there is no such directory and each of them is a note. Round 30: and in the repository directory, the user's own git's.)
+    const execDir = execR.ok ? execR.stdout.trim() : null, repoDir = resolve(cwd);
+    const scan = inIsolatedDir((dir) => pathHelperProblems(schemes, { execDir, listingDir: realpathSync(dir), repoDir }), () => pathHelperProblems(schemes, { execDir, listingDir: null, repoDir }));
     for (const pr of scan.problems) if (!problems.includes(pr)) problems.push(pr);
     for (const nt of scan.notes) if (!trusted.includes(nt)) trusted.push(nt);
+  }
+  { // the git program (round 30): a git behind a non-absolute entry ahead of the one every git here is started by is what the user's own git would run from the repository; no git behind an absolute entry is no git at all
+    const gp = gitOnPath(process.env.PATH ?? "", resolve(cwd));
+    for (const f of gp.shadows) {
+      const pr = `a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${f} (a plain \`git\` run from ${resolve(cwd)} would run it; every git started here is run by an absolute path${gp.bin ? ` (${gp.bin})` : " (none was found: no git is behind an absolute PATH entry)"} with only the absolute PATH entries, and the Hub listing is not read)`;
+      if (!problems.includes(pr)) problems.push(pr);
+    }
+    if (gp.bin === null && gp.shadows.length === 0) problems.push("no git is behind an absolute PATH entry, so no git was started here and nothing below could be read");
   }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
 }
@@ -2987,8 +3032,7 @@ function selfTest() {
     // (10) one place starts git: the environment guards live in gitEnv, and no other direct spawn of git reads objects
     const prodSrc = readFileSync(fileURLToPath(import.meta.url), "utf8"), prodText = prodSrc.slice(0, prodSrc.indexOf("\nfunction selfTest()"));
     // quote-agnostic (round-7 refute: a single-quoted stray was not found): any quote, execFile / spawn / exec forms, only the two allowed argument lists pass
-    const strayGit = (text) => [...text.matchAll(/\b(?:execFileSync|spawnSync|execFile|spawn)\(\s*(["'`])git\1\s*,\s*(\[[^\]]{0,60})?/g)].map((m) => m[2] || "")
-      .filter((a) => !/^\[\s*["'`]-c["'`]\s*,\s*["'`]core\.commitGraph=false["'`]\s*,\s*\.\.\.GIT_EXEC_OFF\s*,/.test(a))
+    const strayGit = (text) => [...text.matchAll(/\b(?:execFileSync|spawnSync|execFile|spawn)\(\s*(["'`])git\1\s*,\s*(\[[^\]]{0,60})?/g)].map((m) => m[2] || "") // (round 30: no spawn of the bare name is allowed any more, gitRun's included: it starts gitProgram())
       .concat([...text.matchAll(/\b(?:exec|execSync)\(\s*(["'`])\s*git\b/g)].map((m) => m[0]));
     const stray = strayGit(prodText);
     check("no git is started outside gitRun (the Hub listing included since round 9), and gitEnv forces replace objects off and optional locks off whatever the caller passes (R7-spawns)",
@@ -3170,7 +3214,7 @@ function selfTest() {
     check("the stray-git scanner is quote-agnostic: double, single and backtick quotes, execFile, spawn and exec forms are all found, the two allowed forms are not (R8-spawns-scan)",
       strayGit(`execFileSync('git', ['rev-parse'])`).length === 1 && strayGit("spawnSync(`git`, [`log`])").length === 1 && strayGit(`execFile("git", ["log"], cb)`).length === 1 &&
       strayGit(`spawn('git',['status'])`).length === 1 && strayGit(`execSync("git status")`).length === 1 && strayGit(`execFileSync('git', ['ls-remote', '--heads'])`).length === 1 &&
-      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, "-C", dir, ...args])`).length === 0 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args])`).length === 1 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 1 && strayGit(prodText).length === 0);
+      strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, "-C", dir, ...args])`).length === 1 && strayGit(`spawnSync(gitProgram(), ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, "-C", dir, ...args])`).length === 0 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", "-C", dir, ...args])`).length === 1 && strayGit(`spawnSync("git", ["-c", "core.commitGraph=false", ...args])`).length === 1 && strayGit(prodText).length === 0);
     // ══ ROUND 9 ══ The round-8 refuter's fixtures (the proxy repository, dDetach, dShallowKL, dProbe P3, dEnv), rebuilt beside the rows they must change.
     // Each case builds the lie first (a precondition inside its own check) and then asks the guarded answer; each FAILS on the round-8 file.
     const stripAnsi = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
@@ -3245,7 +3289,8 @@ function selfTest() {
       txhScan.problems.length === 0 && !JSON.stringify(txhScan).includes("c2VjcmV0LXRva2Vu") && !/extraheader|postbuffer/i.test(txhScan.note));
     // the whole script. Stand-in for the refuter's TLS-terminating proxy: a `git` first on PATH that answers `ls-remote --heads` with a listing of its own
     // (everything else is the real git), so the lie is on offer exactly where the proxy offered it.
-    const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), fakeBin = join(root, "r9bin");
+    // (round 30: found the way the check finds it, through the ABSOLUTE PATH entries; `command -v git` answers a relative path when the first PATH entry is relative, which a fixture's wrapper script run from another directory cannot exec)
+    const realGit = gitProgram() ?? execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim(), fakeBin = join(root, "r9bin");
     mkdirSync(fakeBin); writeFileSync(join(fakeBin, "git"), "#!/bin/sh\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then [ -n \"$R16_LISTED\" ] && : > \"$R16_LISTED\"; cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R9_REAL_GIT\" \"$@\"\n", { mode: 0o755 });
     const wholeScript = (fx, name, vars = {}, opts = {}) => {
       // opts.hub: run a copy of the script whose Hub constant is another URL (a reserved host, so no fixture carries a credential for a real one)
@@ -3390,7 +3435,7 @@ function selfTest() {
     const relCwd = relative(process.cwd(), en.w);
     check("every git is pinned to the repository asked about, and a relative path to it is resolved once, never compounded by -C beside the spawn's cwd (R9-env-pin)",
       !isAbsolute(relCwd) && gitRun(relCwd, ["rev-parse", "--show-toplevel"]).stdout.trim() === realpathSync(en.w) && gitRun(join(root, "no-repo-here"), ["rev-parse", "--git-dir"]).ok === false &&
-      /spawnSync\("git", \["-c", "core\.commitGraph=false", \.\.\.GIT_EXEC_OFF, \.\.\.\(network \? \[\] : GIT_CREDENTIAL_OFF\), \.\.\.driversOff, "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
+      /spawnSync\(gitProgram\(\), \["-c", "core\.commitGraph=false", \.\.\.GIT_EXEC_OFF, \.\.\.\(network \? \[\] : GIT_CREDENTIAL_OFF\), \.\.\.driversOff, "-C", dir, \.\.\.args\]/.test(prodText)); // (the -C itself cannot change an answer beside the spawn's cwd, so the source is what is pinned)
     // ══ ROUND 10 ══ The round-9 refuter's two ranked items: the trusted-not-verified row must not look like a clean pass, and a key whose ORIGIN file lies inside the
     // repository is the repository's own whatever scope git names. Each case FAILS on a1b43b42.
     const cleanOfTrust = { GIT_CONFIG_COUNT: null, GIT_SSL_CAINFO: null, GIT_SSL_CAPATH: null, SSL_CERT_FILE: null, SSL_CERT_DIR: null, CURL_CA_BUNDLE: null, HTTPS_PROXY: null, https_proxy: null, ALL_PROXY: null, all_proxy: null };
@@ -3585,7 +3630,8 @@ function selfTest() {
       const nested = spawnSync(process.execPath, [fileURLToPath(import.meta.url), "--self-test"], { encoding: "utf8", timeout: 900000, env: { ...process.env, GIT_CONFIG_GLOBAL: hostile, LOOP_STATE_SELFTEST_NESTED: "1" } });
       const nestedTail = String(nested.stdout).trim().split("\n").pop() || "";
       check("the whole self-test, started under a global git configuration that sets fetch.prune=true, http.sslVerify=false, merge.ff=only and a missing core.hooksPath, passes (R12-hostile-global)",
-        nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail));
+        nested.status === 0 && /^self-test passed \((\d+)\/\1\)$/.test(nestedTail),
+        () => JSON.stringify({ status: nested.status, signal: nested.signal, error: nested.error && nested.error.code, tail: nestedTail, failed: String(nested.stdout).split("\n").filter((l) => /^(\s*FAIL\b|FAILED:|self-test FAILED)/.test(l)).slice(0, 12).map((l) => l.slice(0, 300)), stderr: String(nested.stderr).slice(-600) }));
     }
     // ══ ROUND 16 ══ Review round 2 (wave 78). (1) round 12's userinfo scrub read `https://evil.example?x=@github.com/<Hub>.git` as the Hub: the host of a URL is whatever the PARSER says.
     const evilShapes = [["?x=@", "https://evil.example?x=@github.com/"], ["#@", "https://evil.example#@github.com/"], ["backslash", "https://evil.example\\@github.com/"]]
@@ -4330,7 +4376,7 @@ exit 1
     }
     // ══ ROUND 29 ══ A PATH entry that is not absolute is resolved by git against the directory the Hub listing runs in, not against this process's. Round 28 read `../x` against the repository, saw ENOENT and went silent,
     // while git in $TMPDIR/loop-state-ls-XXXX ran $TMPDIR/x/git-remote-https: the whole script exited 0 with the green row (Opus round-28 refute; round 27 had said "PATH directory ../x could not be listed"). The scan now resolves
-    // every non-absolute entry (relative, `.`, `..`, empty) against the same kind of directory the listing runs in (inIsolatedDir) and scans THAT, like an absolute one; when that directory cannot be made it is a note.
+    // every non-absolute entry (relative, `.`, `..`, empty) against the same kind of directory the listing runs in (inIsolatedDir) and scans THAT, like an absolute one; when inIsolatedDir refuses (only for a ":", NUL or newline in the real temp path) it is a note.
     {
       const rroot = realpathSync(root); // fixtures live under the real path, so a printed path compares equal where the temp directory is a symlink
       const mk = (name) => { const d = join(rroot, name); mkdirSync(d); return d; };
@@ -4383,6 +4429,69 @@ exit 1
       checkWithPrecondition("a relative PATH entry `../r29-helper` with a git-remote-https planted at $TMPDIR/r29-helper, a git that ships no https helper, and no proxy or CA: plain git started in the listing's directory runs the helper (the precondition: its marker), and the whole check exits 1 on a gated 'a transport helper on PATH shadows git's own https transport' row naming that file, never calls it, and never prints the green row (R29-tx-relative-e2e)",
         reachedPlain, "git did not run the relative PATH helper from the directory it was started in",
         run29.error === null && run29.status === 1 && new RegExp(`✗ Review Hub URL\\s+a transport helper on PATH shadows git's own https transport: ${shownHelper}`).test(run29.out) && !/✓ Review Hub transport/.test(run29.out) && !run29.out.includes("all present on the Review Hub") && (readIfPresent(log29) || "") === "");
+    }
+    // ══ ROUND 30 ══ The git PROGRAM. gitRun spawned `git` by name with cwd = the directory it works in, so a non-absolute PATH entry (`../x`) was looked up THERE before any helper: a git planted at $TMPDIR/x answered the
+    // isolated directory's three calls while every repository-side call found nothing at ../x and used the real one (Opus round-29 refute: green row, exit 0, no missing helper needed). Every git is now started by an
+    // absolute path found through the absolute PATH entries, with a PATH that holds only those; a non-absolute entry that holds a git ahead of it is a gated finding (the user's own git would run it).
+    {
+      const rroot = realpathSync(root);
+      const mk = (name) => { const d = join(rroot, name); mkdirSync(d); return d; };
+      const asPath = (...d) => d.join(delimiter);
+      const plantGit = (dir, mode = 0o755) => { const f = join(dir, "git"); writeFileSync(f, "#!/bin/sh\necho called >> \"$R30_LOG\"\nexit 1\n", { mode }); return f; };
+      const absA = mk("r30-abs-a"), absB = mk("r30-abs-b"), gA = plantGit(absA), gB = plantGit(absB);
+      const parent = mk("r30-parent"), repoDir = join(parent, "repo"), plantedDir = join(parent, "planted"); mkdirSync(repoDir); mkdirSync(plantedDir);
+      const gPlanted = plantGit(plantedDir), gUp = plantGit(parent), gHere = plantGit(repoDir); // reached from repoDir as ../planted, .. and . (or the empty entry)
+      const named = (r, file) => r.shadows.length === 1 && r.shadows[0].includes(file);
+      const u = {
+        rel: gitOnPath(asPath("../planted", absA, absB), repoDir), dot: gitOnPath(asPath(".", absA), repoDir), up: gitOnPath(asPath("..", absA), repoDir), empty: gitOnPath(asPath("", absA), repoDir),
+        absFirst: gitOnPath(asPath(absA, "../planted"), repoDir), only: gitOnPath("../planted", repoDir), noCwd: gitOnPath(asPath("../planted", absA), null),
+      };
+      const notExec = mk("r30-not-exec"), dirNamedGit = mk("r30-dir-named-git"); plantGit(notExec, 0o644); mkdirSync(join(dirNamedGit, "git"));
+      const skipped = gitOnPath(asPath(notExec, dirNamedGit, absB), repoDir);
+      check("the git a PATH would run is found like exec finds it: the first entry holding an executable FILE named git (a non-executable file and a directory are passed over); a non-absolute entry (relative, `.`, `..`, empty) resolved against the repository directory that holds one AHEAD of the first absolute one is a finding naming the file, and one behind an absolute git is not (the user's git is the absolute one); with no absolute git there is none to run and the finding stands (R30-git-resolve-unit)",
+        u.rel.bin === gA && named(u.rel, gPlanted) && u.dot.bin === gA && named(u.dot, gHere) && u.up.bin === gA && named(u.up, gUp) && u.empty.bin === gA && named(u.empty, gHere) &&
+        u.absFirst.bin === gA && u.absFirst.shadows.length === 0 && u.only.bin === null && named(u.only, gPlanted) && u.noCwd.bin === gA && u.noCwd.shadows.length === 0 &&
+        skipped.bin === gB && skipped.shadows.length === 0 && gitProgram(asPath("../planted", absA)) === gA && isAbsolute(gitProgram(asPath("", ".", "..", absB))) && gitProgram(asPath("../planted", ".")) === null);
+      // in process: hubTransport reports it as a gated problem (the caller then does not read the listing), and every git it starts is still the real one, by its absolute path
+      const fxG = mk("r30-git-inproc"), fxGw = join(fxG, "work"); execFileSync("git", ["init", "-q", "-b", "main", fxGw], { env: FX_ENV }); const gBox = plantGit(fxG);
+      const inG = withEnvVars({ PATH: `..${delimiter}${process.env.PATH ?? ""}`, R30_LOG: join(rroot, "r30-inproc.log") }, () => inCleanEnv(() => ({ t: hubTransport(fxGw), g: gitRun(fxGw, ["rev-parse", "--git-dir"]), prog: gitProgram() }), cleanOfTrust));
+      check("hubTransport turns a git planted behind `..` of the repository into a gated problem naming it, and the git it (and gitRun) starts is still the real one by an absolute path: the planted one is never run (R30-git-resolve-gated)",
+        inG.t.problems.length >= 1 && inG.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && inG.g.ok === true && isAbsolute(inG.prog) && inG.prog !== gBox && (readIfPresent(join(rroot, "r30-inproc.log")) || "") === "");
+      // the PATH an isolated git is handed: no non-absolute entry, every absolute one in order (the stand-in git, found by its absolute path, records the PATH it was started with)
+      const standDir = mk("r30-standin"), pathLog = join(rroot, "r30-path.log"); writeFileSync(pathLog, "");
+      writeFileSync(join(standDir, "git"), "#!/bin/sh\nprintf '%s\\n' \"$PATH\" >> \"$R30_PATHLOG\"\nexec \"$R30_NEXT\" \"$@\"\n", { mode: 0o755 });
+      const mixed = asPath(standDir, "../r30x", "", ".", "..", absA, "rel/dir", absB), wanted = asPath(standDir, absA, absB);
+      const handed = withEnvVars({ PATH: mixed, R30_PATHLOG: pathLog, R30_NEXT: realGit }, () => ({ env: gitEnv().PATH, iso: inIsolatedDir((dir, isoEnv) => ({ envPath: gitEnv(isoEnv).PATH, run: gitRun(dir, ["rev-parse", "--git-dir"], { env: isoEnv }) })), over: gitEnv({ PATH: "a:/b:c" }).PATH }));
+      const seenPaths = (readIfPresent(pathLog) || "").split("\n").filter(Boolean);
+      check("the PATH handed to every git, the isolated listing's included, holds no non-absolute entry (relative, `.`, `..`, empty, an override too) and every absolute entry in order, read both from gitEnv and from the PATH a real isolated git was started with (R30-isolated-path-sanitized-unit)",
+        handed.env === wanted && handed.iso.envPath === wanted && handed.over === "/b" && seenPaths.length >= 1 && seenPaths.every((p) => p === wanted) && !("PATH" in withEnvVars({ PATH: null }, () => gitEnv())));
+      // helper scan: a relative entry is read in BOTH places a git could look, the repository directory (the user's own git) and the listing's directory (round 29), which here have different parents so each can be told apart
+      const execNone = mk("r30-exec-none");
+      const both = (name) => { const t = mk(`r30-${name}`), tmpd = join(t, "tmpdir"), iso = join(tmpd, "loop-state-ls-fixed"), repo2 = join(t, "repo"); mkdirSync(tmpd); mkdirSync(iso); mkdirSync(repo2); return { t, tmpd, iso, repo2 }; };
+      const planth = (dir, name = "git-remote-https") => { const f = join(dir, name); writeFileSync(f, "x\n", { mode: 0o755 }); return f; };
+      const scanBoth = (pathVar, w) => pathHelperProblems(["https"], { pathVar, execDir: execNone, listingDir: w.iso, repoDir: w.repo2 });
+      const hasOne = (r, file) => r.problems.length === 1 && r.problems[0].includes(`: ${file} (`) && r.notes.length === 0;
+      const bDot = both("both-dot"), fDot = planth(bDot.repo2), bUp = both("both-up"), fUp = planth(bUp.t);
+      const bRel = both("both-rel"); mkdirSync(join(bRel.t, "planted")); const fRel = planth(join(bRel.t, "planted"));
+      const bLst = both("both-listing"); mkdirSync(join(bLst.tmpd, "only-listing")); const fLst = planth(join(bLst.tmpd, "only-listing"));
+      const bNone = both("both-none"), bTwo = both("both-two"); mkdirSync(join(bTwo.repo2, "x")); mkdirSync(join(bTwo.iso, "x")); const fRepoX = planth(join(bTwo.repo2, "x")), fLstX = planth(join(bTwo.iso, "x"));
+      const rDot = scanBoth(asPath(".", absA), bDot), rUp = scanBoth(asPath("..", absA), bUp), rRel = scanBoth(asPath("../planted", absA), bRel), rLst = scanBoth(asPath("../only-listing", absA), bLst);
+      const rNone = scanBoth(asPath(".", "..", "", "../planted", "x/y", absA), bNone), rTwo = scanBoth(asPath("x", absA), bTwo);
+      check("a relative PATH entry is read in the repository directory as well as the listing's: a helper in the repository root behind `.`, one in the repository's parent behind `..` and one behind `../planted` are each exactly one gated problem naming the file (the repository side the round-29 scan dropped), one only the listing's directory has is still found, the same entry holding a helper on both sides is two problems, and nothing planted is no problem and no note (R30-path-both-dirs-unit)",
+        hasOne(rDot, fDot) && hasOne(rUp, fUp) && hasOne(rRel, fRel) && hasOne(rLst, fLst) && rNone.problems.length === 0 && rNone.notes.length === 0 &&
+        rTwo.problems.length === 2 && rTwo.problems.some((p) => p.includes(`: ${fRepoX} (`)) && rTwo.problems.some((p) => p.includes(`: ${fLstX} (`)));
+      // end to end, the whole script (Opus's p4 shape): stock git, `../r30x` first on PATH, TMPDIR = the fixture's directory so ../r30x is the same place from the repository and from the listing's directory, a git planted there
+      // that answers --heads with a listing of its own. The planted git is never run (the marker stays empty), the transport is not the green row, the script exits 1 on a gated row naming it.
+      const fxE = mkLikeUe("r30-git-e2e"), boxDir = dirname(fxE.w), x30 = join(boxDir, "r30x"); mkdirSync(x30);
+      const log30 = join(rroot, "r30-e2e.log"); writeFileSync(log30, "");
+      writeFileSync(join(x30, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R30_LOG\"\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R30_NEXT\" \"$@\"\n", { mode: 0o755 });
+      const e2e = wholeScript(fxE, "r30-git-e2e", { ...cleanOfTrust, TMPDIR: boxDir, PATH: ["../r30x", fakeBin, process.env.PATH ?? ""].join(delimiter), R30_LOG: log30, R30_NEXT: realGit }, { timeout: 90000 });
+      const shownGit = join(realpathSync(boxDir), "r30x", "git").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      check("a relative PATH entry `../r30x` holding a git that answers the Hub listing with one of its own, stock git, no proxy or CA: the whole check exits 1 on a gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R30-git-relative-e2e)",
+        e2e.error === null && e2e.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${shownGit}`).test(e2e.out) && !/✓ Review Hub transport/.test(e2e.out) && !e2e.listed && (readIfPresent(log30) || "") === "",
+        () => JSON.stringify({ status: e2e.status, listed: e2e.listed, marker: readIfPresent(log30), rows: e2e.out.split("\n").filter((l) => /Review Hub|unpushed/.test(l)).slice(0, 4) }));
+      check("the header names the git program rule and the code starts git by the program it found, not by name (R30-audit-git-program)",
+        prodText.includes("THE git PROGRAM (round 30") && prodText.includes("spawnSync(gitProgram(), [\"-c\", \"core.commitGraph=false\"") && !/spawnSync\(\s*["'`]git["'`]/.test(prodText));
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.

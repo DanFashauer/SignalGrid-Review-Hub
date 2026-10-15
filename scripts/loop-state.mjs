@@ -216,6 +216,9 @@ function isTrustedAbsoluteEntry(entry) {
   const raw = String(entry);
   return isAbsolute(raw) && !hasDotDotSegment(raw) && !isPerProcessSpelling(raw) && !isPerProcessSpelling(posix.normalize(raw));
 }
+// ROUND 34. How the rows name what isTrustedAbsoluteEntry passes and what it does not. "absolute" alone was untrue: an entry like /tmp/../bin IS absolute and is not trusted, and the old rows sent the operator looking for a relative one.
+const TRUSTED_ENTRY = "trusted PATH entry (absolute, no `..`, not per-process)";
+const UNTRUSTED_GIT_ROW = "a git on PATH is reached through an entry this check does not trust (relative or empty, a per-process place such as /proc/self/cwd or /dev/fd, or an absolute one containing `..` — write it without the `..`), ahead of any trusted one";
 // Where a lookup that starts in `base` reads a PATH entry that is not trusted: a relative one joined to it (by concatenation, as the kernel follows `..` through a symlink); `/proc/self/cwd<rest>` as `base<rest>` (that IS
 // the lookup's working directory); any other untrusted absolute spelling (another per-process root, or a `..` anywhere) as written, which is how THIS process reads it (the only process there is any evidence about).
 const CWD_ENTRY = /^\/+proc\/+(?:self|thread-self)\/+cwd(\/.*)?$/;
@@ -298,7 +301,7 @@ function gitRun(cwd, args, { input, env, buffer = false, timeout } = {}) {
     if (!d.ok && d.status !== 1) return { ok: false, error: new Error("filter drivers unreadable"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: `could not read the filter drivers: ${gitWhy(d)}`, timedOut: false };
     for (const rec of String(d.stdout).split("\0").filter(Boolean)) driversOff.push("-c", `${rec.split("\n")[0]}=`);
   }
-  if (gitProgram() === null) return { ok: false, error: new Error("no git in an absolute PATH entry"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: "git was not found in any absolute PATH entry", timedOut: false };
+  if (gitProgram() === null) return { ok: false, error: new Error("no git in a trusted PATH entry"), status: null, stdout: buffer ? Buffer.alloc(0) : "", stderr: `git was not found in any ${TRUSTED_ENTRY}`, timedOut: false };
   const r = spawnSync(gitProgram(), ["-c", "core.commitGraph=false", ...GIT_EXEC_OFF, ...(network ? [] : GIT_CREDENTIAL_OFF), ...driversOff, "-C", dir, ...args], {
     cwd: dir, input, env: gitEnv(env), ...(buffer ? {} : { encoding: "utf8" }), maxBuffer: 64 * 1024 * 1024, timeout: ms, killSignal: "SIGKILL",
     stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
@@ -602,13 +605,13 @@ function hubTransport(cwd = repo, hub = HUB) {
     for (const pr of scan.problems) if (!problems.includes(pr)) problems.push(pr);
     for (const nt of scan.notes) if (!trusted.includes(nt)) trusted.push(nt);
   }
-  { // the git program (round 30): a git behind a non-absolute entry ahead of the one every git here is started by is what the user's own git would run from the repository; no git behind an absolute entry is no git at all
+  { // the git program (round 30): a git behind an untrusted entry ahead of the one every git here is started by is what the user's own git would run from the repository; no git behind a trusted entry is no git at all
     const gp = gitOnPath(process.env.PATH ?? "", resolve(cwd));
     for (const f of gp.shadows) {
-      const pr = `a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${f} (a plain \`git\` run from ${resolve(cwd)} would run it; ${gp.bin ? `every git started here is found through the absolute PATH entries only (${gp.bin})` : "no git is behind an absolute PATH entry, so none was started here"}, and the Hub listing is not read)`;
+      const pr = `${UNTRUSTED_GIT_ROW}: ${f} (a plain \`git\` run from ${resolve(cwd)} would run it; ${gp.bin ? `every git started here is found through the trusted PATH entries only (${gp.bin})` : `no git is behind a ${TRUSTED_ENTRY}, so none was started here`}, and the Hub listing is not read)`;
       if (!problems.includes(pr)) problems.push(pr);
     }
-    if (gp.bin === null && gp.shadows.length === 0) problems.push("no git is behind an absolute PATH entry, so no git was started here and nothing below could be read");
+    if (gp.bin === null && gp.shadows.length === 0) problems.push(`no git is behind a ${TRUSTED_ENTRY}, so no git was started here and nothing below could be read`);
   }
   return { problems, trusted, note: trusted.length ? `trusted, not verified: ${trusted.join("; ")}` : "no proxy, CA or URL rewrite configured; direct" };
 }
@@ -731,7 +734,7 @@ function originRow(cwd = repo, hub = HUB) {
   const rewriteNote = configured && configured !== fetchUrl ? ` (remote.origin.url is ${displayUrl(configured)}, rewritten by url.<base>.insteadOf)` : "";
   // a URL that is not the Hub as written can print as the Hub once what precedes an @ is left out: say so, so a failing row never reads like a passing one
   const hidden = !ok && [fetchUrl, pushUrl].some((x) => x && !isHubUrl(x, hub) && hubIdentity(parseGitUrl(displayUrl(x))) === hubIdentity(parseGitUrl(hub))) ? " (not the Hub as written: text before an @ is not shown)" : "";
-  if (gitProgram() === null) return { state: "fail", what: "origin points at the Review Hub", detail: "git unavailable: no git is behind an absolute PATH entry, so no remote could be read" }; // (not "(no origin)": every git call failed)
+  if (gitProgram() === null) return { state: "fail", what: "origin points at the Review Hub", detail: `git unavailable: no git is behind a ${TRUSTED_ENTRY}, so no remote could be read` }; // (not "(no origin)": every git call failed)
   return { state: ok ? "ok" : "fail", what: "origin points at the Review Hub", detail: `${displayUrl(fetchUrl) || "(no origin)"}${pushNote}${rewriteNote}${hidden}` };
 }
 // A FULL refname, never `origin/SignalGrid_Alpha`: a tag called origin/SignalGrid_Alpha outranks the
@@ -3747,25 +3750,30 @@ function selfTest() {
     check("the whole check, with a global rewrite of the Hub to another host behind ?x=@ (a fake Hub that answers a listing is standing by), exits 1 with a failing Hub-URL row and never ASKS for the listing; with the origin hidden behind #@ it fails the origin row and exits 1 (R16-url-e2e)",
       ueRewrite.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL .* to https:\/\/evil\.example\//.test(ueRewrite.out) && !ueRewrite.listed && !/all present on the Review Hub/.test(ueRewrite.out) && !/adds credentials/.test(ueRewrite.out) &&
       ueOrigin.status === 1 && /✗ origin points at the Review Hub\s+https:\/\/evil\.example\//.test(ueOrigin.out));
+    // <port-handshake>
+    // A fixture server hands its port to this process through a file (R16, R22, R23). Round 34: writeFileSync is open(O_TRUNC) and THEN write, so a reader between the two read "" (an existing, empty file), the wait loop stopped on it
+    // (it waited for "not null"), and the case built `http://127.0.0.1:?x=@...`; git then aimed at port 80 (rc 128) and the case printed FAIL with no detail. Measured with these servers: the case's own loop read "" first in 7 of 400 handshakes under load.
+    // Both halves are closed: each server writes `<file>.tmp` and renames it onto `<file>` (atomic: the name appears with its whole content), and this reader accepts a file only when it is all digits. The deadline is unchanged (400 x 50 ms).
+    const waitForPort = (file) => { for (let i = 0; i < 400; i++) { const v = readIfPresent(file); if (v !== null && /^\d+$/.test(v)) return v; spawnSync("sleep", ["0.05"]); } const last = readIfPresent(file); return last !== null && /^\d+$/.test(last) ? last : null; };
+    // </port-handshake>
     // The refuter's end-to-end shape: a fixture Hub that REALLY answers a listing, on a local port, reachable only through a rewrite that hides the real host behind ?x=@.
     // Precondition: the plain git, under that rewrite, reaches it. The whole check must then fail the Hub-URL row and never send it a request.
     const lpSha = hubMapOf(ue.h).get("main"), lpPort = join(root, "r16-hub.port"), lpLog = join(root, "r16-hub.log"), lpServer = join(root, "r16-hub-server.mjs");
     writeFileSync(lpLog, "");
-    writeFileSync(lpServer, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+    writeFileSync(lpServer, [`import { createServer } from "node:http"; import { appendFileSync, renameSync, writeFileSync } from "node:fs";`,
       `const pkt = (s) => (s.length + 4).toString(16).padStart(4, "0") + s;`,
       `const body = pkt("# service=git-upload-pack\\n") + "0000" + pkt(process.argv[2] + " refs/heads/main\\0multi_ack thin-pack side-band side-band-64k ofs-delta shallow no-progress include-tag multi_ack_detailed symref=HEAD:refs/heads/main object-format=sha1 agent=fixture\\n") + "0000";`,
       `const srv = createServer((req, res) => { appendFileSync(process.argv[4], req.url + "\\n"); res.writeHead(200, { "content-type": "application/x-git-upload-pack-advertisement", "cache-control": "no-cache" }); res.end(body); });`,
-      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[3], String(srv.address().port)));`].join("\n") + "\n");
+      `srv.listen(0, "127.0.0.1", () => { writeFileSync(process.argv[3] + ".tmp", String(srv.address().port)); renameSync(process.argv[3] + ".tmp", process.argv[3]); });`].join("\n") + "\n");
     const lpChild = spawn(process.execPath, [lpServer, lpSha, lpPort, lpLog], { detached: true, stdio: "ignore" }); // no shell, no command string: the program and its arguments are separate
     lpChild.on("error", () => { /* it never started: the port file never appears and the case fails below */ });
     lpChild.unref();
     const lpPid = lpChild.pid;
-    let lpOk = false, lpListed = null, lpScan = null, lpWhole = null, lpAfter = null, lpPlain = null;
+    let lpOk = false, lpListed = null, lpScan = null, lpWhole = null, lpAfter = null, lpPlain = null, lpPortNo = null, lpBase = null;
     try {
-      for (let i = 0; i < 400 && readIfPresent(lpPort) === null; i++) spawnSync("sleep", ["0.05"]);
-      const lpPortNo = readIfPresent(lpPort);
+      lpPortNo = waitForPort(lpPort);
       if (lpPortNo !== null) {
-        const lpBase = ["http://127.0.0.1:" + lpPortNo + "?x=", "github.com/"].join("@"); // (joined, so no line of this file spells a credential in front of a real host)
+        lpBase = ["http://127.0.0.1:" + lpPortNo + "?x=", "github.com/"].join("@"); // (joined, so no line of this file spells a credential in front of a real host)
         const lpCfg = cfgFile("r16-localport-global.cfg", `[url ${JSON.stringify(lpBase)}]\n\tinsteadOf = https://github.com/\n`);
         const lpEnv = { NO_PROXY: "127.0.0.1", no_proxy: "127.0.0.1", HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null };
         lpPlain = inCleanEnv(() => gitRun(ue.w, ["ls-remote", "--heads", HUB], { timeout: 60000 }), { GIT_CONFIG_GLOBAL: lpCfg, ...lpEnv });
@@ -3780,7 +3788,11 @@ function selfTest() {
     check("a fixture Hub on a local port that answers a real listing, reached only through a global rewrite hiding the host behind ?x=@, is reachable by plain git (the precondition), is a gated 'rewrites the Hub URL' finding, and the whole check exits 1 without sending it one request (R16-url-localport)",
       lpOk && !!lpPlain && lpPlain.ok && lpPlain.stdout.includes(lpSha) && !!lpListed && lpListed.length > 0 &&
       !!lpScan && lpScan.problems.some((p) => /^git configuration rewrites the Hub URL .* to http:\/\/127\.0\.0\.1\/\?\.\.\. \(url\./.test(p)) &&
-      !!lpWhole && lpWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lpWhole.out) && !lpWhole.out.includes("all present on the Review Hub") && lpAfter === "");
+      !!lpWhole && lpWhole.status === 1 && /✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lpWhole.out) && !lpWhole.out.includes("all present on the Review Hub") && lpAfter === "",
+      () => `port file ${JSON.stringify(readIfPresent(lpPort))} (waitForPort: ${JSON.stringify(lpPortNo)}); URL built ${JSON.stringify(lpBase)}; ran ${lpOk}; ` +
+        (lpPlain ? `plain git rc ${lpPlain.status} ok=${lpPlain.ok} stdout has the sha ${lpPlain.stdout.includes(lpSha)} stderr ${JSON.stringify(String(lpPlain.stderr).slice(0, 300))}` : "plain git not run") +
+        `; the fixture Hub saw ${JSON.stringify(lpListed)}; scan problems ${lpScan ? JSON.stringify(lpScan.problems) : "(scan not run)"}; whole check ` +
+        (lpWhole ? `rc ${lpWhole.status}, Hub-URL row ${/✗ Review Hub URL\s+git configuration rewrites the Hub URL/.test(lpWhole.out)}, listing printed ${lpWhole.out.includes("all present on the Review Hub")}` : "not run") + `; requests after the scan ${JSON.stringify(lpAfter)}`);
     // (3) listHub's isolation. Where it runs is probed (an empty directory made for the call, under the temp directory, with the ceiling set), and a rewrite written into .git/config AFTER the scan took its snapshot
     // (a shape no scan can see) is followed by a listing made inside the repository and not by listHub.
     const lhSeen = [], lhReal = gitRun;
@@ -4003,10 +4015,10 @@ exit 1
     const gcFx = mkLikeUe("r22gc"), rcFx = mkLikeUe("r22rc");
     const px = join(root, "r22-proxy.mjs"), pxPort = join(root, "r22-proxy.port"), pxLog = join(root, "r22-proxy.log");
     writeFileSync(pxLog, "");
-    writeFileSync(px, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+    writeFileSync(px, [`import { createServer } from "node:http"; import { appendFileSync, renameSync, writeFileSync } from "node:fs";`,
       `const srv = createServer((req, res) => { appendFileSync(process.argv[3], "REQ " + req.url + "\\n"); res.writeHead(502); res.end(); });`,
       `srv.on("connect", (req, sock) => { appendFileSync(process.argv[3], "CONNECT " + req.url + "\\n"); sock.destroy(); });`,
-      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[2], String(srv.address().port)));`].join("\n") + "\n");
+      `srv.listen(0, "127.0.0.1", () => { writeFileSync(process.argv[2] + ".tmp", String(srv.address().port)); renameSync(process.argv[2] + ".tmp", process.argv[2]); });`].join("\n") + "\n");
     const pxChild = spawn(process.execPath, [px, pxPort, pxLog], { detached: true, stdio: "ignore" });
     pxChild.on("error", () => { /* it never started: the port file never appears and the cases fail below */ });
     pxChild.unref();
@@ -4014,8 +4026,7 @@ exit 1
     const noProxyEnv = { HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null, NO_PROXY: null, no_proxy: null };
     let gcPlain = null, gcBlind = null, gcLogged = null, gcWhole = null, gcAfter = null, gcScan = null, rcScans = [], rcPlain = null, rcLogged = null, rcWhole = null, rcAfter = null;
     try {
-      for (let i = 0; i < 400 && readIfPresent(pxPort) === null; i++) spawnSync("sleep", ["0.05"]);
-      const pxNo = readIfPresent(pxPort);
+      const pxNo = waitForPort(pxPort);
       if (pxNo !== null) {
         const proxyCfg = `[http]\n\tproxy = http://127.0.0.1:${pxNo}\n\tsslVerify = false\n`;
         // (1) a global proxy + sslVerify=false, and GIT_CONFIG=/dev/null in the environment
@@ -4080,10 +4091,10 @@ exit 1
     // end to end: a logging proxy; the listing would go through it if a switch were read as "on"
     const bpx = join(root, "r23-proxy.mjs"), bpxPort = join(root, "r23-proxy.port"), bpxLog = join(root, "r23-proxy.log");
     writeFileSync(bpxLog, "");
-    writeFileSync(bpx, [`import { createServer } from "node:http"; import { appendFileSync, writeFileSync } from "node:fs";`,
+    writeFileSync(bpx, [`import { createServer } from "node:http"; import { appendFileSync, renameSync, writeFileSync } from "node:fs";`,
       `const srv = createServer((req, res) => { appendFileSync(process.argv[3], "REQ " + req.url + "\\n"); res.writeHead(502); res.end(); });`,
       `srv.on("connect", (req, sock) => { appendFileSync(process.argv[3], "CONNECT " + req.url + "\\n"); sock.destroy(); });`,
-      `srv.listen(0, "127.0.0.1", () => writeFileSync(process.argv[2], String(srv.address().port)));`].join("\n") + "\n");
+      `srv.listen(0, "127.0.0.1", () => { writeFileSync(process.argv[2] + ".tmp", String(srv.address().port)); renameSync(process.argv[2] + ".tmp", process.argv[2]); });`].join("\n") + "\n");
     const bpxChild = spawn(process.execPath, [bpx, bpxPort, bpxLog], { detached: true, stdio: "ignore" });
     bpxChild.on("error", () => { /* it never started: the port file never appears and the case fails below */ });
     bpxChild.unref();
@@ -4091,8 +4102,7 @@ exit 1
     let bxPlain = null, bxLogged = null, bxGlobal = null, bxGlobalAfter = null, bxParams = null, bxParamsAfter = null;
     const bxNoProxy = { HTTPS_PROXY: null, https_proxy: null, HTTP_PROXY: null, http_proxy: null, ALL_PROXY: null, all_proxy: null, NO_PROXY: null, no_proxy: null };
     try {
-      for (let i = 0; i < 400 && readIfPresent(bpxPort) === null; i++) spawnSync("sleep", ["0.05"]);
-      const bpxNo = readIfPresent(bpxPort);
+      const bpxNo = waitForPort(bpxPort);
       if (bpxNo !== null) {
         const proxyUrl = `http://127.0.0.1:${bpxNo}`, bxCfg = cfgFile("r23-e2e.cfg", `[http]\n\tproxy = ${proxyUrl}\n\tsslVerify = 00\n`);
         const rawEnv = { ...FX_ENV, GIT_CONFIG_GLOBAL: bxCfg, GIT_CONFIG_NOSYSTEM: "1" };
@@ -4534,7 +4544,7 @@ exit 1
       const fxG = mk("r30-git-inproc"), fxGw = join(fxG, "work"); execFileSync("git", ["init", "-q", "-b", "main", fxGw], { env: FX_ENV }); const gBox = plantGit(fxG);
       const inG = withEnvVars({ PATH: `..${delimiter}${process.env.PATH ?? ""}`, R30_LOG: join(rroot, "r30-inproc.log") }, () => inCleanEnv(() => ({ t: hubTransport(fxGw), g: gitRun(fxGw, ["rev-parse", "--git-dir"]), prog: gitProgram() }), cleanOfTrust));
       check("hubTransport turns a git planted behind `..` of the repository into a gated problem naming it, and the git it (and gitRun) starts is still the real one by an absolute path: the planted one is never run (R30-git-resolve-gated)",
-        inG.t.problems.length >= 1 && inG.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && inG.g.ok === true && isAbsolute(inG.prog) && inG.prog !== gBox && (readIfPresent(join(rroot, "r30-inproc.log")) || "") === "");
+        inG.t.problems.length >= 1 && inG.t.problems.some((p) => p.startsWith("a git on PATH is reached through an entry this check does not trust (") && p.includes(gBox)) && inG.g.ok === true && isAbsolute(inG.prog) && inG.prog !== gBox && (readIfPresent(join(rroot, "r30-inproc.log")) || "") === "");
       // the PATH an isolated git is handed: no non-absolute entry, every absolute one in order (the stand-in git, found by its absolute path, records the PATH it was started with)
       const standDir = mk("r30-standin"), pathLog = join(rroot, "r30-path.log"); writeFileSync(pathLog, "");
       writeFileSync(join(standDir, "git"), "#!/bin/sh\nprintf '%s\\n' \"$PATH\" >> \"$R30_PATHLOG\"\nexec \"$R30_NEXT\" \"$@\"\n", { mode: 0o755 });
@@ -4565,8 +4575,8 @@ exit 1
       writeFileSync(join(x30, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R30_LOG\"\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R30_NEXT\" \"$@\"\n", { mode: 0o755 });
       const e2e = wholeScript(fxE, "r30-git-e2e", { ...cleanOfTrust, TMPDIR: boxDir, PATH: ["../r30x", fakeBin, process.env.PATH ?? ""].join(delimiter), R30_LOG: log30, R30_NEXT: realGit }, { timeout: 90000 });
       const shownGit = join(realpathSync(boxDir), "r30x", "git").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      check("a relative PATH entry `../r30x` holding a git that answers the Hub listing with one of its own, stock git, no proxy or CA: the whole check exits 1 on a gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R30-git-relative-e2e)",
-        e2e.error === null && e2e.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${shownGit}`).test(e2e.out) && !/✓ Review Hub transport/.test(e2e.out) && !e2e.listed && /Review coverage\s+\d+ of \d+ surfaces read/.test(e2e.out) && (readIfPresent(log30) || "") === "",
+      check("a relative PATH entry `../r30x` holding a git that answers the Hub listing with one of its own, stock git, no proxy or CA: the whole check exits 1 on a gated 'a git on PATH is reached through an entry this check does not trust' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R30-git-relative-e2e)",
+        e2e.error === null && e2e.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through an entry this check does not trust \\([^\\n]*\\), ahead of any trusted one: ${shownGit}`).test(e2e.out) && !/✓ Review Hub transport/.test(e2e.out) && !e2e.listed && /Review coverage\s+\d+ of \d+ surfaces read/.test(e2e.out) && (readIfPresent(log30) || "") === "",
         () => JSON.stringify({ status: e2e.status, listed: e2e.listed, marker: readIfPresent(log30), rows: e2e.out.split("\n").filter((l) => /Review Hub|unpushed/.test(l)).slice(0, 4) }));
       check("the header names the git program rule and the code starts git by the program it found, not by name (R30-audit-git-program)",
         prodText.includes("THE git PROGRAM (round 30") && prodText.includes("spawnSync(gitProgram(), [\"-c\", \"core.commitGraph=false\"") && !/spawnSync\(\s*["'`]git["'`]/.test(prodText));
@@ -4597,14 +4607,14 @@ exit 1
       const noOrigin = mk("r31-no-origin"); execFileSync("git", ["init", "-q", "-b", "main", noOrigin], { env: FX_ENV });
       const oDegraded = withEnvVars({ PATH: "." }, () => originRow(noOrigin)), oPlain = originRow(noOrigin);
       check("with no git behind an absolute PATH entry the origin row says git is unavailable and why, not '(no origin)'; with git, a repository that has no origin still reads '(no origin)' (R31-origin-degraded-unit)",
-        oDegraded.state === "fail" && /^git unavailable: no git is behind an absolute PATH entry/.test(oDegraded.detail) && !oDegraded.detail.includes("(no origin)") && oPlain.state === "fail" && oPlain.detail.startsWith("(no origin)"));
+        oDegraded.state === "fail" && /^git unavailable: no git is behind a trusted PATH entry/.test(oDegraded.detail) && !oDegraded.detail.includes("(no origin)") && oPlain.state === "fail" && oPlain.detail.startsWith("(no origin)"));
       // (4) the whole script, `.` on PATH with a git in the repository root, the coverage module present (the full tree's shape): the planted git logs its calls and then runs the real one
       const plantLogging = (dir) => writeFileSync(join(dir, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R31_LOG\"\nexec \"$R31_NEXT\" \"$@\"\n", { mode: 0o755 });
       const fxR = mkLikeUe("r31-git-root"); giveCoverage(fxR); plantLogging(fxR.w);
       const logR = join(rroot, "r31-root.log"); writeFileSync(logR, "");
       const runR = wholeScript(fxR, "r31-git-root", { ...cleanOfTrust, PATH: [".", fakeBin, process.env.PATH ?? ""].join(delimiter), R31_LOG: logR, R31_NEXT: realGit }, { timeout: 120000 });
       check("`.` on PATH with a git in the repository root, the coverage module present: the gate row names that git and the check exits 1, the coverage row is still produced from the real git's answers, and the planted git is run by nothing, gitRun and the coverage module's own by-name git calls alike (R31-git-root-e2e)",
-        runR.error === null && runR.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${esc(join(realpathSync(fxR.w), "git"))}`).test(runR.out) && runR.out.includes("every git started here is found through the absolute PATH entries only") &&
+        runR.error === null && runR.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through an entry this check does not trust \\([^\\n]*\\), ahead of any trusted one: ${esc(join(realpathSync(fxR.w), "git"))}`).test(runR.out) && runR.out.includes("every git started here is found through the trusted PATH entries only") &&
         /✓ Review coverage\s+\d+ of \d+ surfaces read/.test(runR.out) && (readIfPresent(logR) || "") === "",
         () => JSON.stringify({ status: runR.status, marker: (readIfPresent(logR) || "").split("\n").slice(0, 4), coverage: (runR.out.match(/^.*Review coverage.*$/m) || [""])[0], rows: runR.out.split("\n").filter((l) => /Review Hub/.test(l)).slice(0, 3) }));
       // (5) the whole script with NO absolute entry at all (`.` only) and stand-in children that each start a git by name: they run (their rows are there) and the planted git in the working directory is not what they run
@@ -4614,11 +4624,11 @@ exit 1
       for (const [name, body] of [["check-readiness-figure.mjs", `console.log(JSON.stringify({ headline: 90, floor: 80, target: [92, 95], a: 90, b: 90, c: 90 }));`], ["check-decision-vocabulary.mjs", ""], ["check-product-framing.mjs", ""], ["check-raised-hands.mjs", `console.log(JSON.stringify({ open: 0 }));`]]) writeFileSync(join(fxN.w, "scripts", name), childStub(body));
       const runN = wholeScript(fxN, "r31-nopath", { ...cleanOfTrust, PATH: ".", R31_LOG: logN, R31_NEXT: realGit }, { timeout: 120000 });
       check("a PATH with no absolute entry (`.` only) fails closed and runs nothing from the working directory: exit 1, the origin row says git is unavailable, the stand-in readiness, doctrine-gate and raised-hands children all ran (node started by its own path) and the git each of them tries by name is not the planted one in the repository root (R31-git-nopath-e2e)",
-        runN.error === null && runN.status === 1 && /✗ origin points at the Review Hub\s+git unavailable: no git is behind an absolute PATH entry/.test(runN.out) && /Readiness \(gates outreach\)/.test(runN.out) && /Decision vocabulary\s+green/.test(runN.out) && /Product framing\s+green/.test(runN.out) && /Raised hands\s+none open/.test(runN.out) && (readIfPresent(logN) || "") === "",
+        runN.error === null && runN.status === 1 && /✗ origin points at the Review Hub\s+git unavailable: no git is behind a trusted PATH entry/.test(runN.out) && /Readiness \(gates outreach\)/.test(runN.out) && /Decision vocabulary\s+green/.test(runN.out) && /Product framing\s+green/.test(runN.out) && /Raised hands\s+none open/.test(runN.out) && (readIfPresent(logN) || "") === "",
         () => JSON.stringify({ status: runN.status, marker: (readIfPresent(logN) || "").split("\n").slice(0, 3), rows: runN.out.split("\n").filter((l) => /Readiness|Decision vocabulary|Product framing|Raised hands|origin points/.test(l)).slice(0, 6) }));
       // (6) what the header and the code claim
       check("the header states the scope of the rule as it is (gitRun starts git by an absolute path; every other process gets a PATH of absolute entries only; the one known divergence from exec is named), and no node child is started by name (R31-audit-scope)",
-        prodText.includes("ROUND 31") && prodText.includes("absolutePathOnly()") && prodText.includes("a git whose script interpreter is missing") && !/(?:execFileSync|spawnSync|execFile|spawn)\(\s*["'`]node["'`]/.test(prodText) && prodText.includes("found through the absolute PATH entries only"));
+        prodText.includes("ROUND 31") && prodText.includes("absolutePathOnly()") && prodText.includes("a git whose script interpreter is missing") && !/(?:execFileSync|spawnSync|execFile|spawn)\(\s*["'`]node["'`]/.test(prodText) && prodText.includes("found through the trusted PATH entries only"));
     }
     // ══ ROUND 32 ══ "Absolute" is not lexical. Round 31 kept a PATH entry iff path.isAbsolute(entry), but /proc/self/cwd/../x, /proc/<pid>/cwd/.., /proc/self/fd/N, /dev/fd/N and /proc/self/root are absolute to that test and
     // are resolved by the KERNEL per process: a git planted behind `/proc/self/cwd/../x` was found by the check's own lookup and ran on its own path (round-31 review: exit 0 and a green transport row in the Opus-p4 fixture,
@@ -4657,6 +4667,11 @@ exit 1
           reach(viaCwd) && reach(viaPid) && reach(viaFd), "this platform does not resolve /proc/self/cwd, /proc/<pid>/cwd and /dev/fd/N to a directory",
           lists.env === asPath(absA, absB) && lists.inside === asPath(absA, absB) && lists.prog === gA && listsNone.has === false && listsNone.hasInside === false && listsNone.prog === null,
           () => JSON.stringify({ lists, listsNone }));
+        // ROUND 34. Five cases below are OFFERED by these probes and are SKIPPED when one reads false, which is right for a Mac (no /proc, no /dev/fd/N as a directory). On Linux the kernel does resolve them, so a probe that reads false there is a
+        // regression or a masked /proc or /dev, not a platform without the behaviour; left a skip, the self-test exited 0 with five cases never run. Here it is a failing case of its own, naming the paths probed. Other platforms are unchanged.
+        const linuxProbes = [viaCwd, viaPid, viaFd, `/dev//fd/../cwd/${relative(process.cwd(), planted)}`], linuxMissed = linuxProbes.filter((e) => !reach(e));
+        if (process.platform === "linux") check("on Linux the kernel resolves /proc/self/cwd, /proc/<pid>/cwd, /dev/fd/N and /dev//fd/../cwd/.. to the directory each names, so every probe that offers the kernel cases below reads true: a probe that reads false is a FAILURE here and not a skip of those cases (R34-linux-probe)",
+          linuxMissed.length === 0, () => `${linuxMissed.length} of ${linuxProbes.length} probes read false (git not reachable through): ${linuxMissed.join(" | ")}`);
         // (3) the shadow gate: a per-process entry is read like a relative one, in the directory the lookup would run in
         const parent = mk("r32-parent"), repoDir = join(parent, "repo"), plantedDir = join(parent, "planted"); mkdirSync(repoDir); mkdirSync(plantedDir);
         const gUnder = plantGit(plantedDir), gUp = plantGit(parent), gHere = plantGit(repoDir), fdUnder = dirFd(plantedDir);
@@ -4680,7 +4695,7 @@ exit 1
           const logP = join(rroot, `r32-inproc-${i}.log`);
           return withEnvVars({ PATH: `${entry}${delimiter}${process.env.PATH ?? ""}`, R32_LOG: logP }, () => inCleanEnv(() => ({ entry, t: hubTransport(fxGw), run: gitRun(fxGw, ["rev-parse", "--git-dir"]), prog: gitProgram(), ran: (readIfPresent(logP) || "") !== "" }), cleanOfTrust));
         });
-        const gated = (x) => x.t.problems.some((p) => p.startsWith("a git on PATH is reached through a non-absolute entry") && p.includes(gBox)) && x.run.ok === true && isAbsolute(x.prog) && x.prog !== gBox && x.ran === false;
+        const gated = (x) => x.t.problems.some((p) => p.startsWith("a git on PATH is reached through an entry this check does not trust (") && p.includes(gBox)) && x.run.ok === true && isAbsolute(x.prog) && x.prog !== gBox && x.ran === false;
         const gatedDetail = (xs) => () => JSON.stringify(xs.map((x) => ({ entry: x.entry, problems: x.t.problems.map((p) => p.slice(0, 120)), ok: x.run.ok, prog: x.prog, ran: x.ran })));
         check("hubTransport turns a git planted behind /proc/self/cwd/.. into a gated problem naming it, and the git it and gitRun start is still the real one by an absolute path: the planted one is never run (R32-git-resolve-gated)", gated(inproc[0]), gatedDetail([inproc[0]]));
         checkIfOffered("the same for /proc/<pid>/cwd/<path> and /dev/fd/N (the precondition: the planted git is reachable from this process through both) (R33-git-resolve-kernel-gated)",
@@ -4713,15 +4728,15 @@ exit 1
           writeFileSync(join(dirX, "git"), "#!/bin/sh\necho \"planted git: cwd=$PWD args=$*\" >> \"$R32_LOG\"\nfor a in \"$@\"; do\n  if [ \"$a\" = \"--heads\" ]; then /bin/cat \"$R9_FAKE_LISTING\"; exit 0; fi\ndone\nexec \"$R32_NEXT\" \"$@\"\n", { mode: 0o755 });
           const run = wholeScript(fx, `r32-${tag}`, { ...cleanOfTrust, TMPDIR: box, PATH: [entryOf(dirX, fx.w), fakeBin, process.env.PATH ?? ""].join(delimiter), R32_LOG: log, R32_NEXT: realGit }, { timeout: 120000, ...runOpts(dirX) });
           const shown = join(realpathSync(box), `r32${tag}`, "git");
-          const ok = run.error === null && run.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through a non-absolute entry, ahead of any absolute one: ${esc(shown)}`).test(run.out) && !/✓ Review Hub transport/.test(run.out) && !run.listed &&
-            /Review coverage\s+\d+ of \d+ surfaces read/.test(run.out) && (readIfPresent(log) || "") === "";
+          const ok = run.error === null && run.status === 1 && new RegExp(`✗ Review Hub URL\\s+a git on PATH is reached through an entry this check does not trust \\([^\\n]*\\), ahead of any trusted one: ${esc(shown)}`).test(run.out) && !/✓ Review Hub transport/.test(run.out) && !run.listed &&
+            run.out.includes("or an absolute one containing `..` — write it without the `..`), ahead of any trusted one: ") && !run.out.includes("non-absolute entry") && /Review coverage\s+\d+ of \d+ surfaces read/.test(run.out) && (readIfPresent(log) || "") === "";
           return { ok, detail: () => JSON.stringify({ status: run.status, listed: run.listed, marker: (readIfPresent(log) || "").split("\n").slice(0, 3), rows: run.out.split("\n").filter((l) => /Review Hub|unpushed/.test(l)).slice(0, 4) }) };
         };
         const eCwd = e2eCase("cwd", () => "/proc/self/cwd/../r32cwd", () => ({}));
         const offeredPid = reach(viaPid), offeredFd = reach(viaFd); // (round 33: a platform that cannot resolve them has no planted git to find, so these two are not run there at all)
         const ePid = offeredPid ? e2eCase("pid", (dirX) => `/proc/${process.pid}/cwd/${relative(process.cwd(), dirX)}`, () => ({})) : null;
         let eFd = null; if (offeredFd) { let fdE2e = null; try { eFd = e2eCase("fd", () => "/dev/fd/3", (dirX) => { fdE2e = openSync(dirX, "r"); return { stdio: ["pipe", "pipe", "pipe", fdE2e] }; }); } finally { if (fdE2e !== null) closeSync(fdE2e); } }
-        check("a git planted behind `/proc/self/cwd/../r32cwd` (the Opus-p4 shape: TMPDIR = the fixture's directory, the planted git answers the Hub listing with its own), stock git behind it: the whole check exits 1 on a gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R32-cwd-e2e)", eCwd.ok, eCwd.detail);
+        check("a git planted behind `/proc/self/cwd/../r32cwd` (the Opus-p4 shape: TMPDIR = the fixture's directory, the planted git answers the Hub listing with its own), stock git behind it: the whole check exits 1 on a gated 'a git on PATH is reached through an entry this check does not trust' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R32-cwd-e2e)", eCwd.ok, eCwd.detail);
         checkIfOffered("the same through `/proc/<pid>/cwd/<path>` (the pid of the self-test, which any process can read; the precondition: /proc/<pid>/cwd resolves to a directory here) (R32-pid-e2e)", offeredPid, "this platform does not resolve /proc/<pid>/cwd to a directory", ePid !== null && ePid.ok, ePid && ePid.detail);
         checkIfOffered("the same through `/dev/fd/3`, a directory descriptor the check inherited from its parent (the precondition: /dev/fd/N resolves to a directory here) (R32-fd-e2e)", offeredFd, "this platform does not resolve /dev/fd/N to a directory", eFd !== null && eFd.ok, eFd && eFd.detail);
         // (6) the restore at the call site of section 4b: the process's PATH after the whole run is byte-identical to what it was handed (an unset one stays unset), seen from an exit hook loaded into the checked process only
@@ -4760,7 +4775,7 @@ exit 1
         const eDotdot = e2eCase("dotdot", (dirX, wdir) => `${wdir}/../${basename(dirX)}`, () => ({}));
         const offeredDd = reach(`/dev//fd/../cwd/${relative(process.cwd(), planted)}`);
         const eDd = offeredDd ? e2eCase("dd", () => "/dev//fd/../cwd/../r32dd", () => ({})) : null;
-        check("a git planted behind `<repository>/../r32dotdot` (an absolute entry with a `..`, stock git behind it): the whole check exits 1 on the gated 'a git on PATH is reached through a non-absolute entry' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R33-dotdot-e2e)", eDotdot.ok, eDotdot.detail);
+        check("a git planted behind `<repository>/../r32dotdot` (an absolute entry with a `..`, stock git behind it): the whole check exits 1 on the gated 'a git on PATH is reached through an entry this check does not trust' row naming that file, never prints the green transport row, does not read the listing, and never runs the planted git (R33-dotdot-e2e)", eDotdot.ok, eDotdot.detail);
         checkIfOffered("the same through `/dev//fd/../cwd/../r32dd` (the reviewer's spelling: /dev/fd is a link to /proc/self/fd, so the `..` steps to /proc/self and `cwd/..` is the parent of the repository; posix.normalize reads it as /dev/r32dd; the precondition: the kernel resolves it from this process) (R33-dev-fd-dotdot-e2e)",
           offeredDd, "this platform does not resolve /dev//fd/../cwd/.. to the working directory's parent", eDd !== null && eDd.ok, eDd && eDd.detail);
         const sumSk = selfTestSummaryLines([["case one", true], ["case two", false]], [["case three", "a cap git did not honour"]], [["case four", "no /proc here"]]);

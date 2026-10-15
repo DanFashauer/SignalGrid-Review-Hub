@@ -453,13 +453,13 @@ const AMBIENT_COUNTS = {
   "process[": 0, "process.env": 1, globalThis: 0, getBuiltinModule: 0, eval: 0, "new Function": 0, "import(": 0, "require(": 0,
   performance: 5, "performance (not .now())": 0, Date: 0, "high-resolution time": 0,
   "process.execArgv": 0, "process.argv": 6, "process.pid": 0, "process.platform": 0, "os.": 0,
-  "import.meta": 2, "readFileSync(": 2, "spawnSync(": 1, "timers, entropy, locale": 0,
+  "import.meta": 2, readFileSync: 3, writeFileSync: 3, spawnSync: 2, Function: 0, "timers, entropy, locale": 0,
 };
 const AMBIENT_PATTERNS = {
   "process[": /\bprocess\s*\[/g, "process.env": /\bprocess\.env\b/g, globalThis: /\bglobalThis\b/g, getBuiltinModule: /getBuiltinModule/g, eval: /\beval\s*\(/g, "new Function": /\bnew\s+Function\b/g, "import(": /\bimport\s*\(/g, "require(": /\brequire\s*\(/g,
   performance: /\bperformance\b/g, "performance (not .now())": /\bperformance\b(?!\.now\(\))/g, Date: /\bDate\b/g, "high-resolution time": /h[r]time/g,
   "process.execArgv": /\bprocess\.execArgv\b/g, "process.argv": /\bprocess\.argv\b/g, "process.pid": /\bprocess\.pid\b/g, "process.platform": /\bprocess\.platform\b/g, "os.": /\bos\s*\./g,
-  "import.meta": /\bimport\.meta\b/g, "readFileSync(": /\breadFileSync\s*\(/g, "spawnSync(": /\bspawnSync\s*\(/g,
+  "import.meta": /\bimport\.meta\b/g, readFileSync: /\breadFileSync\b/g, writeFileSync: /\bwriteFileSync\b/g, spawnSync: /\bspawnSync\b/g, Function: /\bFunction\b/g,
   "timers, entropy, locale": /\b(?:Math\.rando[m]|crypto|Atomics|SharedArrayBuffer|WebAssembly|I[n]tl|navigator|setTimeout|setInterval|setImmediate)\b|locale[C]ompare|to[L]ocale\w*/g,
 };
 // Everything the file does with `process`: these members and no others, and no use of `process` that is not a member access (an alias, an argument, a
@@ -509,7 +509,7 @@ check("main() (comments stripped) sweeps with the exported selector, passes the 
   const off = Object.entries(FORK_COUNTS).filter(([name, n]) => got[name] !== n).map(([name, n]) => `${name} ${got[name]} (pinned ${n})`);
   check(`main() (comments stripped) holds ${Object.keys(FORK_COUNTS).length} counts of the places it forks on the plan flag, reads its arguments and environment, leaves a unit or the run early (continue ${FORK_COUNTS.continue}, break ${FORK_COUNTS.break}, return ${FORK_COUNTS.return}, throw ${FORK_COUNTS.throw}, try ${FORK_COUNTS.try}, catch ${FORK_COUNTS.catch}, process.exit( ${FORK_COUNTS["process.exit("]}) and touches the list the loop walks (\`targets =\` ${FORK_COUNTS["targets ="]}, \`targets\` ${FORK_COUNTS.targets}, \`TARGETS\` ${FORK_COUNTS.TARGETS}): a statement that runs only in a real sweep, or drops a unit on a time budget, a warning or the runner's environment, must edit this pin in review${off.length ? ` — OFF: ${off.join(", ")}` : ""}`, forksPinned(mainBody(GUARD_SRC)));
   const ambOff = ambientProblems(GUARD_SRC);
-  check(`mutation-guard.mjs (comments stripped, WHOLE file, helpers included) reads the clock, the process and the machine in exactly the pinned places: performance ${AMBIENT_COUNTS.performance} (all \`.now()\`), Date ${AMBIENT_COUNTS.Date}, high-resolution time ${AMBIENT_COUNTS["high-resolution time"]}, process.execArgv ${AMBIENT_COUNTS["process.execArgv"]}, process.argv ${AMBIENT_COUNTS["process.argv"]}, process.env ${AMBIENT_COUNTS["process.env"]}, process.pid ${AMBIENT_COUNTS["process.pid"]}, process.platform ${AMBIENT_COUNTS["process.platform"]}, os ${AMBIENT_COUNTS["os."]}, import.meta ${AMBIENT_COUNTS["import.meta"]}, readFileSync( ${AMBIENT_COUNTS["readFileSync("]}, spawnSync( ${AMBIENT_COUNTS["spawnSync("]}, \`process\` members ${JSON.stringify(PROCESS_MEMBERS)}, ${IMPORT_LINES.length} import statements, and no timer, entropy, locale, computed-module route (process[, globalThis, getBuiltinModule, eval, new Function, import(), require() all 0)${ambOff.length ? ` — OFF: ${ambOff.join("; ")}` : ""}`, ambOff.length === 0);
+  check(`mutation-guard.mjs (comments stripped, WHOLE file, helpers included) reads the clock, the process and the machine in exactly the pinned places: performance ${AMBIENT_COUNTS.performance} (all \`.now()\`), Date ${AMBIENT_COUNTS.Date}, high-resolution time ${AMBIENT_COUNTS["high-resolution time"]}, process.execArgv ${AMBIENT_COUNTS["process.execArgv"]}, process.argv ${AMBIENT_COUNTS["process.argv"]}, process.env ${AMBIENT_COUNTS["process.env"]}, process.pid ${AMBIENT_COUNTS["process.pid"]}, process.platform ${AMBIENT_COUNTS["process.platform"]}, os ${AMBIENT_COUNTS["os."]}, import.meta ${AMBIENT_COUNTS["import.meta"]}, readFileSync ${AMBIENT_COUNTS.readFileSync}, writeFileSync ${AMBIENT_COUNTS.writeFileSync}, spawnSync ${AMBIENT_COUNTS.spawnSync} (each: the import and the calls, so no reading of a stub's identity), Function ${AMBIENT_COUNTS.Function}, \`process\` members ${JSON.stringify(PROCESS_MEMBERS)}, ${IMPORT_LINES.length} import statements, and no timer, entropy, locale, computed-module route (process[, globalThis, getBuiltinModule, eval, new Function, import(), require() all 0)${ambOff.length ? ` — OFF: ${ambOff.join("; ")}` : ""}`, ambOff.length === 0);
 }
 check("main()'s --plan mode takes no baseline and records each placement INSTEAD of writing the mutation (the condition for spawning it below)", planModeStopsBeforeMutation(GUARD_SRC));
 const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
@@ -594,6 +594,9 @@ for (const [name, from, to] of [
   ["g12: the selector reads a file the registry does not name (the process's own environment)", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (readFileSync("/proc/self/environ", "utf8").length < 0) ${EMPTY_SELECTION}\n`],
   ["g13: the sharder keeps an alias of process", SHARDER_HEAD, `${SHARDER_HEAD}  const p = process;\n  if (p["execArgv"].length === 0 && p.argv.length > 99) all = [];\n`],
   ["g14: the module imports the machine (os)", "import { fileURLToPath } from \"node:url\";\n", "import { fileURLToPath } from \"node:url\";\nimport { cpus } from \"node:os\";\n"],
+  ["g16: the sharder tells the stubbed file write from the real one by the function's name", SHARDER_HEAD, `${SHARDER_HEAD}  if (writeFileSync.name === "recorded") all = [];\n`],
+  ["g17: the selector tells the stubbed spawn from the real one by the function's source", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (String(spawnSync).length < 200) ${EMPTY_SELECTION}\n`],
+  ["g18: the sharder reads the source of a function through Function.prototype", SHARDER_HEAD, `${SHARDER_HEAD}  if (Function.prototype.toString.call(readFileSync).length < 0) all = [];\n`],
   ["g15: a timer decides the selection", SELECTOR_HEAD, `${SELECTOR_HEAD}  if (typeof setTimeout === "number") ${EMPTY_SELECTION}\n`],
   // The arithmetic net itself, in main().
   ["s1: the plan-vs-size check of each unit is switched off", "if (plan.swept !== sized) {", "if (false) {"],

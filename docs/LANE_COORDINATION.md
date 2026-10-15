@@ -245,7 +245,11 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    merges a change to the launch profile / launch-claims gate / publication boundary,
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
-   this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+   this rule: #656, #657, #653, #649, #654 on 2026-09-12. DR-061 (owner-directed
+   2026-09-29) extends lane merges to DECISION_PATH PRs under two added conditions —
+   an adversarial Opus review by an agent that did not author the change, and an
+   executed counterexample quoted in the body; its rule 2 paths stay the owner's
+   merge. The landing skill carries the full text.
 
 ### How the cloud lane runs build work (2026-09-12)
 

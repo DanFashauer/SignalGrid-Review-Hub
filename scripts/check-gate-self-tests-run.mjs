@@ -39,11 +39,20 @@
 //    `["pnpm", "run", <alias>, …, "--self-test"]` for a known alias, and it is neither `heavy` nor `needsNativeBuild`.
 //    Source cannot be made to look like a step without being one, so comments, strings, spreads, ternaries,
 //    `.filter`, `.length = 0`, `Object.assign`, aliases and the rest need no rule of their own. What IS checked statically
-//    is that the `--list-steps` block sits directly above the one `for (const step of STEPS)` loop (only
-//    `const`/`let` declarations of a LITERAL — `[]`, `{}`, `null`, a boolean or an integer — between them), so nothing can change the list between the dump and the loop; a runner
-//    whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv steps,
-//    fails the gate and credits nothing. Stated limits: the position check reads strings and comments with the stripper's regex-versus-division heuristic, so a decoy hidden by that misparse (`(4) / 2; /* ;` and ``(4) / 2, doc = `/ ;``) is not modelled; regex-literal text is masked like string text, so a brace or a block inside a regex literal is refused; the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn buffer fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
-//    other than the `heavy`/`needsNativeBuild` skips, are not modelled.
+//    is that the `--list-steps` block (matched by its exact text) is a DIRECT CHILD OF THE MODULE in a real parse
+//    (TypeScript's, so strings, templates, regex literals and divisions are lexed correctly: a copy inside any of them,
+//    a function, `if (false) { }`, a loop or a brace-free `if` is not a module statement and is refused), followed only
+//    by `const`/`let` declarations of a LITERAL (`[]`, `{}`, `null`, a boolean or an integer) and then the ONE
+//    `for (const step of STEPS)` loop in the file, with `--list-steps` named once in any string; a file that does not
+//    parse, or whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv
+//    steps, fails the gate and credits nothing. Stated limits: an entry whose value depends on runtime state that
+//    differs between the listing run and the real run (a `process.argv` or `process.env` conditional other than the one
+//    `--list-steps` mention, which is refused); a statement before the block that exits or throws is reached only by
+//    the runtime listing, which a runner that does not print cannot fake; a workflow `run:` line that is credited
+//    although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that
+//    rewrites `step.cmd`, and any runner logic other than the `heavy`/`needsNativeBuild` skips, are not modelled. The
+//    comment stripper's regex-versus-division heuristic is still used to find a gate's `--self-test` handler and its
+//    control; there a misread can only hide text, and the live self-test requires the handler count to equal a plain grep.
 //  · WORKFLOWS: whether a `run:` line really runs `<gate> --self-test` is decided by scripts/lib/workflow-invocation.mjs
 //    — the SAME matcher scripts/check-preflight-ci-parity.mjs uses (command position only; quotes masked; `echo`, a quoted
 //    `|`, a `continue-on-error` step, a folded `run: >`, a step-level `shell:` other than bash/sh, and a `run:` that is not
@@ -62,6 +71,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { invokes, maskQuoted, runCommands, stripYamlComments } from "./lib/workflow-invocation.mjs";
 
 const SELF_FILE = fileURLToPath(import.meta.url);
@@ -75,7 +85,7 @@ const SPAWN_TIMEOUT_MS = 120_000;
 /** Pure: the source with every comment blanked (line structure kept). Strings, template
  *  literals (with `${}` nesting) and regex literals are walked, so comment markers inside them
  *  are not comments. */
-export function stripComments(src, { maskStrings = false } = {}) {
+export function stripComments(src) {
   const n = src.length;
   let out = "";
   let i = 0;
@@ -86,23 +96,21 @@ export function stripComments(src, { maskStrings = false } = {}) {
   // can open a bogus comment and blank real code, a division read as a regex only copies text, so regex wins.
   const REGEX_AFTER = new Set(["", "(", ")", ",", "=", ":", "[", "]", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "<", ">", "~", "^"]);
   const REGEX_WORDS = new Set(["return", "typeof", "else", "case", "in", "of", "void", "delete", "throw", "yield", "await", "do", "instanceof", "new"]);
-  const FILL = "\u0001";
-  const lit = (t) => (maskStrings ? t.replace(/[^\n]/g, FILL) : t); // string text, or filler of the same length
   const copyString = (q) => { // at src[i] === q; copies through the closing quote or the line end
     out += src[i++];
     while (i < n && src[i] !== "\n") {
-      if (src[i] === "\\") { out += lit(src.slice(i, i + 2)); i += 2; continue; }
+      if (src[i] === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
       if (src[i] === q) { out += src[i++]; return; }
-      out += lit(src[i++]);
+      out += src[i++];
     }
   };
   const copyTemplate = () => {
     out += src[i++];
     while (i < n) {
-      if (src[i] === "\\") { out += lit(src.slice(i, i + 2)); i += 2; continue; }
+      if (src[i] === "\\") { out += src.slice(i, i + 2); i += 2; continue; }
       if (src[i] === "`") { out += src[i++]; return; }
-      if (src[i] === "$" && src[i + 1] === "{") { out += lit("${"); i += 2; code(true); if (maskStrings && src[i - 1] === "}" && out.endsWith("}")) out = out.slice(0, -1) + FILL; continue; }
-      out += lit(src[i++]);
+      if (src[i] === "$" && src[i + 1] === "{") { out += "${"; i += 2; code(true); continue; }
+      out += src[i++];
     }
   };
   function code(untilBrace) {
@@ -128,7 +136,7 @@ export function stripComments(src, { maskStrings = false } = {}) {
           else if (src[j] === "/" && !inClass) { ok = true; j++; break; }
           j++;
         }
-        if (ok) { out += lit(src.slice(i, j)); i = j; prev = "a"; prevWord = ""; continue; }
+        if (ok) { out += src.slice(i, j); i = j; prev = "a"; prevWord = ""; continue; }
       }
       if (untilBrace) {
         if (c === "{") depth++;
@@ -158,24 +166,53 @@ export function namesControl(src) {
 // ── registration: who invokes `<gate> --self-test` ──────────────────────────────────────────
 
 const LIST_BLOCK = String.raw`if\s*\(\s*process\.argv\.includes\(\s*"--list-steps"\s*\)\s*\)\s*\{\s*await new Promise\(\(done\) => process\.stdout\.write\(JSON\.stringify\(STEPS\.map\(\(s\) => \(\{ name: s\.name, cmd: s\.cmd, heavy: s\.heavy === true, needsNativeBuild: s\.needsNativeBuild === true \}\)\)\) \+ "\\n", done\)\);\s*process\.exit\(0\);\s*\}`;
-const RUNNER_SHAPE = new RegExp(String.raw`${LIST_BLOCK}\s*(?:(?:const|let)\s+\w+\s*=\s*(?:\[\s*\]|\{\s*\}|null|true|false|-?\d+)\s*;\s*)*for\s*\(\s*const\s+step\s+of\s+STEPS\s*\)`);
+const LIST_BLOCK_EXACT = new RegExp(`^${LIST_BLOCK}$`);
 
-/** Pure: does the runner source carry the `--list-steps` block directly above its one `for (const step of STEPS)` loop? */
+const isLiteralInit = (e) =>
+  e !== undefined && (
+    (ts.isArrayLiteralExpression(e) && e.elements.length === 0)
+    || (ts.isObjectLiteralExpression(e) && e.properties.length === 0)
+    || e.kind === ts.SyntaxKind.NullKeyword || e.kind === ts.SyntaxKind.TrueKeyword || e.kind === ts.SyntaxKind.FalseKeyword
+    || ts.isNumericLiteral(e)
+    || (ts.isPrefixUnaryExpression(e) && e.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(e.operand)));
+
+const isLiteralDecl = (st) =>
+  ts.isVariableStatement(st) && (st.declarationList.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) !== 0
+  && st.declarationList.declarations.every((d) => ts.isIdentifier(d.name) && isLiteralInit(d.initializer));
+
+const isStepsLoop = (st) =>
+  ts.isForOfStatement(st) && !st.awaitModifier && ts.isIdentifier(st.expression) && st.expression.text === "STEPS"
+  && ts.isVariableDeclarationList(st.initializer) && (st.initializer.flags & ts.NodeFlags.Const) !== 0
+  && st.initializer.declarations.length === 1 && ts.isIdentifier(st.initializer.declarations[0].name)
+  && st.initializer.declarations[0].name.text === "step";
+
+/** Pure: does the runner source carry the `--list-steps` block directly above its one `for (const step of STEPS)` loop?
+ *  Decided from a real parse (TypeScript's), not from text: the block must be a DIRECT child of the module — so not in a
+ *  string, template or regex literal, a function, `if (false) { }`, a loop or a brace-free `if` — and only literal
+ *  declarations may sit between it and the one loop. A file that does not parse is refused. */
 export function runnerShapeOk(source) {
-  const live = stripComments(source);
-  const code = stripComments(source, { maskStrings: true }); // same offsets; string and template text blanked
-  const loops = [...live.matchAll(/\bfor\s*\(\s*const\s+step\s+of\s+STEPS\s*\)/g)];
-  const m = RUNNER_SHAPE.exec(live);
-  if (m === null) return false;
-  // reachable CODE, not a decoy: at brace depth 0 and right after a statement boundary, read on the string-masked text,
-  // so a block inside a string or template literal (whose text is blanked), a function, `if (false) { }` or a
-  // brace-free `if` is refused (what precedes it is blanked, `{`, `)` or `else`, not `;` or `}`). The loop must be the
-  // only one, and `--list-steps` may appear once as a literal (belt-and-braces; it blocks that one spelling).
-  const before = code.slice(0, m.index);
-  const depth = (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length;
-  const prev = before.trimEnd().slice(-1);
-  return depth === 0 && (prev === ";" || prev === "}")
-    && loops.length === 1 && (live.match(/--list-steps/g) ?? []).length === 1;
+  const sf = ts.createSourceFile("runner.mjs", String(source), {
+    languageVersion: ts.ScriptTarget.ESNext,
+    setExternalModuleIndicator: (f) => { f.externalModuleIndicator = f; },
+  }, false, ts.ScriptKind.JS);
+  if ((sf.parseDiagnostics ?? []).length > 0) return false;
+  const st = sf.statements;
+  const at = st.map((x, i) => (ts.isIfStatement(x) && LIST_BLOCK_EXACT.test(stripComments(x.getText(sf)).trim()) ? i : -1)).filter((i) => i >= 0);
+  if (at.length === 0) return false; // a second block names `--list-steps` a second time, which the mention count below refuses
+  let j = at[0] + 1;
+  while (j < st.length && isLiteralDecl(st[j])) j++;
+  if (j >= st.length || !isStepsLoop(st[j])) return false;
+  // the one loop over STEPS anywhere in the file, and `--list-steps` named once in any string
+  let loops = 0;
+  let mentions = 0;
+  const visit = (n) => {
+    if (isStepsLoop(n)) loops++;
+    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n)
+      || ts.isTemplateTail(n)) && n.text.includes("--list-steps")) mentions++;
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return loops === 1 && mentions === 1;
 }
 
 /** Pure: the gate files a runner's `--list-steps` output registers for `--self-test`. Returns {files, error}; any
@@ -392,7 +429,18 @@ function selfTest() {
     writeFileSync(join(root, "fixture-marker.txt"), "x");
     return root;
   };
-  const self = (root, floor = "1") => spawnSync(process.execPath, [SELF_FILE, "--root", root, "--floor", floor], { encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL" });
+  // the CLI itself (exit code, stderr, arguments): a real subprocess, used for a few cases only — loading TypeScript in
+  // a fresh process costs ~0.4 s, which over ~150 fixtures was a 55 s increase in a CI job that is near its time bound
+  const selfProc = (root, floor = "1") => spawnSync(process.execPath, [SELF_FILE, "--root", root, "--floor", floor], { encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL" });
+  // every other fixture runs the same function the CLI runs, in this process, and reports what the CLI would
+  const self = (root, floor = "1") => {
+    const { problems, counts } = runGate(root, { floor: Number(floor) });
+    return {
+      status: problems.length ? 1 : 0,
+      stdout: `${formatCounts(counts)}\n`,
+      stderr: problems.length ? `\n✗ ${problems.length} problem(s):\n${problems.map((p) => `  - ${p}`).join("\n")}\n` : "",
+    };
+  };
   const note = (name, ok, detail = "") => checks.push([name, ok, detail]);
   const out = (r) => `${r.stdout}\n${r.stderr}`;
   const red = (label, root, file, extra) => {
@@ -404,6 +452,15 @@ function selfTest() {
   const E = '{ name: "r", cmd: ["node", "scripts/check-bad.mjs", "--self-test"] }';
 
   try {
+    // ── the CLI, as a process ──
+    {
+      const rc = selfProc(mkTree("cli-red", { "check-bad.mjs": BAD_ST }));
+      note("CLI: an unregistered failing --self-test exits 1 and names the file on stderr", rc.status === 1 && rc.stderr.includes("check-bad.mjs"), `exit ${rc.status}`);
+      const gc = selfProc(mkTree("cli-green", { "check-good.mjs": GOOD_ST }));
+      note("CLI: a clean tree exits 0 and prints the confirmation line", gc.status === 0 && gc.stdout.includes("every gate's self-test is run"), `exit ${gc.status}`);
+      const fc = spawnSync(process.execPath, [SELF_FILE, "--floor", "-1"], { encoding: "utf8", timeout: 60_000 });
+      note("CLI: a negative --floor is refused", fc.status === 1 && /--floor must be/.test(fc.stderr), `exit ${fc.status}`);
+    }
     // ── the reds the spec names ──
     red("an unregistered gate whose --self-test exits 1 fails the gate and is named", mkTree("red1", { "check-bad.mjs": BAD_ST }), "check-bad.mjs");
     red("an unregistered gate whose --self-test is a no-op (exit 0, prints nothing self-test-shaped) fails", mkTree("red2", { "check-noop.mjs": NOOP_ST }), "check-noop.mjs", /no-op/);
@@ -462,6 +519,15 @@ function selfTest() {
     const REAL_SPLIT = LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"') + "for (const step of STEPS.filter(() => false)) {\n}\n";
     R("a decoy block and loop inside a template literal whose text starts with `;`, the real dump spelled another way", { breadth: `${stepsDecl(E)}\nconst __doc = \`;\n${LIST_SRC}${LOOP_SRC}\`;\n${REAL_SPLIT}` });
     const DECOY = LIST_SRC + LOOP_SRC;
+    for (const [label, pre] of [
+      ["a parenthesised division", "const k = (4) / 2; if (false) { void 1 / 2;"],
+      ["an indexed division", "const a = [1]; const k = a[0] / 2; if (false) { void 1 / 2;"],
+      ["a post-increment division", "let i = 1; const k = i++ / 2; if (false) { void 1 / 2;"],
+      ["a post-decrement division", "let i = 1; const k = i-- / 2; if (false) { void 1 / 2;"],
+      ["an object-literal division", "const k = ({}) / 2; if (false) { void 1 / 2;"],
+      ["the old comment misparse", "const k = (4) / 2; /* ; */ if (false) {"],
+      ["the old template misparse", "const k = (4) / 2, doc = `/`; if (false) {"],
+    ]) R(`a decoy inside \`if (false)\` hidden behind ${label}`, { breadth: `${stepsDecl(E)}\n${pre}\n${DECOY}}\n${REAL_SPLIT}` });
     R("a decoy inside `if (false) { }` after a regex literal holding `}`", { breadth: `${stepsDecl(E)}\nif (false) { /}/; ${DECOY}}\n${REAL_SPLIT}` });
     R("a decoy inside `while (false) { }` after a regex literal holding an escaped `}`", { breadth: `${stepsDecl(E)}\nwhile (false) { void /\\}/;\n${DECOY}}\n${REAL_SPLIT}` });
     R("a decoy inside an uncalled function after a regex literal holding `[}]`", { breadth: `${stepsDecl(E)}\nasync function never() { /[}]/;\n${DECOY}}\n${REAL_SPLIT}` });
@@ -587,7 +653,9 @@ function selfTest() {
         { name: "f", cmd: ["node", "scripts/check-f.mjs.bak", "--self-test"] },
       ]);
       const got = selfTestFilesInListing(`noise\n${L}\n`, new Map([["ee", "check-e.mjs"]]));
-      note("pure: selfTestFilesInListing credits exact argv --self-test only, skips heavy, resolves aliases, takes the last line", got.error === null && got.files.size === 2 && got.files.has("check-a.mjs") && got.files.has("check-e.mjs"));
+      note("pure: runnerShapeOk refuses a file that does not parse, and two dump blocks in one file",
+      !runnerShapeOk(`${runnerSrc(stepsDecl(""))}\n)(\n`) && !runnerShapeOk(`${stepsDecl("")}\n${LIST_SRC}${LIST_SRC}${LOOP_SRC}`));
+    note("pure: selfTestFilesInListing credits exact argv --self-test only, skips heavy, resolves aliases, takes the last line", got.error === null && got.files.size === 2 && got.files.has("check-a.mjs") && got.files.has("check-e.mjs"));
       note("pure: selfTestFilesInListing refuses non-JSON, an empty array and a malformed step", selfTestFilesInListing("not json").error !== null && selfTestFilesInListing("[]").error !== null && selfTestFilesInListing('[{"name":"x"}]').error !== null && selfTestFilesInListing("").error !== null);
     }
     note("pure: exit 1 earns no credit", !spawnCredit({ status: 1, stdout: "self-test" }).ok);

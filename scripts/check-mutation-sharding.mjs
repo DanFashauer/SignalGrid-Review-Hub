@@ -16,31 +16,51 @@
  * distribution — a flaky gate gets switched off, and this one is worth keeping.
  *
  * What IS gated is narrower, deterministic, and read from the registry and the workflow
- * (never from a clock): (1) the split covers every MUTATION exactly once, not merely every
- * target, because a heavy target is cut into slices, and it is proven by running the SAME
- * `selectSliceMutations` that mutation-guard's main() sweeps with over every real unit (a gate
- * that re-implemented the ownership loop covered a model of it: three one-token regressions in
- * main()'s own copy stayed green, one of them a silent skip), AND by running main() ITSELF in its
- * `--plan` mode (its own target resolution, shard split and selection, stopping where the first
- * mutation would be written) for shard counts 1 to 4 and comparing what it plans with the selector's
- * own run and with the registry's totals: a pin on main()'s source text was satisfied by a comment,
- * a dead branch, or a statement that rewrote the selection afterwards, and a dropped
- * `targets = shardTargets(...)` assignment was not pinned at all, so what main() DOES is observed
- * and its text is only a second net (comments stripped), with fixture mutants of the call and of
- * the function that must go red, and a fixture that cannot be built failing the gate by name
- * instead of passing or crashing it;
- * (2) a target that registers a cost
- * heavier than one unit is in fact sliced; (3) no shard's REGISTERED load exceeds 80% of the
- * sweep job's own `timeout-minutes`. (3) exists because the sweep was balanced by mutation
- * count while one proof cost 45x the others per mutation, and shard 3 sat over its 40-minute
- * bound for a week (see mutation-guard.mjs, WHY THE SHARDS ARE BALANCED BY COST). An unregistered
- * cost is invisible to this gate by construction; the sweep's own COST DRIFT line is the net
- * for that.
+ * (never from a clock):
+ *
+ * (1) the split covers every MUTATION exactly once, not merely every target, because a heavy
+ *     target is cut into slices. Four things prove it; b to d exist because a pin on main()'s
+ *     source text was satisfied by a comment, a dead branch, or a statement that rewrote the
+ *     selection afterwards:
+ *     a. the SAME `selectSliceMutations` that mutation-guard's main() sweeps with is run over
+ *        every real unit (a gate that re-implemented the ownership loop covered a model of it:
+ *        three one-token regressions in main()'s own copy stayed green, one a silent skip);
+ *     b. main() ITSELF is run in its `--plan` mode (its own target resolution, shard split and
+ *        selection, stopping where the first mutation would be written) for shard counts 1 to 4,
+ *        and what it plans is compared with the selector's own run and the registry's totals;
+ *     c. main() ITSELF is SWEPT, shards 0 to 3 of the whole registry and of the heavy proof's
+ *        local slice command, with the disk and the proof stubbed, and what it writes is compared
+ *        with its own `--plan`. `--plan` stops before the write, so one-line plants in the half
+ *        after it (a skip after the plan stop, a `planOnly`-keyed splice of the owned list, a
+ *        `planOnly`-keyed drop of the first unit) left the plan, the selector and every text pin
+ *        as they were while the sweep ran 1021, 1832 and 1977 of 2026 mutations, every shard rc 0;
+ *     d. main()'s text is the second net (comments stripped): the statements that write, count,
+ *        run and restore a mutation are pinned to follow the plan stop with nothing between, and
+ *        the number of places main() forks on the plan flag is pinned. At runtime each unit's
+ *        written count is checked against the selector's own (the one net no text pin gives).
+ *     Each has fixture mutants that must go red, and a fixture that cannot be built fails the gate
+ *     by name instead of passing or crashing it.
+ *
+ *     Every child runs under scripts/lib/no-write-preload.mjs (a write under the repository, or a
+ *     spawned process, throws), the registered guard files are hashed before the first child and
+ *     after the last, and each child has a time limit that stops the pool at the first hang. The
+ *     workflow's run line is refused if it passes `--plan` or any flag but `--shard=`/`--proof=`
+ *     (every shard would be a green no-op).
+ *
+ * (2) a target that registers a cost heavier than one unit is in fact sliced;
+ *
+ * (3) no shard's REGISTERED load exceeds 80% of the sweep job's own `timeout-minutes`. (3) exists
+ *     because the sweep was balanced by mutation count while one proof cost 45x the others per
+ *     mutation, and shard 3 sat over its 40-minute bound for a week (see mutation-guard.mjs, WHY
+ *     THE SHARDS ARE BALANCED BY COST). An unregistered cost is invisible to this gate by
+ *     construction; the sweep's own COST DRIFT line is the net for that.
  */
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf } from "./mutation-guard.mjs";
 
@@ -319,21 +339,53 @@ const PIN_SELECT = "const plan = selectSliceMutations(target, mutationsByFile(ta
 const PIN_SHARD = "targets = shardTargets(targets, i, n);";
 const PIN_FILES = "for (const { file, allCount, owned } of plan.files) {";
 const PIN_ZERO = "if (allCount === 0) {";
-const PIN_PLAN_STOP = "for (const { ordinal, mutation } of owned) { if (planOnly) { placements.push(placementOf(target, file, ordinal, mutation)); continue; }";
+// The statement that WRITES the mutation is pinned to follow the plan stop with nothing conditional
+// between, and the statements that count it, run the proof and restore the file follow it the same way.
+// The plan, the selector's own run and the text pins that stopped at the plan stop all left room for a
+// line that ran only in a real sweep (`if (mutation.lineNo % 2 === 1) continue;` after the stop swept
+// 1021 of 2026 mutations with every shard exiting 0), and a write-then-restore without the proof run is the
+// same hole one statement later.
+const foldPin = (text) => text.replace(/\s+/g, " ").trim();
+const PIN_PLAN_STOP = foldPin(`for (const { ordinal, mutation } of owned) {
+  if (planOnly) { placements.push(placementOf(target, file, ordinal, mutation)); continue; }
+  total += 1; writeFileSync(mutation.abs, mutation.content); writtenInUnit += 1;
+  let verdict; try { verdict = runProof(target.proof); } finally { writeFileSync(mutation.abs, mutation.original); }`);
 const PIN_NO_BASELINE = "if (!planOnly) { const base = baselineProbe(target.proof, runProof);";
-const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE];
+// The runtime net (what a unit actually wrote must equal what the selector planned) and its report.
+const PIN_COUNT_INIT = foldPin("const swept = plan.swept; const placedBefore = placements.length; let writtenInUnit = 0;");
+const PIN_COUNT_CHECK = foldPin("const accounted = writtenInUnit + (placements.length - placedBefore); if (accounted !== swept) { const line = `${unitName(target)}: ${accounted} mutations written, the selector planned ${swept}`; writeMismatches.push(line); console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`); process.exitCode = 1; }");
+const PIN_MISMATCH_EXIT = foldPin("if (writeMismatches.length > 0) { console.error(\"\\nMutation guard FAILED — the sweep did not write what the plan selected, so the counts above are over a different set than the one the shards were balanced for:\\n\"); for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`); process.exit(1); }");
+const MAIN_PINS = [PIN_SELECT, PIN_SHARD, PIN_FILES, PIN_ZERO, PIN_PLAN_STOP, PIN_NO_BASELINE, PIN_COUNT_INIT, PIN_COUNT_CHECK, PIN_MISMATCH_EXIT];
+// A new plan/sweep fork has to be reviewed, so the number of places main() names the plan flag, and reads
+// its arguments and environment, is pinned. `planOnly` today: the declaration, the log alias, the empty-shard
+// guard, the baseline guard, the loop stop and the final print. (`if (!planOnly) owned.splice(0, 1);` before
+// the owned loop swept 1832 of 2026; `if (!planOnly) targets = targets.slice(1);` dropped every shard's
+// device-management-health slice while --plan still showed 13/12/12/12; a second `process.argv.includes("--plan")`
+// under another name would escape a count of the first.)
+const FORK_COUNTS = { planOnly: 6, "process.argv": 4, "process.env": 1 };
+const forkCountsOf = (body) => ({
+  planOnly: (body.match(/\bplanOnly\b/g) ?? []).length,
+  "process.argv": (body.match(/\bprocess\.argv\b/g) ?? []).length,
+  "process.env": (body.match(/\bprocess\.env\b/g) ?? []).length,
+});
+const forksPinned = (body) => { const got = forkCountsOf(body); return body !== "" && Object.entries(FORK_COUNTS).every(([name, n]) => got[name] === n); };
 function mainSweepsWithSelector(src) {
   const body = mainBody(src);
   // The words below may appear only inside the pinned statements (the plan records the selector's
   // own ordinal); anywhere else they are a private ownership filter or counter.
-  const rest = MAIN_PINS.reduce((b, pin) => b.split(pin).join(""), body);
+  const rest = MAIN_PINS.reduce((b, p) => b.split(p).join(""), body);
   return body !== ""
     && (body.match(/selectSliceMutations\(/g) ?? []).length === 1
-    && MAIN_PINS.every((pin) => body.includes(pin))
+    && MAIN_PINS.every((p) => body.includes(p))
+    && forksPinned(body)
     && !/sliceOwns\(|ordinal|mutationsFor\(|owned\.length === 0|allInFile/.test(rest);
 }
 const planModeStopsBeforeMutation = (src) => { const body = mainBody(src); return body.includes(PIN_PLAN_STOP) && body.includes(PIN_NO_BASELINE); };
-check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, and keeps no ownership filter or counter of its own", mainSweepsWithSelector(GUARD_SRC));
+check("main() (comments stripped) sweeps with the exported selector, passes the unit's own slice, assigns its shard split, zero-checks the WHOLE file, keeps no ownership filter or counter of its own, goes from the plan stop straight to the write, the count, the proof run and the restore with nothing between, and checks what each unit wrote against what the selector planned", mainSweepsWithSelector(GUARD_SRC));
+{
+  const got = forkCountsOf(mainBody(GUARD_SRC));
+  check(`main() (comments stripped) names planOnly exactly ${FORK_COUNTS.planOnly} times (found ${got.planOnly}) and reads process.argv ${FORK_COUNTS["process.argv"]} (found ${got["process.argv"]}) and process.env ${FORK_COUNTS["process.env"]} times (found ${got["process.env"]}): a statement that runs only in a real sweep, or a second reading of the plan flag, must edit this pin in review`, forksPinned(mainBody(GUARD_SRC)));
+}
 check("main()'s --plan mode takes no baseline and records each placement INSTEAD of writing the mutation (the condition for spawning it below)", planModeStopsBeforeMutation(GUARD_SRC));
 const withReplaced = (src, from, to) => (src.split(from).length === 2 ? src.replace(from, () => to) : undefined);
 // A fixture mutant is a replacement in the real text. When the text it replaces has MOVED, nothing was
@@ -354,6 +406,18 @@ for (const [name, from, to] of [
   ["main() discards the shard split (every shard sweeps the whole registry)", PIN_SHARD, "shardTargets(targets, i, n);"],
   ["main()'s plan mode falls through to the mutation instead of stopping", "placements.push(placementOf(target, file, ordinal, mutation));\n          continue;", "placements.push(placementOf(target, file, ordinal, mutation));"],
   ["main()'s plan mode takes the baseline", "if (!planOnly) {\n      // See baselineProbe()", "if (true) {\n      // See baselineProbe()"],
+  // The sweep after the plan fork: each of these leaves the plan, the selector's run and the earlier text
+  // pins as they were. Measured through a stub-driven main(): the first swept 1021 of 2026 mutations and
+  // the second 1832, every shard exiting 0; the third dropped every shard's device-management-health slice
+  // (1977 of 2026) while --plan still showed 13/12/12/12.
+  ["a statement after the plan stop drops half the mutations (the plan and the selector are untouched)", "          continue;\n        }\n        total += 1;", "          continue;\n        }\n        if (mutation.lineNo % 2 === 1) continue;\n        total += 1;"],
+  ["a sweep-only splice of the owned list (the plan is untouched)", "      for (const { ordinal, mutation } of owned) {", "      if (!planOnly) owned.splice(0, 1);\n      for (const { ordinal, mutation } of owned) {"],
+  ["a sweep-only drop of the first unit (every shard loses its device-management-health slice; the plan is untouched)", "    const slicedUnits = targets.filter", "    if (!planOnly) targets = targets.slice(1);\n    const slicedUnits = targets.filter"],
+  ["a mutation is written and restored without its proof run (counted, so the written count alone would not see it)", "        writtenInUnit += 1;\n        let verdict;", "        writtenInUnit += 1;\n        if (mutation.lineNo % 2 === 1) { writeFileSync(mutation.abs, mutation.original); continue; }\n        let verdict;"],
+  ["a second reading of the plan flag under another name (a count of planOnly alone cannot see it)", "  const planOnly = process.argv.includes(\"--plan\");", "  const planOnly = process.argv.includes(\"--plan\");\n  const dry = process.argv.includes(\"--plan\");"],
+  ["the unit's planned count is rewritten before it is compared (a short sweep would then match it)", "    const swept = plan.swept;\n", "    const swept = plan.swept - 1;\n"],
+  ["the written-vs-plan check of each unit is switched off", "if (accounted !== swept) {", "if (false) {"],
+  ["the written-vs-plan failure no longer ends the sweep", "for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);\n    process.exit(1);", "for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);"],
 ]) {
   const mutant = fixtureText(GUARD_SRC, name, from, to);
   if (mutant !== undefined) check(`fixture mutant is detected, the gate goes red: ${name}`, mutant !== GUARD_SRC && !mainSweepsWithSelector(mutant));
@@ -361,24 +425,66 @@ for (const [name, from, to] of [
 
 // main() RUN. Each shard of each shard count is planned by the real entrypoint and compared, in
 // order, with what the selector gives for the same shard, then the shards of one count are checked
-// to cover every registered mutation exactly once. The run that the CI shard job makes
-// (`--proof=<heavy proof> --shard=i/4`) is planned too. Planning parses text and runs no proof.
+// to cover every registered mutation exactly once. The heavy proof's local slice command
+// (`--proof=<heavy proof> --shard=i/4`) is planned too; CI itself runs `--shard=i/4` with no `--proof`,
+// which is the N=4 run. Planning parses text and runs no proof.
+//
+// Then the four shards of the whole registry, and of the heavy proof's local slice command, are SWEPT by
+// the real main() with the disk and the proof stubbed (scripts/lib/sweep-stub-preload.mjs: a write is
+// recorded instead of performed, a `pnpm run` is answered, nothing is mutated or run), and what each
+// sweep WROTE is compared, in order, with what that
+// shard's `--plan` listed. The plan is the half of main() that stops before the write; this is the other
+// half. Three one-line plants in the sweep path alone (a skip after the plan stop, a `planOnly`-keyed splice
+// of `owned`, a `planOnly`-keyed drop of the first unit) left the plan, the selector and every text pin as they
+// were and swept 1021, 1832 and 1977 of 2026 mutations with every shard exiting 0. A stubbed child takes about
+// 0.2 s, so nothing is sampled: all 2026 mutations are swept this way.
+//
+// The children cannot hurt the tree they run in. Every child starts with scripts/lib/no-write-preload.mjs: a
+// write, rename or removal under the repository, or a spawned process, throws, after a marker line on stderr
+// that this gate also fails on (a throw swallowed by a catch is still seen). Before, that was a text pin alone,
+// and one plan-mode `writeFileSync` that got past the pins left all 185 registered guard files (deliberately
+// broken security guards) mutated on disk after a single gate run. As a second net the registered files are
+// hashed before the first child and after the last, and any that moved fail the gate by name. Each child has
+// a time limit and the first to run out stops the rest from starting, so a hang fails the gate in about a
+// minute instead of after the whole pool had waited its turn (608 s measured, 16 children at 120 s each).
 const GUARD_PATH = join(REPO, "scripts/mutation-guard.mjs");
-const runPlan = (args, env = {}) => new Promise((done) => {
-  execFile(process.execPath, [GUARD_PATH, "--plan", ...args], { cwd: REPO, env: { ...process.env, ...env }, maxBuffer: 64 * 1024 * 1024, timeout: 120_000 }, (err, stdout, stderr) => {
+const PRELOAD_NOWRITE_PATH = join(REPO, "scripts/lib/no-write-preload.mjs");
+const PRELOAD_NOWRITE = pathToFileURL(PRELOAD_NOWRITE_PATH).href;
+const PRELOAD_STUB = pathToFileURL(join(REPO, "scripts/lib/sweep-stub-preload.mjs")).href;
+const DENIED_MARKER = "NO-WRITE-DENIED";
+const REPORT_MARKER = "SWEEP-STUB-REPORT";
+const CHILD_TIMEOUT_SECONDS = 60;
+const sha256 = (data) => createHash("sha256").update(data).digest("hex");
+const REGISTERED_FILES = [...new Set([...TARGETS.flatMap((t) => t.files), "scripts/mutation-guard.mjs"])].sort();
+const hashFiles = (root, files) => new Map(files.map((f) => { try { return [f, sha256(readFileSync(join(root, f)))]; } catch { return [f, "unreadable"]; } }));
+const movedFiles = (before, after) => [...before.keys()].filter((f) => before.get(f) !== after.get(f));
+const digestOf = (hashes) => sha256([...hashes].map(([f, h]) => `${f} ${h}`).join("\n")).slice(0, 16);
+const spawnGuard = (preloads, args, env = {}) => new Promise((done) => {
+  execFile(process.execPath, [...preloads.flatMap((p) => ["--import", p]), GUARD_PATH, ...args], { cwd: REPO, env: { ...process.env, ...env, NOWRITE_ALLOW: "" }, maxBuffer: 64 * 1024 * 1024, timeout: CHILD_TIMEOUT_SECONDS * 1000, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
     let doc = null;
     try { doc = JSON.parse(stdout); } catch { /* not JSON: the checks below say so */ }
-    done({ rc: err === null ? 0 : typeof err.code === "number" ? err.code : 1, stdout, stderr, doc });
+    done({ rc: err === null ? 0 : typeof err.code === "number" ? err.code : 1, stdout, stderr, doc, timedOut: err !== null && err.killed === true && typeof err.code !== "string", denied: stderr.includes(DENIED_MARKER) });
   });
 });
+const runPlan = (args, env) => spawnGuard([PRELOAD_NOWRITE], ["--plan", ...args], env);
+const runStubSweep = (args) => spawnGuard([PRELOAD_NOWRITE, PRELOAD_STUB], args);
+// The first child to hit its time limit is remembered; the pool starts no more after it.
+let firstHung;
+const watched = (label, fn) => async () => {
+  const run = await fn();
+  if (run.timedOut && firstHung === undefined) firstHung = { ...run, label };
+  return run;
+};
 const inPool = async (jobs, limit) => {
-  const out = new Array(jobs.length);
+  const out = new Array(jobs.length).fill(undefined);
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(limit, jobs.length) }, async () => {
-    while (next < jobs.length) { const k = next; next += 1; out[k] = await jobs[k](); }
+    while (next < jobs.length && firstHung === undefined) { const k = next; next += 1; out[k] = await jobs[k](); }
   }));
   return out;
 };
+const hungCheck = (what, runs) =>
+  check(`${what} finished: \`${firstHung.label}\` ran past ${CHILD_TIMEOUT_SECONDS} s and was killed, and no further child was started (${runs.filter((r) => r === undefined).length} of ${runs.length} never started)`, false);
 const expectedPlan = (registry, i, n) =>
   shardTargets(registry, i, n).flatMap((u) => selectSliceMutations(u, perFileOf(u)).files.flatMap((f) => f.owned.map(({ ordinal, mutation }) => placementOf(u, f.file, ordinal, mutation))));
 const briefly = (p) => (p === undefined ? "none" : `${p.unit} ${p.file.split("/").pop()}:${p.line} ${p.mutator} #${p.ordinal}`);
@@ -389,6 +495,57 @@ const firstDifference = (got, want) => {
 const proofOfUnit = (unit) => unit.replace(/\[\d+\/\d+\]$/, "");
 const PLAN_COUNTS = [1, 2, 3, 4];
 const dmhTarget = TARGETS.find((t) => t.proof === "proof:device-management-health");
+
+// Fixtures for the two safety nets, before anything is spawned against the real tree.
+// (1) The write-denying preload, a COPY of it rooted in a scratch directory (it takes its root from its own
+//     location), against a child that tries every kind of write at a file under that root.
+{
+  const root = mkdtempSync(join(tmpdir(), "sg-nowrite-"));
+  const outside = mkdtempSync(join(tmpdir(), "sg-nowrite-out-"));
+  try {
+    mkdirSync(join(root, "scripts/lib"), { recursive: true });
+    copyFileSync(PRELOAD_NOWRITE_PATH, join(root, "scripts/lib/no-write-preload.mjs"));
+    writeFileSync(join(root, "victim.txt"), "keep");
+    writeFileSync(join(root, "child.mjs"), [
+      "import fs from \"node:fs\";",
+      "import fsp from \"node:fs/promises\";",
+      "import { spawnSync } from \"node:child_process\";",
+      "const [victim, free] = process.argv.slice(2);",
+      "const out = [];",
+      "for (const [name, fn] of [[\"writeFileSync\", () => fs.writeFileSync(victim, \"x\")], [\"promises.writeFile\", () => fsp.writeFile(victim, \"x\")], [\"createWriteStream\", () => fs.createWriteStream(victim)], [\"renameSync\", () => fs.renameSync(victim, `${victim}.b`)], [\"rmSync\", () => fs.rmSync(victim)], [\"spawnSync\", () => spawnSync(\"true\")], [\"outside\", () => fs.writeFileSync(free, \"ok\")]]) {",
+      "  try { await fn(); out.push(`${name}:allowed`); } catch { out.push(`${name}:denied`); }",
+      "}",
+      "console.log(out.join(\",\"));",
+    ].join("\n"));
+    const r = await new Promise((done) => execFile(process.execPath, ["--import", pathToFileURL(join(root, "scripts/lib/no-write-preload.mjs")).href, join(root, "child.mjs"), join(root, "victim.txt"), join(outside, "free.txt")], { env: { ...process.env, NOWRITE_ALLOW: "" }, timeout: 30_000, killSignal: "SIGKILL" }, (err, stdout, stderr) => done({ stdout: stdout.trim(), stderr })));
+    check("fixture: the write-denying preload refuses writeFileSync, promises.writeFile, createWriteStream, renameSync, rmSync and a spawned process under its root, marks stderr, leaves the file as it was, and still lets a write outside its root through",
+      r.stdout === "writeFileSync:denied,promises.writeFile:denied,createWriteStream:denied,renameSync:denied,rmSync:denied,spawnSync:denied,outside:allowed"
+      && r.stderr.includes(DENIED_MARKER) && readFileSync(join(root, "victim.txt"), "utf8") === "keep");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+}
+// (2) The before/after comparison of the registered files names a file that moved.
+{
+  const dir = mkdtempSync(join(tmpdir(), "sg-hash-"));
+  try {
+    writeFileSync(join(dir, "a.ts"), "one");
+    writeFileSync(join(dir, "b.ts"), "two");
+    const before = hashFiles(dir, ["a.ts", "b.ts"]);
+    const unchanged = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
+    writeFileSync(join(dir, "b.ts"), "TWO");
+    const rewritten = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
+    rmSync(join(dir, "a.ts"));
+    const removed = movedFiles(before, hashFiles(dir, ["a.ts", "b.ts"]));
+    check("fixture: the before/after hash comparison reports nothing when no file moved and names a file that was rewritten or removed",
+      unchanged.length === 0 && rewritten.join() === "b.ts" && removed.join() === "a.ts,b.ts");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const HASH_BEFORE = hashFiles(REPO, REGISTERED_FILES);
 if (!planModeStopsBeforeMutation(GUARD_SRC)) {
   check("main()'s real --plan places every mutation exactly once (NOT RUN: its stop before the mutation is not pinned, and running it could sweep)", false);
 } else {
@@ -396,52 +553,112 @@ if (!planModeStopsBeforeMutation(GUARD_SRC)) {
     ...PLAN_COUNTS.flatMap((n) => Array.from({ length: n }, (_, i) => ({ n, i, args: [`--shard=${i}/${n}`], registry: TARGETS }))),
     ...(dmhTarget ? Array.from({ length: 4 }, (_, i) => ({ n: 4, i, args: [`--proof=${dmhTarget.proof}`, `--shard=${i}/4`], registry: [dmhTarget], only: dmhTarget.proof })) : []),
   ];
-  const runs = await inPool(jobs.map((j) => () => runPlan(j.args)), 4);
-  const judged = jobs.map((j, k) => {
-    const run = runs[k];
-    const want = expectedPlan(j.registry, j.i, j.n);
-    const got = run.doc?.placements ?? [];
-    const ok = run.rc === 0 && run.doc !== null && run.doc.shard === `${j.i}/${j.n}` && run.doc.proof === (j.only ?? null)
-      && run.doc.count === got.length && JSON.stringify(got) === JSON.stringify(want);
-    if (!ok) console.error(`    plan ${j.args.join(" ")}: rc=${run.rc}, ${run.doc === null ? `stdout is not JSON (${run.stderr.trim().split("\n").pop() ?? ""})` : `${got.length} placements vs ${want.length} expected${firstDifference(got, want)}`}`);
-    return { ...j, got, want, ok };
-  });
-  // A mutation is keyed by its identity (proof, file, line, mutator), never by the ordinal main()
-  // reports: a wrong ordinal must not be able to make a repeated mutation look like a distinct one.
-  const onceAndTotal = (set, expected) => {
-    const seen = new Map();
-    for (const p of set) {
-      const id = `${proofOfUnit(p.unit)}|${p.file}|${p.line}|${p.mutator}`;
-      seen.set(id, (seen.get(id) ?? 0) + 1);
+  const runs = await inPool(jobs.map((j) => watched(`--plan ${j.args.join(" ")}`, () => runPlan(j.args))), 4);
+  if (firstHung !== undefined) {
+    hungCheck("main()'s real --plan", runs);
+  } else {
+    const judged = jobs.map((j, k) => {
+      const run = runs[k];
+      const want = expectedPlan(j.registry, j.i, j.n);
+      const got = run.doc?.placements ?? [];
+      const ok = run.rc === 0 && !run.denied && run.doc !== null && run.doc.shard === `${j.i}/${j.n}` && run.doc.proof === (j.only ?? null)
+        && run.doc.count === got.length && JSON.stringify(got) === JSON.stringify(want);
+      if (!ok) console.error(`    plan ${j.args.join(" ")}: rc=${run.rc}, ${run.denied ? `a write or spawn was attempted and refused (${run.stderr.split("\n").find((l) => l.includes(DENIED_MARKER)) ?? DENIED_MARKER})` : run.doc === null ? `stdout is not JSON (${run.stderr.trim().split("\n").pop() ?? ""})` : `${got.length} placements vs ${want.length} expected${firstDifference(got, want)}`}`);
+      return { ...j, got, want, ok };
+    });
+    // A mutation is keyed by its identity (proof, file, line, mutator), never by the ordinal main()
+    // reports: a wrong ordinal must not be able to make a repeated mutation look like a distinct one.
+    const onceAndTotal = (set, expected) => {
+      const seen = new Map();
+      for (const p of set) {
+        const id = `${proofOfUnit(p.unit)}|${p.file}|${p.line}|${p.mutator}`;
+        seen.set(id, (seen.get(id) ?? 0) + 1);
+      }
+      return { placed: set.length, distinct: seen.size, ok: set.length === expected && seen.size === expected && [...seen.values()].every((c) => c === 1) };
+    };
+    for (const n of PLAN_COUNTS) {
+      const mine = judged.filter((j) => j.n === n && j.only === undefined);
+      const expected = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
+      const u = onceAndTotal(mine.flatMap((j) => j.got), expected);
+      check(`N=${n}: main()'s real --plan, shards 0..${n - 1}, plans exactly what the selector gives and every registered mutation exactly once (${u.placed} placements, ${u.distinct} distinct, ${expected} registered)`,
+        mine.length === n && mine.every((j) => j.ok) && u.ok);
     }
-    return { placed: set.length, distinct: seen.size, ok: set.length === expected && seen.size === expected && [...seen.values()].every((c) => c === 1) };
-  };
-  for (const n of PLAN_COUNTS) {
-    const mine = judged.filter((j) => j.n === n && j.only === undefined);
-    const expected = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
-    const u = onceAndTotal(mine.flatMap((j) => j.got), expected);
-    check(`N=${n}: main()'s real --plan, shards 0..${n - 1}, plans exactly what the selector gives and every registered mutation exactly once (${u.placed} placements, ${u.distinct} distinct, ${expected} registered)`,
-      mine.length === n && mine.every((j) => j.ok) && u.ok);
+    const quarter = judged.find((j) => j.n === 4 && j.i === 0 && j.only === undefined);
+    const whole = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
+    check(`main()'s --plan for shard 0/4 is a strict subset of the sweep (${quarter?.got.length} of ${whole} mutations, ${expectedPlan(TARGETS, 0, 4).length} expected), so the shard split is in effect`,
+      quarter !== undefined && quarter.ok && quarter.got.length > 0 && quarter.got.length < whole);
+    if (dmhTarget) {
+      const mine = judged.filter((j) => j.only === dmhTarget.proof);
+      const u = onceAndTotal(mine.flatMap((j) => j.got), totalOf(dmhTarget));
+      check(`main()'s real --plan for the local slice command (--proof=${dmhTarget.proof} --shard=i/4) holds ${mine.map((j) => j.got.length).join("+")} = ${u.placed} of ${totalOf(dmhTarget)} mutations, each once`,
+        mine.length === 4 && mine.every((j) => j.ok) && u.ok);
+    }
+    // The split is computed independently on every runner, so the REAL entrypoint must not depend on the
+    // machine: same bytes under a different locale and time zone.
+    const shardOne = judged.find((j) => j.n === 4 && j.i === 1 && j.only === undefined);
+    const localeRuns = await inPool([
+      watched("--plan --shard=1/4 (LC_ALL=C TZ=UTC)", () => runPlan(["--shard=1/4"], { LC_ALL: "C", LANG: "C", TZ: "UTC" })),
+      watched("--plan --shard=1/4 (LC_ALL=tr_TR.UTF-8 TZ=Pacific/Kiritimati)", () => runPlan(["--shard=1/4"], { LC_ALL: "tr_TR.UTF-8", LANG: "tr_TR.UTF-8", TZ: "Pacific/Kiritimati" })),
+    ], 2);
+    if (firstHung !== undefined) {
+      hungCheck("main()'s real --plan under another locale and time zone", localeRuns);
+    } else {
+      const [plainRun, [utcRun, farRun]] = [runs[judged.indexOf(shardOne)], localeRuns];
+      check("main()'s --plan is byte-identical under LC_ALL=C TZ=UTC and under LC_ALL=tr_TR.UTF-8 TZ=Pacific/Kiritimati (independent runners each compute the split)",
+        plainRun.rc === 0 && utcRun.rc === 0 && farRun.rc === 0 && plainRun.stdout !== "" && utcRun.stdout === plainRun.stdout && farRun.stdout === plainRun.stdout);
+    }
+
+    // The sweep half. The mutations a stubbed sweep of each shard WRITES, in order, against what that
+    // shard's own `--plan` listed (content hashes: a write is the whole mutated file). A stubbed child takes
+    // about 0.2 s, so this is not a sample: the whole registry at N=4 (2026 mutations over four shards) and the
+    // heavy proof's local slice command.
+    if (firstHung === undefined) {
+      const sweepJobs = [
+        ...Array.from({ length: 4 }, (_, i) => ({ i, args: [`--shard=${i}/4`], registry: TARGETS })),
+        ...(dmhTarget ? Array.from({ length: 4 }, (_, i) => ({ i, args: [`--proof=${dmhTarget.proof}`, `--shard=${i}/4`], registry: [dmhTarget], only: dmhTarget.proof })) : []),
+      ];
+      const sweeps = await inPool(sweepJobs.map((j) => watched(`sweep ${j.args.join(" ")} (stubbed)`, () => runStubSweep(j.args))), 4);
+      if (firstHung !== undefined) {
+        hungCheck("main()'s stubbed sweep", sweeps);
+      } else {
+        const contentHash = new Map();
+        for (const t of TARGETS) for (const f of mutationsByFile(t)) for (const m of f.mutations) contentHash.set(`${f.file}|${m.lineNo}|${m.mutator}`, sha256(m.content));
+        const sweepJudged = sweepJobs.map((j, k) => {
+          const run = sweeps[k];
+          const planned = (judged.find((p) => p.n === 4 && p.i === j.i && p.only === j.only)?.got ?? []).map((p) => `${p.file}|${contentHash.get(`${p.file}|${p.line}|${p.mutator}`) ?? "unknown"}`);
+          const reportLine = run.stderr.split("\n").find((l) => l.startsWith(`${REPORT_MARKER} `));
+          let report = null;
+          try { report = reportLine === undefined ? null : JSON.parse(reportLine.slice(REPORT_MARKER.length + 1)); } catch { /* no report: the check below says so */ }
+          const written = (report?.writes ?? []).map((w) => `${w.file}|${w.sha256}`);
+          const summary = `mutations=${planned.length} killed=${planned.length} hung=0 known-inert=0 survivors=0`;
+          const runsWanted = shardTargets(j.registry, j.i, 4).length + planned.length;
+          const ok = run.rc === 0 && !run.denied && report !== null && planned.length > 0 && JSON.stringify(written) === JSON.stringify(planned)
+            && report.dirty === 0 && report.proofRuns === runsWanted && run.stdout.includes(summary);
+          if (!ok) {
+            const x = Array.from({ length: Math.max(written.length, planned.length) }, (_, y) => y).find((y) => written[y] !== planned[y]);
+            const brief = (w) => (w === undefined ? "none" : `${w.split("|")[0].split("/").pop()} ${w.split("|")[1].slice(0, 8)}`);
+            console.error(`    stubbed sweep ${j.args.join(" ")}: rc=${run.rc}, ${report === null ? `no report (${run.stderr.trim().split("\n").pop() ?? ""})` : `${written.length} written vs ${planned.length} planned${x === undefined ? "" : ` (first difference at ${x}: ${brief(written[x])} vs planned ${brief(planned[x])})`}, dirty=${report.dirty}, proof runs=${report.proofRuns} (expected ${runsWanted})`}${run.stdout.includes(summary) ? "" : `, no \`${summary}\``}`);
+          }
+          return { ...j, written, ok };
+        });
+        for (const [what, mine, registered] of [
+          ["the whole registry", sweepJudged.filter((j) => j.only === undefined), whole],
+          ...(dmhTarget ? [[dmhTarget.proof, sweepJudged.filter((j) => j.only === dmhTarget.proof), totalOf(dmhTarget)]] : []),
+        ]) {
+          const writtenTotal = mine.reduce((n, j) => n + j.written.length, 0);
+          check(`main()'s REAL sweep of ${what} with the disk and the proof stubbed, shards 0..3 of 4, writes exactly the mutations each shard's --plan lists, in order, restores every one, runs the proof once per mutation and once per unit for its baseline, and exits 0 (${mine.map((j) => j.written.length).join("+")} = ${writtenTotal} of ${registered} written)`,
+            mine.length === 4 && mine.every((j) => j.ok) && writtenTotal === registered);
+        }
+      }
+    }
   }
-  const quarter = judged.find((j) => j.n === 4 && j.i === 0 && j.only === undefined);
-  const whole = TARGETS.reduce((sum, t) => sum + totalOf(t), 0);
-  check(`main()'s --plan for shard 0/4 is a strict subset of the sweep (${quarter?.got.length} of ${whole} mutations, ${expectedPlan(TARGETS, 0, 4).length} expected), so the shard split is in effect`,
-    quarter !== undefined && quarter.ok && quarter.got.length > 0 && quarter.got.length < whole);
-  if (dmhTarget) {
-    const mine = judged.filter((j) => j.only === dmhTarget.proof);
-    const u = onceAndTotal(mine.flatMap((j) => j.got), totalOf(dmhTarget));
-    check(`main()'s real --plan for the CI slice command (--proof=${dmhTarget.proof} --shard=i/4) holds ${mine.map((j) => j.got.length).join("+")} = ${u.placed} of ${totalOf(dmhTarget)} mutations, each once`,
-      mine.length === 4 && mine.every((j) => j.ok) && u.ok);
-  }
-  // The split is computed independently on every runner, so the REAL entrypoint must not depend on the
-  // machine: same bytes under a different locale and time zone.
-  const shardOne = judged.find((j) => j.n === 4 && j.i === 1 && j.only === undefined);
-  const [plainRun, utcRun, farRun] = [runs[judged.indexOf(shardOne)], ...(await Promise.all([
-    runPlan(["--shard=1/4"], { LC_ALL: "C", LANG: "C", TZ: "UTC" }),
-    runPlan(["--shard=1/4"], { LC_ALL: "tr_TR.UTF-8", LANG: "tr_TR.UTF-8", TZ: "Pacific/Kiritimati" }),
-  ]))];
-  check("main()'s --plan is byte-identical under LC_ALL=C TZ=UTC and under LC_ALL=tr_TR.UTF-8 TZ=Pacific/Kiritimati (independent runners each compute the split)",
-    plainRun.rc === 0 && utcRun.rc === 0 && farRun.rc === 0 && plainRun.stdout !== "" && utcRun.stdout === plainRun.stdout && farRun.stdout === plainRun.stdout);
+}
+// Whatever the children did, the files they could have mutated are the files they started with.
+{
+  const after = hashFiles(REPO, REGISTERED_FILES);
+  const moved = movedFiles(HASH_BEFORE, after);
+  for (const f of moved) console.error(`    MOVED by a spawned child: ${f}`);
+  check(`the ${REGISTERED_FILES.length - 1} registered guard files and the guard itself hash identically before and after every spawned child (digest ${digestOf(HASH_BEFORE)} before, ${digestOf(after)} after)${moved.length ? ` — MOVED: ${moved.slice(0, 4).join(", ")}${moved.length > 4 ? `, +${moved.length - 4} more` : ""}` : ""}`, moved.length === 0);
 }
 
 // The function's own text, mutated, loaded as a module and run through the SAME coverage() the real
@@ -517,6 +734,31 @@ check(`workflow: the mutation-sweep job runs \`--shard=<matrix>/N\` (N=${shardsI
 const matrixShards = sweepJob?.strategy?.matrix?.shard;
 check(`workflow: matrix.shard is exactly 0..${shardsInRun - 1} (a shard the matrix lacks is swept by no runner)`,
   workflowOk && Array.isArray(matrixShards) && matrixShards.length === shardsInRun && matrixShards.every((v, i) => v === i));
+// The run line may carry `--shard=` and `--proof=` and nothing else. `--plan` is accepted by the script (it is how
+// this gate observes main()), and on the run line it turns every shard into a green no-op: a JSON plan, exit 0, no
+// proof run. Before `--plan` existed any extra flag exited 1 through unknownArgs, so the gate has to refuse the one
+// flag the script now accepts. Only the command that runs mutation-guard.mjs is read (a multi-line `run:` may hold
+// others), and the substring test on that command is a second net for a flag spelled across a template expression.
+const guardCommandsOf = (run) => String(run ?? "").split("\n").flatMap((l) => {
+  const at = l.indexOf("mutation-guard.mjs");
+  return at < 0 ? [] : [l.slice(at + "mutation-guard.mjs".length)];
+});
+const refusedRunFlags = (run) => [...new Set(guardCommandsOf(run).flatMap((cmd) => [
+  ...cmd.split(/&&|\|\||;|\|/)[0].split(/\s+/).filter((t) => t.startsWith("-") && t !== "--" && !/^--(shard|proof)=\S+$/.test(t)),
+  ...(cmd.includes("--plan") ? ["--plan"] : []),
+]))];
+check(`workflow: the mutation-sweep run line passes no flag but --shard=/--proof= and never --plan${refusedRunFlags(runLine).length ? ` — it passes ${refusedRunFlags(runLine).join(" ")}` : ""}`, runLine !== undefined && refusedRunFlags(runLine).length === 0);
+{
+  const refused = (run) => refusedRunFlags(run).join();
+  check("fixture: the run-line check refuses --plan (before the shard, after it, or spelled through a template expression), --help and -h, and passes the real run line and a --proof= line beside another command",
+    refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4") === ""
+    && refused("node scripts/mutation-guard.mjs --plan --shard=${{ matrix.shard }}/4") === "--plan"
+    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 --plan") === "--plan"
+    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4${{ '--plan' }}") === "--plan"
+    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 --help") === "--help"
+    && refused("node scripts/mutation-guard.mjs --shard=${{ matrix.shard }}/4 -h") === "-h"
+    && refused("pnpm install --frozen-lockfile\nnode scripts/mutation-guard.mjs --proof=proof:x --shard=0/4") === "");
+}
 const LANE_N = workflowOk ? shardsInRun : 4;
 const BOUND_SECONDS = (workflowOk ? timeoutMinutes : 40) * 60;
 const loadsOf = (registry, n, totals, maxUnitSeconds) =>

@@ -2016,7 +2016,13 @@ export function unknownArgs(argv) {
  *  mutation would be written. Nothing is mutated, no proof runs, no baseline is taken; stdout is the
  *  `planDocument` JSON and nothing else (the human lines go to stderr). It exists so the sharding gate
  *  can observe what main() actually sweeps instead of reading main()'s source: the placements are
- *  recorded at the statement that would otherwise run the mutation. */
+ *  recorded at the statement that would otherwise run the mutation.
+ *
+ *  After each unit's sweep main() compares the mutations it wrote with the selector's `swept` for that unit
+ *  and fails the sweep (exit 1, a `WRITTEN-vs-PLAN` line) on a difference: a statement between the plan and
+ *  the write that skips or re-selects mutations leaves the plan intact, and this count is what sees it. In
+ *  `--plan` the placements count in place of writes. A whole unit dropped before the loop is not visible to
+ *  this count; the sharding gate's stubbed sweep and its pin on how often main() forks on the plan flag are. */
 function main() {
   const unknown = unknownArgs(process.argv.slice(2));
   if (unknown.length > 0) {
@@ -2099,6 +2105,7 @@ function main() {
   const survivors = [];
   const zeroMutation = [];
   const baselineFailures = [];
+  const writeMismatches = [];
 
   // Registered load of everything this run will sweep, on the pristine tree (the end-of-run
   // line below must not re-count mutations after the loop has been writing to the files).
@@ -2140,6 +2147,8 @@ function main() {
     // at the whole file (allCount), never at the slice.
     const plan = selectSliceMutations(target, mutationsByFile(target));
     const swept = plan.swept;
+    const placedBefore = placements.length;
+    let writtenInUnit = 0;
     for (const { file, allCount, owned } of plan.files) {
       log(`   ${file} — ${owned.length} mutations${target.slice ? ` (of ${allCount} in the file)` : ""}`);
       // A registered file the mutators cannot touch is a FALSE COVERAGE CLAIM, and a
@@ -2162,6 +2171,7 @@ function main() {
         }
         total += 1;
         writeFileSync(mutation.abs, mutation.content);
+        writtenInUnit += 1;
         let verdict;
         try {
           verdict = runProof(target.proof);
@@ -2186,6 +2196,17 @@ function main() {
           }
         }
       }
+    }
+    // THE REAL-PATH NET, the one no text pin can give: what this unit actually wrote must equal what the
+    // selector planned for it. A statement between the plan stop and the write that skips or re-selects
+    // mutations leaves the plan and the pins intact, but not this count. Plan mode counts the placements it
+    // recorded instead of writes, so the same line also holds the plan to the selector.
+    const accounted = writtenInUnit + (placements.length - placedBefore);
+    if (accounted !== swept) {
+      const line = `${unitName(target)}: ${accounted} mutations written, the selector planned ${swept}`;
+      writeMismatches.push(line);
+      console.error(`   ✗ WRITTEN-vs-PLAN  ${line}`);
+      process.exitCode = 1;
     }
     timings.push({
       proof: target.proof,
@@ -2246,6 +2267,12 @@ function main() {
         "resolve) and sweep again. Reporting a kill rate measured through a broken runner is the\n" +
         "exact unfalsifiable-guard defect this file exists to find.",
     );
+    process.exit(1);
+  }
+
+  if (writeMismatches.length > 0) {
+    console.error("\nMutation guard FAILED — the sweep did not write what the plan selected, so the counts above are over a different set than the one the shards were balanced for:\n");
+    for (const m of writeMismatches) console.error(`  ✗ WRITTEN-vs-PLAN  ${m}`);
     process.exit(1);
   }
 

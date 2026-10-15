@@ -210,3 +210,11 @@ block; a stage run on the wrong tier is a lesson here.
 - **evidence:** `scripts/loop-state.mjs` (`branchesInAgentWorktrees`, the seam that names unpushed branches, and its rule against pushing attack reproductions); PR #1154's raised hand.
 - **landing:** `.claude/skills/orchestrator-over-workers/SKILL.md` "Briefs, reviews and records" — to free disk, delete an agent worktree's build output (`node_modules`, `dist`) and keep the worktree until its scratch branches are deleted with the owner's OK; keep a finished worktree only for that reason, after pushing or landing any real work in it, since `scripts/loop-state.mjs` treats every branch in a kept worktree's reflog as ephemeral.
 - **status:** landed
+
+### L23 — The coordinator edited the registry row and the hands itself, on the wrong tier
+- **date:** 2026-10-15
+- **lane:** cloud
+- **incident:** On the first fire after the 5d17h weekly-usage-limit outage (2026-10-09T16:40Z to 2026-10-15T10:00Z), with every PR's gating check red on the dependabot-queue-review row's 30-day bound, the coordinating session (creative tier) wrote the row's retirement and the raised hands directly and authored the commits itself for two rounds, instead of handing the edits to a Sonnet builder and the commit message to Haiku as DR-060 rule 1 requires. Both review rounds (a Sonnet reviewer and an Opus refuter) found untrue sentences in those direct edits (the Mac tick was alive, a provenance read time later than the commit, a duty-performed claim the heartbeats contradict), which is the defect the rule exists to prevent.
+- **evidence:** Commits 2f5c8809 and 50bb19d7 on branch `fix/retire-dependabot-queue-review-row` (trailer "Co-Authored-By: Claude Fable 5.1"); the review verdicts' trailer notes; `docs/DECISION_RECORDS.md` DR-060 rule 1.
+- **landing:** recorded only — the rule already exists (DR-060 rule 1); round 3 of the same change was built by a Sonnet builder and this row is the record that the two direct rounds were the defect, so the next repo-wide red is handed to a builder on its first round
+- **status:** landed

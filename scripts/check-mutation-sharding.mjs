@@ -163,6 +163,25 @@ check(
   TARGETS.find((t) => t.proof === "proof:graph-connector")?.files.includes("lib/integrations/src/integrations/graph/posture-connector.ts") === true,
 );
 
+// ── Wave 9 (2026-10-09): nac, edr-threat, location-services, peripheral-control and incident-playbook ──
+// join the brace-less sweep, the two nac connectors are re-registered (de-registered 2026-08-25
+// because the mutator could not reach their brace-less guards; it can now), and the three
+// families' mock transports the proofs DRIVE are registered under their existing targets.
+for (const p of ["nac", "edr-threat", "location-services", "peripheral-control", "incident-playbook"]) {
+  check(`brace-less sweep: proof:${p} stays opted in (oneLine: true)`, TARGETS.find((t) => t.proof === `proof:${p}`)?.oneLine === true);
+}
+for (const [proof, file] of [
+  ["proof:nac", "lib/integrations/src/integrations/nac/cisco-ise.ts"],
+  ["proof:nac", "lib/integrations/src/integrations/nac/aruba-clearpass.ts"],
+  ["proof:edr-threat", "lib/integrations/src/integrations/edr-threat/mock-transport.ts"],
+  ["proof:location-services", "lib/integrations/src/integrations/location-services/mock-transport.ts"],
+  ["proof:peripheral-control", "lib/integrations/src/integrations/peripheral-control/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/mock-transport.ts"],
+  ["proof:graph-connector", "lib/integrations/src/integrations/graph/estate.ts"],
+]) {
+  check(`${proof} keeps ${file.split("/").slice(-2).join("/")} registered`, TARGETS.find((t) => t.proof === proof)?.files.includes(file) === true);
+}
+
 // ── Wave 8 (2026-10-09): the shared adapter guards, emitter-discipline, the attestation connector ──
 // url-guard (the outbound SSRF-class check), bounded-text, redirect and vendor-values are imported by
 // every emitter family and sat in NO target; emitter-discipline joined the brace-less sweep with all
@@ -178,6 +197,17 @@ check("proof:device-attestation keeps its connector registered: device-attestati
 check("proof:config-scope keeps the tenant-key guard registered and opted in: store-scope.ts",
   TARGETS.find((t) => t.proof === "proof:config-scope")?.files.includes("lib/integrations/src/integrations/store-scope.ts") === true
   && TARGETS.find((t) => t.proof === "proof:config-scope")?.oneLine === true);
+
+// ── Wave 10 (2026-10-09): the per-family mock transports ──
+// Each family's `mock-transport.ts` is the fake the family proof drives its connector through; its
+// non-GET / bad-token / unknown-path guards sit on the offline allow path and sat in NO target.
+// Every one is registered under its own family proof (already `oneLine`) with its survivors pinned.
+// local-authority is NOT in this list: its proof never references the factory, so a mutant there
+// could not be killed and the file stays unregistered (listed on the BUILD_BACKLOG row "61 files under lib/integrations/src/integrations").
+for (const f of ["credential-exposure", "data-protection", "identity-risk", "network-nac", "rtls-custody", "access-governance", "macos-posture", "oauth-consent", "ot-posture", "pacs-access", "sso-session", "task-exception", "token-binding", "link-usability", "agent-identity", "device-attestation"]) {
+  const file = `lib/integrations/src/integrations/${f}/mock-transport.ts`;
+  check(`proof:${f} keeps its mock transport registered: ${f}/mock-transport.ts`, TARGETS.find((t) => t.proof === `proof:${f}`)?.files.includes(file) === true);
+}
 
 // An unknown argument must be refused, not fall through to a full in-place sweep.
 check("unknown flags are refused (--help, a bare -h, a space-separated --proof)", unknownArgs(["--help"]).length === 1 && unknownArgs(["-h"]).length === 1 && unknownArgs(["--proof", "x"]).length === 2);

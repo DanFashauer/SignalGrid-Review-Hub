@@ -267,6 +267,47 @@ export function helperBattery(mod, root) {
     writeFileSync(hcfg, `[core]\n\thooksPath = ${hooks}\n`);
     exercise("global failing hook", () => ({ GIT_CONFIG_GLOBAL: hcfg }));
     exercise("empty identity env", () => ({ GIT_AUTHOR_NAME: "", GIT_COMMITTER_NAME: "" }));
+    // GIT_NAMESPACE: only the receiving side of a push honours it (a local commit ignores it), so push into a bare
+    // scratch repo with a decoy namespace in the caller's env: the ref must land on refs/heads/main, not under refs/namespaces/.
+    {
+      const src = mkdtempSync(join(root, "scratch-ns-src-"));
+      const tgt = mkdtempSync(join(root, "scratch-ns-tgt-"));
+      set({ GIT_NAMESPACE: "decoy" });
+      try {
+        mod.scratchGitOk(tgt, ["init", "-q", "--bare"]);
+        mod.scratchGitOk(src, ["init", "-q"]);
+        writeFileSync(join(src, "f.txt"), "f\n");
+        mod.scratchGitOk(src, ["add", "-A"]);
+        mod.scratchGitOk(src, ["commit", "-qm", "scratch"]);
+        mod.scratchGitOk(src, ["push", "-q", tgt, "main"]);
+      } catch { /* judged below */ } finally { restore(); }
+      if (plain(tgt, ["rev-parse", "--verify", "-q", "refs/heads/main"]) === "") failures.push("GIT_NAMESPACE was honoured: a scratch push did not land on refs/heads/main");
+      if (plain(tgt, ["for-each-ref", "refs/namespaces"]) !== "") failures.push("GIT_NAMESPACE was honoured: a scratch push wrote refs under refs/namespaces/");
+    }
+    // tag.gpgsign and init.defaultBranch overridden by a hostile global config: unsigned tag, branch named main.
+    {
+      const tcfg = join(root, "hostile-tag.gitconfig");
+      writeFileSync(tcfg, "[tag]\n\tgpgsign = true\n[gpg]\n\tprogram = /bin/false\n[init]\n\tdefaultBranch = trunk\n");
+      const s = mkdtempSync(join(root, "scratch-tag-"));
+      const opts = { env: { GIT_CONFIG_GLOBAL: tcfg } };
+      let tagged = true;
+      try {
+        mod.scratchGitOk(s, ["init", "-q"], opts);
+        writeFileSync(join(s, "f.txt"), "f\n");
+        mod.scratchGitOk(s, ["add", "-A"], opts);
+        mod.scratchGitOk(s, ["commit", "-qm", "scratch"], opts);
+        mod.scratchGitOk(s, ["tag", "-a", "-m", "release", "v1"], opts);
+      } catch { tagged = false; }
+      if (!tagged) failures.push("a hostile tag.gpgsign=true global config broke an annotated scratch tag (tag.gpgsign not overridden)");
+      if (plain(s, ["symbolic-ref", "--short", "HEAD"]) !== "main") failures.push("a hostile init.defaultBranch=trunk global config named the scratch branch something other than main");
+    }
+    // The timeout must reach spawnSync: a hung child (an alias that sleeps) is killed, not waited for.
+    {
+      const acfg = join(root, "hang.gitconfig");
+      writeFileSync(acfg, "[alias]\n\thang = !sleep 5\n");
+      const r = mod.scratchGit(root, ["hang"], { timeout: 300, env: { GIT_CONFIG_GLOBAL: acfg } });
+      if (r.error?.code !== "ETIMEDOUT") failures.push("a hung git child was not killed by opts.timeout");
+    }
     // The throwing variant must throw, or a failed fixture step is silent.
     let threw = false;
     try { mod.scratchGitOk(root, ["rev-parse", "--verify", "no-such-ref^{commit}"]); } catch { threw = true; }
@@ -401,6 +442,10 @@ async function selfTest({ inner = false } = {}) {
     ["opts.env ignored", (s) => s.replace("...SCRATCH_IDENTITY, ...extra }", "...SCRATCH_IDENTITY }")],
     ["opts.input ignored", (s) => s.replace("...(opts?.input === undefined ? {} : { input: opts.input }),", "")],
     ["scrubProcessGitEnv made a no-op", (s) => s.replace("export function scrubProcessGitEnv(env = process.env) {\n  for (const k of SCRATCH_GIT_SCRUB) delete env[k];", "export function scrubProcessGitEnv(env = process.env) {\n  void env;")],
+    ["GIT_NAMESPACE dropped from the scrub list", (s) => s.replace('  "GIT_NAMESPACE",\n', "")],
+    ["tag.gpgsign override deleted", (s) => s.replace('"-c", "tag.gpgsign=false",', "")],
+    ["init.defaultBranch override deleted", (s) => s.replace('"-c", "init.defaultBranch=main",', "")],
+    ["timeout option ignored", (s) => s.replace("timeout: opts?.timeout ?? 60000,", "timeout: undefined,")],
     ["scratchGitOk made non-throwing", (s) => s.replace("if (r.error || r.status !== 0) {", "if (false) {")],
   ];
   for (const [name, mutate] of helperMutants) {

@@ -42,7 +42,7 @@
 //    is that the `--list-steps` block sits directly above the one `for (const step of STEPS)` loop (only
 //    `const`/`let` declarations of a LITERAL — `[]`, `{}`, `null`, a boolean or an integer — between them), so nothing can change the list between the dump and the loop; a runner
 //    whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv steps,
-//    fails the gate and credits nothing. Stated limits: the position check reads strings and comments with the stripper's regex-versus-division heuristic, so a decoy hidden by a misparse (`(4) / 2; /*`) is not modelled; the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn buffer fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
+//    fails the gate and credits nothing. Stated limits: the position check reads strings and comments with the stripper's regex-versus-division heuristic, so a decoy hidden by that misparse (`(4) / 2; /* ;` and ``(4) / 2, doc = `/ ;``) is not modelled; regex-literal text is masked like string text, so a brace or a block inside a regex literal is refused; the one-mention rule for `--list-steps` is a blacklist on its verbatim spelling (a block or branch spelled any other way is caught only by the position check, which refuses a decoy block in a string or template, and by the runtime listing); a listing longer than the spawn buffer fails closed; an entry whose value depends on runtime state that differs between the listing run and the real run (an `--env`, `process.argv` or `process.env` conditional other than the one `--list-steps` mention, which is refused); a workflow `run:` line that is credited although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that rewrites `step.cmd`, and any runner logic
 //    other than the `heavy`/`needsNativeBuild` skips, are not modelled.
 //  · WORKFLOWS: whether a `run:` line really runs `<gate> --self-test` is decided by scripts/lib/workflow-invocation.mjs
 //    — the SAME matcher scripts/check-preflight-ci-parity.mjs uses (command position only; quotes masked; `echo`, a quoted
@@ -128,7 +128,7 @@ export function stripComments(src, { maskStrings = false } = {}) {
           else if (src[j] === "/" && !inClass) { ok = true; j++; break; }
           j++;
         }
-        if (ok) { out += src.slice(i, j); i = j; prev = "a"; prevWord = ""; continue; }
+        if (ok) { out += lit(src.slice(i, j)); i = j; prev = "a"; prevWord = ""; continue; }
       }
       if (untilBrace) {
         if (c === "{") depth++;
@@ -174,7 +174,7 @@ export function runnerShapeOk(source) {
   const before = code.slice(0, m.index);
   const depth = (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length;
   const prev = before.trimEnd().slice(-1);
-  return depth === 0 && (prev === "" || prev === ";" || prev === "}")
+  return depth === 0 && (prev === ";" || prev === "}")
     && loops.length === 1 && (live.match(/--list-steps/g) ?? []).length === 1;
 }
 
@@ -461,6 +461,12 @@ function selfTest() {
     R("a decoy block and loop in a template, the real dump flag spelled \"--list-\" + \"steps\", the real loop filtered", { breadth: `${stepsDecl(E)}\nconst __doc = \`${LIST_SRC}${LOOP_SRC}\`;\n${LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"')}for (const step of STEPS.filter(() => false)) {\n}\n` });
     const REAL_SPLIT = LIST_SRC.replace('"--list-steps"', '"--list-" + "steps"') + "for (const step of STEPS.filter(() => false)) {\n}\n";
     R("a decoy block and loop inside a template literal whose text starts with `;`, the real dump spelled another way", { breadth: `${stepsDecl(E)}\nconst __doc = \`;\n${LIST_SRC}${LOOP_SRC}\`;\n${REAL_SPLIT}` });
+    const DECOY = LIST_SRC + LOOP_SRC;
+    R("a decoy inside `if (false) { }` after a regex literal holding `}`", { breadth: `${stepsDecl(E)}\nif (false) { /}/; ${DECOY}}\n${REAL_SPLIT}` });
+    R("a decoy inside `while (false) { }` after a regex literal holding an escaped `}`", { breadth: `${stepsDecl(E)}\nwhile (false) { void /\\}/;\n${DECOY}}\n${REAL_SPLIT}` });
+    R("a decoy inside an uncalled function after a regex literal holding `[}]`", { breadth: `${stepsDecl(E)}\nasync function never() { /[}]/;\n${DECOY}}\n${REAL_SPLIT}` });
+    R("a decoy block and loop carried inside a regex literal that starts with `;`", { breadth: `${stepsDecl(E)}\nconst re = /;${DECOY.replace(/\n/g, " ")}/;\n${REAL_SPLIT}` });
+    R("the same regex-literal decoy after ` ;`", { breadth: `${stepsDecl(E)}\nconst re = / ;${DECOY.replace(/\n/g, " ")}/;\n${REAL_SPLIT}` });
     R("a decoy dump block and loop inside `if (false) { }` with the real dump spelled another way", { breadth: `${stepsDecl(E)}\nif (false) {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop after a statement inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\nconst x = 1;\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });

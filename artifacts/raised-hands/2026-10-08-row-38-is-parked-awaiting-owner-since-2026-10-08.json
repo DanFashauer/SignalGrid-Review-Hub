@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-row-38-is-parked-awaiting-owner-since-2026-10-08",
+  "raisedAt": "2026-10-08T14:33:12.303Z",
+  "origin": "cloud",
+  "doing": "Ranking docs/COMPANY_BUILD_PLAN.md row 38 (free-tier proprietary validation targets) in the objective loop.",
+  "blockedBy": "Row 38 is parked AWAITING OWNER since 2026-10-08 (PR #1449): it runs only when a pilot's stack matches its trigger, and docs/agent/DISCOVERY_LOG.md records 0 of 15 conversations with a matching stack, so an unattended worker would validate free tiers for no pilot.",
+  "need": "Owner: name a pilot whose stack matches the row's trigger (or an account the lane may use), or confirm the row stays parked until the discovery log records one.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-38"
+  ]
+}

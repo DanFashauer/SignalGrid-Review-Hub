@@ -64,6 +64,7 @@
 // UNKNOWN IS NEVER FRESH. An unparseable instant ages as infinitely old, exactly as
 // check-lane-messages treats an unparseable sentAt.
 import { spawnSync } from "node:child_process";
+import { scratchGit, scratchGitEnv, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -428,6 +429,7 @@ async function loadPrs(api) {
 
 // ── self-test ────────────────────────────────────────────────────────────────
 async function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim openTip's plain git at the real repo
   const T = Date.parse("2026-09-23T12:00:00Z");
   const ago = (h) => new Date(T - h * H).toISOString();
   const checks = [];
@@ -580,9 +582,9 @@ async function selfTest() {
   const plant = async (workHb, tipHb) => {
     const dir = mkdtempSync(join(realpathSync(tmpdir()), "rh-plant-"));
     const hbPath = "artifacts/agent-heartbeats/x.json";
-    const g = (...a) => { const r = git(dir, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r; };
+    const g = (...a) => { const r = scratchGit(dir, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r; };
     try {
-      g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
+      g("init", "-q");
       mkdirSync(join(dir, "docs/agent"), { recursive: true }); mkdirSync(join(dir, "artifacts/agent-heartbeats"), { recursive: true });
       writeFileSync(join(dir, "docs/agent/scheduled-routines.json"), JSON.stringify({ routines: [{ id: "x-tick", status: "active", heartbeatPath: hbPath, cadenceToleranceHours: 3 }] }));
       writeFileSync(join(dir, hbPath), JSON.stringify({ firedAt: tipHb }));
@@ -599,7 +601,7 @@ async function selfTest() {
   checks.push(["a STALE heartbeat in the branch tree with a FRESH one at the tip raises NO hand", (await plant(ago(20), ago(1))) === 0]);
   checks.push(["…the inverse (fresh in the branch tree, stale at the tip) raises a hand", (await plant(ago(1), ago(20))) === 1]);
   const bare = mkdtempSync(join(realpathSync(tmpdir()), "rh-bare-"));
-  try { git(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
+  try { scratchGitOk(bare, ["init", "-q"]); let missing = false; try { openTip(bare); } catch (x) { missing = x instanceof TipMissing && x.message.includes("does not exist"); } checks.push(["a MISSING origin ref fails closed (TipMissing), never reads as no-stall", missing]); }
   finally { rmSync(bare, { recursive: true, force: true }); }
 
   // main() end to end: a temp git repo holding a copy of the scripts, run as the real CLI. The cases
@@ -607,8 +609,8 @@ async function selfTest() {
   // the stale rule reaching checkOutcome, the printed source line).
   const e2e = mkdtempSync(join(realpathSync(tmpdir()), "rh-e2e-"));
   try {
-    const g2 = (...a) => { const r = git(e2e, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
-    g2("init", "-q"); g2("config", "user.email", "t@t"); g2("config", "user.name", "t");
+    const g2 = (...a) => { const r = scratchGit(e2e, a); if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+    g2("init", "-q");
     cpSync(join(repo, "scripts"), join(e2e, "scripts"), { recursive: true });
     cpSync(join(repo, ".claude"), join(e2e, ".claude"), { recursive: true });
     mkdirSync(join(e2e, "docs/agent"), { recursive: true }); mkdirSync(join(e2e, "artifacts/agent-heartbeats"), { recursive: true }); mkdirSync(join(e2e, LEDGER_DIR), { recursive: true });
@@ -617,7 +619,7 @@ async function selfTest() {
     const hbFile = join(e2e, "artifacts/agent-heartbeats/x.json");
     const hb = (hAgo) => writeFileSync(hbFile, JSON.stringify({ firedAt: new Date(Date.now() - hAgo * H).toISOString() }));
     const commit = (msg) => { g2("add", "-A"); g2("commit", "-qm", msg, "--allow-empty"); return g2("rev-parse", "HEAD"); };
-    const main2 = (...a) => spawnSync("node", [join(e2e, "scripts/raised-hands.mjs"), "--check", ...a], { cwd: e2e, encoding: "utf8", env: { ...process.env, SIGNALGRID_LANE_REPO: e2e } });
+    const main2 = (...a) => spawnSync("node", [join(e2e, "scripts/raised-hands.mjs"), "--check", ...a], { cwd: e2e, encoding: "utf8", env: scratchGitEnv(process.env, { SIGNALGRID_LANE_REPO: e2e }) });
     hb(1);
     const freshTip = commit("tip: fresh heartbeat");
     let r = main2();

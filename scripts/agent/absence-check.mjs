@@ -35,7 +35,9 @@
 //
 // EXIT CODES:  0 = absence corroborated   1 = refuted (a file exists)   2 = inconclusive
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { scratchGitOk, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
+import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -120,7 +122,24 @@ function workflowFilesMentioning(needles) {
  * ever agree with each other. These four look in different places.
  */
 // Build output and generated artefacts. NOT docs/ — see the content probe below.
-const CONTENT_EXCLUSIONS = [":!*lock*", ":!*dist*", ":!*.map"];
+// EXACT lockfile names and dist/ directories only (plan row 61, 2026-10-08). The earlier
+// substring globs `*lock*` / `*dist*` matched ANY path containing those letters and hid
+// first-party files (a locker doc, LockedIdleView.swift, a hook, a distribution script),
+// so an absence claim about a word living only there came back CORROBORATED.
+// `**/` needs a directory before it, so a ROOT-level Cargo.lock / dist/ needs its own entry
+// (measured: `git grep -- ':!**/dist/**'` still returns dist/b.js at the repo root).
+const CONTENT_EXCLUSIONS = [
+  ":!pnpm-lock.yaml",
+  ":!Cargo.lock",
+  ":!**/Cargo.lock",
+  ":!package-lock.json",
+  ":!**/package-lock.json",
+  ":!yarn.lock",
+  ":!**/yarn.lock",
+  ":!dist/**",
+  ":!**/dist/**",
+  ":!*.map",
+];
 
 /** A pathspec's bare directory, so ':!docs', ':!docs/*' and ':!docs/**' all normalise to 'docs'. */
 export function excludedDir(pathspec) {
@@ -171,11 +190,71 @@ export function spellingVariants(topic) {
   return [...out].filter(Boolean);
 }
 
+/** The topic's words, camelCase split, as spellingVariants sees them. */
+function topicWords(topic) {
+  return String(topic)
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[\s\-_.\/]+/)
+    .filter(Boolean);
+}
+
+// Generic suffix nouns a caller adds to a name ("model tier GATE") that an identifier may
+// spell differently ("check-agent-model-tier"), so they carry no matching weight.
+const GENERIC_WORDS = new Set(["gate", "check", "checker", "guard", "script", "test", "tests", "proof", "rule", "lint"]);
+
+/** The words worth matching on their own: generic nouns and tokens under 3 characters dropped. */
+export function significantWords(topic) {
+  return topicWords(topic).filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w));
+}
+
+/**
+ * Variants of the topic with its generic nouns removed ("agent model tier gate" ->
+ * agent-model-tier). Only when a generic noun was actually dropped AND two or more words
+ * remain: a one-word stem ("agent") would match half the tree and turn every query into
+ * a refusal.
+ */
+export function stemVariants(topic) {
+  const words = topicWords(topic);
+  const kept = words.filter((w) => !GENERIC_WORDS.has(w));
+  if (kept.length === words.length || kept.length < 2) return [];
+  const out = new Set();
+  for (const sep of [" ", "-", "_", "."]) out.add(kept.join(sep));
+  const glued = kept.join("");
+  if (glued.length >= 5) out.add(glued);
+  return [...out];
+}
+
+/**
+ * The words probe applies when two or more significant words remain, OR when a generic noun
+ * was dropped from a multi-word topic and one word is left ("lessons gate" -> lessons, which
+ * exited 0 CORROBORATED while scripts/check-lessons.mjs exists; review round 1 of PR #1464).
+ * A weak probe, so the cost of the one-word case is INCONCLUSIVE noise, never a refusal.
+ */
+export function wordsProbeApplies(topic) {
+  const sig = significantWords(topic).length;
+  return sig >= 2 || (sig === 1 && topicWords(topic).length >= 2);
+}
+
+/** Merge the git-grep half and the tracked-path half of the words probe; a failure in either is a failure. */
+export function combineWordsProbe(grep, tracked, words) {
+  const pathHits = tracked.lines.filter((f) => words.every((w) => f.toLowerCase().includes(w)));
+  return probeResult([...new Set([...grep.lines, ...pathHits])], Boolean(grep.failed || tracked.failed), grep.why || tracked.why);
+}
+
+/** git argv for the `words` probe: files containing ALL the words, in any order. Pure so the self-test can inspect it. */
+export function wordsProbeArgv(words) {
+  return ["grep", "-lIi", "--all-match", ...words.flatMap((w) => ["-e", w]), "--", ...CONTENT_EXCLUSIONS];
+}
+
 export function probeSpecs(topic) {
   const variants = spellingVariants(topic);
+  const strongVariants = [...new Set([...variants, ...stemVariants(topic)])];
+  const words = significantWords(topic);
   const t = String(topic).toLowerCase();
-  const anyVariant = (hay) => variants.some((v) => hay.includes(v));
-  return [
+  const anyVariant = (hay) => strongVariants.some((v) => hay.includes(v));
+  const specs = [
     {
       id: "filename",
       strength: "strong",
@@ -202,7 +281,7 @@ export function probeSpecs(topic) {
       id: "ci",
       strength: "strong",
       how: "a CI WORKFLOW that builds or tests it",
-      run: () => workflowFilesMentioning(variants),
+      run: () => workflowFilesMentioning(strongVariants),
     },
     {
       id: "content",
@@ -247,6 +326,18 @@ export function probeSpecs(topic) {
       },
     },
   ];
+  // A WEAK probe, so classify() is unchanged: a hit is INCONCLUSIVE, never REFUTED, and
+  // CORROBORATED still needs every probe empty. Tracked files containing ALL the
+  // significant words (any order, any suffix) plus tracked paths containing all of them.
+  if (wordsProbeApplies(topic)) {
+    specs.push({
+      id: "words",
+      strength: "weak",
+      how: `a tracked file or path containing ALL of: ${words.join(", ")}`,
+      run: () => combineWordsProbe(gitLines(wordsProbeArgv(words), { emptyStatus: 1 }), trackedFiles(), words),
+    });
+  }
+  return specs;
 }
 
 export function classify(results) {
@@ -260,7 +351,12 @@ export function classify(results) {
 }
 
 function selfTest() {
+  scrubProcessGitEnv(); // inherited GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE would aim the gate's own plain-git calls at the real repo
   const checks = [];
+  // Assembled so the token is never a contiguous literal in this tracked file: the words
+  // probe (all words in one file) would otherwise find this file and the absent-topic
+  // cases could never corroborate.
+  const NONSENSE = ["zz", "q"].join("");
   const spec = probeSpecs("android");
 
   checks.push(["four differently-shaped probes, no two the same id", new Set(spec.map((s) => s.id)).size === 4]);
@@ -384,6 +480,76 @@ function selfTest() {
     !spellingVariants("a b").includes("ab") && spellingVariants("a b").includes("a-b"),
   ]);
 
+  // WORDS PROBE (backlog row: check:absence returned CORROBORATED for a multi-word topic
+  // spelled differently from the identifier that enforces it). Measured 2026-10-08:
+  // "agent frontmatter model gate" exited 0 "Safe to claim" while
+  // scripts/check-skill-plane-conformance.mjs enforces exactly that. Every probe tested
+  // each variant as ONE contiguous substring, so the words were never matched separately.
+  const multi = probeSpecs("agent frontmatter model gate");
+  checks.push(["a multi-word topic gets a fifth, WEAK `words` probe", multi.some((s) => s.id === "words" && s.strength === "weak")]);
+  {
+    const res = multi.map((s) => ({ ...s, ...s.run() }));
+    const wordHits = res.find((r) => r.id === "words")?.hits ?? [];
+    checks.push([
+      "LIVE: a multi-word topic spelled differently from the enforcing identifier is NOT corroborated, and the words probe names that file",
+      classify(res) !== "corroborated" && wordHits.includes("scripts/check-skill-plane-conformance.mjs"),
+    ]);
+  }
+  checks.push(["a single-word topic gets no words probe (it is the content probe already)", !probeSpecs("android").some((s) => s.id === "words")]);
+  {
+    const words = significantWords("agent model tier gate");
+    checks.push(["significantWords drops generic suffix nouns and tokens under 3 characters", JSON.stringify(words) === JSON.stringify(["agent", "model", "tier"]) && JSON.stringify(significantWords("an id gate check")) === "[]"]);
+    const argv = wordsProbeArgv(["agent", "model", "tier"]);
+    checks.push([
+      "the word-probe argv carries --all-match and exactly one -e per word",
+      argv.includes("--all-match") && argv.filter((a) => a === "-e").length === 3 && ["agent", "model", "tier"].every((w) => argv[argv.indexOf(w) - 1] === "-e"),
+    ]);
+    checks.push([
+      "stem variants drop the generic noun only when two or more words remain",
+      stemVariants("agent model tier gate").includes("agent-model-tier") && stemVariants("agent gate").length === 0 && stemVariants("agent model tier").length === 0,
+    ]);
+  }
+  {
+    // Review round 1: one significant word left after a generic noun is dropped.
+    const one = probeSpecs("lessons gate");
+    checks.push(["a two-word topic left with ONE significant word still gets the weak words probe", one.some((s) => s.id === "words" && s.strength === "weak")]);
+    {
+      // Asserted on the WORDS probe's own hits: the topic's literal sits in tracked files, so a
+      // verdict-only check passes even when the one-word probe finds nothing (review round 2).
+      const res = one.map((s) => ({ ...s, ...s.run() }));
+      const wordHits = res.find((r) => r.id === "words")?.hits ?? [];
+      checks.push(["LIVE: 'lessons gate' is NOT corroborated, and the words probe itself names scripts/check-lessons.mjs", classify(res) !== "corroborated" && wordHits.includes("scripts/check-lessons.mjs")]);
+    }
+    checks.push(["a plain single-word topic still gets no words probe", !wordsProbeApplies("android") && !wordsProbeApplies("gate check")]);
+    // The two halves and the failure flag of the words probe, pinned.
+    const g = { lines: ["a.txt"], failed: false, why: null };
+    const tr = { lines: ["scripts/check-agent-model-tier.mjs", "x.md"], failed: false, why: null };
+    const w3 = ["agent", "model", "tier"];
+    checks.push(["words probe merges the grep half and the tracked-PATH half", JSON.stringify(combineWordsProbe(g, tr, w3).hits.sort()) === JSON.stringify(["a.txt", "scripts/check-agent-model-tier.mjs"])]);
+    checks.push(["a failure in either half marks the words probe failed (never silently empty)", combineWordsProbe({ ...g, failed: true, why: "boom" }, tr, w3).failed === true && combineWordsProbe(g, { ...tr, failed: true, why: "boom" }, w3).failed === true && combineWordsProbe(g, tr, w3).failed === false]);
+    // The grep half is CASE-INSENSITIVE: topicWords lowercases the topic, files do not.
+    const tmp = mkdtempSync(join(tmpdir(), "absence-words-"));
+    try {
+      writeFileSync(join(tmp, "doc.md"), "Agent MODEL Tier\n");
+      const git = (...a) => scratchGitOk(tmp, a);
+      git("init", "-q");
+      git("add", "-A");
+      const hits = git(...wordsProbeArgv(w3)).split("\n").filter(Boolean);
+      checks.push(["the words-probe grep matches capitalised content (case-insensitive)", JSON.stringify(hits) === JSON.stringify(["doc.md"])]);
+    } catch (err) {
+      checks.push([`the words-probe grep matches capitalised content (hermetic repo failed: ${err && err.message})`, false]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+  {
+    // A nonsense multi-word topic, assembled from parts, must still CORROBORATE: --all-match
+    // needs every word in ONE file and the nonsense token is in none.
+    const nonsense = [NONSENSE, "frobnicate", "quux", NONSENSE].join(" ");
+    const res = probeSpecs(nonsense).map((s) => ({ ...s, ...s.run() }));
+    checks.push(["LIVE: a multi-word nonsense topic assembled from parts still CORROBORATES", res.some((r) => r.id === "words") && classify(res) === "corroborated"]);
+  }
+
   const fed = probeSpecs("fedramp").map((s) => ({ ...s, ...s.run() }));
   checks.push(['LIVE: "fedramp" is NOT refuted — mentions exist, artifacts do not', classify(fed) !== "refuted"]);
 
@@ -403,12 +569,12 @@ function selfTest() {
   checks.push(["a git invocation that ERRORS reports failed, not empty", bogus.failed === true && bogus.lines.length === 0]);
   // git grep exits 1 on no-match. If that were read as a failure every clean topic would
   // be inconclusive and the tool would be useless — the opposite error, equally fatal.
-  const nomatch = probeSpecs(["zzq", "no", "such", "topic", "zzq"].join("-")).find((sp) => sp.id === "content").run();
+  const nomatch = probeSpecs([NONSENSE, "no", "such", "topic", NONSENSE].join("-")).find((sp) => sp.id === "content").run();
   checks.push(["git grep finding NOTHING is an empty probe, not a failed one", nomatch.failed === false && nomatch.hits.length === 0]);
 
   // END TO END, both directions, on this tree: the reproduction that started this.
   // The topic is assembled from parts so the literal is not itself tracked content.
-  const absentTopic = ["zzq", "no", "such", "topic", "zzq"].join("-");
+  const absentTopic = [NONSENSE, "no", "such", "topic", NONSENSE].join("-");
   const self = fileURLToPath(import.meta.url);
   const clean = spawnSync(process.execPath, [self, absentTopic], { cwd: REPO, encoding: "utf8" });
   const noGit = spawnSync(process.execPath, [self, absentTopic], {
@@ -427,6 +593,58 @@ function selfTest() {
     "no bare catch returns an empty array from a git probe",
     !code.split(/\s+/).join("").includes("catch{" + "return[];}"),
   ]);
+
+  // THE EXCLUSIONS HIDE LOCKFILES AND dist/, NOT EVERY PATH THAT CONTAINS THOSE LETTERS
+  // (plan row 61). The old globs `*lock*` / `*dist*` matched any path containing the
+  // substring, so the content probe could not see docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md,
+  // LockedIdleView.swift, .claude/hooks/block-dangerous.sh or distribution_sensitivity.py:
+  // `check:absence SHALLOW_PATTERN` returned CORROBORATED for a word that is in the tree.
+  // Hermetic: a throwaway repo, the REAL CONTENT_EXCLUSIONS, one canary in every file.
+  {
+    const canary = [NONSENSE, "canary", "row61"].join("-");
+    const tmp = mkdtempSync(join(tmpdir(), "absence-excl-"));
+    try {
+      const put = (rel) => {
+        mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+        writeFileSync(join(tmp, rel), `${canary}\n`);
+      };
+      const firstParty = [
+        "docs/SMART_LOCKER_IDENTITY_CUSTODY_MODEL.md",
+        "native/Views/LockedIdleView.swift",
+        ".claude/hooks/block-dangerous.sh",
+        "scripts/distribution_sensitivity.py",
+        "lib/redistribute.ts",
+      ];
+      const excluded = [
+        "pnpm-lock.yaml",
+        "firmware/dock/core/Cargo.lock",
+        "native/desktop/app/Cargo.lock",
+        "native/desktop/core/Cargo.lock",
+        "web/package-lock.json",
+        "web/yarn.lock",
+        "dist/bundle.js",
+        "packages/a/dist/x.js",
+        "a.js.map",
+      ];
+      for (const f of [...firstParty, ...excluded]) put(f);
+      const git = (...a) => scratchGitOk(tmp, a);
+      git("init", "-q");
+      git("add", "-A");
+      const hits = git("grep", "-lIi", "-e", canary, "--", ...CONTENT_EXCLUSIONS).split("\n").filter(Boolean).sort();
+      checks.push([
+        "EXCLUSIONS NARROW: first-party paths containing lock/dist are SEARCHED; pnpm-lock.yaml, the three Cargo.lock, package-lock, yarn.lock, dist/ and .map stay excluded",
+        JSON.stringify(hits) === JSON.stringify([...firstParty].sort()),
+      ]);
+    } catch (err) {
+      checks.push([`EXCLUSIONS NARROW: hermetic repo could not run (${err && err.message})`, false]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+    checks.push([
+      "EXCLUSIONS NARROW: no bare substring glob (*lock*, *dist*) survives in CONTENT_EXCLUSIONS",
+      !CONTENT_EXCLUSIONS.some((e) => /^:!\*[a-z]+\*$/.test(e)),
+    ]);
+  }
 
   const failed = checks.filter(([, ok]) => !ok);
   for (const [name, ok] of checks) console.log(`  ${ok ? "ok" : "FAIL"} — self-test: ${name}`);

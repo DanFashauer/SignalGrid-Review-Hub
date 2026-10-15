@@ -155,7 +155,10 @@ const GIT_BEHAVIOUR_ENV = ["GIT_MMAP_LIMIT", "GIT_ALLOC_LIMIT", "GIT_DIFF_OPTS"]
 //   PATH TRANSPORT HELPERS (round 27; the table above is about names git reads and keys it runs, this row about FILES it finds): for a scheme with no native transport git runs `git-remote-<scheme>`, looked up in its OWN
 //     helper directory first and then on PATH, so a `git-remote-https` on PATH is the transport itself for a git that ships none and is never run for one that does (measured, git 2.43.0). PATH is scanned before the
 //     Hub listing (pathHelperProblems): a file `git-remote-<s>` whose <s>, compared CASE-INSENSITIVELY on every filesystem (it is one file on macOS and two elsewhere), is one of git's transports or the Hub's scheme, is a
-//     gated problem unless git's own helper directory holds that helper (also compared case-insensitively); an unreadable helper directory means "ships none". Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
+//     gated problem unless git's own helper directory holds that helper (also compared case-insensitively); an unreadable helper directory means "ships none".
+//     PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28; a runner's PATH names directories that do not exist): an entry whose listing fails with ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG names nothing exec could look in, so it is skipped
+//     without a word and the clean row stays the green one (a missing one is never a note); any other failure to list an entry (EACCES, EIO) is a directory that exists and may hold a helper, so it is a note and the row is a warning.
+//     Not covered, and said so: the git calls inside the imported check-surface-review-coverage.mjs (ls-files, cat-file -e, rev-parse: none of them reads a key that runs a program).
 const GIT_ENV_DROPPED = ["GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_NAMESPACE", "GIT_SSL_NO_VERIFY", ...GIT_TRANSPORT_ENV, ...GIT_REDIRECT_ENV, ...GIT_BEHAVIOUR_ENV];
 function gitEnv(extra) {
   const env = { ...process.env }; // what the CALLER exported is cleaned; what a caller of gitEnv passes (`extra`) is its own choice and is applied after
@@ -401,7 +404,11 @@ function inIsolatedDir(fn, refused = (why) => { throw new Error(why); }) {
 // written `SSH://` would be served, so it is a problem wherever it lives. (Round-27 coordinator diagnosis of the Mac failure, R18-scheme-e2e, said the PATH file hijacks the real https transport on a case-insensitive
 // filesystem; the code read shows the opposite: git's own helper wins there, which made the case's PRECONDITION unreachable on macOS. The scan is still right for a git that ships no helper.)
 const TRANSPORT_SCHEMES = ["https", "http", "ssh", "git", "file", "ftp", "ftps", "ext", "fd"];
-function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, cwd = process.cwd() } = {}) {
+// ROUND 28. The errors that say a PATH entry is not a directory at all: it names nothing exec could look in, so there is nothing to scan and nothing to report. A GitHub runner's PATH lists directories that do not
+// exist; round 27 recorded each as "trusted, not verified" (a note), the clean Hub row turned into a warning and R10-tx-clean failed (CI check run 113919440642, c57cdc0d). Any OTHER failure (EACCES, EIO, no code at all)
+// is a directory that exists and cannot be listed: it may hold a helper this scan cannot see, so it stays a note and the row is never the green one. A missing one is never a note.
+const NOT_A_DIRECTORY = new Set(["ENOENT", "ENOTDIR", "ELOOP", "ENAMETOOLONG"]);
+function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir = null, cwd = process.cwd(), listDir = readdirSync } = {}) {
   const want = new Set([...TRANSPORT_SCHEMES, ...schemes.map((s) => String(s).toLowerCase()).filter(Boolean)]);
   const ownNames = (() => { // what this git ships, lower-cased; null = could not be listed
     if (!execDir) return null;
@@ -413,7 +420,7 @@ function pathHelperProblems(schemes, { pathVar = process.env.PATH ?? "", execDir
     if (seen.has(dir)) continue;
     seen.add(dir);
     let names;
-    try { names = readdirSync(dir); } catch { notes.push(`PATH directory ${dir} could not be listed`); continue; }
+    try { names = listDir(dir); } catch (e) { if (!NOT_A_DIRECTORY.has(e?.code)) notes.push(`PATH directory ${dir} could not be listed (${e?.code ?? "no error code"})`); continue; }
     for (const n of names) {
       const m = /^git-remote-(.+?)(?:\.exe)?$/i.exec(n);
       if (!m || !want.has(m[1].toLowerCase())) continue;
@@ -4237,7 +4244,7 @@ exit 1
       check("a git-remote-https on PATH is a gated problem naming the file when this git ships no https helper of its own (it is the one git would run), nothing when git's own comes first, a problem when git's helper directory cannot be read (fail closed), and a git-remote-ssh is a problem wherever git's helpers live; an unrelated helper name is no problem unless it is the Hub's own scheme (R27-helper-shadow-unit)",
         u1.problems.length === 1 && u1.problems[0].startsWith(shadowText("https", join(lower, "git-remote-https"))) && /this file is the one git runs for https:\/\//.test(u1.problems[0]) && u2.problems.length === 0 &&
         u3.problems.length === 1 && /could not be read, so it is taken to ship none/.test(u3.problems[0]) && u4.problems.length === 1 && u4.problems[0].includes(join(nativeDir, "git-remote-ssh")) && u5.problems.length === 1 && u6.problems.length === 1 && u6.notes.length === 0 &&
-        scan(join(root, "r27-no-such-dir"), execNone).notes.length === 1);
+        scan(join(root, "r27-no-such-dir"), execNone).notes.length === 0); // (round 28: a missing PATH entry is skipped, not noted; R28-path-absent-unit and R28-path-unlistable-unit hold the rest)
       // the case-variant: the comparison is case-INSENSITIVE on every filesystem, for the PATH file and for git's own directory alike
       const c1 = scan(upper, execNone), c2 = scan(upper, execOwn), c3 = scan(lower, execOwnUpper), c4 = scan(upper, execOwnUpper);
       check("a git-remote-HTTPS on PATH is the same finding as git-remote-https, on this filesystem and on a case-sensitive one alike (the comparison is case-insensitive by design), and git's own helper is matched case-insensitively too (R27-helper-shadow-case-unit)",
@@ -4264,6 +4271,39 @@ exit 1
             reachedPlain, "this filesystem is case-sensitive: git-remote-HTTPS is a different file from git-remote-https, which git does not run for https://", guarded);
         }
       }
+    }
+    // ══ ROUND 28 ══ A PATH entry that cannot hold a helper is not a finding. Round 27 recorded every PATH directory it could not list as "trusted, not verified", a missing one included, so on a runner (whose PATH names
+    // directories that do not exist) the clean Hub row became a warning and R10-tx-clean failed (CI check run 113919440642, c57cdc0d; the row read "trusted, not verified: PATH directory <missing> could not be listed").
+    // These cases build the runner's PATH themselves, so they do not depend on the PATH the self-test starts under, and the unlistable shapes go through pathHelperProblems' own listDir seam so they hold as root too.
+    {
+      const mkd = (name, files = []) => { const d = join(root, name); mkdirSync(d); for (const f of files) writeFileSync(join(d, f), "x\n", { mode: 0o755 }); return d; };
+      const execNone = mkd("r28-exec-none"), execOwn = mkd("r28-exec-own", ["git-remote-https", "git-remote-http"]);
+      const tools = mkd("r28-tools", ["node", "git-lfs", "git-remote-nosuchscheme"]), shadow = mkd("r28-shadow", ["git-remote-https"]), noList = mkd("r28-no-list", ["git-remote-https"]);
+      const missing = join(root, "r28-no-such-runner-bin-dir"), notADir = join(root, "r28-a-file"), loopA = join(root, "r28-loop-a"), loopB = join(root, "r28-loop-b");
+      writeFileSync(notADir, "x\n"); symlinkSync(loopB, loopA); symlinkSync(loopA, loopB);
+      const asPath = (...d) => d.join(delimiter);
+      const scan28 = (pathVar, execDir = execOwn, extra = {}) => pathHelperProblems(["https"], { pathVar, execDir, ...extra });
+      const absentShapes = [missing, notADir, loopA, `${missing}${sep}`]; // ENOENT, ENOTDIR, ELOOP, ENOENT: none of them is a directory exec could look in
+      const absentEach = absentShapes.map((p) => scan28(asPath(p, tools))), absentAll = scan28(asPath(...absentShapes, tools)), absentBeside = scan28(asPath(...absentShapes, shadow, tools), execNone);
+      check("a PATH entry that does not resolve to a directory (missing, a regular file, a symlink loop, a trailing-slash spelling of a missing one) holds nothing git could run: it adds no problem and no note, alone or all together beside real directories, and a shadowing helper in the same PATH is still the one gated problem (R28-path-absent-unit)",
+        absentEach.every((r) => r.problems.length === 0 && r.notes.length === 0) && absentAll.problems.length === 0 && absentAll.notes.length === 0 &&
+        absentBeside.problems.length === 1 && absentBeside.problems[0].includes(join(shadow, "git-remote-https")) && absentBeside.notes.length === 0);
+      const failing = (code) => (d) => { if (d !== noList) return readdirSync(d); const e = new Error(`cannot list ${d}`); if (code) e.code = code; throw e; };
+      const unlistable = ["EACCES", "EIO", undefined].map((c) => scan28(asPath(noList, tools), execOwn, { listDir: failing(c) }));
+      const unlistableShadow = scan28(asPath(noList, shadow), execNone, { listDir: failing("EACCES") });
+      check("a PATH entry that exists but cannot be listed (EACCES, EIO, an error with no code) could hold a helper this scan cannot see: it stays a note, so the row is a warning and never the green one, naming the directory and the code, and it is never a gated problem by itself; beside a real shadowing helper that problem is still raised as well (R28-path-unlistable-unit)",
+        unlistable.every((r) => r.problems.length === 0 && r.notes.length === 1 && r.notes[0].startsWith(`PATH directory ${noList} could not be listed`)) &&
+        unlistable[0].notes[0].includes("EACCES") && unlistable[1].notes[0].includes("EIO") && unlistable[2].notes[0].includes("no error code") &&
+        unlistableShadow.problems.length === 1 && unlistableShadow.problems[0].includes(join(shadow, "git-remote-https")) && unlistableShadow.notes.length === 1);
+      // end to end on the runner's shape: entries that do not exist ahead of the real ones. The clean row is the green one with the text that says nothing was configured, in process and through the whole script.
+      const runnerPath = (...mid) => asPath(missing, notADir, ...mid, process.env.PATH ?? "");
+      const clean28 = inCleanEnv(() => hubTransport(txc.w), { ...cleanOfTrust, PATH: runnerPath() }), clean28Row = transportRow(clean28);
+      const clean28Run = wholeScript(txw2, "r28-clean", { ...cleanOfTrust, PATH: runnerPath(fakeBin) });
+      check("a runner-shaped PATH (entries that are missing or not directories, ahead of the real ones) leaves the clean Hub row clean: no problem, nothing trusted, the green row whose text says nothing was configured, and the whole script renders that row and exits 0 (R28-tx-clean-runner-path)",
+        clean28.problems.length === 0 && clean28.trusted.length === 0 && clean28Row.state === "ok" && clean28Row.gated === false && clean28Row.detail === `listing read from ${HUB}; no proxy, CA or URL rewrite configured; direct` &&
+        clean28Run.status === 0 && /✓ Review Hub transport\s+listing read from .*no proxy, CA or URL rewrite configured; direct/.test(clean28Run.out) && !/! Review Hub transport/.test(clean28Run.out));
+      check("the header's PATH-helper row says which PATH entries are skipped and which are noted, and the code skips exactly the four errors that mean 'not a directory' (R28-audit-path-absent)",
+        prodText.includes("PATH ENTRIES THAT ARE NOT DIRECTORIES (round 28") && prodText.includes("ENOENT, ENOTDIR, ELOOP, ENAMETOOLONG") && prodText.includes("a missing one is never a note") && JSON.stringify([...NOT_A_DIRECTORY].sort()) === JSON.stringify(["ELOOP", "ENAMETOOLONG", "ENOENT", "ENOTDIR"]));
     }
     // ══ ROUND 15 ══ CodeQL js/insecure-temporary-file: reappliesExactly's throwaway index had a predictable name made of the pid and the time, created directly in the shared temp directory.
     // The probe wraps gitRun (a module function, restored in the finally) and records the GIT_INDEX_FILE every git call is handed, and what that file's directory looked like AT THAT MOMENT.

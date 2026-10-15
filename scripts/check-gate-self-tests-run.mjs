@@ -47,8 +47,10 @@
 //    parse, or whose block is missing, altered or elsewhere, or whose `--list-steps` output is not a JSON array of argv
 //    steps, fails the gate and credits nothing. Stated limits: an entry whose value depends on runtime state that
 //    differs between the listing run and the real run (a `process.argv` or `process.env` conditional other than the one
-//    `--list-steps` mention, which is refused); a statement before the block that exits or throws is reached only by
-//    the runtime listing, which a runner that does not print cannot fake; a workflow `run:` line that is credited
+//    `--list-steps` mention, which is refused); the one-mention rule is a blacklist on that verbatim spelling (a top-level
+//    branch spelled `"--list-" + "steps"` before the real block is accepted, and the listing then prints the decoy); a
+//    statement before the block that exits or throws is reached only by the runtime listing, which a runner that does not
+//    print cannot fake; a workflow `run:` line that is credited
 //    although it ends `|| true`, `false &&` or `; exit 0`, or only holds the command in a heredoc; a loop body that
 //    rewrites `step.cmd`, and any runner logic other than the `heavy`/`needsNativeBuild` skips, are not modelled. The
 //    comment stripper's regex-versus-division heuristic is still used to find a gate's `--self-test` handler and its
@@ -537,6 +539,12 @@ function selfTest() {
     R("a decoy dump block and loop inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop after a statement inside an uncalled function", { breadth: `${stepsDecl(E)}\nasync function unused() {\nconst x = 1;\n${LIST_SRC}${LOOP_SRC}}\n${REAL_SPLIT}` });
     R("a decoy dump block and loop under a brace-free `if (false)`", { breadth: `${stepsDecl(E)}\nif (false) ${LIST_SRC}${LOOP_SRC}${REAL_SPLIT}` });
+    for (const [label, tpl] of [
+      ["a template without substitutions", "`--list-steps`"],
+      ["the head of a template", "`--list-steps${1}`"],
+      ["the middle of a template", "`${1}--list-steps${2}`"],
+      ["the tail of a template", "`${1}--list-steps`"],
+    ]) R(`a second --list-steps mention in ${label}`, { breadth: runnerSrc(stepsDecl(E), { pre: `const __note = ${tpl};\n` }) });
     R("an entry chosen by a second --list-steps test", { breadth: runnerSrc(`const STEPS = [process.argv.includes("--list-steps") ? ${E} : { name: "n", cmd: ["true"] }];`) });
     R("a runner whose dump block is missing", { breadth: `${stepsDecl(E)}\n${LOOP_SRC}` });
     R("a runner whose dump filters the list", { breadth: `${stepsDecl(E)}\n${LIST_SRC.replace("STEPS.map", "STEPS.filter(() => false).map")}${LOOP_SRC}` });

@@ -116,7 +116,7 @@
 //     a literal is readable); a getter on an absent-key entry must return a readable value on EVERY return path.
 //     A name rebound by a hoisted `var`, a `switch` case-clause const, or a binding named `undefined` is unreadable.
 //     A template with only a substitution (`${pick()}`) is read as non-good, like `text-${c}-400`.
-//     Depth caps FAIL OPEN: a const alias chain of 7+ hops and a chain of 10+ nested components declared leaf-first (a root-first chain propagates in one pass) are not
+//     Depth caps FAIL OPEN: a const alias chain of 7+ hops and a chain of 9+ nested components in the usual React layout (leaf-first, the page declared LAST; page-first layouts get one more hop, a root-first chain propagates in one pass and is not capped) are not
 //     followed. A write to a `...BASE` spread source is followed (the spread sources' names join the map's). A write whose VALUE this cannot
 //     read (`T.x = pick()`, a parameter, an import, `Object.assign(T, { x: pick() })`) is treated as possibly good-state; a spread this
 //     cannot resolve (`...(c ? BASE : {})`, `...getBase()`, `...cfg.base`, a `let` source) is treated as carrying a possibly good-state entry. A map's WRITES are a whitelist:
@@ -802,13 +802,17 @@ function analyzeSourceFile(relPath, text) {
         scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
     return false;
   };
-  const declaresVar = (scope, name) => { // does `var <name>` appear in this scope (not inside a nested function)?
+  const bindsPatternName = (b, name) => ts.isIdentifier(b) ? b.text === name
+    : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsPatternName(el.name, name));
+  // A function, a class static block and a namespace each own their `var`s; a nested one does not leak into the enclosing scope.
+  const isVarScope = (n) => ts.isFunctionLike(n) || ts.isClassStaticBlockDeclaration(n) || ts.isModuleDeclaration(n) || ts.isSourceFile(n);
+  const declaresVar = (scope, name) => { // does `var <name>` (plain or destructured) appear in this scope, not inside a nested var scope?
     let found = false;
     const v = (n) => {
       if (found) return;
-      if (n !== scope && ts.isFunctionLike(n)) return;
+      if (n !== scope && isVarScope(n)) return;
       if (ts.isVariableDeclarationList(n) && !(n.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) &&
-          n.declarations.some((d) => ts.isIdentifier(d.name) && d.name.text === name)) { found = true; return; }
+          n.declarations.some((d) => bindsPatternName(d.name, name))) { found = true; return; }
       ts.forEachChild(n, v);
     };
     v(scope);
@@ -818,8 +822,8 @@ function analyzeSourceFile(relPath, text) {
     for (let cur = id.parent; cur; cur = cur.parent) {
       if (bindsNameOpaquely(cur, id.text)) return null;
       // a `var X` anywhere in this function / module scope (hoisted, even inside an `if`) rebinds the name
-      if ((ts.isFunctionLike(cur) || ts.isSourceFile(cur)) && declaresVar(cur, id.text)) return null;
-      const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) ? cur.statements
+      if (isVarScope(cur) && declaresVar(cur, id.text)) return null;
+      const stmts = ts.isBlock(cur) || ts.isSourceFile(cur) || ts.isModuleBlock(cur) ? cur.statements
         : ts.isCaseBlock(cur) ? cur.clauses.flatMap((cl) => [...cl.statements]) : null; // a `switch` case clause scopes its declarations
       if (!stmts) continue;
       for (const st of stmts) {
@@ -888,7 +892,8 @@ function analyzeSourceFile(relPath, text) {
     let hit = false;
     const v = (n) => {
       if (hit) return;
-      if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n)) && ts.isIdentifier(n.name) && n.name.text === "undefined") { hit = true; return; }
+      if ((ts.isParameter(n) || ts.isVariableDeclaration(n) || ts.isBindingElement(n) || ts.isImportSpecifier(n) || ts.isImportClause(n) ||
+           ts.isNamespaceImport(n) || ts.isImportEqualsDeclaration(n)) && n.name && ts.isIdentifier(n.name) && n.name.text === "undefined") { hit = true; return; }
       ts.forEachChild(n, v);
     };
     v(sf);
@@ -2404,11 +2409,30 @@ BUG_R6.push(
   ["getter on an unreadable computed key returning pick()", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get [kfn()]() { return pick(); } };`, "T[q.data?.s] ?? T.default")],
   ["getter on undefined with a readable first return and an unreadable second", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get undefined() { if (c) { return "text-slate-500"; } return cfg.cls; } };`, "T[q.data?.s] ?? T.default")],
   ["getter on UNDEFINED hit by a toUpperCase key", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", get UNDEFINED() { return pick(); } };`, "T[String(q.data?.s).toUpperCase()] ?? T.default")],
-  ["name rebound by a hoisted var inside an if", mkMap(`const X = "text-slate-500"; if (c) { var X = pick(); } const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
   ["name bound by a switch case-clause const", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function f() { switch (k) { case 1: const X = pick(); T.undefined = X; } }`, "T[q.data?.s] ?? T.default")],
   ["T.undefined = undefined with a parameter named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function s(undefined) { T.undefined = undefined; } s(pick());`, "T[q.data?.s] ?? T.default")],
   ["map literal value undefined with a binding named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: undefined }; function Page2(undefined) { return undefined; }`, "T[q.data?.s] ?? T.default")],
   ["shorthand { __proto__ } over a const this cannot read", mkMap(`const __proto__ = pick(); const T = { ok: "text-red-400", default: "text-slate-400", __proto__ };`, "T[q.data?.s] ?? T.default")],
+  ["scope: var inside a class static block does not rebind the module const (bug stays flagged)", keyFx(`const GOOD = "text-emerald-400"; class Registry { static { var GOOD = 0; } }`, "", "GOOD")],
+  ["scope: var inside a namespace does not rebind the module const", keyFx(`const GOOD = "text-emerald-400"; namespace N { export var GOOD = 0; }`, "", "GOOD")],
+  ["scope: var inside declare global does not rebind the module const", keyFx(`const GOOD = "text-emerald-400"; declare global { var GOOD: string; }`, "", "GOOD")],
+  ["scope: var inside a nested function does not rebind the module const", keyFx(`const GOOD = "text-emerald-400"; function g() { var GOOD = 0; return GOOD; }`, "", "GOOD")],
+  ["rebinding: a function-scope hoisted var inside an if", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { if (c) { var X = pick(); } T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: a destructured var { X }", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { var { X } = { X: pick() }; T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: an array-destructured var [X]", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { var [X] = [pick()]; T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: for (var { X } of rows)", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g(rows) { for (var { X } of rows) { T.undefined = X; } }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: a destructured var inside a catch block", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { try { init(); } catch (e) { var { X } = { X: pick() }; T.undefined = X; } }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: a const inside a namespace body", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; namespace N { const X = pick(); T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: a const in the SECOND case clause", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { switch (k) { case 1: break; case 2: { } default: const X = pick(); T.undefined = X; } }`, "T[q.data?.s] ?? T.default")],
+  ["undefined: an import named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; import { undefined } from "./x"; T.undefined = undefined;`, "T[q.data?.s] ?? T.default")],
+  ["undefined: an import renamed to undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; import { cls as undefined } from "./x"; T.undefined = undefined;`, "T[q.data?.s] ?? T.default")],
+  ["undefined: a default import named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; import undefined from "./x"; T.undefined = undefined;`, "T[q.data?.s] ?? T.default")],
+  ["undefined: a namespace import named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; import * as undefined from "./x"; T.undefined = undefined;`, "T[q.data?.s] ?? T.default")],
+  ["undefined: a let named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { let undefined = pick(); T.undefined = undefined; }`, "T[q.data?.s] ?? T.default")],
+  ["undefined: a catch binding named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; try { init(); } catch (undefined) { T.undefined = undefined; }`, "T[q.data?.s] ?? T.default")],
+  ["undefined: a destructured parameter named undefined", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function g({ undefined }) { T.undefined = undefined; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: a destructured var hoisted out of an if block", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { if (c) { var { X } = { X: pick() }; } T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
+  ["rebinding: an array-destructured var hoisted out of an if block", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { if (c) { var [X] = [pick()]; } T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
   ["map write: T.__proto__ = \u2026", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; T.__proto__ = { undefined: "${EMER}" };`, "T[q.data?.s] ?? T.default")],
   ["map escapes to a function that writes it: seed(T)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function seed(m) { m.undefined = "${EMER}"; } seed(T);`, "T[q.data?.s] ?? T.default")],
   ["map stored in an array, then written", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; const reg = [T]; reg[0].undefined = "${EMER}";`, "T[q.data?.s] ?? T.default")],
@@ -2441,6 +2465,8 @@ OK_R6.push(
   ["twin: a var-free module const bound to a literal stays readable", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400", undefined: X };`, "T[q.data?.s] ?? T.default")],
   ["a const alias chain of 7 hops FAILS OPEN (documented limit)", mkMap(`const A0 = { ok: "${EMER}" }; const A1 = A0; const A2 = A1; const A3 = A2; const A4 = A3; const A5 = A4; const A6 = A5; const A7 = A6;`, "A7.ok")],
   ["a template with only a substitution is read as non-good (documented)", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400", undefined: \`\${pick()}\` };`, "T[q.data?.s] ?? T.default")],
+  ["twin: a let / var of another name does not make undefined unreadable", mkMap(`const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { let other = 1; var more = 2; T.undefined = undefined; }`, "T[q.data?.s] ?? T.default")],
+  ["twin: a function-scope var of ANOTHER name keeps the module const readable", mkMap(`const X = "text-slate-500"; const T = { ok: "text-red-400", default: "text-slate-400" }; function g() { var Y = pick(); T.undefined = X; }`, "T[q.data?.s] ?? T.default")],
   ["control: a map with no absent-key entry", mkMap(`const U = { ok: "text-red-400", default: "text-slate-400" };`, "U[q.data?.s?.x] ?? U.default")],
 );
 
@@ -2450,6 +2476,19 @@ const compChain = (n) => propsFixture(Array.from({ length: n }, (_, i) => i < n 
   : `function C${i + 1}({ items }) { return ${EMERALD_ITEMS}; }`).reverse().join("\n"), "<C1 items={items} />"); // declared leaf-first: each pass of the fixpoint moves the taint one hop
 BUG_R6.push(["component chain of 9, declared leaf-first, still follows the props", compChain(9)]);
 OK_R6.push(["component chain of 10, declared leaf-first, FAILS OPEN (documented limit)", compChain(10)]);
+
+const compChainPageLast = (n) => `
+import { useQuery } from "@tanstack/react-query";
+${Array.from({ length: n }, (_, i) => i < n - 1
+  ? `function C${i + 1}(props) { return <C${i + 2} items={props.items} />; }`
+  : `function C${i + 1}({ items }) { return ${EMERALD_ITEMS}; }`).reverse().join("\n")}
+export function Page() {
+  const q = useQuery({ queryKey: ["a"], queryFn: fa });
+  const items = q.data?.items ?? [];
+  return <C1 items={items} />;
+}`;
+BUG_R6.push(["component chain of 8, leaf-first with the page declared LAST, still follows the props", compChainPageLast(8)]);
+OK_R6.push(["component chain of 9, leaf-first with the page declared LAST, FAILS OPEN (documented limit)", compChainPageLast(9)]);
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {

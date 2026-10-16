@@ -246,6 +246,23 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
    this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
+   `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
+   `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.
+   Before that re-mint the blob read 2026-10-02T16:07:18.870Z, while the commit that carried it then (047dcfd93) is dated
+   2026-10-04 17:14:10 -04:00: a git date two days younger than the file's real age. Read the field, not the commit.
+9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index (2026-10-15).** After a merge of mainline
+   into a branch, the index holds duplicate stages until the merge is resolved and staged, and the coverage gate then
+   reports a false STALE (seen on #1524's round 7, 2026-10-15). Resolve, `git add -A`, run
+   `node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`.
+10. **A heartbeat's "since the last cycle" is what the first-parent log prints, measured (2026-10-15).** Measure the window with
+   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age from
+   the two `firedAt` values, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
+   landings; the window from the prior `firedAt` 2026-10-15T19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z)
+   holds nine first-parent commits: four PR merges (#1524 df4ea3b8, #1526 67ff76eb, #1527 9e7fc18b, #1468 760d5032) and five
+   Mac heartbeat commits. Its age at delivery was 2h00m45s. The 17:24Z record (#1523) claimed a keepalive "also due" at
+   1h57m; the age from the prior `firedAt` 2026-10-15T15:28:02.975Z to its delivery commit e7f03d2db (17:25:56Z) is
+   1h57m53s, under the 2-hour threshold, so the keepalive was not due (corrected in 4808841e).
 
 ### How the cloud lane runs build work (2026-09-12)
 

@@ -56,26 +56,18 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-16 (cloud lane; window 02:11Z-05:16Z) - SEVEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
+LAST TOUCHED: 2026-10-16 (cloud lane; window 2026-10-15 22:07:46Z-2026-10-16 04:29:46Z) - THIRTEEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
               UNTIL THE MAC'S ONE RE-MINT (ASKED IN #1536).
-              LANDINGS (merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`; gating runs from
-              `gh api .../check-runs/<id>`): #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3
-              (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged
-              head ca89f108 tree-identical to the verified head 9613ac61; gating 116776717682, Mac-only 116776521794; the sync manifest moved v96
-              3c69fedd to v97 aa9ce381438ecb26, today's last manifest move); #1534 dd3ba58f (03:06:14Z, the mutation sweep's shard-3 root cause,
-              cost-balanced partition; gating 116782022894, Mac-only 116782022240); #1536 06e494a1 (03:13:57Z, the ONE live-evidence re-mint ask to
-              the Mac lane after the manifest move, retiring the refresh portions of the 2026-10-08 and 2026-10-09 messages; gating 116787586536);
-              #1537 7fd78b48 (03:29:32Z, Mac tick mac/tick-20261016T025332Z, "objective loop: escalate", merged by the steward; gating 116786409708);
-              #1538 1efb3fdd (03:55:57Z, the steward's 03:25Z non-quiet heartbeat; gating 116796976650); #1539 511c0153 (04:29:46Z, the 04:11Z
-              forward-build heartbeat; gating 116807305698).
-              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at base fc9440a9, exit 0): HEADLINE 0%, OUTREACH CLOSED.
+              LANDINGS: every first-parent merge in the window, in merged_at order. Window query: `git log origin/SignalGrid_Alpha --first-parent --merges --since=2026-10-15T22:07:46Z --until=2026-10-16T04:29:46Z` prints 13 lines. Merged sha, UTC merged_at and gating id from `gh api .../pulls/N` and `.../check-runs/<id>`. The same window holds 17 direct, non-merge commits, all Mac heartbeats ("Lane mail (mac): heartbeat mac-lane-tick"), which are not PR landings.
+              #1529 f304ca4d (22:42:56Z, the 22:11Z forward-build heartbeat; gating 116703665804); #1530 f8625295 (23:49:32Z, the 23:24Z steward keepalive, quiet; gating 116726065910); #1460 cc910439 (00:28:14Z, a check-gate's --self-test that no step runs is run by a gate; gating 116735582504, Mac-only 116735581757); #1531 6b97d0ac (00:33:15Z, the 00:11Z forward-build heartbeat; gating 116741518825); #1532 468fd3e0 (00:43:57Z, the 2026-10-15 docs batch; gating 116741851860, Mac-only 116741851749); #1533 e6795df0 (01:48:58Z, the 01:28Z steward keepalive; gating 116764648248); #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3 (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged head ca89f108 tree-identical to the verified head 9613ac61; the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26; gating 116776717682, Mac-only 116776521794); #1534 dd3ba58f (03:06:14Z, the mutation sweep's shard-3 root cause, cost-balanced partition; gating 116782022894, Mac-only 116782022240); #1536 06e494a1 (03:13:57Z, the ONE live-evidence re-mint ask to the Mac lane after the manifest move, retiring the refresh portions of the 2026-10-08 and 2026-10-09 messages; gating 116787586536); #1537 7fd78b48 (03:29:32Z, Mac tick mac/tick-20261016T025332Z, "objective loop: escalate", merged by the steward; gating 116786409708); #1538 1efb3fdd (03:55:57Z, the steward's 03:25Z non-quiet heartbeat; gating 116796976650); #1539 511c0153 (04:29:46Z, the 04:11Z forward-build heartbeat; gating 116807305698).
+READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at origin 759a39a6 at 06:19Z, exit 0): HEADLINE 0%, OUTREACH CLOSED.
               (a) 100%; (b) 0% (proofs current 0/20, launch items fully current 0/28; evidence covers manifest 3c69fedd7754 and tree aa9ce381438e),
               which stays 0% by design until the Mac's one re-mint (asked in #1536, 06e494a1) lands; the refreshed
               artifacts/live-evidence/mac-run.json is not on mainline yet; (c) 100%.
-              IN FLIGHT AT THE END OF THE WINDOW (all four PRs open when read, none merged): #1370 round 23 (four regressions from Codex-driven fixes to
-              repair; 19 of 28 review threads resolved, 9 open); #1333 round 29 (three fail-open classes still open through adjacent spellings);
-              #1349 round 26 (a mode-160000 gitlink counted as a tracked file); #1378 round 16 (coverage-page merge plus four unpinned guards).
+              IN FLIGHT WHEN THIS BLOCK WAS WRITTEN (06:19Z; all four PRs open, none merged): #1370 round 23 (four regressions from Codex-driven fixes to repair; 32 review threads, 19 resolved, 13 open); #1333 round 29 (three fail-open classes still open through adjacent spellings); #1349 round 26 (a mode-160000 gitlink counted as a tracked file); #1378 round 16 (coverage-page merge plus four unpinned guards).
               The owner's open usage-limit hand keeps the pool at three concurrent workers.
+TIERS THIS SESSION: Haiku — this docs batch; Sonnet — the reviews (#1378 round 15, #1333 round 28, the #1540 docs review) and the #1370/#1333 branch workers' fix rounds; Opus — the landing refutes (#1349 round 25, #1370 round 22) and the #1349/#1378 branch workers; the coordinator ran no engineering or review stage.
+
 PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
               THE FREEZE; READINESS 100%, OUTREACH OPEN; ONE OWNER CRITERION UNMET. Docs batch on claude/docs-batch-20261015-landings from 64d0ca6d.
               LANDINGS AFTER THE FREEZE POINT (e6acacc7, 12:31:32Z), merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`
@@ -2071,8 +2063,8 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON:   16 open hands (`pnpm run hands`, read 2026-10-15 22:09Z in the docs worktree: "Raised hands — 16 open", 14 "Needs you (Dan)",
-              2 "Needs the Mac lane", measured at origin/SignalGrid_Alpha 708e97ef; the subjects match the list below one for one).
+BLOCKED ON:   16 open hands (`pnpm run hands`, read 2026-10-16 06:19Z in the docs worktree: "Raised hands — 16 open", "Needs you (Dan) — 14",
+              "Needs the Mac lane — 2", measured at origin/SignalGrid_Alpha 759a39a6; the id list below is the 2026-10-15 22:09Z copy and was not re-diffed against this read).
               Earlier count, 15:02Z: 16 open hands at origin/SignalGrid_Alpha 38003303 (counted by status over the 31 files in artifacts/raised-hands/,
               and `pnpm run hands` prints the live list and is the authority, this block being a copy). The tree this record was written
               on (e6acacc7) holds 17: #1515 (merged 355ff646 at 12:39:09Z) resolved the 17th, the mac-lane-tick cover, after that base.
@@ -2119,18 +2111,13 @@ PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATI
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud lane (2026-10-15, as of 23:03Z). Every item is named by its PR and branch; nothing here depends on a sha that only
+NEXT ACTION: cloud lane (2026-10-16, as of 06:19Z). Every item is named by its PR and branch; nothing here depends on a sha that only
               the cloud container holds. In this order:
-              1. #1460 (claude/build-gate-self-tests-run, origin 7c37759f02c7371636190f6bea13f3439915ee84, round 17, from `git ls-remote origin refs/heads/claude/build-gate-self-tests-run`):
-              round 18, a worker merging mainline 64d0ca6d or later, adding a regex-literal mention arm with its fixture and the row-43 sentences; then the Opus
-              landing re-refute, marking it ready, the DR-037 line and the merge.
-              2. The mutation-sweep shard-3 root-cause branch (claude/build-mutation-sweep-shard3-rootcause, local tip ad5b1d39 at round 5, unpushed): a local Sonnet
-              builder's answer to the Opus round-4 re-check's two MEDIUMs and one LOW; then the Opus re-check, a mainline merge, local preflight and breadth, the push,
-              the PR, its gating check and the merge.
-              3. This docs batch (claude/docs-batch-20261015-landings, branched from 64d0ca6d): Sonnet review, local preflight and breadth, push, PR, gating check and
-              merge; it lands after items 1 and 2.
-              4. The wave harvest, in this order: #1370 round-16 review, #1333 round-26 review, then the conflicted SAFETY_MACHINERY PRs #1504 #1398 #1378 #1349 #1230
-              #1309 #1369 #1390 #1308 by size.
+              1. #1370 (claude/build-console-unknown-render-props-maps, open and not a draft, head fd8b56c5 at 05:53Z): round 23. Repair the four regressions from
+              the Codex-driven fixes, and fix or declare the open Codex threads in all three places. Live count (`gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1370/ccr/review_threads`, 06:19Z): 32 threads, 19 resolved, 13 open.
+              2. #1349 (claude/build-controls-matrix-status-gate, draft, head 4878a9d8): round 26. The mode-160000 gitlink allowlist, and the two LOWs.
+              3. #1378 (claude/build-row-status-drift-detector, draft, head c96e7b6b): round 16. The coverage-page merge, the four unpinned guards, and the sha regex.
+              4. #1333 (claude/build-mcp-roster-context7-pin-parity, draft, head cd083857): round 29. Close the three fail-open classes generally: prefixed or backtick-quoted spec words, a backtick before whitespace, and a flow collection before the spec.
               5. Waiting on the owner. Counts are by classifyDiff (scripts/check-owner-gated-surfaces.mjs) over the changed files of each open PR, measured at 23:00:53Z:
               (a) every open PR with a claude/ head, 44 PRs: 26 match DECISION_PATH (23 non-draft) and 3 match OWNER_RESERVED (2 non-draft, #1321 #1265; 1 draft, #1307);
               (b) every open non-Dependabot PR, 104 PRs (9 Dependabot excluded): 36 match DECISION_PATH (33 non-draft) and 4 match OWNER_RESERVED (3 non-draft,

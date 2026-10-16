@@ -4535,7 +4535,7 @@ Output:   1ed88f9f
 Verdict:  holds for each PR's head, merged sha, merged time and gating check run (completed success on that head, read above). The Mac-only check is not named for these five, so none is given. The one-line descriptions are the coordinator's measured facts for the 2026-10-16 window and were not re-read from the PR bodies here.
 
 ## 2026-10-16 — "#1504 (url-guard and redirect hand mutants pinned in proof:emitter-discipline, 139 to 150) landed under DR-037 at 2b7f81f3 on gating check 116776717682 and Mac-only check 116776521794 at head ca89f108; the merged head is tree-identical to the verified head 9613ac61 (tree 9a271679); the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26"
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1504 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116776717682 116776521794; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git rev-parse ca89f108^{tree} 9613ac61^{tree}; pnpm run proof:emitter-discipline (in the docs worktree at base fc9440a9); node scripts/generate-sync-manifest.mjs --check
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1504 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116776717682 116776521794; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git rev-parse ca89f108^{tree} 9613ac61^{tree}; pnpm run proof:emitter-discipline (in the docs worktree at base fc9440a9); node scripts/generate-sync-manifest.mjs --check; git show 04f97ddc1^1:artifacts/sync/live-sync-manifest.json | head -5; git show 04f97ddc1:artifacts/sync/live-sync-manifest.json | head -5
 Output:   #1504 head=ca89f108 merge=2b7f81f3 merged=2026-10-16T02:51:27Z state=closed
           116776717682 Typecheck, build, and proof scaffold head=ca89f108 completed success completed=2026-10-16T02:38:32Z
           116776521794 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=ca89f108 completed success completed=2026-10-16T02:50:28Z
@@ -4543,13 +4543,40 @@ Output:   #1504 head=ca89f108 merge=2b7f81f3 merged=2026-10-16T02:51:27Z state=c
           9a27167951a25d7c81f6ede92316f5eb2aa45e75
           rc 0; `summary=pass (150/150)`
           live-sync manifest unchanged — version 97, fingerprint aa9ce381438ecb26…
-Verdict:  holds for the merge, the merged head, the tree identity, both check runs, the proof count and the manifest version (read above). The five landing-refute rounds are the coordinator's measured fact and were not re-run here. The manifest move from v96 is recorded in the 2026-10-15 entry for #1505 (version 95 to 96, fingerprint 3c69fedd), which this entry does not re-read.
+          "manifestVersion": 95,   (04f97ddc1^1, first parent of the #1505 merge)
+          "fingerprint": "73609a329ab41dafbc2d0009b0d60c496a763b6d61d3a4327312c6e6aa564ae9",
+          "manifestVersion": 96,   (04f97ddc1, the #1505 merge)
+          "fingerprint": "3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc",
+Verdict:  holds for the merge, the merged head, the tree identity, both check runs, the proof count and the manifest version (read above). The five landing-refute rounds are the coordinator's measured fact and were not re-run here. The v96 manifest first appears at the #1505 merge (04f97ddc): its first parent carries manifestVersion 95 and fingerprint 73609a329ab41dafbc2d0009b0d60c496a763b6d61d3a4327312c6e6aa564ae9, and the merge carries manifestVersion 96 and fingerprint 3c69fedd77548d613e9520a28a68daefe88423b7e8f7df5a652111841b4274bc (read above).
 
 ## 2026-10-16 — "#1534 (the daily mutation sweep partitioned by cost, with the sharding gate pinning the plan, the sweep path and the job; the shard-3 root cause) landed under DR-037 at dd3ba58f on gating check 116782022894 and Mac-only check 116782022240 at head e15be07b; eleven review rounds; CodeQL alert 230 (js/file-system-race) fixed on the head"
-Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1534 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116782022894 116782022240; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; gh api "repos/DanFashauer/SignalGrid-Review-Hub/code-scanning/alerts?pr=1534&per_page=50" --jq '.[] | select(.number==230) | "state=\(.state) fixed_at=\(.fixed_at) ref=\(.most_recent_instance.ref)"'; node scripts/check-mutation-sharding.mjs (in the docs worktree at base fc9440a9)
-Output:   #1534 head=e15be07b merge=dd3ba58f merged=2026-10-16T03:06:14Z state=closed
-          116782022894 Typecheck, build, and proof scaffold head=e15be07b completed success completed=2026-10-16T02:58:32Z
-          116782022240 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e15be07b completed success completed=2026-10-16T03:05:25Z
-          state=fixed fixed_at=2026-10-16T02:39:47Z ref=refs/pull/1534/merge
-          sharding gate: `  56 targets · 185 files · 2026 mutations`, `summary=pass (277/277)`, exit 0
+Command:  (1) gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1534 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; (2) and (3) for id in 116782022894 116782022240; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; (4) gh api "repos/DanFashauer/SignalGrid-Review-Hub/code-scanning/alerts?pr=1534&per_page=50" --jq '.[] | select(.number==230) | "state=\(.state) fixed_at=\(.fixed_at) ref=\(.most_recent_instance.ref)"'; (5) node scripts/check-mutation-sharding.mjs (in the docs worktree at base fc9440a9)
+Output:   (1) #1534 head=e15be07b merge=dd3ba58f merged=2026-10-16T03:06:14Z state=closed
+          (2) 116782022894 Typecheck, build, and proof scaffold head=e15be07b completed success completed=2026-10-16T02:58:32Z
+          (3) 116782022240 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e15be07b completed success completed=2026-10-16T03:05:25Z
+          (4) state=fixed fixed_at=2026-10-16T02:39:47Z ref=refs/pull/1534/merge
+          (5) sharding gate: `  56 targets · 185 files · 2026 mutations`, `summary=pass (277/277)`, exit 0
 Verdict:  holds for the merge, the head, both check runs, and the alert's state (read above): the code-scanning list read for PR 1534 reports alert 230 as state=fixed, fixed_at 2026-10-16T02:39:47Z, on refs/pull/1534/merge. An earlier per-alert read of code-scanning/alerts/230 returned state=null and is not the source of the status. The sharding gate's reported total on the base is 2026 mutations with the brace-less opt-in counted, so the #1505 review's INFO on a 1594 total does not hold at this base.
+
+## 2026-10-16 — "Five PRs landed in the gap between the two LOOP windows (2026-10-15 22:07:46Z to 2026-10-16 02:11Z): #1529, #1530, #1531 and #1533 (lane mail) and #1532 (the 2026-10-15 docs batch), each with its merged sha, UTC merged_at and gating check run"
+Command:  for n in 1529 1530 1531 1532 1533; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; done; for id in 116703665804 116726065910 116741518825 116741851860 116741851749 116764648248; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git log origin/SignalGrid_Alpha --first-parent --merges --since=2026-10-15T22:07:46Z --until=2026-10-16T04:29:46Z --format='%h' | wc -l
+Output:   #1529 head=1d57978d merge=f304ca4d merged=2026-10-15T22:42:56Z state=closed
+          #1530 head=1c6d3c32 merge=f8625295 merged=2026-10-15T23:49:32Z state=closed
+          #1531 head=0daee16c merge=6b97d0ac merged=2026-10-16T00:33:15Z state=closed
+          #1532 head=5ae883f5 merge=468fd3e0 merged=2026-10-16T00:43:57Z state=closed
+          #1533 head=4e01e905 merge=e6795df0 merged=2026-10-16T01:48:58Z state=closed
+          116703665804 Typecheck, build, and proof scaffold head=1d57978d completed success completed=2026-10-15T22:41:18Z
+          116726065910 Typecheck, build, and proof scaffold head=1c6d3c32 completed success completed=2026-10-15T23:48:34Z
+          116741518825 Typecheck, build, and proof scaffold head=0daee16c completed success completed=2026-10-16T00:32:41Z
+          116741851860 Typecheck, build, and proof scaffold head=5ae883f5 completed success completed=2026-10-16T00:37:33Z
+          116741851749 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=5ae883f5 completed success completed=2026-10-16T00:41:41Z
+          116764648248 Typecheck, build, and proof scaffold head=4e01e905 completed success completed=2026-10-16T01:48:32Z
+          13
+Verdict:  holds for each PR's head, merged sha, merged time and gating check run (read above). The Mac-only run is named only for #1532, because #1529, #1530, #1531 and #1533 have no Mac-only run on their heads. The 13 is the first-parent merge count of the whole window, of which these five are part. The review rounds of these PRs are not read here.
+
+## 2026-10-16 — "#1460 (a check-gate's --self-test that no step runs is run by a gate, and a gate with neither flag nor control fails; plan row 43 remainder) reached mainline at cc910439 at 00:28:14Z on gating check 116735582504 and Mac-only check 116735581757 at head 6945ab1a"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1460 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116735582504 116735581757; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done
+Output:   #1460 head=6945ab1a merge=cc910439 merged=2026-10-16T00:28:14Z state=closed
+          116735582504 Typecheck, build, and proof scaffold head=6945ab1a completed success completed=2026-10-16T00:12:12Z
+          116735581757 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=6945ab1a completed success completed=2026-10-16T00:23:24Z
+Verdict:  holds for the merge, the merged head, the merged time and both check runs (read above). The review rounds and any refute on this PR are not read here, and the title's "plan row 43 remainder" is quoted from the PR, not checked against the plan.

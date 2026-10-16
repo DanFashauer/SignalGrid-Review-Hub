@@ -256,8 +256,8 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    reports a false STALE (seen on #1524's round 7, 2026-10-15). Resolve, `git add -A`, run
    `node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`.
 10. **A heartbeat's "since the last cycle" is what the first-parent log prints, measured (2026-10-15).** Measure the window with
-   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age from
-   the two `firedAt` values, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
+   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age at
+   delivery from the prior `firedAt` to this delivery's instant, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
    landings; the window from the prior `firedAt` 2026-10-15T19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z)
    holds nine first-parent commits: four PR merges (#1524 df4ea3b8, #1526 67ff76eb, #1527 9e7fc18b, #1468 760d5032) and five
    Mac heartbeat commits. Its age at delivery was 2h00m45s. The 17:24Z record (#1523) claimed a keepalive "also due" at
@@ -300,6 +300,15 @@ out of the line instead of shown as a number. To turn it off, delete the
 `statusLine` key from `.claude/settings.json`, or override it in your own local
 settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
 fixture tree; preflight and CI run it.
+
+### Operating notes, 2026-10-16 (cloud lane)
+
+- The lane takes an artifact's own freshness — the live evidence's `mintedAt`, a tick's or a routine's last `firedAt` — from the artifact's field, never from the commit that carried it, while the keepalive's "age at delivery" runs from the prior heartbeat's `firedAt` to the instant the new heartbeat is delivered (the #1523 correction above), so a heartbeat committed after its own `firedAt` is classified by when it was delivered.
+- A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
+- The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
+- The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
+- The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
+- Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
 
 ## Collision log
 

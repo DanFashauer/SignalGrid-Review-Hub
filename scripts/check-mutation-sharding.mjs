@@ -91,8 +91,10 @@ import { isBuiltin } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { TARGETS, ALLOWED, shardTargets, mutationsFor, MUTATORS, lineMutations, unknownArgs, resolveAllowedLine, allowlistProblem, auditAllowlist, allowlistFailureCount, isAllowed, DEFAULT_RUN_SECONDS, MAX_UNIT_SECONDS, runSecondsOf, mutationTotal, sliceOwns, sliceSize, sliceCount, unitWeight, costDrifted, mutationsByFile, selectSliceMutations, unitName, placementOf, expectedUnitNames, unitAccountingProblems } from "./mutation-guard.mjs";
-import { scratchGitOk } from "./lib/scratch-git.mjs";
+import { scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 
+// A caller's GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE must not point the whole-tree write net (treeSnapshot of REPO) at another repository.
+scrubProcessGitEnv();
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 let passed = 0;

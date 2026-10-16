@@ -236,7 +236,11 @@ export function findAnnotations(file, text) {
     const end = start < 0 ? -1 : text.slice(start).search(/\n## (?!Global)/);
     section = start < 0 ? [0, 0] : [start, end < 0 ? text.length : start + end];
   }
-  const all = [...text.matchAll(DATED)].map((d) => {
+  // A dated FIX PROPOSED inside a code span or a quotation is an example, not an annotation: the
+  // sibling's statusText rule (backticks, straight and curly double quotes), applied per line and
+  // offset-preserving, so every position still maps to the same place in the raw text.
+  const masked = text.replace(/`[^`\n]*`|"[^"\n]*"|\u201c[^\u201d\n]*\u201d/g, (q) => " ".repeat(q.length));
+  const all = [...text.matchAll(DATED)].filter((d) => masked.startsWith("FIX", d.index)).map((d) => {
     const rest = text.slice(d.index + d[0].length, d.index + d[0].length + CLAUSE_WINDOW);
     const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
     let clause = p ? p[2] : "";
@@ -262,7 +266,10 @@ export function findAnnotations(file, text) {
     // extensionless `.githooks/pre-push`); classify keeps the ones tracked at the landing.
     const tokens = [...new Set((span.match(PATH_TOKEN) ?? []).map((t) => t.replace(/^\.\//, "").replace(/[.,;:]+$/, "")))]
       .filter((t) => t && !LEDGERS.includes(t) && !cited.includes(t));
-    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, unterminated, key: norm(m[0]), cited, tokens });
+    const key = norm(m[0]);
+    // The same key earlier on the same line (a branch reused later that day) is a separate annotation.
+    const ord = out.filter((o) => o.line === line && o.key === key).length;
+    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, unterminated, key, ord, cited, tokens });
   });
   return out;
 }
@@ -271,7 +278,8 @@ export function findAnnotations(file, text) {
 function introOf(cwd, a) {
   const log = git(cwd, ["log", "--format=C %H", `-L${a.line},${a.lastLine}:${a.file}`, "HEAD"]);
   let cur = null, added = [], found = null;
-  const flush = () => { if (cur && norm(added.join("\n")).includes(a.key)) found = cur; };
+  // The annotation's own occurrence: the oldest commit whose added text carries the key more than `ord` times.
+  const flush = () => { if (cur && norm(added.join("\n")).split(a.key).length - 1 > (a.ord ?? 0)) found = cur; };
   for (const l of log.split("\n")) {
     if (l.startsWith("C ")) { flush(); cur = l.slice(2); added = []; continue; }
     if (l.startsWith("+") && !l.startsWith("+++")) added.push(l.slice(1));
@@ -473,6 +481,10 @@ export function readLedger(cwd, file) {
   // Rows in the ledger's OWN grammar: a backlog's checkboxes do not make a plan readable, nor the reverse.
   const rows = file === LEDGERS[1] ? (text.match(/^\s*[-*] \[[ xX]\]/gm) ?? []).length : parseRows(text).length;
   if (rows === 0) return { why: "has no rows in its own grammar (empty, cut before its first row, or its section heading renamed)" };
+  // A heading that looks like a row but does not parse (e.g. "40c-x.") would be skipped by rowOf,
+  // and its annotations read onto the row above; the sibling ownership gate refuses it too.
+  const unparsed = file === LEDGERS[0] ? parseRows(text).unparsed ?? [] : [];
+  if (unparsed.length) return { why: `has a row heading the row grammar cannot read ("${unparsed[0]}")` };
   // A ledger cut mid-file still has rows. Compare with HIGH-WATER MARKS over
   // its last HIGH_WATER_WINDOW changes on the first-parent line: the largest
   // size AND the most rows it reached. Comparing with the previous copy only
@@ -611,7 +623,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else gAs(GH, "merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -751,6 +763,15 @@ function selfTest() {
     edit(plan, row(22), row(22) + ` FIX PROPOSED 2026-10-08 (PR #26, ${g("rev-parse", "--short=8", "HEAD")}): \`scripts/c.mjs\`.`); commit("annotate 22");
     // Plain box: a non-bold open box under a ticked bold one, landed — STALE, not the ticked box's residue.
     pr("claude/fix-m", 19, () => { edit(backlog, "Plain open box — open.", "Plain open box — open." + ann("claude/fix-m", "scripts/c.mjs")); write("scripts/c.mjs", "m\n"); });
+    // 57: a landed annotation; the worker later appends a second, same date, same branch, on the same line (below).
+    pr("claude/twice", 57, () => { edit(plan, row(57), row(57) + ann("claude/twice", "scripts/a.mjs")); write("scripts/a.mjs", "57\n"); });
+    // 58, 59: a dated FIX PROPOSED quoted as an example, in a code span and in double quotes, added by a
+    // PR that also changed the cited path — an example, not an annotation, so nothing is read.
+    pr("claude/examples", 58, () => {
+      edit(plan, row(58), row(58) + " Example: `FIX PROPOSED 2026-10-01 (branch claude/example, x): scripts/a.mjs`.");
+      edit(plan, row(59), row(59) + ' Example: "FIX PROPOSED 2026-10-01 (branch claude/example, x): scripts/a.mjs".');
+      write("scripts/a.mjs", "58\n");
+    });
     // 10: the worker's branch merged mainline in (a sync merge) before its PR landed — STALE via the PR.
     g("checkout", "-qb", "claude/fix-j"); edit(plan, row(10), row(10) + ann("claude/fix-j", "scripts/d.mjs")); write("scripts/d.mjs", "10\n"); commit("fix j");
     g("checkout", "-q", "main"); write("scripts/other.mjs", "x\n"); commit("unrelated mainline commit");
@@ -767,7 +788,10 @@ function selfTest() {
     // 17: a PR-named annotation whose PR has not landed — in flight, not STALE.
     edit(plan, row(17), row(17) + " FIX PROPOSED 2026-10-08 (PR #98, abc1234): `scripts/w.mjs`.");
     // 30: PR #17 landed on main after this worker forked; it reaches HEAD only through the sync merge — STALE.
-    edit(plan, row(30), row(30) + " FIX PROPOSED 2026-10-08 (PR #17): `scripts/a.mjs`."); commit("fix 4 (#99)");
+    edit(plan, row(30), row(30) + " FIX PROPOSED 2026-10-08 (PR #17): `scripts/a.mjs`.");
+    // 57's second annotation, in flight on this branch: its own occurrence, not the landed first one.
+    edit(plan, row(57) + ann("claude/twice", "scripts/a.mjs"), row(57) + ann("claude/twice", "scripts/a.mjs") + ann("claude/twice", "scripts/a.mjs"));
+    commit("fix 4 (#99)");
 
     const all = measure(dir);
     const res = Object.fromEntries(all.map((r) => [r.row, r]));
@@ -787,7 +811,7 @@ function selfTest() {
     checks.push(["an open child row under a ticked parent is its own row and flags STALE", is('"Child"', "STALE", (r) => r.pr === 15)]);
     checks.push(["a path cited only by the NEXT row does not corroborate this row — READ", is("row 12", "LANDED-UNCORROBORATED", (r) => r.pr === 18)]);
     checks.push(["a non-bold open box under a ticked bold box is its own row and flags STALE", is('"Plain open box"', "STALE", (r) => r.pr === 19)]);
-    const stale = Object.values(res).filter((r) => r.status === "STALE").map((r) => r.row).sort();
+    const stale = all.filter((r) => r.status === "STALE").map((r) => r.row).sort();
     checks.push(["a PR-named annotation \"(PR #23, <sha>)\" landed as PR #23 is flagged STALE", is("row 16", "STALE", (r) => r.pr === 23)]);
     checks.push(["a PR-named annotation whose PR has not landed is not STALE", is("row 17", "NOT-VIA-PR")]);
     checks.push(["a worker's merge titled \"(#25, …)\" is not a landing (GitHub did not commit it)", is("row 21", "NOT-VIA-PR")]);
@@ -827,9 +851,12 @@ function selfTest() {
     checks.push(["a PR-named clause whose \")\" and sha sit past 200 characters is read whole — READ", is("row 54", "LANDED-UNCORROBORATED", (r) => r.claimSha === baseSha && notIn(r))]);
     checks.push(["a PR-named clause with no \")\" or row boundary within the window is NOT MEASURED", is("row 55", "NO-HISTORY", (r) => /no row boundary within 2000 characters/.test(r.why ?? ""))]);
     checks.push(["a landed annotation under a later \"##\" section is not read onto the last backlog row", !all.some((r) => r.branch === "claude/hands") && all.filter((r) => r.file === plan && r.status === "STALE").every((r) => r.row !== "row 55")]);
+    const r57 = all.filter((r) => r.row === "row 57");
+    checks.push(["two same-date same-branch annotations on one line: the landed one is STALE, the in-flight one is not", r57.length === 2 && r57[0].status === "STALE" && r57[0].pr === 57 && r57[1].status === "NOT-VIA-PR"]);
+    checks.push(["a FIX PROPOSED example in a code span or double quotes is not read as an annotation", !all.some((r) => r.row === "row 58" || r.row === "row 59")]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 57", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
@@ -852,13 +879,13 @@ function selfTest() {
       finally { rmSync(shallowDir, { recursive: true, force: true }); }
       checks.push(["the CLI in a depth-1 clone prints NOT MEASURED, not a count", /^REPORTED: NOT MEASURED — shallow/m.test(out)]);
     }
-    checks.push(["measured from a subdirectory, the result is identical", sig(measure(join(dir, "scripts"))) === sig(Object.values(res))]);
+    checks.push(["measured from a subdirectory, the result is identical", sig(measure(join(dir, "scripts"))) === sig(all)]);
     write(plan, "inserted line\n" + read(plan));
-    checks.push(["an uncommitted ledger edit does not shift the measurement (HEAD is read)", sig(measure(dir)) === sig(Object.values(res))]);
+    checks.push(["an uncommitted ledger edit does not shift the measurement (HEAD is read)", sig(measure(dir)) === sig(all)]);
     checks.push(["…and the uncommitted ledger is named in a NOTE, not silently ignored", JSON.stringify(uncommittedLedgers(dir)) === JSON.stringify([plan])]);
     let sub = "";
     try { sub = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: join(dir, "scripts"), encoding: "utf8" }); } catch { /* counted below */ }
-    checks.push(["the CLI run from a subdirectory reports the real annotation count", sub.includes(`REPORTED: ${Object.values(res).length} FIX PROPOSED`)]);
+    checks.push(["the CLI run from a subdirectory reports the real annotation count", sub.includes(`REPORTED: ${all.length} FIX PROPOSED`)]);
     // The CLI entry must run from a path with a space and through a symlink (a failed guard exits 0 silently).
     const spaced = join(dir, "sp ace é");
     mkdirSync(spaced);
@@ -908,6 +935,7 @@ function selfTest() {
     ["cp1252 (a curly quote as byte 0x93)", /not valid UTF-8/, (f) => writeFileSync(f, Buffer.concat([Buffer.from(planText), Buffer.from([0x93, 0x44, 0x4f, 0x4e, 0x45, 0x94, 0x0a])]))],
     ["two rows joined by a lone CR", /lone CR/, (f) => writeFileSync(f, planText + "\r2. **Row 2.** — DONE.\n")],
     ["a file holding merge-conflict markers", /merge-conflict/, (f) => writeFileSync(f, "<<<<<<< HEAD\n" + planText + "=======\n" + planText + ">>>>>>> other\n")],
+    ["a row heading the row grammar cannot read (\"40c-x.\")", /row heading the row grammar cannot read \("40c-x\./, (f) => writeFileSync(f, planText + "40c-x. **Row 40c-x.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/y, x): `scripts/a.mjs`.\n")],
     ["a renamed section heading plus a stray checkbox", /no rows in its own grammar/, (f) => writeFileSync(f, planText.replace("Global backlog", "Global Backlog") + "- [ ] item\n")],
     ["a file cut mid-file with rows left", /high-water mark/, (f) => { writeFileSync(f, bigPlan); return (g) => writeFileSync(g, bigPlan.slice(0, 400)); }],
     ["a cut followed by a small edit to the same ledger", /high-water mark/, (f) => { writeFileSync(f, bigPlan); return [(g) => writeFileSync(g, bigPlan.slice(0, 400)), (g) => writeFileSync(g, bigPlan.slice(0, 400) + "\n")]; }],
@@ -1214,7 +1242,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 119;
+  return failed === 0 && checks.length === 122;
 }
 
 let isMain = false;

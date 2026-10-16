@@ -806,11 +806,11 @@ function selfTest() {
     const inproc = [
       // tracked AND present: a path the index lists but the disk lacks is not evidence
       ["fail: a tracked path absent from disk (in-process, phantom in the tracked list)", () => {
-        const res = checkMatrix(plant(`| Planted H12 | ASVS 5.0 | Implemented (public core) | \`${phantom}\` |`), { ...ctx, tracked: [...ctx.tracked, phantom] });
+        const res = checkMatrix(plant(`| Planted H12 | ASVS 5.0 | Implemented (public core) | \`${phantom}\` |`), { ...ctx, tracked: [...ctx.tracked, phantom], indexed: [...ctx.indexed, phantom] });
         return res.fails.some((f) => f.control === "Planted H12" && f.why.some((w) => w.includes(`\`${phantom}\` is not a tracked repo path`)));
       }],
       ["fail: the same phantom by bare basename (in-process)", () => {
-        const res = checkMatrix(plant(`| Planted H13 | ASVS 5.0 | Implemented (public core) | \`zz-phantom-tracked-not-on-disk.md\` |`), { ...ctx, tracked: [...ctx.tracked, phantom] });
+        const res = checkMatrix(plant(`| Planted H13 | ASVS 5.0 | Implemented (public core) | \`zz-phantom-tracked-not-on-disk.md\` |`), { ...ctx, tracked: [...ctx.tracked, phantom], indexed: [...ctx.indexed, phantom] });
         return res.fails.some((f) => f.control === "Planted H13");
       }],
       // symlinks: a mode-120000 index entry never enters the tracked set
@@ -835,8 +835,10 @@ function selfTest() {
         const res = checkMatrix(plant("| Planted H15 | ASVS 5.0 | Implemented (public core) | `docs/agent/LOOP.md`; `PURPOSE.md` |"), { ...ctx, indexed: [...ctx.indexed, "docs/agent/PURPOSE.md"] });
         return res.fails.some((f) => f.control === "Planted H15");
       }],
-      ["pass: the real tracked set holds the matrix and no symlink (in-process)", () =>
-        ctx.tracked.includes(DOC_SELF) && !ctx.tracked.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")],
+      // realContext must wire BOTH lists: regular files in `tracked`, every index entry in `indexed` (round 27)
+      ["pass: the real tracked set holds the matrix and no symlink; the index view holds the symlink (in-process)", () =>
+        ctx.tracked.includes(DOC_SELF) && !ctx.tracked.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")
+        && ctx.indexed.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")],
     ];
     for (const [name, check] of inproc) {
       const pass = check() === true;

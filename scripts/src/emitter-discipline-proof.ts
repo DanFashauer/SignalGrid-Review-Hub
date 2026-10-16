@@ -588,8 +588,8 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
   check("url-guard: an unparseable URL is refused as invalidUrl", refusedAs("not a url", WEBHOOK_URL_REFUSALS.invalidUrl));
   // Hand-mutant pins (B83, #1498 review LOWs): the brace-less sweep cannot generate a regex-bound
   // mutant, so each pin below is an input ONLY the narrowed/dropped alternative would let through.
-  check("url-guard: RFC6598 interior (100.65-69, 100.70-99, 100.110-119 and 100.120-126 alternatives) is refused as privateRange, not just the 100.64 / 100.127 edges",
-    ["100.65.0.1", "100.69.255.255", "100.70.0.1", "100.80.1.1", "100.99.255.255", "100.100.1.1", "100.110.0.1", "100.119.0.1", "100.120.0.1", "100.121.0.1", "100.126.255.255", "100.127.255.255"]
+  check("url-guard: RFC6598 interior (every second octet 100.64-100.127, so each of the four alternatives end to end) is refused as privateRange, not just the 100.64 / 100.127 edges",
+    [...Array.from({ length: 64 }, (_, i) => `100.${64 + i}.0.1`), "100.69.255.255", "100.99.255.255", "100.126.255.255", "100.127.255.255"]
       .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
   check("url-guard: fe80::/10 interior (fe90, fea0, febf) is refused as privateRange, not just fe80",
     ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
@@ -628,11 +628,11 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     [0, 200, 299, 400].every((n) => isRedirectStatus(n) === false));
   check("redirect: isRedirectRefusal is true for a reason redirectRefusal minted",
     isRedirectRefusal(redirectRefusal(302, "https://evil.example/x")) === true);
-  check("redirect: isRedirectRefusal is false for undefined, another reason, the prefix appearing mid-string, a lowercase or space-led spelling and the bare word REDIRECT",
+  check("redirect: isRedirectRefusal is false for undefined, another reason, the prefix appearing mid-string, a lowercase or space-led spelling, the bare word REDIRECT and a near-miss differing only in the prefix's last character",
     isRedirectRefusal(undefined) === false && isRedirectRefusal("HTTP 500") === false
     && isRedirectRefusal(`x ${redirectRefusal(302, null)}`) === false
     && isRedirectRefusal(REDIRECT_REFUSED.toLowerCase()) === false && isRedirectRefusal(` ${redirectRefusal(302, null)}`) === false
-    && isRedirectRefusal("REDIRECT") === false);
+    && isRedirectRefusal("REDIRECT") === false && isRedirectRefusal(`${REDIRECT_REFUSED.slice(0, -1)}X`) === false);
 }
 
 // ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------

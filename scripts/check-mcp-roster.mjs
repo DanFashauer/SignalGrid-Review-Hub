@@ -289,10 +289,10 @@ function lineUnits(line, kind) {
     const item = /^\s*-\s+(?!(?:"[^"]*"|'[^']*'|[^"'#:])*:\s)(.*)$/.exec(line);
     if (item) return [unquote(stripYamlProps(stripYamlComment(item[1]).trim()))];
     const kv = /^\s*(?:-\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)?\s*:\s+(.*)$/.exec(line); // incl. an explicit `: value`
-    // a "key" holding whitespace and the package is a command line in a block scalar (`npx -y … && echo "done: ok"`),
-    // where `: ` is just text: its words are read as well as the value's
+    // a "key" holding whitespace may be a command line in a block scalar (`npx -y … && echo "done: ok"`,
+    // `echo version: [1,2] && npx -y …`), where `: ` is just text: its words are ALWAYS read as well as the value's
     const keyText = kv ? line.slice(0, line.length - kv[1].length) : "";
-    if (kv && /\S\s+\S/.test(keyText.trim()) && /context7/i.test(keyText)) return [...shellWords(line), ...yamlValueUnits(kv[1])];
+    if (kv && /\S\s+\S/.test(keyText.trim())) return [...shellWords(line), ...yamlValueUnits(kv[1])];
     if (kv) return yamlValueUnits(kv[1]);
   }
   return shellWords(line);
@@ -442,9 +442,10 @@ export function logicalLines(lines, kind, path = "") {
   const ps1 = /\.(?:ps1|psm1)$/i.test(path);
   const physical = [];
   for (let i = 0; i < lines.length; i++) {
-    // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
+    // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays;
+    // an escaped operator or whitespace (`|`, `` ` `` + space or tab) is a literal inside the word, so it is kept quoted
     // a Dockerfile line is trimmed of every trailing `\r` (BuildKit's trimNewline), so `\\\r\r\n` still continues
-    const l = ps1 ? lines[i].replace(/`(\S)/g, (_, c) => (/[|&;<>]/.test(c) ? `"${c}"` : c)) : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
+    const l = ps1 ? lines[i].replace(/`(.)/g, (_, c) => (/[|&;<>\s]/.test(c) ? `"${c}"` : c)) : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
@@ -535,10 +536,10 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
     PACKAGE_RUNNER_RE.test(line) ||
     /["']?command["']?\s*[:=](?=(\s*(?:[&!][^\s#]*\s+|#[^\n]*\n\s*)*))\1(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,\]]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
-  // a quoted string that IS a spec is one argv word wherever it stands (Docker exec form, a compact list, a shell word),
-  // so its WHOLE tail is the version: `"…@4.1.1 || *"` and `"…@4.1.1 - 5"` are ranges, which the word readers above
+  // a quoted or backtick-delimited string holding a spec — after any glued prefix (`--package=`, `ctx@npm:`) — is one
+  // argv word wherever it stands (Docker exec form, a compact list, a template literal, a Go raw string), so its WHOLE tail is the version: `"…@4.1.1 || *"` and `"…@4.1.1 - 5"` are ranges, which the word readers above
   // split at the space and lose
-  for (const m of line.matchAll(/(["'])(?:npm:)?@upstash\\?\/context7-mcp@([^"'\n]*)\1/gi))
+  for (const m of line.matchAll(/(["'`])[^"'`\s]*?@upstash\\?\/context7-mcp@([^"'`\n]*)\1/gi))
     if (/[\s|,]/.test(m[2]) && !out.some((f) => f.unpinned || f.stale)) out.push({ unpinned: m[2].slice(0, 24) }); // once per line
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
@@ -1973,6 +1974,43 @@ server.registerTool(
     ["Dockerfile", `CMD ["npx", "-y", "${C7}"]\n`, "a pinned spaced exec form"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);
+  }
+  // round 28, by CLASS: a quoted or backtick-delimited word reads its whole tail after ANY glued prefix, in every
+  // compact shape (a differential of floating tails, each of which must be named); a PowerShell backtick before
+  // whitespace keeps it inside the word; a block-scalar line's words are read whatever the key holds
+  {
+    const BT = "`";
+    const tails = [" || *", "||*", " - 5", " -  4.9", " || 4.2.0", " >=4", " ^4", " x", "\t- 5", ",||", " 4.1.1 - 5", " || >4.1.1"];
+    const shapes = {
+      "exec-form `--package=`": (t) => ["Dockerfile", `CMD ["npx","-y","--package=${SPEC}${realPin}${t}","context7-mcp"]\n`],
+      "TOML `--package=`": (t) => ["c.toml", `args = ["-y","--package=${SPEC}${realPin}${t}","context7-mcp"]\n`],
+      "JS `--package=`": (t) => ["a.mjs", `spawn("npx",["-y","--package=${SPEC}${realPin}${t}","context7-mcp"]);\n`],
+      "exec-form `npm:` alias": (t) => ["Dockerfile", `RUN ["npm","i","ctx@npm:${SPEC}${realPin}${t}"]\n`],
+      "single-quoted TOML": (t) => ["c.toml", `args = ['-y','${SPEC}${realPin}${t}']\n`],
+      "single-quoted Deno `npm:`": (t) => ["a.ts", `new Deno.Command('deno',{args:['run','npm:${SPEC}${realPin}${t}']});\n`],
+      "JS template literal": (t) => ["a.mjs", `spawn("npx",["-y",${BT}${SPEC}${realPin}${t}${BT}]);\n`],
+      "Go raw string": (t) => ["a.go", `exec.Command("npx", "-y", ${BT}${SPEC}${realPin}${t}${BT})\n`],
+      "PowerShell backtick-escaped": (t) => ["s.ps1", `npx -y ${SPEC}${realPin}${t.replace(/([\s|])/g, "`$1")}\n`],
+    };
+    for (const [shape, make] of Object.entries(shapes)) {
+      const missed = tails.filter((t) => sweep(...make(t)).length === 0);
+      checks.push([`differential: ${tails.length} floating tails in a ${shape} word are each named (missed: ${missed.join(" | ") || "none"})`, missed.length === 0]);
+    }
+    for (const [path, body, what] of [
+      [".github/workflows/a.yml", W24("      - run: |\n          echo version: [1,2] && npx -y @upstash/context7-mcp@latest && echo done: ok\n"), "a flow list before the spec on a block-scalar line"],
+      [".github/workflows/a.yml", W24("      - run: |\n          true k: [1,2] ; npx -y @upstash/context7-mcp@latest && echo k:\ty\n"), "a `k: [1,2]` before the spec and a tab-valued key after"],
+      [".gitlab-ci.yml", "j:\n  script:\n    - |\n      echo cfg: {a,b} ; npx -y @upstash/context7-mcp@latest ; echo done: ok\n", "a flow mapping before the spec in a GitLab `- |`"],
+    ]) {
+      checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => /UNPINNED \(@latest\)/.test(p))]);
+    }
+    for (const [path, body, what] of [
+      [".github/workflows/a.yml", W24(`      - run: |\n          echo version: [1,2] && npx -y ${C7} && echo done: ok\n`), "a pinned block-scalar line behind a flow list"],
+      ["a.mjs", `spawn("npx",["-y",${BT}${C7}${BT}]);\n`, "a pinned template literal"],
+      ["README.md", `Run ${BT}npx -y ${C7}${BT} or ${BT}${C7}${BT}.\n`, "pinned inline code spans"],
+      ["s.ps1", `npx -y ${C7}\n`, "a pinned PowerShell line"],
+    ]) {
+      checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);
+    }
   }
   {
     // structural, not a latency threshold: doubling a pathological run must not quadruple the time (linear ~2x,

@@ -113,6 +113,14 @@
 // Round 28 (landing refute 27, FIXED): a `var` redeclaring a component parameter in the parameter's OWN function (`function P({ tone }) { var
 //   tone; }`, also in a nested block of it) is the SAME binding, not a shadow, and its initializer is one more value of the parameter;
 //   same-scope `var` redeclarations of a helper are merged (`var tone = red; var tone = emerald;`).
+// Codex pass 10 on 57cef22e (round 29): FIXED: `memo` / `forwardRef` are transparent ONLY when they are React's (a named import from "react",
+//   aliases included, or a member of a namespace / default import of "react"); a local definition, an import from any other module, a
+//   member of anything else or a bare undeclared name is UNRESOLVED, and a component bound to one that receives unguarded query data is
+//   REJECTED (kind unresolved-wrapper-on-unguarded-data; a call site guarded on the data, or passing no data, is clean). A numeric or
+//   template-literal map key (`T[1]`, T[`ok`]) selects its own entry. A rest binding receives only the properties the pattern did not
+//   destructure. DECLARED, NOT BUILT: a map property unconditionally overwritten before the lookup (`const T = { ok: emerald };
+//   T.ok = red; className={T.ok}`) still counts the initializer as a possible value, an over-flag (fail-closed): last-write semantics is
+//   flow-sensitive analysis this gate does not do anywhere else.
 // Codex pass 9 on ad26faa5 (declared, NOT fixed; each pre-existing): false NEGATIVES: a `let` COMPONENT reassigned to another component
 //   (`let Pill = …red; Pill = …emerald;` registers the initializer only); `React.createElement(Pill, { tone: "…emerald", n: q.data?.n })`
 //   is not a propagation site (only JSX attributes carry data and classes into a child). false POSITIVES (fail-closed): a query-object
@@ -954,10 +962,44 @@ function analyzeSourceFile(relPath, text) {
     }
     return isHelper ? out : null; // a const bound to a call / member read is not a helper binding
   };
+  // `memo` / `forwardRef` unwrap ONLY when the callee is React's: a named import from "react" (aliases included) or a member of a
+  // namespace / default import of "react" (`React.memo`). A local definition, an import from any other module, a member of anything
+  // else, or a bare undeclared name is NOT React's: the wrapper is UNRESOLVED (see the unresolved-wrapper rule).
+  const reactNamed = new Map(); // local name -> imported name
+  const reactNs = new Set(); // local namespace / default import of "react"
+  const topDeclared = new Set(); // names declared at module level other than by an import
+  for (const st of sf.statements) {
+    if (ts.isImportDeclaration(st) && st.importClause && ts.isStringLiteralLike(st.moduleSpecifier) && st.moduleSpecifier.text === "react" && !st.importClause.isTypeOnly) {
+      const ic = st.importClause;
+      if (ic.name) reactNs.add(ic.name.text);
+      if (ic.namedBindings) { if (ts.isNamespaceImport(ic.namedBindings)) reactNs.add(ic.namedBindings.name.text); else for (const e of ic.namedBindings.elements) if (!e.isTypeOnly) reactNamed.set(e.name.text, (e.propertyName ?? e.name).text); }
+    }
+  }
+  const declaresIn = (stmts, name) => stmts.some((st) =>
+    (ts.isVariableStatement(st) && st.declarationList.declarations.some((d) => bindsPatternName(d.name, name))) ||
+    ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name && st.name.text === name));
+  const reactWrapperName = (call) => { // "memo" | "forwardRef" when the call is React's, else null
+    const callee = unwrapExpr(call.expression);
+    const climb = (idNode) => { // true when the nearest binding of the name is the module-level import
+      for (let c = idNode.parent; c; c = c.parent) {
+        if (bindsNameOpaquely(c, idNode.text)) return false;
+        if (ts.isBlock(c) && declaresIn(c.statements, idNode.text)) return false;
+        if (ts.isSourceFile(c)) return !declaresIn(c.statements, idNode.text);
+      }
+      return false;
+    };
+    if (ts.isIdentifier(callee)) { const imp = reactNamed.get(callee.text); return imp && (imp === "memo" || imp === "forwardRef") && climb(callee) ? imp : null; }
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && (callee.name.text === "memo" || callee.name.text === "forwardRef"))
+      return reactNs.has(callee.expression.text) && climb(callee.expression) ? callee.name.text : null;
+    return null;
+  };
+  const isWrapperName = (n) => n === "memo" || n === "forwardRef";
+  const wrapperLike = (call) => ts.isCallExpression(call) &&
+    (isWrapperName(callName(call)) || (ts.isIdentifier(unwrapExpr(call.expression)) && isWrapperName(reactNamed.get(unwrapExpr(call.expression).text)))); // `import { memo as m } from "react"`
   const localComponents = []; // { name, params, scope }
   const componentFn = (init) => {
     let e = init;
-    while (e && ts.isCallExpression(e) && (callName(e) === "memo" || callName(e) === "forwardRef") && e.arguments[0]) e = e.arguments[0];
+    while (e && wrapperLike(e) && reactWrapperName(e) && e.arguments[0]) e = e.arguments[0]; // only React's own memo / forwardRef is transparent
     if (e && ts.isIdentifier(e)) e = findHelper(e) ?? e; // `memo(PanelImpl)` wraps a named same-file component
     return e && (ts.isArrowFunction(e) || ts.isFunctionExpression(e) || ts.isFunctionDeclaration(e)) ? e : null;
   };
@@ -1081,7 +1123,7 @@ function analyzeSourceFile(relPath, text) {
     if (ts.isIdentifier(param.name)) mark(param, param.name.text);
     else if (ts.isObjectBindingPattern(param.name)) {
       for (const el of param.name.elements) {
-        if (ts.isIdentifier(el.name)) { if (propName === null || el.dotDotDotToken || propOf(el) === propName) mark(el, el.name.text); }
+        if (ts.isIdentifier(el.name)) { if (propName === null || (el.dotDotDotToken && !param.name.elements.some((sib) => sib !== el && !sib.dotDotDotToken && propOf(sib) === propName)) || (!el.dotDotDotToken && propOf(el) === propName)) mark(el, el.name.text); }
         else if (propName === null || propOf(el) === propName) markAll(el.name);
       }
     }
@@ -1121,7 +1163,7 @@ function analyzeSourceFile(relPath, text) {
       if (!ts.isObjectBindingPattern(param.name)) return;
       const nestedBindings = (b, out = []) => { for (const e of b.elements) { if (ts.isOmittedExpression(e)) continue; if (ts.isIdentifier(e.name)) out.push(e); else nestedBindings(e.name, out); } return out; };
       for (const el0 of param.name.elements) {
-        if (propOf(el0) !== propName && !el0.dotDotDotToken) continue;
+        if (el0.dotDotDotToken ? param.name.elements.some((sib) => sib !== el0 && !sib.dotDotDotToken && propOf(sib) === propName) : propOf(el0) !== propName) continue; // a rest binding gets only the props the pattern did not destructure
         // `{ style: { tone } }` receiving `style={{ tone: "…emerald" }}`: every binding inside the pattern may hold the class
         const litAttr = ts.isJsxAttribute(attr) && attr.initializer && ts.isJsxExpression(attr.initializer) && attr.initializer.expression ? unwrapExpr(attr.initializer.expression) : null;
         for (const el of ts.isIdentifier(el0.name) ? [el0] : nestedBindings(el0.name)) {
@@ -1462,8 +1504,9 @@ function analyzeSourceFile(relPath, text) {
   const lookupEntries = (x) => { // x: ElementAccess | PropertyAccess over a resolvable map, else null
     const obj = mapObjectOf(x.expression);
     if (!obj) return null;
+    const ka = !ts.isPropertyAccessExpression(x) && x.argumentExpression ? unwrapExpr(x.argumentExpression) : null; // `T["ok"]`, `T[1]`, T[`ok`]
     const lit = ts.isPropertyAccessExpression(x) ? x.name.text
-      : x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression) ? x.argumentExpression.text : null;
+      : ka && (ts.isStringLiteralLike(ka) || ts.isNumericLiteral(ka)) ? ka.text : null; // StringLiteralLike covers T[`ok`] too
     const extra = mapMutations(mapNamesOf(x)).filter((m) => lit === null || m.key === null || m.key === lit).map((m) => m.node);
     return [...mapEntries(obj, lit), ...extra];
   };
@@ -1951,6 +1994,19 @@ function analyzeSourceFile(relPath, text) {
         }
       }
     }
+    // UNRESOLVED WRAPPER (fail-closed): `const Pill = memo(Red)` where `memo` is not React's cannot be followed, so a component bound
+    // to it that receives unguarded query data is rejected rather than credited with its argument's provenance.
+    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && ts.isIdentifier(n.tagName)) {
+      const d = lookupDecl(n.tagName);
+      let init = d && d.init ? unwrapExpr(d.init) : null;
+      let unresolved = false;
+      while (init && wrapperLike(init)) { if (!reactWrapperName(init)) { unresolved = true; break; } init = init.arguments[0] ? unwrapExpr(init.arguments[0]) : null; }
+      if (unresolved) {
+        const carries = n.attributes.properties.some((a) => ts.isJsxSpreadAttribute(a) ? elementHasUnguardedDataRender(a.expression) : ts.isJsxAttribute(a) && a.initializer && elementHasUnguardedDataRender(a.initializer)) ||
+          (ts.isJsxOpeningElement(n) && n.parent.children.some((ch) => !ts.isJsxText(ch) && elementHasUnguardedDataRender(ch)));
+        if (carries) report(n, "unresolved-wrapper-on-unguarded-data", n.tagName.text);
+      }
+    }
     // Good-state className on a JSX attribute.
     if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) &&
         (n.name.text === "className" || n.name.text === "accent" || n.name.text === "dot" || n.name.text === "text")) {
@@ -2318,8 +2374,8 @@ ${child}`;
 const EMERALD_ITEMS = `<span className="text-emerald-400">{items.length} rows</span>`;
 const BUG_PROPS_IDENT = propsFixture(`function Panel(props) { return <span className="text-emerald-400">{props.items.length} rows</span>; }`, "<Panel items={items} />");
 const BUG_PROPS_SPREAD = propsFixture(`function Panel({ items }) { return ${EMERALD_ITEMS}; }`, "<Panel {...p} />");
-const BUG_PROPS_MEMO = propsFixture(`const Panel = React.memo(function Panel({ items }) { return ${EMERALD_ITEMS}; });`, "<Panel items={items} />");
-const BUG_PROPS_FWDREF = propsFixture(`const Panel = forwardRef(({ items }, ref) => ${EMERALD_ITEMS});`, "<Panel items={items} />");
+const BUG_PROPS_MEMO = propsFixture(`const Panel = React.memo(function Panel({ items }) { return ${EMERALD_ITEMS}; });`, "<Panel items={items} />", `import React, { memo, forwardRef } from "react";`);
+const BUG_PROPS_FWDREF = propsFixture(`const Panel = forwardRef(({ items }, ref) => ${EMERALD_ITEMS});`, "<Panel items={items} />", `import React, { memo, forwardRef } from "react";`);
 const BUG_PROPS_RENAMED = propsFixture(`function Panel({ items: list }) { return <span className="text-emerald-400">{list.length} rows</span>; }`, "<Panel items={items} />");
 const BUG_PROPS_CHILDREN = propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "<Panel>{items.length}</Panel>");
 const OK_PROPS_IDENT_GUARD = propsFixture(`function Panel(props) { if (!props.items) return null; return <span className="text-emerald-400">{props.items.length} rows</span>; }`, "<Panel items={items} />");
@@ -2935,9 +2991,9 @@ BUG_R6.push(
   ["nested object pattern: ({ items: { length } }) renders emerald", propsFixture(`function Panel({ items: { length } }) { return <span className="text-emerald-400">{length}</span>; }`, "<Panel items={items} />")],
   ["nested array pattern: ({ items: [first] }) renders emerald", propsFixture(`function Panel({ items: [first] }) { return <span className="text-emerald-400">{first}</span>; }`, "<Panel items={items} />")],
   ["helper resolved in its own scope: Page's emerald tone() beside Other's red tone()", helperScope(`s === "ok" ? "text-emerald-400" : "text-red-400"`, `"text-red-400"`)],
-  ["memo(PanelImpl) over a named component", propsFixture(`const PanelImpl = ({ items }) => ${EMERALD_ITEMS};\nconst Panel = memo(PanelImpl);`, "<Panel items={items} />")],
-  ["memo(PanelImpl) over a function declaration", propsFixture(`function PanelImpl({ items }) { return ${EMERALD_ITEMS}; }\nconst Panel = memo(PanelImpl);`, "<Panel items={items} />")],
-  ["forwardRef(PanelImpl) over a named component", propsFixture(`const PanelImpl = ({ items }, ref) => ${EMERALD_ITEMS};\nconst Panel = forwardRef(PanelImpl);`, "<Panel items={items} />")],
+  ["memo(PanelImpl) over a named component", propsFixture(`const PanelImpl = ({ items }) => ${EMERALD_ITEMS};\nconst Panel = memo(PanelImpl);`, "<Panel items={items} />", `import React, { memo, forwardRef } from "react";`)],
+  ["memo(PanelImpl) over a function declaration", propsFixture(`function PanelImpl({ items }) { return ${EMERALD_ITEMS}; }\nconst Panel = memo(PanelImpl);`, "<Panel items={items} />", `import React, { memo, forwardRef } from "react";`)],
+  ["forwardRef(PanelImpl) over a named component", propsFixture(`const PanelImpl = ({ items }, ref) => ${EMERALD_ITEMS};\nconst Panel = forwardRef(PanelImpl);`, "<Panel items={items} />", `import React, { memo, forwardRef } from "react";`)],
   ["named query-object prop on an identifier parameter: props.query.data", propsFixture(`function Row(props) { return <b className="text-emerald-400">{props.query.data?.n}</b>; }`, "<Row query={q} />")],
   ["call sites paired: the emerald site also passes data", propsFixture(PILL, `<div><Pill tone="text-emerald-400" n={items.length} /><Pill tone="text-red-400" n="static" /></div>`)],
 );
@@ -2948,7 +3004,7 @@ OK_R6.push(
   ["identifier-style props, child renders no data", propsFixture(PILL_ID, `<Pill tone="text-emerald-400" n="static" />`)],
   ["nested object pattern, call site guarded", propsFixture(`function Panel({ items: { length } }) { return <span className="text-emerald-400">{length}</span>; }`, "q.data ? <Panel items={items} /> : null")],
   ["helper in its own scope returns only red", helperScope(`"text-red-400"`, `s === "ok" ? "text-emerald-400" : "text-red-400"`)],
-  ["memo(PanelImpl), call site guarded", propsFixture(`const PanelImpl = ({ items }) => ${EMERALD_ITEMS};\nconst Panel = memo(PanelImpl);`, "q.data ? <Panel items={items} /> : null")],
+  ["memo(PanelImpl), call site guarded", propsFixture(`const PanelImpl = ({ items }) => ${EMERALD_ITEMS};\nconst Panel = memo(PanelImpl);`, "q.data ? <Panel items={items} /> : null", `import React, { memo, forwardRef } from "react";`)],
   ["named query-object prop, child guards props.query.data", propsFixture(`function Row(props) { return props.query.data ? <b className="text-emerald-400">{props.query.data.n}</b> : null; }`, "<Row query={q} />")],
   ["call sites paired: the emerald site passes no data, the data site is red", propsFixture(PILL, `<div><Pill tone="text-emerald-400" n="static" /><Pill tone="text-red-400" n={items.length} /></div>`)],
 );
@@ -3301,6 +3357,62 @@ export function Page() {
   ["conditional const initializer, both branches muted", helperPage(`${GOOD_FN}\nconst tone = enabled ? muted : muted;`, useTone)],
 );
 
+// Round 29 (Codex pass 10): `memo` / `forwardRef` unwrap only when they are React's; an unresolved wrapper that receives unguarded
+// query data is rejected. Static map keys (numeric / template literals) select their own entry. A rest binding receives only the
+// properties the pattern did not destructure.
+const REACT_IMP = `import React, { memo, forwardRef } from "react";`;
+const PANEL_IMPL = `function PanelImpl({ items }) { return ${EMERALD_ITEMS}; }`;
+const REDPILL = `const RedPill = ({ items }) => <span className="text-red-400">{items.length} rows</span>;\nconst EmeraldPill = ({ items }) => ${EMERALD_ITEMS};`;
+BUG_R6.push(
+  ["a LOCAL memo that swaps the component (emerald around a red one) is unresolved and rejected", propsFixture(`const memo = (C) => EmeraldPill;\n${REDPILL}\nconst Pill = memo(RedPill);`, "<Pill items={items} />")],
+  ["memo imported from another module is unresolved", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "<Pill items={items} />", `import { memo } from "./mine";`)],
+  ["memo re-exported by a local module (member of an unrelated object) is unresolved", propsFixture(`const lib = { memo: (C) => EmeraldPill };\n${REDPILL}\nconst Pill = lib.memo(RedPill);`, "<Pill items={items} />")],
+  ["a bare undeclared memo is unresolved", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "<Pill items={items} />")],
+  ["forwardRef imported from another module is unresolved", propsFixture(`${PANEL_IMPL}\nconst Pill = forwardRef(PanelImpl);`, "<Pill items={items} />", `import { forwardRef } from "./mine";`)],
+  ["a block-scoped memo shadows React's import", wrap2(`import { memo } from "react";
+${REDPILL}
+export function Page() {
+  ${Q2}
+  const items = q.data?.items ?? [];
+  const memo = (C) => EmeraldPill;
+  const Pill = memo(RedPill);
+  return <Pill items={items} />;
+}`)],
+  ["numeric map key selects its own entry: T[1] is emerald", mapShape(`const T = { 1: "text-emerald-400", ok: "text-red-400" };`, "T[1]")],
+  ["template-literal map key selects its own entry: T[`ok`] is emerald", mapShape("const T = { 1: \"text-red-400\", ok: \"text-emerald-400\" };", "T[`ok`]")],
+  ["an aliased named import of react's memo is transparent: the wrapped emerald component is followed", propsFixture(`${PANEL_IMPL}\nconst Pill = m(PanelImpl);`, "<Pill items={items} />", `import { memo as m } from "react";`)],
+  ["a namespace import of react is transparent: R.forwardRef(PanelImpl) is followed", propsFixture(`${PANEL_IMPL}\nconst Pill = R.forwardRef(PanelImpl);`, "<Pill items={items} />", `import * as R from "react";`)],
+  ["an unresolved wrapper receiving unguarded data as JSX children", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "<Pill>{items.length}</Pill>", `import { memo } from "./mine";`)],
+  ["an unresolved wrapper receiving unguarded data through a spread", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "<Pill {...{ items }} />", `import { memo } from "./mine";`)],
+  ["memo(forwardRef(…)) with a LOCAL inner forwardRef is unresolved (the whole chain is checked)", propsFixture(`${PANEL_IMPL}\nconst forwardRef = (C) => C;\nconst Pill = memo(forwardRef(PanelImpl));`, "<Pill items={items} />", `import { memo } from "react";`)],
+  ["a rest binding still receives a class that the pattern did not destructure", wrap2(`function Pill({ n, ...rest }) { return <span className={rest.tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" n={q.data?.n} />;
+}`)],
+);
+OK_R6.push(
+  ["React.memo from a default import resolves", propsFixture(`${PANEL_IMPL}\nconst Pill = React.memo(PanelImpl);`, "q.data ? <Pill items={items} /> : null", REACT_IMP)],
+  ["memo from a named import of react resolves", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "q.data ? <Pill items={items} /> : null", REACT_IMP)],
+  ["an aliased named import of react's memo resolves", propsFixture(`${PANEL_IMPL}\nconst Pill = m(PanelImpl);`, "q.data ? <Pill items={items} /> : null", `import { memo as m } from "react";`)],
+  ["a namespace import of react resolves: R.forwardRef", propsFixture(`${PANEL_IMPL}\nconst Pill = R.forwardRef(PanelImpl);`, "q.data ? <Pill items={items} /> : null", `import * as R from "react";`)],
+  ["an unresolved wrapper, call site guarded on the data", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "q.data ? <Pill items={items} /> : null", `import { memo } from "./mine";`)],
+  ["an unresolved wrapper that receives only static props", propsFixture(`${PANEL_IMPL}\nconst Pill = memo(PanelImpl);`, "<Pill items={[]} />", `import { memo } from "./mine";`)],
+  ["numeric map key selects its own (red) entry: T[1]", mapShape(`const T = { 1: "text-red-400", ok: "text-emerald-400" };`, "T[1]")],
+  ["template-literal map key selects its own (red) entry", mapShape("const T = { ok: \"text-red-400\", other: \"text-emerald-400\" };", "T[`ok`]")],
+  ["a rest binding is not tainted by a data prop the pattern destructured", wrap2(`function Pill({ items, ...rest }) { return <span className="text-emerald-400">{rest.label}</span>; }
+export function Page() {
+  ${Q2}
+  const items = q.data?.items ?? [];
+  return <Pill items={items} label="static" />;
+}`)],
+  ["a rest binding does not receive the destructured tone class", wrap2(`function Pill({ tone, ...rest }) { return <span className={rest.other}>{rest.n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" other="text-red-400" n={q.data?.n} />;
+}`)],
+);
+
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }
 function selfTest() {
   let ok = true;
@@ -3525,7 +3637,7 @@ function selfTest() {
   for (const [label, src] of BUG_R6) {
     const v = analyze(src, "R6.tsx");
     console.log(`  self-test R6 ${label} → ${v.length}: ${v.map((x) => x.kind).join(" ")}`);
-    if (!v.some((x) => x.kind === "good-class-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
+    if (!v.some((x) => x.kind === "good-class-on-unguarded-data" || x.kind === "unresolved-wrapper-on-unguarded-data")) { ok = false; console.error(`  FAIL — not caught: ${label}`); }
   }
   for (const [label, src] of OK_R6) {
     const v = analyze(src, "R6OK.tsx");

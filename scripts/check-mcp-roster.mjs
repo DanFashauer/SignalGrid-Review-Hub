@@ -289,6 +289,10 @@ function lineUnits(line, kind) {
     const item = /^\s*-\s+(?!(?:"[^"]*"|'[^']*'|[^"'#:])*:\s)(.*)$/.exec(line);
     if (item) return [unquote(stripYamlProps(stripYamlComment(item[1]).trim()))];
     const kv = /^\s*(?:-\s+)?(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?)?\s*:\s+(.*)$/.exec(line); // incl. an explicit `: value`
+    // a "key" holding whitespace and the package is a command line in a block scalar (`npx -y … && echo "done: ok"`),
+    // where `: ` is just text: its words are read as well as the value's
+    const keyText = kv ? line.slice(0, line.length - kv[1].length) : "";
+    if (kv && /\S\s+\S/.test(keyText.trim()) && /context7/i.test(keyText)) return [...shellWords(line), ...yamlValueUnits(kv[1])];
     if (kv) return yamlValueUnits(kv[1]);
   }
   return shellWords(line);
@@ -440,7 +444,7 @@ export function logicalLines(lines, kind, path = "") {
   for (let i = 0; i < lines.length; i++) {
     // PowerShell: a backtick before a character escapes it (`context7`-mcp` is `context7-mcp`); the line-end one stays
     // a Dockerfile line is trimmed of every trailing `\r` (BuildKit's trimNewline), so `\\\r\r\n` still continues
-    const l = ps1 ? lines[i].replace(/`(?=\S)/g, "") : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
+    const l = ps1 ? lines[i].replace(/`(\S)/g, (_, c) => (/[|&;<>]/.test(c) ? `"${c}"` : c)) : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at)))) && openQuote(l)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
@@ -529,8 +533,13 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner =
     PACKAGE_RUNNER_RE.test(line) ||
-    /["']?command["']?\s*[:=]\s*(?=((?:[&!][^\s#]*\s+|#[^\n]*\n\s*)*))\1(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
+    /["']?command["']?\s*[:=](?=(\s*(?:[&!][^\s#]*\s+|#[^\n]*\n\s*)*))\1(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,\]]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
+  // a quoted string that IS a spec is one argv word wherever it stands (Docker exec form, a compact list, a shell word),
+  // so its WHOLE tail is the version: `"…@4.1.1 || *"` and `"…@4.1.1 - 5"` are ranges, which the word readers above
+  // split at the space and lose
+  for (const m of line.matchAll(/(["'])(?:npm:)?@upstash\\?\/context7-mcp@([^"'\n]*)\1/gi))
+    if (/[\s|,]/.test(m[2]) && !out.some((f) => f.unpinned || f.stale)) out.push({ unpinned: m[2].slice(0, 24) }); // once per line
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
 }
@@ -547,7 +556,7 @@ export function context7UnitFindings(units, pin, runner, depth = 0) {
       // the unit's quotes are already gone (exec form `["npx","-y","…@4.1.1||"]`, `X="npx …@4.1.1||"`), so the re-split
       // below would read a once-quoted `||` as the shell's OR and drop it: a spec's glued tail holding `||` is read first
       for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
-        const glued = /^@[^\s,]*/.exec(unit.slice(m.index + m[0].length))?.[0] ?? "";
+        const glued = (/^@[^\s,]*/.exec(unit.slice(m.index + m[0].length))?.[0] ?? "").replace(/[)\]}"'.,;:]+$/, "");
         if (/\|\|/.test(glued)) out.push({ unpinned: glued.slice(1, 25) });
       }
       out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
@@ -652,8 +661,8 @@ export function context7JsonFindings(text, pin) {
             typeof v === "string" ? v
             : Array.isArray(v) ? "[array]"
             : v && typeof v === "object"
-              ? typeof v["."] === "string" ? v["."]
-                : "version" in v ? String(v.version)
+              ? "." in v ? (typeof v["."] === "string" ? v["."] : JSON.stringify(v["."]))
+                : "version" in v ? (typeof v.version === "string" ? v.version : JSON.stringify(v.version))
                 : Object.keys(v).length === 0 ? "{}"
                 : null // nested overrides of the package's own dependencies: walked below
             : String(v); // null, true, 4
@@ -722,7 +731,7 @@ export function context7YamlKeyScan(lines) {
       out.push({ i, value: val ? oneScalar(val[1], j, indent(l)) : "" });
       continue;
     }
-    for (const m of l.matchAll(KEY)) {
+    for (const m of /context7/i.test(l) ? l.matchAll(KEY) : []) {
       if (!CONTEXT7_KEY_RE.test(m[2].replace(/\\\//g, "/"))) continue;
       const after = l.slice(m.index + m[0].length).trim();
       if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
@@ -1884,7 +1893,7 @@ server.registerTool(
   // round 26's surviving operator mutants (whitespace-only and comment lines, column-0 keys, a 3-member `^`/backtick
   // split, a JSON git source, a known copy outside the sweep)
   for (const [path, body, what, re] of [
-    ["Dockerfile", `RUN ["npx","-y","${C7}||"]\n`, "Docker exec form `RUN [\"npx\",\"-y\",\"…@<pin>||\"]`", /UNPINNED \(@[\d.]+\|\|/],
+    ["Dockerfile", `RUN ["npx","-y","${C7}||"]\n`, "Docker exec form `RUN [\"npx\",\"-y\",\"…@<pin>||\"]`", /UNPINNED \(@[\d.]+\|\|\)/],
     ["Dockerfile", `CMD ["npx","-y","${C7}||"]\n`, "Docker exec form `CMD`", /UNPINNED \(@[\d.]+\|\|/],
     ["c.toml", `command = "npx"\nargs = ["-y","${C7}||"]\n`, "a compact TOML args list", /UNPINNED \(@[\d.]+\|\|/],
     ["a.mjs", `spawn("npx",["-y","${C7}||"]);\n`, "a compact JS args list", /UNPINNED \(@[\d.]+\|\|/],
@@ -1935,6 +1944,54 @@ server.registerTool(
       got = `threw: ${e.message}`;
     }
     checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, got === want]);
+  }
+  // round 27: a quoted spec's whole tail (a spaced range inside one argv word); a PowerShell-escaped `|`; a block-scalar
+  // command line holding `: ` after the spec; an unquoted `[npx]`; non-string `.`/`version` values; the two
+  // `scalar < 0` siblings; and a structural bound on the two patterns that backtracked on long runs
+  for (const [path, body, what, re] of [
+    ["Dockerfile", `CMD ["npx","-y","${C7} || *"]\n`, "a spaced `|| *` range in one exec-form word", /UNPINNED \(@[\d.]+ \|\| \*\)/],
+    ["Dockerfile", `RUN ["npx","-y","${C7} - 5"]\n`, "a hyphen range in one exec-form word", /UNPINNED \(@[\d.]+ - 5\)/],
+    ["c.toml", `command = "npx"\nargs = ["-y","${C7} || 4.2.0"]\n`, "a spaced union in a compact TOML list", /UNPINNED \(@[\d.]+ \|\| 4\.2\.0\)/],
+    ["a.mjs", `spawn("npx",["-y","${C7} - 5"]);\n`, "a hyphen range in a compact JS list", /UNPINNED \(@[\d.]+ - 5\)/],
+    ["s.sh", `npx -y "${C7} - 5"\n`, "a hyphen range in one quoted shell word", /UNPINNED \(@[\d.]+ - 5\)/],
+    ["s.ps1", `npx -y ${C7}\`|\`|\n`, "a PowerShell-escaped `||` (literal, not a pipeline chain)", /UNPINNED \(@[\d.]+\|\|\)/],
+    [".github/workflows/a.yml", W24('      - run: |\n          npx -y @upstash/context7-mcp@latest && echo "done: ok"\n'), "a block-scalar command line with `: ` after the spec"],
+    [".github/workflows/a.yml", W24('      - run: |\n          npx -y @upstash/context7-mcp@latest --header "Accept: text/plain"\n'), "a block-scalar command line with a quoted header after the spec"],
+    ["a.yaml", 'c:\n  command: [npx]\n  args: ["-y","@upstash/context7-mcp"]\n', "an unquoted `command: [npx]`", /with NO version/],
+    ["a.yaml", 'c:\n  command: !!seq [npx]\n  args: ["-y","@upstash/context7-mcp"]\n', "`command: !!seq [npx]`", /with NO version/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": { version: [realPin] } } }), "a `version` array holding the pin", /UNPINNED \(@\["/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": { ".": 4 } } }), "a numeric `.`", /UNPINNED \(@4\)/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": { ".": { version: "latest" } } } }), "an object `.`", /UNPINNED \(@\{/],
+    ["a.yml", `run: |\n  - |\n${S23(2)}\n`, "a `- |` content line inside a column-0 block (the `scalar < 0` header test)"],
+    ["a.yml", `run: |\n  echo hi\n  |\n${S23(2)}\n`, "a `|` content line inside a column-0 block (the `scalar < 0` alone-header test)"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  for (const [path, body, what] of [
+    ["s.ps1", `npx -y ${C7} || echo hi\n`, "an unescaped PowerShell `||` (a pipeline chain: npx receives the pin)"],
+    [".github/workflows/a.yml", W24(`      - run: |\n          npx -y ${C7} && echo "done: ok"\n`), "a pinned block-scalar command line with `: ` after it"],
+    ["Dockerfile", `CMD ["npx", "-y", "${C7}"]\n`, "a pinned spaced exec form"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);
+  }
+  {
+    // structural, not a latency threshold: doubling a pathological run must not quadruple the time (linear ~2x,
+    // quadratic ~4x); a run fast in absolute terms passes outright, and each shape gets three tries against noise
+    const linear = (make) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const time = (n) => {
+          const t = process.hrtime.bigint();
+          make(n);
+          return Number(process.hrtime.bigint() - t) / 1e6;
+        };
+        const a = time(25000);
+        const b = time(50000);
+        if (b < 150 || b / Math.max(a, 1) < 3) return true;
+      }
+      return false;
+    };
+    checks.push(["`command:` + a long run of spaces stays linear", linear((n) => context7SpecFindings(`${SPEC}${realPin}`, realPin, "shell", `command:${" ".repeat(n)}`, ""))]);
+    checks.push(["a YAML line of many `!` stays linear in the key scan", linear((n) => sweep("a.yaml", `x: ${"!".repeat(n)}\nc: npx -y ${SPEC}${realPin}\n`))]);
   }
   for (const bad of ["latest", "^4", "4.1", `${realPin}-rc.1`]) {
     const installer = realInstaller.replace(/export const PINNED = "@upstash\/context7-mcp@[^"]+"/, `export const PINNED = "@upstash/context7-mcp@${bad}"`);

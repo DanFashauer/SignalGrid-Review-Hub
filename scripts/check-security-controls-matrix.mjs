@@ -238,6 +238,10 @@ export function parseMatrix(raw) {
     if (l.trim() === "" && !isBlank(l)) opaque.push({ line: k + 1, raw: JSON.stringify(l), why: "is whitespace-only but not blank to Markdown (NBSP, U+3000, form feed…) — GitHub keeps it as content" });
     else if (/^ {0,3}</.test(l)) opaque.push({ line: k + 1, raw: l, why: "starts an HTML block — its content can be hidden or never rendered" });
     else if (/^ {0,3}(`{3,}|~{3,})/.test(l)) opaque.push({ line: k + 1, raw: l, why: "opens a code fence — text inside renders as code, not as the claim it reads like" });
+    // raw HTML ANYWHERE on the line, outside a code span: `intro <details>` before
+    // the tables collapses them (round 29). The matrix needs no raw HTML at all,
+    // so the allowance is empty — any `<tag`, `</tag`, `<!` or `<?` fails
+    else if (/<[A-Za-z/!?]/.test(l.replace(/(`+)[\s\S]*?\1/g, ""))) opaque.push({ line: k + 1, raw: l, why: "carries raw HTML outside a code span — a tag mid-line can still open or close a hiding block" });
   });
   const legend = new Map();
   const legendTables = [];
@@ -252,7 +256,11 @@ export function parseMatrix(raw) {
     // claimed here, so the unclaimed-pipe check below fails it (round 28)
     if (!/^ {0,3}\|/.test(lines[i])) continue;
     const head = cells(lines[i]);
-    const isTable = /^ {0,3}\|\s*:?-/.test(lines[i + 1] ?? "");
+    // the delimiter row must match the header cell for cell, each `:?-+:?`: with
+    // fewer cells, or a malformed one, Markdown renders no table at all (round 29);
+    // an unclaimed header then fails the unclaimed-pipe check below
+    const sep = /^ {0,3}\|/.test(lines[i + 1] ?? "") ? cells(lines[i + 1]) : null;
+    const isTable = sep !== null && sep.length === head.length && sep.every((c) => /^\s*:?-+:?\s*$/.test(c));
     const isLegend = sameHeader(head, LEGEND_HEADER);
     const isControls = sameHeader(head, CONTROLS_HEADER);
     const isOther = NON_CONTROL_TABLES.some((h) => sameHeader(head, h));
@@ -832,6 +840,15 @@ function selfTest() {
     ["fail: one control row indented four spaces", real.replace("\n| Deny-by-default RBAC", "\n    | Deny-by-default RBAC"), 1],
     ["fail: one control row indented by a tab", real.replace("\n| Deny-by-default RBAC", "\n\t| Deny-by-default RBAC"), 1],
     ["pass: a control row indented three spaces is still a row", real.replace("\n| Deny-by-default RBAC", "\n   | Deny-by-default RBAC"), 0],
+    // round 29 (Codex): raw HTML mid-line; a delimiter row that does not match its header
+    ["fail: a mid-line HTML opener before the control tables (`intro <details>`)", real.replace("| Control | Framework refs | Status | Where |\n| ------- |", "intro <details>\n\n| Control | Framework refs | Status | Where |\n| ------- |"), 1],
+    ["fail: a mid-line HTML closer after the control tables (`outro </details>`)", `${real}\noutro </details>\n`, 1],
+    ["fail: a mid-line HTML comment-like `<!` opener", `${real}\nsee <!DOCTYPE x> here\n`, 1],
+    ["pass: a tag inside a code span and a bare `a < b` are not raw HTML", `${real}\nThe matrix uses no \`<details>\` block, and a < b is prose.\n`, 0],
+    ["fail: a one-cell delimiter row under a four-cell header", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where |\n| --- |"), 1],
+    ["fail: a malformed delimiter cell", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where |\n| ------- | -------------- | x | ----- |"), 1],
+    ["fail: a five-cell delimiter row under a four-cell header", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where |\n| --- | --- | --- | --- | --- |"), 1],
+    ["pass: an aligned delimiter row (`:---`, `:---:`, `---:`)", real.replace("| Control | Framework refs | Status | Where |\n| ------- | -------------- | ------ | ----- |", "| Control | Framework refs | Status | Where |\n| :--- | :---: | ---: | --- |"), 0],
     ["pass: a unique, present bare basename resolves (`PURPOSE.md` -> docs/PURPOSE.md)", plant("| Planted H9 | ASVS 5.0 | Implemented (public core) | `PURPOSE.md` |"), 0],
     // round 23: claimFold's emphasis strip — a legend word split by ** or __ in a Control name
     ["fail: a legend word split by ** in a Control name", plant("| Im**ple**men**ted (public core) ZZ7 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],

@@ -86,8 +86,15 @@
 //   map mutations are matched by identifier text across functions; an absent-key getter's whole body is walked
 //   (a `console.log("…emerald")` in it is reported).
 // Codex pass 5 on fd8b56c5 (NOT fixed, declared): false NEGATIVES: an object-valued query prop (`config={{ query: q }}`);
-//   a good class that reaches a child as JSX children rather than a prop. false POSITIVE (fail-closed): an overridden
-//   spread entry (`{...{ tone: "…emerald" }} tone="…red"`) is still read as the spread class.
+//   a good class that reaches a child as JSX children rather than a prop. false POSITIVE (fail-closed): a map
+//   literal whose own entry overrides a spread one (`{ ...BASE, ok: "text-red-400" }`) is still read as the spread class.
+// Codex pass 6 on 68827403 (NOT fixed, declared; each pre-existing since af273d65): false NEGATIVES: a good class forwarded
+//   through `<Leaf {...props} />` (the spread branch resolves only object literals and const objects); a parameter default
+//   that supplies the class (`{ tone = "text-emerald-400", n }` used as `<Pill n={q.data?.n} />`; only the nested-pattern default
+//   was declared before); a local or imported `Object` is trusted because `Object.keys/values/entries` are matched by name;
+//   a getter's side effect during `const { a } = T` (destructuring is treated as a plain read). false POSITIVE (fail-closed):
+//   an explicit good class followed by a later overriding spread. Also fail-closed: a child that calls any query but renders
+//   only its props over-flags (the own-query pairing exception).
 // Round 24: a same-file helper's parameter substitutes only while EVERY reference to it in the helper is a plain read
 // (destructuring / for-of targets and inner shadowing count as writes); a key rooted at a query result is plain only
 // through `.data` (`q.isError`, `q.isLoading`, `q.status` are present while the data is absent).

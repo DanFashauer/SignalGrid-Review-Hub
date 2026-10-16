@@ -69,7 +69,11 @@
 // Codex review of #1370 (round 20): identifier-style props (`props.tone`, `props.query.data`), nested binding
 // patterns (`{ items: { length } }`), `memo(Named)` / `forwardRef(Named)`, and helpers resolved in their own lexical
 // scope are followed; a good class and unguarded data are paired PER CALL SITE (a site passing no data contributes
-// no class); a parenthesised / asserted `(TONE[s]) ?? …` fallback is the same lookup as the bare form.
+// no class) and the pairing is PROP-level (the data must ride a prop the child reads); a parenthesised / asserted
+// `(TONE[s]) ?? …` fallback is the same lookup as the bare form. Round 21: nested query-object and class bindings
+// (`{ query: { data } }`, `{ style: { tone } }`), JSX-valued children (`<Panel><>{data}</></Panel>`), a nearer opaque
+// binding of a component name (a parameter, a class, an import) shadows an outer component, `React["cloneElement"]`,
+// downstream map aliases (`const T1 = T0`), and an imported `String`/`Array` is not the global.
 // Same-file shapes followed: arrow/function/`memo`/`forwardRef` components resolved by lexical
 // scope (two same-named components in different scopes never share a taint); a destructured,
 // renamed, rest, `props`-identifier or `{...spread}` parameter; `children`; a whole query object
@@ -266,11 +270,19 @@ function analyzeSourceFile(relPath, text) {
   };
   const propQueryObjs = new Map(); // identifier parameter -> Map(prop name -> origins): `query={q}` read as `props.query`
   const bindingOfParam = (id) => {
+    const inPattern = (b) => { // a binding element (at any depth) named like `id`
+      for (const el of b.elements) {
+        if (ts.isOmittedExpression(el)) continue;
+        if (ts.isIdentifier(el.name)) { if (el.name.text === id.text) return el; }
+        else { const hit = inPattern(el.name); if (hit) return hit; }
+      }
+      return null;
+    };
     for (let c = id.parent; c; c = c.parent) {
       if (!(ts.isFunctionLike(c) && c.parameters)) continue;
       for (const p of c.parameters) {
         if (ts.isIdentifier(p.name) && p.name.text === id.text) return p;
-        if (ts.isObjectBindingPattern(p.name)) for (const el of p.name.elements) if (ts.isIdentifier(el.name) && el.name.text === id.text) return el;
+        if (ts.isObjectBindingPattern(p.name)) { const hit = inPattern(p.name); if (hit) return hit; }
       }
     }
     return null;
@@ -719,11 +731,18 @@ function analyzeSourceFile(relPath, text) {
     };
     reg(sf);
   }
+  // Does this block declare `name` in any shape (const / let / var incl. patterns, function, class, import)?
+  const blockDeclares = (block, name) => block.statements.some((st) =>
+    (ts.isVariableStatement(st) && st.declarationList.declarations.some((d) => bindsPatternName(d.name, name))) ||
+    ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name && st.name.text === name) ||
+    (ts.isSourceFile(block) && importedNames.has(name) && ts.isImportDeclaration(st)));
   const findComponent = (tag) => {
     for (let c = tag.parent; c; c = c.parent) {
+      if (bindsNameOpaquely(c, tag.text)) return undefined; // a parameter / catch / loop binding shadows the tag name
       if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
       const hit = localComponents.find((k) => k.name === tag.text && k.scope === c);
       if (hit) return hit;
+      if (blockDeclares(c, tag.text)) return undefined; // a nearer binding this analyzer does not register still shadows an outer component
     }
     return undefined;
   };
@@ -735,6 +754,42 @@ function analyzeSourceFile(relPath, text) {
   // the call site passes, and resolved where the child uses it as a class.
   var goodParams = new Map(); // binding element | parameter -> [{ node }]
   const goodPropParams = new Map(); // identifier parameter -> Map(prop name -> [{ node }])
+  // The props a same-file child READS (null = it reads them all: a rest element, a spread, or a bare `props`).
+  const childReadProps = (comp) => {
+    const p0 = comp.params[0];
+    if (!p0) return new Set();
+    if (ts.isObjectBindingPattern(p0.name)) return p0.name.elements.some((e) => e.dotDotDotToken) ? null : new Set(p0.name.elements.map(propOf));
+    if (!ts.isIdentifier(p0.name)) return null;
+    const names = new Set();
+    let whole = false;
+    const w = (n) => {
+      if (whole) return;
+      if (ts.isIdentifier(n) && n.text === p0.name.text && n !== p0.name) {
+        const par = n.parent;
+        if (ts.isPropertyAccessExpression(par) && par.expression === n) names.add(par.name.text);
+        else if (ts.isElementAccessExpression(par) && par.expression === n && par.argumentExpression && ts.isStringLiteralLike(par.argumentExpression)) names.add(par.argumentExpression.text);
+        else if (!(ts.isPropertyAccessExpression(par) && par.name === n)) whole = true;
+      }
+      ts.forEachChild(n, w);
+    };
+    if (comp.fn.body) w(comp.fn.body);
+    return whole ? null : names;
+  };
+  // Does THIS call site pass unguarded query data through a prop the child actually reads? (prop-level pairing)
+  const siteRendersData = (comp, open) => {
+    const reads = childReadProps(comp);
+    const opening = ts.isJsxOpeningElement(open) ? open : open;
+    for (const a of opening.attributes.properties) {
+      if (ts.isJsxSpreadAttribute(a)) { if (elementHasUnguardedDataRender(a.expression)) return true; continue; }
+      if (!ts.isJsxAttribute(a) || !ts.isIdentifier(a.name) || !a.initializer) continue;
+      if (reads !== null && !reads.has(a.name.text)) continue;
+      if (elementHasUnguardedDataRender(a.initializer)) return true;
+    }
+    if (ts.isJsxOpeningElement(open) && (reads === null || reads.has("children"))) {
+      for (const ch of open.parent.children) if (!ts.isJsxText(ch) && elementHasUnguardedDataRender(ch)) return true;
+    }
+    return false;
+  };
   const passQueryObject = (param, propName, origins) => {
     // The whole query object arrives (`query={q}` / `{...q}`): the receiving binding IS a query result.
     let changed = false;
@@ -752,7 +807,17 @@ function analyzeSourceFile(relPath, text) {
     } else if (ts.isIdentifier(param.name)) mark(param, param.name.text, null);
     else if (ts.isObjectBindingPattern(param.name)) {
       for (const el of param.name.elements) {
-        if (!ts.isIdentifier(el.name)) continue;
+        if (!ts.isIdentifier(el.name)) {
+          // `{ query: { data } }`: the nested pattern destructures the query result itself
+          if (propName !== null && propOf(el) === propName && ts.isObjectBindingPattern(el.name)) {
+            for (const inner of el.name.elements) {
+              if (!ts.isIdentifier(inner.name)) continue;
+              const ip = propOf(inner);
+              if (ip === "data" || QUERY_DESTRUCTURE.has(ip)) mark(inner, inner.name.text, ip);
+            }
+          }
+          continue;
+        }
         if (propName === null) { if (QUERY_DESTRUCTURE.has(propOf(el))) mark(el, el.name.text, propOf(el)); }
         else if (propOf(el) === propName) mark(el, el.name.text, null);
       }
@@ -802,7 +867,7 @@ function analyzeSourceFile(relPath, text) {
       // Paired by call site: a good class only paints data green at a site that ALSO passes unguarded data,
       // so `<Pill tone="…emerald" n="static" />` next to `<Pill tone="…red" n={q.data?.n} />` flags neither.
       const open = attr.parent.parent;
-      if (!elementHasUnguardedDataRender(ts.isJsxOpeningElement(open) ? open.parent : open)) return;
+      if (!siteRendersData(comp, open)) return;
       if (ts.isIdentifier(param.name)) { // `function Pill(props) { … props.tone … }`
         const byProp = goodPropParams.get(param) ?? new Map();
         const have = byProp.get(propName) ?? [];
@@ -812,11 +877,15 @@ function analyzeSourceFile(relPath, text) {
         return;
       }
       if (!ts.isObjectBindingPattern(param.name)) return;
-      for (const el of param.name.elements) {
-        if (!ts.isIdentifier(el.name) || propOf(el) !== propName) continue;
+      const nestedBindings = (b, out = []) => { for (const e of b.elements) { if (ts.isOmittedExpression(e)) continue; if (ts.isIdentifier(e.name)) out.push(e); else nestedBindings(e.name, out); } return out; };
+      for (const el0 of param.name.elements) {
+        if (propOf(el0) !== propName && !el0.dotDotDotToken) continue;
+        // `{ style: { tone } }` receiving `style={{ tone: "…emerald" }}`: every binding inside the pattern may hold the class
+        for (const el of ts.isIdentifier(el0.name) ? [el0] : nestedBindings(el0.name)) {
         const have = goodParams.get(el) ?? [];
         for (const f of found) if (!have.some((h) => h.node === f.node)) { have.push({ node: f.node }); changed = true; }
         goodParams.set(el, have);
+        }
       }
     };
     const visit = (n) => {
@@ -825,7 +894,10 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isJsxSpreadAttribute(n)) passQuery(n.parent.parent.tagName, null, n.expression);
       if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) pass(n.parent.parent.tagName, n.name.text, n.initializer.expression);
       if (ts.isJsxSpreadAttribute(n)) pass(n.parent.parent.tagName, null, n.expression);
-      if (ts.isJsxElement(n)) for (const ch of n.children) if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
+      if (ts.isJsxElement(n)) for (const ch of n.children) {
+        if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
+        else if (ts.isJsxElement(ch) || ts.isJsxSelfClosingElement(ch) || ts.isJsxFragment(ch)) pass(n.openingElement.tagName, "children", ch); // `<Panel><>{data}</></Panel>`
+      }
       ts.forEachChild(n, visit);
     };
     visit(sf);
@@ -1145,6 +1217,18 @@ function analyzeSourceFile(relPath, text) {
       }
     };
     addMap(mapObjectOf(x.expression), 0);
+    // downstream aliases (`const T1 = T0`) are the same map: writes through them count, and the alias initializer is not an escape
+    for (let grew = true; grew;) {
+      grew = false;
+      const scan = (n) => {
+        if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer && (n.parent.flags & ts.NodeFlags.Const)) {
+          const u = unwrapExpr(n.initializer);
+          if (ts.isIdentifier(u) && names.has(u.text) && !names.has(n.name.text)) { names.add(n.name.text); grew = true; }
+        }
+        ts.forEachChild(n, scan);
+      };
+      scan(sf);
+    }
     return names;
   };
   const lookupEntries = (x) => { // x: ElementAccess | PropertyAccess over a resolvable map, else null
@@ -1173,7 +1257,16 @@ function analyzeSourceFile(relPath, text) {
   // const, a callback parameter) might select a fixed entry, so the fallback does not protect it
   // and the lookup is judged like an inline good class. Over-flags a key that defaults to a
   // NON-good entry (`T[s ?? "bad"]`) — a finding the author reads and exempts with `// unknown-ok:`.
+  const importedNames = new Set(); // an import named `String` / `Array` is NOT the global
+  for (const st of sf.statements) {
+    if (ts.isImportDeclaration(st) && st.importClause) {
+      const ic = st.importClause;
+      if (ic.name) importedNames.add(ic.name.text);
+      if (ic.namedBindings) { if (ts.isNamespaceImport(ic.namedBindings)) importedNames.add(ic.namedBindings.name.text); else for (const e of ic.namedBindings.elements) importedNames.add(e.name.text); }
+    } else if (ts.isImportEqualsDeclaration(st)) importedNames.add(st.name.text);
+  }
   const findBinding = (id) => {
+    if (importedNames.has(id.text)) return { kind: "opaque" };
     for (let c = id.parent; c; c = c.parent) {
       if (ts.isFunctionLike(c) && c.parameters) {
         for (const p of c.parameters) {
@@ -1209,7 +1302,7 @@ function analyzeSourceFile(relPath, text) {
   const siteCache = new Map();
   let cloneSeen;
   const cloneElementUsed = () => {
-    if (cloneSeen === undefined) { cloneSeen = false; const w = (n) => { if (cloneSeen) return; if (ts.isIdentifier(n) && n.text === "cloneElement") cloneSeen = true; else ts.forEachChild(n, w); }; w(sf); }
+    if (cloneSeen === undefined) { cloneSeen = false; const w = (n) => { if (cloneSeen) return; if ((ts.isIdentifier(n) || ts.isStringLiteralLike(n)) && n.text === "cloneElement") cloneSeen = true; else ts.forEachChild(n, w); }; w(sf); }
     return cloneSeen;
   };
   const callSitesOf = (fn) => {
@@ -2588,6 +2681,67 @@ OK_R6.push(
   ["memo(PanelImpl), call site guarded", propsFixture(`const PanelImpl = ({ items }) => ${EMERALD_ITEMS};\nconst Panel = memo(PanelImpl);`, "q.data ? <Panel items={items} /> : null")],
   ["named query-object prop, child guards props.query.data", propsFixture(`function Row(props) { return props.query.data ? <b className="text-emerald-400">{props.query.data.n}</b> : null; }`, "<Row query={q} />")],
   ["call sites paired: the emerald site passes no data, the data site is red", propsFixture(PILL, `<div><Pill tone="text-emerald-400" n="static" /><Pill tone="text-red-400" n={items.length} /></div>`)],
+);
+
+// Codex review #2 of #1370 (head ea7caf5a): nested query-object bindings, prop-level call-site pairing, opaque
+// shadowing of a component name, computed cloneElement, nested class bindings, JSX-valued children, downstream
+// map aliases, imported `String`.
+const Q2 = `const q = useQuery({ queryKey: ["a"], queryFn: fa });`;
+const wrap2 = (body) => `import { useQuery } from "@tanstack/react-query";\n${body}`;
+const shadowFx = (shadow) => wrap2(`function Panel({ n }) { return <span className="text-emerald-400">{n}</span>; }
+class SafePanel extends React.Component { render() { return <span className="text-red-400">{this.props.n}</span>; } }
+export function Page() {
+  ${Q2}
+  ${shadow ? "const Panel = SafePanel;" : ""}
+  return <Panel n={q.data?.n} />;
+}`);
+const cloneFx = (alias) => wrap2(`const T = { ok: "text-emerald-400", default: "text-slate-400" };
+${alias}
+function Card({ s, n }) { return <span className={T[s] ?? T.default}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <div>{clone(<Card s={q.data?.status} n={q.data?.n} />, { s: "ok" })}</div>;
+}`);
+const aliasFx = (extra) => wrap2(`const T0 = { ok: "text-emerald-400", default: "text-slate-400" };
+const T1 = T0;
+${extra}
+export function Page() {
+  ${Q2}
+  return <span className={T0[q.data?.s] ?? T0.default}>{q.data?.n}</span>;
+}`);
+const stringFx = (imp) => wrap2(`${imp}
+const T = { ok: "text-emerald-400", default: "text-slate-400" };
+export function Page() {
+  ${Q2}
+  return <span className={T[String(q.data?.status)] ?? T.default}>{q.data?.n}</span>;
+}`);
+BUG_R6.push(
+  ["nested query-object binding: ({ query: { data } }) fed query={q}", propsFixture(`function Row({ query: { data } }) { return <span className="text-emerald-400">{data?.n}</span>; }`, "<Row query={q} />")],
+  ["nested query-object binding: ({ query: { data: d } }) fed query={q}", propsFixture(`function Row({ query: { data: d } }) { return <span className="text-emerald-400">{d?.n}</span>; }`, "<Row query={q} />")],
+  ["prop-level pairing: the emerald site passes data through a prop the child reads", propsFixture(PILL, `<div><Pill tone="text-emerald-400" n={items.length} hidden="x" /><Pill tone="text-red-400" n="static" /></div>`)],
+  ["outer component is not shadowed when the inner name is unbound", shadowFx(false)],
+  ["computed cloneElement alias: React[\"cloneElement\"]", cloneFx(`const clone = React["cloneElement"];`)],
+  ["computed cloneElement destructure: { [\"cloneElement\"]: clone }", cloneFx(`const { ["cloneElement"]: clone } = React;`)],
+  ["nested class binding: ({ style: { tone } }) fed style={{ tone: emerald }}", propsFixture(`function Pill({ style: { tone }, n }) { return <span className={tone}>{n}</span>; }`, `<Pill style={{ tone: "text-emerald-400" }} n={items.length} />`)],
+  ["children: a fragment around query data", propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "<Panel><>{items.length}</></Panel>")],
+  ["children: an element around query data", propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "<Panel><b>{items.length}</b></Panel>")],
+  ["downstream map alias is written: const T1 = T0; T1.undefined = emerald", aliasFx(`T1.undefined = "text-emerald-400";`)],
+  ["imported String is not the global String", stringFx(`import { String } from "./fmt";`)],
+  ["imported String via a namespace import", stringFx(`import * as String from "./fmt";`)],
+);
+OK_R6.push(
+  ["nested query-object binding, call site guarded", propsFixture(`function Row({ query: { data } }) { return <span className="text-emerald-400">{data?.n}</span>; }`, "q.data ? <Row query={q} /> : null")],
+  ["prop-level pairing: the data rides a prop the child never reads", propsFixture(PILL, `<div><Pill tone="text-emerald-400" n="static" hidden={items.length} /><Pill tone="text-red-400" n={items.length} /></div>`)],
+  ["an opaque inner binding shadows the outer component name", shadowFx(true)],
+  ["a parameter named like the component shadows it", wrap2(`function Panel({ n }) { return <span className="text-emerald-400">{n}</span>; }
+export function Page({ Panel }) {
+  ${Q2}
+  return <Panel n={q.data?.n} />;
+}`)],
+  ["nested class binding, call site guarded", propsFixture(`function Pill({ style: { tone }, n }) { return <span className={tone}>{n}</span>; }`, `q.data ? <Pill style={{ tone: "text-emerald-400" }} n={items.length} /> : null`)],
+  ["children: a fragment, call site guarded", propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "q.data ? <Panel><>{items.length}</></Panel> : null")],
+  ["downstream map alias that is never written", aliasFx("")],
+  ["the global String stays the builtin when an unrelated name is imported", stringFx(`import { fmt } from "./fmt";`)],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

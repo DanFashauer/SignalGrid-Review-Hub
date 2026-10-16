@@ -84,7 +84,7 @@
  */
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isBuiltin } from "node:module";
@@ -709,23 +709,28 @@ const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 // and said so: paths git ignores, and a change to a file's mtime alone; the preload refuses both by path, whatever git thinks.
 // `GIT_OPTIONAL_LOCKS=0` keeps the check from writing the index itself, and the ceiling stops git from finding a repository
 // above the one it was asked about (a scratch copy of the tree is its own repository, or it is not one and the net says so).
-// A regular file's mode and content come from ONE descriptor (CodeQL js/file-system-race): the path is opened once and both are
-// read from what that open returned, so a writer cannot land between a mode taken from one observation and a content taken from
-// a later one. O_NOFOLLOW makes a link swapped in after the lstat a refusal (ELOOP, so "absent") instead of a followed path;
-// where the platform has no O_NOFOLLOW (win32) the descriptor is re-checked with fstat and anything not a regular file is refused.
+// A path is opened ONCE and classified from the descriptor that open returned (CodeQL js/file-system-race): there is no stat
+// of the name before the open, so no writer can land between a check and a use. The open carries O_NOFOLLOW, which makes the
+// kernel refuse a symlink (ELOOP, dangling or not); that refusal is how a link is recognised, and it is reported as
+// `link <sha256 of readlink>`. A directory opens read-only on Linux and macOS and fstat names it "dir". A regular file's mode
+// and content both come from the same descriptor. Anything else (a socket, a device, a path gone or unreadable) is "absent".
+// Without O_NOFOLLOW (win32) the open follows a link to its target and the target's mode and content are hashed from the one
+// descriptor: there a symlink is reported as its target, never as a link. The gate runs on Linux and macOS.
 const O_NOFOLLOW = fsConstants.O_NOFOLLOW ?? 0;
 const contentHash = (abs) => {
+  let fd;
   try {
-    const st = lstatSync(abs);
-    if (st.isSymbolicLink()) return `link ${sha256(readlinkSync(abs))}`;
-    if (st.isDirectory()) return "dir";
-    const fd = openSync(abs, fsConstants.O_RDONLY | O_NOFOLLOW);
-    try {
-      const own = fstatSync(fd);
-      if (O_NOFOLLOW === 0 && !own.isFile()) return "absent";
-      return `${(own.mode & 0o777).toString(8)} ${sha256(readFileSync(fd))}`;
-    } finally { closeSync(fd); }
-  } catch { return "absent"; }
+    fd = openSync(abs, fsConstants.O_RDONLY | O_NOFOLLOW);
+  } catch (err) {
+    if (err?.code !== "ELOOP") return "absent";
+    try { return `link ${sha256(readlinkSync(abs))}`; } catch { return "absent"; }
+  }
+  try {
+    const own = fstatSync(fd);
+    if (own.isDirectory()) return "dir";
+    if (!own.isFile()) return "absent";
+    return `${(own.mode & 0o777).toString(8)} ${sha256(readFileSync(fd))}`;
+  } catch { return "absent"; } finally { closeSync(fd); }
 };
 const treeSnapshot = (root) => {
   let raw;

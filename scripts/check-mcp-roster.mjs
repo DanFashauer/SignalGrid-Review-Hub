@@ -550,6 +550,24 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // space and lose. The tail runs to the SAME delimiter, unescaped: another quote or a backtick inside it is text
   for (const m of line.matchAll(/(["'`])[^"'`\s]*?@upstash\\?\/context7-mcp@((?:\\.|(?!\1)[^\\\n])*)\1/gi))
     if (/[\s|,]/.test(m[2]) && !out.some((f) => f.unpinned || f.stale)) out.push({ unpinned: m[2].slice(0, 24) }); // once per line
+  // a JSON array on the line (Docker's exec form, a compact list) is decoded as JSON first: Docker hands npx the decoded
+  // word, so `\t`, `\u000b` or `\"` inside it are whitespace and quotes, not a backslash and a letter
+  for (const arr of line.matchAll(/\[[^[\]\n]*\]/g)) {
+    let words;
+    try {
+      words = JSON.parse(arr[0]);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(words) || out.some((f) => f.unpinned || f.stale)) continue;
+    for (const w of words) {
+      const t = typeof w === "string" ? /@upstash\/context7-mcp@([^\n]*)$/i.exec(w) : null;
+      if (t && (/[\s|,"'`]/.test(t[1]) || CONTEXT7_RANGE_FOLLOW_RE.test(w))) {
+        out.push({ unpinned: t[1].slice(0, 24) });
+        break;
+      }
+    }
+  }
   // whatever the container (a heredoc, `%q()`, `[[ ]]`, a here-string, adjacent literals): a spec followed on its line by
   // whitespace and a range continuation is read as a range, fail-closed (`@4.1.1 || *`, `@4.1.1 - 5`, `@4.1.1 >=4`)
   const follow = CONTEXT7_RANGE_FOLLOW_RE.exec(line);
@@ -689,6 +707,17 @@ export function context7JsonFindings(text, pin) {
       // the name may appear only once the shell running the value drops quotes and escapes (`cont\\ext7`, `cont''ext7`)
       const raw = node;
       node = spliceDecoded(node); // a backslash-newline inside the value is spliced as the shell running it would
+      // a string that is itself JSON (an exec list, a nested config) is decoded and walked as JSON, at any depth, so its
+      // word boundaries and its escapes (`\t`, `\u000b`, `\"`) are read as the program reading it reads them
+      if (/^\s*[[{]/.test(node)) {
+        let inner;
+        try {
+          inner = JSON.parse(node);
+        } catch {
+          inner = undefined;
+        }
+        if (inner !== undefined && typeof inner === "object") walk(inner, false, runner || PACKAGE_RUNNER_RE.test(node));
+      }
       const units = inArray || SPEC_VALUE_RE.test(node) ? [node] : shellWords(node);
       const line = lineOf(JSON.stringify(raw).slice(1, -1));
       for (const f of context7UnitFindings(units, pin, runner || PACKAGE_RUNNER_RE.test(node))) out.push({ line, f });
@@ -2083,6 +2112,18 @@ server.registerTool(
       ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || "]` })}\n`, "a parsed JSON string holding an exec list whose word ends ` || ` (an escaped closing quote)"],
       ["a.jsonc", `// c\n${JSON.stringify({ entrypoint: `["npx","-y","${P} ||"]` })}\n`, "the same in JSONC, `||` against the escaped quote"],
       ["a.json", `${JSON.stringify({ outer: JSON.stringify({ entrypoint: `["npx","-y","${P} || "]` }) })}\n`, "an exec list nested twice in JSON (a closing quote escaped at depth 2)"],
+      ["a.json", `${JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} ||\t`]) })}\n`, "a JSON string holding an exec list whose word ends in a JSON-escaped TAB"],
+      ["a.json", `{"entrypoint":"[\\u0022npx\\u0022,\\u0022-y\\u0022,\\u0022${P} || 4\\u0022]"}\n`, "an exec list in a JSON string quoted with \`\\u0022\` (System.Text.Json)"],
+      ["a.json", `${JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} || 4`]) })}\n`, "an exec list in a JSON string with a bare major after \`||\`"],
+      ["a.json", `${JSON.stringify({ o: JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} ||\t*`]) }) })}\n`, "the same nested twice, a JSON-escaped TAB before \`*\`"],
+      ["Dockerfile", `RUN ["npx","-y","${P}>\\t<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped TAB (\`>\\t<5\`)"],
+      // the raw-text readers stay the only readers where the JSON does not parse (a `RUN …` command, a trailing comma)
+      ["a.json", `${JSON.stringify({ o: JSON.stringify({ cmd: `RUN ["npx","-y","${P} || "]` }) })}\n`, "a non-JSON command nested twice, \`||\` before a closing quote escaped at depth 2"],
+      ["a.json", `${JSON.stringify({ cmd: `RUN ["npx","-y","${P} || ","--stdio"]` })}\n`, "a non-JSON command in a JSON string, an escaped closing quote then a comma"],
+      ["a.json", `${JSON.stringify({ cmd: `RUN ["npx","-y","${P} || "]` })}\n`, "a non-JSON command in a JSON string, \`||\` before an escaped closing quote"],
+      ["Dockerfile", `RUN ["npx","-y","${P}${BT}\\" *", ]\n`, "an escaped quote inside a word of an exec form that is not valid JSON (a trailing comma)"],
+      ["c.toml", `args = ['-y','--package=${P} 4.x','context7-mcp']\n`, "a single-quoted (non-JSON) \`--package=\` word with a spaced tail"],
+      ["a.js", `spawn('npx',['-y','@upstash\\/context7-mcp@${realPin} 4.x'])\n`, "a single-quoted (non-JSON) JSON-escaped \`\\/\` word with a spaced tail"],
       ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || ","--stdio"]` })}\n`, "an escaped closing quote then a comma (the spec mid-list)"],
       ["a.rb", `system(%q(npx -y ${P} ||\u00a0*))\n`, "an NBSP between \`||\` and \`*\`"],
       ["a.rb", `system(%q(npx -y ${P} ||\t4.2.0))\n`, "a TAB between \`||\` and a version"],
@@ -2111,6 +2152,8 @@ server.registerTool(
       ["s.sh", `npx -y ${P} || "$FALLBACK" arg\n`, "a spaced \`||\` then the next word's opening quote"],
       ["s.sh", `npx -y ${P} || ${BT}which node${BT}\n`, "a spaced \`||\` then a backtick substitution"],
       ["s.ps1", `npx -y ${P} || 'x'\n`, "a PowerShell \`||\` then a quoted word"],
+      ["a.json", `${JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", P]) })}\n`, "a pinned exec list in a JSON string"],
+      ["Dockerfile", `RUN ["npx","-y","${P}"]\n`, "a pinned Dockerfile exec form decoded as JSON"],
     ]) {
       checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);
     }

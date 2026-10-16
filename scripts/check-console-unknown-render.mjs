@@ -95,6 +95,12 @@
 //   a getter's side effect during `const { a } = T` (destructuring is treated as a plain read). false POSITIVE (fail-closed):
 //   an explicit good class followed by a later overriding spread. Also fail-closed: a child that calls any query but renders
 //   only its props over-flags (the own-query pairing exception).
+// Codex pass 7 on fa5ad9a0 (declared, NOT fixed): false NEGATIVES: affirmation TEXT carried through an arbitrary component prop
+//   (`<Panel message="All clear" n={q.data?.n} />` with the child rendering `{message}` is silent: only classes and data ride props);
+//   the alias returned by `Object.assign(T)` (`const U = Object.assign(T); U.undefined = "…emerald"`) is not tracked, so the write is
+//   missed (silent).
+// Round 26 (fixed): a `let`/`var` helper reassigned to another function resolves to every assigned function, and a `const` alias of a
+//   same-file helper (`const pickTone = toneFor`, an alias chain) resolves to the helper.
 // Round 24: a same-file helper's parameter substitutes only while EVERY reference to it in the helper is a plain read
 // (destructuring / for-of targets and inner shadowing count as writes); a key rooted at a query result is plain only
 // through `.data` (`q.isError`, `q.isLoading`, `q.status` are present while the data is absent).
@@ -720,6 +726,8 @@ function analyzeSourceFile(relPath, text) {
   // never share a taint. `memo(…)` / `forwardRef(…)` wrappers are unwrapped.
   // Same-file helper functions, registered with their DECLARING scope; a call site resolves the nearest
   // enclosing scope that declares the name (two components may each own a `tone()` helper).
+  const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
+    ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
   const localFns = new Map(); // name -> [{ fn, scope }]
   const scopeOf = (n) => { let c = n.parent; while (c && !ts.isBlock(c) && !ts.isSourceFile(c)) c = c.parent; return c; };
   {
@@ -744,14 +752,35 @@ function analyzeSourceFile(relPath, text) {
     };
     reg(sf);
   }
-  const findHelper = (id) => { // the function an identifier names, resolved through lexical scope
+  const findHelper = (id, depth = 0) => { // the function an identifier names, resolved through lexical scope
     for (let c = id.parent; c; c = c.parent) {
       if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
       const hit = (localFns.get(id.text) ?? []).find((h) => h.scope === c);
       if (hit) return hit.fn;
+      // `const pickTone = toneFor;` is the same helper under another name (an immutable alias only)
+      for (const st of c.statements) {
+        if (!ts.isVariableStatement(st) || !(st.declarationList.flags & ts.NodeFlags.Const)) continue;
+        const d = st.declarationList.declarations.find((x) => ts.isIdentifier(x.name) && x.name.text === id.text);
+        if (d) return d.initializer && ts.isIdentifier(unwrapExpr(d.initializer)) && depth < 6 ? findHelper(unwrapExpr(d.initializer), depth + 1) : undefined;
+      }
     }
     return undefined;
   };
+  // A `let` / `var` helper REASSIGNED to another function (`let tone = () => red; tone = () => emerald;`) is every one of
+  // its values: the call walks the initializer's returns AND each assigned function's (fail-closed over a single resolution).
+  const helperAlts = new Map(); // initializer function -> [assigned functions]
+  {
+    const w = (n) => {
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.EqualsToken && ts.isIdentifier(n.left)) {
+        const rhs = unwrapExpr(n.right);
+        const alt = ts.isArrowFunction(rhs) || ts.isFunctionExpression(rhs) ? rhs : ts.isIdentifier(rhs) ? findHelper(rhs) : undefined;
+        const base = alt ? findHelper(n.left) : undefined;
+        if (alt && base && base !== alt) helperAlts.set(base, [...(helperAlts.get(base) ?? []), alt]);
+      }
+      ts.forEachChild(n, w);
+    };
+    w(sf);
+  }
   const localComponents = []; // { name, params, scope }
   const componentFn = (init) => {
     let e = init;
@@ -1036,8 +1065,6 @@ function analyzeSourceFile(relPath, text) {
   // walked, so a good-state fallback (`?? TONE.ok`, `|| "…emerald"`) is flagged on its own. Anything else is judged like
   // an inline good class (flagged on unguarded query data). A map that is not a same-file const
   // object literal (imported, a parameter, `let`) is not resolved.
-  const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
-    ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
   const escapedMapRefs = new Set(); // a reference that may write the map, or a spread it cannot resolve: stands for an unreadable, possibly good-state entry
   const mapObject = (id, depth = 0) => {
     if (depth > 6) return null;
@@ -1654,8 +1681,8 @@ function analyzeSourceFile(relPath, text) {
       }
       // A same-file helper — `className={toneFor(status)}` — is read through its return values.
       if (ts.isCallExpression(x) && ts.isIdentifier(x.expression) && findHelper(x.expression)) {
-        const fn = findHelper(x.expression);
-        if (!resolving.has(fn)) {
+        for (const fn of [findHelper(x.expression), ...(helperAlts.get(findHelper(x.expression)) ?? [])]) {
+          if (resolving.has(fn)) continue;
           resolving.add(fn);
           const saved = helperBind;
           helperBind = new Map();
@@ -2942,6 +2969,25 @@ BUG_R6.push(
 OK_R6.push(
   ["data key through .data still earns the fallback exemption", keyFx(flagMap("ok"), "", "S[q.data?.status] ?? S.default")],
   ["destructured data binding still earns the fallback exemption", keyFx(flagMap("ok"), "const { data } = q;", "S[data?.status] ?? S.default")],
+);
+
+// Round 26 (Codex pass 7): a reassigned `let`/`var` helper is every one of its values; a const alias names the same helper.
+const helperPage = (pre, call) => wrap2(`${pre}
+export function Page() {
+  ${Q2}
+  return ${call};
+}`);
+BUG_R6.push(
+  ["let helper reassigned to an emerald arrow after a red initializer", helperPage(`let tone = () => "text-red-400"; tone = () => "text-emerald-400";`, `<span className={tone()}>{q.data?.n}</span>`)],
+  ["var helper reassigned to a named emerald function", helperPage(`function good() { return "text-emerald-400"; }\nvar tone = () => "text-red-400"; tone = good;`, `<span className={tone()}>{q.data?.n}</span>`)],
+  ["const alias of an emerald helper", helperPage(`function good() { return "text-emerald-400"; }\nconst pick = good;`, `<span className={pick()}>{q.data?.n}</span>`)],
+  ["const alias of a map-lookup helper that falls to an emerald default key", helperPage(`const T = { ok: "text-emerald-400", default: "text-slate-400" };\nfunction toneFor(s) { return T[s ?? "ok"]; }\nconst pickTone = toneFor;`, `<span className={pickTone(q.data?.status)}>{q.data?.n}</span>`)],
+  ["const alias chain of an emerald helper", helperPage(`function good() { return "text-emerald-400"; }\nconst a = good; const b = a;`, `<span className={b()}>{q.data?.n}</span>`)],
+);
+OK_R6.push(
+  ["let helper reassigned to another muted arrow stays clean", helperPage(`let tone = () => "text-red-400"; tone = () => "text-slate-400";`, `<span className={tone()}>{q.data?.n}</span>`)],
+  ["const alias of a muted helper stays clean", helperPage(`function muted() { return "text-slate-400"; }\nconst pick = muted;`, `<span className={pick()}>{q.data?.n}</span>`)],
+  ["reassigned emerald helper, call guarded on the data", helperPage(`let tone = () => "text-red-400"; tone = () => "text-emerald-400";`, `q.data ? <span className={tone()}>{q.data.n}</span> : null`)],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

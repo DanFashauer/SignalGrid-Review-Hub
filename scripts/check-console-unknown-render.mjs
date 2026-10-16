@@ -113,6 +113,18 @@
 // Round 28 (landing refute 27, FIXED): a `var` redeclaring a component parameter in the parameter's OWN function (`function P({ tone }) { var
 //   tone; }`, also in a nested block of it) is the SAME binding, not a shadow, and its initializer is one more value of the parameter;
 //   same-scope `var` redeclarations of a helper are merged (`var tone = red; var tone = emerald;`).
+// Round 31 (Codex pass 11 on 74b05455, FIXED): a component binding is judged by EVERY component it can hold (`enabled ? Good : Bad`,
+//   `enabled && Good`, `Good ?? Bad`; `&&` contributes its right operand only) and a branch this analysis cannot resolve (an imported
+//   or computed component, a call) REJECTS an element of it that receives unguarded query data; a member-expression tag backed by a
+//   same-file const object literal (`<Components.Pill />`, shorthand or inline members) is followed, and an unresolvable member is
+//   rejected; a TypeScript overload signature is not the component (only declarations with a body register); a helper parameter
+//   DEFAULT is walked as a value when the argument is omitted, `undefined`, or shifted by `.call` / `.apply`; string-literal bracket
+//   access (`q["data"]`, `props.query["data"]`, status members) is read like dotted access; a render-prop callback handed to a same-file
+//   component (`render={(n) => …}`, a same-file function name, function-as-children) takes the origin of the arguments the component
+//   calls it with (`render(value)`, `props.render(value)`, `children(value)`). STILL SILENT (declared): a non-literal bracket key
+//   (`props.query[k]`); a callback the gate cannot resolve (an imported function, a computed value); an imported namespace member tag
+//   (`<UI.Pill />`, the declared imported-component limitation, consistent with an imported identifier tag); a callback stored in a
+//   variable or an object before it is passed.
 // Round 30 (landing refute of rounds 28/29, FIXED): the unresolved-wrapper rejection also counts a WHOLE query object as carried data
 //   (`<Row query={q} />`, `<Row {...q} />`, the references `passQuery` follows) and follows an alias chain (`const Pill = P;`); the rest
 //   subtraction removes only siblings with a KNOWN source key (an identifier, a string / numeric literal, a computed literal): a computed
@@ -293,6 +305,16 @@ function callName(call) {
   if (ts.isPropertyAccessExpression(call.expression)) return call.expression.name.text;
   return undefined;
 }
+// The member a PropertyAccess or a STRING-LITERAL ElementAccess reads (`q.data`, `q["data"]`), else null (a computed key is not followed).
+function memberName(x) {
+  if (ts.isPropertyAccessExpression(x)) return x.name.text;
+  if (ts.isElementAccessExpression(x) && x.argumentExpression) {
+    let a = x.argumentExpression;
+    while (ts.isParenthesizedExpression(a) || ts.isAsExpression(a) || ts.isNonNullExpression(a)) a = a.expression;
+    if (ts.isStringLiteralLike(a)) return a.text;
+  }
+  return null;
+}
 function propOf(el) {
   const pn = el.propertyName;
   if (pn && ts.isIdentifier(pn)) return pn.text;
@@ -403,9 +425,9 @@ function analyzeSourceFile(relPath, text) {
   const queryObjOfExpr = (e) => { // origins of a query-result expression: `q`, or `props.query` for a named query-object prop
     if (!e) return undefined;
     if (ts.isIdentifier(e) && queryObjVars.has(e.text)) return queryObjVars.get(e.text);
-    if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression)) {
+    if (memberName(e) !== null && ts.isIdentifier(e.expression)) {
       const prm = bindingOfParam(e.expression);
-      return prm && propQueryObjs.get(prm)?.get(e.name.text);
+      return prm && propQueryObjs.get(prm)?.get(memberName(e));
     }
     return undefined;
   };
@@ -478,8 +500,8 @@ function analyzeSourceFile(relPath, text) {
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isIdentifier(x) && !isMemberName(x) && (queryObjVars.has(x.text) || dataVars.has(x.text) || statusVars.has(x.text))) { hit = true; return; }
-      if (ts.isPropertyAccessExpression(x) &&
-          queryObjOfExpr(x.expression) && STATUS_MEMBERS.has(x.name.text)) { hit = true; return; }
+      if (memberName(x) !== null &&
+          queryObjOfExpr(x.expression) && STATUS_MEMBERS.has(memberName(x))) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
@@ -533,8 +555,8 @@ function analyzeSourceFile(relPath, text) {
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isIdentifier(x) && !isMemberName(x) && errorLoadingVars.has(x.text)) { hit = true; return; }
-      if (ts.isPropertyAccessExpression(x) &&
-          queryObjOfExpr(x.expression) && ERROR_LOADING.has(x.name.text)) { hit = true; return; }
+      if (memberName(x) !== null &&
+          queryObjOfExpr(x.expression) && ERROR_LOADING.has(memberName(x))) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
@@ -546,8 +568,8 @@ function analyzeSourceFile(relPath, text) {
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isIdentifier(x) && !isMemberName(x) && varSet.has(x.text) && inOrigin(varSet.get(x.text), origin)) { hit = true; return; }
-      if (ts.isPropertyAccessExpression(x) &&
-          queryObjOfExpr(x.expression) && memberSet.has(x.name.text) && inOrigin(queryObjOfExpr(x.expression), origin)) { hit = true; return; }
+      if (memberName(x) !== null &&
+          queryObjOfExpr(x.expression) && memberSet.has(memberName(x)) && inOrigin(queryObjOfExpr(x.expression), origin)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
@@ -561,8 +583,8 @@ function analyzeSourceFile(relPath, text) {
     const walk = (x) => {
       if (hit || !x) return;
       if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && inOrigin(dataVars.get(x.text), origin)) { hit = true; return; }
-      if (ts.isPropertyAccessExpression(x) &&
-          queryObjOfExpr(x.expression) && x.name.text === "data" && inOrigin(queryObjOfExpr(x.expression), origin)) { hit = true; return; }
+      if (memberName(x) === "data" &&
+          queryObjOfExpr(x.expression) && inOrigin(queryObjOfExpr(x.expression), origin)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
     walk(n);
@@ -766,7 +788,7 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isBinaryExpression(x) && x.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
           referencesQueryData(x.left) && !isHandled(x, originsIn(x.left)) && !inGuardTest(x)) { hit = true; return; }
       if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !isHandled(x, dataVars.get(x.text)) && !inGuardTest(x)) { hit = true; return; }
-      if (ts.isPropertyAccessExpression(x) && x.name.text === "data" && queryObjOfExpr(x.expression) &&
+      if (memberName(x) === "data" && queryObjOfExpr(x.expression) &&
           !isHandled(x, queryObjOfExpr(x.expression)) && !inGuardTest(x)) { hit = true; return; }
       ts.forEachChild(x, walk);
     };
@@ -785,7 +807,7 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isIdentifier(x) && !isMemberName(x) && dataVars.has(x.text) && !boundAsParamInEnclosingFn(x) && !inGuardTest(x)) {
         for (const o of dataVars.get(x.text)) out.add(o);
       }
-      if (ts.isPropertyAccessExpression(x) && x.name.text === "data" && queryObjOfExpr(x.expression) && !inGuardTest(x)) {
+      if (memberName(x) === "data" && queryObjOfExpr(x.expression) && !inGuardTest(x)) {
         for (const o of queryObjOfExpr(x.expression)) out.add(o);
       }
       ts.forEachChild(x, walk);
@@ -1012,18 +1034,44 @@ function analyzeSourceFile(relPath, text) {
   const wrapperLike = (call) => ts.isCallExpression(call) &&
     (isWrapperName(callName(call)) || (ts.isIdentifier(unwrapExpr(call.expression)) && isWrapperName(reactNamed.get(unwrapExpr(call.expression).text)))); // `import { memo as m } from "react"`
   const localComponents = []; // { name, params, scope }
-  const componentFn = (init) => {
-    let e = init;
-    while (e && wrapperLike(e) && reactWrapperName(e) && e.arguments[0]) e = e.arguments[0]; // only React's own memo / forwardRef is transparent
-    if (e && ts.isIdentifier(e)) e = findHelper(e) ?? e; // `memo(PanelImpl)` wraps a named same-file component
-    return e && (ts.isArrowFunction(e) || ts.isFunctionExpression(e) || ts.isFunctionDeclaration(e)) ? e : null;
+  // EVERY component a binding can hold: a conditional / logical initializer (`enabled ? Good : Bad`, `enabled && Good`, `Good ?? Bad`)
+  // contributes each branch; `&&` contributes only its right operand (the left is a guard). A branch this analysis cannot resolve
+  // (an imported or computed component, a call) marks the binding `unresolved`; the unresolved-wrapper rule then rejects an element
+  // of it that receives unguarded query data.
+  const componentLeaves = (init) => {
+    const out = { fns: [], unresolved: false };
+    const add = (e, d) => {
+      if (d > 6) { out.unresolved = true; return; }
+      let u = unwrapExpr(e);
+      while (u && wrapperLike(u)) { if (!reactWrapperName(u)) { out.unresolved = true; return; } u = u.arguments[0] ? unwrapExpr(u.arguments[0]) : null; } // only React's own memo / forwardRef is transparent
+      if (!u) { out.unresolved = true; return; }
+      if (ts.isConditionalExpression(u)) { add(u.whenTrue, d + 1); add(u.whenFalse, d + 1); return; }
+      if (ts.isBinaryExpression(u)) {
+        const k = u.operatorToken.kind;
+        if (k === K.AmpersandAmpersandToken) add(u.right, d + 1);
+        else if (k === K.BarBarToken || k === K.QuestionQuestionToken) { add(u.left, d + 1); add(u.right, d + 1); }
+        else out.unresolved = true;
+        return;
+      }
+      if (ts.isArrowFunction(u) || ts.isFunctionExpression(u)) { out.fns.push(u); return; }
+      if (ts.isIdentifier(u)) { // `memo(PanelImpl)` wraps a named same-file component
+        if (u.text === "undefined") return;
+        const f = findHelper(u);
+        if (f && (ts.isArrowFunction(f) || ts.isFunctionExpression(f) || ts.isFunctionDeclaration(f))) out.fns.push(f); else out.unresolved = true;
+        return;
+      }
+      if (u.kind === K.NullKeyword || u.kind === K.FalseKeyword) return;
+      out.unresolved = true;
+    };
+    add(init, 0);
+    return out;
   };
   {
     const reg = (n) => {
-      if (ts.isFunctionDeclaration(n) && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n), fn: n });
+      // a TypeScript overload signature has no body and is not the component: only the implementation registers
+      if (ts.isFunctionDeclaration(n) && n.body && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n), fn: n });
       if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer) {
-        const fn = componentFn(n.initializer);
-        if (fn) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n), fn });
+        for (const fn of componentLeaves(n.initializer).fns) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n), fn });
       }
       ts.forEachChild(n, reg);
     };
@@ -1034,16 +1082,42 @@ function analyzeSourceFile(relPath, text) {
     (ts.isVariableStatement(st) && st.declarationList.declarations.some((d) => bindsPatternName(d.name, name))) ||
     ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name && st.name.text === name) ||
     (ts.isSourceFile(block) && importedNames.has(name) && ts.isImportDeclaration(st)));
-  const findComponent = (tag) => {
-    for (let c = tag.parent; c; c = c.parent) {
-      if (bindsNameOpaquely(c, tag.text)) return undefined; // a parameter / catch / loop binding shadows the tag name
-      if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
-      const hit = localComponents.find((k) => k.name === tag.text && k.scope === c);
-      if (hit) return hit;
-      if (blockDeclares(c, tag.text)) return undefined; // a nearer binding this analyzer does not register still shadows an outer component
-    }
-    return undefined;
+  // Every component a JSX tag can name: an identifier (all branches of a conditional binding) or a member expression backed by a
+  // same-file const object literal (`const Components = { Pill }; <Components.Pill />`). Anything else is not resolved here.
+  const adhocComps = new Map();
+  const compOfFn = (fn, name) => {
+    const known = localComponents.find((k) => k.fn === fn);
+    if (known) return known;
+    if (!adhocComps.has(fn)) adhocComps.set(fn, { name, params: fn.parameters, scope: undefined, fn });
+    return adhocComps.get(fn);
   };
+  const memberTagValue = (tag) => { // the value expression of `Obj.Name` when Obj is a same-file const object literal
+    if (!(ts.isPropertyAccessExpression(tag) && ts.isIdentifier(tag.expression))) return null;
+    const d = lookupDecl(tag.expression);
+    const o = d && !d.mutable && d.init ? unwrapExpr(d.init) : null;
+    if (!o || !ts.isObjectLiteralExpression(o)) return null;
+    for (const pr of o.properties) {
+      if (ts.isPropertyAssignment(pr) && pr.name && memberKey(pr.name) === tag.name.text) return pr.initializer;
+      if (ts.isShorthandPropertyAssignment(pr) && pr.name.text === tag.name.text) return pr.name;
+    }
+    return null;
+  };
+  const findComponents = (tag) => {
+    if (tag && ts.isPropertyAccessExpression(tag)) {
+      const v = memberTagValue(tag);
+      return v ? componentLeaves(v).fns.map((fn) => compOfFn(fn, tag.getText(sf))) : [];
+    }
+    if (!tag || !ts.isIdentifier(tag)) return [];
+    for (let c = tag.parent; c; c = c.parent) {
+      if (bindsNameOpaquely(c, tag.text)) return []; // a parameter / catch / loop binding shadows the tag name
+      if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
+      const hits = localComponents.filter((k) => k.name === tag.text && k.scope === c);
+      if (hits.length) return hits;
+      if (blockDeclares(c, tag.text)) return []; // a nearer binding this analyzer does not register still shadows an outer component
+    }
+    return [];
+  };
+  const findComponent = (tag) => findComponents(tag)[0];
   // Taint the receiving parameter. `propName === null` (a `{...p}` spread) taints every
   // binding of the first parameter; a rest element is tainted too; a plain `props` identifier
   // is tainted whole (so `props.items` reads as data).
@@ -1144,21 +1218,27 @@ function analyzeSourceFile(relPath, text) {
     }
     return changed;
   };
+  const cbBinding = new Map(); // binding element -> [callback functions handed to that prop]
+  const cbParamProp = new Map(); // identifier parameter -> Map(prop name -> [callback functions])
   const propagateProps = () => {
     let changed = false;
     const pass = (tag, propName, expr) => {
-      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
-      // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
-      if (comp && comp.params[0] && expr && elementHasUnguardedDataRender(expr) && taintParam(comp.params[0], propName, originsIn(expr))) changed = true;
+      for (const comp of findComponents(tag)) {
+        // A prop expression that gates its own data (`s ? String(s.n) : "-"`) passes no unguarded data.
+        if (comp.params[0] && expr && elementHasUnguardedDataRender(expr) && taintParam(comp.params[0], propName, originsIn(expr))) changed = true;
+      }
     };
     const passQuery = (tag, propName, expr) => {
-      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
-      const e = expr && unwrapExpr(expr);
-      if (comp && comp.params[0] && e && ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)) &&
-          passQueryObject(comp.params[0], propName, originsIn(e))) changed = true;
+      for (const comp of findComponents(tag)) {
+        const e = expr && unwrapExpr(expr);
+        if (comp.params[0] && e && ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)) &&
+            passQueryObject(comp.params[0], propName, originsIn(e))) changed = true;
+      }
     };
     const passClass = (tag, propName, attr, openEl = attr.parent.parent) => {
-      const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
+      for (const comp of findComponents(tag)) passClassTo(comp, propName, attr, openEl);
+    };
+    const passClassTo = (comp, propName, attr, openEl) => {
       const param = comp && comp.params[0];
       if (!param) return;
       const found = goodClassStringNodes(attr);
@@ -1194,7 +1274,48 @@ function analyzeSourceFile(relPath, text) {
         }
       }
     };
+    // RENDER-PROP CALLBACKS: `<Panel render={(n) => …} />` where Panel calls `render(value)` (or `props.render(value)`, `children(value)`).
+    // The callback is recorded against the receiving binding; a call with an argument that carries unguarded query data taints the
+    // callback's parameter at that position.
+    const callbackFn = (expr) => {
+      const u = expr && unwrapExpr(expr);
+      if (!u) return null;
+      if (ts.isArrowFunction(u) || ts.isFunctionExpression(u)) return u;
+      if (ts.isIdentifier(u)) { const f = findHelper(u); return f && (ts.isArrowFunction(f) || ts.isFunctionExpression(f) || ts.isFunctionDeclaration(f)) ? f : null; }
+      return null;
+    };
+    const regCallback = (tag, propName, expr) => {
+      const f = callbackFn(expr);
+      if (!f) return;
+      for (const comp of findComponents(tag)) {
+        const p0 = comp.params[0];
+        if (!p0) continue;
+        if (ts.isObjectBindingPattern(p0.name)) {
+          for (const el of p0.name.elements) if (!el.dotDotDotToken && propOf(el) === propName) { const l = cbBinding.get(el) ?? []; if (!l.includes(f)) l.push(f); cbBinding.set(el, l); }
+        } else if (ts.isIdentifier(p0.name)) {
+          const m = cbParamProp.get(p0) ?? new Map();
+          const l = m.get(propName) ?? [];
+          if (!l.includes(f)) l.push(f);
+          m.set(propName, l);
+          cbParamProp.set(p0, m);
+        }
+      }
+    };
+    const callCallbacks = (call) => {
+      const callee = unwrapExpr(call.expression);
+      let fns = null;
+      if (ts.isIdentifier(callee)) { const b = bindingOfParam(callee); fns = b && paramIsNearest(callee, b) ? cbBinding.get(b) : null; }
+      else if (memberName(callee) !== null && ts.isIdentifier(callee.expression)) { const prm = paramThroughAliases(callee.expression); fns = prm ? cbParamProp.get(prm)?.get(memberName(callee)) : null; }
+      if (!fns) return;
+      call.arguments.forEach((arg, i) => {
+        if (!elementHasUnguardedDataRender(arg)) return;
+        for (const f of fns) if (f.parameters[i] && taintParam(f.parameters[i], null, originsIn(arg))) changed = true;
+      });
+    };
     const visit = (n) => {
+      if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) regCallback(n.parent.parent.tagName, n.name.text, n.initializer.expression);
+      if (ts.isJsxElement(n)) for (const ch of n.children) if (ts.isJsxExpression(ch) && ch.expression) regCallback(n.openingElement.tagName, "children", ch.expression);
+      if (ts.isCallExpression(n)) callCallbacks(n);
       if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer) passClass(n.parent.parent.tagName, n.name.text, n);
       if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) passQuery(n.parent.parent.tagName, n.name.text, n.initializer.expression);
       if (ts.isJsxSpreadAttribute(n)) passQuery(n.parent.parent.tagName, null, n.expression);
@@ -1897,7 +2018,11 @@ function analyzeSourceFile(relPath, text) {
           resolving.add(fn);
           const saved = helperBind;
           helperBind = new Map();
-          const viaCallApply = ts.isPropertyAccessExpression(unwrapExpr(x.expression)); // `.call(null, a)` shifts the arguments: no substitution
+          const viaCallApply = ts.isPropertyAccessExpression(unwrapExpr(x.expression));
+          (fn.parameters ?? []).forEach((prm, i) => { // an omitted argument (or one shifted by call / apply) takes the parameter's DEFAULT: walk it as a value
+            const a = x.arguments[i];
+            if (prm.initializer && (viaCallApply || !a || (ts.isIdentifier(unwrapExpr(a)) && unwrapExpr(a).text === "undefined"))) walk(prm.initializer, use ?? x);
+          }); // `.call(null, a)` shifts the arguments: no substitution
           (fn.parameters ?? []).forEach((prm, i) => { if (!viaCallApply && ts.isIdentifier(prm.name) && !prm.initializer && refsReadOnly(prm.name.text, fn, prm) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
           for (const r of returnExprs(fn)) walk(r, use ?? x);
           helperBind = saved;
@@ -2011,23 +2136,30 @@ function analyzeSourceFile(relPath, text) {
     }
     // UNRESOLVED WRAPPER (fail-closed): `const Pill = memo(Red)` where `memo` is not React's cannot be followed, so a component bound
     // to it that receives unguarded query data is rejected rather than credited with its argument's provenance.
-    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && ts.isIdentifier(n.tagName)) {
+    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && (ts.isIdentifier(n.tagName) || ts.isPropertyAccessExpression(n.tagName))) {
       let init = null; // follow `const Pill = P;` (an alias chain) to the call that binds the component
-      for (let cur = n.tagName, hops = 0; hops < 6; hops++) {
+      let unresolved = false;
+      if (ts.isPropertyAccessExpression(n.tagName)) { // `<Components.Pill />` backed by a same-file const object: its value is judged like a binding
+        const v = memberTagValue(n.tagName);
+        init = v ? unwrapExpr(v) : null;
+        if (v && componentLeaves(v).unresolved) unresolved = true; // a member this analysis cannot resolve (a call, an imported component) is rejected
+        if (v && ts.isIdentifier(init)) init = null; // a plain same-file component name: followed, not rejected
+      } else for (let cur = n.tagName, hops = 0; hops < 6; hops++) {
         const d = lookupDecl(cur);
         const u = d && d.init ? unwrapExpr(d.init) : null;
         if (u && ts.isIdentifier(u)) { cur = u; continue; }
         init = u;
         break;
       }
-      let unresolved = false;
       while (init && wrapperLike(init)) { if (!reactWrapperName(init)) { unresolved = true; break; } init = init.arguments[0] ? unwrapExpr(init.arguments[0]) : null; }
+      // a conditional / logical selection (`enabled ? Good : Bad`): a branch this analysis cannot resolve rejects the element
+      if (!unresolved && init && (ts.isConditionalExpression(init) || (ts.isBinaryExpression(init) && (init.operatorToken.kind === K.AmpersandAmpersandToken || init.operatorToken.kind === K.BarBarToken || init.operatorToken.kind === K.QuestionQuestionToken))) && componentLeaves(init).unresolved) unresolved = true;
       if (unresolved) {
         // data carried: unguarded query data, OR a whole query object (`query={q}` / `{...q}`, the references `passQuery` follows)
         const carriesData = (x) => elementHasUnguardedDataRender(x) || (() => { const e = unwrapExpr(ts.isJsxExpression(x) && x.expression ? x.expression : x); return ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)); })();
         const carries = n.attributes.properties.some((a) => ts.isJsxSpreadAttribute(a) ? carriesData(a.expression) : ts.isJsxAttribute(a) && a.initializer && carriesData(a.initializer)) ||
           (ts.isJsxOpeningElement(n) && n.parent.children.some((ch) => !ts.isJsxText(ch) && elementHasUnguardedDataRender(ch)));
-        if (carries) report(n, "unresolved-wrapper-on-unguarded-data", n.tagName.text);
+        if (carries) report(n, "unresolved-wrapper-on-unguarded-data", n.tagName.getText(sf));
       }
     }
     // Good-state className on a JSX attribute.
@@ -3493,6 +3625,87 @@ export function Page() {
 export function Page() {
   ${Q2}
   return <Pill tone="text-emerald-400" other="text-red-400" n={q.data?.n} />;
+}`)],
+);
+
+// Round 31 (Codex pass 11): conditionally selected components, member-expression tags, bracket-accessed query fields, overload
+// signatures, helper parameter defaults and render-prop callbacks.
+const GOOD_C = `const Good = ({ items }) => ${EMERALD_ITEMS};\nconst Bad = ({ items }) => <span className="text-red-400">{items.length} rows</span>;`;
+const RENDER_PANEL = `function Panel({ value, render }) { return <div>{render(value)}</div>; }`;
+BUG_R6.push(
+  ["conditionally selected component: enabled ? Good : Bad", propsFixture(`${GOOD_C}\nconst Pill = enabled ? Good : Bad;`, "<Pill items={items} />")],
+  ["the emerald component is the LAST branch: enabled ? Bad : Good", propsFixture(`${GOOD_C}\nconst Pill = enabled ? Bad : Good;`, "<Pill items={items} />")],
+  ["logically selected component: enabled && Good", propsFixture(`${GOOD_C}\nconst Pill = enabled && Good;`, "<Pill items={items} />")],
+  ["nullish-selected component: Good ?? Bad", propsFixture(`${GOOD_C}\nconst Pill = Good ?? Bad;`, "<Pill items={items} />")],
+  ["a conditional selection with an unresolved (imported) branch is rejected: enabled ? Bad : Imported", propsFixture(`${GOOD_C}\nconst Pill = enabled ? Bad : Imported;`, "<Pill items={items} />", `import Imported from "./x";`)],
+  ["member-expression tag backed by a same-file object: <Components.Pill />", propsFixture(`${GOOD_C}\nconst Components = { Pill: Good };`, "<Components.Pill items={items} />")],
+  ["member-expression tag, shorthand member: { Good } -> <Components.Good />", propsFixture(`${GOOD_C}\nconst Components = { Good };`, "<Components.Good items={items} />")],
+  ["member-expression tag, inline component value", propsFixture(`const Components = { Pill: ({ items }) => ${EMERALD_ITEMS} };`, "<Components.Pill items={items} />")],
+  ["member-expression tag whose object member is unresolvable is rejected", propsFixture(`${GOOD_C}\nconst Components = { Pill: useThing() };`, "<Components.Pill items={items} />")],
+  ["bracket-accessed query field on a local query: q[\"data\"]", wrap2(`export function Page() {
+  ${Q2}
+  return <span className="text-emerald-400">{q["data"]?.n}</span>;
+}`)],
+  ["bracket-accessed query field on a propagated query object: query[\"data\"]", wrap2(`function Row({ query }) { return <span className="text-emerald-400">{query["data"]?.n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Row query={q} />;
+}`)],
+  ["bracket-accessed query field through props: props.query[\"data\"]", wrap2(`function Row(props) { return <span className="text-emerald-400">{props.query["data"]?.n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Row query={q} />;
+}`)],
+  ["an overload signature is not the component: the implementation is followed", propsFixture(`function Pill(props: { items: number[] }): JSX.Element;\nfunction Pill({ items }: { items: number[] }) { return ${EMERALD_ITEMS}; }`, "<Pill items={items} />")],
+  ["helper parameter default supplies the good class: tone()", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone()}>{q.data?.n}</span>`)],
+  ["helper parameter default is used when the argument is undefined: tone(undefined)", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone(undefined)}>{q.data?.n}</span>`)],
+  ["render prop: query data reaches the callback parameter", wrap2(`${RENDER_PANEL}
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n} render={(n) => <span className="text-emerald-400">{n}</span>} />;
+}`)],
+  ["children-as-function: query data reaches the callback parameter", wrap2(`function Panel({ value, children }) { return <div>{children(value)}</div>; }
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n}>{(n) => <span className="text-emerald-400">{n}</span>}</Panel>;
+}`)],
+  ["render prop called through props.render(props.value)", wrap2(`function Panel(props) { return <div>{props.render(props.value)}</div>; }
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n} render={(n) => <span className="text-emerald-400">{n}</span>} />;
+}`)],
+  ["render prop given by a same-file function name", wrap2(`${RENDER_PANEL}
+const renderRow = (n) => <span className="text-emerald-400">{n}</span>;
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n} render={renderRow} />;
+}`)],
+);
+OK_R6.push(
+  ["conditionally selected components, both muted", propsFixture(`const Bad = ({ items }) => <span className="text-red-400">{items.length} rows</span>;\nconst Bad2 = ({ items }) => <span className="text-slate-400">{items.length} rows</span>;\nconst Pill = enabled ? Bad : Bad2;`, "<Pill items={items} />")],
+  ["a logical selection of a muted component: enabled && Bad", propsFixture(`${GOOD_C}\nconst Pill = enabled && Bad;`, "<Pill items={items} />")],
+  ["a nullish selection of muted components: Bad ?? Bad2", propsFixture(`${GOOD_C}\nconst Bad2 = ({ items }) => <span className="text-slate-400">{items.length} rows</span>;\nconst Pill = Bad ?? Bad2;`, "<Pill items={items} />")],
+  ["conditionally selected components, call site guarded on the data", propsFixture(`${GOOD_C}\nconst Pill = enabled ? Good : Bad;`, "q.data ? <Pill items={items} /> : null")],
+  ["an imported namespace member tag is the declared imported-component limitation, not rejected", propsFixture(``, "<UI.Pill items={items} />", `import * as UI from "./ui";`)],
+  ["member-expression tag backed by a muted component", propsFixture(`${GOOD_C}\nconst Components = { Pill: Bad };`, "<Components.Pill items={items} />")],
+  ["member-expression tag, call site guarded on the data", propsFixture(`${GOOD_C}\nconst Components = { Pill: Good };`, "q.data ? <Components.Pill items={items} /> : null")],
+  ["bracket-accessed query field, call site guarded on the data", wrap2(`function Row({ query }) { return <span className="text-emerald-400">{query["data"]?.n}</span>; }
+export function Page() {
+  ${Q2}
+  return q.data ? <Row query={q} /> : null;
+}`)],
+  ["an overloaded component, call site guarded on the data", propsFixture(`function Pill(props: { items: number[] }): JSX.Element;\nfunction Pill({ items }: { items: number[] }) { return ${EMERALD_ITEMS}; }`, "q.data ? <Pill items={items} /> : null")],
+  ["helper parameter default is muted", helperPage(`function tone(c = "text-slate-400") { return c; }`, `<span className={tone()}>{q.data?.n}</span>`)],
+  ["helper called with an explicit muted argument although the default is emerald", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone("text-slate-400")}>{q.data?.n}</span>`)],
+  ["render prop, call site guarded on the data", wrap2(`${RENDER_PANEL}
+export function Page() {
+  ${Q2}
+  return q.data ? <Panel value={q.data.n} render={(n) => <span className="text-emerald-400">{n}</span>} /> : null;
+}`)],
+  ["render prop whose callback renders no data", wrap2(`${RENDER_PANEL}
+export function Page() {
+  ${Q2}
+  return <Panel value={q.data?.n} render={() => <span className="text-emerald-400">ready</span>} />;
 }`)],
 );
 

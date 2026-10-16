@@ -57,6 +57,8 @@ export const DENIED_MARKER = "NO-WRITE-DENIED";
 // root for a path being judged (the write would fail with ELOOP anyway, and a path that cannot be placed is treated as inside), and the text of the
 // root itself when the root is what is being placed. It is a parameter and not a read of `ROOT` because `ROOT` is computed by this very function at
 // module load: a read of it inside the walk would be a read in its own temporal dead zone (check-module-init-order.mjs fails on exactly that).
+// A looped `NOWRITE_ALLOW` entry allows nothing: its fallback is a sentinel holding a NUL, which no real path can match (the repository root there would
+// have allowed the whole repository).
 // `realpath.native` is realpath(3): the JS `realpathSync` normalises `..` as text before it looks, which is the shortcut above. Both are taken now, so
 // the program under test replacing them on `fs` later does not change where a path is judged to land.
 const MAX_LINK_HOPS = 40;
@@ -85,7 +87,7 @@ const realish = (p, unplaceable) => {
 };
 const rootText = resolve(dirname(fileURLToPath(import.meta.url)), "../.."); // a loop of links on the repository's own path keeps this text, which is still inside
 const ROOT = realish(rootText, rootText);
-const ALLOW = (process.env.NOWRITE_ALLOW ?? "").split(":").filter((x) => x !== "").map((x) => realish(resolve(x), ROOT));
+const ALLOW = (process.env.NOWRITE_ALLOW ?? "").split(":").filter((x) => x !== "").map((x) => realish(resolve(x), "\u0000unplaceable")); // a looped entry allows nothing
 delete process.env.NOWRITE_ALLOW;
 const inside = (abs, dir) => abs === dir || abs.startsWith(dir + sep);
 // Every spelling of a path the fs functions accept: a string, a Buffer or any other Uint8Array, a URL, and a plain object that

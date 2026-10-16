@@ -39,10 +39,12 @@ import { resolveTelemetryEmitter } from "@workspace/integrations/telemetry";
 import { resolveWebhooksEmitter } from "@workspace/integrations/webhooks";
 import { resolveCaepEmitter } from "@workspace/integrations/caep-events";
 import { REDIRECT_REFUSED } from "@workspace/integrations/emit-gate/redirect";
-import { WEBHOOK_URL_REFUSALS } from "@workspace/integrations/emit-gate/url-guard";
+import { WEBHOOK_URL_REFUSALS, validateWebhookUrl } from "@workspace/integrations/emit-gate/url-guard";
 import { ITSM_WEBHOOK_REFUSALS } from "@workspace/integrations/itsm";
 import { verifySignedWebhook } from "@workspace/integrations/webhooks";
-import { VENDOR_ERROR_TEXT_LIMIT } from "@workspace/integrations/emit-gate/bounded-text";
+import { VENDOR_ERROR_TEXT_LIMIT, boundedText } from "@workspace/integrations/emit-gate/bounded-text";
+import { redirectRefusal } from "@workspace/integrations/emit-gate/redirect";
+import { asNonEmptyString, asPositiveNumber, asVendorInstant, VendorFieldInvalid } from "@workspace/integrations/emit-gate/vendor-values";
 
 let passed = 0;
 const failures: string[] = [];
@@ -554,6 +556,86 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     if (savedT === undefined) delete process.env.SIGNALGRID_TIER; else process.env.SIGNALGRID_TIER = savedT;
     if (savedL === undefined) delete process.env.SIGNALGRID_LIVE_INTEGRATIONS; else process.env.SIGNALGRID_LIVE_INTEGRATIONS = savedL;
   }
+}
+
+// ---- The shared outbound guards, driven directly (wave 8, 2026-10-09) -------------
+// url-guard, bounded-text and redirect are imported by every emitter family; they are
+// registered under this proof in scripts/mutation-guard.mjs with the brace-less sweep on, so
+// EACH refusing clause is pinned by an input only that clause refuses. Without this block the
+// family tests above reach them only through whichever hostnames those tests happened to use.
+{
+  const live = { live: true };
+  const refusedAs = (u: string, reason: string, opts = live): boolean => {
+    const v = validateWebhookUrl(u, opts);
+    return v.valid === false && v.error === reason;
+  };
+  check("url-guard: a plain-http target is refused at a live tier, naming HTTPS",
+    refusedAs("http://hook.example.com/x", WEBHOOK_URL_REFUSALS.httpsRequired));
+  check("url-guard: …and the same http target is NOT refused off a live tier (the clause is the live one)",
+    validateWebhookUrl("http://hook.example.com/x", { live: false }).valid === true);
+  check("url-guard: an https public host is valid", validateWebhookUrl("https://hook.example.com/x", live).valid === true);
+  const loopbacks = ["https://localhost/x", "https://app.localhost/x", "https://0.0.0.0/x", "https://[::]/x", "https://[::1]/x", "https://127.0.0.1/x"];
+  for (const u of loopbacks) {
+    check(`url-guard: loopback/unspecified ${u} is refused as loopback`, refusedAs(u, WEBHOOK_URL_REFUSALS.loopback));
+  }
+  const privates = ["https://10.1.2.3/x", "https://192.168.1.1/x", "https://172.16.0.1/x", "https://172.31.255.1/x",
+    "https://100.64.0.1/x", "https://100.127.0.1/x", "https://169.254.169.254/x", "https://[fc00::1]/x", "https://[fd12::1]/x", "https://[fe80::1]/x"];
+  for (const u of privates) {
+    check(`url-guard: private/link-local ${u} is refused as privateRange`, refusedAs(u, WEBHOOK_URL_REFUSALS.privateRange));
+  }
+  check("url-guard: the range edges just outside RFC1918/6598 stay valid (172.15, 172.32, 100.63, 100.128)",
+    ["https://172.15.0.1/x", "https://172.32.0.1/x", "https://100.63.0.1/x", "https://100.128.0.1/x"].every((u) => validateWebhookUrl(u, live).valid === true));
+  check("url-guard: an unparseable URL is refused as invalidUrl", refusedAs("not a url", WEBHOOK_URL_REFUSALS.invalidUrl));
+}
+{
+  check("bounded-text: a non-string yields the empty string, not a throw or the value",
+    boundedText(undefined as unknown as string) === "" && boundedText(42 as unknown as string) === "");
+  check("bounded-text: text at or under the limit is returned untouched",
+    boundedText("abc", 3) === "abc" && boundedText("", 3) === "");
+  check("bounded-text: text over the limit is cut and the cut is STATED with the full length",
+    boundedText("abcdef", 3) === "abc… [truncated, 6 characters total]");
+}
+{
+  check("redirect: a missing, null or empty Location reads as 'no Location header', never echoed",
+    [undefined, null, ""].every((l) => redirectRefusal(302, l).includes("no Location header")));
+  check("redirect: an unparseable Location is reported as unparseable and not echoed verbatim",
+    redirectRefusal(302, "http://[bad").includes("an unparseable Location header") && !redirectRefusal(302, "http://[bad").includes("[bad"));
+  check("redirect: a parseable Location names only its host, not its path",
+    (() => { const r = redirectRefusal(307, "https://evil.example/secret/path?q=1"); return r.includes('Location host "evil.example"') && !r.includes("secret"); })());
+}
+
+// ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------
+// vendor-values.ts is what the servicenow/bmc-helix/ivanti/manageengine/sentinel adapters read a
+// token, lifetime or instant through. Each throw is pinned by the DETAIL it names (which also
+// pins shapeOf's branches), so a guard flipped off cannot hide behind a later guard's throw.
+{
+  const detailOf = (fn: () => unknown): string => {
+    try { fn(); return "RETURNED"; }
+    catch (err) { return err instanceof VendorFieldInvalid ? `${err.field}|${err.detail}` : "OTHER"; }
+  };
+  check("vendor-values: a non-string token is refused naming 'absent' for undefined",
+    detailOf(() => asNonEmptyString(undefined, "access_token")) === "access_token|expected a string, received absent");
+  check("vendor-values: …'null' for null", detailOf(() => asNonEmptyString(null, "access_token")).endsWith("received null"));
+  check("vendor-values: …'an array of N' for an array", detailOf(() => asNonEmptyString([1, 2], "f")).endsWith("received an array of 2"));
+  check("vendor-values: …'a number' for a number (never echoing it)", detailOf(() => asNonEmptyString(7, "f")).endsWith("received a number"));
+  check("vendor-values: whitespace-only is empty and refused", detailOf(() => asNonEmptyString("   ", "f")).includes("only whitespace"));
+  check("vendor-values: a real token is returned untouched", asNonEmptyString("tok-1", "f") === "tok-1");
+  check("vendor-values: a non-numeric lifetime is refused as not-a-finite-number, naming its shape",
+    detailOf(() => asPositiveNumber("abc", "expires_in")).includes("expected a finite number, received a 3-character string")
+    && detailOf(() => asPositiveNumber("", "expires_in")).includes("received an empty string")
+    && detailOf(() => asPositiveNumber(NaN, "expires_in")).includes("expected a finite number")
+    && detailOf(() => asPositiveNumber(Infinity, "expires_in")).includes("expected a finite number"));
+  check("vendor-values: zero and negative lifetimes are refused as non-positive (finite, so past the first guard)",
+    detailOf(() => asPositiveNumber(0, "expires_in")).includes("expected a positive number, received 0")
+    && detailOf(() => asPositiveNumber(-5, "expires_in")).includes("expected a positive number, received -5"));
+  check("vendor-values: 3600 and the decimal string \"3600\" are both accepted", asPositiveNumber(3600, "f") === 3600 && asPositiveNumber("3600", "f") === 3600);
+  check("vendor-values: a non-instant type is refused naming its shape",
+    detailOf(() => asVendorInstant(undefined, "created")).includes("expected an instant, received absent")
+    && detailOf(() => asVendorInstant({}, "created")).includes("expected an instant, received a object"));
+  check("vendor-values: an unparseable instant string is refused as unparseable",
+    detailOf(() => asVendorInstant("not a date", "created")).includes("unparseable") && detailOf(() => asVendorInstant(NaN, "created")).includes("unparseable"));
+  check("vendor-values: an ISO instant and an epoch number both normalise to ISO-8601",
+    asVendorInstant("2026-01-01T00:00:00Z", "f") === "2026-01-01T00:00:00.000Z" && asVendorInstant(0, "f") === "1970-01-01T00:00:00.000Z");
 }
 
 // Determinism: two identical resolutions produce identical fixture logs.

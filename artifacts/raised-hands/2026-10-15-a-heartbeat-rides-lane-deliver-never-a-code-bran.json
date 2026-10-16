@@ -1,0 +1,20 @@
+{
+  "id": "2026-10-15-a-heartbeat-rides-lane-deliver-never-a-code-bran",
+  "raisedAt": "2026-10-15T10:32:13.514Z",
+  "origin": "cloud",
+  "doing": "Delivering the forward-build-cycle heartbeat (and the steward and hygiene heartbeats) for the first fire after the weekly-usage-limit outage.",
+  "blockedBy": "A heartbeat rides lane-deliver, never a code branch, and lane-deliver's scheduled-routines gate refused every heartbeat delivery (the gate runs only for heartbeat ops) while the dependabot-queue-review row sat past its 30-day awaiting-activation bound (reached 2026-10-12, inside the outage of 2026-10-09T16:40Z to 2026-10-15T10:00Z). The heartbeat therefore cannot be written until the row's retirement, carried by this same change, is on SignalGrid_Alpha.",
+  "need": "This change to land. The first lane-deliver batch after it carries the forward-build-cycle, mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats and clears this hand.",
+  "whoCanUnblock": "cloud lane",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:forward-build-cycle"
+  ],
+  "takenBy": "cloud",
+  "takenAt": "2026-10-15T11:11:06.195Z",
+  "resolvedAt": "2026-10-15T12:05:53.540Z",
+  "resolvedBy": "cloud",
+  "resolution": "#1513 landed the dependabot-queue-review retirement; this batch carries the forward-build-cycle, mac-lane-steward-duty-cycle and cloud-lane-hygiene-sweep heartbeats through lane-deliver, whose scheduled-routines gate passes again."
+}

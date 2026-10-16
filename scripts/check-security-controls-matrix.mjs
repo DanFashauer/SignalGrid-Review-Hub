@@ -59,8 +59,12 @@
 //         CI is its own gate) — a proof nobody runs proves nothing (round 28). A
 //         proof that self-skips without an env var (the parity gate's
 //         --list-self-skipping-proofs) counts only where a workflow step runs
-//         exactly `pnpm run <proof>` with that var set in the step's or job's env,
-//         without continue-on-error — a lane that skips it never ran it (round 31). A
+//         exactly `pnpm run <proof>` with that var a non-empty literal (the step's
+//         own value wins over the job's), in a workflow triggered on push or
+//         pull_request, from a job and step whose keys are all allowlisted (no `if`,
+//         `needs`, `strategy`, `shell`, `continue-on-error` …) — a lane that skips
+//         it never ran it (rounds 31–32). CEILING: whether that workflow is a
+//         required check for merging is repository settings, not files. A
 //         span that reads as a proof or a package-manager command (any case,
 //         padding or prefix: `PROOF:x`, ` proof:x `, `npm run …`) must be exactly
 //         `(pnpm run )?proof:<name>` or `pnpm install --frozen-lockfile`; any
@@ -548,7 +552,7 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
   // workflow step runs it WITH that var set (round 31) — see envRunsFromWorkflows
   const laneWhy = (p, tag = "") => {
     if (!gatedProofs.has(p)) return `proof \`${p}\`${tag} runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`;
-    if (selfSkipping.has(p) && !envRuns.has(p)) return `proof \`${p}\`${tag} self-skips without ${selfSkipping.get(p)}, and no workflow step runs exactly \`pnpm run ${p}\` with ${selfSkipping.get(p)} set in the step's or job's env — a lane that skips it never ran it`;
+    if (selfSkipping.has(p) && !envRuns.has(p)) return `proof \`${p}\`${tag} self-skips without ${selfSkipping.get(p)}, and no workflow step runs exactly \`pnpm run ${p}\` with ${selfSkipping.get(p)} set, in a push/pull_request workflow, from a job and step with only allowlisted keys — a lane that skips it never ran it${envRuns.refusals?.get(p)?.length ? ` (refused: ${envRuns.refusals.get(p).join("; ")})` : ""}`;
     return null;
   };
   // a `path:NN` anchor is a claim about one line: that line must EXIST and name
@@ -772,28 +776,62 @@ export function selfSkippingFromListing(stdout) {
   return out;
 }
 
-/** Self-skipping proofs a workflow really runs: a step whose `run` is EXACTLY
- *  `pnpm run <proof>`, with the proof's env var set to a non-empty value in that
- *  step's `env` or its job's `env`, and with no `continue-on-error` on the step
- *  or job (round 31 — deleting DATABASE_URL from the CI Postgres step left the
- *  proof listed in preflight, self-skipping, and credited). `files` is
- *  [{ path, text }]; a workflow that does not parse throws. */
+/** Self-skipping proofs a workflow really runs (rounds 31–32). A step credits
+ *  `<proof>` only when ALL of these hold, each an allowlist measured from the
+ *  real crediting job (review-hub-ci.yml `durable-persistence`):
+ *   - the workflow's `on:` includes `push` or `pull_request` (a schedule- or
+ *     dispatch-only workflow never runs on a change);
+ *   - every key of the job is in JOB_KEYS — so no `if`, `needs` (a job that
+ *     never runs takes its dependents with it), `strategy` (a matrix can exclude
+ *     every combination), `continue-on-error`, `container`, `environment`;
+ *   - every key of the step is in STEP_KEYS — so no `if`, `shell`,
+ *     `continue-on-error`, `working-directory`, `uses`;
+ *   - its `run` is EXACTLY `pnpm run <proof>`;
+ *   - the proof's env var is a non-empty literal: the STEP's value when the
+ *     step's env has the key (GitHub's precedence — an empty step value
+ *     overrides the job's), else the job's; a `${{ … }}` expression is not a
+ *     literal and may be empty at run time.
+ *  Workflow-level `env` is not credited (safe side). `files` is [{ path, text }];
+ *  a workflow that does not parse throws. The returned Set carries `refusals`:
+ *  proof -> why each candidate step (one whose `run` names `pnpm run <proof>`)
+ *  was refused, so a failure names its cause. */
+const JOB_KEYS = new Set(["name", "runs-on", "timeout-minutes", "services", "steps", "env", "permissions"]);
+const STEP_KEYS = new Set(["name", "id", "env", "run", "timeout-minutes"]);
+const CREDIT_TRIGGERS = new Set(["push", "pull_request"]);
 export function envRunsFromWorkflows(files, selfSkipping) {
   const out = new Set();
-  const set = (env, k) => env && typeof env === "object" && typeof env[k] === "string" && env[k].trim() !== "";
+  const refusals = new Map();
+  const refuse = (proof, why) => refusals.set(proof, [...(refusals.get(proof) ?? []), why]);
   for (const { path, text } of files) {
     const doc = parseDocument(text);
     if (doc.errors.length) throw new Error(`${path} does not parse as YAML: ${doc.errors[0].message}`);
     const wf = doc.toJS();
-    for (const job of Object.values(wf?.jobs ?? {})) {
-      if (!job || typeof job !== "object" || job["continue-on-error"]) continue;
-      for (const step of Array.isArray(job.steps) ? job.steps : []) {
-        if (!step || typeof step.run !== "string" || step["continue-on-error"]) continue;
-        const m = /^pnpm run (proof:[\w:.-]+)$/.exec(step.run.trim());
-        if (m && selfSkipping.has(m[1]) && (set(step.env, selfSkipping.get(m[1])) || set(job.env, selfSkipping.get(m[1])))) out.add(m[1]);
+    const on = wf?.on;
+    const triggers = typeof on === "string" ? [on] : Array.isArray(on) ? on : on && typeof on === "object" ? Object.keys(on) : [];
+    const triggered = triggers.some((t) => CREDIT_TRIGGERS.has(t));
+    for (const [jobId, job] of Object.entries(wf?.jobs ?? {})) {
+      if (!job || typeof job !== "object") continue;
+      const badJobKey = Object.keys(job).find((k) => !JOB_KEYS.has(k));
+      for (const [n, step] of (Array.isArray(job.steps) ? job.steps : []).entries()) {
+        if (!step || typeof step.run !== "string") continue;
+        const named = [...step.run.matchAll(/pnpm run (proof:[\w:.-]+)/g)].map((m) => m[1]).filter((x) => selfSkipping.has(x));
+        for (const proof of new Set(named)) {
+          const where = `${path} job \`${jobId}\` step ${n + 1}`;
+          const env = selfSkipping.get(proof);
+          const badStepKey = Object.keys(step).find((k) => !STEP_KEYS.has(k));
+          const stepHas = step.env && typeof step.env === "object" && Object.hasOwn(step.env, env);
+          const v = stepHas ? step.env[env] : job.env && typeof job.env === "object" ? job.env[env] : undefined;
+          if (!triggered) refuse(proof, `${path}: its \`on:\` has neither push nor pull_request`);
+          else if (badJobKey) refuse(proof, `${where}: job key \`${badJobKey}\` is outside the allowlist (${[...JOB_KEYS].join(", ")})`);
+          else if (badStepKey) refuse(proof, `${where}: step key \`${badStepKey}\` is outside the allowlist (${[...STEP_KEYS].join(", ")})`);
+          else if (step.run.trim() !== `pnpm run ${proof}`) refuse(proof, `${where}: its \`run\` is not exactly \`pnpm run ${proof}\``);
+          else if (typeof v !== "string" || v.trim() === "" || v.includes("${{")) refuse(proof, `${where}: ${env} is unset, empty or not a literal${stepHas ? " in the step's own env, which wins over the job's" : ""}`);
+          else out.add(proof);
+        }
       }
     }
   }
+  out.refusals = refusals;
   return out;
 }
 
@@ -1189,15 +1227,56 @@ function selfTest() {
             && envRunsFromWorkflows(wf("      - run: pnpm run proof:zz\n", "    env:\n      DATABASE_URL: x\n"), ss).has("proof:zz")],
           ["fail: an unreadable self-skipping listing or workflow throws (selfSkippingFromListing / envRunsFromWorkflows)", () => {
             let a = false, b = false;
-            try { selfSkippingFromListing("proof:x DATABASE_URL\nnot a line\n"); } catch { a = true; }
-            try { envRunsFromWorkflows([{ path: "bad.yml", text: "jobs: [\n" }], ss); } catch { b = true; }
+            try { selfSkippingFromListing("proof:x DATABASE_URL\nnot a line\n"); } catch (e) { a = /printed an unreadable line: "not a line"/.test(e.message); }
+            try { envRunsFromWorkflows([{ path: "bad.yml", text: "jobs: [\n" }], ss); } catch (e) { b = /^bad\.yml does not parse as YAML/.test(e.message); }
             return a && b;
           }],
           ["pass: the real backup-restore row (matrix line 178) is credited — its proof runs with DATABASE_URL in CI (in-process)", () =>
             ctx.selfSkipping.get("proof:backup-restore") === "DATABASE_URL" && ctx.envRuns.has("proof:backup-restore")
             && !(row178(ctx)?.why ?? []).some((w) => w.includes("self-skips"))],
+          // round 32 (Codex :793 and its siblings): each edit of the REAL workflow
+          // leaves the step in place but never running it with its env — every one
+          // must leave proof:backup-restore uncredited, for the reason named
+          ...(() => {
+            const STEP = "      - name: Backup/restore proof on Postgres\n";
+            const DB = "          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid\n";
+            const RUN = "        run: pnpm run proof:backup-restore\n";
+            const JOB = "  durable-persistence:\n";
+            const edit = (fn, extra = []) => {
+              if (!ci || [STEP, DB, RUN, JOB].some((x) => ci.text.split(x).length < 2) || ci.text.split(JOB).length !== 2) return null; // a pin moved
+              const at = ci.text.indexOf(STEP); // edits apply to the backup-restore step and its job only
+              const text = fn(ci.text, at);
+              return [...ctx.workflows.map((w) => (w === ci ? { ...w, text } : w)), ...extra];
+            };
+            const inStep = (t, at, a, b) => t.slice(0, at) + t.slice(at).replace(a, b);
+            const refusedFor = (files, re) => {
+              if (!files) return false;
+              const runs = envRunsFromWorkflows(files, ctx.selfSkipping);
+              const f = row178({ ...ctx, envRuns: runs });
+              return !runs.has("proof:backup-restore") && Boolean(f?.why.some((w) => w.includes("`proof:backup-restore` self-skips without DATABASE_URL") && re.test(w)));
+            };
+            const credited = (files) => Boolean(files) && envRunsFromWorkflows(files, ctx.selfSkipping).has("proof:backup-restore") && !(row178({ ...ctx, envRuns: envRunsFromWorkflows(files, ctx.selfSkipping) })?.why ?? []).some((w) => w.includes("self-skips"));
+            return [
+              ["fail W2: step `if: ${{ false }}`", () => refusedFor(edit((t, at) => inStep(t, at, STEP, `${STEP}        if: \${{ false }}\n`)), /step key `if` is outside the allowlist/)],
+              ["fail W13: step `if: github.event_name == 'schedule'`", () => refusedFor(edit((t, at) => inStep(t, at, STEP, `${STEP}        if: github.event_name == 'schedule'\n`)), /step key `if` is outside the allowlist/)],
+              ["fail: step `shell: bash -e {0}`", () => refusedFor(edit((t, at) => inStep(t, at, STEP, `${STEP}        shell: bash -e {0}\n`)), /step key `shell` is outside the allowlist/)],
+              ["fail W3: job `if: ${{ false }}`", () => refusedFor(edit((t) => t.replace(JOB, `${JOB}    if: \${{ false }}\n`)), /job key `if` is outside the allowlist/)],
+              ["fail W10: job `needs:` on a job that never runs", () => refusedFor(edit((t) => t.replace("\njobs:\n", "\njobs:\n  zz-never:\n    if: ${{ false }}\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"true\"\n").replace(JOB, `${JOB}    needs: [zz-never]\n`)), /job key `needs` is outside the allowlist/)],
+              ["fail W12: a strategy matrix that excludes every combination", () => refusedFor(edit((t) => t.replace(JOB, `${JOB}    strategy:\n      matrix:\n        x: [a]\n        exclude:\n          - x: a\n`)), /job key `strategy` is outside the allowlist/)],
+              ["fail W6: the CI step's env removed, the proof run only by a schedule-only workflow", () => refusedFor(edit((t, at) => inStep(t, at, DB, ""), [{ path: ".github/workflows/zz-schedule.yml", text: "on:\n  schedule:\n    - cron: '0 0 * * *'\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          DATABASE_URL: x\n        run: pnpm run proof:backup-restore\n" }]), /zz-schedule\.yml: its `on:` has neither push nor pull_request/)],
+              ["fail W11: DATABASE_URL on the job, an empty DATABASE_URL on the step (the step's value wins)", () => refusedFor(edit((t, at) => inStep(t, at, DB, '          DATABASE_URL: ""\n').replace(JOB, `${JOB}    env:\n      DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid\n`)), /DATABASE_URL is unset, empty or not a literal in the step's own env, which wins over the job's/)],
+              ["fail: a `${{ }}` expression is not a literal value", () => refusedFor(edit((t, at) => inStep(t, at, DB, "          DATABASE_URL: ${{ secrets.ZZ_NONE }}\n")), /DATABASE_URL is unset, empty or not a literal/)],
+              ["fail W1 (control): the step's DATABASE_URL deleted", () => refusedFor(edit((t, at) => inStep(t, at, DB, "")), /DATABASE_URL is unset, empty or not a literal/)],
+              ["fail W7 (control): a multi-line `run:` is not credited", () => refusedFor(edit((t, at) => inStep(t, at, RUN, "        run: |\n          pnpm run proof:backup-restore\n          true\n")), /its `run` is not exactly `pnpm run proof:backup-restore`/)],
+              ["fail W9 (control): a workflow-level env is not credited", () => refusedFor(edit((t, at) => inStep(t, at, DB, "").replace("\njobs:\n", "\nenv:\n  DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid\njobs:\n")), /DATABASE_URL is unset, empty or not a literal/)],
+              ["fail W5 (control): step `continue-on-error: ${{ true }}`", () => refusedFor(edit((t, at) => inStep(t, at, STEP, `${STEP}        continue-on-error: \${{ true }}\n`)), /step key `continue-on-error` is outside the allowlist/)],
+              ["pass W8 (control): DATABASE_URL on the job, none on the step, is credited", () => credited(edit((t, at) => inStep(t, at, DB, "").replace(JOB, `${JOB}    env:\n      DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid\n`)))],
+            ].map(([n, f]) => [`${n} (in-process, the real workflow)`, f]);
+          })(),
           ["pass: a proof only verify-breadth runs is gated (in-process, the breadth half of the registry)", () => {
-            const only = [...ctx.lanes["scripts/verify-breadth.mjs"]].filter((p) => !ctx.lanes["scripts/preflight.mjs"].has(p) && !ctx.selfSkipping.has(p));
+            const breadth = ctx.lanes?.["scripts/verify-breadth.mjs"], pre = ctx.lanes?.["scripts/preflight.mjs"];
+            if (!(breadth instanceof Set) || !(pre instanceof Set) || breadth.size === 0) return false; // the breadth lane was never read
+            const only = [...breadth].filter((p) => !pre.has(p) && !ctx.selfSkipping.has(p));
             const p = only.find((x) => proofSource(x, { scripts: ctx.scripts, tracked: new Set(ctx.tracked) }));
             if (!p) return false;
             const res = checkMatrix(plant(`| Planted S1 | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`pnpm run ${p}\` |`), ctx);
@@ -1213,9 +1292,10 @@ function selfTest() {
         && ctx.indexed.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")],
     ];
     for (const [name, check] of inproc) {
-      const pass = check() === true;
+      let pass = false, threw = "";
+      try { pass = check() === true; } catch (e) { threw = ` — threw ${e?.message ?? e}`; } // a crash is a BAD, never an abort
       if (!pass) ok = false;
-      console.log(`${pass ? "ok  " : "BAD "} self-test ${name}`);
+      console.log(`${pass ? "ok  " : "BAD "} self-test ${name}${threw}`);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
   return { ok, ctx };

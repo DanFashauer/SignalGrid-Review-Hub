@@ -53,15 +53,17 @@ export const DENIED_MARKER = "NO-WRITE-DENIED";
 // repository, and so do `/tmp/dir-link/new-file` and `/tmp/dir-link/../new-file`. Two shortcuts used to let a write through: resolving only the missing
 // path's DIRECTORY (a dangling link outside the repository whose target is a new file inside it was a way to create that file), and normalising `..`
 // as text before looking (`/tmp/link-to-a-repository-directory/../file` named `/tmp/file`, outside, for a file the system opens inside the repository).
-// A walk that runs past the hop limit (a loop of links) is reported as the repository root: the write would fail with ELOOP anyway, and a path that
-// cannot be placed is treated as inside.
+// A walk that runs past the hop limit (a loop of links) is reported as `unplaceable`, the second argument, which every caller passes: the repository
+// root for a path being judged (the write would fail with ELOOP anyway, and a path that cannot be placed is treated as inside), and the text of the
+// root itself when the root is what is being placed. It is a parameter and not a read of `ROOT` because `ROOT` is computed by this very function at
+// module load: a read of it inside the walk would be a read in its own temporal dead zone (check-module-init-order.mjs fails on exactly that).
 // `realpath.native` is realpath(3): the JS `realpathSync` normalises `..` as text before it looks, which is the shortcut above. Both are taken now, so
 // the program under test replacing them on `fs` later does not change where a path is judged to land.
 const MAX_LINK_HOPS = 40;
 const realpath = fs.realpathSync.native;
 const readlink = fs.readlinkSync;
 const partsOf = (s) => s.split(sep).filter((part) => part !== "");
-const realish = (p) => {
+const realish = (p, unplaceable) => {
   try { return realpath(p); } catch { /* absent, or a link to something absent: walk it */ }
   let rest = partsOf(p.startsWith(sep) ? p : `${process.cwd()}${sep}${p}`);
   let at = sep;
@@ -75,14 +77,15 @@ const realish = (p) => {
     let link;
     try { link = readlink(next); } catch { at = next; continue; } // not a link (a file, a directory, or absent): keep it
     hops += 1;
-    if (hops > MAX_LINK_HOPS) return ROOT;
+    if (hops > MAX_LINK_HOPS) return unplaceable;
     if (link.startsWith(sep)) at = sep;
     rest = [...partsOf(link), ...rest];
   }
   try { return realpath(at); } catch { return at; }
 };
-const ROOT = realish(resolve(dirname(fileURLToPath(import.meta.url)), "../.."));
-const ALLOW = (process.env.NOWRITE_ALLOW ?? "").split(":").filter((x) => x !== "").map((x) => realish(resolve(x)));
+const rootText = resolve(dirname(fileURLToPath(import.meta.url)), "../.."); // a loop of links on the repository's own path keeps this text, which is still inside
+const ROOT = realish(rootText, rootText);
+const ALLOW = (process.env.NOWRITE_ALLOW ?? "").split(":").filter((x) => x !== "").map((x) => realish(resolve(x), ROOT));
 delete process.env.NOWRITE_ALLOW;
 const inside = (abs, dir) => abs === dir || abs.startsWith(dir + sep);
 // Every spelling of a path the fs functions accept: a string, a Buffer or any other Uint8Array, a URL, and a plain object that
@@ -99,7 +102,7 @@ const pathOf = (p) => {
 export const underRepo = (p) => {
   const s = pathOf(p);
   if (s === undefined) return false;
-  const abs = realish(s);
+  const abs = realish(s, ROOT);
   return inside(abs, ROOT) && !ALLOW.some((a) => inside(abs, a));
 };
 const deny = (what, p) => {

@@ -32,8 +32,9 @@
 //   1. The Status cell (bold markers stripped) is a legend word.
 //   2. A row whose status reads "implement…" (the legend's Implemented word or
 //      any other) must:
-//      a. cite at least one repo path, every one a TRACKED and present file or
-//         a tracked directory two or more segments deep — no `..`, no absolute
+//      a. cite at least one repo path, every one a TRACKED and present REGULAR
+//         file (index mode 100644/100755 — never a symlink or a gitlink) or a
+//         directory of tracked files two or more segments deep — no `..`, no absolute
 //         path, no untracked file, not the matrix itself; a path-like citation
 //         the parser cannot read fails rather than being skipped (`lib/x/{a,b}.ts` braces expand; `path:NN` suffixes are
 //         stripped; a bare `file.ts` resolves beside the cell's previous path,
@@ -357,15 +358,20 @@ export function citedProofs(where) {
  *  at least two segments deep (`lib/persistence`, never `lib` or `./`). Paths
  *  with `.`/`..` segments, absolute paths, and anything untracked (node_modules,
  *  .git, build output) resolve to nothing (review round 2 of PR #1349). */
-function resolver(root, tracked) {
+function resolver(root, tracked, indexed = tracked) {
   const files = new Set(tracked);
+  const entries = new Set(indexed); // every index path, any mode: what a reader sees as tracked
   const dirs = new Set();
   for (const f of tracked) {
     const parts = f.split("/");
     for (let k = 1; k < parts.length; k += 1) dirs.add(parts.slice(0, k).join("/"));
   }
+  // the basename map counts EVERY index entry, so a name shared by a regular file
+  // and a symlink or gitlink stays ambiguous, and only a regular hit is accepted.
+  // That also covers a non-regular entry beside the previous path: it is a hit of
+  // its own name, so the bare name can never skip past it to a match elsewhere (round 25)
   const byBase = new Map();
-  for (const f of tracked) {
+  for (const f of entries) {
     const b = f.split("/").pop();
     byBase.set(b, [...(byBase.get(b) ?? []), f]);
   }
@@ -387,7 +393,7 @@ function resolver(root, tracked) {
     // still passes every inRepo rule: not the matrix itself, tracked AND present
     // (round 23: `SECURITY_CONTROLS_MATRIX.md` used to skip both)
     const hits = byBase.get(t) ?? [];
-    return hits.length === 1 ? inRepo(hits[0]) : null;
+    return hits.length === 1 && files.has(hits[0]) ? inRepo(hits[0]) : null;
   };
 }
 
@@ -427,9 +433,9 @@ function defaultReadPkg(root, name) {
   return null;
 }
 
-export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
+export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scripts }) {
   const { shortRefRows, opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
-  const resolve = resolver(root, tracked);
+  const resolve = resolver(root, tracked, indexed);
   const topDirs = new Set(tracked.filter((f) => f.includes("/")).map((f) => f.split("/")[0]));
   const fails = [];
   const structural = [];
@@ -574,21 +580,35 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   return { rows, legend, defaultProof, fails, structural };
 }
 
-/** Tracked paths from `git ls-files -s -z`, WITHOUT symlinks (mode 120000): a link
- *  is not a file, and a tracked link to the matrix would otherwise be accepted as
- *  evidence for it (round 24). Read from the index, so no filesystem call. */
-export function parseLsFilesStage(out) {
-  return out.split("\0").filter(Boolean).flatMap((rec) => {
+/** Index entries from `git ls-files -s -z`, one per path (an unmerged path has a
+ *  row per stage and still counts once — round 25), with each entry's mode. */
+export function parseLsFilesIndex(out) {
+  const byPath = new Map();
+  for (const rec of out.split("\0").filter(Boolean)) {
     const tab = rec.indexOf("\t");
     const [mode] = rec.slice(0, tab).split(" ");
-    return mode === "120000" ? [] : [rec.slice(tab + 1)];
-  });
+    const path = rec.slice(tab + 1);
+    if (!byPath.has(path)) byPath.set(path, new Set());
+    byPath.get(path).add(mode);
+  }
+  return byPath;
+}
+
+/** REGULAR tracked files only: every index row for the path is mode 100644 or
+ *  100755. An ALLOWLIST (round 25): a symlink (120000) is not a file, a gitlink
+ *  (160000) is another repository's commit, and either would otherwise pass as
+ *  evidence — a tracked link to the matrix, an empty submodule directory. Read
+ *  from the index, so no filesystem call. */
+export function parseLsFilesStage(out) {
+  return [...parseLsFilesIndex(out)].filter(([, modes]) => [...modes].every((m) => m === "100644" || m === "100755")).map(([path]) => path);
 }
 
 function realContext() {
-  const tracked = parseLsFilesStage(execFileSync("git", ["ls-files", "-s", "-z"], { cwd: ROOT, encoding: "utf8" }));
+  const stage = execFileSync("git", ["ls-files", "-s", "-z"], { cwd: ROOT, encoding: "utf8" });
+  const tracked = parseLsFilesStage(stage);
+  const indexed = [...parseLsFilesIndex(stage).keys()];
   const scripts = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts ?? {};
-  return { root: ROOT, tracked, scripts };
+  return { root: ROOT, tracked, indexed, scripts };
 }
 
 function run(docPath) {
@@ -797,6 +817,23 @@ function selfTest() {
       ["fail: a tracked symlink is not a tracked file (parseLsFilesStage)", () => {
         const got = parseLsFilesStage("120000 0123abcd 0\tdocs/zz-matrix-alias.md\u0000100644 4567ef01 0\tdocs/PURPOSE.md\u0000100755 89ab2345 0\tscripts/x y.sh\u0000");
         return JSON.stringify(got) === JSON.stringify(["docs/PURPOSE.md", "scripts/x y.sh"]);
+      }],
+      // round 25: an ALLOWLIST of regular modes, one entry per path
+      ["fail: a gitlink (160000) is not a tracked file (parseLsFilesStage)", () => {
+        const got = parseLsFilesStage("160000 0123abcd 0\tlib/zz-sub\u0000160000 0123abcd 0\tzz-sub\u0000100644 4567ef01 0\tdocs/PURPOSE.md\u0000");
+        return JSON.stringify(got) === JSON.stringify(["docs/PURPOSE.md"]);
+      }],
+      ["fail: an unmerged path counts once, not once per stage (parseLsFilesStage)", () => {
+        const got = parseLsFilesStage("100644 aaaa 1\tdocs/f.md\u0000100644 bbbb 2\tdocs/f.md\u0000100644 cccc 3\tdocs/f.md\u0000100644 dddd 1\tdocs/g.md\u0000100644 eeee 2\tdocs/g.md\u0000");
+        return JSON.stringify(got) === JSON.stringify(["docs/f.md", "docs/g.md"]);
+      }],
+      ["fail: a basename shared by a regular file and a tracked symlink is ambiguous (in-process)", () => {
+        const res = checkMatrix(plant("| Planted H14 | ASVS 5.0 | Implemented (public core) | `PURPOSE.md` |"), { ...ctx, indexed: [...ctx.indexed, "docs/agent/PURPOSE.md"] });
+        return res.fails.some((f) => f.control === "Planted H14");
+      }],
+      ["fail: a non-regular entry beside the previous path is rejected, not skipped (in-process)", () => {
+        const res = checkMatrix(plant("| Planted H15 | ASVS 5.0 | Implemented (public core) | `docs/agent/LOOP.md`; `PURPOSE.md` |"), { ...ctx, indexed: [...ctx.indexed, "docs/agent/PURPOSE.md"] });
+        return res.fails.some((f) => f.control === "Planted H15");
       }],
       ["pass: the real tracked set holds the matrix and no symlink (in-process)", () =>
         ctx.tracked.includes(DOC_SELF) && !ctx.tracked.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")],

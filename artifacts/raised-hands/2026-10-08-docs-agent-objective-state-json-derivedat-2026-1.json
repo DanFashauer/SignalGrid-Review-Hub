@@ -1,0 +1,20 @@
+{
+  "id": "2026-10-08-docs-agent-objective-state-json-derivedat-2026-1",
+  "raisedAt": "2026-10-08T11:31:09.114Z",
+  "origin": "cloud",
+  "doing": "Re-owning docs/COMPANY_BUILD_PLAN.md rows 22, 33, 38, 76 and 77 under roster roles that have executors (blocker-dispatcher routing, 2026-10-08): row 22 + docs-writer, row 33 + performance-engineer, row 38 re-wrapped so its existing endpoint-uem-domain role sits on the row's first line (parseQueueRow reads roles from line 1), row 76 + web-engineer, row 77 + docs-writer; no roster change, no new skill (signalgrid-core SKILL.md keeps accessibility-specialist on lane until row 77's doctrine is written).",
+  "blockedBy": "docs/agent/objective-state.json (derivedAt 2026-10-02T16:40:29Z, witnessed by the Mac tick at 2026-10-08T11:15:46Z) lists rows 22, 33, 38, 76, 77 in needsExecutor[] because every role each names resolves to lane; the auto stall executor-gap:objective-state was 138.6h old at 11:19Z and passes 3x48h at 16:40:29Z today, when local preflight starts failing without a covering hand.",
+  "need": "The five-line plan edit merged to SignalGrid_Alpha (PR to follow from the cloud lane) and the Mac tick's next objective-loop --write dropping the five rows from needsExecutor[]; the hand is cleared from that state, never by editing objective-state.json (docs/agent/hand-routing.json, executor-gap).",
+  "whoCanUnblock": "cloud lane",
+  "domain": "",
+  "status": "resolved",
+  "routedTo": null,
+  "covers": [
+    "executor-gap:objective-state"
+  ],
+  "takenBy": "cloud",
+  "takenAt": "2026-10-08T12:11:05.433Z",
+  "resolvedAt": "2026-10-08T15:25:20.900Z",
+  "resolvedBy": "cloud",
+  "resolution": "PR #1449 (merged 16cd1158, 2026-10-08) re-owned rows 33, 76 and 77 to roster roles with executors (api-contract-architect, web-engineer, docs-writer) and parked rows 22 and 38 AWAITING OWNER with their roles kept on the first line; the Mac tick's 14:30Z objective-state write (PR #1452, merged 6ca90aa9) lists needsExecutor as empty, and scripts/raised-hands.mjs --check on mainline reports the executor-gap stall as no longer stuck."
+}

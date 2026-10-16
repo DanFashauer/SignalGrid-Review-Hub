@@ -45,7 +45,30 @@ jobs:
     # Bounded so a regression that makes a proof HANG (an unbounded prototype walk
     # against a Proxy returning a fresh prototype each call) fails red instead of
     # silently consuming the default job timeout.
-    timeout-minutes: 20
+    #
+    # THE BOUND CARRIES A MARGIN RULE (set 2026-10-15): bound = 2 x the longest
+    # run measured, rounded UP to the next 5 minutes, where a run the bound
+    # itself killed MID-STEP counts at the time it was killed; a run whose every
+    # step had finished before the kill is a runner stall, not a run length, and
+    # is not counted (for a run killed mid-step, its true length is not less).
+    # The 2x is the floor of the "two to three times observed runtime" that
+    # scripts/check-ci-job-timeouts.mjs states for every job; a bound at the run
+    # time is a flaky gate. The longest completed green run of this job from
+    # 2026-09-15 to 2026-10-15 is 19m46s (job 113907256410, 2026-10-09), so the
+    # previous bound, 20, sat 14 seconds above it. That bound cancelled three
+    # runs in which no step had failed, each a red check on a branch that broke
+    # nothing: two mid-step, both at 20m05s (job 116440190841, 2026-10-15, 6 s
+    # into its final step, the Decision-throughput saturation gate, every earlier
+    # step green; and job 110943968637, 2026-10-02, attempt 1, 32 steps short of
+    # the end after a 4m16s Playwright install, whose re-run went green in
+    # 14m44s), and one stall after the work (job 113452376076, 2026-10-08,
+    # 24m26s: all 404 of its steps were done by 14m58s, when "Complete job"
+    # finished, and the runner then sat idle for 9m28s until the cancel). A
+    # stall after the work is not a run length, so it is not counted. 2 x 20m05s
+    # = 40m10s, which rounds up to 45. A true hang is still caught here, now at
+    # 45 minutes rather than 20. Re-derive this number from the longest run
+    # whenever one passes half of it (22m30s).
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -288,6 +311,8 @@ jobs:
         run: node scripts/check-sim-scripts-selfcheck.mjs
       - name: Sim-request runner self-test (awaiting-landing classifier, both directions)
         run: node scripts/mac/run-requests.mjs --self-test
+      - name: Lane status line self-test (open hands and unread mail counted from a fixture tree; an unreadable part is left out, never zeroed)
+        run: bash scripts/mac/statusline.sh --self-test
       # Runs in this Node-only job on purpose. The rules it mirrors are enforced
       # for real by swiftlint in ios-ci.yml's `Lint & Security` job on a macOS
       # runner ~20 minutes later; PR #387 failed there on four violations that
@@ -474,6 +499,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/check-ci-liveness.mjs
+      - name: Scheduled-workflow liveness self-test (the gate must be able to fail)
+        run: node scripts/check-scheduled-workflow-liveness.mjs --self-test
+      - name: Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)
+        run: node scripts/check-scheduled-workflow-liveness.mjs
       - name: CI job timeouts (an unbounded job is an unbounded outage)
         run: node scripts/check-ci-job-timeouts.mjs
 
@@ -765,10 +794,20 @@ jobs:
       # to code; one stamped a sha git cat-file -e could not resolve on Alpha.
       - name: "Sim-result provenance self-test (the gate can actually fail)"
         run: node scripts/check-sim-result-provenance.mjs --self-test
-      - name: "Sim-result provenance (a checkable commit; evidence no newer than the result)"
-        run: node scripts/check-sim-result-provenance.mjs
-      # Placed AFTER the provenance gate on purpose: the fetch below brings mainline history into this
-      # shallow checkout, which turns that gate's "unresolvable sha" (reported) into "not an ancestor" (fatal).
+      # Owning runner for commit ancestry: THIS job, on a deepened checkout. The checkout above is
+      # depth 1, where every result sha is unresolvable and the plain gate can only report it; the
+      # unshallow below makes history full, and --require-history then makes an unresolvable or
+      # non-ancestor sha fatal (it refuses to run if the checkout is still shallow). The Mac full-clone
+      # lane (mac-runner-auto, pr-mac-checks) and local preflight run the plain form.
+      - name: Deepen the checkout (sim-result provenance needs full history)
+        run: |
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+      - name: "Sim-result provenance (a checkable commit in this history; evidence no newer than the result)"
+        run: node scripts/check-sim-result-provenance.mjs --require-history
+      # With history now full, the mainline-tip fetch below no longer changes what the provenance gate
+      # sees; it stays after it so the order that was load-bearing before the deepen is unchanged.
       # --warn (DR-054 §5, 2026-09-24): a stall is another lane's clock, and a Mac quiet
       # 9h turned mainline red until the next push. Stalls WARN here; register integrity
       # still fails. Local preflight stays fatal. Reversal: delete --warn from this line.
@@ -812,6 +851,12 @@ jobs:
         run: node scripts/check-cited-paths.mjs
       - name: "Cited-path self-test (the gate can actually fail)"
         run: node scripts/check-cited-paths.mjs --self-test
+      # check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08
+      # on) citing one in plain text passes it unchecked.
+      - name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)"
+        run: node scripts/check-stamp-citations.mjs
+      - name: "Stamp-citation self-test (the gate can actually fail)"
+        run: node scripts/check-stamp-citations.mjs --self-test
       # A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X
       # the control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two
       # documents and read by nothing.
@@ -865,6 +910,8 @@ jobs:
         run: node scripts/check-mcp-ecosystem-map.mjs
       - name: "Absence-check self-test (a word in a disclaimer is not the thing existing)"
         run: node scripts/agent/absence-check.mjs --self-test
+      - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
+        run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push
       # gate (a feature branch legitimately differs from origin); CI runs only the
       # self-tests, which prove each piece can fail in both directions.
@@ -971,6 +1018,10 @@ jobs:
         run: pnpm run proof:absent-collection
       - name: "Mutation sharding partitions the registry (the daily sweep loses no target)"
         run: node scripts/check-mutation-sharding.mjs
+      - name: "Scratch-git hygiene self-test (it can actually fail)"
+        run: node scripts/check-scratch-git-hygiene.mjs --self-test
+      - name: "Scratch-repo self-tests spawn git through one hermetic helper"
+        run: node scripts/check-scratch-git-hygiene.mjs
       - name: "Backlog row citations name rows that exist"
         run: node scripts/check-row-citations.mjs
       - name: "Row-citation gate self-test (it can actually fail)"
@@ -1022,6 +1073,8 @@ jobs:
       - name: MCP surface drift gate (server = docs = ready message = manifest = resources = exercised)
         run: node scripts/check-mcp-surface.mjs
 
+      - name: DMH domains exhaustive-by-construction self-test (a new field/member/raw key must fail tsc)
+        run: node scripts/check-dmh-domains-exhaustive.mjs
       - name: Figure-guard self-test (the baseline-age report must be able to fail)
         run: node scripts/check-proof-figures.mjs --self-test
       - name: Docs↔proof figure guard
@@ -1120,8 +1173,8 @@ jobs:
       # passed — every gate and all 31 assertions of proof:live-idp — so the job
       # reported `cancelled` for a reason that had nothing to do with the branch.
       #
-      # A mirror flake is transient, so retry; but an unbounded step that eats a
-      # 20-minute budget and reports an ambiguous status is the same defect this
+      # A mirror flake is transient, so retry; but an unbounded step that eats the
+      # job's whole budget and reports an ambiguous status is the same defect this
       # workflow's concurrency comment already complains about — a result nobody
       # can tell apart from a real regression. The step timeout makes it fail
       # FAST and legibly instead.

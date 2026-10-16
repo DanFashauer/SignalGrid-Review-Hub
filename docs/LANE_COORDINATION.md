@@ -261,6 +261,29 @@ census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09
 the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
 already describe the mechanics.
 
+### The lane session's status line (2026-10-08)
+
+Claude Code shows one line at the foot of the lane session, from
+`scripts/mac/statusline.sh` (the `statusLine` key in `.claude/settings.json`):
+`<branch> | <N> open hands | <M> unread for <lane> | <model>`. Claude Code re-runs
+it every 30 seconds (`refreshInterval` on that entry) as well as on its own events,
+because hands and mail change while the session is idle, and the entry starts it
+from the repository root of the directory Claude Code was launched in
+(`workspace.project_dir`, never the working directory, which moves), so a session in
+a subdirectory still gets the line and one that wanders into another repository
+never runs that repository's script. It reads only files in the checkout of the
+session's directory: the branch from `git symbolic-ref`, open hands from
+`artifacts/raised-hands/` (every hand not yet resolved), and unread mail from
+`artifacts/lane-messages/` (addressed to this lane, with no ack written by this
+lane). No fetch, no `gh`, no network, so the numbers are as fresh as the last pull
+and are a prompt to run `pnpm run hands` or `pnpm run lane:inbox`, not a replacement
+for either. A part it cannot read (not a git checkout, a file that does not parse, a lane
+message of a shape `pnpm run lane:inbox` would refuse, such as a misspelled `to`) is left
+out of the line instead of shown as a number. To turn it off, delete the
+`statusLine` key from `.claude/settings.json`, or override it in your own local
+settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
+fixture tree; preflight and CI run it.
+
 ## Collision log
 
 Kept because the protocol above is only as persuasive as the evidence that it is

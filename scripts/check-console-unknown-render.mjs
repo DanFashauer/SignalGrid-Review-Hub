@@ -74,6 +74,9 @@
 // (`{ query: { data } }`, `{ style: { tone } }`), JSX-valued children (`<Panel><>{data}</></Panel>`), a nearer opaque
 // binding of a component name (a parameter, a class, an import) shadows an outer component, `React["cloneElement"]`,
 // downstream map aliases (`const T1 = T0`), and an imported `String`/`Array` is not the global.
+// Round 22: a same-file helper's parameter key is judged by the call's argument (`toneFor(q.data?.status)` falls back,
+// `toneFor("ok")` does not); a nested class binding takes only the matching property of a literal prop; classes ride a JSX
+// spread of a literal or a same-file const object; `const p = props` aliases resolve to the parameter.
 // Same-file shapes followed: arrow/function/`memo`/`forwardRef` components resolved by lexical
 // scope (two same-named components in different scopes never share a taint); a destructured,
 // renamed, rest, `props`-identifier or `{...spread}` parameter; `children`; a whole query object
@@ -858,7 +861,7 @@ function analyzeSourceFile(relPath, text) {
       if (comp && comp.params[0] && e && ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)) &&
           passQueryObject(comp.params[0], propName, originsIn(e))) changed = true;
     };
-    const passClass = (tag, propName, attr) => {
+    const passClass = (tag, propName, attr, openEl = attr.parent.parent) => {
       const comp = tag && ts.isIdentifier(tag) ? findComponent(tag) : undefined;
       const param = comp && comp.params[0];
       if (!param) return;
@@ -866,7 +869,7 @@ function analyzeSourceFile(relPath, text) {
       if (found.length === 0) return;
       // Paired by call site: a good class only paints data green at a site that ALSO passes unguarded data,
       // so `<Pill tone="…emerald" n="static" />` next to `<Pill tone="…red" n={q.data?.n} />` flags neither.
-      const open = attr.parent.parent;
+      const open = openEl;
       if (!siteRendersData(comp, open)) return;
       if (ts.isIdentifier(param.name)) { // `function Pill(props) { … props.tone … }`
         const byProp = goodPropParams.get(param) ?? new Map();
@@ -881,9 +884,15 @@ function analyzeSourceFile(relPath, text) {
       for (const el0 of param.name.elements) {
         if (propOf(el0) !== propName && !el0.dotDotDotToken) continue;
         // `{ style: { tone } }` receiving `style={{ tone: "…emerald" }}`: every binding inside the pattern may hold the class
+        const litAttr = ts.isJsxAttribute(attr) && attr.initializer && ts.isJsxExpression(attr.initializer) && attr.initializer.expression ? unwrapExpr(attr.initializer.expression) : null;
         for (const el of ts.isIdentifier(el0.name) ? [el0] : nestedBindings(el0.name)) {
+        let mine = found; // `style={{ tone: red, success: emerald }}` into `{ style: { tone } }`: only the matching property's classes
+        if (!ts.isIdentifier(el0.name) && el.parent === el0.name && litAttr && ts.isObjectLiteralExpression(litAttr) && !litAttr.properties.some((pp) => ts.isSpreadAssignment(pp))) {
+          const pr = litAttr.properties.find((pp) => (ts.isPropertyAssignment(pp) || ts.isShorthandPropertyAssignment(pp)) && pp.name && memberKey(pp.name) === propOf(el));
+          mine = pr ? goodClassStringNodes(ts.isPropertyAssignment(pr) ? pr.initializer : pr.name) : [];
+        }
         const have = goodParams.get(el) ?? [];
-        for (const f of found) if (!have.some((h) => h.node === f.node)) { have.push({ node: f.node }); changed = true; }
+        for (const f of mine) if (!have.some((h) => h.node === f.node)) { have.push({ node: f.node }); changed = true; }
         goodParams.set(el, have);
         }
       }
@@ -894,6 +903,11 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isJsxSpreadAttribute(n)) passQuery(n.parent.parent.tagName, null, n.expression);
       if (ts.isJsxAttribute(n) && ts.isIdentifier(n.name) && n.initializer && ts.isJsxExpression(n.initializer)) pass(n.parent.parent.tagName, n.name.text, n.initializer.expression);
       if (ts.isJsxSpreadAttribute(n)) pass(n.parent.parent.tagName, null, n.expression);
+      if (ts.isJsxSpreadAttribute(n)) { // `{...{ tone: "…emerald" }}` / `{...base}`: each literal property is a prop
+        const sp = unwrapExpr(n.expression);
+        const lit = ts.isObjectLiteralExpression(sp) ? sp : ts.isIdentifier(sp) ? mapObject(sp) : null;
+        if (lit) for (const pp of lit.properties) if (ts.isPropertyAssignment(pp)) { const k = memberKey(pp.name); if (k !== null) passClass(n.parent.parent.tagName, k, pp, n.parent.parent); }
+      }
       if (ts.isJsxElement(n)) for (const ch of n.children) {
         if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
         else if (ts.isJsxElement(ch) || ts.isJsxSelfClosingElement(ch) || ts.isJsxFragment(ch)) pass(n.openingElement.tagName, "children", ch); // `<Panel><>{data}</></Panel>`
@@ -1529,12 +1543,26 @@ function analyzeSourceFile(relPath, text) {
   const hasAbsentKeyEntry = (obj, x) => Boolean(obj) &&
     (mapKeyNames(obj).some((k) => k === null || ABSENT_KEYS.has(k.toLowerCase())) ||
      (x ? mapMutations(mapNamesOf(x)).some((m) => m.key === null || ABSENT_KEYS.has(m.key.toLowerCase())) : false));
+  let helperBind = null; // Map(parameter name -> call argument) while a same-file helper's returns are walked
   const lookupHasSafeFallback = (lookup) => {
+    let key = lookup.argumentExpression; // inside a same-file helper, a parameter key is judged by the call's argument
+    if (helperBind && key && ts.isIdentifier(key) && helperBind.get(key.text)) key = helperBind.get(key.text);
     let c = lookup, p = c.parent; // `(TONE[s]) ?? …`, `(TONE[s] as string) ?? …`, `TONE[s]! ?? …` are the same lookup
     while (p && (ts.isParenthesizedExpression(p) || ts.isAsExpression(p) || ts.isSatisfiesExpression(p) || ts.isNonNullExpression(p) || ts.isTypeAssertionExpression(p))) { c = p; p = c.parent; }
     return p && ts.isBinaryExpression(p) && p.left === c &&
       (p.operatorToken.kind === K.QuestionQuestionToken || p.operatorToken.kind === K.BarBarToken) &&
-      keyIsPlainData(lookup.argumentExpression, 0, true);
+      keyIsPlainData(key, 0, true);
+  };
+  const paramThroughAliases = (id) => { // `const p = props` -> the parameter `props` (a short alias chain)
+    let cur = id;
+    for (let d = 0; d < 6; d++) {
+      const prm = bindingOfParam(cur);
+      if (prm) return prm;
+      const init = resolveConstInit(cur, (n) => n && ts.isIdentifier(unwrapExpr(n)));
+      if (!init) return null;
+      cur = unwrapExpr(init);
+    }
+    return null;
   };
   // Returns [{ node, use }]: `node` is the good-class string, `use` is the node at the JSX
   // site (the string itself when inline; the identifier when resolved through a const).
@@ -1554,7 +1582,7 @@ function analyzeSourceFile(relPath, text) {
         if (gp) for (const g of gp) found.push({ node: g.node, use: use ?? x });
       }
       if ((ts.isPropertyAccessExpression(x) || (ts.isElementAccessExpression(x) && x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression))) && ts.isIdentifier(x.expression)) {
-        const prm = bindingOfParam(x.expression);
+        const prm = paramThroughAliases(x.expression);
         const gpp = prm && goodPropParams.get(prm)?.get(ts.isPropertyAccessExpression(x) ? x.name.text : x.argumentExpression.text);
         if (gpp) for (const g of gpp) found.push({ node: g.node, use: use ?? x });
       }
@@ -1573,7 +1601,11 @@ function analyzeSourceFile(relPath, text) {
         const fn = findHelper(x.expression);
         if (!resolving.has(fn)) {
           resolving.add(fn);
+          const saved = helperBind;
+          helperBind = new Map();
+          (fn.parameters ?? []).forEach((prm, i) => { if (ts.isIdentifier(prm.name) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
           for (const r of returnExprs(fn)) walk(r, use ?? x);
+          helperBind = saved;
           resolving.delete(fn);
         }
       }
@@ -2742,6 +2774,55 @@ export function Page({ Panel }) {
   ["children: a fragment, call site guarded", propsFixture(`function Panel({ children }) { return <span className="text-emerald-400">{children}</span>; }`, "q.data ? <Panel><>{items.length}</></Panel> : null")],
   ["downstream map alias that is never written", aliasFx("")],
   ["the global String stays the builtin when an unrelated name is imported", stringFx(`import { fmt } from "./fmt";`)],
+);
+
+// Codex review #3 of #1370 (head 1e68f97): helper arguments, exact nested class paths, class provenance through
+// JSX spreads and through `const p = props` aliases.
+const helperArgFx = (arg) => wrap2(`const TONE = { ok: "text-emerald-400", default: "text-slate-400" };
+function toneFor(s) { return TONE[s] ?? TONE.default; }
+export function Page() {
+  ${Q2}
+  return <span className={toneFor(${arg})}>{q.data?.n}</span>;
+}`);
+const nestedPathFx = (style, guard) => wrap2(`function Pill({ style: { tone }, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return ${guard ? "q.data ? " : ""}<Pill style={${style}} n={q.data?.n} />${guard ? " : null" : ""};
+}`);
+const spreadFx = (spread, guard) => wrap2(`function Pill({ tone, n }) { return <span className={tone}>{n}</span>; }
+const base = { tone: "text-emerald-400" };
+export function Page() {
+  ${Q2}
+  return ${guard ? "q.data ? " : ""}<Pill ${spread} />${guard ? " : null" : ""};
+}`);
+const aliasPropsFx = (decl, guard) => wrap2(`function Pill(props) { ${decl} return <span className={p.tone}>{p.n}</span>; }
+export function Page() {
+  ${Q2}
+  return ${guard ? "q.data ? " : ""}<Pill tone="text-emerald-400" n={q.data?.n} />${guard ? " : null" : ""};
+}`);
+BUG_R6.push(
+  ["helper called with a fixed argument: toneFor(\"ok\") selects the emerald entry", helperArgFx(`"ok"`)],
+  ["nested class path matches by name: tone is the emerald property", nestedPathFx(`{ tone: "text-emerald-400", success: "text-red-400" }`, false)],
+  ["class through a JSX spread literal: {...{ tone: emerald, n: data }}", wrap2(`function Pill({ tone, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill {...{ tone: "text-emerald-400", n: q.data?.n }} />;
+}`)],
+  ["class through a JSX spread of a const object: {...base}", spreadFx("{...base} n={q.data?.n}", false)],
+  ["class through a props alias: const p = props", aliasPropsFx("const p = props;", false)],
+  ["class through a two-step props alias: const a = props; const p = a", aliasPropsFx("const a = props; const p = a;", false)],
+);
+OK_R6.push(
+  ["helper called with a plain data read: toneFor(q.data?.status) falls back to the muted entry", helperArgFx(`q.data?.status`)],
+  ["nested class path matches by name: tone is the red property, success is emerald", nestedPathFx(`{ tone: "text-red-400", success: "text-emerald-400" }`, false)],
+  ["nested class path, call site guarded", nestedPathFx(`{ tone: "text-emerald-400" }`, true)],
+  ["class through a JSX spread literal that is red", wrap2(`function Pill({ tone, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill {...{ tone: "text-red-400", n: q.data?.n }} />;
+}`)],
+  ["class through a JSX spread of a const object, call site guarded", spreadFx("{...base} n={q.data?.n}", true)],
+  ["class through a props alias, call site guarded", aliasPropsFx("const p = props;", true)],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

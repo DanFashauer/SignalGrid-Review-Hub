@@ -567,12 +567,12 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
     write(plan, "## Global backlog\n\n" + ids.map((n) => row(n)).join("\n") + "\n");
-    write(backlog, "- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n");
+    write(backlog, "- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n- [ ] **Box P** — open.\n- [ ] **Box Q** — open.\n");
     for (const f of ["a", "b", "c", "d"]) write(`scripts/${f}.mjs`, "0\n");
     commit("base");
     const baseSha = g("rev-parse", "HEAD");
@@ -644,6 +644,18 @@ function selfTest() {
     // 43, 44: a clause with no ")" stops at the next row's head; it never borrows row 44's token.
     edit(plan, row(43), row(43) + " FIX PROPOSED 2026-10-08 (PR #23 — `scripts/c.mjs` changed.");
     edit(plan, row(44), row(44) + " FIX PROPOSED 2026-10-08 (PR #23, deadbeef): `scripts/c.mjs`.");
+    // 45-48 and Box P: a clause with no ")" is cut at each boundary, and the cited-path span is built
+    // from the CUT clause, so a path past the boundary never corroborates — each READ, never STALE.
+    // 45: a blank line, then a paragraph citing the changed path.
+    edit(plan, row(45), row(45) + " FIX PROPOSED 2026-10-08 (PR #23 — see below.\n\n    A later paragraph cites `scripts/c.mjs`.");
+    // 46: the next plan row cites the changed path.
+    edit(plan, row(46), row(46) + " FIX PROPOSED 2026-10-08 (PR #23 — see the next row.");
+    edit(plan, row(47), row(47) + " See `scripts/c.mjs`.");
+    // Box P: the next backlog box cites the changed path.
+    edit(backlog, "**Box P** — open.", "**Box P** — open. FIX PROPOSED 2026-10-08 (PR #23 — see the next box.");
+    edit(backlog, "**Box Q** — open.", "**Box Q** — open. See `scripts/c.mjs`.");
+    // 48: the repo's own idiom — a check-run id and prose before the sha, here an earlier mainline commit.
+    edit(plan, row(48), row(48) + ` FIX PROPOSED 2026-10-08 (PR #23, check run 116912232947, merged after review, ${baseSha}): \`scripts/c.mjs\`.`);
     // 35: a digits-only number in the clause (a check-run id) is not a sha — STALE, not READ.
     edit(plan, row(35), row(35) + " FIX PROPOSED 2026-10-08 (PR #23, check run 1234567890): `scripts/c.mjs`.");
     // 33: a path cited inside the PR clause itself still corroborates — STALE.
@@ -737,6 +749,10 @@ function selfTest() {
     checks.push(["a letters-only token of 7+ (\"deadbeef\") is read as a sha, not dropped — READ", is("row 41", "LANDED-UNCORROBORATED", (r) => r.claimSha === "deadbeef")]);
     checks.push(["a digits-only token of 7+ not after \"run\" is read as a sha, not dropped — READ", is("row 42", "LANDED-UNCORROBORATED", (r) => r.claimSha === "7654321")]);
     checks.push(["a clause with no \")\" stops at the next row's head and borrows no token from it — STALE", is("row 43", "STALE", (r) => r.claimSha === undefined) && is("row 44", "LANDED-UNCORROBORATED")]);
+    checks.push(["a clause with no \")\" stops at a blank line: a later paragraph's path does not corroborate — READ", is("row 45", "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
+    checks.push(["…stops at the next plan row: that row's path does not corroborate — READ", is("row 46", "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
+    checks.push(["…stops at the next backlog box: that box's path does not corroborate — READ", is('"Box P"', "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
+    checks.push(["a sha after a check-run id and prose, far into the clause, is still read — READ", is("row 48", "LANDED-UNCORROBORATED", (r) => r.claimSha === baseSha && notIn(r))]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
     checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 5", "row 7"])]);
@@ -1124,7 +1140,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 107;
+  return failed === 0 && checks.length === 111;
 }
 
 let isMain = false;

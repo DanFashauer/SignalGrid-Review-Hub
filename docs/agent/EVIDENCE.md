@@ -4513,3 +4513,43 @@ Output:   #1506 head=763376fb merge=764cb99d merged=2026-10-15T10:22:23Z — the
           #1527 head=e1d5ab8c merge=9e7fc18b merged=2026-10-15T20:44:06Z — the forward-build heartbeat for the 20:11Z fire (one file).
           #1528 head=3c08c60d merge=8023bc7d merged=2026-10-15T21:53:19Z — the steward keepalive heartbeat for the 21:24Z cycle (non-quiet). Its window, from the prior firedAt 19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z), holds four cloud landings: #1526 67ff76eb, #1524 df4ea3b8, #1527 9e7fc18b and #1468 760d5032; and five Mac tick heartbeats (nine first-parent commits in all). The Summary line of its body still says two and was not corrected; its What changed section says four. The prior heartbeat passed the 2-hour threshold at delivery (age 2h00m45s at 21:26:43Z); one file.
 Verdict:  holds for the numbers, shas and times (read above). The Summaries are quoted as their bodies state them; the #1528 Summary line says two landings, which the window above does not bear out (four). #1518 and #1522 have no body; their content is the title only. The changed files, from the pulls/N/files read above, are heartbeat, raised-hand, objective-state, sim-result and evidence files only: #1506 forward-build-cycle.json; #1514 three heartbeats and one hand; #1515 one hand; #1517 two heartbeats; #1518 docs/agent/objective-state.json; #1519, #1523, #1526 and #1528 mac-lane-steward-duty-cycle.json; #1521, #1525 and #1527 forward-build-cycle.json; #1522 artifacts/live-evidence/mac-run.json (the re-mint), artifacts/sim-results/objective-loop-evidence-fresh-2026-10-15.json, docs/agent/SURFACE_REVIEW_COVERAGE.md and docs/agent/objective-state.json. None of the thirteen touches scripts/, lib/ or native/.
+
+## 2026-10-16 — "Five lane PRs landed on mainline between 02:30Z and 04:30Z (#1535, #1536, #1537, #1538, #1539: forward-build and steward heartbeats, the live-evidence re-mint ask and one Mac tick record), each with its merged sha, UTC merge time and gating check run"
+Command:  for n in 1535 1536 1537 1538 1539; do gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/$n --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; done; for id in 116775327913 116786409708 116787586536 116796976650 116807305698; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; for s in 1ed88f9f 06e494a1 7fd78b48 1efb3fdd 511c0153; do git rev-parse --verify --quiet "$s^{commit}" | cut -c1-8; done; git merge-base --is-ancestor 511c0153 origin/SignalGrid_Alpha && echo "511c0153 is an ancestor of origin/SignalGrid_Alpha"
+Output:   1ed88f9f
+          06e494a1
+          7fd78b48
+          1efb3fdd
+          511c0153
+          511c0153 is an ancestor of origin/SignalGrid_Alpha
+          #1535 head=c90777ad merge=1ed88f9f merged=2026-10-16T02:30:36Z state=closed
+          #1536 head=fb13ea10 merge=06e494a1 merged=2026-10-16T03:13:57Z state=closed
+          #1537 head=d0626843 merge=7fd78b48 merged=2026-10-16T03:29:32Z state=closed
+          #1538 head=e95a7898 merge=1efb3fdd merged=2026-10-16T03:55:57Z state=closed
+          #1539 head=76db3d4b merge=511c0153 merged=2026-10-16T04:29:46Z state=closed
+          116775327913 Typecheck, build, and proof scaffold head=c90777ad completed success completed=2026-10-16T02:29:37Z
+          116786409708 Typecheck, build, and proof scaffold head=d0626843 completed success completed=2026-10-16T03:15:09Z
+          116787586536 Typecheck, build, and proof scaffold head=fb13ea10 completed success completed=2026-10-16T03:12:55Z
+          116796976650 Typecheck, build, and proof scaffold head=e95a7898 completed success completed=2026-10-16T03:55:09Z
+          116807305698 Typecheck, build, and proof scaffold head=76db3d4b completed success completed=2026-10-16T04:29:27Z
+Verdict:  holds for each PR's head, merged sha, merged time and gating check run (completed success on that head, read above). The Mac-only check is not named for these five, so none is given. The one-line descriptions are the coordinator's measured facts for the 2026-10-16 window and were not re-read from the PR bodies here.
+
+## 2026-10-16 — "#1504 (url-guard and redirect hand mutants pinned in proof:emitter-discipline, 139 to 150) landed under DR-037 at 2b7f81f3 on gating check 116776717682 and Mac-only check 116776521794 at head ca89f108; the merged head is tree-identical to the verified head 9613ac61 (tree 9a271679); the sync manifest moved v96 3c69fedd to v97 aa9ce381438ecb26"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1504 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116776717682 116776521794; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; git rev-parse ca89f108^{tree} 9613ac61^{tree}; pnpm run proof:emitter-discipline (in the docs worktree at base fc9440a9); node scripts/generate-sync-manifest.mjs --check
+Output:   #1504 head=ca89f108 merge=2b7f81f3 merged=2026-10-16T02:51:27Z state=closed
+          116776717682 Typecheck, build, and proof scaffold head=ca89f108 completed success completed=2026-10-16T02:38:32Z
+          116776521794 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=ca89f108 completed success completed=2026-10-16T02:50:28Z
+          9a27167951a25d7c81f6ede92316f5eb2aa45e75
+          9a27167951a25d7c81f6ede92316f5eb2aa45e75
+          rc 0; `summary=pass (150/150)`
+          live-sync manifest unchanged — version 97, fingerprint aa9ce381438ecb26…
+Verdict:  holds for the merge, the merged head, the tree identity, both check runs, the proof count and the manifest version (read above). The five landing-refute rounds are the coordinator's measured fact and were not re-run here. The manifest move from v96 is recorded in the 2026-10-15 entry for #1505 (version 95 to 96, fingerprint 3c69fedd), which this entry does not re-read.
+
+## 2026-10-16 — "#1534 (the daily mutation sweep partitioned by cost, with the sharding gate pinning the plan, the sweep path and the job; the shard-3 root cause) landed under DR-037 at dd3ba58f on gating check 116782022894 and Mac-only check 116782022240 at head e15be07b; eleven review rounds; CodeQL alert 230 (js/file-system-race) fixed on the head"
+Command:  gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/1534 --jq '"#\(.number) head=\(.head.sha[0:8]) merge=\(.merge_commit_sha[0:8]) merged=\(.merged_at) state=\(.state)"'; for id in 116782022894 116782022240; do gh api repos/DanFashauer/SignalGrid-Review-Hub/check-runs/$id --jq '"\(.id) \(.name) head=\(.head_sha[0:8]) \(.status) \(.conclusion) completed=\(.completed_at)"'; done; gh api repos/DanFashauer/SignalGrid-Review-Hub/code-scanning/alerts/230 --jq '"#\(.number) rule=\(.rule.id) state=\(.state) created=\(.created_at) ref=\(.most_recent_instance.ref // "")"'; node scripts/check-mutation-sharding.mjs (in the docs worktree at base fc9440a9)
+Output:   #1534 head=e15be07b merge=dd3ba58f merged=2026-10-16T03:06:14Z state=closed
+          116782022894 Typecheck, build, and proof scaffold head=e15be07b completed success completed=2026-10-16T02:58:32Z
+          116782022240 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=e15be07b completed success completed=2026-10-16T03:05:25Z
+          #230 rule=js/file-system-race state=null created=2026-10-16T01:53:30Z ref=refs/pull/1534/merge
+          sharding gate: `  56 targets · 185 files · 2026 mutations`, `summary=pass (277/277)`, exit 0
+Verdict:  holds for the merge, the head, both check runs, and the alert's rule and ref (read above). The alert's state field came back null in the read, so "fixed on the head" is the coordinator's measured fact and is not re-verified here. The sharding gate's reported total on the base is 2026 mutations with the brace-less opt-in counted, so the #1505 review's INFO on a 1594 total does not hold at this base.

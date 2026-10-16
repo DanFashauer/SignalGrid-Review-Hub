@@ -301,6 +301,15 @@ out of the line instead of shown as a number. To turn it off, delete the
 settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
 fixture tree; preflight and CI run it.
 
+### Operating notes, 2026-10-16 (cloud lane)
+
+- The lane takes every age in a heartbeat or mail comment from the artifact's own field (`mintedAt`, `firedAt`), never from a commit time.
+- A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
+- The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
+- The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
+- The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
+- Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
+
 ## Collision log
 
 Kept because the protocol above is only as persuasive as the evidence that it is

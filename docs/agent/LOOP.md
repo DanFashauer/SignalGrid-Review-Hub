@@ -56,7 +56,26 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
+LAST TOUCHED: 2026-10-16 (cloud lane; window 02:11Z-05:16Z) - SEVEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
+              UNTIL THE MAC'S ONE RE-MINT (#1536).
+              LANDINGS (merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`; gating runs from
+              `gh api .../check-runs/<id>`): #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3
+              (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged
+              head ca89f108 tree-identical to the verified head 9613ac61; gating 116776717682, Mac-only 116776521794; the sync manifest moved v96
+              3c69fedd to v97 aa9ce381438ecb26, today's last manifest move); #1534 dd3ba58f (03:06:14Z, the mutation sweep's shard-3 root cause,
+              cost-balanced partition; gating 116782022894, Mac-only 116782022240); #1536 06e494a1 (03:13:57Z, the ONE live-evidence re-mint ask to
+              the Mac lane after the manifest move, retiring the refresh portions of the 2026-10-08 and 2026-10-09 messages; gating 116787586536);
+              #1537 7fd78b48 (03:29:32Z, Mac tick mac/tick-20261016T025332Z, "objective loop: escalate", merged by the steward; gating 116786409708);
+              #1538 1efb3fdd (03:55:57Z, the steward's 03:25Z non-quiet heartbeat; gating 116796976650); #1539 511c0153 (04:29:46Z, the 04:11Z
+              forward-build heartbeat; gating 116807305698).
+              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at base fc9440a9, exit 0): HEADLINE 0%, OUTREACH CLOSED.
+              (a) 100%; (b) 0% (proofs current 0/20, launch items fully current 0/28; evidence covers manifest 3c69fedd7754 and tree aa9ce381438e),
+              which stays 0% by design until the Mac's one re-mint lands (#1536); (c) 100%.
+              IN FLIGHT AT THE END OF THE WINDOW (all four PRs open when read, none merged): #1370 round 23 (four regressions from Codex-driven fixes to
+              repair; 19 of 28 review threads resolved, 9 open); #1333 round 29 (three fail-open classes still open through adjacent spellings);
+              #1349 round 26 (a mode-160000 gitlink counted as a tracked file); #1378 round 16 (coverage-page merge plus four unpinned guards).
+              The owner's open usage-limit hand keeps the pool at three concurrent workers.
+PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
               THE FREEZE; READINESS 100%, OUTREACH OPEN; ONE OWNER CRITERION UNMET. Docs batch on claude/docs-batch-20261015-landings from 64d0ca6d.
               LANDINGS AFTER THE FREEZE POINT (e6acacc7, 12:31:32Z), merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`
               (product PRs have their own 2026-10-15 EVIDENCE entries; the lane PRs are one grouped entry): #1515 355ff646 (12:39:09Z, the Mac tick's heartbeat clears the

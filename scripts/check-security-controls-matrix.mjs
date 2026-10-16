@@ -45,14 +45,26 @@
 //         resolves to a source file: the row's own `proof:*` citation(s), else
 //         the closing note's matrix-wide binding ("Everything marked Implemented
 //         (public core) ... is exercised by `pnpm run proof:<x>`"). If that
-//         sentence is gone, every row leaning on it fails (fail-closed). A
+//         sentence is gone, every row leaning on it fails (fail-closed). Every
+//         bound proof, own or matrix-wide, must also be one a gating lane RUNS:
+//         a `pnpm run <proof>` step in the --list-steps of scripts/preflight.mjs
+//         or scripts/verify-breadth.mjs (both run in CI; preflight's parity with
+//         CI is its own gate) — a proof nobody runs proves nothing (round 28). A
 //         span that reads as a proof or a package-manager command (any case,
 //         padding or prefix: `PROOF:x`, ` proof:x `, `npm run …`) must be exactly
 //         `(pnpm run )?proof:<name>` or `pnpm install --frozen-lockfile`; any
 //         other shape fails.
 //   3. An "Automated (CI bot)" row's cited paths must be tracked too (it need
 //      not cite one: several live in GitHub settings), under the same parser,
-//      and any proof it cites must exist and resolve.
+//      and any proof it cites must exist, resolve and run in a gating lane.
+//   2a/3 citations: a slash-free `name.ext` is a path when `ext` is an extension
+//      some tracked file has (`no-such.py`, `.rs`, `.toml` must resolve). CEILING:
+//      a dotted identifier whose suffix no tracked file has (`ApiKeyRecord.token`,
+//      `Connector.credentialRef`) is read as prose — the shapes are the same, so
+//      only the tree can tell them apart; if a `.token` file is ever tracked such
+//      identifiers become paths and fail (safe side) (round 28).
+//   Rows: a table row starts at three or fewer spaces (four, or a tab, renders as
+//      code), and every row must name its control (an empty Control cell fails).
 //   4. A Control name cites nothing (it is never resolved). On every row it
 //      fails on a proof- or command-like span, a span holding `/` (bar the exact
 //      route tokens `/` and `/v1`), a span holding a letter-led dot (bar the
@@ -235,9 +247,12 @@ export function parseMatrix(raw) {
   const malformed = [];
   const claimed = new Set();
   for (let i = 0; i < lines.length; i += 1) {
-    if (!/^\s*\|/.test(lines[i])) continue;
+    // a table row starts at three or fewer spaces: at four (or a tab) CommonMark
+    // renders the line as indented code, not a table — such a line is never
+    // claimed here, so the unclaimed-pipe check below fails it (round 28)
+    if (!/^ {0,3}\|/.test(lines[i])) continue;
     const head = cells(lines[i]);
-    const isTable = /^\s*\|\s*:?-/.test(lines[i + 1] ?? "");
+    const isTable = /^ {0,3}\|\s*:?-/.test(lines[i + 1] ?? "");
     const isLegend = sameHeader(head, LEGEND_HEADER);
     const isControls = sameHeader(head, CONTROLS_HEADER);
     const isOther = NON_CONTROL_TABLES.some((h) => sameHeader(head, h));
@@ -247,7 +262,7 @@ export function parseMatrix(raw) {
     claimed.add(i).add(i + 1);
     if (isLegend) legendTables.push(i + 1);
     let j = i + 2;
-    for (; j < lines.length && /^\s*\|/.test(lines[j]); j += 1) {
+    for (; j < lines.length && /^ {0,3}\|/.test(lines[j]); j += 1) {
       claimed.add(j);
       const c = cells(lines[j]);
       // an escaped pipe or a dropped cell shifts every column after it — never guess
@@ -325,7 +340,7 @@ const COMMAND_CITES = new Set(["pnpm install --frozen-lockfile"]);
  *  (`pnpm-workspace.yaml`) is not one. */
 const COMMAND_LIKE = /proof\s*:|^\s*(pnpm|npm|yarn|npx|pnpx)(\.\w+)?\s/i;
 
-export function citedPaths(where, { strict = false, actionRefs = false, topDirs = new Set() } = {}) {
+export function citedPaths(where, { strict = false, actionRefs = false, topDirs = new Set(), exts = new Set() } = {}) {
   const out = [];
   const unparsed = [];
   for (const m of where.matchAll(/`([^`]+)`/g)) {
@@ -339,7 +354,11 @@ export function citedPaths(where, { strict = false, actionRefs = false, topDirs 
     }
     const tok = m[1].replace(/:\d+$/, "");
     if (API_ROUTE.test(tok)) continue;
-    const looksLikePath = tok.includes("/") || FILEEXT.test(tok);
+    // a slash-free `name.ext` is a path when `ext` is an extension some tracked file
+    // has (`no-such.py`, `.rs`, `.toml` — round 28); `ApiKeyRecord.token` stays an
+    // identifier only because no tracked file ends in `.token`
+    const ext = /\.([A-Za-z0-9]+)$/.exec(tok);
+    const looksLikePath = tok.includes("/") || FILEEXT.test(tok) || (ext !== null && exts.has(ext[1]));
     const ref = ACTION_REF.exec(tok);
     if (actionRefs && ref && !topDirs.has(ref[1])) continue;
     if (!strict && /@v?\d/.test(tok)) continue;
@@ -433,10 +452,11 @@ function defaultReadPkg(root, name) {
   return null;
 }
 
-export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scripts }) {
+export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scripts, gatedProofs = new Set() }) {
   const { shortRefRows, opaque, controlCells, bareCR, legendDup, claimCells, legend, legendTables, linkDefs, trailing, htmlRows, rows, unclaimed, malformed, defaultProof } = parseMatrix(text);
   const resolve = resolver(root, tracked, indexed);
   const topDirs = new Set(tracked.filter((f) => f.includes("/")).map((f) => f.split("/")[0]));
+  const exts = new Set(tracked.map((f) => f.split("/").pop()).filter((b) => b.lastIndexOf(".") > 0).map((b) => b.slice(b.lastIndexOf(".") + 1)));
   const fails = [];
   const structural = [];
   if (legendTables.length !== 1) structural.push(`expected exactly one Status legend table, found ${legendTables.length}${legendTables.length ? ` (lines ${legendTables.join(", ")})` : ""}`);
@@ -500,7 +520,7 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
       // a letter-led dot ANYWHERE in the span reads as a file, whatever follows
       // it (`x.ts:12:5`, `x.ts@v2`, `x.py,` — round 19; suffix-stripping was a
       // denylist and leaked). The one dotted Control span the matrix uses is pinned
-      // in CONTROL_SPAN_ALLOW. Where cells keep FILEEXT: they cite identifiers
+      // in CONTROL_SPAN_ALLOW. Where cells use FILEEXT plus the tracked-extension set: they cite identifiers
       // like `ApiKeyRecord.token`.
       const t = m[1];
       if (COMMAND_LIKE.test(t) || (t.includes("/") && !API_ROUTE.test(t)) || (/\.[A-Za-z]/.test(t) && !CONTROL_SPAN_ALLOW.has(t)))
@@ -525,6 +545,9 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
   const seen = new Map();
   for (const r of rows) { const k = controlKey(r.control); seen.set(k, [...(seen.get(k) ?? []), r.line]); }
   for (const [, at] of seen) if (at.length > 1) { const first = rows.find((r) => r.line === at[0]); structural.push(`Control "${first.control}" appears ${at.length} times (lines ${at.join(", ")}, compared case-, space-, entity- and zero-width-insensitively) — every control row must be unique\n      ${rows.find((r) => r.line === at[1]).raw}`); }
+  // a row must NAME its control: an empty (or markup-only) Control cell would
+  // inflate the counts with a row about nothing (round 28)
+  for (const r of rows) if (controlKey(r.control) === "") structural.push(`line ${r.line}: the Control cell is empty — every row must name the control it claims\n      ${r.raw}`);
   for (const u of unclaimed) structural.push(`line ${u.line} is a pipe row in no recognised table (Control|…|Status|Where, Status|Meaning, or ${NON_CONTROL_TABLES.map((h) => h.join("|")).join(", ")}) — it would go ungated\n      ${u.raw}`);
   for (const m of malformed) structural.push(`line ${m.line} has ${m.got} cells, its table header has ${m.want} (escaped pipe or missing cell) — columns cannot be trusted\n      ${m.raw}`);
   for (const r of rows) {
@@ -532,7 +555,7 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
     if (!EXPECTED_LEGEND.includes(r.status)) why.push(`status "${r.status}" is not in the Status legend (${LEGEND_LIST})`);
     if (PATH_CHECKED.has(r.status)) {
       // strict, like Implemented rows: an unreadable path-like citation fails (round 11)
-      const auto = citedPaths(r.where, { strict: true, actionRefs: true, topDirs });
+      const auto = citedPaths(r.where, { strict: true, actionRefs: true, topDirs, exts });
       for (const u of auto.unparsed) why.push(`cited token \`${u}\` cannot be read as a repo path or as a \`(pnpm run )?proof:<name>\` citation — unreadable evidence is not evidence`);
       let lastDir = null;
       for (const tok of auto.paths) for (const p of expandBraces(tok)) {
@@ -545,10 +568,11 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
       for (const p of citedProofs(r.where)) {
         if (!Object.hasOwn(scripts, p)) why.push(`proof \`${p}\` is not a package.json script`);
         else if (!proofSource(p, { root, scripts })) why.push(`proof \`${p}\` does not resolve to an existing source file`);
+        else if (!gatedProofs.has(p)) why.push(`proof \`${p}\` runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`);
       }
     }
     if (IMPLEMENTED_LIKE.test(r.status)) {
-      const { unparsed } = citedPaths(r.where, { strict: true });
+      const { unparsed } = citedPaths(r.where, { strict: true, exts });
       for (const u of unparsed) why.push(`cited token \`${u}\` cannot be read as a repo path or as a \`(pnpm run )?proof:<name>\` citation — unreadable evidence is not evidence`);
       const own = citedProofs(r.where);
       const proofs = own.length ? own : defaultProof ? [defaultProof] : [];
@@ -557,12 +581,15 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
       for (const p of proofs) {
         const tag = own.length ? "" : " (matrix-wide binding)";
         if (!Object.hasOwn(scripts, p)) { why.push(`proof \`${p}\` is not a package.json script${tag}`); continue; }
+        // a proof no gating lane runs proves nothing: it must be a `pnpm run <proof>`
+        // step of scripts/preflight.mjs or scripts/verify-breadth.mjs (round 28)
+        if (!gatedProofs.has(p)) why.push(`proof \`${p}\`${tag} runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`);
         if (proofSource(p, { root, scripts })) { if (own.length) ownSources += 1; }
         else why.push(`proof \`${p}\`${tag} does not resolve to an existing source file`);
       }
       // A row's own cited proof counts as its repo-path citation: the proof's
       // source file is the thing in the tree that verifies the control.
-      const { paths } = citedPaths(r.where, { strict: true });
+      const { paths } = citedPaths(r.where, { strict: true, exts });
       if (paths.length === 0 && ownSources === 0) why.push("cites no repo path (and no proof of its own whose source file exists)");
       let lastDir = null;
       for (const tok of paths) {
@@ -603,12 +630,37 @@ export function parseLsFilesStage(out) {
   return [...parseLsFilesIndex(out)].filter(([, modes]) => [...modes].every((m) => m === "100644" || m === "100755")).map(([path]) => path);
 }
 
+/** The proofs a gating lane actually RUNS: `pnpm run proof:<name>` steps in a
+ *  runner's `--list-steps` output (its last non-empty line, one JSON array). The
+ *  list the runner's loop iterates is the authority, not its source text, which
+ *  can be written to look like a step without being one. A heavy or native-build
+ *  step may be skipped, so it registers nothing. Unreadable output throws. */
+export function gatedProofsFromListing(stdout, lane = "runner") {
+  const line = String(stdout ?? "").split("\n").filter((l) => l.trim() !== "").pop() ?? "";
+  let list;
+  try { list = JSON.parse(line); } catch { throw new Error(`${lane} --list-steps output is not one JSON line`); }
+  if (!Array.isArray(list) || list.length === 0 || !list.every((st) => st && typeof st === "object" && Array.isArray(st.cmd))) throw new Error(`${lane} --list-steps output is not a non-empty array of { cmd } steps`);
+  const out = new Set();
+  for (const st of list) {
+    if (st.heavy === true || st.needsNativeBuild === true) continue;
+    const [bin, sub, name] = st.cmd;
+    if (bin === "pnpm" && sub === "run" && /^proof:[\w:.-]+$/.test(name ?? "")) out.add(name);
+  }
+  return out;
+}
+
 function realContext() {
   const stage = execFileSync("git", ["ls-files", "-s", "-z"], { cwd: ROOT, encoding: "utf8" });
   const tracked = parseLsFilesStage(stage);
   const indexed = [...parseLsFilesIndex(stage).keys()];
   const scripts = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts ?? {};
-  return { root: ROOT, tracked, indexed, scripts };
+  const gatedProofs = new Set();
+  for (const lane of ["scripts/preflight.mjs", "scripts/verify-breadth.mjs"]) {
+    const r = spawnSync(process.execPath, [join(ROOT, lane), "--list-steps"], { cwd: ROOT, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
+    if (r.error || r.status !== 0) throw new Error(`${lane} --list-steps failed (${r.error ? (r.error.code ?? r.error.message) : `exit ${r.status}`}) — the gating proofs cannot be read`);
+    for (const p of gatedProofsFromListing(r.stdout, lane)) gatedProofs.add(p);
+  }
+  return { root: ROOT, tracked, indexed, scripts, gatedProofs };
 }
 
 function run(docPath) {
@@ -770,6 +822,16 @@ function selfTest() {
     // round 24: the lastDir branch also runs every inRepo rule
     ["fail: the matrix's basename beside a path in its own directory", plant("| Planted H10 | ASVS 5.0 | Implemented (public core) | `docs/PURPOSE.md`; `SECURITY_CONTROLS_MATRIX.md` |"), 1],
     ["fail: the matrix's basename beside a directory under docs/", plant("| Planted H11 | ASVS 5.0 | Implemented (public core) | `docs/agent`; `SECURITY_CONTROLS_MATRIX.md` |"), 1],
+    // round 28 (Codex): an empty Control cell; a slash-free name.ext with a repo extension; indented tables
+    ["fail: an Implemented row with an empty Control cell", plant("| | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts` |"), 1],
+    ...["no-such.py", "no-such.rs", "no-such.toml"].flatMap((t, i) => [
+      [`fail: a missing \`${t}\` beside a valid path on an Implemented row`, plant(`| Planted J${i} | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`${t}\` |`), 1],
+      [`fail: a missing \`${t}\` beside a valid workflow on an Automated row`, plant(`| Planted J${i} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\`; \`${t}\` |`), 1]]),
+    ["pass: an identifier whose suffix no tracked file has (`ApiKeyRecord.token`) stays prose", plant("| Planted J9 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `ApiKeyRecord.token` |"), 0],
+    ["fail: every control table indented four spaces (renders as code)", (() => { let inCtl = false; return real.split("\n").map((l) => { if (l.startsWith("| Control | Framework refs | Status | Where |")) inCtl = true; else if (!l.startsWith("|")) inCtl = false; return inCtl ? `    ${l}` : l; }).join("\n"); })(), 1],
+    ["fail: one control row indented four spaces", real.replace("\n| Deny-by-default RBAC", "\n    | Deny-by-default RBAC"), 1],
+    ["fail: one control row indented by a tab", real.replace("\n| Deny-by-default RBAC", "\n\t| Deny-by-default RBAC"), 1],
+    ["pass: a control row indented three spaces is still a row", real.replace("\n| Deny-by-default RBAC", "\n   | Deny-by-default RBAC"), 0],
     ["pass: a unique, present bare basename resolves (`PURPOSE.md` -> docs/PURPOSE.md)", plant("| Planted H9 | ASVS 5.0 | Implemented (public core) | `PURPOSE.md` |"), 0],
     // round 23: claimFold's emphasis strip — a legend word split by ** or __ in a Control name
     ["fail: a legend word split by ** in a Control name", plant("| Im**ple**men**ted (public core) ZZ7 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
@@ -835,6 +897,28 @@ function selfTest() {
         const res = checkMatrix(plant("| Planted H15 | ASVS 5.0 | Implemented (public core) | `docs/agent/LOOP.md`; `PURPOSE.md` |"), { ...ctx, indexed: [...ctx.indexed, "docs/agent/PURPOSE.md"] });
         return res.fails.some((f) => f.control === "Planted H15");
       }],
+      // round 28 (Codex): a bound proof must be one a gating lane runs
+      ["fail: an Implemented row's own proof that no gating lane runs (in-process)", () => {
+        const scripts2 = { ...ctx.scripts, "proof:zz-ungated": ctx.scripts["proof:signalgrid-core"] };
+        const res = checkMatrix(plant("| Planted K10 | ASVS 5.0 | Implemented (public core) | `lib/signalgrid-core/src/policy.ts`; `pnpm run proof:zz-ungated` |"), { ...ctx, scripts: scripts2 });
+        return res.fails.some((f) => f.control === "Planted K10" && f.why.some((w) => w.includes("`proof:zz-ungated` runs in no gating lane")));
+      }],
+      ["fail: an Automated row's proof that no gating lane runs (in-process)", () => {
+        const scripts2 = { ...ctx.scripts, "proof:zz-ungated": ctx.scripts["proof:signalgrid-core"] };
+        const res = checkMatrix(plant("| Planted K11 | ASVS 5.0 | Automated (CI bot) | `.github/workflows/review-hub-ci.yml`; `pnpm run proof:zz-ungated` |"), { ...ctx, scripts: scripts2 });
+        return res.fails.some((f) => f.control === "Planted K11" && f.why.some((w) => w.includes("runs in no gating lane")));
+      }],
+      ["fail: the matrix-wide binding when no gating lane runs it (in-process)", () => {
+        const g2 = new Set([...ctx.gatedProofs].filter((p) => p !== "proof:signalgrid-core"));
+        return checkMatrix(real, { ...ctx, gatedProofs: g2 }).fails.some((f) => f.why.some((w) => w.includes("(matrix-wide binding) runs in no gating lane")));
+      }],
+      ["fail: a heavy or native-build step registers no proof; bad output throws (gatedProofsFromListing)", () => {
+        const got = gatedProofsFromListing('noise line\n[{"cmd":["pnpm","run","proof:a"]},{"cmd":["pnpm","run","proof:b"],"heavy":true},{"cmd":["pnpm","run","proof:c"],"needsNativeBuild":true},{"cmd":["node","scripts/x.mjs","proof:d"]}]\n');
+        let threw = false; try { gatedProofsFromListing("not json"); } catch { threw = true; }
+        return JSON.stringify([...got]) === JSON.stringify(["proof:a"]) && threw;
+      }],
+      ["pass: the real gating lanes run the matrix's proofs (in-process)", () =>
+        ctx.gatedProofs.has("proof:signalgrid-core") && ctx.gatedProofs.has("proof:backup-restore")],
       // realContext must wire BOTH lists: regular files in `tracked`, every index entry in `indexed` (round 27)
       ["pass: the real tracked set holds the matrix and no symlink; the index view holds the symlink (in-process)", () =>
         ctx.tracked.includes(DOC_SELF) && !ctx.tracked.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")

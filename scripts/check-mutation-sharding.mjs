@@ -84,7 +84,7 @@
  */
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, constants as fsConstants, copyFileSync, fstatSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isBuiltin } from "node:module";
@@ -709,12 +709,22 @@ const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 // and said so: paths git ignores, and a change to a file's mtime alone; the preload refuses both by path, whatever git thinks.
 // `GIT_OPTIONAL_LOCKS=0` keeps the check from writing the index itself, and the ceiling stops git from finding a repository
 // above the one it was asked about (a scratch copy of the tree is its own repository, or it is not one and the net says so).
+// A regular file's mode and content come from ONE descriptor (CodeQL js/file-system-race): the path is opened once and both are
+// read from what that open returned, so a writer cannot land between a mode taken from one observation and a content taken from
+// a later one. O_NOFOLLOW makes a link swapped in after the lstat a refusal (ELOOP, so "absent") instead of a followed path;
+// where the platform has no O_NOFOLLOW (win32) the descriptor is re-checked with fstat and anything not a regular file is refused.
+const O_NOFOLLOW = fsConstants.O_NOFOLLOW ?? 0;
 const contentHash = (abs) => {
   try {
     const st = lstatSync(abs);
     if (st.isSymbolicLink()) return `link ${sha256(readlinkSync(abs))}`;
     if (st.isDirectory()) return "dir";
-    return `${(st.mode & 0o777).toString(8)} ${sha256(readFileSync(abs))}`;
+    const fd = openSync(abs, fsConstants.O_RDONLY | O_NOFOLLOW);
+    try {
+      const own = fstatSync(fd);
+      if (O_NOFOLLOW === 0 && !own.isFile()) return "absent";
+      return `${(own.mode & 0o777).toString(8)} ${sha256(readFileSync(fd))}`;
+    } finally { closeSync(fd); }
   } catch { return "absent"; }
 };
 const treeSnapshot = (root) => {

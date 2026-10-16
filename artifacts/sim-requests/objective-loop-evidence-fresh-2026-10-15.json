@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "objective-loop-evidence-fresh-2026-10-15",
+  "requestedAt": "2026-10-15T15:35:00.000Z",
+  "requestedBy": "cloud lane (mac-lane-steward, on Codex P1 4284966813 on PR #1518)",
+  "reason": "Criterion evidence-fresh is unmet (artifacts/live-evidence/mac-run.json mintedAt 2026-10-02T16:07:18Z, 13 days old on 2026-10-15, bound 7). The objective loop's own request for this criterion, objective-loop-evidence-fresh-2026-09-30-4, sits only on the unmerged tick branch mac/tick-20260930T204503Z (PR #1336, conflicted), so the Mac's checkout of SignalGrid_Alpha never carries it and scripts/objective-loop.mjs requestAlreadyQueued() counts that stale tick ref as outstanding and queues nothing new. This request is reachable from mainline so the tick's sim:run-requests runs sim-operation \"evidence\" on the next tick.",
+  "runs": [
+    "evidence"
+  ],
+  "notes": [
+    "A refusal or a skip never closes this request; the loop re-derives after the result lands.",
+    "The dedup-against-stale-tick-refs gap in scripts/objective-loop.mjs is filed as a backlog row for a builder; this request does not change the script."
+  ]
+}

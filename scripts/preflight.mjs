@@ -206,6 +206,10 @@ const STEPS = [
   // citation that resolves to nothing reads as evidence and is not.
   { name: "Cited paths (a doc may not cite a file that does not exist)", cmd: ["node", "scripts/check-cited-paths.mjs"] },
   { name: "Cited-path self-test (the gate can actually fail)", cmd: ["node", "scripts/check-cited-paths.mjs", "--self-test"] },
+  // check-cited-paths only sees BACKTICKED paths; a re-measured stamp (dated 2026-10-08 on) that
+  // cites one in plain text passes it unchecked. Follow-up (d) of the PR #1456 review.
+  { name: "Stamp citations (a re-measured stamp must backtick the repo paths it cites)", cmd: ["node", "scripts/check-stamp-citations.mjs"] },
+  { name: "Stamp-citation self-test (the gate can actually fail)", cmd: ["node", "scripts/check-stamp-citations.mjs", "--self-test"] },
   // A document that instructs `SIGNALGRID_X=…` names a control; if nothing reads X the
   // control does not exist. SIGNALGRID_SANITIZE_OUTPUT was "required" in two documents
   // and read by nothing, anywhere, for as long as the documents existed.
@@ -356,6 +360,8 @@ const STEPS = [
   // a new rule fails this until a human classifies it — which is also one more
   // mechanical guard on the breadth freeze.
   { name: "Mutation sharding partitions the registry (the daily sweep loses no target)", cmd: ["node", "scripts/check-mutation-sharding.mjs"] },
+  { name: "Scratch-git hygiene self-test (it can actually fail)", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs", "--self-test"] },
+  { name: "Scratch-repo self-tests spawn git through one hermetic helper", cmd: ["node", "scripts/check-scratch-git-hygiene.mjs"] },
   { name: "Backlog row citations name rows that exist", cmd: ["node", "scripts/check-row-citations.mjs"] },
   { name: "Row-citation gate self-test (it can actually fail)", cmd: ["node", "scripts/check-row-citations.mjs", "--self-test"] },
   { name: "IT-layer model (every refusal has an owner; nothing routes to a phantom)", cmd: ["node", "scripts/check-it-layer-model.mjs"] },
@@ -401,6 +407,8 @@ const STEPS = [
   { name: "Skill-plane conformance (every skill/agent carries the name+description the harness selects it by)", cmd: ["node", "scripts/check-skill-plane-conformance.mjs"] },
   { name: "Agent raise-your-hand self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-agent-raise-hand.mjs", "--self-test"] },
   { name: "Agent raise-your-hand (every subagent definition carries the surface-when-stuck contract)", cmd: ["node", "scripts/check-agent-raise-hand.mjs"] },
+  { name: "Gate self-tests run self-test (a gate's --self-test that no step runs is run by a gate)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs", "--self-test"] },
+  { name: "Gate self-tests run (a flag-less gate names a control; an unregistered --self-test is spawned)", cmd: ["node", "scripts/check-gate-self-tests-run.mjs"] },
   { name: "Positioning trace (every ratified claim resolves by id in the launch profile; self-tested)", cmd: ["node", "scripts/check-positioning-trace.mjs"] },
   { name: "Module init order (a const read before it is initialised; self-tested)", cmd: ["node", "scripts/check-module-init-order.mjs"] },
   { name: "Walker-floor self-test (a floorless roots-array walk must fail)", cmd: ["node", "scripts/check-walker-floors.mjs", "--self-test"] },
@@ -420,6 +428,10 @@ const STEPS = [
   { name: "Freshness-divergence self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-freshness-divergence.mjs", "--self-test"] },
   { name: "Freshness divergence (one future/age rule, one body; exemptions REPORTED)", cmd: ["node", "scripts/check-freshness-divergence.mjs"] },
   { name: "CI liveness (a sweep that stops running must fail a build; self-tested)", cmd: ["node", "scripts/check-ci-liveness.mjs"] },
+  // Every `schedule:` workflow names what would notice it STOPPED, or carries a dated exemption
+  // with a reason (sre roster item; row 53's follow-on). Static: reads YAML + the registry only.
+  { name: "Scheduled-workflow liveness self-test (the gate must be able to fail)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs", "--self-test"] },
+  { name: "Scheduled-workflow liveness (every scheduled workflow names its watcher or a dated exemption)", cmd: ["node", "scripts/check-scheduled-workflow-liveness.mjs"] },
   { name: "CI job timeouts (an unbounded job is an unbounded outage; self-tested)", cmd: ["node", "scripts/check-ci-job-timeouts.mjs"] },
   { name: "Connector discipline (every family gated + proven, none acting on a device)", cmd: ["node", "scripts/check-connector-discipline.mjs"] },
   { name: "Launch profile (the declared product edge matches the real one)", cmd: ["node", "scripts/check-launch-profile.mjs"] },
@@ -774,6 +786,16 @@ const STEPS = [
 const nativeExclusion = nativeBuildExclusion(repo);
 if (nativeExclusion.excluded) {
   console.log(`ℹ native web build unavailable on ${nativeExclusion.target} — ${nativeExclusion.reason}\n`);
+}
+
+// `--list-steps` prints the list the loop below iterates, as one JSON line, and stops. The registration gate
+// (scripts/check-gate-self-tests-run.mjs) reads what is registered from HERE rather than parsing this file's source:
+// source can be written to look like a step without being one, the list the loop runs cannot. Keep this block
+// directly above the loop; the gate checks that it is.
+if (process.argv.includes("--list-steps")) {
+  // wait for the write to flush: process.exit() straight after a pipe write cuts the output at the 64 KiB pipe buffer
+  await new Promise((done) => process.stdout.write(JSON.stringify(STEPS.map((s) => ({ name: s.name, cmd: s.cmd, heavy: s.heavy === true, needsNativeBuild: s.needsNativeBuild === true }))) + "\n", done));
+  process.exit(0);
 }
 
 const results = [];

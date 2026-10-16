@@ -39,6 +39,7 @@
 import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { scratchGit, scratchGitEnv } from "./lib/scratch-git.mjs";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -172,21 +173,34 @@ function liveFacts() {
 function scratchCloneChecks(ok) {
   const root = mkdtempSync(join(tmpdir(), "prov-selftest-"));
   // A caller that exports GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE would otherwise point every
-  // git call below (the `reset --hard` especially) at ITS repository instead of the scratch one.
-  const { GIT_DIR: _d, GIT_WORK_TREE: _w, GIT_INDEX_FILE: _i, ...cleanEnv } = process.env;
+  // git call below (the `reset --hard` especially) at ITS repository instead of the scratch one;
+  // the shared helper scrubs them and turns signing off.
+  const cleanEnv = scratchGitEnv();
   const run = (cwd, cmd, args) => spawnSync(cmd, args, { cwd, encoding: "utf8", env: cleanEnv });
-  const g = (cwd, ...args) =>
-    run(cwd, "git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args]);
+  // Fixture setup must fail at the failing line: a swallowed `reset`/`add`/`commit` would let a
+  // later check pass or fail for the wrong reason.
+  const g = (cwd, ...args) => {
+    const r = scratchGit(cwd, args);
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
   // Commit at a fixed time, so a scratch case can make one file's last touch LATER than another's.
-  const gAt = (cwd, when, ...args) =>
-    spawnSync("git", ["-c", "commit.gpgsign=false", "-c", "user.email=t@example.invalid", "-c", "user.name=t", ...args], {
-      cwd, encoding: "utf8", env: { ...cleanEnv, GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
-    });
+  const gAt = (cwd, when, ...args) => {
+    const r = scratchGit(cwd, args, { env: { GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when } });
+    if (r.error || r.status !== 0) throw new Error(`git ${args.join(" ")} failed in ${cwd}: ${r.error ? r.error.message : (r.stderr || r.stdout)}`.trim());
+    return r;
+  };
+  // The gate imports the shared helper, so every scratch copy of the gate carries the helper too.
+  const copyGateInto = (dir) => {
+    copyFileSync(fileURLToPath(import.meta.url), join(dir, "scripts", "check-sim-result-provenance.mjs"));
+    mkdirSync(join(dir, "scripts", "lib"), { recursive: true });
+    copyFileSync(fileURLToPath(new URL("./lib/scratch-git.mjs", import.meta.url)), join(dir, "scripts", "lib", "scratch-git.mjs"));
+  };
   try {
     const src = join(root, "src");
     mkdirSync(join(src, "scripts"), { recursive: true });
     mkdirSync(join(src, RESULTS_DIR), { recursive: true });
-    copyFileSync(fileURLToPath(import.meta.url), join(src, "scripts", "check-sim-result-provenance.mjs"));
+    copyGateInto(src);
     g(src, "init", "-q");
     writeFileSync(join(src, "root.txt"), "root\n");
     g(src, "add", "-A");
@@ -261,7 +275,7 @@ function scratchCloneChecks(ok) {
     const nogit = join(root, "nogit");
     mkdirSync(join(nogit, "scripts"), { recursive: true });
     mkdirSync(join(nogit, RESULTS_DIR), { recursive: true });
-    copyFileSync(fileURLToPath(import.meta.url), join(nogit, "scripts", "check-sim-result-provenance.mjs"));
+    copyGateInto(nogit);
     for (let i = 0; i < MIN_RESULTS + 1; i += 1) {
       writeFileSync(join(nogit, RESULTS_DIR, `r${i}.json`), JSON.stringify({ provenance: { commit: head } }));
     }

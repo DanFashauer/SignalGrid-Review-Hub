@@ -78,9 +78,12 @@ export function deriveToolNames(indexSource) {
 //      package spec, and each `Context7 … <x.y.z>` phrase (case-insensitive, same
 //      line, ≤40 chars apart), must name PINNED. Nothing is typed in a list, so a
 //      new copy anywhere — a skill doc, .mcp.json, a new doc — is held on arrival.
-//      A spec's WHOLE token after `@` must equal PINNED: a tag (@latest), range
-//      (@^4.1.1, @~, @>=), wildcard (@*, @4.1.x), partial (@4, @4.0) or prerelease
-//      is a finding, and `npx … @upstash/context7-mcp` with no version is too.
+//      A spec's token after `@` must equal PINNED once trailing markup (`)`, `.`,
+//      `**`, a closing tag …) is shed; a tail holding `||` is never shed (npm
+//      reads `4.1.1||` as a range): a tag (@latest), range (@^4.1.1, @~, @>=),
+//      wildcard (@*, @4.1.x), partial (@4, @4.0) or prerelease is a finding, and
+//      `npx … @upstash/context7-mcp` with no version is too. PINNED itself must
+//      be an exact x.y.z.
 //      Binary and large files are swept as latin1, never skipped. The PHRASE half
 //      is a heuristic over wording: a version written BEFORE the word, on the next
 //      line, >40 chars away, two-component, or under another name ("ctx7") is not
@@ -123,7 +126,7 @@ export const GO_SPACE_CHARS = "\t\n\v\f\r \u0085\u00A0\u1680\u2000\u2001\u2002\u
 const GO_SPACE = "[\\t\\n\\v\\f\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]";
 const CONTEXT7_NAME_RE = /@upstash\/context7-mcp(?![\w-])/gi; // units are decoded: a JSON `\/` is already `/`
 const PACKAGE_RUNNER_RE =
-  /\b(?:npx|pnpx|bunx|uvx|dlx|bun(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:x|add|i|install)|npm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:exec|x|i|install|add)|pnpm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:add|i|install|exec|dlx)|yarn(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*(?:\s+workspace\s+\S+)?\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // options may come before the verb (`pnpm --filter x add`, `npm --prefix t install`, `yarn workspace x add`) // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
+  /\b(?:npx|pnpx|bunx|uvx|dlx|bun(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:x|add|i|install)|npm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:exec|x|i|in|ins|inst|insta|instal|install|isnt|isnta|isntal|isntall|it|install-test|add)|pnpm(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*\s+(?:add|i|install|exec|dlx)|yarn(?:\s+-\S+(?:\s+(?!(?:add|i|install|exec|dlx)\b)[^\s-]\S*)?)*(?:\s+workspace\s+\S+)?\s+(?:add|dlx|global\s+add)|deno\s+(?:run|install))\b/i; // options may come before the verb (`pnpm --filter x add`, `npm --prefix t install`, `yarn workspace x add`) // Windows runners are case-insensitive: `NPX`, `Npx.CMD`
 // Installing Context7 from git or a URL bypasses the npm pin entirely.
 const CONTEXT7_GIT_SOURCE_RE =
   /(?:github:|gitlab:|bitbucket:|git\+[a-z]+:\/\/|git:\/\/|git@github\.com:)[^\s"'`]*upstash\/context7|codeload\.github\.com\/upstash\/context7|github\.com\/upstash\/context7(?:\.git\b|\/tarball\/|\/archive\/)/i;
@@ -526,7 +529,7 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner =
     PACKAGE_RUNNER_RE.test(line) ||
-    /["']?command["']?\s*[:=]\s*(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
+    /["']?command["']?\s*[:=]\s*(?:(?:[&!]\S*|#[^\n]*)\s+)*(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;
@@ -541,6 +544,12 @@ export function context7UnitFindings(units, pin, runner, depth = 0) {
     // (a unit that IS a spec, or a `--flag=<spec>` argument, is one argv word and is read whole below)
     // (a decoded command string may spell the name only once the shell drops quotes and escapes: `cont\\ext7`, `cont''ext7`)
     if (depth < 2 && /[\s;&|<>]/.test(unit) && /context7-mcp/i.test(unit.replace(/["'\\]/g, "")) && !SPEC_VALUE_RE.test(unit) && !/^--?[\w-]+=/.test(unit)) {
+      // the unit's quotes are already gone (exec form `["npx","-y","…@4.1.1||"]`, `X="npx …@4.1.1||"`), so the re-split
+      // below would read a once-quoted `||` as the shell's OR and drop it: a spec's glued tail holding `||` is read first
+      for (const m of unit.matchAll(new RegExp(CONTEXT7_NAME_RE.source, CONTEXT7_NAME_RE.flags))) {
+        const glued = /^@[^\s,]*/.exec(unit.slice(m.index + m[0].length))?.[0] ?? "";
+        if (/\|\|/.test(glued)) out.push({ unpinned: glued.slice(1, 25) });
+      }
       out.push(...context7UnitFindings(shellWords(unit), pin, runner || PACKAGE_RUNNER_RE.test(unit), depth + 1));
       continue;
     }
@@ -641,9 +650,13 @@ export function context7JsonFindings(text, pin) {
           // scalar (`null`, `true`, `4`) is no pin at all
           const val =
             typeof v === "string" ? v
-            : v && typeof v === "object" && !Array.isArray(v) ? (typeof v["."] === "string" ? v["."] : typeof v.version === "string" ? v.version : null)
-            : v === null || typeof v !== "object" ? String(v)
-            : null;
+            : Array.isArray(v) ? "[array]"
+            : v && typeof v === "object"
+              ? typeof v["."] === "string" ? v["."]
+                : "version" in v ? String(v.version)
+                : Object.keys(v).length === 0 ? "{}"
+                : null // nested overrides of the package's own dependencies: walked below
+            : String(v); // null, true, 4
           const f = val === null ? null : classify(val);
           if (f) out.push({ line: lineOf(JSON.stringify(k).slice(1, -1)), f });
           if (typeof v !== "string") walk(v, false, here);
@@ -793,7 +806,7 @@ export function checkContext7Pin({ installerSource, files, copies = CONTEXT7_PIN
   const pin = deriveContext7Pin(installerSource);
   if (!pin) return [`${CONTEXT7_INSTALLER}: no \`export const PINNED = "@upstash/context7-mcp@<version>"\` — the pin every copy is held to cannot be derived`];
   // a tag, range or partial PINNED would hold every copy to a floating install and pass: the source itself must be exact
-  if (!/^\d+\.\d+\.\d+$/.test(pin)) return [`${CONTEXT7_INSTALLER}: PINNED is "${pin}", not an exact x.y.z version — a floating pin cannot be held`];
+  if (!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(pin)) return [`${CONTEXT7_INSTALLER}: PINNED is "${pin}", not an exact x.y.z version — a floating pin cannot be held`];
   const problems = [];
   const stale = (path, line, v) => `${path}:${line}: Context7 pin copy says ${v}, but ${CONTEXT7_INSTALLER} PINNED is ${pin}`;
 
@@ -1865,6 +1878,63 @@ server.registerTool(
     ["a.yml", `run: |\n${S23(2)}\n`, "a column-0 `run: |` block"],
   ]) {
     checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  // round 26: a `||` tail in a unit the re-split would lose it from (Docker exec form, compact lists, an assignment);
+  // npm's install aliases; `command:` props and comments; non-string values under a package-named key; and pins for
+  // round 26's surviving operator mutants (whitespace-only and comment lines, column-0 keys, a 3-member `^`/backtick
+  // split, a JSON git source, a known copy outside the sweep)
+  for (const [path, body, what, re] of [
+    ["Dockerfile", `RUN ["npx","-y","${C7}||"]\n`, "Docker exec form `RUN [\"npx\",\"-y\",\"…@<pin>||\"]`", /UNPINNED \(@[\d.]+\|\|/],
+    ["Dockerfile", `CMD ["npx","-y","${C7}||"]\n`, "Docker exec form `CMD`", /UNPINNED \(@[\d.]+\|\|/],
+    ["c.toml", `command = "npx"\nargs = ["-y","${C7}||"]\n`, "a compact TOML args list", /UNPINNED \(@[\d.]+\|\|/],
+    ["a.mjs", `spawn("npx",["-y","${C7}||"]);\n`, "a compact JS args list", /UNPINNED \(@[\d.]+\|\|/],
+    ["s.sh", `X="npx -y ${C7}||"\n`, "a quoted assignment holding `||` after the pin", /UNPINNED \(@[\d.]+\|\|/],
+    ["s.sh", "npm in @upstash/context7-mcp\n", "npm's `in` install alias", /with NO version/],
+    ["s.sh", "npm isntall @upstash/context7-mcp\n", "npm's `isntall` install alias", /with NO version/],
+    ["s.sh", "npm it @upstash/context7-mcp\n", "npm's `it` (install-test) alias", /with NO version/],
+    ["docker-compose.yml", 'c:\n  command:\n    # run it\n    - npx\n    - "@upstash/context7-mcp"\n', "a comment line between `command:` and `- npx`", /with NO version/],
+    ["a.yaml", 'c:\n  command: !!seq\n    - npx\n    - "@upstash/context7-mcp"\n', "`command: !!seq` before its list", /with NO version/],
+    ["a.yaml", 'c:\n  command: &a\n    - npx\n    - "@upstash/context7-mcp"\n', "`command: &a` before its list", /with NO version/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": { version: 4 } } }), "a numeric `version` under a package-named key", /UNPINNED \(@4\)/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": {} } }), "an empty object under a package-named key", /UNPINNED \(@\{\}\)/],
+    ["package.json", JSON.stringify({ dependencies: { "@upstash/context7-mcp": [] } }), "an array under a package-named key", /UNPINNED \(@\[array\]\)/],
+    [".github/workflows/a.yml", W24(`      - run: |\n          echo hi\n  \n${S23(10)}\n`), "a block holding a whitespace-only line shorter than its indent (line 333)"],
+    ["a.yaml", `x:\n  "@upstash/context7-mcp": >\n    ${realPin}\n  \n    ||5\n`, "a key's folded value with a whitespace-only line inside (line 687)", /UNPINNED/],
+    ["a.yml", `run:\n  |\n${S23(2)}\n`, "a column-0 key with `|` alone on the next line (line 340)"],
+    ["a.yaml", 'c:\n  command: npx\n  args: "-y @upstash/context7-mcp"\n', "a bare name in a quoted args string after `command: npx` (line 544)", /with NO version/],
+    ["package.json", JSON.stringify({ dependencies: { x: "github:upstash/context7" } }), "a JSON git source with no runner (line 659)", /git\/URL source/],
+    ["s.cmd", "npx -y @upstash/cont^\next7-^\nmcp@latest\n", "a 3-member cmd `^` split (line 483)"],
+    ["s.ps1", "npx -y @upstash/cont`\next7-`\nmcp@latest\n", "a 3-member PowerShell backtick split (line 483)"],
+  ]) {
+    checks.push([`[sweep ${path}] ${what} → named`, sweep(path, body).some((p) => (re ?? /UNPINNED \(@latest\)/).test(p))]);
+  }
+  checks.push([
+    "a spec continued over a whitespace-only line is still refused (line 734)",
+    // a hyphen-range continuation (`- 5`) is an entry the line reader does not fold: only the refusal names it
+    sweep("w.yaml", `x:\n    c7: npm:${SPEC}${realPin}\n  \n      - 5\n`).some((p) => /continues on line 4/.test(p)),
+  ]);
+  checks.push([
+    "a stale known copy outside the sweep is named even when nothing else is (line 902)",
+    checkContext7Pin({ installerSource: realInstaller, files: { "k.md": `npx -y ${SPEC}4.0.4\n` }, copies: [{ path: "k.md", re: CONTEXT7_SPEC_RE }], history: [/^k\.md$/] }).some((p) => /^k\.md:1: .*says 4\.0\.4/.test(p)),
+  ]);
+  checks.push([
+    "a PINNED with a leading zero (04.1.1) is not an exact version",
+    checkContext7Pin({ installerSource: realInstaller.replace(/export const PINNED = "@upstash\/context7-mcp@[^"]+"/, 'export const PINNED = "@upstash/context7-mcp@04.1.1"'), files: { "s.sh": `npx -y ${SPEC}04.1.1\n` }, copies: [] }).some((p) => /not an exact x\.y\.z/.test(p)),
+  ]);
+  for (const [path, body, what, want] of [
+    ["Dockerfile", `RUN ["npx","-y","${C7}"]\n`, "a pinned exec form", 0],
+    ["Dockerfile", `CMD ["npx", "-y", "${C7}"]\n`, "a pinned exec form with spaces", 0],
+    ["c.toml", `command = "npx"\nargs = ["-y","${C7}"]\n`, "a pinned compact TOML list", 0],
+    ["s.sh", `npx -y \\\n${C7} \\`, "a file ending in a continuation chain does not throw", 0],
+    ["a.yaml", '"@upstash/context7-mcp":\n\n\n', "a package key followed only by blank lines does not throw", 1],
+  ]) {
+    let got;
+    try {
+      got = sweep(path, body).length;
+    } catch (e) {
+      got = `threw: ${e.message}`;
+    }
+    checks.push([`[sweep ${path}] ${what} → ${want ? "named" : "no finding"}`, got === want]);
   }
   for (const bad of ["latest", "^4", "4.1", `${realPin}-rc.1`]) {
     const installer = realInstaller.replace(/export const PINNED = "@upstash\/context7-mcp@[^"]+"/, `export const PINNED = "@upstash/context7-mcp@${bad}"`);

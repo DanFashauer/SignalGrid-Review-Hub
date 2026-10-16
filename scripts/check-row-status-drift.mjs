@@ -52,6 +52,15 @@
 // claude/<branch>$'` misses, and the REST head.ref of all 18 distinct PRs
 // equalled the branch the row names.
 //
+// THE PR-NAMED SHAPE, "FIX PROPOSED <date> (PR #N[, <sha>])", is read directly: PR #N's landing
+// is searched on the same lines the branch shape walks (HEAD's first-parent line, and through
+// sync merges into their second parents, at most 8 nested; an unfound PR past that is NOT
+// MEASURED). A GitHub-titled merge lands the LAST "(#N" in its title. A cited sha (any case,
+// any prose prefix; a digits-only token is a number, not a sha) must be in what the landing
+// brought in: for a merge, in landing^1..landing^2; for a squash, not already on landing^1's
+// line. CEILING: offline, a squash cannot tie the cited commit to THIS PR, only rule out an
+// earlier mainline one; a sha token under 7 characters is READ, never resolved.
+//
 // WHAT A STALE LINE MEANS: the annotation's claim is in the tip's history, so
 // the annotation needs restamping. It does NOT say the row should close — a
 // ratchet row (several waves, each with its own annotation) can be correctly
@@ -102,6 +111,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { CLOSED_MARKERS, PARTIAL_MARKERS, marks, parseRows, statusText } from "./check-backlog-ownership.mjs";
+import { SCRATCH_GIT_SCRUB, scratchGitOk, scrubProcessGitEnv } from "./lib/scratch-git.mjs";
 
 export const LEDGERS = ["docs/COMPANY_BUILD_PLAN.md", "docs/BUILD_BACKLOG.md"];
 const HIGH_WATER_WINDOW = 50;
@@ -111,12 +121,19 @@ const HIGH_WATER_WINDOW = 50;
 // detector cannot read is a NOT MEASURED line, never silently skipped.
 const DATED = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})/g;
 const BRANCH_SHAPE = /^\s+\(branch\s+([A-Za-z0-9._/-]+)/;
-const PR_SHAPE = /^\s+\(PR\s+#(\d+)(?:,\s*([0-9a-f]{7,40}))?/;
+const PR_SHAPE = /^\s+\(PR\s+#(\d+)([^)\n]{0,200})/;
+// A commit the PR-named shape cites: any hex token in the claim's clause, any case, with or without
+// a prose prefix ("commit abc1234"). A run of digits only is a number (a check-run id), not a sha.
+const SHA_TOKEN = /(?<![\w#])[0-9a-fA-F]{4,40}(?!\w)/g;
+const shaTokenOf = (clause) => (clause.match(SHA_TOKEN) ?? []).find((t) => /[a-fA-F]/.test(t) && /\d/.test(t))?.toLowerCase();
 const PR_MERGE = /^Merge pull request #(\d+)(?: from [^/\s]+\/(\S+))?/;
 const SQUASH = /\(#(\d+)\)$/;
 // A merge GitHub itself committed under a custom title (the landing chain's
 // "… (#1376, check run …)" and "… (#N) — merged under DR-037 …") is a PR landing too.
-const GITHUB_TITLED_MERGE = /\(#(\d+)[,)\s]/;
+// A title can name an earlier PR first ("ack (#1431) (#1432, check run …)" landed #1432):
+// the landing is the LAST "(#N" group, which is where GitHub appends the PR number.
+const GITHUB_TITLED_MERGE = /\(#(\d+)[,)\s]/g;
+const titledPr = (subject) => { const all = [...subject.matchAll(GITHUB_TITLED_MERGE)]; return all.length ? Number(all[all.length - 1][1]) : null; };
 // GitHub commits every squash merge itself; a worker's own commit whose subject
 // happens to end "(#N)" is not a landing.
 const GITHUB_COMMITTER = "GitHub <noreply@github.com>";
@@ -132,11 +149,13 @@ const SYNC_DEPTH = 8;
 // An inherited repository pointer would make git read a different repository, index or object
 // store than the one being measured (an alternate object store can even substitute a blob), so
 // all of them are dropped: git finds the repository from the working directory.
+// Beyond those six, every other variable git lists as repository-local (the shared helper's
+// SCRATCH_GIT_SCRUB: a shallow file, a ref namespace, config passed down by a parent `git -c`) is
+// dropped too; the two history switches are then set, so an ambient value can never unset them.
 export const REPO_POINTERS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
 export function gitEnvFrom(ambient) {
-  return Object.fromEntries(
-    Object.entries({ ...ambient, GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" }).filter(([k]) => !REPO_POINTERS.includes(k)),
-  );
+  const drop = new Set([...REPO_POINTERS, ...SCRATCH_GIT_SCRUB]);
+  return { ...Object.fromEntries(Object.entries(ambient).filter(([k]) => !drop.has(k))), GIT_NO_REPLACE_OBJECTS: "1", GIT_GRAFT_FILE: "/dev/null" };
 }
 const GIT_ENV = gitEnvFrom(process.env);
 // Config, from any scope (system, global, repository, or passed through the environment), that
@@ -191,7 +210,7 @@ export function findAnnotations(file, text) {
     const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
     const m = [d[0] + (b ? b[0] : p ? p[0] : ""), d[1]];
     m.index = d.index;
-    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p?.[2] };
+    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(p[2]) : undefined };
   });
   all.forEach(({ m, kind, branch, claimPr, claimSha }, k) => {
     // The cited paths are the annotation's OWN: the span stops at the next
@@ -242,8 +261,8 @@ function landingOf(cwd, intro, tip, depth = 0) {
   const pr = PR_MERGE.exec(subject);
   if (pr) return { land, pr: Number(pr[1]), subjectBranch: pr[2] };
   const parents = parentLine.split(" ");
-  const titled = parents.length > 1 && committer === GITHUB_COMMITTER ? GITHUB_TITLED_MERGE.exec(subject) : null;
-  if (titled) return { land, pr: Number(titled[1]) };
+  const titled = parents.length > 1 && committer === GITHUB_COMMITTER ? titledPr(subject) : null;
+  if (titled) return { land, pr: titled };
   if (parents.length > 1) {
     // Past SYNC_DEPTH nested sync merges the trace stops; that is NOT MEASURED, never "not via a PR".
     if (depth >= SYNC_DEPTH) return { land, capped: true };
@@ -270,34 +289,81 @@ function branchEvidence(cwd, a, l) {
  *   NOT-VIA-PR             not landed through a PR merge or squash (a branch tip, a direct push)
  *   NO-HISTORY             no adding commit found in this row's line history
  */
-/** The first-parent commit of HEAD that landed PR #n: a PR merge subject, a GitHub-titled merge, or a GitHub squash. */
-const fpLogCache = new Map();
-function prLandingOf(cwd, n) {
-  if (!fpLogCache.has(cwd)) {
-    fpLogCache.set(cwd, git(cwd, ["log", "--first-parent", "--format=%H%x09%P%x09%cn <%ce>%x09%s", "HEAD"]).split("\n").map((l) => {
+/** Every commit reachable from HEAD, by sha: parents, committer, subject (one `git log` per measurement). */
+const graphCache = new Map();
+function graphOf(cwd) {
+  if (!graphCache.has(cwd)) {
+    const g = new Map();
+    for (const l of git(cwd, ["log", "--format=%H%x09%P%x09%cn <%ce>%x09%s", "HEAD"]).split("\n")) {
       const [sha, parents, committer, ...rest] = l.split("\t");
-      return { sha, merge: parents.split(" ").length > 1, github: committer === GITHUB_COMMITTER, subject: rest.join("\t") };
-    }));
+      g.set(sha, { sha, parents: parents ? parents.split(" ") : [], github: committer === GITHUB_COMMITTER, subject: rest.join("\t") });
+    }
+    graphCache.set(cwd, g);
   }
-  return fpLogCache.get(cwd).find((c) => {
-    const m = PR_MERGE.exec(c.subject);
-    if (m) return Number(m[1]) === n;
-    if (!c.github) return false;
-    const t = (c.merge ? GITHUB_TITLED_MERGE : SQUASH).exec(c.subject);
-    return t ? Number(t[1]) === n : false;
-  });
+  return graphCache.get(cwd);
+}
+
+/** The PR a commit lands, if it is a landing: a PR merge subject, a GitHub-titled merge, or a GitHub squash. */
+function landedPr(c) {
+  const m = PR_MERGE.exec(c.subject);
+  if (m) return Number(m[1]);
+  if (!c.github) return null;
+  if (c.parents.length > 1) return titledPr(c.subject);
+  const sq = SQUASH.exec(c.subject);
+  return sq ? Number(sq[1]) : null;
+}
+
+/**
+ * The commit that landed PR #n, on the same lines the branch-named shape walks: HEAD's
+ * first-parent line, and through every non-landing (sync) merge on it into its second parent's
+ * first-parent line, up to SYNC_DEPTH nested. A worker branch that merged mainline in therefore
+ * sees mainline's landings. Past the cap, an unfound PR is NOT MEASURED, never "not landed".
+ */
+function prLandingOf(cwd, n) {
+  const g = graphOf(cwd);
+  const seen = new Set();
+  let capped = false;
+  let tips = [[git(cwd, ["rev-parse", "HEAD"]), 0]];
+  while (tips.length) {
+    const next = [];
+    for (const [tip, depth] of tips) {
+      for (let c = g.get(tip); c && !seen.has(c.sha); c = g.get(c.parents[0])) {
+        seen.add(c.sha);
+        const pr = landedPr(c);
+        if (pr === n) return { sha: c.sha, merge: c.parents.length > 1 };
+        if (pr === null && c.parents.length > 1) {
+          if (depth >= SYNC_DEPTH) capped = true;
+          else next.push([c.parents[1], depth + 1]);
+        }
+      }
+    }
+    tips = next;
+  }
+  return capped ? { capped: true } : null;
+}
+
+/** Is the commit an annotation cites part of what landing `l` brought in? */
+function shaInLanding(cwd, sha, l) {
+  let full;
+  try { full = git(cwd, ["rev-parse", "--verify", "--quiet", `${sha}^{commit}`]); } catch { return false; }
+  if (full === l.sha) return true;
+  const anc = (x, y) => { try { git(cwd, ["merge-base", "--is-ancestor", x, y]); return true; } catch { return false; } };
+  // Already on the line before the landing: an earlier commit, not this PR's.
+  if (anc(full, `${l.sha}^1`)) return false;
+  // A merge brings in exactly ${l}^1..${l}^2. A squash keeps none of the PR's commits, so a
+  // commit not already on the line is accepted (CEILING: offline, it cannot be tied to THIS PR).
+  return l.merge ? anc(full, `${l.sha}^2`) : true;
 }
 
 /** An annotation that names its PR ("FIX PROPOSED <date> (PR #N, <sha>)"): read the claim directly. */
 function classifyPrShape(cwd, a) {
   const l = prLandingOf(cwd, a.claimPr);
+  if (l?.capped) return { ...a, status: "NO-HISTORY", why: `PR #${a.claimPr} was not found within ${SYNC_DEPTH} nested non-PR merges; the trace stops there` };
   if (!l) return { ...a, status: "NOT-VIA-PR" };
   const changed = new Set(git(cwd, ["diff", "--name-only", `${l.sha}^1`, l.sha]).split("\n"));
   const hit = a.cited.filter((p) => changed.has(p));
-  let shaIn = true;
-  if (a.claimSha) {
-    try { git(cwd, ["merge-base", "--is-ancestor", a.claimSha, l.sha]); } catch { shaIn = false; }
-  }
+  // A cited token too short to resolve is a claim nobody can check, never a skipped one.
+  const shaIn = a.claimSha ? a.claimSha.length >= 7 && shaInLanding(cwd, a.claimSha, l) : true;
   const ok = hit.length > 0 && shaIn;
   const status = a.closed ? "CLOSED-RESIDUE" : ok ? "STALE" : "LANDED-UNCORROBORATED";
   return { ...a, status, land: l.sha, pr: a.claimPr, hit, shaIn, branchEvidence: "pr-named" };
@@ -397,7 +463,7 @@ export function readLedger(cwd, file) {
 
 export function measure(where, ledgers = LEDGERS, opts = {}) {
   fpCache.clear();
-  fpLogCache.clear();
+  graphCache.clear();
   const cwd = git(where, ["rev-parse", "--show-toplevel"]);
   const results = [];
   for (const file of ledgers) {
@@ -446,7 +512,7 @@ function report(results, dirty = []) {
     console.log(`  STALE  ${r.file}:${r.line} ${r.row} — FIX PROPOSED (${claim(r)}) landed: PR #${r.pr} at ${r.land.slice(0, 8)} (${r.intro ? `commit ${r.intro.slice(0, 8)}; ` : ""}changed ${r.hit[0]}; ${note(r)}) — restamp the annotation`);
   }
   for (const r of by("LANDED-UNCORROBORATED")) {
-    const why = r.branchEvidence === "mismatch" ? `PR #${r.pr} came from a different branch than ${r.branch}` : r.shaIn === false ? `the commit it cites (${r.claimSha}) is not in that landing` : `that commit changed none of the ${r.cited.length} path(s) it cites`;
+    const why = r.branchEvidence === "mismatch" ? `PR #${r.pr} came from a different branch than ${r.branch}` : r.shaIn === false ? `the commit it cites (${r.claimSha}) ${r.claimSha.length < 7 ? "is too short to resolve" : "is not in that landing"}` : `that commit changed none of the ${r.cited.length} path(s) it cites`;
     console.log(`  READ   ${r.file}:${r.line} ${r.row} — annotation landed via PR #${r.pr} at ${r.land.slice(0, 8)}, but ${why}; read by hand`);
   }
   for (const r of by("NO-LEDGER")) console.log(`  ?      ${r.file} — ${r.why}; NOT MEASURED (a ledger nobody could read is never a clean result)`);
@@ -463,11 +529,16 @@ export function summaryLine(results) {
 }
 
 function selfTest() {
+  // Every scratch repository is driven through scripts/lib/scratch-git.mjs (repo pointers scrubbed,
+  // signing and hooks off), and this process is scrubbed too: the production functions it calls,
+  // and the CLI children it spawns, must never be aimed at the real repository by an inherited GIT_DIR.
+  scrubProcessGitEnv();
   const dir = mkdtempSync(join(tmpdir(), "row-drift-"));
-  // Fixtures drop the inherited repository pointers too, so an inherited GIT_DIR can never make them commit into another repository.
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPO_POINTERS.includes(k))), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z" };
-  const g = (...args) => execFileSync("git", args, { cwd: dir, env, encoding: "utf8" }).trim();
-  const gAs = (who, ...args) => execFileSync("git", args, { cwd: dir, env: { ...env, GIT_COMMITTER_NAME: who[0], GIT_COMMITTER_EMAIL: who[1] }, encoding: "utf8" }).trim();
+  // Fixed identity and dates, so fixture shas are the same on every run.
+  const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "2026-10-01T00:00:00Z", GIT_COMMITTER_DATE: "2026-10-01T00:00:00Z" };
+  const gIn = (d, ...args) => scratchGitOk(d, args, { env });
+  const g = (...args) => gIn(dir, ...args);
+  const gAs = (who, ...args) => scratchGitOk(dir, args, { env: { ...env, GIT_COMMITTER_NAME: who[0], GIT_COMMITTER_EMAIL: who[1] } });
   const [plan, backlog] = LEDGERS;
   const write = (p, s) => { mkdirSync(join(dir, p, ".."), { recursive: true }); writeFileSync(join(dir, p), s); };
   const read = (p) => readFileSync(join(dir, p), "utf8");
@@ -480,7 +551,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -488,6 +559,7 @@ function selfTest() {
     write(backlog, "- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n");
     for (const f of ["a", "b", "c", "d"]) write(`scripts/${f}.mjs`, "0\n");
     commit("base");
+    const baseSha = g("rev-parse", "HEAD");
     // 1: annotation + fix on the branch, merged as a PR — STALE. Also lands the closed box's residue.
     pr("claude/fix-a", 7, () => {
       edit(plan, row(1), row(1) + ann("claude/fix-a", "scripts/a.mjs")); write("scripts/a.mjs", "1\n");
@@ -523,15 +595,44 @@ function selfTest() {
     // 16: the PR-named shape "FIX PROPOSED <date> (PR #N, <sha>)", landed as PR #23 — STALE.
     g("checkout", "-qb", "claude/pr-shape"); write("scripts/c.mjs", "16\n"); commit("fix 16");
     const fix16 = g("rev-parse", "--short=8", "HEAD");
+    const short16 = g("rev-parse", "HEAD").slice(0, 5);
+    // A commit on a branch that never merges anywhere (row 34 cites it).
+    g("checkout", "-q", "main"); g("checkout", "-qb", "claude/elsewhere"); write("scripts/e.mjs", "e\n"); commit("elsewhere");
+    const elsewhere = g("rev-parse", "HEAD"); g("checkout", "-q", "claude/pr-shape");
     edit(plan, row(16), row(16) + ` FIX PROPOSED 2026-10-08 (PR #23, ${fix16}): \`scripts/c.mjs\` changed.`);
     // 20: same PR, but the commit it cites is not in that landing — READ by hand.
-    edit(plan, row(20), row(20) + " FIX PROPOSED 2026-10-08 (PR #23, 1234567): `scripts/c.mjs` changed."); commit("annotate 16 and 20");
+    edit(plan, row(20), row(20) + " FIX PROPOSED 2026-10-08 (PR #23, 1234abc): `scripts/c.mjs` changed.");
+    // 23-26: the same PR citing a commit that was already on mainline before it — plain, upper-case,
+    // prose-prefixed — or a token too short to resolve: each READ, never STALE, never dropped.
+    edit(plan, row(23), row(23) + ` FIX PROPOSED 2026-10-08 (PR #23, ${baseSha}): \`scripts/c.mjs\`.`);
+    edit(plan, row(24), row(24) + ` FIX PROPOSED 2026-10-08 (PR #23, ${baseSha.slice(0, 10).toUpperCase()}): \`scripts/c.mjs\`.`);
+    // Row 25's token is a real but 5-character prefix of the fix commit: it would resolve, and is still refused.
+    edit(plan, row(25), row(25) + ` FIX PROPOSED 2026-10-08 (PR #23, ${short16}): \`scripts/c.mjs\`.`);
+    // 34: that never-merged commit — neither on mainline before the landing nor in it — READ.
+    edit(plan, row(34), row(34) + ` FIX PROPOSED 2026-10-08 (PR #23, ${elsewhere}): \`scripts/c.mjs\`.`);
+    edit(plan, row(26), row(26) + ` FIX PROPOSED 2026-10-08 (PR #23, commit ${baseSha.slice(0, 10)}): \`scripts/c.mjs\`.`);
+    // 35: a digits-only number in the clause (a check-run id) is not a sha — STALE, not READ.
+    edit(plan, row(35), row(35) + " FIX PROPOSED 2026-10-08 (PR #23, check run 1234567890): `scripts/c.mjs`.");
+    // 33: a path cited inside the PR clause itself still corroborates — STALE.
+    edit(plan, row(33), row(33) + " FIX PROPOSED 2026-10-08 (PR #23, see scripts/c.mjs).");
+    commit("annotate 16, 20, 23-26 and 33");
     g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #23: pr shape", "claude/pr-shape");
     // 18: a dated FIX PROPOSED in a shape nobody reads — NOT MEASURED, never skipped.
     edit(plan, row(18), row(18) + " FIX PROPOSED 2026-10-08 (OFFLINE HALF ONLY), branch claude/x: `scripts/c.mjs`."); commit("odd shape");
     // 19: a GitHub-committed merge under a custom title "… (#24, check run …)" is PR #24's landing — STALE.
     g("checkout", "-qb", "claude/custom-title"); edit(plan, row(19), row(19) + ann("claude/custom-title", "scripts/d.mjs")); write("scripts/d.mjs", "19\n"); commit("fix 19");
     g("checkout", "-q", "main"); gAs(["GitHub", "noreply@github.com"], "merge", "-q", "--no-ff", "-m", "gates: custom title (#24, check run 5)", "claude/custom-title");
+    // 28, 29, 31: a GitHub-titled merge naming an earlier PR first lands the LAST one (#31), not #30.
+    g("checkout", "-qb", "claude/two-titles"); write("scripts/d.mjs", "28\n");
+    edit(plan, row(28), row(28) + " FIX PROPOSED 2026-10-08 (PR #31): `scripts/d.mjs`.");
+    edit(plan, row(29), row(29) + " FIX PROPOSED 2026-10-08 (PR #30): `scripts/d.mjs`.");
+    edit(plan, row(31), row(31) + ann("claude/two-titles", "scripts/d.mjs")); commit("fix 28");
+    g("checkout", "-q", "main"); gAs(["GitHub", "noreply@github.com"], "merge", "-q", "--no-ff", "-m", "ack (#30) (#31, check run 1)", "claude/two-titles");
+    // 32: a PR-named row citing the squashed branch's own commit (PR #11): not on mainline before it — STALE.
+    edit(plan, row(32), row(32) + ` FIX PROPOSED 2026-10-08 (PR #11, ${g("rev-parse", "claude/fix-g")}): \`scripts/d.mjs\`.`); commit("annotate 32");
+    // 27: a GitHub-committed single-parent commit with "(#114)" mid-subject is not a squash landing.
+    edit(plan, row(27), row(27) + ann("claude/tweak", "scripts/d.mjs")); write("scripts/d.mjs", "27\n"); g("add", "-A");
+    gAs(["GitHub", "noreply@github.com"], "commit", "-qm", "tweak (#114) tail");
     // 21: a worker's own merge whose subject happens to carry "(#25" is not a landing — GitHub did not commit it.
     g("checkout", "-qb", "claude/fake-title"); edit(plan, row(21), row(21) + ann("claude/fake-title", "scripts/d.mjs")); write("scripts/d.mjs", "21\n"); commit("fix 21");
     g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "sync work (#25, local)", "claude/fake-title");
@@ -554,7 +655,9 @@ function selfTest() {
     // …and the worker's own commit subject happens to end "(#99)": not a squash landing (GitHub did not commit it).
     edit(plan, row(4), row(4) + ann("claude/worker", "scripts/w.mjs")); write("scripts/w.mjs", "4\n");
     // 17: a PR-named annotation whose PR has not landed — in flight, not STALE.
-    edit(plan, row(17), row(17) + " FIX PROPOSED 2026-10-08 (PR #98, abc1234): `scripts/w.mjs`."); commit("fix 4 (#99)");
+    edit(plan, row(17), row(17) + " FIX PROPOSED 2026-10-08 (PR #98, abc1234): `scripts/w.mjs`.");
+    // 30: PR #17 landed on main after this worker forked; it reaches HEAD only through the sync merge — STALE.
+    edit(plan, row(30), row(30) + " FIX PROPOSED 2026-10-08 (PR #17): `scripts/a.mjs`."); commit("fix 4 (#99)");
 
     const res = Object.fromEntries(measure(dir).map((r) => [r.row, r]));
     const is = (k, st, extra = () => true) => res[k]?.status === st && extra(res[k]);
@@ -581,12 +684,27 @@ function selfTest() {
     checks.push(["a PR-named annotation citing a commit not in that landing is READ, not STALE", is("row 20", "LANDED-UNCORROBORATED", (r) => r.shaIn === false)]);
     checks.push(["a dated FIX PROPOSED in an unreadable shape is NOT MEASURED, never skipped", is("row 18", "NO-HISTORY", (r) => /shape this detector cannot read/.test(r.why))]);
     checks.push(["a GitHub-committed merge titled \"… (#24, check run …)\" is PR #24's landing", is("row 19", "STALE", (r) => r.pr === 24)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 5", "row 7"])]);
+    const notIn = (r) => r.shaIn === false;
+    checks.push(["a PR-named annotation citing a commit already on mainline before the landing is READ", is("row 23", "LANDED-UNCORROBORATED", notIn)]);
+    checks.push(["…the same commit cited in upper case is read, not dropped — READ", is("row 24", "LANDED-UNCORROBORATED", notIn)]);
+    checks.push(["…a cited token under 7 characters is READ even when it is a prefix of the fix commit", is("row 25", "LANDED-UNCORROBORATED", notIn) && /[a-f]/.test(res["row 25"].claimSha) && /\d/.test(res["row 25"].claimSha)]);
+    checks.push(["a PR-named annotation citing a commit from a branch that never merged is READ", is("row 34", "LANDED-UNCORROBORATED", notIn)]);
+    checks.push(["…the same commit behind a prose prefix (\"commit <sha>\") is read, not dropped — READ", is("row 26", "LANDED-UNCORROBORATED", notIn)]);
+    checks.push(["a GitHub-committed single-parent \"tweak (#114) tail\" is not a squash landing", is("row 27", "NOT-VIA-PR")]);
+    checks.push(["a GitHub-titled merge \"ack (#30) (#31, check run 1)\" lands PR #31: \"(PR #31)\" is STALE", is("row 28", "STALE", (r) => r.pr === 31)]);
+    checks.push(["…and \"(PR #30)\", which that merge did not land, is not STALE", is("row 29", "NOT-VIA-PR")]);
+    checks.push(["…and a branch-named row landed by that merge is credited to #31", is("row 31", "STALE", (r) => r.pr === 31)]);
+    checks.push(["a PR-named row citing its squashed branch's own commit is STALE (a squash keeps none of the PR's commits)", is("row 32", "STALE", (r) => r.pr === 11 && r.shaIn === true)]);
+    checks.push(["a path cited inside the \"(PR #N, …)\" clause itself corroborates — STALE", is("row 33", "STALE", (r) => r.pr === 23)]);
+    checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
+    checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 5", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
-    const line = summaryLine(kinds.map((status, i) => ({ status, file: "f", row: `r${i}` })));
-    checks.push(["the REPORTED line counts every bucket, NO-HISTORY and NO-LEDGER both as not measured",
-      line.startsWith("REPORTED: 5 FIX PROPOSED annotation(s) — 1 stale (claim already landed via a PR) across 1 open row(s), 1 landed-uncorroborated, 1 closed-row residue, 1 not landed via a PR, 2 not measured.")]);
+    // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
+    const line = summaryLine([...kinds.map((status, i) => ({ status, file: "f", row: `r${i}` })), { status: "STALE", file: "f", row: "r0" }, { status: "STALE", file: "f", row: "r9" }]);
+    checks.push(["the REPORTED line counts every bucket, distinct stale rows apart from annotations, NO-HISTORY and NO-LEDGER both as not measured",
+      line.startsWith("REPORTED: 7 FIX PROPOSED annotation(s) — 3 stale (claim already landed via a PR) across 2 open row(s), 1 landed-uncorroborated, 1 closed-row residue, 1 not landed via a PR, 2 not measured.")]);
     const sig = (rs) => JSON.stringify(rs.map((r) => [r.file, r.row, r.status, r.pr ?? null]));
     const missing = measure(dir, [plan, "docs/RENAMED_LEDGER.md"]);
     checks.push(["a ledger missing at HEAD is NOT MEASURED, never skipped", missing.some((r) => r.file === "docs/RENAMED_LEDGER.md" && r.status === "NO-LEDGER" && /not present at HEAD/.test(r.why))]);
@@ -597,7 +715,7 @@ function selfTest() {
       const shallowDir = mkdtempSync(join(tmpdir(), "row-drift-shallow-"));
       let out = "";
       try {
-        execFileSync("git", ["clone", "-q", "--depth", "1", `file://${dir}`, shallowDir], { env, stdio: ["ignore", "pipe", "pipe"] });
+        scratchGitOk(tmpdir(), ["clone", "-q", "--depth", "1", `file://${dir}`, shallowDir], { env });
         out = execFileSync(process.execPath, [fileURLToPath(import.meta.url)], { cwd: shallowDir, encoding: "utf8" });
       } catch (e) { out = `threw: ${String(e.message).split("\n")[0]}`; }
       finally { rmSync(shallowDir, { recursive: true, force: true }); }
@@ -624,7 +742,7 @@ function selfTest() {
   // A plan ledger committed in a shape nobody can read must be NOT MEASURED, never zero annotations.
   const shapeOf = (shape) => {
     const d = mkdtempSync(join(tmpdir(), "row-drift-shape-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main");
       mkdirSync(join(d, "docs"), { recursive: true });
@@ -768,14 +886,14 @@ function selfTest() {
   // A real PR landing nested under sync merges: 8 deep is traced to the PR; 9 deep is NOT MEASURED, never "not via a PR".
   for (const [depth, expect] of [[8, "STALE"], [9, "NO-HISTORY"]]) {
     const d = mkdtempSync(join(tmpdir(), "row-drift-depth-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
-      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n");
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n2. **Row 2.** — OPEN, qa.\n");
       writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); writeFileSync(join(d, "scripts/a.mjs"), "0\n");
       gs("add", "-A"); gs("commit", "-qm", "base");
       gs("checkout", "-qb", "claude/deep");
-      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/deep, x): `scripts/a.mjs`.\n");
+      writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/deep, x): `scripts/a.mjs`.\n2. **Row 2.** — OPEN, qa.\n");
       writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "fix");
       gs("checkout", "-q", "main"); gs("checkout", "-qb", "r0");
       gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5 from o/claude/deep", "claude/deep");
@@ -786,8 +904,12 @@ function selfTest() {
         gs("merge", "-q", "--no-ff", "-m", `Merge branch '${prev}' into r${i}`, prev); prev = `r${i}`;
       }
       gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", `Merge branch '${prev}'`, prev);
-      const r = measure(d).find((x) => x.row === "row 1");
+      // The PR-named shape walks the same lines, under the same cap.
+      writeFileSync(join(d, plan), readFileSync(join(d, plan), "utf8").replace("2. **Row 2.** — OPEN, qa.", "2. **Row 2.** — OPEN, qa. FIX PROPOSED 2026-10-08 (PR #5): `scripts/a.mjs`."));
+      gs("commit", "-qam", "annotate row 2");
+      const all = measure(d), r = all.find((x) => x.row === "row 1"), r2 = all.find((x) => x.row === "row 2");
       checks.push([`a PR landing nested under ${depth} merges reads ${expect}`, r?.status === expect && (expect === "STALE" ? r.pr === 5 : /nested under more than 8 non-PR merges/.test(r.why ?? ""))]);
+      checks.push([`a PR-named row whose PR is nested under ${depth} merges reads ${expect}`, r2?.status === expect && (expect === "STALE" ? r2.pr === 5 : /not found within 8 nested non-PR merges/.test(r2.why ?? ""))]);
     } catch (e) {
       checks.push([`depth-${depth} fixture ran (${String(e.message).split("\n")[0]})`, false]);
     } finally { rmSync(d, { recursive: true, force: true }); }
@@ -795,7 +917,6 @@ function selfTest() {
   // An inherited GIT_DIR naming a clean repository cannot make a cut repository read clean.
   {
     const cut = mkdtempSync(join(tmpdir(), "row-drift-cut-")), clean = mkdtempSync(join(tmpdir(), "row-drift-clean-"));
-    const gIn = (d, ...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     try {
       for (const d of [cut, clean]) { gIn(d, "init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n"); }
@@ -818,11 +939,14 @@ function selfTest() {
     const expected = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"];
     checks.push(["all six repository pointers are dropped and replace refs and grafts are switched off",
       expected.every((k) => REPO_POINTERS.includes(k) && !(k in e)) && e.GIT_NO_REPLACE_OBJECTS === "1" && e.GIT_GRAFT_FILE === "/dev/null"]);
+    const e2 = gitEnvFrom({ GIT_SHALLOW_FILE: "/x", GIT_NAMESPACE: "n", GIT_CONFIG_PARAMETERS: "'color.diff'='always'", GIT_CONFIG_COUNT: "1", HOME: "/h" });
+    checks.push(["every other repository-local variable (shallow file, namespace, passed-down config) is dropped; the rest is kept",
+      ["GIT_SHALLOW_FILE", "GIT_NAMESPACE", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"].every((k) => !(k in e2)) && e2.HOME === "/h"]);
   }
   // Repository config that reshapes git's output cannot hide a landing: each overridden key, one repository each.
   for (const [key, value] of [["color.ui", "always"], ["color.diff", "always"], ["i18n.logOutputEncoding", "UTF-7"], ["log.showSignature", "true"]]) {
     const d = mkdtempSync(join(tmpdir(), "row-drift-config-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
       writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n");
@@ -842,7 +966,7 @@ function selfTest() {
   // Two ways a landing cannot be traced, each NOT MEASURED with its own reason.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-landing-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs")); mkdirSync(join(d, "scripts"));
       writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa.\n2. **Row 2.** — OPEN, qa.\n");
@@ -869,7 +993,7 @@ function selfTest() {
   // The backlog's row mark (checkboxes, its own grammar): 40 boxes cut to 28 and padded back with prose.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-backlog-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs"));
       const boxes = (n) => Array.from({ length: n }, (_, i) => `- [ ] **Box ${i + 1}** — open, with some body words.\n`).join("");
@@ -919,7 +1043,7 @@ function selfTest() {
   // A ledger git is told to ignore (assume-unchanged) and then edited still gets the NOTE.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-au-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main"); mkdirSync(join(d, "docs"));
       writeFileSync(join(d, plan), planText); writeFileSync(join(d, backlog), "- [ ] **Open** — open.\n");
@@ -934,7 +1058,7 @@ function selfTest() {
   // CRLF endings and a stray U+2028 inside a box line: rows and closure still read right.
   {
     const d = mkdtempSync(join(tmpdir(), "row-drift-crlf-"));
-    const gs = (...args) => execFileSync("git", args, { cwd: d, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const gs = (...args) => gIn(d, ...args);
     try {
       gs("init", "-q", "-b", "main");
       mkdirSync(join(d, "docs"), { recursive: true }); mkdirSync(join(d, "scripts"));
@@ -959,7 +1083,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 83;
+  return failed === 0 && checks.length === 99;
 }
 
 let isMain = false;

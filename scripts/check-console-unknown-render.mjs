@@ -99,8 +99,14 @@
 //   (`<Panel message="All clear" n={q.data?.n} />` with the child rendering `{message}` is silent: only classes and data ride props);
 //   the alias returned by `Object.assign(T)` (`const U = Object.assign(T); U.undefined = "…emerald"`) is not tracked, so the write is
 //   missed (silent).
-// Round 26 (fixed): a `let`/`var` helper reassigned to another function resolves to every assigned function, and a `const` alias of a
-//   same-file helper (`const pickTone = toneFor`, an alias chain) resolves to the helper.
+// Codex pass 8 on 20450a32 and the round-26 landing refute (round 27, all FIXED): a helper call is judged by EVERY value its binding can
+//   hold: the initializer, an alias (`const` / `let` / `var`, an alias chain), and each write to it (`=`, `&&=` / `||=` / `??=`, a chained
+//   `a = b = x`, a conditional / logical / comma right-hand side, a type-asserted one). A write this analysis cannot collect (a
+//   destructuring or `for…of` target, `++`, a member / call / unresolvable right-hand side, an arithmetic compound assignment) makes the
+//   call POSSIBLY GOOD, so it flags on unguarded query data (fail-closed; an over-flag when the write is in fact harmless). A nearer
+//   parameter / catch / loop binding or nested `let` shadows a helper alias and a class-valued component parameter; string-literal and
+//   computed prop names (`{ "data-value": n }`) ride the props like identifier ones. Still silent: a helper reached through an array / Map
+//   element (`fns[0]()`) and an imported helper (no module resolver).
 // Round 24: a same-file helper's parameter substitutes only while EVERY reference to it in the helper is a plain read
 // (destructuring / for-of targets and inner shadowing count as writes); a key rooted at a query result is plain only
 // through `.data` (`q.isError`, `q.isLoading`, `q.status` are present while the data is absent).
@@ -262,8 +268,11 @@ function callName(call) {
   return undefined;
 }
 function propOf(el) {
-  return el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text
-    : ts.isIdentifier(el.name) ? el.name.text : undefined;
+  const pn = el.propertyName;
+  if (pn && ts.isIdentifier(pn)) return pn.text;
+  if (pn && ts.isStringLiteralLike(pn)) return pn.text; // `{ "data-value": n }`
+  if (pn && ts.isComputedPropertyName(pn) && ts.isStringLiteralLike(pn.expression)) return pn.expression.text; // `{ ["data-value"]: n }`
+  return ts.isIdentifier(el.name) ? el.name.text : undefined;
 }
 
 function collectStrings(node, out) {
@@ -319,6 +328,18 @@ function analyzeSourceFile(relPath, text) {
       }
     }
     return null;
+  };
+  // Is the parameter / binding element `prm` the nearest binding of `id`'s name? A nested `let tone`, a nested function's own
+  // parameter, a `catch (tone)` or a loop binding between the use and the parameter's function shadows it.
+  const paramIsNearest = (id, prm) => {
+    let owner = prm;
+    while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
+    for (let c = id.parent; c && c !== owner; c = c.parent) {
+      if (bindsNameOpaquely(c, id.text)) return false;
+      if ((ts.isBlock(c) || ts.isSourceFile(c)) && blockDeclares(c, id.text)) return false;
+      if (isVarScope(c) && declaresVar(c, id.text)) return false;
+    }
+    return true;
   };
   const queryObjOfExpr = (e) => { // origins of a query-result expression: `q`, or `props.query` for a named query-object prop
     if (!e) return undefined;
@@ -728,16 +749,46 @@ function analyzeSourceFile(relPath, text) {
   // enclosing scope that declares the name (two components may each own a `tone()` helper).
   const unwrapExpr = (n) => (ts.isAsExpression(n) || ts.isSatisfiesExpression(n) || ts.isTypeAssertionExpression(n) ||
     ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) ? unwrapExpr(n.expression) : n;
+  // Does this scope bind `name` as something OTHER than a const we can resolve — a
+  // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
+  // at the use site is that binding, and resolution must stop (no false positive
+  // from `rows.map((cls) => <span className={cls}>…`).
+  const bindsNameOpaquely = (scope, name) => {
+    const bindsIn = (b) => ts.isIdentifier(b) ? b.text === name
+      : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsIn(el.name));
+    if (ts.isFunctionLike(scope) && scope.parameters?.some((p) => bindsIn(p.name))) return true;
+    if (ts.isCatchClause(scope) && scope.variableDeclaration && bindsIn(scope.variableDeclaration.name)) return true;
+    if ((ts.isForStatement(scope) || ts.isForOfStatement(scope) || ts.isForInStatement(scope)) &&
+        scope.initializer && ts.isVariableDeclarationList(scope.initializer) &&
+        scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
+    return false;
+  };
+  const bindsPatternName = (b, name) => ts.isIdentifier(b) ? b.text === name
+    : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsPatternName(el.name, name));
+  // A function, a class static block and a namespace each own their `var`s; a nested one does not leak into the enclosing scope.
+  const isVarScope = (n) => ts.isFunctionLike(n) || ts.isClassStaticBlockDeclaration(n) || ts.isModuleDeclaration(n) || ts.isSourceFile(n);
+  const declaresVar = (scope, name) => { // does `var <name>` (plain or destructured) appear in this scope, not inside a nested var scope?
+    let found = false;
+    const v = (n) => {
+      if (found) return;
+      if (n !== scope && isVarScope(n)) return;
+      if (ts.isVariableDeclarationList(n) && !(n.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) &&
+          n.declarations.some((d) => bindsPatternName(d.name, name))) { found = true; return; }
+      ts.forEachChild(n, v);
+    };
+    v(scope);
+    return found;
+  };
   const localFns = new Map(); // name -> [{ fn, scope }]
   const scopeOf = (n) => { let c = n.parent; while (c && !ts.isBlock(c) && !ts.isSourceFile(c)) c = c.parent; return c; };
+  const varScopeOf = (n) => { // a `var` hoists to its function (or the module), not its block
+    for (let c = n.parent; c; c = c.parent) {
+      if (ts.isSourceFile(c)) return c;
+      if (ts.isFunctionLike(c) && c.body) return ts.isBlock(c.body) ? c.body : scopeOf(c);
+    }
+    return undefined;
+  };
   {
-    const varScopeOf = (n) => { // a `var` hoists to its function (or the module), not its block
-      for (let c = n.parent; c; c = c.parent) {
-        if (ts.isSourceFile(c)) return c;
-        if (ts.isFunctionLike(c) && c.body) return ts.isBlock(c.body) ? c.body : scopeOf(c);
-      }
-      return undefined;
-    };
     const addFn = (name, fn, decl) => {
       const l = localFns.get(name) ?? [];
       const isVar = ts.isVariableDeclaration(decl) && !(decl.parent.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let));
@@ -754,6 +805,7 @@ function analyzeSourceFile(relPath, text) {
   }
   const findHelper = (id, depth = 0) => { // the function an identifier names, resolved through lexical scope
     for (let c = id.parent; c; c = c.parent) {
+      if (bindsNameOpaquely(c, id.text)) return undefined; // a nearer parameter / catch / loop binding of the name is not the helper
       if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
       const hit = (localFns.get(id.text) ?? []).find((h) => h.scope === c);
       if (hit) return hit.fn;
@@ -766,21 +818,102 @@ function analyzeSourceFile(relPath, text) {
     }
     return undefined;
   };
-  // A `let` / `var` helper REASSIGNED to another function (`let tone = () => red; tone = () => emerald;`) is every one of
-  // its values: the call walks the initializer's returns AND each assigned function's (fail-closed over a single resolution).
-  const helperAlts = new Map(); // initializer function -> [assigned functions]
+  // HELPER BINDINGS. A call `tone()` in a class position is judged by EVERY function the binding can hold: its
+  // initializer, an alias (`const pick = good`, also `let` / `var`), and every function written to it later
+  // (`tone = () => …`, a conditional / logical / chained right-hand side). A write this analysis cannot collect —
+  // a destructuring or `for…of` target, `++`, a member / call right-hand side, an unresolvable identifier — makes the
+  // binding possibly good (FAIL-CLOSED: the call flags on unguarded query data).
+  const declList = []; // { name, scope, fn?, init?, mutable, writes: [expr], unknown }
   {
-    const w = (n) => {
-      if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.EqualsToken && ts.isIdentifier(n.left)) {
-        const rhs = unwrapExpr(n.right);
-        const alt = ts.isArrowFunction(rhs) || ts.isFunctionExpression(rhs) ? rhs : ts.isIdentifier(rhs) ? findHelper(rhs) : undefined;
-        const base = alt ? findHelper(n.left) : undefined;
-        if (alt && base && base !== alt) helperAlts.set(base, [...(helperAlts.get(base) ?? []), alt]);
+    const reg = (n) => {
+      if (ts.isFunctionDeclaration(n) && n.name && n.body) declList.push({ name: n.name.text, scope: scopeOf(n), fn: n, mutable: true, writes: [], unknown: false });
+      if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) {
+        const isVar = !(n.parent.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let));
+        declList.push({ name: n.name.text, scope: isVar ? varScopeOf(n) : scopeOf(n), init: n.initializer, mutable: !(n.parent.flags & ts.NodeFlags.Const), writes: [], unknown: false });
       }
+      ts.forEachChild(n, reg);
+    };
+    reg(sf);
+  }
+  const lookupDecl = (id) => { // the declaration an identifier names; null if a nearer binding of another shape owns the name
+    for (let c = id.parent; c; c = c.parent) {
+      if (bindsNameOpaquely(c, id.text)) return null;
+      if (!ts.isBlock(c) && !ts.isSourceFile(c)) continue;
+      const hit = declList.find((d) => d.name === id.text && d.scope === c);
+      if (hit) return hit;
+      if (blockDeclares(c, id.text)) return null; // a pattern / class / import binding
+    }
+    return null;
+  };
+  let writesDone = false;
+  const ensureWrites = () => {
+    if (writesDone) return;
+    writesDone = true;
+    const markUnknown = (idNode) => { const d = lookupDecl(idNode); if (d) d.unknown = true; };
+    const targetIds = (t, f) => { // identifiers assigned by a destructuring-assignment / loop target
+      const e = unwrapExpr(t);
+      if (ts.isIdentifier(e)) f(e);
+      else if (ts.isArrayLiteralExpression(e)) e.elements.forEach((x) => targetIds(x, f));
+      else if (ts.isObjectLiteralExpression(e)) e.properties.forEach((pr) => {
+        if (ts.isShorthandPropertyAssignment(pr)) f(pr.name);
+        else if (ts.isPropertyAssignment(pr)) targetIds(pr.initializer, f);
+        else if (ts.isSpreadAssignment(pr)) targetIds(pr.expression, f);
+      });
+      else if (ts.isSpreadElement(e)) targetIds(e.expression, f);
+      else if (ts.isBinaryExpression(e) && e.operatorToken.kind === K.EqualsToken) targetIds(e.left, f); // `[a = 1] = …`
+    };
+    const w = (n) => {
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment) {
+        const l = unwrapExpr(n.left);
+        const k = n.operatorToken.kind;
+        if (ts.isIdentifier(l)) {
+          const d = lookupDecl(l);
+          if (d) {
+            if (k === K.EqualsToken || k === K.AmpersandAmpersandEqualsToken || k === K.BarBarEqualsToken || k === K.QuestionQuestionEqualsToken) d.writes.push(n.right);
+            else d.unknown = true;
+          }
+        } else targetIds(l, markUnknown);
+      }
+      if ((ts.isForOfStatement(n) || ts.isForInStatement(n)) && !ts.isVariableDeclarationList(n.initializer)) targetIds(n.initializer, markUnknown);
+      if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)) targetIds(n.operand, markUnknown);
       ts.forEachChild(n, w);
     };
     w(sf);
-  }
+  };
+  // -> { fns: Set<function>, unknown } for the helper binding an identifier names, or null when it is not one.
+  const helperValues = (id, seen = new Set()) => {
+    ensureWrites();
+    const d = lookupDecl(id);
+    if (!d) return null;
+    if (seen.has(d)) return { fns: new Set(), unknown: false }; // a cycle adds nothing new
+    seen.add(d);
+    const out = { fns: new Set(), unknown: false };
+    // strict: a callable part this analysis cannot resolve counts as possibly good (a WRITE); an initializer it cannot resolve is not a helper at all
+    const add = (e, strict, depth = 0) => {
+      const u = unwrapExpr(e);
+      if (depth > 8) { out.unknown = true; return; }
+      if (ts.isArrowFunction(u) || ts.isFunctionExpression(u)) out.fns.add(u);
+      else if (ts.isIdentifier(u)) {
+        if (u.text === "undefined") return;
+        const sub = helperValues(u, seen);
+        if (sub) { sub.fns.forEach((f) => out.fns.add(f)); if (sub.unknown) out.unknown = true; } else if (strict) out.unknown = true;
+      } else if (u.kind === K.NullKeyword || ts.isStringLiteralLike(u) || ts.isNumericLiteral(u) || ts.isVoidExpression(u)) return;
+      else if (ts.isConditionalExpression(u)) { add(u.whenTrue, strict, depth + 1); add(u.whenFalse, strict, depth + 1); }
+      else if (ts.isBinaryExpression(u) && (u.operatorToken.kind === K.AmpersandAmpersandToken || u.operatorToken.kind === K.BarBarToken || u.operatorToken.kind === K.QuestionQuestionToken)) { add(u.left, strict, depth + 1); add(u.right, strict, depth + 1); }
+      else if (ts.isBinaryExpression(u) && (u.operatorToken.kind === K.CommaToken || u.operatorToken.kind === K.EqualsToken)) add(u.right, strict, depth + 1); // `a = b = x`, `(0, x)`
+      else if (strict) out.unknown = true;
+    };
+    if (d.fn) out.fns.add(d.fn);
+    else if (d.init) {
+      const u = unwrapExpr(d.init);
+      const callable = ts.isArrowFunction(u) || ts.isFunctionExpression(u) || ts.isIdentifier(u) || ts.isConditionalExpression(u) ||
+        (ts.isBinaryExpression(u) && (u.operatorToken.kind === K.AmpersandAmpersandToken || u.operatorToken.kind === K.BarBarToken || u.operatorToken.kind === K.QuestionQuestionToken));
+      if (callable) add(u, false);
+      else if (!d.mutable) return null; // a const bound to a call / member: not a helper binding (a `let` still collects its writes)
+    } else if (!d.mutable) return null;
+    if (d.mutable) { for (const wr of d.writes) add(wr, true); if (d.unknown) out.unknown = true; }
+    return out;
+  };
   const localComponents = []; // { name, params, scope }
   const componentFn = (init) => {
     let e = init;
@@ -1006,36 +1139,6 @@ function analyzeSourceFile(relPath, text) {
     return ts.isStringLiteralLike(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n) ||
       ts.isCallExpression(n) || ts.isConditionalExpression(n) || ts.isBinaryExpression(n) || ts.isIdentifier(n) ||
       ts.isElementAccessExpression(n) || ts.isPropertyAccessExpression(n);
-  };
-  // Does this scope bind `name` as something OTHER than a const we can resolve — a
-  // parameter, a `let`/`var`, a destructured binding, a catch variable? Then the name
-  // at the use site is that binding, and resolution must stop (no false positive
-  // from `rows.map((cls) => <span className={cls}>…`).
-  const bindsNameOpaquely = (scope, name) => {
-    const bindsIn = (b) => ts.isIdentifier(b) ? b.text === name
-      : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsIn(el.name));
-    if (ts.isFunctionLike(scope) && scope.parameters?.some((p) => bindsIn(p.name))) return true;
-    if (ts.isCatchClause(scope) && scope.variableDeclaration && bindsIn(scope.variableDeclaration.name)) return true;
-    if ((ts.isForStatement(scope) || ts.isForOfStatement(scope) || ts.isForInStatement(scope)) &&
-        scope.initializer && ts.isVariableDeclarationList(scope.initializer) &&
-        scope.initializer.declarations.some((d) => bindsIn(d.name))) return true;
-    return false;
-  };
-  const bindsPatternName = (b, name) => ts.isIdentifier(b) ? b.text === name
-    : (ts.isObjectBindingPattern(b) || ts.isArrayBindingPattern(b)) && b.elements.some((el) => !ts.isOmittedExpression(el) && bindsPatternName(el.name, name));
-  // A function, a class static block and a namespace each own their `var`s; a nested one does not leak into the enclosing scope.
-  const isVarScope = (n) => ts.isFunctionLike(n) || ts.isClassStaticBlockDeclaration(n) || ts.isModuleDeclaration(n) || ts.isSourceFile(n);
-  const declaresVar = (scope, name) => { // does `var <name>` (plain or destructured) appear in this scope, not inside a nested var scope?
-    let found = false;
-    const v = (n) => {
-      if (found) return;
-      if (n !== scope && isVarScope(n)) return;
-      if (ts.isVariableDeclarationList(n) && !(n.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let)) &&
-          n.declarations.some((d) => bindsPatternName(d.name, name))) { found = true; return; }
-      ts.forEachChild(n, v);
-    };
-    v(scope);
-    return found;
   };
   const resolveConstInit = (id, accept = RESOLVABLE_INIT) => {
     for (let cur = id.parent; cur; cur = cur.parent) {
@@ -1640,7 +1743,7 @@ function analyzeSourceFile(relPath, text) {
     let cur = id;
     for (let d = 0; d < 6; d++) {
       const prm = bindingOfParam(cur);
-      if (prm) return prm;
+      if (prm) return paramIsNearest(cur, prm) ? prm : null;
       const init = resolveConstInit(cur, (n) => n && ts.isIdentifier(unwrapExpr(n)));
       if (!init) return null;
       cur = unwrapExpr(init);
@@ -1661,7 +1764,8 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isIdentifier(x) && !isMemberName(x)) {
         const init = resolveConstInit(x);
         if (init && !resolving.has(init)) { resolving.add(init); walk(init, use ?? x); resolving.delete(init); }
-        const gp = !init && goodParams && goodParams.get(bindingOfParam(x));
+        const gprm = !init && goodParams ? bindingOfParam(x) : null;
+        const gp = gprm && paramIsNearest(x, gprm) && goodParams.get(gprm);
         if (gp) for (const g of gp) found.push({ node: g.node, use: use ?? x });
       }
       if ((ts.isPropertyAccessExpression(x) || (ts.isElementAccessExpression(x) && x.argumentExpression && ts.isStringLiteralLike(x.argumentExpression))) && ts.isIdentifier(x.expression)) {
@@ -1680,8 +1784,9 @@ function analyzeSourceFile(relPath, text) {
         }
       }
       // A same-file helper — `className={toneFor(status)}` — is read through its return values.
-      if (ts.isCallExpression(x) && ts.isIdentifier(x.expression) && findHelper(x.expression)) {
-        for (const fn of [findHelper(x.expression), ...(helperAlts.get(findHelper(x.expression)) ?? [])]) {
+      const hv = ts.isCallExpression(x) && ts.isIdentifier(x.expression) ? helperValues(x.expression) : null;
+      if (hv) {
+        for (const fn of hv.fns) {
           if (resolving.has(fn)) continue;
           resolving.add(fn);
           const saved = helperBind;
@@ -1691,6 +1796,7 @@ function analyzeSourceFile(relPath, text) {
           helperBind = saved;
           resolving.delete(fn);
         }
+        if (hv.unknown) found.push({ node: x, use: use ?? x }); // a write this analysis cannot collect: possibly good
       }
       ts.forEachChild(x, (c) => walk(c, use));
     };
@@ -2988,6 +3094,89 @@ OK_R6.push(
   ["let helper reassigned to another muted arrow stays clean", helperPage(`let tone = () => "text-red-400"; tone = () => "text-slate-400";`, `<span className={tone()}>{q.data?.n}</span>`)],
   ["const alias of a muted helper stays clean", helperPage(`function muted() { return "text-slate-400"; }\nconst pick = muted;`, `<span className={pick()}>{q.data?.n}</span>`)],
   ["reassigned emerald helper, call guarded on the data", helperPage(`let tone = () => "text-red-400"; tone = () => "text-emerald-400";`, `q.data ? <span className={tone()}>{q.data.n}</span> : null`)],
+);
+
+// Round 27 (landing refute 26 + Codex pass 8): every write to a `let` / `var` helper is collected; one that cannot be
+// collected makes the call possibly good (fail-closed). A parameter shadows a helper alias; a nested `let` shadows a
+// class-valued parameter; string-literal / computed prop names ride the same props as identifier ones.
+const GOOD_FN = `function good() { return "text-emerald-400"; }\nfunction muted() { return "text-slate-400"; }`;
+const useTone = `<span className={tone()}>{q.data?.n}</span>`;
+BUG_R6.push(
+  ["uninitialised let helper later assigned an emerald arrow", helperPage(`let tone;\ntone = () => "text-emerald-400";`, useTone)],
+  ["let helper initialised to null, later assigned an emerald arrow", helperPage(`let tone = null;\ntone = () => "text-emerald-400";`, useTone)],
+  ["conditional right-hand side with one emerald branch", helperPage(`let tone = () => "text-red-400";\ntone = enabled ? () => "text-emerald-400" : () => "text-red-400";`, useTone)],
+  ["logical right-hand side (||) carrying an emerald arrow", helperPage(`let tone = () => "text-red-400";\ntone = other || (() => "text-emerald-400");`, useTone)],
+  ["array destructuring assignment to the helper", helperPage(`let tone = () => "text-red-400";\n[tone] = [() => "text-emerald-400"];`, useTone)],
+  ["object destructuring assignment to the helper", helperPage(`let tone = () => "text-red-400";\n({ tone } = { tone: () => "text-emerald-400" });`, useTone)],
+  ["logical assignment (&&=) to the helper", helperPage(`let tone = () => "text-red-400";\ntone &&= () => "text-emerald-400";`, useTone)],
+  ["member right-hand side (tone = helpers.good) is unresolvable", helperPage(`const helpers = { good: () => "text-emerald-400" };\nlet tone = () => "text-red-400";\ntone = helpers.good;`, useTone)],
+  ["for-of target assigned to the helper", helperPage(`let tone = () => "text-red-400";\nfor (tone of [() => "text-emerald-400"]) { break; }`, useTone)],
+  ["transitive: a = b where b is itself reassigned", helperPage(`${GOOD_FN}\nlet b = muted; b = good;\nlet tone = muted; tone = b;`, useTone)],
+  ["chained assignment tone = other = good", helperPage(`${GOOD_FN}\nlet other; let tone;\ntone = other = good;`, useTone)],
+  ["let alias of an emerald helper", helperPage(`${GOOD_FN}\nlet tone = good;`, useTone)],
+  ["var alias of an emerald helper", helperPage(`${GOOD_FN}\nvar tone = good;`, useTone)],
+  ["let alias of a muted helper later assigned the emerald one", helperPage(`${GOOD_FN}\nlet tone = muted; tone = good;`, useTone)],
+  ["reassigned to a function EXPRESSION", helperPage(`let tone = () => "text-red-400";\ntone = function () { return "text-emerald-400"; };`, useTone)],
+  ["reassigned to a type-asserted arrow", helperPage(`let tone = () => "text-red-400";\ntone = (() => "text-emerald-400") as () => string;`, useTone)],
+  ["const alias with a type assertion", helperPage(`${GOOD_FN}\nconst tone = good as () => string;`, useTone)],
+  ["recursive initializer with an emerald reassignment", helperPage(`let tone = () => tone();\ntone = () => "text-emerald-400";`, useTone)],
+  ["string-literal prop name rides the props: { \"data-value\": n }", wrap2(`function Pill({ "data-value": n }) { return <span className="text-emerald-400">{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill data-value={q.data?.n} />;
+}`)],
+  ["computed string prop name rides the props: { [\"data-value\"]: n }", wrap2(`function Pill({ ["data-value"]: n }) { return <span className="text-emerald-400">{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill data-value={q.data?.n} />;
+}`)],
+);
+OK_R6.push(
+  ["uninitialised let helper later assigned a muted arrow", helperPage(`let tone;\ntone = () => "text-slate-400";`, useTone)],
+  ["conditional right-hand side with muted branches", helperPage(`let tone = () => "text-red-400";\ntone = enabled ? () => "text-slate-400" : () => "text-red-400";`, useTone)],
+  ["let alias of a muted helper", helperPage(`${GOOD_FN}\nlet tone = muted;`, useTone)],
+  ["uncollectable write, call guarded on the data", helperPage(`let tone = () => "text-red-400";\n[tone] = [() => "text-emerald-400"];`, `q.data ? <span className={tone()}>{q.data.n}</span> : null`)],
+  ["a parameter shadows a module-level emerald helper alias", wrap2(`${GOOD_FN}
+const pick = good;
+export function Page({ pick }) {
+  ${Q2}
+  return <span className={pick()}>{q.data?.n}</span>;
+}`)],
+  ["an inner const bound to a call shadows an outer emerald helper", wrap2(`${GOOD_FN}
+export function Page() {
+  ${Q2}
+  const good = useThing();
+  return <span className={good()}>{q.data?.n}</span>;
+}`)],
+  ["a nested let shadows a class-valued component parameter", wrap2(`function Pill({ tone, n }) { { let tone = "text-red-400"; return <span className={tone}>{n}</span>; } }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" n={q.data?.n} />;
+}`)],
+  ["a nested function parameter shadows a class-valued component parameter", wrap2(`function Pill({ tone, n }) { const f = (tone) => <span className={tone}>{n}</span>; return f("text-red-400"); }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" n={q.data?.n} />;
+}`)],
+  ["string-literal prop name, call site guarded on the data", wrap2(`function Pill({ "data-value": n }) { return <span className="text-emerald-400">{n}</span>; }
+export function Page() {
+  ${Q2}
+  return q.data ? <Pill data-value={q.data.n} /> : null;
+}`)],
+);
+BUG_R6.push(
+  ["let helper initialised by a call, later assigned an emerald arrow", helperPage(`let tone = useThing();\ntone = () => "text-emerald-400";`, useTone)],
+  ["write of an unresolvable identifier (tone = fromProps)", helperPage(`let tone = () => "text-red-400";\ntone = fromProps;`, useTone)],
+);
+OK_R6.push(
+  ["reassigned to a muted function EXPRESSION", helperPage(`let tone = () => "text-red-400";\ntone = function () { return "text-slate-400"; };`, useTone)],
+  ["reassigned to a muted type-asserted arrow", helperPage(`let tone = () => "text-red-400";\ntone = (() => "text-slate-400") as () => string;`, useTone)],
+  ["let helper initialised by a call, never reassigned", helperPage(`let tone = useThing();`, useTone)],
+  ["a catch binding shadows a class-valued component parameter", wrap2(`function Pill({ tone, n }) { try { return null; } catch (tone) { return <span className={tone}>{n}</span>; } }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" n={q.data?.n} />;
+}`)],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

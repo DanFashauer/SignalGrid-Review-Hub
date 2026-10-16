@@ -57,6 +57,10 @@
 //         a `pnpm run <proof>` step in the --list-steps of scripts/preflight.mjs
 //         or scripts/verify-breadth.mjs (both run in CI; preflight's parity with
 //         CI is its own gate) — a proof nobody runs proves nothing (round 28). A
+//         proof that self-skips without an env var (the parity gate's
+//         --list-self-skipping-proofs) counts only where a workflow step runs
+//         exactly `pnpm run <proof>` with that var set in the step's or job's env,
+//         without continue-on-error — a lane that skips it never ran it (round 31). A
 //         span that reads as a proof or a package-manager command (any case,
 //         padding or prefix: `PROOF:x`, ` proof:x `, `npm run …`) must be exactly
 //         `(pnpm run )?proof:<name>` or `pnpm install --frozen-lockfile`; any
@@ -105,6 +109,7 @@ import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseDocument } from "yaml";
 
 const DOC = "docs/SECURITY_CONTROLS_MATRIX.md";
 const IMPLEMENTED = "Implemented (public core)";
@@ -536,8 +541,16 @@ function anchorSubjects(where) {
   return [...new Set([...citedProofs(where), ...ids])];
 }
 
-export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scripts, gatedProofs = new Set() }) {
+export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scripts, gatedProofs = new Set(), selfSkipping = new Map(), envRuns = new Set() }) {
   const trackedSet = new Set(tracked);
+  // a proof a gating lane lists is not yet a proof that RAN: one that self-skips
+  // without an env var (preflight prints "not run, not passed") counts only where a
+  // workflow step runs it WITH that var set (round 31) — see envRunsFromWorkflows
+  const laneWhy = (p, tag = "") => {
+    if (!gatedProofs.has(p)) return `proof \`${p}\`${tag} runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`;
+    if (selfSkipping.has(p) && !envRuns.has(p)) return `proof \`${p}\`${tag} self-skips without ${selfSkipping.get(p)}, and no workflow step runs exactly \`pnpm run ${p}\` with ${selfSkipping.get(p)} set in the step's or job's env — a lane that skips it never ran it`;
+    return null;
+  };
   // a `path:NN` anchor is a claim about one line: that line must EXIST and name
   // what the row cites (round 30 — `scripts/preflight.mjs:486` pointed at another
   // gate long after the proof step moved, and stripping the suffix read it green)
@@ -663,7 +676,7 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
       for (const p of citedProofs(r.where)) {
         if (!Object.hasOwn(scripts, p)) why.push(`proof \`${p}\` is not a package.json script`);
         else if (!proofSource(p, { root, scripts, tracked: trackedSet })) why.push(`proof \`${p}\` ${NO_SOURCE}`);
-        else if (!gatedProofs.has(p)) why.push(`proof \`${p}\` runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`);
+        else { const g = laneWhy(p); if (g) why.push(g); }
       }
     }
     if (IMPLEMENTED_LIKE.test(r.status)) {
@@ -678,7 +691,7 @@ export function checkMatrix(text, { root = ROOT, tracked, indexed = tracked, scr
         if (!Object.hasOwn(scripts, p)) { why.push(`proof \`${p}\` is not a package.json script${tag}`); continue; }
         // a proof no gating lane runs proves nothing: it must be a `pnpm run <proof>`
         // step of scripts/preflight.mjs or scripts/verify-breadth.mjs (round 28)
-        if (!gatedProofs.has(p)) why.push(`proof \`${p}\`${tag} runs in no gating lane — it is not a \`pnpm run ${p}\` step in the --list-steps of scripts/preflight.mjs or scripts/verify-breadth.mjs`);
+        { const g = laneWhy(p, tag); if (g) why.push(g); }
         if (proofSource(p, { root, scripts, tracked: trackedSet })) { if (own.length) ownSources += 1; }
         else why.push(`proof \`${p}\`${tag} ${NO_SOURCE}`);
       }
@@ -745,18 +758,65 @@ export function gatedProofsFromListing(stdout, lane = "runner") {
   return out;
 }
 
+/** The proofs that self-skip without an env var, from the parity gate's own
+ *  derivation over scripts/src (`check-preflight-ci-parity.mjs
+ *  --list-self-skipping-proofs`: one `proof:<name> <ENV>` per line), never a
+ *  hand-typed list. A malformed line throws (round 31). */
+export function selfSkippingFromListing(stdout) {
+  const out = new Map();
+  for (const line of String(stdout ?? "").split("\n").filter((l) => l.trim() !== "")) {
+    const m = /^(proof:[\w:.-]+) ([A-Z][A-Z0-9_]*)$/.exec(line);
+    if (!m) throw new Error(`--list-self-skipping-proofs printed an unreadable line: ${JSON.stringify(line)}`);
+    out.set(m[1], m[2]);
+  }
+  return out;
+}
+
+/** Self-skipping proofs a workflow really runs: a step whose `run` is EXACTLY
+ *  `pnpm run <proof>`, with the proof's env var set to a non-empty value in that
+ *  step's `env` or its job's `env`, and with no `continue-on-error` on the step
+ *  or job (round 31 — deleting DATABASE_URL from the CI Postgres step left the
+ *  proof listed in preflight, self-skipping, and credited). `files` is
+ *  [{ path, text }]; a workflow that does not parse throws. */
+export function envRunsFromWorkflows(files, selfSkipping) {
+  const out = new Set();
+  const set = (env, k) => env && typeof env === "object" && typeof env[k] === "string" && env[k].trim() !== "";
+  for (const { path, text } of files) {
+    const doc = parseDocument(text);
+    if (doc.errors.length) throw new Error(`${path} does not parse as YAML: ${doc.errors[0].message}`);
+    const wf = doc.toJS();
+    for (const job of Object.values(wf?.jobs ?? {})) {
+      if (!job || typeof job !== "object" || job["continue-on-error"]) continue;
+      for (const step of Array.isArray(job.steps) ? job.steps : []) {
+        if (!step || typeof step.run !== "string" || step["continue-on-error"]) continue;
+        const m = /^pnpm run (proof:[\w:.-]+)$/.exec(step.run.trim());
+        if (m && selfSkipping.has(m[1]) && (set(step.env, selfSkipping.get(m[1])) || set(job.env, selfSkipping.get(m[1])))) out.add(m[1]);
+      }
+    }
+  }
+  return out;
+}
+
 function realContext() {
   const stage = execFileSync("git", ["ls-files", "-s", "-z"], { cwd: ROOT, encoding: "utf8" });
   const tracked = parseLsFilesStage(stage);
   const indexed = [...parseLsFilesIndex(stage).keys()];
   const scripts = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts ?? {};
   const gatedProofs = new Set();
+  const lanes = {};
+  const spawn = (args, what) => {
+    const r = spawnSync(process.execPath, args, { cwd: ROOT, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
+    if (r.error || r.status !== 0) throw new Error(`${what} failed (${r.error ? (r.error.code ?? r.error.message) : `exit ${r.status}`}) — the gating proofs cannot be read`);
+    return r.stdout;
+  };
   for (const lane of ["scripts/preflight.mjs", "scripts/verify-breadth.mjs"]) {
-    const r = spawnSync(process.execPath, [join(ROOT, lane), "--list-steps"], { cwd: ROOT, encoding: "utf8", timeout: 60_000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
-    if (r.error || r.status !== 0) throw new Error(`${lane} --list-steps failed (${r.error ? (r.error.code ?? r.error.message) : `exit ${r.status}`}) — the gating proofs cannot be read`);
-    for (const p of gatedProofsFromListing(r.stdout, lane)) gatedProofs.add(p);
+    lanes[lane] = gatedProofsFromListing(spawn([join(ROOT, lane), "--list-steps"], `${lane} --list-steps`), lane);
+    for (const p of lanes[lane]) gatedProofs.add(p);
   }
-  return { root: ROOT, tracked, indexed, scripts, gatedProofs };
+  const selfSkipping = selfSkippingFromListing(spawn([join(ROOT, "scripts/check-preflight-ci-parity.mjs"), "--list-self-skipping-proofs"], "scripts/check-preflight-ci-parity.mjs --list-self-skipping-proofs"));
+  const workflows = tracked.filter((f) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(f)).map((f) => ({ path: f, text: readFileSync(join(ROOT, f), "utf8") }));
+  const envRuns = envRunsFromWorkflows(workflows, selfSkipping);
+  return { root: ROOT, tracked, indexed, scripts, gatedProofs, lanes, selfSkipping, envRuns, workflows };
 }
 
 /** One verdict on one document, as text: the CLI prints it, and the self-test
@@ -1099,6 +1159,52 @@ function selfTest() {
           && proofSource("proof:backup-restore", { scripts: ctx.scripts, tracked: t }) === "scripts/src/backup-restore-proof.ts"
           && proofSource("proof:decision-palette", { scripts: ctx.scripts, tracked: t }) === "scripts/check-decision-palette.mjs";
       }],
+      // round 31 (Codex :743): a self-skipping proof counts only where a workflow runs it with its env
+      ...(() => {
+        const ci = ctx.workflows.find((w) => w.path === ".github/workflows/review-hub-ci.yml");
+        const dbLine = "          DATABASE_URL: postgres://sg:sg@localhost:5432/signalgrid\n          # The proofs DROP the tables they test (and the role-split proof alters the\n          # cluster-wide runtime role). They refuse to run without this declaration —\n          # the service container above is exactly the throwaway cluster it names.\n          SIGNALGRID_DB_DISPOSABLE: \"1\"\n        run: pnpm run proof:backup-restore";
+        const wf = (step, jobEnv = "") => [{ path: "zz.yml", text: `on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n${jobEnv}    steps:\n${step}` }];
+        const ss = new Map([["proof:zz", "DATABASE_URL"]]);
+        const row178 = (c) => checkMatrix(real, c).fails.find((f) => f.control === "Backup and restore, with a verified restore test");
+        return [
+          ["fail: the CI Postgres step's DATABASE_URL deleted — proof:backup-restore self-skips, so it is not credited (in-process, the real workflow)", () => {
+            if (!ci || ci.text.split(dbLine).length !== 2) return false; // the pin moved: fail rather than pass vacuously
+            const cut = ctx.workflows.map((w) => (w === ci ? { ...w, text: w.text.replace(dbLine, dbLine.split("\n").slice(1).join("\n")) } : w));
+            const f = row178({ ...ctx, envRuns: envRunsFromWorkflows(cut, ctx.selfSkipping) });
+            return Boolean(f?.why.some((w) => w.includes("`proof:backup-restore` self-skips without DATABASE_URL")));
+          }],
+          ["fail: an own self-skipping proof with no env-carrying workflow step (in-process)", () => {
+            const res = checkMatrix(plant("| Planted S0 | ASVS 5.0 | Implemented (public core) | `docs/BACKUP_AND_RESTORE.md`; `pnpm run proof:backup-restore` |"), { ...ctx, envRuns: new Set() });
+            return res.fails.some((f) => f.control === "Planted S0" && f.why.some((w) => w.includes("`proof:backup-restore` self-skips without DATABASE_URL")));
+          }],
+          ["fail: a step without the env var, an empty value, a chained run, continue-on-error, a job-level continue-on-error (envRunsFromWorkflows)", () =>
+            [wf("      - run: pnpm run proof:zz\n"),
+              wf("      - env:\n          DATABASE_URL: \"\"\n        run: pnpm run proof:zz\n"),
+              wf("      - env:\n          DATABASE_URL: x\n        run: pnpm run proof:zz || true\n"),
+              wf("      - env:\n          DATABASE_URL: x\n        continue-on-error: true\n        run: pnpm run proof:zz\n"),
+              wf("      - run: pnpm run proof:zz\n", "    continue-on-error: true\n    env:\n      DATABASE_URL: x\n"),
+              wf("      - env:\n          OTHER: x\n        run: pnpm run proof:zz\n")].every((w) => !envRunsFromWorkflows(w, ss).has("proof:zz"))],
+          ["pass: a step-level or job-level env credits the proof (envRunsFromWorkflows)", () =>
+            envRunsFromWorkflows(wf("      - env:\n          DATABASE_URL: x\n        run: pnpm run proof:zz\n"), ss).has("proof:zz")
+            && envRunsFromWorkflows(wf("      - run: pnpm run proof:zz\n", "    env:\n      DATABASE_URL: x\n"), ss).has("proof:zz")],
+          ["fail: an unreadable self-skipping listing or workflow throws (selfSkippingFromListing / envRunsFromWorkflows)", () => {
+            let a = false, b = false;
+            try { selfSkippingFromListing("proof:x DATABASE_URL\nnot a line\n"); } catch { a = true; }
+            try { envRunsFromWorkflows([{ path: "bad.yml", text: "jobs: [\n" }], ss); } catch { b = true; }
+            return a && b;
+          }],
+          ["pass: the real backup-restore row (matrix line 178) is credited — its proof runs with DATABASE_URL in CI (in-process)", () =>
+            ctx.selfSkipping.get("proof:backup-restore") === "DATABASE_URL" && ctx.envRuns.has("proof:backup-restore")
+            && !(row178(ctx)?.why ?? []).some((w) => w.includes("self-skips"))],
+          ["pass: a proof only verify-breadth runs is gated (in-process, the breadth half of the registry)", () => {
+            const only = [...ctx.lanes["scripts/verify-breadth.mjs"]].filter((p) => !ctx.lanes["scripts/preflight.mjs"].has(p) && !ctx.selfSkipping.has(p));
+            const p = only.find((x) => proofSource(x, { scripts: ctx.scripts, tracked: new Set(ctx.tracked) }));
+            if (!p) return false;
+            const res = checkMatrix(plant(`| Planted S1 | ASVS 5.0 | Implemented (public core) | \`lib/signalgrid-core/src/policy.ts\`; \`pnpm run ${p}\` |`), ctx);
+            return ctx.gatedProofs.has(p) && !res.fails.some((f) => f.control === "Planted S1");
+          }],
+        ];
+      })(),
       ["pass: the real gating lanes run the matrix's proofs (in-process)", () =>
         ctx.gatedProofs.has("proof:signalgrid-core") && ctx.gatedProofs.has("proof:backup-restore")],
       // realContext must wire BOTH lists: regular files in `tracked`, every index entry in `indexed` (round 27)

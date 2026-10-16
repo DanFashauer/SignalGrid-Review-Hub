@@ -56,7 +56,7 @@
 // is searched on the same lines the branch shape walks (HEAD's first-parent line, and through
 // sync merges into their second parents, at most 8 nested; an unfound PR past that is NOT
 // MEASURED). A GitHub-titled merge lands the LAST "(#N" in its title. A cited sha (any case,
-// any prose prefix; a digits-only token is a number, not a sha) must be in what the landing
+// any prose prefix, across a hard wrap; see SHA_TOKEN for what counts) must be in what the landing
 // brought in: for a merge, in landing^1..landing^2; for a squash, not already on landing^1's
 // line. CEILING: offline, a squash cannot tie the cited commit to THIS PR, only rule out an
 // earlier mainline one; a sha token under 7 characters is READ, never resolved.
@@ -121,11 +121,24 @@ const HIGH_WATER_WINDOW = 50;
 // detector cannot read is a NOT MEASURED line, never silently skipped.
 const DATED = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})/g;
 const BRANCH_SHAPE = /^\s+\(branch\s+([A-Za-z0-9._/-]+)/;
-const PR_SHAPE = /^\s+\(PR\s+#(\d+)([^)\n]{0,200})/;
-// A commit the PR-named shape cites: any hex token in the claim's clause, any case, with or without
-// a prose prefix ("commit abc1234"). A run of digits only is a number (a check-run id), not a sha.
+// The clause runs to its ")" across a hard wrap, but never past a blank line or the next row's head.
+const PR_SHAPE = /^\s+\(PR\s+#(\d+)([^)]{0,200})/;
+const CLAUSE_STOP = /\n\s*\n|\n\s*\d+[a-z]*(?:-\d+)?\.\s+\*\*|\n\s*[-*] \[[ xX]\]/;
+// A commit the PR-named shape cites: the first hex token in the claim's clause, any case, with or
+// without a prose prefix ("commit abc1234"). Letters and digits mixed: any length from 4. Letters
+// only ("deadbeef"): 7 or more, since shorter ones are words ("added", "face"). Digits only: 7 or
+// more, unless it follows "run" (a check-run id); a shorter run is a year or a count. A claim under
+// 7 characters is READ by hand with that reason, never resolved.
 const SHA_TOKEN = /(?<![\w#])[0-9a-fA-F]{4,40}(?!\w)/g;
-const shaTokenOf = (clause) => (clause.match(SHA_TOKEN) ?? []).find((t) => /[a-fA-F]/.test(t) && /\d/.test(t))?.toLowerCase();
+function shaTokenOf(clause) {
+  for (const m of clause.matchAll(SHA_TOKEN)) {
+    const t = m[0], letters = /[a-fA-F]/.test(t), digits = /\d/.test(t);
+    if (!digits && t.length < 7) continue;
+    if (!letters && (t.length < 7 || /\brun\s*$/i.test(clause.slice(0, m.index)))) continue;
+    return t.toLowerCase();
+  }
+  return undefined;
+}
 const PR_MERGE = /^Merge pull request #(\d+)(?: from [^/\s]+\/(\S+))?/;
 const SQUASH = /\(#(\d+)\)$/;
 // A merge GitHub itself committed under a custom title (the landing chain's
@@ -208,9 +221,12 @@ export function findAnnotations(file, text) {
   const all = [...text.matchAll(DATED)].map((d) => {
     const rest = text.slice(d.index + d[0].length, d.index + d[0].length + 200);
     const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
-    const m = [d[0] + (b ? b[0] : p ? p[0] : ""), d[1]];
+    let clause = p ? p[2] : "";
+    const cut = clause.search(CLAUSE_STOP);
+    if (cut >= 0) clause = clause.slice(0, cut);
+    const m = [d[0] + (b ? b[0] : p ? p[0].slice(0, p[0].length - p[2].length) + clause : ""), d[1]];
     m.index = d.index;
-    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(p[2]) : undefined };
+    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(clause) : undefined };
   });
   all.forEach(({ m, kind, branch, claimPr, claimSha }, k) => {
     // The cited paths are the annotation's OWN: the span stops at the next
@@ -551,7 +567,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -595,7 +611,9 @@ function selfTest() {
     // 16: the PR-named shape "FIX PROPOSED <date> (PR #N, <sha>)", landed as PR #23 — STALE.
     g("checkout", "-qb", "claude/pr-shape"); write("scripts/c.mjs", "16\n"); commit("fix 16");
     const fix16 = g("rev-parse", "--short=8", "HEAD");
-    const short16 = g("rev-parse", "HEAD").slice(0, 5);
+    // Fixture shas are fixed (fixed content, identity and dates). Rows 38/39 assert the prefix was
+    // read as a claim, so a fixture change that made it digits-only fails loudly, never silently.
+    const fixFull = g("rev-parse", "HEAD");
     // A commit on a branch that never merges anywhere (row 34 cites it).
     g("checkout", "-q", "main"); g("checkout", "-qb", "claude/elsewhere"); write("scripts/e.mjs", "e\n"); commit("elsewhere");
     const elsewhere = g("rev-parse", "HEAD"); g("checkout", "-q", "claude/pr-shape");
@@ -606,11 +624,26 @@ function selfTest() {
     // prose-prefixed — or a token too short to resolve: each READ, never STALE, never dropped.
     edit(plan, row(23), row(23) + ` FIX PROPOSED 2026-10-08 (PR #23, ${baseSha}): \`scripts/c.mjs\`.`);
     edit(plan, row(24), row(24) + ` FIX PROPOSED 2026-10-08 (PR #23, ${baseSha.slice(0, 10).toUpperCase()}): \`scripts/c.mjs\`.`);
-    // Row 25's token is a real but 5-character prefix of the fix commit: it would resolve, and is still refused.
-    edit(plan, row(25), row(25) + ` FIX PROPOSED 2026-10-08 (PR #23, ${short16}): \`scripts/c.mjs\`.`);
+    // Row 25's token is 5 characters with letters and digits: a claim, too short to resolve — READ.
+    edit(plan, row(25), row(25) + " FIX PROPOSED 2026-10-08 (PR #23, ab12c): `scripts/c.mjs`.");
     // 34: that never-merged commit — neither on mainline before the landing nor in it — READ.
     edit(plan, row(34), row(34) + ` FIX PROPOSED 2026-10-08 (PR #23, ${elsewhere}): \`scripts/c.mjs\`.`);
     edit(plan, row(26), row(26) + ` FIX PROPOSED 2026-10-08 (PR #23, commit ${baseSha.slice(0, 10)}): \`scripts/c.mjs\`.`);
+    // 36: PR #23 landed, but its landing changed none of the paths this row cites — READ.
+    edit(plan, row(36), row(36) + " FIX PROPOSED 2026-10-08 (PR #23): `scripts/b.mjs`.");
+    // 37: the same landed claim in a plan row that already reads DONE — residue, not STALE.
+    edit(plan, row(37), "37. **Row 37.** — DONE (PR #23). FIX PROPOSED 2026-10-08 (PR #23): `scripts/c.mjs`.");
+    // 38, 39: the short-token boundary — 6 characters of the fix commit is READ, 7 (git's default abbreviation) is STALE.
+    edit(plan, row(38), row(38) + ` FIX PROPOSED 2026-10-08 (PR #23, ${fixFull.slice(0, 6)}): \`scripts/c.mjs\`.`);
+    edit(plan, row(39), row(39) + ` FIX PROPOSED 2026-10-08 (PR #23, ${fixFull.slice(0, 7)}): \`scripts/c.mjs\`.`);
+    // 40-42: claims the clause reader once dropped — a sha on the wrapped next line, a letters-only
+    // and a digits-only token. None is a commit in this repository, so each is READ, never STALE.
+    edit(plan, row(40), row(40) + " FIX PROPOSED 2026-10-08 (PR #23,\n    1234abc): `scripts/c.mjs`.");
+    edit(plan, row(41), row(41) + " FIX PROPOSED 2026-10-08 (PR #23, deadbeef): `scripts/c.mjs`.");
+    edit(plan, row(42), row(42) + " FIX PROPOSED 2026-10-08 (PR #23, 7654321): `scripts/c.mjs`.");
+    // 43, 44: a clause with no ")" stops at the next row's head; it never borrows row 44's token.
+    edit(plan, row(43), row(43) + " FIX PROPOSED 2026-10-08 (PR #23 — `scripts/c.mjs` changed.");
+    edit(plan, row(44), row(44) + " FIX PROPOSED 2026-10-08 (PR #23, deadbeef): `scripts/c.mjs`.");
     // 35: a digits-only number in the clause (a check-run id) is not a sha — STALE, not READ.
     edit(plan, row(35), row(35) + " FIX PROPOSED 2026-10-08 (PR #23, check run 1234567890): `scripts/c.mjs`.");
     // 33: a path cited inside the PR clause itself still corroborates — STALE.
@@ -687,7 +720,7 @@ function selfTest() {
     const notIn = (r) => r.shaIn === false;
     checks.push(["a PR-named annotation citing a commit already on mainline before the landing is READ", is("row 23", "LANDED-UNCORROBORATED", notIn)]);
     checks.push(["…the same commit cited in upper case is read, not dropped — READ", is("row 24", "LANDED-UNCORROBORATED", notIn)]);
-    checks.push(["…a cited token under 7 characters is READ even when it is a prefix of the fix commit", is("row 25", "LANDED-UNCORROBORATED", notIn) && /[a-f]/.test(res["row 25"].claimSha) && /\d/.test(res["row 25"].claimSha)]);
+    checks.push(["…a cited token under 7 characters is READ, not dropped", is("row 25", "LANDED-UNCORROBORATED", (r) => notIn(r) && r.claimSha === "ab12c")]);
     checks.push(["a PR-named annotation citing a commit from a branch that never merged is READ", is("row 34", "LANDED-UNCORROBORATED", notIn)]);
     checks.push(["…the same commit behind a prose prefix (\"commit <sha>\") is read, not dropped — READ", is("row 26", "LANDED-UNCORROBORATED", notIn)]);
     checks.push(["a GitHub-committed single-parent \"tweak (#114) tail\" is not a squash landing", is("row 27", "NOT-VIA-PR")]);
@@ -696,9 +729,17 @@ function selfTest() {
     checks.push(["…and a branch-named row landed by that merge is credited to #31", is("row 31", "STALE", (r) => r.pr === 31)]);
     checks.push(["a PR-named row citing its squashed branch's own commit is STALE (a squash keeps none of the PR's commits)", is("row 32", "STALE", (r) => r.pr === 11 && r.shaIn === true)]);
     checks.push(["a path cited inside the \"(PR #N, …)\" clause itself corroborates — STALE", is("row 33", "STALE", (r) => r.pr === 23)]);
+    checks.push(["a PR-named row whose landing changed none of its cited paths is READ, not STALE", is("row 36", "LANDED-UNCORROBORATED", (r) => r.pr === 23 && r.hit.length === 0 && r.shaIn === true)]);
+    checks.push(["a PR-named claim in a plan row that reads DONE is residue, not STALE", is("row 37", "CLOSED-RESIDUE", (r) => r.pr === 23)]);
+    checks.push(["a 6-character prefix of the fix commit is READ even though it would resolve (too short)", is("row 38", "LANDED-UNCORROBORATED", (r) => notIn(r) && r.claimSha.length === 6)]);
+    checks.push(["a 7-character prefix of the fix commit is STALE (the boundary is 7)", is("row 39", "STALE", (r) => r.shaIn === true && r.claimSha.length === 7)]);
+    checks.push(["a sha on the wrapped next line of the clause is read, not dropped — READ", is("row 40", "LANDED-UNCORROBORATED", (r) => r.claimSha === "1234abc")]);
+    checks.push(["a letters-only token of 7+ (\"deadbeef\") is read as a sha, not dropped — READ", is("row 41", "LANDED-UNCORROBORATED", (r) => r.claimSha === "deadbeef")]);
+    checks.push(["a digits-only token of 7+ not after \"run\" is read as a sha, not dropped — READ", is("row 42", "LANDED-UNCORROBORATED", (r) => r.claimSha === "7654321")]);
+    checks.push(["a clause with no \")\" stops at the next row's head and borrows no token from it — STALE", is("row 43", "STALE", (r) => r.claimSha === undefined) && is("row 44", "LANDED-UNCORROBORATED")]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 5", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 5", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
@@ -1083,7 +1124,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 99;
+  return failed === 0 && checks.length === 107;
 }
 
 let isMain = false;

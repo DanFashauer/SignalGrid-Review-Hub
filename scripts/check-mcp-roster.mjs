@@ -181,10 +181,11 @@ const shedMarkup = (v) => {
 };
 // A value that IS a spec (`npm:@upstash/…@x`, `@upstash/…@x`) is one argv unit, never shell-split.
 const SPEC_VALUE_RE = /^(?:npm:)?@upstash\\?\/context7-mcp/i;
-// a spec, then whitespace (or adjacent literals, `'…@4.1.1' ' || *'`) and a semver range continuation: `|| <range>`, a hyphen and a version, a comparator, `*`/`x`
-// (a shell `|| echo`, `|| 5`, `> out.log` or a flag is not one)
+// a spec, then whitespace of any kind but a line break (NBSP, U+3000 …) or adjacent literals (`'…@4.1.1' ' || *'`),
+// then a semver range continuation: `|| <range>`, `||` closing the line or the string, a hyphen and a version, `*` or
+// `x`, a comparator, `*`/`x` (a shell `|| echo`, `|| 5`, `> out.log` or a flag is not one; a GLUED `||` is the shell's OR)
 export const CONTEXT7_RANGE_FOLLOW_RE =
-  /@upstash\\?\/context7-mcp@[^\s"'`,\]\\]*(?:\\?["'][ \t]*\\?["'][ \t]*|[ \t]+)(?:\|\|[ \t]*(?:[<>=^~]|v?\d+\.|[*xX](?![\w-]))|-[ \t]+v?\d|(?:[<>]=?|[=^~])[ \t]*v?\d|[*xX](?![\w-]))/i;
+  /@upstash\\?\/context7-mcp@[^\s"'`,\]\\]*(?:\\?["'][^\S\r\n]*\\?["'][^\S\r\n]*|[^\S\r\n]+)(?:\|\|[^\S\r\n]*(?:[<>=^~]|v?\d+\.|[*xX](?![\w-])|\|\||[)\]}"'`]|$)|-[^\S\r\n]+(?:v?\d|[*xX](?![\w-]))|(?:[<>]=?|[=^~])[^\S\r\n]*v?\d|[*xX](?![\w-]))/im;
 
 /** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
 /** Pure: `s` with a YAML ` # comment` removed — only outside quotes. */
@@ -297,7 +298,6 @@ function lineUnits(line, kind) {
     // && npx -y …`, a folded `command: >` whose command starts `[ -f a,b ]`), where `: ` is just text: its words are
     // ALWAYS read as well as the value's
     if (kv) return [...shellWords(line), ...yamlValueUnits(kv[1])];
-    if (kv) return yamlValueUnits(kv[1]);
   }
   return shellWords(line);
 }
@@ -452,8 +452,8 @@ export function logicalLines(lines, kind, path = "") {
     const l = ps1 ? lines[i].replace(/`(.)/g, (_, c) => (/[|&;<>\s]/.test(c) ? `"${c}"` : c)) : docker ? lines[i].replace(i === 0 ? /^\uFEFF|\r+$/g : /\r+$/, "") : lines[i]; // a BOM only opens the file
     const at = l.search(/@upstash\\?\/context7-mcp/i);
     // a backtick opens a template literal, a Go raw string or a shell substitution — not in PowerShell or a backtick-
-    // escape Dockerfile, where it escapes, nor in YAML, where it is text
-    const bt = kind !== "yaml" && !ps1 && dockerEscape !== "`";
+    // escape Dockerfile, where it escapes (YAML never reaches here)
+    const bt = !ps1 && dockerEscape !== "`";
     if (kind !== "json" && at >= 0 && i + 1 < lines.length && openQuote(l.slice(Math.max(0, l.lastIndexOf(" ", at))), bt) && openQuote(l, bt)) {
       physical.push({ i, text: `${l} ${lines[i + 1].replace(/^\s*(?:\/\/+|#+|\*+|--)\s?/, "")}`, quoteJoin: true });
     } else physical.push({ i, text: l });
@@ -2072,6 +2072,13 @@ server.registerTool(
       ["s.ps1", `$c = @"\nnpx -y ${P} || *\n"@\n`, "a PowerShell here-string content line"],
       ["a.json", `${JSON.stringify({ run: `RUN ["npx","-y","${P} || *"]` })}\n`, "a parsed JSON value holding an exec list"],
       ["a.py", `subprocess.run(['npx','-y','${P}' ' || *'])\n`, "Python adjacent literals"],
+      ["a.rb", `system(%q(npx -y ${P}\t- 5))\n`, "a TAB before the continuation in a `%q()`"],
+      ["a.rb", `system(%q(npx -y ${P}\u00a0- 5))\n`, "an NBSP before the continuation in a `%q()`"],
+      ["a.rb", `system(%q(npx -y ${P}\u3000>=4))\n`, "an ideographic space before a comparator"],
+      ["a.rb", `system(%q(npx -y ${P} ||))\n`, "a spaced `||` closing the string"],
+      ["a.json", `${JSON.stringify({ run: `npx -y ${P} || ` })}\n`, "a parsed JSON string ending ` || `"],
+      ["s.ps1", `$c = @'\nnpx -y ${P} - *\n'@\n`, "a hyphen then `*` in a PowerShell `@' '@` here-string"],
+      ["Dockerfile", `RUN ["npx","-y","${P}${BT}\\" *"]\n`, "an escaped quote inside an exec-form word's tail (the escape-aware tail)"],
       ["a.js", `spawn("npx",["-y","@upstash\\/context7-mcp@${realPin} ||"]);\n`, "a JSON-escaped `\\/` in a quoted word with a trailing `||` (only the whole-tail reader sees it)"],
       ["docker-compose.yml", `services:\n  a:\n    command: >\n      [ -f a,b ] ; npx -y @upstash/context7-mcp@latest ; echo done: ok\n`, "a folded `command: >` led by `[`, with a comma and a later `: `"],
       ["k.yaml", `spec:\n  containers:\n    - args: >\n        { true,x ; } ; npx -y @upstash/context7-mcp@latest ; echo done: ok\n`, "a folded k8s `args: >` led by `{`"],

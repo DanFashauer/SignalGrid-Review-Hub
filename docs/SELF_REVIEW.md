@@ -90,7 +90,7 @@ Connectors whose full allow-path is currently constrained this way (mismatches=0
 over the full product): **oauth-consent** (6,480), **sso-session** (4,608, widened from 768 by the shared-account attribution axis),
 **access-governance** (18,000, widened from 4,500 by the lifecycle axis), **ot-posture** (324), **token-binding** (1,296),
 **pacs-access** (97,200, in both the unposed and the posed-floor grading), **agent-identity** (17,280 normalized + 870,912 raw + a parse-fidelity pass over the raw space),
-**device-management-health** (21,600 normalized + 1,354,752 raw + a parse-fidelity pass),
+**device-management-health** (86,400 normalized + 9,483,264 raw + a parse-fidelity pass),
 **link-usability** (7,560 normalized + 241,920 raw + a parse-fidelity pass; an earlier version of this line pinned the space as it stood before the link-usability axis widened). These are the enum-field
 "trust grant" dimensions where
 the unknown-reaches-grant class is most acute; new connectors adopt the harness

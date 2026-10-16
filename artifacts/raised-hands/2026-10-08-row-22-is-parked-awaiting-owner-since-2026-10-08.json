@@ -1,0 +1,15 @@
+{
+  "id": "2026-10-08-row-22-is-parked-awaiting-owner-since-2026-10-08",
+  "raisedAt": "2026-10-08T14:33:12.254Z",
+  "origin": "cloud",
+  "doing": "Ranking docs/COMPANY_BUILD_PLAN.md row 22 (stand up the cost model and shift economics) in the objective loop.",
+  "blockedBy": "Row 22 is parked AWAITING OWNER since 2026-10-08 (PR #1449): docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither decision exists. Every remaining item in the row is trigger-bound or owner-private (the monthly spend numerator is computed in the private channel), so there is nothing a lane can build without inventing a price.",
+  "need": "Owner: make the deployment decision (which VM and backup host) so an agent can compute those two lines from a public price list, and say whether a customer requires Fleet Premium; or confirm the row stays parked and the lane re-dates the marker.",
+  "whoCanUnblock": "owner",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "objective-owner:awaiting-owner-row-22"
+  ]
+}

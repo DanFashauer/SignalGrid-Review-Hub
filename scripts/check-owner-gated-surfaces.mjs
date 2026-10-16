@@ -32,6 +32,7 @@
 //     copy. Correct code is not the question; these are the owner's to commit.
 
 import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -52,6 +53,22 @@ export const SAFETY_MACHINERY = [
   // json alone cannot reach goal_met; this is the second belt — a moved pointer is reviewed
   // as safety machinery, never as a doc.
   { rule: "the declared objective (DR-056 attestation pointer)", re: /^docs\/agent\/objective\.json$/ },
+  // The harness's own configuration. settings.json carries the permission deny list, the
+  // PreToolUse/Stop/SessionStart hook wiring and (2026-10-08) the statusLine command; the hook
+  // scripts are what those entries run. None of it is under scripts/**, so a PR touching only
+  // these classified autonomous while changing what runs, unattended, in every session of this
+  // repo. Added on the round-1 review of PR #1450.
+  { rule: ".claude/settings.json (deny list, hooks, status-line command: what runs in every session)", re: /^\.claude\/settings(\.[\w-]+)?\.json$/ },
+  { rule: ".claude/hooks/** (the PreToolUse deny hook and the session hooks settings.json wires in)", re: /^\.claude\/hooks\// },
+  // The instruction and tool-wiring surface. Agent definitions fix each subagent's model and
+  // tools, skills/commands/workflows are instructions every session loads, .mcp.json wires
+  // tool servers, and .githooks/pre-push enforces the lockfile rule. Not under scripts/**, so
+  // a PR touching only these classified autonomous (backlog row, 2026-10-08).
+  { rule: ".claude/{agents,skills,commands,workflows}/** and .mcp.json (the instruction and tool-wiring surface every session loads)", re: /^(\.claude\/(agents|skills|commands|workflows)\/|\.mcp\.json$)/ },
+  { rule: ".githooks/** (the pre-push lockfile enforcement)", re: /^\.githooks\// },
+  { rule: "artifacts/mcp-server/** (the MCP server .mcp.json launches in every session)", re: /^artifacts\/mcp-server\// },
+  { rule: "root tsconfig.json / tsconfig.base.json (decide which file every @workspace import loads, for the MCP server and the proofs)", re: /^tsconfig(\.base)?\.json$/ },
+  { rule: ".claude-plugin/** (the plugin manifest enumerating the agents, skills and commands a consumer loads)", re: /^\.claude-plugin\// },
 ];
 
 // A changed path matching ANY of these is OWNER_RESERVED. Correct code is not the point.
@@ -112,6 +129,60 @@ export function classifyDiff(files) {
   return { tier: matched.length ? "owner-gated" : "autonomous", matched };
 }
 
+// Exemptions for .claude/ children that are plain documentation. A directory (skills, agents...)
+// can never be named here: every entry must be a *.md file tracked directly under .claude/.
+export const CLAUDE_DOC_ONLY = ["COMMANDS.md", "WORKFLOWS.md"];
+
+/**
+ * Problems with the "every child of .claude/ is classified" check; [] = fine. Pure, so the
+ * self-test can feed it fixtures: an empty listing, a new unclassified directory, a directory
+ * smuggled into the exemption list (review round 3 of PR #1464 mutated each guard and lived).
+ */
+export function claudeChildrenProblems(tracked, classify = classifyDiff, docOnly = CLAUDE_DOC_ONLY) {
+  if (!Array.isArray(tracked) || tracked.length === 0) return ["no tracked .claude/ files listed"];
+  const problems = [];
+  for (const name of docOnly) {
+    if (!/\.md$/.test(name)) problems.push(`doc-only exemption "${name}" is not a *.md file`);
+    if (tracked.some((f) => f.startsWith(`.claude/${name}/`))) problems.push(`doc-only exemption "${name}" is a directory`);
+  }
+  const children = [...new Set(tracked.map((f) => f.split("/")[1]).filter(Boolean))];
+  for (const name of children) {
+    if (docOnly.includes(name)) continue;
+    // A directory is probed with a file inside it; a file by its own path.
+    if (classify([`.claude/${name}/probe.x`]).tier !== "owner-gated" && classify([`.claude/${name}`]).tier !== "owner-gated") {
+      problems.push(`unclassified: ${name}`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Problems with the code .mcp.json launches; [] = every repo path it names is owner-gated. Looks
+ * inside flags (`--import=./x.mjs`) and env values, and refuses a launcher it cannot see through
+ * (a pnpm alias runs code from root package.json). Pure, for fixtures (review round 3).
+ */
+export function mcpLaunchProblems(cfg, classify = classifyDiff) {
+  const servers = cfg && typeof cfg === "object" ? cfg.mcpServers : null;
+  if (!servers || typeof servers !== "object" || Object.keys(servers).length === 0) return ["no mcpServers found"];
+  const problems = [];
+  let paths = 0;
+  for (const [name, sv] of Object.entries(servers)) {
+    if (!sv || typeof sv !== "object" || typeof sv.command !== "string") { problems.push(`${name}: malformed server entry`); continue; }
+    if (!sv.command.includes("/") && sv.command !== "node") problems.push(`${name}: launcher "${sv.command}" runs code this check cannot see`);
+    const env = sv.env && typeof sv.env === "object" ? Object.values(sv.env) : [];
+    for (const str of [sv.command, ...(Array.isArray(sv.args) ? sv.args : []), ...env]) {
+      if (typeof str !== "string") { problems.push(`${name}: non-string launch value`); continue; }
+      for (const tok of str.split(/[=\s,:]+/)) {
+        if (!tok.includes("/") || tok.startsWith("-") || tok.startsWith("/")) continue; // flags and absolute paths are not repo paths
+        paths += 1;
+        if (classify([tok]).tier !== "owner-gated") problems.push(`${name}: ungated ${tok}`);
+      }
+    }
+  }
+  if (paths === 0) problems.push("no repo paths found in .mcp.json");
+  return problems;
+}
+
 function selfTest() {
   const checks = [];
   const t = (name, ok) => checks.push([name, ok]);
@@ -123,6 +194,69 @@ function selfTest() {
   t("a proof harness is SAFETY_MACHINERY", cls(["scripts/src/webauthn-verify-proof.ts"]).tier === "owner-gated");
   t("a fixtures dir is SAFETY_MACHINERY", cls(["lib/foo/fixtures/case.json"]).tier === "owner-gated");
   t("the lockfile is SAFETY_MACHINERY", cls(["pnpm-lock.yaml"]).tier === "owner-gated");
+  // The harness configuration (round-1 review of PR #1450): before the two rules these returned
+  // {tier: "autonomous", matched: []}.
+  t(".claude/settings.json alone is SAFETY_MACHINERY (deny list, hooks, status-line command)",
+    cls([".claude/settings.json"]).tier === "owner-gated" && cls([".claude/settings.json"]).matched.some((m) => m.category === "SAFETY_MACHINERY"));
+  t("a .claude/hooks/ script alone is SAFETY_MACHINERY", cls([".claude/hooks/block-dangerous.sh"]).tier === "owner-gated" && cls([".claude/hooks/new-hook.sh"]).tier === "owner-gated");
+  t("a git a/ b/ prefixed or ./ prefixed settings.json cannot slip past", cls(["a/.claude/settings.json"]).tier === "owner-gated" && cls(["./.claude/settings.json"]).tier === "owner-gated");
+  t("a settings variant (.claude/settings.local.json) is SAFETY_MACHINERY too", cls([".claude/settings.local.json"]).tier === "owner-gated");
+  t("a settings.json NOT at .claude/ is not swept in (the rule is anchored)", cls(["docs/examples/.claude/settings.json"]).tier === "autonomous" && cls([".claude/settings.json.md"]).tier === "autonomous");
+  // The instruction and tool-wiring surface every session loads (backlog row, 2026-10-08):
+  // before the two rules below each of these returned {tier: "autonomous", matched: []}.
+  for (const f of [
+    ".claude/agents/x.md", ".claude/skills/a/SKILL.md", ".claude/commands/c.md",
+    ".claude/workflows/land-branch.js", ".mcp.json", ".githooks/pre-push",
+    ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
+  ]) {
+    const c = cls([f]);
+    t(`${f} alone is SAFETY_MACHINERY`, c.tier === "owner-gated" && c.matched.length > 0 && c.matched.every((m) => m.category === "SAFETY_MACHINERY"));
+  }
+  t("a git a/ prefixed agent definition cannot slip past", cls(["a/.claude/agents/x.md"]).tier === "owner-gated");
+  // Derived, so a new .claude/<dir> cannot be added unclassified: every immediate child of the
+  // TRACKED .claude/ (not the disk: an ignored .claude/worktrees/ or a Finder .DS_Store differs
+  // per machine) is classified or a named doc-only exemption. If git cannot list, it fails closed.
+  {
+    let tracked = null;
+    try {
+      tracked = execFileSync("git", ["-C", repo, "ls-files", "-z", "--", ".claude"], { encoding: "utf8" }).split("\0").filter(Boolean);
+    } catch { /* tracked stays null -> a problem below */ }
+    const probs = claudeChildrenProblems(tracked);
+    t(`every TRACKED child of .claude/ is classified or a named doc-only exemption (${probs.join("; ") || "none unclassified"})`, probs.length === 0);
+    // The guards of that check, pinned with fixtures.
+    t("claudeChildrenProblems: an empty or missing listing is a problem (fails closed)", claudeChildrenProblems([]).length > 0 && claudeChildrenProblems(null).length > 0);
+    t("claudeChildrenProblems: a new unclassified child directory is reported", claudeChildrenProblems([".claude/settings.json", ".claude/newdir/x.md"]).some((p) => p.includes("unclassified: newdir")));
+    t("claudeChildrenProblems: a directory cannot be smuggled into the doc-only list (not *.md, and a directory)", (() => {
+      const p = claudeChildrenProblems([".claude/agents/x.md"], classifyDiff, ["agents"]);
+      return p.some((x) => x.includes("not a *.md file")) && p.some((x) => x.includes("is a directory"));
+    })());
+    t("claudeChildrenProblems: the real doc-only list is *.md files, none of them a directory", CLAUDE_DOC_ONLY.every((n) => /\.md$/.test(n)) && claudeChildrenProblems([".claude/COMMANDS.md", ".claude/settings.json"]).length === 0);
+  }
+  // The pointee, not only the pointer (review rounds 2-3 of PR #1464): .mcp.json is gated because
+  // it wires tool servers, so what it LAUNCHES must be gated too. Derived from the real file.
+  {
+    let cfg = null;
+    try { cfg = JSON.parse(readFileSync(join(repo, ".mcp.json"), "utf8")); } catch { /* cfg stays null -> a problem */ }
+    const probs = mcpLaunchProblems(cfg);
+    t(`every repo path .mcp.json launches is gated (${probs.join("; ") || "none ungated"})`, probs.length === 0);
+    const srv = (command, args, env) => ({ mcpServers: { x: { command, args, ...(env ? { env } : {}) } } });
+    t("mcpLaunchProblems: an ungated plain path argument is reported", mcpLaunchProblems(srv("node", ["artifacts/connector-emulator/x.mjs"])).some((p) => p.includes("ungated")));
+    t("mcpLaunchProblems: a path inside a flag (--import=./x.mjs) is reported", mcpLaunchProblems(srv("node", ["--import=./artifacts/connector-emulator/x.mjs", "artifacts/mcp-server/src/index.ts"])).some((p) => p.includes("ungated")));
+    t("mcpLaunchProblems: a path inside an env value (NODE_OPTIONS) is reported", mcpLaunchProblems(srv("artifacts/mcp-server/node_modules/.bin/tsx", ["artifacts/mcp-server/src/index.ts"], { NODE_OPTIONS: "--import=./artifacts/connector-emulator/x.mjs" })).some((p) => p.includes("ungated")));
+    t("mcpLaunchProblems: a launcher it cannot see through (pnpm alias) is reported", mcpLaunchProblems(srv("pnpm", ["run", "mcp:probe"])).some((p) => p.includes("cannot see")));
+    t("mcpLaunchProblems: no servers, or no repo paths, is a problem (fails closed)", mcpLaunchProblems({ mcpServers: {} }).length > 0 && mcpLaunchProblems(null).length > 0 && mcpLaunchProblems(srv("node", ["--version"])).length > 0);
+    t("mcpLaunchProblems: the gated server shape passes", mcpLaunchProblems(srv("artifacts/mcp-server/node_modules/.bin/tsx", ["artifacts/mcp-server/src/index.ts"])).length === 0);
+  }
+  // The root tsconfigs decide which file each @workspace import loads when .mcp.json launches the
+  // server (tsx reads the tsconfig in the repo-root cwd): a paths entry redirected an import to a
+  // stub that ran in the server (review round 3 of PR #1464).
+  t("the root tsconfig.json and tsconfig.base.json are SAFETY_MACHINERY", ["tsconfig.json", "tsconfig.base.json", "./tsconfig.base.json"].every((f) => cls([f]).tier === "owner-gated"));
+  t("a nested tsconfig outside lib/ stays autonomous (the rule is anchored to the root; disclosed)", cls(["docs/tsconfig.json"]).tier === "autonomous" && cls(["tsconfig.json.md"]).tier === "autonomous");
+  t("the MCP server's code and tool files are SAFETY_MACHINERY", ["artifacts/mcp-server/src/index.ts", "artifacts/mcp-server/src/tools/x.ts", "artifacts/mcp-server/package.json"].every((f) => cls([f]).tier === "owner-gated"));
+  t("a look-alike (artifacts/mcp-server-docs/x.md) is not swept in", cls(["artifacts/mcp-server-docs/x.md"]).tier === "autonomous");
+  t("negative control: docs/agent/x.md stays autonomous", cls(["docs/agent/x.md"]).tier === "autonomous");
+  t("negative control: .claude/COMMANDS.md (doc-only exemption) stays autonomous", cls([".claude/COMMANDS.md"]).tier === "autonomous");
+  t("negative control: a .mcp.json look-alike elsewhere is not swept in", cls(["docs/examples/.mcp.json"]).tier === "autonomous" && cls([".mcp.json.md"]).tier === "autonomous");
   t("the decision records are owner-gated", cls(["docs/DECISION_RECORDS.md"]).tier === "owner-gated");
   t("the brain-cycle veto config is SAFETY_MACHINERY", cls(["docs/agent/brain-cycle-config.json"]).tier === "owner-gated");
   t("the declared objective (DR-056) is SAFETY_MACHINERY", cls(["docs/agent/objective.json"]).tier === "owner-gated");

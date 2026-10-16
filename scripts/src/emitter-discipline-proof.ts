@@ -588,11 +588,11 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
   check("url-guard: an unparseable URL is refused as invalidUrl", refusedAs("not a url", WEBHOOK_URL_REFUSALS.invalidUrl));
   // Hand-mutant pins (B83, #1498 review LOWs): the brace-less sweep cannot generate a regex-bound
   // mutant, so each pin below is an input ONLY the narrowed/dropped alternative would let through.
-  check("url-guard: RFC6598 interior (100.70-99 and 100.110-119 alternatives) is refused as privateRange, not just the 100.64 / 100.127 edges",
-    ["100.70.0.1", "100.80.1.1", "100.99.255.255", "100.100.1.1", "100.110.0.1", "100.119.0.1", "100.120.0.1", "100.127.255.255"]
+  check("url-guard: RFC6598 interior (every second octet 100.64-100.127, so each of the four alternatives end to end) is refused as privateRange, not just the 100.64 / 100.127 edges",
+    [...Array.from({ length: 64 }, (_, i) => `100.${64 + i}.0.1`), "100.69.255.255", "100.99.255.255", "100.126.255.255", "100.127.255.255"]
       .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
-  check("url-guard: fe80::/10 interior (fe90, fea0, febf) is refused as privateRange, not just fe80",
-    ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: fe80::/10 interior (fe90, fea0, febf, and fe80::808:808 whose last 32 bits read as IPv4) is refused as privateRange, not just fe80",
+    ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]", "[fe80::808:808]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
   check("url-guard: just outside fe80::/10 (fe7f::1, fec0::1) stays valid",
     ["[fe7f::1]", "[fec0::1]"].every((h) => validateWebhookUrl(`https://${h}/x`, live).valid === true));
   check("url-guard: IPv4-mapped IPv6 (dotted) is refused as its IPv4 twin (loopback, metadata, RFC1918, RFC6598)",
@@ -604,8 +604,8 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     refusedAs("https://[::127.0.0.1]/x", WEBHOOK_URL_REFUSALS.loopback));
   check("url-guard: the hex spelling [::ffff:a9fe:a9fe] decodes (base 16) and is refused as the metadata address",
     refusedAs("https://[::ffff:a9fe:a9fe]/x", WEBHOOK_URL_REFUSALS.privateRange));
-  check("url-guard: a public IPv4-mapped address and a documentation IPv6 address are NOT over-refused",
-    validateWebhookUrl("https://[::ffff:8.8.8.8]/x", live).valid === true && validateWebhookUrl("https://[2001:db8::1]/x", live).valid === true);
+  check("url-guard: a documentation-range IPv4-mapped address and a documentation IPv6 address are NOT over-refused",
+    validateWebhookUrl("https://[::ffff:203.0.113.9]/x", live).valid === true && validateWebhookUrl("https://[2001:db8::1]/x", live).valid === true);
 }
 {
   check("bounded-text: a non-string yields the empty string, not a throw or the value",
@@ -628,9 +628,11 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     [0, 200, 299, 400].every((n) => isRedirectStatus(n) === false));
   check("redirect: isRedirectRefusal is true for a reason redirectRefusal minted",
     isRedirectRefusal(redirectRefusal(302, "https://evil.example/x")) === true);
-  check("redirect: isRedirectRefusal is false for undefined, another reason, and the prefix appearing mid-string",
+  check("redirect: isRedirectRefusal is false for undefined, another reason, the prefix appearing mid-string, a lowercase or space-led spelling, the bare word REDIRECT and a near-miss differing only in the prefix's last character",
     isRedirectRefusal(undefined) === false && isRedirectRefusal("HTTP 500") === false
-    && isRedirectRefusal(`x ${redirectRefusal(302, null)}`) === false);
+    && isRedirectRefusal(`x ${redirectRefusal(302, null)}`) === false
+    && isRedirectRefusal(REDIRECT_REFUSED.toLowerCase()) === false && isRedirectRefusal(` ${redirectRefusal(302, null)}`) === false
+    && isRedirectRefusal("REDIRECT") === false && isRedirectRefusal(`${REDIRECT_REFUSED.slice(0, -1)}X`) === false);
 }
 
 // ---- The vendor-value readers, driven directly (wave 8, 2026-10-09) -----------------

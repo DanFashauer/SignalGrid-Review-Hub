@@ -529,7 +529,7 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
   // a runner on this line, or a `command: <runner>` on one of the lines just before (a multi-line MCP config)
   const runner =
     PACKAGE_RUNNER_RE.test(line) ||
-    /["']?command["']?\s*[:=]\s*(?:(?:[&!][^\s#]*|#[^\n]*\n)\s*)*(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
+    /["']?command["']?\s*[:=]\s*(?=((?:[&!][^\s#]*\s+|#[^\n]*\n\s*)*))\1(?:\[\s*|-\s+)?["']?(?:[^"'\n]*[\\/])?(?:npx|pnpx|bunx|uvx|bun|npm|pnpm|yarn|deno)(?:\.cmd|\.exe|\.ps1)?(?=["'\s,]|$)/im.test(`${before}\n${after}`);
   out.push(...context7UnitFindings(lineUnits(line, kind), pin, runner));
   if (CONTEXT7_GIT_SOURCE_RE.test(line) || (runner && CONTEXT7_SHORTHAND_RE.test(line))) out.push({ git: true });
   return out;

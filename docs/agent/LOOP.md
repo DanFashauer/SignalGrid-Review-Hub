@@ -57,7 +57,7 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
 LAST TOUCHED: 2026-10-16 (cloud lane; window 02:11Z-05:16Z) - SEVEN LANDINGS; READINESS 0% ON THE TIP, DIMENSION (b) 0% BY DESIGN
-              UNTIL THE MAC'S ONE RE-MINT (#1536).
+              UNTIL THE MAC'S ONE RE-MINT (ASKED IN #1536).
               LANDINGS (merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`; gating runs from
               `gh api .../check-runs/<id>`): #1535 1ed88f9f (02:30:36Z, the 02:11Z forward-build heartbeat; gating 116775327913); #1504 2b7f81f3
               (02:51:27Z, url-guard and redirect hand mutants pinned in proof:emitter-discipline, proof 139 to 150, five landing-refute rounds, merged
@@ -70,7 +70,8 @@ LAST TOUCHED: 2026-10-16 (cloud lane; window 02:11Z-05:16Z) - SEVEN LANDINGS; RE
               forward-build heartbeat; gating 116807305698).
               READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at base fc9440a9, exit 0): HEADLINE 0%, OUTREACH CLOSED.
               (a) 100%; (b) 0% (proofs current 0/20, launch items fully current 0/28; evidence covers manifest 3c69fedd7754 and tree aa9ce381438e),
-              which stays 0% by design until the Mac's one re-mint lands (#1536); (c) 100%.
+              which stays 0% by design until the Mac's one re-mint (asked in #1536, 06e494a1) lands; the refreshed
+              artifacts/live-evidence/mac-run.json is not on mainline yet; (c) 100%.
               IN FLIGHT AT THE END OF THE WINDOW (all four PRs open when read, none merged): #1370 round 23 (four regressions from Codex-driven fixes to
               repair; 19 of 28 review threads resolved, 9 open); #1333 round 29 (three fail-open classes still open through adjacent spellings);
               #1349 round 26 (a mode-160000 gitlink counted as a tracked file); #1378 round 16 (coverage-page merge plus four unpinned guards).

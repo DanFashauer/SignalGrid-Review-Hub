@@ -106,13 +106,18 @@
 //   call POSSIBLY GOOD, so it flags on unguarded query data (fail-closed; an over-flag when the write is in fact harmless). A nearer
 //   parameter / catch / loop binding or nested `let` shadows a helper alias and a class-valued component parameter; string-literal and
 //   computed prop names (`{ "data-value": n }`) ride the props like identifier ones.
-//   STILL SILENT after round 28 (named exactly): writes to a PARAMETER or to a destructured `let` (`const { tone } = …; tone = good`);
+//   STILL SILENT after round 28 (named exactly): writes to a PARAMETER or to a destructured `let` (`let { tone } = …; tone = good`);
 //   an initializer this analysis cannot resolve (`let tone = helpers.good`, `useCallback(good, [])`, `good.bind(null)`; the `const`
 //   member form flags through the map walk); a helper called through an array / Map element (`fns[0]()`), `.bind(null)()`, or imported
 //   (no module resolver). Callee spellings `(tone)()`, `tone!()`, `tone.call(null)` and `tone.apply(null, [])` ARE followed (round 28).
 // Round 28 (landing refute 27, FIXED): a `var` redeclaring a component parameter in the parameter's OWN function (`function P({ tone }) { var
 //   tone; }`, also in a nested block of it) is the SAME binding, not a shadow, and its initializer is one more value of the parameter;
 //   same-scope `var` redeclarations of a helper are merged (`var tone = red; var tone = emerald;`).
+// Round 30 (landing refute of rounds 28/29, FIXED): the unresolved-wrapper rejection also counts a WHOLE query object as carried data
+//   (`<Row query={q} />`, `<Row {...q} />`, the references `passQuery` follows) and follows an alias chain (`const Pill = P;`); the rest
+//   subtraction removes only siblings with a KNOWN source key (an identifier, a string / numeric literal, a computed literal): a computed
+//   non-literal sibling (`{ [k]: tone, ...rest }`) leaves `rest` holding every prop. `.call` / `.apply` callees are followed and their
+//   argument positions are not substituted; a member of an imported object is not React's.
 // Codex pass 10 on 57cef22e (round 29): FIXED: `memo` / `forwardRef` are transparent ONLY when they are React's (a named import from "react",
 //   aliases included, or a member of a namespace / default import of "react"); a local definition, an import from any other module, a
 //   member of anything else or a bare undeclared name is UNRESOLVED, and a component bound to one that receives unguarded query data is
@@ -294,6 +299,16 @@ function propOf(el) {
   if (pn && ts.isStringLiteralLike(pn)) return pn.text; // `{ "data-value": n }`
   if (pn && ts.isComputedPropertyName(pn) && ts.isStringLiteralLike(pn.expression)) return pn.expression.text; // `{ ["data-value"]: n }`
   return ts.isIdentifier(el.name) ? el.name.text : undefined;
+}
+
+// The SOURCE key a binding element reads, or null when it is not known: `{ tone }`, `{ a: tone }`, `{ "a-b": tone }`, `{ ["a"]: tone }`
+// are known; a computed non-literal key (`{ [k]: tone }`) may be any key, so it removes nothing from a sibling rest binding.
+function knownKeyOf(el) {
+  const pn = el.propertyName;
+  if (!pn) return ts.isIdentifier(el.name) ? el.name.text : null;
+  if (ts.isIdentifier(pn) || ts.isStringLiteralLike(pn) || ts.isNumericLiteral(pn)) return pn.text;
+  if (ts.isComputedPropertyName(pn) && (ts.isStringLiteralLike(pn.expression) || ts.isNumericLiteral(pn.expression))) return pn.expression.text;
+  return null;
 }
 
 function collectStrings(node, out) {
@@ -1123,7 +1138,7 @@ function analyzeSourceFile(relPath, text) {
     if (ts.isIdentifier(param.name)) mark(param, param.name.text);
     else if (ts.isObjectBindingPattern(param.name)) {
       for (const el of param.name.elements) {
-        if (ts.isIdentifier(el.name)) { if (propName === null || (el.dotDotDotToken && !param.name.elements.some((sib) => sib !== el && !sib.dotDotDotToken && propOf(sib) === propName)) || (!el.dotDotDotToken && propOf(el) === propName)) mark(el, el.name.text); }
+        if (ts.isIdentifier(el.name)) { if (propName === null || (el.dotDotDotToken && !param.name.elements.some((sib) => sib !== el && !sib.dotDotDotToken && knownKeyOf(sib) === propName)) || (!el.dotDotDotToken && propOf(el) === propName)) mark(el, el.name.text); }
         else if (propName === null || propOf(el) === propName) markAll(el.name);
       }
     }
@@ -1163,7 +1178,7 @@ function analyzeSourceFile(relPath, text) {
       if (!ts.isObjectBindingPattern(param.name)) return;
       const nestedBindings = (b, out = []) => { for (const e of b.elements) { if (ts.isOmittedExpression(e)) continue; if (ts.isIdentifier(e.name)) out.push(e); else nestedBindings(e.name, out); } return out; };
       for (const el0 of param.name.elements) {
-        if (el0.dotDotDotToken ? param.name.elements.some((sib) => sib !== el0 && !sib.dotDotDotToken && propOf(sib) === propName) : propOf(el0) !== propName) continue; // a rest binding gets only the props the pattern did not destructure
+        if (el0.dotDotDotToken ? param.name.elements.some((sib) => sib !== el0 && !sib.dotDotDotToken && knownKeyOf(sib) === propName) : propOf(el0) !== propName) continue; // a rest binding gets only the props the pattern did not destructure
         // `{ style: { tone } }` receiving `style={{ tone: "…emerald" }}`: every binding inside the pattern may hold the class
         const litAttr = ts.isJsxAttribute(attr) && attr.initializer && ts.isJsxExpression(attr.initializer) && attr.initializer.expression ? unwrapExpr(attr.initializer.expression) : null;
         for (const el of ts.isIdentifier(el0.name) ? [el0] : nestedBindings(el0.name)) {
@@ -1997,12 +2012,20 @@ function analyzeSourceFile(relPath, text) {
     // UNRESOLVED WRAPPER (fail-closed): `const Pill = memo(Red)` where `memo` is not React's cannot be followed, so a component bound
     // to it that receives unguarded query data is rejected rather than credited with its argument's provenance.
     if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && ts.isIdentifier(n.tagName)) {
-      const d = lookupDecl(n.tagName);
-      let init = d && d.init ? unwrapExpr(d.init) : null;
+      let init = null; // follow `const Pill = P;` (an alias chain) to the call that binds the component
+      for (let cur = n.tagName, hops = 0; hops < 6; hops++) {
+        const d = lookupDecl(cur);
+        const u = d && d.init ? unwrapExpr(d.init) : null;
+        if (u && ts.isIdentifier(u)) { cur = u; continue; }
+        init = u;
+        break;
+      }
       let unresolved = false;
       while (init && wrapperLike(init)) { if (!reactWrapperName(init)) { unresolved = true; break; } init = init.arguments[0] ? unwrapExpr(init.arguments[0]) : null; }
       if (unresolved) {
-        const carries = n.attributes.properties.some((a) => ts.isJsxSpreadAttribute(a) ? elementHasUnguardedDataRender(a.expression) : ts.isJsxAttribute(a) && a.initializer && elementHasUnguardedDataRender(a.initializer)) ||
+        // data carried: unguarded query data, OR a whole query object (`query={q}` / `{...q}`, the references `passQuery` follows)
+        const carriesData = (x) => elementHasUnguardedDataRender(x) || (() => { const e = unwrapExpr(ts.isJsxExpression(x) && x.expression ? x.expression : x); return ts.isIdentifier(e) && queryObjVars.has(e.text) && !isHandled(e, originsIn(e)); })();
+        const carries = n.attributes.properties.some((a) => ts.isJsxSpreadAttribute(a) ? carriesData(a.expression) : ts.isJsxAttribute(a) && a.initializer && carriesData(a.initializer)) ||
           (ts.isJsxOpeningElement(n) && n.parent.children.some((ch) => !ts.isJsxText(ch) && elementHasUnguardedDataRender(ch)));
         if (carries) report(n, "unresolved-wrapper-on-unguarded-data", n.tagName.text);
       }
@@ -3407,6 +3430,66 @@ export function Page() {
   return <Pill items={items} label="static" />;
 }`)],
   ["a rest binding does not receive the destructured tone class", wrap2(`function Pill({ tone, ...rest }) { return <span className={rest.other}>{rest.n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" other="text-red-400" n={q.data?.n} />;
+}`)],
+);
+
+// Round 30 (landing refute 28/29): an unresolved wrapper that receives a WHOLE query object is rejected; the rest subtraction removes
+// only siblings with a KNOWN source key; `.apply`, the call/apply argument shift and a member of an imported object are pinned; an alias
+// of an unresolved wrapper is followed.
+const ROW_IMPL = `const RowImpl = ({ query }) => <span className="text-emerald-400">{query.data?.n}</span>;`;
+BUG_R6.push(
+  ["a non-React memo wrapper receiving a whole query object (query={q}) is rejected", wrap2(`import { memo } from "./mine";
+${ROW_IMPL}
+const Row = memo(RowImpl);
+export function Page() {
+  ${Q2}
+  return <Row query={q} />;
+}`)],
+  ["a non-React memo wrapper receiving a spread query object ({...q}) is rejected", wrap2(`import { memo } from "./mine";
+${ROW_IMPL}
+const Row = memo(RowImpl);
+export function Page() {
+  ${Q2}
+  return <Row {...q} />;
+}`)],
+  ["the same query-object shape through React's memo is followed (flags as before)", wrap2(`import { memo } from "react";
+${ROW_IMPL}
+const Row = memo(RowImpl);
+export function Page() {
+  ${Q2}
+  return <Row query={q} />;
+}`)],
+  ["a computed non-literal sibling key leaves the rest binding holding every class: { [k]: tone, ...rest }", wrap2(`declare const k: string;
+function Pill({ [k]: tone, n, ...rest }: any) { return <span className={rest.tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill tone="text-emerald-400" n={q.data?.n} />;
+}`)],
+  ["a computed non-literal sibling key leaves the rest binding holding every data prop", wrap2(`declare const k: string;
+function Pill({ [k]: n, ...rest }: any) { return <span className="text-emerald-400">{rest.n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill n={q.data?.n} />;
+}`)],
+  ["tone.apply(null, []) is a call of the helper", helperPage(`let tone = () => "text-red-400";\ntone = () => "text-emerald-400";`, `<span className={tone.apply(null, [])}>{q.data?.n}</span>`)],
+  ["toneFor.call(thisArg, \"ok\"): the first argument is `this`, not the key", helperPage(`const T = { ok: "text-emerald-400", default: "text-slate-400" };\nfunction toneFor(s) { return T[s] ?? T.default; }`, `<span className={toneFor.call(q.data?.status, "ok")}>{q.data?.n}</span>`)],
+  ["a member of an IMPORTED object is not React's: Lib.memo(RedPill) may return anything", propsFixture(`${REDPILL}\nconst Pill = Lib.memo(RedPill);`, "<Pill items={items} />", `import Lib from "./lib";`)],
+  ["an alias of an unresolved wrapper is still rejected: const Pill = P", propsFixture(`${PANEL_IMPL}\nconst P = memo(PanelImpl);\nconst Pill = P;`, "<Pill items={items} />", `import { memo } from "./mine";`)],
+  ["an alias chain of an unresolved wrapper is still rejected", propsFixture(`${PANEL_IMPL}\nconst P = memo(PanelImpl);\nconst P2 = P;\nconst Pill = P2;`, "<Pill items={items} />", `import { memo } from "./mine";`)],
+);
+OK_R6.push(
+  ["an unresolved wrapper receiving a query object, call site guarded on the data", wrap2(`import { memo } from "./mine";
+${ROW_IMPL}
+const Row = memo(RowImpl);
+export function Page() {
+  ${Q2}
+  return q.data ? <Row query={q} /> : null;
+}`)],
+  ["an alias of an unresolved wrapper, call site guarded on the data", propsFixture(`${PANEL_IMPL}\nconst P = memo(PanelImpl);\nconst Pill = P;`, "q.data ? <Pill items={items} /> : null", `import { memo } from "./mine";`)],
+  ["a known-key sibling still removes its prop from the rest binding: { tone, ...rest } with rest.other", wrap2(`function Pill({ ["tone"]: t, ...rest }) { return <span className={rest.other}>{rest.n}</span>; }
 export function Page() {
   ${Q2}
   return <Pill tone="text-emerald-400" other="text-red-400" n={q.data?.n} />;

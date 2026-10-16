@@ -591,8 +591,8 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
   check("url-guard: RFC6598 interior (every second octet 100.64-100.127, so each of the four alternatives end to end) is refused as privateRange, not just the 100.64 / 100.127 edges",
     [...Array.from({ length: 64 }, (_, i) => `100.${64 + i}.0.1`), "100.69.255.255", "100.99.255.255", "100.126.255.255", "100.127.255.255"]
       .every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
-  check("url-guard: fe80::/10 interior (fe90, fea0, febf) is refused as privateRange, not just fe80",
-    ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
+  check("url-guard: fe80::/10 interior (fe90, fea0, febf, and fe80::808:808 whose last 32 bits read as IPv4) is refused as privateRange, not just fe80",
+    ["[fe80::1]", "[fe90::1]", "[fea0::1]", "[febf::1]", "[fe80::808:808]"].every((h) => refusedAs(`https://${h}/x`, WEBHOOK_URL_REFUSALS.privateRange)));
   check("url-guard: just outside fe80::/10 (fe7f::1, fec0::1) stays valid",
     ["[fe7f::1]", "[fec0::1]"].every((h) => validateWebhookUrl(`https://${h}/x`, live).valid === true));
   check("url-guard: IPv4-mapped IPv6 (dotted) is refused as its IPv4 twin (loopback, metadata, RFC1918, RFC6598)",

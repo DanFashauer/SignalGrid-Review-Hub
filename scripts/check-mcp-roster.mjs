@@ -182,10 +182,11 @@ const shedMarkup = (v) => {
 // A value that IS a spec (`npm:@upstash/…@x`, `@upstash/…@x`) is one argv unit, never shell-split.
 const SPEC_VALUE_RE = /^(?:npm:)?@upstash\\?\/context7-mcp/i;
 // a spec, then whitespace of any kind but a line break (NBSP, U+3000 …) or adjacent literals (`'…@4.1.1' ' || *'`),
-// then a semver range continuation: `|| <range>`, `||` closing the line or the string, a hyphen and a version, `*` or
+// then a semver range continuation: `|| <range>`, `||` closing the line or the string (a quote that CLOSES, escaped
+// or not, never the opening quote of the next word), a hyphen and a version, `*` or
 // `x`, a comparator, `*`/`x` (a shell `|| echo`, `|| 5`, `> out.log` or a flag is not one; a GLUED `||` is the shell's OR)
 export const CONTEXT7_RANGE_FOLLOW_RE =
-  /@upstash\\?\/context7-mcp@[^\s"'`,\]\\]*(?:\\?["'][^\S\r\n]*\\?["'][^\S\r\n]*|[^\S\r\n]+)(?:\|\|[^\S\r\n]*(?:[<>=^~]|v?\d+\.|[*xX](?![\w-])|\|\||[)\]}"'`]|$)|-[^\S\r\n]+(?:v?\d|[*xX](?![\w-]))|(?:[<>]=?|[=^~])[^\S\r\n]*v?\d|[*xX](?![\w-]))/im;
+  /@upstash\\?\/context7-mcp@[^\s"'`,\]\\]*(?:\\?["'][^\S\r\n]*\\?["'][^\S\r\n]*|[^\S\r\n]+)(?:\|\|[^\S\r\n]*(?:[<>=^~]|v?\d+\.|[*xX](?![\w-])|\|\||[)\]}]|\\?["'`](?=[^\S\r\n]*(?:$|[,;)\]}"'`\\]))|$)|-[^\S\r\n]+(?:v?\d|[*xX](?![\w-]))|(?:[<>]=?|[=^~])[^\S\r\n]*v?\d|[*xX](?![\w-]))/im;
 
 /** Pure: the argv-like units of `line` for a file kind ("json" | "yaml" | "shell"), each a candidate install argument. */
 /** Pure: `s` with a YAML ` # comment` removed — only outside quotes. */
@@ -2079,7 +2080,16 @@ server.registerTool(
       ["a.json", `${JSON.stringify({ run: `npx -y ${P} || ` })}\n`, "a parsed JSON string ending ` || `"],
       ["s.ps1", `$c = @'\nnpx -y ${P} - *\n'@\n`, "a hyphen then `*` in a PowerShell `@' '@` here-string"],
       ["Dockerfile", `RUN ["npx","-y","${P}${BT}\\" *"]\n`, "an escaped quote inside an exec-form word's tail (the escape-aware tail)"],
-      ["a.js", `spawn("npx",["-y","@upstash\\/context7-mcp@${realPin} ||"]);\n`, "a JSON-escaped `\\/` in a quoted word with a trailing `||` (only the whole-tail reader sees it)"],
+      ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || "]` })}\n`, "a parsed JSON string holding an exec list whose word ends ` || ` (an escaped closing quote)"],
+      ["a.jsonc", `// c\n${JSON.stringify({ entrypoint: `["npx","-y","${P} ||"]` })}\n`, "the same in JSONC, `||` against the escaped quote"],
+      ["s.ps1", `$c = @'\nnpx -y ${P} ||\n'@\n`, "a spaced `||` ending a here-string line"],
+      ["a.rb", `system(%q(npx -y ${P} || || x))\n`, "a spaced `||` followed by a second `||`"],
+      ["README.md", `Run it:\n\n${BT}npx -y ${P} ||${BT}\n`, "a spaced `||` closing an inline code span at the end of its line"],
+      ["a.rb", `system(%q(npx -y ${P} - x))\n`, "a hyphen then \`x\`"],
+      ["a.rb", `system(%q(npx -y ${P} || ^4))\n`, "\`|| ^4\`"],
+      ["a.rb", `system(%q(npx -y ${P} || ~4))\n`, "\`|| ~4\`"],
+      ["a.rb", `system(%q(npx -y ${P} || =4.2.0))\n`, "\`|| =4.2.0\`"],
+      ["a.js", `spawn("npx",["-y","@upstash\\/context7-mcp@${realPin} 4.x"]);\n`, "a JSON-escaped `\\/` in a quoted word with a spaced tail no range reader sees (only the whole-tail reader)"],
       ["docker-compose.yml", `services:\n  a:\n    command: >\n      [ -f a,b ] ; npx -y @upstash/context7-mcp@latest ; echo done: ok\n`, "a folded `command: >` led by `[`, with a comma and a later `: `"],
       ["k.yaml", `spec:\n  containers:\n    - args: >\n        { true,x ; } ; npx -y @upstash/context7-mcp@latest ; echo done: ok\n`, "a folded k8s `args: >` led by `{`"],
       ["a.yml", `run: |\n  echo version:\t[1,2] && npx -y @upstash/context7-mcp@latest && echo done: ok\n`, "a tab-separated key before a flow list"],
@@ -2093,6 +2103,9 @@ server.registerTool(
       ["a.mjs", `spawn("npx",["-y",${BT}${P}${BT}]);\nconst x = ${BT}\nhi${BT};\n`, "a pinned template literal beside a multi-line one"],
       ["a.json", `${JSON.stringify({ run: `RUN ["npx","-y","${P}"]` })}\n`, "a parsed JSON exec list at the pin"],
       ["s.ps1", `npx --% -y ${P}||\n`, "`--%` then a pin and `||` (the literal region ends at the pipe)"],
+      ["s.sh", `npx -y ${P} || "$FALLBACK" arg\n`, "a spaced \`||\` then the next word's opening quote"],
+      ["s.sh", `npx -y ${P} || ${BT}which node${BT}\n`, "a spaced \`||\` then a backtick substitution"],
+      ["s.ps1", `npx -y ${P} || 'x'\n`, "a PowerShell \`||\` then a quoted word"],
     ]) {
       checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);
     }

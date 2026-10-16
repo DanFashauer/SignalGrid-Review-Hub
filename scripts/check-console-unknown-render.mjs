@@ -85,6 +85,12 @@
 //   instead of only the coerced absent-key entry; class paths nested more than one level deep merge sibling fields;
 //   map mutations are matched by identifier text across functions; an absent-key getter's whole body is walked
 //   (a `console.log("…emerald")` in it is reported).
+// Codex pass 5 on fd8b56c5 (NOT fixed, declared): false NEGATIVES: an object-valued query prop (`config={{ query: q }}`);
+//   a good class that reaches a child as JSX children rather than a prop. false POSITIVE (fail-closed): an overridden
+//   spread entry (`{...{ tone: "…emerald" }} tone="…red"`) is still read as the spread class.
+// Round 24: a same-file helper's parameter substitutes only while EVERY reference to it in the helper is a plain read
+// (destructuring / for-of targets and inner shadowing count as writes); a key rooted at a query result is plain only
+// through `.data` (`q.isError`, `q.isLoading`, `q.status` are present while the data is absent).
 // Round 22: a same-file helper's parameter key is judged by the call's argument (`toneFor(q.data?.status)` falls back,
 // `toneFor("ok")` does not); a nested class binding takes only the matching property of a literal prop; classes ride a JSX
 // spread of a literal or a same-file const object; `const p = props` aliases resolve to the parameter.
@@ -95,7 +101,7 @@
 // (`tone="…emerald"`, `tone={TONE[s]}`); a map reached through a const alias, a same-file
 // helper, a nested `TONE.a[status]` or a `...BASE` spread. A map lookup is unknown-safe only
 // with an explicit `??`/`||` fallback AND a key this analysis can show is a plain read of query
-// data: a property/optional chain (never a `.length`/`.size` read), `String()` / `.toLowerCase()` /
+// data: a property/optional chain that goes THROUGH `.data` (never a `.length`/`.size` read, never `q.isError` / `q.isLoading` / `q.status`), `String()` / `.toLowerCase()` /
 // `.trim()` / `Array.from()`, a destructured binding without a default, a prop that EVERY call site
 // it can see passes as a plain read, the first parameter of an array callback whose receiver is
 // itself such a read (`rows ?? []`, optionally filtered / sliced / sorted). A binding stays plain only
@@ -1520,6 +1526,16 @@ function analyzeSourceFile(relPath, text) {
   const RETURNS_RECEIVER = new Set(["sort", "reverse"]);
   const READ_METHODS = new Set([...ROW_METHODS, ...ROW_KEEPING, ...PLAIN_METHODS, "concat", "join", "includes", "indexOf", "lastIndexOf",
     "at", "findIndex", "findLast", "findLastIndex", "keys", "values", "entries", "get", "has", "flat", "from"]);
+  // The query RESULT object itself (`q`, `useQuery(...)`): only its `.data` is data; `isError` / `isLoading` / `status`
+  // are present while the data is absent, so a key read from them is never a plain read of query data.
+  const isQueryResultExpr = (x, depth = 0) => {
+    const e = unwrapExpr(x);
+    if (depth > 6 || !e) return false;
+    if (ts.isCallExpression(e)) return hookDecls.has(e);
+    if (!ts.isIdentifier(e)) return false;
+    const b = findBinding(e);
+    return Boolean(b) && b.kind === "var" && Boolean(b.decl.initializer) && isQueryResultExpr(b.decl.initializer, depth + 1);
+  };
   const keyIsPlainData = (k, depth = 0, asKey = false) => {
     if (!k || depth > 8) return false; // also stops a cycle (`const a = b; const b = a`)
     const e = unwrapExpr(k);
@@ -1539,11 +1555,13 @@ function analyzeSourceFile(relPath, text) {
           return !b.node.dotDotDotToken && refsReadOnly(e.text, fn, b.node) && paramSitesPlain(fn, propOf(b.node));
         }
         if (FIXED_VALUE_PROPS.has(propOf(b.node)) || !refsReadOnly(e.text, b.scope, b.node)) return false;
+        if (b.decl.initializer && b.node.parent.parent === b.decl && isQueryResultExpr(b.decl.initializer) && propOf(b.node) !== "data") return false; // \`const { isError } = q\``
+
         return Boolean(b.decl.initializer) && recur(b.decl.initializer);
       }
       return refsReadOnly(e.text, b.scope, b.decl) && Boolean(b.decl.initializer) && recur(b.decl.initializer);
     }
-    if (ts.isPropertyAccessExpression(e)) return !FIXED_VALUE_PROPS.has(e.name.text) && recur(e.expression);
+    if (ts.isPropertyAccessExpression(e)) return !FIXED_VALUE_PROPS.has(e.name.text) && !(isQueryResultExpr(e.expression) && e.name.text !== "data") && recur(e.expression);
     if (ts.isCallExpression(e)) {
       if (hookDecls.has(e)) return true;
       const c = e.expression;
@@ -1574,17 +1592,6 @@ function analyzeSourceFile(relPath, text) {
   const hasAbsentKeyEntry = (obj, x) => Boolean(obj) &&
     (mapKeyNames(obj).some((k) => k === null || ABSENT_KEYS.has(k.toLowerCase())) ||
      (x ? mapMutations(mapNamesOf(x)).some((m) => m.key === null || ABSENT_KEYS.has(m.key.toLowerCase())) : false));
-  const paramWritten = (fn, name) => { // is the parameter assigned (`=`, `??=`, `++`, …) anywhere in the helper?
-    let hit = false;
-    const w = (n) => {
-      if (hit) return;
-      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment && ts.isIdentifier(n.left) && n.left.text === name) { hit = true; return; }
-      if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken) && ts.isIdentifier(n.operand) && n.operand.text === name) { hit = true; return; }
-      ts.forEachChild(n, w);
-    };
-    if (fn.body) w(fn.body);
-    return hit;
-  };
   let helperBind = null; // Map(parameter name -> call argument) while a same-file helper's returns are walked
   const lookupHasSafeFallback = (lookup) => {
     let key = lookup.argumentExpression; // inside a same-file helper, a parameter key is judged by the call's argument
@@ -1645,7 +1652,7 @@ function analyzeSourceFile(relPath, text) {
           resolving.add(fn);
           const saved = helperBind;
           helperBind = new Map();
-          (fn.parameters ?? []).forEach((prm, i) => { if (ts.isIdentifier(prm.name) && !prm.initializer && !paramWritten(fn, prm.name.text) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
+          (fn.parameters ?? []).forEach((prm, i) => { if (ts.isIdentifier(prm.name) && !prm.initializer && refsReadOnly(prm.name.text, fn, prm) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
           for (const r of returnExprs(fn)) walk(r, use ?? x);
           helperBind = saved;
           resolving.delete(fn);
@@ -2884,6 +2891,10 @@ BUG_R6.push(
   ["helper parameter with a default: toneFor(s = \"ok\")", helperParamFx(`function toneFor(s = "ok") { return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
   ["helper parameter reassigned: s = s ?? \"ok\"", helperParamFx(`function toneFor(s) { s = s ?? "ok"; return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
   ["helper parameter reassigned: s ??= \"ok\"", helperParamFx(`function toneFor(s) { s ??= "ok"; return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter written by array destructuring: [s] = [s ?? \"ok\"]", helperParamFx(`function toneFor(s) { [s] = [s ?? "ok"]; return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter written by object destructuring: ({ s } = { s: s ?? \"ok\" })", helperParamFx(`function toneFor(s) { ({ s } = { s: s ?? "ok" }); return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter written by a for-of target", helperParamFx(`function toneFor(s) { for (s of ["ok"]) { break; } return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter shadowed by an inner let", helperParamFx(`function toneFor(s) { { let s = "ok"; return TONE[s] ?? TONE.default; } }`, "toneFor(q.data?.status)")],
   ["arrow helper parameter with a default: (s = \"ok\") =>", helperParamFx(`const toneFor = (s = "ok") => TONE[s] ?? TONE.default;`, "toneFor(q.data?.status)")],
   ["var-declared helper hoisted out of an if block", wrap2(`if (globalThis.flag) { var tone = (s) => "text-emerald-400"; }
 export function Page() {
@@ -2910,6 +2921,20 @@ export function Page() {
   ${Q2}
   return <Pill {...{ tone: "text-emerald-400" }} tone="text-red-400" n={q.data?.n} />;
 }`)],
+);
+
+// Round 24: a key read from the query RESULT (not its `.data`) is present while the data is absent.
+const flagMap = (k) => `const S = { ${k}: "text-emerald-400", default: "text-slate-400" };`;
+BUG_R6.push(
+  ["status-flag key: S[q.isError] ?? S.default with { false: good }", keyFx(flagMap("false"), "", "S[q.isError] ?? S.default")],
+  ["status-flag key: S[q.isLoading] ?? S.default with { true: good }", keyFx(flagMap("true"), "", "S[q.isLoading] ?? S.default")],
+  ["status-flag key: S[q.status] ?? S.default with { pending: good }", keyFx(flagMap("pending"), "", "S[q.status] ?? S.default")],
+  ["status-flag key through a destructured binding: const { isError } = q", keyFx(flagMap("false"), "const { isError } = q;", "S[isError] ?? S.default")],
+  ["status-flag key through an alias: const e = q.isError", keyFx(flagMap("false"), "const e = q.isError;", "S[e] ?? S.default")],
+);
+OK_R6.push(
+  ["data key through .data still earns the fallback exemption", keyFx(flagMap("ok"), "", "S[q.data?.status] ?? S.default")],
+  ["destructured data binding still earns the fallback exemption", keyFx(flagMap("ok"), "const { data } = q;", "S[data?.status] ?? S.default")],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

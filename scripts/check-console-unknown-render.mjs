@@ -74,6 +74,17 @@
 // (`{ query: { data } }`, `{ style: { tone } }`), JSX-valued children (`<Panel><>{data}</></Panel>`), a nearer opaque
 // binding of a component name (a parameter, a class, an import) shadows an outer component, `React["cloneElement"]`,
 // downstream map aliases (`const T1 = T0`), and an imported `String`/`Array` is not the global.
+// KNOWN OPEN (Codex pass 4 on 1f81c0a0 and the landing refute; NOT fixed — each is a long-tail shape):
+//   false NEGATIVES: a shorthand property in a JSX spread (`{...{ tone, n }}`); a query object inside a spread literal
+//   (`{...{ query: q }}`); a query prop forwarded as `props.query` across components; props destructured in the BODY
+//   (`const { tone, n } = props`), `let p = props`, `(props as any).tone`, `const { query } = props`; a nested-pattern default
+//   (`{ style: { tone = "…emerald" } }`); a const style object (`style={st}`); a conditional or nested spread;
+//   `React["clone" + "Element"]`; an identifier-props child rendering its own query.
+//   false POSITIVES (fail-closed over-flags): status-flag props (`isError={q.isError}`) are not propagated into child
+//   guards; a primitive `__proto__` entry is treated as an absent-key hazard; `hasAbsentKeyEntry` walks the whole map
+//   instead of only the coerced absent-key entry; class paths nested more than one level deep merge sibling fields;
+//   map mutations are matched by identifier text across functions; an absent-key getter's whole body is walked
+//   (a `console.log("…emerald")` in it is reported).
 // Round 22: a same-file helper's parameter key is judged by the call's argument (`toneFor(q.data?.status)` falls back,
 // `toneFor("ok")` does not); a nested class binding takes only the matching property of a literal prop; classes ride a JSX
 // spread of a literal or a same-file const object; `const p = props` aliases resolve to the parameter.
@@ -699,7 +710,19 @@ function analyzeSourceFile(relPath, text) {
   const localFns = new Map(); // name -> [{ fn, scope }]
   const scopeOf = (n) => { let c = n.parent; while (c && !ts.isBlock(c) && !ts.isSourceFile(c)) c = c.parent; return c; };
   {
-    const addFn = (name, fn, decl) => { const l = localFns.get(name) ?? []; l.push({ fn, scope: scopeOf(decl) }); localFns.set(name, l); };
+    const varScopeOf = (n) => { // a `var` hoists to its function (or the module), not its block
+      for (let c = n.parent; c; c = c.parent) {
+        if (ts.isSourceFile(c)) return c;
+        if (ts.isFunctionLike(c) && c.body) return ts.isBlock(c.body) ? c.body : scopeOf(c);
+      }
+      return undefined;
+    };
+    const addFn = (name, fn, decl) => {
+      const l = localFns.get(name) ?? [];
+      const isVar = ts.isVariableDeclaration(decl) && !(decl.parent.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let));
+      l.push({ fn, scope: isVar ? varScopeOf(decl) : scopeOf(decl) });
+      localFns.set(name, l);
+    };
     const reg = (n) => {
       if (ts.isFunctionDeclaration(n) && n.name && n.body) addFn(n.name.text, n, n);
       if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer &&
@@ -778,6 +801,7 @@ function analyzeSourceFile(relPath, text) {
     if (comp.fn.body) w(comp.fn.body);
     return whole ? null : names;
   };
+  const childOwnsQuery = (comp) => [...hookDecls].some((h) => h.pos >= comp.fn.pos && h.end <= comp.fn.end); // a query declared inside the child
   // Does THIS call site pass unguarded query data through a prop the child actually reads? (prop-level pairing)
   const siteRendersData = (comp, open) => {
     const reads = childReadProps(comp);
@@ -870,7 +894,7 @@ function analyzeSourceFile(relPath, text) {
       // Paired by call site: a good class only paints data green at a site that ALSO passes unguarded data,
       // so `<Pill tone="…emerald" n="static" />` next to `<Pill tone="…red" n={q.data?.n} />` flags neither.
       const open = openEl;
-      if (!siteRendersData(comp, open)) return;
+      if (!siteRendersData(comp, open) && !childOwnsQuery(comp)) return; // the child's data may be its own query, not a prop
       if (ts.isIdentifier(param.name)) { // `function Pill(props) { … props.tone … }`
         const byProp = goodPropParams.get(param) ?? new Map();
         const have = byProp.get(propName) ?? [];
@@ -889,7 +913,8 @@ function analyzeSourceFile(relPath, text) {
         let mine = found; // `style={{ tone: red, success: emerald }}` into `{ style: { tone } }`: only the matching property's classes
         if (!ts.isIdentifier(el0.name) && el.parent === el0.name && litAttr && ts.isObjectLiteralExpression(litAttr) && !litAttr.properties.some((pp) => ts.isSpreadAssignment(pp))) {
           const pr = litAttr.properties.find((pp) => (ts.isPropertyAssignment(pp) || ts.isShorthandPropertyAssignment(pp)) && pp.name && memberKey(pp.name) === propOf(el));
-          mine = pr ? goodClassStringNodes(ts.isPropertyAssignment(pr) ? pr.initializer : pr.name) : [];
+          const opaque = litAttr.properties.some((pp) => !(ts.isPropertyAssignment(pp) || ts.isShorthandPropertyAssignment(pp))); // a getter / method member can supply any key
+          mine = pr ? goodClassStringNodes(ts.isPropertyAssignment(pr) ? pr.initializer : pr.name) : opaque ? found : [];
         }
         const have = goodParams.get(el) ?? [];
         for (const f of mine) if (!have.some((h) => h.node === f.node)) { have.push({ node: f.node }); changed = true; }
@@ -906,7 +931,13 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isJsxSpreadAttribute(n)) { // `{...{ tone: "…emerald" }}` / `{...base}`: each literal property is a prop
         const sp = unwrapExpr(n.expression);
         const lit = ts.isObjectLiteralExpression(sp) ? sp : ts.isIdentifier(sp) ? mapObject(sp) : null;
-        if (lit) for (const pp of lit.properties) if (ts.isPropertyAssignment(pp)) { const k = memberKey(pp.name); if (k !== null) passClass(n.parent.parent.tagName, k, pp, n.parent.parent); }
+        const attrs = n.parent.properties;
+        const later = attrs.slice(attrs.indexOf(n) + 1);
+        if (lit) for (const pp of lit.properties) if (ts.isPropertyAssignment(pp)) {
+          const k = memberKey(pp.name);
+          if (k === null || later.some((a) => ts.isJsxAttribute(a) && ts.isIdentifier(a.name) && a.name.text === k)) continue; // a later explicit attribute wins
+          passClass(n.parent.parent.tagName, k, pp, n.parent.parent);
+        }
       }
       if (ts.isJsxElement(n)) for (const ch of n.children) {
         if (ts.isJsxExpression(ch) && ch.expression) pass(n.openingElement.tagName, "children", ch.expression);
@@ -1543,6 +1574,17 @@ function analyzeSourceFile(relPath, text) {
   const hasAbsentKeyEntry = (obj, x) => Boolean(obj) &&
     (mapKeyNames(obj).some((k) => k === null || ABSENT_KEYS.has(k.toLowerCase())) ||
      (x ? mapMutations(mapNamesOf(x)).some((m) => m.key === null || ABSENT_KEYS.has(m.key.toLowerCase())) : false));
+  const paramWritten = (fn, name) => { // is the parameter assigned (`=`, `??=`, `++`, …) anywhere in the helper?
+    let hit = false;
+    const w = (n) => {
+      if (hit) return;
+      if (ts.isBinaryExpression(n) && n.operatorToken.kind >= K.FirstAssignment && n.operatorToken.kind <= K.LastAssignment && ts.isIdentifier(n.left) && n.left.text === name) { hit = true; return; }
+      if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken) && ts.isIdentifier(n.operand) && n.operand.text === name) { hit = true; return; }
+      ts.forEachChild(n, w);
+    };
+    if (fn.body) w(fn.body);
+    return hit;
+  };
   let helperBind = null; // Map(parameter name -> call argument) while a same-file helper's returns are walked
   const lookupHasSafeFallback = (lookup) => {
     let key = lookup.argumentExpression; // inside a same-file helper, a parameter key is judged by the call's argument
@@ -1603,7 +1645,7 @@ function analyzeSourceFile(relPath, text) {
           resolving.add(fn);
           const saved = helperBind;
           helperBind = new Map();
-          (fn.parameters ?? []).forEach((prm, i) => { if (ts.isIdentifier(prm.name) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
+          (fn.parameters ?? []).forEach((prm, i) => { if (ts.isIdentifier(prm.name) && !prm.initializer && !paramWritten(fn, prm.name.text) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
           for (const r of returnExprs(fn)) walk(r, use ?? x);
           helperBind = saved;
           resolving.delete(fn);
@@ -2823,6 +2865,51 @@ export function Page() {
 }`)],
   ["class through a JSX spread of a const object, call site guarded", spreadFx("{...base} n={q.data?.n}", true)],
   ["class through a props alias, call site guarded", aliasPropsFx("const p = props;", true)],
+);
+
+// Landing refute round 22 of #1370 (head 1f81c0a0): regressions introduced by the Codex-driven fixes.
+const ownQueryFx = (cls, guard) => wrap2(`function StatusPill({ tone }) {
+  ${Q2}
+  return ${guard ? "q.data ? " : ""}<span className={tone}>{q.data?.count}</span>${guard ? " : null" : ""};
+}
+export function Page() { return <StatusPill tone="${cls}" />; }`);
+const helperParamFx = (decl, call) => wrap2(`const TONE = { ok: "text-emerald-400", default: "text-slate-400" };
+${decl}
+export function Page() {
+  ${Q2}
+  return <span className={${call}}>{q.data?.n}</span>;
+}`);
+BUG_R6.push(
+  ["own-query child: a class from a dataless call site still paints the child's own data", ownQueryFx("text-emerald-400", false)],
+  ["helper parameter with a default: toneFor(s = \"ok\")", helperParamFx(`function toneFor(s = "ok") { return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter reassigned: s = s ?? \"ok\"", helperParamFx(`function toneFor(s) { s = s ?? "ok"; return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["helper parameter reassigned: s ??= \"ok\"", helperParamFx(`function toneFor(s) { s ??= "ok"; return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["arrow helper parameter with a default: (s = \"ok\") =>", helperParamFx(`const toneFor = (s = "ok") => TONE[s] ?? TONE.default;`, "toneFor(q.data?.status)")],
+  ["var-declared helper hoisted out of an if block", wrap2(`if (globalThis.flag) { var tone = (s) => "text-emerald-400"; }
+export function Page() {
+  ${Q2}
+  return <span className={tone(q.data?.status)}>{q.data?.n}</span>;
+}`)],
+  ["getter member in the passed literal supplies the class", wrap2(`function Pill({ style: { tone }, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill style={{ get tone() { return "text-emerald-400"; } }} n={q.data?.n} />;
+}`)],
+  ["method member in the passed literal supplies the class", wrap2(`function Pill({ style: { tone }, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill style={{ tone() { return "text-emerald-400"; } }} n={q.data?.n} />;
+}`)],
+);
+OK_R6.push(
+  ["own-query child with a red class from a dataless call site", ownQueryFx("text-red-400", false)],
+  ["own-query child guarded on its own data", ownQueryFx("text-emerald-400", true)],
+  ["helper parameter untouched and called with a plain read (substitution still applies)", helperParamFx(`function toneFor(s) { return TONE[s] ?? TONE.default; }`, "toneFor(q.data?.status)")],
+  ["spread class overridden by a later explicit red attribute", wrap2(`function Pill({ tone, n }) { return <span className={tone}>{n}</span>; }
+export function Page() {
+  ${Q2}
+  return <Pill {...{ tone: "text-emerald-400" }} tone="text-red-400" n={q.data?.n} />;
+}`)],
 );
 
 function analyze(src, name) { return analyzeSourceFile(name, src).violations; }

@@ -56,7 +56,28 @@ PHASE:        Build / execution (past Customer Discovery, DR-033 2026-09-10).
               resources, the repo absorbs them. Discovery is an input, not the
               gate. Claim discipline unchanged. Near-term: a working core product
               that does what it claims, real in hand for partners before GTM.
-LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
+LAST TOUCHED: 2026-10-15 (cloud lane; window 2026-10-15 12:31Z-22:07:46Z, frozen at #1470's merge 64d0ca6d) - EIGHTEEN LANDINGS AFTER
+              THE FREEZE; READINESS 100%, OUTREACH OPEN; ONE OWNER CRITERION UNMET. Docs batch on claude/docs-batch-20261015-landings from 64d0ca6d.
+              LANDINGS AFTER THE FREEZE POINT (e6acacc7, 12:31:32Z), merged sha and UTC merge time from `gh api repos/DanFashauer/SignalGrid-Review-Hub/pulls/N`
+              (product PRs have their own 2026-10-15 EVIDENCE entries; the lane PRs are one grouped entry): #1515 355ff646 (12:39:09Z, the Mac tick's heartbeat clears the
+              mac-lane-tick cover); #1505 04f97ddc (13:26:43Z, 16 mock transports registered; gating 116438358653); #1517 38003303 (14:41:13Z,
+              forward-build heartbeat); #1490 dcdfcac4 (15:20:02Z, closure and restamp lap; gating 116492282545, Mac-only 116492279875); #1518 ab5ba4d3
+              (15:37:21Z, tick PR, sim results 0 requests); #1520 66b776ca (15:54:12Z, the evidence re-mint request); #1519 2b6fa3e2 (15:54:57Z, lane
+              mail); #1521 9b2f999d (16:36:58Z, lane mail); #1522 67d083b8 (17:10:21Z, tick PR, carries the re-mint: mintedAt 2026-10-15T16:33:53.511Z);
+              #1523 62040a76 (17:45:06Z, steward heartbeat); #1516 9d280d96 (18:22:34Z, the outage record); #1525 0e0b859a (18:33:06Z, lane mail);
+              #1526 67ff76eb (19:44:07Z, lane mail); #1524 df4ea3b8 (20:06:16Z, validation bound 20 to 45; gating 116631935708); #1527 9e7fc18b (20:44:06Z,
+              lane mail); #1468 760d5032 (20:55:41Z, loop-state and the review-wave helper; gating 116655818855, Mac-only 116655817446); #1528 8023bc7d
+              (21:53:19Z, lane mail); #1470 64d0ca6d (22:07:46Z, Graph collection matches the connector's reads; gating 116687433426, Mac-only 116687433354).
+              MAINLINE TIP: 64d0ca6d is this branch's base. origin/SignalGrid_Alpha has since moved to 708e97ef (22:09:12Z, a Mac lane heartbeat pushed
+              direct, not a PR; `git rev-parse origin/SignalGrid_Alpha` in the docs worktree after a fetch).
+              READINESS (`node scripts/check-readiness-figure.mjs`, run in the docs worktree at 64d0ca6d): "HEADLINE 100%  → OUTREACH OPEN — readiness
+              100% meets the 92–95% target (goal 100%)". (a) 100%; (b) 100%, proofs current 20/20, launch items 28/28, 0 day(s) old; (c) 100%, scenarios 15/15,
+              live operations 8/8. The check needs scripts/node_modules, which the docs worktree links read-only from the main checkout; without it the
+              check prints "Readiness derivation BROKEN" and exits 1.
+              OBJECTIVE LOOP (`node scripts/objective-loop.mjs --json`, derives and writes nothing, at 64d0ca6d): verdict escalate. Met: readiness-floor,
+              evidence-fresh, plan-owned. UNMET, the one owner criterion: owner-real-in-hand (attestedIn null; no attestation token in the decision record
+              the objective names). Five rows await the owner or a lab; pendingSimRequests none.
+              PREVIOUSLY:   2026-10-15 (cloud lane; window 2026-10-09 16:40Z-2026-10-15 12:31Z, frozen at #1501's merge e6acacc7) - THE WEEKLY LIMIT
               WENT DARK FOR 5d17h; ONE REGISTRY ROW'S 30-DAY BOUND TURNED EVERY NEW VALIDATION RED; THE BRAIN RETIRED THE ROW AND THE
               LANES LAND AGAIN.
               OUTAGE (recorded from the owner hand, not re-measured here: the limit type, the instants, 5d17h, the 211 fires, the 10:12Z
@@ -2030,7 +2051,9 @@ PREVIOUS:     2026-09-24 (Mac lane, evening) - TWO OWNER RESOURCES ABSORBED: PR 
               deterministic, removes 3 old colour bugs) and landed; the iOS SwiftUI
               view-layer rebuild is now COMPLETE, and native/ios/README's file-tree
               was corrected to match.
-BLOCKED ON:   16 open hands at origin/SignalGrid_Alpha 38003303 (15:02Z; counted by status over the 31 files in artifacts/raised-hands/,
+BLOCKED ON:   16 open hands (`pnpm run hands`, read 2026-10-15 22:09Z in the docs worktree: "Raised hands — 16 open", 14 "Needs you (Dan)",
+              2 "Needs the Mac lane", measured at origin/SignalGrid_Alpha 708e97ef; the subjects match the list below one for one).
+              Earlier count, 15:02Z: 16 open hands at origin/SignalGrid_Alpha 38003303 (counted by status over the 31 files in artifacts/raised-hands/,
               and `pnpm run hands` prints the live list and is the authority, this block being a copy). The tree this record was written
               on (e6acacc7) holds 17: #1515 (merged 355ff646 at 12:39:09Z) resolved the 17th, the mac-lane-tick cover, after that base.
               OWNER clears 14 (ids are file stems):
@@ -2056,7 +2079,7 @@ BLOCKED ON:   16 open hands at origin/SignalGrid_Alpha 38003303 (15:02Z; counted
                 2026-09-23-build-mac-hygiene - the build Mac's posture: firewall, Time Machine, display sleep, Fleet enrolment
               MAC LANE clears 2 (a Mac session, which the cloud cannot start):
                 2026-10-15-five-cloud-to-mac-mails-are-unread-6-2-7-0-days- - ack the five mails (pnpm run lane:inbox), then re-mint live
-                  evidence (minted 2026-10-02T16:07Z, e78a7ae1)
+                  evidence (minted 2026-10-02T16:07Z, e78a7ae1) [superseded: re-minted 2026-10-15T16:33:53Z via #1522, mintedAt]
                 2026-09-28-the-review-acks-on-both-prs-list-work-the-prs-do - deliver every ack item on the #1118 and #1121 heads
               A CHANGE TO LAND clears 0 at the tip (the 17th hand's change, #1515, landed).
               Also the owner's, and not hands: the 14 owner-queue PRs #1463 #1459 #1440 #1443 #1442 #1445 #1441 #1439 #1438 #1338 #1337
@@ -2076,26 +2099,26 @@ PREVIOUSLY:   the FOUNDER's queue, now on one page (docs/agent/ORG_SELF_EVALUATI
               owner-gated and cannot be landed by either lane however green. #730 closes the last
               readiness gap and has been green since 06:30. This is now the binding constraint on
               the whole build; nothing else in the queue moves until those merge.
-NEXT ACTION: cloud lane (2026-10-15, as of 15:02Z). Every item is named by its PR and branch, and the QUEUE paragraph above carries its
-              evidence; nothing here depends on a sha that only the cloud container holds. Land #1516 (docs/outage-record-20261015, this
-              record; round 3 answers the Codex findings and the round-2 LOW) once local preflight+breadth are green on its head and a
-              Sonnet re-check ships. Re-run #1470's landing round (claude/build-graph-collection-transport-parity) on origin's 832041dc once
-              its gating check is green: the branch's worker answered the Opus refutation of bddf469f (comment 6194392948) at 14:46:20Z. #1460
-              (claude/build-gate-self-tests-run, origin 19e51b66): close the round-15 fix-needed in one push, since its gating job ran
-              19m43s against the 20-minute bound (#1460 comment 6194671942). #1468 (claude/loop-state-20261008-gap): origin carries
-              round 27 at c57cdc0d with its gating failure in PR comment 6085117608; rounds 28 to 31 exist only in the cloud container's
-              worktree and are not a hand-off until local preflight+breadth pass on the round's head and it is pushed (CLAUDE.md "Before you
-              push"), so a rebuilt container restarts from c57cdc0d and that comment, not from a local round. #1490
-              (claude/build-closure-restamp-lap-20261009, origin bf7b2e53): the Sonnet round-8 review of the push that restored the three
-              #1464 closures (comment 6195026102), then its landing. The CI validation-job timeout fix
-              (claude/build-ci-validation-job-timeout) is unpushed: push it once its preflight+breadth pass, since a rebuilt container
-              loses it otherwise. B83 takeover of #1504 (claude/build-url-guard-redirect-hand-mutant-pins, origin c7d6a6b0, partial) and
-              the B84 re-dispatch. Backlog rows A and B
-              (docs/BUILD_BACKLOG.md, section "The 2026-10-09 to 2026-10-15 outage - follow-ups") when a builder slot is free. THROTTLE: at
-              most three concurrent workers until the owner decides the budget; at the 14:10Z fire the local pool stood at five (H/S/O
-              0/4/1), over the cap, recorded and not excused on #1517's heartbeat (d87ce8bd; on mainline as 38003303), so no new local worker
-              starts until the pool drains below three; the units queued at that fire were this record's round 3, #1490 round 8 and #1468
-              round 31's review.
+NEXT ACTION: cloud lane (2026-10-15, as of 23:03Z). Every item is named by its PR and branch; nothing here depends on a sha that only
+              the cloud container holds. In this order:
+              1. #1460 (claude/build-gate-self-tests-run, origin 7c37759f02c7371636190f6bea13f3439915ee84, round 17, from `git ls-remote origin refs/heads/claude/build-gate-self-tests-run`):
+              round 18, a worker merging mainline 64d0ca6d or later, adding a regex-literal mention arm with its fixture and the row-43 sentences; then the Opus
+              landing re-refute, marking it ready, the DR-037 line and the merge.
+              2. The mutation-sweep shard-3 root-cause branch (claude/build-mutation-sweep-shard3-rootcause, local tip ad5b1d39 at round 5, unpushed): a local Sonnet
+              builder's answer to the Opus round-4 re-check's two MEDIUMs and one LOW; then the Opus re-check, a mainline merge, local preflight and breadth, the push,
+              the PR, its gating check and the merge.
+              3. This docs batch (claude/docs-batch-20261015-landings, branched from 64d0ca6d): Sonnet review, local preflight and breadth, push, PR, gating check and
+              merge; it lands after items 1 and 2.
+              4. The wave harvest, in this order: #1370 round-16 review, #1333 round-26 review, then the conflicted SAFETY_MACHINERY PRs #1504 #1398 #1378 #1349 #1230
+              #1309 #1369 #1390 #1308 by size.
+              5. Waiting on the owner. Counts are by classifyDiff (scripts/check-owner-gated-surfaces.mjs) over the changed files of each open PR, measured at 23:00:53Z:
+              (a) every open PR with a claude/ head, 44 PRs: 26 match DECISION_PATH (23 non-draft) and 3 match OWNER_RESERVED (2 non-draft, #1321 #1265; 1 draft, #1307);
+              (b) every open non-Dependabot PR, 104 PRs (9 Dependabot excluded): 36 match DECISION_PATH (33 non-draft) and 4 match OWNER_RESERVED (3 non-draft,
+              #1322 #1321 #1265; 1 draft, #1307). Also waiting on the owner: #1337 (the launch-claims gate); the Mac decision-record PRs #1357 #1322 #1246; 9 Dependabot PRs;
+              signalgrid-mcp #15 #16 #17.
+              The one unmet objective-loop criterion is owner-real-in-hand (attestedIn null, from `node scripts/objective-loop.mjs --json`). Row 17 of
+              docs/COMPANY_BUILD_PLAN.md is a separate parked item: the objective loop lists it as awaiting an ITSM lab (owner hand raised 2026-10-08).
+              THROTTLE: at most three concurrent workers until the owner decides the budget (the owner hand, open at 23:03Z by `pnpm run hands`).
 PREVIOUSLY:   owner: merge #1246 #1322 #1357, #1416 #1417 #1422 #1424, signalgrid-mcp #15 #16 #17; mint the GitHub-App
               secret once (claude setup-token + gh secret set in both repos). cloud: land the SAFETY set under DR-037; the
               DECISION_PATH set once #1246 lands. mac: re-mint on the next manifest move; build the loop's next tasks[] row

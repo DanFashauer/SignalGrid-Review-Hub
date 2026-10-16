@@ -303,7 +303,7 @@ fixture tree; preflight and CI run it.
 
 ### Operating notes, 2026-10-16 (cloud lane)
 
-- The lane takes every age in a heartbeat or mail comment from the artifact's own field (`mintedAt`, `firedAt`), never from a commit time.
+- The lane takes an artifact's own freshness — the live evidence's `mintedAt`, a tick's or a routine's last `firedAt`, the age between two heartbeats — from the artifact's field, never from the commit that carried it. The keepalive's "age at delivery" is the one age that keeps the delivery instant: the prior heartbeat's `firedAt` to the moment the new heartbeat is delivered (the #1523 correction above), so a heartbeat committed after its own `firedAt` is still classified by when it was delivered, not by the field it carries.
 - A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
 - The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
 - The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".

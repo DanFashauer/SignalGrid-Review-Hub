@@ -42,8 +42,8 @@
 // carries it (a second row carrying the same string has its own history, so
 // a copy pasted or moved there later by another PR is attributed to THAT PR).
 // The first first-parent commit of the tip descending from it is the commit
-// that landed it: `Merge pull request #N`, or a squash commit `… (#N)` that
-// GitHub itself committed (a worker's subject ending `(#N)` is not one); a
+// that landed it: `Merge pull request #N`, a custom-titled merge, or a squash commit `… (#N)`,
+// each only when GitHub itself committed it (a worker's lookalike is not one); a
 // branch's own sync merge is followed into its second parent. Measured on
 // 2026-10-01 at 0cb19272 (before this branch merged mainline in): 28 of 28
 // annotations in both ledgers resolved to a PR, including the three branches
@@ -79,7 +79,9 @@
 // HOW THE KEY CAN LIE, and what each check does about it:
 //   - a docs-only PR pre-announces a fix: STALE needs the landing commit to
 //     also change a repo path the annotation itself cites (read only up to
-//     the next row, checkbox, heading or blank line; never the ledgers);
+//     the next row, checkbox, heading or blank line; never the ledgers; a
+//     `dir/file.ext` path as written, or any other path-like token that is a
+//     tracked path at the landing, such as `package.json` or `.githooks/pre-push`);
 //     otherwise LANDED-UNCORROBORATED, read by hand.
 //   - a code PR from branch Y writes an annotation naming branch Z: offline,
 //     a GitHub default subject ("Merge pull request #N from o/Y") or a sync
@@ -100,6 +102,9 @@
 // meaningful everywhere, CI included; it also proves the CLI entry runs from
 // a path with a space and through a symlink (a guard that failed there exited
 // 0 without running, which is the fail-open this file must not have).
+//
+// SCOPE: in the plan ledger only its "## Global backlog" section is read (the section the sibling
+// gate's parseRows reads); a FIX PROPOSED under a later "##" heading belongs to no row.
 //
 // WHAT THIS DOES NOT DO: rows that read `open` without a FIX PROPOSED tracer
 // (rows 83, 89, 134, 135 were that kind) are still undecidable from text and

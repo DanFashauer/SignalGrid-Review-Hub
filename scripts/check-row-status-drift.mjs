@@ -104,7 +104,10 @@
 // 0 without running, which is the fail-open this file must not have).
 //
 // SCOPE: in the plan ledger only its "## Global backlog" section is read (the section the sibling
-// gate's parseRows reads); a FIX PROPOSED under a later "##" heading belongs to no row.
+// gate's parseRows reads); a FIX PROPOSED under a later "##" heading belongs to no row, and a
+// heading that looks like a row but does not parse makes the plan NOT MEASURED. A dated FIX
+// PROPOSED inside an inline code span or a double-quoted quotation is an example and is not read
+// (CEILING: a fenced block, an HTML comment, or a quotation wrapped across lines still is).
 //
 // WHAT THIS DOES NOT DO: rows that read `open` without a FIX PROPOSED tracer
 // (rows 83, 89, 134, 135 were that kind) are still undecidable from text and

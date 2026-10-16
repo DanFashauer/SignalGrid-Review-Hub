@@ -122,7 +122,10 @@ const HIGH_WATER_WINDOW = 50;
 const DATED = /FIX\s+PROPOSED\s+(\d{4}-\d{2}-\d{2})/g;
 const BRANCH_SHAPE = /^\s+\(branch\s+([A-Za-z0-9._/-]+)/;
 // The clause runs to its ")" across a hard wrap, but never past a blank line or the next row's head.
-const PR_SHAPE = /^\s+\(PR\s+#(\d+)([^)]{0,200})/;
+// It is read up to CLAUSE_WINDOW characters; a clause with neither its ")" nor a row boundary in
+// that window is NOT MEASURED, never read with the sha it may hold past the window dropped.
+const CLAUSE_WINDOW = 2000;
+const PR_SHAPE = /^\s+\(PR\s+#(\d+)([^)]*)/;
 const CLAUSE_STOP = /\n\s*\n|\n\s*\d+[a-z]*(?:-\d+)?\.\s+\*\*|\n\s*[-*] \[[ xX]\]/;
 // A commit the PR-named shape cites: the first hex token in the claim's clause, any case, with or
 // without a prose prefix ("commit abc1234"). Letters and digits mixed: any length from 4. Letters
@@ -152,6 +155,7 @@ const titledPr = (subject) => { const all = [...subject.matchAll(GITHUB_TITLED_M
 const GITHUB_COMMITTER = "GitHub <noreply@github.com>";
 const SYNC_INTO = /into (?:origin\/)?(claude\/[A-Za-z0-9._/-]+)$/;
 const CITED_PATH = /[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)+\.[A-Za-z0-9]+/g;
+const PATH_TOKEN = /(?<![A-Za-z0-9_.@\/-])[A-Za-z0-9_.@-]+(?:\/[A-Za-z0-9_.@-]+)*/g;
 const norm = (t) => t.replace(/\s+/g, " ");
 
 // Replace refs are local and rewrite history as git reports it (a `git replace
@@ -218,17 +222,28 @@ export function findAnnotations(file, text) {
   const lines = text.split("\n");
   const planRows = parseRows(text);
   const lineAt = (off) => text.slice(0, off).split("\n").length;
+  // The plan's rows live in its "## Global backlog" section, exactly as parseRows reads it; an
+  // annotation under a later "##" heading belongs to no row, so it is not read (rowOf would
+  // otherwise walk up past the heading onto the last backlog row). The backlog ledger is read whole.
+  let section = [0, text.length];
+  if (file === LEDGERS[0]) {
+    const start = text.indexOf("## Global backlog");
+    const end = start < 0 ? -1 : text.slice(start).search(/\n## (?!Global)/);
+    section = start < 0 ? [0, 0] : [start, end < 0 ? text.length : start + end];
+  }
   const all = [...text.matchAll(DATED)].map((d) => {
-    const rest = text.slice(d.index + d[0].length, d.index + d[0].length + 200);
+    const rest = text.slice(d.index + d[0].length, d.index + d[0].length + CLAUSE_WINDOW);
     const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
     let clause = p ? p[2] : "";
     const cut = clause.search(CLAUSE_STOP);
     if (cut >= 0) clause = clause.slice(0, cut);
+    // Terminated by its ")", by a row boundary, or by the end of the ledger; otherwise cut by the window.
+    const unterminated = !!p && cut < 0 && rest.charAt(p[0].length) !== ")" && d.index + d[0].length + rest.length < text.length;
     const m = [d[0] + (b ? b[0] : p ? p[0].slice(0, p[0].length - p[2].length) + clause : ""), d[1]];
     m.index = d.index;
-    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(clause) : undefined };
-  });
-  all.forEach(({ m, kind, branch, claimPr, claimSha }, k) => {
+    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(clause) : undefined, unterminated };
+  }).filter(({ m }) => m.index >= section[0] && m.index < section[1]);
+  all.forEach(({ m, kind, branch, claimPr, claimSha, unterminated }, k) => {
     // The cited paths are the annotation's OWN: the span stops at the next
     // annotation, the next row or checkbox head, a heading, or a blank line.
     const after = text.slice(m.index + m[0].length);
@@ -238,7 +253,11 @@ export function findAnnotations(file, text) {
     const line = lineAt(m.index);
     const lastLine = lineAt(m.index + m[0].length);
     const cited = [...new Set(span.match(CITED_PATH) ?? [])].filter((p) => !LEDGERS.includes(p));
-    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, key: norm(m[0]), cited });
+    // Every path-like token too (a root file such as `package.json` or `Dockerfile`, an
+    // extensionless `.githooks/pre-push`); classify keeps the ones tracked at the landing.
+    const tokens = [...new Set((span.match(PATH_TOKEN) ?? []).map((t) => t.replace(/^\.\//, "").replace(/[.,;:]+$/, "")))]
+      .filter((t) => t && !LEDGERS.includes(t) && !cited.includes(t));
+    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, unterminated, key: norm(m[0]), cited, tokens });
   });
   return out;
 }
@@ -274,7 +293,9 @@ function landingOf(cwd, intro, tip, depth = 0) {
   const land = desc[desc.length - 1];
   if (!land) return null;
   const [subject, committer, parentLine] = git(cwd, ["log", "-1", "--format=%s%n%cn <%ce>%n%P", land]).split("\n");
-  const pr = PR_MERGE.exec(subject);
+  // GitHub commits every PR merge it makes (599 of 599 on mainline's first-parent line); a
+  // lookalike "Merge pull request #N" a worker made locally is a sync merge, not a landing.
+  const pr = committer === GITHUB_COMMITTER ? PR_MERGE.exec(subject) : null;
   if (pr) return { land, pr: Number(pr[1]), subjectBranch: pr[2] };
   const parents = parentLine.split(" ");
   const titled = parents.length > 1 && committer === GITHUB_COMMITTER ? titledPr(subject) : null;
@@ -285,6 +306,17 @@ function landingOf(cwd, intro, tip, depth = 0) {
     return landingOf(cwd, intro, parents[1], depth + 1);
   }
   return { land };
+}
+
+/**
+ * The paths an annotation cites, read at its landing: the slash-and-extension form as written,
+ * plus every other path-like token that is a tracked path in the landing's tree.
+ */
+const treeCache = new Map();
+function citedAt(cwd, a, land) {
+  if (!treeCache.has(land)) treeCache.set(land, new Set(git(cwd, ["ls-tree", "-r", "--name-only", land]).split("\n")));
+  const tree = treeCache.get(land);
+  return [...a.cited, ...a.tokens.filter((t) => tree.has(t))];
 }
 
 /** Offline evidence of which branch a landing PR came from: "match" | "mismatch" | "unknown". */
@@ -321,9 +353,9 @@ function graphOf(cwd) {
 
 /** The PR a commit lands, if it is a landing: a PR merge subject, a GitHub-titled merge, or a GitHub squash. */
 function landedPr(c) {
+  if (!c.github) return null;
   const m = PR_MERGE.exec(c.subject);
   if (m) return Number(m[1]);
-  if (!c.github) return null;
   if (c.parents.length > 1) return titledPr(c.subject);
   const sq = SQUASH.exec(c.subject);
   return sq ? Number(sq[1]) : null;
@@ -377,16 +409,18 @@ function classifyPrShape(cwd, a) {
   if (l?.capped) return { ...a, status: "NO-HISTORY", why: `PR #${a.claimPr} was not found within ${SYNC_DEPTH} nested non-PR merges; the trace stops there` };
   if (!l) return { ...a, status: "NOT-VIA-PR" };
   const changed = new Set(git(cwd, ["diff", "--name-only", `${l.sha}^1`, l.sha]).split("\n"));
-  const hit = a.cited.filter((p) => changed.has(p));
+  const cited = citedAt(cwd, a, l.sha);
+  const hit = cited.filter((p) => changed.has(p));
   // A cited token too short to resolve is a claim nobody can check, never a skipped one.
   const shaIn = a.claimSha ? a.claimSha.length >= 7 && shaInLanding(cwd, a.claimSha, l) : true;
   const ok = hit.length > 0 && shaIn;
   const status = a.closed ? "CLOSED-RESIDUE" : ok ? "STALE" : "LANDED-UNCORROBORATED";
-  return { ...a, status, land: l.sha, pr: a.claimPr, hit, shaIn, branchEvidence: "pr-named" };
+  return { ...a, cited, status, land: l.sha, pr: a.claimPr, hit, shaIn, branchEvidence: "pr-named" };
 }
 
 export function classify(cwd, a, opts = {}) {
   if (a.kind === "unknown") return { ...a, status: "NO-HISTORY", why: "a dated FIX PROPOSED in a shape this detector cannot read (expected \"(branch X\" or \"(PR #N\")" };
+  if (a.kind === "pr" && a.unterminated) return { ...a, status: "NO-HISTORY", why: `a "(PR #${a.claimPr}" clause with no ")" and no row boundary within ${CLAUSE_WINDOW} characters; its cited sha cannot be read` };
   if (a.kind === "pr") return classifyPrShape(cwd, a);
   const intro = introOf(cwd, a);
   if (!intro) return { ...a, status: "NO-HISTORY", why: "no commit in this row's line history adds the annotation (added by a merge commit's own edit?)" };
@@ -395,12 +429,13 @@ export function classify(cwd, a, opts = {}) {
   if (l.capped) return { ...a, status: "NO-HISTORY", intro, why: `its landing is nested under more than ${SYNC_DEPTH} non-PR merges; the trace stops there` };
   if (!l.pr) return { ...a, status: "NOT-VIA-PR", intro, land: l.land };
   const changed = new Set(git(cwd, ["diff", "--name-only", `${l.land}^1`, l.land]).split("\n"));
-  const hit = a.cited.filter((p) => changed.has(p));
+  const cited = citedAt(cwd, a, l.land);
+  const hit = cited.filter((p) => changed.has(p));
   let branch = branchEvidence(cwd, a, l);
   if (branch === "unknown" && opts.rest) branch = opts.rest(l.pr, a.branch);
   const ok = hit.length > 0 && branch !== "mismatch";
   const status = a.closed ? "CLOSED-RESIDUE" : ok ? "STALE" : "LANDED-UNCORROBORATED";
-  return { ...a, status, intro, land: l.land, pr: l.pr, hit, branchEvidence: branch };
+  return { ...a, cited, status, intro, land: l.land, pr: l.pr, hit, branchEvidence: branch };
 }
 
 /**
@@ -480,6 +515,7 @@ export function readLedger(cwd, file) {
 export function measure(where, ledgers = LEDGERS, opts = {}) {
   fpCache.clear();
   graphCache.clear();
+  treeCache.clear();
   const cwd = git(where, ["rev-parse", "--show-toplevel"]);
   const results = [];
   for (const file of ledgers) {
@@ -555,6 +591,9 @@ function selfTest() {
   const gIn = (d, ...args) => scratchGitOk(d, args, { env });
   const g = (...args) => gIn(dir, ...args);
   const gAs = (who, ...args) => scratchGitOk(dir, args, { env: { ...env, GIT_COMMITTER_NAME: who[0], GIT_COMMITTER_EMAIL: who[1] } });
+  // A PR merge is committed by GitHub, as on the real mainline; ghIn does that in any fixture repository.
+  const GH = ["GitHub", "noreply@github.com"];
+  const ghIn = (d, ...args) => scratchGitOk(d, args, { env: { ...env, GIT_COMMITTER_NAME: GH[0], GIT_COMMITTER_EMAIL: GH[1] } });
   const [plan, backlog] = LEDGERS;
   const write = (p, s) => { mkdirSync(join(dir, p, ".."), { recursive: true }); writeFileSync(join(dir, p), s); };
   const read = (p) => readFileSync(join(dir, p), "utf8");
@@ -565,13 +604,13 @@ function selfTest() {
   const pr = (branch, n, fn, how = "merge") => {
     g("checkout", "-qb", branch); fn(); commit(`work on ${branch}`); g("checkout", "-q", "main");
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
-    else g("merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
+    else gAs(GH, "merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
-    write(plan, "## Global backlog\n\n" + ids.map((n) => row(n)).join("\n") + "\n");
+    write(plan, "## Global backlog\n\n" + ids.map((n) => row(n)).join("\n") + "\n\n## Owner hands\n\nNotes.\n");
     write(backlog, "- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n- [ ] **Box P** — open.\n- [ ] **Box Q** — open.\n");
     for (const f of ["a", "b", "c", "d"]) write(`scripts/${f}.mjs`, "0\n");
     commit("base");
@@ -661,7 +700,7 @@ function selfTest() {
     // 33: a path cited inside the PR clause itself still corroborates — STALE.
     edit(plan, row(33), row(33) + " FIX PROPOSED 2026-10-08 (PR #23, see scripts/c.mjs).");
     commit("annotate 16, 20, 23-26 and 33");
-    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #23: pr shape", "claude/pr-shape");
+    g("checkout", "-q", "main"); gAs(GH, "merge", "-q", "--no-ff", "-m", "Merge pull request #23: pr shape", "claude/pr-shape");
     // 18: a dated FIX PROPOSED in a shape nobody reads — NOT MEASURED, never skipped.
     edit(plan, row(18), row(18) + " FIX PROPOSED 2026-10-08 (OFFLINE HALF ONLY), branch claude/x: `scripts/c.mjs`."); commit("odd shape");
     // 19: a GitHub-committed merge under a custom title "… (#24, check run …)" is PR #24's landing — STALE.
@@ -675,6 +714,27 @@ function selfTest() {
     g("checkout", "-q", "main"); gAs(["GitHub", "noreply@github.com"], "merge", "-q", "--no-ff", "-m", "ack (#30) (#31, check run 1)", "claude/two-titles");
     // 32: a PR-named row citing the squashed branch's own commit (PR #11): not on mainline before it — STALE.
     edit(plan, row(32), row(32) + ` FIX PROPOSED 2026-10-08 (PR #11, ${g("rev-parse", "claude/fix-g")}): \`scripts/d.mjs\`.`); commit("annotate 32");
+    // 49-51: root-level and extensionless cited paths, tracked at the landing (PR #50) — STALE.
+    pr("claude/root-files", 50, () => {
+      write("package.json", "{}\n"); write("Dockerfile", "FROM x\n"); write(".githooks/pre-push", "#!/bin/sh\n");
+      edit(plan, row(49), row(49) + ann("claude/root-files", "package.json"));
+      edit(plan, row(50), row(50) + ann("claude/root-files", "Dockerfile"));
+      edit(plan, row(51), row(51) + ann("claude/root-files", ".githooks/pre-push"));
+    });
+    // 52, 53: a lookalike "Merge pull request #N" committed by the worker, not GitHub, is not a landing.
+    g("checkout", "-qb", "claude/lookalike"); write("scripts/d.mjs", "52\n");
+    edit(plan, row(52), row(52) + ann("claude/lookalike", "scripts/d.mjs"));
+    edit(plan, row(53), row(53) + " FIX PROPOSED 2026-10-08 (PR #53): `scripts/d.mjs`."); commit("fix 52");
+    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #52 from o/claude/lookalike", "claude/lookalike");
+    g("checkout", "-qb", "claude/lookalike-2"); write("scripts/d.mjs", "53\n"); commit("fix 53");
+    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #53: lookalike", "claude/lookalike-2");
+    // 54: a PR-named clause whose ")" and sha sit past 200 characters is read whole — READ (an earlier mainline sha).
+    edit(plan, row(54), row(54) + ` FIX PROPOSED 2026-10-08 (PR #23, ${"note ".repeat(60)}${baseSha}): \`scripts/c.mjs\`.`);
+    // 55: a PR-named clause with no ")" and no row boundary within the window is NOT MEASURED.
+    edit(plan, row(55), row(55) + ` FIX PROPOSED 2026-10-08 (PR #23, ${"note ".repeat(450)}\`scripts/c.mjs\`.`);
+    commit("annotate 54 and 55");
+    // Owner hands: a landed annotation under a later "##" section belongs to no row and is not read.
+    pr("claude/hands", 56, () => { edit(plan, "Notes.", "Notes. FIX PROPOSED 2026-10-08 (branch claude/hands, x): `scripts/a.mjs`."); write("scripts/a.mjs", "hands\n"); });
     // 27: a GitHub-committed single-parent commit with "(#114)" mid-subject is not a squash landing.
     edit(plan, row(27), row(27) + ann("claude/tweak", "scripts/d.mjs")); write("scripts/d.mjs", "27\n"); g("add", "-A");
     gAs(["GitHub", "noreply@github.com"], "commit", "-qm", "tweak (#114) tail");
@@ -690,7 +750,7 @@ function selfTest() {
     g("checkout", "-qb", "claude/fix-j"); edit(plan, row(10), row(10) + ann("claude/fix-j", "scripts/d.mjs")); write("scripts/d.mjs", "10\n"); commit("fix j");
     g("checkout", "-q", "main"); write("scripts/other.mjs", "x\n"); commit("unrelated mainline commit");
     g("checkout", "-q", "claude/fix-j"); g("merge", "-q", "--no-ff", "-m", "Merge remote-tracking branch 'origin/main' into claude/fix-j", "main");
-    g("checkout", "-q", "main"); g("merge", "-q", "--no-ff", "-m", "Merge pull request #16: fix j", "claude/fix-j");
+    g("checkout", "-q", "main"); gAs(GH, "merge", "-q", "--no-ff", "-m", "Merge pull request #16: fix j", "claude/fix-j");
     // 11: a row that arrived on a branch tip through a sync merge from a mainline where it landed via PR — STALE.
     pr("claude/fix-k", 17, () => { edit(plan, row(11), row(11) + ann("claude/fix-k", "scripts/a.mjs")); write("scripts/a.mjs", "11\n"); });
     const mainTip = g("rev-parse", "HEAD");
@@ -704,7 +764,8 @@ function selfTest() {
     // 30: PR #17 landed on main after this worker forked; it reaches HEAD only through the sync merge — STALE.
     edit(plan, row(30), row(30) + " FIX PROPOSED 2026-10-08 (PR #17): `scripts/a.mjs`."); commit("fix 4 (#99)");
 
-    const res = Object.fromEntries(measure(dir).map((r) => [r.row, r]));
+    const all = measure(dir);
+    const res = Object.fromEntries(all.map((r) => [r.row, r]));
     const is = (k, st, extra = () => true) => res[k]?.status === st && extra(res[k]);
     checks.push(["planted stale row (annotation + fix merged as PR #7) is flagged STALE", is("row 1", "STALE", (r) => r.pr === 7)]);
     checks.push(["docs-only pre-announcement (cited code never merged) is READ, not STALE", is("row 2", "LANDED-UNCORROBORATED")]);
@@ -753,9 +814,17 @@ function selfTest() {
     checks.push(["…stops at the next plan row: that row's path does not corroborate — READ", is("row 46", "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
     checks.push(["…stops at the next backlog box: that box's path does not corroborate — READ", is('"Box P"', "LANDED-UNCORROBORATED", (r) => r.hit.length === 0)]);
     checks.push(["a sha after a check-run id and prose, far into the clause, is still read — READ", is("row 48", "LANDED-UNCORROBORATED", (r) => r.claimSha === baseSha && notIn(r))]);
+    for (const [k, path] of [["row 49", "package.json"], ["row 50", "Dockerfile"], ["row 51", ".githooks/pre-push"]]) {
+      checks.push([`a cited ${path} tracked at the landing corroborates — STALE`, is(k, "STALE", (r) => r.pr === 50 && r.hit.includes(path))]);
+    }
+    checks.push(["a lookalike \"Merge pull request #52 from …\" the worker committed is not a landing", is("row 52", "NOT-VIA-PR")]);
+    checks.push(["…nor, for a PR-named row, a lookalike \"Merge pull request #53: …\"", is("row 53", "NOT-VIA-PR")]);
+    checks.push(["a PR-named clause whose \")\" and sha sit past 200 characters is read whole — READ", is("row 54", "LANDED-UNCORROBORATED", (r) => r.claimSha === baseSha && notIn(r))]);
+    checks.push(["a PR-named clause with no \")\" or row boundary within the window is NOT MEASURED", is("row 55", "NO-HISTORY", (r) => /no row boundary within 2000 characters/.test(r.why ?? ""))]);
+    checks.push(["a landed annotation under a later \"##\" section is not read onto the last backlog row", !all.some((r) => r.branch === "claude/hands") && all.filter((r) => r.file === plan && r.status === "STALE").every((r) => r.row !== "row 55")]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 5", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
@@ -953,7 +1022,7 @@ function selfTest() {
       writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/deep, x): `scripts/a.mjs`.\n2. **Row 2.** — OPEN, qa.\n");
       writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "fix");
       gs("checkout", "-q", "main"); gs("checkout", "-qb", "r0");
-      gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5 from o/claude/deep", "claude/deep");
+      ghIn(d, "merge", "-q", "--no-ff", "-m", "Merge pull request #5 from o/claude/deep", "claude/deep");
       let prev = "r0";
       for (let i = 1; i < depth; i++) {
         gs("checkout", "-q", "main"); gs("checkout", "-qb", `r${i}`);
@@ -1012,7 +1081,7 @@ function selfTest() {
       gs("checkout", "-qb", "claude/cfg");
       writeFileSync(join(d, plan), "## Global backlog\n\n1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/cfg, x): `scripts/a.mjs`.\n");
       writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "fix");
-      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5: cfg", "claude/cfg");
+      gs("checkout", "-q", "main"); ghIn(d, "merge", "-q", "--no-ff", "-m", "Merge pull request #5: cfg", "claude/cfg");
       gs("config", key, value);
       const r = measure(d).find((x) => x.row === "row 1");
       checks.push([`repository config ${key}=${value} does not hide a PR landing`, r?.status === "STALE" && r.pr === 5]);
@@ -1033,7 +1102,7 @@ function selfTest() {
       gs("checkout", "-qb", "side"); writeFileSync(join(d, "scripts/a.mjs"), "1\n"); gs("commit", "-qam", "side");
       gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "--no-commit", "side");
       writeFileSync(join(d, plan), readFileSync(join(d, plan), "utf8").replace("1. **Row 1.** — OPEN, qa.", "1. **Row 1.** — OPEN, qa. FIX PROPOSED 2026-10-01 (branch claude/evil, x): `scripts/a.mjs`."));
-      gs("add", "-A"); gs("commit", "-qm", "Merge pull request #5: side");
+      gs("add", "-A"); ghIn(d, "commit", "-qm", "Merge pull request #5: side");
       // Row 2: landed by an octopus merge, through its third parent.
       gs("checkout", "-qb", "b1"); writeFileSync(join(d, "scripts/b1.mjs"), "b\n"); gs("add", "-A"); gs("commit", "-qm", "b1");
       gs("checkout", "-q", "main"); gs("checkout", "-qb", "claude/oct");
@@ -1129,7 +1198,7 @@ function selfTest() {
       writeFileSync(join(d, backlog), readFileSync(join(d, backlog), "utf8").replace("still.", "still." + a).replace("— closed.", "— closed." + a));
       writeFileSync(join(d, "scripts/a.mjs"), "1\n");
       gs("add", "-A"); gs("commit", "-qm", "fix o");
-      gs("checkout", "-q", "main"); gs("merge", "-q", "--no-ff", "-m", "Merge pull request #5: fix o", "claude/fix-o");
+      gs("checkout", "-q", "main"); ghIn(d, "merge", "-q", "--no-ff", "-m", "Merge pull request #5: fix o", "claude/fix-o");
       const r = Object.fromEntries(measure(d).map((x) => [`${x.file}|${x.row}`, x.status]));
       checks.push(["CRLF ledgers: a closed plan row and a ticked box stay residue", r[`${plan}|row 1`] === "CLOSED-RESIDUE" && r[`${backlog}|"Done"`] === "CLOSED-RESIDUE"]);
       checks.push(["CRLF ledgers: an open plan row and a box line holding U+2028 flag STALE", r[`${plan}|row 2`] === "STALE" && Object.entries(r).some(([k, v]) => k.startsWith(`${backlog}|"Open`) && v === "STALE")]);
@@ -1140,7 +1209,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 111;
+  return failed === 0 && checks.length === 119;
 }
 
 let isMain = false;

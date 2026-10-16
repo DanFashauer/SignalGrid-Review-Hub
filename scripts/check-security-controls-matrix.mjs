@@ -8,7 +8,7 @@
 // "Implemented (public core)" while the file it cites has been renamed or the
 // proof it names deleted, and nothing noticed.
 //
-// WHAT IS GATED (hardened over eleven review rounds on PR #1349):
+// WHAT IS GATED (hardened over many review rounds on PR #1349):
 //   0. Structure. Every line carrying an unescaped `|` sits in a recognised
 //      table (controls `| Control | … | Status | Where |`, the ONE Status legend,
 //      or `| Short ref | Framework |`) — GFM renders pipe-less, blockquoted and
@@ -574,8 +574,19 @@ export function checkMatrix(text, { root = ROOT, tracked, scripts }) {
   return { rows, legend, defaultProof, fails, structural };
 }
 
+/** Tracked paths from `git ls-files -s -z`, WITHOUT symlinks (mode 120000): a link
+ *  is not a file, and a tracked link to the matrix would otherwise be accepted as
+ *  evidence for it (round 24). Read from the index, so no filesystem call. */
+export function parseLsFilesStage(out) {
+  return out.split("\0").filter(Boolean).flatMap((rec) => {
+    const tab = rec.indexOf("\t");
+    const [mode] = rec.slice(0, tab).split(" ");
+    return mode === "120000" ? [] : [rec.slice(tab + 1)];
+  });
+}
+
 function realContext() {
-  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+  const tracked = parseLsFilesStage(execFileSync("git", ["ls-files", "-s", "-z"], { cwd: ROOT, encoding: "utf8" }));
   const scripts = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).scripts ?? {};
   return { root: ROOT, tracked, scripts };
 }
@@ -736,6 +747,9 @@ function selfTest() {
     ...["`SECURITY_CONTROLS_MATRIX.md`", "`SECURITY_CONTROLS_MATRIX.md:12`", "`./SECURITY_CONTROLS_MATRIX.md`", "`SECURITY_CONTROLS_MATRIX.md/`", "`./PURPOSE.md`", "`index.ts`"].flatMap((w, i) => [
       [`fail: Implemented row whose only evidence is ${w}`, plant(`| Planted H${i} | ASVS 5.0 | Implemented (public core) | ${w} |`), 1],
       [`fail: Automated row citing ${w} beside a valid workflow`, plant(`| Planted H${i} | ASVS 5.0 | Automated (CI bot) | \`.github/workflows/review-hub-ci.yml\`; ${w} |`), 1]]),
+    // round 24: the lastDir branch also runs every inRepo rule
+    ["fail: the matrix's basename beside a path in its own directory", plant("| Planted H10 | ASVS 5.0 | Implemented (public core) | `docs/PURPOSE.md`; `SECURITY_CONTROLS_MATRIX.md` |"), 1],
+    ["fail: the matrix's basename beside a directory under docs/", plant("| Planted H11 | ASVS 5.0 | Implemented (public core) | `docs/agent`; `SECURITY_CONTROLS_MATRIX.md` |"), 1],
     ["pass: a unique, present bare basename resolves (`PURPOSE.md` -> docs/PURPOSE.md)", plant("| Planted H9 | ASVS 5.0 | Implemented (public core) | `PURPOSE.md` |"), 0],
     // round 23: claimFold's emphasis strip — a legend word split by ** or __ in a Control name
     ["fail: a legend word split by ** in a Control name", plant("| Im**ple**men**ted (public core) ZZ7 | ASVS 5.0 | Private-core (planned) | private repo |"), 1],
@@ -765,6 +779,32 @@ function selfTest() {
       const pass = r.status === want && quoted;
       if (!pass) ok = false;
       console.log(`${pass ? "ok  " : "BAD "} self-test ${name} (exit ${r.status}, want ${want})${pass ? "" : `\n${r.stderr}`}`);
+    }
+    // round 24: in-process cases for what a planted doc cannot reach
+    const ctx = realContext();
+    const phantom = "docs/zz-phantom-tracked-not-on-disk.md";
+    const inproc = [
+      // tracked AND present: a path the index lists but the disk lacks is not evidence
+      ["fail: a tracked path absent from disk (in-process, phantom in the tracked list)", () => {
+        const res = checkMatrix(plant(`| Planted H12 | ASVS 5.0 | Implemented (public core) | \`${phantom}\` |`), { ...ctx, tracked: [...ctx.tracked, phantom] });
+        return res.fails.some((f) => f.control === "Planted H12" && f.why.some((w) => w.includes(`\`${phantom}\` is not a tracked repo path`)));
+      }],
+      ["fail: the same phantom by bare basename (in-process)", () => {
+        const res = checkMatrix(plant(`| Planted H13 | ASVS 5.0 | Implemented (public core) | \`zz-phantom-tracked-not-on-disk.md\` |`), { ...ctx, tracked: [...ctx.tracked, phantom] });
+        return res.fails.some((f) => f.control === "Planted H13");
+      }],
+      // symlinks: a mode-120000 index entry never enters the tracked set
+      ["fail: a tracked symlink is not a tracked file (parseLsFilesStage)", () => {
+        const got = parseLsFilesStage("120000 0123abcd 0\tdocs/zz-matrix-alias.md\u0000100644 4567ef01 0\tdocs/PURPOSE.md\u0000100755 89ab2345 0\tscripts/x y.sh\u0000");
+        return JSON.stringify(got) === JSON.stringify(["docs/PURPOSE.md", "scripts/x y.sh"]);
+      }],
+      ["pass: the real tracked set holds the matrix and no symlink (in-process)", () =>
+        ctx.tracked.includes(DOC_SELF) && !ctx.tracked.includes("scripts/mobile-app-catalog/fixtures/evil/app-escape-link.json")],
+    ];
+    for (const [name, check] of inproc) {
+      const pass = check() === true;
+      if (!pass) ok = false;
+      console.log(`${pass ? "ok  " : "BAD "} self-test ${name}`);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
   return ok;

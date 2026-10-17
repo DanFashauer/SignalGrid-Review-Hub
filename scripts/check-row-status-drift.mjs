@@ -94,6 +94,10 @@
 //     box, is CLOSED-RESIDUE, not STALE.
 //   - CEILING, not caught: a fix that landed and was later reverted reads
 //     STALE. A regression is a different question; the re-read owns it.
+//   - CEILING, over-report only: an identical annotation removed and later
+//     re-added is credited to its EARLIER adding commit (the oldest match in
+//     the line history), so an in-flight re-add can read STALE. Backlog row
+//     "credits a removed-then-re-added identical annotation" tracks the fix.
 //
 // FAIL-CLOSED, IN THE DIRECTION A REPORTER CAN BE: a shallow clone (CI's
 // default checkout) cannot walk history, so the real-tree run prints NOT
@@ -239,11 +243,12 @@ export function findAnnotations(file, text) {
     const end = start < 0 ? -1 : text.slice(start).search(/\n## (?!Global)/);
     section = start < 0 ? [0, 0] : [start, end < 0 ? text.length : start + end];
   }
-  // A dated FIX PROPOSED inside a code span or a quotation is an example, not an annotation: the
-  // sibling's statusText rule (backticks, straight and curly double quotes), applied per line and
-  // offset-preserving, so every position still maps to the same place in the raw text.
+  // A dated FIX PROPOSED inside a code span or a quotation (the sibling's statusText rule:
+  // backticks, straight and curly double quotes, per line, offset-preserving) is usually an
+  // example, but a stray delimiter pairs across a real annotation just as well; so it is never
+  // dropped, it is NOT MEASURED with that reason.
   const masked = text.replace(/`[^`\n]*`|"[^"\n]*"|\u201c[^\u201d\n]*\u201d/g, (q) => " ".repeat(q.length));
-  const all = [...text.matchAll(DATED)].filter((d) => masked.startsWith("FIX", d.index)).map((d) => {
+  const all = [...text.matchAll(DATED)].map((d) => {
     const rest = text.slice(d.index + d[0].length, d.index + d[0].length + CLAUSE_WINDOW);
     const b = BRANCH_SHAPE.exec(rest), p = b ? null : PR_SHAPE.exec(rest);
     let clause = p ? p[2] : "";
@@ -253,9 +258,9 @@ export function findAnnotations(file, text) {
     const unterminated = !!p && cut < 0 && rest.charAt(p[0].length) !== ")" && d.index + d[0].length + rest.length < text.length;
     const m = [d[0] + (b ? b[0] : p ? p[0].slice(0, p[0].length - p[2].length) + clause : ""), d[1]];
     m.index = d.index;
-    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(clause) : undefined, unterminated };
+    return { m, kind: b ? "branch" : p ? "pr" : "unknown", branch: b?.[1], claimPr: p ? Number(p[1]) : undefined, claimSha: p ? shaTokenOf(clause) : undefined, unterminated, quoted: !masked.startsWith("FIX", d.index) };
   }).filter(({ m }) => m.index >= section[0] && m.index < section[1]);
-  all.forEach(({ m, kind, branch, claimPr, claimSha, unterminated }, k) => {
+  all.forEach(({ m, kind, branch, claimPr, claimSha, unterminated, quoted }, k) => {
     // The cited paths are the annotation's OWN: the span stops at the next
     // annotation, the next row or checkbox head, a heading, or a blank line.
     const after = text.slice(m.index + m[0].length);
@@ -264,16 +269,16 @@ export function findAnnotations(file, text) {
     const span = text.slice(m.index, end);
     const line = lineAt(m.index);
     const lastLine = lineAt(m.index + m[0].length);
-    const cited = [...new Set(span.match(CITED_PATH) ?? [])].filter((p) => !LEDGERS.includes(p));
+    const cited = [...new Set((span.match(CITED_PATH) ?? []).map((p) => p.replace(/^\.\//, "")))].filter((p) => !LEDGERS.includes(p));
     // Every path-like token too (a root file such as `package.json` or `Dockerfile`, an
     // extensionless `.githooks/pre-push`); classify keeps the ones tracked at the landing.
     const tokens = [...new Set((span.match(PATH_TOKEN) ?? []).map((t) => t.replace(/^\.\//, "").replace(/[.,;:]+$/, "")))]
       .filter((t) => t && !LEDGERS.includes(t) && !cited.includes(t));
-    const key = norm(m[0]);
-    // The same key earlier on the same line (a branch reused later that day) is a separate annotation.
-    const ord = out.filter((o) => o.line === line && o.key === key).length;
-    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, unterminated, key, ord, cited, tokens });
+    out.push({ file, line, lastLine, ...rowOf(lines, line - 1, planRows), date: m[1], kind, branch, claimPr, claimSha, unterminated, quoted, key: norm(m[0]), cited, tokens });
   });
+  // Two annotations with one key on one line (a branch reused later that day): the line history
+  // cannot tell which commit added which, so neither is traced.
+  for (const o of out) o.dupKey = out.some((x) => x !== o && x.line === o.line && x.key === o.key);
   return out;
 }
 
@@ -281,8 +286,7 @@ export function findAnnotations(file, text) {
 function introOf(cwd, a) {
   const log = git(cwd, ["log", "--format=C %H", `-L${a.line},${a.lastLine}:${a.file}`, "HEAD"]);
   let cur = null, added = [], found = null;
-  // The annotation's own occurrence: the oldest commit whose added text carries the key more than `ord` times.
-  const flush = () => { if (cur && norm(added.join("\n")).split(a.key).length - 1 > (a.ord ?? 0)) found = cur; };
+  const flush = () => { if (cur && norm(added.join("\n")).includes(a.key)) found = cur; };
   for (const l of log.split("\n")) {
     if (l.startsWith("C ")) { flush(); cur = l.slice(2); added = []; continue; }
     if (l.startsWith("+") && !l.startsWith("+++")) added.push(l.slice(1));
@@ -424,7 +428,7 @@ function classifyPrShape(cwd, a) {
   const l = prLandingOf(cwd, a.claimPr);
   if (l?.capped) return { ...a, status: "NO-HISTORY", why: `PR #${a.claimPr} was not found within ${SYNC_DEPTH} nested non-PR merges; the trace stops there` };
   if (!l) return { ...a, status: "NOT-VIA-PR" };
-  const changed = new Set(git(cwd, ["diff", "--name-only", `${l.sha}^1`, l.sha]).split("\n"));
+  const changed = new Set(git(cwd, ["diff", "--name-only", "--no-renames", `${l.sha}^1`, l.sha]).split("\n"));
   const cited = citedAt(cwd, a, l.sha);
   const hit = cited.filter((p) => changed.has(p));
   // A cited token too short to resolve is a claim nobody can check, never a skipped one.
@@ -435,16 +439,19 @@ function classifyPrShape(cwd, a) {
 }
 
 export function classify(cwd, a, opts = {}) {
+  if (a.quoted) return { ...a, status: "NO-HISTORY", why: "a dated FIX PROPOSED inside a code span or a quotation (an example, or a stray delimiter pairing across a real annotation); read by hand" };
+  if (a.row === "(no row)") return { ...a, status: "NO-HISTORY", why: "a dated FIX PROPOSED outside any ledger row (prose, not a row's status); read by hand" };
   if (a.kind === "unknown") return { ...a, status: "NO-HISTORY", why: "a dated FIX PROPOSED in a shape this detector cannot read (expected \"(branch X\" or \"(PR #N\")" };
   if (a.kind === "pr" && a.unterminated) return { ...a, status: "NO-HISTORY", why: `a "(PR #${a.claimPr}" clause with no ")" and no row boundary within ${CLAUSE_WINDOW} characters; its cited sha cannot be read` };
   if (a.kind === "pr") return classifyPrShape(cwd, a);
+  if (a.dupKey) return { ...a, status: "NO-HISTORY", why: "the same annotation key appears twice on this line; its line history cannot tell which commit added which" };
   const intro = introOf(cwd, a);
   if (!intro) return { ...a, status: "NO-HISTORY", why: "no commit in this row's line history adds the annotation (added by a merge commit's own edit?)" };
   const l = landingOf(cwd, intro, "HEAD");
   if (!l) return { ...a, status: "NO-HISTORY", intro, why: `its adding commit ${intro.slice(0, 8)} reaches the tip by no first-parent or second-parent path (an octopus merge?)` };
   if (l.capped) return { ...a, status: "NO-HISTORY", intro, why: `its landing is nested under more than ${SYNC_DEPTH} non-PR merges; the trace stops there` };
   if (!l.pr) return { ...a, status: "NOT-VIA-PR", intro, land: l.land };
-  const changed = new Set(git(cwd, ["diff", "--name-only", `${l.land}^1`, l.land]).split("\n"));
+  const changed = new Set(git(cwd, ["diff", "--name-only", "--no-renames", `${l.land}^1`, l.land]).split("\n"));
   const cited = citedAt(cwd, a, l.land);
   const hit = cited.filter((p) => changed.has(p));
   let branch = branchEvidence(cwd, a, l);
@@ -626,13 +633,13 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else gAs(GH, "merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59", "60", "61", "62"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
     write(plan, "## Global backlog\n\n" + ids.map((n) => row(n)).join("\n") + "\n\n## Owner hands\n\nNotes.\n");
-    write(backlog, "- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n- [ ] **Box P** — open.\n- [ ] **Box Q** — open.\n");
-    for (const f of ["a", "b", "c", "d"]) write(`scripts/${f}.mjs`, "0\n");
+    write(backlog, "Intro prose.\n- [x] **Done** — closed.\n- [x] **Parent** — closed.\n  - [ ] **Child** — open.\n- [x] **Closed parent** — closed.\n- [ ] Plain open box — open.\n- [ ] **Box P** — open.\n- [ ] **Box Q** — open.\n");
+    for (const f of ["a", "b", "c", "d", "z", "old"]) write(`scripts/${f}.mjs`, `0 ${f}\n`);
     commit("base");
     const baseSha = g("rev-parse", "HEAD");
     // 1: annotation + fix on the branch, merged as a PR — STALE. Also lands the closed box's residue.
@@ -669,6 +676,10 @@ function selfTest() {
     pr("claude/far-cite", 21, () => { edit(plan, row(15), row(15) + ann("claude/far-cite", "no/path") + " " + "word ".repeat(450) + "`scripts/a.mjs`."); write("scripts/a.mjs", "15\n"); });
     // 16: the PR-named shape "FIX PROPOSED <date> (PR #N, <sha>)", landed as PR #23 — STALE.
     g("checkout", "-qb", "claude/pr-shape"); write("scripts/c.mjs", "16\n"); commit("fix 16");
+    // Rows 38/39 cite 6- and 7-character prefixes of this commit; give it a sha whose prefixes mix
+    // letters and digits (so they are read as claims), whatever the fixture above it produced.
+    const mixed = (t) => /[a-f]/.test(t) && /\d/.test(t);
+    for (let i = 1; !mixed(g("rev-parse", "HEAD").slice(0, 6)); i++) g("commit", "--amend", "-qm", `fix 16 (${i})`);
     const fix16 = g("rev-parse", "--short=8", "HEAD");
     // Fixture shas are fixed (fixed content, identity and dates). Rows 38/39 assert the prefix was
     // read as a claim, so a fixture change that made it digits-only fails loudly, never silently.
@@ -775,6 +786,17 @@ function selfTest() {
       edit(plan, row(59), row(59) + ' Example: "FIX PROPOSED 2026-10-01 (branch claude/example, x): scripts/a.mjs".');
       write("scripts/a.mjs", "58\n");
     });
+    // 60: a stray backtick pairs across a real annotation — never dropped, NOT MEASURED.
+    // 61: a "./"-prefixed cited path, deleted by the landing — normalised, STALE.
+    // 62: a cited path the landing renamed — both sides of a rename count, STALE.
+    // Intro prose: a dated FIX PROPOSED above the first backlog box belongs to no row — NOT MEASURED.
+    pr("claude/r19", 60, () => {
+      edit(plan, row(60), row(60) + " Use `x then FIX PROPOSED 2026-10-01 (branch claude/r19, x): `scripts/a.mjs`.");
+      edit(plan, row(61), row(61) + ann("claude/r19", "./scripts/z.mjs"));
+      edit(plan, row(62), row(62) + ann("claude/r19", "scripts/old.mjs"));
+      edit(backlog, "Intro prose.", "Intro prose." + ann("claude/r19", "scripts/a.mjs"));
+      write("scripts/a.mjs", "60\n"); rmSync(join(dir, "scripts/z.mjs")); g("mv", "scripts/old.mjs", "scripts/new.mjs");
+    });
     // 10: the worker's branch merged mainline in (a sync merge) before its PR landed — STALE via the PR.
     g("checkout", "-qb", "claude/fix-j"); edit(plan, row(10), row(10) + ann("claude/fix-j", "scripts/d.mjs")); write("scripts/d.mjs", "10\n"); commit("fix j");
     g("checkout", "-q", "main"); write("scripts/other.mjs", "x\n"); commit("unrelated mainline commit");
@@ -855,17 +877,30 @@ function selfTest() {
     checks.push(["a PR-named clause with no \")\" or row boundary within the window is NOT MEASURED", is("row 55", "NO-HISTORY", (r) => /no row boundary within 2000 characters/.test(r.why ?? ""))]);
     checks.push(["a landed annotation under a later \"##\" section is not read onto the last backlog row", !all.some((r) => r.branch === "claude/hands") && all.filter((r) => r.file === plan && r.status === "STALE").every((r) => r.row !== "row 55")]);
     const r57 = all.filter((r) => r.row === "row 57");
-    checks.push(["two same-date same-branch annotations on one line: the landed one is STALE, the in-flight one is not", r57.length === 2 && r57[0].status === "STALE" && r57[0].pr === 57 && r57[1].status === "NOT-VIA-PR"]);
-    checks.push(["a FIX PROPOSED example in a code span or double quotes is not read as an annotation", !all.some((r) => r.row === "row 58" || r.row === "row 59")]);
+    checks.push(["two annotations with one key on one line are both NOT MEASURED (the trace cannot tell which commit added which)", r57.length === 2 && r57.every((r) => r.status === "NO-HISTORY" && /appears twice on this line/.test(r.why))]);
+    const quotedNm = (k) => is(k, "NO-HISTORY", (r) => /inside a code span or a quotation/.test(r.why));
+    checks.push(["a FIX PROPOSED example in a code span or double quotes is NOT MEASURED, never dropped and never STALE", quotedNm("row 58") && quotedNm("row 59")]);
+    checks.push(["a real annotation a stray backtick pairs across is NOT MEASURED, never dropped", quotedNm("row 60")]);
+    checks.push(["a \"./\"-prefixed cited path the landing deleted is normalised and corroborates — STALE", is("row 61", "STALE", (r) => r.pr === 60 && r.hit.includes("scripts/z.mjs"))]);
+    checks.push(["a cited path the landing renamed corroborates (both sides of a rename) — STALE", is("row 62", "STALE", (r) => r.pr === 60 && r.hit.includes("scripts/old.mjs"))]);
+    checks.push(["a dated FIX PROPOSED in prose above the first backlog box is NOT MEASURED, not an open row", all.some((r) => r.file === backlog && r.row === "(no row)" && r.status === "NO-HISTORY" && /outside any ledger row/.test(r.why))]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 57", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 61", "row 62", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
     const line = summaryLine([...kinds.map((status, i) => ({ status, file: "f", row: `r${i}` })), { status: "STALE", file: "f", row: "r0" }, { status: "STALE", file: "f", row: "r9" }]);
     checks.push(["the REPORTED line counts every bucket, distinct stale rows apart from annotations, NO-HISTORY and NO-LEDGER both as not measured",
       line.startsWith("REPORTED: 7 FIX PROPOSED annotation(s) — 3 stale (claim already landed via a PR) across 2 open row(s), 1 landed-uncorroborated, 1 closed-row residue, 1 not landed via a PR, 2 not measured.")]);
+    // Plan row 170 on this tree: its body prose must never close it (an unquoted "DONE" in this
+    // PR's own text once did); only a closed marker in its status lines may.
+    {
+      const real = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", plan), "utf8");
+      const r170 = parseRows(real).find((r) => r.id === "170");
+      const head = r170 ? r170.text.split("\n").slice(0, 2).join("\n") : "";
+      checks.push(["plan row 170 on this tree is not closed by its body prose", !!r170 && (!planRowClosed(r170.text) || planRowClosed(head))]);
+    }
     const sig = (rs) => JSON.stringify(rs.map((r) => [r.file, r.row, r.status, r.pr ?? null]));
     const missing = measure(dir, [plan, "docs/RENAMED_LEDGER.md"]);
     checks.push(["a ledger missing at HEAD is NOT MEASURED, never skipped", missing.some((r) => r.file === "docs/RENAMED_LEDGER.md" && r.status === "NO-LEDGER" && /not present at HEAD/.test(r.why))]);
@@ -1245,7 +1280,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 122;
+  return failed === 0 && checks.length === 127;
 }
 
 let isMain = false;

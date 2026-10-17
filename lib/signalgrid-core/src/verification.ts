@@ -50,7 +50,7 @@
 // `lib/integrations`. No IO, no randomness, no network — the verdict is a pure
 // function of the action, the reads the caller already holds, and `asOf`.
 
-import { deterministicId } from "./util";
+import { deterministicId, parseInstant } from "./util";
 import type { RemediationAction } from "./types";
 
 /**
@@ -93,9 +93,10 @@ export interface RemediationVerification {
 }
 
 /** Parse an instant, or null. Never silently 0, which would place an unreadable
- *  instant before every request and admit it as evidence. */
+ *  instant before every request and admit it as evidence. An offset-less stamp is
+ *  unreadable too: its meaning depends on the host's zone (`parseInstant`). */
 function instant(iso: string): number | null {
-  const ms = Date.parse(iso);
+  const ms = parseInstant(iso);
   return Number.isFinite(ms) ? ms : null;
 }
 

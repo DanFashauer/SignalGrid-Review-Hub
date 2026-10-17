@@ -23,7 +23,7 @@ import type {
   WebhookEndpoint,
   Workflow,
 } from "./types";
-import { constantTimeEquals } from "./util";
+import { constantTimeEquals, deterministicId, parseInstant } from "./util";
 
 // Codepoint comparison for sorts that must be DETERMINISTIC on any machine.
 // `localeCompare` follows the process locale (sv_SE sorts "ä" after "z", de_DE
@@ -66,6 +66,7 @@ export class MemoryStore {
   //                              (lib/signalgrid-core/src/decision.ts:157,166)
   //   webhookDeliveries      2x  one per ACTIVE subscribed endpoint — a fan-out
   //   remediations           1x  bounded by the decision that proposed them
+  //   stepUpAnswers          1x  one per decision, evicted with it (row 2522)
   private readonly maxDecisionsPerTenant: number;
   private readonly maxAuditEventsPerTenant: number;
   private readonly maxWebhookDeliveriesPerTenant: number;
@@ -252,7 +253,8 @@ export class MemoryStore {
    * deliberately unscoped by tenant — and deliberately carrying no id, ref, subject
    * or tenant, only category names, counts and modes. Nothing here can identify a
    * device, a person or a customer, which is what lets an unscoped aggregate be
-   * served at all (the same rule /metrics already follows).
+   * served at all (the same rule /metrics already follows). `signalsHeld` counts
+   * readings HELD, so a fresh row `putSignal` keeps beside a not-fresh one counts.
    */
   signalInventory(): Array<{ category: SignalCategory; signalsHeld: number; modes: ConnectorMode[] }> {
     const byConnector = new Map<string, ConnectorMode>();
@@ -291,6 +293,48 @@ export class MemoryStore {
   // ── Normalized signals ────────────────────────────────────────────────────
 
   putSignal(signal: NormalizedSignal): void {
+    // An OLDER reading re-put under the same id does not erase a newer one
+    // (BUILD_BACKLOG row 2521): one dock sync carrying a confirmed tamper at 09:30
+    // and a "none" at 08:00, in that order, stored "none". A null value is a
+    // retraction and always replaces. A stored row the sync itself stamped
+    // "unknown" (a future stamp) never blocks: one dock record dated 2099 would
+    // otherwise make every honest record after it "older" and drop it.
+    // ponytail: equal or illegible stamps keep last-write-wins; posture sync stamps
+    // every record with its own nowIso (connector.ts:179, :194), so posture rows
+    // are guarded too and a backward server-clock step drops posture updates until
+    // the clock passes the old stamp. A per-row sequence is the upgrade.
+    const previous = this.signals.get(signal.id);
+    if (previous && signal.value !== null && previous.freshness !== "unknown") {
+      const incomingAt = parseInstant(signal.observedAt);
+      const previousAt = parseInstant(previous.observedAt);
+      if (Number.isFinite(incomingAt) && Number.isFinite(previousAt) && incomingAt < previousAt) return;
+    }
+    // A NOT-FRESH READING MAY ACCUSE BUT CANNOT VOUCH (row 2519) — and the evidence
+    // fold cannot enforce that if the store has already overwritten the fresh row
+    // (cloud review of #1224: one dock syncing confirmed@14:55Z, then none@2099,
+    // stored only the "none", and a deny became a step-up). So the newest FRESH
+    // reading this id has held is kept beside a not-fresh one, under a derived id,
+    // and `groupLatest` folds the two worst-wins. Keeping it INSTEAD would drop a
+    // not-fresh accusation. A fresh reading at least as new, or a retraction,
+    // retires it.
+    const keptId = deterministicId("sig_fresh", signal.id);
+    const kept = this.signals.get(keptId);
+    if (signal.value !== null && signal.freshness !== "fresh") {
+      if (
+        previous?.freshness === "fresh" &&
+        previous.value !== null &&
+        (!kept || parseInstant(previous.observedAt) > parseInstant(kept.observedAt))
+      ) {
+        this.setSignalRow({ ...previous, id: keptId });
+      }
+    } else if (kept && (signal.value === null || !(parseInstant(kept.observedAt) > parseInstant(signal.observedAt)))) {
+      this.signals.delete(keptId);
+      this.signalsBySubject.get(subjectKey(kept.tenantId, kept.subjectType, kept.subjectId))?.delete(keptId);
+    }
+    this.setSignalRow(signal);
+  }
+
+  private setSignalRow(signal: NormalizedSignal): void {
     this.signals.set(signal.id, signal);
     const key = subjectKey(signal.tenantId, signal.subjectType, signal.subjectId);
     let bucket = this.signalsBySubject.get(key);
@@ -391,6 +435,7 @@ export class MemoryStore {
       const evicted = this.decisions.get(evictId);
       this.decisions.delete(evictId);
       if (evicted) this.snapshots.delete(evicted.evidenceSnapshotId);
+      this.stepUpAnswers.delete(`${decision.tenantId}::${evictId}`);
       // Counted so /v1/metrics can say its numbers cover a WINDOW, not the whole history.
       this.decisionsEvicted.set(decision.tenantId, (this.decisionsEvicted.get(decision.tenantId) ?? 0) + 1);
     });
@@ -485,8 +530,10 @@ export class MemoryStore {
 
   // ── Step-up answers ───────────────────────────────────────────────────────
   //
-  // Bounded by the decisions that raised them (one per decision, evicted with the
-  // decision order), so this collection can never outgrow the one knob.
+  // Bounded by the decisions that raised them: one per decision, deleted by
+  // `putDecision`'s evict callback when its decision goes, so this collection can
+  // never outgrow the one knob. (Until row 2522 nothing deleted them, and this
+  // comment claimed a bound no code enforced.)
 
   putStepUpAnswer(answer: StepUpAnswer): void {
     this.stepUpAnswers.set(`${answer.tenantId}::${answer.decisionId}`, answer);
@@ -546,12 +593,14 @@ export class MemoryStore {
   }
 }
 
-// Composite index keys. The tenant id is always the first segment, so an index
-// lookup is inherently tenant-scoped. `|` is safe as a separator: tenant ids,
-// external refs, workflow keys, and subject ids in this core are alphanumeric
-// with `_`/`-`/`.` and never contain `|`.
+// Composite index keys. The tenant id is always the first segment, and every part
+// has its `\` and `|` escaped before the join, so no part can forge a separator
+// (BUILD_BACKLOG row 2545). The old premise — "ids never contain `|`" — was a
+// promise no input validation kept: tenant "a|b" + ref "c" and tenant "a" + ref
+// "b|c" made the SAME key, and the by-ref lookups do not re-check the tenant, so
+// one tenant's query resolved another's row. In-memory only; nothing migrates.
 function refKey(tenantId: string, ref: string): string {
-  return `${tenantId}|${ref}`;
+  return [tenantId, ref].map((p) => p.replace(/[\\|]/g, "\\$&")).join("|");
 }
 
 function subjectKey(
@@ -559,7 +608,7 @@ function subjectKey(
   subjectType: string,
   subjectId: string,
 ): string {
-  return `${tenantId}|${subjectType}|${subjectId}`;
+  return [tenantId, subjectType, subjectId].map((p) => p.replace(/[\\|]/g, "\\$&")).join("|");
 }
 
 /** Return the row only if it belongs to the caller's tenant; else undefined. */

@@ -17,7 +17,7 @@
 //     tenant mismatch, and a server that answers 200 with no verdict each exit
 //     non-zero with a message naming the cause, and none prints an outcome.
 //   · The session file never holds the token and is refused inside the tree.
-//   · The committed .claude/skills/signalgrid-cli/SKILL.md equals the generator,
+//   · The committed .claude/skills/cli-anything/signalgrid-cli/SKILL.md equals the generator,
 //     and the run line it documents (pnpm --silent …) yields one parseable JSON object.
 //   · Every write carries an Idempotency-Key; reusing it replays instead of writing twice,
 //     and a write whose answer is lost names the key to recover with.
@@ -37,7 +37,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const serverEntry = resolve(repoRoot, "artifacts/api-server/dist/index.mjs");
 const cliDir = resolve(repoRoot, "artifacts/signalgrid-cli");
 const cliBin = resolve(cliDir, "src/bin.ts");
-const skillPath = resolve(repoRoot, ".claude/skills/signalgrid-cli/SKILL.md");
+const skillPath = resolve(repoRoot, ".claude/skills/cli-anything/signalgrid-cli/SKILL.md");
 const TOKEN = "sgk_demo_northwind_owner";
 const TENANT = "tenant_northwind";
 
@@ -1148,7 +1148,7 @@ async function main(): Promise<void> {
     check("--json with no command exits 2 with one JSON error object", bareJson.code === 2 && parse(bareJson.stdout)?.["ok"] === false);
     const gen = await cli(["skill"], {});
     const committed = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "";
-    check(".claude/skills/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
+    check(".claude/skills/cli-anything/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
       gen.code === 0 && gen.stdout.length > 0 && gen.stdout === committed);
     // The run line the SKILL.md documents, exactly as an agent types it: pnpm must add
     // nothing to stdout, or `--json` is no longer one JSON object.
@@ -1175,9 +1175,10 @@ async function main(): Promise<void> {
     check("skill --json prints one JSON object carrying the SKILL.md", skillJson.code === 0 && parse(skillJson.stdout)?.["skillMd"] === committed);
     const skillTypo = await cli(["skill", "typo"], {});
     check("skill with a stray operand exits 2", skillTypo.code === 2);
-    // The skill sits one level under .claude/skills/, so skill discovery and
-    // scripts/check-skill-plane-conformance.mjs both see it (review round 15 moved it out of
-    // cli-anything/); the shape is also held here, against the generator's own output.
+    // scripts/check-skill-plane-conformance.mjs walks .claude/skills/*/SKILL.md one level deep, so
+    // this nested skill is outside its walk; its three rules are held here instead, not waived.
+    // It stays nested: a top-level directory falls in the publication boundary's vendored-skill
+    // area, whose classification this PR may not edit (review round 15 on PR #1321).
     const fm = /^---\n([\s\S]*?)\n---\n/.exec(committed)?.[1] ?? "";
     const fmName = /^name:\s*(.+)$/m.exec(fm)?.[1]?.trim();
     const fmDesc = /^description:\s*(.+)$/m.exec(fm)?.[1]?.trim();

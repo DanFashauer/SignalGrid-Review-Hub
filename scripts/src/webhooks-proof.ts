@@ -39,7 +39,7 @@ import {
   WEBHOOK_URL_REFUSAL_REASONS,
 } from "@workspace/integrations/webhooks";
 import { SIGNING_SECRET_MISSING } from "@workspace/integrations/emit-gate/signing";
-import { createWebhook, getDeliveryLogs, updateWebhook } from "@workspace/integrations/webhooks/store";
+import { addToDLQ, createWebhook, getDeliveryLogs, listDLQ, updateWebhook } from "@workspace/integrations/webhooks/store";
 import { MemoryStore, deliverEvent, fixedClock } from "@workspace/signalgrid-core";
 
 let passed = 0;
@@ -702,6 +702,27 @@ check(
           dlLogs[0]?.status === "dead_letter");
         check("...while the ATTEMPTS themselves are still recorded as `failed` (the terminal row is added, not a relabel)",
           dlLogs.filter((l) => l.status === "failed").length >= 3);
+
+        // PLAN ROW 138: the DLQ record states the attempt count the dispatcher
+        // OBSERVED. addToDLQ hardcoded 6 whatever maxAttempts was, so this
+        // three-attempt dispatch dead-lettered a record claiming six.
+        const dlq = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`the DLQ entry records the attempts actually made (3 configured, spy fired ${calls.length}x, entry says ${dlq[0]?.attempts})`,
+          dlq.length >= 1 && dlq[0]?.attempts === calls.length && calls.length === 3);
+        let refused = false;
+        try { await addToDLQ(hook.id, "evt_probe", {}, "probe", Number.NaN); } catch { refused = true; }
+        check("...and addToDLQ refuses a count nobody observed (NaN) rather than writing it as evidence", refused);
+        // Distinguishes the OBSERVED count from the CONFIGURED one: with maxAttempts -1
+        // the loop makes zero deliveries, so a record of 0 is the truth and a record
+        // echoing the config (-1) is refused. A three-attempt run alone could not tell
+        // `attemptsMade` from `config.retry.maxAttempts` — they are both 3 there.
+        const before = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id).length;
+        installSpy();
+        await dispatchEvent("siem.event", { probe: true },
+          { timeoutMs: 1000, retry: { maxAttempts: -1, baseDelayMs: 1, maxDelayMs: 1, jitterFactor: 0 } } as never).catch(() => undefined);
+        const after = (await listDLQ(1000)).filter((e) => e.webhookId === hook.id);
+        check(`a run that made ZERO deliveries dead-letters a record saying 0, not the configured ceiling (spy fired ${calls.length}x, new entries ${after.length - before}, newest says ${after[0]?.attempts})`,
+          calls.length === 0 && after.length === before + 1 && after[0]?.attempts === 0);
       }
     } finally {
       delete process.env[ENV_KEY];

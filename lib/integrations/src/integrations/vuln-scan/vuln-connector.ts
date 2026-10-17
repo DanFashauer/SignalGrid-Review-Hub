@@ -127,7 +127,11 @@ export function normalizeFinding(finding: VulnFindingRaw): NormalizedVulnFinding
     deviceId: finding.deviceId,
     cveId: finding.cveId ?? null,
     severity: normalizeSeverity(finding.severity, finding.cvssScore),
-    cvssScore: typeof finding.cvssScore === "number" ? finding.cvssScore : null,
+    // FINITE, or null (unknown). A bare typeof admitted NaN and Infinity, which then
+    // travelled out to evidence as if they were readings; rtls-connector.ts guards the
+    // identical shape. Severity above still sees the raw value on purpose: NaN already
+    // lands on `unknown` there and Infinity on `critical`, both of which tighten.
+    cvssScore: typeof finding.cvssScore === "number" && Number.isFinite(finding.cvssScore) ? finding.cvssScore : null,
     exploitAvailable: finding.exploitAvailable === true,
     component: finding.component ?? null,
     fixedVersion: finding.fixedVersion ?? null,

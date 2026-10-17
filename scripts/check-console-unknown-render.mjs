@@ -78,6 +78,14 @@
 //   Round 32 DECLARED (not built): a nested object map `TONE[group][status]` is judged on its FIRST sub-map only; a later sub-map
 //   with a good class under the same key is not examined, so a good-class entry there stays silent. Resolving every sub-map needs a
 //   per-key product over both lookups; the live tree has no nested map, so the cost is declared, not paid (backlog row filed).
+//   Round 33 DECLARED (Codex pass 13 on 8c74d9cf; not built, 0 instances in the live console tree):
+//     SILENT: a render-prop invoked through `.call`/`.apply` (`render.call(null, v)`) is not followed; `void 0` as an argument is read as an
+//     explicit value, so the parameter default is not walked; a member of a same-file component object reassigned after its literal
+//     (`Components.Pill = Good`) is judged by the literal's member only; a data variable derived by ASSIGNMENT (`let n; n = value`) rather
+//     than an initializer is not tracked.
+//     OVER-FLAG (fail-closed): a later JSX spread that replaces a data prop (`n={q.data?.n} {...{ n: "known" }}`) still taints the child; a
+//     same-file member tag (`<Components.Pill s={…} />`) is not counted as a call site for plain-prop analysis; any identifier or string named
+//     `cloneElement`, even a local helper, marks every component as having unseen call sites.
 //   Round 32 FIXED: a member tag whose member is absent, computed, or hidden behind a spread is rejected when it receives unguarded
 //   query data; `.call`/`.apply` shift the argument list before a parameter default applies; a `var` component hoists to its function.
 //   false NEGATIVES: a shorthand property in a JSX spread (`{...{ tone, n }}`); a query object inside a spread literal

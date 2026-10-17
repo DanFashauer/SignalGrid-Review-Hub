@@ -138,7 +138,9 @@ Session-independent copies of the two scripts the coordinator runs around the
 wave, kept in the tree because a container rebuild wiped the scratchpad copies
 on 2026-10-08 and they had to be rewritten from memory:
 
-- `helpers/review-wave-verdict.py <journal.jsonl> <wave> [out_dir] [--prs 1444,1445]`
+- `helpers/review-wave-verdict.py <journal.jsonl> <wave> [out_dir] --prs 1444,1445`
+  (coordinator-run only: no gate runs its `--self-test`; run `python3 -I` on it
+  after any edit. `--prs` is required, exit 64 without it)
   — turns the wave's journal into one `c<PR>w<wave>.md` verdict comment per PR:
   the reviewer's verdict, the refuter's upheld/refuted call (the refuter's
   counter-verdict wins when it refutes), findings with the command and exit
@@ -146,8 +148,8 @@ on 2026-10-08 and they had to be rewritten from memory:
   (DR-054): a reviewer or refuter that is missing, null, dead, blocked or
   schema-invalid makes the verdict `blocked`, never `ship` — the file names the
   agent and why, never carries the DR-037 landing sentence, and the exit code is
-  2; a ship on a SAFETY_MACHINERY, DECISION_PATH or OWNER_RESERVED tier with no
-  refute is blocked too. `--prs` lists the PRs the wave was given, so one whose
+  2; a ship with no refute is blocked unless its tier is exactly `autonomous` or
+  `docs only`; the latest round decides. `--prs` lists the PRs the wave was given, so one whose
   reviewer never started still gets a blocked row. `--self-test` runs its
   cases on synthetic journals. It replaces `@claude` with `@ claude` so a
   posted comment never summons the GitHub workflow. Run it with `python3 -I`;

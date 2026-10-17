@@ -894,11 +894,13 @@ function selfTest() {
     checks.push(["the REPORTED line counts every bucket, distinct stale rows apart from annotations, NO-HISTORY and NO-LEDGER both as not measured",
       line.startsWith("REPORTED: 7 FIX PROPOSED annotation(s) — 3 stale (claim already landed via a PR) across 2 open row(s), 1 landed-uncorroborated, 1 closed-row residue, 1 not landed via a PR, 2 not measured.")]);
     // Plan row 170 on this tree: its body prose must never close it (an unquoted "DONE" in this
-    // PR's own text once did); only a closed marker in its status lines may.
+    // PR's own text once did); only a closed marker in its status, the words right after the
+    // heading's dash, may.
     {
       const real = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", plan), "utf8");
       const r170 = parseRows(real).find((r) => r.id === "170");
-      const head = r170 ? r170.text.split("\n").slice(0, 2).join("\n") : "";
+      const dash = r170 ? r170.text.indexOf("—") : -1;
+      const head = r170 && dash >= 0 ? r170.text.slice(0, dash + 60) : "";
       checks.push(["plan row 170 on this tree is not closed by its body prose", !!r170 && (!planRowClosed(r170.text) || planRowClosed(head))]);
     }
     const sig = (rs) => JSON.stringify(rs.map((r) => [r.file, r.row, r.status, r.pr ?? null]));

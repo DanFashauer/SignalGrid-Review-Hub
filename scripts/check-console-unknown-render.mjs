@@ -75,6 +75,11 @@
 // binding of a component name (a parameter, a class, an import) shadows an outer component, `React["cloneElement"]`,
 // downstream map aliases (`const T1 = T0`), and an imported `String`/`Array` is not the global.
 // KNOWN OPEN (Codex pass 4 on 1f81c0a0 and the landing refute; NOT fixed — each is a long-tail shape):
+//   Round 32 DECLARED (not built): a nested object map `TONE[group][status]` is judged on its FIRST sub-map only; a later sub-map
+//   with a good class under the same key is not examined, so a good-class entry there stays silent. Resolving every sub-map needs a
+//   per-key product over both lookups; the live tree has no nested map, so the cost is declared, not paid (backlog row filed).
+//   Round 32 FIXED: a member tag whose member is absent, computed, or hidden behind a spread is rejected when it receives unguarded
+//   query data; `.call`/`.apply` shift the argument list before a parameter default applies; a `var` component hoists to its function.
 //   false NEGATIVES: a shorthand property in a JSX spread (`{...{ tone, n }}`); a query object inside a spread literal
 //   (`{...{ query: q }}`); a query prop forwarded as `props.query` across components; props destructured in the BODY
 //   (`const { tone, n } = props`), `let p = props`, `(props as any).tone`, `const { query } = props`; a nested-pattern default
@@ -1071,7 +1076,8 @@ function analyzeSourceFile(relPath, text) {
       // a TypeScript overload signature has no body and is not the component: only the implementation registers
       if (ts.isFunctionDeclaration(n) && n.body && n.name && /^[A-Z]/.test(n.name.text)) localComponents.push({ name: n.name.text, params: n.parameters, scope: scopeOf(n), fn: n });
       if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && /^[A-Z]/.test(n.name.text) && n.initializer) {
-        for (const fn of componentLeaves(n.initializer).fns) localComponents.push({ name: n.name.text, params: fn.parameters, scope: scopeOf(n), fn });
+        const cscope = n.parent.flags & (ts.NodeFlags.Const | ts.NodeFlags.Let) ? scopeOf(n) : varScopeOf(n); // a `var` hoists to its function (or the module)
+        for (const fn of componentLeaves(n.initializer).fns) localComponents.push({ name: n.name.text, params: fn.parameters, scope: cscope, fn });
       }
       ts.forEachChild(n, reg);
     };
@@ -1091,16 +1097,22 @@ function analyzeSourceFile(relPath, text) {
     if (!adhocComps.has(fn)) adhocComps.set(fn, { name, params: fn.parameters, scope: undefined, fn });
     return adhocComps.get(fn);
   };
-  const memberTagValue = (tag) => { // the value expression of `Obj.Name` when Obj is a same-file const object literal
+  const memberTagObject = (tag) => { // the same-file const object literal `Obj` of `<Obj.Name />`, else null (an imported namespace is not followed)
     if (!(ts.isPropertyAccessExpression(tag) && ts.isIdentifier(tag.expression))) return null;
     const d = lookupDecl(tag.expression);
     const o = d && !d.mutable && d.init ? unwrapExpr(d.init) : null;
-    if (!o || !ts.isObjectLiteralExpression(o)) return null;
+    return o && ts.isObjectLiteralExpression(o) ? o : null;
+  };
+  const memberTagValue = (tag) => { // the value expression of `Obj.Name`; null when absent, or when a later spread could override it
+    const o = memberTagObject(tag);
+    if (!o) return null;
+    let found = null;
     for (const pr of o.properties) {
-      if (ts.isPropertyAssignment(pr) && pr.name && memberKey(pr.name) === tag.name.text) return pr.initializer;
-      if (ts.isShorthandPropertyAssignment(pr) && pr.name.text === tag.name.text) return pr.name;
+      if (ts.isPropertyAssignment(pr) && pr.name && memberKey(pr.name) === tag.name.text) found = pr.initializer;
+      else if (ts.isShorthandPropertyAssignment(pr) && pr.name.text === tag.name.text) found = pr.name;
+      else if (ts.isSpreadAssignment(pr)) found = null; // `{ Pill, ...other }`: the spread may override it; `{ ...{ Pill } }` hides it. Either way not followed here.
     }
-    return null;
+    return found;
   };
   const findComponents = (tag) => {
     if (tag && ts.isPropertyAccessExpression(tag)) {
@@ -2018,12 +2030,19 @@ function analyzeSourceFile(relPath, text) {
           resolving.add(fn);
           const saved = helperBind;
           helperBind = new Map();
-          const viaCallApply = ts.isPropertyAccessExpression(unwrapExpr(x.expression));
-          (fn.parameters ?? []).forEach((prm, i) => { // an omitted argument (or one shifted by call / apply) takes the parameter's DEFAULT: walk it as a value
-            const a = x.arguments[i];
-            if (prm.initializer && (viaCallApply || !a || (ts.isIdentifier(unwrapExpr(a)) && unwrapExpr(a).text === "undefined"))) walk(prm.initializer, use ?? x);
-          }); // `.call(null, a)` shifts the arguments: no substitution
-          (fn.parameters ?? []).forEach((prm, i) => { if (!viaCallApply && ts.isIdentifier(prm.name) && !prm.initializer && refsReadOnly(prm.name.text, fn, prm) && x.arguments[i]) helperBind.set(prm.name.text, x.arguments[i]); });
+          // the ACTUAL arguments: `.call(this, a, b)` drops the first, `.apply(this, [a, b])` is its array literal; null = unknown
+          const callee0 = unwrapExpr(x.expression);
+          let argList = [...x.arguments];
+          if (ts.isPropertyAccessExpression(callee0) && callee0.name.text === "call") argList = x.arguments.slice(1);
+          else if (ts.isPropertyAccessExpression(callee0) && callee0.name.text === "apply") {
+            const a1 = x.arguments[1] && unwrapExpr(x.arguments[1]);
+            argList = a1 && ts.isArrayLiteralExpression(a1) && !a1.elements.some((e) => ts.isSpreadElement(e)) ? [...a1.elements] : null;
+          }
+          (fn.parameters ?? []).forEach((prm, i) => { // an omitted argument takes the parameter's DEFAULT: walk it as a value (an unknown argument list walks it, fail-closed)
+            const a = argList ? argList[i] : undefined;
+            if (prm.initializer && (!a || (ts.isIdentifier(unwrapExpr(a)) && unwrapExpr(a).text === "undefined"))) walk(prm.initializer, use ?? x);
+          });
+          (fn.parameters ?? []).forEach((prm, i) => { if (argList && argList[i] && ts.isIdentifier(prm.name) && !prm.initializer && refsReadOnly(prm.name.text, fn, prm)) helperBind.set(prm.name.text, argList[i]); });
           for (const r of returnExprs(fn)) walk(r, use ?? x);
           helperBind = saved;
           resolving.delete(fn);
@@ -2142,6 +2161,7 @@ function analyzeSourceFile(relPath, text) {
       if (ts.isPropertyAccessExpression(n.tagName)) { // `<Components.Pill />` backed by a same-file const object: its value is judged like a binding
         const v = memberTagValue(n.tagName);
         init = v ? unwrapExpr(v) : null;
+        if (memberTagObject(n.tagName) && !v) unresolved = true; // a member of a same-file object that is absent, computed or hidden behind a spread: rejected
         if (v && componentLeaves(v).unresolved) unresolved = true; // a member this analysis cannot resolve (a call, an imported component) is rejected
         if (v && ts.isIdentifier(init)) init = null; // a plain same-file component name: followed, not rejected
       } else for (let cur = n.tagName, hops = 0; hops < 6; hops++) {
@@ -3706,6 +3726,36 @@ export function Page() {
 export function Page() {
   ${Q2}
   return <Panel value={q.data?.n} render={() => <span className="text-emerald-400">ready</span>} />;
+}`)],
+);
+
+// Round 32 (Codex pass 12 + coordinator): a member tag of a same-file object whose member is absent, computed, or hidden behind / under
+// a spread is rejected when it receives unguarded query data; `.call` / `.apply` arguments are shifted before a parameter default
+// applies (an unknown `.apply` argument list walks the default, fail-closed); a `var` component registers in its hoisted scope.
+const NS_PRE = `${GOOD_C}`;
+BUG_R6.push(
+  ["a spread hides the namespace member: { ...{ Pill: Good } } -> <Components.Pill /> is rejected", propsFixture(`${NS_PRE}\nconst Components = { ...{ Pill: Good } };`, "<Components.Pill items={items} />")],
+  ["a namespace object that has no such member is rejected", propsFixture(`${NS_PRE}\nconst Components = { Other: Bad };`, "<Components.Pill items={items} />")],
+  ["a computed namespace key is not a known member and is rejected", propsFixture(`${NS_PRE}\nconst Components = { [k]: Good };`, "<Components.Pill items={items} />")],
+  ["a later spread may override the namespace member and is rejected", propsFixture(`${NS_PRE}\nconst Components = { Pill: Bad, ...other };`, "<Components.Pill items={items} />")],
+  ["tone.call(null) omits the argument after the shift: the emerald default applies", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone.call(null)}>{q.data?.n}</span>`)],
+  ["tone.apply(null, []) omits the argument: the emerald default applies", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone.apply(null, [])}>{q.data?.n}</span>`)],
+  ["tone.apply(null, args) has an unknown argument list: the default is walked (fail-closed)", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone.apply(null, args)}>{q.data?.n}</span>`)],
+  ["a var component in a nested block is registered in its hoisted scope", wrap2(`export function Page() {
+  ${Q2}
+  if (enabled) { var Pill = ({ n }) => <span className="text-emerald-400">{n}</span>; }
+  return Pill ? <Pill n={q.data?.n} /> : null;
+}`)],
+);
+OK_R6.push(
+  ["a namespace member that is present and muted is followed and clean", propsFixture(`${NS_PRE}\nconst Components = { Pill: Bad };`, "<Components.Pill items={items} />")],
+  ["a namespace object with an absent member, call site guarded on the data", propsFixture(`${NS_PRE}\nconst Components = { Other: Bad };`, "q.data ? <Components.Pill items={items} /> : null")],
+  ["tone.call(null, explicit muted argument) replaces the emerald default", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone.call(null, "text-slate-400")}>{q.data?.n}</span>`)],
+  ["tone.apply(null, [explicit muted argument]) replaces the emerald default", helperPage(`function tone(c = "text-emerald-400") { return c; }`, `<span className={tone.apply(null, ["text-slate-400"])}>{q.data?.n}</span>`)],
+  ["a var component in a nested block, call site guarded on the data", wrap2(`export function Page() {
+  ${Q2}
+  if (enabled) { var Pill = ({ n }) => <span className="text-emerald-400">{n}</span>; }
+  return Pill && q.data ? <Pill n={q.data.n} /> : null;
 }`)],
 );
 

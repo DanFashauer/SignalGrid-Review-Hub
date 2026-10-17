@@ -149,7 +149,7 @@ export function writeRecovery(
   }
   return key
     ? {
-        suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes replays the recorded answer only from the same server process (its replay store is in-process memory); if the server restarted or runs as several instances, check the tenant's audit log (\`signalgrid audit\`) with a credential that holds audit:read (owner, admin or auditor — operator and connector keys do not) before retrying.`,
+        suffix: ` The write may have been recorded. Re-running the same command with --idempotency-key ${key} within 5 minutes MAY replay the recorded answer, from the same server process only (its replay store is in-process memory, and it evicts its oldest keys early once it holds 10,000), so a replay cannot be relied on; check the tenant's audit log (\`signalgrid audit\`) with a credential that holds audit:read (owner, admin or auditor — operator and connector keys do not) before retrying.`,
         extra: { idempotencyKey: key, reconcileWith: RECONCILE },
       }
     : { suffix: "", extra: undefined };
@@ -270,7 +270,7 @@ export async function confirmTenant(cfg: Config): Promise<{ id: string; slug: st
   if (cfg.tenant !== id && cfg.tenant !== slug) {
     throw new CliError(
       "tenant_mismatch",
-      `SIGNALGRID_TENANT is "${cfg.tenant}" but the token belongs to "${id}"${slug ? ` (${slug})` : ""}; nothing was requested beyond /v1/context.`,
+      `SIGNALGRID_TENANT is "${cfg.tenant}" but the token belongs to "${clean(id)}"${slug ? ` (${clean(slug)})` : ""}; nothing was requested beyond /v1/context.`,
       EXIT.usage,
     );
   }

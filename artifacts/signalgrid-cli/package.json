@@ -8,8 +8,10 @@
     "start": "tsx src/bin.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "devDependencies": {
-    "@types/node": "catalog:",
+  "dependencies": {
     "tsx": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
   }
 }

@@ -404,13 +404,14 @@ importers:
         version: 3.25.76
 
   artifacts/signalgrid-cli:
+    dependencies:
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.12
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.2
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.12
 
   artifacts/signalgrid-desktop:
     devDependencies:

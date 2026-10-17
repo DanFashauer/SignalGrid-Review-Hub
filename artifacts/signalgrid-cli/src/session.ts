@@ -45,10 +45,14 @@ export function sessionPath(env: NodeJS.ProcessEnv): string | null {
     throw new CliError("session_invalid", "SIGNALGRID_CLI_SESSION must be an absolute path.", EXIT.usage);
   }
   const path = resolve(raw);
+  // The REAL path is what is checked AND what is returned: every later lock, temp file and
+  // rename goes to it, so an ancestor symlink re-pointed into the tree after this check
+  // cannot carry the write there (review round 15 on PR #1321).
+  const real = realOf(path);
   const root = repoRoot();
   if (root) {
     // Compare REAL paths: a symlink outside the tree that points into it must not pass.
-    const rel = relative(realpathSync(root), realOf(path));
+    const rel = relative(realpathSync(root), real);
     if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) {
       throw new CliError(
         "session_in_tree",
@@ -57,7 +61,7 @@ export function sessionPath(env: NodeJS.ProcessEnv): string | null {
       );
     }
   }
-  return path;
+  return real;
 }
 
 /** The real path of `p`: its deepest existing ancestor resolved through symlinks, plus the rest. */

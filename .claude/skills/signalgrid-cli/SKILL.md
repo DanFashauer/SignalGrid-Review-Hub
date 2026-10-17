@@ -47,6 +47,6 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass `--allow-write` only when the task says to mint a decision or start a sync.
-- A write that exits 3 may still have been recorded. Its error names an idempotency key (`error.idempotencyKey` under `--json`); re-running the same command with `--idempotency-key <key>` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check `signalgrid audit` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
+- A write that exits 3 may still have been recorded. Its error names an idempotency key (`error.idempotencyKey` under `--json`); re-running the same command with `--idempotency-key <key>` within 5 minutes MAY replay the recorded answer, but only from the same server process and only while the key is still held (the replay store is in-process memory and evicts its oldest keys early once it holds 10,000). A replay cannot be relied on, so check `signalgrid audit` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - `--json` prints one JSON object on stdout for every exit, errors included.

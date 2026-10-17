@@ -302,11 +302,13 @@ async function explain(cfg: Config, id: string): Promise<Out> {
   let stepUpLine: string;
   if (stepUpRaw === null || stepUpRaw === undefined) {
     stepUpLine = d["outcome"] === "step_up" ? "UNANSWERED — a host must treat this step_up as unresolved" : "none";
-  } else if (isCompleteStepUp(stepUpRaw, id, tenant.id, d["identityId"])) {
+  } else if (d["outcome"] === "step_up" && isCompleteStepUp(stepUpRaw, id, tenant.id, d["identityId"])) {
+    // Only a step_up can be answered (core recordStepUpAnswer): an answer beside any other
+    // outcome would read as an upgrade the evidence never supported (review round 15).
     const a = stepUpRaw as Record<string, unknown>;
     stepUpLine = `answered by ${str(a["method"])} at ${str(a["answeredAt"])} (credential ${str(a["credentialReference"])})`;
   } else {
-    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried a step-up answer that is incomplete or not this decision's; nothing is reported.`, EXIT.refused);
+    throw new CliError("malformed_answer", `GET /v1/decisions/${id} carried a step-up answer that is incomplete, not this decision's, or beside an outcome that is not step_up; nothing is reported.`, EXIT.refused);
   }
   const rules = Array.isArray(d["matchedRules"]) ? (d["matchedRules"] as Record<string, unknown>[]) : [];
   const signals = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
@@ -342,6 +344,11 @@ async function signals(cfg: Config, id: string): Promise<Out> {
   const list = (ev["evidence"] as Record<string, unknown> | undefined)?.["signalsUsed"];
   if (!Array.isArray(list)) {
     throw new CliError("malformed_answer", "the evidence snapshot named no signalsUsed list; nothing is reported.", EXIT.refused);
+  }
+  // Each signal row is a tenant record of its own: one outside the confirmed tenant is never
+  // listed, in either mode (review round 15 on PR #1321).
+  if (!list.every((s) => isObj(s) && s["tenantId"] === tenant.id)) {
+    throw new CliError("malformed_answer", `the evidence snapshot of ${id} listed a signal outside the confirmed tenant; nothing is reported.`, EXIT.refused);
   }
   const verified = snapshotId !== "" && boundVerdict(ev, id, snapshotId, tenant.id);
   const rows = (list as Record<string, unknown>[]).map((s) => [
@@ -385,7 +392,12 @@ function chainVerdict(chain: Record<string, unknown>, source: unknown, received:
         chain["scope"] !== "global-ledger") {
       return { valid: false, label: "UNKNOWN (a durable verdict without its count, head hash and scope)", length: count };
     }
-    return { valid: true, label: "valid", length: chain["count"] ?? chain["length"] };
+    // The count is the whole global ledger, so it can never be smaller than the tenant
+    // events these pages carried (review round 15 on PR #1321).
+    if (count < received) {
+      return { valid: false, label: `UNKNOWN (the verdict covers ${count} records, the pages carried ${received})`, length: count };
+    }
+    return { valid: true, label: "valid", length: count };
   }
   if (source === "memory") {
     // The in-memory verifier keeps its anchor across eviction, so its `truncated` does not
@@ -397,8 +409,11 @@ function chainVerdict(chain: Record<string, unknown>, source: unknown, received:
     if (chain["valid"] === true && chain["length"] !== received) {
       return { valid: false, label: `UNKNOWN (the verdict covers ${str(chain["length"])} events, the answer carried ${received})`, length: chain["length"] };
     }
+    // A verdict over a retained window says so in BOTH modes: earlier history was evicted and
+    // was not re-checked beyond the anchor the verifier kept (review round 15).
+    const window = chain["truncated"] === true ? ` (retained window only; ${str(chain["evictedCount"])} earlier events evicted)` : "";
     return chain["valid"] === true
-      ? { valid: true, label: "valid", length: chain["length"] }
+      ? { valid: true, label: `valid${window}`, length: chain["length"] }
       : { valid: false, label: `BROKEN at seq ${str(chain["brokenAtSeq"])}`, length: chain["length"] };
   }
   return { valid: false, label: `UNKNOWN (unrecognised ledger source ${str(source)})`, length: len };
@@ -587,7 +602,7 @@ A non-zero exit is never a verdict. Treat it as "no answer", which a host app re
 ## Rules
 
 - Read-only by default. Pass \`--allow-write\` only when the task says to mint a decision or start a sync.
-- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-running the same command with \`--idempotency-key <key>\` within 5 minutes replays the recorded answer only from the same server process, because the replay store is in-process memory. After a server restart, or against several instances, check \`signalgrid audit\` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
+- A write that exits ${EXIT.unreachable} may still have been recorded. Its error names an idempotency key (\`error.idempotencyKey\` under \`--json\`); re-running the same command with \`--idempotency-key <key>\` within 5 minutes MAY replay the recorded answer, but only from the same server process and only while the key is still held (the replay store is in-process memory and evicts its oldest keys early once it holds 10,000). A replay cannot be relied on, so check \`signalgrid audit\` for the write before retrying — with a credential holding audit:read (owner, admin or auditor; operator and connector keys do not).
 - No registry, no telemetry, no live tenant: point it at a local or fixture api-server.
 - \`--json\` prints one JSON object on stdout for every exit, errors included.
 `;

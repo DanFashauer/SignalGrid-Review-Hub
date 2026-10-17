@@ -62,7 +62,7 @@ template does not:
 
 The first harness built this way is `artifacts/signalgrid-cli` (`decide`, `explain`,
 `signals`, `audit`, `connectors`; read-only unless `--allow-write`). Its generated skill
-is `.claude/skills/cli-anything/signalgrid-cli/SKILL.md`, regenerated with
+is `.claude/skills/signalgrid-cli/SKILL.md`, regenerated with
 `signalgrid skill` and held equal to the generator by `pnpm run proof:signalgrid-cli`.
 
 This is a build item, recorded in `docs/BUILD_BACKLOG.md`, not a claim: nothing about

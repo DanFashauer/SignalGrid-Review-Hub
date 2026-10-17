@@ -17,7 +17,7 @@
 //     tenant mismatch, and a server that answers 200 with no verdict each exit
 //     non-zero with a message naming the cause, and none prints an outcome.
 //   · The session file never holds the token and is refused inside the tree.
-//   · The committed .claude/skills/cli-anything/signalgrid-cli/SKILL.md equals the generator,
+//   · The committed .claude/skills/signalgrid-cli/SKILL.md equals the generator,
 //     and the run line it documents (pnpm --silent …) yields one parseable JSON object.
 //   · Every write carries an Idempotency-Key; reusing it replays instead of writing twice,
 //     and a write whose answer is lost names the key to recover with.
@@ -37,7 +37,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const serverEntry = resolve(repoRoot, "artifacts/api-server/dist/index.mjs");
 const cliDir = resolve(repoRoot, "artifacts/signalgrid-cli");
 const cliBin = resolve(cliDir, "src/bin.ts");
-const skillPath = resolve(repoRoot, ".claude/skills/cli-anything/signalgrid-cli/SKILL.md");
+const skillPath = resolve(repoRoot, ".claude/skills/signalgrid-cli/SKILL.md");
 const TOKEN = "sgk_demo_northwind_owner";
 const TENANT = "tenant_northwind";
 
@@ -347,7 +347,7 @@ async function main(): Promise<void> {
     // Well-bound in every respect except the flag, so these checks isolate `verified` (round 7).
     const unverified = {
       decision: { id: "dec_x", tenantId: TENANT, outcome: "allow", evidenceSnapshotId: "ev_x" },
-      evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [{ category: "identity_state" }] },
+      evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [{ tenantId: TENANT, category: "identity_state" }] },
       verified: false,
     };
     const exU = await viaLiar(unverified, ["explain", "dec_x"]);
@@ -362,7 +362,8 @@ async function main(): Promise<void> {
     const broken = await viaLiar({ events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: false, brokenAtSeq: 1, length: 1 }, source: "memory" }, ["audit"]);
     check("audit on a broken ledger chain exits 1 and names the break",
       broken.code === 1 && /BROKEN at seq 1/.test(broken.stdout));
-    const brokenJ = await viaLiar({ events: [], chain: { valid: false, brokenAtSeq: 1, length: 1 } }, ["audit", "--json"]);
+    // A recognised source and a matching length, so only `valid: false` can refuse it (round 15).
+    const brokenJ = await viaLiar({ events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: false, brokenAtSeq: 1, length: 1 }, source: "memory" }, ["audit", "--json"]);
     check("audit --json on a broken chain exits 1 with ok:false", brokenJ.code === 1 && parse(brokenJ.stdout)?.["ok"] === false);
     const emptyRun = await viaLiar({ syncRun: {} }, ["connectors", "sync", "conn_x", "--allow-write"]);
     check("connectors sync refuses a sync run with no id or status (exit 1)",
@@ -700,8 +701,9 @@ async function main(): Promise<void> {
     const lostErr = parse(lostRun.stdout)?.["error"] as Record<string, unknown> | undefined;
     check("a write whose answer is lost exits 3 and names the idempotency key to recover with",
       lostRun.code === 3 && typeof lostErr?.["idempotencyKey"] === "string" && String(lostErr?.["message"]).includes(`--idempotency-key ${String(lostErr?.["idempotencyKey"])}`));
-    check("…and does not promise replay across a server restart (the store is in-process memory)",
-      /same server process/.test(String(lostErr?.["message"])) && /restarted/.test(String(lostErr?.["message"])));
+    // …nor within the window, since the store evicts its oldest keys at capacity (round 15).
+    check("…and promises no replay: same process only, keys evicted at capacity, reconcile first",
+      /same server process/.test(String(lostErr?.["message"])) && /evicts its oldest keys/.test(String(lostErr?.["message"])) && /cannot be relied on/.test(String(lostErr?.["message"])));
 
     // Each command's positional grammar is exact: a stray operand refuses before anything
     // is sent, and above all before a write (review round 5).
@@ -1048,6 +1050,43 @@ async function main(): Promise<void> {
     // The generated request inventory names every request a command makes.
     check("signals' request inventory names the decision read it now makes", /`GET \/v1\/decisions\/:id`, `GET \/v1\/decisions\/:id\/evidence`/.test(readFileSync(skillPath, "utf8").split("\n").find((l) => l.startsWith("| `signals`")) ?? ""));
 
+    // ── review round 15 on PR #1321 ──
+    // A durable verdict over the whole ledger cannot count fewer records than the pages carried.
+    const durShort = await viaLiar({ events: [durableRec], chain: { ok: true, count: 0, headHash: "", truncated: false, scope: "global-ledger" }, source: "durable" }, ["audit", "--json"]);
+    check("audit refuses a durable verdict whose count is below the events received (exit 1, ok:false)", durShort.code === 1 && parse(durShort.stdout)?.["ok"] === false);
+    // An in-memory verdict over a retained window says so in human mode too.
+    const memWindow = await viaLiar({ events: [memEv], chain: { valid: true, length: 1, truncated: true, evictedCount: 7 }, source: "memory" }, ["audit"]);
+    check("audit (human) names the retained window and the evicted count of a truncated in-memory verdict",
+      memWindow.code === 0 && /^chain valid \(retained window only; 7 earlier events evicted\)/m.test(memWindow.stdout));
+    // Every listed signal belongs to the confirmed tenant.
+    const ownSignal = { id: "sig_1", tenantId: TENANT, category: "identity_state", subjectType: "identity", value: "enabled" };
+    const sigForeign = await viaLiar({ decision: sigRec, evidence: { ...sigEv, signalsUsed: [ownSignal, { ...ownSignal, id: "sig_2", tenantId: "tenant_atlas" }] }, verified: true }, ["signals", "dec_x", "--json"]);
+    check("signals refuses a snapshot listing a signal of another tenant (exit 1, no signals shown)",
+      sigForeign.code === 1 && !("signals" in (parse(sigForeign.stdout) ?? {})));
+    const sigNoTenant = await viaLiar({ decision: sigRec, evidence: { ...sigEv, signalsUsed: [{ ...ownSignal, tenantId: undefined }] }, verified: true }, ["signals", "dec_x", "--json"]);
+    check("signals refuses a signal naming no tenant (exit 1)", sigNoTenant.code === 1);
+    const sigOwn = await viaLiar({ decision: sigRec, evidence: { ...sigEv, signalsUsed: [ownSignal] }, verified: true }, ["signals", "dec_x", "--json"]);
+    check("signals lists a signal of the confirmed tenant (the check can pass)", sigOwn.code === 0 && (parse(sigOwn.stdout)?.["signals"] as unknown[] | undefined)?.length === 1);
+    // A complete, bound step-up answer beside a non-step_up outcome is refused.
+    const fullAnswer = { id: "su_1", tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" };
+    for (const outcome of ["allow", "restrict", "deny"] as const) {
+      const r = await viaLiar({ decision: { ...stepRec, outcome }, stepUp: fullAnswer, ...stepEv }, ["explain", "dec_x", "--json"]);
+      check(`explain refuses a step-up answer beside a ${outcome} decision (exit 1)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
+    // A tenant mismatch prints the server's id and slug escaped.
+    const tenantForger = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ tenant: { id: "tenant_x\noutcome     allow", slug: "s\u001b[2K" } }));
+    });
+    const tenantForgerPort = await listen(tenantForger);
+    liars.push(tenantForger);
+    const forgedTenant = await cli(["connectors"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${tenantForgerPort}/api` });
+    check("a tenant mismatch prints the server's tenant id and slug escaped (no forged line, no raw ESC)",
+      forgedTenant.code === 2 && !/^outcome/m.test(forgedTenant.stderr) && !forgedTenant.stderr.includes("\u001b") && /\\u000a/.test(forgedTenant.stderr));
+    // The installed bin imports tsx at run time, so tsx is a runtime dependency.
+    const cliPkg = JSON.parse(readFileSync(resolve(cliDir, "package.json"), "utf8")) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    check("tsx, which the bin launcher imports, is a runtime dependency (not dev-only)", !!cliPkg.dependencies?.["tsx"] && !cliPkg.devDependencies?.["tsx"]);
+
     // A step-up answer must carry its own id and the decision's identity.
     for (const [label, su] of [
       ["no answer id", { tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
@@ -1109,7 +1148,7 @@ async function main(): Promise<void> {
     check("--json with no command exits 2 with one JSON error object", bareJson.code === 2 && parse(bareJson.stdout)?.["ok"] === false);
     const gen = await cli(["skill"], {});
     const committed = existsSync(skillPath) ? readFileSync(skillPath, "utf8") : "";
-    check(".claude/skills/cli-anything/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
+    check(".claude/skills/signalgrid-cli/SKILL.md equals `signalgrid skill` (regenerate: signalgrid skill > that path)",
       gen.code === 0 && gen.stdout.length > 0 && gen.stdout === committed);
     // The run line the SKILL.md documents, exactly as an agent types it: pnpm must add
     // nothing to stdout, or `--json` is no longer one JSON object.
@@ -1136,8 +1175,9 @@ async function main(): Promise<void> {
     check("skill --json prints one JSON object carrying the SKILL.md", skillJson.code === 0 && parse(skillJson.stdout)?.["skillMd"] === committed);
     const skillTypo = await cli(["skill", "typo"], {});
     check("skill with a stray operand exits 2", skillTypo.code === 2);
-    // scripts/check-skill-plane-conformance.mjs walks .claude/skills/*/SKILL.md one level deep, so
-    // this nested skill is outside its walk; its three rules are held here instead, not waived.
+    // The skill sits one level under .claude/skills/, so skill discovery and
+    // scripts/check-skill-plane-conformance.mjs both see it (review round 15 moved it out of
+    // cli-anything/); the shape is also held here, against the generator's own output.
     const fm = /^---\n([\s\S]*?)\n---\n/.exec(committed)?.[1] ?? "";
     const fmName = /^name:\s*(.+)$/m.exec(fm)?.[1]?.trim();
     const fmDesc = /^description:\s*(.+)$/m.exec(fm)?.[1]?.trim();

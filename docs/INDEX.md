@@ -206,6 +206,7 @@ Everything below is the full catalog, deepest first.
 - [Bruno API testing](BRUNO_API_TESTING.md): the contract plane's operator manual — collection layout, the two-directional coverage gate (`scripts/check-api-collection.mjs`), running against the fixture-mode server, negative tests as refusals on schedule, and the no-credentials rule.
 - [SIGNALGRID_OPERATING_METHOD.md](SIGNALGRID_OPERATING_METHOD.md) — the handbook: how SignalGrid is run (buckets, DRIs, wireframe-first, AI accountability ladder)
 - [LAUNCH_CONSOLE_WIREFRAMES.md](LAUNCH_CONSOLE_WIREFRAMES.md) — wireframe-first spec for the six launch screens (layout, states, API data, build order)
+- [SCREEN_INVENTORY.md](SCREEN_INVENTORY.md) — every web page file with its surface's launch status (copied from `scripts/launch-profile.mjs`, gated by `scripts/check-screen-inventory.mjs`) and one fixture demo path from console decision to host-app embed
 
 - [Repository agent instructions](../AGENTS.md): defines automation-agent guardrails, public-safety rules, PR validation commands, and review guidelines.
 - [SignalGrid Autopilot Control Plane](SIGNALGRID_AUTOPILOT_CONTROL_PLANE.md): defines the one-input-to-one-phase automation model, bot roles, risk lanes, evidence requirements, and owner boundaries.

@@ -561,7 +561,7 @@ export function context7SpecFindings(line, pin, kind = "shell", before = "", aft
     }
     if (!Array.isArray(words) || out.some((f) => f.unpinned || f.stale)) continue;
     for (const w of words) {
-      const t = typeof w === "string" ? /@upstash\/context7-mcp@([^\n]*)$/i.exec(w) : null;
+      const t = typeof w === "string" ? /@upstash\/context7-mcp@([\s\S]*)$/i.exec(w) : null;
       if (t && (/[\s|,"'`]/.test(t[1]) || CONTEXT7_RANGE_FOLLOW_RE.test(w))) {
         out.push({ unpinned: t[1].slice(0, 24) });
         break;
@@ -714,7 +714,11 @@ export function context7JsonFindings(text, pin) {
         try {
           inner = JSON.parse(node);
         } catch {
+          // a decode that fails (a raw control character, a trailing comma) falls back to the line readers on the DECODED
+          // string, so the failure fails closed rather than leaving only the raw-text readers
           inner = undefined;
+          const at = lineOf(JSON.stringify(raw).slice(1, -1));
+          for (const f of context7SpecFindings(node, pin, "shell")) out.push({ line: at, f });
         }
         if (inner !== undefined && typeof inner === "object") walk(inner, false, runner || PACKAGE_RUNNER_RE.test(node));
       }
@@ -2117,6 +2121,8 @@ server.registerTool(
       ["a.json", `${JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} || 4`]) })}\n`, "an exec list in a JSON string with a bare major after \`||\`"],
       ["a.json", `${JSON.stringify({ o: JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} ||\t*`]) }) })}\n`, "the same nested twice, a JSON-escaped TAB before \`*\`"],
       ["Dockerfile", `RUN ["npx","-y","${P}>\\t<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped TAB (\`>\\t<5\`)"],
+      ["Dockerfile", `RUN ["npx","-y","${P}>\\n<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped line feed (\`>\\n<5\`)"],
+      ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || 4\t",]` })}\n`, "a JSON string holding an exec list that does not decode (a raw TAB, a trailing comma): the decoded string is read"],
       // the raw-text readers stay the only readers where the JSON does not parse (a `RUN …` command, a trailing comma)
       ["a.json", `${JSON.stringify({ o: JSON.stringify({ cmd: `RUN ["npx","-y","${P} || "]` }) })}\n`, "a non-JSON command nested twice, \`||\` before a closing quote escaped at depth 2"],
       ["a.json", `${JSON.stringify({ cmd: `RUN ["npx","-y","${P} || ","--stdio"]` })}\n`, "a non-JSON command in a JSON string, an escaped closing quote then a comma"],

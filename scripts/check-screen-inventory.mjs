@@ -66,14 +66,13 @@ const PAGE_RE = /^artifacts\/([^/]+)\/src\/pages\/.+\.tsx$/;
 //
 // Codex review of ff2df174: the shell sits at LockedIdle without `-DemoMode YES` and a
 // simulated badge, and opens the host app only with `-DemoAssist`, so those are gated
-// too; and the seeded subject is the stale-posture nurse, because the compliant one is
-// allowed outright and no step-up ever appears.
+// too (the Assist flag only saves a tap, but the doc's command carries it).
 export const STEP4_FLAGS = {
   "-DemoMode": "YES",
   "-SimulateBadge": "04A3F291",
   "-DemoAssist": "YES",
-  "-DemoBackendIdentity": "nurse.stale",
-  "-DemoBackendDevice": "ipad-ward-03",
+  "-DemoBackendIdentity": "nurse.compliant",
+  "-DemoBackendDevice": "ipad-ward-01",
   "-DemoBackendToken": "sgk_demo_northwind_operator",
   "-DemoBackendURL": null,
 };
@@ -717,7 +716,7 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
         errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the shell never shows the host app on a server decision in the seeded tenant`);
         continue;
       }
-      if (step4Fence !== null && !new RegExp(`(?<![\\w-])${esc}(?![\\w-])`).test(step4Fence))
+      if (!new RegExp(`(?<![\\w-])${esc}(?![\\w-])`).test(step4Fence ?? ""))
         errors.push(`${DOC}: demo step 4's fenced command no longer gives ${flag} — prose naming it is not what an operator copies`);
       // EVERY use of the flag in the rendered text must carry the right value, so a
       // second, wrong occurrence cannot hide behind a right one. The value is the
@@ -875,8 +874,8 @@ function selfTest() {
     "-DemoMode": "YES",
     "-SimulateBadge": "04A3F291",
     "-DemoAssist": "YES",
-    "-DemoBackendIdentity": "nurse.stale",
-    "-DemoBackendDevice": "ipad-ward-03",
+    "-DemoBackendIdentity": "nurse.compliant",
+    "-DemoBackendDevice": "ipad-ward-01",
     "-DemoBackendURL": "http://127.0.0.1:8080",
     "-DemoBackendToken": "sgk_demo_northwind_operator",
   };
@@ -1046,7 +1045,10 @@ function selfTest() {
     // a route an earlier <Switch> sibling matches is unreachable.
     ["a flag only in prose, not in the fenced command, fails (round 29)", withArg("-DemoAssist", undefined, "`-DemoAssist YES`"), "fenced command no longer gives -DemoAssist"],
     ["a step 4 with two fenced blocks fails (round 29)", withProse("```\n   x\n   ```"), "holds 2 fenced blocks"],
-    ...["http://localhost:8080/foo", "http://127.0.0.1:8080/api", "http://127.0.0.1:8080/?x=1", "http://127.0.0.1:8080/#f"].map((url) =>
+    ["the argument lines as inline code with no fenced block fail (round 29)", { ...base, doc: good.replace(STEP4, `4. host app:\n\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, "fenced command no longer gives"],
+    ["a /:id route above a literal sibling fails (round 29)", routeCase(SESSIONS, '<Route path="/sessions/:id" component={SessionList} />\n        <Route path="/sessions/new" component={SessionList} />', asNotRouted), "is unreachable"],
+    ["a literal route above its /:id sibling passes (round 29)", routeCase(SESSIONS, `${SESSIONS}\n        <Route path="/sessions/new" component={SessionList} />\n        <Route path="/sessions/:id" component={SessionList} />`), null],
+    ...["http://localhost:8080/foo", "http://127.0.0.1:8080/api", "http://127.0.0.1:8080/api/v1", "http://127.0.0.1:8080/api/", "http://127.0.0.1:8080/?x=1", "http://127.0.0.1:8080/#f"].map((url) =>
       [`a backend URL ${url} with a path, query or fragment fails (round 29)`, withArg("-DemoBackendURL", url), "carries a path, query or fragment"]),
     ["a route after a pathless catch-all in the same <Switch> fails (round 29)", routeCase(SESSIONS, `<Route component={NotFound} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],
     ["a route after a /:param route that matches it fails (round 29)", routeCase(SESSIONS, `<Route path="/:any" component={FleetPreview} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],

@@ -161,19 +161,20 @@ Native apps are not in this table: they are not `src/pages` files. The one host 
 the launch profile is `ios:EnterpriseShell`; `ios:WardlinkDemo` is demo-only and
 `ios:SignalGridOperator` is deferred.
 
-## The demo path — the console, then the host app's own decision
+## The demo path — two decisions, console to host app
 
 **This is a fixture demo, not a shipped claim.** It runs against a locally started
-api-server on its seeded demo core (the served default is still the demo factory — see
-the `non-demo-core-constructor` gap in `scripts/launch-profile.mjs`), with seeded
-identities and devices. No customer estate, tenant or real worker is involved.
+api-server on its seeded in-memory demo core, started without `DATABASE_URL` (the
+served default is still the demo factory — see the `non-demo-core-constructor` gap in
+`scripts/launch-profile.mjs`), with seeded identities and devices. No customer estate,
+tenant or real worker is involved.
 
 The embedded-UX law (`docs/EMBEDDED_UX_PRINCIPLE.md`) decides the shape: the investor
 sees the admin console because they are looking at the operator's side, and then sees
 the worker's side — which is the host app and nothing else. The worker never sees
 SignalGrid. Two decisions are made on the way, and the demo says so: steps 2 and 3 show
-one the operator asks the console for; step 4 makes the host app's own, a different
-subject on a different workflow; step 5 finds that second one in the ledger.
+the one the operator asks the console for; step 4 makes the host app's own, on its own
+workflow; step 5 proves that second one reached the ledger.
 
 1. **Sessions** (`DecisionList.tsx`, launch route). The console opens on the ledger.
    Say what the investor is looking at: the operator's view of decisions, not
@@ -181,55 +182,79 @@ subject on a different workflow; step 5 finds that second one in the ledger.
 2. **Overview → live decision panel** (`Dashboard.tsx`, preview route — the PREVIEW
    banner stays on screen, and that is correct). Pick the "Compliant nurse" preset
    (`nurse.compliant`, `ipad-ward-01`, `med-admin`). The `/v1` core returns an outcome
-   with its reason codes, decision id and evidence id. That is the console's decision,
-   made because the operator asked; it is not the one the host app makes in step 4.
+   with its reason codes, decision id and evidence id. That is the console's decision.
 3. **Decision Envelope** (`DecisionDetail.tsx`, launch route). Open that decision from
    Sessions: outcome, matched rules, reason codes, the re-verified evidence snapshot,
    and every signal with its source and freshness.
 4. **The host app** (`ios:EnterpriseShell`, its `HostAppViewController`). Now the
-   worker's side. Launch the shell in the simulator with exactly these arguments:
+   worker's side. Launch the shell in the simulator with these seven arguments:
 
    ```
    -DemoMode YES
    -SimulateBadge 04A3F291
    -DemoAssist YES
-   -DemoBackendIdentity nurse.stale
-   -DemoBackendDevice ipad-ward-03
+   -DemoBackendIdentity nurse.compliant
+   -DemoBackendDevice ipad-ward-01
    -DemoBackendURL http://127.0.0.1:8080
    -DemoBackendToken sgk_demo_northwind_operator
    ```
 
-   With `native/ios/run-ios.sh`, pass all seven as `LAUNCH_ARGS`, because setting it
-   replaces the script's default flags. The first three are the simulator's demo
-   lifecycle (`native/ios/EnterpriseShell/Services/DemoMode.swift`): without demo mode
-   and a simulated badge the shell stays locked, and the Assist flag opens the host app
-   once the session starts. The identity and device are the seeded
-   stale-posture subject, for which the core returns `step_up` (`POSTURE_STALE`) on the
-   host app's `clinical-session` workflow; the compliant nurse of step 2 is allowed
-   outright there, so no step-up would appear. The URL is the
-   local api-server's origin, on whatever port it was started with, and nothing after
-   it, because the shell appends the `/v1` path itself; the shell compares the
-   host as written and accepts only `localhost`, `127.0.0.1` or `::1`, ignoring any
-   other. The token is the same public fixture key the console uses
-   (`artifacts/signalgrid-app/src/lib/v1.ts`), so both sides act in the northwind
-   tenant that owns these refs; another tenant's `sgk_demo_*` key would put the
-   decision in a different tenant's ledger. All four backend arguments are needed:
-   without a loopback URL and a non-empty token `DecisionServiceProvider.resolve`
+   The first three run the shell's own session
+   (`native/ios/EnterpriseShell/Services/DemoMode.swift`). `-DemoMode YES` answers
+   session start from the canned demo backend, and `-SimulateBadge 04A3F291` injects
+   the badge scan the simulator has no reader for; without both, the shell does not
+   get past its lock screen. `-DemoAssist YES` opens the host app once the session is
+   active (if it does not open, or a "Device still locked" alert is showing because a
+   simulator cannot release Single App Mode, dismiss the alert and tap the Host App
+   tile). Through `native/ios/run-ios.sh`, `LAUNCH_ARGS` replaces the script's
+   default `-DemoMode YES -SimulateBadge 04A3F291` line, so put all seven in it.
+
+   The last four decide where the verdict comes from. The identity and device are the
+   refs the console preset used. The URL is the local api-server's origin, on
+   whatever port it was started with, and nothing after it, because the shell appends
+   the `/v1` path itself; the shell compares the host as written and accepts only
+   `localhost`, `127.0.0.1` or `::1`, ignoring any other. The token is the same
+   public fixture key the console uses (`artifacts/signalgrid-app/src/lib/v1.ts`), so
+   both sides act in the northwind tenant that owns these refs; another tenant's
+   `sgk_demo_*` key would put the decision in a different tenant's ledger. All four
+   are needed: without a loopback URL and a non-empty token
+   `DecisionServiceProvider.resolve`
    (`native/ios/EnterpriseShell/Services/DecisionService.swift`) picks the on-device
-   engine and the shell never calls the api-server. The investor sees the host app's
-   own screens: an ordinary action runs with no friction; a sensitive action is held,
-   the phone's own Face ID prompt appears (on a simulator with no enrolled Face ID,
-   the shell shows its labelled "Demo · simulated authenticator" sheet instead), then
-   the app's own confirmation dialog, then the action applies. No SignalGrid screen
-   appears on the phone.
-   `-DemoAssistAuto` walks these states unattended for a room; `-DemoAssistDecline`
-   shows the fail-closed "nothing fires" ending.
-5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). When step 4 reached
-   the api-server, the host app's decision (`nurse.stale`, `clinical-session`,
-   `step_up`) is the newest row in the ledger (the api-server seeds an older one for the
-   same subject at boot, so read the time); open its envelope, then Audit, where the chain
-   recomputes its digests. If it is not there, the shell decided on-device (no token,
-   or the server did not answer) — say so rather than skip the step.
+   engine and the shell never calls the api-server.
+
+   With these refs the core answers allow (reason `TRUST_ESTABLISHED`), and that
+   decides what the investor sees in the host app's own screens. Open chart and View
+   lab results run with no friction. Place controlled med order is held for the
+   app's own confirmation dialog and nothing else: no Face ID prompt and no
+   simulated sheet appears, because the grid already trusts this nurse on this iPad.
+   After the worker confirms, the action applies. No SignalGrid screen appears on the
+   phone.
+
+   To show the step-up gate instead, add `-DemoSignal stale`. That injects a stale
+   device check-in on the phone, and the shell takes the stricter of the control
+   plane's allow and its own check, so the verdict becomes step_up
+   (`LOCAL_RISK_CLAMP`) and every gated action, Open chart and View lab results
+   included, is held for the phone's own authenticator: Face ID, or on a simulator
+   with no passcode and no enrolled Face ID the labelled "Demo · simulated
+   authenticator" sheet. For the order, the app's own confirmation follows. Say that
+   the stale check-in is injected, because it is.
+
+   `-DemoAssistAuto` walks either flow unattended for a room (in the step-up flow the
+   walker satisfies the step-up, so no sheet appears); `-DemoAssistDecline` shows the
+   fail-closed "nothing fires" ending.
+5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). The host app's call
+   is a second decision, not step 2's: workflow `clinical-session`, with its own
+   decision id. In Sessions it is one more row at the bottom (rows run oldest first
+   and the demo clock is fixed, so every row carries the same time). The api-server
+   also mints a `clinical-session` row for this same nurse and iPad when it boots, so
+   finding such a row proves nothing. Audit does prove it: read the banner's event
+   count before step 4 and again after (the page refreshes every 30 seconds). When
+   step 4 reached the api-server the count rises by two: the top row is a
+   `decision.evaluated` event for `nurse.compliant` on `ipad-ward-01` (hover the
+   Summary for the workflow), the row under it is its `evidence.captured`, and every
+   digest is recomputed. If the count did not move, the shell decided on-device (no
+   token, or the server did not answer; an unanswered call reads as step_up with
+   `REMOTE_UNAVAILABLE_STEP_UP`) — say so rather than skip the step.
 
 **Where the supervised iPhone fits, honestly.** The investor story is a host app on a
 supervised iPhone, and that step is the one this repository cannot yet show. The

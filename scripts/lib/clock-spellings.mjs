@@ -14,6 +14,10 @@
 //   · PINS COUNT LINES, not reads. Two reads on one line are one hit.
 //   · Matching is per line, so `Date` newline `.now()` and `new Date(` newline `)`
 //     are not seen.
+//   · A `}` followed by `/` is read as a regex start (a block end), so division
+//     after an object literal (`{} / x / y`) can blank the text between the two
+//     slashes. No live site; the masker reports the desync it causes only when a
+//     quote or backtick is swallowed.
 //   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call,
 //     Temporal / Intl, require("crypto") destructured with a rename, and unicode
 //     escapes in an identifier are not seen.
@@ -38,7 +42,7 @@ const IS_WORD = /[\w$]/;
 
 // Operators and punctuation after which a `/` begins a regex. `)` and `}` are
 // handled separately; `]` and a closing quote/backtick are operands.
-const REGEX_AFTER_PUNCT = /[(,=:[!&|?{;+\-*%<>~^]/;
+const REGEX_AFTER_PUNCT = /[(,=:[&|?{;+\-*%<>~^]/;
 
 // Mask comments and string/template/regex literal TEXT (delimiters and newlines
 // kept, so offsets and line numbers survive). Returns
@@ -69,10 +73,15 @@ export function maskSource(src, blankComments = true) {
     return { word: out.slice(s + 1, k + 1).join(""), start: s + 1 };
   };
 
-  const regexStartsHere = (top) => {
-    const k = prevSig(i);
+  // Would a `/` at index `at` begin a regex? Decided from the previous token.
+  const regexStartsHere = (top, at = i) => {
+    const k = prevSig(at);
     if (k < 0) return true;
     const p = out[k];
+    // A `!` is TypeScript's postfix non-null (`m.get(k)! / 2`, an operand-ender) when
+    // a `/` at the `!` itself would divide, and a prefix NOT (`= !/x/.test(s)`, an
+    // operator) when it would start a regex. Ask the question one token back.
+    if (p === "!") return regexStartsHere(top, k);
     if (p === "+" || p === "-") {
       // `i++ / 2`: the operator ends an operand, so the slash divides.
       if (k > 0 && out[k - 1] === p) return false;
@@ -331,6 +340,8 @@ export const CLOCK_BLIND_SPOT_PLANTS = [
   ["a read after a property named like a keyword (`.return`) divided", 'const q = counts.return / a; const w = "x/y";\nconst t = Date.now();'],
   ["a read after an identifier named `of` divided", 'const of = 4; const z = of / 2; const w = "x/y";\nconst t = Date.now();'],
   ["a read after an identifier named `in` divided", 'const inn = { in: 4 }; const z = inn.in / 2; const w = "x/y";\nconst t = Date.now();'],
+  ["a read after a postfix non-null `!` division", "const t = m.get(k)! / Date.now() / 2;"],
+  ["a read after a prefix `!` regex holding a quote", 'const ok = !/"/.test(s);\nconst t = Date.now();'],
   ["a read inside a template expression", "const s = `${Date.now()}`;"],
   ["a read after a URL string on the same line", 'const u = "http://x"; const t = Date.now();'],
   ["a read after a division that follows `}` and sits on a later-slash file", "const a = {}\n  / 2;\nconst t = Date.now();\nconst b = 6 / 3;"],
@@ -352,12 +363,13 @@ export const CLOCK_DESYNC_PLANTS = [
   ["a block comment open at end of file", "const t = 1;\n/* never closed\nconst u = 2;"],
   ["a template expression open at end of file", "const s = `a${b\n"],
 ];
-// A default-less switch and a localeCompare, each placed behind a confuser that
-// used to blind the masker, for the two non-clock gates that share it.
-export const CONFUSER_PREFIXES = [
-  ["i++ / 2 then a slash in a string", "i++ / 2; const s = 'a/b';\n"],
-  ["a regex holding a quote after an if", 'if (a) /"/.test(s);\n'],
-  ["a regex holding a backtick after else", "if (a) b(); else /`/.test(s);\n"],
+// A default-less switch and a localeCompare, each placed behind (or inside) a
+// confuser that used to blind the masker, for the two non-clock gates that share it.
+export const CONFUSER_WRAPS = [
+  ["i++ / 2 then a slash in a string", (code) => `i++ / 2; const s = 'a/b';\n${code}`],
+  ["a regex holding a quote after an if", (code) => `if (a) /"/.test(s);\n${code}`],
+  ["a regex holding a backtick after else", (code) => `if (a) b(); else /\`/.test(s);\n${code}`],
+  ["a postfix non-null `!` division wrapped around it", (code) => `const q = m.get(k)! / 2 + ${code} / 3;`],
 ];
 
 // Run every plant through `scan(src) -> { lines, problems }`. Returns

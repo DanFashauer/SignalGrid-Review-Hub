@@ -28,7 +28,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { maskSource, scanSource, clockSelfTestChecks, CONFUSER_PREFIXES } from "./lib/clock-spellings.mjs";
+import { maskSource, scanSource, clockSelfTestChecks, CONFUSER_WRAPS } from "./lib/clock-spellings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -374,14 +374,14 @@ if (process.argv.includes("--self-test")) {
   // A default-less switch and a localeCompare each stay VISIBLE behind a confuser
   // that used to blind the shared masker (i++ / 2 then a slash in a string; a
   // regex holding a quote or backtick after `if (...)` / `else`).
-  for (const [name, prefix] of CONFUSER_PREFIXES) {
+  for (const [name, wrap] of CONFUSER_WRAPS) {
     checks.push([
       `a default-less switch behind a confuser is still flagged: ${name}`,
-      switchViolations(prep(prefix + "function f(x){ switch (x) { case 1: return 1; } }")).length === 1,
+      switchViolations(prep(wrap("function f(x){ switch (x) { case 1: return 1; } }"))).length === 1,
     ]);
     checks.push([
       `a localeCompare behind a confuser is still flagged: ${name}`,
-      localeCompareViolations(prep(prefix + "items.sort((a, b) => a.id.localeCompare(b.id));")).length === 1,
+      localeCompareViolations(prep(wrap("items.sort((a, b) => a.id.localeCompare(b.id))"))).length === 1,
     ]);
   }
 

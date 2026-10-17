@@ -206,8 +206,8 @@ interface LockFence {
  * write and RESTORING the credential that had just been revoked — precisely the outcome
  * the comment above says the lock exists to make impossible. Measured, not reasoned:
  * `proof:enrollment-race` raced one revocation against twelve enrolments on the
- * unlocked store and lost `cred-100`. Latent today (no route calls removeCredential),
- * live the day a revoke endpoint is wired.
+ * unlocked store and lost `cred-100`. Live since `POST /v1/step-up/enroll/revoke` was
+ * wired to removeCredential; the proof's forced orderings pin both directions.
  *
  * Failing to acquire THROWS. A writer that could not take the lock has not written, and
  * neither an enrolment nor a revocation may be reported over a record it never held.

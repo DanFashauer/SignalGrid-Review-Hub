@@ -227,6 +227,7 @@
       "surface": [
         "scripts/**",
         "artifacts/lab-collections/**",
+        "artifacts/signalgrid-cli/**",
         "fixtures/**",
         ".github/**",
         ".githooks/**",

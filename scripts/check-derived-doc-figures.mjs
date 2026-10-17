@@ -742,7 +742,8 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/agent/LOOP.md",
     near: /proofs 148(?! proof)/,
-    count: 1,
+    // 0 since 2026-09-30: proof:signalgrid-cli moved the live figure to 155, so the dated 154 no longer collides.
+    count: 0,
     reason:
       "a dated record of review round seven: the number of ASSERTIONS in two proof modules before and after " +
       "that round (148 -> 154), not the number of proof:* scripts. It collided with the derived figure while " +
@@ -753,7 +754,8 @@ export const SWEEP_EXEMPT = [
   {
     doc: "docs/agent/ORG_SELF_EVALUATION_2026-09-12.md",
     near: /154 `-- self-skipping proofs/,
-    count: 1,
+    // 0 since 2026-09-30: proof:signalgrid-cli moved the live figure to 155, as the reason below predicts.
+    count: 0,
     reason:
       "a LINE NUMBER in a dated evaluation (validate-sim-macos.sh:154, the line that prints the self-skipping " +
       "proofs), not a count of proof:* scripts. It collides with the derived figure only while that figure is 154 " +

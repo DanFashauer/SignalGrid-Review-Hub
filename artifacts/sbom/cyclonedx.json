@@ -16261,9 +16261,9 @@
     {
       "type": "library",
       "name": "lucide-react",
-      "version": "0.545.0",
-      "bom-ref": "pkg:npm/lucide-react@0.545.0",
-      "purl": "pkg:npm/lucide-react@0.545.0",
+      "version": "1.48.0",
+      "bom-ref": "pkg:npm/lucide-react@1.48.0",
+      "purl": "pkg:npm/lucide-react@1.48.0",
       "licenses": [
         {
           "license": {

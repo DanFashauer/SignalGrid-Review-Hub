@@ -36,13 +36,14 @@ route table, when the route table holds a `<Route>` shape the gate cannot read o
 renders a route some other way (an aliased or namespaced `Route`, `Route` passed to a
 function, a `path` or `component` prop on another tag, a page import naming no tracked
 file; a directory import is read as its `index.tsx`), or
-when demo step 4 stops giving any of the four launch arguments the shell needs with
-its exact value (the seeded refs, `sgk_demo_northwind_operator`, and an http(s) URL
-written with a literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the
-host as written, so shorthand forms such as `127.1` do not count). Step 4 is checked
+when demo step 4 stops giving any of the seven launch arguments the shell needs, inside
+its fenced command, with its exact value (the demo lifecycle flags, the seeded refs,
+`sgk_demo_northwind_operator`, and an http(s) URL that is an origin only, written with a
+literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the host as
+written, so shorthand forms such as `127.1` do not count). Step 4 is checked
 as it renders (markdown-it renders it, an HTML5 parser reads the text a browser
-shows), because that is the text an operator copies; keep the four arguments in
-their fenced block, one per line. The gate renders with markdown-it while GitHub
+shows), because that is the text an operator copies; keep the seven arguments in
+step 4's one fenced block, one per line. The gate renders with markdown-it while GitHub
 uses its own renderer, so the demo section may hold only what both show the same
 way: paragraphs, ordered lists, fenced blocks with no language (or `sh`, `bash`,
 `text`), and plain, bold, italic or code text. Anything else fails, as do footnotes,
@@ -160,7 +161,7 @@ Native apps are not in this table: they are not `src/pages` files. The one host 
 the launch profile is `ios:EnterpriseShell`; `ios:WardlinkDemo` is demo-only and
 `ios:SignalGridOperator` is deferred.
 
-## The demo path — one decision, console to host app
+## The demo path — the console, then the host app's own decision
 
 **This is a fixture demo, not a shipped claim.** It runs against a locally started
 api-server on its seeded demo core (the served default is still the demo factory — see
@@ -170,7 +171,9 @@ identities and devices. No customer estate, tenant or real worker is involved.
 The embedded-UX law (`docs/EMBEDDED_UX_PRINCIPLE.md`) decides the shape: the investor
 sees the admin console because they are looking at the operator's side, and then sees
 the worker's side — which is the host app and nothing else. The worker never sees
-SignalGrid.
+SignalGrid. Two decisions are made on the way, and the demo says so: steps 2 and 3 show
+one the operator asks the console for; step 4 makes the host app's own, a different
+subject on a different workflow; step 5 finds that second one in the ledger.
 
 1. **Sessions** (`DecisionList.tsx`, launch route). The console opens on the ledger.
    Say what the investor is looking at: the operator's view of decisions, not
@@ -178,28 +181,40 @@ SignalGrid.
 2. **Overview → live decision panel** (`Dashboard.tsx`, preview route — the PREVIEW
    banner stays on screen, and that is correct). Pick the "Compliant nurse" preset
    (`nurse.compliant`, `ipad-ward-01`, `med-admin`). The `/v1` core returns an outcome
-   with its reason codes, decision id and evidence id. That is the decision.
-3. **Decision Envelope** (`DecisionDetail.tsx`, launch route). Open the new session
-   from Sessions: outcome, matched rules, reason codes, the re-verified evidence
-   snapshot, and every signal with its source and freshness.
+   with its reason codes, decision id and evidence id. That is the console's decision,
+   made because the operator asked; it is not the one the host app makes in step 4.
+3. **Decision Envelope** (`DecisionDetail.tsx`, launch route). Open that decision from
+   Sessions: outcome, matched rules, reason codes, the re-verified evidence snapshot,
+   and every signal with its source and freshness.
 4. **The host app** (`ios:EnterpriseShell`, its `HostAppViewController`). Now the
-   worker's side. Launch the shell with exactly these four arguments:
+   worker's side. Launch the shell in the simulator with exactly these arguments:
 
    ```
-   -DemoBackendIdentity nurse.compliant
-   -DemoBackendDevice ipad-ward-01
+   -DemoMode YES
+   -SimulateBadge 04A3F291
+   -DemoAssist YES
+   -DemoBackendIdentity nurse.stale
+   -DemoBackendDevice ipad-ward-03
    -DemoBackendURL http://127.0.0.1:8080
    -DemoBackendToken sgk_demo_northwind_operator
    ```
 
-   The identity and device are the refs the console preset used. The URL is the same
-   local api-server, on whatever port it was started with; the shell compares the
+   With `native/ios/run-ios.sh`, pass all seven as `LAUNCH_ARGS`, because setting it
+   replaces the script's default flags. The first three are the simulator's demo
+   lifecycle (`native/ios/EnterpriseShell/Services/DemoMode.swift`): without demo mode
+   and a simulated badge the shell stays locked, and the Assist flag opens the host app
+   once the session starts. The identity and device are the seeded
+   stale-posture subject, for which the core returns `step_up` (`POSTURE_STALE`) on the
+   host app's `clinical-session` workflow; the compliant nurse of step 2 is allowed
+   outright there, so no step-up would appear. The URL is the
+   local api-server's origin, on whatever port it was started with, and nothing after
+   it, because the shell appends the `/v1` path itself; the shell compares the
    host as written and accepts only `localhost`, `127.0.0.1` or `::1`, ignoring any
    other. The token is the same public fixture key the console uses
    (`artifacts/signalgrid-app/src/lib/v1.ts`), so both sides act in the northwind
    tenant that owns these refs; another tenant's `sgk_demo_*` key would put the
-   decision in a different tenant's ledger. All four are needed: without a loopback
-   URL and a non-empty token `DecisionServiceProvider.resolve`
+   decision in a different tenant's ledger. All four backend arguments are needed:
+   without a loopback URL and a non-empty token `DecisionServiceProvider.resolve`
    (`native/ios/EnterpriseShell/Services/DecisionService.swift`) picks the on-device
    engine and the shell never calls the api-server. The investor sees the host app's
    own screens: an ordinary action runs with no friction; a sensitive action is held,
@@ -210,7 +225,9 @@ SignalGrid.
    `-DemoAssistAuto` walks these states unattended for a room; `-DemoAssistDecline`
    shows the fail-closed "nothing fires" ending.
 5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). When step 4 reached
-   the api-server, the host app's decision is in the ledger and the audit chain
+   the api-server, the host app's decision (`nurse.stale`, `clinical-session`,
+   `step_up`) is the newest row in the ledger (the api-server seeds an older one for the
+   same subject at boot, so read the time); open its envelope, then Audit, where the chain
    recomputes its digests. If it is not there, the shell decided on-device (no token,
    or the server did not answer) — say so rather than skip the step.
 

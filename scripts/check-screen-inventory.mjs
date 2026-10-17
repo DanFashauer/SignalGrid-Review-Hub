@@ -63,9 +63,17 @@ const PAGE_RE = /^artifacts\/([^/]+)\/src\/pages\/.+\.tsx$/;
 // checked below). Values are read as the whole token after the flag, never as a
 // substring somewhere in the step — round 4 showed `nurse.compliantX` and a swapped
 // token beside "(not sgk_demo_northwind_operator)" both passing a substring check.
+//
+// Codex review of ff2df174: the shell sits at LockedIdle without `-DemoMode YES` and a
+// simulated badge, and opens the host app only with `-DemoAssist`, so those are gated
+// too; and the seeded subject is the stale-posture nurse, because the compliant one is
+// allowed outright and no step-up ever appears.
 export const STEP4_FLAGS = {
-  "-DemoBackendIdentity": "nurse.compliant",
-  "-DemoBackendDevice": "ipad-ward-01",
+  "-DemoMode": "YES",
+  "-SimulateBadge": "04A3F291",
+  "-DemoAssist": "YES",
+  "-DemoBackendIdentity": "nurse.stale",
+  "-DemoBackendDevice": "ipad-ward-03",
   "-DemoBackendToken": "sgk_demo_northwind_operator",
   "-DemoBackendURL": null,
 };
@@ -76,7 +84,10 @@ export const STEP4_FLAGS = {
 // and `127.0.0.1\@evil.com` all normalising to loopback under WHATWG while Swift's host
 // is the literal text, nil, or the foreign host.
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const CANONICAL_LOOPBACK_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/[^\s\\]*)?$/i;
+// Origin only: the shell appends `api/v1/app-workflows/evaluate` to this URL
+// (RemoteDecisionService), and the api-server serves no other base path, so any path
+// on it is a 404 and an on-device decision (Codex review of ff2df174).
+const CANONICAL_LOOPBACK_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?\/?$/i;
 
 /** surface id → status, from the app-surfaces entry of the launch profile. */
 export function appSurfaceStatuses(surfaces = SURFACES) {
@@ -178,6 +189,25 @@ export function adminPlacements(appSource, adminKeys) {
     }
     if (!placement.has(key) || rank[p] > rank[placement.get(key)]) placement.set(key, p);
   };
+  // Wouter's <Switch> renders its FIRST matching child (Codex review of ff2df174), so a
+  // route an earlier sibling already matches is unreachable: a pathless catch-all
+  // shadows everything after it, and `/:x` shadows `/sessions`. Routes are compared
+  // within their nearest <Switch>; a path pattern this parser cannot compare (a
+  // wildcard, an optional or regex segment) is reported rather than assumed apart.
+  const switchOf = (el) => {
+    for (let n = el.parent; n; n = n.parent)
+      if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === "Switch") return n;
+    return null;
+  };
+  const plain = (p) => /^\/(?:[A-Za-z0-9._~-]+|:[A-Za-z_][A-Za-z0-9_]*)?(?:\/(?:[A-Za-z0-9._~-]+|:[A-Za-z_][A-Za-z0-9_]*))*$/.test(p);
+  // Does a route at `a` (undefined: pathless) match every location `b` matches?
+  const covers = (a, b) => {
+    if (a === undefined) return true;
+    if (b === undefined) return false;
+    const as = a.split("/"), bs = b.split("/");
+    return as.length === bs.length && as.every((seg, i) => seg === bs[i] || seg.startsWith(":"));
+  };
+  const earlier = new Map(); // Switch node → [{ path, snippet }]
   for (const el of routes) {
     const snippet = el.getText(sf).split("\n")[0].trim();
     if (ts.isJsxOpeningElement(el)) {
@@ -198,6 +228,21 @@ export function adminPlacements(appSource, adminKeys) {
     if (odd || !comp) {
       unparsed.push(`unrecognised <Route> shape: ${snippet}`);
       continue;
+    }
+    if (path !== undefined && !plain(path)) {
+      unparsed.push(`<Route> path pattern the gate cannot compare for shadowing (only literal and :param segments): ${snippet}`);
+      continue;
+    }
+    const sw = switchOf(el);
+    if (sw) {
+      const before = earlier.get(sw) ?? [];
+      const by = before.find((r) => covers(r.path, path));
+      before.push({ path, snippet });
+      earlier.set(sw, before);
+      if (by) {
+        unparsed.push(`<Route> is unreachable — an earlier route in the same <Switch> (${by.snippet}) already matches every path it does: ${snippet}`);
+        continue;
+      }
     }
     if (previewOf.has(comp) && pageOf.has(previewOf.get(comp))) set(pageOf.get(previewOf.get(comp)), PREVIEW, snippet);
     else if (pageOf.has(comp)) set(pageOf.get(comp), path !== undefined ? "launch route" : "404 fallback", snippet);
@@ -222,9 +267,11 @@ export function urlProblem(value) {
   if (u.username || u.password) return `it carries userinfo, so its real host is ${u.hostname}`;
   if (!LOOPBACK.has(u.hostname)) return `its host is ${u.hostname} (loopback only: localhost, 127.0.0.1, ::1)`;
   if (u.port === "0") return "its port is 0, which no api-server listens on, so every request fails and the shell falls back on-device";
+  if (u.pathname !== "/" || u.search || u.hash)
+    return `it carries a path, query or fragment (${u.pathname}${u.search}${u.hash}); the shell appends api/v1/app-workflows/evaluate to it, so the request 404s and the shell falls back on-device`;
   // WHATWG agreed it is loopback; the shell compares the literal text, so require it.
   if (!CANONICAL_LOOPBACK_URL.test(value))
-    return "it is not written as http(s)://localhost|127.0.0.1|[::1][:port][/path] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
+    return "it is not written as http(s)://localhost|127.0.0.1|[::1][:port][/] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
   return null;
 }
 
@@ -337,8 +384,12 @@ export function renderedStep4(doc) {
   const body = section.slice(open + 1, close);
   if (body.some((t) => t.type === "inline" && t.children.some((c) => c.type === "image")))
     problems.push("demo step 4 contains an image — its alt text shows only if it fails to load");
+  // The fenced block is what an operator copies (Codex review of ff2df174): a flag that
+  // only appears in prose is not in the command, so the fence is returned on its own.
+  const fences = body.filter((t) => t.type === "fence");
+  if (fences.length !== 1) problems.push(`demo step 4 holds ${fences.length} fenced blocks — it must hold exactly one, the launch command`);
   const html = md.renderer.render(body, md.options, {});
-  return { text: visibleText(parseFragment(html)), problems };
+  return { text: visibleText(parseFragment(html)), fence: fences[0]?.content ?? null, problems };
 }
 
 // A footnote definition opener as GitHub's cmark-gfm reads one — `[^label]:` at the
@@ -655,7 +706,7 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   // DemoMode.backendURL returns nil for any host that is not loopback; the refs must be
   // the seeded ones or the decision is fail-closed), so every one is gated, and every
   // URL step 4 gives must be loopback.
-  const { text: step4, problems: step4Problems } = renderedStep4(doc);
+  const { text: step4, fence: step4Fence, problems: step4Problems } = renderedStep4(doc);
   for (const p of step4Problems) errors.push(`${DOC}: ${p}`);
   if (step4 === null) errors.push(`${DOC}: demo path step 4 not found`);
   else {
@@ -663,9 +714,11 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
       const esc = flag.replace(/[\\^$.*+?()[\]{}|\/-]/g, "\\$&"); // every regex metacharacter, backslash included
       const uses = [...step4.matchAll(new RegExp(`(?<![\\w-])${esc}(?![\\w-])(?:[ \\t]+([^ \\t\\n]+))?`, "g"))];
       if (uses.length === 0) {
-        errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the host app decides on-device or in another tenant`);
+        errors.push(`${DOC}: demo step 4 no longer names ${flag} — without it the shell never shows the host app on a server decision in the seeded tenant`);
         continue;
       }
+      if (step4Fence !== null && !new RegExp(`(?<![\\w-])${esc}(?![\\w-])`).test(step4Fence))
+        errors.push(`${DOC}: demo step 4's fenced command no longer gives ${flag} — prose naming it is not what an operator copies`);
       // EVERY use of the flag in the rendered text must carry the right value, so a
       // second, wrong occurrence cannot hide behind a right one. The value is the
       // whole argument up to ASCII space, tab or newline — what the shell splits
@@ -819,8 +872,11 @@ function selfTest() {
   // Step 4 as the real doc writes it: the four launch arguments in a fenced block,
   // one per line, inside list item 4.
   const ARGS = {
-    "-DemoBackendIdentity": "nurse.compliant",
-    "-DemoBackendDevice": "ipad-ward-01",
+    "-DemoMode": "YES",
+    "-SimulateBadge": "04A3F291",
+    "-DemoAssist": "YES",
+    "-DemoBackendIdentity": "nurse.stale",
+    "-DemoBackendDevice": "ipad-ward-03",
     "-DemoBackendURL": "http://127.0.0.1:8080",
     "-DemoBackendToken": "sgk_demo_northwind_operator",
   };
@@ -901,7 +957,7 @@ function selfTest() {
       [`demo step 4 without ${flag} fails (round 3)`, withArg(flag, undefined), `no longer names ${flag}`]),
     ["demo step 4 with a non-loopback URL fails (round 3)", withArg("-DemoBackendURL", "https://api.example.com"), "loopback only"],
     ["demo step 4 with a flag but no value fails", withArg("-DemoBackendURL", ""), "no value after it"],
-    ...["http://localhost:8080", "http://[::1]:8080", "http://127.0.0.1:8080/api", "HTTP://LOCALHOST:8080"].map((url) =>
+    ...["http://localhost:8080", "http://[::1]:8080", "http://127.0.0.1:8080/", "HTTP://LOCALHOST:8080"].map((url) =>
       [`demo step 4 with ${url} passes`, withArg("-DemoBackendURL", url), null]),
     // Round 4.
     ["port + userinfo before a foreign host fails (round 4)", withArg("-DemoBackendURL", "http://127.0.0.1:8080@api.example.com"), "userinfo"],
@@ -970,9 +1026,9 @@ function selfTest() {
     // Round 11: the section is held to an allow-list, so a renderer disagreement fails
     // by default; the numbered-line check reads every rendered line, in any script.
     ...["math", "mermaid", "geojson", "topojson", "stl"].map((lang) =>
-      [`a \`\`\`${lang} fence in step 4 fails (round 11)`, { ...base, doc: good.replace("   ```\n   -DemoBackendIdentity", `   \`\`\`${lang}\n   -DemoBackendIdentity`) }, `info "${lang}"`]),
+      [`a \`\`\`${lang} fence in step 4 fails (round 11)`, { ...base, doc: good.replace("   ```\n   -DemoMode", `   \`\`\`${lang}\n   -DemoMode`) }, `info "${lang}"`]),
     ["a ~~~math fence fails (round 11)", { ...base, doc: good.replace(STEP4, STEP4.replace(/```/g, "~~~").replace("~~~\n   -Demo", "~~~math\n   -Demo")) }, 'info "math"'],
-    ["a sh fence passes (round 11)", { ...base, doc: good.replace("   ```\n   -DemoBackendIdentity", "   ```sh\n   -DemoBackendIdentity") }, null],
+    ["a sh fence passes (round 11)", { ...base, doc: good.replace("   ```\n   -DemoMode", "   ```sh\n   -DemoMode") }, null],
     ["a hard break fails (round 11)", withProse("first line\\\n   second line"), "renders as hardbreak"],
     ["a link fails (round 11)", withProse("[the console](https://example.com)"), "renders as link"],
     ["a blockquote fails (round 11)", withProse("> quoted"), "renders as blockquote"],
@@ -985,7 +1041,17 @@ function selfTest() {
     ...[["[^t]: x", "a footnote definition"], ['[^t]: x "title"', "one with a title"], ["[^1]: x", "a numeric label"], ["[^T]:x", "no space"],
       ["[^t]: http://127.0.0.1:8080", "a URL destination"]].map(([def, what]) =>
       [`${what} swallowing the argument lines fails (round 12)`, { ...base, doc: good.replace(STEP4, `4. host app:\n\n   ${def}\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, "is a footnote definition"]),
-    ["the same argument lines without a definition pass (round 12 control)", { ...base, doc: good.replace(STEP4, `4. host app:\n\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n`) }, null],
+    ["the same argument lines without a definition pass (round 12 control)", { ...base, doc: good.replace(STEP4, `4. host app:\n\n${Object.entries(ARGS).map(([f, v]) => `   ${f} \`${v}\``).join("\n")}\n\n${fence(ARGS)}\n`) }, null],
+    // Codex review of ff2df174: the fenced block is the command, a URL is an origin, and
+    // a route an earlier <Switch> sibling matches is unreachable.
+    ["a flag only in prose, not in the fenced command, fails (round 29)", withArg("-DemoAssist", undefined, "`-DemoAssist YES`"), "fenced command no longer gives -DemoAssist"],
+    ["a step 4 with two fenced blocks fails (round 29)", withProse("```\n   x\n   ```"), "holds 2 fenced blocks"],
+    ...["http://localhost:8080/foo", "http://127.0.0.1:8080/api", "http://127.0.0.1:8080/?x=1", "http://127.0.0.1:8080/#f"].map((url) =>
+      [`a backend URL ${url} with a path, query or fragment fails (round 29)`, withArg("-DemoBackendURL", url), "carries a path, query or fragment"]),
+    ["a route after a pathless catch-all in the same <Switch> fails (round 29)", routeCase(SESSIONS, `<Route component={NotFound} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],
+    ["a route after a /:param route that matches it fails (round 29)", routeCase(SESSIONS, `<Route path="/:any" component={FleetPreview} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],
+    ["a longer route after a shorter one passes (round 29)", routeCase(SESSIONS, `${SESSIONS}\n        <Route path="/sessions/:id" component={SessionList} />`), null],
+    ["a wildcard route path fails (round 29)", routeCase(SESSIONS, '<Route path="/sessions/*" component={SessionList} />', asNotRouted), "cannot compare for shadowing"],
     // Round 13: markdown-it records a definition only when its destination validates, so
     // definitions are found by shape on the raw source, and the rows the table RENDERS
     // must be the rows the source lists.

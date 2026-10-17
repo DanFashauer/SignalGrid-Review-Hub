@@ -15,6 +15,9 @@ export default function DashboardPage() {
   // this { limit: 8 } request can fail while the shell's succeeds. Reading the shell's
   // key shares its cache entry; the page alerts only when the shell is not already.
   const shellFeed = useListLatestSignals({ limit: 5 });
+  // Likewise the shell's 1h metrics: an endpoint outage fails both, and the shell's
+  // status-bar alert already speaks it.
+  const shellMetrics = useGetDashboardMetrics({ window: "1h" });
 
   const METRICS = [
     { label: "TOTAL DECISIONS", value: metrics?.totalDecisions.toLocaleString() ?? "–" },
@@ -41,7 +44,9 @@ export default function DashboardPage() {
         ].filter(Boolean).join(" ")}
         alert={[
           decisionsError ? "Decisions could not be loaded." : "",
-          metricsError || seriesError ? `Dashboard ${metricsError ? "metrics" : "decision series"} could not be refreshed; figures shown may be stale.` : "",
+          (metricsError && !shellMetrics.isError) || seriesError
+            ? `Dashboard ${[metricsError && !shellMetrics.isError ? "metrics" : "", seriesError ? "decision series" : ""].filter(Boolean).join(" and ")} could not be refreshed; figures shown may be stale.`
+            : "",
           // The DesktopLayout shell owns the signal-feed outage alert: one assertive
           // announcement per outage, so this one speaks only when the shell is not.
           signalsError && !shellFeed.isError ? "Dashboard signal list could not be refreshed; critical signal count unknown." : "",

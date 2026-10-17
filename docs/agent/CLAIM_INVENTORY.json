@@ -8892,7 +8892,7 @@
   },
   {
    "file": "artifacts/signalgrid-desktop/src/pages/Dashboard.tsx",
-   "line": "39, 41-62",
+   "line": "74",
    "claim": "Stacked area chart \"Decision Volume (24h)\" — 24 hourly points of allow/step-up/restrict/deny traffic presented as observed system load.",
    "kind": "count",
    "classification": "demo-only",

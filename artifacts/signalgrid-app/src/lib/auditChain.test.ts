@@ -115,6 +115,18 @@ test("a break location that is not a real position is unverified, not a confirme
   assert.equal(chainAlert(normalizeChain({ valid: false, brokenAtSeq: 7, length: 7, truncated: false })), "Hash chain broken at sequence 7.");
 });
 
+test("after eviction a break is located by its monotonic sequence in the retained window", () => {
+  // 40 evicted, 500 retained: the retained window is sequences 41..540.
+  const c = normalizeChain({ valid: false, brokenAtSeq: 520, length: 500, truncated: true, evictedCount: 40 });
+  assert.equal(c.brokenAtSeq, 520);
+  assert.equal(chainAlert(c), "Hash chain broken at sequence 520.");
+  for (const seq of [40, 541]) {
+    const out = normalizeChain({ valid: false, brokenAtSeq: seq, length: 500, truncated: true, evictedCount: 40 });
+    assert.equal(out.brokenAtSeq, null);
+    assert.equal(chainAlert(out), "Hash chain could not be verified.");
+  }
+});
+
 test("an unrecognised shape is unverified", () => {
   for (const raw of [undefined, null, {}, { ok: "yes" }]) {
     const c = normalizeChain(raw);

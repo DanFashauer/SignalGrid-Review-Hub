@@ -50,17 +50,20 @@ export function normalizeChain(raw: unknown): ChainVerdict {
   const durable = typeof c.ok === "boolean" && count(c.count) !== null && typeof c.truncated === "boolean" && !("valid" in c);
   if (memory && typeof c.valid === "boolean") {
     if (c.valid && c.brokenAtSeq != null) return unverifiedVerdict;
-    // A located break must be a real position: a one-based tenant sequence within the
-    // chain. -1, 0, 1.5 or past `length` is malformed, not a confirmed break.
-    if (!c.valid && c.brokenAtSeq != null) {
-      const seq = count(c.brokenAtSeq);
-      if (seq === null || seq < 1 || seq > (count(c.length) ?? 0)) return unverifiedVerdict;
-    }
     // `evictedCount` > 0 means older events were discarded: it contradicts
     // `truncated: false`, and a count that is not a non-negative integer is malformed.
     if ("evictedCount" in c) {
       const ev = c.evictedCount;
       if (typeof ev !== "number" || !Number.isInteger(ev) || ev < 0 || (ev > 0 && c.truncated === false)) return unverifiedVerdict;
+    }
+    // A located break must be a real position: a one-based tenant sequence among the
+    // RETAINED events. Sequences stay monotonic across eviction, so after N evicted
+    // events the retained window is N+1 … N+length. -1, 0, 1.5, an evicted sequence or
+    // one past the window is malformed, not a confirmed break.
+    if (!c.valid && c.brokenAtSeq != null) {
+      const seq = count(c.brokenAtSeq);
+      const evicted = count(c.evictedCount) ?? 0;
+      if (seq === null || seq <= evicted || seq > evicted + (count(c.length) ?? 0)) return unverifiedVerdict;
     }
     return { valid: c.valid, partial, unverified: partial ? (c.truncated === true ? "earlier" : "unknown") : null, brokenAtSeq: c.valid ? null : count(c.brokenAtSeq), brokenAtLedgerIndex: null, scope: "tenant", length: count(c.length) ?? 0 };
   }

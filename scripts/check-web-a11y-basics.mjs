@@ -451,10 +451,12 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
     const isHook = queryHookNames(f.code, generated).isHook;
     const unspoken = new Set(checkUnannouncedQueries(f.rel, f.code, isHook, defaultPolls)
       .filter((x) => /data never reaches|is never read by a <LiveRegion> —/.test(x)).map((x) => Number(x.split(":")[1])));
-    for (const b of f.code.matchAll(/\b(?:const|let|var)\s+(?:\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(\([^()]*(?:\([^()]*\)[^()]*)*\))/g)) {
-      if (!isHook(b[1])) continue;
+    for (const b of hookBindings(f.code)) {
+      if (!isHook(b.callee)) continue;
       if (unspoken.has(f.code.slice(0, b.index).split("\n").length)) continue;
-      shellSpoken.add(`${b[1]}${b[2].replace(/\s+/g, "")}`);
+      const { spans } = callSpans(f.code.slice(b.open), /\(/g);
+      if (!spans.length) continue;
+      shellSpoken.add(`${b.callee}${f.code.slice(b.open).slice(spans[0][0], spans[0][1]).replace(/\s+/g, "")}`);
     }
   }
   const polling = [];
@@ -490,6 +492,127 @@ export function checkLiveRegions(files, defaultPolls, generated = new Set()) {
 const REFRESHED_KEYS = "data|error|isError|isRefetchError|isLoadingError|status|dataUpdatedAt|errorUpdatedAt|failureCount|failureReason";
 const REFRESHED = new RegExp(`^(?:${REFRESHED_KEYS})$`);
 
+/** Split `s` on `sep` at bracket depth 0 (`()`, `[]`, `{}`, `<>`; `=>` is not a bracket). */
+function splitTop(s, sep) {
+  const out = [];
+  let depth = 0, from = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "=" && s[i + 1] === ">") { i++; continue; }
+    if ("([{<".includes(ch)) depth++;
+    else if (")]}>".includes(ch)) depth--;
+    else if (ch === sep && depth === 0) { out.push(s.slice(from, i)); from = i + 1; }
+  }
+  out.push(s.slice(from));
+  return out.map((x) => x.trim()).filter(Boolean);
+}
+
+/** Every identifier a destructuring pattern (or a bare name) binds. */
+function patternNames(pattern) {
+  const p = pattern.trim();
+  if (p.startsWith("{")) return objectPattern(p).flatMap((e) => e.names);
+  if (p.startsWith("[")) return splitTop(p.slice(1, -1), ",").flatMap((el) => patternNames(splitTop(el.replace(/^\.\.\./, ""), "=")[0] ?? ""));
+  return /^[A-Za-z_$][\w$]*$/.test(p) ? [p] : [];
+}
+
+/**
+ * The entries of an object pattern: `{ data: { items }, isError: e = false, ...rest }`
+ * gives [{ key: "data", names: ["items"] }, { key: "isError", names: ["e"] },
+ * { rest: "rest" }]. A nested pattern binds every name inside it under its key.
+ */
+function objectPattern(pattern) {
+  const out = [];
+  for (const part of splitTop(pattern.trim().slice(1, -1), ",")) {
+    if (part.startsWith("...")) { out.push({ rest: part.slice(3).trim(), names: [part.slice(3).trim()] }); continue; }
+    const colon = splitTop(part, ":");
+    const key = splitTop(colon[0], "=")[0];
+    const value = colon.length > 1 ? splitTop(colon.slice(1).join(":"), "=")[0] : key;
+    out.push({ key, names: patternNames(value) });
+  }
+  return out;
+}
+
+/**
+ * Every `const|let|var PATTERN[: Type] = [await] [ns.]callee[<T>](` in code, with
+ * PATTERN an identifier or a (nested) object/array pattern. Yields
+ * { index, pattern, callee, open } — `open` is the index of the call's `(`.
+ */
+export function hookBindings(code) {
+  const out = [];
+  for (const d of code.matchAll(/\b(?:const|let|var)\s+/g)) {
+    let i = d.index + d[0].length;
+    let pattern;
+    if (code[i] === "{" || code[i] === "[") {
+      const close = { "{": "}", "[": "]" }[code[i]];
+      let depth = 0, j = i;
+      for (; j < code.length; j++) {
+        if (code[j] === code[i]) depth++;
+        else if (code[j] === close && --depth === 0) break;
+      }
+      if (j >= code.length) continue;
+      pattern = code.slice(i, j + 1);
+      i = j + 1;
+    } else {
+      const id = /^[A-Za-z_$][\w$]*/.exec(code.slice(i));
+      if (!id) continue;
+      pattern = id[0];
+      i += id[0].length;
+    }
+    while (/\s/.test(code[i] ?? "")) i++;
+    if (code[i] === ":") {
+      // A type annotation runs to the first `=` at depth 0 that is not `=>`.
+      let depth = 0;
+      for (i++; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === "=" && code[i + 1] === ">") { i++; continue; }
+        if ("([{<".includes(ch)) depth++;
+        else if (")]}>".includes(ch)) depth--;
+        else if ((ch === "=" && depth === 0) || ch === ";" || (ch === "\n" && depth === 0 && /^\s*(?:const|let|var|return|function)\b/.test(code.slice(i + 1)))) break;
+      }
+    }
+    if (code[i] !== "=" || code[i + 1] === "=") continue;
+    const call = /^=\s*(?:await\s+)?(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/.exec(code.slice(i));
+    if (!call) continue;
+    out.push({ index: d.index, pattern, callee: call[1], open: i + call[0].length - 1 });
+  }
+  return out;
+}
+
+/**
+ * An attribute expression with its string literals emptied: `{"data"}` reads no
+ * binding. A template literal keeps its `${…}` interpolations, which are code.
+ */
+export function stripLiterals(expr) {
+  let out = "";
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1;
+      for (; j < expr.length && expr[j] !== ch && expr[j] !== "\n"; j++) if (expr[j] === "\\") j++;
+      out += ch + ch;
+      i = j;
+    } else if (ch === "`") {
+      out += "`";
+      let j = i + 1;
+      for (; j < expr.length && expr[j] !== "`"; j++) {
+        if (expr[j] === "\\") { j++; continue; }
+        if (expr[j] === "$" && expr[j + 1] === "{") {
+          let depth = 0, k = j + 1;
+          for (; k < expr.length; k++) {
+            if (expr[k] === "{") depth++;
+            else if (expr[k] === "}" && --depth === 0) break;
+          }
+          out += " " + stripLiterals(expr.slice(j + 2, k)) + " ";
+          j = k;
+        }
+      }
+      out += "`";
+      i = j;
+    } else out += ch;
+  }
+  return out;
+}
+
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set()) {
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
@@ -497,15 +620,18 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     if (t !== null) tags.push(t);
   }
   if (tags.length === 0) return [];
-  const announced = tags.join("\n");
-  const alerts = tags.map((t) => attrExpression(t, "alert") ?? "").join("\n");
-  const messages = tags.map((t) => attrExpression(t, "message") ?? "").join("\n");
+  // String literals are text, not a read: `message={"data"}` consumes no query state.
+  const announced = stripLiterals(tags.join("\n"));
+  const alerts = stripLiterals(tags.map((t) => attrExpression(t, "alert") ?? "").join("\n"));
+  const messages = stripLiterals(tags.map((t) => attrExpression(t, "message") ?? "").join("\n"));
   const failures = [];
-  const binding = /\b(?:const|let|var)\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*=\s*(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g;
-  for (const m of code.matchAll(binding)) {
+  // Typed (`const q: UseQueryResult<D> = useX()`) and nested (`const { data: { items } }
+  // = useX()`) bindings are parsed, not matched by one regex.
+  for (const b of hookBindings(code)) {
+    const m = { index: b.index, 1: b.pattern, 2: b.callee };
     if (!isHook(m[2])) continue;
-    const { spans } = callSpans(code.slice(m.index + m[0].length - 1), /\(/g);
-    const args = spans.length ? code.slice(m.index + m[0].length - 1).slice(spans[0][0], spans[0][1]) : "";
+    const { spans } = callSpans(code.slice(b.open), /\(/g);
+    const args = spans.length ? code.slice(b.open).slice(spans[0][0], spans[0][1]) : "";
     if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
     // Only state a background refetch changes counts: the result and its error.
     // `isLoading`/`isPending` stay false while a poll refetches, so a region reading
@@ -513,20 +639,22 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     const errorsOnlyPolite = [];
     const direct = [];   // names bound straight to result/error state
     const holders = [];  // whole query objects (`q`, `...rest`): must read `q.data`, `q.error`, …
+    const entries = m[1].startsWith("{") ? objectPattern(m[1]) : [];
+    // Names bound under `key` matching `re` (a nested pattern binds all of its names).
+    const boundUnder = (re) => entries.filter((e) => !e.rest && re.test(e.key)).flatMap((e) => e.names);
     if (m[1].startsWith("{")) {
-      for (const part of m[1].slice(1, -1).split(",").map((x) => x.trim()).filter(Boolean)) {
-        if (part.startsWith("...")) { holders.push(part.slice(3).trim()); continue; }
-        const [key, alias] = part.split("=")[0].split(":").map((x) => x.trim());
-        if (REFRESHED.test(key)) direct.push(alias || key);
+      for (const e of entries) {
+        if (e.rest) { holders.push(e.rest); continue; }
+        if (REFRESHED.test(e.key)) direct.push(...e.names);
         // A bound error flag must reach the ALERT: read only by the polite message,
         // a failed refresh changes a sentence nobody is interrupted for.
-        if (/^(?:error|isError|isRefetchError|isLoadingError)$/.test(key) && !new RegExp(`(?<![\\w$.])${escapeRegExp(alias || key)}(?![\\w$])`).test(alerts)) {
-          errorsOnlyPolite.push(alias || key);
+        if (/^(?:error|isError|isRefetchError|isLoadingError)$/.test(e.key)) {
+          for (const n of e.names) if (!new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(alerts)) errorsOnlyPolite.push(n);
         }
       }
     } else if (m[1].startsWith("[")) {
       // `const [metrics, decisions] = useQueries(…)`: each element is a whole query result.
-      for (const el of m[1].slice(1, -1).split(",").map((x) => x.trim().replace(/^\.\.\./, "").split("=")[0].trim())) if (/^[A-Za-z_$][\w$]*$/.test(el)) holders.push(el);
+      for (const el of splitTop(m[1].slice(1, -1), ",").map((x) => splitTop(x.replace(/^\.\.\./, ""), "=")[0] ?? "")) if (/^[A-Za-z_$][\w$]*$/.test(el)) holders.push(el);
       if (holders.length === 0) holders.push("(unbound element)");
     } else holders.push(m[1]);
     // An identifier bound to a list of queries (`const results = useQueries(…)`) is read
@@ -537,10 +665,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
     // Every polled query's FAILURE must reach an alert: a failed background refetch
     // keeps the cached data, so a region reading only `data` stays silent through it.
     const ERR = "error|isError|isRefetchError|isLoadingError|status|failureCount|failureReason";
-    const errBound = m[1].startsWith("{")
-      ? m[1].slice(1, -1).split(",").map((x) => x.trim()).filter((x) => !x.startsWith("...")).map((x) => x.split("=")[0].split(":").map((y) => y.trim()))
-        .filter(([key]) => new RegExp(`^(?:${ERR})$`).test(key)).map(([key, alias]) => alias || key)
-      : [];
+    const errBound = boundUnder(new RegExp(`^(?:${ERR})$`));
     const inAlert = (re) => re.test(alerts);
     const failureAlerted = errBound.some((n) => inAlert(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
       holders.some((h) => inAlert(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}(?:\\[\\d+\\])?\\??\\.(?:${ERR})(?![\\w$])`))) ||
@@ -553,10 +678,7 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
       // successful refresh that changes only this query's data is otherwise silent —
       // and its FAILURE must reach an alert. One finding per query.
       const RESULT = "data|dataUpdatedAt";
-      const resultAliases = m[1].startsWith("{")
-        ? m[1].slice(1, -1).split(",").map((x) => x.trim()).filter((x) => !x.startsWith("...")).map((x) => x.split("=")[0].split(":").map((y) => y.trim()))
-          .filter(([key]) => new RegExp(`^(?:${RESULT})$`).test(key)).map(([key, alias]) => alias || key)
-        : [];
+      const resultAliases = boundUnder(new RegExp(`^(?:${RESULT})$`));
       // A value derived from the result (`const anomalous = signals?.signals.filter(…)`)
       // carries it: follow `const X = …alias…` to a fixpoint.
       const derived = new Set([...resultAliases, ...holders]);
@@ -976,8 +1098,10 @@ export function checkIconButtons(rel, raw) {
     // A child text node (an sr-only <span>) names the button as well as aria-label does.
     const childText = tag.trimEnd().endsWith("/") ? "" : buttonText(src, m.index + tag.length, "Button") ?? "";
     const named = hasNonBlankLabel(tag, src) || (!isBlank(childText) && !isGlyphOnly(childText));
-    if (/\bsize=["{]\s*["'`]?icon["'`]?/.test(tag) && !named) {
-      failures.push(`${rel}:${line}: icon-only <Button size="icon"> has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+    // Every <Button>, whatever its `size`: an icon child with no text and no label is
+    // unnamed whether or not the author also asked for icon sizing.
+    if (!named) {
+      failures.push(`${rel}:${line}: <Button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     }
   }
   return failures;
@@ -1006,16 +1130,62 @@ export function rechartsSeriesNames(src) {
     }
     if (!ns && !named) return null;
   }
-  if (imports === 0 && /["']recharts["']/.test(src)) return null;
+  // A re-export (`export { Area } from "recharts"`) renders nothing here; the files
+  // importing it are followed by rechartsSeriesViaImports.
+  if (imports === 0 && /["']recharts["']/.test(src.replace(/export\s*(?:type\s*)?(?:\*|\{[^}]*\})\s*from\s*["']recharts["']/g, ""))) return null;
   return names;
 }
 
-/** Rule 4 over one file. Returns failure strings. */
-export function checkChartMotion(rel, raw) {
+/**
+ * Recharts series reached through LOCAL modules: a barrel that re-exports `Area`
+ * (`export { Area }`, `export { Area as A } from "recharts"`, `export * from
+ * "recharts"`, or through another barrel) hands a series to a view whose source
+ * never names "recharts". Followed to a fixpoint. `files` is [{ rel, src }];
+ * returns Map rel -> the local JSX names that are series imported that way.
+ */
+export function rechartsSeriesViaImports(files) {
+  const parsed = files.map((f) => ({ rel: f.rel, code: stripComments(f.src) }));
+  const rels = new Set(parsed.map((f) => f.rel));
+  const exportsOf = new Map(parsed.map((f) => [f.rel, new Set()]));
+  const imported = new Map(parsed.map((f) => [f.rel, new Set()]));
+  const fromSeries = (spec, rel) => (spec === "recharts" ? new Set(SERIES) : exportsOf.get(resolveImport(rel, spec, rels)) ?? new Set());
+  for (let changed = true; changed; ) {
+    changed = false;
+    const add = (set, n) => { if (!set.has(n)) { set.add(n); changed = true; } };
+    for (const f of parsed) {
+      const local = new Set([...(rechartsSeriesNames(f.code) ?? []), ...imported.get(f.rel)]);
+      for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*["'](\.[^"']*|@\/[^"']*)["']/g)) {
+        const series = fromSeries(m[2], f.rel);
+        for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+          const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
+          if (series.has(orig)) add(imported.get(f.rel), alias ?? orig);
+        }
+      }
+      for (const m of f.code.matchAll(/import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*["'](\.[^"']*|@\/[^"']*)["']/g)) {
+        for (const n of fromSeries(m[2], f.rel)) add(imported.get(f.rel), `${m[1]}.${n}`);
+      }
+      const out = exportsOf.get(f.rel);
+      for (const m of f.code.matchAll(/export\s*\{([^}]*)\}\s*(?:from\s*["']([^"']+)["'])?/g)) {
+        const series = m[2] ? fromSeries(m[2], f.rel) : local;
+        for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
+          const [orig, alias] = part.replace(/^type\s+/, "").split(/\s+as\s+/).map((x) => x.trim());
+          if (series.has(orig)) add(out, alias ?? orig);
+        }
+      }
+      for (const m of f.code.matchAll(/export\s*\*\s*from\s*["']([^"']+)["']/g)) for (const n of fromSeries(m[1], f.rel)) add(out, n);
+      for (const m of f.code.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$.]*)\s*;?\s*$/gm)) if (local.has(m[2])) add(out, m[1]);
+    }
+  }
+  return imported;
+}
+
+/** Rule 4 over one file; `viaImports` are series reached through local barrels. Returns failure strings. */
+export function checkChartMotion(rel, raw, viaImports = []) {
   const src = stripComments(raw);
-  if (!/["']recharts["']/.test(src)) return [];
-  const names = rechartsSeriesNames(src);
-  if (names === null) return [`${rel}: recharts is imported in a form the gate cannot parse — failing closed`];
+  if (!/["']recharts["']/.test(src) && viaImports.length === 0) return [];
+  const direct = rechartsSeriesNames(src);
+  if (direct === null) return [`${rel}: recharts is imported in a form the gate cannot parse — failing closed`];
+  const names = [...new Set([...direct, ...viaImports])];
   const reduced = new Set([...src.matchAll(/(?:const|let)\s+(\w+)\s*=\s*usePrefersReducedMotion\s*\(\s*\)/g)].map((m) => m[1]));
   const failures = [];
   for (const name of names) {
@@ -1098,7 +1268,16 @@ export function checkReducedMotion(rel, raw) {
   const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
   const re = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/g;
   let m;
-  let ok = false;
+  // The universal damper must reach every box that can animate: `*`, and the
+  // `::before`/`::after` pseudo-elements, which `*` alone does not select.
+  const UNIVERSAL = ["*", "*::before", "*::after"];
+  const universalOf = (sel) => {
+    const t = sel.trim().replace(/\s+/g, " ");
+    if (t === "*") return "*";
+    const pseudo = /^\*?::?(before|after)$/.exec(t);
+    return pseudo ? `*::${pseudo[1]}` : null;
+  };
+  const covered = new Set();
   let unimportant = false;
   const reversals = [];
   const blocks = []; // [start, end) of every reduced-motion block
@@ -1119,9 +1298,9 @@ export function checkReducedMotion(rel, raw) {
         // …and reach every element: the rule whose selector list holds the bare
         // universal `*` must ITSELF damp all three families. `* { color: red }`
         // beside `.unused { animation: none … }` damps nothing on screen.
-        const universal = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-          .filter((r) => r[1].split(",").some((sel) => sel.trim() === "*"))
-          .some((r) => {
+        const damping = [...css.slice(m.index + m[0].length, i + 1).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+          .filter((r) => r[1].split(",").some((sel) => universalOf(sel) !== null))
+          .filter((r) => {
             // A family counts only through a declaration that stops it: `animation:
             // none`/`-name: none`/near-zero `-duration` (an iteration count of 1 still
             // runs a one-shot entrance animation in full), likewise for transition.
@@ -1132,7 +1311,7 @@ export function checkReducedMotion(rel, raw) {
             if (!motion.filter((d) => !MOTION_NEUTRAL.has(d[1])).every((d) => /!\s*important\s*$/.test(d[2].trim()))) { unimportant = true; return false; }
             return ["animation", "transition", "scroll"].every((f) => own.has(f));
           });
-        if (universal) ok = true;
+        for (const r of damping) for (const sel of r[1].split(",")) if (universalOf(sel)) covered.add(universalOf(sel));
         blocks.push([m.index, i + 1]);
         // Every block's motion declarations must damp: a later block that re-enables
         // motion (`.spinner { animation: spin 2s infinite !important }`) reverses the first.
@@ -1158,26 +1337,79 @@ export function checkReducedMotion(rel, raw) {
     .filter((d) => /!\s*important/.test(d[2]) && !MOTION_NEUTRAL.has(d[1]) && !damps(d[1], d[2].replace(/!\s*important/, "").trim()))
     .map((d) => `${d[1]}: ${d[2].trim()}`);
   if (overrides.length) return [`${rel}: an !important motion declaration outside the reduced-motion block overrides it for reduced-motion users (${overrides.join("; ")}) — WCAG 2.3.3`];
+  const missed = UNIVERSAL.filter((u) => !covered.has(u));
+  const ok = missed.length === 0;
+  if (covered.size > 0 && !ok && !unimportant) return [`${rel}: the reduced-motion block damps ${[...covered].join(", ")} but not ${missed.join(", ")} — an animated pseudo-element keeps moving (WCAG 2.3.3)`];
   if (!ok && unimportant) return [`${rel}: the reduced-motion universal (*) rule's dampers are not all !important — any more specific rule re-enables motion — WCAG 2.3.3`];
   if (ok) return [];
   return [`${rel}: no @media (prefers-reduced-motion: reduce) block whose universal (*) rule damps animation, transition and scroll-behavior — WCAG 2.3.3`];
 }
 
 /**
- * Every artifacts/signalgrid-* web package (a vite config, or .tsx under src/),
- * found WITHOUT looking at its stylesheet: a new package whose stylesheet is
- * missing or named differently must fail here, not drop out of the scan.
+ * The JSX elements of a file as a tree: [{ name, tag, start, end, parent }], `end`
+ * just past the element (its closing tag, or its own `/>`). A fragment's name is "".
+ * Returns null when the tags do not balance — the caller fails closed.
  */
+export function jsxElements(src) {
+  const nodes = [];
+  const stack = [];
+  // A `<` opens a tag only where an expression can start: not after an identifier,
+  // `)` or `]` (a generic `useState<T>` or a comparison `a < b`).
+  for (const t of src.matchAll(/(?<![\w$)\]]\s*)<(\/?)([A-Za-z][\w.]*)?(?=[\s/>])/g)) {
+    const name = t[2] ?? "";
+    if (t[1]) {
+      const open = stack.pop();
+      if (!open || open.name !== name) return null;
+      const close = src.indexOf(">", t.index);
+      if (close < 0) return null;
+      open.end = close + 1;
+      continue;
+    }
+    const tag = name ? openingTag(src, t.index) : "<";
+    if (tag === null) return null;
+    const node = { name, tag, start: t.index, end: -1, parent: stack.at(-1) ?? null };
+    nodes.push(node);
+    if (tag.trimEnd().endsWith("/")) node.end = t.index + tag.length + 1;
+    else stack.push(node);
+  }
+  return stack.length ? null : nodes;
+}
+
+/**
+ * Does a `<MotionConfig reducedMotion="user"|"always">` element ENCLOSE the tree it
+ * sits in? It must have children, and every other element of its outermost JSX
+ * expression must be one of its ancestors or inside it: a self-closing
+ * `<MotionConfig … />`, or one beside `<AppRoutes />` in a fragment, configures nothing.
+ * Returns true, false, or null when the file's JSX cannot be parsed.
+ */
+export function motionConfigWraps(src) {
+  const nodes = jsxElements(src);
+  if (nodes === null) return null;
+  return nodes.some((mc) => {
+    if (mc.name !== "MotionConfig" || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag)) return false;
+    const inside = (n) => n.start > mc.start && n.end <= mc.end;
+    if (!nodes.some(inside)) return false;
+    let root = mc;
+    while (root.parent) root = root.parent;
+    const ancestors = new Set();
+    for (let a = mc.parent; a; a = a.parent) ancestors.add(a);
+    return nodes.filter((n) => n.start >= root.start && n.end <= root.end).every((n) => n === mc || ancestors.has(n) || inside(n));
+  });
+}
+
 /**
  * Framer Motion animates from JavaScript, so the stylesheet's reduced-motion block
- * does not reach it. A tree that animates with framer-motion (or motion/react) must
- * wrap its app root (src/App.tsx or src/main.tsx) in `<MotionConfig reducedMotion="user">`
- * (or "always"), and nothing may set `reducedMotion="never"` or a value the gate
- * cannot read. `files` is [{ rel, src }]. Returns failures.
+ * does not reach it. A tree with any value import from framer-motion (or motion,
+ * motion/react) — `motion`, the optimised `m`, an aliased import, `useAnimate` —
+ * must wrap its app (src/App.tsx or src/main.tsx) in `<MotionConfig
+ * reducedMotion="user">` (or "always"), and nothing may set `reducedMotion="never"`
+ * or a value the gate cannot read. `files` is [{ rel, src }]. Returns failures.
  */
 export function checkFramerMotion(treeRel, files) {
-  const MOTION_IMPORT = /from\s*["'](?:framer-motion|motion\/react)["']/;
-  const animates = files.filter((f) => { const c = stripComments(f.src); return MOTION_IMPORT.test(c) && /<motion\.|\bmotion\(|\buseAnimate\b|\banimate\(/.test(c); });
+  const MOTION_IMPORT = /import\s+(?!type\b)([^;]*?)\s*from\s*["'](?:framer-motion|motion|motion\/react)["']/g;
+  // An import of MotionConfig alone animates nothing; any other value import is followed.
+  const animates = files.filter((f) => [...stripComments(f.src).matchAll(MOTION_IMPORT)]
+    .some((m) => m[1].replace(/[{}\s]/g, "").split(",").filter(Boolean).some((n) => !/^(?:type[^,]*|MotionConfig)$/.test(n))));
   if (animates.length === 0) return [];
   const failures = [];
   for (const f of files) {
@@ -1185,8 +1417,9 @@ export function checkFramerMotion(treeRel, files) {
       if (!/^["'](?:user|always)["']$/.test(m[1])) failures.push(`${f.rel}: reducedMotion=${m[1]} — framer-motion animations ignore prefers-reduced-motion unless it is "user" or "always" (WCAG 2.3.3)`);
     }
   }
-  const root = files.some((f) => /\/src\/(?:App|main)\.tsx$/.test(f.rel) && /<MotionConfig\b[^>]*\breducedMotion\s*=\s*["'](?:user|always)["']/.test(stripComments(f.src)));
-  if (!root) failures.push(`${treeRel}: animates with framer-motion (${animates.length} file(s), e.g. ${animates[0].rel}) but no <MotionConfig reducedMotion="user"> wraps src/App.tsx or src/main.tsx — CSS reduced-motion rules do not stop JS animation (WCAG 2.3.3)`);
+  const roots = files.filter((f) => /\/src\/(?:App|main)\.tsx$/.test(f.rel)).map((f) => ({ rel: f.rel, wraps: motionConfigWraps(stripComments(f.src)) }));
+  for (const r of roots) if (r.wraps === null) failures.push(`${r.rel}: its JSX does not balance — the gate cannot see what <MotionConfig> wraps (failing closed)`);
+  if (!roots.some((r) => r.wraps === true)) failures.push(`${treeRel}: animates with framer-motion (${animates.length} file(s), e.g. ${animates[0].rel}) but no <MotionConfig reducedMotion="user"> encloses the app in src/App.tsx or src/main.tsx — CSS reduced-motion rules do not stop JS animation (WCAG 2.3.3)`);
   return failures;
 }
 
@@ -1220,6 +1453,11 @@ export function checkStylesheetLoaded(treeRel, indexHtml, readEntry) {
   return [`${treeRel}/${entries.join(", ")}: the entry does not \`import "./index.css"\` — the reduced-motion rule never reaches the rendered UI (WCAG 2.3.3)`];
 }
 
+/**
+ * Every artifacts/signalgrid-* web package (a vite config, or .tsx under src/),
+ * found WITHOUT looking at its stylesheet: a new package whose stylesheet is
+ * missing or named differently must fail here, not drop out of the scan.
+ */
 export function webTreeCandidates(base, dirs, has) {
   const trees = [];
   const missing = [];
@@ -1278,13 +1516,15 @@ function run() {
     failures.push(...checkSharedAlerts(files.filter((x) => x.rel.endsWith(".tsx"))));
     pollingTotal += lr.polling.length;
     failures.push(...lr.failures);
+    const seriesVia = rechartsSeriesViaImports(files);
     for (const f of files.filter((x) => x.rel.endsWith(".tsx"))) {
       buttons += (f.src.match(/<Button\b/g) ?? []).length;
       rawButtons += (stripComments(f.src).match(/<button\b/g) ?? []).length;
       failures.push(...checkIconButtons(f.rel, f.src));
       failures.push(...checkLiveRegionText(f.rel, f.src));
-      if (/["']recharts["']/.test(f.src)) charts++;
-      failures.push(...checkChartMotion(f.rel, f.src));
+      const via = [...(seriesVia.get(f.rel) ?? [])];
+      if (/["']recharts["']/.test(f.src) || via.length) charts++;
+      failures.push(...checkChartMotion(f.rel, f.src, via));
     }
     for (const f of files) failures.push(...checkScrollMotion(f.rel, f.src));
   }
@@ -1499,7 +1739,7 @@ function selfTest() {
     ["a reduced-motion block must damp all three motion families",
       ["scroll-behavior: auto", "animation-duration: 0.01ms; scroll-behavior: auto", "animation: none; transition: none"].every((d) =>
         checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["a timer that invalidates or resets queries polls",
       ["setInterval(() => qc.invalidateQueries({ queryKey: k }), 5000)", "setTimeout(function t() { qc.resetQueries(); setTimeout(t, 5000); }, 5000)"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
@@ -1507,7 +1747,7 @@ function selfTest() {
       ["animation-duration: 99s", "scroll-behavior: smooth", "transition-duration: 0.01ms; animation-duration: 2s", "animation-iteration-count: infinite", "transition: opacity 1s"].every((d) =>
         checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { ${d}; } }`).length === 1) &&
       ["animation: none !important", "transition-duration: 0s !important", "scroll-behavior: auto !important", "animation-duration: 10ms !important; animation-timing-function: linear"].every((d) =>
-        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; ${d}; } }`).length === 0)],
+        checkReducedMotion("a.css", `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; ${d}; } }`).length === 0)],
     ["a live-region alert gated on cached data being absent is flagged",
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={isError && !data ? "Feed down." : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message="" alert={m.error && !m.data ? "Down." : ""} />').length === 1 &&
@@ -1562,7 +1802,7 @@ function selfTest() {
     ["the universal rule itself must damp all three motion families",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { color: red; } .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; } .x { transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["a refetch passed to a timer as its callback polls",
       ["setInterval(refetch, 5000)", "setTimeout(function tick() { refetchAll(); setTimeout(tick, 5000); }, 5000)", "const id = setInterval(refetchFeed, 3000)"].every((c) =>
         checkLiveRegions([view("t/src/pages/T.tsx", `${c}; return <div/>;`)], false).failures.length === 1)],
@@ -1611,7 +1851,7 @@ function selfTest() {
     ["reduced motion must win the cascade: !important dampers, and no !important motion outside the block",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
       checkReducedMotion("a.css", ".spinner { animation: spin 2s infinite !important; } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 1 &&
-      checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["useQueries array bindings must reach the live region",
       checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
@@ -1689,10 +1929,10 @@ function selfTest() {
       checkChartMotion("c.tsx", 'import { Area } from "recharts"; <Area {...props} isAnimationActive={false} />').length === 0],
     ["a later reduced-motion block that re-enables motion fails",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none; transition: none; scroll-behavior: auto; } } @media (prefers-reduced-motion: reduce) { .spinner { animation: spin 2s infinite !important; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } } @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .x { color: red; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["an iteration count alone does not damp the animation family",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-iteration-count: 1; transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; } }").length === 0],
     ["an alert count names a record",
       checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts.` : ""} />').length === 1 &&
       checkLiveRegionText("x.tsx", '<LiveRegion message={ok ? `${a.length} active alerts, first ${a[0]?.receivedAt}.` : ""} />').length === 0],
@@ -1701,11 +1941,38 @@ function selfTest() {
       checkLiveRegionText("x.tsx", '<LiveRegion message={d ? `${d.events.length} audit events, newest ${d.events[d.events.length - 1]?.id}.` : ""} />').length === 0],
     ["a reduced-motion block must reach every element through a universal rule",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { .unused { animation: none; transition: none; scroll-behavior: auto; } }").length === 1 &&
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["stylesheet without reduced-motion fails",
       checkReducedMotion("a.css", "@media (prefers-color-scheme: dark) {}").length === 1],
+    ["a typed or nested query binding is parsed, not skipped",
+      checkUnannouncedQueries("x.tsx", 'const q: UseQueryResult<Data> = useGetMetrics();\n<LiveRegion message="Ready" alert="" />', (n) => /^use[A-Z]/.test(n), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: { items }, isError } = useGetMetrics();\n<LiveRegion message="Ready" alert={isError ? "x" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: { items } = {}, isError } = useGetMetrics();\n<LiveRegion message={`${items?.[0]?.id}`} alert={isError ? "Failed" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 0],
+    ["a string literal naming a binding is not a read of it",
+      checkUnannouncedQueries("x.tsx", 'const { data, isError } = useGetMetrics();\n<LiveRegion message={"data"} alert={"isError"} />', (n) => /^use[A-Z]/.test(n), true).length > 0 &&
+      checkUnannouncedQueries("x.tsx", 'const { data, isError } = useGetMetrics();\n<LiveRegion message={`${data?.id}`} alert={isError ? "Failed" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 0],
+    ["an unnamed <Button> fails whatever its size",
+      checkIconButtons("x.tsx", '<Button variant="ghost"><Trash2 /></Button>').length === 1 &&
+      checkIconButtons("x.tsx", '<Button variant="ghost" aria-label="Delete"><Trash2 /></Button>').length === 0],
+    ["the reduced-motion damper must reach ::before and ::after",
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 1 &&
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
+    ["framer-motion's m and aliased imports animate",
+      checkFramerMotion("t", [view("t/src/H.tsx", 'import { m } from "framer-motion";\nexport const H = () => <m.div animate={{ opacity: 1 }} />;')]).length === 1 &&
+      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion as mo } from "framer-motion";\nexport const H = () => <mo.div animate={{ opacity: 1 }} />;')]).length === 1],
+    ["<MotionConfig> must enclose the app, not sit beside it",
+      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<><MotionConfig reducedMotion="user" /><AppRoutes /></>')]).length === 1 &&
+      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<><MotionConfig reducedMotion="user"><div /></MotionConfig><AppRoutes /></>')]).length === 1 &&
+      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<Provider><MotionConfig reducedMotion="user"><AppRoutes /></MotionConfig></Provider>')]).length === 0],
+    ["a recharts series re-exported through a local barrel is followed",
+      (() => {
+        const run = (fs) => { const v = rechartsSeriesViaImports(fs); return fs.flatMap((f) => checkChartMotion(f.rel, f.src, [...(v.get(f.rel) ?? [])])); };
+        return run([view("t/src/charts.ts", 'import { Area } from "recharts";\nexport { Area };'), view("t/src/V.tsx", 'import { Area } from "./charts";\n<Area dataKey="x" />')]).length === 1 &&
+          run([view("t/src/charts.ts", 'export * from "recharts";'), view("t/src/V.tsx", 'import * as C from "./charts";\n<C.Area dataKey="x" />')]).length === 1 &&
+          run([view("t/src/charts.ts", 'export { Area } from "recharts";'), view("t/src/V.tsx", 'import { Area } from "./charts";\n<Area isAnimationActive={false} dataKey="x" />')]).length === 0;
+      })()],
     ["stylesheet with reduced-motion passes",
-      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
+      checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
   ];
   const bad = cases.filter(([, ok]) => !ok);
   for (const [name, ok] of cases) console.log(`${ok ? "ok" : "FAIL"}  ${name}`);

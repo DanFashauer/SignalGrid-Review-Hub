@@ -783,7 +783,11 @@ export function context7YamlKeyScan(lines) {
     for (const m of /context7/i.test(dl) ? dl.matchAll(KEY) : []) {
       if (!CONTEXT7_KEY_RE.test(m[2].replace(/\\\//g, "/"))) continue;
       const after = dl.slice(m.index + m[0].length).trim();
-      if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
+      // a lockfile package key carries its version in the key (`'@upstash/context7-mcp@4.1.1':` then `resolution: …`,
+      // pnpm): the selector is the version and the nested mapping is metadata, not a pin
+      const selector = /@upstash\\?\/context7-mcp@([^\s"':]+)$/i.exec(unquote(m[2]))?.[1];
+      if (selector && (after === "" || after.startsWith("{"))) out.push({ i, value: selector });
+      else if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
       else {
         const j = nextValueLine(i, indent(l));
         out.push({ i, value: j < 0 ? "" : oneScalar(stripYamlComment(lines[j]), j, indent(l)) });
@@ -809,6 +813,9 @@ export function yamlSpecContinuations(lines) {
     const item = /^\s*-\s+(.*)$/.exec(l);
     const value = stripYamlProps((kv ? kv[1] : item ? item[1] : l).trim()).replace(/^["']/, "");
     if (!SPEC_VALUE_RE.test(value)) continue;
+    // a KEY naming the package with its mapping below (a lockfile `'@upstash/context7-mcp@4.1.1':`) is not a value that
+    // continues: the key scan reads its selector
+    if (!kv && !item && /^\s*(?:"(?:\\.|[^"\\])*"|'(?:[^']|'')*'|[^\s#"'][^#]*?):\s*$/.test(l)) continue;
     let base = indent(l);
     if (!kv && !item) {
       // a value on its own line: its owner is the nearest less-indented line above
@@ -2126,6 +2133,7 @@ server.registerTool(
       ["Dockerfile", `RUN ["npx","-y","${P}>\\n<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped line feed (\`>\\n<5\`)"],
       ["a.yaml", `x: npx -y ${P}\ndependencies:\n  "@upstash/context\\u0037-mcp": 4.0.4\n`, "a YAML double-quoted dependency key spelling the name through \`\\u0037\`, beside a pinned reference (Codex, round 35)"],
       ["a.yaml", `x: npx -y ${P}\ndeps:\n  "@upstash/context\\x37-mcp": "4.0.4"\n`, "the same through \`\\x37\` with a quoted value"],
+      ["pnpm-lock.yaml", `packages:\n\n  '@upstash/context7-mcp@4.0.4':\n    resolution: {integrity: sha512-abc}\n`, "a pnpm lockfile package key at a stale version (the key is the version source)"],
       ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || 4\t",]` })}\n`, "a JSON string holding an exec list that does not decode (a raw TAB, a trailing comma): the decoded string is read"],
       // the raw-text readers stay the only readers where the JSON does not parse (a `RUN …` command, a trailing comma)
       ["a.json", `${JSON.stringify({ o: JSON.stringify({ cmd: `RUN ["npx","-y","${P} || "]` }) })}\n`, "a non-JSON command nested twice, \`||\` before a closing quote escaped at depth 2"],
@@ -2163,6 +2171,8 @@ server.registerTool(
       ["s.sh", `npx -y ${P} || ${BT}which node${BT}\n`, "a spaced \`||\` then a backtick substitution"],
       ["s.ps1", `npx -y ${P} || 'x'\n`, "a PowerShell \`||\` then a quoted word"],
       ["a.json", `${JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", P]) })}\n`, "a pinned exec list in a JSON string"],
+      ["pnpm-lock.yaml", `lockfileVersion: '9.0'\npackages:\n\n  '@upstash/context7-mcp@${realPin}':\n    resolution: {integrity: sha512-abc}\n    engines: {node: '>=18'}\n`, "a pnpm lockfile package key at the pin, with nested metadata (Codex, round 35)"],
+      ["pnpm-lock.yaml", `packages:\n  '@upstash/context7-mcp@${realPin}': {resolution: {integrity: sha512-abc}}\n`, "the same key with a flow-mapping value"],
       ["Dockerfile", `RUN ["npx","-y","${P}"]\n`, "a pinned Dockerfile exec form decoded as JSON"],
     ]) {
       checks.push([`[sweep ${path}] ${what} → no finding`, sweep(path, body).length === 0]);

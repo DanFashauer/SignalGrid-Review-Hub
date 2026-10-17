@@ -32,7 +32,10 @@ under the console's PREVIEW banner — the Placement column says which.
 `node scripts/check-screen-inventory.mjs` fails when a tracked
 `artifacts/*/src/pages/**/*.tsx` file has no row, when a listed file is gone, when a
 Status disagrees with the launch profile, when a Placement disagrees with the
-route table, when the route table holds a `<Route>` shape the gate cannot read, or
+route table, when the route table holds a `<Route>` shape the gate cannot read or
+renders a route some other way (an aliased or namespaced `Route`, `Route` passed to a
+function, a `path` or `component` prop on another tag, a page import naming no tracked
+file; a directory import is read as its `index.tsx`), or
 when demo step 4 stops giving any of the four launch arguments the shell needs with
 its exact value (the seeded refs, `sgk_demo_northwind_operator`, and an http(s) URL
 written with a literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the
@@ -56,7 +59,8 @@ tags open an HTML block, and an open one hides every line after it up to the nex
 the inventory table included. The file may not start with a byte-order mark either,
 because GitHub drops it before reading the first line and the gate does not, nor with a
 `---` line, which GitHub reads as YAML front matter and renders outside markdown.
-No line may hold an ASCII control character other than a tab: GitHub reads a form feed
+The file must be valid UTF-8, because a decoder would otherwise replace a bad byte
+unseen. No line may hold an ASCII control character other than a tab: GitHub reads a form feed
 or vertical tab as a space in a table's delimiter row and the gate's renderer does not,
 so GitHub could build a table the gate never counted and split a code span across its
 cells.
@@ -107,13 +111,13 @@ elements, not reachability: a `<Route>` inside a branch that never renders (for 
 | --- | --- | --- | --- | --- |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/decisions/DecisionList.tsx` | launch | launch route | Sessions — the default screen (`/`, `/sessions`, and the `/decisions` alias): the `/v1` decision ledger, one row per decision with its outcome and assurance label. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/decisions/DecisionDetail.tsx` | launch | launch route | The Decision Envelope for one session: outcome, matched rules, reason codes, the evidence snapshot re-verified on request, and each signal with its source and freshness. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyList.tsx` | launch | launch route | Versioned policy rule sets with their content digests. Read-only. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx` | launch | launch route | One policy: its rules and the pinned policy tests, run server-side. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyList.tsx` | launch | launch route | Versioned policy rule sets. Read-only. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyDetail.tsx` | launch | launch route | One policy: its rules, each version's content digest, and the pinned policy tests, run server-side. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/settings/Settings.tsx` | launch | launch route | Settings — the entry point to configuration screens (connector setup, assurance, audit). |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/Status.tsx` | launch | launch route | Deployment assurance: profile, tier, signal source and engine metrics, all read from the server. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/ConnectorSetup.tsx` | launch | launch route | Microsoft connector setup: the gate checklist, the server-resolved mode, and a fixture sync run with its history. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/Audit.tsx` | launch | launch route | The tamper-evident audit chain with every digest recomputed. |
-| signalgrid-app | `artifacts/signalgrid-app/src/pages/Dashboard.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Overview (`/overview`): fixture telemetry tiles plus the live decision panel — the console's one place to run a live `/v1` evaluation from seeded presets. |
+| signalgrid-app | `artifacts/signalgrid-app/src/pages/Dashboard.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Overview (`/overview`): fixture telemetry tiles plus the live decision panel, which runs a live `/v1` evaluation from seeded presets. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/policies/PolicyCreate.tsx` | launch surface · not a launch screen | preview route (not launch UI) | New-policy form preview; it states that no served route creates a policy. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/signals/SignalList.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Signal feed on fixture data. |
 | signalgrid-app | `artifacts/signalgrid-app/src/pages/integrations/IntegrationList.tsx` | launch surface · not a launch screen | preview route (not launch UI) | Integrations catalogue on fixture data. |
@@ -199,8 +203,10 @@ SignalGrid.
    (`native/ios/EnterpriseShell/Services/DecisionService.swift`) picks the on-device
    engine and the shell never calls the api-server. The investor sees the host app's
    own screens: an ordinary action runs with no friction; a sensitive action is held,
-   the phone's own Face ID prompt appears, then the app's own confirmation dialog,
-   then the action applies. No SignalGrid screen appears on the phone.
+   the phone's own Face ID prompt appears (on a simulator with no enrolled Face ID,
+   the shell shows its labelled "Demo · simulated authenticator" sheet instead), then
+   the app's own confirmation dialog, then the action applies. No SignalGrid screen
+   appears on the phone.
    `-DemoAssistAuto` walks these states unattended for a room; `-DemoAssistDecline`
    shows the fail-closed "nothing fires" ending.
 5. **Back to Sessions, then Audit** (`Audit.tsx`, launch route). When step 4 reached

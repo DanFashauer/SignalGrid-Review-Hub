@@ -27,17 +27,26 @@
 //   · every <Route> in App.tsx has a shape this parser understands and names a
 //     known page or preview wrapper. An unrecognised shape (an inline arrow
 //     component, a spread, an unknown identifier) FAILS, whatever the doc says —
-//     otherwise a page it could not see would read as `not routed` and pass.
+//     otherwise a page it could not see would read as `not routed` and pass. So
+//     does any way of rendering a route the parser has no node for: an aliased
+//     import of Route, any other reference to Route (createElement(Route, …),
+//     W.Route), a path= or component= prop on another tag, and a page import
+//     that resolves to no tracked page file (a typo; a directory import is read
+//     as its index.tsx)
 //   · the "shows" column is not empty and not a placeholder (TBD, TODO, …); its
 //     accuracy is still a human's job — nothing here can read a screen
 //   · the doc names the launch-profile version it was checked against, and that
 //     version is the current LAUNCH_PROFILE_VERSION
+//   · the doc is valid UTF-8 (a decoder would otherwise swap a bad byte for U+FFFD
+//     unseen, while every other renderer-ambiguous byte is refused)
 //
 // `--self-test` proves each of those can fail on a synthetic case before the real
 // check is trusted.
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import MarkdownIt from "markdown-it";
 import { parseFragment } from "parse5";
 import ts from "typescript";
@@ -98,8 +107,15 @@ export const PREVIEW = "preview route (not launch UI)";
  * Bindings read from the same AST: `import X from "@/pages/P"`,
  * `const X = named(() => import("@/pages/P"), …)`, `const Y = X` aliases and
  * `const Z = preview(X)` wrappers.
+ *
+ * `adminKeys` are the tracked admin page files as keys (`decisions/DecisionList`).
+ * Round 15: every page a route places must be one of them — `@/pages/reports` is
+ * read as `reports/index` when only that file exists, and a key matching no file is
+ * reported. Route forms with no node here — `Route as R`, `createElement(Route, …)`,
+ * `<W.Route>`, a path= or component= prop on any other tag — are reported, never
+ * skipped, so a page they render cannot read `not routed` and pass.
  */
-export function adminPlacements(appSource) {
+export function adminPlacements(appSource, adminKeys) {
   const sf = ts.createSourceFile("App.tsx", appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const unparsed = sf.parseDiagnostics.map((d) => `does not parse: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`);
   const pageOf = new Map(); // binding name → page path under src/pages
@@ -126,6 +142,21 @@ export function adminPlacements(appSource) {
       }
     } else if ((ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) && node.tagName.getText(sf) === "Route") {
       routes.push(node);
+    } else if (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) {
+      const props = node.attributes.properties.filter((a) => ts.isJsxAttribute(a) && ["path", "component"].includes(a.name.getText(sf)));
+      if (props.length)
+        unparsed.push(`<${node.tagName.getText(sf)}> carries ${props.map((a) => `${a.name.getText(sf)}=`).join(" and ")} but only <Route> is read: ${node.getText(sf).split("\n")[0].trim()}`);
+    }
+    // The only uses of Route this parser reads: the tag name of a JSX element, and a
+    // plain `import { Route }`. Any other reference could render a route unseen.
+    if (ts.isIdentifier(node) && node.text === "Route") {
+      const parent = node.parent;
+      const isTag = (ts.isJsxSelfClosingElement(parent) || ts.isJsxOpeningElement(parent) || ts.isJsxClosingElement(parent)) && parent.tagName === node;
+      const isPlainImport = ts.isImportSpecifier(parent) && !parent.propertyName && parent.name === node;
+      if (!isTag && !isPlainImport) {
+        const at = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+        unparsed.push(`Route is referenced outside a <Route> tag or a plain import on line ${at}: ${parent.getText(sf).split("\n")[0].trim()}`);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -136,8 +167,15 @@ export function adminPlacements(appSource) {
   }
   const placement = new Map();
   const rank = { "launch route": 3, [PREVIEW]: 2, "404 fallback": 1 };
-  const set = (page, p) => {
-    if (!placement.has(page) || rank[p] > rank[placement.get(page)]) placement.set(page, p);
+  const known = new Set(adminKeys ?? []);
+  const resolve = (page) => (known.has(page) ? page : known.has(`${page}/index`) ? `${page}/index` : null);
+  const set = (page, p, snippet) => {
+    const key = resolve(page);
+    if (!key) {
+      unparsed.push(`<Route> places @/pages/${page}, which is no tracked page file (no ${page}.tsx or ${page}/index.tsx): ${snippet}`);
+      return;
+    }
+    if (!placement.has(key) || rank[p] > rank[placement.get(key)]) placement.set(key, p);
   };
   for (const el of routes) {
     const snippet = el.getText(sf).split("\n")[0].trim();
@@ -160,14 +198,14 @@ export function adminPlacements(appSource) {
       unparsed.push(`unrecognised <Route> shape: ${snippet}`);
       continue;
     }
-    if (previewOf.has(comp) && pageOf.has(previewOf.get(comp))) set(pageOf.get(previewOf.get(comp)), PREVIEW);
-    else if (pageOf.has(comp)) set(pageOf.get(comp), path !== undefined ? "launch route" : "404 fallback");
+    if (previewOf.has(comp) && pageOf.has(previewOf.get(comp))) set(pageOf.get(previewOf.get(comp)), PREVIEW, snippet);
+    else if (pageOf.has(comp)) set(pageOf.get(comp), path !== undefined ? "launch route" : "404 fallback", snippet);
     else unparsed.push(`<Route> component ${comp} resolves to no page under src/pages: ${snippet}`);
   }
   return { placement, unparsed }; // placement keys like "decisions/DecisionList"
 }
 
-function adminPageKey(file) {
+export function adminPageKey(file) {
   return file.replace(`artifacts/${ADMIN}/src/pages/`, "").replace(/\.tsx$/, "");
 }
 
@@ -672,9 +710,71 @@ export function check({ doc, pageFiles, statuses, placements, unparsedRoutes = [
   return errors;
 }
 
+/**
+ * The doc's bytes as text, or null when they are not valid UTF-8 (round 15).
+ * `readFileSync(…, "utf8")` would swap a bad byte for U+FFFD without a word.
+ */
+export function decodeDoc(bytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is this module the script node was started with? Compared by real path on both
+ * sides (round 15): `import.meta.url` is already the real path, `process.argv[1]` is
+ * not, so a symlinked start used to skip the whole gate and exit 0.
+ */
+export function isMainModule(argv1, moduleUrl) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
 function trackedPages() {
   const out = execFileSync("git", ["ls-files", "-z", "--", "artifacts/*/src/pages/*.tsx", "artifacts/*/src/pages/**/*.tsx"], { encoding: "utf8" });
   return [...new Set(out.split("\0").filter((f) => PAGE_RE.test(f)))].sort();
+}
+
+/**
+ * Runs this script as a child process, through a symlinked directory, in a throwaway
+ * git repo holding a planted fault. Each run must exit 1 and print its ✗ line: a
+ * symlinked start once skipped the gate and exited 0 (round 15), and an exit code or
+ * error branch no in-process case reaches can only be seen from outside.
+ */
+function processChecks() {
+  const root = mkdtempSync(join(tmpdir(), "screen-inventory-"));
+  const out = [];
+  try {
+    symlinkSync(dirname(fileURLToPath(import.meta.url)), join(root, "scripts-link"), "dir");
+    const script = join(root, "scripts-link", "check-screen-inventory.mjs");
+    const repo = join(root, "repo");
+    mkdirSync(join(repo, `artifacts/${ADMIN}/src/pages`), { recursive: true });
+    mkdirSync(join(repo, "docs"));
+    writeFileSync(join(repo, ADMIN_ROUTES), 'import NotFound from "@/pages/not-found";\nexport const R = () => <Route component={NotFound} />;\n');
+    writeFileSync(join(repo, `artifacts/${ADMIN}/src/pages/not-found.tsx`), "export default () => null;\n");
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "-A"], { cwd: repo });
+    const expectFail = (name, line) => {
+      const r = spawnSync(process.execPath, [script], { cwd: repo, encoding: "utf8" });
+      out.push([name, r.status === 1 && r.stderr.split("\n").includes(line), `exit ${r.status}, stderr ${JSON.stringify((r.stderr ?? "").slice(0, 400))}`]);
+    };
+    expectFail("through a symlink, a missing doc exits 1 (round 28)", `✗ ${DOC} does not exist`);
+    writeFileSync(join(repo, DOC), `x\n${BEGIN}\n| Surface | File | Status | Placement | Shows |\n| --- | --- | --- | --- | --- |\n${END}\n`);
+    expectFail("through a symlink, an unlisted page exits 1 with its ✗ line (round 28)", `✗ page file missing from ${DOC}: artifacts/${ADMIN}/src/pages/not-found.tsx`);
+    writeFileSync(join(repo, DOC), Buffer.from([0x78, 0xff, 0x0a]));
+    expectFail("through a symlink, a doc that is not UTF-8 exits 1 (round 28)", `✗ ${DOC} is not valid UTF-8 — a renderer would show U+FFFD where the gate cannot see what was meant; re-save it as UTF-8`);
+  } catch (e) {
+    out.push(["the process checks ran", false, String(e)]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  return out;
 }
 
 function selfTest() {
@@ -704,7 +804,6 @@ function selfTest() {
     "}",
     "",
   ].join("\n");
-  const { placement: placements, unparsed } = adminPlacements(appSrc);
   const pageFiles = [
     "artifacts/signalgrid-app/src/pages/Fleet.tsx",
     "artifacts/signalgrid-app/src/pages/Orphan.tsx",
@@ -712,6 +811,8 @@ function selfTest() {
     "artifacts/signalgrid-app/src/pages/not-found.tsx",
     "artifacts/signalgrid-web/src/pages/Home.tsx",
   ];
+  const adminKeys = pageFiles.filter((f) => PAGE_RE.exec(f)[1] === ADMIN).map(adminPageKey);
+  const { placement: placements, unparsed } = adminPlacements(appSrc, adminKeys);
   const row = (s, f, st, p, sh = "a screen") => `| ${s} | \`${f}\` | ${st} | ${p} | ${sh} |`;
   // Step 4 as the real doc writes it: the four launch arguments in a fenced block,
   // one per line, inside list item 4.
@@ -747,9 +848,19 @@ function selfTest() {
   const SESSIONS = ROUTES[1].trim();
   const FLEET = ROUTES[2].trim();
   const routeCase = (from, to, docEdit = (d) => d, extra = "") => {
-    const r = adminPlacements(appSrc.replace(from, to) + extra);
+    const r = adminPlacements(appSrc.replace(from, to) + extra, adminKeys);
     return { ...base, doc: docEdit(good), placements: r.placement, unparsedRoutes: r.unparsed };
   };
+  // Round 15: a directory-index page, imported by its directory.
+  const INDEX_PAGE = "artifacts/signalgrid-app/src/pages/reports/index.tsx";
+  const indexCase = (status, placement, importPath = "@/pages/reports") => {
+    const keys = [...adminKeys, adminPageKey(INDEX_PAGE)];
+    const r = adminPlacements(appSrc.replace(SESSIONS, `${SESSIONS}\n        <Route path="/reports" component={Reports} />`)
+      + `\nconst Reports = named(() => import("${importPath}"), "Reports");\n`, keys);
+    return { ...base, pageFiles: [...pageFiles, INDEX_PAGE], placements: r.placement, unparsedRoutes: r.unparsed,
+      doc: good.replace(END, `${row("signalgrid-app", INDEX_PAGE, status, placement)}\n${END}`) };
+  };
+  const fleetNotRouted = (d) => d.replace(`| ${PREVIEW} |`, "| not routed |");
   const asNotRouted = (d) => d.replace("| launch | launch route |", "| launch surface · not a launch screen | not routed |");
   const cases = [
     ["clean fixture passes", base, null],
@@ -772,6 +883,14 @@ function selfTest() {
     ["<Route> text only in a template literal is not a route (round 3)", routeCase(SESSIONS, "", (d) => d, `\nexport const EXAMPLE = \`${SESSIONS}\`;\n`), "placement column"],
     ["<Route> text only in a quoted string is not a route (round 3)", routeCase(SESSIONS, "", (d) => d, `\nexport const EXAMPLE = '${SESSIONS}';\n`), "placement column"],
     ["an App.tsx that does not parse fails", routeCase("export function Router() {", "export function Router( {"), "does not parse"],
+    // Round 15: route forms the parser has no node for are reported, never invisible.
+    ["an aliased Route import used as <R …/> fails even when the row says 'not routed' (round 28)", routeCase(FLEET, '<R path="/fleet" component={FleetPreview} />', fleetNotRouted, '\nimport { Route as R } from "wouter";\n'), "Route is referenced outside a <Route> tag"],
+    ["createElement(Route, …) fails even when the row says 'not routed' (round 28)", routeCase(FLEET, '{createElement(Route, { path: "/fleet", component: FleetPreview })}', fleetNotRouted), "Route is referenced outside a <Route> tag"],
+    ["a namespaced <W.Route …/> fails even when the row says 'not routed' (round 28)", routeCase(FLEET, '<W.Route path="/fleet" component={FleetPreview} />', fleetNotRouted), "Route is referenced outside a <Route> tag"],
+    ["a path= prop on another tag fails even when the row says 'not routed' (round 28)", routeCase(FLEET, '<Page path="/fleet" component={FleetPreview} />', fleetNotRouted), "but only <Route> is read"],
+    ["a directory-index page routed by its directory fails when the row says 'not routed' (round 28)", indexCase("launch surface · not a launch screen", "not routed"), "placement column"],
+    ["a directory-index page routed by its directory passes as a launch route (round 28)", indexCase("launch", "launch route"), null],
+    ["a page import that names no tracked file fails (round 28)", indexCase("launch surface · not a launch screen", "not routed", "@/pages/report"), "is no tracked page file"],
     ["an empty shows column fails", { ...base, doc: good.replace("| — | a screen |", "| — |  |") }, "empty"],
     ["a placeholder shows column (TBD) fails", { ...base, doc: good.replace("| — | a screen |", "| — | TBD |") }, "placeholder"],
     // Demo step 4 — read as rendered text. `withArg` edits one line of the fenced block;
@@ -974,6 +1093,10 @@ function selfTest() {
       [`a page row whose cell holds ${x} fails (round 18)`, { ...base, doc: good.replace(INV_ROW, INV_ROW.replace(/ \|$/, ` ${x} |`)) }, 'page row contains "<"']),
     ["prose punctuation touching a value fails closed", withProse("`-DemoBackendDevice ipad-ward-01`, then"), "gives -DemoBackendDevice ipad-ward-01,"],
     ["a stale launch-profile version fails", { ...base, profileVersion: 8 }, "launch profile v7"],
+    // Round 15: the three checks a deletion sweep found no case for.
+    ["a doc naming no launch-profile version fails (round 28)", { ...base, doc: good.replace("Checked against launch profile v7.", "Checked.") }, "does not name the launch-profile version"],
+    ["a row whose surface column names another surface fails (round 28)", { ...base, doc: good.replace(row("signalgrid-web", pageFiles[4], "demo_only", "—"), row("signalgrid-app", pageFiles[4], "demo_only", "—")) }, 'surface column says "signalgrid-app"'],
+    ["a non-admin row with a route placement fails (round 28)", { ...base, doc: good.replace(row("signalgrid-web", pageFiles[4], "demo_only", "—"), row("signalgrid-web", pageFiles[4], "demo_only", "launch route")) }, 'non-admin surface gives "—"'],
     ["a missing inventory block fails", { ...base, doc: good.replace(BEGIN, "") }, "no <!--"],
     ["a duplicated row fails", { ...base, doc: good.replace(END, `${row("signalgrid-web", pageFiles[4], "demo_only", "—")}\n${END}`) }, "listed 2 times"],
   ];
@@ -986,6 +1109,11 @@ function selfTest() {
     console.log(`  ${pass ? "✓" : "✗"} ${name}${pass ? "" : ` — got ${JSON.stringify(errs)}`}`);
     ok &&= pass;
   }
+  // Round 15: the gate as a process — started through a symlink, on planted faults.
+  for (const [name, pass, detail] of processChecks()) {
+    console.log(`  ${pass ? "✓" : "✗"} ${name}${pass ? "" : ` — got ${detail}`}`);
+    ok &&= pass;
+  }
   // The real launch profile must be readable into statuses, or every real run is meaningless.
   const real = appSurfaceStatuses();
   const realOk = real.get("signalgrid-app") !== undefined && real.size > 0;
@@ -995,7 +1123,7 @@ function selfTest() {
   process.exit(ok ? 0 : 1);
 }
 
-const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = isMainModule(process.argv[1], import.meta.url);
 if (!isMain) {
   // imported for its pure functions
 } else if (process.argv.includes("--self-test")) selfTest();
@@ -1004,12 +1132,18 @@ else {
     console.error(`✗ ${DOC} does not exist`);
     process.exit(1);
   }
+  const doc = decodeDoc(readFileSync(DOC));
+  if (doc === null) {
+    console.error(`✗ ${DOC} is not valid UTF-8 — a renderer would show U+FFFD where the gate cannot see what was meant; re-save it as UTF-8`);
+    process.exit(1);
+  }
   const pageFiles = trackedPages();
+  const adminKeys = pageFiles.filter((f) => PAGE_RE.exec(f)[1] === ADMIN).map(adminPageKey);
   const errors = check({
-    doc: readFileSync(DOC, "utf8"),
+    doc,
     pageFiles,
     statuses: appSurfaceStatuses(),
-    ...(({ placement, unparsed }) => ({ placements: placement, unparsedRoutes: unparsed }))(adminPlacements(readFileSync(ADMIN_ROUTES, "utf8"))),
+    ...(({ placement, unparsed }) => ({ placements: placement, unparsedRoutes: unparsed }))(adminPlacements(readFileSync(ADMIN_ROUTES, "utf8"), adminKeys)),
     profileVersion: LAUNCH_PROFILE_VERSION,
   });
   if (errors.length) {

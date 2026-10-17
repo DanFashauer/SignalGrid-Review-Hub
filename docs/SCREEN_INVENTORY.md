@@ -212,7 +212,7 @@ workflow; step 5 proves that second one reached the ledger.
    The last four decide where the verdict comes from. The identity and device are the
    refs the console preset used. The URL is the local api-server's origin, on
    whatever port it was started with, and nothing after it, because the shell appends
-   the `/v1` path itself; the shell compares the host as written and accepts only
+   `api/v1/app-workflows/evaluate` itself; the shell compares the host as written and accepts only
    `localhost`, `127.0.0.1` or `::1`, ignoring any other. The token is the same
    public fixture key the console uses (`artifacts/signalgrid-app/src/lib/v1.ts`), so
    both sides act in the northwind tenant that owns these refs; another tenant's
@@ -227,8 +227,10 @@ workflow; step 5 proves that second one reached the ledger.
    lab results run with no friction. Place controlled med order is held for the
    app's own confirmation dialog and nothing else: no Face ID prompt and no
    simulated sheet appears, because the grid already trusts this nurse on this iPad.
-   After the worker confirms, the action applies. No SignalGrid screen appears on the
-   phone.
+   After the worker confirms, the action applies. In the manual flow no SignalGrid
+   screen appears on the phone. The simulator build has one exception, compiled out of
+   device builds: a "Behind the glass" operator panel, which the eye button in the host
+   app's top bar shows by hand and the Auto walk below reveals on its own.
 
    To show the step-up gate instead, add `-DemoSignal stale`. That injects a stale
    device check-in on the phone, and the shell takes the stricter of the control
@@ -253,8 +255,9 @@ workflow; step 5 proves that second one reached the ledger.
    `decision.evaluated` event for `nurse.compliant` on `ipad-ward-01` (hover the
    Summary for the workflow), the row under it is its `evidence.captured`, and every
    digest is recomputed. If the count did not move, the shell decided on-device (no
-   token, or the server did not answer; an unanswered call reads as step_up with
-   `REMOTE_UNAVAILABLE_STEP_UP`) — say so rather than skip the step.
+   token, or the server did not answer; with clean local signals an unanswered call
+   reads as step_up with `REMOTE_UNAVAILABLE_STEP_UP`) — say so rather than skip the
+   step.
 
 **Where the supervised iPhone fits, honestly.** The investor story is a host app on a
 supervised iPhone, and that step is the one this repository cannot yet show. The

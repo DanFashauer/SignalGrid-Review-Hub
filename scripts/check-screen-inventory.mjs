@@ -160,13 +160,14 @@ export function adminPlacements(appSource, adminKeys) {
     }
     // The only uses of Route this parser reads: the tag name of a JSX element, and a
     // plain `import { Route }`. Any other reference could render a route unseen.
-    if (ts.isIdentifier(node) && node.text === "Route") {
+    // Round 17: the same holds for Switch, which the shadowing check finds by tag name.
+    if (ts.isIdentifier(node) && (node.text === "Route" || node.text === "Switch")) {
       const parent = node.parent;
       const isTag = (ts.isJsxSelfClosingElement(parent) || ts.isJsxOpeningElement(parent) || ts.isJsxClosingElement(parent)) && parent.tagName === node;
       const isPlainImport = ts.isImportSpecifier(parent) && !parent.propertyName && parent.name === node;
       if (!isTag && !isPlainImport) {
         const at = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
-        unparsed.push(`Route is referenced outside a <Route> tag or a plain import on line ${at}: ${parent.getText(sf).split("\n")[0].trim()}`);
+        unparsed.push(`${node.text} is referenced outside a <${node.text}> tag or a plain import on line ${at}: ${parent.getText(sf).split("\n")[0].trim()}`);
       }
     }
     ts.forEachChild(node, visit);
@@ -204,7 +205,8 @@ export function adminPlacements(appSource, adminKeys) {
     if (a === undefined) return true;
     if (b === undefined) return false;
     const as = a.split("/"), bs = b.split("/");
-    return as.length === bs.length && as.every((seg, i) => seg === bs[i] || seg.startsWith(":"));
+    // wouter 3 builds its matcher with the `i` flag, so literals compare case-insensitively.
+    return as.length === bs.length && as.every((seg, i) => seg.toLowerCase() === bs[i].toLowerCase() || seg.startsWith(":"));
   };
   const earlier = new Map(); // Switch node → [{ path, snippet }]
   for (const el of routes) {
@@ -1053,6 +1055,15 @@ function selfTest() {
     ["a route after a pathless catch-all in the same <Switch> fails (round 29)", routeCase(SESSIONS, `<Route component={NotFound} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],
     ["a route after a /:param route that matches it fails (round 29)", routeCase(SESSIONS, `<Route path="/:any" component={FleetPreview} />\n        ${SESSIONS}`, asNotRouted), "is unreachable"],
     ["a longer route after a shorter one passes (round 29)", routeCase(SESSIONS, `${SESSIONS}\n        <Route path="/sessions/:id" component={SessionList} />`), null],
+    // Round 17 of review: aliased Switch forms, case-insensitive literals, a pinned URL tail.
+    ...[['import { Switch as Sw } from "wouter";', "Sw", "an aliased Switch import"], ["", "W.Switch", "a namespaced W.Switch"], ["const Sw = Switch;", "Sw", "a Switch alias"]].map(([decl, tag, what]) =>
+      [`${what} fails even with the catch-all moved first (round 30)`, (() => {
+        const r = adminPlacements(`${decl}\n${appSrc.replace("<Switch>", `<${tag}>`).replace("</Switch>", `</${tag}>`).replace(SESSIONS, `<Route component={NotFound} />\n        ${SESSIONS}`)}`, adminKeys);
+        return { ...base, doc: asNotRouted(good), placements: r.placement, unparsedRoutes: r.unparsed };
+      })(), "Switch is referenced outside a <Switch> tag"]),
+    ["a /Sessions/:id route above /sessions/new fails, wouter matching case-insensitively (round 30)", routeCase(SESSIONS, '<Route path="/Sessions/:id" component={SessionList} />\n        <Route path="/sessions/new" component={SessionList} />', asNotRouted), "is unreachable"],
+    ...["http://127.0.0.1:8080/.", "http://127.0.0.1:8080/foo/..", "http://127.0.0.1:8080/?", "http://127.0.0.1:8080/#"].map((url) =>
+      [`a backend URL ${url} that WHATWG normalises to / still fails (round 30)`, withArg("-DemoBackendURL", url), "is not written as"]),
     ["a wildcard route path fails (round 29)", routeCase(SESSIONS, '<Route path="/sessions/*" component={SessionList} />', asNotRouted), "cannot compare for shadowing"],
     // Round 13: markdown-it records a definition only when its destination validates, so
     // definitions are found by shape on the raw source, and the rows the table RENDERS

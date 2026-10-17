@@ -148,8 +148,8 @@ on 2026-10-08 and they had to be rewritten from memory:
   (DR-054): a reviewer or refuter that is missing, null, dead, blocked or
   schema-invalid makes the verdict `blocked`, never `ship` — the file names the
   agent and why, never carries the DR-037 landing sentence, and the exit code is
-  2; a ship with no refute is blocked unless its tier is exactly `autonomous` or
-  `docs only`; the latest round decides. `--prs` lists the PRs the wave was given, so one whose
+  2; a ship with no refute is blocked unless its tier is `autonomous` or
+  `docs only` (case-, whitespace-, `-`- and `_`-insensitive); the latest round decides. `--prs` lists the PRs the wave was given, so one whose
   reviewer never started still gets a blocked row. `--self-test` runs its
   cases on synthetic journals. It replaces `@claude` with `@ claude` so a
   posted comment never summons the GitHub workflow. Run it with `python3 -I`;

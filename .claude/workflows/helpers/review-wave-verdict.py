@@ -2,7 +2,7 @@
 # review-wave-verdict.py <journal.jsonl> <wave> [out_dir] --prs 1444,1445  |  review-wave-verdict.py --self-test  -> writes c<PR>w<wave>.md per PR from the review-wave journal
 # FAIL-CLOSED (DR-054: a workflow surfaces a dead agent, it never filters it away). A reviewer or refuter that is missing, null, dead (failed, or started and never returned), blocked or schema-invalid makes that PR's verdict
 # `blocked`, never ship: the file names the agent and why, the DR-037 landing sentence is not written, and the exit code is 2. --prs lists the PRs the wave was GIVEN, so one whose reviewer never started still gets a row.
-# No refute ran is fine ("by routing") only behind a ship whose tier is exactly `autonomous` or `docs only` (an allowlist: any other or unknown tier text requires a refute). --prs is REQUIRED (exit 64 without it).
+# No refute ran is fine ("by routing") only behind a ship whose tier is `autonomous` or `docs only`, compared case-, whitespace-, `-`- and `_`-insensitively (an allowlist: any other or unknown tier text requires a refute). --prs is REQUIRED (exit 64 without it).
 # An agent is a (PR, round, kind): the LATEST round decides, and within a journal key the LAST row wins (started, failed, started, result renders the result).
 import json, sys, re, os
 VERDICTS = ("ship", "fix-needed", "owner-decision")
@@ -62,7 +62,7 @@ def selftest():
         ("unknown free-text tier, ship, no refute -> blocked", L + [started("review", 1, "a"), res("a", rv(tier="low-risk i guess"))], None, 2, ["verdict: **blocked**"], ["DR-037"]),
         ("tier 'autonomous', ship, no refute -> ships", L + [started("review", 1, "a"), res("a", rv(tier="autonomous"))], None, 0, ["verdict: **ship**", "DR-037"], []),
         ("tier 'docs only', ship, no refute -> ships (control)", L + [started("review", 1, "a"), res("a", rv(tier="docs only"))], None, 0, ["verdict: **ship**", "DR-037"], []),
-        ("tier 'autonomous (SAFETY_MACHINERY)', ship, no refute -> blocked (not an exact allowlist entry)", L + [started("review", 1, "a"), res("a", rv(tier="autonomous (SAFETY_MACHINERY)"))], None, 2, ["verdict: **blocked**"], ["DR-037"]),
+        ("tier 'autonomous (SAFETY_MACHINERY)', ship, no refute -> blocked (not an allowlist entry)", L + [started("review", 1, "a"), res("a", rv(tier="autonomous (SAFETY_MACHINERY)"))], None, 2, ["verdict: **blocked**"], ["DR-037"]),
         ("retried key: started, failed, started, result -> the result, not BLOCKED", L + [started("review", 1, "a"), {"type": "failed", "key": "a"}, started("review", 1, "a"), res("a", rv("fix-needed"))], None, 0, ["verdict: **fix-needed**"], ["BLOCKED", "blocked"]),
         ("retried key then failed again: started, result, failed -> blocked", L + [started("review", 1, "a"), res("a", rv()), {"type": "failed", "key": "a"}], None, 2, ["verdict: **blocked**", "DEAD"], ["DR-037"]),
         ("S8 no --prs -> exit 64 and writes nothing", r1, (), 64, [], ["verdict"]),

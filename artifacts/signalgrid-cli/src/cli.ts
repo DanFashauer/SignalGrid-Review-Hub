@@ -25,6 +25,10 @@ import { checkSessionWritable, readSession, sessionPath, writeSession } from "./
 const OUTCOMES = new Set(["allow", "step_up", "restrict", "deny"]);
 /** A sync run's recognised statuses (lib/signalgrid-core/src/types.ts SyncStatus). */
 const SYNC_STATUSES = new Set(["success", "partial", "failed"]);
+/** The core's ConnectorKind, ConnectorMode and ConnectorStatus (lib/signalgrid-core types.ts). */
+const CONNECTOR_KINDS = new Set(["microsoft-entra-intune", "dockbridge-custody", "wfm-shift"]);
+const CONNECTOR_MODES = new Set(["fixture", "live"]);
+const CONNECTOR_STATUSES = new Set(["healthy", "degraded", "never_synced"]);
 
 interface CommandSpec {
   usage: string;
@@ -248,6 +252,10 @@ function boundVerdict(ev: Record<string, unknown>, decisionId: string, snapshotI
   // Every caller reads the decision record first; a record that names no snapshot id is
   // never a reason to skip the comparison (review rounds 5 and 13).
   if (typeof s["id"] !== "string" || s["id"] !== snapshotId) return false;
+  // …and every signal it lists is a record of that same tenant: a snapshot carrying another
+  // tenant's evidence verifies nothing for this one, for decide, explain and signals alike
+  // (review round 16 on PR #1321).
+  if (!Array.isArray(s["signalsUsed"]) || !(s["signalsUsed"] as unknown[]).every((g) => isObj(g) && g["tenantId"] === tenantId)) return false;
   return ev["verified"] === true;
 }
 
@@ -448,6 +456,7 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
   // in-memory backend ignores the paging and answers the whole list once.
   let shown: Record<string, unknown>[] = [];
   let received = 0;
+  const seen = new Set<string>();
   let chain: Record<string, unknown> | undefined;
   let source: unknown;
   for (let page = 0; ; page++) {
@@ -475,6 +484,20 @@ async function audit(cfg: Config, limitRaw: string | undefined): Promise<Out> {
     // Every event must be this tenant's: a foreign record is never appended or shown.
     if ((events as unknown[]).some((e) => !e || typeof e !== "object" || (e as Record<string, unknown>)["tenantId"] !== tenant.id)) {
       throw new CliError("malformed_answer", "GET /v1/audit carried an event outside the confirmed tenant; nothing is reported.", EXIT.refused);
+    }
+    // A durable page must be the page asked for — its echoed offset — and carry only records
+    // no earlier page carried, or repeated rows could pose as the newest (review round 16).
+    if (body["source"] === "durable") {
+      if (body["offset"] !== page * AUDIT_PAGE) {
+        throw new CliError("malformed_answer", `GET /v1/audit answered offset ${str(body["offset"])} for page ${page} (offset ${page * AUDIT_PAGE}); nothing is reported.`, EXIT.refused);
+      }
+      for (const e of events as Record<string, unknown>[]) {
+        const eid = e["id"];
+        if (!isSafeId(eid) || seen.has(eid)) {
+          throw new CliError("malformed_answer", "GET /v1/audit carried a durable record with no well-formed id, or one an earlier page already carried; nothing is reported.", EXIT.refused);
+        }
+        seen.add(eid);
+      }
     }
     chain = pageChain as Record<string, unknown>;
     source = body["source"];
@@ -545,8 +568,12 @@ async function connectors(getCfg: () => Config, args: string[], allowWrite: bool
   if (!Array.isArray(list)) throw new CliError("malformed_answer", "GET /v1/connectors carried no connectors list; nothing is reported.", EXIT.refused);
   // A connector row of another tenant (or none) is never shown, in either output mode: its
   // scope and credential reference are that tenant's (review round 12).
-  if (!list.every((c) => isObj(c) && isSafeId(c["id"]) && c["tenantId"] === tenant.id)) {
-    throw new CliError("malformed_answer", "GET /v1/connectors listed a connector that is not a well-formed connector of this tenant; nothing is reported.", EXIT.refused);
+  // …and kind, mode and status inside the core's vocabularies: a health or operating mode
+  // the core cannot produce is not reported as inventory (review round 16).
+  const inVocab = (v: unknown, set: Set<string>): boolean => typeof v === "string" && set.has(v);
+  if (!list.every((c) => isObj(c) && isSafeId(c["id"]) && c["tenantId"] === tenant.id &&
+      inVocab(c["kind"], CONNECTOR_KINDS) && inVocab(c["mode"], CONNECTOR_MODES) && inVocab(c["status"], CONNECTOR_STATUSES))) {
+    throw new CliError("malformed_answer", "GET /v1/connectors listed a connector that is not a well-formed connector of this tenant with a recognised kind, mode and status; nothing is reported.", EXIT.refused);
   }
   return {
     json: { ok: true, command: "connectors", tenant: tenant.id, connectors: list },

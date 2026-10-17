@@ -589,16 +589,16 @@ async function main(): Promise<void> {
 
     // The durable ledger's verdict shape: `ok` + `truncated`, records with ts/eventType/target.
     const durableRec = { id: "aud_1", tenantId: TENANT, ts: "2026-10-08T00:00:00.000Z", actor: { type: "system" }, eventType: "decision.allow", target: { type: "decision", id: "dec_1" }, prevHash: "", hash: "h1" };
-    const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, headHash: "h1", truncated: false, batches: 1, scope: "global-ledger" }, source: "durable" }, ["audit"]);
+    const durOk = await viaLiar({ events: [durableRec], chain: { ok: true, count: 1, headHash: "h1", truncated: false, batches: 1, scope: "global-ledger" }, source: "durable", offset: 0 }, ["audit"]);
     check("audit reads an intact durable ledger (`ok`, not truncated) as valid and renders its record fields",
       durOk.code === 0 && /^chain valid · length 1 · source durable/.test(durOk.stdout) && /decision\.allow/.test(durOk.stdout) && /decision:dec_1/.test(durOk.stdout) && /2026-10-08T00:00:00/.test(durOk.stdout));
-    const durCap = await viaLiar({ events: [durableRec], chain: { ok: true, count: 10000, truncated: true }, source: "durable" }, ["audit"]);
+    const durCap = await viaLiar({ events: [durableRec], chain: { ok: true, count: 10000, truncated: true }, source: "durable", offset: 0 }, ["audit"]);
     check("audit on a durable verdict that stopped at its read cap exits 1 (inconclusive, not valid)", durCap.code === 1 && /INCONCLUSIVE/.test(durCap.stdout));
-    const durBroken = await viaLiar({ events: [durableRec], chain: { ok: false, count: 1, truncated: false, brokenAtIndex: 0 }, source: "durable" }, ["audit"]);
+    const durBroken = await viaLiar({ events: [durableRec], chain: { ok: false, count: 1, truncated: false, brokenAtIndex: 0 }, source: "durable", offset: 0 }, ["audit"]);
     check("audit on a broken durable ledger exits 1 and names the break", durBroken.code === 1 && /BROKEN at index 0/.test(durBroken.stdout));
-    const dualCapped = await viaLiar({ events: [], chain: { valid: true, ok: true, truncated: true, count: 10000 }, source: "durable" }, ["audit"]);
+    const dualCapped = await viaLiar({ events: [], chain: { valid: true, ok: true, truncated: true, count: 10000 }, source: "durable", offset: 0 }, ["audit"]);
     check("audit on agreeing valid/ok fields whose verifier stopped at its cap exits 1 (truncation still applies)", dualCapped.code === 1 && /INCONCLUSIVE/.test(dualCapped.stdout));
-    const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false }, source: "durable" }, ["audit"]);
+    const contra = await viaLiar({ events: [], chain: { valid: true, ok: false, truncated: false }, source: "durable", offset: 0 }, ["audit"]);
     check("audit on two verdict fields that disagree exits 1", contra.code === 1);
 
     // Durable paging is oldest-first: `--limit 3` must still be the NEWEST three.
@@ -628,7 +628,7 @@ async function main(): Promise<void> {
       }
       const offset = Number(url.searchParams.get("offset") ?? 0);
       res.end(JSON.stringify(offset === 0
-        ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, headHash: "head_2500", truncated: false, scope: "global-ledger" }, source: "durable" }
+        ? { events: ledger.slice(0, 1000), chain: { ok: true, count: 2500, headHash: "head_2500", truncated: false, scope: "global-ledger" }, source: "durable", offset: 0 }
         : { events: [{ seq: 1, tenantId: TENANT, type: "decision.evaluated" }], chain: { valid: true, length: 1 }, source: "memory" }));
     });
     const switcherPort = await listen(switcher);
@@ -874,7 +874,7 @@ async function main(): Promise<void> {
 
     // ── review round 10 on PR #1321 ──
     // The answer's `source` decides the verdict schema, not whichever fields are present.
-    const durNoOk = await viaLiar({ events: [], chain: { valid: true, truncated: true, count: 10000 }, source: "durable" }, ["audit"]);
+    const durNoOk = await viaLiar({ events: [], chain: { valid: true, truncated: true, count: 10000 }, source: "durable", offset: 0 }, ["audit"]);
     check("audit on a durable verdict carrying `valid` but no `ok` exits 1 (the read-cap rule still applies)", durNoOk.code === 1 && /UNKNOWN|INCONCLUSIVE/.test(durNoOk.stdout));
     const noSource = await viaLiar({ events: [], chain: { valid: true, length: 0 } }, ["audit"]);
     check("audit on a verdict with no recognised source exits 1", noSource.code === 1 && /unrecognised ledger source/.test(noSource.stdout));
@@ -949,7 +949,7 @@ async function main(): Promise<void> {
 
     // ── review round 12 on PR #1321 ──
     // Listed rows are bound like the single answers: a foreign or unbound row refuses the whole list.
-    const connRow = { id: "conn_x", tenantId: TENANT, kind: "idp", mode: "fixture", status: "active", lastSyncAt: null, permissionScope: "read", credentialRef: "ref" };
+    const connRow = { id: "conn_x", tenantId: TENANT, kind: "microsoft-entra-intune", mode: "fixture", status: "healthy", lastSyncAt: null, permissionScope: "read", credentialRef: "ref" };
     const runRow = { id: "run_1", tenantId: TENANT, connectorId: "conn_x", status: "success", startedAt: "t", recordsProcessed: 1, signalsNormalized: 1 };
     for (const [label, body, args] of [
       ["a connector of another tenant", { connectors: [connRow, { ...connRow, id: "conn_y", tenantId: "tenant_atlas" }] }, ["connectors", "--json"]],
@@ -1010,7 +1010,7 @@ async function main(): Promise<void> {
       ["no scope", { ...durChain, scope: undefined }],
       ["a scope other than the global ledger", { ...durChain, scope: "tenant" }],
     ] as const) {
-      const r = await viaLiar({ events: [durableRec], chain, source: "durable" }, ["audit", "--json"]);
+      const r = await viaLiar({ events: [durableRec], chain, source: "durable", offset: 0 }, ["audit", "--json"]);
       check(`audit refuses a durable ok verdict with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
     }
     // Listed sync runs carry a recognised status, as a single run does.
@@ -1052,7 +1052,7 @@ async function main(): Promise<void> {
 
     // ── review round 15 on PR #1321 ──
     // A durable verdict over the whole ledger cannot count fewer records than the pages carried.
-    const durShort = await viaLiar({ events: [durableRec], chain: { ok: true, count: 0, headHash: "", truncated: false, scope: "global-ledger" }, source: "durable" }, ["audit", "--json"]);
+    const durShort = await viaLiar({ events: [durableRec], chain: { ok: true, count: 0, headHash: "", truncated: false, scope: "global-ledger" }, source: "durable", offset: 0 }, ["audit", "--json"]);
     check("audit refuses a durable verdict whose count is below the events received (exit 1, ok:false)", durShort.code === 1 && parse(durShort.stdout)?.["ok"] === false);
     // An in-memory verdict over a retained window says so in human mode too.
     const memWindow = await viaLiar({ events: [memEv], chain: { valid: true, length: 1, truncated: true, evictedCount: 7 }, source: "memory" }, ["audit"]);
@@ -1087,6 +1087,46 @@ async function main(): Promise<void> {
     const cliPkg = JSON.parse(readFileSync(resolve(cliDir, "package.json"), "utf8")) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
     check("tsx, which the bin launcher imports, is a runtime dependency (not dev-only)", !!cliPkg.dependencies?.["tsx"] && !cliPkg.devDependencies?.["tsx"]);
 
+    // ── review round 16 on PR #1321 ──
+    // A verified, bound snapshot listing another tenant's signal verifies nothing, for every command.
+    const foreignSigEv = { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [ownSignal, { ...ownSignal, id: "sig_9", tenantId: "tenant_atlas" }] }, verified: true };
+    const deForeignSig = await decideWith(200, foreignSigEv);
+    check("decide refuses an allow whose verified snapshot lists a foreign-tenant signal (exit 1, no session)", deForeignSig.r.code === 1 && !deForeignSig.sessionWritten);
+    const exForeignSig = await viaLiar({ decision: sigRec, ...foreignSigEv }, ["explain", "dec_x"]);
+    check("explain never reports a snapshot listing a foreign-tenant signal as verified (exit 1)", exForeignSig.code === 1 && !/digest verifies/.test(exForeignSig.stdout));
+    const deOwnSig = await decideWith(200, { evidence: { id: "ev_x", tenantId: TENANT, decisionId: "dec_x", signalsUsed: [ownSignal] }, verified: true });
+    check("decide reports an allow whose snapshot lists only this tenant's signals (the check can pass)", deOwnSig.r.code === 0);
+    // Durable pages must echo the offset asked for and never repeat a record.
+    const pagedServer = async (answer: (offset: number) => unknown) => {
+      const srv = createServer((req, res) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        const url = new URL(req.url ?? "/", "http://x");
+        if (url.pathname.endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
+        res.end(JSON.stringify(answer(Number(url.searchParams.get("offset") ?? 0))));
+      });
+      const port = await listen(srv);
+      liars.push(srv);
+      return cli(["audit", "--limit", "3", "--json"], { ...env, SIGNALGRID_BASE_URL: `http://127.0.0.1:${port}/api` });
+    };
+    const chain1500 = { ok: true, count: 1500, headHash: "head_1500", truncated: false, scope: "global-ledger" };
+    const repeated = await pagedServer((offset) => ({ events: offset === 0 ? ledger.slice(0, 1000) : ledger.slice(0, 500), chain: chain1500, source: "durable", offset }));
+    check("audit refuses a later durable page that repeats earlier records (exit 1, ok:false)", repeated.code === 1 && parse(repeated.stdout)?.["ok"] === false);
+    const misOffset = await pagedServer((offset) => ({ events: ledger.slice(offset, offset + 1000).slice(0, offset === 0 ? 1000 : 500), chain: chain1500, source: "durable", offset: 0 }));
+    check("audit refuses a durable page whose echoed offset is not the one asked for (exit 1)", misOffset.code === 1 && parse(misOffset.stdout)?.["ok"] === false);
+    const noId = await viaLiar({ events: [{ ...durableRec, id: undefined }], chain: { ok: true, count: 1, headHash: "h1", truncated: false, scope: "global-ledger" }, source: "durable", offset: 0 }, ["audit", "--json"]);
+    check("audit refuses a durable record with no id (exit 1)", noId.code === 1);
+    const twoPages = await pagedServer((offset) => ({ events: ledger.slice(offset, offset + 1000).slice(0, offset === 0 ? 1000 : 500), chain: chain1500, source: "durable", offset }));
+    check("audit accepts two well-formed durable pages (the paging checks can pass)", twoPages.code === 0 && (parse(twoPages.stdout)?.["events"] as unknown[] | undefined)?.length === 3);
+    // Connector rows carry the core's kind, mode and status vocabularies.
+    for (const [label, row] of [
+      ["an unknown kind", { ...connRow, kind: "bogus" }],
+      ["an unknown mode", { ...connRow, mode: "write" }],
+      ["an unknown status", { ...connRow, status: "compromised" }],
+    ] as const) {
+      const r = await viaLiar({ connectors: [row] }, ["connectors", "--json"]);
+      check(`connectors refuses a row with ${label} (exit 1, ok:false)`, r.code === 1 && parse(r.stdout)?.["ok"] === false);
+    }
+
     // A step-up answer must carry its own id and the decision's identity.
     for (const [label, su] of [
       ["no answer id", { tenantId: TENANT, identityId: "idn_1", decisionId: "dec_x", method: "webauthn", credentialReference: "cred_…42", answeredAt: "2026-10-09T01:00:00Z" }],
@@ -1106,7 +1146,7 @@ async function main(): Promise<void> {
       const url = new URL(req.url ?? "/", "http://x");
       if (url.pathname.endsWith("/v1/context")) return void res.end(JSON.stringify({ tenant: { id: TENANT, slug: "northwind-health" } }));
       const offset = Number(url.searchParams.get("offset") ?? 0);
-      res.end(JSON.stringify({ events: ledger.slice(offset, offset + 1000), chain: { ok: true, count: 2500, truncated: false, headHash: offset === 0 ? "head_A" : "head_B", scope: "global-ledger" }, source: "durable" }));
+      res.end(JSON.stringify({ events: ledger.slice(offset, offset + 1000), chain: { ok: true, count: 2500, truncated: false, headHash: offset === 0 ? "head_A" : "head_B", scope: "global-ledger" }, source: "durable", offset }));
     });
     const ledgerSwapPort = await listen(ledgerSwap);
     liars.push(ledgerSwap);

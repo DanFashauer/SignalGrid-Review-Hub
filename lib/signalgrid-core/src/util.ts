@@ -48,6 +48,15 @@ export function digest(input: string): string {
 export const MAX_CANONICAL_DEPTH = 64;
 
 /**
+ * Posture freshness windows (hours since the source last synced the device).
+ * Shared by the sync (which stamps freshness at ingest) and by evidence (which
+ * re-derives it at decision time, DR-059): the same rule in both places, so a
+ * posture cannot be fresher at decision time than the clock says it is.
+ */
+export const FRESH_WINDOW_HOURS = 24;
+export const STALE_WINDOW_HOURS = 72;
+
+/**
  * Canonical JSON: stable key ordering so digests are reproducible regardless of
  * property insertion order. Bounded depth: deeply-nested input (a stack-overflow
  * DoS vector) is rejected instead of recursed. Throws a RangeError past the cap.

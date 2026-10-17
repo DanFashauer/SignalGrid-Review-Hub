@@ -51,6 +51,7 @@ import MarkdownIt from "markdown-it";
 import { parseFragment } from "parse5";
 import ts from "typescript";
 import { LAUNCH_PROFILE_VERSION, SURFACES } from "./launch-profile.mjs";
+import { scratchGitEnv, scratchGitOk } from "./lib/scratch-git.mjs";
 
 const DOC = "docs/SCREEN_INVENTORY.md";
 const ADMIN = "signalgrid-app";
@@ -758,10 +759,11 @@ function processChecks() {
     mkdirSync(join(repo, "docs"));
     writeFileSync(join(repo, ADMIN_ROUTES), 'import NotFound from "@/pages/not-found";\nexport const R = () => <Route component={NotFound} />;\n');
     writeFileSync(join(repo, `artifacts/${ADMIN}/src/pages/not-found.tsx`), "export default () => null;\n");
-    execFileSync("git", ["init", "-q"], { cwd: repo });
-    execFileSync("git", ["add", "-A"], { cwd: repo });
+    scratchGitOk(repo, ["init", "-q"]);
+    scratchGitOk(repo, ["add", "-A"]);
     const expectFail = (name, line) => {
-      const r = spawnSync(process.execPath, [script], { cwd: repo, encoding: "utf8" });
+      // The child's own `git ls-files` must read the scratch repo, never one a GIT_DIR names.
+      const r = spawnSync(process.execPath, [script], { cwd: repo, encoding: "utf8", env: scratchGitEnv(), timeout: 60000 });
       out.push([name, r.status === 1 && r.stderr.split("\n").includes(line), `exit ${r.status}, stderr ${JSON.stringify((r.stderr ?? "").slice(0, 400))}`]);
     };
     expectFail("through a symlink, a missing doc exits 1 (round 28)", `✗ ${DOC} does not exist`);

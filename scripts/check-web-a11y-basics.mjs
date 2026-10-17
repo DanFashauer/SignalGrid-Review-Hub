@@ -655,6 +655,19 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
   const failures = [];
   // Typed (`const q: UseQueryResult<D> = useX()`) and nested (`const { data: { items } }
   // = useX()`) bindings are parsed, not matched by one regex.
+  // A polled hook call NOT bound straight to a name (`const s = { q: useQuery(…) }`,
+  // `return useX(…)`, a bare `useX(…);`) leaves the gate no binding to follow into
+  // the region: fail closed rather than pass a region that never reads it.
+  const bound = new Set(hookBindings(code).map((b) => b.open));
+  for (const c of code.matchAll(/(?<![\w$.])(?:[A-Za-z_$][\w$]*\.)?([A-Za-z_$][\w$]*)\s*(?:<[^()]*>)?\s*\(/g)) {
+    if (!isHook(c[1]) || /\bfunction\s*$/.test(code.slice(Math.max(0, c.index - 20), c.index))) continue;
+    const open = c.index + c[0].length - 1;
+    if (bound.has(open)) continue;
+    const { spans } = callSpans(code.slice(open), /\(/g);
+    const args = spans.length ? code.slice(open).slice(spans[0][0], spans[0][1]) : "";
+    if (!defaultPolls && !/\brefetchInterval\b/.test(args)) continue;
+    failures.push(`${rel}:${code.slice(0, c.index).split("\n").length}: polled ${c[1]}() is not bound to a name (\`const { data, isError } = ${c[1]}(…)\`) — the gate cannot follow its result or failure into the <LiveRegion>; failing closed (WCAG 4.1.3)`);
+  }
   for (const b of hookBindings(code)) {
     const m = { index: b.index, 1: b.pattern, 2: b.callee };
     if (!isHook(m[2])) continue;
@@ -1129,6 +1142,8 @@ export function checkIconButtons(rel, raw) {
       if (as) aliases.push(as[1]);
     }
   }
+  // `import * as UI from "…"`: `UI.Button` is the shared Button too.
+  for (const ns of src.matchAll(/import\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from/g)) aliases.push(`${ns[1]}.Button`);
   for (const name of withLocalAliases(src, ["Button", ...aliases])) {
     const re = new RegExp(`<${escapeRegExp(name)}(?=[\\s/>])`, "g");
     let m;
@@ -1221,13 +1236,32 @@ export function rechartsSeriesViaImports(files) {
   return imported;
 }
 
-/** `names` plus every local alias of one (`const MyArea = Area`), to a fixpoint. */
+/**
+ * `names` plus every local name derived from one, to a fixpoint: an alias (`const
+ * MyArea = Area`) or a wrapper (`React.memo(Area)`, `styled(Area)`, `forwardRef(…
+ * <Area …/>)`). Any declaration whose initializer mentions a known name is taken to
+ * render it — fail closed: a wrapper the gate cannot see through is still checked.
+ */
 export function withLocalAliases(src, names) {
   const out = new Set(names);
+  const decls = [...src.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=(?!=)/g)].map((d) => {
+    // The initializer runs to the first `;` or blank line at bracket depth 0.
+    let i = d.index + d[0].length, depth = 0;
+    for (; i < src.length; i++) {
+      const ch = src[i];
+      if ("([{".includes(ch)) depth++;
+      else if (")]}".includes(ch)) { if (depth === 0) break; depth--; }
+      else if (depth === 0 && (ch === ";" || (ch === "\n" && /^\s*\n/.test(src.slice(i + 1))) || (ch === "\n" && /^\s*(?:const|let|var|function|export|return|import)\b/.test(src.slice(i + 1))))) break;
+    }
+    return [d[1], src.slice(d.index + d[0].length, i)];
+  });
   for (let grew = true; grew; ) {
     grew = false;
-    for (const m of src.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*([A-Za-z_$][\w$.]*)\s*(?:as\s+[^;\n]+)?;?\s*$/gm)) {
-      if (out.has(m[2]) && !out.has(m[1])) { out.add(m[1]); grew = true; }
+    for (const [name, init] of decls) {
+      // Only a capitalised name renders as a component: `<header>` is an HTML element
+      // whatever a `const header = …` beside it holds.
+      if (out.has(name) || !/^[A-Z]/.test(name)) continue;
+      if ([...out].some((n) => new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`).test(init))) { out.add(name); grew = true; }
     }
   }
   return [...out];
@@ -1651,13 +1685,13 @@ function selfTest() {
     ["polling view without a live region fails",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); return <div/>;")], false).failures.length === 1],
     ["polling view with <LiveRegion> passes",
-      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <LiveRegion message=\"x\" />")], false).failures.length === 0],
+      checkLiveRegions([view("t/src/pages/A.tsx", "const { data, isError } = useQuery({ refetchInterval: 5 }); <LiveRegion message={`${data?.id}`} alert={isError ? \"Down.\" : \"\"} />")], false).failures.length === 0],
     ["aria-live=\"off\" is not a live region",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"off\" />")], false).failures.length === 1],
     ["a data-aria-live attribute is not a live region",
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div data-aria-live=\"polite\" />")], false).failures.length === 1 &&
       checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <div aria-live=\"polite\" />")], false).failures.length === 1 &&
-      checkLiveRegions([view("t/src/pages/A.tsx", "useQuery({ refetchInterval: 5 }); <LiveRegion message=\"\" />")], false).failures.length === 0],
+      checkLiveRegions([view("t/src/pages/A.tsx", "const { data, isError } = useQuery({ refetchInterval: 5 }); <LiveRegion message={`${data?.id}`} alert={isError ? \"Down.\" : \"\"} />")], false).failures.length === 0],
     ["default-polling tree: page with a list hook and no live region fails",
       checkLiveRegions([view("t/src/pages/B.tsx", "const { data } = useListThings();")], true).failures.length === 1],
     ["non-default tree: page with a list hook is not a polling view",
@@ -2105,6 +2139,15 @@ function selfTest() {
       checkIconButtons("x.tsx", 'import { Button as ActionButton } from "@/components/ui/button";\n<ActionButton><Trash2 /></ActionButton>').length === 1 &&
       checkIconButtons("x.tsx", 'import { Button } from "@/components/ui/button";\nconst Act = Button;\n<Act variant="ghost"><Trash2 /></Act>').length === 1 &&
       checkIconButtons("x.tsx", 'import { Button as ActionButton } from "@/components/ui/button";\n<ActionButton aria-label="Delete"><Trash2 /></ActionButton>').length === 0],
+    ["a polled hook call nested in an initializer, or unbound, fails closed",
+      checkUnannouncedQueries("x.tsx", 'const state = { query: useQuery({ refetchInterval: 5000 }) };\n<LiveRegion message="Ready" alert="" />', (n) => /^use[A-Z]/.test(n), false).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'useQuery({ refetchInterval: 5000 });\n<LiveRegion message="Ready" alert="" />', (n) => /^use[A-Z]/.test(n), false).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data, isError } = useQuery({ refetchInterval: 5000 });\n<LiveRegion message={`${data?.id}`} alert={isError ? "Down." : ""} />', (n) => /^use[A-Z]/.test(n), false).length === 0],
+    ["a wrapped recharts series or a namespaced Button is still checked",
+      checkChartMotion("c.tsx", 'import { Area } from "recharts";\nconst MyArea = React.memo(Area);\nreturn <MyArea dataKey="x" />;').length === 1 &&
+      checkChartMotion("c.tsx", 'import { Area } from "recharts";\nconst MyArea = styled(Area)``;\nreturn <MyArea />;').length === 1 &&
+      checkIconButtons("x.tsx", 'import * as UI from "@/components/ui/button";\n<UI.Button><Trash2 /></UI.Button>').length === 1 &&
+      checkIconButtons("x.tsx", 'const header = <Button>Save</Button>;\n<header><Logo /></header>').length === 0],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
   ];

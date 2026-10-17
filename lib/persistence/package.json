@@ -8,11 +8,11 @@
   },
   "dependencies": {
     "@workspace/signalgrid-core": "workspace:*",
-    "pg": "^8.23.0",
+    "pg": "^8.23.1",
     "@workspace/audit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@types/pg": "^8.21.0"
+    "@types/pg": "^8.23.1"
   }
 }

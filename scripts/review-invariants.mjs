@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripComments, maskLiterals, prepare as prepareClock, clockReadLines, clockSelfTestChecks } from "./lib/clock-spellings.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -100,7 +101,7 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/integrations/src/",
     {
-      count: 22,
+      count: 64,
       reason:
         "Connector boundary. Fixture/demo enrolment and last-seen timestamps, and freshness computed " +
         "AT the boundary where wall-clock is the input being read. The 21st and 22nd (2026-09-06) are " +
@@ -128,7 +129,18 @@ const DECLARED_CLOCK_READS = new Map([
         "several signatures. The read is REMOVED, not injected and not moved: the instant is derived " +
         "from the payload's own `timestamp` (minted once per delivery in dispatch.ts buildPayload), and " +
         "an unresolvable instant now throws WebhookTimestampUnresolvable rather than falling back to " +
-        "the clock. sign.ts reads no clock at all; `proof:webhooks` asserts the refusal by name.",
+        "the clock. sign.ts reads no clock at all; `proof:webhooks` asserts the refusal by name. " +
+        "RE-MEASURED 22 -> 64 (2026-10-17, the gate learned every spelling; golden rule 2): the 22 counted " +
+        "only Date.now()/Math.random(). On the same tree the widened scan finds Date.now() 24 + " +
+        "Math.random() 1 (+3: the old masker lost sentinel.ts's token-expiry Date.now() after a regex " +
+        "literal / URL string, so they were never counted; they are the OAuth token-cache expiry, the " +
+        "same cache-expiry shape as telemetry/store.ts above) + argless `new Date()` 29 (receivedAt / " +
+        "createdAt / lastSeenAt stamps on SIEM, syslog, ITSM and registry records, the x-ms-date header, " +
+        "and device-management-health's injected `now: () => new Date()` default) + crypto " +
+        "randomUUID()/randomBytes() 10 (correlation, event and delivery ids, the ITSM IV, webhook " +
+        "secrets) + Math.random() 1 (retry.ts backoff jitter). Each is an identifier, timestamp or " +
+        "backoff at the connector boundary; none feeds a verdict. The retry jitter and the ids are " +
+        "genuinely non-deterministic by design, and that is why they live HERE and not in the core.",
       retires: "When connector fixtures move to injected clocks, this drops to the freshness derivations only.",
     },
   ],
@@ -156,7 +168,7 @@ const DECLARED_CLOCK_READS = new Map([
   [
     "lib/webauthn/src/",
     {
-      count: 13,
+      count: 21,
       reason:
         "Challenge and step-up session expiry. An expiry check is inherently clock-dependent; the risk " +
         "here was never the read but its DIRECTION, which is now gated separately by " +
@@ -164,66 +176,43 @@ const DECLARED_CLOCK_READS = new Map([
         "12 -> 13 on 2026-08-24: verifyStepUp compared bare Date objects (`new Date(a) < new Date()`), " +
         "which reads an unparseable expiry as VALID; closing it required an explicit Date.now() beside a " +
         "finiteness check. This pin is what surfaced the delta — the fix was written, preflight failed on " +
-        "the count, and the number was re-stated deliberately rather than drifting.",
+        "the count, and the number was re-stated deliberately rather than drifting. " +
+        "RE-MEASURED 13 -> 21 (2026-10-17, every spelling now counted): the 13 are Date.now() 12 + " +
+        "Math.random() 1 (the store lock's retry jitter). The other 8 are argless `new Date()` 6 " +
+        "(ISO timestamps on credentials, challenges and step-up records, and the step-up expiry " +
+        "comparison clock in stepUpStore.ts) and crypto randomBytes() 2 (the 32-byte registration and " +
+        "authentication challenges, whose whole job is to be unpredictable — they must NOT be " +
+        "deterministic). No verdict reads any of them.",
       retires: "When step-up moves to an injected clock for testability, this drops to the store TTLs.",
+    },
+  ],
+  [
+    "lib/verdict-attestation/src/",
+    {
+      count: 1,
+      reason:
+        "attest.ts `options.nonce ?? randomUUID()` (2026-10-17, first counted when the gate learned the " +
+        "imported-randomBytes/randomUUID spelling). The nonce is the attestation's replay-uniqueness " +
+        "value and must be unpredictable; it is minted at the signing boundary, is an INJECTABLE option " +
+        "(`options.nonce`, so a proof can fix it), and is not an input to the verdict being attested.",
+      retires: "When every caller supplies the nonce from an injected source, this drops to zero and the entry goes.",
+    },
+  ],
+  [
+    "lib/audit/src/",
+    {
+      count: 1,
+      reason:
+        "index.ts appendAuditRecord() stamps `new Date().toISOString()` on the ledger entry (2026-10-17, " +
+        "first counted: the argless-Date spelling, and a regex literal holding a quote had also blinded " +
+        "the old masker for the rest of that file). An append-only audit ledger records WHEN a thing was " +
+        "written; the instant is the datum being recorded, and no decision reads it back as an input.",
+      retires: "When appendAuditRecord takes an injected clock (as the hash chain's proof already wants).",
     },
   ],
 ]);
 const isTs = (f) => f.endsWith(".ts") && !f.endsWith(".d.ts");
 const inAny = (f, prefixes) => prefixes.some((p) => f.startsWith(p));
-
-// Strip line/block comments so textual scans don't trip on prose in comments.
-// Block comments are blanked in place (newlines preserved) so reported line
-// numbers stay accurate.
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .split("\n")
-    .map((l) => l.replace(/\/\/.*$/, ""))
-    .join("\n");
-}
-
-// Blank the TEXT of string and template literals (keeping delimiters + newlines,
-// so offsets and line numbers are preserved) so that braces or keywords inside a
-// literal are never mistaken for code structure. Template `${…}` expressions are
-// real code and are left intact via a small mode stack. This is what lets the
-// brace matcher below bound switch blocks correctly even when a `case` body
-// contains a string like `"}"` or a backtick template with `{`.
-function maskLiterals(src) {
-  const arr = src.split("");
-  const n = src.length;
-  const blank = (k) => { if (arr[k] !== "\n") arr[k] = " "; };
-  const stack = [{ mode: "code", depth: 0 }];
-  let i = 0;
-  while (i < n) {
-    const top = stack[stack.length - 1];
-    const c = src[i];
-    if (top.mode === "code") {
-      if (c === "\\") { i += 2; continue; }
-      if (c === "'") { stack.push({ mode: "sq" }); i++; continue; }
-      if (c === '"') { stack.push({ mode: "dq" }); i++; continue; }
-      if (c === "`") { stack.push({ mode: "tmpl" }); i++; continue; }
-      if (c === "{") { top.depth++; i++; continue; }
-      if (c === "}") {
-        if (top.depth === 0 && stack.length > 1) { stack.pop(); i++; continue; } // close ${…}
-        top.depth--; i++; continue;
-      }
-      i++; continue;
-    }
-    if (top.mode === "sq" || top.mode === "dq") {
-      const q = top.mode === "sq" ? "'" : '"';
-      if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-      if (c === q) { stack.pop(); i++; continue; }
-      blank(i); i++; continue;
-    }
-    // template literal
-    if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-    if (c === "`") { stack.pop(); i++; continue; }
-    if (c === "$" && src[i + 1] === "{") { stack.push({ mode: "code", depth: 0 }); i += 2; continue; }
-    blank(i); i++;
-  }
-  return arr.join("");
-}
 
 // Find every `switch (...) { … }` block (including nested ones) with proper,
 // literal-aware brace matching. Returns { kw, open, end } offsets.
@@ -348,6 +337,9 @@ if (process.argv.includes("--self-test")) {
     localeCompareViolations(prep('const why = "a.localeCompare(b) is locale-dependent";')).length === 0,
   ]);
 
+  // One planted case per clock/randomness spelling, and prose that must not count.
+  checks.push(...clockSelfTestChecks((src) => clockReadLines(prepareClock(src))));
+
   // A clock read in a package OUTSIDE the pinned set is flagged as undeclared.
   const undecl = classifyClockReads(
     new Map([["lib/not-a-declared-pkg/src/", ["lib/not-a-declared-pkg/src/x.ts:5"]]]),
@@ -360,7 +352,17 @@ if (process.argv.includes("--self-test")) {
     new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count + 1).fill("x")]]),
     DECLARED_CLOCK_READS,
   );
-  checks.push(["a declared count that no longer matches is drift", drift.drifted.length === 1]);
+  checks.push(["MORE clock reads than declared is drift", drift.drifted.length === 1]);
+  const fewer = classifyClockReads(
+    new Map([[firstDeclared, Array(DECLARED_CLOCK_READS.get(firstDeclared).count - 1).fill("x")]]),
+    DECLARED_CLOCK_READS,
+  );
+  checks.push(["FEWER clock reads than declared is drift (the pin fails in both directions)", fewer.drifted.length === 1]);
+  // Every declared package named by the widened-spelling work is present and pinned.
+  checks.push([
+    "verdict-attestation and audit carry declared, reasoned entries",
+    ["lib/verdict-attestation/src/", "lib/audit/src/"].every((k) => (DECLARED_CLOCK_READS.get(k)?.reason ?? "").length > 40),
+  ]);
   // A declared package that reads NO clock is a stale exemption.
   const staleR = classifyClockReads(new Map(), DECLARED_CLOCK_READS);
   checks.push(["a declared package that no longer reads a clock is stale", staleR.stale.length === DECLARED_CLOCK_READS.size]);
@@ -407,14 +409,14 @@ if (process.argv.includes("--self-test")) {
   // would be reported as a clock call.
   const byPackage = new Map();
   for (const f of files) {
-    const code = maskLiterals(stripComments(read(f)));
-    code.split("\n").forEach((line, idx) => {
-      if (/\b(Date\.now|Math\.random)\s*\(/.test(line)) {
-        const pkg = scope.find((p) => f.startsWith(p)) ?? f;
-        if (!byPackage.has(pkg)) byPackage.set(pkg, []);
-        byPackage.get(pkg).push(`${f}:${idx + 1}`);
-      }
-    });
+    // The spellings live in scripts/lib/clock-spellings.mjs, shared with
+    // safety-check.mjs check 1: Date.now/Math.random AND their bracket,
+    // destructured, argless-Date, crypto, performance and hrtime forms.
+    for (const line of clockReadLines(prepareClock(read(f)))) {
+      const pkg = scope.find((p) => f.startsWith(p)) ?? f;
+      if (!byPackage.has(pkg)) byPackage.set(pkg, []);
+      byPackage.get(pkg).push(`${f}:${line}`);
+    }
   }
 
   // An exemption for a package that no longer reads the clock at all has outlived

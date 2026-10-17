@@ -1120,19 +1120,30 @@ export function checkIconButtons(rel, raw) {
     if (isBlank(text)) failures.push(`${rel}:${line}: icon-only <button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
     else if (isGlyphOnly(text)) failures.push(`${rel}:${line}: <button> is named only by a glyph (${text.trim()}) and has no aria-label — it reads as the symbol, not the action (WCAG 4.1.2)`);
   }
-  const re = /<Button\b/g;
-  let m;
-  while ((m = re.exec(src))) {
-    const line = src.slice(0, m.index).split("\n").length;
-    const tag = openingTag(src, m.index);
-    if (tag === null) { failures.push(`${rel}:${line}: <Button> tag could not be parsed — failing closed`); continue; }
-    // A child text node (an sr-only <span>) names the button as well as aria-label does.
-    const childText = tag.trimEnd().endsWith("/") ? "" : buttonText(src, m.index + tag.length, "Button") ?? "";
-    const named = hasNonBlankLabel(tag, src) || (!isBlank(childText) && !isGlyphOnly(childText));
-    // Every <Button>, whatever its `size`: an icon child with no text and no label is
-    // unnamed whether or not the author also asked for icon sizing.
-    if (!named) {
-      failures.push(`${rel}:${line}: <Button> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+  // The shared Button under any local name: `import { Button as ActionButton }`, or
+  // `const Action = Button`. Each renders the same HTML <button>.
+  const aliases = [];
+  for (const imp of src.matchAll(/import\s+(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from/g)) {
+    for (const part of imp[1].split(",").map((x) => x.trim())) {
+      const as = /^Button\s+as\s+([A-Za-z_$][\w$]*)$/.exec(part);
+      if (as) aliases.push(as[1]);
+    }
+  }
+  for (const name of withLocalAliases(src, ["Button", ...aliases])) {
+    const re = new RegExp(`<${escapeRegExp(name)}(?=[\\s/>])`, "g");
+    let m;
+    while ((m = re.exec(src))) {
+      const line = src.slice(0, m.index).split("\n").length;
+      const tag = openingTag(src, m.index);
+      if (tag === null) { failures.push(`${rel}:${line}: <${name}> tag could not be parsed — failing closed`); continue; }
+      // A child text node (an sr-only <span>) names the button as well as aria-label does.
+      const childText = tag.trimEnd().endsWith("/") ? "" : buttonText(src, m.index + tag.length, name) ?? "";
+      const named = hasNonBlankLabel(tag, src) || (!isBlank(childText) && !isGlyphOnly(childText));
+      // Every <Button>, whatever its `size`: an icon child with no text and no label is
+      // unnamed whether or not the author also asked for icon sizing.
+      if (!named) {
+        failures.push(`${rel}:${line}: <${name}> renders no text and has no aria-label — its accessible name is empty (WCAG 4.1.2)`);
+      }
     }
   }
   return failures;
@@ -2090,6 +2101,10 @@ function selfTest() {
         return checkStylesheets(index.rel, [index, { rel: "t/src/spinner.module.css", css: ".spinner { animation: spin 2s infinite !important; }" }]).length === 1 &&
           checkStylesheets(index.rel, [index, { rel: "t/src/spinner.module.css", css: ".spinner { animation: spin 2s infinite; }" }]).length === 0;
       })()],
+    ["the shared Button under a local alias is checked",
+      checkIconButtons("x.tsx", 'import { Button as ActionButton } from "@/components/ui/button";\n<ActionButton><Trash2 /></ActionButton>').length === 1 &&
+      checkIconButtons("x.tsx", 'import { Button } from "@/components/ui/button";\nconst Act = Button;\n<Act variant="ghost"><Trash2 /></Act>').length === 1 &&
+      checkIconButtons("x.tsx", 'import { Button as ActionButton } from "@/components/ui/button";\n<ActionButton aria-label="Delete"><Trash2 /></ActionButton>').length === 0],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],
   ];

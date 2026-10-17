@@ -39,10 +39,26 @@
  * at this commit", which is what the sim-result provenance carries.
  */
 import { spawn } from "node:child_process";
+import { createServer as netCreateServer } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PORT = 5320;
+// OS-assigned ports, as `api.test.mjs` (#1106) does — a fixed port here collides
+// with the SAME fixed port bound by another tree or tick on the same host.
+// `handedOut` stops one run from reusing a number it just released to itself.
+const handedOut = [];
+const freePort = () => new Promise((resolvePort) => {
+  const probe = netCreateServer();
+  probe.listen(0, "127.0.0.1", () => {
+    const p = probe.address().port;
+    probe.close(() => {
+      if (handedOut.includes(p)) return resolvePort(freePort());
+      handedOut.push(p);
+      resolvePort(p);
+    });
+  });
+});
+const PORT = await freePort();
 const BASE = `http://localhost:${PORT}/api`;
 const here = dirname(fileURLToPath(import.meta.url));
 const serverEntry = resolve(here, "../dist/index.mjs");
@@ -223,7 +239,7 @@ const server = spawn("node", [serverEntry], {
 // asserted through the running surface. If the fallback ever breaks, the burst
 // below sails through and this test goes red rather than the door opening
 // quietly in production.
-const LIMIT_PORT = 5321;
+const LIMIT_PORT = await freePort();
 const LIMIT_BASE = `http://localhost:${LIMIT_PORT}/api`;
 const SHIPPED_V1_LIMIT = 240;
 const limitServer = spawn("node", [serverEntry], {

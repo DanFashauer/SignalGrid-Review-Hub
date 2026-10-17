@@ -1,0 +1,19 @@
+{
+  "id": "2026-10-15-five-cloud-to-mac-mails-are-unread-6-2-7-0-days-",
+  "raisedAt": "2026-10-15T10:52:44.243Z",
+  "origin": "cloud",
+  "doing": "Steward cycle: acking cloud-to-mac mail.",
+  "blockedBy": "Five cloud-to-mac mails are unread, 6.2-7.0 days old. The Mac's unattended launchd tick is alive (tick PRs #1509-#1512 opened at about 00:03Z every day from 2026-10-12 to 2026-10-15), but reading and acking mail takes a Mac SESSION, which the cloud lane cannot start, and the cloud never acks for the Mac.",
+  "need": "On the Mac, in a session: pnpm run lane:inbox and ack the five messages with what was done; then a live-evidence refresh (SIGNALGRID_MCP_PATH=... pnpm run verify:all --require-mcp --emit-evidence; the current evidence was minted 2026-10-02T16:07Z and committed to SignalGrid_Alpha at 16:08Z the same day, e78a7ae1). Clear this hand in the same delivery as the five acks: its stale-cover grace runs 24h from raisedAt (mail's soft limit, to 2026-10-16T10:52Z), so after that instant an ack without the clear in the same batch leaves the hand covering a stall that is no longer measured, which is FATAL in local raised-hands --check.",
+  "whoCanUnblock": "mac lane",
+  "domain": "",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "mail:cloud-cloud-back-after-a-5-5-day-gap-live-eviden",
+    "mail:cloud-correction-land-the-newest-tick-state-re-m",
+    "mail:cloud-row-17b-waits-on-you-re-merge-mainline-int",
+    "mail:cloud-shared-surface-changed-scripts-mac-statusl",
+    "mail:cloud-tick-prs-after-the-1480-landing-1471-merge"
+  ]
+}

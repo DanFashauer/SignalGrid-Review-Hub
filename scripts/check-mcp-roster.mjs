@@ -778,9 +778,11 @@ export function context7YamlKeyScan(lines) {
       out.push({ i, value: val ? oneScalar(val[1], j, indent(l)) : "" });
       continue;
     }
-    for (const m of /context7/i.test(l) ? l.matchAll(KEY) : []) {
+    // a double-quoted key may spell the name through YAML escapes (`"@upstash/context\u0037-mcp"`): read it decoded
+    const dl = /"/.test(l) ? l.replace(/\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))/g, (e, x, u, U) => codePoint(parseInt(x ?? u ?? U, 16), e)) : l;
+    for (const m of /context7/i.test(dl) ? dl.matchAll(KEY) : []) {
       if (!CONTEXT7_KEY_RE.test(m[2].replace(/\\\//g, "/"))) continue;
-      const after = l.slice(m.index + m[0].length).trim();
+      const after = dl.slice(m.index + m[0].length).trim();
       if (after !== "") out.push({ i, value: oneScalar(after, i, indent(l)) });
       else {
         const j = nextValueLine(i, indent(l));
@@ -2122,6 +2124,8 @@ server.registerTool(
       ["a.json", `${JSON.stringify({ o: JSON.stringify({ entrypoint: JSON.stringify(["npx", "-y", `${P} ||\t*`]) }) })}\n`, "the same nested twice, a JSON-escaped TAB before \`*\`"],
       ["Dockerfile", `RUN ["npx","-y","${P}>\\t<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped TAB (\`>\\t<5\`)"],
       ["Dockerfile", `RUN ["npx","-y","${P}>\\n<5"]\n`, "a Dockerfile exec form whose word holds a JSON-escaped line feed (\`>\\n<5\`)"],
+      ["a.yaml", `x: npx -y ${P}\ndependencies:\n  "@upstash/context\\u0037-mcp": 4.0.4\n`, "a YAML double-quoted dependency key spelling the name through \`\\u0037\`, beside a pinned reference (Codex, round 35)"],
+      ["a.yaml", `x: npx -y ${P}\ndeps:\n  "@upstash/context\\x37-mcp": "4.0.4"\n`, "the same through \`\\x37\` with a quoted value"],
       ["a.json", `${JSON.stringify({ entrypoint: `["npx","-y","${P} || 4\t",]` })}\n`, "a JSON string holding an exec list that does not decode (a raw TAB, a trailing comma): the decoded string is read"],
       // the raw-text readers stay the only readers where the JSON does not parse (a `RUN …` command, a trailing comma)
       ["a.json", `${JSON.stringify({ o: JSON.stringify({ cmd: `RUN ["npx","-y","${P} || "]` }) })}\n`, "a non-JSON command nested twice, \`||\` before a closing quote escaped at depth 2"],

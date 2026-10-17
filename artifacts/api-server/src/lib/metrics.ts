@@ -6,6 +6,8 @@
 // the Prometheus text format. No external client, so there is no ambiguity about
 // what is exported and no supply-chain surface.
 
+import { FRESHNESS_VALUES, type ConnectorKind, type ConnectorStatus } from "@workspace/signalgrid-core";
+
 type Labels = Record<string, string>;
 
 function key(labels: Labels): string {
@@ -182,6 +184,136 @@ export function markServing(): void {
  *  exists for) fired once per new scraper and never for an actual restart. */
 const processUptime = new Gauge("signalgrid_process_uptime_seconds", "Process uptime in seconds.");
 
+// ── connector health and evidence freshness (plan row 33) ─────────────────────
+//
+// Both are GAUGES over what the core HOLDS at scrape time, not counters bumped
+// beside a route: a re-sync overwrites a connector's status and a signal's
+// freshness in place, so the series recover when the estate does.
+//
+// Every label value is enumerated here. The kind and status vocabularies are
+// `Record<Union, true>` maps, so adding a member to `ConnectorKind` or
+// `ConnectorStatus` without updating the exposition is a typecheck error, and
+// freshness comes from `FRESHNESS_VALUES`, exhaustive by construction. Each axis
+// carries a literal `unknown` that every value outside the vocabulary folds into.
+//
+// FAIL-CLOSED: `healthy` and `fresh` are the only affirmative values. `unknown`
+// is counted as not-healthy / not-fresh (a connector of unrecognised kind never
+// reads healthy), and EVERY series is written on EVERY scrape, zeros included,
+// so an absent series never reads as an absent problem.
+//
+// AS OF THE LAST COMPLETED SYNC: both gauges report what the core HOLDS. A
+// connector's status changes only when a sync completes and a signal's freshness
+// is stamped at ingest, so a source that stops answering leaves these series at
+// their last value. They do not detect an outage of the source on their own
+// (docs/METRIC_STANDARDS.md; BUILD_BACKLOG "Estate posture must age" and "A
+// posture refresh must retract").
+// 4 kinds x 4 statuses + 5 freshness values is far under MAX_SERIES_PER_METRIC.
+
+/** The fold for any label value outside a declared vocabulary. */
+export const UNKNOWN_LABEL = "unknown";
+
+const CONNECTOR_KINDS: Record<ConnectorKind, true> = {
+  "microsoft-entra-intune": true,
+  "dockbridge-custody": true, // deferred family: the label is enumerated so the series is bounded, not Limited GA capability
+  "wfm-shift": true,
+};
+const CONNECTOR_STATUSES: Record<ConnectorStatus, true> = {
+  healthy: true,
+  degraded: true,
+  never_synced: true,
+};
+
+const withUnknown = (values: readonly string[]): readonly string[] => [
+  ...values.filter((v) => v !== UNKNOWN_LABEL),
+  UNKNOWN_LABEL,
+];
+/** Every `kind` label value the connector gauge can carry. */
+export const CONNECTOR_KIND_LABELS = withUnknown(Object.keys(CONNECTOR_KINDS));
+/** Every `status` label value the connector gauge can carry. */
+export const CONNECTOR_STATUS_LABELS = withUnknown(Object.keys(CONNECTOR_STATUSES));
+/** Every `freshness` label value the evidence gauge can carry. */
+export const FRESHNESS_LABELS = withUnknown(FRESHNESS_VALUES);
+
+const inVocabulary = (vocabulary: readonly string[], value: unknown): string =>
+  typeof value === "string" && vocabulary.includes(value) ? value : UNKNOWN_LABEL;
+
+/** A count that is not a non-negative safe integer is itself illegible: it is
+ *  folded into the `unknown` series as ONE item, never dropped and never added
+ *  to an affirmative series. Safe integers also keep any sum of counts finite, so
+ *  no series can overflow to Infinity. */
+const legibleCount = (count: unknown): number | null =>
+  typeof count === "number" && Number.isSafeInteger(count) && count >= 0 ? count : null;
+
+const connectorsGauge = new Gauge(
+  "signalgrid_connectors",
+  "Connectors held by this process, by kind and status, as of each connector's last completed sync; a source that stops answering leaves this at its last value. Only status=healthy is affirmative; unknown counts as not healthy.",
+);
+const evidenceGauge = new Gauge(
+  "signalgrid_evidence_signals",
+  "Normalized signals held by this process, by freshness as stamped at ingest; a source that stops answering leaves this at its last value. Only freshness=fresh is affirmative; unknown counts as not fresh.",
+);
+
+/** Write EVERY kind x status series from the core's connector inventory. */
+export function observeConnectors(rows: ReadonlyArray<{ kind: unknown; status: unknown; count: unknown }>): void {
+  const acc = new Map<string, number>();
+  for (const kind of CONNECTOR_KIND_LABELS) for (const status of CONNECTOR_STATUS_LABELS) acc.set(key({ kind, status }), 0);
+  for (const row of rows) {
+    const count = legibleCount(row?.count);
+    const kind = inVocabulary(CONNECTOR_KIND_LABELS, row.kind);
+    const status = inVocabulary(CONNECTOR_STATUS_LABELS, row.status);
+    // A connector of an unrecognised kind cannot vouch for itself: its `healthy`
+    // is demoted to `unknown`, so no series labelled kind="unknown" ever reads
+    // healthy. A non-affirmative status (degraded, never_synced) keeps its label.
+    const labels =
+      count === null
+        ? { kind: UNKNOWN_LABEL, status: UNKNOWN_LABEL }
+        : { kind, status: kind === UNKNOWN_LABEL && status === "healthy" ? UNKNOWN_LABEL : status };
+    const k = key(labels);
+    acc.set(k, (acc.get(k) ?? 0) + (count ?? 1));
+  }
+  for (const kind of CONNECTOR_KIND_LABELS) {
+    for (const status of CONNECTOR_STATUS_LABELS) connectorsGauge.set(acc.get(key({ kind, status })) ?? 0, { kind, status });
+  }
+}
+
+/** Write EVERY freshness series from the core's signal-freshness inventory. */
+export function observeEvidence(rows: ReadonlyArray<{ freshness: unknown; count: unknown }>): void {
+  const acc = new Map<string, number>(FRESHNESS_LABELS.map((f) => [f, 0]));
+  for (const row of rows) {
+    const count = legibleCount(row?.count);
+    const freshness = count === null ? UNKNOWN_LABEL : inVocabulary(FRESHNESS_LABELS, row.freshness);
+    acc.set(freshness, (acc.get(freshness) ?? 0) + (count ?? 1));
+  }
+  for (const freshness of FRESHNESS_LABELS) evidenceGauge.set(acc.get(freshness) ?? 0, { freshness });
+}
+
+/**
+ * Refresh both gauges from the core immediately before a render. If either
+ * inventory read THROWS, that gauge reports a single `unknown` item and every
+ * affirmative series at 0 — never a silent omission and never a failed scrape,
+ * because a scrape that fails hides the outage the metric exists to show.
+ */
+export function refreshInventoryGauges(source: {
+  connectorInventory(): ReadonlyArray<{ kind: unknown; status: unknown; count: unknown }>;
+  signalFreshnessInventory(): ReadonlyArray<{ freshness: unknown; count: unknown }>;
+}): void {
+  try {
+    observeConnectors(source.connectorInventory());
+  } catch {
+    observeConnectors([{ kind: UNKNOWN_LABEL, status: UNKNOWN_LABEL, count: 1 }]);
+  }
+  try {
+    observeEvidence(source.signalFreshnessInventory());
+  } catch {
+    observeEvidence([{ freshness: UNKNOWN_LABEL, count: 1 }]);
+  }
+}
+
+// Zero-filled at import, so a render before the first refresh still carries every
+// series (and they read not-healthy / not-fresh, never healthy by absence).
+observeConnectors([]);
+observeEvidence([]);
+
 /** Render the full metrics registry in Prometheus text format. */
 export function renderMetrics(): string {
   processUptime.set(Math.max(0, process.uptime()));
@@ -192,6 +324,8 @@ export function renderMetrics(): string {
     httpDuration.render(),
     decisionsTotal.render(),
     auditEventsTotal.render(),
+    connectorsGauge.render(),
+    evidenceGauge.render(),
     "",
   ].join("\n");
 }

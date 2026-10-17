@@ -2217,6 +2217,64 @@ async function run() {
     check("audit trail: connector.sync.triggered appended", counted("connector.sync.triggered") >= 1);
   }
 
+  // ── connector health and evidence freshness, derived from held state (plan row 33) ──
+  // The two series the lab-telemetry row named as missing. Each is read off what
+  // the core HOLDS at scrape time, never counted beside a route, so a re-sync moves
+  // the gauge. Every series is written on every scrape, zeros included: a series
+  // that is absent when nothing is unhealthy is one an alert cannot tell from a
+  // scrape that lost the metric. `unknown` folds any value outside the declared
+  // vocabulary and must be 0 on a clean tree.
+  {
+    const KINDS = ["microsoft-entra-intune", "dockbridge-custody", "wfm-shift", "unknown"];
+    const STATUSES = ["healthy", "degraded", "never_synced", "unknown"];
+    const FRESHNESS = ["fresh", "stale", "expired", "missing", "unknown"];
+    const scrape = async () => (await fetch(`${BASE.replace(/\/api$/, "")}/metrics`)).text();
+    const gauge = (text, name, labels) => {
+      const m = text.match(new RegExp(`^${name}\\{${labels.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\} (\\d+)$`, "m"));
+      return m ? Number(m[1]) : null;
+    };
+    const conn = (text, kind, status) => gauge(text, "signalgrid_connectors", `kind="${kind}",status="${status}"`);
+    const fresh = (text, f) => gauge(text, "signalgrid_evidence_signals", `freshness="${f}"`);
+
+    // The sync above already ran; read the status it actually produced rather than assuming healthy.
+    const mine = await req("GET", "/v1/connectors", { token: KEYS.owner });
+    const synced = (mine.json?.connectors ?? []).find((c) => c.id === "conn_tenant_northwind_entra_intune");
+    const text = await scrape();
+
+    check("connector-health: every kind x status series is present, zeros included",
+      KINDS.every((k) => STATUSES.every((s) => conn(text, k, s) !== null)));
+    check("evidence freshness: every freshness series is present, zeros included",
+      FRESHNESS.every((f) => fresh(text, f) !== null));
+    check("connector-health: the synced entra-intune connector is counted under the status the sync produced",
+      typeof synced?.status === "string" && (conn(text, "microsoft-entra-intune", synced.status) ?? 0) >= 1);
+    check("connector-health: every status=\"unknown\" series is 0 on the clean tree",
+      KINDS.every((k) => conn(text, k, "unknown") === 0) && STATUSES.every((s) => conn(text, "unknown", s) === 0));
+    check("evidence freshness: the freshness=\"unknown\" series is 0 on the clean tree",
+      fresh(text, "unknown") === 0);
+
+    // One owner key per seeded tenant. KEYS above omits meridian and civic, and a
+    // sum over KEYS alone undercounts what the process holds; a tenant added to the
+    // seed without a key here turns this red, which is the safe direction.
+    const OWNER_PER_TENANT = [KEYS.owner, KEYS.atlas, "sgk_demo_meridian_owner", KEYS.vero, KEYS.forge, KEYS.orion, "sgk_demo_civic_owner"];
+    let held = 0;
+    for (const key of OWNER_PER_TENANT) {
+      const listed = await req("GET", "/v1/connectors", { token: key });
+      held += (listed.json?.connectors ?? []).length;
+    }
+    let exported = 0;
+    for (const k of KINDS) for (const s of STATUSES) exported += conn(text, k, s) ?? 0;
+    check("connector-health: the status series total equals the connectors the core holds across the seeded tenants",
+      held > 0 && exported === held);
+    check("evidence freshness: the core holds signals, so the freshness series are not all zero",
+      FRESHNESS.reduce((n, f) => n + (fresh(text, f) ?? 0), 0) > 0);
+    // The demo seed holds stale and missing evidence. A core inventory that called
+    // every held signal fresh would zero these while the evidence is still held.
+    check("evidence freshness: the seeded stale and missing evidence reaches the gauge (not all fresh)",
+      (fresh(text, "stale") ?? 0) > 0 && (fresh(text, "missing") ?? 0) > 0);
+    check("/metrics still carries no tenant-shaped text after the two new series",
+      !text.includes("tenant"));
+  }
+
   // ── OPERATIONAL PROBES MUST NOT BE THROTTLED (backlog row 94) ─────────────
   //
   // `lib/profile.ts` keeps /healthz and /readyz outside the GA fence because an

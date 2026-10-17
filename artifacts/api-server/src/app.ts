@@ -11,7 +11,8 @@ import { errorHandler } from "./middlewares/errors";
 import { globalRateLimiter } from "./middlewares/rateLimit";
 import { deprecationHeaders } from "./middlewares/deprecation";
 import { metricsMiddleware } from "./middlewares/metrics";
-import { renderMetrics } from "./lib/metrics";
+import { refreshInventoryGauges, renderMetrics } from "./lib/metrics";
+import { core } from "./lib/core";
 
 const app: Express = express();
 
@@ -163,6 +164,9 @@ app.get("/metrics", (req, res) => {
     res.status(401).type("text/plain").send("metrics: bearer token required");
     return;
   }
+  // Connector health and evidence freshness are read off held state at scrape time.
+  // A throwing read folds into `unknown` inside refreshInventoryGauges; it never 500s.
+  refreshInventoryGauges(core);
   res.type("text/plain; version=0.0.4").send(renderMetrics());
 });
 

@@ -276,6 +276,51 @@ export class MemoryStore {
       .sort((a, b) => cmpCodepoint(a.category, b.category));
   }
 
+  /**
+   * Per connector KIND and STATUS: how many connectors this process holds. A
+   * deployment fact, like `signalInventory`, so deliberately unscoped by tenant —
+   * and deliberately carrying no id, ref, subject or tenant, only kind names,
+   * status names and counts. Nothing here can identify a device, a person or a
+   * customer, which is what lets an unscoped aggregate be served at all (the same
+   * rule /metrics already follows).
+   *
+   * A value outside the declared union is returned as the literal string it is,
+   * not coerced: the core reports what it holds, and the exporter decides how an
+   * unrecognised value folds (fail-closed, into `unknown`).
+   */
+  connectorInventory(): Array<{ kind: string; status: string; count: number }> {
+    const acc = new Map<string, { kind: string; status: string; count: number }>();
+    for (const connector of this.connectors.values()) {
+      const kind = String(connector.kind as string);
+      const status = String(connector.status as string);
+      const k = `${kind}\u0000${status}`;
+      const row = acc.get(k) ?? { kind, status, count: 0 };
+      row.count += 1;
+      acc.set(k, row);
+    }
+    return [...acc.values()].sort(
+      (a, b) => cmpCodepoint(a.kind, b.kind) || cmpCodepoint(a.status, b.status),
+    );
+  }
+
+  /**
+   * Per FRESHNESS value: how many normalized signals this process holds. Same
+   * rule as `signalInventory` — unscoped, no id, ref, subject or tenant. Signal
+   * ids are deterministic per source, so a re-sync overwrites in place and these
+   * counts track the latest reading rather than accumulating history. A value
+   * outside `Freshness` is returned as the literal string it is.
+   */
+  signalFreshnessInventory(): Array<{ freshness: string; count: number }> {
+    const acc = new Map<string, number>();
+    for (const signal of this.signals.values()) {
+      const freshness = String(signal.freshness as string);
+      acc.set(freshness, (acc.get(freshness) ?? 0) + 1);
+    }
+    return [...acc.entries()]
+      .map(([freshness, count]) => ({ freshness, count }))
+      .sort((a, b) => cmpCodepoint(a.freshness, b.freshness));
+  }
+
   putSyncRun(run: ConnectorSyncRun): void {
     this.syncRuns.set(run.id, run);
   }

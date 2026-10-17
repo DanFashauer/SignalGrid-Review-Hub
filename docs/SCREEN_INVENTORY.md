@@ -38,7 +38,7 @@ function, a `path` or `component` prop on another tag, a page import naming no t
 file; a directory import is read as its `index.tsx`), or
 when demo step 4 stops giving any of the seven launch arguments the shell needs, inside
 its fenced command, with its exact value (the demo lifecycle flags, the seeded refs,
-`sgk_demo_northwind_operator`, and an http(s) URL that is an origin only, written with a
+`sgk_demo_northwind_operator`, and a plain `http` URL that is an origin only, written with a
 literal `localhost`, `127.0.0.1` or `[::1]` host — the shell compares the host as
 written, so shorthand forms such as `127.1` do not count). Step 4 is checked
 as it renders (markdown-it renders it, an HTML5 parser reads the text a browser
@@ -228,9 +228,10 @@ workflow; step 5 proves that second one reached the ledger.
    app's own confirmation dialog and nothing else: no Face ID prompt and no
    simulated sheet appears, because the grid already trusts this nurse on this iPad.
    After the worker confirms, the action applies. In the manual flow no SignalGrid
-   screen appears on the phone. The simulator build has one exception, compiled out of
-   device builds: a "Behind the glass" operator panel, which the eye button in the host
-   app's top bar shows by hand and the Auto walk below reveals on its own.
+   screen appears on the phone. The simulator build has one exception: a "Behind the
+   glass" operator panel, which the eye button in the host app's top bar shows by hand
+   and the Auto walk below reveals on its own. Both of those reveal paths are compiled
+   out of device builds, so on a device the panel can never be shown.
 
    To show the step-up gate instead, add `-DemoSignal stale`. That injects a stale
    device check-in on the phone, and the shell takes the stricter of the control

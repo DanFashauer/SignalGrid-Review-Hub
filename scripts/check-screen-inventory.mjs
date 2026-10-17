@@ -86,7 +86,7 @@ const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 // Origin only: the shell appends `api/v1/app-workflows/evaluate` to this URL
 // (RemoteDecisionService), and the api-server serves no other base path, so any path
 // on it is a 404 and an on-device decision (Codex review of ff2df174).
-const CANONICAL_LOOPBACK_URL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?\/?$/i;
+const CANONICAL_LOOPBACK_URL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?\/?$/i;
 
 /** surface id → status, from the app-surfaces entry of the launch profile. */
 export function appSurfaceStatuses(surfaces = SURFACES) {
@@ -199,7 +199,8 @@ export function adminPlacements(appSource, adminKeys) {
       if (ts.isJsxElement(n) && n.openingElement.tagName.getText(sf) === "Switch") return n;
     return null;
   };
-  const plain = (p) => /^\/(?:[A-Za-z0-9._~-]+|:[A-Za-z_][A-Za-z0-9_]*)?(?:\/(?:[A-Za-z0-9._~-]+|:[A-Za-z_][A-Za-z0-9_]*))*$/.test(p);
+  // No `.` in a literal (round 18): regexparam leaves it unescaped, so `/a.b` also matches `/axb`.
+  const plain = (p) => /^\/(?:[A-Za-z0-9_~-]+|:[A-Za-z_][A-Za-z0-9_]*)?(?:\/(?:[A-Za-z0-9_~-]+|:[A-Za-z_][A-Za-z0-9_]*))*$/.test(p);
   // Does a route at `a` (undefined: pathless) match every location `b` matches?
   const covers = (a, b) => {
     if (a === undefined) return true;
@@ -270,9 +271,13 @@ export function urlProblem(value) {
   if (u.port === "0") return "its port is 0, which no api-server listens on, so every request fails and the shell falls back on-device";
   if (u.pathname !== "/" || u.search || u.hash)
     return `it carries a path, query or fragment (${u.pathname}${u.search}${u.hash}); the shell appends api/v1/app-workflows/evaluate to it, so the request 404s and the shell falls back on-device`;
+  // Round 18: the api-server listens with plain app.listen (artifacts/api-server/src/index.ts),
+  // no TLS, so an https URL never completes a handshake and the shell decides on-device.
+  if (u.protocol === "https:")
+    return "its scheme is https, but the local api-server serves plain HTTP only (app.listen, no TLS), so the call fails and the shell falls back on-device";
   // WHATWG agreed it is loopback; the shell compares the literal text, so require it.
   if (!CANONICAL_LOOPBACK_URL.test(value))
-    return "it is not written as http(s)://localhost|127.0.0.1|[::1][:port][/] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
+    return "it is not written as http://localhost|127.0.0.1|[::1][:port][/] — the shell compares the literal host, so a shorthand, non-canonical or backslash form is not loopback to it";
   return null;
 }
 
@@ -1064,6 +1069,9 @@ function selfTest() {
     ["a /Sessions/:id route above /sessions/new fails, wouter matching case-insensitively (round 30)", routeCase(SESSIONS, '<Route path="/Sessions/:id" component={SessionList} />\n        <Route path="/sessions/new" component={SessionList} />', asNotRouted), "is unreachable"],
     ...["http://127.0.0.1:8080/.", "http://127.0.0.1:8080/foo/..", "http://127.0.0.1:8080/?", "http://127.0.0.1:8080/#"].map((url) =>
       [`a backend URL ${url} that WHATWG normalises to / still fails (round 30)`, withArg("-DemoBackendURL", url), "is not written as"]),
+    // Round 18 of review: plain HTTP only; a dotted literal is not modelled.
+    ["an https backend URL fails, the api-server serving plain HTTP (round 31)", withArg("-DemoBackendURL", "https://127.0.0.1:8080"), "serves plain HTTP only"],
+    ["a dotted route literal is reported, not compared (round 31)", routeCase(SESSIONS, '<Route path="/sessions.json" component={SessionList} />', asNotRouted), "cannot compare for shadowing"],
     ["a wildcard route path fails (round 29)", routeCase(SESSIONS, '<Route path="/sessions/*" component={SessionList} />', asNotRouted), "cannot compare for shadowing"],
     // Round 13: markdown-it records a definition only when its destination validates, so
     // definitions are found by shape on the raw source, and the rows the table RENDERS

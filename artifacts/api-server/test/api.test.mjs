@@ -534,6 +534,40 @@ async function run() {
   const simReset = await req("POST", "/simulator/reset", { body: {} });
   check("simulator reset → 200", simReset.status === 200 && Array.isArray(simReset.json?.auditEvidence));
 
+  // ── Row 99: both demo routers speak the envelope's requestId — the SAME one ──
+  // the header carries. /api/simulator/* minted a fresh uuid per body (a caller's
+  // x-request-id echoed in the header, contradicted in the body) and /api/sim/*
+  // carried none at all while forwarding the room-sim library's raw error text.
+  {
+    const demoCall = async (method, path, body) => {
+      const r = await fetch(`${BASE}${path}`, {
+        method,
+        headers: { "x-request-id": "row99-caller-id", ...(body ? { "content-type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, header: r.headers.get("x-request-id"), json: await r.json().catch(() => null) };
+    };
+    const firstSim = (scenarios.json?.scenarios ?? [])[0]?.id;
+    const cases = [
+      ["GET", "/simulator/scenarios", undefined],
+      ["POST", "/simulator/run", { scenarioId: firstSim }],
+      ["POST", "/simulator/run", { scenarioId: "no-such-scenario" }],
+      ["GET", "/sim/room-entry/scenarios", undefined],
+      ["POST", "/sim/room-entry", { scenarioId: "compliant-bedside" }],
+      ["POST", "/sim/room-entry", { scenarioId: "does-not-exist" }],
+    ];
+    for (const [method, path, body] of cases) {
+      const r = await demoCall(method, path, body);
+      check(`demo envelope: ${method} ${path} (${r.status}) body requestId is the header's x-request-id`,
+        r.header === "row99-caller-id" && r.json?.requestId === "row99-caller-id");
+    }
+    const unknownRoom = await demoCall("POST", "/sim/room-entry", { scenarioId: "does-not-exist" });
+    check("demo envelope: an unknown room-entry scenario is a fixed not_found message, not the library's error string",
+      unknownRoom.status === 404 && unknownRoom.json?.error === "not_found" &&
+      unknownRoom.json?.message === "Room-entry scenario not found." &&
+      !String(unknownRoom.json?.message).includes("does-not-exist"));
+  }
+
   // ── auth fails closed ───────────────────────────────────────────────────
   const noAuth = await req("GET", "/v1/decisions");
   check("unauthenticated request is 401", noAuth.status === 401);
@@ -1901,6 +1935,23 @@ async function run() {
       const uptime = Number(/^signalgrid_process_uptime_seconds ([0-9.]+)$/m.exec(gwMetricsBody)?.[1] ?? "-1");
       check(`metrics: process uptime measures the PROCESS, not the scraper (first scrape of a >0.9s-old server read ${uptime}s)`,
         uptime >= 0.7);
+
+      // ── Row 95: HEAD is served wherever GET is, and nowhere else ────────────
+      // Express answers HEAD from the GET handler, but the fence matched the verb
+      // literally and 404'd first — a healthy instance reporting 404 to a
+      // load-balancer probe that defaults to HEAD. Both halves, like the fence above.
+      const gwHeadHealth = await fetch(`${BASE4}/healthz`, { method: "HEAD" });
+      check(`gateway: HEAD /healthz is served as GET is (${gwHeadHealth.status}, was 404)`, gwHeadHealth.status === 200);
+      const gwHeadContext = await fetch(`${BASE4}/v1/context`, { method: "HEAD" });
+      check(`gateway: HEAD on the allowlisted GET /v1/context reaches the route and demands a credential (${gwHeadContext.status}, want 401)`,
+        gwHeadContext.status === 401);
+      const gwHeadKeys = await fetch(`${BASE4}/v1/keys`, { method: "HEAD" });
+      check("gateway: HEAD on an unlisted route is still fenced (404)", gwHeadKeys.status === 404);
+      // /v1/authorize is POST-only with no GET sibling pattern (unlike
+      // /v1/decisions/evaluate, which GET /v1/decisions/:id also matches).
+      const gwHeadAuthorize = await fetch(`${BASE4}/v1/authorize`, { method: "HEAD" });
+      check("gateway: HEAD on a POST-only launch route is still fenced (404) — only HEAD→GET is folded",
+        gwHeadAuthorize.status === 404);
 
       // NON-VACUITY. Every check above asserts an ABSENCE, and a server that failed to
       // boot, or a wrong base URL, would satisfy all of them. Something must still be

@@ -617,8 +617,11 @@ check("syslog: under a suppressing env the adapter reports status 'suppressed', 
     && refusedAs("https://[::ffff:0:169.254.169.254]/x", WEBHOOK_URL_REFUSALS.privateRange));
   check("url-guard: a documentation-range IPv4-translated address [::ffff:0:203.0.113.9] is NOT over-refused",
     validateWebhookUrl("https://[::ffff:0:203.0.113.9]/x", live).valid === true);
-  check("url-guard: the trailing-dot FQDN spellings localhost., app.localhost. and localhost.. are refused as loopback",
-    ["https://localhost./x", "https://app.localhost./x", "https://localhost../x"].every((u) => refusedAs(u, WEBHOOK_URL_REFUSALS.loopback)));
+  check("url-guard: the trailing-dot FQDN spellings localhost., app.localhost., localhost.. and localhost... are refused as loopback",
+    ["https://localhost./x", "https://app.localhost./x", "https://localhost../x", "https://localhost.../x"].every((u) => refusedAs(u, WEBHOOK_URL_REFUSALS.loopback)));
+  check("url-guard: the dot strip never loosens a refusal — 127.., 10.. and 172.16.. (domains to the URL parser, refused by the raw prefix rules) stay refused",
+    refusedAs("https://127../x", WEBHOOK_URL_REFUSALS.loopback) && refusedAs("https://10../x", WEBHOOK_URL_REFUSALS.privateRange)
+    && refusedAs("https://172.16../x", WEBHOOK_URL_REFUSALS.privateRange));
   check("url-guard: a trailing-dot public FQDN (hook.example.com.) stays valid",
     validateWebhookUrl("https://hook.example.com./x", live).valid === true);
   check("url-guard: the mapped unspecified address [::ffff:0.0.0.0] is refused as loopback (every decoded octet counts, not only the first)",

@@ -94,10 +94,18 @@
 //     box, is CLOSED-RESIDUE, not STALE.
 //   - CEILING, not caught: a fix that landed and was later reverted reads
 //     STALE. A regression is a different question; the re-read owns it.
-//   - CEILING, over-report only: an identical annotation removed and later
+//   - CEILING, both directions: an identical annotation removed and later
 //     re-added is credited to its EARLIER adding commit (the oldest match in
-//     the line history), so an in-flight re-add can read STALE. Backlog row
-//     "credits a removed-then-re-added identical annotation" tracks the fix.
+//     the line history). That over-reports when the earlier addition landed
+//     via a PR (an in-flight re-add can read STALE), and under-reports,
+//     silently, when it did not: a re-add that then lands via a PR still reads
+//     not landed via a PR. Backlog row "credits a removed-then-re-added
+//     identical annotation" tracks the fix.
+//   - CEILING, never hidden: a cited root-level or extensionless path the
+//     landing DELETES is neither in the landing's tree nor in slash-and-
+//     extension form, so it cannot corroborate; the annotation reads READ
+//     (read by hand). Backlog row "a cited root-level or extensionless path
+//     the landing deletes" tracks the fix.
 //
 // FAIL-CLOSED, IN THE DIRECTION A REPORTER CAN BE: a shallow clone (CI's
 // default checkout) cannot walk history, so the real-tree run prints NOT
@@ -633,7 +641,7 @@ function selfTest() {
     if (how === "squash") { g("merge", "-q", "--squash", branch); g("add", "-A"); gAs(["GitHub", "noreply@github.com"], "commit", "-qm", `squash ${branch} (#${n})`); }
     else gAs(GH, "merge", "-q", "--no-ff", "-m", how === "default" ? `Merge pull request #${n} from o/${branch}` : `Merge pull request #${n}: ${branch}`, branch);
   };
-  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59", "60", "61", "62"];
+  const ids = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "57", "58", "59", "60", "61", "62", "63"];
   const checks = [];
   try {
     g("init", "-q", "-b", "main");
@@ -794,6 +802,7 @@ function selfTest() {
       edit(plan, row(60), row(60) + " Use `x then FIX PROPOSED 2026-10-01 (branch claude/r19, x): `scripts/a.mjs`.");
       edit(plan, row(61), row(61) + ann("claude/r19", "./scripts/z.mjs"));
       edit(plan, row(62), row(62) + ann("claude/r19", "scripts/old.mjs"));
+      edit(plan, row(63), row(63) + " FIX PROPOSED 2026-10-08 (PR #60): `scripts/old.mjs`.");
       edit(backlog, "Intro prose.", "Intro prose." + ann("claude/r19", "scripts/a.mjs"));
       write("scripts/a.mjs", "60\n"); rmSync(join(dir, "scripts/z.mjs")); g("mv", "scripts/old.mjs", "scripts/new.mjs");
     });
@@ -883,10 +892,11 @@ function selfTest() {
     checks.push(["a real annotation a stray backtick pairs across is NOT MEASURED, never dropped", quotedNm("row 60")]);
     checks.push(["a \"./\"-prefixed cited path the landing deleted is normalised and corroborates — STALE", is("row 61", "STALE", (r) => r.pr === 60 && r.hit.includes("scripts/z.mjs"))]);
     checks.push(["a cited path the landing renamed corroborates (both sides of a rename) — STALE", is("row 62", "STALE", (r) => r.pr === 60 && r.hit.includes("scripts/old.mjs"))]);
+    checks.push(["…and a PR-named row citing that renamed path corroborates too — STALE", is("row 63", "STALE", (r) => r.pr === 60 && r.hit.includes("scripts/old.mjs"))]);
     checks.push(["a dated FIX PROPOSED in prose above the first backlog box is NOT MEASURED, not an open row", all.some((r) => r.file === backlog && r.row === "(no row)" && r.status === "NO-HISTORY" && /outside any ledger row/.test(r.why))]);
     checks.push(["a digits-only number in the clause (\"check run 1234567890\") is not read as a sha — STALE", is("row 35", "STALE", (r) => r.pr === 23 && r.claimSha === undefined)]);
     checks.push(["a PR-named row whose PR reached the worker's HEAD only through a sync merge is STALE", is("row 30", "STALE", (r) => r.pr === 17)]);
-    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 61", "row 62", "row 7"])]);
+    checks.push(["exactly the planted stale rows are flagged", JSON.stringify(stale) === JSON.stringify(['"Child"', '"Plain open box"', "row 1", "row 10", "row 11", "row 16", "row 19", "row 28", "row 30", "row 31", "row 32", "row 33", "row 35", "row 39", "row 43", "row 49", "row 5", "row 50", "row 51", "row 61", "row 62", "row 63", "row 7"])]);
     // The REPORTED line counts every bucket: one result of each kind gives a 1 in each place, 2 not measured.
     const kinds = ["STALE", "LANDED-UNCORROBORATED", "CLOSED-RESIDUE", "NOT-VIA-PR", "NO-HISTORY", "NO-LEDGER"];
     // Two more STALE results, one sharing r0's row: 3 stale annotations across 2 distinct rows.
@@ -1282,7 +1292,7 @@ function selfTest() {
   let failed = 0;
   for (const [name, ok] of checks) { console.log(`  ${ok ? "ok  " : "FAIL"} ${name}`); if (!ok) failed++; }
   console.log(`row-status-drift self-test: ${checks.length - failed}/${checks.length} passed`);
-  return failed === 0 && checks.length === 127;
+  return failed === 0 && checks.length === 128;
 }
 
 let isMain = false;

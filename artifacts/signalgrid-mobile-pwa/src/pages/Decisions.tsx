@@ -69,6 +69,7 @@ export default function Decisions() {
               <button 
                 key={d.id} 
                 onClick={() => setSelectedId(d.id)}
+                aria-label={`Decision ${d.outcome} for ${d.identityId} on ${d.deviceId}, ${d.workflowId}, ${formatTimeAgo(d.evaluatedAt)}`}
                 className="w-full text-left p-4 flex flex-col gap-2 active:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">

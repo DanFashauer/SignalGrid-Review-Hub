@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useListDecisions } from "@workspace/api-client-react";
 import { outcomeTone } from "../lib/outcome-tone";
+import { LiveRegion } from "@/components/LiveRegion";
 
 const OUTCOMES = ["all", "allow", "step-up", "restrict", "deny"] as const;
 type Filter = typeof OUTCOMES[number];
@@ -36,6 +37,10 @@ export default function DecisionsPage() {
 
   return (
     <div className="p-6 space-y-4">
+      <LiveRegion
+        message={data ? `${data.decisions.length} decisions shown, ${data.decisions.filter((d) => d.outcome === "deny").length} denied${data.decisions[0] ? `, newest record ${data.decisions[0].id.slice(-6)} at ${new Date(data.decisions[0].evaluatedAt).toLocaleTimeString()}` : ""}.` : ""}
+        alert={isError ? "Decisions could not be loaded." : ""}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Decisions</h1>

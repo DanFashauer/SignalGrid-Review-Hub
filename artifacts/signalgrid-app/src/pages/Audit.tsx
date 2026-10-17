@@ -20,7 +20,10 @@ export function Audit() {
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <LiveRegion
-        message={data && !error && data.chain.valid && !data.chain.partial ? `${data.chain.scope === "tenant" ? `${data.chain.length} events in this tenant's chain` : `${data.chain.length} records in the global ledger (all tenants)`}, ${data.events.length} of this tenant's events shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}. Hash chain intact.` : ""}
+        // The newest event is spoken whatever the chain verdict: once the ledger is
+        // truncated the alert repeats the same partial-verification warning on every
+        // poll, so this message is the only channel a new event can change.
+        message={data && !error ? `${data.chain.scope === "tenant" ? `${data.chain.length} events in this tenant's chain` : data.chain.scope === "global-ledger" ? `${data.chain.length} records in the global ledger (all tenants)` : "Chain length unverified"}, ${data.events.length} of this tenant's events shown, last shown ${data.events[data.events.length - 1]?.id ?? "none"}.${data.chain.valid && !data.chain.partial ? " Hash chain intact." : ""}` : ""}
         alert={
           error
             ? data

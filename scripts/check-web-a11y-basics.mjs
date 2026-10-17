@@ -101,6 +101,17 @@ function sourceFiles(dir) {
   return out;
 }
 
+/** Every .css file under dir (node_modules and dist skipped). */
+function cssFiles(dir) {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) { if (e.name !== "node_modules" && e.name !== "dist") out.push(...cssFiles(p)); }
+    else if (e.name.endsWith(".css")) out.push(p);
+  }
+  return out;
+}
+
 const QUERY_HOOK_NAME = /^use(Query|Queries|InfiniteQuery|SuspenseQuery|SuspenseQueries|SuspenseInfiniteQuery|List[A-Z]\w*|Get[A-Z]\w*)$/;
 const GENERATED_CLIENT = "lib/api-client-react/src/generated/api.ts";
 
@@ -613,6 +624,23 @@ export function stripLiterals(expr) {
   return out;
 }
 
+/**
+ * Does `expr` read a match of regex source `src` as a VALUE — a member access or
+ * index on it, or the value itself interpolated or passed on — rather than only
+ * testing it (`x ? …`, `x && …`, `x || …`, `x ?? …`, `!x`)? A presence test renders
+ * the same text however the value changes.
+ */
+export function valueRead(expr, src) {
+  for (const m of expr.matchAll(new RegExp(src, "g"))) {
+    const after = expr.slice(m.index + m[0].length);
+    if (/^\s*(?:\?\.|\.|\[)/.test(after)) return true;
+    if (/!\s*$/.test(expr.slice(0, m.index))) continue;
+    if (/^\s*(?:\?(?![.?])|&&|\|\||\?\?)/.test(after)) continue;
+    return true;
+  }
+  return false;
+}
+
 export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSpoken = new Set()) {
   const tags = [];
   for (const m of code.matchAll(/<LiveRegion\b/g)) {
@@ -691,9 +719,12 @@ export function checkUnannouncedQueries(rel, code, isHook, defaultPolls, shellSp
       }
       for (const n of derived) if (!holders.includes(n)) resultAliases.push(n);
       const inMessage = (re) => re.test(messages);
-      const resultSpoken = resultAliases.some((n) => inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`))) ||
-        holders.some((h) => inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(h)}(?:\\[\\d+\\])?\\??\\.(?:${RESULT})(?![\\w$])`))) ||
-        (listHook && inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?![\\w$])`)) && inMessage(new RegExp(`\\??\\.(?:${RESULT})(?![\\w$])`)));
+      // The message must SAY the result, not just test that it exists: `data ? "Ready"
+      // : ""` reads `data` but renders the same text on every later refresh.
+      const spoken = (src) => valueRead(messages, src);
+      const resultSpoken = resultAliases.some((n) => spoken(`(?<![\\w$.])${escapeRegExp(n)}(?![\\w$])`)) ||
+        holders.some((h) => spoken(`(?<![\\w$.])${escapeRegExp(h)}(?:\\[\\d+\\])?\\??\\.(?:${RESULT})(?![\\w$])`)) ||
+        (listHook && inMessage(new RegExp(`(?<![\\w$.])${escapeRegExp(m[1])}(?![\\w$])`)) && spoken(`\\??\\.(?:${RESULT})(?![\\w$])`));
       // A query the layout shell binds with the same arguments is the shell's to speak
       // (one announcement per update); the page may read it for its failure state only.
       const signature = `${m[2]}${args.replace(/\s+/g, "")}`;
@@ -1153,7 +1184,7 @@ export function rechartsSeriesViaImports(files) {
     changed = false;
     const add = (set, n) => { if (!set.has(n)) { set.add(n); changed = true; } };
     for (const f of parsed) {
-      const local = new Set([...(rechartsSeriesNames(f.code) ?? []), ...imported.get(f.rel)]);
+      const local = new Set(withLocalAliases(f.code, [...(rechartsSeriesNames(f.code) ?? []), ...imported.get(f.rel)]));
       for (const m of f.code.matchAll(/import\s+(?:type\s+)?(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*["'](\.[^"']*|@\/[^"']*)["']/g)) {
         const series = fromSeries(m[2], f.rel);
         for (const part of m[1].split(",").map((x) => x.trim()).filter(Boolean)) {
@@ -1179,13 +1210,25 @@ export function rechartsSeriesViaImports(files) {
   return imported;
 }
 
+/** `names` plus every local alias of one (`const MyArea = Area`), to a fixpoint. */
+export function withLocalAliases(src, names) {
+  const out = new Set(names);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const m of src.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*([A-Za-z_$][\w$.]*)\s*(?:as\s+[^;\n]+)?;?\s*$/gm)) {
+      if (out.has(m[2]) && !out.has(m[1])) { out.add(m[1]); grew = true; }
+    }
+  }
+  return [...out];
+}
+
 /** Rule 4 over one file; `viaImports` are series reached through local barrels. Returns failure strings. */
 export function checkChartMotion(rel, raw, viaImports = []) {
   const src = stripComments(raw);
   if (!/["']recharts["']/.test(src) && viaImports.length === 0) return [];
   const direct = rechartsSeriesNames(src);
   if (direct === null) return [`${rel}: recharts is imported in a form the gate cannot parse — failing closed`];
-  const names = [...new Set([...direct, ...viaImports])];
+  const names = withLocalAliases(src, [...direct, ...viaImports]);
   const reduced = new Set([...src.matchAll(/(?:const|let)\s+(\w+)\s*=\s*usePrefersReducedMotion\s*\(\s*\)/g)].map((m) => m[1]));
   const failures = [];
   for (const name of names) {
@@ -1264,7 +1307,7 @@ export function damps(prop, value) {
  * Rule 3 over one stylesheet. Comments are stripped first, and the block must
  * hold at least one declaration: a commented-out or empty block reduces nothing.
  */
-export function checkReducedMotion(rel, raw) {
+export function checkReducedMotion(rel, raw, { requireUniversal = true } = {}) {
   const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
   const re = /@media\s*\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)\s*\{/g;
   let m;
@@ -1337,6 +1380,9 @@ export function checkReducedMotion(rel, raw) {
     .filter((d) => /!\s*important/.test(d[2]) && !MOTION_NEUTRAL.has(d[1]) && !damps(d[1], d[2].replace(/!\s*important/, "").trim()))
     .map((d) => `${d[1]}: ${d[2].trim()}`);
   if (overrides.length) return [`${rel}: an !important motion declaration outside the reduced-motion block overrides it for reduced-motion users (${overrides.join("; ")}) — WCAG 2.3.3`];
+  // Every other stylesheet the tree loads (a component's CSS, a CSS module) need not
+  // hold the universal damper, but may not out-rank it: the two checks above apply.
+  if (!requireUniversal) return [];
   const missed = UNIVERSAL.filter((u) => !covered.has(u));
   const ok = missed.length === 0;
   if (covered.size > 0 && !ok && !unimportant) return [`${rel}: the reduced-motion block damps ${[...covered].join(", ")} but not ${missed.join(", ")} — an animated pseudo-element keeps moving (WCAG 2.3.3)`];
@@ -1354,8 +1400,12 @@ export function jsxElements(src) {
   const nodes = [];
   const stack = [];
   // A `<` opens a tag only where an expression can start: not after an identifier,
-  // `)` or `]` (a generic `useState<T>` or a comparison `a < b`).
-  for (const t of src.matchAll(/(?<![\w$)\]]\s*)<(\/?)([A-Za-z][\w.]*)?(?=[\s/>])/g)) {
+  // `)` or `]` (a generic `useState<T>` or a comparison `a < b`) — a keyword such as
+  // `return <App />` excepted.
+  for (const t of src.matchAll(/<(\/?)([A-Za-z][\w.]*)?(?=[\s/>])/g)) {
+    const before = /([\w$)\]]+)\s*$/.exec(src.slice(Math.max(0, t.index - 40), t.index))?.[1];
+    // Inside an open element the text before a tag is JSX children (`Hello</p>`), not code.
+    if (stack.length === 0 && before && !/^(?:return|yield|await|case|default|else|in|of|typeof|void)$/.test(before)) continue;
     const name = t[2] ?? "";
     if (t[1]) {
       const open = stack.pop();
@@ -1385,6 +1435,10 @@ export function jsxElements(src) {
 export function motionConfigWraps(src) {
   const nodes = jsxElements(src);
   if (nodes === null) return null;
+  // `src` is ONE rendered tree (the app component's body, or the render() argument):
+  // a second, separate JSX expression in it (`const preview = <MotionConfig …>`) is
+  // not what mounts, so the configured tree must be the only one.
+  if (nodes.filter((n) => n.parent === null).length !== 1) return false;
   return nodes.some((mc) => {
     if (mc.name !== "MotionConfig" || !/\breducedMotion\s*=\s*["'](?:user|always)["']/.test(mc.tag)) return false;
     const inside = (n) => n.start > mc.start && n.end <= mc.end;
@@ -1395,6 +1449,38 @@ export function motionConfigWraps(src) {
     for (let a = mc.parent; a; a = a.parent) ancestors.add(a);
     return nodes.filter((n) => n.start >= root.start && n.end <= root.end).every((n) => n === mc || ancestors.has(n) || inside(n));
   });
+}
+
+/**
+ * The trees a web app actually mounts: main.tsx's `createRoot(…).render(…)` argument,
+ * and — when that argument renders the default import of ./App — App.tsx's
+ * default-exported component body. A helper component or an unused JSX expression
+ * elsewhere in either file is not the mounted tree. Returns [{ rel, wraps }].
+ */
+export function mountedTrees(files) {
+  const main = files.find((f) => /\/src\/main\.tsx$/.test(f.rel));
+  if (!main) return [];
+  const code = stripComments(main.src);
+  const call = /\.render\s*\(/.exec(code);
+  if (!call) return [{ rel: main.rel, wraps: null }];
+  let depth = 0, end = -1;
+  for (let i = call.index + call[0].length - 1; i < code.length; i++) {
+    if (code[i] === "(") depth++;
+    else if (code[i] === ")" && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return [{ rel: main.rel, wraps: null }];
+  const arg = code.slice(call.index + call[0].length, end);
+  const out = [{ rel: main.rel, wraps: motionConfigWraps(arg) }];
+  const appName = /import\s+([A-Za-z_$][\w$]*)\s+from\s*["']\.\/App(?:\.tsx)?["']/.exec(code)?.[1];
+  const app = files.find((f) => /\/src\/App\.tsx$/.test(f.rel));
+  if (appName && app && new RegExp(`<${escapeRegExp(appName)}(?=[\\s/>])`).test(arg)) {
+    const appCode = stripComments(app.src);
+    const named = /export\s+default\s+(?:function\s+([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*;?\s*$)/m.exec(appCode);
+    const name = named?.[1] ?? named?.[2];
+    const body = name ? functionBody(appCode, name) : null;
+    out.push({ rel: app.rel, wraps: body ? motionConfigWraps(body.text.slice(body.text.indexOf("{"))) : null });
+  }
+  return out;
 }
 
 /**
@@ -1417,7 +1503,7 @@ export function checkFramerMotion(treeRel, files) {
       if (!/^["'](?:user|always)["']$/.test(m[1])) failures.push(`${f.rel}: reducedMotion=${m[1]} — framer-motion animations ignore prefers-reduced-motion unless it is "user" or "always" (WCAG 2.3.3)`);
     }
   }
-  const roots = files.filter((f) => /\/src\/(?:App|main)\.tsx$/.test(f.rel)).map((f) => ({ rel: f.rel, wraps: motionConfigWraps(stripComments(f.src)) }));
+  const roots = mountedTrees(files);
   for (const r of roots) if (r.wraps === null) failures.push(`${r.rel}: its JSX does not balance — the gate cannot see what <MotionConfig> wraps (failing closed)`);
   if (!roots.some((r) => r.wraps === true)) failures.push(`${treeRel}: animates with framer-motion (${animates.length} file(s), e.g. ${animates[0].rel}) but no <MotionConfig reducedMotion="user"> encloses the app in src/App.tsx or src/main.tsx — CSS reduced-motion rules do not stop JS animation (WCAG 2.3.3)`);
   return failures;
@@ -1451,6 +1537,17 @@ export function checkStylesheetLoaded(treeRel, indexHtml, readEntry) {
     if (/^\s*import\s+["']\.\/index\.css["']\s*;?\s*$/m.test(stripComments(entry))) return [];
   }
   return [`${treeRel}/${entries.join(", ")}: the entry does not \`import "./index.css"\` — the reduced-motion rule never reaches the rendered UI (WCAG 2.3.3)`];
+}
+
+/**
+ * Rule 3 over every stylesheet of a tree: `indexRel` must hold the universal damper,
+ * and every OTHER local stylesheet (a component's CSS, a CSS module) cascades over
+ * the same elements, so it may not out-rank the damper either. `sheets` is
+ * [{ rel, css }]; a tree whose index stylesheet is not among them fails closed.
+ */
+export function checkStylesheets(indexRel, sheets) {
+  if (!sheets.some((x) => x.rel === indexRel)) return [`${indexRel}: not among the tree's stylesheets — failing closed`];
+  return sheets.flatMap((x) => checkReducedMotion(x.rel, x.css, { requireUniversal: x.rel === indexRel }));
 }
 
 /**
@@ -1493,7 +1590,7 @@ function run() {
   for (const tree of trees) {
     const treeRel = relative(repo, tree);
     const css = join(tree, "src", "index.css");
-    failures.push(...checkReducedMotion(relative(repo, css), readFileSync(css, "utf8")));
+    failures.push(...checkStylesheets(relative(repo, css), cssFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), css: readFileSync(p, "utf8") }))));
     const readOrNull = (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } };
     failures.push(...checkStylesheetLoaded(treeRel, readOrNull(join(tree, "index.html")), (rel) => readOrNull(join(tree, rel))));
     const treeFiles = sourceFiles(join(tree, "src")).map((p) => ({ rel: relative(repo, p), src: readFileSync(p, "utf8") }));
@@ -1821,9 +1918,9 @@ function selfTest() {
       checkLiveRegionText("x.tsx", 'const { data, isError } = useQ(); <LiveRegion message={m} alert={isError && !shell.isError ? "Filtered signals could not be refreshed." : ""} />').length === 0 &&
       checkLiveRegionText("x.tsx", 'const { data } = useQ(); <LiveRegion message={m} alert="" />').length === 0],
     ["a polled query a view binds must reach its live region",
-      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s, isError: se } = useListSignals(); <LiveRegion message={s ? "x" : ""} alert={se ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); const { data: s, isError: se } = useListSignals(); <LiveRegion message={s ? `${s.n}` : ""} alert={se ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m, isError: e } = useGetMetrics(); <LiveRegion message={m ? `${m.n}` : ""} alert={e ? "Metrics could not be refreshed." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
-      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? "x" : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} alert={q.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics(); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const { data: m } = useGetMetrics({ query: { refetchInterval: 5000 } }); <LiveRegion message="" />', (n) => n.startsWith("use"), false).length === 1],
     ["a live region must read a polled query's result or error, not only its loading flags",
@@ -1833,7 +1930,7 @@ function selfTest() {
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 1) &&
       ['const { data: m, isLoading, isError: e } = useGetMetrics(); <LiveRegion message={m ? `${m.total}` : ""} alert={e ? "Down." : ""} />',
         'const q = useGetMetrics(); <LiveRegion message={q.data ? `${q.data.n}` : ""} alert={q.isError ? "Metrics could not be refreshed." : ""} />',
-        'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? "x" : ""} alert={rest.isError ? "Down." : ""} />'].every((c) =>
+        'const { isLoading, ...rest } = useGetMetrics(); <LiveRegion message={rest.data ? `${rest.data.n}` : ""} alert={rest.isError ? "Down." : ""} />'].every((c) =>
         checkUnannouncedQueries("x.tsx", c, (n) => n.startsWith("use"), true).length === 0)],
     ["the reduced-motion stylesheet must be imported by index.html's module entry",
       (() => {
@@ -1854,7 +1951,7 @@ function selfTest() {
       checkReducedMotion("a.css", ".fade { transition: opacity 1s; } @keyframes spin { from { animation-timing-function: linear !important; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }").length === 0],
     ["useQueries array bindings must reach the live region",
       checkUnannouncedQueries("x.tsx", 'const [metrics, decisions] = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
-      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? "x" : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
+      checkUnannouncedQueries("x.tsx", 'const [metrics] = useQueries({ queries }); <LiveRegion message={metrics.data ? `${metrics.data.n}` : ""} alert={metrics.isError ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message="Ready" />', (n) => n.startsWith("use"), true).length === 1 &&
       checkUnannouncedQueries("x.tsx", 'const results = useQueries({ queries }); <LiveRegion message={results.map((r) => r.data?.n).join(", ")} alert={results.some((r) => r.isError) ? "Down." : ""} />', (n) => n.startsWith("use"), true).length === 0],
     ["live-region markup inside a string or template literal is not a live region",
@@ -1904,10 +2001,11 @@ function selfTest() {
     ["framer-motion animations must sit under MotionConfig reducedMotion=\"user\" at the app root",
       (() => {
         const anim = { rel: "t/src/pages/Home.tsx", src: 'import { motion } from "framer-motion"; <motion.div animate={{ x: 10 }} />' };
-        const app = (attr) => ({ rel: "t/src/App.tsx", src: `import { MotionConfig } from "framer-motion"; <MotionConfig ${attr}><Router /></MotionConfig>` });
-        return checkFramerMotion("t", [anim, app('reducedMotion="user"')]).length === 0 &&
-          checkFramerMotion("t", [anim, app('reducedMotion="never"')]).length === 2 &&
-          checkFramerMotion("t", [anim, app("reducedMotion={mode}")]).length === 2 &&
+        const main = { rel: "t/src/main.tsx", src: 'import App from "./App";\ncreateRoot(el).render(<App />);' };
+        const app = (attr) => ({ rel: "t/src/App.tsx", src: `import { MotionConfig } from "framer-motion";\nexport default function App() { return <MotionConfig ${attr}><Router /></MotionConfig>; }` });
+        return checkFramerMotion("t", [anim, main, app('reducedMotion="user"')]).length === 0 &&
+          checkFramerMotion("t", [anim, main, app('reducedMotion="never"')]).length === 2 &&
+          checkFramerMotion("t", [anim, main, app("reducedMotion={mode}")]).length === 2 &&
           checkFramerMotion("t", [anim]).length === 1 &&
           checkFramerMotion("t", [{ rel: "t/src/App.tsx", src: "<div/>" }]).length === 0;
       })()],
@@ -1960,16 +2058,37 @@ function selfTest() {
     ["framer-motion's m and aliased imports animate",
       checkFramerMotion("t", [view("t/src/H.tsx", 'import { m } from "framer-motion";\nexport const H = () => <m.div animate={{ opacity: 1 }} />;')]).length === 1 &&
       checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion as mo } from "framer-motion";\nexport const H = () => <mo.div animate={{ opacity: 1 }} />;')]).length === 1],
-    ["<MotionConfig> must enclose the app, not sit beside it",
-      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<><MotionConfig reducedMotion="user" /><AppRoutes /></>')]).length === 1 &&
-      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<><MotionConfig reducedMotion="user"><div /></MotionConfig><AppRoutes /></>')]).length === 1 &&
-      checkFramerMotion("t", [view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />'), view("t/src/App.tsx", '<Provider><MotionConfig reducedMotion="user"><AppRoutes /></MotionConfig></Provider>')]).length === 0],
+    ["<MotionConfig> must enclose the mounted app, not sit beside it or in a helper",
+      (() => {
+        const anim = view("t/src/H.tsx", 'import { motion } from "framer-motion";\n<motion.div />');
+        const main = view("t/src/main.tsx", 'import App from "./App";\ncreateRoot(el).render(<App />);');
+        const app = (body) => view("t/src/App.tsx", body);
+        return checkFramerMotion("t", [anim, main, app('export default function App() { return <><MotionConfig reducedMotion="user" /><AppRoutes /></>; }')]).length === 1 &&
+          checkFramerMotion("t", [anim, main, app('export default function App() { return <><MotionConfig reducedMotion="user"><div /></MotionConfig><AppRoutes /></>; }')]).length === 1 &&
+          checkFramerMotion("t", [anim, main, app('function Preview() { return <MotionConfig reducedMotion="user"><div /></MotionConfig>; }\nexport default function App() { return <AppRoutes />; }')]).length === 1 &&
+          checkFramerMotion("t", [anim, main, app('export default function App() { const preview = <MotionConfig reducedMotion="user"><div /></MotionConfig>; return <AppRoutes />; }')]).length === 1 &&
+          checkFramerMotion("t", [anim, main, app('export default function App() { return <Provider><MotionConfig reducedMotion="user"><AppRoutes /></MotionConfig></Provider>; }')]).length === 0 &&
+          checkFramerMotion("t", [anim, view("t/src/main.tsx", 'createRoot(el).render(<MotionConfig reducedMotion="user"><App /></MotionConfig>);')]).length === 0;
+      })()],
     ["a recharts series re-exported through a local barrel is followed",
       (() => {
         const run = (fs) => { const v = rechartsSeriesViaImports(fs); return fs.flatMap((f) => checkChartMotion(f.rel, f.src, [...(v.get(f.rel) ?? [])])); };
         return run([view("t/src/charts.ts", 'import { Area } from "recharts";\nexport { Area };'), view("t/src/V.tsx", 'import { Area } from "./charts";\n<Area dataKey="x" />')]).length === 1 &&
           run([view("t/src/charts.ts", 'export * from "recharts";'), view("t/src/V.tsx", 'import * as C from "./charts";\n<C.Area dataKey="x" />')]).length === 1 &&
           run([view("t/src/charts.ts", 'export { Area } from "recharts";'), view("t/src/V.tsx", 'import { Area } from "./charts";\n<Area isAnimationActive={false} dataKey="x" />')]).length === 0;
+      })()],
+    ["a message that only tests a result's presence does not speak it",
+      checkUnannouncedQueries("x.tsx", 'const { data, isError } = useQuery(o);\n<LiveRegion message={data ? "Ready" : ""} alert={isError ? "Failed" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const q = useQuery(o);\n<LiveRegion message={q.data && !q.isError ? "Ready" : ""} alert={q.isError ? "Failed" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 1 &&
+      checkUnannouncedQueries("x.tsx", 'const { data, isError } = useQuery(o);\n<LiveRegion message={data ? `Latest ${data.id}` : ""} alert={isError ? "Failed" : ""} />', (n) => /^use[A-Z]/.test(n), true).length === 0],
+    ["a recharts series aliased in the file is checked",
+      checkChartMotion("c.tsx", 'import { Area } from "recharts";\nconst MyArea = Area;\nreturn <MyArea dataKey="x" />;').length === 1 &&
+      checkChartMotion("c.tsx", 'import { Area } from "recharts";\nconst MyArea = Area;\nreturn <MyArea isAnimationActive={false} dataKey="x" />;').length === 0],
+    ["any other stylesheet may not out-rank the reduced-motion damper",
+      (() => {
+        const index = { rel: "t/src/index.css", css: "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }" };
+        return checkStylesheets(index.rel, [index, { rel: "t/src/spinner.module.css", css: ".spinner { animation: spin 2s infinite !important; }" }]).length === 1 &&
+          checkStylesheets(index.rel, [index, { rel: "t/src/spinner.module.css", css: ".spinner { animation: spin 2s infinite; }" }]).length === 0;
       })()],
     ["stylesheet with reduced-motion passes",
       checkReducedMotion("a.css", "@media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }").length === 0],

@@ -47,13 +47,28 @@
  * `fe80::1`, `fc00::1`) never matches either shape, because both require the leading
  * ~96 bits to be all zero, which no routable IPv6 prefix is.
  *
+ * A THIRD SHAPE, ADDED 2026-10-17: the IPv4-TRANSLATED form `::ffff:0:a.b.c.d`
+ * (`::ffff:0:0:0/96`, RFC 2765 §2.1 SIIT, obsoleted by RFC 6145) canonicalizes to
+ * `::ffff:0:<hex16>:<hex16>`, which neither pattern above matched, so
+ * `[::ffff:0:127.0.0.1]` was judged as an IPv6 address no rule names and passed. It is
+ * decoded the same way, so it gets its IPv4 twin's verdict. Its leading 80 bits are
+ * zero too, so no routable IPv6 prefix matches it either.
+ *
+ * THE TRAILING DOT IS A SPELLING TOO. `localhost.` and `app.localhost.` are the
+ * fully-qualified spellings of `localhost` and `app.localhost` (RFC 6761 reserves the
+ * whole `.localhost` name), and `new URL()` keeps the dot. Trailing dots are stripped
+ * before the name rules run; IPv4 literals never reach here with one, because the URL
+ * parser already drops it (`127.0.0.1.` parses to `127.0.0.1`).
+ *
  * A DIFFERENT EMBEDDING IS DELIBERATELY LEFT ALONE: the NAT64 well-known prefix
- * `64:ff9b::/96` (e.g. `64:ff9b::7f00:1` for 127.0.0.1) is a THIRD way to spell an
+ * `64:ff9b::/96` (e.g. `64:ff9b::7f00:1` for 127.0.0.1) is a FOURTH way to spell an
  * IPv4 address inside IPv6, is not in the reported bypass, and decoding it is a
  * bigger change than this fix — a NAT64 resolver on an actual deployment's network
  * can legitimately hand back addresses in that block for otherwise-ordinary public
  * IPv4 hosts, and this file's job today is closing the reported bypass, not widening
- * the rule. Named here so it is not mistaken for closed.
+ * the rule. Named here so it is not mistaken for closed. The 6to4 prefix `2002::/16`
+ * (e.g. `2002:7f00:1::1` for 127.0.0.1) embeds an IPv4 address too and is left alone
+ * for the same reason; it is not closed either.
  */
 
 /**
@@ -133,8 +148,9 @@ export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBH
  * `new URL()` canonicalizes every IPv4-mapped (`::ffff:a.b.c.d`) or IPv4-compatible
  * (`::a.b.c.d`) IPv6 literal — however the caller spelled it, dotted or hex, padded
  * or not, upper- or lower-case — to one of exactly two lowercase shapes:
- * `::ffff:<hex16>:<hex16>` or `::<hex16>:<hex16>`. Both mean the same thing: the
- * trailing 32 bits ARE an IPv4 address. Decode them back to dotted-decimal so the
+ * `::ffff:<hex16>:<hex16>` or `::<hex16>:<hex16>`, and every IPv4-translated
+ * (`::ffff:0:a.b.c.d`) literal to `::ffff:0:<hex16>:<hex16>`. All three mean the same
+ * thing: the trailing 32 bits ARE an IPv4 address. Decode them back to dotted-decimal so the
  * rules in {@link validateWebhookUrl} see the same literal regardless of spelling.
  *
  * Anchored full-string match on purpose: `::1`, `::`, `fe80::1`, `fc00::1` and every
@@ -142,9 +158,13 @@ export const WEBHOOK_URL_REFUSAL_REASONS: readonly string[] = Object.values(WEBH
  * required `::` prefix) or fewer than two explicit trailing groups (fails the
  * `<hex16>:<hex16>` requirement), so none of them match here and each still falls
  * through to its own existing check unchanged.
+ *
+ * Exported so `proof:emitter-discipline` can pin all four decoded octets directly:
+ * the guard's verdict reads only the first two, so a corrupted low group is
+ * otherwise visible only at `[::ffff:0.0.0.0]`.
  */
-function decodeIPv4InIPv6(hostname: string): string | null {
-  const match = /^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(hostname);
+export function decodeIPv4InIPv6(hostname: string): string | null {
+  const match = /^::(?:ffff:(?:0:)?)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(hostname);
   if (!match) return null;
   const hi = parseInt(match[1], 16);
   const lo = parseInt(match[2], 16);
@@ -165,7 +185,7 @@ export function validateWebhookUrl(
     // Zone ids (`[fe80::1%eth0]`) are refused by `new URL()` itself for the
     // http/https schemes this guard validates — confirmed above, not assumed —
     // so a zone id never reaches here; it is already caught below as invalidUrl.
-    const bracketless = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const bracketless = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
     const hostname = decodeIPv4InIPv6(bracketless) ?? bracketless;
 
     // Loopback and unspecified, in both families.

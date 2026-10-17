@@ -1673,6 +1673,19 @@ components:
           description: Sorted, deduplicated roll-up of signalsUsed[].sourceReference.
         digest: { type: string }
         coreNormalizationVersion: { type: integer }
+        digestAlg:
+          type: string
+          enum: [fnv1a64-wtf8]
+          description: >-
+            Which digest function minted `digest`: FNV-1a 64 over the WTF-8 encoding of
+            the string. WTF-8 is identical to UTF-8 for every well-formed string; the
+            one difference is an unpaired UTF-16 surrogate, which WTF-8 encodes as its
+            own 3-byte sequence instead of substituting U+FFFD. A verifier must
+            implement WTF-8, not just UTF-8 — a standard UTF-8 encoder (e.g.
+            TextEncoder) is correct here only for well-formed input, and will compute a
+            different digest for a snapshot whose evidence contains an unpaired
+            surrogate. Absent means the row was minted before this digest fix and
+            verifies against the legacy low-byte function instead — never re-stamped.
       required:
         [id, tenantId, decisionId, capturedAt, evidence, signalsUsed,
          policyVersionId, policyVersion, sourceReferences]

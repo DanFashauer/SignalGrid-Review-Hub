@@ -190,13 +190,15 @@
       "criterionId": "evidence-fresh",
       "op": "evidence",
       "clears": "artifacts/live-evidence/mac-run.json",
-      "id": "objective-loop-evidence-fresh-2026-10-17",
-      "queuedAs": "origin/mac/tick-20260930T204503Z (objective-loop-evidence-fresh-2026-09-30-4.json)"
+      "id": "objective-loop-evidence-fresh-2026-10-20",
+      "queuedAs": "working tree (objective-loop-evidence-fresh-2026-10-17-2.json)"
     }
   ],
   "probeErrors": [],
   "report": {
-    "pendingSimRequests": [],
+    "pendingSimRequests": [
+      "objective-loop-evidence-fresh-2026-10-17-2"
+    ],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
     "unmeasuredCount": 0,
@@ -205,8 +207,8 @@
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-17T00:00:32.100Z",
-  "derivedAtCommit": "a7059b93e9a053726240a97dd78f5448a85d056b",
+  "derivedAt": "2026-10-20T00:00:25.571Z",
+  "derivedAtCommit": "81c9fa10efd20a4e7e5b8a4c9189c727cb16c62d",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "5b5e127657be3484b153ba0a77030f55c0cdbfa1a53765151a4fb419f99e79dd"
+  "decisionAddress": "92e140c0eed277023f7647b4033378c4ea5eec0b346eceb59eb1e1252fde232a"
 }

@@ -292,6 +292,23 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
    and never deletes a branch. The Mac lane's landing PRs are merged by the cloud
    only when the Mac asked for it in mail (as #653 did). The first landings under
    this rule: #656, #657, #653, #649, #654 on 2026-09-12.
+8. **Evidence age is read from `mintedAt` inside the artifact, never from the file's git date (2026-10-15).** The re-mint of
+   `artifacts/live-evidence/mac-run.json` landed via tick PR #1522 with `mintedAt` 2026-10-15T16:33:53.511Z, read with
+   `node -e 'console.log(JSON.parse(require("fs").readFileSync("artifacts/live-evidence/mac-run.json","utf8")).mintedAt)'`.
+   Before that re-mint the blob read 2026-10-02T16:07:18.870Z, while the commit that carried it then (047dcfd93) is dated
+   2026-10-04 17:14:10 -04:00: a git date two days younger than the file's real age. Read the field, not the commit.
+9. **Regenerate `docs/agent/SURFACE_REVIEW_COVERAGE.md` only on a fully staged index (2026-10-15).** After a merge of mainline
+   into a branch, the index holds duplicate stages until the merge is resolved and staged, and the coverage gate then
+   reports a false STALE (seen on #1524's round 7, 2026-10-15). Resolve, `git add -A`, run
+   `node scripts/check-surface-review-coverage.mjs --write`, `git add -A`, then run the gate without `--write`.
+10. **A heartbeat's "since the last cycle" is what the first-parent log prints, measured (2026-10-15).** Measure the window with
+   `git log origin/SignalGrid_Alpha --first-parent --since=<prior heartbeat firedAt> --until=<this delivery>`, and the age at
+   delivery from the prior `firedAt` to this delivery's instant, never from what the session remembers. The 21:24Z steward record (#1528) named two cloud
+   landings; the window from the prior `firedAt` 2026-10-15T19:25:57.719Z to its delivery commit 5703c7585 (21:26:43Z)
+   holds nine first-parent commits: four PR merges (#1524 df4ea3b8, #1526 67ff76eb, #1527 9e7fc18b, #1468 760d5032) and five
+   Mac heartbeat commits. Its age at delivery was 2h00m45s. The 17:24Z record (#1523) claimed a keepalive "also due" at
+   1h57m; the age from the prior `firedAt` 2026-10-15T15:28:02.975Z to its delivery commit e7f03d2db (17:25:56Z) is
+   1h57m53s, under the 2-hour threshold, so the keepalive was not due (corrected in 4808841e).
 
 ### How the cloud lane runs build work (2026-09-12)
 
@@ -306,6 +323,38 @@ one. First application: the mutation guard's pending brace-less families
 census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09-12);
 the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
 already describe the mechanics.
+
+### The lane session's status line (2026-10-08)
+
+Claude Code shows one line at the foot of the lane session, from
+`scripts/mac/statusline.sh` (the `statusLine` key in `.claude/settings.json`):
+`<branch> | <N> open hands | <M> unread for <lane> | <model>`. Claude Code re-runs
+it every 30 seconds (`refreshInterval` on that entry) as well as on its own events,
+because hands and mail change while the session is idle, and the entry starts it
+from the repository root of the directory Claude Code was launched in
+(`workspace.project_dir`, never the working directory, which moves), so a session in
+a subdirectory still gets the line and one that wanders into another repository
+never runs that repository's script. It reads only files in the checkout of the
+session's directory: the branch from `git symbolic-ref`, open hands from
+`artifacts/raised-hands/` (every hand not yet resolved), and unread mail from
+`artifacts/lane-messages/` (addressed to this lane, with no ack written by this
+lane). No fetch, no `gh`, no network, so the numbers are as fresh as the last pull
+and are a prompt to run `pnpm run hands` or `pnpm run lane:inbox`, not a replacement
+for either. A part it cannot read (not a git checkout, a file that does not parse, a lane
+message of a shape `pnpm run lane:inbox` would refuse, such as a misspelled `to`) is left
+out of the line instead of shown as a number. To turn it off, delete the
+`statusLine` key from `.claude/settings.json`, or override it in your own local
+settings file. `bash scripts/mac/statusline.sh --self-test` proves the counts on a
+fixture tree; preflight and CI run it.
+
+### Operating notes, 2026-10-16 (cloud lane)
+
+- The lane takes an artifact's own freshness — the live evidence's `mintedAt`, a tick's or a routine's last `firedAt` — from the artifact's field, never from the commit that carried it, while the keepalive's "age at delivery" runs from the prior heartbeat's `firedAt` to the instant the new heartbeat is delivered (the #1523 correction above), so a heartbeat committed after its own `firedAt` is classified by when it was delivered.
+- A new ask names and retires the earlier asks it supersedes in part, and leaves their other items standing.
+- The lane compares commit times in epoch seconds (`git log -1 --format=%ct`), never as ISO strings, because the Mac commits at -04:00 and a later instant reads as earlier.
+- The lane reads a heartbeat delivered under two hours after the prior one as a non-quiet delivery only, never as "also the keepalive".
+- The lane marks a draft PR ready only when it is prepared for another round, because marking it ready triggers a Codex review whose comments wake the branch worker.
+- Every landing refute re-runs the earlier heads' flagged plants on the new head before a ship, because a fix that widens a gate's recognition can silently re-open a fail-open case.
 
 ## Collision log
 

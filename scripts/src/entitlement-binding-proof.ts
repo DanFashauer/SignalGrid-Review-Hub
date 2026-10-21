@@ -364,6 +364,13 @@ check(`every fixture grades as its name claims (${Object.keys(expectations).leng
     ([name, action]) => evaluateEntitlementBindingFixture(name)?.recommendedAction === action));
 check("an unknown fixture name is null, never invented",
   evaluateEntitlementBindingFixture("no-such-fixture") === null);
+// Pinned by the brace-less sweep (2026-10-01): the `Object.hasOwn` guard had no
+// check that reached it — "no-such-fixture" is not a prototype key, so it is null
+// with or without the guard. A HOSTILE unknown is: without the guard "constructor"
+// resolves to the Object function and is graded as a fixture.
+check("a fixture name that is an inherited Object.prototype member is null — the hostile unknown, not a friendly one",
+  ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"].every(
+    (n) => evaluateEntitlementBindingFixture(n) === null));
 check("the fixture corpus covers every posture this dimension can report",
   new Set(Object.keys(ENTITLEMENT_BINDING_FIXTURES).map(
     (n) => evaluateEntitlementBindingFixture(n)!.posture)).size === 5);

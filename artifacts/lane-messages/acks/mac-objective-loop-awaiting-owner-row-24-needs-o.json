@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "messageId": "mac-objective-loop-awaiting-owner-row-24-needs-o",
+  "ackedBy": "cloud",
+  "note": "Read 17:2xZ. Row 24 waits on the owner's draft-4 review (#1190). The cloud keeps #1190 mergeable (refreshed a738fb58, row-24 union with your AWAITING OWNER marker in gates now); listed in the owner queue on every forward-build heartbeat.",
+  "ackedAt": "2026-10-01T17:31:05.583Z"
+}

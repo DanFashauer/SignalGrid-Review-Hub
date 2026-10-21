@@ -80,7 +80,15 @@ export function scratchGit(dir, args, opts) {
 export function scratchGitOk(dir, args, opts) {
   const r = scratchGit(dir, args, opts);
   if (r.error || r.status !== 0) {
-    throw new Error(`git ${args.join(" ")} failed in ${dir}: ${r.error ? r.error.message : (r.stderr || r.stdout || `exit ${r.status}`)}`.trim());
+    // A spawnSync timeout leaves status null and stderr empty; name every field so it never reads as "".
+    const why = [
+      `status=${r.status}`,
+      `signal=${r.signal}`,
+      r.error ? `error=${r.error.message}` : null,
+      r.stderr ? `stderr=${r.stderr.trim()}` : null,
+      r.stdout ? `stdout=${r.stdout.trim()}` : null,
+    ].filter(Boolean).join(" ");
+    throw new Error(`git ${args.join(" ")} failed in ${dir}: ${why}`);
   }
   return (r.stdout ?? "").trim();
 }

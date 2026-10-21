@@ -268,15 +268,18 @@ target — the same reasoning behind that bench's own 6,000x floor headroom.
 
 Orchestrator over workers, not one long session: the session model writes the spec
 (what changes, which check must fail without it, which gates must stay green),
-fans execution out to Opus sub-agents each in its own worktree with its own
-`pnpm install`, reviews what comes back against the spec, sends it back with the
+fans execution out to explicitly selected workers under DR-047/DR-060's stage
+table, each in its own worktree with its own `pnpm install`, reviews what comes
+back against the spec, sends it back with the
 exact defects until it is good, and only then runs the full gates and opens the PR.
 The loop closes on a check that fails without the fix, never on a description of
 one. First application: the mutation guard's pending brace-less families
 (BUILD_BACKLOG campaign row) — one worker per family, the orchestrator holds the
 census. Absorbed from an owner-shared practitioner clip (RESOURCE_INTAKE 2026-09-12);
 the vendored `subagent-driven-development` and `dispatching-parallel-agents` skills
-already describe the mechanics.
+already describe the mechanics. `docs/agent/WORKER_BRIEF.md` carries the shared
+worker contract for local-model, Codex and Claude Code sessions. Provider
+availability changes dispatch; it grants no additional merge authority.
 
 ### The lane session's status line (2026-10-08)
 

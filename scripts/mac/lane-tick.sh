@@ -94,7 +94,7 @@ if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   mkdir "$TICK_LOCK" 2>/dev/null || { say "could not take $TICK_LOCK — exiting"; exit 0; }
 fi
 printf '%s' "$$" > "$TICK_LOCK/pid"
-trap 'rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null' EXIT
+trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK" 2>/dev/null' EXIT
 
 # An UNCHANGED tick heartbeats at most once per this many minutes, so a short launchd
 # interval does not push a heartbeat commit to Alpha every run. Override with
@@ -275,6 +275,28 @@ if ! command -v pnpm >/dev/null 2>&1 || ! command -v node >/dev/null 2>&1; then
   # still more than nothing, and it costs one line.
   heartbeat
   exit 0
+fi
+# Keep the tick alive and honest while another chain owns this host's heavyweight lane.
+defer_host_verification() {
+  RESULT="deferred: $SG_VERIFY_LOCK_REASON; sim requests and objective evaluation not run"
+  say "$RESULT"
+  heartbeat
+}
+if [ "$DRY" = "0" ]; then
+  _verify_cache="$HOME/Library/Caches/signalgrid"
+  mkdir -p "$_verify_cache" || { SG_VERIFY_LOCK_REASON="host verification cache unavailable"; defer_host_verification; exit 1; }
+  _verify_helper="$(mktemp "$_verify_cache/host-verification.XXXXXX")" || { SG_VERIFY_LOCK_REASON="host verification reader unavailable"; defer_host_verification; exit 1; }
+  _verify_sha="$(git rev-parse origin/SignalGrid_Alpha)"
+  if ! git show "$_verify_sha:scripts/mac/host-verification-lock.sh" > "$_verify_helper"; then
+    rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper unavailable"; defer_host_verification; exit 1
+  fi
+  # shellcheck source=/dev/null
+  . "$_verify_helper" || { rm -f "$_verify_helper"; SG_VERIFY_LOCK_REASON="mainline host verification helper could not load"; defer_host_verification; exit 1; }
+  rm -f "$_verify_helper"
+  if ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+    defer_host_verification
+    exit 0
+  fi
 fi
 LOCK_SHA="$(shasum -a 256 pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1)"
 INSTALL_STAMP="node_modules/.sg-installed-lock-sha"

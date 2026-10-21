@@ -371,7 +371,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   mkdir "$LOCK" 2>/dev/null || { say "result: skipped: could not take $LOCK"; exit 0; }
 fi
 printf '%s' "$$" > "$LOCK/pid"
-trap 'rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"; rmdir "$LOCK" 2>/dev/null' EXIT
+trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"; rmdir "$LOCK" 2>/dev/null' EXIT
 # The empty hooks directory every sgit call points core.hooksPath at, recreated empty each run before any session exists.
 rm -rf "${CACHE:?}/no-hooks"
 mkdir -p "$NOHOOKS" || { echo "cannot create $NOHOOKS" >&2; exit 1; }
@@ -418,6 +418,22 @@ capped() {
     waitpid($pid, 0);
     exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' "$_cap" "$@"
 }
+
+# One host chain includes the optional PR refresh, model build/checks and final full gates.
+# Load only pinned mainline's helper, never code from the mutable build clone.
+if [ "$DRY" = "0" ]; then
+  _verify_helper="$(mktemp "$CACHE/host-verification.XXXXXX")" || fail "could not prepare host verification exclusion"
+  if ! git -C "$REPO_ROOT" show "$MAINLINE_SHA:scripts/mac/host-verification-lock.sh" > "$_verify_helper"; then
+    rm -f "$_verify_helper"; fail "pinned mainline lacks the host verification lock helper"
+  fi
+  # shellcheck source=/dev/null
+  . "$_verify_helper" || { rm -f "$_verify_helper"; fail "pinned host verification helper could not load"; }
+  rm -f "$_verify_helper"
+  if ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
+    say "result: deferred: $SG_VERIFY_LOCK_REASON; no refresh, triage or claim ran"
+    exit 0
+  fi
+fi
 
 # ── dry-run only: pin the sha a real run would have pinned ───────────────────
 # Under the seams that is the SCRATCH remote's SignalGrid_Alpha (and nothing is fetched); otherwise the real remote, read-only.
@@ -467,6 +483,18 @@ else
 fi
 
 # ── 2. the ranked tasks, from the pinned sha ─────────────────────────────────
+# DR-056: an old decision can still be current when the pinned tick heartbeat witnesses it.
+# Read state AND heartbeat from the same pinned tree. The --state seam changes JSON data only.
+# Import the canonical readVerdict contract from pinned objects, never from a topic checkout.
+_contract_dir="$(mktemp -d "$CACHE/objective-contract.XXXXXX")" || fail "could not prepare the pinned objective reader"
+mkdir -p "$_contract_dir/scripts/lib" || fail "could not prepare the pinned objective reader's imports"
+for _contract_file in scripts/objective-loop.mjs scripts/check-backlog-ownership.mjs scripts/lib/sim-operations.mjs scripts/lib/raised-hand-kinds.mjs; do
+  if ! git -C "$REPO_ROOT" show "$MAINLINE_SHA:$_contract_file" > "$_contract_dir/$_contract_file" 2>/dev/null; then
+    rm -rf "$_contract_dir"
+    fail "pinned mainline $MAINLINE_SHA has no readable objective contract ($_contract_file)"
+  fi
+done
+HEARTBEAT_JSON="$(git -C "$REPO_ROOT" show "$MAINLINE_SHA:artifacts/agent-heartbeats/mac-lane-tick.json" 2>/dev/null)" || HEARTBEAT_JSON="null"
 if [ -n "$STATE_FILE" ]; then
   STATE_JSON="$(cat "$STATE_FILE" 2>/dev/null)"
 else
@@ -477,10 +505,19 @@ fi
 # below it. A title's "{{" is broken up so it cannot look like a placeholder. stderr goes
 # to a file: a warning is never a task line.
 _err="$(mktemp "$CACHE/tasks-err.XXXXXX")"
-TASKS="$(printf '%s' "$STATE_JSON" | node -e '
+_tasks_rc=0
+TASKS="$(printf '%s' "$STATE_JSON" | node --input-type=module -e '
+  import { pathToFileURL } from "node:url";
+  const { readVerdict } = await import(pathToFileURL(process.argv[2]).href);
   let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
     try {
-      const tasks = JSON.parse(s).tasks;
+      const state = JSON.parse(s), heartbeat = JSON.parse(process.argv[3]);
+      const nowIso = new Date().toISOString();
+      const current = readVerdict(state, { heartbeat, nowIso });
+      if (current.verdict === "unknown" || current.verdict === "broken") throw new Error(`objective intake refuses ${current.verdict}: ${current.reason ?? "the objective evaluator is broken"}`);
+      if (Date.parse(heartbeat?.firedAt) > Date.parse(nowIso)) throw new Error("objective intake refuses a future tick heartbeat");
+      if (current.verdict === "goal_met") return;
+      const tasks = state.tasks;
       if (!Array.isArray(tasks)) throw new Error("tasks[] is not an array");
       const out = [];
       for (const t of [...tasks].sort((a, b) => a.rank - b.rank)) {
@@ -489,7 +526,12 @@ TASKS="$(printf '%s' "$STATE_JSON" | node -e '
       }
       process.stdout.write(out.join(""));
     } catch (e) { console.error(e.message); process.exit(1); }
-  });' 2>"$_err")" || fail "could not read tasks[] from ${STATE_FILE:-mainline $MAINLINE_SHA:docs/agent/objective-state.json}: $(cat "$_err")"
+  });' objective-intake "$_contract_dir/scripts/objective-loop.mjs" "$HEARTBEAT_JSON" 2>"$_err")" || _tasks_rc=$?
+rm -rf "$_contract_dir"
+if [ "$_tasks_rc" != "0" ]; then
+  _tasks_error="$(cat "$_err")"; rm -f "$_err"
+  fail "could not read current tasks[] from ${STATE_FILE:-mainline $MAINLINE_SHA:docs/agent/objective-state.json}: $_tasks_error"
+fi
 [ -s "$_err" ] && say "$(tr '\n' ' ' < "$_err")"
 rm -f "$_err"
 if [ -z "$TASKS" ]; then

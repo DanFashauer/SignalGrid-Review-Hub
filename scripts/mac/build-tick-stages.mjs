@@ -1537,6 +1537,51 @@ function shellTests(root, ok) {
   };
   const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
+  const copyObjectiveContract = (repo) => {
+    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs"]) {
+      mkdirSync(dirname(join(repo, "scripts", file)), { recursive: true });
+      copyFileSync(join(HERE, "..", file), join(repo, "scripts", file));
+    }
+  };
+  const witnessedState = (tasks, verdict = "escalate") => ({ verdict, staleAfterHours: 3, tasks });
+  const freshHeartbeat = (verdict = "escalate") => ({ firedAt: new Date().toISOString(), result: `quiet; objective: ${verdict}` });
+
+  guard2(ok, "shared host verification lock", () => {
+    const helper = join(HERE, "host-verification-lock.sh");
+    const dir = join(root, "host-verification"); mkdirSync(dir);
+    const lock = join(dir, "host.lock"), events = join(dir, "gates"), exitMark = join(dir, "exit-trap");
+    const contender = `. ${q(helper)}\nsg_host_verify_acquire ${q(lock)} || exit $?\nprintf 'overlap\\n' >> ${q(events)}`;
+    const r = bash(`. ${q(helper)}
+trap ${q(`printf kept > ${q(exitMark)}`)} EXIT
+sg_host_verify_acquire ${q(lock)} || exit 2
+printf 'first\\n' >> ${q(events)}
+/bin/bash -c ${q(contender)}
+busy=$?
+sg_host_verify_release
+sg_host_verify_acquire ${q(lock)} || exit 3
+printf 'after\\n' >> ${q(events)}
+sg_host_verify_release
+printf 'busy=%s\\n' "$busy"`);
+    ok("host verification: two shell chains cannot enter heavyweight work together, and release permits the next", r.status === 0 && /busy=75/.test(r.stdout)
+      && readFileSync(events, "utf8") === "first\nafter\n", `${r.status} ${r.stdout} ${r.stderr}`);
+    ok("host verification: the helper preserves its caller's EXIT trap", existsSync(exitMark) && readFileSync(exitMark, "utf8") === "kept");
+    const crash = bash(`. ${q(helper)}\nsg_host_verify_acquire ${q(lock)} || exit 2\nkill -KILL $$`);
+    const recovered = bash(`. ${q(helper)}\nsg_host_verify_acquire ${q(lock)} || exit $?\nsg_host_verify_release`);
+    ok("host verification: crash recovery uses kernel ownership; a leftover file does not latch the next chain", crash.signal === "SIGKILL" && recovered.status === 0 && existsSync(lock), `${crash.signal} ${recovered.status} ${recovered.stderr}`);
+    const lane = readFileSync(join(HERE, "lane-tick.sh"), "utf8");
+    const defer = shFn(lane, "defer_host_verification");
+    const hb = bash(`SG_VERIFY_LOCK_REASON='another SignalGrid verification chain holds the host lock'
+say() { printf 'said:%s\\n' "$1"; }
+heartbeat() { printf 'heartbeat:%s\\n' "$RESULT"; }
+${defer ?? ""}
+defer_host_verification`);
+    ok("host verification: a deferred lane tick still heartbeats that requests and objective evaluation did not run", !!defer && hb.status === 0
+      && /heartbeat:deferred: .*sim requests and objective evaluation not run/.test(hb.stdout), `${hb.status} ${hb.stdout}`);
+    ok("host verification: both ticks use the same host path before heavy work and preserve their own lock cleanup",
+      sh.includes('$HOME/Library/Caches/signalgrid/host-verification.lock') && lane.includes('$HOME/Library/Caches/signalgrid/host-verification.lock')
+      && sh.indexOf('if ! sg_host_verify_acquire') < sh.indexOf('# ── 1b. refresh') && lane.indexOf('if ! sg_host_verify_acquire') < lane.indexOf('LOCK_SHA=')
+      && /trap '[^\n]*sg_host_verify_release[^\n]*\$LOCK\/pid/.test(sh) && /trap '[^\n]*sg_host_verify_release[^\n]*\$TICK_LOCK\/pid/.test(lane));
+  });
 
   // ── B-1(a): no git command in the script names the shared remote-tracking ref ──
   ok("B-1 build-tick.sh pins MAINLINE_SHA from `git ls-remote` of the real remote's URL, and never feeds git a `origin/SignalGrid_Alpha` ref",
@@ -1847,8 +1892,12 @@ function shellTests(root, ok) {
     writeFileSync(join(bin, "gh"), `#!/bin/sh\necho "$@" >> ${ghlog}\nexit 1\n`);
     for (const t of ["pnpm", "npm", "claude"]) writeFileSync(join(bin, t), "#!/bin/sh\nexit 0\n");
     for (const f of readdirSync(bin)) chmodSync(join(bin, f), 0o755);
-    for (const f of ["build-tick.sh", "build-tick-stages.mjs", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(main, "scripts/mac", f));
-    copyFileSync(join(HERE, "../check-backlog-ownership.mjs"), join(main, "scripts/check-backlog-ownership.mjs"));
+    for (const f of ["build-tick.sh", "build-tick-stages.mjs", "host-verification-lock.sh", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(main, "scripts/mac", f));
+    copyObjectiveContract(main);
+    const heartbeatRel = "artifacts/agent-heartbeats/mac-lane-tick.json";
+    const heartbeatPath = join(main, heartbeatRel);
+    mkdirSync(dirname(heartbeatPath), { recursive: true });
+    writeFileSync(heartbeatPath, JSON.stringify(freshHeartbeat()));
     G(main, "init", "-q", "-b", "SignalGrid_Alpha");
     G(main, "remote", "add", "origin", join(dir, "REAL-ORIGIN-MUST-NOT-BE-TOUCHED.git"));
     G(main, "add", "-A"); G(main, "commit", "-q", "-m", "x");
@@ -1856,12 +1905,45 @@ function shellTests(root, ok) {
     G(main, "push", "-q", scratch, "SignalGrid_Alpha");
     G(main, "push", "-q", scratch, "SignalGrid_Alpha:refs/heads/mac/build-row-3-20260101T000000Z");
     const state = join(dir, "state.json");
-    writeFileSync(state, JSON.stringify({ tasks: [{ rowId: "3", rank: 1, title: "claimed row" }, { rowId: "7", rank: 2, title: "Row seven" }] }));
-    const r = spawnSync("/bin/bash", [join(main, "scripts/mac/build-tick.sh"), "--dry-run", "--state", state, "--remote", scratch], { env: { ...gitEnv, HOME: home, PATH: `${bin}:${process.env.PATH}` }, encoding: "utf8", timeout: 120000 });
+    const tasks = [{ rowId: "3", rank: 1, title: "claimed row" }, { rowId: "7", rank: 2, title: "Row seven" }];
+    writeFileSync(state, JSON.stringify(witnessedState(tasks)));
+    const runDry = () => spawnSync("/bin/bash", [join(main, "scripts/mac/build-tick.sh"), "--dry-run", "--state", state, "--remote", scratch], { env: { ...gitEnv, HOME: home, PATH: `${bin}:${process.env.PATH}` }, encoding: "utf8", timeout: 120000 });
+    const r = runDry();
     const tr = existsSync(trace) ? readFileSync(trace, "utf8") : "";
     ok("N-7 the dry-run on a scratch --state / --remote exits 0, skips the claimed row and picks row 7", r.status === 0 && /row 3 claimed/.test(r.stdout) && /picked plan row 7/.test(r.stdout), `${r.status} ${r.stdout} ${r.stderr}`);
     ok("N-7 ...it never ran `git fetch` and never named the real origin to git (only the scratch remote)", !/^fetch/m.test(tr) && !/REAL-ORIGIN-MUST-NOT-BE-TOUCHED/.test(tr) && /ls-remote[^\n]*scratch\.git/.test(tr), tr);
     ok("N-7 ...and never called gh (open PRs read as none under the seams)", !existsSync(ghlog), existsSync(ghlog) ? readFileSync(ghlog, "utf8") : "");
+    const publishHeartbeat = (heartbeat) => {
+      if (heartbeat === null) rmSync(heartbeatPath, { force: true });
+      else writeFileSync(heartbeatPath, JSON.stringify(heartbeat));
+      G(main, "add", heartbeatRel); G(main, "commit", "-q", "--allow-empty", "-m", "heartbeat fixture");
+      G(main, "push", "-q", scratch, "SignalGrid_Alpha");
+    };
+    for (const [label, value, heartbeat] of [
+      ["stale heartbeat", witnessedState(tasks), { ...freshHeartbeat(), firedAt: "2000-01-01T00:00:00Z" }],
+      ["missing heartbeat", witnessedState(tasks), null],
+      ["unparseable heartbeat", witnessedState(tasks), { ...freshHeartbeat(), firedAt: "not-a-date" }],
+      ["future heartbeat", witnessedState(tasks), { ...freshHeartbeat(), firedAt: "2999-01-01T00:00:00Z" }],
+      ["mismatched heartbeat verdict", witnessedState(tasks), freshHeartbeat("replan")],
+      ["broken verdict", witnessedState(tasks, "broken"), freshHeartbeat("broken")],
+      ["unknown verdict", witnessedState(tasks, "unknown"), freshHeartbeat("unknown")],
+      ["missing state freshness bound", { tasks, verdict: "escalate" }, freshHeartbeat()],
+    ]) {
+      publishHeartbeat(heartbeat); writeFileSync(state, JSON.stringify(value));
+      const refused = runDry();
+      ok(`DR-056 ${label} refuses before selecting, triaging or claiming any row`, refused.status === 1 && !/picked plan row|stage commands:/.test(refused.stdout)
+        && /would raise a hand/.test(refused.stdout), `${refused.status} ${refused.stdout} ${refused.stderr}`);
+    }
+    publishHeartbeat(freshHeartbeat("goal_met")); writeFileSync(state, JSON.stringify(witnessedState(tasks, "goal_met")));
+    const met = runDry();
+    ok("DR-056 goal_met with stray tasks produces no build", met.status === 0 && /nothing buildable/.test(met.stdout) && !/picked plan row/.test(met.stdout), `${met.status} ${met.stdout}`);
+    publishHeartbeat(freshHeartbeat());
+    writeFileSync(state, JSON.stringify({ ...witnessedState(tasks), derivedAt: "2000-01-01T00:00:00Z" }));
+    const branchMarker = join(dir, "UNTRUSTED-CONTRACT-RAN");
+    writeFileSync(join(main, "scripts/objective-loop.mjs"), `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(branchMarker)}, 'bad'); throw new Error('branch contract executed');`);
+    const current = runDry();
+    ok("DR-056 old decision timestamp with fresh matching pinned heartbeat remains usable; changed checkout code is never executed", current.status === 0
+      && /picked plan row 7/.test(current.stdout) && !existsSync(branchMarker), `${current.status} ${current.stdout} ${current.stderr}`);
   });
 
   // End to end, on this Mac, against a scratch "GitHub": the REAL build-tick.sh (step 0 re-exec, lock, clone, triage, claim, pipeline,
@@ -1883,13 +1965,16 @@ function shellTests(root, ok) {
     G(dir, "init", "-q", "-b", "SignalGrid_Alpha", seed);
     mkdirSync(join(seed, "scripts/mac"), { recursive: true });
     mkdirSync(join(seed, "docs/agent"), { recursive: true });
-    for (const f of ["build-tick.sh", "build-tick-stages.mjs", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(seed, "scripts/mac", f));
+    for (const f of ["build-tick.sh", "build-tick-stages.mjs", "host-verification-lock.sh", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(seed, "scripts/mac", f));
+    copyObjectiveContract(seed);
     for (const f of ["check-backlog-ownership.mjs", "check-owner-gated-surfaces.mjs"]) copyFileSync(join(HERE, "..", f), join(seed, "scripts", f));
     writeFileSync(join(seed, "scripts/preflight.mjs"), `import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";\nimport { execFileSync } from "node:child_process";\nif (process.env.SG_E2E_DIRTY === "tracked") writeFileSync("docs/COMPANY_BUILD_PLAN.md", "a gate rewrote a tracked file\\n");\nif (process.env.SG_E2E_DIRTY === "untracked") writeFileSync("gate-output.txt", "a cache a gate left\\n");\nif (process.env.SG_E2E_PLANT) {\n  const g = (...a) => execFileSync("git", a, { encoding: "utf8" }).trim();\n  appendFileSync(".git/config", '[url "' + process.env.SG_E2E_PLANT + '"]\\n\\tpushInsteadOf = ' + g("config", "remote.origin.url") + "\\n");\n  g("add", "-A");\n  mkdirSync(".git/refs/replace", { recursive: true });\n  writeFileSync(".git/refs/replace/" + g("rev-parse", "HEAD"), g("commit-tree", "-m", "substitute", g("write-tree")) + "\\n");\n}\nconsole.log(process.env.SG_E2E_PFQUICK ? "\\nPreflight PASSED (quick — heavy builds skipped) — everything it runs is green." : "\\nPreflight PASSED — everything it runs is green.");\n`);
     writeFileSync(join(seed, "scripts/mac/gh-pr.mjs"), `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(prlog)}, process.argv.slice(2).join(" ") + "\\n");\n`);
     writeFileSync(join(seed, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(handlog)}, readFileSync(process.argv[3], "utf8") + "\\n");\n`);
     writeFileSync(join(seed, "docs/COMPANY_BUILD_PLAN.md"), PLAN);
-    writeFileSync(join(seed, "docs/agent/objective-state.json"), JSON.stringify({ tasks: [{ rowId: "7", rank: 1, title: "Row seven" }] }));
+    writeFileSync(join(seed, "docs/agent/objective-state.json"), JSON.stringify(witnessedState([{ rowId: "7", rank: 1, title: "Row seven" }])));
+    mkdirSync(join(seed, "artifacts/agent-heartbeats"), { recursive: true });
+    writeFileSync(join(seed, "artifacts/agent-heartbeats/mac-lane-tick.json"), JSON.stringify(freshHeartbeat()));
     writeFileSync(join(seed, "pnpm-lock.yaml"), "lockfileVersion: stub\n");
     writeFileSync(join(seed, ".gitignore"), "node_modules/\n");
     G(seed, "add", "-A"); G(seed, "commit", "-q", "-m", "mainline");

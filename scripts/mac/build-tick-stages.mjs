@@ -1566,6 +1566,33 @@ function shellTests(root, ok) {
   const witnessedState = (tasks, verdict = "escalate") => ({ verdict, staleAfterHours: 3, tasks });
   const freshHeartbeat = (verdict = "escalate") => ({ firedAt: new Date().toISOString(), result: `quiet; objective: ${verdict}` });
 
+  guard2(ok, "raised-hand public diagnostics", () => {
+    const dir = join(root, "sh-public-hand"), repo = join(dir, "repo"), cache = join(dir, "cache");
+    const home = join(dir, "custom-home"), log = join(home, "Library", "Logs", "build-tick.log"), capture = join(dir, "public.json");
+    mkdirSync(join(repo, "scripts"), { recursive: true }); mkdirSync(cache); mkdirSync(dirname(log), { recursive: true });
+    // Capture the actual exported batch locally; never invoke lane-deliver or a remote.
+    writeFileSync(join(repo, "scripts", "lane-deliver.mjs"), `import { readFileSync, writeFileSync } from "node:fs";
+if (process.argv[2] !== "batch") throw new Error("expected a batch");
+writeFileSync(process.env.SG_HAND_CAPTURE, readFileSync(process.argv[3]));
+console.log("private delivery output");\n`);
+    const failure = `failed at ${home}/project/failure.txt; mac /Users/fixture-mac/work/failure.txt; linux /home/fixture-linux/work/failure.txt; endpoint https://fixture.invalid/private; ghp_fixturetoken123; eyJabcdefghijk.abcdefghijk.abcdefghijk; ${"A".repeat(48)}; api_key=fixture-value`;
+    const run = (runLog, text) => bash(`DRY=0 STAMP=fixture CACHE=${q(cache)} REPO_ROOT=${q(repo)} RUN_LOG=${q(runLog)}
+${shFn(sh, "say")}
+${shFn(sh, "raise_hand")}
+raise_hand ${q(text)}`, { HOME: home, SG_HAND_CAPTURE: capture });
+    const r = run(log, failure), hand = JSON.parse(readFileSync(capture, "utf8"))[0];
+    ok("raise_hand exports redacted home paths, endpoints and credential-shaped failure text", r.status === 0
+      && hand.where === "<HOME>/Library/Logs/build-tick.log"
+      && hand.blocked === "failed at <HOME>/project/failure.txt; mac <HOME>/work/failure.txt; linux <HOME>/work/failure.txt; endpoint <URL> <REDACTED-TOKEN>; <REDACTED-JWT>; <REDACTED-BLOB>; api_key=<REDACTED>", `${r.status} ${r.stderr}`);
+    ok("raise_hand keeps all four public text fields free of absolute home directories and fixture credentials",
+      ["doing", "blocked", "need", "where"].every((key) => typeof hand[key] === "string" && ![home, "/Users/fixture-mac", "/home/fixture-linux", "fixturetoken123", "fixture-value"].some((secret) => hand[key].includes(secret)))
+      && hand.op === "raise" && hand.who === "mac lane" && hand.domain === "lane");
+    const privateLog = readFileSync(log, "utf8");
+    ok("raise_hand leaves the actual private log path, failure text and delivery output intact", privateLog.includes(failure) && privateLog.includes("private delivery output"));
+    const fallback = run("", "a public-safe fixture failure"), fallbackHand = JSON.parse(readFileSync(capture, "utf8"))[0];
+    ok("raise_hand preserves the default relative launchd log hint", fallback.status === 0 && fallbackHand.where === "launchd log ~/Library/Logs/signalgrid-build-tick.log");
+  });
+
   guard2(ok, "shared host verification lock", () => {
     const helper = join(HERE, "host-verification-lock.sh");
     const dir = join(root, "host-verification"); mkdirSync(dir);

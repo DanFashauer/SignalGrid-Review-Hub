@@ -15,7 +15,7 @@ if [ "$WAIT_SECONDS" -lt 1 ] || [ "$WAIT_SECONDS" -gt 39600 ] || [ "$WORK_SECOND
   echo 'ci-host-verification: budgets outside the declared bounds' >&2; exit 2
 fi
 SCRATCH="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/sg-ci-host.XXXXXX")" || exit 2
-WORK_PID="" WORK_STARTED=0 SG_VERIFY_LOCK_HELD=0
+WORK_PID="" WORK_STARTED=0
 cleanup() {
   _ci_status=$?
   trap - EXIT INT TERM HUP

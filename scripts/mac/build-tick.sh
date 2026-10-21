@@ -169,9 +169,20 @@ raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
   _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
   if node -e 'const [f, blocked, where] = process.argv.slice(1);
-      require("fs").writeFileSync(f, JSON.stringify([{ op: "raise", who: "mac lane", domain: "lane", where,
+      // Same public-diagnostic policy as run-requests.mjs; private shell logs stay verbatim.
+      const home = (process.env.HOME ?? "").replace(/\/+$/, "");
+      const redact = (value) => (home ? value.split(home).join("<HOME>") : value)
+        .replace(/\/(?:Users|home)\/[^/\s:]+/g, "<HOME>")
+        .replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"\x27]+/gi, "<URL>")
+        .replace(/\b(?:sk|pk|ghp|gho|sgk|xox[abpr])[-_][A-Za-z0-9_-]{8,}/g, "<REDACTED-TOKEN>")
+        .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, "<REDACTED-JWT>")
+        .replace(/\b(?:[A-Za-z0-9+/]{40,}={0,2})\b/g, "<REDACTED-BLOB>")
+        .replace(/\b(\w*(?:secret|password|token|api[_-]?key|credential)\w*)\s*[:=]\s*\S+/gi, "$1=<REDACTED>");
+      const hand = { op: "raise", who: "mac lane", domain: "lane", where,
         doing: "the unattended build tick (scripts/mac/build-tick.sh)", blocked,
-        need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" }]));' \
+        need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" };
+      for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
+      require("fs").writeFileSync(f, JSON.stringify([hand]));' \
       "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" \
     && node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1; then
     say "raised a hand: $1"

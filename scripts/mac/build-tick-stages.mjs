@@ -56,6 +56,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marks, parseRows, statusText } from "../check-backlog-ownership.mjs";
+import { scratchGit, scratchGitOk, scratchGitEnv, scrubProcessGitEnv } from "../lib/scratch-git.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
@@ -870,12 +871,8 @@ function selfTestBody(root, ok) {
     const repo = join(dir, "repo"), run = join(dir, "run"), cache = join(dir, "cache"), log = join(dir, "stub.log");
     mkdirSync(repo, { recursive: true });
     mkdirSync(run);
-    const env = { ...process.env, SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", PATH: `${stubDir}${delimiter}${process.env.PATH}`, SSH_AUTH_SOCK: "planted", GH_TOKEN: "planted-token", SG_STUB_LOG: log };
-    const git = (...a) => {
-      const r = spawnSync("git", a, { cwd: repo, env, encoding: "utf8" });
-      if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`);
-      return r.stdout;
-    };
+    const env = scratchGitEnv(process.env, { SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", PATH: `${stubDir}${delimiter}${process.env.PATH}`, SSH_AUTH_SOCK: "planted", GH_TOKEN: "planted-token", SG_STUB_LOG: log });
+    const git = (...a) => scratchGitOk(repo, a, { env });
     git("init", "-q");
     git("config", "user.name", "Self Test");
     git("config", "user.email", "self-test@example.invalid");
@@ -886,6 +883,8 @@ function selfTestBody(root, ok) {
       mkdirSync(join(repo, "scripts/mac"), { recursive: true });
       for (const f of ["build-tick-stages.mjs", ...Object.values(BRIEFS)]) copyFileSync(join(HERE, f), join(repo, "scripts/mac", f));
       copyFileSync(join(HERE, "../check-backlog-ownership.mjs"), join(repo, "scripts/check-backlog-ownership.mjs"));
+      mkdirSync(join(repo, "scripts/lib"));
+      copyFileSync(join(HERE, "../lib/scratch-git.mjs"), join(repo, "scripts/lib/scratch-git.mjs"));
     }
     git("add", "-A");
     git("commit", "-q", "-m", "base");
@@ -911,6 +910,31 @@ function selfTestBody(root, ok) {
     };
     return s;
   }
+
+  guard("scratch Git isolation", () => {
+    const victim = join(root, "git-env-victim"); mkdirSync(victim);
+    scratchGitOk(victim, ["init", "-q"]);
+    writeFileSync(join(victim, "keep.txt"), "owner data\n");
+    scratchGitOk(victim, ["add", "-A"]); scratchGitOk(victim, ["commit", "-q", "-m", "victim"]);
+    const before = scratchGitOk(victim, ["rev-parse", "HEAD"]);
+    const poison = { GIT_DIR: join(victim, ".git"), GIT_WORK_TREE: victim, GIT_INDEX_FILE: join(victim, ".git/index"),
+      GIT_OBJECT_DIRECTORY: join(victim, ".git/objects"), GIT_COMMON_DIR: join(victim, ".git"), GIT_AUTHOR_NAME: "", GIT_COMMITTER_NAME: "" };
+    const saved = Object.fromEntries(Object.keys(poison).map((key) => [key, process.env[key]]));
+    try {
+      Object.assign(process.env, poison);
+      const fixture = scenario(PLAN, { withHelper: true });
+      ok("scratch Git: the real fixture builder ignores inherited repository pointers and empty identity", realpathSync(fixture.git("rev-parse", "--show-toplevel")) === realpathSync(fixture.repo)
+        && fixture.git("rev-parse", "HEAD") !== before);
+      fixture.cli(["triage"], { SG_STUB_TRIAGE: buildTriage("code") });
+      ok("scratch Git: an isolated copied helper retains its scratch-git import and reads its own pinned base", fixture.next() === "build code", fixture.next());
+      ok("scratch Git: poisoned fixture creation and triage never change the victim repository", scratchGitOk(victim, ["rev-parse", "HEAD"]) === before
+        && scratchGitOk(victim, ["status", "--porcelain"]) === "" && readFileSync(join(victim, "keep.txt"), "utf8") === "owner data\n");
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+    }
+  });
 
   // The optional transport is a literal executable + stdin protocol. These fixtures never call a
   // model or the network: the external executable translates the request to our existing CLI stub.
@@ -1449,7 +1473,7 @@ process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || '
         classify(s.repo, "lib/signalgrid-core/src/x.ts").stdout === "DECISION_PATH" && classify(s.repo, "scripts/mac/x.sh").stdout === "SAFETY_MACHINERY");
       const empty = join(root, "no-mainline-classifier");
       mkdirSync(empty);
-      spawnSync("git", ["init", "-q"], { cwd: empty });
+      scratchGitOk(empty, ["init", "-q"]);
       const none = classify(empty, "docs/LAUNCH_PROFILE.md");
       ok("S4 classify_change fails closed when mainline has no classifier: non-zero, no class on stdout", none.status !== 0 && none.stdout === "", `${none.status} ${JSON.stringify(none.stdout)}`);
     }
@@ -1529,16 +1553,12 @@ const shVar = (sh, name) => new RegExp(`^${name}=.*$`, "m").exec(sh)?.[0];
 function shellTests(root, ok) {
   const sh = readFileSync(join(HERE, "build-tick.sh"), "utf8");
   const code = sh.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // no comment lines
-  const gitEnv = { ...process.env, SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" };
-  const G = (cwd, ...args) => {
-    const r = spawnSync("git", args, { cwd, env: gitEnv, encoding: "utf8" });
-    if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);
-    return r.stdout.trim();
-  };
+  const gitEnv = scratchGitEnv(process.env, { SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" });
+  const G = (cwd, ...args) => scratchGitOk(cwd, args, { env: gitEnv });
   const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
   const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
   const copyObjectiveContract = (repo) => {
-    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs"]) {
+    for (const file of ["objective-loop.mjs", "check-backlog-ownership.mjs", "lib/sim-operations.mjs", "lib/raised-hand-kinds.mjs", "lib/scratch-git.mjs"]) {
       mkdirSync(dirname(join(repo, "scripts", file)), { recursive: true });
       copyFileSync(join(HERE, "..", file), join(repo, "scripts", file));
     }
@@ -1642,7 +1662,7 @@ defer_host_verification`);
     const nograft = join(dir, "no-grafts");
     const prep = (sha, wt = bw) => bash(`${sg}\n${fn}\nREPO_ROOT=${q(main)} BUILD_WT=${q(wt)} ORIGIN_URL=${q(origin)} MAINLINE_SHA=${q(sha)} NOHOOKS=${q(nohooks)} NOGRAFTS=${q(nograft)}\nprepare_clone`);
     let r = prep(sha1);
-    const head = () => spawnSync("git", ["-C", bw, "rev-parse", "HEAD"], { env: gitEnv, encoding: "utf8" }).stdout.trim();
+    const head = () => G(bw, "rev-parse", "HEAD");
     ok("B-1 prepare_clone, first run: a CLONE (its own .git directory, not a worktree file) detached at the pinned sha, objects borrowed from the person's repo",
       r.status === 0 && statSync(join(bw, ".git")).isDirectory() && head() === sha1 && readFileSync(join(bw, "a.txt"), "utf8") === "one\n"
         && existsSync(join(bw, ".git/objects/info/alternates")) && readFileSync(join(bw, ".git/objects/info/alternates"), "utf8").includes(main), `${r.status} ${r.stderr}`);
@@ -1790,10 +1810,10 @@ defer_host_verification`);
     ok("B-1 push_branch pushes exactly the gated sha to the named branch of the literal origin URL, and the pre-push hook a session planted did not run",
       r.status === 0 && remote("mac/ok") === head && !existsSync(marker), `${r.status} ${r.stdout} ${r.stderr}`);
     r = push(base, "mac/moved");
-    ok("B-1 push_branch refuses when HEAD is not the sha the gates ran on (HEAD moved while preflight ran)", r.status !== 0 && /HEAD/.test(r.stdout) && spawnSync("git", ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/moved"]).status !== 0, `${r.status} ${r.stdout}`);
+    ok("B-1 push_branch refuses when HEAD is not the sha the gates ran on (HEAD moved while preflight ran)", r.status !== 0 && /HEAD/.test(r.stdout) && scratchGit(dir, ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/moved"], { env: gitEnv }).status !== 0, `${r.status} ${r.stdout}`);
     writeFileSync(join(wt, "a.txt"), "a gate rewrote a tracked file\n");
     r = push(head, "mac/dirty");
-    ok("B-1 push_branch refuses when a TRACKED file changed after the gates (what they tested is not what would be pushed)", r.status !== 0 && /dirty/.test(r.stdout) && spawnSync("git", ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/dirty"]).status !== 0, `${r.status} ${r.stdout}`);
+    ok("B-1 push_branch refuses when a TRACKED file changed after the gates (what they tested is not what would be pushed)", r.status !== 0 && /dirty/.test(r.stdout) && scratchGit(dir, ["--git-dir", origin, "rev-parse", "--verify", "-q", "refs/heads/mac/dirty"], { env: gitEnv }).status !== 0, `${r.status} ${r.stdout}`);
     G(wt, "checkout", "-q", "--", "a.txt");
     writeFileSync(join(wt, ".hypothesis-cache"), "a cache a gate left, not gitignored\n");
     r = push(head, "mac/untracked");
@@ -2099,6 +2119,9 @@ defer_host_verification`);
 const guard2 = (ok, name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } };
 
 function selfTest() {
+  // Production functions and hostile CLI fixtures intentionally run plain git against their
+  // scratch cwd; remove inherited repo pointers before any of those child processes exist.
+  scrubProcessGitEnv();
   const root = mkdtempSync(join(tmpdir(), "sg-stages-"));
   const checks = [];
   const ok = (name, cond, detail) => {

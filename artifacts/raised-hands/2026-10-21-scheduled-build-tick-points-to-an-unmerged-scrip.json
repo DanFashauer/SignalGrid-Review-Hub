@@ -1,0 +1,17 @@
+{
+  "id": "2026-10-21-scheduled-build-tick-points-to-an-unmerged-scrip",
+  "raisedAt": "2026-10-21T20:09:27.855Z",
+  "origin": "mac-local-brain-integration",
+  "doing": "Restoring the forward build cycle through the staged local worker integration",
+  "blockedBy": "Scheduled build tick points to an unmerged script; worker integration still requires full validation and mainline landing",
+  "need": "Land the validated staged worker integration and demonstrate an actual bounded build cycle",
+  "whoCanUnblock": "mac lane",
+  "domain": "lane",
+  "status": "open",
+  "routedTo": null,
+  "covers": [
+    "heartbeat:forward-build-cycle"
+  ],
+  "takenBy": "mac-local-brain-integration",
+  "takenAt": "2026-10-21T20:09:36.034Z"
+}

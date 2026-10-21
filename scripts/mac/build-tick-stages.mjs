@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// build-tick-stages.mjs — the staged pipeline behind scripts/mac/build-tick.sh (DR-061 rule 4;
+// build-tick-stages.mjs — the staged pipeline behind scripts/mac/build-tick.sh (DR-050 placement; DR-060 delegation;
 // the tier map follows the DR-060 stage table in .claude/skills/orchestrator-over-workers/SKILL.md).
 //
 //   node scripts/mac/build-tick-stages.mjs triage   <flags>   # RUN_DIR/triage.json + RUN_DIR/next
@@ -50,9 +50,10 @@
 // scrubbed environment (no ssh agent, no tokens, no git config, an empty gh config).
 
 import { spawnSync } from "node:child_process";
-import { appendFileSync, chmodSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { accessSync, appendFileSync, chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { marks, parseRows, statusText } from "../check-backlog-ownership.mjs";
 
@@ -179,10 +180,82 @@ export function claudeArgv(stage, kind, brief, runDir) {
 /** The claude CHILD's environment, never this process's: no ssh agent or token, no git config, an empty gh config. */
 export function scrubbedEnv(cache, base = process.env) {
   const env = { ...base };
-  for (const k of ["SSH_AUTH_SOCK", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN"]) delete env[k];
+  for (const k of ["SSH_AUTH_SOCK", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+    "OPENAI_API_KEY", "OPENAI_ACCESS_TOKEN", "AZURE_OPENAI_API_KEY", "ANTHROPIC_BASE_URL", "OPENAI_BASE_URL", "OPENAI_API_BASE", "AZURE_OPENAI_ENDPOINT"]) delete env[k];
   const gh = join(cache, "empty-gh-config");
   mkdirSync(gh, { recursive: true });
   return { ...env, GIT_SSH_COMMAND: "false", GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GH_CONFIG_DIR: gh };
+}
+
+// SG_STAGE_RUNNER is an explicit host-side transport, not a shell command or a provider implementation.
+// Protocol 1: one JSON request on stdin, no argv, and one existing result envelope on stdout. The runner
+// must enforce readOnly, credential isolation, limits and fresh independent review sessions. No host path
+// or provider credential belongs in this public tree. The native Claude argv is unchanged when unset.
+// Pin the canonical executable's identity and bytes in parent memory; a writer may not replace its own
+// reviewer by changing this file between stages. This is a drift check, not an OS isolation boundary or
+// an atomic exec-by-descriptor guarantee. The trusted host must keep the runner and its dependencies
+// outside the clone and writable run directory, and must not detach children from our timeout group.
+export const STAGE_RUNNER_PROTOCOL = 1;
+const insidePath = (root, file) => {
+  const rel = relative(root, file);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+};
+function canonicalScope(path) {
+  let at = resolve(path);
+  const missing = [];
+  while (!existsSync(at)) {
+    const parent = dirname(at);
+    if (parent === at) throw new HelperFault("cannot resolve the stage runner's workspace boundary");
+    missing.unshift(basename(at));
+    at = parent;
+  }
+  return join(realpathSync(at), ...missing);
+}
+function runnerIdentity(path) {
+  const st = statSync(path);
+  if (!st.isFile()) throw new HelperFault("SG_STAGE_RUNNER must name a regular executable file");
+  accessSync(path, constants.R_OK | constants.X_OK);
+  return { dev: st.dev, ino: st.ino, mode: st.mode, size: st.size,
+    sha256: createHash("sha256").update(readFileSync(path)).digest("hex") };
+}
+export function stageRunner(ctx, baseEnv = process.env) {
+  if (!Object.hasOwn(ctx, "pinnedStageRunner")) {
+    const configured = baseEnv.SG_STAGE_RUNNER;
+    if (configured === undefined || configured === "") ctx.pinnedStageRunner = null;
+    else {
+      try {
+        if (typeof configured !== "string" || !isAbsolute(configured)) throw new HelperFault("SG_STAGE_RUNNER must be an absolute executable path, never a command string");
+        const path = realpathSync(configured);
+        if (insidePath(canonicalScope(ctx.cwd), path) || insidePath(canonicalScope(ctx.runDir), path)) {
+          throw new HelperFault("SG_STAGE_RUNNER must be outside the build clone and writable run directory");
+        }
+        ctx.pinnedStageRunner = Object.freeze({ path, ...runnerIdentity(path) });
+      } catch (e) {
+        if (e instanceof HelperFault) throw e;
+        throw new HelperFault("SG_STAGE_RUNNER cannot be read or executed; refusing the stage");
+      }
+    }
+  }
+  const pinned = ctx.pinnedStageRunner;
+  if (pinned) {
+    try {
+      const now = runnerIdentity(pinned.path);
+      if (realpathSync(pinned.path) !== pinned.path || Object.keys(now).some((k) => now[k] !== pinned[k])) {
+        throw new HelperFault("SG_STAGE_RUNNER changed after it was pinned; refusing the next stage");
+      }
+    } catch (e) {
+      if (e instanceof HelperFault) throw e;
+      throw new HelperFault("SG_STAGE_RUNNER is no longer readable or executable; refusing the next stage");
+    }
+  }
+  return pinned;
+}
+export function stageRequest(ctx, stage, kind, brief) {
+  const spec = stageSpec(stage, kind);
+  return { protocolVersion: STAGE_RUNNER_PROTOCOL, stage, kind: kind ?? null, tierAsked: spec.model,
+    limits: { seconds: spec.seconds, turns: spec.turns, budgetUsd: spec.budget },
+    readOnly: stage === "triage" || stage === "review", brief,
+    runDir: resolve(ctx.runDir), cwd: resolve(ctx.cwd), base: ctx.base, schema: SCHEMAS[stage] ?? null };
 }
 
 let LOADED = null;
@@ -292,7 +365,8 @@ export function costTable(ledgerLines) {
   const unknown = rows.filter((r) => r.costUsd == null).length;
   return ["## Tiers and cost", "", "| Stage | Tier asked | Model that ran | Turns | Seconds | Cost (USD, list price) |", "| --- | --- | --- | --- | --- | --- |", ...body,
     `| **Total** | | | ${sum("numTurns")} | ${Math.round(sum("durationMs") / 1000)} | ${sum("costUsd").toFixed(4)}${unknown ? ` (+${unknown} stage(s) unknown)` : ""} |`,
-    "", "_Cost is the CLI's own `total_cost_usd` at list price, not a bill. A figure the CLI did not print is `unknown` on its row and counts as 0 in the Total (turns, seconds and cost alike)._"].join("\n");
+    "", "_Cost is the CLI's own `total_cost_usd` at list price, not a bill. A figure the CLI did not print is `unknown` on its row and counts as 0 in the Total (turns, seconds and cost alike)._",
+    ...(rows.some((r) => r.budgetPolicy === "subscription_call_cap") ? ["", "_A stage used the host's subscription invocation cap, not an enforced USD cap. Its requested dollar budget and cost-policy note are recorded in the stage ledger; unavailable dollar cost remains unknown._"] : [])].join("\n");
 }
 
 // ── running a stage ──────────────────────────────────────────────────────────
@@ -370,7 +444,7 @@ export const CAPPED_PERL = String.raw`
     my $cap = shift @ARGV;
     my $pid = fork();
     die "fork: $!" unless defined $pid;
-    if (!$pid) { setpgrp(0, 0); exec @ARGV or die "exec: $!"; }
+    if (!$pid) { setpgrp(0, 0); exec { $ARGV[0] } @ARGV or die "exec: $!"; }
     setpgrp($pid, $pid);    # from the parent too: the group must exist before the first kill
     $SIG{ALRM} = sub {
       kill "TERM", -$pid;
@@ -398,10 +472,13 @@ function runStage(ctx, stage, kind, label, vals = {}) {
   const brief = render(BRIEFS[stage], { ROW_ID: ctx.row, ROW_TITLE: ctx.title, BRANCH: ctx.branch, RUN_DIR: ctx.runDir, TODAY: ctx.today, KIND: ctx.kind ?? "none", PATH: ctx.path ?? "none", BASE: ctx.base, ...vals });
   mkdirSync(ctx.runDir, { recursive: true });
   mkdirSync(ctx.cache, { recursive: true });
+  const runner = stageRunner(ctx);
   const outFile = join(ctx.runDir, `${label}.out.json`);
   const fo = openSync(outFile, "w"), fe = openSync(join(ctx.runDir, `${label}.err`), "w");
   console.log(`stage ${label}: ${spec.model}, up to ${spec.turns} turns, ${spec.seconds}s cap`);
-  const r = spawnCapped(spec.seconds, "claude", claudeArgv(stage, kind, brief, ctx.runDir), { cwd: ctx.cwd, env: scrubbedEnv(ctx.cache), stdio: ["ignore", fo, fe] });
+  const r = runner
+    ? spawnCapped(spec.seconds, runner.path, [], { cwd: ctx.cwd, env: scrubbedEnv(ctx.cache), stdio: ["pipe", fo, fe], input: `${JSON.stringify(stageRequest(ctx, stage, kind, brief))}\n` })
+    : spawnCapped(spec.seconds, "claude", claudeArgv(stage, kind, brief, ctx.runDir), { cwd: ctx.cwd, env: scrubbedEnv(ctx.cache), stdio: ["ignore", fo, fe] });
   closeSync(fo);
   closeSync(fe);
   const exit = r.error?.code === "ETIMEDOUT" ? 142 : (r.status ?? 1);
@@ -409,6 +486,10 @@ function runStage(ctx, stage, kind, label, vals = {}) {
   const capped = exit === 142 || /^error_max/.test(env?.subtype ?? "");
   const rec = {
     stamp: ctx.stamp, row: ctx.row, branch: ctx.branch, stage, tierAsked: spec.model,
+    provider: typeof env?.provider === "string" && /^[a-z][a-z0-9_.-]{0,63}$/i.test(env.provider) ? env.provider : (runner ? null : "claude"),
+    budgetPolicy: typeof env?.budgetPolicy === "string" ? env.budgetPolicy : null,
+    requested_budget_usd: num(env?.requested_budget_usd),
+    costPolicyNote: typeof env?.costPolicyNote === "string" ? env.costPolicyNote : null,
     models: env?.modelUsage && typeof env.modelUsage === "object" ? Object.keys(env.modelUsage) : [],
     numTurns: num(env?.num_turns), durationMs: num(env?.duration_ms), costUsd: num(env?.total_cost_usd),
     isError: env ? env.is_error === true : null, subtype: env?.subtype ?? null, apiErrorStatus: env?.api_error_status ?? null, exit, capped,
@@ -638,11 +719,16 @@ export function runCmd(ctx, path, kind) {
 /** One line per stage; spawns nothing. The brief is shown as a placeholder so each stays ONE line. */
 export function commandsCmd(ctx) {
   loadBriefs();
+  const runner = stageRunner(ctx);
   const base = { ROW_ID: ctx.row, ROW_TITLE: ctx.title, BRANCH: ctx.branch, RUN_DIR: ctx.runDir, TODAY: ctx.today, PATH: "build", BASE: ctx.base || "<pinned mainline sha>" };
   const show = (label, stage, kind, extra = {}) => {
     const brief = render(BRIEFS[stage], { ...base, KIND: kind ?? "code", ...extra }); // renders for real: a broken brief fails the dry-run
-    const argv = claudeArgv(stage, kind, `<${BRIEFS[stage]} rendered, ${brief.length} chars>`, ctx.runDir);
-    console.log(`${label}: ${["claude", ...argv].map(shq).join(" ")}`);
+    const placeholder = `<${BRIEFS[stage]} rendered, ${brief.length} chars>`;
+    if (runner) console.log(`${label}: ${shq(runner.path)} < JSON stdin ${JSON.stringify(stageRequest(ctx, stage, kind, placeholder))}`);
+    else {
+      const argv = claudeArgv(stage, kind, placeholder, ctx.runDir);
+      console.log(`${label}: ${["claude", ...argv].map(shq).join(" ")}`);
+    }
   };
   show("triage", "triage");
   for (const k of KINDS) show(`build (${k})`, "build", k);
@@ -784,7 +870,7 @@ function selfTestBody(root, ok) {
     const repo = join(dir, "repo"), run = join(dir, "run"), cache = join(dir, "cache"), log = join(dir, "stub.log");
     mkdirSync(repo, { recursive: true });
     mkdirSync(run);
-    const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", PATH: `${stubDir}${delimiter}${process.env.PATH}`, SSH_AUTH_SOCK: "planted", GH_TOKEN: "planted-token", SG_STUB_LOG: log };
+    const env = { ...process.env, SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", PATH: `${stubDir}${delimiter}${process.env.PATH}`, SSH_AUTH_SOCK: "planted", GH_TOKEN: "planted-token", SG_STUB_LOG: log };
     const git = (...a) => {
       const r = spawnSync("git", a, { cwd: repo, env, encoding: "utf8" });
       if (r.status !== 0) throw new Error(`git ${a.join(" ")}: ${r.stderr}`);
@@ -825,6 +911,104 @@ function selfTestBody(root, ok) {
     };
     return s;
   }
+
+  // The optional transport is a literal executable + stdin protocol. These fixtures never call a
+  // model or the network: the external executable translates the request to our existing CLI stub.
+  guard("stage runner protocol", () => {
+    const dir = join(root, "external-runner"); mkdirSync(dir);
+    const runner = join(dir, "runner ; literal $(name).cjs");
+    const source = `#!/usr/bin/env node
+const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const request = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.appendFileSync(process.env.SG_RUNNER_LOG, JSON.stringify({request, argv:process.argv.slice(2),pid:process.pid,
+ env:{SSH_AUTH_SOCK:process.env.SSH_AUTH_SOCK??null,GH_TOKEN:process.env.GH_TOKEN??null,ANTHROPIC_API_KEY:process.env.ANTHROPIC_API_KEY??null,OPENAI_API_KEY:process.env.OPENAI_API_KEY??null,GIT_SSH_COMMAND:process.env.GIT_SSH_COMMAND, GIT_CONFIG_GLOBAL:process.env.GIT_CONFIG_GLOBAL}})+'\\n');
+const args = ['-p',request.brief,'--model',request.tierAsked,'--add-dir',request.runDir];
+const r = spawnSync(process.execPath, [${JSON.stringify(join(stubDir, "claude"))}, ...args], {encoding:'utf8',env:process.env,stdio:['ignore','pipe','pipe']});
+if (process.env.SG_RUNNER_TAMPER_STAGE === request.stage) fs.appendFileSync(__filename, '\\n// runner was changed\\n');
+if (process.env.SG_RUNNER_BAD_STAGE === request.stage) { process.stdout.write('not-json'); process.exit(1); }
+let result;
+try { result = JSON.parse(r.stdout); } catch { process.stdout.write(r.stdout); process.exit(r.status ?? 1); }
+result.provider='codex'; result.modelUsage={'fixture-codex-model':{}}; result.total_cost_usd=null;
+result.budgetPolicy='subscription_call_cap'; result.requested_budget_usd=request.limits.budgetUsd; result.costPolicyNote='USD cap unavailable; subscription invocation cap enforced.';
+process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || ''); process.exit(r.status ?? 1);
+`;
+    const resetRunner = () => { writeFileSync(runner, source); chmodSync(runner, 0o700); };
+    resetRunner();
+    const s = scenario();
+    const ctx = { cwd: s.repo, runDir: s.run, base: s.base };
+    ok("runner: unset transport keeps native Claude (the default argv tests below still run)", stageRunner({ ...ctx }, {}) === null);
+    for (const [name, path] of [["relative", "./runner"], ["command string", `${runner} --extra`], ["missing", join(dir, "missing")]]) {
+      let error; try { stageRunner({ ...ctx }, { SG_STAGE_RUNNER: path }); } catch (e) { error = e; }
+      ok(`runner: ${name} executable refuses as a helper fault`, error instanceof HelperFault, String(error));
+    }
+    for (const [name, path] of [["clone", join(s.repo, "runner.cjs")], ["run directory", join(s.run, "runner.cjs")]]) {
+      copyFileSync(runner, path); chmodSync(path, 0o700);
+      let error; try { stageRunner({ ...ctx }, { SG_STAGE_RUNNER: path }); } catch (e) { error = e; }
+      ok(`runner: an executable in the writable ${name} is refused`, error instanceof HelperFault && /outside/.test(error.message), String(error));
+      rmSync(path);
+    }
+    const link = join(dir, "link-to-clone");
+    const inside = join(s.repo, "runner.cjs"); copyFileSync(runner, inside); chmodSync(inside, 0o700);
+    // A symlink is resolved before containment, so an outside-looking name cannot hide an inside executable.
+    spawnSync("ln", ["-s", inside, link]);
+    let linkedError; try { stageRunner({ ...ctx }, { SG_STAGE_RUNNER: link }); } catch (e) { linkedError = e; }
+    ok("runner: an outside symlink to a clone executable is refused", linkedError instanceof HelperFault && /outside/.test(linkedError.message));
+    rmSync(inside); rmSync(link);
+    const identityCtx = { ...ctx }; stageRunner(identityCtx, { SG_STAGE_RUNNER: runner });
+    appendFileSync(runner, "\n// changed after pin\n");
+    let changedError; try { stageRunner(identityCtx, { SG_STAGE_RUNNER: runner }); } catch (e) { changedError = e; }
+    ok("runner: changed executable bytes refuse the next stage", changedError instanceof HelperFault && /changed/.test(changedError.message));
+    resetRunner();
+    const pinCtx = { ...ctx }; stageRunner(pinCtx, { SG_STAGE_RUNNER: runner });
+    const replacement = join(dir, "replacement.cjs"); writeFileSync(replacement, source); chmodSync(replacement, 0o700); renameSync(replacement, runner);
+    let replacementError; try { stageRunner(pinCtx, { SG_STAGE_RUNNER: runner }); } catch (e) { replacementError = e; }
+    ok("runner: replacing the executable with identical bytes still refuses (identity is pinned)", replacementError instanceof HelperFault && /changed/.test(replacementError.message));
+    const brief = "literal 'quote' $() `backticks` ; newline\nnot a command";
+    const request = stageRequest(ctx, "review", null, brief);
+    ok("runner: protocol carries the complete review contract and lossless JSON text",
+      request.protocolVersion === 1 && request.stage === "review" && request.kind === null && request.tierAsked === "opus" && request.readOnly === true
+      && request.limits.seconds === STAGES.review.seconds && request.limits.turns === STAGES.review.turns && request.limits.budgetUsd === STAGES.review.budget
+      && request.cwd === s.repo && request.runDir === s.run && request.base === s.base && request.schema === SCHEMAS.review && JSON.parse(JSON.stringify(request)).brief === brief);
+    ok("runner: build/fix requests are writable and triage/review have their own schemas",
+      stageRequest(ctx, "build", "code", brief).readOnly === false && stageRequest(ctx, "fix", "code", brief).schema === null
+      && stageRequest(ctx, "triage", null, brief).readOnly === true && stageRequest(ctx, "triage", null, brief).schema === SCHEMAS.triage);
+    const hookEnv = (scenario, extra = {}) => ({ SG_STAGE_RUNNER: runner, SG_RUNNER_LOG: join(dirname(scenario.repo), "runner.jsonl"), ...extra });
+    const readRunner = (scenario) => readLog(join(dirname(scenario.repo), "runner.jsonl"));
+    const invalid = scenario();
+    invalid.cli(["triage"], hookEnv(invalid, { SG_STAGE_RUNNER: join(dir, "not-there") }));
+    ok("runner: a missing configured runner pauses triage without falling back to native inference", /^pause /.test(invalid.next()) && invalid.stub().length === 0);
+    const full = scenario();
+    const marker = join(dir, "shell-must-not-run");
+    const title = `row title; $(touch ${marker}) 'quoted'\nnewline`;
+    full.raw(["triage", "--row", "7", "--title", title, "--branch", "mac/build-row-7-T", "--run-dir", full.run, "--cache", full.cache,
+      "--today", TODAY, "--stamp", STAMP, "--base", full.base], hookEnv(full, { SG_STUB_TRIAGE: buildTriage("code"), ANTHROPIC_API_KEY: "planted-api", OPENAI_API_KEY: "planted-api" }));
+    full.cli(["run", "--path", "build", "--kind", "code"], hookEnv(full));
+    const called = readRunner(full);
+    ok("runner: literal metacharacter path and JSON stdin never execute prompt text as a shell", !existsSync(marker) && called.length === 3 && called[0].request.brief.includes(title) && called.every((c) => c.argv.length === 0));
+    ok("runner: triage, build and independent review use separate processes with accurate readOnly roles", full.outcome().outcome === "land"
+      && called.map((c) => c.request.stage).join(",") === "triage,build,review" && new Set(called.map((c) => c.pid)).size === 3
+      && called.map((c) => c.request.readOnly).join(",") === "true,false,true");
+    ok("runner: credential and Git restrictions reach the external executable", called.every((c) => c.env.SSH_AUTH_SOCK === null && c.env.GH_TOKEN === null
+      && c.env.ANTHROPIC_API_KEY === null && c.env.OPENAI_API_KEY === null && c.env.GIT_SSH_COMMAND === "false" && c.env.GIT_CONFIG_GLOBAL === "/dev/null"));
+    const telemetry = full.ledger();
+    ok("runner: actual provider/model are logged; requested Opus and unknown cost never become fabricated actual usage", telemetry.every((r) => r.provider === "codex" && r.models.join(",") === "fixture-codex-model" && r.costUsd === null)
+      && telemetry.find((r) => r.stage === "review").tierAsked === "opus" && telemetry.every((r) => r.budgetPolicy === "subscription_call_cap" && r.requested_budget_usd === STAGES[r.stage === "build" ? "build.code" : r.stage].budget && /USD cap unavailable/.test(r.costPolicyNote))
+      && /not an enforced USD cap/.test(costTable(telemetry)));
+    for (const [name, extra, expected] of [["broken triage", { SG_STUB_LOGGEDOUT: "triage" }, "pause"], ["capped triage", { SG_STUB_CAPPED: "triage" }, "hand"], ["malformed failed triage", { SG_RUNNER_BAD_STAGE: "triage" }, "pause"]]) {
+      const q = scenario(); q.cli(["triage"], hookEnv(q, extra));
+      ok(`runner: ${name} preserves fail-closed ${expected}`, q.next().startsWith(`${expected} `), q.next());
+    }
+    for (const [name, extra, expected] of [["broken review", { SG_STUB_REVIEWS: "apierror" }, "pause"], ["capped review", { SG_STUB_REVIEWS: "capped" }, "hand"], ["malformed failed review", { SG_RUNNER_BAD_STAGE: "review" }, "pause"]]) {
+      const q = scenario(); q.cli(["run", "--path", "build", "--kind", "code"], hookEnv(q, extra));
+      ok(`runner: ${name} cannot land (${expected})`, q.outcome().outcome === expected, JSON.stringify(q.outcome()));
+    }
+    const tamper = scenario();
+    tamper.cli(["run", "--path", "build", "--kind", "code"], hookEnv(tamper, { SG_RUNNER_TAMPER_STAGE: "build" }));
+    ok("runner: executable changed by a writing stage pauses before any reviewer runs", tamper.outcome().outcome === "pause" && /changed/.test(tamper.outcome().reason)
+      && readRunner(tamper).map((c) => c.request.stage).join(",") === "build");
+    resetRunner();
+  });
 
   // S1 — triage says done: one plan line, no build, no fix.
   {
@@ -1345,7 +1529,7 @@ const shVar = (sh, name) => new RegExp(`^${name}=.*$`, "m").exec(sh)?.[0];
 function shellTests(root, ok) {
   const sh = readFileSync(join(HERE, "build-tick.sh"), "utf8");
   const code = sh.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n"); // no comment lines
-  const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" };
+  const gitEnv = { ...process.env, SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" };
   const G = (cwd, ...args) => {
     const r = spawnSync("git", args, { cwd, env: gitEnv, encoding: "utf8" });
     if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr}`);

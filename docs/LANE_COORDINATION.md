@@ -68,7 +68,24 @@ cloud's, the third is a sim request the tick runs.
 **What the owner does, once:** on the Mac, `bash scripts/mac/install-launchd.sh`.
 Then nothing — `bash scripts/mac/install-launchd.sh --status` shows it running.
 
-**The build tick (DR-061, 2026-09-29; staged tiers 2026-10-01).** The lane tick
+**The build tick (DR-050 placement, DR-060 delegation; owner reaffirmed 2026-10-21).**
+The owner asked on October 21, 2026 to adapt and run the workers with available local,
+Codex and Claude resources. This worker authorization does not adopt the pending
+DR-061 proposal or widen decision-path merge authority.
+
+`SG_STAGE_RUNNER` optionally names one absolute executable on the host, outside the
+build clone and writable run directory. The helper pins its file identity and SHA256
+and checks both before each stage. It sends protocol-version-1 JSON on stdin, with
+stage, kind, requested tier, time/turn/budget limits, read-only flag, brief, paths,
+pinned base and verdict schema; no shell command or host path is stored in this tree.
+The host runner must enforce those restrictions, keep reviews in fresh sessions,
+retain the timeout process group, and return the existing result envelope with actual
+provider/model telemetry. Unsupported budgets or unavailable providers must refuse;
+unknown cost remains unknown. Native Claude arguments remain the default when the
+variable is unset. The path check and hash are drift checks, not an OS sandbox or
+atomic executable-file pin; the host must protect the runner and its dependencies.
+
+The lane tick
 never builds. A second launchd job, `scripts/mac/build-tick.sh`
 (`bash scripts/mac/install-build-tick.sh`, every 3 hours), does nothing at all
 while it is paused. Each run first pins mainline ONCE: it asks the real remote

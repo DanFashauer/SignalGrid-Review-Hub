@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# SignalGrid — the Mac lane's BUILD tick (DR-061 rule 4). Runs WITHOUT a person, from
+# SignalGrid — the Mac lane's BUILD tick (DR-050 placement; DR-060 delegation). Runs WITHOUT a person, from
 # launchd every 3 hours (scripts/mac/install-build-tick.sh, label
 # com.signalgrid.build-tick). The lane tick (lane-tick.sh) is separate and never builds.
 #
@@ -43,7 +43,7 @@
 # (the deny list matches by prefix), that re-points git at ssh and the on-disk keys, a file a
 # session writes straight into its clone's .git (config: core.sshCommand, url.*.insteadOf;
 # refs/replace/; info/grafts), or code a session writes that this script's own
-# preflight then runs WITH credentials (DR-061 rule 4 accepts that risk).
+# preflight then runs WITH credentials (the documented credential-isolation limit remains).
 #
 # ONE BASE, PINNED. A session shares its clone's refs, and `git update-ref` is not the only way to
 # move one, so nothing here measures against a ref. Step 0 asks the REAL remote (`git ls-remote`) for
@@ -377,6 +377,7 @@ rm -rf "${CACHE:?}/no-hooks"
 mkdir -p "$NOHOOKS" || { echo "cannot create $NOHOOKS" >&2; exit 1; }
 
 for _tool in git gh node pnpm npm claude perl; do
+  if [ "$_tool" = "claude" ] && [ -n "${SG_STAGE_RUNNER:-}" ]; then continue; fi
   command -v "$_tool" >/dev/null 2>&1 || fail "$_tool is not on PATH for launchd (edit PATH at the top of scripts/mac/build-tick.sh)"
 done
 
@@ -404,7 +405,7 @@ capped() {
     my $cap = shift @ARGV;
     my $pid = fork();
     die "fork: $!" unless defined $pid;
-    if (!$pid) { setpgrp(0, 0); exec @ARGV or die "exec: $!"; }
+    if (!$pid) { setpgrp(0, 0); exec { $ARGV[0] } @ARGV or die "exec: $!"; }
     setpgrp($pid, $pid);    # from the parent too: the group must exist before the first kill
     $SIG{ALRM} = sub {
       kill "TERM", -$pid;
@@ -716,7 +717,7 @@ _why="$(push_branch 2>&1)" || fail "plan row $PICK_ID: gates green but the push 
   cat "$RUN_DIR/pr-body.md"
   printf '\n\n'
   cat "$RUN_DIR/pr-body-stages.md"
-  printf '\n\n## Gates (run by scripts/mac/build-tick.sh on %s, after the pipeline)\n\n- `node scripts/preflight.mjs` exit %s: %s\n- `pnpm run verify:breadth` exit %s: %s\n\nOpened by the unattended build tick (DR-061 rule 4). It never merges; a lane merges it, if at all, under DR-037 / DR-061 rule 1.\n' \
+  printf '\n\n## Gates (run by scripts/mac/build-tick.sh on %s, after the pipeline)\n\n- `node scripts/preflight.mjs` exit %s: %s\n- `pnpm run verify:breadth` exit %s: %s\n\nOpened by the unattended build tick (DR-050 placement; DR-060 delegation). It never merges; a lane merges it, if at all, under DR-037; owner-gated decision-path changes remain owner-gated.\n' \
     "$HEAD_SHA" "$PF" "$PF_LINE" "$BR" "$BR_LINE"
 } > "$RUN_DIR/pr-body-final.md"
 node scripts/mac/gh-pr.mjs open --head "$BRANCH" --title "$(head -1 "$RUN_DIR/pr-title.txt")" --body-file "$RUN_DIR/pr-body-final.md" >> "$RUN_LOG" 2>&1 \

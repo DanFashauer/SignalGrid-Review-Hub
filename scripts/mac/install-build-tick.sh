@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # SignalGrid — install (or remove) the Mac lane's BUILD tick as a launchd user
-# agent (DR-061, owner-directed 2026-09-29). ONE command, once, on the Mac that
+# agent (owner-directed 2026-09-29; reaffirmed 2026-10-21, DR-050 / DR-060). ONE command, once, on the Mac that
 # holds this clone:
 #
 #   bash scripts/mac/install-build-tick.sh            # install / update (every 3 h)

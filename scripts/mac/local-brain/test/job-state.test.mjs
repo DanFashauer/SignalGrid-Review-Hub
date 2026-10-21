@@ -210,3 +210,90 @@ test('completed and interrupted states refuse further mutations', () => {
   assert.throws(() => job.checkpoint({ type: 'build', details: 1 }, job.getVersion(), 'worker-a'), /Invalid transition/);
   assert.throws(() => job.claim('worker-a', job.getVersion()), /Invalid transition/);
 });
+
+const malformedVerificationDetails = [
+  { exitCode: 0, passed: 'not-a-number' },
+  { command: 'node --test', exitCode: 0, passed: '1' },
+  { command: 'node --test', exitCode: 0, passed: 1.5 },
+  { command: 'node --test', exitCode: 0, passed: Number.MAX_SAFE_INTEGER + 1 },
+  { command: 'node --test', exitCode: 0, passed: null },
+  { command: 'node --test', exitCode: 0, passed: 0 },
+  { command: 'node --test', exitCode: '0', passed: 1 },
+  { command: 'node --test', exitCode: 1, passed: 1 },
+  { command: '   ', exitCode: 0, passed: 1 },
+  { command: ['node --test'], exitCode: 0, passed: 1 },
+  null,
+  [],
+];
+
+test('restore rejects malformed verification evidence before it can complete a job', () => {
+  const job = make();
+  claim(job);
+  verify(job);
+  for (const details of malformedVerificationDetails) {
+    const saved = job.snapshot();
+    saved.checkpoints[0].details = details;
+    assert.throws(() => JobState.restore(saved), /Invalid saved verification checkpoint/,
+      `persisted verification must refuse ${JSON.stringify(details)}`);
+  }
+});
+
+test('complete revalidates command, strict exit code and positive safe integer count', () => {
+  for (const details of malformedVerificationDetails) {
+    const job = make();
+    claim(job);
+    verify(job);
+    // The class exposes its in-memory fields; completion must validate again even
+    // when a caller mutates evidence after checkpoint() originally accepted it.
+    job.checkpoints[0].details = details;
+    const before = job.snapshot();
+    assert.throws(() => job.complete(true, 3, 'worker-a'), /fresh successful verification/,
+      `completion must refuse ${JSON.stringify(details)}`);
+    assert.deepEqual(job.snapshot(), before);
+  }
+});
+
+test('restore refuses completed snapshots without fresh verification by the assigned worker', () => {
+  const job = make();
+  claim(job);
+  verify(job);
+  job.complete(true, job.getVersion(), 'worker-a');
+  const valid = job.snapshot();
+  const absent = { ...valid, checkpoints: [] };
+  const wrongOwner = structuredClone(valid);
+  wrongOwner.checkpoints[0].workerId = 'worker-b';
+  const notLatest = structuredClone(valid);
+  notLatest.checkpoints[0].type = 'build';
+  for (const saved of [absent, wrongOwner, notLatest]) {
+    assert.throws(() => JobState.restore(saved), /Completed saved state requires fresh successful verification/);
+  }
+  for (const details of malformedVerificationDetails) {
+    const saved = structuredClone(valid);
+    saved.checkpoints[0].details = details;
+    assert.throws(() => JobState.restore(saved), /Invalid saved verification checkpoint/);
+  }
+});
+
+test('valid restored verification completes without weakening stale-version checks', () => {
+  const job = make();
+  claim(job);
+  verify(job);
+  const restored = JobState.restore(job.snapshot());
+  assert.throws(() => restored.complete(true, 2, 'worker-a'), /Stale state version/);
+  assert.equal(restored.getVersion(), 3);
+  assert.equal(restored.complete(true, 3, 'worker-a').status, 'COMPLETED');
+  assert.equal(restored.getVersion(), 4);
+  assert.equal(job.status, 'ASSIGNED');
+});
+
+test('valid completed snapshots restore as terminal with the same evidence and version', () => {
+  const job = make();
+  claim(job);
+  verify(job);
+  job.complete(true, job.getVersion(), 'worker-a');
+  const saved = job.snapshot();
+  const restored = JobState.restore(saved);
+  assert.deepEqual(restored.snapshot(), saved);
+  assert.throws(() => restored.complete(true, 3, 'worker-a'), /Stale state version/);
+  assert.throws(() => restored.complete(true, 4, 'worker-a'), /Invalid transition/);
+});

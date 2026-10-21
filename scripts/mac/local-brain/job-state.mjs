@@ -23,6 +23,17 @@ function validVersion(value, label = 'State version') {
   return value;
 }
 
+function successfulVerification(details) {
+  return details !== null && typeof details === 'object' && !Array.isArray(details) &&
+    typeof details.command === 'string' && details.command.trim().length > 0 &&
+    details.exitCode === 0 && Number.isSafeInteger(details.passed) && details.passed > 0;
+}
+
+function freshVerification(checkpoint, workerId) {
+  return checkpoint?.type === 'verification' && checkpoint.workerId === workerId &&
+    successfulVerification(checkpoint.details);
+}
+
 function jsonCopy(value) {
   let serialized;
   try {
@@ -107,10 +118,7 @@ export class JobState {
       throw new TypeError('Checkpoint details are required');
     }
     if (type === 'verification') {
-      const details = data.details;
-      if (!details || typeof details !== 'object' || Array.isArray(details) ||
-          typeof details.command !== 'string' || !details.command.trim() ||
-          details.exitCode !== 0 || !Number.isSafeInteger(details.passed) || details.passed < 1) {
+      if (!successfulVerification(data.details)) {
         throw new Error('Verification requires a command, exitCode 0, and a positive passed count');
       }
     }
@@ -165,9 +173,7 @@ export class JobState {
       throw new Error('Cannot complete unverified work');
     }
     const evidence = this.checkpoints.at(-1);
-    if (!evidence || evidence.type !== 'verification' ||
-        evidence.workerId !== actingWorkerId ||
-        evidence.details.exitCode !== 0 || evidence.details.passed < 1) {
+    if (!freshVerification(evidence, actingWorkerId)) {
       throw new Error('Cannot complete unverified work: fresh successful verification checkpoint required');
     }
     this.status = 'COMPLETED';
@@ -214,9 +220,16 @@ export class JobState {
           !Object.hasOwn(entry, 'details')) {
         throw new Error(`Invalid saved checkpoint at index ${index}`);
       }
+      if (entry.type === 'verification' && !successfulVerification(entry.details)) {
+        throw new Error(`Invalid saved verification checkpoint at index ${index}`);
+      }
     }
     if (saved.stateVersion < saved.checkpoints.length + 1) {
       throw new Error('Saved state version is inconsistent with checkpoints');
+    }
+    if (saved.status === 'COMPLETED' &&
+        !freshVerification(saved.checkpoints.at(-1), saved.assignedWorkerId)) {
+      throw new Error('Completed saved state requires fresh successful verification by the assigned worker');
     }
     restored.status = saved.status;
     restored.stateVersion = saved.stateVersion;

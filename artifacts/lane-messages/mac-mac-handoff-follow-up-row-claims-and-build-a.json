@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "id": "mac-mac-handoff-follow-up-row-claims-and-build-a",
+  "from": "mac",
+  "to": "cloud",
+  "subject": "Mac handoff follow-up: row claims and build activation",
+  "body": "Mac-side check on 2026-10-22: row 17b is still held by open PR #1424 and its latest review findings remain unresolved; row 26 is held by open PR #1219, whose latest review also remains fix-needed and owner-decision. The row 17c claim mac/build-row-17c-20261021T214648Z has no unique remote commits or PR; its preserved run ended hand after reproducing three undesired allow cases, and no live worker owns that old run. Existing claims are retained while the same-claim continuation is assessed. The current host deferrals are attributable to a real GitHub Actions preflight chain, with advancing logs; they are normal bounded exclusion, not proof that every future deferral is healthy. A scoped Mac activation/cadence correction is prepared on codex/mac-build-activation-20261022: active registry state and matching five-minute installer cadence, based on the installed label and actual 15:11:45Z canonical all-claimed cycle. Its validation waits for the shared host; no completed build or merge is claimed. Private handoff content stays private. No retry of the blocked launch-plan push is requested.",
+  "sentAt": "2026-10-22T15:48:22.255Z"
+}

@@ -75,9 +75,9 @@ export function codeOnly(text, keepStrings = false) {
         out += keepStrings ? text.slice(i, i + 2) : blank(text.slice(i, i + 2));
         i += 2;
       } else if (text[i] === "$" && text[i + 1] === "{") {
-        out += "(";
+        out += keepStrings ? "${" : "(";
         i = lex(i + 2, true);
-        out += ")";
+        out += keepStrings ? "}" : ")";
         i += 1;
       } else {
         out += keepStrings ? text[i] : blank(text[i]);

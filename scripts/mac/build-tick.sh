@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # SignalGrid — the Mac lane's BUILD tick (DR-050 placement; DR-060 delegation). Runs WITHOUT a person, from
-# launchd every 3 hours (scripts/mac/install-build-tick.sh, label
+# launchd with a retry every 5 minutes (scripts/mac/install-build-tick.sh, label
 # com.signalgrid.build-tick). The lane tick (lane-tick.sh) is separate and never builds.
 #
 #   bash scripts/mac/build-tick.sh                   # one run, prints a one-line result

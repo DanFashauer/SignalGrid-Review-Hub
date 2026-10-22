@@ -89,6 +89,7 @@ import { tmpdir } from "node:os";
 import { execFileSync, spawnSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scratchGitOk, scratchGitEnv } from "./lib/scratch-git.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SCAN_ROOT = "lib/integrations/src/integrations";
@@ -675,16 +676,17 @@ function selfTest() {
         const tmp = mkdtempSync(join(tmpdir(), "ungated-fetch-e2e-"));
         try {
           for (const root of [SCAN_ROOT, UTIL_ROOT]) cpSync(resolve(repoRoot, root), join(tmp, root), { recursive: true });
-          mkdirSync(join(tmp, "scripts"), { recursive: true });
+          mkdirSync(join(tmp, "scripts", "lib"), { recursive: true });
           cpSync(fileURLToPath(import.meta.url), join(tmp, "scripts", "check-ungated-fetch.mjs"));
+          cpSync(resolve(repoRoot, "scripts/lib/scratch-git.mjs"), join(tmp, "scripts", "lib", "scratch-git.mjs"), { recursive: true });
           // An EXTRA family directory, so the six-family floor still holds and the unreadable
           // report is the only thing that can fail the run (replacing a real family's
           // resolve.ts would also trip that floor and hide a dropped exit).
           const fam = plant ? "zz-planted" : null;
           if (plant) mkdirSync(join(tmp, SCAN_ROOT, fam, "resolve.ts"), { recursive: true });
-          execFileSync("git", ["init", "-q"], { cwd: tmp });
-          execFileSync("git", ["add", "-A"], { cwd: tmp });
-          const r = spawnSync(process.execPath, ["scripts/check-ungated-fetch.mjs"], { cwd: tmp, encoding: "utf8" });
+          scratchGitOk(tmp, ["init", "-q"]);
+          scratchGitOk(tmp, ["add", "-A"]);
+          const r = spawnSync(process.execPath, ["scripts/check-ungated-fetch.mjs"], { cwd: tmp, encoding: "utf8", env: scratchGitEnv() });
           return { status: r.status, text: `${r.stdout}${r.stderr}`, fam };
         } finally { rmSync(tmp, { recursive: true, force: true }); }
       };

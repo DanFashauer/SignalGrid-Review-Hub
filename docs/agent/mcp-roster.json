@@ -189,6 +189,12 @@
           "server": "github",
           "why": "names the `.github/workflows/raised-hands.yml` page and GitHub's own 60-day scheduled-workflow disable behavior, not a call to the github MCP server"
         }
+      ],
+      "backlog-landing": [
+        {
+          "server": "github",
+          "why": "names GitHub as the platform the queue tool reads (the REST API with GH_TOKEN, `gh api` reads, the `.github/workflows/raised-hands.yml` path) — none instructs a call to the github MCP server; the skill's one write, the per-PR comment, is described as a REST call"
+        }
       ]
     }
   },

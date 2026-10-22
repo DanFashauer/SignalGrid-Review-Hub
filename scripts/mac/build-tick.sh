@@ -106,7 +106,15 @@
 #      lockfile guard for tick PRs: the repo's local pre-push hook is deliberately not run here,
 #      because a session can edit hooks.
 #      Anything else raises a hand and leaves the claim in place for a person.
-#   EVERY exit of a real run but six named at finish() heartbeats artifacts/agent-heartbeats/mac-build-tick.json (M1).
+#   EVERY exit of a real run but six named at finish() heartbeats artifacts/agent-heartbeats/mac-build-tick.json (M1, subject to the
+#   throttle at bt_heartbeat); a signal or a shell error heartbeats `failed` from the EXIT trap; and a capped step (the refresh, the
+#   pipeline, preflight, breadth) heartbeats `working` every HB_PULSE_SECONDS while it runs, so a long session run does not look dead.
+#   NAMED CEILINGS of the heartbeat, here on purpose:
+#     - a run that cannot enter REPO_ROOT (`cannot enter`) cannot heartbeat: lane-deliver lives there. It exits 1 and says so; the
+#       staleness the row's tolerance reports is the evidence;
+#     - the trap's heartbeat is best effort: launchd may SIGKILL a run it asked to stop, and then nothing is written;
+#     - an UNCAPPED step that hangs (pnpm install, npm install, a clone or a fetch) is silent for as long as it hangs: that silence is the
+#       signal (the lock's HUNG_SECONDS names it), not a gap in the heartbeats.
 #
 # Stock macOS bash 3.2: guarded array expansion, here-strings, no mapfile, no ${var,,}.
 # =============================================================================
@@ -211,19 +219,29 @@ raise_hand() {
       fi ;;
   esac
 }
-fail() { say "result: failed: $1"; raise_hand "$1"; finish failed "${BT_FAIL_HB:-a hand was raised for the Mac lane (see artifacts/raised-hands)}" 1; }
+fail() { say "result: failed: $1"; raise_hand "$1"; finish failed "${BT_FAIL_HB:-the run failed (a hand was raised, queued or already raised today; see artifacts/raised-hands)}" 1; }
 
 # ── the heartbeat, on every exit of a real run (M1) ──────────────────────────
 # A loaded job that never fires, or fires and dies before a hand, used to leave nothing (the row had heartbeatPath null).
 # Every exit below goes through finish, which heartbeats artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver
 # (--no-wake: a staleness record, never mail). Six exits do not, by design: the non-Mac refusal, the three usage refusals,
 # a cache directory that cannot be made (unreachable under launchd: the launcher's own mktemp there fails first) and the
-# dry-run's end. The text is a fixed vocabulary (no pid, sha, stamp, path or log name) so a repeat can be held: at most one an
-# hour unless the run acted, and a CHANGED result may go once the last delivery is HB_CHANGED_SECONDS old. A delivery that fails
-# never fails the run.
+# dry-run's end. A signal or a shell error (set -u) ends a run WITHOUT reaching finish: the EXIT trap (bt_on_exit) heartbeats
+# `failed` for that, best effort. The text is a fixed vocabulary (no pid, sha, stamp, path or log name) so a repeat can be
+# held: at most one an hour for a repeated result, one every HB_CHANGED_SECONDS when the result changes, and
+# every run that acted. A delivery that fails never fails the run.
+# A model session can run for hours and the row's tolerance is 3 hours, so a heartbeat written only at exit would make a long
+# run look dead. Every capped step (the PR refresh, the staged pipeline, preflight, breadth) therefore runs under bt_pulse_run,
+# which heartbeats `working: <what>` every HB_PULSE_SECONDS while the step runs, and each stretch opens with an unthrottled
+# `working` heartbeat (the session start, the pipeline start, the gates start). build-tick-stages.mjs derives the longest silent
+# window from these constants and the stage caps and fails if it can reach the tolerance.
 HB_QUIET_SECONDS=3600
 HB_CHANGED_SECONDS=900
+HB_PULSE_SECONDS=2700
+HB_POLL_SECONDS=10
 SESSION_RUN=0
+BT_FINISHED=0
+LOCK_HELD=0
 ADMIT_GAP_SECONDS=10800
 LAST_ADMITTED="$CACHE/last-admitted-epoch"
 
@@ -237,15 +255,20 @@ bt_now() {
   esac
 }
 
-# One heartbeat per exit, through lane-deliver, never more than one an hour unless the run acted (a CHANGED result may go early once
-# the last delivery is 15 min old). $1 the text ("<class>: <fixed words>"), $2 the class. Never fails the run.
+# One heartbeat per exit, through lane-deliver. Held: a repeat of the last delivered text inside an hour, and a CHANGED text inside
+# HB_CHANGED_SECONDS (15 min) of the last delivery. Never held: a run that ACTED, a `working` pulse (bt_pulse_run paces it), and the
+# result that follows a `working` heartbeat (so the file never keeps saying `working` after the run is over). $1 the text
+# ("<class>: <fixed words>"), $2 the class. Never fails the run.
 bt_heartbeat() {
   if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $1"; return 0; fi
   _hn="$(bt_now)"
   _hl="$(cat "$CACHE/heartbeat-last" 2>/dev/null)"
   _hr="$(cat "$CACHE/heartbeat-last-result" 2>/dev/null)"
   case "$_hl" in ''|*[!0-9]*|0[0-9]*) _hl="" ;; esac   # a leading zero would be octal in $(( )): unreadable
-  if [ "$2" != "acted" ] && [ -n "$_hl" ] && [ "$_hl" -le "$_hn" ]; then
+  _hp=0
+  case "$2" in acted|working) _hp=1 ;; esac
+  case "$_hr" in working:*) _hp=1 ;; esac
+  if [ "$_hp" = "0" ] && [ -n "$_hl" ] && [ "$_hl" -le "$_hn" ]; then
     _ha=$((_hn - _hl))
     if [ "$_ha" -lt "$HB_QUIET_SECONDS" ] && { [ "$1" = "$_hr" ] || [ "$_ha" -lt "$HB_CHANGED_SECONDS" ]; }; then
       say "heartbeat held ($((_ha / 60)) min since the last one): $1"
@@ -266,6 +289,7 @@ bt_heartbeat() {
 # $2 fixed text (no pid, sha, stamp or path), $3 exit code. A run that started a model session records its outcome as the session
 # stamp the gap is measured from. The host verification lock is released BEFORE the push: a slow delivery must not hold the host.
 finish() {
+  BT_FINISHED=1
   if [ "${SESSION_RUN:-0}" = "1" ] && [ "$DRY" = "0" ]; then
     printf '%s %s' "$(bt_now)" "$1" > "$LAST_ADMITTED" 2>/dev/null || true
   fi
@@ -290,11 +314,55 @@ session_gap_left() {
   _gr=$((_ge + ADMIT_GAP_SECONDS - _gn))
   if [ "$_gr" -gt 0 ]; then echo "$_gr"; else echo 0; fi
 }
-# Stamps the start of a model session; finish() rewrites it with the outcome. Called once, just before triage.
+# Stamps the start of a model session; finish() rewrites it with the outcome. Called once, just before triage. The stamp comes first; then an
+# unthrottled `working` heartbeat opens the stretch (a session run lasts hours: see bt_pulse_run).
 bt_session_start() {
   SESSION_RUN=1
   printf '%s running' "$(bt_now)" > "$LAST_ADMITTED" 2>/dev/null || true
+  bt_heartbeat "working: a model session is starting" working
 }
+
+# F1. Runs the command "$@" in the background and heartbeats `working: $1` every HB_PULSE_SECONDS of wall clock while it runs; returns the
+# command's own exit status. $1 is a fixed label. The dry-run runs the command inline. The command's redirections live INSIDE the step
+# function, so a heartbeat's own output is not swallowed by them. The poll starts at 1 s and doubles to HB_POLL_SECONDS, so a step that ends
+# at once (a refresh with nothing to do) costs a second, not a poll period. A clock that moved back restarts the interval.
+bt_pulse_run() {
+  _bpl="$1"; shift
+  if [ "$DRY" = "1" ]; then "$@"; return $?; fi
+  "$@" &
+  _bpj=$!
+  _bpt="$(bt_now)"
+  _bps=1
+  while kill -0 "$_bpj" 2>/dev/null; do
+    sleep "$_bps"
+    _bps=$((_bps * 2)); if [ "$_bps" -gt "$HB_POLL_SECONDS" ]; then _bps="$HB_POLL_SECONDS"; fi
+    _bpn="$(bt_now)"
+    if [ "$_bpn" -lt "$_bpt" ]; then _bpt="$_bpn"; fi
+    if [ $((_bpn - _bpt)) -ge "$HB_PULSE_SECONDS" ]; then
+      bt_heartbeat "working: $_bpl" working
+      _bpt="$(bt_now)"
+    fi
+  done
+  wait "$_bpj"
+}
+
+# The one EXIT trap, installed below (before step 0, so a signal during the network reads is covered). The build lock is released only by the run
+# that took it (LOCK_HELD, set where the pid is written): a run that skipped because another tick holds it must not remove the holder's pid. A real
+# run that ends WITHOUT reaching finish (a signal, or a shell error under set -u) heartbeats `failed` here; finish() sets BT_FINISHED first, so a
+# normal exit heartbeats once. Best effort: launchd may SIGKILL a run that was asked to stop, and then nothing is written.
+bt_on_exit() {
+  if [ "$LOCK_HELD" = "1" ]; then
+    if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi
+    rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"
+    rmdir "$LOCK" 2>/dev/null
+  fi
+  if [ "$DRY" = "0" ] && [ "$BT_FINISHED" != "1" ]; then
+    BT_FINISHED=1
+    bt_heartbeat "failed: the run ended without a result (a signal or a shell error)" failed
+  fi
+  return 0
+}
+trap bt_on_exit EXIT
 
 # L3. $1 is a directory holding the PINNED package.json; returns 1 (printing why) unless pnpm, run there on this PATH, is the pin.
 pnpm_pin_check() {
@@ -512,7 +580,7 @@ gate_green() {
 # outcome) is a PAUSE, not only a hand: a hand keeps the claim and the next tick takes a NEW row, so a broken helper
 # would burn the backlog one row per admitted run. Same rule as a broken session (1a). $1 why, $2 what is true of the claim.
 pause_tick() {
-  BT_FAIL_HB="the tick paused itself and raised a hand"
+  BT_FAIL_HB="the tick paused itself (a hand was raised, queued or already raised today)"
   printf 'the build tick paused itself on %s: %s; log %s\n' "$STAMP" "$1" "${RUN_LOG:-none}" > "$PAUSED"
   fail "$1. The build tick is PAUSED (${2:-claim status unknown}): fix the cause, then delete $PAUSED"
 }
@@ -539,7 +607,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   mkdir "$LOCK" 2>/dev/null || { say "result: skipped: could not take $LOCK"; finish skipped "could not take the build lock" 0; }
 fi
 printf '%s' "$$" > "$LOCK/pid"
-trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"; rmdir "$LOCK" 2>/dev/null' EXIT
+LOCK_HELD=1
 # The empty hooks directory every sgit call points core.hooksPath at, recreated empty each run before any session exists.
 rm -rf "${CACHE:?}/no-hooks"
 mkdir -p "$NOHOOKS" || { echo "cannot create $NOHOOKS" >&2; finish failed "cannot create the empty hooks directory" 1; }
@@ -587,6 +655,18 @@ capped() {
     alarm $cap;
     waitpid($pid, 0);
     exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' "$_cap" "$@"
+}
+
+# The capped steps, each a function so bt_pulse_run can run it in the background and heartbeat while it runs (F1). The redirections live here.
+# pipeline_step is defined beside stages(), below.
+refresh_step() {
+  capped "$REFRESH_SECONDS" env SG_REPO_ROOT="$REPO_ROOT" SG_MAINLINE_SHA="$MAINLINE_SHA" node "$_rd/pr-refresh.mjs" --max 1 >> "$CACHE/pr-refresh.log" 2>&1 < /dev/null
+}
+preflight_step() {
+  capped "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1 < /dev/null
+}
+breadth_step() {
+  capped "$BREADTH_SECONDS" pnpm run verify:breadth > "$RUN_DIR/breadth.log" 2>&1 < /dev/null
 }
 
 # ── 1c. the session gap (M4) ─────────────────────────────────────────────────
@@ -673,7 +753,7 @@ elif git cat-file -e "$MAINLINE_SHA:scripts/mac/pr-refresh.mjs" 2>/dev/null; the
     # and breadth have none, and a hung refresh would hold the lock and starve every later tick.
     # The cap kills the process GROUP (capped above), so pr-refresh's re-exec'd child and the gates
     # it spawned die with the launcher.
-    capped "$REFRESH_SECONDS" env SG_REPO_ROOT="$REPO_ROOT" SG_MAINLINE_SHA="$MAINLINE_SHA" node "$_rd/pr-refresh.mjs" --max 1 >> "$CACHE/pr-refresh.log" 2>&1 < /dev/null
+    bt_pulse_run "the PR refresh is running" refresh_step
     _rc=$?
     say "pr-refresh exited $_rc (142 = the ${REFRESH_SECONDS}s cap; log $CACHE/pr-refresh.log)"
   else
@@ -852,6 +932,9 @@ stages() {
   node scripts/mac/build-tick-stages.mjs "$_sub" --row "$PICK_ID" --title "$PICK_TITLE" --branch "$BRANCH" \
     --run-dir "$RUN_DIR" --cache "$CACHE" --today "$TODAY" --stamp "$STAMP" --base "$MAINLINE_SHA" "$@"
 }
+pipeline_step() {
+  stages run --path "$_verb" --kind "${_rest:-none}" >> "$RUN_LOG" 2>&1 < /dev/null
+}
 claim() {
   # Triage can run as long as its stage-table cap. If the cloud lane or a person claimed this row meanwhile, skip it.
   load_inflight
@@ -886,7 +969,8 @@ esac
 # a second review. Each stage logs its tier, turns, cost and exit into the run log; the
 # verdict is $RUN_DIR/outcome.json (land | hand | pause).
 say "pipeline starting: path $_verb${_rest:+ ($_rest)}"
-stages run --path "$_verb" --kind "${_rest:-none}" >> "$RUN_LOG" 2>&1 < /dev/null
+bt_heartbeat "working: the staged pipeline is starting" working
+bt_pulse_run "the staged pipeline is running" pipeline_step
 [ -s "$RUN_DIR/outcome.json" ] || pause_tick "plan row $PICK_ID: the pipeline wrote no $RUN_DIR/outcome.json" "claim $BRANCH stays until a person deletes it"
 _oc="$(node -e 'const o = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
   process.stdout.write(`${o.outcome}\t${String(o.reason ?? "").replace(/\s+/g, " ")}`);' "$RUN_DIR/outcome.json" 2>&1)" \
@@ -940,12 +1024,13 @@ if [ "$CLASS" = "OWNER_RESERVED" ]; then
   fail "plan row $PICK_ID: the change touches owner-reserved paths the build tick may not land ($CLASS). Nothing pushed past the claim; the commit $HEAD_SHA stays on the local branch $BRANCH"
 fi
 say "committed $HEAD_SHA ($CLASS); preflight then breadth"
-capped "$PREFLIGHT_SECONDS" node scripts/preflight.mjs > "$RUN_DIR/preflight.log" 2>&1 < /dev/null
+bt_heartbeat "working: the gates are starting" working
+bt_pulse_run "preflight is running" preflight_step
 PF=$?
 printf '\nPREFLIGHT_EXIT %s %s\n' "$PF" "$(sgit rev-parse HEAD 2>/dev/null)" >> "$RUN_DIR/preflight.log"
 BR=1
 if [ "$PF" = "0" ]; then
-  capped "$BREADTH_SECONDS" pnpm run verify:breadth > "$RUN_DIR/breadth.log" 2>&1 < /dev/null
+  bt_pulse_run "breadth is running" breadth_step
   BR=$?
   printf '\nBREADTH_EXIT %s %s\n' "$BR" "$(sgit rev-parse HEAD 2>/dev/null)" >> "$RUN_DIR/breadth.log"
 fi

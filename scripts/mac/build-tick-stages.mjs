@@ -1448,9 +1448,10 @@ process.stdout.write(JSON.stringify(result)); process.stderr.write(r.stderr || '
     ok("nit: the dry-run only says it would run the refresh when mainline's pinned sha has pr-refresh.mjs (the cat-file test comes first)",
       /if \[ -n "\$MAINLINE_SHA" \] && git cat-file -e "\$MAINLINE_SHA:scripts\/mac\/pr-refresh\.mjs"[^\n]*; then\n\s*say "dry-run: would run mainline's/.test(sh));
     ok("S4 preflight and breadth run under capped (a group kill), and no bare `alarm shift` + exec launcher is left anywhere",
-      /^capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs > /m.test(sh) && /^\s*capped "\$BREADTH_SECONDS" pnpm run verify:breadth > /m.test(sh) && !/alarm shift/.test(sh));
-    ok("S4 the EXIT trap that releases the lock also removes the extracted classifier (one trap: a second would replace the first)",
-      (sh.match(/^trap /gm) ?? []).length === 1 && /^trap '[^\n]*"\$CLASSIFIER"[^\n]*rmdir "\$LOCK"[^\n]*' EXIT$/m.test(sh));
+      /^\s*capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs > /m.test(sh) && /^\s*capped "\$BREADTH_SECONDS" pnpm run verify:breadth > /m.test(sh) && !/alarm shift/.test(sh));
+    const onExit = /^bt_on_exit\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0] ?? "";
+    ok("S4 the EXIT trap (bt_on_exit) that releases the lock also removes the extracted classifier (one trap: a second would replace the first)",
+      (sh.match(/^trap /gm) ?? []).length === 1 && /^trap bt_on_exit EXIT$/m.test(sh) && /rm -f "\$LOCK\/pid"[^\n]*"\$CLASSIFIER"/.test(onExit) && /rmdir "\$LOCK"/.test(onExit));
     const classifyFn = /^classify_change\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0];
     ok("S4 build-tick.sh classifies from mainline's copy extracted by git show into $CLASSIFIER and never imports a worktree path",
       !!classifyFn && /git -C "\$REPO_ROOT" show "\$MAINLINE_SHA:scripts\/check-owner-gated-surfaces\.mjs" > "\$CLASSIFIER"/.test(classifyFn)
@@ -1763,7 +1764,7 @@ defer_host_verification`);
     ok("host verification: both ticks use the same host path before heavy work and preserve their own lock cleanup",
       sh.includes('$HOME/Library/Caches/signalgrid/host-verification.lock') && lane.includes('$HOME/Library/Caches/signalgrid/host-verification.lock')
       && sh.indexOf('if ! sg_host_verify_acquire') < sh.indexOf('# ── 1b. refresh') && lane.indexOf('if ! sg_host_verify_acquire') < lane.indexOf('LOCK_SHA=')
-      && /trap '[^\n]*sg_host_verify_release[^\n]*\$LOCK\/pid/.test(sh) && /trap '[^\n]*sg_host_verify_release[^\n]*\$TICK_LOCK\/pid/.test(lane));
+      && /sg_host_verify_release[\s\S]*\$LOCK\/pid/.test(/^bt_on_exit\(\) \{[\s\S]*?^\}/m.exec(sh)?.[0] ?? "") && /trap '[^\n]*sg_host_verify_release[^\n]*\$TICK_LOCK\/pid/.test(lane));
   });
 
   // ── B-1(a): no git command in the script names the shared remote-tracking ref ──
@@ -2345,7 +2346,7 @@ export function followupTests(root, ok, sh) {
     for (const name of ["capped", "finish"]) { const f = shFn(t, name); if (f) t = t.replace(f, ""); }
     const exempt = [];
     for (const [label, re] of SIX_EXITS) { const n = (t.match(re) ?? []).length; exempt.push([label, n]); t = t.replace(re, "$1<one of the six>"); }
-    const stray = [...t.matchAll(/(?:^|[;&|{(]|\bthen\b|\belse\b|\bdo\b)[ \t]*exit\b[^\n]*/gm)].map((m) => m[0].trim());
+    const stray = [...t.matchAll(/(?:^|[;&|{()]|\bthen\b|\belse\b|\bdo\b)[ \t]*exit\b[^\n]*/gm)].map((m) => m[0].trim());
     return { programs, exempt, stray, hasFinish: !!shFn(text, "finish") };
   };
   const audit = exitAudit(sh);
@@ -2355,6 +2356,9 @@ export function followupTests(root, ok, sh) {
   const mutant = sh.replace('say "result: nothing buildable (the state ranks no task)"', (m) => `${m}\n  exit 0`);
   const mutantAudit = exitAudit(mutant);
   ok("M1 MUTANT: a bare `exit 0` inserted after `result: nothing buildable (the state ranks no task)` is caught by the same audit", mutant !== sh && mutantAudit.stray.length >= 1, mutantAudit.stray.join(" | "));
+  const mutantArm = sh.replace("  marker|build) claim ;;", (m) => `${m}\n  nope) exit 0 ;;`);
+  const mutantArmAudit = exitAudit(mutantArm);
+  ok("M1 MUTANT: a bare `exit 0` as a case arm (`  nope) exit 0 ;;`) is caught by the same audit (its anchors used to miss an exit straight after a pattern's `)`)", mutantArm !== sh && mutantArmAudit.stray.length >= 1, mutantArmAudit.stray.join(" | "));
   const finishCalls = [...code.matchAll(/\bfinish ([a-z]+) "([^"\n]*)" (\d)/g)].map((m) => ({ cls: m[1], text: m[2], rc: m[3] }));
   const forbidden = ["STAMP", "MAINLINE_SHA", "HEAD_SHA", "_holder", "RUN_LOG", "BRANCH", "LOCK", "CACHE"];
   const leaks = finishCalls.filter((c) => forbidden.some((v) => new RegExp(`\\$\\{?${v}\\b`).test(c.text)));
@@ -2782,7 +2786,223 @@ process.exit(1);\n`);
         && doc.includes("a reinstall refuses to drop wiring the installed plist has unless `--force`") && !doc.includes("agent-heartbeats/mac-build-tick") && doc.includes("PR #1353, not on mainline yet"));
   });
 
-  // ── FOLLOWUP-NEXT-CHUNK ──
+  // ── round 2 of the follow-up (review r1: F1 the heartbeat while a capped step runs, F2 the exit trap, F7 the cooldown on Linux) ──
+  // F1. A model session can run for hours and the row's tolerance is 3 h, so the heartbeat cannot be written only at exit. Every capped step runs
+  // under bt_pulse_run, which heartbeats `working: <what>` every HB_PULSE_SECONDS while the step runs; the longest silent window is then a pulse plus
+  // the delivery's own time, not a step's cap. The windows are DERIVED here from the shell's own constants (the way N-2 derives the stage caps) and the
+  // registry's tolerance; a mutant that leaves the pipeline unpulsed (a 4-hour window) or stretches the pulse must fail the same derivation.
+  guard2(ok, "F1 the longest silent window", () => {
+    const consts = sh.split("\n").filter((l) => /^(PREFLIGHT|BREADTH|REFRESH|TRIAGE|BUILD|FIX|REVIEW|STAGES|HUNG)_SECONDS=/.test(l)).join("\n");
+    const r = bash(`${consts}\necho "$PREFLIGHT_SECONDS $BREADTH_SECONDS $REFRESH_SECONDS $TRIAGE_SECONDS $STAGES_SECONDS"`);
+    const [preflight, breadth, refresh, triage, stagesAll] = r.stdout.trim().split(" ").map(Number);
+    const reg = JSON.parse(readFileSync(join(HERE, "../../docs/agent/scheduled-routines.json"), "utf8")).routines.find((x) => x.id === "mac-build-tick") ?? {};
+    const tolerance = (reg.cadenceToleranceHours ?? 0) * 3600;
+    const cadence = Number(/^INTERVAL_SECONDS=(\d+)$/m.exec(readFileSync(join(HERE, "install-build-tick.sh"), "utf8"))?.[1]);
+    const SLACK = 600; // one delivery's own time (fetch, gate, push) and a late poll
+    const windows = (text) => {
+      const num = (n) => Number(new RegExp(`^${n}=(\\d+)$`, "m").exec(text)?.[1]);
+      const pulse = num("HB_PULSE_SECONDS"), poll = num("HB_POLL_SECONDS"), quiet = num("HB_QUIET_SECONDS");
+      const pulsed = (fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" ${fn}\\b`, "m").test(nonComment(text));
+      const inside = (cap, fn) => (pulsed(fn) ? pulse + poll + SLACK : cap + SLACK);
+      return [
+        // the refresh is the first long step of an admitted run: the delivery before it can be one throttle period and one launchd interval old
+        ["the PR refresh", quiet + cadence + inside(refresh, "refresh_step")],
+        ["triage (after the session-start heartbeat)", inside(triage + 60, "triage_step")],
+        ["the pipeline (after its own start heartbeat)", inside(stagesAll - triage, "pipeline_step")],
+        ["preflight (after the gates-start heartbeat)", inside(preflight, "preflight_step")],
+        ["breadth", inside(breadth, "breadth_step")],
+      ];
+    };
+    const worst = (text) => windows(text).reduce((a, b) => (b[1] > a[1] ? b : a));
+    const w = worst(sh);
+    ok("F1 the longest silent window between two heartbeats, derived from the stage caps, HB_PULSE_SECONDS and the launchd interval, is under the row's 3-hour tolerance",
+      tolerance === 10800 && Number.isFinite(w[1]) && w[1] < tolerance, `${w[0]}: ${w[1]} s of ${tolerance} s`);
+    const unpulsed = sh.replace(/bt_pulse_run "[^"\n]+" pipeline_step/, "pipeline_step");
+    ok("F1 MUTANT: the pipeline run without bt_pulse_run leaves a window past the tolerance (build 2 h + review + fix 1 h + review = 4 h), and the same derivation catches it",
+      unpulsed !== sh && worst(unpulsed)[1] >= tolerance, `${worst(unpulsed)[0]}: ${worst(unpulsed)[1]} s`);
+    const slow = sh.replace(/^HB_PULSE_SECONDS=\d+$/m, "HB_PULSE_SECONDS=9000");
+    ok("F1 MUTANT: a pulse interval of 9000 s leaves a window past the tolerance, and the same derivation catches it", slow !== sh && worst(slow)[1] >= tolerance, `${worst(slow)[0]}: ${worst(slow)[1]} s`);
+    const bare = [...code.replace(shFn(code, "capped") ?? "", "").matchAll(/\bcapped "\$[A-Z_]+"/g)].length;
+    ok("F1 every `capped` call and the pipeline's `stages run` sits inside its own step function (refresh_step, preflight_step, breadth_step, pipeline_step), and each step is called through bt_pulse_run",
+      bare === 3 && (code.match(/\bstages run\b/g) ?? []).length === 1
+        && /^refresh_step\(\) \{\n[^}]*capped "\$REFRESH_SECONDS" env [^}]*pr-refresh\.mjs/m.test(code) && /^preflight_step\(\) \{\n[^}]*capped "\$PREFLIGHT_SECONDS" node scripts\/preflight\.mjs/m.test(code)
+        && /^breadth_step\(\) \{\n[^}]*capped "\$BREADTH_SECONDS" pnpm run verify:breadth/m.test(code) && /^pipeline_step\(\) \{\n[^}]*stages run /m.test(code)
+        && ["refresh_step", "pipeline_step", "preflight_step", "breadth_step"].every((fn) => new RegExp(`^\\s*bt_pulse_run "[^"\\n]+" ${fn}\\b`, "m").test(code)), `bare capped: ${bare}`);
+    const at = (t) => code.indexOf(t);
+    ok("F1 an unthrottled `working` heartbeat opens each stretch: in bt_session_start (before triage), after the claim (before the pipeline) and before the gates; each class is `working`, and none carries a pid, sha, stamp or path",
+      /bt_heartbeat "working: [^"$]+" working/.test(shFn(sh, "bt_session_start") ?? "")
+        && at('bt_heartbeat "working: the staged pipeline is starting" working') > at("marker|build) claim ;;") && at('bt_heartbeat "working: the staged pipeline is starting" working') < at('bt_pulse_run "the staged pipeline is running" pipeline_step')
+        && at('bt_heartbeat "working: the gates are starting" working') > at('say "committed $HEAD_SHA') && at('bt_heartbeat "working: the gates are starting" working') < at('bt_pulse_run "preflight is running" preflight_step')
+        && (code.match(/bt_heartbeat "working: [^"$]+" working/g) ?? []).length === 3 && !/bt_heartbeat "working: [^"]*\$[^"]*" working/.test(code.replace(/^bt_pulse_run\(\) \{[\s\S]*?^\}/m, ""))
+        && (code.match(/^\s*bt_pulse_run "[^"$\n]+" [a-z_]+_step$/gm) ?? []).length === 4);
+  });
+
+  guard2(ok, "F1 bt_pulse_run and the working class", () => {
+    const pre = `DRY=0 STAMP=fixture RUN_LOG=''
+HB_PULSE_SECONDS=2; HB_POLL_SECONDS=1
+${fns("say", "bt_now", "bt_pulse_run")}
+bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
+`;
+    const quick = bash(`${pre}quick() { return 7; }\nbt_pulse_run "a quick step" quick; echo "rc=$?"`);
+    ok("F1 bt_pulse_run returns the step's own exit status (7), and a step that ends before the first pulse heartbeats nothing", /rc=7/.test(quick.stdout) && !/HB\[/.test(quick.stdout), `${quick.stdout} ${quick.stderr}`);
+    const slow = bash(`${pre}slow() { sleep 5; return 3; }\nbt_pulse_run "a slow step" slow; echo "rc=$?"`);
+    const pulses = (slow.stdout.match(/HB\[working: a slow step\|working\]/g) ?? []).length;
+    ok("F1 ...a step that runs 5 s under a 2 s pulse heartbeats `working: <label>` (class working) at least twice and still returns its own status (3)", pulses >= 2 && /rc=3/.test(slow.stdout), `${slow.stdout} ${slow.stderr}`);
+    const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\nHB_PULSE_SECONDS=1; HB_POLL_SECONDS=1\n${fns("say", "bt_now", "bt_pulse_run")}\nbt_heartbeat() { printf 'HB\\n'; }\nslow() { sleep 2; return 0; }\nbt_pulse_run "x" slow; echo "rc=$?"`);
+    ok("F1 ...the dry-run runs the step inline and never heartbeats", /rc=0/.test(dry.stdout) && !/HB/.test(dry.stdout), dry.stdout);
+
+    const dir = join(root, "fu-f1"), repo = join(dir, "repo"), cache = join(dir, "cache"), ldlog = join(dir, "ld.log");
+    mkdirSync(join(repo, "scripts"), { recursive: true }); mkdirSync(cache, { recursive: true });
+    writeFileSync(join(repo, "scripts/lane-deliver.mjs"), `import { appendFileSync } from "node:fs";\nappendFileSync(process.env.SG_LD_LOG, process.argv.slice(2).join(" | ") + "\\n");\n`);
+    writeFileSync(ldlog, "");
+    const hbPre = `DRY=0 STAMP=fixture CACHE=${q(cache)} REPO_ROOT=${q(repo)} RUN_LOG=''
+${vars("HB_QUIET_SECONDS", "HB_CHANGED_SECONDS")}
+${fns("say", "bt_now", "bt_heartbeat")}
+`;
+    const T0 = 1761170000, lines = () => readFileSync(ldlog, "utf8").split("\n").filter(Boolean);
+    const hb = (clock, text) => bash(`${hbPre}bt_heartbeat ${q(text)} ${q(text.split(":")[0])}`, { SG_NOW: String(clock), SG_LD_LOG: ldlog });
+    hb(T0, "working: the staged pipeline is running"); hb(T0 + 5, "working: the staged pipeline is running");
+    ok("F1 a `working` heartbeat is never held by the throttle (the pulse interval paces it): the same text 5 s apart is delivered twice", lines().length === 2, lines().join(" / "));
+    hb(T0 + 10, "failed: the run failed");
+    ok("F1 ...and the result that follows a `working` heartbeat is delivered at once, so the file never keeps saying `working` after the run is over", lines().length === 3 && /failed: the run failed/.test(lines()[2]), lines().join(" / "));
+    hb(T0 + 20, "failed: the run failed");
+    ok("F1 ...while an ordinary repeat of that result is held as before", lines().length === 3, lines().join(" / "));
+  });
+
+  // F2. The exit trap: the build lock is released only by the run that holds it, and a run that ends without reaching finish (a signal, a `set -u`
+  // abort) heartbeats `failed` from the same trap. The trap is installed before step 0, so a signal there is covered too.
+  guard2(ok, "F2 bt_on_exit", () => {
+    const dir = join(root, "fu-f2"), lock = join(dir, "lock"), cache = join(dir, "cache");
+    mkdirSync(cache, { recursive: true });
+    const pre = `STAMP=fixture RUN_LOG=''
+LOCK=${q(lock)}; CLASSIFIER=${q(join(dir, "classifier.mjs"))}
+${fns("bt_on_exit")}
+bt_heartbeat() { printf 'HB[%s|%s]\\n' "$1" "$2"; }
+`;
+    const withLock = () => { mkdirSync(lock, { recursive: true }); writeFileSync(join(lock, "pid"), "4242"); writeFileSync(join(dir, "classifier.mjs"), "x"); };
+    withLock();
+    let x = bash(`${pre}DRY=0 LOCK_HELD=0 BT_FINISHED=1; bt_on_exit`);
+    ok("F2 bt_on_exit leaves the lock alone when this run does not hold it (a run that skipped because another tick holds it must not remove the holder's pid)", existsSync(join(lock, "pid")) && x.status === 0, `${x.stdout} ${x.stderr}`);
+    x = bash(`${pre}DRY=0 LOCK_HELD=1 BT_FINISHED=1; bt_on_exit`);
+    ok("F2 ...and removes the pid, the hung-hand marker, the classifier file and the lock directory when it does", !existsSync(lock) && !existsSync(join(dir, "classifier.mjs")) && !/HB\[/.test(x.stdout), `${x.stdout} ${x.stderr}`);
+    withLock();
+    x = bash(`${pre}DRY=0 LOCK_HELD=1 BT_FINISHED=0; bt_on_exit`);
+    ok("F2 a real run that never reached finish heartbeats `failed: the run ended without a result (a signal or a shell error)` once, from the trap", (x.stdout.match(/HB\[/g) ?? []).length === 1 && x.stdout.includes("HB[failed: the run ended without a result (a signal or a shell error)|failed]"), `${x.stdout} ${x.stderr}`);
+    x = bash(`${pre}DRY=1 LOCK_HELD=0 BT_FINISHED=0; bt_on_exit`);
+    ok("F2 ...a dry-run never does", !/HB\[/.test(x.stdout) && x.status === 0, x.stdout);
+    const f = shFn(sh, "finish") ?? "";
+    ok("F2 finish() marks the run as finished BEFORE it heartbeats (so the trap does not report a second, false failure on the way out)", /BT_FINISHED=1/.test(f) && f.indexOf("BT_FINISHED=1") < f.indexOf("bt_heartbeat"), f.slice(0, 200));
+    const trapAt = sh.search(/^trap bt_on_exit EXIT$/m);
+    ok("F2 the one EXIT trap is `trap bt_on_exit EXIT`, installed before step 0 (before the first call that can block on the network), and the lock is flagged held only after this run wrote its own pid",
+      (sh.match(/^trap /gm) ?? []).length === 1 && trapAt > 0 && trapAt < sh.indexOf('ORIGIN_URL="${SG_ORIGIN_URL:-}"') && /printf '%s' "\$\$" > "\$LOCK\/pid"\nLOCK_HELD=1\n/.test(sh)
+        && /^LOCK_HELD=0$/m.test(sh) && /^BT_FINISHED=0$/m.test(sh));
+  });
+
+  // ── the WHOLE script on Linux (F1, F2, F7): `uname` says Darwin, `stat -f %m` is answered; git, gh, npm, pnpm, claude, lane-deliver and the stages helper ──
+  // are stubs on a scratch origin. Nothing here reaches launchd, ~/Library, the network, GitHub or a model. (The darwin block above runs the real helper.)
+  guard2(ok, "F1/F2/F7 the whole script on Linux", () => {
+    const realGit = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+    const gnuStat = spawnSync("/usr/bin/stat", ["-c", "%Y", "/"], { encoding: "utf8" }).status === 0; // GNU stat takes -c; BSD stat (macOS) already answers `-f %m`
+    const arch = spawnSync("uname", ["-m"], { encoding: "utf8" }).stdout.trim().replace("x86_64", "x64");
+    const rig = (name, { transform = (t) => t } = {}) => {
+      const dir = join(root, `fu-ws-${name}`), bin = join(dir, "bin"), home = join(dir, "home"), seed = join(dir, "seed"), main = join(dir, "Repo");
+      const origin = join(dir, "github.com/Owner/Repo.git"), ld = join(dir, "ld.log"), ready = join(dir, "READY");
+      for (const d of [bin, home, join(dir, "github.com/Owner")]) mkdirSync(d, { recursive: true });
+      const exe = (n, t) => { writeFileSync(join(bin, n), t); chmodSync(join(bin, n), 0o755); };
+      exe("uname", '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; *) exec /usr/bin/uname "$@" ;; esac\n');
+      if (gnuStat) exe("stat", '#!/bin/sh\nif [ "$1" = -f ] && [ "$2" = %m ]; then exec /usr/bin/stat -c %Y "$3"; fi\nexec /usr/bin/stat "$@"\n');
+      exe("gh", '#!/bin/sh\ncase "$*" in *"--jq length"*) echo 1 ;; esac\nexit 0\n');
+      exe("npm", "#!/bin/sh\nexit 0\n");
+      exe("claude", "#!/bin/sh\nexit 0\n");
+      exe("pnpm", `#!/bin/sh\ncase "$1" in\n  --version) echo 10.28.1 ;;\n  install) mkdir -p node_modules scripts/node_modules/tsx scripts/node_modules/esbuild\n    echo '{"name":"tsx"}' > scripts/node_modules/tsx/package.json\n    echo '{"name":"esbuild","version":"0.0.1"}' > scripts/node_modules/esbuild/package.json ;;\nesac\nexit 0\n`);
+      exe("git", `#!/bin/sh\nif [ "$1" = ls-remote ] && [ -n "\${SG_LSREMOTE_HOLD:-}" ]; then : > "$SG_READY"; sleep "$SG_LSREMOTE_HOLD"; fi\nexec ${realGit} "$@"\n`);
+      const esb = join(home, "Library/Caches/signalgrid/esbuild-0.0.1/node_modules/@esbuild", `darwin-${arch}`, "bin");
+      mkdirSync(esb, { recursive: true }); writeFileSync(join(esb, "esbuild"), "#!/bin/sh\nexit 0\n"); chmodSync(join(esb, "esbuild"), 0o755);
+      G(dir, "init", "-q", "--bare", "-b", "SignalGrid_Alpha", origin);
+      G(dir, "init", "-q", "-b", "SignalGrid_Alpha", seed);
+      for (const d of ["scripts/mac", "scripts/lib", "docs/agent", "artifacts/agent-heartbeats"]) mkdirSync(join(seed, d), { recursive: true });
+      writeFileSync(join(seed, "scripts/mac/build-tick.sh"), transform(readFileSync(join(HERE, "build-tick.sh"), "utf8")));
+      copyFileSync(join(HERE, "host-verification-lock.sh"), join(seed, "scripts/mac/host-verification-lock.sh"));
+      writeFileSync(join(seed, "package.json"), '{"packageManager":"pnpm@10.28.1"}\n');
+      writeFileSync(join(seed, "pnpm-lock.yaml"), "lockfileVersion: stub\n");
+      writeFileSync(join(seed, ".gitignore"), "node_modules/\n");
+      writeFileSync(join(seed, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";\nconst a = process.argv.slice(2);\nappendFileSync(process.env.SG_LD_LOG, (a[0] === "batch" ? "BATCH " + JSON.parse(readFileSync(a[1], "utf8"))[0].blocked : a.join(" | ")) + "\\n");\nprocess.exit(Number(a[0] === "heartbeat" ? (process.env.SG_HB_RC ?? 0) : 0));\n`);
+      writeFileSync(join(seed, "scripts/objective-loop.mjs"), 'export function readVerdict() { return { verdict: process.env.SG_VERDICT ?? "open" }; }\n');
+      for (const f of ["scripts/check-backlog-ownership.mjs", "scripts/lib/sim-operations.mjs", "scripts/lib/raised-hand-kinds.mjs"]) writeFileSync(join(seed, f), "export {};\n");
+      writeFileSync(join(seed, "docs/agent/objective-state.json"), '{"tasks":[{"rowId":"7","rank":1,"title":"Row seven"}]}\n');
+      writeFileSync(join(seed, "artifacts/agent-heartbeats/mac-lane-tick.json"), '{"firedAt":"2026-10-22T00:00:00Z","result":"quiet"}\n');
+      writeFileSync(join(seed, "scripts/mac/build-tick-stages.mjs"), `import { writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+const a = process.argv.slice(2), arg = (k) => a[a.indexOf(k) + 1];
+const rd = arg("--run-dir"); mkdirSync(rd, { recursive: true });
+if (a[0] === "triage") {
+  if (process.env.SG_TRIAGE_HOLD) { writeFileSync(process.env.SG_READY, "x"); execFileSync("sleep", [process.env.SG_TRIAGE_HOLD]); }
+  writeFileSync(rd + "/next", "build code\\n");
+} else if (a[0] === "run") {
+  if (process.env.SG_RUN_SLEEP) execFileSync("sleep", [process.env.SG_RUN_SLEEP]);
+  writeFileSync(rd + "/outcome.json", JSON.stringify({ outcome: "hand", reason: "stub" }));
+}\n`);
+      G(seed, "add", "-A"); G(seed, "commit", "-q", "-m", "seed"); G(seed, "remote", "add", "origin", origin); G(seed, "push", "-q", "origin", "SignalGrid_Alpha");
+      G(dir, "clone", "-q", origin, main);
+      const cache = join(home, "Library/Caches/signalgrid/build-tick");
+      mkdirSync(cache, { recursive: true });
+      const env = { ...gitEnv, HOME: home, PATH: `${bin}:${process.env.PATH}`, SG_LD_LOG: ld, SG_READY: ready };
+      const script = join(main, "scripts/mac/build-tick.sh");
+      const run = (extra = {}) => spawnSync("/bin/bash", [script], { env: { ...env, ...extra }, encoding: "utf8", timeout: 120000 });
+      // Starts the tick, waits for the stub to say it is inside the step (READY), sends TERM to it (launchd's bootout and a shutdown do), reports its exit status.
+      const killed = (extra = {}) => {
+        const driver = `/bin/bash "$TICK" > "$OUTF" 2> "$ERRF" &\npid=$!\ni=0; while [ ! -e "$SG_READY" ] && [ "$i" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done\nkill -TERM "$pid"\nwait "$pid"; echo "$?" > "$RCF"\n`;
+        spawnSync("/bin/bash", ["-c", driver], { env: { ...env, ...extra, TICK: script, OUTF: join(dir, "out"), ERRF: join(dir, "err"), RCF: join(dir, "rc") }, encoding: "utf8", timeout: 120000 });
+        return { rc: Number(readFileSync(join(dir, "rc"), "utf8")), out: existsSync(join(dir, "out")) ? readFileSync(join(dir, "out"), "utf8") : "" };
+      };
+      const hb = () => (existsSync(ld) ? readFileSync(ld, "utf8") : "").split("\n").filter((l) => l.startsWith("heartbeat | mac-build-tick | "));
+      return { dir, cache, home, run, killed, hb, lockDir: join(cache, "build-tick.lock") };
+    };
+    const now = () => Math.floor(Date.now() / 1000);
+
+    // F7 + the one-heartbeat-per-exit rule: the cooldown comparison and the admitted path, on Linux (the darwin block is the only other place they run)
+    let t = rig("cooldown");
+    writeFileSync(join(t.cache, "last-admitted-epoch"), `${now() - 3600} failed`);
+    let r = t.run();
+    ok("F7 a session run that ended an hour ago: this run prints `result: cooldown`, exits 0, picks no row, and heartbeats `cooldown:` once",
+      r.status === 0 && /result: cooldown: .*no refresh, triage or claim ran/.test(r.stdout) && !/picked plan row|triage starting/.test(r.stdout) && t.hb().length === 1 && /\| cooldown: a model session ended under 3 h ago/.test(t.hb()[0] ?? ""), `${r.status}\n${r.stdout}\n${r.stderr}\n${t.hb().join("\n")}`);
+    t = rig("admitted");
+    writeFileSync(join(t.cache, "last-admitted-epoch"), `${now() - 10800 - 60} failed`);
+    r = t.run({ SG_VERDICT: "goal_met" });
+    ok("F7 ...and one that ended just over 3 h ago is admitted: it reaches `nothing buildable` and heartbeats exactly once (finish marks the run finished, so the trap adds no second `failed`)",
+      r.status === 0 && /result: nothing buildable/.test(r.stdout) && !/cooldown/.test(r.stdout) && t.hb().length === 1 && /\| nothing: the state ranks no task \|/.test(t.hb()[0] ?? ""), `${r.status}\n${r.stdout}\n${r.stderr}\n${t.hb().join("\n")}`);
+
+    // F2: a lock held by a live holder is not this run's to release
+    t = rig("lockheld");
+    const held = spawnSync("/bin/bash", ["-c", `sleep 30 & h=$!; mkdir -p "$LOCKDIR"; printf '%s' "$h" > "$LOCKDIR/pid"; /bin/bash "$TICK" > "$OUTF" 2>&1; echo "$?" > "$RCF"; cat "$LOCKDIR/pid" > "$PIDAFTER" 2>/dev/null; kill "$h"`],
+      { env: { ...gitEnv, HOME: t.home, PATH: `${join(t.dir, "bin")}:${process.env.PATH}`, SG_LD_LOG: join(t.dir, "ld.log"), LOCKDIR: t.lockDir, TICK: join(t.dir, "Repo/scripts/mac/build-tick.sh"), OUTF: join(t.dir, "out"), RCF: join(t.dir, "rc"), PIDAFTER: join(t.dir, "pid-after") }, encoding: "utf8", timeout: 60000 });
+    ok("F2 a run that skips because another tick holds the build lock exits 0, heartbeats `skipped: another build tick holds the build lock`, and leaves the holder's lock and pid in place (the trap must not release a lock this run never took)",
+      readFileSync(join(t.dir, "rc"), "utf8").trim() === "0" && /^\d+$/.test(readFileSync(join(t.dir, "pid-after"), "utf8")) && t.hb().some((l) => /\| skipped: another build tick holds the build lock \|/.test(l)) && t.hb().length === 1,
+      `${held.status} ${readFileSync(join(t.dir, "out"), "utf8")} ${t.hb().join("\n")}`);
+
+    // F2: a signal. During triage (a session run: the stamp must stay `running`, the lock must be released) ...
+    t = rig("term-triage");
+    let k = t.killed({ SG_TRIAGE_HOLD: "8" });
+    ok("F2 SIGTERM during triage: the run exits 143, the trap releases the build lock, and it heartbeats `failed: the run ended without a result (a signal or a shell error)` (once)",
+      k.rc === 143 && !existsSync(t.lockDir) && t.hb().filter((l) => /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(l)).length === 1, `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
+    ok("F2 ...the session stamp is left at `running` (an interrupted session run restarts the gap as unrecorded; the trap does not invent an outcome), and the session-start heartbeat (`working`) came first",
+      /^\d+ running$/.test(readFileSync(join(t.cache, "last-admitted-epoch"), "utf8")) && /\| working: a model session is starting \|/.test(t.hb()[0] ?? ""), `${readFileSync(join(t.cache, "last-admitted-epoch"), "utf8")} / ${t.hb().join(" / ")}`);
+    // ... and during step 0, before the lock exists
+    t = rig("term-step0");
+    k = t.killed({ SG_LSREMOTE_HOLD: "8" });
+    ok("F2 SIGTERM during step 0 (the network read, before the build lock exists): exit 143, no lock directory was created or left, and the trap still heartbeats `failed: the run ended without a result`",
+      k.rc === 143 && !existsSync(t.lockDir) && t.hb().length === 1 && /\| failed: the run ended without a result \(a signal or a shell error\) \|/.test(t.hb()[0] ?? ""), `${k.rc}\n${k.out}\n${t.hb().join("\n")}`);
+
+    // F1: the pulses, whole-script, with the pulse shortened to 2 s (a test-only copy of the pinned script) and a pipeline stub that runs 7 s
+    t = rig("pulse", { transform: (text) => text.replace(/^HB_PULSE_SECONDS=\d+$/m, "HB_PULSE_SECONDS=2").replace(/^HB_POLL_SECONDS=\d+$/m, "HB_POLL_SECONDS=1") });
+    r = t.run({ SG_RUN_SLEEP: "7" });
+    const texts = t.hb().map((l) => l.split(" | ")[2]);
+    const at = (s) => texts.findIndex((x) => x === s);
+    const pulses = texts.filter((x) => x === "working: the staged pipeline is running").length;
+    ok("F1 a 7 s pipeline under a 2 s pulse: the heartbeats go session-start, pipeline-start, at least two `working: the staged pipeline is running` pulses, then the run's own `failed:` result (delivered at once after a pulse), and the run still ends through the pipeline's outcome",
+      r.status === 1 && /result: failed: plan row 7: stub/.test(r.stdout) && at("working: a model session is starting") === 0 && at("working: the staged pipeline is starting") === 1 && pulses >= 2
+        && /^failed: /.test(texts.at(-1) ?? "") && at("working: the staged pipeline is running") > 1, `${r.status}\n${r.stdout}\n${r.stderr}\n${texts.join("\n")}`);
+  });
 }
 const guard2 = (ok, name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } };
 

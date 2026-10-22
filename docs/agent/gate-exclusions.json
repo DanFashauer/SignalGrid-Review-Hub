@@ -301,6 +301,12 @@
       "symbol": "REF_SKIP_WARNING",
       "reason": "Not an exclusion of the subject but the opposite: the regex names the two warnings `git for-each-ref` prints when it silently SKIPS a ref it cannot read, so that a listing carrying either is treated as a hard failure (an unreadable ref is an unknown, and unknown is not clean) instead of a shorter list that reads as complete.",
       "date": "2026-10-08"
+    },
+    {
+      "path": "scripts/check-verdict-tone-source.mjs",
+      "symbol": "IGNORE",
+      "reason": "The context the tone-module branch judge gives an arm it deliberately does not pair to a verdict: the default arm of a verdict branch and a branch whose test names no verdict literal outside a verdict arm. It is an exclusion of the subject, but not a hidden one: every case it covers is a numbered ceiling in the gate's header, in its printed footer and in plan row 168, and the self-test checks those three agree; inside a verdict arm the context is inherited, so nothing under a verdict is skipped.",
+      "date": "2026-10-22"
     }
   ]
 }

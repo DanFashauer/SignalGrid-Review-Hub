@@ -21,18 +21,23 @@
 // `.text-/.bg-status-*` rule against it. A total Record with the wrong colours in
 // it no longer passes.
 //
-// WHAT IT STILL CANNOT DO, said plainly (the run prints the same seven items):
+// WHAT IT STILL CANNOT DO, said plainly (the run prints the same eight items; the self-test checks the
+// agreement of this list, the printed footer and plan row 168 in both directions):
 //   1. restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006), so a swap of the two is
 //      invisible; they differ by class suffix and chart pattern only.
 //   2. badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED or typed
 //      Record<…Outcome…, string>; an unnamed Record is held to canonical class tokens but may carry extras.
-//   3. the default arm of a verdict branch, a branch whose test names no verdict literal, and any verdict
-//      choice not made by an object property, a comparison, `.includes()` or a `switch` case (a class
-//      written before its comparison, `clsx({ … })` keys, an alias of a judged Record mutated by another name).
+//   3. the default arm of a verdict branch; every status class under a branch whose test names no verdict
+//      literal and that is not inside a verdict arm; a switch clause that falls into the next with statements;
+//      and any verdict choice not made by an object property, a comparison, `.includes()` or a `switch` case
+//      (a class written before its comparison, `clsx({ … })` keys, an aliased mutation of a judged Record).
 //   4. the desktop tree's chart: it exports no OUTCOME_CHART_MARK and its Dashboard carries literal fills.
-//   5. signalgrid-app's TSX, `.jsx` pages, and a new app tree with neither a tone module nor verdict CSS.
-//   6. Tailwind theme/config colours, and the opacity forms (`bg-status-allow/5`) that no rule generates.
+//   5. signalgrid-app's TSX (its stylesheet is judged), and a new app tree with neither a tone module nor
+//      verdict CSS.
+//   6. Tailwind theme/config colours, the opacity forms (`bg-status-allow/5`) that no rule generates, and
+//      font-package stylesheets (`@fontsource/…`), the one package specifier let through.
 //   7. the tokens' own values: check-decision-palette.mjs holds contrast and canon.
+//   8. an arbitrary-value or important override written beside a status class in a page.
 // Option (b) of row 168, distinct rendered values, is still open.
 
 import { readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
@@ -537,6 +542,7 @@ export function toneRecordProblems(src, expectedIn = []) {
         else seen.set(classes[v], v);
       }
       if (VERDICTS.every((v) => classes[v] !== null)) totals.add(name);
+      if (Object.keys(expected).length > 0 && !(name in expected)) problems.push(`line ${lineAt(open)}: ${name} is a four-verdict Record that is not listed in TONE_EXPECTED — list it with its class kind so it is held to exactly one canonical class per verdict`);
     }
   }
   for (const name of Object.keys(expected)) {
@@ -559,16 +565,38 @@ export function toneRecordProblems(src, expectedIn = []) {
  * `background` / `border` / `all` shorthand that could override what was read.
  * `found` is the set of canonical `kind:verdict` rules, for the caller's floor.
  */
-const COLOUR_EXPR = /^hsl\(\s*var\(\s*(--decision-(?:allow|review|deny))(-on-tint)?\s*\)\s*(?:\/\s*[\d.]+%?\s*)?\)$/i;
+const COLOUR_EXPR = /^hsl\(\s*var\(\s*(--decision-(?:allow|review|deny))(-on-tint)?\s*\)\s*(?:\/\s*([\d.]+%?)\s*)?\)$/i;
 /** The properties a verdict rule may declare; anything else can change how the verdict renders and cannot be judged. */
 const ALLOWED_PROPS = { text: new Set(["color"]), bg: new Set(["background-color", "color", "border-color"]) };
 
-/** Strip comments, neutralise string contents (a `{` inside `content: "{"` is not a block), keep line breaks. */
+/**
+ * Strip comments and neutralise string contents in ONE pass, so a `/*` inside `content: "/*"` is a string and
+ * not a comment opener (and a quote inside a comment is not a string). `bad` is set for an unterminated
+ * comment or string: the stylesheet cannot be tokenised and is a problem, not a pass.
+ */
 function cssClean(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""))
-    .replace(/"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, '""');
+  let out = "", i = 0, bad = false;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "/" && src[i + 1] === "*") {
+      const j = src.indexOf("*/", i + 2);
+      if (j < 0) bad = true;
+      const end = j < 0 ? src.length : j + 2;
+      out += src.slice(i, end).replace(/[^\n]/g, "");
+      i = end;
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < src.length && src[j] !== c && src[j] !== "\n") { if (src[j] === "\\") j++; j++; }
+      if (src[j] !== c) bad = true;
+      const end = Math.min(j + 1, src.length);
+      out += '""' + src.slice(i, end).replace(/[^\n]/g, "");
+      i = end;
+    } else { out += c; i++; }
+  }
+  return { code: out, bad };
 }
+/** CSS escapes (`\64 `, `\000064`, `\d`) decoded, so an escaped selector is matched as the browser reads it. */
+const decodeCssEscapes = (t) => t.replace(/\\([0-9a-fA-F]{1,6})[ \t\n]?|\\([\s\S])/g, (m, hex, ch) => (hex ? String.fromCodePoint(Math.min(parseInt(hex, 16), 0x10ffff) || 0xfffd) : ch));
 
 /**
  * A small block parser: `{ prelude, body, children, line }` per block. A `;` ends a statement at the top
@@ -630,14 +658,24 @@ const effectiveDecl = (decls, prop) => {
   const important = mine.filter((d) => d.imp);
   return (important.length > 0 ? important : mine).at(-1).value;
 };
-const tokenOf = (decl, allowOnTint) => {
+/**
+ * The token a colour expression paints, or undefined. `role` bounds the alpha: a text colour is opaque (no alpha, or
+ * 1 / 100%), a fill or border has an alpha above zero. A verdict painted at alpha 0 renders invisible.
+ */
+const tokenOf = (decl, allowOnTint, role) => {
   const m = COLOUR_EXPR.exec(decl ?? "");
-  return m && (allowOnTint || !m[2]) ? m[1] : undefined;
+  if (!m || (m[2] && !allowOnTint)) return undefined;
+  if (m[3] !== undefined) {
+    const a = m[3].endsWith("%") ? parseFloat(m[3]) / 100 : parseFloat(m[3]);
+    if (!(role === "text" ? a === 1 : a > 0)) return undefined;
+  }
+  return m[1];
 };
 const VERDICT_CLASS_MENTION = /(?:text|bg|border)-status-(?:allow|step-up|restrict|deny)\b/i;
 export function cssToneProblems(src) {
-  const code = cssClean(src);
+  const { code, bad } = cssClean(src);
   const problems = [];
+  if (bad) problems.push("the stylesheet has an unterminated string or comment — it cannot be judged");
   const found = new Set();
   let rules = 0;
   const { root, balanced } = parseCssBlocks(code);
@@ -645,9 +683,10 @@ export function cssToneProblems(src) {
   const visit = (node, parentIsStyle) => {
     const prelude = node.prelude.replace(/\s+/g, " ");
     const style = !prelude.startsWith("@");
-    const mentions = VERDICT_CLASS_MENTION.test(prelude)
-      || (/\\/.test(prelude) && /status|text-|bg-|border-/i.test(prelude))
-      || (/\[\s*class\s*[~|^$*]?=/i.test(prelude) && node.body.length > 0);
+    const decoded = decodeCssEscapes(prelude);
+    const mentions = VERDICT_CLASS_MENTION.test(decoded)
+      || (/\\/.test(prelude) && /status|text-|bg-|border-/i.test(decoded))
+      || (/\[\s*(?:[\w*-]*\|)?\s*class\s*[~|^$*]?=/i.test(decoded) && node.body.length > 0);
     if (mentions) {
       const canon = style && /^\.(text|bg)-status-(allow|step-up|restrict|deny)$/.exec(prelude);
       if (!canon) {
@@ -667,12 +706,12 @@ export function cssToneProblems(src) {
           else if (!ALLOWED_PROPS[kind].has(d.prop)) problems.push(`${at} declares \`${d.prop}\`, which is not one of the colour properties judged here (shorthands and paint-altering properties cannot be judged)`);
         }
         const checks = kind === "text"
-          ? [["color", false, true]]
-          : [["background-color", false, true], ["color", true, true], ["border-color", false, false]];
-        for (const [prop, onTint, required] of checks) {
+          ? [["color", false, true, "text"]]
+          : [["background-color", false, true, "fill"], ["color", true, true, "text"], ["border-color", false, false, "fill"]];
+        for (const [prop, onTint, required, role] of checks) {
           const decl = effectiveDecl(decls, prop);
           if (decl === undefined && !required) continue;
-          const got = tokenOf(decl, onTint);
+          const got = tokenOf(decl, onTint, role);
           if (!got) problems.push(`${at} ${prop} resolves to no --decision-* token (expected \`hsl(var(${want}))\`)`);
           else if (got !== want) problems.push(`${at} ${prop} paints ${got}, its registry token is ${want}`);
         }
@@ -713,7 +752,12 @@ export function toneBranchProblems(src) {
     return null;
   };
   const verdictOf = (n) => { const s = strOf(n); return s !== null && Object.hasOwn(KEY_VERDICT, s) ? KEY_VERDICT[s] : null; };
-  const analyse = (test) => {
+  const analyse = (test0) => {
+    const test = unwrap(test0);
+    if (ts.isPrefixUnaryExpression(test) && test.operator === K.ExclamationToken) {
+      const inner = analyse(test.operand);
+      return { V: inner.V, mode: inner.mode === "pos" ? "neg" : inner.mode === "neg" ? "pos" : inner.mode };
+    }
     const V = new Set();
     let pos = 0, neg = 0, other = 0;
     const visit = (n) => {
@@ -742,21 +786,27 @@ export function toneBranchProblems(src) {
     const mode = V.size === 0 ? "none" : other > 0 || (pos > 0 && neg > 0) ? "mixed" : neg > 0 ? "neg" : "pos";
     return { V, mode };
   };
-  const UNJUDGED = { kind: "unjudged" };
+  const IGNORE = { kind: "ignore" };
   const bound = (V) => ({ kind: "bound", V });
   const scan = (text, node, ctx) => {
-    if (ctx.kind === "unjudged") return;
-    if (/(?:text|bg|border)-status-$/.test(text)) out.push(`line ${lineOf(node)}: a status class built at runtime ("${text.slice(-24)}…") cannot be paired to a verdict`);
+    if (ctx.kind === "ignore") return;
+    if (/(?:text|bg|border)-status-?$/.test(text)) out.push(`line ${lineOf(node)}: a status class built at runtime ("${text.slice(-24)}…") cannot be paired to a verdict`);
     for (const m of text.matchAll(/(?<![\w/-])(?:text|bg|border)-status-([a-z-]+)/g)) {
       if (!Object.hasOwn(VERDICT_REGISTRY, m[1])) continue;
-      if (ctx.kind === "free") out.push(`line ${lineOf(node)}: status-${m[1]} appears outside a verdict-keyed property or a branch on a verdict literal — it cannot be paired to a verdict`);
-      else if (!ctx.V.has(m[1])) out.push(`line ${lineOf(node)}: a branch on ${[...ctx.V].map((v) => `"${v}"`).join("/")} returns status-${m[1]}, its own class is ${[...ctx.V].map((v) => `status-${v}`).join("/")}`);
+      if (ctx.kind === "free") { out.push(`line ${lineOf(node)}: status-${m[1]} appears outside a verdict-keyed property or a branch on a verdict literal — it cannot be paired to a verdict`); continue; }
+      // One verdict: its own class. A SET of verdicts (`["allow","deny"].includes(x)`, `a || b`, fallthrough cases):
+      // the class must paint every one of them, i.e. every verdict in the set owns that class's registry token.
+      const ok = ctx.V.size === 1 ? ctx.V.has(m[1]) : [...ctx.V].every((v) => VERDICT_REGISTRY[v].token === VERDICT_REGISTRY[m[1]].token);
+      if (!ok) out.push(`line ${lineOf(node)}: a branch on ${[...ctx.V].map((v) => `"${v}"`).join("/")} returns status-${m[1]}, which paints ${VERDICT_REGISTRY[m[1]].token} — not every verdict in the branch owns that token (own classes: ${[...ctx.V].map((v) => `status-${v}`).join("/")})`);
     }
   };
-  const arms = (a, whenTrue, whenFalse) => {
-    if (a.mode === "none") { if (whenTrue) walk(whenTrue, UNJUDGED); if (whenFalse) walk(whenFalse, UNJUDGED); }
-    else if (a.mode === "pos") { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, UNJUDGED); }
-    else if (a.mode === "neg") { walk(whenTrue, UNJUDGED); if (whenFalse) walk(whenFalse, bound(a.V)); }
+  // A test that names no verdict inherits the enclosing verdict context (a nested `if (x.length > 0)` inside the deny arm
+  // is still the deny arm); at the top level it is not a verdict choice and is not judged (`failMode === "fail-closed"`).
+  const inherit = (ctx) => (ctx.kind === "bound" ? ctx : IGNORE);
+  const arms = (a, whenTrue, whenFalse, ctx) => {
+    if (a.mode === "none") { const c = inherit(ctx); walk(whenTrue, c); if (whenFalse) walk(whenFalse, c); }
+    else if (a.mode === "pos") { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, IGNORE); }
+    else if (a.mode === "neg") { walk(whenTrue, IGNORE); if (whenFalse) walk(whenFalse, bound(a.V)); }
     else { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, bound(a.V)); }
   };
   const propName = (nm) => (ts.isIdentifier(nm) || ts.isStringLiteral(nm) || ts.isNumericLiteral(nm) ? nm.text : ts.isComputedPropertyName(nm) ? strOf(nm.expression) : null);
@@ -768,15 +818,19 @@ export function toneBranchProblems(src) {
       for (const span of n.templateSpans) { walk(span.expression, ctx); scan(span.literal.text, span, ctx); }
       return;
     }
-    if (ts.isConditionalExpression(n)) { walk(n.condition, ctx); arms(analyse(n.condition), n.whenTrue, n.whenFalse); return; }
-    if (ts.isIfStatement(n)) { walk(n.expression, ctx); arms(analyse(n.expression), n.thenStatement, n.elseStatement); return; }
+    if (ts.isConditionalExpression(n)) { walk(n.condition, ctx); arms(analyse(n.condition), n.whenTrue, n.whenFalse, ctx); return; }
+    if (ts.isIfStatement(n)) { walk(n.expression, ctx); arms(analyse(n.expression), n.thenStatement, n.elseStatement, ctx); return; }
     if (ts.isSwitchStatement(n)) {
       walk(n.expression, ctx);
+      const onTrue = unwrap(n.expression).kind === K.TrueKeyword;
       let pending = new Set();
       for (const clause of n.caseBlock.clauses) {
-        if (ts.isCaseClause(clause)) { const v = verdictOf(clause.expression); if (v) pending.add(v); }
+        if (ts.isCaseClause(clause)) {
+          if (onTrue) analyse(clause.expression).V.forEach((v) => pending.add(v));
+          else { const v = verdictOf(clause.expression); if (v) pending.add(v); }
+        }
         if (clause.statements.length === 0 && ts.isCaseClause(clause)) continue;
-        const c = ts.isDefaultClause(clause) || pending.size === 0 ? UNJUDGED : bound(pending);
+        const c = ts.isDefaultClause(clause) ? inherit(ctx) : pending.size === 0 ? inherit(ctx) : bound(pending);
         for (const st of clause.statements) walk(st, c);
         pending = new Set();
       }
@@ -796,7 +850,79 @@ export function toneBranchProblems(src) {
     }
     ts.forEachChild(n, (c) => walk(c, ctx));
   }
+  for (const d of sf.parseDiagnostics ?? []) out.push(`line ${sf.getLineAndCharacterOfPosition(d.start ?? 0).line + 1}: parse error — ${ts.flattenDiagnosticMessageText(d.messageText, " ")}; the module cannot be judged`);
   walk(sf, { kind: "free" });
+  return out;
+}
+
+const ASSIGN_TOKENS = new Set([
+  ts.SyntaxKind.EqualsToken, ts.SyntaxKind.PlusEqualsToken, ts.SyntaxKind.MinusEqualsToken, ts.SyntaxKind.AsteriskEqualsToken,
+  ts.SyntaxKind.SlashEqualsToken, ts.SyntaxKind.PercentEqualsToken, ts.SyntaxKind.AmpersandEqualsToken, ts.SyntaxKind.BarEqualsToken,
+  ts.SyntaxKind.CaretEqualsToken, ts.SyntaxKind.QuestionQuestionEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+  ts.SyntaxKind.AsteriskAsteriskEqualsToken, ts.SyntaxKind.LessThanLessThanEqualsToken, ts.SyntaxKind.GreaterThanGreaterThanEqualsToken,
+  ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
+]);
+const scriptKindOf = (file) => (/\.[cm]?js$/.test(file) ? ts.ScriptKind.JS : /\.jsx$/.test(file) ? ts.ScriptKind.JSX : /\.tsx$/.test(file) ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+
+/**
+ * Where a judged Record is written to after its literal: an assignment (plain, compound, destructuring or in a
+ * `for … of` head is out of scope), `++`/`--`, `delete`, `Object.assign|defineProperty|defineProperties|setPrototypeOf`
+ * and `Reflect.set|defineProperty|deleteProperty|setPrototypeOf` (dotted or bracketed), through the bare name, a
+ * member chain, a namespace import (`T.OUTCOME_TONE.deny = …`) or an element access. An alias is a named ceiling.
+ */
+export function mutationProblems(src, names, file = "x.tsx") {
+  const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, true, scriptKindOf(file));
+  const K = ts.SyntaxKind;
+  const out = [];
+  const unwrap = (n) => (ts.isParenthesizedExpression(n) || ts.isAsExpression(n) || ts.isNonNullExpression(n) || ts.isTypeAssertionExpression?.(n) ? unwrap(n.expression) : n);
+  const lit = (n) => (n && (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) ? n.text : null);
+  const refers = (n0, name) => {
+    const n = unwrap(n0);
+    if (ts.isIdentifier(n)) return n.text === name;
+    if (ts.isPropertyAccessExpression(n)) return n.name.text === name || refers(n.expression, name);
+    if (ts.isElementAccessExpression(n)) return lit(n.argumentExpression) === name || refers(n.expression, name);
+    return false;
+  };
+  const targets = (n0) => {
+    const n = unwrap(n0);
+    if (ts.isArrayLiteralExpression(n)) return n.elements.flatMap(targets);
+    if (ts.isObjectLiteralExpression(n)) return n.properties.flatMap((p) => (ts.isPropertyAssignment(p) ? targets(p.initializer) : ts.isShorthandPropertyAssignment(p) ? [p.name] : ts.isSpreadAssignment(p) ? targets(p.expression) : []));
+    if (ts.isSpreadElement(n)) return targets(n.expression);
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === K.EqualsToken) return targets(n.left);
+    return [n];
+  };
+  const MUT = { Object: new Set(["assign", "defineProperty", "defineProperties", "setPrototypeOf"]), Reflect: new Set(["set", "defineProperty", "deleteProperty", "setPrototypeOf"]) };
+  const hit = (n, name, what) => out.push(`line ${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1}: ${name} is mutated at runtime (${what}) — its literal is no longer what renders`);
+  const visit = (n) => {
+    if (ts.isBinaryExpression(n) && ASSIGN_TOKENS.has(n.operatorToken.kind)) {
+      for (const t of targets(n.left)) for (const nm of names) if (refers(t, nm)) hit(n, nm, "assignment");
+    } else if ((ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) && (n.operator === K.PlusPlusToken || n.operator === K.MinusMinusToken)) {
+      for (const nm of names) if (refers(n.operand, nm)) hit(n, nm, "increment");
+    } else if (ts.isDeleteExpression(n)) {
+      for (const nm of names) if (refers(n.expression, nm)) hit(n, nm, "delete");
+    } else if (ts.isCallExpression(n) && n.arguments.length > 0) {
+      const c = unwrap(n.expression);
+      const obj = ts.isPropertyAccessExpression(c) ? c.expression : ts.isElementAccessExpression(c) ? c.expression : null;
+      const meth = ts.isPropertyAccessExpression(c) ? c.name.text : ts.isElementAccessExpression(c) ? lit(c.argumentExpression) : null;
+      if (obj && ts.isIdentifier(obj) && MUT[obj.text]?.has(meth)) for (const nm of names) if (refers(n.arguments[0], nm)) hit(n, nm, `${obj.text}.${meth}`);
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+/** A judged Record exported under another name (`export { A as B, B as A }`) is judged by its local name; refuse the swap. */
+export function toneExportProblems(src, names) {
+  const sf = ts.createSourceFile("tone.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const out = [];
+  for (const st of sf.statements) {
+    if (!ts.isExportDeclaration(st) || !st.exportClause || !ts.isNamedExports(st.exportClause)) continue;
+    for (const el of st.exportClause.elements) {
+      const local = (el.propertyName ?? el.name).text, exported = el.name.text;
+      if (local !== exported && (names.includes(local) || names.includes(exported))) out.push(`line ${sf.getLineAndCharacterOfPosition(el.getStart(sf)).line + 1}: ${local} is exported as ${exported} — a judged Record is judged by its local name, so an export alias would swap which one renders`);
+    }
+  }
   return out;
 }
 
@@ -805,30 +931,36 @@ export function toneBranchProblems(src) {
  * "./index.css"`, `"@/index.css"`), plus anything those `@import`. A stylesheet that
  * nothing loads cannot supply the floor, however many rules it holds.
  */
+/** Font-package stylesheets declare `@font-face` only; the one package-specifier family the gate lets through (a named ceiling). */
+const FONT_PACKAGE_CSS = /^@fontsource\//;
 export function loadedStylesheets(rootDir, sources, readFile = readFileSync) {
   const loaded = new Set();
   const errs = [];
+  const unresolved = [];
   const add = (p) => { if (!loaded.has(p)) { loaded.add(p); return true; } return false; };
   const queue = [];
+  const IMPORT_CSS = /\bimport\s*(?:[^;"'`]*?\bfrom\s*)?["']([^"']+\.css(?:[?#][^"']*)?)["']|\bimport\s*\(\s*["']([^"']+\.css(?:[?#][^"']*)?)["']\s*\)|\brequire\s*\(\s*["']([^"']+\.css(?:[?#][^"']*)?)["']\s*\)/g;
   for (const f of sources) {
     let text;
     try { text = stripComments(readFile(f, "utf8")); } catch (e) { errs.push(`${f}: ${e.code ?? e.message}`); continue; }
-    for (const m of text.matchAll(/\bimport\s*(?:[^;"'`]*?\bfrom\s*)?["']((?:\.{1,2}\/|@\/)[^"']+\.css)["']/g)) {
-      const p = m[1].startsWith("@/") ? join(rootDir, m[1].slice(2)) : join(dirname(f), m[1]);
-      if (add(p)) queue.push(p);
+    for (const m of text.matchAll(IMPORT_CSS)) {
+      const spec = (m[1] ?? m[2] ?? m[3]).replace(/[?#].*$/, "");
+      if (spec.startsWith("@/")) { const p = join(rootDir, spec.slice(2)); if (add(p)) queue.push(p); }
+      else if (/^\.{1,2}\//.test(spec)) { const p = join(dirname(f), spec); if (add(p)) queue.push(p); }
+      else if (!FONT_PACKAGE_CSS.test(spec)) unresolved.push(`${f}: import of "${spec}"`);
     }
   }
   while (queue.length > 0) {
     const css = queue.shift();
     let text;
     try { text = readFile(css, "utf8"); } catch (e) { if (e.code !== "ENOENT") errs.push(`${css}: ${e.code ?? e.message}`); continue; }
-    for (const m of text.matchAll(/@import\s+(?:url\()?["']([^"')]+\.css)["']/g)) {
-      if (!/^[./]/.test(m[1])) continue;
+    for (const m of text.matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+\.css)["']?\s*\)?/g)) {
+      if (!/^\.{1,2}\//.test(m[1])) { if (!FONT_PACKAGE_CSS.test(m[1])) unresolved.push(`${css}: @import of "${m[1]}"`); continue; }
       const p = join(dirname(css), m[1]);
       if (add(p)) queue.push(p);
     }
   }
-  return { loaded, errs };
+  return { loaded, errs, unresolved };
 }
 
 /**
@@ -1069,7 +1201,7 @@ async function selfTest() {
   const e2e = async (label, expectCode, expectInErr, plant = {}) => {
     const dir = mkdtempSync(join(tmpdir(), "tone-gate-"));
     try {
-      const { cssRoots, discover, readFile, readdir, trees, ...planted } = plant;
+      const { cssRoots, discover, readFile, readdir, trees, toneModules: tm, ...planted } = plant;
       const files = { "a/src/lib/outcome-tone.ts": e2eTone, "a/src/index.css": e2eCss, "a/src/main.tsx": 'import "./index.css";\n', ...planted };
       for (const [f, text] of Object.entries(files)) {
         mkdirSync(dirname(join(dir, f)), { recursive: true });
@@ -1077,7 +1209,7 @@ async function selfTest() {
         else writeFileSync(join(dir, f), text);
       }
       const r = await runGate({
-        root: dir, trees: trees ?? ["a/src"], toneModules: { "a/src/lib/outcome-tone.ts": { OUTCOME_TONE: "text" } },
+        root: dir, trees: trees ?? ["a/src"], toneModules: tm ?? { "a/src/lib/outcome-tone.ts": { OUTCOME_TONE: "text" } },
         cssRoots: cssRoots ?? ["a/src"], chartMapRequired: new Set(), discover: discover ?? null,
         readFile: readFile ? (f, enc) => readFile(f, enc, dir) : readFileSync,
         readdir: readdir ? (d, o) => readdir(d, o, dir) : readdirSync,
@@ -1190,7 +1322,10 @@ async function selfTest() {
   checks.push(["F7 MUTANT color-mix() is RED", cp(cssRule("color: color-mix(in srgb, hsl(var(--decision-deny)), red);")).length === 1]);
   checks.push(["F7 MUTANT a longer token name (--decision-deny-x) is RED", cp(cssRule("color: hsl(var(--decision-deny-x));")).length === 1]);
   checks.push(["F7 MUTANT a --decision-* re-declared inside the rule is RED", cp(cssRule("--decision-deny: var(--decision-allow); color: hsl(var(--decision-deny));")).some((m) => /re-declares/.test(m))]);
-  checks.push(["F7: an alpha on the colour is accepted", cp(cssRule("color: hsl(var(--decision-deny) / 0.5);")).length === 0]);
+  checks.push(["F4: a text colour at full alpha (`/ 1`, `/ 100%`) is accepted", cp(cssRule("color: hsl(var(--decision-deny) / 1);")).length === 0 && cp(cssRule("color: hsl(var(--decision-deny) / 100%);")).length === 0]);
+  checks.push(["F4 MUTANT a text colour at alpha 0 or 0.5 is RED (invisible or faded)", cp(cssRule("color: hsl(var(--decision-deny) / 0);")).length === 1 && cp(cssRule("color: hsl(var(--decision-deny) / 0.5);")).length === 1]);
+  checks.push(["F4 MUTANT a fill at alpha 0 / 0% is RED, a border at alpha 0 is RED", cp(goodCss.replace("background-color: hsl(var(--decision-deny) / 0.08)", "background-color: hsl(var(--decision-deny) / 0%)")).length === 1 && cp(goodCss.replace(".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08);", ".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); border-color: hsl(var(--decision-deny) / 0);")).length === 1]);
+  checks.push(["F4: a fill with a small positive alpha is accepted", cp(goodCss).length === 0]);
   checks.push(["F8 MUTANT an earlier !important wins over a later plain declaration (RED)", cp(cssRule("color: hsl(var(--decision-allow)) !important; color: hsl(var(--decision-deny));")).some((m) => /paints --decision-allow/.test(m))]);
   checks.push(["F8: an earlier !important DENY wins over a later wrong plain one (passes)", cp(cssRule("color: hsl(var(--decision-deny)) !important; color: hsl(var(--decision-allow));")).length === 0]);
   checks.push(["F10 MUTANT a `background` shorthand in a .bg-status-* rule is RED", cp(goodCss.replace(".bg-status-deny { background-color:", ".bg-status-deny { background: red; background-color:")).some((m) => /not one of the colour properties/.test(m))]);
@@ -1252,19 +1387,101 @@ async function selfTest() {
   await e2e("O8: an unreadable stylesheet in a tree the lists omit still demands the root (discover fails closed)", 1, "missing from the gate's stylesheet roots", { discover: "d", "d/other/src/index.css": e2eCss, readFile: denyRead("d/other/src/index.css") });
   await e2e("O19: an unreadable discover directory is reported", 1, "d — unreadable (EACCES)", { discover: "d", "d/x/readme.txt": "x", readdir: (dir, o, root) => { if (dir === join(root, "d")) throw Object.assign(new Error("denied"), { code: "EACCES" }); return readdirSync(dir, o); } });
   await e2e("O11: a tree directory failing with EACCES is reported, not skipped as absent", 1, "a/src/lib: EACCES", { readdir: (dir, o, root) => { if (dir === join(root, "a/src/lib")) throw Object.assign(new Error("denied"), { code: "EACCES" }); return readdirSync(dir, o); } });
-  // L6: every ceiling is named, verbatim by key phrase, in this file's header and in plan row 168.
+  // L6/F7: the ceilings agree in BOTH directions between this file's header, the printed footer and plan row 168.
   {
     const self = readFileSync(fileURLToPath(import.meta.url), "utf8");
     const header = self.slice(0, self.indexOf('import { readFileSync'));
+    const items = [...header.matchAll(/^\/\/\s+(\d+)\.\s([\s\S]*?)(?=^\/\/\s+\d+\.\s|^\/\/ Option \(b\))/gm)].map((m) => m[2].replace(/\n\/\/\s*/g, " "));
     let plan = "";
     try { plan = readFileSync(join(repo, "docs/COMPANY_BUILD_PLAN.md"), "utf8"); } catch { /* reported by the checks */ }
     const row = plan.slice(plan.indexOf("168. **The palette gate"), plan.indexOf("\n169. "));
-    for (const c of CEILINGS) {
-      checks.push([`ceiling named in the header: ${c.key}`, header.includes(c.key)]);
-      checks.push([`ceiling named in plan row 168: ${c.key}`, row.includes(c.key)]);
-    }
+    const rowItems = (row.match(/printed by the gate \((\w+) items\):([\s\S]*?)(?:\. RE-MEASURED|\. Row 151)/) ?? [])[2] ?? "";
+    checks.push([`ceilings: the header lists exactly ${CEILINGS.length} numbered items (one per CEILINGS entry)`, items.length === CEILINGS.length]);
+    CEILINGS.forEach((c, i) => {
+      checks.push([`ceiling ${i + 1}: every phrase is in its header item, its footer text and plan row 168 (${c.phrases[0]})`, c.phrases.every((ph) => (items[i] ?? "").includes(ph) && c.text.includes(ph) && row.includes(ph))]);
+    });
+    checks.push(["ceilings: the plan row's list names the same count as CEILINGS", new RegExp(`\\(${["zero","one","two","three","four","five","six","seven","eight","nine","ten"][CEILINGS.length]} items\\)`).test(row)]);
   }
 
+
+  // ── Round 5 (F1–F13) ────────────────────────────────────────────────────────
+  // F1: a test that names no verdict inherits the enclosing verdict arm.
+  for (const [label, body] of [
+    ["a nested non-verdict ternary", 'return outcome === "deny" ? (outcome.length > 0 ? "text-status-allow" : "text-status-deny") : "text-status-restrict";'],
+    ["a nested non-verdict if", 'if (outcome === "deny") { if (outcome.length > 0) return "text-status-allow"; } return "text-status-restrict";'],
+    ["a nested non-verdict switch", 'if (outcome === "deny") { switch (outcome.length) { case 4: return "text-status-allow"; } } return "text-status-restrict";'],
+    ["a nested switch default", 'if (outcome === "deny") { switch (outcome.length) { default: return "text-status-allow"; } } return "text-status-restrict";'],
+  ]) checks.push([`F1 MUTANT ${label} inside the deny arm is RED`, bp(body).length >= 1]);
+  checks.push(["F1: a nested non-verdict branch that returns the verdict's own class passes", bp('return outcome === "deny" ? (outcome.length > 0 ? "text-status-deny" : "text-status-deny") : "text-status-restrict";').length === 0]);
+  checks.push(["F1 (named ceiling): a non-verdict wrapper at the top level, outside any verdict arm, is not judged", bp('if (typeof outcome === "string") { const DENY_TONE = "text-status-allow"; return outcome === "deny" ? DENY_TONE : "text-status-restrict"; } return "text-status-restrict";').length === 0]);
+  // F2: a set of verdicts passes a class only if every verdict in it owns that class's token.
+  checks.push(["F2 MUTANT `[\"allow\",\"deny\"].includes()` with the allow class is RED", bp('return ["allow", "deny"].includes(outcome) ? "text-status-allow" : "text-status-restrict";').length >= 1]);
+  checks.push(["F2 MUTANT `outcome === \"allow\" || outcome === \"deny\"` with the allow class is RED", bp('return outcome === "allow" || outcome === "deny" ? "text-status-allow" : "text-status-restrict";').length >= 1]);
+  checks.push(["F2: {deny, restrict} with either of their classes passes (shared token)", bp('return ["deny", "restrict"].includes(outcome) ? "text-status-restrict" : "text-status-allow";').length === 0 && bp('return ["deny", "restrict"].includes(outcome) ? "text-status-deny" : "text-status-allow";').length === 0]);
+  checks.push(["F2 MUTANT {deny, restrict} with the step-up class is RED", bp('return ["deny", "restrict"].includes(outcome) ? "text-status-step-up" : "text-status-allow";').length >= 1]);
+  // F9: negation flips polarity; switch(true).
+  checks.push(["F9: the correct `!(outcome === \"deny\")` and `![…].includes()` forms pass", bp('return !(outcome === "deny") ? "text-status-allow" : "text-status-deny";').length === 0 && bp('return !["deny"].includes(outcome) ? "text-status-allow" : "text-status-deny";').length === 0]);
+  checks.push(["F9 MUTANT `!(outcome === \"deny\")` with the deny arm wrong is RED", bp('return !(outcome === "deny") ? "text-status-deny" : "text-status-allow";').length >= 1]);
+  checks.push(["F9 MUTANT `switch (true) { case outcome === \"deny\": return … }` mis-paired is RED, paired passes", bp('switch (true) { case outcome === "deny": return "text-status-allow"; default: return "text-status-restrict"; }').length >= 1 && bp('switch (true) { case outcome === "deny": return "text-status-deny"; default: return "text-status-restrict"; }').length === 0]);
+  // F10 plants.
+  checks.push(["X1: the loose `!=` correct form passes, its swapped form is RED", bp('return outcome != "deny" ? "text-status-allow" : "text-status-deny";').length === 0 && bp('return outcome != "deny" ? "text-status-deny" : "text-status-allow";').length >= 1]);
+  checks.push(["X26 MUTANT a mixed test binds BOTH arms: the else arm wrong is RED", bp('return outcome === "deny" || flag ? "text-status-deny" : "text-status-allow";').length >= 1]);
+  checks.push(["X3 MUTANT the LAST important declaration wins, not the first (RED)", cp(cssRule("color: hsl(var(--decision-deny)) !important; color: hsl(var(--decision-allow)) !important;")).some((m) => /paints --decision-allow/.test(m)) && cp(cssRule("color: hsl(var(--decision-allow)) !important; color: hsl(var(--decision-deny)) !important;")).length === 0]);
+  checks.push(["X4 MUTANT a text rule setting background-color is RED", cp(cssRule("color: hsl(var(--decision-deny)); background-color: red;")).some((m) => /not one of the colour properties/.test(m))]);
+  checks.push(["X13 MUTANT an unnamed Record's `text-status-deny/0` is RED (complete token)", rp(`${goodRecord}\nconst U: Record<SimulatorOutcome, string> = { deny: "text-status-deny/0" };`).some((m) => /not a complete canonical/.test(m))]);
+  checks.push(["F8: a four-verdict Record not listed in TONE_EXPECTED is RED (kind null is rejected by the lane)", toneRecordProblems(`${goodRecord}\nexport const OTHER: Record<Outcome, string> = { allow: "text-status-allow", "step-up": "text-status-step-up", restrict: "text-status-restrict", deny: "text-status-deny" };`, { OUTCOME_TONE: "text" }).problems.some((m) => /OTHER is a four-verdict Record that is not listed/.test(m))]);
+  checks.push(["F8 MUTANT an export alias swapping two judged Records is RED", toneExportProblems("export { A as B, B as A };", ["A", "B"]).length === 2 && toneExportProblems("export { A as Z };", ["A"]).length === 1 && toneExportProblems("export { A };", ["A"]).length === 0]);
+  checks.push(["INFO: a parse error in a tone module is reported by the syntax-tree judge itself", toneBranchProblems("export const z = ;").some((m) => /parse error/.test(m))]);
+  // F3: CSS shapes.
+  const hexName = [..."text-status-deny"].map((ch) => `\\${ch.codePointAt(0).toString(16)} `).join("").trim();
+  checks.push(["F3 MUTANT a per-letter escaped selector is RED", cp(`${goodCss}\n.t\\65xt-st\\61tus-d\\65ny { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m))]);
+  checks.push(["F3 MUTANT a fully hex-escaped selector is RED", cp(`${goodCss}\n.${hexName} { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m))]);
+  checks.push(["F3 MUTANT a `/*` inside a string does not swallow the next rule (RED, and the rule is still judged)", cp('.x::before { content: "/*"; }\n.text-status-deny { color: hsl(var(--decision-allow)); }\n.y::before { content: "*/"; }').some((m) => /paints --decision-allow/.test(m))]);
+  checks.push(["F3 MUTANT namespaced attribute selectors `[*|class*=…]` and `[|class*=…]` are RED", cp(`${goodCss}\n[*|class*="xt-status-den"] { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m)) && cp(`${goodCss}\n[|class*="xt-status-den"] { color: hsl(var(--decision-allow)); }`).some((m) => /canonical/.test(m))]);
+  checks.push(["F3: an unterminated comment or string makes the stylesheet unjudgeable (RED)", cp(`${goodCss}\n/* never closed`).some((m) => /unterminated/.test(m)) && cp(`${goodCss}\n.x { content: "never closed;\n}`).some((m) => /unterminated/.test(m))]);
+  checks.push(["F3: an unrelated escaped selector (`.sm\\:flex`) is not a verdict mention", cp(`${goodCss}\n.sm\\:flex { display: flex; }`).length === 0]);
+  // F5: stylesheets the gate cannot reach.
+  const ls5 = (files, srcs) => loadedStylesheets("/r", srcs, (f) => { if (f in files) return files[f]; throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); });
+  checks.push(["F5 MUTANT a package-specifier stylesheet import is reported as unresolved", ls5({ "/r/main.tsx": 'import "@workspace/api/verdict.css";' }, ["/r/main.tsx"]).unresolved.length === 1]);
+  checks.push(["F5 MUTANT a dynamic `import(\"x.css\")` and a `require` are seen", ls5({ "/r/m.tsx": 'import("@w/a.css"); require("@w/b.css");' }, ["/r/m.tsx"]).unresolved.length === 2]);
+  checks.push(["F5: the font-package family is the one specifier let through", ls5({ "/r/m.tsx": 'import "@fontsource/inter/400.css";' }, ["/r/m.tsx"]).unresolved.length === 0]);
+  checks.push(["F5 MUTANT an unquoted `@import url(../x.css)` is followed, a package one is reported", [...ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": "@import url(./x.css); @import url(pkg/y.css);" }, ["/r/m.tsx"]).loaded].includes("/r/x.css") && ls5({ "/r/m.tsx": 'import "./i.css";', "/r/i.css": "@import url(pkg/y.css);" }, ["/r/m.tsx"]).unresolved.length === 1]);
+  await e2e("F5: a package-specifier stylesheet in main.tsx exits 1", 1, "cannot resolve", { "a/src/main.tsx": 'import "./index.css";\nimport "@workspace/api/verdict.css";\n' });
+  await e2e("F5: a font-package stylesheet import still exits 0", 0, "", { "a/src/main.tsx": 'import "./index.css";\nimport "@fontsource/inter/400.css";\n' });
+  await e2e("F5: a <link rel=stylesheet> in index.html (not the font host) exits 1", 1, "which this gate cannot judge", { "a/index.html": '<html><head><link rel="stylesheet" href="/overrides.css"></head></html>' });
+  await e2e("F5: the font host <link> in index.html is allowed", 0, "", { "a/index.html": '<html><head><link href="https://fonts.googleapis.com/css2?family=Inter" rel="stylesheet"></head></html>' });
+  await e2e("F5: an inline <style> block in a page exits 1", 1, "inline <style> block", { "a/src/Page.tsx": "export const P = () => <style>{`.text-status-deny{color:red}`}</style>;\n" });
+  await e2e("F5: an inline <style> in index.html exits 1", 1, "inline <style> block", { "a/index.html": "<html><style>.text-status-deny{color:red}</style></html>" });
+  // F6: every spelling of a runtime write to a judged Record.
+  const mp = (code, file) => mutationProblems(code, ["OUTCOME_TONE"], file);
+  for (const [label, code, file] of [
+    ["Reflect.set", 'Reflect.set(OUTCOME_TONE, "deny", "x");'],
+    ["a namespace import member", 'import * as T from "./tone"; T.OUTCOME_TONE.deny = "x";'],
+    ["destructuring assignment (array)", '[OUTCOME_TONE.deny] = ["x"];'],
+    ["destructuring assignment (object)", '({ a: OUTCOME_TONE.deny } = { a: "x" });'],
+    ["Object[\"assign\"]", 'Object["assign"](OUTCOME_TONE, { deny: "x" });'],
+    ["a bracketed write", 'OUTCOME_TONE["deny"] = "x";'],
+    ["a compound write", 'OUTCOME_TONE.deny += "x";'],
+    ["Object.defineProperty", 'Object.defineProperty(OUTCOME_TONE, "deny", { value: "x" });'],
+    ["delete", 'delete OUTCOME_TONE.deny;'],
+    ["a bracketed namespace member", 'import * as T from "./tone"; T["OUTCOME_TONE"].deny = "x";'],
+    ["a write in a .js file", 'OUTCOME_TONE.deny = "x";', "x.js"],
+    ["a write in a .mjs file", 'OUTCOME_TONE.deny = "x";', "x.mjs"],
+  ]) checks.push([`F6 MUTANT ${label} is RED`, mp(code, file).length >= 1]);
+  checks.push(["F6: reads of a judged Record are not mutations", mp('const a = OUTCOME_TONE.deny; if (OUTCOME_TONE.deny == OUTCOME_TONE.allow) {} const b = OUTCOME_TONE["deny"]; const { deny } = OUTCOME_TONE; foo(OUTCOME_TONE);').length === 0]);
+  await e2e("F6: `Reflect.set(OUTCOME_TONE, …)` in a page exits 1", 1, "OUTCOME_TONE is mutated at runtime", { "a/src/Page.jsx": 'import { OUTCOME_TONE } from "./lib/outcome-tone";\nReflect.set(OUTCOME_TONE, "deny", "text-status-allow");\n' });
+  // L3 spellings of a concatenated bg-status class.
+  await e2e("L3: `'bg-status-'.concat(v)` exits 1", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": "export const C = ({ v }) => <i className={'bg-status-'.concat(v)} />;\n" });
+  await e2e("L3: `['bg-status', v].join('-')` exits 1", 1, "no canonical .bg-status-", { "a/src/Chip.tsx": "export const C = ({ v }) => <i className={['bg-status', v].join('-')} />;\n" });
+  // X24: the bg floor demands every verdict's rule, not only deny's.
+  await e2e("X24: a bare `bg-status-step-up` use with only that bg rule missing exits 1", 1, "no canonical .bg-status-step-up", { "a/src/Chip.tsx": 'export const C = () => <i className="bg-status-step-up" />;\n', "a/src/index.css": `${e2eCss}\n${e2eBg.split("\n").filter((l) => !l.startsWith(".bg-status-step-up")).join("\n")}` });
+  // F8 through the lane.
+  await e2e("F8: an expected Record listed without a kind exits 1", 1, "listed without a class kind", { toneModules: { "a/src/lib/outcome-tone.ts": { OUTCOME_TONE: null } } });
+  await e2e("F8: an export alias swapping the expected Record's name exits 1", 1, "is exported as", { "a/src/lib/outcome-tone.ts": e2eTone.replace("export const OUTCOME_TONE", "const OUTCOME_TONE") + 'export { OUTCOME_TONE as OTHER_NAME };\n' });
+  const real4 = await runGate({ ...REAL_CONFIG, toneModules: Object.fromEntries(Object.entries(TONE_EXPECTED).map(([m, e]) => [m, Object.fromEntries(Object.entries(e).filter(([n]) => n !== "VERDICT_TEXT_TONE"))])) });
+  checks.push(["F8: dropping VERDICT_TEXT_TONE from the expected list makes the real run exit 1 (the Record is then unlisted)", real4.code === 1 && real4.err.join("\n").includes("VERDICT_TEXT_TONE is a four-verdict Record that is not listed")]);
+  const real5 = await runGate({ ...REAL_CONFIG, toneModules: Object.fromEntries(Object.entries(TONE_EXPECTED).map(([m, e]) => [m, Object.fromEntries(Object.entries(e).map(([n]) => [n, null]))])) });
+  checks.push(["F8: loosening every expected kind to null makes the real run exit 1", real5.code === 1 && real5.err.join("\n").includes("listed without a class kind")]);
 
   // The direction rule must hold on the REAL tone modules, each of which must exist.
   for (const rel of TONE_MODULES) {
@@ -1286,17 +1503,19 @@ async function selfTest() {
 }
 
 /**
- * What this gate does NOT judge. One list: it is printed on every passing run, and the self-test checks
- * that each `key` phrase appears in this file's header, in plan row 168 and in nothing it was copied from.
+ * What this gate does NOT judge. One list: it is printed on every passing run, and the self-test checks, in both
+ * directions, that the header comment, this footer and plan row 168 carry the same items — the header has exactly
+ * this many numbered items, and each item's `phrases` all appear in its header item, in its footer text and in the row.
  */
 export const CEILINGS = [
-  { key: "restrict vs deny TOKENS", text: "restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only;" },
-  { key: "badge Records outside the three tone modules", text: "badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED (an unnamed Record is held to canonical class tokens, but may carry extra utilities beside them) or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE);" },
-  { key: "default arm", text: "the default arm of a verdict branch, a branch whose test names no verdict literal (`failMode === 'fail-closed'`), and any verdict choice not made by an object property, a `===`/`==`/`!==`/`!=` test, `.includes()` or a `switch` case — a class written before its comparison (`text-status-${x === 'deny' ? …}`), `clsx({ 'text-status-allow': outcome === 'deny' })`, a switch clause that falls into the next with statements, an alias of a judged Record mutated through another name;" },
-  { key: "desktop tree's chart", text: "the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) — chart sites are judged only where a tone module exports OUTCOME_CHART_MARK;" },
-  { key: "signalgrid-app's TSX", text: "signalgrid-app's TSX, `.jsx` pages, and a NEW app tree with neither a tone module nor verdict CSS: the app's stylesheet is judged (a CSS root), but its sources are not inline-scanned (its LiveDecisionPanel map would trip the scan);" },
-  { key: "Tailwind theme", text: "Tailwind theme/config colours, and the Tailwind opacity forms (`bg-status-allow/5`), which no stylesheet rule generates (plan row 153);" },
-  { key: "tokens' own values", text: "the tokens' own values (check-decision-palette.mjs holds contrast and canon)." },
+  { phrases: ["restrict vs deny TOKENS"], text: "restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only;" },
+  { phrases: ["badge Records outside the three tone modules", "TONE_EXPECTED"], text: "badge Records outside the three tone modules, and any Record not named in TONE_EXPECTED or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE); an unnamed Record is held to canonical class tokens but may carry extra utilities beside them;" },
+  { phrases: ["default arm", "names no verdict literal", "falls into the next", "clsx", "aliased mutation"], text: "the default arm of a verdict branch; every status class under a branch whose test names no verdict literal and that is not inside a verdict arm (`if (typeof x === 'string') { const DENY = … }`, `failMode === 'fail-closed'`); a switch clause that falls into the next with statements; and any verdict choice not made by an object property, a comparison, `.includes()` or a `switch` case — a class written before its comparison, `clsx({ … })` keys, an aliased mutation of a judged Record (`const t = OUTCOME_TONE; t.deny = …`);" },
+  { phrases: ["desktop tree's chart"], text: "the desktop tree's chart (it exports no OUTCOME_CHART_MARK; its Dashboard carries literal fills) — chart sites are judged only where a tone module exports OUTCOME_CHART_MARK;" },
+  { phrases: ["signalgrid-app's TSX", "new app tree"], text: "signalgrid-app's TSX (its stylesheet is judged, its sources are not inline-scanned: its LiveDecisionPanel map would trip the scan) and a new app tree with neither a tone module nor verdict CSS;" },
+  { phrases: ["Tailwind theme", "opacity forms", "@fontsource"], text: "Tailwind theme/config colours, the Tailwind opacity forms (`bg-status-allow/5`) that no stylesheet rule generates (plan row 153), and font-package stylesheets (`@fontsource/…`, @font-face only), the one package specifier the gate lets through;" },
+  { phrases: ["tokens' own values"], text: "the tokens' own values (check-decision-palette.mjs holds contrast and canon);" },
+  { phrases: ["arbitrary-value or important override"], text: "an arbitrary-value or important override written beside a status class in a page (`className=\"text-status-deny !text-[hsl(var(--decision-allow))]\"`), which neither this gate nor check-decision-palette sees." },
 ];
 
 /**
@@ -1324,7 +1543,7 @@ export async function runGate(cfg) {
 
   const walkErrs = [];
   const files = trees.flatMap((t) => {
-    const r = walk(join(root, t), /\.tsx?$/, [], [], fsx);
+    const r = walk(join(root, t), /\.(?:[cm]?js|jsx|tsx?)$/, [], [], fsx);
     walkErrs.push(...r.errs);
     return r.files;
   });
@@ -1355,6 +1574,11 @@ export async function runGate(cfg) {
     entriesJudged += r.entries;
     for (const msg of r.problems) registryProblems.push(`${mod}:${msg}`);
     for (const msg of toneBranchProblems(src)) registryProblems.push(`${mod}:${msg}`);
+    const expectedMap = Array.isArray(toneModules[mod]) ? Object.fromEntries(toneModules[mod].map((n) => [n, null])) : toneModules[mod];
+    for (const [n, kind] of Object.entries(expectedMap)) {
+      if (kind !== "text" && kind !== "bg") registryProblems.push(`${mod}: ${n} is listed without a class kind (\`text\` or \`bg\`) — an unkinded Record is not held to one canonical class`);
+    }
+    for (const msg of toneExportProblems(src, Object.keys(expectedMap))) registryProblems.push(`${mod}:${msg}`);
     // Every tone module is imported and its namespace inspected, whatever the spelling of
     // its export; an import that fails matters only to a module that is required to carry
     // a chart map or that mentions one.
@@ -1376,16 +1600,19 @@ export async function runGate(cfg) {
   }
 
   let cssRules = 0;
-  const BARE_BG = /(?<![\w/-])bg-status-(?:allow|step-up|restrict|deny)(?![\w/-])|(?<![\w/-])bg-status-(?:\$\{|["'`]\s*\+)/;
+  // The bare class is the one a stylesheet rule can satisfy; the Tailwind opacity form (`bg-status-allow/5`) is a
+  // different class that no `.bg-status-*` rule generates (plan row 153). Concatenated forms are uses of the bare class.
+  const BARE_BG = /(?<![\w/-])bg-status-(?:allow|step-up|restrict|deny)(?![\w/-])|(?<![\w/-])bg-status-(?:\$\{|["'`]\s*(?:\+|\)?\s*\.\s*concat\b))|["'`]bg-status["'`]\s*,[^\]]*\]\s*\.\s*join\b/;
   for (const cssRoot of cssRoots) {
-    const everything = walk(join(root, cssRoot), /\.(?:tsx?|css)$/, [], [], fsx);
+    const everything = walk(join(root, cssRoot), /\.(?:[cm]?js|jsx|tsx?|css)$/, [], [], fsx);
     const css = { files: everything.files.filter((f) => f.endsWith(".css")) };
     const srcs = { files: everything.files.filter((f) => !f.endsWith(".css")) };
     for (const e of everything.errs) registryProblems.push(`${e} — unreadable; ${cssRoot} was not fully judged`);
     // The floor is supplied only by stylesheets the tree LOADS, not by any .css file lying under it; and a
     // stylesheet the tree loads from OUTSIDE its root is judged too (it styles the same classes).
-    const { loaded, errs: loadErrs } = loadedStylesheets(join(root, cssRoot), srcs.files, readFile);
+    const { loaded, errs: loadErrs, unresolved } = loadedStylesheets(join(root, cssRoot), srcs.files, readFile);
     for (const e of loadErrs) registryProblems.push(`${e} — unreadable; ${cssRoot}'s loaded stylesheets were not fully judged`);
+    for (const u of unresolved) registryProblems.push(`${u.replace(root + "/", "")} — a stylesheet this gate cannot resolve (a package specifier, not a path); it is NOT judged`);
     const judgedCss = new Map();
     for (const f of new Set([...css.files, ...loaded])) {
       let text;
@@ -1397,12 +1624,24 @@ export async function runGate(cfg) {
     }
     const found = new Set();
     for (const [f, set] of judgedCss) if (loaded.has(f)) for (const k of set) found.add(k);
-    // The bare class is the one a stylesheet rule can satisfy; the Tailwind opacity form
-    // (`bg-status-allow/5`) is a different class that no `.bg-status-*` rule generates (plan row 153).
+    // Stylesheets the gate cannot reach at all: an HTML `<link rel=stylesheet>` (the font host aside) and any inline `<style>`.
     let usesBg = false;
     for (const f of srcs.files) {
-      try { if (BARE_BG.test(stripComments(readFile(f, "utf8")))) usesBg = true; }
-      catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message}); not searched for bg-status-* use`); }
+      let text;
+      try { text = stripComments(readFile(f, "utf8")); }
+      catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message}); not searched for bg-status-* use or inline <style>`); continue; }
+      if (BARE_BG.test(text)) usesBg = true;
+      if (/<style[\s>]/.test(text)) registryProblems.push(`${rel(f)} — contains an inline <style> block, which this gate cannot judge`);
+    }
+    const htmlFile = join(root, dirname(cssRoot), "index.html");
+    let html = null;
+    try { html = readFile(htmlFile, "utf8"); } catch (e) { if (e.code !== "ENOENT") registryProblems.push(`${rel(htmlFile)} — unreadable (${e.code ?? e.message})`); }
+    if (html !== null) {
+      for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
+        const href = /\bhref\s*=\s*["']?([^"'\s>]+)/i.exec(tag)?.[1] ?? "";
+        if (/\brel\s*=\s*["']?stylesheet/i.test(tag) && !/^https:\/\/fonts\.googleapis\.com\//.test(href)) registryProblems.push(`${rel(htmlFile)} — links the stylesheet "${href}", which this gate cannot judge (only the font host is allowed)`);
+      }
+      if (/<style[\s>]/i.test(html)) registryProblems.push(`${rel(htmlFile)} — contains an inline <style> block, which this gate cannot judge`);
     }
     const need = VERDICTS.map((v) => `text:${v}`);
     if (usesBg) need.push(...VERDICTS.map((v) => `bg:${v}`));
@@ -1438,13 +1677,9 @@ export async function runGate(cfg) {
     let src;
     try { src = readFile(file, "utf8"); } catch (e) { registryProblems.push(`${r} — unreadable (${e.code ?? e.message}); not inline-scanned`); continue; }
     const hits = [...offendingLines(src), ...localMapLines(src)];
-    // A judged Record mutated at runtime (`OUTCOME_TONE.deny = …`, `Object.assign(OUTCOME_TONE, …)`) is judged
-    // by what its literal says, not by what it holds when rendered: refuse the mutation where it is written.
-    const code = stripComments(src);
-    for (const name of expectedNames) {
-      const mutation = new RegExp(`(?<![\\w$.])${escapeRegExp(name)}\\s*(?:\\.\\s*[\\w$]+|\\[[^\\]]+\\])\\s*(?:[-+*/%&|^]|\\*\\*|\\?\\?|\\|\\||&&)?=(?!=)|\\bObject\\s*\\.\\s*(?:assign|defineProperty|defineProperties|setPrototypeOf)\\s*\\(\\s*${escapeRegExp(name)}\\b|\\bdelete\\s+${escapeRegExp(name)}\\b`).exec(code);
-      if (mutation) registryProblems.push(`${r}:line ${code.slice(0, mutation.index).split("\n").length}: ${name} is mutated at runtime (${mutation[0].trim().slice(0, 40)}) — its literal is no longer what renders`);
-    }
+    // A judged Record written to after its literal is judged by what its literal says, not by what it holds when
+    // rendered: refuse the mutation where it is written (assignment, destructuring, delete, Object.* / Reflect.*).
+    for (const msg of mutationProblems(src, expectedNames, file)) registryProblems.push(`${r}:${msg}`);
     if (toneSet.has(r)) {
       exempted += hits.length;
       // Inside the one place a map may live, the fallback's DIRECTION is gated.

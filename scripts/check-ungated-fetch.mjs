@@ -92,6 +92,16 @@ import { fileURLToPath } from "node:url";
 import { scratchGitOk, scratchGitEnv } from "./lib/scratch-git.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+/** A tracked source the gate cannot read is a gate that scanned nothing in it: name the path and refuse, never crash or skip. */
+function readTracked(file) {
+  try {
+    return readFileSync(resolve(repoRoot, file), "utf8");
+  } catch (e) {
+    console.error(`\n✗ ${file}: a tracked source cannot be read (${e.code ?? e.message}) — nothing in it was scanned; refusing to report a pass.`);
+    process.exit(1);
+  }
+}
+
 const SCAN_ROOT = "lib/integrations/src/integrations";
 const UTIL_ROOT = "lib/integrations/src/utils";
 /** Comments must not clear a gate (review finding): a body containing
@@ -459,7 +469,7 @@ function assertNoUnseenWrapper() {
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
   const unseen = [];
   for (const file of utilFiles) {
-    const text = readFileSync(resolve(repoRoot, file), "utf8");
+    const text = readTracked(file);
     // Does this helper reach a real network primitive? `fetch(` AND WebSocket
     // construction both count — a utils helper wrapping `new WebSocket` would
     // otherwise recreate the exact fetchWithTimeout blind spot this function
@@ -714,7 +724,12 @@ function selfTest() {
           // An EXTRA family directory, so the six-family floor still holds and the unreadable
           // report is the only thing that can fail the run (replacing a real family's
           // resolve.ts would also trip that floor and hide a dropped exit).
-          const fam = plant ? "zz-planted" : null;
+          const tracked = plant === "trackedDir" || plant === "trackedGone";
+          // A tracked source OTHER than a resolve.ts, so the family-derivation report cannot be what fails the run.
+          const trackedPick = tracked
+            ? readdirSync(join(tmp, SCAN_ROOT), { withFileTypes: true }).filter((d) => d.isDirectory()).flatMap((d) => readdirSync(join(tmp, SCAN_ROOT, d.name)).filter((f) => /\.ts$/.test(f) && f !== "resolve.ts" && !/\.test\.ts$/.test(f)).map((f) => `${d.name}/${f}`))[0]
+            : null;
+          const fam = tracked ? trackedPick : plant ? "zz-planted" : null;
           if (plant === "dir") mkdirSync(join(tmp, SCAN_ROOT, fam, "resolve.ts"), { recursive: true });
           scratchGitOk(tmp, ["init", "-q"]);
           scratchGitOk(tmp, ["add", "-A"]);
@@ -723,6 +738,11 @@ function selfTest() {
             mkdirSync(join(tmp, SCAN_ROOT, fam), { recursive: true });
             symlinkSync(join(tmp, "no-such-target.ts"), join(tmp, SCAN_ROOT, fam, "resolve.ts"));
           }
+          // A TRACKED source replaced after the index is built: the tracked-source read must name it, not crash.
+          if (tracked) {
+            rmSync(join(tmp, SCAN_ROOT, fam));
+            if (plant === "trackedDir") mkdirSync(join(tmp, SCAN_ROOT, fam));
+          }
           const r = spawnSync(process.execPath, ["scripts/check-ungated-fetch.mjs"], { cwd: tmp, encoding: "utf8", env: scratchGitEnv() });
           return { status: r.status, text: `${r.stdout}${r.stderr}`, fam };
         } finally { rmSync(tmp, { recursive: true, force: true }); }
@@ -730,12 +750,18 @@ function selfTest() {
       const control = run(false);
       const planted = run("dir");
       const dangling = run("dangling");
+      const trackedDir = run("trackedDir");
+      const trackedGone = run("trackedGone");
       return [
         ["end to end: the gate over an untouched copy of its roots exits 0 (control)", control.status === 0],
         ["end to end: a DIRECTORY named resolve.ts makes the whole gate exit 1, naming the path",
           planted.status === 1 && planted.text.includes(`${planted.fam}/resolve.ts`) && /EISDIR/.test(planted.text)],
         ["end to end: a DANGLING SYMLINK resolve.ts makes the whole gate exit 1, naming the path",
           dangling.status === 1 && dangling.text.includes(`${dangling.fam}/resolve.ts: present but unreadable`)],
+        ["end to end: a TRACKED source replaced by a directory exits 1 naming the path, with no stack trace",
+          trackedDir.status === 1 && trackedDir.text.includes(trackedDir.fam) && /EISDIR/.test(trackedDir.text) && !/\n\s+at /.test(trackedDir.text)],
+        ["end to end: a TRACKED source deleted from disk exits 1 naming the path, with no stack trace",
+          trackedGone.status === 1 && trackedGone.text.includes(trackedGone.fam) && /ENOENT/.test(trackedGone.text) && !/\n\s+at /.test(trackedGone.text)],
       ];
     })(),
     ["the real tree still yields at least six emitter families",
@@ -783,7 +809,7 @@ const SELF_BOUNDING_WRAPPERS = new Set();
 for (const file of execFileSync("git", ["ls-files", UTIL_ROOT], { cwd: repoRoot, encoding: "utf8" })
   .split("\n")
   .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))) {
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   if (!/AbortSignal\.timeout/.test(text)) continue;
   for (const m of text.matchAll(/^export\s+(?:async\s+)?function\s+([\w$]+)/gm)) SELF_BOUNDING_WRAPPERS.add(m[1]);
 }
@@ -804,7 +830,7 @@ let boundedSites = 0;
 for (const file of files) {
   const rel = file.slice(`${SCAN_ROOT}/`.length);
   if (EXEMPT.has(rel)) continue;
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   if (!FETCH_CALL.test(text)) continue;
   scanned += 1;
   const localBounded = selfBoundingLocals(text);
@@ -1007,7 +1033,7 @@ for (const file of files) {
 // factory gates without fetching, and a call that skips the clause is a hole wherever
 // it sits.
 for (const file of files) {
-  const text = readFileSync(resolve(repoRoot, file), "utf8");
+  const text = readTracked(file);
   const code = stripComments(text);
   for (const m of code.matchAll(/(?<![\w$.])resolveEmission\s*\(/g)) {
     const before = code.slice(Math.max(0, m.index - 30), m.index);

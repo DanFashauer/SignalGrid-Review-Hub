@@ -4678,3 +4678,48 @@ Recorded review and delivery observations: independent primary source review was
 The coordinator's pre-merge observations recorded all review threads resolved and all triggered workflows successful, including the body-edit phase 39691582074. The landing used no author approval, force push, branch deletion or check bypass. These are recorded process observations, not conclusions produced by the local graph reads.
 
 Verdict: holds for the immutable merge identity, source-head and artifact ancestry, readable stored receipts, and unchanged scoped mail-resolution records. The Git commit timestamp is 23:10:52Z; the recorded GitHub server merge time is 23:10:53Z. The recorded checks and local gates support this landing on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 within their stated coverage; the graph reads do not rerun them. Publication carries the already-recorded mint (141 passed proof records, Review Hub and MCP pass) onto canonical mainline; it does not re-mint on e8fa4a6a64bc0ae937e56685cd0eaa3aac0afda5 or 24eff86a940099e0725d474d1d5520bfbc71d368. The earlier receipt's two notRecorded proofs (backup-restore and db-role-split), its three stepsExcluded entries, and its source-bound Linux attestation remain explicit ceilings. No new overall readiness figure, owner-real-in-hand attestation or later follow-up landing is asserted.
+
+## 2026-10-22 — #1578 makes self-hosted Mac CI share the local workers' host reservation, landed at 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 from head 2493b26d100d398bd178ddc5a0052d8b5787e481
+Command:
+```bash
+git show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 2493b26d100d398bd178ddc5a0052d8b5787e481 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git merge-base --is-ancestor 24eff86a940099e0725d474d1d5520bfbc71d368 3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:scripts/mac/ci-host-verification.sh | shasum -a 256
+git show 24eff86a940099e0725d474d1d5520bfbc71d368:scripts/mac/host-verification-lock.sh | shasum -a 256
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-auto.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+git show 2493b26d100d398bd178ddc5a0052d8b5787e481:.github/workflows/mac-runner-harness.yml | node --input-type=module -e 'import fs from "node:fs"; for (const l of fs.readFileSync(0,"utf8").split("\n")) if (/^    timeout-minutes:/.test(l) || l.includes("bash scripts/mac/ci-host-verification.sh")) console.log(l.trim());'
+```
+Output:
+```text
+commit=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0
+parents=733beff264aad52081e758469052f7bcc056ae9e 2493b26d100d398bd178ddc5a0052d8b5787e481
+committedAt=2026-10-21T20:05:38-04:00
+subject=Merge pull request #1578 from DanFashauer/codex/worker-runtime-final-record-20261021
+e3fdd47695514d06d8d900faba4014fa372a9bd2efa81f2ac0f8891ee873f068  -
+3e3b6f62fc74dd48a65bae03353a1ef225f520592d17f5a7772fbcae23f8d1c0  -
+timeout-minutes: 720
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 2400 <<'CI_CHAIN'
+timeout-minutes: 780
+bash scripts/mac/ci-host-verification.sh 24eff86a940099e0725d474d1d5520bfbc71d368 39600 5400 <<'CI_CHAIN'
+```
+Recorded fixed-command exits: all seven commands returned exit 0; both ancestry checks produced no stdout. The SHA256 lines identify, in order, D's CI wrapper and the published C helper it pins; the following workflow projections name their declared job/admission/work budgets. The source reads identify the mechanism; they do not execute its timing, cancellation or process cleanup paths.
+
+Recorded GitHub API observations (the coordinator's final check and merge-confirmation receipts, separate from the fixed local source reads; no API retrieval instant is inferred):
+```text
+#1578 head=2493b26d100d398bd178ddc5a0052d8b5787e481 merge=3c892ad96dded5d8e4630d4dc63c12e3fcf02bb0 merged=2026-10-22T00:05:39Z state=closed
+119552326565 Typecheck, build, and proof scaffold head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:35Z completed=2026-10-22T00:03:04Z workflow=39695673531
+119552323893 PR — Mac-only checks (full-clone provenance, preflight on macOS) head=2493b26d100d398bd178ddc5a0052d8b5787e481 status=completed conclusion=success started=2026-10-21T23:47:33Z completed=2026-10-22T00:05:12Z workflow=39695672972
+```
+The coordinator's retained pre-push receipts on exact clean head 2493b26d100d398bd178ddc5a0052d8b5787e481 record full local preflight passed in 941.32 seconds and breadth passed, 58 proofs, in 36.78 seconds. Build (all packages) and Browser E2E (review console, website, admin) were unavailable on darwin-arm64, not passed by that local run. Three checks also self-skipped: backup-restore and db-role-split (DATABASE_URL unset), and the report-only Mainline workflow red streaks check (GITHUB_TOKEN unset); none is counted as passed by that local run. The new CI wrapper encloses install, initial port cleanup, selected proof chains and final teardown in one lock-owning shell; it waits only on busy exit 75, caps admitted PR work at 2400 seconds and harness work at 5400 seconds, and keeps normal local ticks nonblocking. Its helper source is pinned to published commit 24eff86a940099e0725d474d1d5520bfbc71d368. These source and validation claims do not grant new merge or product authority.
+
+Recorded live host observations (sanitized coordinator receipts, not re-runnable Git proof and not model-quality evidence):
+- At 2026-10-21T23:48:06.801950Z, the normal local audit was active; a Python worker held the persistent host-lock file, and a nonblocking Python lock probe observed contention. The manual validation guard had already been released before CI.
+- At 2026-10-21T23:49:29.148312Z, that audit had finished (44 reviewed units, no running audit). The self-hosted Actions Bash wrapper and Perl guardian held FD 9 on the **same persistent inode**, and a nonblocking Python lock probe again observed contention. No manual CI reservation existed and these observations triggered no model inference.
+
+The paired observations record local-worker ownership followed by CI ownership at the measured instants; they are not a continuous process census and do not substitute for either check's final conclusion. The Python probe recorded a Boolean contention result; the shell helper's exit-75 behavior is a separate source/fixture property. Raw PIDs, inode values, absolute home paths and private log locations are deliberately omitted.
+
+Recorded final review/workflow disposition: Independent primary source review recorded at 2026-10-21T23:31:42.805472Z was clear on exact head 2493b26d100d398bd178ddc5a0052d8b5787e481, with required validation still pending at that review. The subsequent local validation and both checks above completed before merge. The coordinator's 2026-10-21T23:50:31.644020Z bot observation found a completed Codex review on that exact head with no findings. The final pre-merge read at 2026-10-22T00:05Z found zero review threads. All five PR-triggered workflows completed success before merge, including the main validation workflow 39695673531 and Mac workflow 39695672972.
+Recorded merge process: Normal merge commit using fresh full expected head SHA; no author approval, force push, branch deletion or check bypass.
+
+Verdict: holds for the pinned merge identity, source and prior-landing ancestry, and declared wrapper/helper configuration. Git committedAt is 2026-10-22T00:05:38Z; the recorded GitHub server merged_at is 2026-10-22T00:05:39Z. The recorded exact-head local gates, final check results and independent review support the landing within their stated coverage; these fixed reads do not rerun them. The local graph/source reads, the recorded local gates, the GitHub check/merge receipts and the live host observations are distinct evidence. This landing does not re-mint the existing artifact f3b55f7173ed5d5365a102ebadadef2e0e1dfcea, measured on clean source a70c36b3e0e897d8a80a863e7228417f729e487f. Manifest v97 remains aa9ce381438ecb26874cdbe60b82a9339821d6b540f176e122291202a6b3885b in that receipt; its 141 passed proof records, two notRecorded proofs, three stepsExcluded entries, and Linux-VM native attestation on exact a70 remain the earlier receipt's coverage, not new measurements of D or its merge. No new overall readiness, owner-real-in-hand attestation, completion of pending product/PR work, or later journal landing is asserted.

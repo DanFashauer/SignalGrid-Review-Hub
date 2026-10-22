@@ -4514,7 +4514,7 @@ exit 1
     // The sibling module and the ledger section 4b needs, so a whole-script fixture REACHES the coverage row: that module starts git by name, and a fixture holding only loop-state.mjs could not see it (round 31).
     const giveCoverage = (fx) => {
       mkdirSync(join(fx.w, "scripts", "lib"), { recursive: true }); mkdirSync(join(fx.w, "docs", "agent"), { recursive: true }); mkdirSync(join(fx.w, "lib", "a"), { recursive: true });
-      for (const f of ["scripts/check-surface-review-coverage.mjs", "scripts/lib/scratch-git.mjs", "docs/agent/SURFACE_REVIEW_COVERAGE.json"]) writeFileSync(join(fx.w, f), readFileSync(join(repo, f)));
+      for (const f of ["scripts/check-surface-review-coverage.mjs", "scripts/lib/scratch-git.mjs", "scripts/lib/is-main.mjs", "docs/agent/SURFACE_REVIEW_COVERAGE.json"]) writeFileSync(join(fx.w, f), readFileSync(join(repo, f)));
       writeFileSync(join(fx.w, "pnpm-workspace.yaml"), "packages:\n  - \"lib/*\"\n"); writeFileSync(join(fx.w, "lib", "a", "package.json"), "{\"name\":\"@w/a\",\"version\":\"1.0.0\"}\n"); writeFileSync(join(fx.w, "lib", "a", "index.ts"), "export const a = 1;\n");
       fx.f("add", "-A", "scripts", "lib", "docs", "pnpm-workspace.yaml"); // (the module reads the TRACKED files: one workspace package is enough for a real 'N of M surfaces read' row)
     };

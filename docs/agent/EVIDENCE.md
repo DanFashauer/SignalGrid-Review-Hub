@@ -4760,6 +4760,7 @@ git-object-committedDate=2026-10-22T19:52:30Z
 The three skipped contexts were Nightly — full harness + preflight, Nightly — MCP lane, and CycloneDX SBOM sync (dependabot); skips are not passes. The optional Mac-only job was queued, not passed, at this observation. All six jobs in the main SignalGrid CI run completed success on the tested head. The three source-review threads were resolved. The sole formal Codex review in the recorded review list names earlier head 100682a473ab4ca662baed7c0f73d78fb75e8370; it is not represented as a new review of 79c40300. The final compare receipt found only artifacts/agent-heartbeats/mac-lane-tick.json between the tested canonical pin 07ce83a0 and pre-merge fcdf2732, with no counted-surface movement. The merge call used the freshly re-read full expected head; no author approval, force push, branch deletion or check bypass is recorded. Git committedDate and GitHub merged_at differ by one second.
 
 Fixed Git graph/source reads executed at 2026-10-22T20:07:29.153449+00:00; the following fixed commands each exited 0:
+Command:
 ```bash
 git --no-replace-objects show --no-patch --format='commit=%H%nparents=%P%ncommittedAt=%cI%nsubject=%s' 69258e30433f1a20c31975d50d746065032097c4
 git --no-replace-objects merge-base --is-ancestor 79c403004707627f7b0431725c48dd713775af18 69258e30433f1a20c31975d50d746065032097c4

@@ -56,34 +56,8 @@
   "tasks": [
     {
       "rank": 1,
-      "rowId": "29",
-      "title": "Assurance-pass advisories, batch one (2026-08-21)",
-      "role": "devex-tooling-engineer",
-      "executor": "agent:gate-and-proof-engineer",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-10-22T00:49:06.737Z"
-    },
-    {
-      "rank": 2,
-      "rowId": "43",
-      "title": "Falsifiability is enforced only for the connector tier",
-      "role": "devex-tooling-engineer",
-      "executor": "agent:gate-and-proof-engineer",
-      "kind": "role",
-      "source": {
-        "path": "docs/COMPANY_BUILD_PLAN.md",
-        "section": "Global backlog"
-      },
-      "firstRankedAt": "2026-10-22T00:49:06.737Z"
-    },
-    {
-      "rank": 3,
-      "rowId": "50",
-      "title": "Operability claims without live evidence",
+      "rowId": "17b",
+      "title": "Drive access-governance against the Keycloak lab that already exists",
       "role": "mac-lane-steward",
       "executor": "skill:signalgrid-native",
       "kind": "role",
@@ -91,331 +65,117 @@
         "path": "docs/COMPANY_BUILD_PLAN.md",
         "section": "Global backlog"
       },
-      "firstRankedAt": "2026-10-22T00:49:06.737Z"
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "rank": 2,
+      "rowId": "17c",
+      "title": "Shift-context: missing or unverified evidence must not compose to allow (the active shift-context-misfit rule in lib/signalgrid-core/src/policy.ts)",
+      "role": "principal-engineer",
+      "executor": "agent:architect",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "rank": 3,
+      "rowId": "26",
+      "title": "Role-split follow-ups from PR #222's round-9 review (post-cutoff)",
+      "role": "data-persistence-engineer",
+      "executor": "skill:signalgrid-core",
+      "kind": "role",
+      "source": {
+        "path": "docs/COMPANY_BUILD_PLAN.md",
+        "section": "Global backlog"
+      },
+      "firstRankedAt": "2026-10-22T12:28:51.447Z"
     }
   ],
   "needsExecutor": [],
-  "unmeasured": [
+  "unmeasured": [],
+  "awaiting": [
     {
       "rowId": "17",
       "title": "Run the two remaining wire-truth shifts and bind the records to the code",
-      "measuredAt": "2026-09-27",
-      "reason": "lab marker 2026-10-08 is older than 14 days - re-check the blocker"
-    },
-    {
-      "rowId": "17b",
-      "title": "Drive access-governance against the Keycloak lab that already exists",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "17c",
-      "title": "Shift-context: missing or unverified evidence must not compose to allow (the active shift-context-misfit rule in lib/signalgrid-core/src/policy.ts)",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
+      "kind": "lab",
+      "blocker": "ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand re-raised 2026-10-22",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "18",
       "title": "Make iOS port parity behavioral, not textual",
-      "measuredAt": "2026-09-26",
-      "reason": "owner marker 2026-10-08 is older than 14 days - re-check the blocker"
+      "kind": "owner",
+      "blocker": "the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "22",
       "title": "Stand up the cost model and shift economics",
-      "measuredAt": "2026-10-08",
-      "reason": "owner marker 2026-10-08 is older than 14 days - re-check the blocker"
+      "kind": "owner",
+      "blocker": "a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "24",
       "title": "Stage the ledger-truncation article for your review",
-      "measuredAt": "2026-09-27",
-      "reason": "owner marker 2026-10-08 is older than 14 days - re-check the blocker"
-    },
-    {
-      "rowId": "26",
-      "title": "Role-split follow-ups from PR #222's round-9 review (post-cutoff)",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "27",
-      "title": "Wire WEBAUTHN_REQUIRE_STEP_UP_FOR_ADMIN or retire it",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "30",
-      "title": "Graph launch-subset Bruno collection + transport abstraction check",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "33",
-      "title": "Lab telemetry: OTel Collector + Prometheus profile",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "35",
-      "title": "OpenBao secret boundary",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "36",
-      "title": "Second-IdP source independence: authentik",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
+      "kind": "owner",
+      "blocker": "#1190 draft-4 review; owner hand re-raised 2026-10-22",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "38",
       "title": "Free-tier proprietary validation targets",
-      "measuredAt": "2026-09-26",
-      "reason": "owner marker 2026-10-08 is older than 14 days - re-check the blocker"
-    },
-    {
-      "rowId": "40",
-      "title": "Row 7's reconcile half never ran",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "48",
-      "title": "Native parity is textual, not behavioral",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
+      "kind": "owner",
+      "blocker": "a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations",
+      "markedAt": "2026-10-22"
     },
     {
       "rowId": "49",
       "title": "Assessor-facing overstatement",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "61",
-      "title": "Swept every gate for the exclusion shape that broke `check:absence`. Nine of ninety-seven carry one; one was hiding forty-three documents.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "73",
-      "title": "What the first audit of the instruction layer found, and who owns each.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "76",
-      "title": "What the first accessibility execution found that is still open.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "76a",
-      "title": "Desktop tree accessibility: live regions, ARIA names, reduced motion and chart axis text in artifacts/signalgrid-desktop",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "77",
-      "title": "There is no web accessibility standard in this repository, proven eight ways.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "78",
-      "title": "What the first iOS execution found — including that CLAUDE.md's own way of checking one of its rules returns a false clean.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "81",
-      "title": "The product's sharpest unbuilt idea was already latent in its own DDM schema: the difference between what is DECLARED and what is OBSERVED.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "84",
-      "title": "The simulator never compares `zone` against `expectedZone`; 12 of 21 attribute branches are unreachable from any fixture.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "85",
-      "title": "A comment claims four falsifiable conjuncts; a 1024-case sweep shows two are constants.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "86",
-      "title": "`registerVerifiedPrincipal` does not validate the role its docstring says it validates.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "91",
-      "title": "`activatePolicyVersion` does not require the version's own tests to pass.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "95",
-      "title": "`HEAD` on an allowlisted route 404s under the gateway profile.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "97",
-      "title": "`POST /cp/v1/telemetry` is an unauthenticated, unbounded, cross-tenant WRITE that the profile documentation does not name as a write.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "98",
-      "title": "Under the gateway profile, unknown ROOT paths return Express's default HTML error page.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "99",
-      "title": "Two demo routers break the response-envelope contract.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "101",
-      "title": "iOS: `AppWorkflows.swift` is missing the scoped step-up release the TS planner has, so one gesture releases every held action.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "102",
-      "title": "iOS: white text on the brand header fill fails WCAG AA, one label in both appearances.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "109",
-      "title": "Web: an unrecognised verdict renders as NOTHING in the console's live decision panel.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "124",
-      "title": "`ladderRungs` is published as a derived figure by twelve proofs, is a literal in all twelve, and they disagree.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "128",
-      "title": "The ITSM aggregate reports `unhealthy` for a call the gate never let it make.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "130",
-      "title": "`deviceResolver`'s class docstring names a source that does not exist.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "131",
-      "title": "The empty-candidate backstop is present in five families and absent in ten.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "138",
-      "title": "`addToDLQ` hardcodes an attempt count it did not observe.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "140",
-      "title": "`vuln-scan` lets a non-finite CVSS into the evidence field while a sibling guards the same shape.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "149",
-      "title": "1,700 lines and 239 assertions of the decision core's own proof are unreviewed.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "150",
-      "title": "`ladderRungs=5` in the agent-behavior proof matches nothing in its source of truth.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "152",
-      "title": "`artifacts/signalgrid-desktop` dresses a web app as a native window, and the repo has a REAL desktop shell somewhere else entirely.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "154",
-      "title": "Two demo trees declare a large social card and ship an image nothing references.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "161",
-      "title": "Biometric and location privacy law is absent from the repo entirely.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "162",
-      "title": "The buyer's own program document describes the ICP in vocabulary the repo does not contain — and asks for the one thing the core refuses to do.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "165",
-      "title": "`tamperState` is an enum where the source material describes a graph.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "166",
-      "title": "Two iOS CI workflows are documented that do not exist.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "168",
-      "title": "The palette gate cannot see a verdict painted with the WRONG ratified token.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "182",
-      "title": "The claims gate read zero of 281 public documents.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "176",
-      "title": "\"Adding a signal to the grid\" is already the architecture, and I recommended against it on a mis-framing.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
-    },
-    {
-      "rowId": "170",
-      "title": "A row's status can be WRONG in either direction, and no gate can tell.",
-      "measuredAt": "2026-10-08",
-      "reason": "stamp 2026-10-08 is older than 14 days"
+      "kind": "owner",
+      "blocker": "a ruling on the 3 known failures that check-security-controls-matrix lists in the owner-reserved docs/SECURITY_CONTROLS_MATRIX.md",
+      "markedAt": "2026-10-22"
     }
   ],
-  "awaiting": [],
   "escalations": [
     {
-      "id": "plan-rows-unmeasured",
-      "clears": "cloud",
-      "asks": "52 open row(s) in docs/COMPANY_BUILD_PLAN.md carry no `re-measured YYYY-MM-DD` stamp within 14 days and were ranked from nothing — a row nobody measured against the tree is an unknown input: 17, 17b, 17c, 18, 22, 24, 26, 27, 30, 33, 35, 36, 38, 40, 48, 49, 61, 73, 76, 76a, 77, 78, 81, 84, 85, 86, 91, 95, 97, 98, 99, 101, 102, 109, 124, 128, 130, 131, 138, 140, 149, 150, 152, 154, 161, 162, 165, 166, 168, 182, 176, 170. Measure each against the tree; close it, or restamp it with what was measured (a row whose AWAITING OWNER / BLOCKED ON LAB marker is expired or future-dated needs the blocker re-checked and the marker re-dated or removed — restamping alone does not rank it)",
-      "since": "2026-10-22T00:49:06.737Z"
+      "id": "awaiting-owner-row-17",
+      "clears": "owner",
+      "asks": "row 17 (\"Run the two remaining wire-truth shifts and bind the records to the code\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: lab (ITSM lab for the seven vendor adapters; shift-context live source - both NON-PRODUCTION with synthetic data, read-only; owner hand re-raised 2026-10-22), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "id": "awaiting-owner-row-18",
+      "clears": "owner",
+      "asks": "row 18 (\"Make iOS port parity behavioral, not textual\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (the ruling was given 2026-09-29 as DR-061 in #1246; still owner-only: the #1246 merge and the #1118 unsafe-allow repair shape, asked in the 2026-09-28 hand), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "id": "awaiting-owner-row-22",
+      "clears": "owner",
+      "asks": "row 22 (\"Stand up the cost model and shift economics\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a deployment decision - docs/COST_MODEL.md closes the VM and backup hosting lines at deployment-decision time and the Fleet Premium per-device line only when the Premium decision is live, and neither trigger exists today), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "id": "awaiting-owner-row-24",
+      "clears": "owner",
+      "asks": "row 24 (\"Stage the ledger-truncation article for your review\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (#1190 draft-4 review; owner hand re-raised 2026-10-22), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "id": "awaiting-owner-row-38",
+      "clears": "owner",
+      "asks": "row 38 (\"Free-tier proprietary validation targets\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a pilot whose stack matches the row's trigger - the discovery log records 0 of 15 conversations), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
+    },
+    {
+      "id": "awaiting-owner-row-49",
+      "clears": "owner",
+      "asks": "row 49 (\"Assessor-facing overstatement\") in docs/COMPANY_BUILD_PLAN.md is parked, not ranked, because only the owner or a lab can unblock it: owner (a ruling on the 3 known failures that check-security-controls-matrix lists in the owner-reserved docs/SECURITY_CONTROLS_MATRIX.md), checked 2026-10-22. Clear the blocker, or remove its marker once cleared",
+      "since": "2026-10-22T12:28:51.447Z"
     },
     {
       "id": "owner-real-in-hand",
@@ -430,14 +190,14 @@
     "pendingSimRequests": [],
     "badRequestFiles": [],
     "needsExecutorCount": 0,
-    "unmeasuredCount": 52,
-    "awaitingCount": 0,
+    "unmeasuredCount": 0,
+    "awaitingCount": 6,
     "openRows": 52,
     "partialRows": 5
   },
   "staleAfterHours": 3,
-  "derivedAt": "2026-10-22T00:49:06.737Z",
-  "derivedAtCommit": "540f0259f2404565286ae3a8b58af8a208698384",
+  "derivedAt": "2026-10-22T12:28:51.447Z",
+  "derivedAtCommit": "1ba8b50732508b1b51dfe1e865f80daae15aab4d",
   "workingTreeCleanAtEntry": true,
-  "decisionAddress": "6f049a8ea74be87aadd5e92ed94b91834298c7951184dbe5bb282c102241fcfe"
+  "decisionAddress": "97a0c6a50d6dd43d89c10db480f1a267af7d676c5b71bfee439877216f4c21d6"
 }

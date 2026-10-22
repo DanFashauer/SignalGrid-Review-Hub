@@ -17,34 +17,58 @@
 // import/require bindings below list. It is NOT "every spelling": see CEILING.
 //
 // HOW IT MATCHES. The patterns run over the whole masked text (so `Date` newline
-// `.now()` is one match), and a hit is attributed to the line its match STARTS on.
-// Three things are done on the syntax tree first, all in place (a rewrite replaces
-// characters with spaces and never moves a newline, so line numbers are exact):
-//   · `X["name"]`, `X['name']`, X[`name`] and `X?.["name"]` become `X.name`;
+// `.now()` is one match), and a hit is attributed to the line its match STARTS on, by
+// source offset. Four things are done on the syntax tree first, all in place (a rewrite
+// replaces characters with spaces and the text keeps its length):
+//   · every TYPE node is blanked, and so are the `<...>` of explicit type arguments, so
+//     `typeof performance.timeOrigin` is not a read and `crypto.getRandomValues<T>(x)` is
+//     the call `crypto.getRandomValues(x)`;
+//   · `X["name"]`, `X['name']`, X[`name`], `X?.["name"]`, a key with an escape or a line
+//     continuation, and a parenthesised or `as const` key become `X.name`;
 //   · TypeScript wrappers around an expression are blanked: parens, `as T`,
 //     `satisfies T`, `<T>x`, a postfix non-null run, and `(0, x)` / `(void 0, x)`;
-//   · `Date(...)` called without `new`, and `new Date`, `new Date()` and
-//     `new Date(...spread)`, are found as call/new nodes, not by pattern.
+//   · `Date(...)` and Date`x` called without `new`, and `new Date`, `new Date()` and
+//     `new Date(...a, ...b)` (no arguments, or only spreads), are found as call/new
+//     nodes, not by pattern. These tree rules also follow the right operand of ANY comma
+//     (`(a, Date)()`, `new (a, Date)()`, `const { now } = (a, Date)`).
 // Destructures, `import` and `require` bindings (renamed, namespace, default, mixed,
 // `import x = require`, destructured `require`) are read from the tree too.
 //
 // CEILING (declared, not built; the syntax-tree rewrite of the textual matcher, which
-// counts reads rather than lines, is its own backlog row, not this one):
+// counts reads rather than lines, is its own backlog row, not this one). The same list is
+// in docs/BUILD_BACKLOG.md and the PR body:
 //   · LINES ARE NUMBERED BY LF, as git, grep and the pins count them. A CR-only
 //     (classic Mac) file is one line to a pin, though its `//` comments end at the CR.
 //   · PINS COUNT LINES, not reads. Two reads on one line are one hit.
 //   · FALSE-ALARM direction (a hit that is not a read, not a hidden read): `\bcrypto`,
 //     `\bperformance` and `\bprocess` also match after a dot, so `fixture.performance.now()`
 //     is a false hit; a bare imported name such as `randomInt(` is flagged anywhere,
-//     including an unrelated local function of that name; a comma expression whose left
-//     operand is not a number or `void 0` is not unwrapped.
-//   · Not followed: a unicode-letter alias; a string-named import specifier
-//     (`import { "randomBytes" as rb }`); an inline `require("crypto").randomBytes(4)`;
-//     `await import("crypto")`; `const { webcrypto } = nc` (a receiver taken from a
-//     namespace); and a clock or randomness function bound by any other route. This list
-//     is not exhaustive: the followed forms are the ones the plants name.
+//     including an unrelated local function of that name; a spread-only argument list is
+//     flagged although the spread may be non-empty (`new Date(...[1])`); a shadowed local
+//     named `Date` or `$Date`; and, inherited from mainline, safety-check's legacy raw-line
+//     union also flags a STRING or TEMPLATE that names `Date.now()` in the decision core
+//     (the legacy scan reads literal text, the parser-based scan does not).
+//   · HIDDEN-READ direction, not followed (the list is not exhaustive; the followed
+//     forms are the ones the plants name):
+//       - a comma expression whose left operand is not a number or `void 0`, in the TEXT
+//         rules: `(a, Date.now)()` (the tree rules above do follow it);
+//       - a unicode-letter alias; a string-named import specifier
+//         (`import { "randomBytes" as rb }`); an inline `require("crypto").randomBytes(4)`;
+//         `await import("crypto")`; `const { webcrypto } = nc` (a receiver taken from a
+//         namespace); a reassigned `require`; a variable key (`Date[k]()`);
+//       - receiver aliases: `const D = Date; D.now()`, `const p = performance; p.now()`;
+//       - `Reflect.get(Date, "now")()`, `Function("return Date.now()")()` and `eval(...)`
+//         (review-invariants misses them; safety-check catches a string-held one in the
+//         core only, through the legacy raw-line scan);
+//       - `new globalThis["Date"]()` and `new window.Date()`; `Date.prototype.constructor()`;
+//         a nested destructure from `globalThis`; a tagged template of a function other
+//         than Date (`Date.now`x``);
+//       - other timing and randomness sources: `performance.mark().startTime`,
+//         `os.uptime()`, `crypto.subtle.generateKey` and `generateKeyPair*`.
 //   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call, Temporal /
 //     Intl, and unicode escapes in an identifier are not seen.
+//   · COST: a 2 MB scoped file takes about 7 s in review-invariants and 4 s in
+//     safety-check (mainline about 2 s each). Slow, not a hang; typical files are not affected.
 import ts from "typescript";
 
 const K = ts.SyntaxKind;
@@ -132,21 +156,23 @@ const isWrapper = (n) =>
 const isTrivialLeft = (n) =>
   n.kind === K.NumericLiteral || (n.kind === K.VoidExpression && n.expression.kind === K.NumericLiteral);
 // Peel wrappers (and a trivial comma) down to the expression that actually runs.
-function peel(n) {
+// `anyComma` also follows the RIGHT operand of any comma (the tree rules never blank text, so a read on the
+// left is still found where it stands); the text rewrite below only drops a trivial left operand.
+function peel(n, anyComma = false) {
   for (;;) {
     if (n.kind === K.ParenthesizedExpression) {
       const e = n.expression;
-      if (e.kind === K.BinaryExpression && e.operatorToken.kind === K.CommaToken && isTrivialLeft(e.left)) n = e.right;
+      if (e.kind === K.BinaryExpression && e.operatorToken.kind === K.CommaToken && (anyComma || isTrivialLeft(e.left))) n = e.right;
       else n = e;
     } else if (isWrapper(n)) n = n.expression;
     else return n;
   }
 }
 const isDateRef = (e) => {
-  const p = peel(e);
+  const p = peel(e, true);
   if (p.kind === K.Identifier) return p.text === "Date";
   if (p.kind === K.PropertyAccessExpression && p.name.text === "Date") {
-    const r = peel(p.expression);
+    const r = peel(p.expression, true);
     return r.kind === K.Identifier && r.text === "globalThis";
   }
   return false;
@@ -160,17 +186,17 @@ function keyOf(n) {
 }
 // The name of the receiver a destructure reads from: `Date`, `globalThis.Date`, or a local.
 function receiverOf(e) {
-  const p = peel(e);
+  const p = peel(e, true);
   if (p.kind === K.Identifier) return p.text;
   if (p.kind === K.PropertyAccessExpression) {
-    const r = peel(p.expression);
+    const r = peel(p.expression, true);
     if (r.kind === K.Identifier && r.text === "globalThis") return p.name.text;
   }
   return null;
 }
 function requireModule(init) {
   if (!init) return null;
-  const e = peel(init);
+  const e = peel(init, true);
   if (e.kind === K.CallExpression && e.expression.kind === K.Identifier && e.expression.text === "require" &&
       e.arguments.length === 1 && ts.isStringLiteralLike(e.arguments[0])) return e.arguments[0].text;
   return null;
@@ -235,6 +261,8 @@ function build(src) {
   const interiors = []; // [a, b) literal text to blank in the masked text
   const wrappers = [];
   const accesses = [];
+  const typeRanges = []; // [start, end) of every type node: not code that runs
+  const typeArgLists = []; // call/new/tag type-argument lists, `<` and `>` included
   const dateLines = [];
   const sites = [];
   const b = newBindings();
@@ -264,6 +292,9 @@ function build(src) {
   };
 
   const visit = (node, inWrapper) => {
+    // A type is not code that runs: `typeof performance.timeOrigin` names a type, not a read. Instantiation-expression
+    // heads (ExpressionWithTypeArguments) are left alone; their argument types are recorded as they are visited.
+    if (ts.isTypeNode(node) && node.kind !== K.ExpressionWithTypeArguments) typeRanges.push([startOf(node), node.end]);
     switch (node.kind) {
       case K.StringLiteral:
       case K.NoSubstitutionTemplateLiteral: {
@@ -297,11 +328,20 @@ function build(src) {
         break;
       case K.CallExpression:
         if (isDateRef(node.expression)) dateLines.push(lineAt(starts, startOf(node)));
+        if (node.typeArguments?.length) typeArgLists.push(node.typeArguments);
+        break;
+      case K.TaggedTemplateExpression:
+        // A tagged template calls its tag: Date`x` is Date("x").
+        if (isDateRef(node.tag)) dateLines.push(lineAt(starts, startOf(node)));
+        if (node.typeArguments?.length) typeArgLists.push(node.typeArguments);
         break;
       case K.NewExpression:
-        if (isDateRef(node.expression) && (!node.arguments || node.arguments.length === 0 || node.arguments.some((x) => x.kind === K.SpreadElement))) {
+        // No arguments, or only spreads (which may be empty): the zero-argument form reads the clock. One
+        // plain argument first, `new Date(0, ...parts)`, is a fixed instant whatever the spread holds.
+        if (isDateRef(node.expression) && (!node.arguments || node.arguments.length === 0 || node.arguments.every((x) => x.kind === K.SpreadElement))) {
           dateLines.push(lineAt(starts, startOf(node)));
         }
+        if (node.typeArguments?.length) typeArgLists.push(node.typeArguments);
         break;
       case K.VariableDeclaration: {
         if (node.name.kind === K.ObjectBindingPattern) addSite(node.name, node.initializer);
@@ -383,23 +423,35 @@ function build(src) {
     blank(t, startOf(w), startOf(inner));
     blank(t, inner.end, w.end);
   }
+  // Types are blanked from the pattern text, and so are the angle brackets of explicit type arguments
+  // (`crypto.getRandomValues<Uint8Array>(x)` is the call `crypto.getRandomValues(x)`).
+  for (const [a, e] of typeRanges) blank(t, a, e);
+  for (const list of typeArgLists) {
+    const lt = t.lastIndexOf("<", startOf(list[0]));
+    let gt = list[list.length - 1].end;
+    while (gt < t.length && t[gt] !== ">") gt++;
+    if (lt >= 0 && gt < t.length) {
+      t[lt] = " ";
+      t[gt] = " ";
+    }
+  }
   for (const node of accesses) {
-    const arg = node.argumentExpression;
+    const arg = peel(node.argumentExpression);
     if (!(arg.kind === K.StringLiteral || arg.kind === K.NoSubstitutionTemplateLiteral) || !/^[A-Za-z_$][\w$]*$/.test(arg.text)) continue;
     const kids = node.getChildren(sf);
     const open = kids.find((c) => c.kind === K.OpenBracketToken);
     const close = kids.find((c) => c.kind === K.CloseBracketToken);
     if (!open || !close) continue;
     const hasQd = kids.some((c) => c.kind === K.QuestionDotToken);
-    const a = startOf(arg);
-    t[startOf(open)] = hasQd ? " " : ".";
-    t[a] = " ";
-    // The key's COOKED text (`"r\u0061ndom"` is `random`) goes where the raw text was; a cooked key is never
-    // longer than its raw spelling, and what is left over is blanked, so offsets and newlines do not move.
-    let ci = 0;
-    for (let k = a + 1; k < arg.end - 1; k++) if (!EOL.test(src[k])) t[k] = ci < arg.text.length ? arg.text[ci++] : " ";
-    t[arg.end - 1] = " ";
-    t[startOf(close)] = " ";
+    // `X["key"]` becomes `X.key`. The key's COOKED text (`"r\u0061ndom"` is `random`, a line continuation is
+    // nothing) is written contiguously where the raw text began and the rest of the brackets, newlines included,
+    // is blanked. Hits are attributed through source offsets, so no line moves.
+    const o = startOf(open);
+    const c = startOf(close);
+    for (let k = o; k <= c; k++) t[k] = " ";
+    if (!hasQd) t[o] = ".";
+    const a = startOf(arg) + 1;
+    for (let k = 0; k < arg.text.length; k++) t[a + k] = arg.text[k];
   }
 
   // Patterns built from this file's own bindings. Names are regex-escaped.
@@ -680,6 +732,32 @@ export const CLOCK_TREE_PLANTS = [
   ["a read after a postfix ! then a division at line end", "const z = m.get(k)! / 2;\nconst t = Date.now();"],
   ["a read after i++ then a division at line end", "i++ / 2;\nconst t = Date.now();"],
   ["a read after a numeric literal then a division", "const z = 4 / 2;\nconst t = Date.now();"],
+  // Round 10: explicit type arguments, tagged templates, comma receivers, wrapped and continued keys.
+  ["type arguments on a crypto call", "crypto.getRandomValues<Uint8Array<ArrayBuffer>>(new Uint8Array(4));"],
+  ["type arguments on an imported random call", 'import { randomFillSync } from "node:crypto";\nrandomFillSync<Buffer>(Buffer.alloc(4));'],
+  ["type arguments on a webcrypto receiver", 'import { webcrypto } from "node:crypto";\nwebcrypto.getRandomValues<Uint8Array<ArrayBuffer>>(new Uint8Array(4));'],
+  ["type arguments on Date.now", "const t = Date.now<number>();"],
+  ["type arguments after ?. on Date.now", "const t = Date.now?.<number>();"],
+  ["a tagged-template call of Date", "const t = Date`x`;"],
+  ["a tagged-template call of a cast Date", "const t = (Date as any)`x`;"],
+  ["a spread-only argument list: new Date(...a, ...b)", "const t = new Date(...a, ...b);"],
+  ["a destructure from a comma receiver: (a, Date)", "const { now } = (a, Date); now();"],
+  ["a comma receiver in new: new (a, Date)()", "const t = new (a, Date)();"],
+  ["a comma receiver in a call: (a, Date)()", "const t = (a, Date)();"],
+  ["new (void 0, Date)()", "const t = new (void 0, Date)();"],
+  ["a read on the LEFT of a comma: (Date.now(), 0)", "const t = (Date.now(), 0);"],
+  ["a trivial-comma destructure source: (0, Date)", "const { now } = (0, Date); export const t = now();"],
+  ["a cast on a require: require(...) as typeof import(...)", 'const nc = require("crypto") as typeof import("crypto");\nconst b = nc.randomBytes(4);'],
+  ["{ default as proc } from node:process", 'import { default as proc } from "node:process";\nconst t = proc.uptime();'],
+  ["proc.default.uptime() through a process namespace", 'import * as proc from "node:process";\nconst t = proc.default.uptime();'],
+  ["nc.default.webcrypto.getRandomValues(...)", 'import * as nc from "node:crypto";\nconst b = nc.default.webcrypto.getRandomValues(new Uint8Array(4));'],
+  ["a key with a line continuation: Date[\"n\\\now\"]()", 'const t = Date["n\\\now"]();'],
+  ["a key with a line continuation: Math[\"ran\\\ndom\"]()", 'const r = Math["ran\\\ndom"]();'],
+  ["a template key with a line continuation", "const t = Date[`n\\\now`]();"],
+  ["a parenthesised key: Date[(\"now\")]()", 'const t = Date[("now")]();'],
+  ["a key with a const assertion: Date[\"now\" as const]()", 'const t = Date["now" as const]();'],
+  ["a comment scan that must step over a template: `${a}//`; Date.now()", "const s = `${a}//`;\nconst t = Date.now();"],
+  ["a comment scan that must step over a regex: /\\/\\//; Date.now()", "const re = /\\/\\//; const t = Date.now();"],
   ["a multi-line destructure", "const {\n  UTC,\n  now,\n} = Date;"],
   ["a read after a bracket access that spans two physical lines", 'const v = x\n[\n"k"\n];\nconst t = Date.now();'],
 ];
@@ -778,11 +856,23 @@ export const CLOCK_NON_PLANTS = [
   ["a quoted key that is not a clock name", 'const { "parse": n } = Date;'],
   ["a computed key that is not static", "const { [k]: n } = Date;"],
   ["node:perf_hooks imported but only the type is used", 'import type { performance } from "node:perf_hooks";\nconst x: typeof performance = y;'],
+  ["a type-only reference: typeof performance.timeOrigin", "export type Origin = typeof performance.timeOrigin;"],
+  ["a type-only reference: typeof process.hrtime", "export type H = typeof process.hrtime;"],
+  ["a type-only reference in an interface", "export interface I { t: typeof performance.timeOrigin }"],
+  ["a type-only reference in a declare const", "export declare const hr: typeof process.hrtime;"],
+  ["new Date(0, ...parts): a fixed first argument", "const d = new Date(0, ...parts);"],
+  ["new Date(undefined as any, ...xs)", "const d = new Date(undefined as any, ...xs);"],
+  ["a template head naming Date.now()", "const s = `Date.now() at ${x}`;"],
   ["a regex literal naming Date.now()", "const re = /Date.now()/;"],
   ["a division of two names that match a spelling by prefix", "const r = Mathematics / randomness;"],
 ];
 // Sources the masker must REPORT as unreadable, and one it must not.
 export const CLOCK_DESYNC_PLANTS = [
+  ["a missing expression: let x = ;", "let x = ;\nconst t = Date.now();"],
+  ["a missing name: const = 1", "const = 1;\nconst t = Date.now();"],
+  ["an unclosed paren", "const a = (1 + 2;\nconst t = Date.now();"],
+  ["an unclosed class body", "class A {\nconst t = Date.now();"],
+  ["a stray closing brace", "}\nconst t = Date.now();"],
   // Not ASI: `foo()\n/x=/` is a division to the grammar, so the parser says so instead of guessing.
   ["a call then a line-initial regex", "foo()\n/x=/.test(s); const t = Date.now() / 2;"],
   ["a quoted string crossing a newline", 'const s = "abc\nconst t = 1;'],
@@ -866,6 +956,9 @@ export function clockSelfTestChecks(scan = scanSource) {
   checks.push(["a non-null spanning lines keeps the line of a later read", at("const v = foo\n!\n.bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a read split across lines is attributed to the line it STARTS on", at("const a = 1;\nconst t = Date\n  .now();\nconst u = 2;") === "[2]"]);
   checks.push(["two physically distinct reads around a multi-line bracket access stay on their own lines", at('const a = crypto.randomUUID(), v = o[\n"k"\n]; const b = crypto.randomUUID();') === "[1,3]"]);
+  checks.push(["a read in column 0 is not merged into the line above", at("const a = Date.now();\nDate.now();") === "[1,2]"]);
+  checks.push(["a read after a multi-line type is attributed to its own line", at("type T = {\n  a: number;\n};\nconst t = Date.now();") === "[4]"]);
+  checks.push(["a syntax error reports the line it is on", (scan("const a = 1;\nconst b = 2;\nlet x = ;\n").problems[0]?.line ?? 0) === 3]);
   checks.push(["lines are numbered by LF: a lone CR does not start a new line", at("const a = 1;\rconst b = 2;\nconst t = Date.now();") === "[2]"]);
   checks.push(["a clean file reports no masker problem", scan("const a = 1 / 2;\nconst s = `x${a}`;\n").problems.length === 0]);
   return checks;

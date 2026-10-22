@@ -133,8 +133,12 @@ stuck or red run raises a hand and keeps the claim for a person. Registry row:
 
 Every real run ends by heartbeating the mac-build-tick file under artifacts/agent-heartbeats
 through scripts/lane-deliver.mjs (`--no-wake`; deferred, skipped, paused, cooldown, nothing
-buildable, acted or failed; at most one an hour unless it acted), so the row's 3-hour
-tolerance catches a loaded job that never fires. A deferral retries every 5 minutes; a run
+buildable, acted or failed: hourly for a repeated result, every 15 minutes when the result
+changes, at once for a run that acted). A signal or a shell error that ends a run first is
+reported from its exit trap (best effort: launchd may kill a run it asked to stop), and while
+a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs, a `working`
+pulse goes out every 45 minutes, so the row's 3-hour tolerance catches a loaded job that never
+fires without mistaking a long session for one. A deferral retries every 5 minutes; a run
 that started a model session is followed by at least 3 hours with no admitted run, so
 sessions stay every few hours. Origin unreachable for 12 hours of wall clock raises one
 hand, and a hand that could not be delivered is retried by the next run that reaches origin.
@@ -143,8 +147,9 @@ hand, and a hand that could not be delivered is retried by the next run that rea
 `SG_STAGE_RUNNER` and a PATH prefix come from the Mac's environment or
 `~/.config/signalgrid/build-tick.env` (outside this tree; read by
 `scripts/mac/install-build-tick.sh`, never sourced); nothing in this repository can show what
-the loaded job carries, and a reinstall refuses to drop wiring the installed plist has unless
-`--force`.
+the loaded job carries, and a reinstall refuses to drop or change any key the installed plist
+has other than its interval (its arguments, working directory, log paths, KeepAlive, Nice and
+the rest) unless `--force`.
 
 ## The loop as of 2026-09-05, first revision (superseded above; kept for history)
 

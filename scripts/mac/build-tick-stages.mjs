@@ -2822,8 +2822,12 @@ process.exit(1);\n`);
     ok("M1 the mac-build-tick row declares the heartbeat path, a 3-hour tolerance (the most a */5 cron may declare) and the instant the path was declared; the null-path reason is gone",
       row.heartbeatPath === "artifacts/agent-heartbeats/mac-build-tick.json" && row.cadenceToleranceHours === 3 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(row.heartbeatSince ?? "") && row.heartbeatPathReason === undefined && row.status === "active", JSON.stringify({ p: row.heartbeatPath, t: row.cadenceToleranceHours, s: row.heartbeatSince }));
     const ws = row.writeScope ?? "";
-    ok("M1 the row's writeScope names the heartbeat file, lane-deliver heartbeat --no-wake, every exit but six, the hourly throttle and the undelivered-hands queue (five a run, 24 hours); `#1353, not on mainline yet` is byte-identical (N-4)",
-      ws.includes("writes artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver heartbeat --no-wake on every exit of a real run but six named in the script (straight to SignalGrid_Alpha; at most one an hour unless the run acted)")
+    const hbNum = (n) => Number(new RegExp(`^${n}=(\\d+)$`, "m").exec(sh)?.[1]);
+    const pulseMin = hbNum("HB_PULSE_SECONDS") / 60, changedMin = hbNum("HB_CHANGED_SECONDS") / 60, quietH = hbNum("HB_QUIET_SECONDS") / 3600;
+    ok("M1 the row's writeScope names the heartbeat file, lane-deliver heartbeat --no-wake, every exit but six, the exit trap, the working pulse and every throttle (read from the script's own constants: the pulse interval, the changed-result interval, the hour); `#1353, not on mainline yet` is byte-identical (N-4)",
+      ws.includes("writes artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver heartbeat --no-wake on every exit of a real run but six named in the script, from the EXIT trap when a signal or a shell error ends a run first (best effort), and every " + pulseMin + " minutes while a capped step (the PR refresh, the staged pipeline, preflight, breadth) runs")
+        && ws.includes("(straight to SignalGrid_Alpha; a repeated result at most once every " + quietH + " hour, a changed result at most once every " + changedMin + " minutes, and at once for a run that acted, for a working pulse and for the result that follows one)")
+        && !ws.includes("at most one an hour unless the run acted") && pulseMin === 45 && changedMin === 15 && quietH === 1
         && ws.includes("undelivered-hands/ and retried, at most five a run, for 24 hours") && ws.includes("it is PR #1353, not on mainline yet;") && !ws.includes("and raises hands through lane-deliver batch (straight to SignalGrid_Alpha)."));
     const eb = row.escalationBoundary ?? "";
     ok("M3 no `144` survives anywhere in the mac-build-tick row (the run count is gone from the registry too)", !/\b144\b/.test(JSON.stringify(row)));
@@ -2844,7 +2848,9 @@ process.exit(1);\n`);
     ok("TF transcribedFrom records the 2026-10-22 follow-up: the heartbeat path, the 12-hour hand, the 3-hour gap, the narrowed activationEvidence, and that no scheduler re-read was done", reg.transcribedFrom.includes("2026-10-22 (the cloud lane's follow-up to PR #1593; no scheduler re-read: mac-build-tick is a launchd agent, not an account trigger)") && reg.transcribedFrom.includes("heartbeatSince"));
     ok("M1/M5 the lane doc says a paused tick does nothing but heartbeat, and describes the heartbeat, the 12-hour hand, the 3-hour gap and host-local admission without citing the heartbeat file by path (check-cited-paths fails a path that does not exist yet)",
       doc.includes("does nothing but heartbeat while it is paused.") && doc.includes("Every real run ends by heartbeating the mac-build-tick file under artifacts/agent-heartbeats") && doc.includes("**Admission is host-local:**")
-        && doc.includes("a reinstall refuses to drop wiring the installed plist has unless `--force`") && !doc.includes("agent-heartbeats/mac-build-tick") && doc.includes("PR #1353, not on mainline yet"));
+        && doc.includes("hourly for a repeated result, every 15 minutes when the result changes, at once for a run that acted") && !doc.includes("at most one an hour unless it acted")
+        && doc.includes("signal or a shell error that ends a run first is reported from its exit trap (best effort:") && doc.includes("a `working` pulse goes out every " + pulseMin + " minutes")
+        && doc.includes("a reinstall refuses to drop or change any key the installed plist has other than its interval (its arguments, working directory, log paths, KeepAlive, Nice and the rest) unless `--force`") && !doc.includes("agent-heartbeats/mac-build-tick") && doc.includes("PR #1353, not on mainline yet"));
   });
 
   // ── round 2 of the follow-up (review r1: F1 the heartbeat while a capped step runs, F2 the exit trap, F7 the cooldown on Linux) ──

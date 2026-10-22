@@ -11,6 +11,9 @@
 // see. A gate that claims more than its table is the over-claim this repo gates.
 //
 // CEILING (declared, not built; one follow-up row in docs/BUILD_BACKLOG.md):
+//   · LINES ARE NUMBERED BY LF, as git, grep and the pins count them. A CR-only
+//     (classic Mac) file is one line to a pin and to a problem report, though a `//`
+//     comment and a regex literal in it do end at the CR.
 //   · PINS COUNT LINES, not reads. Two reads on one line are one hit.
 //   · Matching is per line, so `Date` newline `.now()` and `new Date(` newline `)`
 //     are not seen.
@@ -82,7 +85,9 @@ export function maskSource(src, blankComments = true) {
   // literal text already blanked, so only real code and delimiters are seen.
   const prevSig = (from) => {
     let k = from - 1;
-    while (k >= 0 && (out[k] === " " || out[k] === "\t" || EOL.test(out[k]))) k--;
+    // `\s` is exactly ECMAScript WhiteSpace plus LineTerminator, so a no-break space,
+    // a form feed or a U+2028 is never mistaken for the previous token.
+    while (k >= 0 && /\s/.test(out[k])) k--;
     return k;
   };
   const wordBefore = (k) => {
@@ -492,6 +497,8 @@ export const CLOCK_BLIND_SPOT_PLANTS = [
   ["a read after a for-of regex, with a parenthesised binding", "for ((x) of /a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
   ["a read after a for-of regex, destructuring an object", "for (const { p } of /a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
   ["a read after a for-await-of regex", "for await (const x of /a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
+  ["a read after a for-of regex separated by a no-break space", "for (const x of\u00a0/a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
+  ["a read after a for-of regex separated by a form feed", "for (const x of\f/a+/.exec(s) ?? []) { const t = Date.now() / 2; }"],
   ["a read after a regex following `in` with a single-quoted key", "const ok = 'k' in /a+/ ? Date.now() / 2 : 0;"],
   ["a read after a regex following `in` with a template key", "const ok = `k` in /a+/ ? Date.now() / 2 : 0;"],
   ["a read after a division that follows a closing quote", 'const z = "a" / 2; const w = "x/y";\nconst t = Date.now();'],

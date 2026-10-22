@@ -32,7 +32,7 @@
 // session that edited and then capped or broke left a half-finished change. The helper ITSELF failing (a
 // brief it cannot read or render, a failed git command, a missing --base, any exception that is not a content
 // Hand) is a PAUSE too, never a hand: a hand keeps the claim and the next tick takes a NEW row, so a broken
-// helper would burn the backlog 3 h at a time. An unparseable triage becomes a judgment (opus) build. An
+// helper would burn the backlog one row per admitted run. An unparseable triage becomes a judgment-kind build. An
 // unparseable or capped review is a reject (DR-047: an Opus failure is never downgraded). A marker is
 // written only by applyMarker, which asserts it changed exactly one line and the plan still parses.
 //
@@ -708,7 +708,7 @@ export function runCmd(ctx, path, kind) {
     }
   } catch (e) {
     // A Hand is the ROW's problem (a hand keeps the claim). Anything else is the helper's own (S-3): a pause, so the tick stops
-    // instead of claiming a new row every 3 h behind a broken helper.
+    // instead of claiming a new row on every admitted run behind a broken helper.
     if (!(e instanceof Hand)) console.error(e.stack);
     res = e instanceof Hand ? { outcome: "hand", reason: e.message } : { outcome: "pause", reason: e instanceof HelperFault ? e.message : `helper error: ${e.message}` };
   }
@@ -2133,13 +2133,13 @@ defer_host_verification`);
   // classification, gates, push, PR) with a stub claude/gh/pnpm and a scratch bare origin. No real model, network or preflight runs.
   if (process.platform === "darwin") guard2(ok, "e2e", () => {
     const dir = join(root, "sh-e2e"), home = join(dir, "home"), bin = join(dir, "bin"), seed = join(dir, "seed"), main = join(dir, "Repo");
-    const origin = join(dir, "github.com/Owner/Repo.git"), prlog = join(dir, "pr.log"), handlog = join(dir, "hand.log"), ghlog = join(dir, "gh.log"), marker = join(dir, "HOOK-RAN");
+    const origin = join(dir, "github.com/Owner/Repo.git"), prlog = join(dir, "pr.log"), handlog = join(dir, "hand.log"), hblog = join(dir, "heartbeat.log"), ghlog = join(dir, "gh.log"), marker = join(dir, "HOOK-RAN");
     for (const d of [home, bin, join(dir, "github.com/Owner")]) mkdirSync(d, { recursive: true });
     writeStub(bin);
     const exe = (name, text) => { writeFileSync(join(bin, name), text); chmodSync(join(bin, name), 0o755); };
     exe("gh", `#!/bin/sh\necho "$@" >> ${ghlog}\ncase "$*" in *"--jq length"*) echo 1 ;; esac\nexit 0\n`);
     exe("npm", "#!/bin/sh\nexit 0\n");
-    exe("pnpm", `#!/bin/sh\ncase "$1" in\n  install) mkdir -p node_modules scripts/node_modules/tsx scripts/node_modules/esbuild\n    echo '{"name":"tsx"}' > scripts/node_modules/tsx/package.json\n    echo '{"name":"esbuild","version":"0.0.1"}' > scripts/node_modules/esbuild/package.json ;;\n  run) echo "Breadth lane PASSED — 1 breadth proofs green (stub)" ;;\nesac\nexit 0\n`);
+    exe("pnpm", `#!/bin/sh\ncase "$1" in\n  --version) echo "\${SG_STUB_PNPM_VERSION:-10.28.1}" ;;\n  install) mkdir -p node_modules scripts/node_modules/tsx scripts/node_modules/esbuild\n    echo '{"name":"tsx"}' > scripts/node_modules/tsx/package.json\n    echo '{"name":"esbuild","version":"0.0.1"}' > scripts/node_modules/esbuild/package.json ;;\n  run) echo "Breadth lane PASSED — 1 breadth proofs green (stub)" ;;\nesac\nexit 0\n`);
     const esb = join(home, "Library/Caches/signalgrid/esbuild-0.0.1/node_modules/@esbuild", `darwin-${process.arch === "arm64" ? "arm64" : "x64"}`, "bin");
     mkdirSync(esb, { recursive: true });
     writeFileSync(join(esb, "esbuild"), "#!/bin/sh\nexit 0\n"); chmodSync(join(esb, "esbuild"), 0o755);
@@ -2153,7 +2153,8 @@ defer_host_verification`);
     for (const f of ["check-backlog-ownership.mjs", "check-owner-gated-surfaces.mjs"]) copyFileSync(join(HERE, "..", f), join(seed, "scripts", f));
     writeFileSync(join(seed, "scripts/preflight.mjs"), `import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";\nimport { execFileSync } from "node:child_process";\nif (process.env.SG_E2E_DIRTY === "tracked") writeFileSync("docs/COMPANY_BUILD_PLAN.md", "a gate rewrote a tracked file\\n");\nif (process.env.SG_E2E_DIRTY === "untracked") writeFileSync("gate-output.txt", "a cache a gate left\\n");\nif (process.env.SG_E2E_PLANT) {\n  const g = (...a) => execFileSync("git", a, { encoding: "utf8" }).trim();\n  appendFileSync(".git/config", '[url "' + process.env.SG_E2E_PLANT + '"]\\n\\tpushInsteadOf = ' + g("config", "remote.origin.url") + "\\n");\n  g("add", "-A");\n  mkdirSync(".git/refs/replace", { recursive: true });\n  writeFileSync(".git/refs/replace/" + g("rev-parse", "HEAD"), g("commit-tree", "-m", "substitute", g("write-tree")) + "\\n");\n}\nconsole.log(process.env.SG_E2E_PFQUICK ? "\\nPreflight PASSED (quick — heavy builds skipped) — everything it runs is green." : "\\nPreflight PASSED — everything it runs is green.");\n`);
     writeFileSync(join(seed, "scripts/mac/gh-pr.mjs"), `import { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(prlog)}, process.argv.slice(2).join(" ") + "\\n");\n`);
-    writeFileSync(join(seed, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(handlog)}, readFileSync(process.argv[3], "utf8") + "\\n");\n`);
+    writeFileSync(join(seed, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";\nif (process.argv[2] === "heartbeat") { appendFileSync(${JSON.stringify(hblog)}, ["HEARTBEAT", process.argv[3], process.argv[4], process.argv[5]].join(" ") + "\\n"); process.exit(0); }\nappendFileSync(${JSON.stringify(handlog)}, readFileSync(process.argv[3], "utf8") + "\\n");\n`);
+    writeFileSync(join(seed, "package.json"), JSON.stringify({ packageManager: "pnpm@10.28.1" })); // L3 reads the pin from the pinned mainline
     writeFileSync(join(seed, "docs/COMPANY_BUILD_PLAN.md"), PLAN);
     writeFileSync(join(seed, "docs/agent/objective-state.json"), JSON.stringify(witnessedState([{ rowId: "7", rank: 1, title: "Row seven" }])));
     mkdirSync(join(seed, "artifacts/agent-heartbeats"), { recursive: true });
@@ -2166,14 +2167,20 @@ defer_host_verification`);
     G(dir, "clone", "-q", origin, main); // the person's checkout; REPO_ROOT
     const bw = join(dir, "Repo.build");
     // A tick's branch and run directory are named by its STAMP (to the second); real ticks are hours apart, these are not, so wait for a new second.
-    const runTick = (extra = {}) => {
+    // The session gap and the heartbeat throttle are stamps in the cache, and these runs are seconds apart where real ones are hours: clear them
+    // before every run, except the gap when a case is about the gap itself.
+    const cacheDir = join(home, "Library/Caches/signalgrid/build-tick");
+    const runTick = (extra = {}, { keepGap = false } = {}) => {
+      for (const f of ["heartbeat-last", "heartbeat-last-result", ...(keepGap ? [] : ["last-admitted-epoch"])]) rmSync(join(cacheDir, f), { force: true });
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
       return spawnSync("/bin/bash", [join(main, "scripts/mac/build-tick.sh")], {
         env: { ...gitEnv, HOME: home, PATH: `${bin}:${process.env.PATH}`, SG_STUB_LOG: join(dir, "stub.log"), SG_STUB_TRIAGE: buildTriage("code"), SG_STUB_REVIEWS: "ship", ...extra }, encoding: "utf8", timeout: 240000 });
     };
     const remoteBranches = () => G(dir, "--git-dir", origin, "for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads/mac/").split("\n").filter(Boolean);
     const freeRow = () => { for (const l of remoteBranches()) G(dir, "--git-dir", origin, "update-ref", "-d", `refs/heads/${l.split(" ")[0]}`); };
-    const paused = join(home, "Library/Caches/signalgrid/build-tick/paused");
+    const paused = join(cacheDir, "paused");
+    let hbSeen = 0;
+    const heartbeats = () => { const all = existsSync(hblog) ? readFileSync(hblog, "utf8").split("\n").filter(Boolean) : []; const fresh = all.slice(hbSeen); hbSeen = all.length; return fresh; };
 
     let r = runTick();
     let br = remoteBranches();
@@ -2184,6 +2191,9 @@ defer_host_verification`);
       br.length === 1 && br[0].split(" ")[1] === cloneHead && G(bw, "rev-parse", "HEAD~1") === mainline && /^open --head mac\/build-row-7-/m.test(existsSync(prlog) ? readFileSync(prlog, "utf8") : ""), `${br.join("|")} ${cloneHead} ${mainline}`);
     ok("E2E ...and the claim was at the pinned sha (the run log says so) while gh was asked about the slug from the origin URL, not the cwd",
       /claimed plan row 7 with mac\/build-row-7-\S+ \(at the pinned mainline /.test(readFileSync(readdirSync(join(home, "Library/Logs/signalgrid")).map((f) => join(home, "Library/Logs/signalgrid", f)).find((f) => /build-tick-/.test(f)), "utf8")) && /repos\/Owner\/Repo\/pulls/.test(readFileSync(ghlog, "utf8")), readFileSync(ghlog, "utf8"));
+
+    ok("E2E M1 the acted run heartbeated mac-build-tick through lane-deliver, with --no-wake and the fixed words: `acted: plan row 7 — PR opened`",
+      heartbeats().includes("HEARTBEAT mac-build-tick acted: plan row 7 — PR opened --no-wake"), existsSync(hblog) ? readFileSync(hblog, "utf8") : "no heartbeat log");
 
     // B-1 end to end: a session that commits CLAUDE.md, repoints refs/remotes/origin/SignalGrid_Alpha at it, and plants a hook in its clone.
     freeRow();
@@ -2261,21 +2271,41 @@ defer_host_verification`);
     const stagesFile = join(bw, "scripts/mac/build-tick-stages.mjs");
     r = runTick({ SG_STUB_LOGGEDOUT: "triage" });
     ok("E2E a logged-out triage PAUSES the tick before any claim (paused file written, no new branch)", r.status === 1 && existsSync(paused) && remoteBranches().length === 0, `${r.status}\n${r.stdout}`);
+    heartbeats();
     r = runTick();
-    ok("E2E while paused the next run does nothing at all (exit 0, `paused`, no branch, no clone work)", r.status === 0 && /build-tick: paused/.test(r.stdout) && remoteBranches().length === 0, `${r.status}\n${r.stdout}`);
+    ok("E2E while paused the next run does nothing but heartbeat (exit 0, `paused`, a `paused:` heartbeat, no branch, no clone work)",
+      r.status === 0 && /build-tick: paused/.test(r.stdout) && remoteBranches().length === 0 && heartbeats().some((l) => l.startsWith("HEARTBEAT mac-build-tick paused: the tick is paused") && l.endsWith("--no-wake")), `${r.status}\n${r.stdout}`);
     rmSync(paused, { force: true });
 
     // B-1(a) end to end: an unreachable origin is a skip, never a run on leftovers.
     renameSync(origin, `${origin}.away`);
     r = runTick();
     renameSync(`${origin}.away`, origin);
-    ok("E2E B-1 an unreachable origin -> `skipped: origin unreachable`, exit 0, no row picked (it never runs a previous session's leftover)", r.status === 0 && /result: skipped: origin unreachable/.test(r.stdout) && !/picked plan row/.test(r.stdout), `${r.status}\n${r.stdout}`);
+    ok("E2E B-1 an unreachable origin -> `skipped: origin unreachable`, exit 0, no row picked (it never runs a previous session's leftover), and the skip heartbeats", r.status === 0 && /result: skipped: origin unreachable/.test(r.stdout) && !/picked plan row/.test(r.stdout)
+      && existsSync(join(cacheDir, "origin-down-since")) && heartbeats().includes("HEARTBEAT mac-build-tick skipped: origin unreachable --no-wake"), `${r.status}\n${r.stdout}`);
 
     // A session that poisoned the clone's config is undone before the next run touches it.
     writeFileSync(join(bw, ".git/config"), `${readFileSync(join(bw, ".git/config"), "utf8")}[core]\n\thooksPath = ${join(bw, ".git/hooks")}\n[remote "origin"]\n\turl = /nonexistent/elsewhere.git\n`);
     freeRow();
     r = runTick();
     ok("E2E the next run resets a poisoned clone config and a planted hook: it still lands, and no hook ran", r.status === 0 && /result: acted/.test(r.stdout) && !existsSync(marker), `${r.status}\n${r.stdout}`);
+    ok("E2E ...and a run that reaches origin again drops the streak stamp the unreachable run wrote", !existsSync(join(cacheDir, "origin-down-since")) && !existsSync(join(cacheDir, "origin-down-handed")));
+
+    // M4 end to end: the run that started a model session is followed by a gap; the second run, seconds later, does nothing but heartbeat.
+    freeRow();
+    r = runTick();
+    const gapBranches = remoteBranches().length;
+    heartbeats();
+    r = runTick({}, { keepGap: true });
+    ok("E2E M4 two runs back to back: the first acts, the second prints `result: cooldown`, exits 0, pushes no branch, runs no triage, and heartbeats `cooldown:`",
+      r.status === 0 && /result: cooldown: .*no refresh, triage or claim ran/.test(r.stdout) && remoteBranches().length === gapBranches && !/picked plan row|triage starting/.test(r.stdout)
+        && heartbeats().some((l) => l.startsWith("HEARTBEAT mac-build-tick cooldown: a model session ended under 3 h ago")) && /acted$/.test(readFileSync(join(cacheDir, "last-admitted-epoch"), "utf8")), `${r.status}\n${r.stdout}`);
+
+    // L3 end to end: a pnpm that is not the pinned one stops the run before the refresh, any claim or any session, and raises a hand.
+    freeRow();
+    r = runTick({ SG_STUB_PNPM_VERSION: "11.20.0" });
+    ok("E2E L3 a pnpm 11.20.0 against the pinned 10.28.1 -> exit 1, `pnpm on this PATH is 11.20.0`, no branch pushed, a hand raised",
+      r.status === 1 && /pnpm on this PATH is 11\.20\.0/.test(r.stdout) && remoteBranches().length === 0 && /pnpm on this PATH is 11\.20\.0/.test(readFileSync(handlog, "utf8")), `${r.status}\n${r.stdout}\n${remoteBranches().join("|")}`);
     void stagesFile;
   });
   followupTests(root, ok, sh);
@@ -2431,6 +2461,146 @@ bt_heartbeat() { printf 'heartbeat:%s\\n' "$1"; }
       callLine("bt_session_start").length === 1 && /bt_session_start\nstages triage >> "\$RUN_LOG" 2>&1 < \/dev\/null/.test(code) && at("\nbt_session_start\n") > at("sed 's/^/dry-run: /'"));
     ok("M4 ADMIT_GAP_SECONDS is the 3-hour (10800 s) gap the registry row's authorizationEvidence names", /^ADMIT_GAP_SECONDS=10800$/m.test(sh));
   }
+
+  // ── M3: origin-down by wall clock; hands lane-deliver could not deliver are queued and retried ──
+  guard2(ok, "M3 origin-down and the undelivered-hand queue", () => {
+    const dir = join(root, "fu-m3"), origin = join(dir, "origin.git"), seed = join(dir, "seed"), repo = join(dir, "repo"), bin = join(dir, "bin");
+    const ldlog = join(dir, "ld.log"), gitCount = join(dir, "git.count");
+    mkdirSync(bin, { recursive: true });
+    G(dir, "init", "-q", "--bare", "-b", "SignalGrid_Alpha", origin);
+    G(dir, "init", "-q", "-b", "SignalGrid_Alpha", seed);
+    mkdirSync(join(seed, "scripts/mac"), { recursive: true });
+    writeFileSync(join(seed, "scripts/mac/build-tick.sh"), 'echo REEXEC "$SG_MAINLINE_SHA"\n');
+    G(seed, "add", "-A"); G(seed, "commit", "-q", "-m", "marker"); G(seed, "remote", "add", "origin", origin); G(seed, "push", "-q", "origin", "SignalGrid_Alpha");
+    const sha = G(seed, "rev-parse", "HEAD");
+    G(dir, "clone", "-q", origin, repo);
+    mkdirSync(join(repo, "scripts"), { recursive: true });
+    writeFileSync(join(repo, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";
+const a = process.argv.slice(2);
+appendFileSync(process.env.SG_LD_LOG, (a[0] === "batch" ? "batch " + JSON.parse(readFileSync(a[1], "utf8"))[0].blocked : a.join(" | ")) + "\\n");
+process.exit(Number(a[0] === "heartbeat" ? (process.env.SG_STUB_HB_RC ?? 0) : (process.env.SG_STUB_LD_RC ?? 0)));\n`);
+    const realGit = spawnSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+    writeFileSync(join(bin, "git"), `#!/bin/sh\nif [ "$1" = ls-remote ]; then\n  n=$(cat "$SG_GIT_COUNT" 2>/dev/null || echo 0)\n  if [ "$n" -lt "$SG_FAIL_RUNS" ]; then echo $((n + 1)) > "$SG_GIT_COUNT"; exit 128; fi\nfi\nexec ${realGit} "$@"\n`);
+    chmodSync(join(bin, "git"), 0o755);
+    const step0 = /if \[ "\$DRY" = "0" \] && \[ -z "\$MAINLINE_SHA" \]; then[\s\S]*?exec \/bin\/bash "\$_f"/.exec(sh)?.[0] ?? "";
+    const allVars = vars("HB_QUIET_SECONDS", "HB_CHANGED_SECONDS", "SESSION_RUN", "ADMIT_GAP_SECONDS", "LAST_ADMITTED", "FETCH_FAILS", "ORIGIN_DOWN_SINCE", "ORIGIN_DOWN_HANDED", "ORIGIN_DOWN_HAND_SECONDS");
+    const allFns = fns("say", "raise_hand", "bt_now", "bt_heartbeat", "finish", "origin_down", "remote_mainline_sha", "retry_undelivered_hands");
+    const scenario = (name) => { const c = join(dir, name); mkdirSync(c, { recursive: true }); return c; };
+    const T0 = 1761170000;
+    const batchLines = () => (existsSync(ldlog) ? readFileSync(ldlog, "utf8") : "").split("\n").filter((l) => l.startsWith("batch "));
+    const env = (cache, t, extra = {}) => ({ PATH: `${bin}:${process.env.PATH}`, SG_NOW: String(t), SG_LD_LOG: ldlog, SG_GIT_COUNT: gitCount, SG_FAIL_RUNS: "150", SG_STUB_LD_RC: "1", ...extra });
+    const step0Run = (cache, t, extra) => bash(`DRY=0 MAINLINE_SHA= ORIGIN_URL= CACHE=${q(cache)} REPO_ROOT=${q(repo)} STAMP=fixture RUN_LOG=''
+${allVars}
+${allFns}
+${step0}
+fi`, env(cache, t, extra));
+    const call = (cache, t, snippet, extra) => bash(`DRY=0 CACHE=${q(cache)} REPO_ROOT=${q(repo)} STAMP=fixture RUN_LOG=''
+${allVars}
+${allFns}
+${snippet}`, env(cache, t, extra));
+
+    // The replay: origin unreachable for the first 150 runs of a 300 s cadence, lane-deliver down throughout (exit 1).
+    const cache = scenario("replay"); writeFileSync(ldlog, ""); writeFileSync(gitCount, "0");
+    const first = { hand: -1 }, skipped = [], attempts = [];
+    let last;
+    for (let k = 0; k <= 150; k += 1) {
+      const before = batchLines().length;
+      last = step0Run(cache, T0 + 300 * k);
+      attempts.push(batchLines().length - before);
+      if (/result: skipped: origin unreachable/.test(last.stdout)) skipped.push(k);
+      if (first.hand < 0 && attempts[k] > 0) first.hand = k;
+    }
+    ok("M3 origin unreachable on 150 runs of a 300 s cadence: runs 0..149 print `skipped: origin unreachable`, and run 150 (origin back) re-execs the pinned copy",
+      skipped.length === 150 && skipped.at(-1) === 149 && new RegExp(`REEXEC ${sha}`).test(last.stdout), `${skipped.length} skipped; last: ${last.stdout.slice(0, 200)} ${last.stderr.slice(0, 200)}`);
+    ok("M3 ...the hand is attempted first on run 144 (43200 s of WALL CLOCK after the first failing run), once, and on no run before or after it",
+      first.hand === 144 && attempts.reduce((a, b) => a + b, 0) === 1, `first ${first.hand}; attempts ${JSON.stringify(attempts.map((n, i) => (n ? [i, n] : null)).filter(Boolean))}`);
+    const hand = batchLines()[0] ?? "";
+    ok("M3 ...its text says the origin was unreachable for 12 h, and with lane-deliver down (exit 1) the hand is QUEUED under undelivered-hands/ instead of lost",
+      /unreachable for 12 h/.test(hand) && readdirSync(join(cache, "undelivered-hands")).filter((f) => f.endsWith(".json")).length === 1, hand);
+    const queued = readdirSync(join(cache, "undelivered-hands")).find((f) => f.endsWith(".json")) ?? "";
+    ok("M3 ...the queued file is named `<epoch>-<stamp>-<ops file>.json` (the epoch is what the 24 h expiry reads)", new RegExp(`^${T0 + 300 * 144}-fixture-hand\\.[A-Za-z0-9]+\\.json$`).test(queued), queued);
+    ok("M3 ...and run 150 left neither the streak stamp, nor the handed marker, nor the old run counter behind (a Mac upgrading from the counter drops it)",
+      !existsSync(join(cache, "origin-down-since")) && !existsSync(join(cache, "origin-down-handed")) && !existsSync(join(cache, "fetch-failures")));
+    const retried = call(cache, T0 + 300 * 151, "retry_undelivered_hands", { SG_STUB_LD_RC: "0" });
+    ok("M3 the next run that reaches origin delivers the queued hand and removes it", /delivered a queued hand/.test(retried.stdout) && !existsSync(join(cache, "undelivered-hands", queued)) && batchLines().length === 2, `${retried.stdout} ${retried.stderr}`);
+
+    // The Mac asleep: two runs 12 h apart (a count would call that two) raise on the second.
+    const asleep = scenario("asleep"); writeFileSync(ldlog, ""); writeFileSync(gitCount, "0");
+    step0Run(asleep, T0, { SG_FAIL_RUNS: "99999" }); const n1 = batchLines().length;
+    step0Run(asleep, T0 + 43200, { SG_FAIL_RUNS: "99999" });
+    ok("M3 two runs 12 h apart (the Mac asleep between): the hand comes on the second run, none on the first", n1 === 0 && batchLines().length === 1);
+    for (const [label, stamp] of [["unreadable", "garbage"], ["in the future", String(T0 + 99999)]]) {
+      const c = scenario(`stamp-${label.replace(/\W/g, "")}`); writeFileSync(ldlog, ""); writeFileSync(gitCount, "0"); writeFileSync(join(c, "origin-down-since"), stamp);
+      step0Run(c, T0, { SG_FAIL_RUNS: "99999" });
+      ok(`M3 a streak stamp that is ${label} raises the hand at once and says how long is unknown (unknown tightens)`, batchLines().length === 1 && /how long is unknown/.test(batchLines()[0]), batchLines().join(" | "));
+    }
+
+    // The queue: a refusal (exit 2) is kept and never retried, an old hand expires, five a run.
+    const rq = scenario("retry"); writeFileSync(ldlog, "");
+    const uq = join(rq, "undelivered-hands"); mkdirSync(uq, { recursive: true });
+    const plant = (name, blocked) => writeFileSync(join(uq, name), JSON.stringify([{ op: "raise", blocked }]));
+    plant(`${T0}-s-dup.json`, "dup");
+    call(rq, T0 + 60, "retry_undelivered_hands", { SG_STUB_LD_RC: "2" });
+    ok("M3 a hand lane-deliver REFUSES (exit 2: already raised today, or invalid) is kept as .refused and never retried", existsSync(join(uq, `${T0}-s-dup.json.refused`)) && !existsSync(join(uq, `${T0}-s-dup.json`)));
+    plant(`${T0}-s-old.json`, "old");
+    call(rq, T0 + 90000, "retry_undelivered_hands", { SG_STUB_LD_RC: "1" });
+    ok("M3 a queued hand older than 24 h is kept as .expired and not retried", existsSync(join(uq, `${T0}-s-old.json.expired`)) && !batchLines().some((l) => l.endsWith("old")));
+    writeFileSync(ldlog, "");
+    for (let i = 0; i < 7; i += 1) plant(`${T0 + 100000 + i}-s-h${i}.json`, `h${i}`);
+    call(rq, T0 + 100100, "retry_undelivered_hands", { SG_STUB_LD_RC: "1" });
+    ok("M3 at most five queued hands are attempted per run (seven planted, lane-deliver still down: five calls, all seven kept)", batchLines().length === 5 && readdirSync(uq).filter((f) => /-s-h\d\.json$/.test(f)).length === 7, `${batchLines().length}`);
+    const dry = bash(`DRY=1 CACHE=${q(rq)} STAMP=fixture RUN_LOG=''\n${allVars}\n${allFns}\nretry_undelivered_hands; echo rc=$?`, env(rq, T0));
+    ok("M3 the dry-run retries nothing", /rc=0/.test(dry.stdout) && batchLines().length === 5);
+
+    // raise_hand: what each lane-deliver exit code means
+    const rh = scenario("raise"); writeFileSync(ldlog, "");
+    const raised = (rc) => call(rh, T0 + 7, `raise_hand 'a fixed blocker'`, { SG_STUB_LD_RC: String(rc) });
+    let r = raised(0);
+    ok("M3 raise_hand, lane-deliver exit 0: `raised a hand`, nothing queued, no stray ops file", /raised a hand: a fixed blocker/.test(r.stdout) && !existsSync(join(rh, "undelivered-hands")) && readdirSync(rh).filter((f) => f.startsWith("hand.")).length === 0, `${r.stdout} ${r.stderr}`);
+    r = raised(2);
+    ok("M3 raise_hand, exit 2 (a duplicate or an invalid hand): says so, appends to undelivered-hands.log, and queues nothing for retry", /WARN lane-deliver refused the hand/.test(r.stdout) && /a fixed blocker/.test(readFileSync(join(rh, "undelivered-hands.log"), "utf8")) && !existsSync(join(rh, "undelivered-hands")), `${r.stdout}`);
+    r = raised(1);
+    ok("M3 raise_hand, exit 1 (fetch, push or a gate failed): the ops file is QUEUED for the next run that reaches origin, and the text log still gets the line",
+      /could not deliver a hand \(lane-deliver exit 1\); queued for the next run that reaches origin/.test(r.stdout) && readdirSync(join(rh, "undelivered-hands")).filter((f) => f.endsWith(".json")).length === 1
+        && (readFileSync(join(rh, "undelivered-hands.log"), "utf8").match(/a fixed blocker/g) ?? []).length === 2 && readdirSync(rh).filter((f) => f.startsWith("hand.")).length === 0, `${r.stdout}`);
+  });
+  ok("M3 no `144` survives in build-tick.sh code (the run count is gone), the old counter is only removed, and the hand is raised after ORIGIN_DOWN_HAND_SECONDS of wall clock",
+    !/\b144\b/.test(code) && /^ORIGIN_DOWN_HAND_SECONDS=43200$/m.test(sh) && /rm -f "\$FETCH_FAILS" "\$ORIGIN_DOWN_SINCE" "\$ORIGIN_DOWN_HANDED"/.test(sh));
+  ok("M3 retry_undelivered_hands is called once, after the pause check (a paused tick only heartbeats) and before the session gap",
+    (code.match(/^retry_undelivered_hands$/gm) ?? []).length === 1 && code.indexOf('[ -f "$PAUSED" ]') < code.indexOf("\nretry_undelivered_hands\n") && code.indexOf("\nretry_undelivered_hands\n") < code.indexOf("session_gap_left 1"));
+
+  // ── L1: the stale "3 h" text ──
+  {
+    const helper = readFileSync(join(HERE, "build-tick-stages.mjs"), "utf8");
+    // The phrases are assembled so that this test's own source does not contain them (it is part of the file it reads).
+    const stale = [["burn the backlog", "3 h", "at a time"], ["re-triaged every", "3 h"], ["new row every", "3 h"]].map((w) => w.join(" "));
+    ok("L1 the claim comments say one row per ADMITTED run, not the old 3-hour cadence: neither build-tick.sh nor the helper's own text carries the three stale phrases",
+      stale.every((t) => !sh.includes(t) && !helper.includes(t)) && /one row per admitted run/.test(sh) && /on every admitted run/.test(sh), stale.filter((t) => sh.includes(t) || helper.includes(t)).join(" | "));
+  }
+
+  // ── L3: the project's pnpm, or no run ──
+  guard2(ok, "L3 pnpm pin", () => {
+    const dir = join(root, "fu-l3"), bin = join(dir, "bin"), pin = join(dir, "pin");
+    mkdirSync(bin, { recursive: true }); mkdirSync(pin, { recursive: true });
+    writeFileSync(join(bin, "pnpm"), '#!/bin/sh\n[ "$1" = "--version" ] && { [ -n "${SG_STUB_PNPM:-}" ] && echo "$SG_STUB_PNPM"; exit 0; }\nexit 0\n');
+    chmodSync(join(bin, "pnpm"), 0o755);
+    const check = (pkg, version) => {
+      writeFileSync(join(pin, "package.json"), pkg);
+      return bash(`${fns("pnpm_pin_check")}\npnpm_pin_check ${q(pin)}`, { PATH: `${bin}:${process.env.PATH}`, SG_STUB_PNPM: version });
+    };
+    const GOOD = '{"packageManager":"pnpm@10.28.1"}';
+    ok("L3 pnpm on the PATH equal to the pinned packageManager passes", check(GOOD, "10.28.1").status === 0);
+    const wrong = check(GOOD, "11.20.0");
+    ok("L3 a different pnpm (the Homebrew-first PATH case: 11.20.0 against 10.28.1) is refused, naming both", wrong.status === 1 && /pnpm on this PATH is 11\.20\.0 \(.*pnpm\), package\.json pins 10\.28\.1/.test(wrong.stdout), wrong.stdout);
+    ok("L3 a corepack hash suffix on the pin (pnpm@10.28.1+sha512...) still matches", check('{"packageManager":"pnpm@10.28.1+sha512.abc"}', "10.28.1").status === 0);
+    ok("L3 no packageManager, `pnpm@latest`, an unreadable package.json and an empty `pnpm --version` are each refused (a missing pin or answer is not a pass)",
+      check('{"name":"x"}', "10.28.1").status === 1 && check('{"packageManager":"pnpm@latest"}', "10.28.1").status === 1 && check("not json", "10.28.1").status === 1 && check(GOOD, "").status === 1);
+    const at = (t) => code.indexOf(t);
+    ok("L3 the check runs after the host verification lock is taken, before the PR refresh (which runs preflight and breadth with pnpm), reads package.json from the PINNED mainline, and the dry-run only says it would",
+      at("pnpm_pin_check \"$_pin_dir\"") > at("if ! sg_host_verify_acquire") && sh.indexOf('pnpm_pin_check "$_pin_dir"') < sh.indexOf("# ── dry-run only: pin the sha") && sh.indexOf("# ── dry-run only: pin the sha") < sh.indexOf("# ── 1b. refresh")
+        && /git -C "\$REPO_ROOT" show "\$MAINLINE_SHA:package\.json"/.test(code) && /dry-run: a real run checks pnpm on this PATH against package\.json's packageManager here/.test(code)
+        && /put the pinned pnpm first on the job's PATH \(SG_BUILD_TICK_PATH_PREFIX/.test(code));
+  });
 
   // ── FOLLOWUP-NEXT-CHUNK ──
 }

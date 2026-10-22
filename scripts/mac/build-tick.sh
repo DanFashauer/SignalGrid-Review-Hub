@@ -64,7 +64,7 @@
 #   1b. REFRESH, before any row: mainline's PR-refresh script (when mainline has it) brings
 #      ONE dirty mac/* PR up to date, under a wall-clock cap that kills its whole process
 #      group. It needs no model; a failure never stops the build;
-#   2. read tasks[] from the pinned sha's state (144 origin failures in a row raise a hand);
+#   2. read tasks[] from the pinned sha's state (origin unreachable for 12 h of wall clock raises one hand: origin_down);
 #   3. take the first row nobody has claimed: no remote head and no open PR names it
 #      ("row 12", "row-12", "rows 12", "row #12" in a head or title; "plan row 12" or
 #      "row-12" in a body; a range like "rows 17-18" names only 17). A false match only
@@ -171,6 +171,7 @@ say() {
 raise_hand() {
   if [ "$DRY" = "1" ]; then say "dry-run: would raise a hand: $1"; return 0; fi
   _ops="$(mktemp "$CACHE/hand.XXXXXX")" || { say "WARN could not raise a hand (mktemp)"; return 0; }
+  _hrc=none
   if node -e 'const [f, blocked, where] = process.argv.slice(1);
       // Same public-diagnostic policy as run-requests.mjs; private shell logs stay verbatim.
       const home = (process.env.HOME ?? "").replace(/\/+$/, "");
@@ -186,14 +187,29 @@ raise_hand() {
         need: "a person on the Mac to read the log named in where, fix the cause or re-rank the row, and delete the claim branch it names when the row should be retried" };
       for (const key of ["doing", "blocked", "need", "where"]) hand[key] = redact(hand[key]);
       require("fs").writeFileSync(f, JSON.stringify([hand]));' \
-      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}" \
-    && node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1; then
-    say "raised a hand: $1"
-  else
-    say "WARN could not deliver a hand (already raised today, or lane-deliver refused): $1"
-    printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"
+      "$_ops" "$1" "${RUN_LOG:-launchd log ~/Library/Logs/signalgrid-build-tick.log}"; then
+    node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_ops" >> "${RUN_LOG:-/dev/null}" 2>&1
+    _hrc=$?
   fi
-  rm -f "$_ops"
+  # lane-deliver's exit code decides what happens to the hand. 0: delivered. 2: it REFUSED (raise-hand.mjs exits 2 on a duplicate of
+  # the day or an invalid hand; retrying cannot change that answer). Anything else (1: the fetch, the push or a gate failed, which
+  # is what an unreachable origin looks like): the ops file is QUEUED and the next run whose step 0 reached origin retries it.
+  case "$_hrc" in
+    0) say "raised a hand: $1"; rm -f "$_ops" ;;
+    2)
+      say "WARN lane-deliver refused the hand (already raised today, or invalid): $1"
+      printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"
+      rm -f "$_ops" ;;
+    *)
+      printf '%s  %s\n' "$STAMP" "$1" >> "$CACHE/undelivered-hands.log"
+      if [ "$_hrc" != "none" ] && [ -s "$_ops" ] && mkdir -p "$CACHE/undelivered-hands" \
+        && mv "$_ops" "$CACHE/undelivered-hands/$(bt_now)-$STAMP-$(basename "$_ops").json"; then
+        say "WARN could not deliver a hand (lane-deliver exit $_hrc); queued for the next run that reaches origin: $1"
+      else
+        say "WARN could not deliver a hand (lane-deliver exit $_hrc) and could not queue it: $1"
+        rm -f "$_ops"
+      fi ;;
+  esac
 }
 fail() { say "result: failed: $1"; raise_hand "$1"; finish failed "${BT_FAIL_HB:-a hand was raised for the Mac lane (see artifacts/raised-hands)}" 1; }
 
@@ -280,18 +296,72 @@ bt_session_start() {
   printf '%s running' "$(bt_now)" > "$LAST_ADMITTED" 2>/dev/null || true
 }
 
-# An asleep Mac is common and says nothing; 144 failures at the five-minute cadence (12 h) is not. A run that cannot
-# ask the real remote for mainline's sha does NOTHING (it never runs a previous session's leftover).
+# L3. $1 is a directory holding the PINNED package.json; returns 1 (printing why) unless pnpm, run there on this PATH, is the pin.
+pnpm_pin_check() {
+  _pw="$(node -e 'try { const m = /^pnpm@(\d+\.\d+\.\d+)(?:\+\S+)?$/.exec(String(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).packageManager ?? "")); if (!m) process.exit(3); process.stdout.write(m[1]); } catch { process.exit(3); }' "$1/package.json" 2>/dev/null)" \
+    || { echo "the pinned package.json names no pnpm@<x.y.z> packageManager"; return 1; }
+  _ph="$( (cd "$1" && pnpm --version) 2>/dev/null | head -1 | tr -d '[:space:]')"
+  [ -n "$_ph" ] || { echo "pnpm --version printed nothing ($(command -v pnpm || echo 'no pnpm on PATH'))"; return 1; }
+  [ "$_ph" = "$_pw" ] || { echo "pnpm on this PATH is $_ph ($(command -v pnpm)), package.json pins $_pw"; return 1; }
+  return 0
+}
+
+# An asleep Mac is common and says nothing; origin unreachable for 12 h of WALL CLOCK is not. The first failing run of a
+# streak writes its epoch to ORIGIN_DOWN_SINCE; the first run at or past 12 h after it raises ONE hand. (A run COUNT, 144,
+# was 12 h only while every 300 s slot fired, and 18 days at the old 3-hour interval.) An unreadable or future stamp raises
+# at once: how long is unknown. A run that cannot ask the real remote for mainline's sha does NOTHING (it never runs a
+# previous session's leftover).
 FETCH_FAILS="$CACHE/fetch-failures"
+ORIGIN_DOWN_SINCE="$CACHE/origin-down-since"
+ORIGIN_DOWN_HANDED="$CACHE/origin-down-handed"
+ORIGIN_DOWN_HAND_SECONDS=43200
 origin_down() {
-  _n=0
+  _el=0
   if [ "$DRY" = "0" ]; then
-    _n=$(( $(cat "$FETCH_FAILS" 2>/dev/null || echo 0) + 1 ))
-    printf '%s' "$_n" > "$FETCH_FAILS"
-    [ "$_n" = "144" ] && raise_hand "origin has been unreachable on 144 build ticks in a row (12 h at the five-minute cadence; $1; auth expired? repo locked?)"
+    _on="$(bt_now)"
+    _os=""
+    if [ -e "$ORIGIN_DOWN_SINCE" ]; then
+      _os="$(cat "$ORIGIN_DOWN_SINCE" 2>/dev/null)"
+      case "$_os" in ''|*[!0-9]*) _os="unreadable" ;; esac
+    else
+      _os="$_on"; printf '%s' "$_os" > "$ORIGIN_DOWN_SINCE" 2>/dev/null || true
+    fi
+    if [ "$_os" = "unreadable" ] || [ "$_os" -gt "$_on" ]; then
+      _el="$ORIGIN_DOWN_HAND_SECONDS"; _why="how long is unknown: the streak stamp is unreadable or in the future"
+    else
+      _el=$((_on - _os)); _why="unreachable for $((_el / 3600)) h of wall clock"
+    fi
+    if [ "$_el" -ge "$ORIGIN_DOWN_HAND_SECONDS" ] && [ ! -e "$ORIGIN_DOWN_HANDED" ]; then
+      : > "$ORIGIN_DOWN_HANDED"
+      raise_hand "origin has been unreachable for 12 h or more ($_why; every build tick since could not ask it; last: $1; auth expired? repo locked? network?)"
+    fi
   fi
-  say "result: skipped: origin unreachable ($1; $_n in a row)"
+  say "result: skipped: origin unreachable ($1; down $((_el / 60)) min)"
   finish skipped "origin unreachable" 0
+}
+
+# Hands lane-deliver could not deliver (raise_hand queued them: exit 1, the origin it needs is the one that failed) are retried here, by a
+# run whose step 0 reached origin. At most five a run; an exit 2 is a refusal (kept as .refused, never retried); one older than 24 h is
+# kept as .expired and not retried. Nothing here fails the run.
+retry_undelivered_hands() {
+  [ "$DRY" = "0" ] && [ -d "$CACHE/undelivered-hands" ] || return 0
+  _rt=0; _rn="$(bt_now)"
+  for _q in "$CACHE/undelivered-hands"/*.json; do
+    [ -f "$_q" ] || continue
+    _qb="$(basename "$_q")"; _qe="${_qb%%-*}"
+    case "$_qe" in ''|*[!0-9]*) _qe=0 ;; esac
+    if [ $((_rn - _qe)) -gt 86400 ]; then mv -f "$_q" "$_q.expired"; say "WARN a queued hand is older than 24 h and was not delivered: $_qb (kept as .expired)"; continue; fi
+    [ "$_rt" -lt 5 ] || break
+    _rt=$((_rt + 1))
+    node "$REPO_ROOT/scripts/lane-deliver.mjs" batch "$_q" >> "${RUN_LOG:-/dev/null}" 2>&1
+    _rc=$?
+    case "$_rc" in
+      0) rm -f "$_q"; say "delivered a queued hand: $_qb" ;;
+      2) mv -f "$_q" "$_q.refused"; say "WARN lane-deliver refused a queued hand (already raised, or invalid): $_qb (kept as .refused, not retried)" ;;
+      *) say "WARN a queued hand is still undeliverable (lane-deliver exit $_rc): $_qb" ;;
+    esac
+  done
+  return 0
 }
 # SignalGrid_Alpha's sha, from the remote named by $1 (a URL, a name or a scratch path). Exact ref match, 40 hex, or nothing.
 remote_mainline_sha() {
@@ -318,7 +388,7 @@ if [ "$DRY" = "0" ] && [ -z "$MAINLINE_SHA" ]; then
   MAINLINE_SHA="$(remote_mainline_sha "$ORIGIN_URL")"
   [ -n "$MAINLINE_SHA" ] || origin_down "git ls-remote could not read refs/heads/SignalGrid_Alpha"
   git -C "$REPO_ROOT" fetch -q "$ORIGIN_URL" "$MAINLINE_SHA" 2>/dev/null || origin_down "could not fetch mainline $MAINLINE_SHA"
-  rm -f "$FETCH_FAILS"
+  rm -f "$FETCH_FAILS" "$ORIGIN_DOWN_SINCE" "$ORIGIN_DOWN_HANDED"
   # A fresh file per run: bash reads a script as it runs, so overwriting one a live run
   # is reading would feed it misaligned text.
   _f="$(mktemp "$CACHE/mainline.XXXXXX")" || { say "result: failed: could not stage mainline's copy of this script"; finish failed "could not stage mainline's copy of this script" 1; }
@@ -440,7 +510,7 @@ gate_green() {
 
 # A failure of the HELPER or of this script's own plumbing (no verdict written, an unknown verdict, an unreadable
 # outcome) is a PAUSE, not only a hand: a hand keeps the claim and the next tick takes a NEW row, so a broken helper
-# would burn the backlog 3 h at a time. Same rule as a broken session (1a). $1 why, $2 what is true of the claim.
+# would burn the backlog one row per admitted run. Same rule as a broken session (1a). $1 why, $2 what is true of the claim.
 pause_tick() {
   BT_FAIL_HB="the tick paused itself and raised a hand"
   printf 'the build tick paused itself on %s: %s; log %s\n' "$STAMP" "$1" "${RUN_LOG:-none}" > "$PAUSED"
@@ -490,6 +560,8 @@ if [ "$DRY" = "0" ] && [ -f "$PAUSED" ]; then
   echo "build-tick: paused — $(head -c 300 "$PAUSED" | tr '\n' ' '); delete $PAUSED to resume"
   finish paused "the tick is paused until a person deletes ~/Library/Caches/signalgrid/build-tick/paused" 0
 fi
+# Step 0 reached origin, so a hand an earlier run could not deliver can go now (a paused tick got no further than its heartbeat).
+retry_undelivered_hands
 
 # Run a command under a wall-clock cap that kills its WHOLE PROCESS GROUP. perl forks the command into its own
 # group; at the cap it TERMs the group, waits up to 5 s, KILLs it and exits 142. Otherwise it exits with the
@@ -550,6 +622,19 @@ if [ "$DRY" = "0" ]; then
     say "result: deferred: $SG_VERIFY_LOCK_REASON; no refresh, triage or claim ran"
     finish deferred "$SG_VERIFY_LOCK_REASON; no refresh, triage or claim ran" 0
   fi
+fi
+
+# ── pnpm, the project's (L3) ─────────────────────────────────────────────────
+# launchd's PATH puts Homebrew first, so `pnpm` here can differ from package.json's packageManager (the Mac's own breadth run
+# once picked 11.20.0 against the pinned 10.28.1). Read the pin from the PINNED mainline, run `pnpm --version` beside it on
+# this PATH (so a pnpm that switches itself to the pin passes), and refuse any mismatch, missing pin or empty answer.
+if [ "$DRY" = "0" ]; then
+  _pin_dir="$CACHE/pnpm-pin"
+  mkdir -p "$_pin_dir" && git -C "$REPO_ROOT" show "$MAINLINE_SHA:package.json" > "$_pin_dir/package.json" 2>/dev/null \
+    || fail "could not read package.json at the pinned mainline $MAINLINE_SHA to check pnpm against its packageManager"
+  _why="$(pnpm_pin_check "$_pin_dir")" || fail "$_why — put the pinned pnpm first on the job's PATH (SG_BUILD_TICK_PATH_PREFIX in ~/.config/signalgrid/build-tick.env, then bash scripts/mac/install-build-tick.sh)"
+else
+  say "dry-run: a real run checks pnpm on this PATH against package.json's packageManager here"
 fi
 
 # ── dry-run only: pin the sha a real run would have pinned ───────────────────
@@ -789,7 +874,7 @@ _rest="${_next#"$_verb"}"; _rest="${_rest# }"
 case "$_verb" in
   pause) pause_tick "plan row $PICK_ID: $_rest" "NO claim was pushed, so this row is still unclaimed" ;;
   hand)
-    claim   # claimed first, so the row is not re-triaged every 3 h
+    claim   # claimed first, so the row is not re-triaged on every admitted run
     fail "plan row $PICK_ID: triage: $_rest. Claim $BRANCH stays until a person deletes it" ;;
   marker|build) claim ;;
   *) pause_tick "plan row $PICK_ID: triage wrote an unknown verdict: $_next" "NO claim was pushed, so this row is still unclaimed" ;;

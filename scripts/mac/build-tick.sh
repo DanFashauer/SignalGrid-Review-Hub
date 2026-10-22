@@ -244,7 +244,7 @@ bt_heartbeat() {
   _hn="$(bt_now)"
   _hl="$(cat "$CACHE/heartbeat-last" 2>/dev/null)"
   _hr="$(cat "$CACHE/heartbeat-last-result" 2>/dev/null)"
-  case "$_hl" in ''|*[!0-9]*) _hl="" ;; esac
+  case "$_hl" in ''|*[!0-9]*|0[0-9]*) _hl="" ;; esac   # a leading zero would be octal in $(( )): unreadable
   if [ "$2" != "acted" ] && [ -n "$_hl" ] && [ "$_hl" -le "$_hn" ]; then
     _ha=$((_hn - _hl))
     if [ "$_ha" -lt "$HB_QUIET_SECONDS" ] && { [ "$1" = "$_hr" ] || [ "$_ha" -lt "$HB_CHANGED_SECONDS" ]; }; then
@@ -282,7 +282,7 @@ session_gap_left() {
   _gl=""
   if [ -e "$LAST_ADMITTED" ]; then _gl="$(cat "$LAST_ADMITTED" 2>/dev/null)" || _gl=""; else echo 0; return 0; fi
   _ge="${_gl%% *}"; _go="${_gl#* }"
-  case "$_ge" in ''|*[!0-9]*) _ge="" ;; esac
+  case "$_ge" in ''|*[!0-9]*|0[0-9]*) _ge="" ;; esac
   if [ -z "$_ge" ] || [ "$_go" = "running" ] || [ "$_go" = "$_gl" ] || [ "$_ge" -gt $((_gn + 300)) ]; then
     _ge="$_gn"
     if [ "$1" = "1" ]; then printf '%s %s' "$_gn" "unrecorded" > "$LAST_ADMITTED" 2>/dev/null || true; fi
@@ -322,7 +322,7 @@ origin_down() {
     _os=""
     if [ -e "$ORIGIN_DOWN_SINCE" ]; then
       _os="$(cat "$ORIGIN_DOWN_SINCE" 2>/dev/null)"
-      case "$_os" in ''|*[!0-9]*) _os="unreadable" ;; esac
+      case "$_os" in ''|*[!0-9]*|0[0-9]*) _os="unreadable" ;; esac
     else
       _os="$_on"; printf '%s' "$_os" > "$ORIGIN_DOWN_SINCE" 2>/dev/null || true
     fi
@@ -349,7 +349,7 @@ retry_undelivered_hands() {
   for _q in "$CACHE/undelivered-hands"/*.json; do
     [ -f "$_q" ] || continue
     _qb="$(basename "$_q")"; _qe="${_qb%%-*}"
-    case "$_qe" in ''|*[!0-9]*) _qe=0 ;; esac
+    case "$_qe" in ''|*[!0-9]*|0[0-9]*) _qe=0 ;; esac
     if [ $((_rn - _qe)) -gt 86400 ]; then mv -f "$_q" "$_q.expired"; say "WARN a queued hand is older than 24 h and was not delivered: $_qb (kept as .expired)"; continue; fi
     [ "$_rt" -lt 5 ] || break
     _rt=$((_rt + 1))

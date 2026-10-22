@@ -2406,6 +2406,9 @@ sg_host_verify_release() { printf 'release\\n' >> "$SG_LD_LOG"; }
     writeFileSync(join(cache, "heartbeat-last"), "garbage");
     hb(T0 + 20100, "cooldown: a model session ended under 3 h ago");
     ok("M1 an unreadable throttle stamp delivers (unknown tightens)", lines().length === 9, lines().join(" / "));
+    writeFileSync(join(cache, "heartbeat-last"), "0800");
+    const zero = hb(T0 + 20160, "cooldown: a model session ended under 3 h ago");
+    ok("M1 ...and so does one with a leading zero (an octal trap in bash arithmetic), without an arithmetic error", lines().length === 10 && zero.stderr === "", `${lines().length} ${zero.stderr}`);
     const before = lines().length;
     const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\n${fns("say", "bt_heartbeat")}\nbt_heartbeat 'x: y' x`, { SG_LD_LOG: ldlog });
     ok("M1 the dry-run only says it would heartbeat and never calls lane-deliver", dry.status === 0 && /dry-run: would heartbeat: x: y/.test(dry.stdout) && lines().length === before, `${dry.stdout}`);
@@ -2439,6 +2442,9 @@ bt_heartbeat() { printf 'heartbeat:%s\\n' "$1"; }
     ok("M4 a stamp still saying `running` (the run died before it recorded an outcome) restarts a full gap now and is rewritten `unrecorded`", gap(T0 + 60) === "10800" && readFileSync(la, "utf8") === `${T0 + 60} unrecorded`, readFileSync(la, "utf8"));
     writeFileSync(la, "garbage");
     ok("M4 an unreadable stamp restarts the gap (unknown tightens); the dry-run reads it without rewriting it", gap(T0, 0) === "10800" && readFileSync(la, "utf8") === "garbage" && gap(T0, 1) === "10800" && readFileSync(la, "utf8") === `${T0} unrecorded`);
+    writeFileSync(la, "0800 failed");
+    const octal = run(T0, "session_gap_left 1");
+    ok("M4 a stamp with a leading zero (bash arithmetic would read it as octal and fail) is unreadable, so the gap restarts instead of erroring", octal.stdout.trim() === "10800" && octal.stderr === "", `${octal.stdout} ${octal.stderr}`);
     writeFileSync(la, `${T0 + 86400} failed`);
     ok("M4 a stamp a day in the FUTURE (the clock moved back) restarts the gap now instead of waiting a day", gap(T0) === "10800");
     rmSync(la, { force: true });
@@ -2755,6 +2761,7 @@ process.exit(1);\n`);
       ws.includes("writes artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver heartbeat --no-wake on every exit of a real run but six named in the script (straight to SignalGrid_Alpha; at most one an hour unless the run acted)")
         && ws.includes("undelivered-hands/ and retried, at most five a run, for 24 hours") && ws.includes("it is PR #1353, not on mainline yet;") && !ws.includes("and raises hands through lane-deliver batch (straight to SignalGrid_Alpha)."));
     const eb = row.escalationBoundary ?? "";
+    ok("M3 no `144` survives anywhere in the mac-build-tick row (the run count is gone from the registry too)", !/\b144\b/.test(JSON.stringify(row)));
     ok("M3/M4 the row's escalationBoundary replaces the 144-run count with 12 hours of wall clock (measured from the first failing run's epoch), says where a hand lane-deliver could not deliver waits, and names the 3-hour gap after any run that started a model session",
       !/\b144\b/.test(eb) && eb.includes("origin unreachable for 12 hours of wall clock (measured from the first failing run's epoch in ~/Library/Caches/signalgrid/build-tick/origin-down-since")
         && eb.includes("undelivered-hands/ and retried, at most five a run and for 24 hours") && eb.includes("a run that started a model session (triage onward), whatever its outcome, is followed by at least 3 hours with no admitted run"));

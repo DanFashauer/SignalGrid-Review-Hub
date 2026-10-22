@@ -208,7 +208,10 @@ export function autoHands({ messages = [], acks = [], simPending = [], routines 
     try { firedAt = raw === undefined ? undefined : JSON.parse(raw).firedAt; } catch { firedAt = undefined; }
     // Never written: the clock starts at heartbeatSince (check-scheduled-routines.mjs validates it), the same baseline that gate uses.
     // Absent, unreadable or FUTURE stays unknown (Infinity): age() would floor a future instant at 0 and read it fresh forever.
-    if (raw === undefined && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/.test(String(r.heartbeatSince ?? "")) && Date.parse(r.heartbeatSince) <= nowMs) firedAt = r.heartbeatSince;
+    if (raw === undefined && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?Z$/.test(String(r.heartbeatSince ?? ""))) {
+      const since = Date.parse(r.heartbeatSince);
+      if (Number.isFinite(since) && since <= nowMs) firedAt = r.heartbeatSince;
+    }
     const h = age(firedAt, nowMs);
     if (h > r.cadenceToleranceHours) out.push({ id: `heartbeat:${r.id}`, clears: r.id.startsWith("mac-lane-tick") || r.trigger?.startsWith?.("launchd:") ? "mac" : "cloud", ageH: h, softH: r.cadenceToleranceHours, what: `routine ${r.id} silent ${fmtAge(h)} (tolerance ${r.cadenceToleranceHours}h)`, needs: raw === undefined ? "its first heartbeat" : "the routine fires again, or its lane says why it cannot" });
   }
@@ -506,6 +509,7 @@ async function selfTest() {
   checks.push(["…10h after it is past the HARD limit (3 x 3h): the gate fails unless a hand covers it", evaluate([], autoHands({ routines: [since(10)], heartbeats: {} }, T), T, route).fatal.length === 1]);
   checks.push(["…a heartbeatSince in the FUTURE stays unknown age (Infinity), never fresh: age() floors a future instant at 0", autoHands({ routines: [since(-3)], heartbeats: {} }, T)[0]?.ageH === Infinity]);
   checks.push(["…and an unreadable heartbeatSince is unknown age too", autoHands({ routines: [{ ...routine, heartbeatSince: "soon" }], heartbeats: {} }, T)[0]?.ageH === Infinity]);
+  checks.push(["…and one that matches the shape but names no real instant (month 13) is unknown age too, never a parsed NaN read as fresh", autoHands({ routines: [{ ...routine, heartbeatSince: "2026-13-45T99:99Z" }], heartbeats: {} }, T)[0]?.ageH === Infinity]);
   checks.push(["…once a heartbeat file exists heartbeatSince is read by nothing: a fresh heartbeat beside a 10h-old heartbeatSince is not a hand", autoHands({ routines: [since(10)], heartbeats: { "hb/r.json": JSON.stringify({ firedAt: ago(1) }) } }, T).length === 0]);
 
   const pr = (state, h) => ({ number: 7, title: "t", url: "u", updatedAt: ago(h), state, lane: "cloud" });

@@ -1775,9 +1775,9 @@ defer_host_verification`);
   const at = (t) => step0.indexOf(t);
   ok("B-1 step 0 resolves the sha FIRST, skips (exit 0, `origin unreachable`) when it cannot, fetches that sha, and re-execs the copy at that sha with SG_MAINLINE_SHA exported",
     at("remote_mainline_sha") > 0 && at("remote_mainline_sha") < at("fetch -q") && at("fetch -q") < at("show \"$MAINLINE_SHA:scripts/mac/build-tick.sh\"") && /origin_down "could not fetch/.test(step0) && /origin_down "git ls-remote could not read/.test(step0)
-      && /^origin_down\(\) \{[\s\S]*?result: skipped: origin unreachable[\s\S]*?exit 0/m.test(sh) && /SG_MAINLINE_SHA="\$MAINLINE_SHA"/.test(step0) && /SG_ORIGIN_URL="\$ORIGIN_URL"/.test(step0), step0.slice(0, 200));
+      && /^origin_down\(\) \{[\s\S]*?result: skipped: origin unreachable[\s\S]*?finish skipped "origin unreachable" 0\n\}/m.test(sh) && /SG_MAINLINE_SHA="\$MAINLINE_SHA"/.test(step0) && /SG_ORIGIN_URL="\$ORIGIN_URL"/.test(step0), step0.slice(0, 200));
   ok("B-1 step 0 is skipped only when SG_MAINLINE_SHA is already set (so an older parent that sets only SG_BUILD_TICK_MAINLINE still gets pinned), and a set value that is not a 40-hex sha refuses",
-    /\[ -z "\$MAINLINE_SHA" \]; then/.test(sh) && /grep -qE '\^\[0-9a-f\]\{40\}\$'[^\n]*\|\| \[ -z "\$ORIGIN_URL" \]/.test(sh) && /refusing" >&2\n\s*exit 2/.test(sh) && sh.indexOf('case "$0" in "$CACHE"/mainline.*)') < sh.indexOf('if [ "$DRY" = "0" ] && [ -z "$MAINLINE_SHA" ]'));
+    /\[ -z "\$MAINLINE_SHA" \]; then/.test(sh) && /grep -qE '\^\[0-9a-f\]\{40\}\$'[^\n]*\|\| \[ -z "\$ORIGIN_URL" \]/.test(sh) && /refusing" >&2\n\s*finish failed "[^"]+" 2/.test(sh) && sh.indexOf('case "$0" in "$CACHE"/mainline.*)') < sh.indexOf('if [ "$DRY" = "0" ] && [ -z "$MAINLINE_SHA" ]'));
 
   // ── B-1(a): CHANGED comes from the pinned sha, with renames off ──
   guard2(ok, "B-1 changed_since_base", () => {
@@ -2278,6 +2278,161 @@ defer_host_verification`);
     ok("E2E the next run resets a poisoned clone config and a planted hook: it still lands, and no hook ran", r.status === 0 && /result: acted/.test(r.stdout) && !existsSync(marker), `${r.status}\n${r.stdout}`);
     void stagesFile;
   });
+  followupTests(root, ok, sh);
+}
+
+// ── the follow-up to PR #1593 (M1–M5, L1–L3), executed ────────────────────────
+// Every new shell function is cut out of the shipped text by name (shFn: `name() {` and its `}` at column 0) and run for real, with a
+// fake clock (SG_NOW, which only the EXTRACTED functions read: the script's top level unsets it) and a stub lane-deliver; the installers
+// run whole against stub launchctl/plutil on a scratch HOME. Nothing here touches the real launchd, ~/Library, origin or a model.
+// The end-to-end cases of the real script are in shellTests' darwin block.
+export function followupTests(root, ok, sh) {
+  const gitEnv = scratchGitEnv(process.env, { SG_STAGE_RUNNER: "", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" });
+  const G = (cwd, ...args) => scratchGitOk(cwd, args, { env: gitEnv });
+  const bash = (script, extra = {}) => spawnSync("/bin/bash", ["-c", `set -u\n${script}`], { env: { ...gitEnv, ...extra }, encoding: "utf8", timeout: 120000 });
+  const q = (v) => `'${String(v).replace(/'/g, "'\\''")}'`;
+  const nonComment = (t) => t.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+  const code = nonComment(sh);
+  const fns = (...names) => names.map((n) => shFn(sh, n) ?? `# MISSING ${n}`).join("\n");
+  const vars = (...names) => names.map((n) => shVar(sh, n) ?? `# MISSING ${n}`).join("\n");
+  void G;
+
+  // ── M1: every exit of a real run heartbeats (static) ──
+  // Strip what is not shell control flow (capped()'s perl, every `node … -e '…'` program, finish() itself), then every `exit` left must be
+  // one of the SIX named in the header, each matched by its own text exactly once. Six exits cannot heartbeat by design.
+  const EXEMPT = [
+    ["the non-Mac refusal", /(uname -s\)" != "Darwin" \]; then\n\s*echo [^\n]*>&2\n\s*)exit 2/g],
+    ["a flag that needs a value", /(needs a value" >&2; )exit 2/g],
+    ["an unknown flag", /(unknown flag: \$1 [^\n]*>&2; )exit 2/g],
+    ["the seams on a real run", /(a real run reads mainline's state and origin" >&2\n\s*)exit 2/g],
+    ["a cache directory that cannot be made", /(cannot create \$CACHE" >&2; )exit 1/g],
+    ["the dry-run's end", /(sed 's\/\^\/dry-run: \/'\n\s*)exit 0/g],
+  ];
+  const exitAudit = (text) => {
+    let t = nonComment(text);
+    const programs = (t.match(/node\b[^\n']*-e '[^']*'/g) ?? []).length;
+    t = t.replace(/node\b[^\n']*-e '[^']*'/g, "node -e '<program>'");
+    for (const name of ["capped", "finish"]) { const f = shFn(t, name); if (f) t = t.replace(f, ""); }
+    const exempt = [];
+    for (const [label, re] of EXEMPT) { const n = (t.match(re) ?? []).length; exempt.push([label, n]); t = t.replace(re, "$1EXEMPT"); }
+    const stray = [...t.matchAll(/(?:^|[;&|{(]|\bthen\b|\belse\b|\bdo\b)[ \t]*exit\b[^\n]*/gm)].map((m) => m[0].trim());
+    return { programs, exempt, stray, hasFinish: !!shFn(text, "finish") };
+  };
+  const audit = exitAudit(sh);
+  ok("M1 every shell `exit` of build-tick.sh is inside finish() or one of the six exempt exits named in the header (each matched once by its own text); at least five node programs and capped()'s perl were stripped first",
+    audit.hasFinish && audit.stray.length === 0 && audit.exempt.every(([, n]) => n === 1) && audit.exempt.length === 6 && audit.programs >= 5,
+    `${audit.hasFinish ? "" : "no finish(); "}stray: ${audit.stray.join(" | ")}; exempt: ${audit.exempt.map(([l, n]) => `${l}=${n}`).join(", ")}; programs ${audit.programs}`);
+  const mutant = sh.replace('say "result: nothing buildable (the state ranks no task)"', (m) => `${m}\n  exit 0`);
+  const mutantAudit = exitAudit(mutant);
+  ok("M1 MUTANT: a bare `exit 0` inserted after `result: nothing buildable (the state ranks no task)` is caught by the same audit", mutant !== sh && mutantAudit.stray.length >= 1, mutantAudit.stray.join(" | "));
+  const finishCalls = [...code.matchAll(/\bfinish ([a-z]+) "([^"\n]*)" (\d)/g)].map((m) => ({ cls: m[1], text: m[2], rc: m[3] }));
+  const forbidden = ["STAMP", "MAINLINE_SHA", "HEAD_SHA", "_holder", "RUN_LOG", "BRANCH", "LOCK", "CACHE"];
+  const leaks = finishCalls.filter((c) => forbidden.some((v) => new RegExp(`\\$\\{?${v}\\b`).test(c.text)));
+  ok("M1 no `finish` call's text carries a pid, sha, stamp, branch, lock, cache or log name (the heartbeat is a public file, throttled by equality); at least 15 call sites", finishCalls.length >= 15 && leaks.length === 0 && /BT_FAIL_HB="[^"$]*"/.test(code) && !/BT_FAIL_HB:-[^}]*\$/.test(code),
+    `${finishCalls.length} calls; leaking: ${leaks.map((c) => c.text).join(" | ")}`);
+  const hbFn = shFn(sh, "bt_heartbeat") ?? "", finishFn = shFn(sh, "finish") ?? "";
+  ok("M1 bt_heartbeat delivers with `scripts/lane-deliver.mjs heartbeat mac-build-tick \"$1\" --no-wake`; finish() releases the host verification lock BEFORE it heartbeats, and rewrites the session stamp only for a session run",
+    /node "\$REPO_ROOT\/scripts\/lane-deliver\.mjs" heartbeat mac-build-tick "\$1" --no-wake/.test(hbFn)
+      && finishFn.indexOf("sg_host_verify_release") > 0 && finishFn.indexOf("sg_host_verify_release") < finishFn.indexOf("bt_heartbeat") && /SESSION_RUN:-0\}" = "1"/.test(finishFn));
+  ok("M1 the script still has exactly one EXIT trap (finish() exits through it, so the build lock and the classifier file are released by the same trap)", (sh.match(/^trap /gm) ?? []).length === 1);
+  ok("M1 `unset SG_NOW` follows the flag loop at the top level, so a real run or a dry-run of the file always reads date +%s and only the self-test's extracted functions can inject a clock",
+    sh.indexOf("\nunset SG_NOW") > sh.indexOf('*) echo "unknown flag:') && sh.indexOf("\nunset SG_NOW") < sh.indexOf("\nSEAMS=0") && /case "\$\{SG_NOW:-\}" in/.test(shFn(sh, "bt_now") ?? ""));
+
+  // ── M1 (behavioural): the throttle, with a fake clock and a stub lane-deliver ──
+  guard2(ok, "M1 heartbeat throttle", () => {
+    const dir = join(root, "fu-m1"), repo = join(dir, "repo"), cache = join(dir, "cache"), ldlog = join(dir, "ld.log");
+    mkdirSync(join(repo, "scripts"), { recursive: true }); mkdirSync(cache, { recursive: true });
+    writeFileSync(join(repo, "scripts/lane-deliver.mjs"), `import { appendFileSync, readFileSync } from "node:fs";
+const a = process.argv.slice(2);
+appendFileSync(process.env.SG_LD_LOG, (a[0] === "batch" ? "batch " + JSON.parse(readFileSync(a[1], "utf8"))[0].blocked : a.join(" | ")) + "\\n");
+process.exit(Number(a[0] === "heartbeat" ? (process.env.SG_STUB_HB_RC ?? 0) : (process.env.SG_STUB_LD_RC ?? 0)));\n`);
+    writeFileSync(ldlog, "");
+    const pre = `DRY=0 STAMP=fixture CACHE=${q(cache)} REPO_ROOT=${q(repo)} RUN_LOG=''
+${vars("HB_QUIET_SECONDS", "HB_CHANGED_SECONDS", "SESSION_RUN", "ADMIT_GAP_SECONDS", "LAST_ADMITTED")}
+${fns("say", "bt_now", "bt_heartbeat", "finish")}
+sg_host_verify_release() { printf 'release\\n' >> "$SG_LD_LOG"; }
+`;
+    const run = (clock, snippet, extra = {}) => bash(`${pre}${snippet}`, { SG_NOW: String(clock), SG_LD_LOG: ldlog, ...extra });
+    const lines = () => readFileSync(ldlog, "utf8").split("\n").filter(Boolean);
+    const T0 = 1761170000;
+    const hb = (clock, text, extra) => run(clock, `bt_heartbeat ${q(text)} ${q(text.split(":")[0])}`, extra);
+    hb(T0, "deferred: host busy");
+    ok("M1 the first heartbeat is delivered to mac-build-tick with --no-wake (a staleness record, never mail)", lines().includes("heartbeat | mac-build-tick | deferred: host busy | --no-wake"), lines().join(" / "));
+    hb(T0 + 600, "deferred: host busy"); hb(T0 + 660, "nothing: the state ranks no task");
+    ok("M1 the same result 10 min later and a CHANGED one at 11 min are both held (at most one an hour; a change may go once the last delivery is 15 min old)", lines().length === 1, lines().join(" / "));
+    hb(T0 + 960, "nothing: the state ranks no task");
+    ok("M1 a changed result once the last delivery is 16 min old is delivered", lines().length === 2, lines().join(" / "));
+    hb(T0 + 1000, "acted: plan row 7 — PR opened"); hb(T0 + 1100, "acted: plan row 7 — PR opened");
+    ok("M1 an ACTED result is always delivered, repeats included", lines().length === 4 && lines().at(-1).includes("acted: plan row 7 — PR opened"), lines().join(" / "));
+    hb(T0 + 1000 + 3000, "skipped: origin unreachable");
+    ok("M1 a quiet result with new text 50 min after an acted one is delivered (changed, last delivery older than 15 min)", lines().length === 5, lines().join(" / "));
+    hb(T0 + 1000 + 3000 + 120, "skipped: origin unreachable");
+    ok("M1 ...and the same text 2 min later is held", lines().length === 5, lines().join(" / "));
+    hb(T0 + 1000 + 3000 + 3700, "skipped: origin unreachable");
+    ok("M1 ...and the same text an hour after its last delivery is delivered again (the lane is still alive)", lines().length === 6, lines().join(" / "));
+    const failing = hb(T0 + 20000, "cooldown: a model session ended under 3 h ago", { SG_STUB_HB_RC: "1" });
+    hb(T0 + 20060, "cooldown: a model session ended under 3 h ago");
+    ok("M1 a heartbeat lane-deliver could not deliver neither fails the run nor moves the stamp: the next run tries again at once", failing.status === 0 && /WARN heartbeat not delivered/.test(failing.stdout) && lines().length === 8, `${failing.status} ${failing.stdout} / ${lines().join(" / ")}`);
+    writeFileSync(join(cache, "heartbeat-last"), "garbage");
+    hb(T0 + 20100, "cooldown: a model session ended under 3 h ago");
+    ok("M1 an unreadable throttle stamp delivers (unknown tightens)", lines().length === 9, lines().join(" / "));
+    const before = lines().length;
+    const dry = bash(`DRY=1 STAMP=fixture RUN_LOG=''\n${fns("say", "bt_heartbeat")}\nbt_heartbeat 'x: y' x`, { SG_LD_LOG: ldlog });
+    ok("M1 the dry-run only says it would heartbeat and never calls lane-deliver", dry.status === 0 && /dry-run: would heartbeat: x: y/.test(dry.stdout) && lines().length === before, `${dry.stdout}`);
+    writeFileSync(ldlog, "");
+    const codes = [[0, "nothing", 0], [1, "failed", 1000], [2, "failed", 2000]].map(([rc, cls, dt]) => run(T0 + 30000 + dt, `finish ${cls} 'a fixed text' ${rc}`).status);
+    ok("M1 finish() exits with its third argument (0, 1, 2) and each exit heartbeated `<class>: <text>`", codes.join() === "0,1,2" && lines().some((l) => l.includes("| nothing: a fixed text |")) && lines().some((l) => l.includes("| failed: a fixed text |")), `${codes} / ${lines().join(" / ")}`);
+    writeFileSync(ldlog, ""); rmSync(join(cache, "heartbeat-last"), { force: true }); rmSync(join(cache, "heartbeat-last-result"), { force: true });
+    run(T0, "finish acted 'plan row 7 — PR opened' 0");
+    ok("M1 finish() releases the host verification lock BEFORE the lane-deliver call (a slow push must not hold the host)", lines()[0] === "release" && /^heartbeat \| mac-build-tick \| acted: plan row 7/.test(lines()[1] ?? ""), lines().join(" / "));
+  });
+
+  // ── M4: a session gap between admitted runs ──
+  guard2(ok, "M4 session gap", () => {
+    const dir = join(root, "fu-m4"), cache = join(dir, "cache"), la = join(cache, "last-admitted-epoch");
+    mkdirSync(cache, { recursive: true });
+    const pre = `DRY=0 STAMP=fixture CACHE=${q(cache)} RUN_LOG=''
+${vars("ADMIT_GAP_SECONDS", "LAST_ADMITTED", "SESSION_RUN")}
+${fns("say", "bt_now", "session_gap_left", "bt_session_start", "finish")}
+bt_heartbeat() { printf 'heartbeat:%s\\n' "$1"; }
+`;
+    const run = (clock, snippet, extra = {}) => bash(`${pre}${snippet}`, { SG_NOW: String(clock), ...extra });
+    const gap = (clock, flag = 1) => run(clock, `session_gap_left ${flag}`).stdout.trim();
+    const T0 = 1761170000;
+    rmSync(la, { force: true });
+    ok("M4 no stamp, no gap (the first run on a Mac is admitted)", gap(T0) === "0" && !existsSync(la));
+    writeFileSync(la, `${T0} failed`);
+    ok("M4 a session run that FAILED an hour ago leaves 7200 s of the 10800 s gap, and none at 3 h", gap(T0 + 3600) === "7200" && gap(T0 + 10800) === "0" && gap(T0 + 10799) === "1");
+    writeFileSync(la, `${T0} acted`);
+    ok("M4 an ACTED session run starts the gap too (sessions every few hours, whatever the outcome): 10740 s left a minute later", gap(T0 + 60) === "10740");
+    writeFileSync(la, `${T0} running`);
+    ok("M4 a stamp still saying `running` (the run died before it recorded an outcome) restarts a full gap now and is rewritten `unrecorded`", gap(T0 + 60) === "10800" && readFileSync(la, "utf8") === `${T0 + 60} unrecorded`, readFileSync(la, "utf8"));
+    writeFileSync(la, "garbage");
+    ok("M4 an unreadable stamp restarts the gap (unknown tightens); the dry-run reads it without rewriting it", gap(T0, 0) === "10800" && readFileSync(la, "utf8") === "garbage" && gap(T0, 1) === "10800" && readFileSync(la, "utf8") === `${T0} unrecorded`);
+    writeFileSync(la, `${T0 + 86400} failed`);
+    ok("M4 a stamp a day in the FUTURE (the clock moved back) restarts the gap now instead of waiting a day", gap(T0) === "10800");
+    rmSync(la, { force: true });
+    const f1 = run(T0, "SESSION_RUN=1; finish failed 'a hand was raised' 1");
+    ok("M4 finish() with SESSION_RUN=1 records `<now> <class>` as the stamp and keeps its exit code", f1.status === 1 && readFileSync(la, "utf8") === `${T0} failed` && /heartbeat:failed: a hand was raised/.test(f1.stdout), `${f1.status} ${f1.stdout}`);
+    const f0 = run(T0 + 5, "SESSION_RUN=0; finish nothing 'x' 0");
+    ok("M4 ...and with SESSION_RUN=0 (paused, lock held, deferred, cooldown, origin down, nothing buildable) it leaves the stamp alone: such runs never start or extend the gap", f0.status === 0 && readFileSync(la, "utf8") === `${T0} failed`);
+    const fd = run(T0 + 9, "DRY=1; SESSION_RUN=1; finish nothing 'x' 0");
+    ok("M4 ...and a dry-run never writes it", fd.status === 0 && readFileSync(la, "utf8") === `${T0} failed`);
+    run(T0 + 70, "bt_session_start");
+    ok("M4 bt_session_start sets SESSION_RUN and stamps `<now> running` before any model session starts", readFileSync(la, "utf8") === `${T0 + 70} running`);
+  });
+  {
+    const at = (t) => code.indexOf(t);
+    const callLine = (name) => code.split("\n").filter((l) => new RegExp(`^\\s*${name}(\\s|$)`).test(l));
+    ok("M4 the session-gap block (1c) sits after the pause check and before the host verification lock; it returns the cooldown through finish, and the dry-run only says what a real run would do",
+      at('[ -f "$PAUSED" ]') > 0 && at('[ -f "$PAUSED" ]') < at('_gap="$(session_gap_left 1)"') && at('_gap="$(session_gap_left 1)"') < at("if ! sg_host_verify_acquire")
+        && /finish cooldown "[^"$]*" 0/.test(code) && /session_gap_left 0/.test(code) && /dry-run: a real run would stop here: cooldown/.test(code));
+    ok("M4 bt_session_start is called once, immediately before the triage session, and only on the real-run path (after the dry-run's exit)",
+      callLine("bt_session_start").length === 1 && /bt_session_start\nstages triage >> "\$RUN_LOG" 2>&1 < \/dev\/null/.test(code) && at("\nbt_session_start\n") > at("sed 's/^/dry-run: /'"));
+    ok("M4 ADMIT_GAP_SECONDS is the 3-hour (10800 s) gap the registry row's authorizationEvidence names", /^ADMIT_GAP_SECONDS=10800$/m.test(sh));
+  }
+
+  // ── FOLLOWUP-NEXT-CHUNK ──
 }
 const guard2 = (ok, name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } };
 

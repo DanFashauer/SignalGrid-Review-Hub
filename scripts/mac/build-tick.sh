@@ -58,8 +58,9 @@
 #      runs a branch copy);
 #   1. one run at a time (a lock under ~/Library/Caches, never $TMPDIR, whose value
 #      differs between launchd, a sandboxed shell and a plain one);
-#   1a. the pause check: a tick the last run PAUSED (see 6 and 8) does nothing at all, the
+#   1a. the pause check: a tick the last run PAUSED (see 6 and 8) does nothing but heartbeat "paused", the
 #      refresh included, until a person deletes the paused file;
+#   1c. the session gap: a run that started a model session is followed by at least 3 h with no admitted run (see 1c below);
 #   1b. REFRESH, before any row: mainline's PR-refresh script (when mainline has it) brings
 #      ONE dirty mac/* PR up to date, under a wall-clock cap that kills its whole process
 #      group. It needs no model; a failure never stops the build;
@@ -105,6 +106,7 @@
 #      lockfile guard for tick PRs: the repo's local pre-push hook is deliberately not run here,
 #      because a session can edit hooks.
 #      Anything else raises a hand and leaves the claim in place for a person.
+#   EVERY exit of a real run but six named at finish() heartbeats artifacts/agent-heartbeats/mac-build-tick.json (M1).
 #
 # Stock macOS bash 3.2: guarded array expansion, here-strings, no mapfile, no ${var,,}.
 # =============================================================================
@@ -129,6 +131,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+unset SG_NOW   # a seam for the self-test's extracted functions only (bt_now); never a real run's clock
 # The overrides are test seams: a REAL run always builds from mainline's own state.
 if [ "$DRY" = "0" ] && { [ -n "$STATE_FILE" ] || [ "$REMOTE" != "origin" ]; }; then
   echo "--state / --remote are for --dry-run only; a real run reads mainline's state and origin" >&2
@@ -192,7 +195,90 @@ raise_hand() {
   fi
   rm -f "$_ops"
 }
-fail() { say "result: failed: $1"; raise_hand "$1"; exit 1; }
+fail() { say "result: failed: $1"; raise_hand "$1"; finish failed "${BT_FAIL_HB:-a hand was raised for the Mac lane (see artifacts/raised-hands)}" 1; }
+
+# ── the heartbeat, on every exit of a real run (M1) ──────────────────────────
+# A loaded job that never fires, or fires and dies before a hand, used to leave nothing (the row had heartbeatPath null).
+# Every exit below goes through finish, which heartbeats artifacts/agent-heartbeats/mac-build-tick.json through lane-deliver
+# (--no-wake: a staleness record, never mail). Six exits do not, by design: the non-Mac refusal, the three usage refusals,
+# a cache directory that cannot be made (unreachable under launchd: the launcher's own mktemp there fails first) and the
+# dry-run's end. The text is a fixed vocabulary (no pid, sha, stamp, path or log name) so a repeat can be held: at most one an
+# hour unless the run acted, and a CHANGED result may go once the last delivery is HB_CHANGED_SECONDS old. A delivery that fails
+# never fails the run.
+HB_QUIET_SECONDS=3600
+HB_CHANGED_SECONDS=900
+SESSION_RUN=0
+ADMIT_GAP_SECONDS=10800
+LAST_ADMITTED="$CACHE/last-admitted-epoch"
+
+# The ONE clock the new logic reads (the heartbeat throttle, the origin-down streak, the session gap, queued-hand expiry). SG_NOW
+# (whole seconds since the epoch) is a seam for the self-test's EXTRACTED functions only: the script's top level runs
+# `unset SG_NOW`, so a real run or a dry-run of the file always reads `date +%s` here.
+bt_now() {
+  case "${SG_NOW:-}" in
+    ''|*[!0-9]*) date +%s ;;
+    *) printf '%s\n' "$SG_NOW" ;;
+  esac
+}
+
+# One heartbeat per exit, through lane-deliver, never more than one an hour unless the run acted (a CHANGED result may go early once
+# the last delivery is 15 min old). $1 the text ("<class>: <fixed words>"), $2 the class. Never fails the run.
+bt_heartbeat() {
+  if [ "$DRY" = "1" ]; then say "dry-run: would heartbeat: $1"; return 0; fi
+  _hn="$(bt_now)"
+  _hl="$(cat "$CACHE/heartbeat-last" 2>/dev/null)"
+  _hr="$(cat "$CACHE/heartbeat-last-result" 2>/dev/null)"
+  case "$_hl" in ''|*[!0-9]*) _hl="" ;; esac
+  if [ "$2" != "acted" ] && [ -n "$_hl" ] && [ "$_hl" -le "$_hn" ]; then
+    _ha=$((_hn - _hl))
+    if [ "$_ha" -lt "$HB_QUIET_SECONDS" ] && { [ "$1" = "$_hr" ] || [ "$_ha" -lt "$HB_CHANGED_SECONDS" ]; }; then
+      say "heartbeat held ($((_ha / 60)) min since the last one): $1"
+      return 0
+    fi
+  fi
+  if node "$REPO_ROOT/scripts/lane-deliver.mjs" heartbeat mac-build-tick "$1" --no-wake >> "${RUN_LOG:-/dev/null}" 2>&1; then
+    printf '%s' "$_hn" > "$CACHE/heartbeat-last" 2>/dev/null || true
+    printf '%s' "$1" > "$CACHE/heartbeat-last-result" 2>/dev/null || true
+    say "heartbeat delivered: $1"
+  else
+    say "WARN heartbeat not delivered (origin unreachable, a refused push, or a mainline without the mac-build-tick heartbeat path): $1"
+  fi
+  return 0
+}
+
+# Every exit of a real run but the six named above comes through here. $1 class (acted|failed|deferred|skipped|paused|cooldown|nothing),
+# $2 fixed text (no pid, sha, stamp or path), $3 exit code. A run that started a model session records its outcome as the session
+# stamp the gap is measured from. The host verification lock is released BEFORE the push: a slow delivery must not hold the host.
+finish() {
+  if [ "${SESSION_RUN:-0}" = "1" ] && [ "$DRY" = "0" ]; then
+    printf '%s %s' "$(bt_now)" "$1" > "$LAST_ADMITTED" 2>/dev/null || true
+  fi
+  if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi
+  bt_heartbeat "$1: $2" "$1"
+  exit "${3:-0}"
+}
+
+# M4. Seconds left in the gap after the last run that started a model session; 0 when none. $1 = 1 lets it rewrite an unreadable stamp
+# (a real run); 0 reads only (the dry-run). The stamp is `<epoch> <outcome>`; an unreadable one, a session run that died before it recorded
+# an outcome (`running`), or an epoch in the future (the clock moved back) restarts the gap now: unknown tightens, never loosens.
+session_gap_left() {
+  _gn="$(bt_now)"
+  _gl=""
+  if [ -e "$LAST_ADMITTED" ]; then _gl="$(cat "$LAST_ADMITTED" 2>/dev/null)" || _gl=""; else echo 0; return 0; fi
+  _ge="${_gl%% *}"; _go="${_gl#* }"
+  case "$_ge" in ''|*[!0-9]*) _ge="" ;; esac
+  if [ -z "$_ge" ] || [ "$_go" = "running" ] || [ "$_go" = "$_gl" ] || [ "$_ge" -gt $((_gn + 300)) ]; then
+    _ge="$_gn"
+    if [ "$1" = "1" ]; then printf '%s %s' "$_gn" "unrecorded" > "$LAST_ADMITTED" 2>/dev/null || true; fi
+  fi
+  _gr=$((_ge + ADMIT_GAP_SECONDS - _gn))
+  if [ "$_gr" -gt 0 ]; then echo "$_gr"; else echo 0; fi
+}
+# Stamps the start of a model session; finish() rewrites it with the outcome. Called once, just before triage.
+bt_session_start() {
+  SESSION_RUN=1
+  printf '%s running' "$(bt_now)" > "$LAST_ADMITTED" 2>/dev/null || true
+}
 
 # An asleep Mac is common and says nothing; 144 failures at the five-minute cadence (12 h) is not. A run that cannot
 # ask the real remote for mainline's sha does NOTHING (it never runs a previous session's leftover).
@@ -205,7 +291,7 @@ origin_down() {
     [ "$_n" = "144" ] && raise_hand "origin has been unreachable on 144 build ticks in a row (12 h at the five-minute cadence; $1; auth expired? repo locked?)"
   fi
   say "result: skipped: origin unreachable ($1; $_n in a row)"
-  exit 0
+  finish skipped "origin unreachable" 0
 }
 # SignalGrid_Alpha's sha, from the remote named by $1 (a URL, a name or a scratch path). Exact ref match, 40 hex, or nothing.
 remote_mainline_sha() {
@@ -235,11 +321,11 @@ if [ "$DRY" = "0" ] && [ -z "$MAINLINE_SHA" ]; then
   rm -f "$FETCH_FAILS"
   # A fresh file per run: bash reads a script as it runs, so overwriting one a live run
   # is reading would feed it misaligned text.
-  _f="$(mktemp "$CACHE/mainline.XXXXXX")" || exit 1
+  _f="$(mktemp "$CACHE/mainline.XXXXXX")" || { say "result: failed: could not stage mainline's copy of this script"; finish failed "could not stage mainline's copy of this script" 1; }
   if ! git -C "$REPO_ROOT" show "$MAINLINE_SHA:scripts/mac/build-tick.sh" > "$_f" 2>/dev/null; then
     rm -f "$_f"
     echo "build-tick: mainline $MAINLINE_SHA has no scripts/mac/build-tick.sh — nothing to run"
-    exit 0
+    finish skipped "mainline has no scripts/mac/build-tick.sh" 0
   fi
   SG_BUILD_TICK_MAINLINE=1 SG_REPO_ROOT="$REPO_ROOT" SG_MAINLINE_SHA="$MAINLINE_SHA" SG_ORIGIN_URL="$ORIGIN_URL" exec /bin/bash "$_f"
 fi
@@ -247,10 +333,10 @@ if [ "$DRY" = "0" ]; then
   # Past step 0 only with the sha and URL it resolved (a hand-set SG_MAINLINE_SHA that is not a sha pins nothing).
   if ! printf '%s' "$MAINLINE_SHA" | grep -qE '^[0-9a-f]{40}$' || [ -z "$ORIGIN_URL" ]; then
     echo "build-tick: SG_MAINLINE_SHA is not a 40-hex sha, or SG_ORIGIN_URL is empty — step 0 sets both; refusing" >&2
-    exit 2
+    finish failed "step 0 did not hand down a pinned sha and origin URL" 2
   fi
 fi
-cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; exit 1; }
+cd "$REPO_ROOT" || { echo "cannot enter $REPO_ROOT" >&2; finish failed "cannot enter the repository" 1; }
 
 # Wall-clock budgets. The per-stage caps live in build-tick-stages.mjs's stage table and
 # nowhere else; the four restated below feed the hung-hand budget, and the helper's --self-test
@@ -356,6 +442,7 @@ gate_green() {
 # outcome) is a PAUSE, not only a hand: a hand keeps the claim and the next tick takes a NEW row, so a broken helper
 # would burn the backlog 3 h at a time. Same rule as a broken session (1a). $1 why, $2 what is true of the claim.
 pause_tick() {
+  BT_FAIL_HB="the tick paused itself and raised a hand"
   printf 'the build tick paused itself on %s: %s; log %s\n' "$STAMP" "$1" "${RUN_LOG:-none}" > "$PAUSED"
   fail "$1. The build tick is PAUSED (${2:-claim status unknown}): fix the cause, then delete $PAUSED"
 }
@@ -375,17 +462,17 @@ if ! mkdir "$LOCK" 2>/dev/null; then
       raise_hand "a build tick (pid $_holder) has held $LOCK for $((_age / 3600)) h (a full run fits in $((HUNG_SECONDS / 3600)) h) — it is hung; kill that pid and read the newest ~/Library/Logs/signalgrid/build-tick-*.log"
     fi
     say "result: skipped: another build tick (pid ${_holder:-starting}) holds $LOCK"
-    exit 0
+    finish skipped "another build tick holds the build lock" 0
   fi
   say "stale build lock (holder ${_holder:-unknown} is gone) — clearing it"
   rm -f "$LOCK/pid" "$LOCK/hung-hand"; rmdir "$LOCK" 2>/dev/null || true
-  mkdir "$LOCK" 2>/dev/null || { say "result: skipped: could not take $LOCK"; exit 0; }
+  mkdir "$LOCK" 2>/dev/null || { say "result: skipped: could not take $LOCK"; finish skipped "could not take the build lock" 0; }
 fi
 printf '%s' "$$" > "$LOCK/pid"
 trap 'if declare -F sg_host_verify_release >/dev/null; then sg_host_verify_release; fi; rm -f "$LOCK/pid" "$LOCK/hung-hand" "$CLASSIFIER"; rmdir "$LOCK" 2>/dev/null' EXIT
 # The empty hooks directory every sgit call points core.hooksPath at, recreated empty each run before any session exists.
 rm -rf "${CACHE:?}/no-hooks"
-mkdir -p "$NOHOOKS" || { echo "cannot create $NOHOOKS" >&2; exit 1; }
+mkdir -p "$NOHOOKS" || { echo "cannot create $NOHOOKS" >&2; finish failed "cannot create the empty hooks directory" 1; }
 
 for _tool in git gh node pnpm npm claude perl; do
   if [ "$_tool" = "claude" ] && [ -n "${SG_STAGE_RUNNER:-}" ]; then continue; fi
@@ -397,11 +484,11 @@ done
 # calls a session broken when its envelope names an API error or the CLI died with no envelope (a turn or
 # time cap is not broken). A broken TRIAGE pauses before any claim, so no row is claimed; a session that
 # breaks AFTER the claim pauses the tick but leaves that row's claim branch for a person. A helper that fails
-# (cannot read a brief, throws) pauses it the same way. While paused the tick does nothing at all, the PR refresh included.
+# (cannot read a brief, throws) pauses it the same way. While paused the tick does nothing but heartbeat, the PR refresh included.
 PAUSED="$CACHE/paused"
 if [ "$DRY" = "0" ] && [ -f "$PAUSED" ]; then
   echo "build-tick: paused — $(head -c 300 "$PAUSED" | tr '\n' ' '); delete $PAUSED to resume"
-  exit 0
+  finish paused "the tick is paused until a person deletes ~/Library/Caches/signalgrid/build-tick/paused" 0
 fi
 
 # Run a command under a wall-clock cap that kills its WHOLE PROCESS GROUP. perl forks the command into its own
@@ -430,6 +517,25 @@ capped() {
     exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' "$_cap" "$@"
 }
 
+# ── 1c. the session gap (M4) ─────────────────────────────────────────────────
+# launchd retries every 5 minutes, so a DEFERRAL (another chain holds the host) or a skip waits minutes. A run that started a
+# model session (triage onward), whatever its outcome, is followed by at least ADMIT_GAP_SECONDS with no admitted run: a
+# failure class cannot walk the ranked rows at the retry cadence, and sessions stay every few hours as the owner approved on
+# 2026-09-29. An unreadable stamp, a session run that died before it recorded an outcome, or a clock that moved back restarts
+# the gap (unknown tightens). Delete ~/Library/Caches/signalgrid/build-tick/last-admitted-epoch to admit the next run early.
+if [ "$DRY" = "0" ]; then
+  _gap="$(session_gap_left 1)"
+  case "$_gap" in ''|*[!0-9]*) _gap="$ADMIT_GAP_SECONDS" ;; esac
+  if [ "$_gap" -gt 0 ]; then
+    say "result: cooldown: the last run that started a model session ended under $((ADMIT_GAP_SECONDS / 3600)) h ago ($(( (_gap + 59) / 60 )) min left); no refresh, triage or claim ran"
+    finish cooldown "a model session ended under 3 h ago; no refresh, triage or claim ran" 0
+  fi
+else
+  _gap="$(session_gap_left 0)"
+  case "$_gap" in ''|*[!0-9]*) _gap="$ADMIT_GAP_SECONDS" ;; esac
+  if [ "$_gap" -gt 0 ]; then say "dry-run: a real run would stop here: cooldown, $(( (_gap + 59) / 60 )) min left"; fi
+fi
+
 # One host chain includes the optional PR refresh, model build/checks and final full gates.
 # Load only pinned mainline's helper, never code from the mutable build clone.
 if [ "$DRY" = "0" ]; then
@@ -442,7 +548,7 @@ if [ "$DRY" = "0" ]; then
   rm -f "$_verify_helper"
   if ! sg_host_verify_acquire "$HOME/Library/Caches/signalgrid/host-verification.lock"; then
     say "result: deferred: $SG_VERIFY_LOCK_REASON; no refresh, triage or claim ran"
-    exit 0
+    finish deferred "$SG_VERIFY_LOCK_REASON; no refresh, triage or claim ran" 0
   fi
 fi
 
@@ -547,7 +653,7 @@ fi
 rm -f "$_err"
 if [ -z "$TASKS" ]; then
   say "result: nothing buildable (the state ranks no task)"
-  exit 0
+  finish nothing "the state ranks no task" 0
 fi
 
 # ── 3. the first row nobody has claimed ──────────────────────────────────────
@@ -595,7 +701,7 @@ $TASKS
 TASKS_EOF
 if [ -z "$PICK_ID" ]; then
   say "result: nothing buildable ($N_TASKS ranked task(s), every one claimed)"
-  exit 0
+  finish nothing "$N_TASKS ranked task(s), every one claimed" 0
 fi
 BRANCH="mac/build-row-$PICK_ID-$STAMP"
 RUN_DIR="$CACHE/runs/$STAMP"
@@ -666,7 +772,7 @@ claim() {
   load_inflight
   if _why="$(in_flight "$PICK_ID")"; then
     say "result: skipped: plan row $PICK_ID was claimed while triage ran ($_why) — nothing pushed"
-    exit 0
+    finish skipped "the picked row was claimed while triage ran" 0
   fi
   sgit switch -q -c "$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not create $BRANCH in the build clone"
   sgit push -q "$ORIGIN_URL" "$MAINLINE_SHA:refs/heads/$BRANCH" >> "$RUN_LOG" 2>&1 || fail "could not push the claim branch $BRANCH"
@@ -674,6 +780,7 @@ claim() {
 }
 rm -f "$RUN_DIR/next" "$RUN_DIR/outcome.json"
 say "triage starting (read-only; tier and cap are the helper's stage table), no git/GitHub credentials"
+bt_session_start
 stages triage >> "$RUN_LOG" 2>&1 < /dev/null
 _next="$(head -1 "$RUN_DIR/next" 2>/dev/null)"
 [ -n "$_next" ] || pause_tick "plan row $PICK_ID: triage wrote no $RUN_DIR/next — not claiming a row it could not read" "NO claim was pushed, so this row is still unclaimed"
@@ -781,4 +888,4 @@ OWNER="${REPO_SLUG%%/*}"
 _open="$(gh api "repos/$REPO_SLUG/pulls?head=$OWNER:$BRANCH&state=open" --jq length 2>/dev/null)"
 [ "${_open:-0}" -ge 1 ] 2>/dev/null || fail "plan row $PICK_ID: pushed $BRANCH but no open PR for it could be found afterwards"
 say "result: acted: plan row $PICK_ID — $BRANCH at $HEAD_SHA, preflight + breadth green, PR open"
-exit 0
+finish acted "plan row $PICK_ID — PR opened" 0

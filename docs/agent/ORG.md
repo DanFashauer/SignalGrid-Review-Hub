@@ -82,6 +82,11 @@ Write capability is **derived** from each agent's own `tools:` frontmatter, neve
 taken on trust from the registry — a registry that asked an applicant to fill in
 their own badge would not be a permission system.
 
+The Mac's local operating brain is not a role, not a registered agent and not a tier: it
+is an unattended unit on the owner's Mac that writes only under
+`scripts/mac/local-brain/**` (owner-gated safety machinery), never merges its own work,
+and follows `scripts/mac/local-brain/CAPABILITIES.md`.
+
 ### The hiring loop
 
 Owner-directed, 2026-08-23: when work needs a skill nobody has, that is a gap.

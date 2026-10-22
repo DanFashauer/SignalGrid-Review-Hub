@@ -2330,7 +2330,7 @@ export function followupTests(root, ok, sh) {
   // ── M1: every exit of a real run heartbeats (static) ──
   // Strip what is not shell control flow (capped()'s perl, every `node … -e '…'` program, finish() itself), then every `exit` left must be
   // one of the SIX named in the header, each matched by its own text exactly once. Six exits cannot heartbeat by design.
-  const EXEMPT = [
+  const SIX_EXITS = [
     ["the non-Mac refusal", /(uname -s\)" != "Darwin" \]; then\n\s*echo [^\n]*>&2\n\s*)exit 2/g],
     ["a flag that needs a value", /(needs a value" >&2; )exit 2/g],
     ["an unknown flag", /(unknown flag: \$1 [^\n]*>&2; )exit 2/g],
@@ -2344,7 +2344,7 @@ export function followupTests(root, ok, sh) {
     t = t.replace(/node\b[^\n']*-e '[^']*'/g, "node -e '<program>'");
     for (const name of ["capped", "finish"]) { const f = shFn(t, name); if (f) t = t.replace(f, ""); }
     const exempt = [];
-    for (const [label, re] of EXEMPT) { const n = (t.match(re) ?? []).length; exempt.push([label, n]); t = t.replace(re, "$1EXEMPT"); }
+    for (const [label, re] of SIX_EXITS) { const n = (t.match(re) ?? []).length; exempt.push([label, n]); t = t.replace(re, "$1<one of the six>"); }
     const stray = [...t.matchAll(/(?:^|[;&|{(]|\bthen\b|\belse\b|\bdo\b)[ \t]*exit\b[^\n]*/gm)].map((m) => m[0].trim());
     return { programs, exempt, stray, hasFinish: !!shFn(text, "finish") };
   };

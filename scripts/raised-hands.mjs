@@ -106,6 +106,7 @@ export const SIM_UNREADABLE = "UNREADABLE-check-sim-requests-printed-nothing";
 /** Soft limit per source: past it the hand is on the list; past HARD_MULTIPLE× it the gate fails unless covered. */
 export { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs"; // in a leaf module so check-raised-hands.mjs can validate `covers` without importing this file (a cycle deadlocks its top-level await)
 import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 export const HARD_MULTIPLE = 3;
 /** Every auto-hand kind, plus the two routes every explicit hand falls into. Each needs a responder. */
 export const AUTO_KINDS = Object.keys(SOFT_LIMIT_H);
@@ -733,7 +734,7 @@ async function selfTest() {
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const argv = process.argv.slice(2);
   if (argv.includes("--self-test")) process.exit(await selfTest());
   const records = loadLedger();

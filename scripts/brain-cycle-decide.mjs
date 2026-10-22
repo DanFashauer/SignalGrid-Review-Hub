@@ -33,6 +33,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { classifyDiff } from "./check-owner-gated-surfaces.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 // The two STRUCTURAL veto lenses. This set is a non-negotiable floor: the config file
 // (docs/agent/brain-cycle-config.json — itself owner-gated in check-owner-gated-surfaces.mjs)
@@ -351,7 +352,7 @@ function selfTest() {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   console.error("brain-cycle-decide is a library; run with --self-test, or import { decide }.");
   process.exit(2);

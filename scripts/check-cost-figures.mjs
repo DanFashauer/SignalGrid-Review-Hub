@@ -49,6 +49,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel, root = ROOT) => readFileSync(join(root, rel), "utf8");
@@ -517,7 +518,7 @@ function selfTest() {
 }
 
 // Exact-entry guard: importing this module must never gate as a side effect.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
 
   const r = scan();

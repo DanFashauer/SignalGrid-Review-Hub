@@ -140,7 +140,7 @@ check(
   /const id = slug\(/.test(cliSrc) && /join\(ACK_DIR, `\$\{slug\(messageId\)\}\.json`\)/.test(cliSrc) &&
     /\.replace\(\/\[\^a-z0-9\]\+\/g, "-"\)/.test(cliSrc),
 );
-check("the module does not run its CLI on import — the gate and this proof import it for the audit", /if \(process\.argv\[1\] && resolve\(process\.argv\[1\]\) === fileURLToPath\(import\.meta\.url\)\) runCli\(\)/.test(cliSrc));
+check("the module does not run its CLI on import — the gate and this proof import it for the audit", /if \(isMainModule\(process\.argv\[1\], import\.meta\.url\)\) runCli\(\)/.test(cliSrc));
 check(
   "LIVE: the inbox names the lane it believes it is, so a misread identity is visible rather than silent",
   cli(["inbox"], { SIGNALGRID_LANE: "mac" }).out.includes("this machine is the MAC lane"),

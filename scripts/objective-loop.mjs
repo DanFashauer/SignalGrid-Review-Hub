@@ -74,6 +74,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { auditBacklogOwnership, parseRows, rosterIds, statusText } from "./check-backlog-ownership.mjs";
 import { SIM_OPERATIONS } from "./lib/sim-operations.mjs";
 import { SOFT_LIMIT_H } from "./lib/raised-hand-kinds.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const HERE = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(HERE), "..");
@@ -988,4 +989,4 @@ function main() {
   process.exit(state.verdict === "broken" ? 1 : 0);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (isMainModule(process.argv[1], import.meta.url)) main();

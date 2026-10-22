@@ -17,6 +17,7 @@
 //   · served-with-stale-gap fails; an emptied vector suite fails (vacuity).
 import { readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const VECTORS = "native/shared/assist-wire-conformance.json";
 const SPEC = "lib/api-spec/v1-openapi.yaml";
@@ -206,7 +207,7 @@ function selfTest() {
     const src = readFileSync(fileURLToPath(import.meta.url), "utf8");
     checks.push([
       "the entry guard is EXACT, not a basename suffix match",
-      /import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href/.test(src) &&
+      /isMainModule\(process\.argv\[1\], import\.meta\.url\)/.test(src) &&
         !/import\.meta\.url\.endsWith\(/.test(src),
     ]);
   }
@@ -257,7 +258,7 @@ function selfTest() {
 // `check-decision-palette.mjs` that only imported this module ran the whole gate, and the
 // same file renamed did not — the gate's scope depended on the caller's filename.
 // `check-lab-registry.mjs` diagnosed this exact hazard and fixed it; these two had not.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   if (process.argv.includes("--self-test")) process.exit(selfTest());
   const { problems, boundRoute } = auditAssistWire(load());
   console.log("Assist-wire served-ness — the vector-bound wire is served, or a declared gap (DR-007 / DR-023)");

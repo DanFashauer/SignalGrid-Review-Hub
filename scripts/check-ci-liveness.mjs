@@ -53,6 +53,7 @@
 
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const REPO = process.env.GITHUB_REPOSITORY || "DanFashauer/SignalGrid-Review-Hub";
 const WORKFLOW_FILE = "scheduled-verification.yml";
@@ -684,7 +685,7 @@ export function classifyScan({ runsInspected, runsWithSweep }) {
 // silently hits the API — which is the same class of surprise this gate exists
 // to catch, in the gate itself.
 const invokedDirectly =
-  process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  isMainModule(process.argv[1], import.meta.url);
 if (!invokedDirectly) {
   // imported for its pure function only
 } else {

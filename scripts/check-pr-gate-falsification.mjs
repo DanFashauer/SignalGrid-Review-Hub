@@ -41,6 +41,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TARGETS, mutationsFor, runProof } from "./mutation-guard.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -266,7 +267,7 @@ function validate() {
   console.log("Run with --base <ref> --head <ref> to judge a PR; --self-test to exercise the fail-closed arms (preflight + CI do).");
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(process.argv[1], import.meta.url)) {
   const argv = process.argv.slice(2);
   const val = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
   if (argv.includes("--self-test")) selfTest();

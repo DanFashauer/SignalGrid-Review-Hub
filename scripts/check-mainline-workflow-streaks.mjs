@@ -33,6 +33,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apiWith } from "./check-ci-liveness.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BRANCH = "SignalGrid_Alpha";
@@ -418,7 +419,7 @@ async function main() {
 
 // Importing this file (e.g. for WATCHED/streakVerdict/tokenVerdict) must not run main() or
 // call process.exit — that surprise is the same class of bug lesson L8 already names.
-const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const invokedDirectly = isMainModule(process.argv[1], import.meta.url);
 if (invokedDirectly) {
   main().then(
     (code) => process.exit(code),

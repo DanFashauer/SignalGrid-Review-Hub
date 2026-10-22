@@ -25,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { vendoredSkillPrefixes } from "./lib/skill-plane.mjs";
+import { isMainModule } from "./lib/is-main.mjs";
 
 const SELF_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -932,7 +933,7 @@ function selfTest() {
 // Guarded on being the entry point: `scan-estate-citations.mjs` imports `scanRepo` from
 // here, and a module that gates its own repository as a side effect of being imported
 // makes every consumer's exit code a lie about the wrong tree.
-const isEntry = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isEntry = isMainModule(process.argv[1], import.meta.url);
 if (!isEntry) {
   // exported API only
 } else if (argv.includes("--self-test")) {

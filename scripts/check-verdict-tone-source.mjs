@@ -742,10 +742,10 @@ export function toneBranchProblems(src) {
     const mode = V.size === 0 ? "none" : other > 0 || (pos > 0 && neg > 0) ? "mixed" : neg > 0 ? "neg" : "pos";
     return { V, mode };
   };
-  const IGNORE = { kind: "ignore" };
+  const UNJUDGED = { kind: "unjudged" };
   const bound = (V) => ({ kind: "bound", V });
   const scan = (text, node, ctx) => {
-    if (ctx.kind === "ignore") return;
+    if (ctx.kind === "unjudged") return;
     if (/(?:text|bg|border)-status-$/.test(text)) out.push(`line ${lineOf(node)}: a status class built at runtime ("${text.slice(-24)}…") cannot be paired to a verdict`);
     for (const m of text.matchAll(/(?<![\w/-])(?:text|bg|border)-status-([a-z-]+)/g)) {
       if (!Object.hasOwn(VERDICT_REGISTRY, m[1])) continue;
@@ -754,9 +754,9 @@ export function toneBranchProblems(src) {
     }
   };
   const arms = (a, whenTrue, whenFalse) => {
-    if (a.mode === "none") { if (whenTrue) walk(whenTrue, IGNORE); if (whenFalse) walk(whenFalse, IGNORE); }
-    else if (a.mode === "pos") { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, IGNORE); }
-    else if (a.mode === "neg") { walk(whenTrue, IGNORE); if (whenFalse) walk(whenFalse, bound(a.V)); }
+    if (a.mode === "none") { if (whenTrue) walk(whenTrue, UNJUDGED); if (whenFalse) walk(whenFalse, UNJUDGED); }
+    else if (a.mode === "pos") { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, UNJUDGED); }
+    else if (a.mode === "neg") { walk(whenTrue, UNJUDGED); if (whenFalse) walk(whenFalse, bound(a.V)); }
     else { walk(whenTrue, bound(a.V)); if (whenFalse) walk(whenFalse, bound(a.V)); }
   };
   const propName = (nm) => (ts.isIdentifier(nm) || ts.isStringLiteral(nm) || ts.isNumericLiteral(nm) ? nm.text : ts.isComputedPropertyName(nm) ? strOf(nm.expression) : null);
@@ -776,7 +776,7 @@ export function toneBranchProblems(src) {
       for (const clause of n.caseBlock.clauses) {
         if (ts.isCaseClause(clause)) { const v = verdictOf(clause.expression); if (v) pending.add(v); }
         if (clause.statements.length === 0 && ts.isCaseClause(clause)) continue;
-        const c = ts.isDefaultClause(clause) || pending.size === 0 ? IGNORE : bound(pending);
+        const c = ts.isDefaultClause(clause) || pending.size === 0 ? UNJUDGED : bound(pending);
         for (const st of clause.statements) walk(st, c);
         pending = new Set();
       }

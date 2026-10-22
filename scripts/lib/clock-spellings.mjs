@@ -18,6 +18,11 @@
 //     after an object literal (`{} / x / y`) can blank the text between the two
 //     slashes. No live site; the masker reports the desync it causes only when a
 //     quote or backtick is swallowed.
+//   · FALSE-ALARM direction (never a hidden read): import discovery reads string
+//     text, so a fixture string holding `import { randomBytes as seeded } from
+//     "crypto"` makes a later `seeded(` a false hit; and `\bcrypto`, `\bperformance`
+//     and `\bprocess` also match after a dot, so `fixture.performance.now()` is a
+//     false hit. No live site for either.
 //   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call,
 //     Temporal / Intl, require("crypto") destructured with a rename, and unicode
 //     escapes in an identifier are not seen.
@@ -209,7 +214,7 @@ export const LINE_SPELLINGS = [
   { label: "Math.random()", re: new RegExp(String.raw`\bMath\s*\.\s*random\s*\(`) },
   // `new Date()` and a bare `Date()` both read the clock; `new Date(x)` does not.
   { label: "argless Date()", re: new RegExp(String.raw`(?<![\w$.])${G}Date\s*\(\s*\)`) },
-  { label: "crypto random call", re: new RegExp(String.raw`\bcrypto\s*\.\s*(?:${RANDOM_ALT})\s*\(`) },
+  { label: "crypto random call", re: new RegExp(String.raw`\bcrypto\s*\.\s*(?:webcrypto\s*\.\s*)?(?:${RANDOM_ALT})\s*\(`) },
   // Imported without a rename, the bare name is the call.
   { label: "imported random call", re: new RegExp(String.raw`(?<![\w$.])(?:${RANDOM_ALT})\s*\(`) },
   { label: "performance.now()", re: new RegExp(String.raw`\bperformance\s*\.\s*now\s*\(`) },
@@ -242,6 +247,9 @@ const GENERATOR_PACKAGES = {
   "@paralleldrive/cuid2": ["createId"],
 };
 
+// A binding is an identifier, and `$` is legal in one but is a regex end anchor.
+const escId = (s) => s.replace(/\$/g, "\\$");
+
 const parseNamed = (list) =>
   list.split(",").map((s) => s.trim().replace(/^type\s+/, "")).filter(Boolean).map((s) => {
     const m = /^([\w$]+)\s+as\s+([\w$]+)$/.exec(s);
@@ -256,19 +264,23 @@ function importPatterns(visible) {
   const fnLocals = new Set();
   const nsLocals = new Set();
   for (const m of visible.matchAll(/\bimport\s*(?:type\s+)?\{([^}]*)\}\s*from\s*(["'])(?:node:)?crypto\2/g)) {
-    for (const { name, local } of parseNamed(m[1])) if (RANDOM_FNS.includes(name)) fnLocals.add(local);
+    for (const { name, local } of parseNamed(m[1])) {
+      if (RANDOM_FNS.includes(name)) fnLocals.add(local);
+      // `webcrypto` is the Web Crypto namespace: a receiver of getRandomValues/randomUUID.
+      if (name === "webcrypto") nsLocals.add(local);
+    }
   }
   for (const m of visible.matchAll(/\bimport\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s*(["'])(?:node:)?crypto\2/g)) nsLocals.add(m[1]);
   for (const m of visible.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*(["'])(?:node:)?crypto\2\s*\)/g)) nsLocals.add(m[1]);
-  if (fnLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...fnLocals].join("|")})\s*\(`));
-  if (nsLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...nsLocals].join("|")})\s*\.\s*(?:${RANDOM_ALT})\s*\(`));
+  if (fnLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...fnLocals].map(escId).join("|")})\s*\(`));
+  if (nsLocals.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...nsLocals].map(escId).join("|")})\s*\.\s*(?:${RANDOM_ALT})\s*\(`));
   const gen = new Set();
   for (const m of visible.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*(["'])([^"']+)\2/g)) {
     const names = GENERATOR_PACKAGES[m[3]];
     if (!names) continue;
     for (const { name, local } of parseNamed(m[1])) if (names.includes(name)) gen.add(local);
   }
-  if (gen.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...gen].join("|")})\s*\(`));
+  if (gen.size) res.push(new RegExp(String.raw`(?<![\w$.])(?:${[...gen].map(escId).join("|")})\s*\(`));
   return res;
 }
 
@@ -320,6 +332,13 @@ export const CLOCK_FORM_PLANTS = [
   ["globalThis.Date()", "const t = new globalThis.Date();"],
   ["globalThis.Date.now()", "const t = globalThis.Date.now();"],
   ["crypto.getRandomValues(...)", "const b = crypto.getRandomValues(new Uint8Array(4));"],
+  ["crypto.webcrypto.getRandomValues(...)", "const b = crypto.webcrypto.getRandomValues(new Uint8Array(4));"],
+  ["imported webcrypto receiver", 'import { webcrypto } from "node:crypto";\nconst b = webcrypto.getRandomValues(new Uint8Array(4));'],
+  ["renamed webcrypto receiver", 'import { webcrypto as wc } from "node:crypto";\nconst b = wc.randomUUID();'],
+  ["$-prefixed renamed crypto import", 'import { randomBytes as $bytes } from "node:crypto";\nconst b = $bytes(4);'],
+  ["$ in a crypto namespace alias", 'import * as $c from "node:crypto";\nconst b = $c.randomBytes(4);'],
+  ["$-prefixed uuid generator alias", 'import { v4 as $uuid } from "uuid";\nconst id = $uuid();'],
+  ["$ inside a renamed crypto alias", 'import { randomBytes as rand$b } from "node:crypto";\nconst b = rand$b(4);'],
   ["renamed crypto import", 'import { randomBytes as bytes } from "node:crypto";\nconst b = bytes(4);'],
   ["crypto namespace import", 'import * as nc from "node:crypto";\nconst b = nc.randomBytes(4);'],
   ["crypto default import", 'import nodeCrypto from "crypto";\nconst b = nodeCrypto.randomUUID();'],
@@ -342,6 +361,8 @@ export const CLOCK_BLIND_SPOT_PLANTS = [
   ["a read after an identifier named `in` divided", 'const inn = { in: 4 }; const z = inn.in / 2; const w = "x/y";\nconst t = Date.now();'],
   ["a read after a postfix non-null `!` division", "const t = m.get(k)! / Date.now() / 2;"],
   ["a read after a prefix `!` regex holding a quote", 'const ok = !/"/.test(s);\nconst t = Date.now();'],
+  ["a read after a division that follows `]`", "const t = counts[k] / sum + Date.now() / 1000;"],
+  ["a read after a regex holding a slash in a character class", "const ok = /[/]+/.test(s) ? Date.now() / 2 : 0;"],
   ["a read inside a template expression", "const s = `${Date.now()}`;"],
   ["a read after a URL string on the same line", 'const u = "http://x"; const t = Date.now();'],
   ["a read after a division that follows `}` and sits on a later-slash file", "const a = {}\n  / 2;\nconst t = Date.now();\nconst b = 6 / 3;"],
@@ -369,6 +390,7 @@ export const CONFUSER_WRAPS = [
   ["i++ / 2 then a slash in a string", (code) => `i++ / 2; const s = 'a/b';\n${code}`],
   ["a regex holding a quote after an if", (code) => `if (a) /"/.test(s);\n${code}`],
   ["a regex holding a backtick after else", (code) => `if (a) b(); else /\`/.test(s);\n${code}`],
+  ["a `]` division wrapped around it", (code) => `const q = counts[k] / 2 + ${code} / 3;`],
   ["a postfix non-null `!` division wrapped around it", (code) => `const q = m.get(k)! / 2 + ${code} / 3;`],
 ];
 

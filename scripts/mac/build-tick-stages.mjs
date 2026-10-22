@@ -51,7 +51,7 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { accessSync, appendFileSync, chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, appendFileSync, chmodSync, closeSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -2620,6 +2620,7 @@ ${snippet}`, env(cache, t, extra));
     G(repo, "init", "-q", "-b", "SignalGrid_Alpha"); G(repo, "add", "-A"); G(repo, "commit", "-q", "-m", "installers");
     const exe = (name, text) => { writeFileSync(join(bin, name), text); chmodSync(join(bin, name), 0o755); };
     exe("uname", '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; *) exec /usr/bin/uname "$@" ;; esac\n');
+    exe("cat", '#!/bin/sh\nif [ -n "${SG_CAT_FAIL:-}" ] && [ "$1" = "$SG_CAT_FAIL" ]; then echo "cat: $1: Input/output error" >&2; exit 1; fi\nexec /bin/cat "$@"\n');
     exe("launchctl", '#!/bin/sh\necho "$@" >> "$SG_LC_LOG"\ncase "$1" in\n  print) printf "%s" "${SG_STUB_PRINT:-}"; exit "${SG_STUB_PRINT_RC:-1}" ;;\nesac\nexit "${SG_STUB_LC_RC:-0}"\n');
     // plutil over the template's XML subset: dict, array, string, integer, true; exits 1 on anything else, or on the file named by SG_PLUTIL_FAIL
     exe("plutil", `#!/usr/bin/env node
@@ -2712,6 +2713,66 @@ process.exit(1);\n`);
     writeFileSync(plistPath, plistText().replace("<integer>300</integer>", "<integer>10800</integer>"));
     r = run("install-build-tick.sh");
     ok("M5 (g) an installed plist that differs only by StartInterval (10800 -> 300) is the UPDATE path and installs without --force", r.status === 0 && /<integer>300<\/integer>/.test(plistText()), `${r.status} ${r.stderr}`);
+    // (g2) F3: EVERY top-level key the installed plist carries must survive the reinstall (not only ProgramArguments and EnvironmentVariables)
+    const extras = {
+      KeepAlive: "<key>KeepAlive</key><true/>", ExitTimeOut: "<key>ExitTimeOut</key><integer>30</integer>", Nice: "<key>Nice</key><integer>5</integer>",
+      LowPriorityIO: "<key>LowPriorityIO</key><true/>", UserName: "<key>UserName</key><string>someone</string>",
+      StartCalendarInterval: "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer></dict>",
+    };
+    for (const [key, xml] of Object.entries(extras)) {
+      reset(); run("install-build-tick.sh");
+      writeFileSync(plistPath, plistText().replace("<key>RunAtLoad</key><true/>", `<key>RunAtLoad</key><true/>\n  ${xml}`));
+      const before = plistText(); rmSync(lclog, { force: true });
+      const refused = run("install-build-tick.sh");
+      const forced = run("install-build-tick.sh", ["--force"]);
+      ok(`M5 F3 an installed plist carrying ${key} is refused on reinstall (exit 1, ${key} named, plist byte-identical, no bootout); --force replaces it`,
+        refused.status === 1 && refused.stderr.includes(`${key}: dropped`) && /--force/.test(refused.stderr) && before.includes(`<key>${key}</key>`) && forced.status === 0 && !plistText().includes(`<key>${key}</key>`), `${refused.status} ${refused.stderr}`);
+    }
+    for (const [key, re, value] of [["WorkingDirectory", /<key>WorkingDirectory<\/key><string>[^<]*<\/string>/, "/Users/someone/elsewhere"], ["StandardOutPath", /<key>StandardOutPath<\/key><string>[^<]*<\/string>/, "/var/log/custom.log"]]) {
+      reset(); run("install-build-tick.sh");
+      writeFileSync(plistPath, plistText().replace(re, `<key>${key}</key><string>${value}</string>`));
+      const before = plistText(); rmSync(lclog, { force: true });
+      const refused = run("install-build-tick.sh");
+      ok(`M5 F3 an installed ${key} that this install would overwrite (${value}) is refused, named, untouched, no bootout`,
+        refused.status === 1 && new RegExp(`${key}: loaded "${value}" -> new`).test(refused.stderr) && plistText() === before && !lcLines().some((l) => l.startsWith("bootout")), `${refused.status} ${refused.stderr}`);
+    }
+    reset(); run("install-build-tick.sh");
+    r = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: runner });
+    ok("M5 F3 control: a key the installed plist lacks may be ADDED (a runner on a reinstall that had none) and the same plist reinstalled unchanged is not a refusal",
+      r.status === 0 && plistText().includes(`<key>SG_STAGE_RUNNER</key><string>${runner}</string>`) && run("install-build-tick.sh", [], { SG_STAGE_RUNNER: runner }).status === 0);
+
+    // (g3) F4: a symlink is followed before the "outside the checkout" rule is applied
+    reset();
+    mkdirSync(`${repo}.build`, { recursive: true }); writeFileSync(join(`${repo}.build`, "runner"), "#!/bin/sh\n"); chmodSync(join(`${repo}.build`, "runner"), 0o755);
+    symlinkSync(join(`${repo}.build`, "runner"), join(host, "link-into-build"));
+    symlinkSync("link-into-build", join(host, "link-chain"));
+    symlinkSync(relative(host, join(`${repo}.build`, "runner")), join(host, "link-relative"));
+    symlinkSync(`${repo}.build`, join(host, "dirlink"));
+    symlinkSync(runner, join(host, "link-fine"));
+    for (const [label, path] of [["a symlink whose target is inside the build clone", join(host, "link-into-build")], ["a chain of two symlinks that ends inside the build clone", join(host, "link-chain")],
+      ["a RELATIVE symlink that ends inside the build clone", join(host, "link-relative")], ["a runner reached through a symlinked directory that is the build clone", join(host, "dirlink", "runner")]]) {
+      reset();
+      const x = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: path });
+      ok(`M5 F4 ${label} is refused with exit 2 (the file a model session can rewrite must not become the stage runner) and writes nothing`, x.status === 2 && /outside this checkout/.test(x.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${x.status} ${x.stderr}`);
+    }
+    reset();
+    r = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: join(host, "link-fine") });
+    ok("M5 F4 control: a symlink to an executable OUTSIDE the checkout and its build clone is accepted (the path as given goes into the plist)", r.status === 0 && plistText().includes(`<string>${join(host, "link-fine")}</string>`), `${r.status} ${r.stderr}`);
+
+    // (g4) F9b: an env file that is not a readable regular file is a refusal, never an ignored file or an accident of `set -u`
+    reset(); mkdirSync(envFile, { recursive: true });
+    r = run("install-build-tick.sh");
+    ok("M5 F9 an env-file path that is a directory is refused (exit 2, `not a regular file`), not silently ignored", r.status === 2 && /not a regular file/.test(r.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${r.status} ${r.stderr}`);
+    reset(); mkdirSync(dirname(envFile), { recursive: true }); symlinkSync(join(dir, "does-not-exist.env"), envFile);
+    r = run("install-build-tick.sh");
+    ok("M5 F9 ...and so is a dangling symlink", r.status === 2 && /not a regular file/.test(r.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${r.status} ${r.stderr}`);
+    reset(); writeEnvFile(`SG_STAGE_RUNNER=${runner}\n`);
+    r = run("install-build-tick.sh", [], { SG_CAT_FAIL: envFile });
+    ok("M5 F9 a read error on the env file (cat exits 1) is a refusal with a message of its own (exit 2, `could not be read`), not an unbound-variable abort", r.status === 2 && /could not be read/.test(r.stderr) && !/unbound/.test(r.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${r.status} ${r.stderr}`);
+    reset(); writeEnvFile("");
+    r = run("install-build-tick.sh");
+    ok("M5 F9 control: an EMPTY env file is fine (no wiring)", r.status === 0 && !plistText().includes("SG_STAGE_RUNNER"), `${r.status} ${r.stderr}`);
+
     // (h) a plist this installer cannot read is not compared as equal
     reset(); run("install-build-tick.sh"); rmSync(lclog, { force: true });
     r = run("install-build-tick.sh", [], { SG_PLUTIL_FAIL: plistPath });

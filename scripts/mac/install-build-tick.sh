@@ -89,7 +89,11 @@ bad_chars() {
 }
 FILE_RUNNER=""
 FILE_PREFIX=""
-if [ -f "$ENV_FILE" ]; then
+# A path that exists but is not a readable regular file (a directory, a dangling link, a device, a read error) is a refusal: an installer that
+# ignored it would write a job without the wiring the person thought they had given it. The text is read once, then parsed.
+if [ -e "$ENV_FILE" ] || [ -L "$ENV_FILE" ]; then
+  [ -f "$ENV_FILE" ] || refuse_wiring "$ENV_FILE exists but is not a regular file (a directory, a dangling link or a device): refusing to guess"
+  _env_text="$(cat "$ENV_FILE" 2>/dev/null)" || refuse_wiring "$ENV_FILE could not be read: refusing to guess"
   _ln=0
   while IFS= read -r _line || [ -n "$_line" ]; do
     _ln=$((_ln + 1))
@@ -103,11 +107,23 @@ if [ -f "$ENV_FILE" ]; then
       SG_BUILD_TICK_PATH_PREFIX) FILE_PREFIX="$_val" ;;
       *) refuse_wiring "$ENV_FILE:$_ln: key \"$_key\" is not one this installer carries (SG_STAGE_RUNNER, SG_BUILD_TICK_PATH_PREFIX); refusing to guess" ;;
     esac
-  done < "$ENV_FILE"
+  done <<< "$_env_text"
 fi
 RUNNER="${SG_STAGE_RUNNER:-$FILE_RUNNER}"
 PATH_PREFIX="${SG_BUILD_TICK_PATH_PREFIX:-$FILE_PREFIX}"
 REPO_REAL="$(cd "$REPO_ROOT" && pwd -P)" || { echo "install-build-tick.sh: cannot enter $REPO_ROOT" >&2; exit 1; }
+# The physical path of $1 with every symlink in the chain followed (plain `readlink`, no -f: stock macOS bash 3.2 and BSD readlink). Prints
+# nothing and fails on a loop or an unreadable link. `cd && pwd -P` alone resolves the DIRECTORY of a path, never a link in its last component.
+resolve_path() {
+  _rp="$1"; _hops=0
+  while [ -L "$_rp" ]; do
+    _hops=$((_hops + 1)); [ "$_hops" -le 40 ] || return 1
+    _lt="$(readlink "$_rp")" || return 1
+    case "$_lt" in /*) _rp="$_lt" ;; *) _rp="$(dirname "$_rp")/$_lt" ;; esac
+  done
+  _rd="$(cd "$(dirname "$_rp")" && pwd -P)" || return 1
+  printf '%s/%s\n' "$_rd" "$(basename "$_rp")"
+}
 # Inside the checkout or the build clone (<repo>.build) a model session could rewrite it: a physical path, compared by prefix.
 under_checkout() {
   case "$1" in
@@ -119,8 +135,8 @@ if [ -n "$RUNNER" ]; then
   if bad_chars "$RUNNER"; then refuse_wiring "SG_STAGE_RUNNER holds a quote, <, >, & or a control character, which this installer will not write into a plist"; fi
   case "$RUNNER" in /*) ;; *) refuse_wiring "SG_STAGE_RUNNER must be an absolute path: $RUNNER" ;; esac
   { [ -f "$RUNNER" ] && [ -x "$RUNNER" ]; } || refuse_wiring "SG_STAGE_RUNNER is not an executable file: $RUNNER"
-  _rdir="$(cd "$(dirname "$RUNNER")" && pwd -P)" || refuse_wiring "SG_STAGE_RUNNER's directory cannot be entered: $RUNNER"
-  if under_checkout "$_rdir/$(basename "$RUNNER")"; then refuse_wiring "SG_STAGE_RUNNER must live outside this checkout and its build clone: $RUNNER"; fi
+  _rreal="$(resolve_path "$RUNNER")" || refuse_wiring "SG_STAGE_RUNNER cannot be resolved to a physical path (a symlink loop, an unreadable link or a directory that cannot be entered): $RUNNER"
+  if under_checkout "$_rreal"; then refuse_wiring "SG_STAGE_RUNNER must live outside this checkout and its build clone (it resolves to $_rreal): $RUNNER"; fi
 fi
 if [ -n "$PATH_PREFIX" ]; then
   if bad_chars "$PATH_PREFIX"; then refuse_wiring "SG_BUILD_TICK_PATH_PREFIX holds a quote, <, >, & or a control character, which this installer will not write into a plist"; fi
@@ -178,8 +194,9 @@ PLIST_EOF
 
 # ── refuse to destroy wiring (M5) ────────────────────────────────────────────
 # What the loaded job carries is host-local, and nothing in this tree can show it. What this installer CAN read is the plist it
-# wrote last time (or a person edited since): ProgramArguments must be identical and every EnvironmentVariables key the installed
-# plist has must survive with the same value. An ADDED key, and a changed StartInterval (that is an update), are allowed. A job that is
+# wrote last time (or a person edited since): EVERY top-level key the installed plist has must survive with the same value
+# (ProgramArguments, WorkingDirectory, the log paths, KeepAlive, Nice, UserName, StartCalendarInterval, ...), and so must every
+# EnvironmentVariables key. An ADDED key, and a changed StartInterval (that is an update), are allowed. A job that is
 # loaded while no plist exists where this installer writes was loaded from a file it cannot read; a plist it cannot compare is not
 # "the same". Each refusal says what to carry in ENV_FILE, or to rerun with --force, which replaces the installed wiring.
 refuse_replace() { rm -f "$NEW_PLIST"; echo "install-build-tick.sh: refusing to replace the installed job's wiring: $1" >&2; echo "  carry it in $ENV_FILE, or rerun with --force to replace it" >&2; exit 1; }
@@ -193,14 +210,20 @@ if [ "$FORCE" != "1" ]; then
     _drop="$(node -e '// argv: <installed plist as JSON> <new plist as JSON>; prints what the new plist would DROP or CHANGE; exit 1 if anything, 0 if nothing, 3 if unreadable.
       try {
         const [o, n] = process.argv.slice(1).map((t) => JSON.parse(t));
+        if (!o || typeof o !== "object" || Array.isArray(o) || !n || typeof n !== "object" || Array.isArray(n)) process.exit(3);
+        const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
         const out = [];
-        const oa = JSON.stringify(o.ProgramArguments ?? null), na = JSON.stringify(n.ProgramArguments ?? null);
-        if (oa !== na) out.push(`ProgramArguments: loaded ${oa} -> new ${na}`);
-        const oe = o.EnvironmentVariables ?? {}, ne = n.EnvironmentVariables ?? {};
-        if (typeof oe !== "object" || Array.isArray(oe)) process.exit(3);
-        for (const k of Object.keys(oe).sort()) {
-          if (!(k in ne)) out.push(`EnvironmentVariables.${k}: dropped (loaded ${JSON.stringify(oe[k])})`);
-          else if (ne[k] !== oe[k]) out.push(`EnvironmentVariables.${k}: ${JSON.stringify(oe[k])} -> ${JSON.stringify(ne[k])}`);
+        for (const k of Object.keys(o).sort()) {
+          if (k === "StartInterval") continue;   // a changed interval is the update path
+          if (!(k in n)) { out.push(`${k}: dropped (loaded ${canon(o[k])})`); continue; }
+          if (k === "EnvironmentVariables") {
+            const oe = o[k], ne = n[k];
+            if (!oe || typeof oe !== "object" || Array.isArray(oe) || !ne || typeof ne !== "object" || Array.isArray(ne)) process.exit(3);
+            for (const e of Object.keys(oe).sort()) {
+              if (!(e in ne)) out.push(`EnvironmentVariables.${e}: dropped (loaded ${JSON.stringify(oe[e])})`);
+              else if (canon(ne[e]) !== canon(oe[e])) out.push(`EnvironmentVariables.${e}: ${JSON.stringify(oe[e])} -> ${JSON.stringify(ne[e])}`);
+            }
+          } else if (canon(o[k]) !== canon(n[k])) out.push(`${k}: loaded ${canon(o[k])} -> new ${canon(n[k])}`);
         }
         if (out.length) { console.log(out.join("\n")); process.exit(1); }
       } catch { process.exit(3); }' "$_old_json" "$_new_json" 2>/dev/null)"

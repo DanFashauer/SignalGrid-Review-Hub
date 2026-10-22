@@ -4,12 +4,12 @@
 # agent (owner-directed 2026-09-29; reaffirmed 2026-10-21, DR-050 / DR-060). ONE command, once, on the Mac that
 # holds this clone:
 #
-#   bash scripts/mac/install-build-tick.sh            # install / update (every 3 h)
+#   bash scripts/mac/install-build-tick.sh            # install / update (retry every 5 min)
 #   bash scripts/mac/install-build-tick.sh --uninstall
 #   bash scripts/mac/install-build-tick.sh --status
 #
-# After this, scripts/mac/build-tick.sh runs every 3 hours with no Claude session
-# open: one headless session builds the objective loop's top buildable task and
+# After this, scripts/mac/build-tick.sh retries every 5 minutes with no Claude session
+# open: an admitted run builds the objective loop's top unclaimed buildable task and
 # opens a PR (never merges). The lane tick (install-launchd.sh) is separate and
 # unchanged. A second installer, not a second label in install-launchd.sh, because
 # check-scheduled-routines.mjs holds ONE LABEL= and ONE INTERVAL_SECONDS= per
@@ -30,10 +30,10 @@ LABEL="com.signalgrid.build-tick"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/signalgrid-build-tick.log"
 # MUST be a bare integer of seconds: check-scheduled-routines.mjs holds it equal to
-# the mac-build-tick row's cron ("0 */3 * * *"). Edit BOTH together. A run can outlast
+# the mac-build-tick row's cron ("*/5 * * * *"). Edit BOTH together. A run can outlast
 # its slot (2 h session + preflight + breadth); launchd never overlaps its own label and
 # build-tick.sh holds a lock, so a late slot is skipped, never doubled.
-INTERVAL_SECONDS=10800
+INTERVAL_SECONDS=300
 UID_NUM="$(id -u)"
 
 if [ "$(uname -s)" != "Darwin" ]; then
@@ -49,9 +49,15 @@ case "${1:-}" in
     exit 0
     ;;
   --status)
-    if launchctl print "gui/$UID_NUM/$LABEL" >/dev/null 2>&1; then
-      echo "$LABEL is loaded (every $INTERVAL_SECONDS s); log: $LOG"
+    if STATUS_OUTPUT="$(launchctl print "gui/$UID_NUM/$LABEL" 2>/dev/null)"; then
+      LOADED_INTERVAL="$(printf '%s\n' "$STATUS_OUTPUT" | awk '$1 == "run" && $2 == "interval" && $3 == "=" && $4 ~ /^[0-9]+$/ && $5 == "seconds" { print $4; exit }')"
+      INSTALLED_INTERVAL="$(/usr/libexec/PlistBuddy -c 'Print :StartInterval' "$PLIST" 2>/dev/null || true)"
+      echo "$LABEL is loaded; configured interval: $INTERVAL_SECONDS s; installed interval: ${INSTALLED_INTERVAL:-unknown} s; loaded interval: ${LOADED_INTERVAL:-unknown} s; log: $LOG"
       [ -f "$LOG" ] && tail -n 5 "$LOG"
+      if [ "$LOADED_INTERVAL" != "$INTERVAL_SECONDS" ] || [ "$INSTALLED_INTERVAL" != "$INTERVAL_SECONDS" ]; then
+        echo "interval update or verification needed — configured cadence is not confirmed loaded; run: bash scripts/mac/install-build-tick.sh"
+        exit 1
+      fi
     else
       echo "$LABEL is NOT loaded — run: bash scripts/mac/install-build-tick.sh"
       exit 1

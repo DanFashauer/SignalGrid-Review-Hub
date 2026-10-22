@@ -87,7 +87,7 @@ atomic executable-file pin; the host must protect the runner and its dependencie
 
 The lane tick
 never builds. A second launchd job, `scripts/mac/build-tick.sh`
-(`bash scripts/mac/install-build-tick.sh`, every 3 hours), does nothing at all
+(`bash scripts/mac/install-build-tick.sh`, retrying every 5 minutes), does nothing at all
 while it is paused. Each run first pins mainline ONCE: it asks the real remote
 for SignalGrid_Alpha's sha (`git ls-remote`), and every later step (the re-exec of
 its own script, the build clone, the diff the reviewer reads, the changed-path and

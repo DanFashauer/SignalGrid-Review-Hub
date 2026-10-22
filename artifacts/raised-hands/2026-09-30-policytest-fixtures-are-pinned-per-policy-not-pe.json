@@ -1,0 +1,12 @@
+{
+  "id": "2026-09-30-policytest-fixtures-are-pinned-per-policy-not-pe",
+  "raisedAt": "2026-09-30T12:55:25.431Z",
+  "origin": "cloud",
+  "doing": "Building plan row 91 (activatePolicyVersion should require the version's own PolicyTest fixtures to pass and refuse a superseded target) on claude/build-core-principal-policy-guards, PR #1280",
+  "blockedBy": "PolicyTest fixtures are pinned per POLICY, not per version, and the 35 seeded ones pin v1: SHARED_DEVICE_RULES_V2 fails 6 of them, so a test gate refuses the v1->v2 activation the core proof exercises (decisions would change), and refusing a superseded target removes the rollback artifacts/api-server/test/api.test.mjs uses to restore the seed policy",
+  "need": "Owner decision: (a) should PolicyTest bind to a policy VERSION (a schema change), and (b) is re-activating a superseded version (rollback) allowed? Row 91 is buildable once both are answered",
+  "whoCanUnblock": "owner",
+  "domain": "decision-core",
+  "status": "open",
+  "routedTo": null
+}

@@ -445,8 +445,10 @@ async function tickEvidence(ctx, f) {
   try {
     const head = await memo(`commit:${f.headSha}`, () => api.json(`/repos/${repo}/commits/${f.headSha}`));
     const headDate = head?.commit?.committer?.date ?? head?.commit?.author?.date;
-    if (!headDate) return { applicable: true, superseded: null, evidence: [], unknownWhy: "the head commit has no date" };
+    const headMs = Date.parse(headDate ?? "");
+    if (!Number.isFinite(headMs)) return { applicable: true, superseded: null, evidence: [], unknownWhy: "the head commit has no readable date" };
     const evidence = [];
+    let unreadable = null;
     let all = f.files.length > 0;
     if (f.files.length === 0) evidence.push("it changes no files");
     for (const file of f.files) {
@@ -462,7 +464,12 @@ async function tickEvidence(ctx, f) {
       const newest = Array.isArray(list) ? list[0] : null;
       if (!newest) { all = false; evidence.push(`${p}: not on mainline`); continue; }
       const when = newest.commit?.committer?.date ?? newest.commit?.author?.date;
-      if (when && new Date(when) > new Date(headDate)) {
+      const whenMs = Date.parse(when ?? "");
+      if (!Number.isFinite(whenMs)) {
+        all = false;
+        unreadable = `${p}: the mainline commit ${String(newest.sha).slice(0, 8)} has no readable date`;
+        evidence.push(unreadable);
+      } else if (whenMs > headMs) {
         const pr = /#(\d+)/.exec(String(newest.commit?.message ?? "").split("\n")[0]);
         evidence.push(`${p}: rewritten on mainline at ${String(newest.sha).slice(0, 8)} (${when})${pr ? ` by #${pr[1]}` : ""}`);
       } else {
@@ -470,7 +477,7 @@ async function tickEvidence(ctx, f) {
         evidence.push(`${p}: not rewritten on mainline since the head commit (${headDate})`);
       }
     }
-    return { applicable: true, superseded: all, evidence, unknownWhy: null };
+    return { applicable: true, superseded: unreadable ? null : all, evidence, unknownWhy: unreadable };
   } catch (e) {
     if (e instanceof ToolError) throw e;
     return { applicable: true, superseded: null, evidence: [], unknownWhy: String(e?.message ?? e) };
@@ -1783,9 +1790,11 @@ async function runSelfTest(io) {
         prFx(90, { ref: "mac/tick-20260930T000000Z", files: tickFiles, sha: shaFx(90) }),
         prFx(91, { ref: "mac/tick-20260930T010000Z", files: [{ filename: "docs/agent/objective-state.json" }, { filename: "artifacts/sim-requests/obj-2.json", status: "added" }], sha: shaFx(91) }),
         prFx(92, { ref: "mac/tick-20260930T020000Z", files: [{ filename: "docs/agent/other-state.json" }], sha: shaFx(92) }),
+        prFx(93, { ref: "mac/tick-20260930T030000Z", files: [{ filename: "docs/agent/garbled-date.json" }], sha: shaFx(93) }),
       ],
-      headDate: { [shaFx(90)]: agoIso(20), [shaFx(91)]: agoIso(20), [shaFx(92)]: agoIso(20) },
+      headDate: { [shaFx(90)]: agoIso(20), [shaFx(91)]: agoIso(20), [shaFx(92)]: agoIso(20), [shaFx(93)]: agoIso(20) },
       commitsByPath: {
+        "docs/agent/garbled-date.json": [{ sha: "e".repeat(40), commit: { committer: { date: "garbage" }, message: "a commit whose date cannot be read" } }],
         "docs/agent/objective-state.json": [{ sha: "c".repeat(40), commit: { committer: { date: agoIso(1) }, message: "Merge pull request #1583 from x/y" } }],
         "docs/agent/other-state.json": [{ sha: "d".repeat(40), commit: { committer: { date: agoIso(30) }, message: "older than the PR head" } }],
       },
@@ -1796,6 +1805,7 @@ async function runSelfTest(io) {
     t("its evidence names the rewriting commit's PR and the fulfilled request", /by #1583/.test(rowOf(res, 90).evidence.join(" ")) && /already fulfilled/.test(rowOf(res, 90).evidence.join(" ")));
     t("control: a tick whose sim-request has no result on mainline is not SUPERSEDED", rowOf(res, 91)?.disposition !== "SUPERSEDED");
     t("control: a tick whose file mainline did not rewrite after the head is not SUPERSEDED", rowOf(res, 92)?.disposition !== "SUPERSEDED");
+    t("a tick whose mainline commit date cannot be read is not SUPERSEDED, and the row says why", rowOf(res, 93)?.disposition !== "SUPERSEDED" && rowOf(res, 93).flags.some((x) => /no readable date/.test(x)), JSON.stringify(rowOf(res, 93)));
   }
 
   // ── issues and branches ──

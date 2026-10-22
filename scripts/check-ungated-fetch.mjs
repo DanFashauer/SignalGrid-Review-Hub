@@ -84,9 +84,10 @@
 // imports `createEmitterResolver` — so a seventh emitter family is covered the day it
 // is added, and a hand-maintained copy of the list cannot go stale.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -182,12 +183,18 @@ function callSitesGated(text, name, gateTokens) {
  * family iff its `resolve.ts` imports `createEmitterResolver` — the shared
  * fail-closed factory every emitter's resolve.ts is built from. Hand-listing them
  * here is what `adapters/emit-gate.ts` and two proofs already did wrong once.
+ *
+ * A missing `resolve.ts` (ENOENT) is a legitimate skip — the directory is not a
+ * family. Any other read error means a resolve.ts is present but unreadable, so the
+ * family list would silently shrink; it is pushed onto `unreadable` for the caller
+ * to fail on (same shape as check-emitter-wire-discipline.mjs).
  */
-export function deriveEmitterFamilies(readDir, readFile) {
+export function deriveEmitterFamilies(readDir, readFile, unreadable = []) {
   const families = [];
   for (const entry of readDir()) {
     let src;
-    try { src = readFile(`${entry}/resolve.ts`); } catch { continue; }
+    try { src = readFile(`${entry}/resolve.ts`); }
+    catch (e) { if (e.code !== "ENOENT") unreadable.push(`${entry}/resolve.ts: ${e.message}`); continue; }
     if (/createEmitterResolver/.test(src)) families.push(entry);
   }
   return families.sort();
@@ -641,7 +648,25 @@ function selfTest() {
         rel.startsWith("nac/") ? "export const x = 1;" : "import { createEmitterResolver } from '../adapters/emitter-resolver';")) ===
         JSON.stringify(["itsm", "siem"])],
     ["a directory with NO resolve.ts is not an emitter family",
-      deriveEmitterFamilies(() => ["graph"], () => { throw new Error("ENOENT"); }).length === 0],
+      deriveEmitterFamilies(() => ["graph"], () => { throw Object.assign(new Error("ENOENT"), { code: "ENOENT" }); }).length === 0],
+    // Real fs errors, no chmod (a root container reads chmod-000 files): a DIRECTORY
+    // named resolve.ts is EISDIR, a missing path is ENOENT.
+    ["a present-but-unreadable resolve.ts (a DIRECTORY, EISDIR) is reported, naming the path", (() => {
+      const root = mkdtempSync(join(tmpdir(), "ungated-fetch-"));
+      try {
+        mkdirSync(join(root, "fam", "resolve.ts"), { recursive: true });
+        const u = [];
+        const fams = deriveEmitterFamilies(() => ["fam"], (rel) => readFileSync(join(root, rel), "utf8"), u);
+        return u.length === 1 && u[0].startsWith("fam/resolve.ts: ") && /EISDIR/.test(u[0]) && fams.length === 0;
+      } finally { rmSync(root, { recursive: true, force: true }); }
+    })()],
+    ["a missing resolve.ts (real ENOENT) is skipped, not reported", (() => {
+      const u = [];
+      const fams = deriveEmitterFamilies(() => ["nope"], (rel) => readFileSync(resolve(repoRoot, "nope-no-such-dir", rel), "utf8"), u);
+      return u.length === 0 && fams.length === 0;
+    })()],
+    ["an ENOENT that is only a message, with no .code, IS reported (the old fixture shape)",
+      (() => { const u = []; deriveEmitterFamilies(() => ["graph"], () => { throw new Error("ENOENT"); }, u); return u.length === 1; })()],
     ["the real tree still yields at least six emitter families",
       deriveEmitterFamilies(
         () => readdirSync(resolve(repoRoot, SCAN_ROOT), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name),
@@ -668,12 +693,14 @@ let fetchSites = 0;
 // ── ASSERTIONS 2 AND 3 ───────────────────────────────────────────────────────
 // The emitter families, derived (see deriveEmitterFamilies). Enforced scope for
 // bounding and for the timeout-knob check; everything else is REPORTED.
+const unreadableResolvers = [];
 const EMITTER_FAMILIES = deriveEmitterFamilies(
   () =>
     readdirSync(resolve(repoRoot, SCAN_ROOT), { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name),
   (rel) => readFileSync(resolve(repoRoot, SCAN_ROOT, rel), "utf8"),
+  unreadableResolvers,
 );
 const EMITTER_FAMILY_RE = new RegExp(`/(${EMITTER_FAMILIES.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})/`);
 
@@ -1017,6 +1044,13 @@ if (delegatedSites.length > 0) {
 // FLOORS. Both derivations can silently stop matching, and a scan that finds
 // nothing reports everything as clean. Six emitter families exist; a change that
 // leaves fewer than six is a broken derivation, not a deleted family.
+if (unreadableResolvers.length > 0) {
+  console.error(
+    `\n✗ ${unreadableResolvers.length} resolve.ts present but unreadable — its family was NOT derived, so its sources were never scanned:\n` +
+      unreadableResolvers.map((u) => `    ${SCAN_ROOT}/${u}`).join("\n"),
+  );
+  process.exit(1);
+}
 if (EMITTER_FAMILIES.length < 6) {
   console.error(
     `\n✗ derived only ${EMITTER_FAMILIES.length} emitter families (expected >= 6): ${EMITTER_FAMILIES.join(", ") || "none"}.\n` +

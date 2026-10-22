@@ -173,3 +173,6 @@ docs/handoffs/
 docs/plans/
 build-gate-ledger.md
 .lock-compass/
+
+# Scratch copy written by scripts/clock-spellings-mutants.mjs (removed after each run)
+scripts/lib/clock-spellings.mutant.mjs

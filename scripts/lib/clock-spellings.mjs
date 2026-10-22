@@ -21,8 +21,9 @@
 // source offset. Four things are done on the syntax tree first, all in place (a rewrite
 // replaces characters with spaces and the text keeps its length):
 //   · every TYPE node is blanked, and so are the `<...>` of explicit type arguments, so
-//     `typeof performance.timeOrigin` is not a read and `crypto.getRandomValues<T>(x)` is
-//     the call `crypto.getRandomValues(x)`;
+//     `typeof performance.timeOrigin` is not a read and `crypto.getRandomValues<T>(x)`,
+//     `(crypto.getRandomValues<T>)(x)` and `crypto.getRandomValues<T>?.(x)` are the call
+//     `crypto.getRandomValues(x)`;
 //   · `X["name"]`, `X['name']`, X[`name`], `X?.["name"]`, a key with an escape or a line
 //     continuation, and a parenthesised or `as const` key become `X.name`;
 //   · TypeScript wrappers around an expression are blanked: parens, `as T`,
@@ -32,47 +33,28 @@
 //     nodes, not by pattern. These tree rules also follow the right operand of ANY comma
 //     (`(a, Date)()`, `new (a, Date)()`, `const { now } = (a, Date)`).
 // Destructures, `import` and `require` bindings (renamed, namespace, default, mixed,
-// `import x = require`, destructured `require`) are read from the tree too.
+// `import x = require`, destructured `require`, `await import(...)`) are read from the tree
+// too, for node:crypto, node:perf_hooks, node:process and the uuid-style generator packages.
 //
-// CEILING (declared, not built; the syntax-tree rewrite of the textual matcher, which
-// counts reads rather than lines, is its own backlog row, not this one). The same list is
-// in docs/BUILD_BACKLOG.md and the PR body:
-//   · LINES ARE NUMBERED BY LF, as git, grep and the pins count them. A CR-only
-//     (classic Mac) file is one line to a pin, though its `//` comments end at the CR.
-//   · PINS COUNT LINES, not reads. Two reads on one line are one hit.
-//   · FALSE-ALARM direction (a hit that is not a read, not a hidden read): `\bcrypto`,
-//     `\bperformance` and `\bprocess` also match after a dot, so `fixture.performance.now()`
-//     is a false hit; a bare imported name such as `randomInt(` is flagged anywhere,
-//     including an unrelated local function of that name; a spread-only argument list is
-//     flagged although the spread may be non-empty (`new Date(...[1])`); a shadowed local
-//     named `Date` or `$Date`; and, inherited from mainline, safety-check's legacy raw-line
-//     union also flags a STRING or TEMPLATE that names `Date.now()` in the decision core
-//     (the legacy scan reads literal text, the parser-based scan does not).
-//   · HIDDEN-READ direction, not followed (the list is not exhaustive; the followed
-//     forms are the ones the plants name):
-//       - a comma expression whose left operand is not a number or `void 0`, in the TEXT
-//         rules: `(a, Date.now)()` (the tree rules above do follow it);
-//       - a unicode-letter alias; a string-named import specifier
-//         (`import { "randomBytes" as rb }`); an inline `require("crypto").randomBytes(4)`;
-//         `await import("crypto")`; `const { webcrypto } = nc` (a receiver taken from a
-//         namespace); a reassigned `require`; a variable key (`Date[k]()`);
-//       - receiver aliases: `const D = Date; D.now()`, `const p = performance; p.now()`;
-//       - `Reflect.get(Date, "now")()`, `Function("return Date.now()")()` and `eval(...)`
-//         (review-invariants misses them; safety-check catches a string-held one in the
-//         core only, through the legacy raw-line scan);
-//       - `new globalThis["Date"]()` and `new window.Date()`; `Date.prototype.constructor()`;
-//         a nested destructure from `globalThis`; a tagged template of a function other
-//         than Date (`Date.now`x``);
-//       - other timing and randomness sources: `performance.mark().startTime`,
-//         `os.uptime()`, `crypto.subtle.generateKey` and `generateKeyPair*`.
-//   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call, Temporal /
-//     Intl, and unicode escapes in an identifier are not seen.
-//   · COST: a 2 MB scoped file takes about 7 s in review-invariants and 4 s in
-//     safety-check (mainline about 2 s each). Slow, not a hang; typical files are not affected.
+// CEILING (declared, not built): see CLOCK_CEILING below. It is the one source of the list;
+// docs/BUILD_BACKLOG.md carries each item verbatim and scripts/clock-spellings-mutants.mjs
+// fails if one of them drifts. The syntax-tree rewrite of the textual matcher, which counts
+// reads rather than lines, is its own backlog row, not this one.
 import ts from "typescript";
 
 const K = ts.SyntaxKind;
 const EOL = /[\n\r\u2028\u2029]/;
+
+// The declared ceiling, item by item. Docs and the PR body copy these strings unchanged.
+export const CLOCK_CEILING = [
+  "Pins count LINES, not reads: two reads on one line are one hit, so a second read on an already-counted line does not move a pin (two live lines carry two reads each: `lib/webauthn/src/stepUpStore.ts:119`, `lib/webauthn/src/webauthn/store.ts:228`).",
+  "Lines are numbered by LF, as git, grep and the pins count them: a CR-only file is one line to a pin, though its `//` comments end at the CR.",
+  "FALSE-ALARM direction (a hit that is not a read, not a hidden read): `\\bcrypto`, `\\bperformance` and `\\bprocess` also match after a dot, so `fixture.performance.now()` is a false hit; a bare imported name such as `randomInt(` is flagged anywhere, including an unrelated local function of that name; a spread-only argument list is flagged although the spread may be non-empty (`new Date(...[1])`); a shadowed local named `Date` or `$Date`; and, inherited from mainline, safety-check's legacy raw-line union also flags a string or template that names `Date.now()` in the decision core (the legacy scan reads literal text, the parser-based scan does not).",
+  "HIDDEN-READ direction, not followed (the list is not exhaustive; the followed forms are the ones the plants name): a computed key whose parenthesised expression has a non-trivial left operand (`Date[(f(), \"now\")]()`); a unicode-letter alias; a string-named import specifier (`import { \"randomBytes\" as rb }`); an inline `require(\"crypto\").randomBytes(4)`, `(await import(\"crypto\")).randomBytes(4)` or `import(\"crypto\").then(...)`; `const { webcrypto } = nc` (a receiver taken from a namespace); a reassigned `require`; a variable key (`Date[k]()`); receiver aliases (`const D = Date; D.now()`, `const p = performance; p.now()`); `Reflect.get(Date, \"now\")()`, `Function(\"return Date.now()\")()` and `eval(...)` (review-invariants misses them; safety-check catches a string-held one in the core only, through the legacy raw-line scan); `new globalThis[\"Date\"]()` and `new window.Date()`; `Date.prototype.constructor()`; a nested destructure from `globalThis`; a tagged template of a function other than Date (`Date.now` followed by a template literal); `performance.mark().startTime`, `os.uptime()`, `crypto.subtle.generateKey` and `generateKeyPair*`.",
+  "Not seen at all: an uncalled reference (`const c = Date.now`), `Reflect.apply` / `.call`, `Temporal` / `Intl`, and unicode escapes in an identifier.",
+  "Cost: a 2 MB scoped file takes about 7 s in review-invariants and 4 s in safety-check (mainline about 2 s each); slow, not a hang.",
+  "An unreadable file is a named problem in both gates: ENOENT and EISDIR are exercised; EACCES takes the same catch but cannot be exercised as root.",
+];
 
 // ── small helpers ─────────────────────────────────────────────────────────────
 // Offsets of the first character of every LF-numbered line, and a binary search.
@@ -196,8 +178,10 @@ function receiverOf(e) {
 }
 function requireModule(init) {
   if (!init) return null;
-  const e = peel(init, true);
-  if (e.kind === K.CallExpression && e.expression.kind === K.Identifier && e.expression.text === "require" &&
+  let e = peel(init, true);
+  // `await import("x")` binds the module namespace the way `require("x")` binds its object.
+  if (e.kind === K.AwaitExpression) e = peel(e.expression, true);
+  if (e.kind === K.CallExpression && (e.expression.kind === K.ImportKeyword || (e.expression.kind === K.Identifier && e.expression.text === "require")) &&
       e.arguments.length === 1 && ts.isStringLiteralLike(e.arguments[0])) return e.arguments[0].text;
   return null;
 }
@@ -226,12 +210,23 @@ function bind(b, mod, { dflt, ns, named }) {
       if (imported === "default") b.procNs.add(local);
     }
   } else if (GENERATOR_PACKAGES[base]) {
-    for (const { imported, local } of named) if (GENERATOR_PACKAGES[base].includes(imported)) b.gen.add(local);
+    // A default, namespace, require-object, import-equals or awaited-import binding holds every member.
+    for (const n of whole) {
+      if (!b.genNs.has(base)) b.genNs.set(base, new Set());
+      b.genNs.get(base).add(n);
+    }
+    for (const { imported, local } of named) {
+      if (GENERATOR_PACKAGES[base].includes(imported)) b.gen.add(local);
+      if (imported === "default") {
+        if (!b.genNs.has(base)) b.genNs.set(base, new Set());
+        b.genNs.get(base).add(local);
+      }
+    }
   }
 }
 const newBindings = () => ({
   randomFns: new Set(), cryptoNs: new Set(), perf: new Set(), perfNs: new Set(),
-  procNs: new Set(), upFns: new Set(), hrFns: new Set(), gen: new Set(),
+  procNs: new Set(), upFns: new Set(), hrFns: new Set(), gen: new Set(), genNs: new Map(),
 });
 
 // ── the analysis of one file ──────────────────────────────────────────────────
@@ -295,6 +290,8 @@ function build(src) {
     // A type is not code that runs: `typeof performance.timeOrigin` names a type, not a read. Instantiation-expression
     // heads (ExpressionWithTypeArguments) are left alone; their argument types are recorded as they are visited.
     if (ts.isTypeNode(node) && node.kind !== K.ExpressionWithTypeArguments) typeRanges.push([startOf(node), node.end]);
+    // `f<T>` as an instantiation expression, `f<T>?.(x)` and `(f<T>)(x)`: the head is code, the brackets are not.
+    if (node.kind === K.ExpressionWithTypeArguments && node.typeArguments?.length) typeArgLists.push(node.typeArguments);
     switch (node.kind) {
       case K.StringLiteral:
       case K.NoSubstitutionTemplateLiteral: {
@@ -463,6 +460,11 @@ function build(src) {
   if (b.upFns.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.upFns)})${CALL}`, "g"));
   if (b.hrFns.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.hrFns)})(?:${CALL}|${DOT}bigint${CALL})`, "g"));
   if (b.gen.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.gen)})${CALL}`, "g"));
+  for (const [pkg, names] of b.genNs) {
+    const members = GENERATOR_PACKAGES[pkg];
+    dyn.push(new RegExp(String.raw`${L}(?:${alt(names)})${DOT}(?:default${DOT})?(?:${members.map(escId).join("|")})${CALL}`, "g"));
+    dynDestructures.push({ names: members, from: [...names] });
+  }
   if (b.cryptoNs.size) {
     dyn.push(new RegExp(String.raw`${L}(?:${alt(b.cryptoNs)})${DOT}(?:(?:default|webcrypto)${DOT})*(?:${RANDOM_ALT})${CALL}`, "g"));
     dynDestructures.push({ names: RANDOM_FNS, from: [...b.cryptoNs] });
@@ -758,6 +760,32 @@ export const CLOCK_TREE_PLANTS = [
   ["a key with a const assertion: Date[\"now\" as const]()", 'const t = Date["now" as const]();'],
   ["a comment scan that must step over a template: `${a}//`; Date.now()", "const s = `${a}//`;\nconst t = Date.now();"],
   ["a comment scan that must step over a regex: /\\/\\//; Date.now()", "const re = /\\/\\//; const t = Date.now();"],
+  // Round 11.
+  ["a computed key with a void 0 comma: Date[(void 0, \"now\")]()", 'export const t = Date[(void 0, "now")]();'],
+  ["a computed key with a void 0 comma: Math[(void 0, \"random\")]()", 'export const r = Math[(void 0, "random")]();'],
+  ["a computed key with a void 0 comma and a template key", "export const t = Date[(void 0, `now`)]();"],
+  ["a computed key with a 0 comma: Date[(0, \"now\")]()", 'export const t = Date[(0, "now")]();'],
+  ["uuid namespace import: ids.v4()", 'import * as ids from "uuid";\nexport const id = ids.v4();'],
+  ["uuid require object: ids.v4()", 'const ids = require("uuid");\nexport const id = ids.v4();'],
+  ["uuid require object: ids.v7()", 'const ids = require("uuid");\nexport const id = ids.v7();'],
+  ["uuid import = require: ids.v4()", 'import ids = require("uuid");\nexport const id = ids.v4();'],
+  ["uuid awaited import: ids.v4()", 'const ids = await import("uuid");\nexport const id = ids.v4();'],
+  ["uuid namespace destructured later: { v4 } = ids", 'import * as ids from "uuid";\nconst { v4 } = ids;'],
+  ["uuid default import: ids.v1()", 'import ids from "uuid";\nexport const id = ids.v1();'],
+  ["nanoid namespace import", 'import * as n from "nanoid";\nexport const id = n.nanoid();'],
+  ["awaited import of node:crypto", 'const nc = await import("node:crypto");\nexport const b = nc.randomUUID();'],
+  ["instantiation expression with ?. call: getRandomValues<T>?.(x)", "crypto.getRandomValues<Uint8Array<ArrayBuffer>>?.(new Uint8Array(4));"],
+  ["parenthesised instantiation expression: (getRandomValues<T>)(x)", "(crypto.getRandomValues<Uint8Array<ArrayBuffer>>)(new Uint8Array(4));"],
+  ["parenthesised instantiation of an imported name", 'import { randomFillSync } from "node:crypto";\n(randomFillSync<Buffer>)(Buffer.alloc(4));'],
+  ["parenthesised instantiation with a non-null call", 'import { randomFillSync } from "node:crypto";\n(randomFillSync<Buffer>)!(Buffer.alloc(4));'],
+  ["parenthesised instantiation of a webcrypto receiver", 'import { webcrypto } from "node:crypto";\n(webcrypto.getRandomValues<Uint8Array<ArrayBuffer>>)(new Uint8Array(4));'],
+  ["a comma receiver through globalThis in a destructure", "const { now } = (f(), globalThis).Date;"],
+  ["a comma receiver through globalThis in new", "const t = new (f(), globalThis).Date();"],
+  ["a comma receiver around a require", 'const nc = (f(), require("crypto"));\nconst b = nc.randomUUID();'],
+  ["a read in the argument of a class heritage call", "class A extends mixin(Date.now()) {}"],
+  ["a template tail holding // before a read on the same line", "const s = `${a}//`; export const t = Date.now();"],
+  ["a template tail holding /* hiding a line until a later */", "const s = `${a}/*`;\nexport const t = Date.now();\nconst u = `*/`;"],
+  ["a template middle holding // before a read on the same line", "const s = `${a}//${b}`; export const t = Date.now();"],
   ["a multi-line destructure", "const {\n  UTC,\n  now,\n} = Date;"],
   ["a read after a bracket access that spans two physical lines", 'const v = x\n[\n"k"\n];\nconst t = Date.now();'],
 ];
@@ -863,6 +891,7 @@ export const CLOCK_NON_PLANTS = [
   ["new Date(0, ...parts): a fixed first argument", "const d = new Date(0, ...parts);"],
   ["new Date(undefined as any, ...xs)", "const d = new Date(undefined as any, ...xs);"],
   ["a template head naming Date.now()", "const s = `Date.now() at ${x}`;"],
+  ["uuid v5 through a namespace is deterministic", 'import * as ids from "uuid";\nexport const id = ids.v5("a", ns);'],
   ["a regex literal naming Date.now()", "const re = /Date.now()/;"],
   ["a division of two names that match a spelling by prefix", "const r = Mathematics / randomness;"],
 ];
@@ -956,6 +985,8 @@ export function clockSelfTestChecks(scan = scanSource) {
   checks.push(["a non-null spanning lines keeps the line of a later read", at("const v = foo\n!\n.bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a read split across lines is attributed to the line it STARTS on", at("const a = 1;\nconst t = Date\n  .now();\nconst u = 2;") === "[2]"]);
   checks.push(["two physically distinct reads around a multi-line bracket access stay on their own lines", at('const a = crypto.randomUUID(), v = o[\n"k"\n]; const b = crypto.randomUUID();') === "[1,3]"]);
+  checks.push(["a new Date on the line after a previous read keeps its own line", at("export const a = Date.now(), b =\nnew Date();") === "[1,2]"]);
+  checks.push(["a destructure is attributed to the line its pattern starts on", at("const a = 1;\nconst {\n  now,\n} = Date;") === "[2]"]);
   checks.push(["a read in column 0 is not merged into the line above", at("const a = Date.now();\nDate.now();") === "[1,2]"]);
   checks.push(["a read after a multi-line type is attributed to its own line", at("type T = {\n  a: number;\n};\nconst t = Date.now();") === "[4]"]);
   checks.push(["a syntax error reports the line it is on", (scan("const a = 1;\nconst b = 2;\nlet x = ;\n").problems[0]?.line ?? 0) === 3]);

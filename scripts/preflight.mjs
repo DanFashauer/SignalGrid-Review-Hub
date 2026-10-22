@@ -106,6 +106,10 @@ const STEPS = [
   // script-side gate says so; this proves the gate refuses a missing, non-zero or
   // stale (previous-run, wrong-sha) sentinel.
   { name: "Land-branch push gate self-test (a missing, non-zero or stale sentinel must refuse the push)", cmd: ["node", "scripts/lib/land-branch-gate.mjs", "--self-test"] },
+  { name: "Staged Mac worker self-test (triage, review, limits and transport)", cmd: ["node", "scripts/mac/build-tick-stages.mjs", "--self-test"] },
+  { name: "Local worker job-state proofs", cmd: ["node", "scripts/mac/local-brain/test/job-state.test.mjs"] },
+  { name: "Local worker task-selector proofs", cmd: ["node", "scripts/mac/local-brain/test/task-selector.test.mjs"] },
+  { name: "Local worker proof-policy proofs", cmd: ["node", "scripts/mac/local-brain/test/proof-policy.test.mjs"] },
   // DR-060 rule 3, first slice: docs/agent/mcp-roster.json names which lane or
   // first-party skill may call which MCP server, with signalgrid-mcp's tool count
   // DERIVED from artifacts/mcp-server/src/index.ts, never hand-typed.

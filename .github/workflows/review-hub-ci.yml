@@ -937,6 +937,8 @@ jobs:
         run: node scripts/agent/absence-check.mjs --self-test
       - name: "Backlog triage self-test (a placeholder token, an empty page, an owner-gated PR, a draft or a red gating check must never place a PR as landable)"
         run: node scripts/backlog-triage.mjs --self-test
+      - name: "Backlog triage planted defects (every row of its --mutants table must turn that self-test red)"
+        run: node scripts/backlog-triage.mjs --mutants
       - name: "Untracked-ignore self-test (verify-all: an untracked lockfile is source, scratch stays ignored)"
         run: node scripts/check-untracked-ignore.mjs --self-test
       # Brain cycle (DR-032). The live origin-diff is the cycle's STEP 0, not a per-push

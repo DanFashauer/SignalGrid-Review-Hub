@@ -17,18 +17,25 @@
 //
 // THE RULES ARE THE INVENTORY'S, NOT NEW ONES (2026-10-22 PR inventory, 116 PRs). A PR gets
 // the FIRST of these that holds, in this order:
-//   STANDING       the mailbox PR named in docs/agent/lane-mailbox.json: a draft with no files.
+//   STANDING       the mailbox PR named in docs/agent/lane-mailbox.json: a draft with no files. Any
+//                  OTHER PR from that branch is UNKNOWN: the standing wake channel is never landed.
 //   IN-FLIGHT      declared live by the caller (--declared-live). The tool cannot see a worker.
 //   SUPERSEDED     its head is an ancestor of mainline, or it is a mac/tick-* snapshot whose
 //                  every file was rewritten on mainline after its head commit (or is a
 //                  sim-request whose result is already on mainline).
 //   STALE          idle more than 14 days AND (red OR conflicting). Red = the gating check, the
-//                  Mac-only check or CodeQL failed; code-scanning, phase-pr-evidence and the
-//                  SBOM check are ADVISORY and never make a PR red.
+//                  Mac-only check or CodeQL failed IN ITS NEWEST RUN (a re-run or a second
+//                  trigger leaves the old run on the commit; the old failure is history);
+//                  code-scanning, phase-pr-evidence and the SBOM check are ADVISORY and never
+//                  make a PR red.
 //   OWNER-MERGE    the diff reaches DECISION_PATH or OWNER_RESERVED (classifyDiff, imported
 //                  from check-owner-gated-surfaces.mjs, not retyped), or an owner-named surface
 //                  DR-037 keeps back, or it is Dependabot's, or it is not a lane's own branch.
-//   MAC-ASK-NEEDED a mac/* PR DR-037 would let the cloud lane land only on the Mac's ask.
+//   MAC-ASK-NEEDED a mac/* PR. DR-037 cond. 5 lets the cloud lane land one only on the Mac's ask IN
+//                  MAIL, which this tool does not read. A line in the PR body is not that ask (a
+//                  body has no provenance: every lane pushes as one account and a body can be
+//                  rewritten), so a body ask alone reads "ask in body; confirm mail" and the
+//                  tool NEVER prints LAND for a mac/* PR. mac/tick-* PRs are here too (below).
 //   LAND-UNDER-DR-037  a cloud-lane PR (claude/*, lane/cloud-*) that is landable NOW.
 // A STALE or SUPERSEDED or IN-FLIGHT row keeps the class it would have in `natural`.
 //
@@ -46,26 +53,38 @@
 //     comments: roots, and which roots have a reply. That is a heuristic. A PR with any
 //     review thread is NOT landable from this reading (a thread whose state cannot be read
 //     counts as open); --threads-file lets a caller who read the exact numbers supply them.
-//   * Mac lane mail. A Mac PR's ask is read from the PR BODY only.
+//     The comment list is checked against the PR's own review_comments count like every other
+//     list: a different number (or no count) makes the comments unreadable, which blocks LAND.
+//   * Mac lane mail. It is not read. A body line that reads as an ask is flagged, never trusted.
+//   * Who opened a mac/tick-* PR. LANE_COORDINATION rule 2 has the cloud steward open and land
+//     these, and DR-037 cond. 5 lets the lane land only a PR it opened; but lane-tick.sh opens
+//     the PR itself when gh is on the Mac's PATH and the API cannot tell the two apart. The
+//     stricter reading holds in this tool: an unsuperseded tick PR is MAC-ASK-NEEDED, and a
+//     sweep lands one only if the steward opened it or the Mac's mail names it. That is a
+//     statement about what the tool can read, not a claim that rule 2 is wrong.
 //   * Which workers are live. Declare them with --declared-live; a PR touched in the last 3
 //     hours and not declared is flagged, not classified.
 //   * Mainline ancestry from a checkout that is shallow or behind: local git "yes" is
 //     conclusive, local "no" is not, so the REST compare endpoint answers those, and the
 //     report says how many PRs each source answered.
 //
-// EXIT CODES: 0 report printed (UNKNOWN rows are part of a report) · 1 self-test failed ·
-// 2 usage, token, auth or rate-limit refusal · 3 the read was inconsistent (counts disagree
-// after re-reads, a listing missing the default branch) · 4 --snapshot could not be written.
+// EXIT CODES: 0 report printed (UNKNOWN rows are part of a report) · 1 self-test or --mutants
+// failed · 2 usage, token, auth or rate-limit refusal (a 401, a 403 that is not a rate limit, or
+// a 404 on a read the whole queue depends on is an auth refusal) · 3 the read was inconsistent
+// (counts disagree after re-reads, a short branch or closed-PR page, a listing missing the
+// default branch, a read that failed after retries) · 4 --snapshot could not be written.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { classifyDiff } from "./check-owner-gated-surfaces.mjs";
 
 const SELF_FILE = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SELF_FILE), "..");
+const SKILL_FILE = resolve(REPO_ROOT, ".claude/skills/backlog-landing/SKILL.md");
+const PAGE_FILE = resolve(REPO_ROOT, "docs/agent/BACKLOG_LANDING.md");
 
 // ── constants ────────────────────────────────────────────────────────────────────────────
 
@@ -84,6 +103,8 @@ export const SNAPSHOT_BEGIN = "<!-- backlog-triage:snapshot:begin - generated by
 export const DISPOSITIONS = ["LAND-UNDER-DR-037", "MAC-ASK-NEEDED", "OWNER-MERGE", "SUPERSEDED", "STALE", "IN-FLIGHT", "STANDING", "UNKNOWN"];
 const DISP_RANK = new Map(DISPOSITIONS.map((d, i) => [d, i]));
 export const LANES = ["claude", "mac", "lane", "dependabot", "other"];
+/** The standing mailbox branch (docs/agent/lane-mailbox.json); the fallback when that file is unreadable. */
+export const MAILBOX_BRANCH = "lane/mailbox";
 
 /** Conclusions that are a verdict of "failed". */
 const FAILED = new Set(["failure", "timed_out", "startup_failure"]);
@@ -298,23 +319,46 @@ export async function pool(items, limit, fn) {
 
 const stateOfRun = (r) => (r.status === "completed" ? (r.conclusion ?? "unknown") : (r.status ?? "unknown"));
 
-/** The gating check, the Mac-only check, what failed, what is pending, the native-client suites. */
+/** One run per check NAME: the newest, by id. A re-run, or a second trigger of the same workflow
+ *  (a label, a reopen), adds a run under the same name and leaves the old one on the commit: the
+ *  old failure is history and the newest run is the verdict. Equal ids (never seen on GitHub)
+ *  keep the worse state, so a tie cannot hide a failure.
+ *  Ceiling: two workflows that share a job name collapse to the newer; the gating check, the
+ *  Mac-only check and CodeQL are unique names, and the live commits show duplicates only for
+ *  phase-pr-evidence and "Label & summarize". */
+export function latestByName(runs) {
+  const rank = (r) => (FAILED.has(stateOfRun(r)) ? 2 : PENDING.has(stateOfRun(r)) ? 1 : 0);
+  const latest = new Map();
+  for (const r of runs) {
+    const cur = latest.get(r.name);
+    if (!cur) { latest.set(r.name, r); continue; }
+    const a = r.id ?? 0;
+    const b = cur.id ?? 0;
+    if (a > b || (a === b && rank(r) > rank(cur))) latest.set(r.name, r);
+  }
+  return [...latest.values()];
+}
+
+/** The gating check, the Mac-only check, what failed, what is pending, the native-client suites;
+ *  every verdict taken from the newest run of each check name. */
 export function summarizeChecks(runs) {
-  const newest = (pred) => runs.filter(pred).sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0] ?? null;
+  const current = latestByName(runs);
+  const pick = (pred) => current.filter(pred).sort((a, b) => (b.id ?? 0) - (a.id ?? 0))[0] ?? null;
   const shape = (r) => (r ? { state: stateOfRun(r), id: r.id ?? null } : { state: "absent", id: null });
   const label = (r) => `${r.name}=${stateOfRun(r)}`;
-  const failingRuns = runs.filter((r) => FAILED.has(stateOfRun(r)));
-  const pendingRuns = runs.filter((r) => PENDING.has(stateOfRun(r)));
+  const failingRuns = current.filter((r) => FAILED.has(stateOfRun(r)));
+  const pendingRuns = current.filter((r) => PENDING.has(stateOfRun(r)));
   const isRedName = (n) => n === GATING_CHECK || MAC_ONLY_CHECK_RE.test(n) || isCodeQL(n);
   return {
     total: runs.length,
-    gating: shape(newest((r) => r.name === GATING_CHECK)),
-    macOnly: shape(newest((r) => MAC_ONLY_CHECK_RE.test(r.name))),
+    superseded: runs.length - current.length,
+    gating: shape(pick((r) => r.name === GATING_CHECK)),
+    macOnly: shape(pick((r) => MAC_ONLY_CHECK_RE.test(r.name))),
     failing: uniqSorted(failingRuns.map(label)),
     red: uniqSorted(failingRuns.filter((r) => isRedName(r.name)).map(label)),
     advisory: uniqSorted(failingRuns.filter((r) => !isRedName(r.name)).map(label)),
     pending: uniqSorted(pendingRuns.map(label)),
-    native: uniqSorted(runs.filter((r) => NATIVE_CHECK_RE.test(r.name)).map(label)),
+    native: uniqSorted(current.filter((r) => NATIVE_CHECK_RE.test(r.name)).map(label)),
   };
 }
 
@@ -331,17 +375,27 @@ export function summarizeThreads(comments) {
   };
 }
 
-/** Does the PR body ask the cloud lane to land it? Sentence-level, HTML comments stripped,
- *  and a negation in the same sentence cancels it. Mac MAIL is not read by this tool. */
+/** Does the PR body carry a line that reads as an ask to the cloud lane to land THIS PR?
+ *  Sentence-level; HTML comments and fenced code are stripped (a quoted rule is not the PR's own
+ *  statement); a negation in the sentence cancels it. A sentence that merely DESCRIBES the rule
+ *  does not count: the object of "merge" or "land" must be this PR ("this PR", "it", "them"), or
+ *  absent with the merge conditioned on this PR's CI ("may merge under DR-037 once CI is green",
+ *  the Mac's PR-template line). Anything naming other PRs (#1234, "PRs", "its own"), or a
+ *  general noun ("a", "any", "every"), is a description. Even a true here is NOT the Mac's ask:
+ *  a body has no provenance, so the caller reports it as "ask in body; confirm mail". */
 export function bodyAsksCloudToLand(body) {
-  const text = String(body ?? "").replace(/<!--[\s\S]*?-->/g, " ");
+  const text = String(body ?? "").replace(/<!--[\s\S]*?-->/g, " ").replace(/```[\s\S]*?```/g, " ");
   for (const sentence of text.split(/[.!?;\n]+/)) {
     const s = sentence.trim();
     if (!s) continue;
-    const m = /\b(?:the\s+)?(cloud(?:\s+lane)?|steward)\b[^]{0,80}?\b(may|can|should|please|to)\b[^]{0,30}?\b(merge|land)\b/i.exec(s);
+    const m = /\b(?:the\s+)?(?:cloud(?:\s+lane)?|steward)\b[^]{0,80}?\b(?:may|can|should|please|to)\b[^]{0,30}?\b(?:merge|land)\b([^]*)$/i.exec(s);
     if (!m) continue;
     if (/\b(not|never|no|cannot|can't|won't|don't|do not|without)\b|n't\b/i.test(s)) continue;
-    return true;
+    const after = m[1];
+    if (/#\d+|\b(?:its|their|own|other|others|any|every|all|each|a|an|PRs|pull requests)\b/i.test(after)) continue;
+    const thisPr = /\b(?:this|it|them)\b/i.test(after);
+    const onItsCi = /^\s*(?:(?:under|per|by)\s+DR-037\s+)?(?:once|when|after|if)\b[^]{0,40}\b(?:CI|checks?|green|gating)\b/i.test(after);
+    if (thisPr || onItsCi) return true;
   }
   return false;
 }
@@ -508,6 +562,7 @@ export async function gatherPr(ctx, item) {
     files: [],
     filesExpected: null,
     filesComplete: false,
+    commentsExpected: null,
     tier: "unknown",
     categories: [],
     matched: [],
@@ -540,6 +595,7 @@ export async function gatherPr(ctx, item) {
     f.mergeableState = detail.mergeable_state ?? null;
     f.conflicting = f.mergeableState === "dirty" ? true : (f.mergeableState && f.mergeableState !== "unknown") ? false : null;
     f.filesExpected = typeof detail.changed_files === "number" ? detail.changed_files : null;
+    f.commentsExpected = typeof detail.review_comments === "number" ? detail.review_comments : null;
     f.ask = f.lane === "mac" ? bodyAsksCloudToLand(detail.body) : false;
     f.quotesGates = bodyMentionsGates(detail.body);
     if (!Number.isFinite(f.idleDays) || !Number.isFinite(f.ageDays)) f.errors.pr = "created_at or updated_at is not a date, so the PR's age cannot be measured";
@@ -567,7 +623,14 @@ export async function gatherPr(ctx, item) {
     f.threads = { method: "file", roots: exact.total ?? exact.roots ?? null, unanswered: null, unresolved: exact.unresolved };
   } else {
     const comments = await guard("comments", () => listAll(api, `/repos/${repo}/pulls/${item.number}/comments`));
-    if (comments) f.threads = summarizeThreads(comments);
+    // Every other list is checked against a count GitHub states; this one is checked against the
+    // PR's own review_comments. A short page (or a count that moved while it was read) is a read
+    // error, never "no threads": the comments are then unreadable, which blocks LAND.
+    if (comments) {
+      if (f.commentsExpected === null) f.errors.comments = "the PR detail carries no review_comments count, so the comment list cannot be checked for completeness";
+      else if (comments.length !== f.commentsExpected) f.errors.comments = `read ${comments.length} review comment(s) but the PR reports ${f.commentsExpected}`;
+      else f.threads = summarizeThreads(comments);
+    }
   }
 
   // ancestry: only worth asking for a PR the earlier rules have not already placed
@@ -597,7 +660,8 @@ export async function gatherPr(ctx, item) {
 
 /** What the PR would be if nothing else (idleness, supersession, a declared worker) applied.
  *  cls is null when the file list could not be read: the class is then unknown, not guessed. */
-export function naturalClass(f) {
+export function naturalClass(f, mailboxBranch = MAILBOX_BRANCH) {
+  if (f.lane === "lane" && f.headRef === mailboxBranch) return { cls: null, why: "the standing mailbox branch is never landed" };
   if (f.errors.files || !f.filesComplete) return { cls: null, why: "the changed-file list could not be read in full" };
   const hard = f.categories.filter((c) => c === "DECISION_PATH" || c === "OWNER_RESERVED");
   if (hard.length) return { cls: "OWNER-MERGE", why: `classifier-${hard.map((c) => c.toLowerCase()).join("+")}` };
@@ -648,13 +712,16 @@ export function landingBlockers(f, baseName) {
 
 const fmtDays = (x) => round1(x).toFixed(1);
 
+const TICK_NOTE = "mac/tick-* PR: LANE_COORDINATION rule 2 has the cloud steward open and land these, but the API cannot show who opened this one (scripts/mac/lane-tick.sh opens the PR itself when gh is on the Mac's PATH), and DR-037 cond. 5 lets the lane land only a PR it opened or was asked to drive. The stricter reading holds here: land it only if the steward opened it or the Mac's mail names it.";
+
 /**
  * The disposition of one PR: the FIRST rule that holds, in the order the header lists, and
  * UNKNOWN (never a guess) when the rules have no row for what was read.
  * ctx = { base, declared: Map(number -> note), standing: {pr, branch} | null }
  */
 export function decide(f, ctx) {
-  const nat = naturalClass(f);
+  const mailboxBranch = ctx.standing?.branch ?? MAILBOX_BRANCH;
+  const nat = naturalClass(f, mailboxBranch);
   const blockers = landingBlockers(f, ctx.base);
   const flags = [];
   const out = (disposition, reason, evidence = []) => ({
@@ -674,8 +741,16 @@ export function decide(f, ctx) {
 
   if (f.errors.pr) return out("UNKNOWN", `the PR could not be read: ${f.errors.pr}`);
 
-  if (ctx.standing && f.number === ctx.standing.pr && f.headRef === ctx.standing.branch && f.draft && f.filesComplete && f.files.length === 0) {
-    return out("STANDING", "standing-wake-channel", [`Draft PR with no changed files whose number and branch match docs/agent/lane-mailbox.json (#${ctx.standing.pr}, ${ctx.standing.branch}); its comments wake the cloud lane. Never landed, never closed.`]);
+  if (f.lane === "lane" && f.headRef === mailboxBranch) {
+    if (ctx.standing && f.number === ctx.standing.pr && f.draft && f.filesComplete && f.files.length === 0) {
+      return out("STANDING", "standing-wake-channel", [`Draft PR with no changed files whose number and branch match docs/agent/lane-mailbox.json (#${ctx.standing.pr}, ${ctx.standing.branch}); its comments wake the cloud lane. Never landed, never closed.`]);
+    }
+    const why = !ctx.standing ? "docs/agent/lane-mailbox.json was unreadable, so the mailbox PR is not known"
+      : f.number !== ctx.standing.pr ? `docs/agent/lane-mailbox.json names #${ctx.standing.pr}, not #${f.number}`
+      : !f.draft ? "it is not a draft"
+      : !f.filesComplete ? "its file list could not be read in full"
+      : `it carries ${f.files.length} changed file(s)`;
+    return out("UNKNOWN", `head is the standing mailbox branch (${mailboxBranch}) but the PR is not the standing draft with no files (${why}); the mailbox channel is never landed and never closed by a sweep, so a person looks`);
   }
   if (ctx.declared.has(f.number)) {
     const note = ctx.declared.get(f.number);
@@ -722,12 +797,11 @@ export function decide(f, ctx) {
   }
 
   if (nat.cls === "MAC-ASK-NEEDED") {
-    const askNote = f.ask ? "ask found in the PR body" : "no ask in the PR body";
-    const trail = `${askNote}; Mac mail was not read by this tool`;
-    if (f.ask && blockers.length === 0) {
-      return out("LAND-UNDER-DR-037", nat.why, [`mac/* PR the Mac asked the cloud lane to land (${trail}); every other condition the tool can read holds.`]);
-    }
-    return out("MAC-ASK-NEEDED", nat.why, [`mac/* ${nat.why.replace("mac-opened-", "")} PR - DR-037 cond. 5: the cloud lane lands it only on the Mac's ask (${trail}).`, ...(f.ask && blockers.length ? [`Asked in the body, but not landable now: ${blockers.join("; ")}.`] : [])]);
+    const ev = [`mac/* ${nat.why.replace("mac-opened-", "")} PR - DR-037 cond. 5: the cloud lane lands it only on the Mac's ask in MAIL, which this tool does not read (${f.ask ? "a line in the PR body reads as an ask" : "no ask in the PR body"}).`];
+    if (f.ask) ev.push("A body line has no provenance (every lane pushes as one account, and a body can be rewritten), so it is never the ask: confirm the mail ask (pnpm run lane:inbox; artifacts/lane-messages) before anything lands.");
+    if (f.ask && blockers.length) ev.push(`Not landable now either: ${blockers.join("; ")}.`);
+    if (/^mac\/tick-/.test(f.headRef)) ev.push(TICK_NOTE);
+    return out("MAC-ASK-NEEDED", f.ask ? `ask in body; confirm mail${blockers.length ? "; not landable now" : ""}` : nat.why, ev);
   }
 
   if (nat.cls === "LAND-UNDER-DR-037") {
@@ -1079,8 +1153,11 @@ export function parseThreadsFile(text) {
   return out;
 }
 
-async function pullCount(api, repo, state) {
-  const r = await api.get(`/repos/${repo}/pulls?state=${state}&per_page=1`);
+/** How many rows a list endpoint holds, by asking for one row per page and reading the Link
+ *  header's last page: a number that does not depend on the pages `listAll` reads, so a short
+ *  page in the middle of that read is caught by comparing the two. */
+async function countOf(api, path) {
+  const r = await api.get(withQuery(path, "per_page=1"));
   const last = /[?&]page=(\d+)>;\s*rel="last"/.exec(r.headers?.get?.("link") ?? "");
   if (last) return Number(last[1]);
   return Array.isArray(r.json) ? r.json.length : 0;
@@ -1150,7 +1227,10 @@ export async function collectReport(opts, io) {
     const p = lg.probe(baseSha);
     if (p.available) {
       localGit = lg;
-      localNote = `checkout ${opts.repoDir} ${p.shallow ? "is shallow" : "is whole"}, its origin/${base} ${p.current ? "is" : "is NOT"} the live head`;
+      // never the absolute path: the report is committed to a public page, and on the Mac that
+      // path holds the home directory
+      const where = opts.repoDir === REPO_ROOT ? "this checkout" : "the --repo-dir checkout";
+      localNote = `${where} ${p.shallow ? "is shallow" : "is whole"}, its origin/${base} ${p.current ? "is" : "is NOT"} the live head`;
     } else {
       localNote = `not used (${p.reason})`;
     }
@@ -1176,9 +1256,11 @@ export async function collectReport(opts, io) {
   const unread = prFacts.filter((f) => f.ancestor === null && !ctx.declared.has(f.number)).length;
   const exactThreads = prFacts.filter((f) => f.threads?.method === "file").length;
 
+  const branchTotal = await countOf(api, `/repos/${repo}/branches`);
   const branchList = await listAll(api, `/repos/${repo}/branches`);
+  if (branchList.length < branchTotal) throw new ToolError(`read ${branchList.length} branches but the repository reports ${branchTotal}: a short page, so no branch table is printed`, 3);
   if (!branchList.some((b) => b.name === base)) throw new ToolError(`the branch listing (${branchList.length} rows) does not contain ${base}: an incomplete read, so no branch table is printed`, 3);
-  const closedTotal = await pullCount(api, repo, "closed");
+  const closedTotal = await countOf(api, `/repos/${repo}/pulls?state=closed`);
   const closedRaw = await listAll(api, `/repos/${repo}/pulls?state=closed&sort=created&direction=asc`);
   const closed = [...new Map(closedRaw.map((p) => [p.number, p])).values()];
   if (closed.length < closedTotal) throw new ToolError(`read ${closed.length} closed PRs but the list reports ${closedTotal}: an incomplete read, so no branch table is printed`, 3);
@@ -1196,7 +1278,7 @@ export async function collectReport(opts, io) {
   });
 
   const notes = [
-    "A mac/* PR's ask is read from its PR body only; Mac lane mail is not read by this tool.",
+    "Mac lane mail is not read by this tool, and a line in a mac/* PR body is never the Mac's ask: the tool prints no LAND for a mac/* PR (a body ask reads \"ask in body; confirm mail\").",
     "A PR is IN-FLIGHT only if --declared-live names it; the tool cannot see a worker.",
   ];
   if (!standing) notes.push("docs/agent/lane-mailbox.json was unreadable, so no PR can be STANDING.");
@@ -1207,10 +1289,10 @@ export async function collectReport(opts, io) {
     sources: {
       openTotalListed: open.prs.length + open.issuesRaw.length,
       openTotalExpected: open.expected,
-      ancestry: `local git ${localNote}; it answered ${bySource("local-git")} PR(s), the REST compare endpoint ${bySource("rest-compare")}, ${unread} left unread.`,
+      ancestry: `local git: ${localNote}; it answered ${bySource("local-git")} PR(s), the REST compare endpoint ${bySource("rest-compare")}, ${unread} left unread.`,
       threads: exactThreads === prFacts.length && prFacts.length > 0
         ? `exact counts supplied by --threads-file for all ${exactThreads} PR(s).`
-        : `REST heuristic${exactThreads ? ` (exact for ${exactThreads} PR(s) from --threads-file)` : ""}: root review comments and which have a reply. GitHub shows resolution through GraphQL only, which this tool does not call, so any PR with a review thread counts as having an open one.`,
+        : `REST heuristic${exactThreads ? ` (exact for ${exactThreads} PR(s) from --threads-file)` : ""}: root review comments and which have a reply, each list checked against the PR's own review_comments count (a different number makes that PR's comments unreadable, which blocks LAND). GitHub shows resolution through GraphQL only, which this tool does not call, so any PR with a review thread counts as having an open one.`,
       apiCalls: 0,
     },
     notes, declared: opts.declared, standing, prFacts, issuesRaw: open.issuesRaw, branchInfo,
@@ -1227,6 +1309,7 @@ export const USAGE = `usage: node scripts/backlog-triage.mjs [options]
   --json                     the same data as JSON, stable key order
   --snapshot FILE            also write the compact dated block between the markers in FILE
   --self-test                run the fixture cases (no network)
+  --mutants                  run every planted defect against the self-test (no network); each must turn it red
   --repo OWNER/NAME          default: GITHUB_REPOSITORY, else the origin remote, else ${DEFAULT_REPO}
   --base BRANCH              default: the repository's default branch
   --declared-live LIST       PRs a person knows are being pushed to now: 1559,1585:worker B87
@@ -1251,7 +1334,7 @@ function originRepo(io, dir) {
 
 export function parseArgs(argv, io) {
   const o = {
-    json: false, markdown: false, snapshot: null, selfTest: false, help: false,
+    json: false, markdown: false, snapshot: null, selfTest: false, mutants: false, help: false,
     repo: null, base: null, declared: new Map(), threadsFile: new Map(), repoDir: REPO_ROOT,
     noLocalGit: false, now: null, concurrency: 6, allowCountDrift: false,
   };
@@ -1268,6 +1351,7 @@ export function parseArgs(argv, io) {
       case "--json": o.json = true; break;
       case "--markdown": o.markdown = true; break;
       case "--self-test": o.selfTest = true; break;
+      case "--mutants": o.mutants = true; break;
       case "--help": case "-h": o.help = true; break;
       case "--no-local-git": o.noLocalGit = true; break;
       case "--allow-count-drift": o.allowCountDrift = true; break;
@@ -1328,6 +1412,7 @@ export async function main(argv, io = defaultIo()) {
   }
   if (opts.help) { io.stdout(`${USAGE}\n`); return 0; }
   if (opts.selfTest) return runSelfTest(io);
+  if (opts.mutants) return runMutants(io);
   try {
     const report = await collectReport(opts, io);
     io.stdout(opts.json ? `${JSON.stringify(report, null, 2)}\n` : `${renderMarkdown(report)}\n`);
@@ -1336,7 +1421,14 @@ export async function main(argv, io = defaultIo()) {
       io.stderr(`backlog-triage: snapshot written between the markers in ${opts.snapshot}\n`);
     }
     return 0;
-  } catch (e) {
+  } catch (err) {
+    // A read the whole queue depends on that GitHub refused or that failed after retries (a 403 that
+    // is not a rate limit, a 404, a persistent 5xx) is a refusal with a message, not an "unexpected
+    // failure": 401/403/404 are the token's access (exit 2), the rest an inconsistent read (exit 3).
+    // Reads of one PR's details are guarded per PR and never reach here.
+    const e = err instanceof ApiError
+      ? new ToolError(`GitHub refused or failed a read the whole queue depends on, so there is no queue to report: ${err.message}`, [401, 403, 404].includes(err.status) ? 2 : 3)
+      : err;
     if (!(e instanceof ToolError)) throw e;
     io.stderr(`backlog-triage: ${e.message}\n`);
     if (opts.snapshot && e.exitCode !== 4) {
@@ -1364,6 +1456,288 @@ function reexecForProxy() {
   });
   process.exit(r.status ?? 1);
 }
+
+// ── planted defects: --mutants ───────────────────────────────────────────────────────────
+//
+// A self-test that passes proves nothing until a broken tool fails it. Each row of the table
+// below is one defect: `find` is text that occurs exactly once in `file` (the tool's source,
+// the skill, or the page) outside the table, `replace` is what it becomes. `--mutants` writes
+// each mutated copy to a temporary directory, runs its --self-test, and demands RED (exit 1 and a
+// "self-test FAILED" report); a copy that passes SURVIVED, one that crashes is BROKEN, a row
+// whose `find` no longer occurs once DOES-NOT-APPLY, and any of those exits 1. The normal
+// self-test also checks that every row still applies, so the table cannot rot unseen.
+// Nothing here touches the checkout: the copies live in a directory this function removes.
+
+const MUT_BEGIN = "// >>> mutants" + "-begin";
+const MUT_END = "// <<< mutants" + "-end";
+
+/** The source with the mutant table cut out: the table holds the very text it mutates, and a
+ *  write verb among it, so every scan of the source reads around the table. */
+function withoutMutantTable(text) {
+  const a = text.indexOf(MUT_BEGIN);
+  const b = text.indexOf(MUT_END);
+  return a >= 0 && b > a ? text.slice(0, a) + text.slice(b + MUT_END.length) : text;
+}
+
+/** Apply one row to `texts` = { src, skill, page }. Never applies a row that is ambiguous or inert. */
+function applyMutant(m, texts) {
+  const target = m.file ?? "src";
+  const text = texts[target];
+  if (typeof text !== "string" || typeof m.find !== "string" || m.find === "") return { ok: false, why: `no ${target} text, or an empty find` };
+  if (m.find === m.replace) return { ok: false, why: "replace equals find" };
+  const a = target === "src" ? text.indexOf(MUT_BEGIN) : -1;
+  const b = target === "src" ? text.indexOf(MUT_END) + MUT_END.length : -1;
+  const spans = a >= 0 ? [[0, a], [b, text.length]] : [[0, text.length]];
+  const hits = [];
+  for (const [from, to] of spans) {
+    for (let i = text.indexOf(m.find, from); i >= 0 && i + m.find.length <= to; i = text.indexOf(m.find, i + m.find.length)) hits.push(i);
+  }
+  if (hits.length !== 1) return { ok: false, why: `the find text occurs ${hits.length} times in ${target} (want exactly 1)` };
+  return { ok: true, target, text: text.slice(0, hits[0]) + m.replace + text.slice(hits[0] + m.find.length) };
+}
+
+const readTexts = () => ({ src: readFileSync(SELF_FILE, "utf8"), skill: readFileSync(SKILL_FILE, "utf8"), page: readFileSync(PAGE_FILE, "utf8") });
+
+function runMutants(io) {
+  const texts = readTexts();
+  const dir = mkdtempSync(join(tmpdir(), "sgbt-mut-"));
+  const rows = [];
+  // the copy runs from a temporary directory: point its three path anchors back at this checkout
+  const swap = (code, from, to) => {
+    const i = code.indexOf(from);
+    if (i < 0 || code.indexOf(from, i + 1) !== -1) throw new ToolError(`--mutants: cannot prepare the runnable copy (anchor not found exactly once: ${from.slice(0, 60)})`, 1);
+    return code.slice(0, i) + to + code.slice(i + from.length);
+  };
+  try {
+    for (const m of MUTANTS) {
+      const applied = applyMutant(m, texts);
+      if (!applied.ok) { rows.push({ id: m.id, what: m.what, verdict: "DOES-NOT-APPLY", detail: applied.why }); continue; }
+      const files = { ...texts, [applied.target]: applied.text };
+      const skillCopy = join(dir, "SKILL.md");
+      const pageCopy = join(dir, "PAGE.md");
+      const copy = join(dir, "backlog-triage.mjs");
+      writeFileSync(skillCopy, files.skill);
+      writeFileSync(pageCopy, files.page);
+      let code = files.src;
+      code = swap(code, "import { classifyDiff } from " + '"./check-owner-gated-surfaces.mjs";', `import { classifyDiff } from ${JSON.stringify(pathToFileURL(join(dirname(SELF_FILE), "check-owner-gated-surfaces.mjs")).href)};`);
+      code = swap(code, "const REPO_ROOT = " + 'resolve(dirname(SELF_FILE), "..");', `const REPO_ROOT = ${JSON.stringify(REPO_ROOT)};`);
+      code = swap(code, "const SKILL_FILE = " + 'resolve(REPO_ROOT, ".claude/skills/backlog-landing/SKILL.md");', `const SKILL_FILE = ${JSON.stringify(skillCopy)};`);
+      code = swap(code, "const PAGE_FILE = " + 'resolve(REPO_ROOT, "docs/agent/BACKLOG_LANDING.md");', `const PAGE_FILE = ${JSON.stringify(pageCopy)};`);
+      writeFileSync(copy, code);
+      const r = spawnSync(process.execPath, [copy, "--self-test"], { encoding: "utf8", timeout: 120_000, env: { ...process.env, SGBT_MUTANT: "1", GH_TOKEN: "", GITHUB_TOKEN: "" } });
+      const out = `${r.stdout ?? ""}`;
+      if (r.status === 0) rows.push({ id: m.id, what: m.what, verdict: "SURVIVED", detail: "the self-test still passed" });
+      else if (r.status === 1 && /self-test FAILED/.test(out)) {
+        const first = out.split("\n").find((l) => l.startsWith("  FAIL ")) ?? "";
+        rows.push({ id: m.id, what: m.what, verdict: "killed", detail: first.replace(/^ {2}FAIL /, "").slice(0, 110) });
+      } else rows.push({ id: m.id, what: m.what, verdict: "BROKEN", detail: `exit ${r.status}: ${String(r.stderr ?? "").split("\n").find(Boolean) ?? out.split("\n")[0]}`.slice(0, 160) });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  for (const r of rows) io.stdout(`${r.verdict === "killed" ? "  killed  " : `  ${r.verdict.padEnd(8)}`} ${r.id}  ${r.what}${r.verdict === "killed" ? ` - first red: ${r.detail}` : ` - ${r.detail}`}\n`);
+  const killed = rows.filter((r) => r.verdict === "killed").length;
+  if (killed !== rows.length) {
+    io.stdout(`backlog-triage mutants FAILED: ${killed}/${rows.length} planted defects killed\n`);
+    return 1;
+  }
+  io.stdout(`backlog-triage mutants: ${killed}/${killed} planted defects killed by the self-test\n`);
+  return 0;
+}
+
+// >>> mutants-begin
+const MUTANTS = [
+  { id: "M01", file: "src", what: "a write verb reaches the API",
+    find: "fetchImpl(url, { method: \"GET\", headers })",
+    replace: "fetchImpl(url, { method: \"POST\", headers })" },
+  { id: "M02", file: "src", what: "DECISION_PATH and OWNER_RESERVED diffs stop being OWNER-MERGE",
+    find: "if (hard.length) return",
+    replace: "if (false && hard.length) return" },
+  { id: "M03", file: "src", what: "owner-named surfaces stop holding a PR",
+    find: "if (f.ownerNamed.length) return",
+    replace: "if (false && f.ownerNamed.length) return" },
+  { id: "M04", file: "src", what: "a draft is landable",
+    find: "if (f.draft) b.push",
+    replace: "if (false) b.push" },
+  { id: "M05", file: "src", what: "the gating check is not required",
+    find: "if (c.gating.state !== \"success\") b.push",
+    replace: "if (false) b.push" },
+  { id: "M06", file: "src", what: "a conflicting PR is landable",
+    find: "if (f.conflicting === true) b.push",
+    replace: "if (false) b.push" },
+  { id: "M07", file: "src", what: "a stacked PR is landable",
+    find: "if (f.base !== baseName) b.push",
+    replace: "if (false) b.push" },
+  { id: "M08", file: "src", what: "IN-FLIGHT is never assigned",
+    find: "if (ctx.declared.has(f.number)) {",
+    replace: "if (false) {" },
+  { id: "M09", file: "src", what: "an ancestor head is not SUPERSEDED",
+    find: "if (f.ancestor === true) {",
+    replace: "if (false) {" },
+  { id: "M10", file: "src", what: "STALE starts at exactly 14 days",
+    find: "if (f.idleDays > STALE_DAYS) {",
+    replace: "if (f.idleDays >= STALE_DAYS) {" },
+  { id: "M11", file: "src", what: "advisory checks make a PR red",
+    find: "const isRedName = (n) => n === GATING_CHECK || MAC_ONLY_CHECK_RE.test(n) || isCodeQL(n);",
+    replace: "const isRedName = () => true;" },
+  { id: "M12", file: "src", what: "a heuristic review thread stops blocking LAND",
+    find: "} else if (f.threads.roots > 0) {",
+    replace: "} else if (false) {" },
+  { id: "M13", file: "src", what: "the body need not quote preflight and breadth",
+    find: "if (!f.quotesGates) b.push",
+    replace: "if (false) b.push" },
+  { id: "M14", file: "src", what: "native client suites are not required",
+    find: "if (c.native.length === 0) b.push",
+    replace: "if (false) b.push" },
+  { id: "M15", file: "src", what: "open-list counts are not cross-checked (an empty page is an empty queue)",
+    find: "if (prs.length === prEntries && all.length === expected) return",
+    replace: "if (true) return" },
+  { id: "M16", file: "src", what: "listAll stops at an empty page, not a short one",
+    find: "if (rows.length < perPage) return out;",
+    replace: "if (rows.length === 0) return out;" },
+  { id: "M17", file: "src", what: "an anonymous answer is accepted",
+    find: "if (core.limit <= 60) {",
+    replace: "if (false) {" },
+  { id: "M18", file: "src", what: "an empty token is not missing",
+    find: "if (t === \"\") return",
+    replace: "if (false) return" },
+  { id: "M19", file: "src", what: "a 401 is not fatal",
+    find: "if (res.status === 401) {",
+    replace: "if (res.status === 4010) {" },
+  { id: "M20", file: "src", what: "a rate limit is not fatal",
+    find: "if (remaining === \"0\" || retryAfter || res.status === 429 || /rate limit|abuse/i.test(text)) {",
+    replace: "if (false) {" },
+  { id: "M21", file: "src", what: "the file list is never checked against changed_files",
+    find: "f.filesComplete = f.filesExpected === null ? false : f.files.length === f.filesExpected;",
+    replace: "f.filesComplete = true;" },
+  { id: "M22", file: "src", what: "a missing changed_files count is a complete file list (O7)",
+    find: "f.filesComplete = f.filesExpected === null ? false :",
+    replace: "f.filesComplete = f.filesExpected === null ? true :" },
+  { id: "M23", file: "src", what: "the check-runs total_count cross-check is removed (O8)",
+    find: "if (typeof total === \"number\" && runs.length < total) throw",
+    replace: "if (false) throw" },
+  { id: "M24", file: "src", what: "a failed or running Mac-only check does not block (O9)",
+    find: "if (c.macOnly.state !== \"absent\" && c.macOnly.state !== \"success\") b.push",
+    replace: "if (false) b.push" },
+  { id: "M25", file: "src", what: "a removed tick file counts as rewritten (O18)",
+    find: "if (file.status === \"removed\") { all = false; evidence.push(",
+    replace: "if (file.status === \"removed\") { evidence.push(" },
+  { id: "M26", file: "src", what: "an uncomputed mergeable_state is never read again",
+    find: "round <= 3; round++",
+    replace: "round <= 0; round++" },
+  { id: "M27", file: "src", what: "compare status 'behind' is not read as an ancestor",
+    find: "if (c?.status === \"identical\" || c?.status === \"behind\") return true;",
+    replace: "if (c?.status === \"identical\") return true;" },
+  { id: "M28", file: "src", what: "a shallow checkout's 'no' is conclusive",
+    find: "if (r.status === 1 && !info.shallow && info.current) return false;",
+    replace: "if (r.status === 1) return false;" },
+  { id: "M29", file: "src", what: "--snapshot accepts a page with duplicate markers",
+    find: "if (begins.length !== 1 || ends !== 1) throw",
+    replace: "if (false) throw" },
+  { id: "M30", file: "src", what: "a failed run erases a real snapshot",
+    find: "if (keepIfRealWhenNotGenerated && current !== \"\" && !/^not generated here:/m.test(current)) {",
+    replace: "if (false) {" },
+  { id: "M31", file: "src", what: "PRUNABLE ignores a moved branch tip",
+    find: "} else if (merged[0].headSha === tip) {",
+    replace: "} else if (true) {" },
+  { id: "M32", file: "src", what: "duplicate issue titles are case-sensitive",
+    find: ".trim().toLowerCase();",
+    replace: ".trim();" },
+  { id: "M33", file: "src", what: "a fork PR takes its branch prefix's lane",
+    find: "lane: item.head?.repo?.full_name === repo ? laneOf(item.head?.ref) : \"other\",",
+    replace: "lane: laneOf(item.head?.ref)," },
+  { id: "M34", file: "src", what: "Dependabot PRs are landable",
+    find: "if (f.lane === \"dependabot\") return { cls: \"OWNER-MERGE\"",
+    replace: "if (false) return { cls: \"OWNER-MERGE\"" },
+  { id: "M35", file: "src", what: "PRs from branches no lane owns are landable",
+    find: "if (f.lane === \"other\") return { cls: \"OWNER-MERGE\"",
+    replace: "if (false) return { cls: \"OWNER-MERGE\"" },
+  { id: "M36", file: "src", what: "a rename's old path is not classified",
+    find: "if (f.previous) names.push(f.previous);",
+    replace: "if (false) names.push(f.previous);" },
+  { id: "N01", file: "src", what: "review comments are never checked against the PR's review_comments (finding 3)",
+    find: "else if (comments.length !== f.commentsExpected) f.errors.comments =",
+    replace: "else if (false) f.errors.comments =" },
+  { id: "N02", file: "src", what: "only a SHORT comment list is an error (finding 3)",
+    find: "comments.length !== f.commentsExpected",
+    replace: "comments.length < f.commentsExpected" },
+  { id: "N03", file: "src", what: "a missing review_comments count is not reported as such (finding 3)",
+    find: "if (f.commentsExpected === null) f.errors.comments =",
+    replace: "if (false) f.errors.comments =" },
+  { id: "N04", file: "skill", what: "the skill's re-classify command drops previous_filename (finding 4)",
+    find: "-q '.[] | .filename, (.previous_filename // empty)'",
+    replace: "-q '.[].filename'" },
+  { id: "N05", file: "src", what: "a body ask lands a mac/* PR (finding 5)",
+    find: "    if (/^mac\\/tick-/.test(f.headRef)) ev.push(TICK_NOTE);\n",
+    replace: "    if (/^mac\\/tick-/.test(f.headRef)) ev.push(TICK_NOTE);\n    if (f.ask && blockers.length === 0) return out(\"LAND-UNDER-DR-037\", nat.why, ev);\n" },
+  { id: "N06", file: "src", what: "the ask detector reads sentences about other PRs or the rule as asks (finding 5)",
+    find: "if (/#\\d+|\\b(?:its|their|own|other|others|any|every|all|each|a|an|PRs|pull requests)\\b/i.test(after)) continue;",
+    replace: "" },
+  { id: "N07", file: "src", what: "the ask detector needs no object (finding 5)",
+    find: "if (thisPr || onItsCi) return true;",
+    replace: "return true;" },
+  { id: "N08", file: "src", what: "a negated sentence is an ask",
+    find: "if (/\\b(not|never|no|cannot|can't|won't|don't|do not|without)\\b|n't\\b/i.test(s)) continue;",
+    replace: "" },
+  { id: "N09", file: "src", what: "fenced code is read as the PR's own words",
+    find: ".replace(/```[\\s\\S]*?```/g, \" \")",
+    replace: "" },
+  { id: "N10", file: "skill", what: "the skill has no step that confirms the mail ask (finding 5)",
+    find: "artifacts/lane-messages/mac-*.json",
+    replace: "artifacts/lane-messages/README.md" },
+  { id: "N11", file: "src", what: "the mailbox block is skipped (finding 6)",
+    find: "  if (f.lane === \"lane\" && f.headRef === mailboxBranch) {\n    if (ctx.standing",
+    replace: "  if (false && f.lane === \"lane\" && f.headRef === mailboxBranch) {\n    if (ctx.standing" },
+  { id: "N12", file: "src", what: "any empty draft on the mailbox branch is STANDING (finding 6)",
+    find: "if (ctx.standing && f.number === ctx.standing.pr && f.draft",
+    replace: "if (ctx.standing && f.draft" },
+  { id: "N13", file: "src", what: "no mailbox fallback when lane-mailbox.json is unreadable (finding 6)",
+    find: "ctx.standing?.branch ?? MAILBOX_BRANCH;",
+    replace: "ctx.standing?.branch ?? \"\";" },
+  { id: "N14", file: "src", what: "the mailbox branch has a natural class (finding 6)",
+    find: "if (f.lane === \"lane\" && f.headRef === mailboxBranch) return { cls: null,",
+    replace: "if (false) return { cls: null," },
+  { id: "N15", file: "src", what: "the OLDEST run of a check name is the verdict (finding 7)",
+    find: "if (a > b || (a === b && rank(r) > rank(cur))) latest.set(r.name, r);",
+    replace: "if (a < b || (a === b && rank(r) > rank(cur))) latest.set(r.name, r);" },
+  { id: "N16", file: "src", what: "an id tie keeps the better state (finding 7)",
+    find: "(a === b && rank(r) > rank(cur))",
+    replace: "(a === b && rank(r) < rank(cur))" },
+  { id: "N17", file: "src", what: "every run counts, not the newest per check name (finding 7)",
+    find: "const current = latestByName(runs);",
+    replace: "const current = runs;" },
+  { id: "N18", file: "src", what: "a short branch page is accepted (finding 8)",
+    find: "if (branchList.length < branchTotal) throw",
+    replace: "if (false) throw" },
+  { id: "N19", file: "src", what: "the Link header's last page is not read (finding 8)",
+    find: "if (last) return Number(last[1]);",
+    replace: "if (last) return 0;" },
+  { id: "N20", file: "src", what: "the checkout's absolute path is printed (finding 11)",
+    find: "const where = opts.repoDir === REPO_ROOT ? \"this checkout\" : \"the --repo-dir checkout\";",
+    replace: "const where = `checkout ${opts.repoDir}`;" },
+  { id: "N21", file: "src", what: "a refused read is an unexpected failure (finding 12)",
+    find: "err instanceof ApiError",
+    replace: "err instanceof Array" },
+  { id: "N22", file: "src", what: "a 403 that is not a rate limit exits 3 (finding 12)",
+    find: "[401, 403, 404].includes(err.status) ? 2 : 3",
+    replace: "[401, 404].includes(err.status) ? 2 : 3" },
+  { id: "N23", file: "src", what: "a tick PR's row does not say why the stricter reading holds (finding 10)",
+    find: "if (/^mac\\/tick-/.test(f.headRef)) ev.push(TICK_NOTE);",
+    replace: "" },
+  { id: "N24", file: "src", what: "a tick PR is not a mac/* PR (finding 10)",
+    find: "if (r.startsWith(\"mac/\")) return \"mac\";",
+    replace: "if (r.startsWith(\"mac/\") && !r.startsWith(\"mac/tick-\")) return \"mac\";" },
+  { id: "N25", file: "src", what: "the publication boundary is not an owner-named surface (finding 1)",
+    find: "{ rule: \"publication boundary\", re: /(^|\\/)(check-)?publication[-_]boundary",
+    replace: "{ rule: \"publication boundary\", re: /(^|\\/)(check-)?publication[-_]boundaryX" },
+  { id: "N26", file: "skill", what: "the skill does not say this PR is the owner's (finding 1)",
+    find: "this PR is the owner's, by the tool's rule",
+    replace: "this PR can be landed" },
+  { id: "N27", file: "page", what: "the page does not say this PR is the owner's (finding 1)",
+    find: "this PR is the owner's, by the tool's rule",
+    replace: "this PR can be landed" },
+];
+// <<< mutants-end
 
 // ── self-test: fixture cases, no network ─────────────────────────────────────────────────
 //
@@ -1412,8 +1786,13 @@ function prFx(n, o = {}) {
     mergeable_state: o.mergeable_state ?? "clean",
     files: o.files ?? [{ filename: "docs/notes.md", status: "modified" }],
     changedFiles: o.changedFiles,
+    omitChangedFiles: o.omitChangedFiles ?? false,
     checks: o.checks ?? checksFx({ mac: "success" }),
+    checksTotal: o.checksTotal,
     comments: o.comments ?? [],
+    reportedComments: o.reportedComments,
+    omitReviewComments: o.omitReviewComments ?? false,
+    shortComments: o.shortComments ?? false,
     compare: o.compare ?? "diverged",
     fork: o.fork ?? false,
     unknownReads: o.unknownReads ?? 0,
@@ -1424,7 +1803,7 @@ function worldFx(over = {}) {
   return {
     prs: [], issues: [], branches: [{ name: BASE_FX, commit: { sha: BASE_SHA_FX }, protected: true }], closed: [],
     rate: { limit: 5000, remaining: 4000, reset: 1792700000 },
-    commitsByPath: {}, contents: new Set(), headDate: {}, fail: [], countOverride: undefined, latency: null,
+    commitsByPath: {}, contents: new Set(), headDate: {}, fail: [], countOverride: undefined, latency: null, branchCut: null,
     ...over,
   };
 }
@@ -1462,7 +1841,15 @@ function fakeGitHub(w) {
     if (path === "/rate_limit") return respond(200, { resources: { core: w.rate } });
     if (path === R) return respond(200, { default_branch: BASE_FX, full_name: REPO_FX, open_issues_count: w.countOverride ?? w.prs.length + nonPrIssues().length });
     if (path === `${R}/branches/${BASE_FX}`) return respond(200, { commit: { sha: BASE_SHA_FX } });
-    if (path === `${R}/branches`) return respond(200, pageOf(w.branches, q));
+    if (path === `${R}/branches`) {
+      if (q.get("per_page") === "1") {
+        return respond(200, w.branches.slice(0, 1), w.branches.length > 1 ? { link: `<https://api.github.com/x?per_page=1&page=${w.branches.length}>; rel="last"` } : {});
+      }
+      // branchCut = { page, keep }: that page of the list comes back short (a GitHub hiccup)
+      const cut = w.branchCut && Number(q.get("page") ?? 1) === w.branchCut.page ? w.branchCut.keep : null;
+      const rows = pageOf(w.branches, q);
+      return respond(200, cut === null ? rows : rows.slice(0, cut));
+    }
     if (path === `${R}/pulls`) {
       const state = q.get("state");
       if (state === "open") return respond(200, pageOf([...w.prs].sort((a, b) => a.number - b.number).map(listItem), q));
@@ -1482,7 +1869,11 @@ function fakeGitHub(w) {
       if (!p) return respond(404, { message: "Not Found" });
       const unknown = (p.unknownReads ?? 0) > 0;
       if (unknown) p.unknownReads -= 1;
-      return respond(200, { ...listItem(p), body: p.body, mergeable_state: unknown ? "unknown" : p.mergeable_state, changed_files: p.changedFiles ?? p.files.length });
+      return respond(200, {
+        ...listItem(p), body: p.body, mergeable_state: unknown ? "unknown" : p.mergeable_state,
+        changed_files: p.omitChangedFiles ? undefined : (p.changedFiles ?? p.files.length),
+        review_comments: p.omitReviewComments ? undefined : (p.reportedComments ?? p.comments.length),
+      });
     }
     if ((m = new RegExp(`^${R}/pulls/(\\d+)/files$`).exec(path))) {
       const p = w.prs.find((x) => x.number === Number(m[1]));
@@ -1490,12 +1881,12 @@ function fakeGitHub(w) {
     }
     if ((m = new RegExp(`^${R}/pulls/(\\d+)/comments$`).exec(path))) {
       const p = w.prs.find((x) => x.number === Number(m[1]));
-      return respond(200, pageOf(p.comments, q));
+      return respond(200, p.shortComments ? [] : pageOf(p.comments, q));
     }
     if ((m = new RegExp(`^${R}/commits/([0-9a-f]{40})/check-runs$`).exec(path))) {
       const p = w.prs.find((x) => x.sha === m[1]);
       const runs = p ? p.checks : [];
-      return respond(200, { total_count: runs.length, check_runs: pageOf(runs, q) });
+      return respond(200, { total_count: p?.checksTotal ?? runs.length, check_runs: pageOf(runs, q) });
     }
     if ((m = new RegExp(`^${R}/commits/([0-9a-f]{40})$`).exec(path))) {
       return respond(200, { sha: m[1], commit: { committer: { date: w.headDate[m[1]] ?? agoIso(10) } } });
@@ -1516,11 +1907,11 @@ function fakeGitHub(w) {
   return { fetch, log };
 }
 
-async function runFx_(w, argv = [], { env = {}, textFiles = {}, gitExec } = {}) {
+async function runFx_(w, argv = [], { env = {}, textFiles = {}, gitExec, mailbox = { pr: 439, branch: "lane/mailbox" } } = {}) {
   const out = [];
   const err = [];
   const gh = fakeGitHub(w);
-  const mailbox = resolve(REPO_ROOT, "docs/agent/lane-mailbox.json");
+  const mailboxPath = resolve(REPO_ROOT, "docs/agent/lane-mailbox.json");
   const io = {
     env: { GITHUB_TOKEN: `ghp_${"a".repeat(36)}`, ...env },
     fetchImpl: gh.fetch,
@@ -1528,7 +1919,10 @@ async function runFx_(w, argv = [], { env = {}, textFiles = {}, gitExec } = {}) 
     now: () => NOW_FX,
     gitExec: gitExec ?? (() => ({ status: 128, stdout: "" })),
     readText: (p) => {
-      if (p === mailbox) return JSON.stringify({ pr: 439, branch: "lane/mailbox" });
+      if (p === mailboxPath) {
+        if (mailbox === null) throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+        return JSON.stringify(mailbox);
+      }
       if (p in textFiles) return textFiles[p];
       return readFileSync(p, "utf8");
     },
@@ -1549,6 +1943,14 @@ async function runSelfTest(io) {
   const t = (name, ok, detail = "") => results.push({ name, ok: Boolean(ok), detail });
   const eq = (name, got, want) => t(name, JSON.stringify(got) === JSON.stringify(want), `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
   try {
+
+  // ── the planted-defect table still applies to what it was written against ──
+  if (!io.env?.SGBT_MUTANT) {
+    const texts = readTexts();
+    const broken = MUTANTS.map((m) => ({ m, r: applyMutant(m, texts) })).filter((x) => !x.r.ok).map((x) => `${x.m.id}: ${x.r.why}`);
+    t(`all ${MUTANTS.length} planted defects (--mutants) still apply to the source, skill and page they were written against`, broken.length === 0, broken.join("; "));
+    t("planted-defect ids are unique", new Set(MUTANTS.map((m) => m.id)).size === MUTANTS.length);
+  }
 
   // ── tokens fail closed ──
   for (const v of ["<token>", "your_token_here", "REPLACE_ME", "xxxxxxxx", "changeme", "null", "${GITHUB_TOKEN}", "placeholder"]) {
@@ -1641,6 +2043,8 @@ async function runSelfTest(io) {
   {
     const macAsk = "Owner decision needed: none - the cloud lane may merge under DR-037 once CI is green.";
     const macNo = "The cloud lane may not merge this one; the owner decides.";
+    const macDescribes = "Context: the cloud lane can merge its own PRs under DR-037. This Mac PR is for the owner.";
+    const macOtherPr = "Once this is in, the cloud lane is free to land #1234.";
     const sm = [{ filename: "scripts/check-something-else.mjs" }];
     const w = worldFx({
       prs: [
@@ -1649,15 +2053,37 @@ async function runSelfTest(io) {
         prFx(22, { ref: "mac/safety-thing-negated", files: sm, body: `${GOOD_BODY_FX}\n${macNo}` }),
         prFx(23, { ref: "mac/safety-thing-asked-red", files: sm, body: `${GOOD_BODY_FX}\n${macAsk}`, checks: checksFx({ mac: "success", extra: [{ name: "github-advanced-security", state: "failure" }] }) }),
         prFx(24, { ref: "mac/docs-only", files: [{ filename: "docs/notes.md" }] }),
+        prFx(25, { ref: "mac/describes-the-rule", files: sm, body: `${GOOD_BODY_FX}\n${macDescribes}` }),
+        prFx(26, { ref: "mac/names-another-pr", files: sm, body: `${GOOD_BODY_FX}\n${macOtherPr}` }),
+        prFx(27, { ref: "mac/tick-20261022T010000Z", files: [{ filename: "docs/agent/not-on-mainline.json" }], sha: shaFx(27) }),
+        prFx(28, { ref: "claude/safety-thing-asked", files: sm, body: `${GOOD_BODY_FX}\n${macAsk}` }),
       ],
     });
     const res = await runFx_(w, []);
-    t("a mac/* SAFETY_MACHINERY PR with no ask is MAC-ASK-NEEDED", rowOf(res, 20)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 20).ask === "not-in-body", JSON.stringify(rowOf(res, 20)));
-    t("control: the same PR whose body carries the ask is LAND-UNDER-DR-037", landable(res, 21), JSON.stringify(rowOf(res, 21)));
+    t("a mac/* SAFETY_MACHINERY PR with no ask is MAC-ASK-NEEDED", rowOf(res, 20)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 20).ask === "not-in-body" && rowOf(res, 20).reason === "mac-opened-safety_machinery", JSON.stringify(rowOf(res, 20)));
+    t("an ask found only in the body is MAC-ASK-NEEDED 'ask in body; confirm mail', never LAND (a body has no provenance)", rowOf(res, 21)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 21).ask === "in-body" && rowOf(res, 21).reason === "ask in body; confirm mail" && rowOf(res, 21).blockers.length === 0 && /confirm the mail ask/.test(rowOf(res, 21).evidence.join(" ")), JSON.stringify(rowOf(res, 21)));
+    t("control: the same body on a cloud-lane (claude/*) PR is LAND-UNDER-DR-037, so only the mac/ prefix holds PR 21 back", landable(res, 28), JSON.stringify(rowOf(res, 28)));
     t("a body that says the cloud lane may NOT merge is not an ask", rowOf(res, 22)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 22).ask === "not-in-body");
-    t("asked in the body but a bot check is failing: still MAC-ASK-NEEDED, with the blocker named", rowOf(res, 23)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 23).ask === "in-body" && rowOf(res, 23).blockers.some((b) => /github-advanced-security/.test(b)), JSON.stringify(rowOf(res, 23)));
+    t("asked in the body but a bot check is failing: MAC-ASK-NEEDED, with the blocker named", rowOf(res, 23)?.disposition === "MAC-ASK-NEEDED" && rowOf(res, 23).ask === "in-body" && /not landable now/.test(rowOf(res, 23).reason) && rowOf(res, 23).blockers.some((b) => /github-advanced-security/.test(b)), JSON.stringify(rowOf(res, 23)));
     t("a mac/* autonomous PR with no ask is MAC-ASK-NEEDED", rowOf(res, 24)?.disposition === "MAC-ASK-NEEDED");
-    t("the mac ask is read from the body only, and the report says Mac mail is not read", res.report.notes.some((n) => /Mac lane mail is not read/.test(n)));
+    t("a sentence that only describes the rule (the cloud lane can merge its own PRs) is not an ask", rowOf(res, 25)?.ask === "not-in-body" && rowOf(res, 25).reason === "mac-opened-safety_machinery", JSON.stringify(rowOf(res, 25)));
+    t("a sentence about landing ANOTHER PR (#1234) is not an ask for this one", rowOf(res, 26)?.ask === "not-in-body", JSON.stringify(rowOf(res, 26)));
+    t("an unsuperseded mac/tick-* PR is MAC-ASK-NEEDED, and its row says why the stricter reading holds against LANE_COORDINATION rule 2", rowOf(res, 27)?.disposition === "MAC-ASK-NEEDED" && /rule 2/.test(rowOf(res, 27).evidence.join(" ")) && /opened/.test(rowOf(res, 27).evidence.join(" ")), JSON.stringify(rowOf(res, 27)));
+    t("the report says Mac mail is not read and a body line is never the ask", res.report.notes.some((n) => /Mac lane mail is not read/.test(n) && /confirm mail/.test(n)));
+    for (const [text, want] of [
+      ["Owner decision needed: none - SAFETY_MACHINERY; the cloud lane may merge under DR-037 once CI is green.", true],
+      ["Mac asks the cloud lane to land this PR.", true],
+      ["Context: the cloud lane can merge its own PRs under DR-037. This Mac PR is for the owner.", false],
+      ["Once this is in, the cloud lane is free to land #1234.", false],
+      ["The cloud lane can merge a green PR once CI passes.", false],
+      ["The cloud lane can merge on Tuesdays.", false],
+      ["The cloud lane may merge all of them once CI is green.", false],
+      ["The cloud lane can land #1234 and this one when green.", false],
+      ["The cloud lane may land this PR when CI is green.", true],
+      ["The cloud lane may not merge this one; the owner decides.", false],
+      ["```\nthe cloud lane may merge this PR\n```", false],
+      ["<!-- the cloud lane may merge this PR -->", false],
+    ]) t(`ask detector (${want ? "ask" : "not an ask"}): ${JSON.stringify(text).slice(0, 70)}`, bodyAsksCloudToLand(text) === want);
   }
   {
     const w = worldFx({ prs: [prFx(30, { compare: "behind" }), prFx(31, { compare: "identical" }), prFx(32, { compare: "diverged" }), prFx(33, { compare: "ahead" })] });
@@ -1745,7 +2171,7 @@ async function runSelfTest(io) {
     t("a declared-live PR is IN-FLIGHT, ahead of OWNER-MERGE, with the caller's note", rowOf(res, 72)?.disposition === "IN-FLIGHT" && rowOf(res, 72).natural === "OWNER-MERGE" && /worker B87/.test(rowOf(res, 72).evidence.join(" ")), JSON.stringify(rowOf(res, 72)));
     t("control: undeclared, the same PR is OWNER-MERGE", (await runFx_(w, [])).report.prs.find((p) => p.number === 72).disposition === "OWNER-MERGE");
     t("the mailbox PR named in lane-mailbox.json is STANDING", rowOf(res, 439)?.disposition === "STANDING");
-    t("control: another empty draft on the same branch name is not STANDING", rowOf(res, 73)?.disposition !== "STANDING");
+    t("control: another empty draft on the same branch name (another number) is UNKNOWN, neither STANDING nor LAND", rowOf(res, 73)?.disposition === "UNKNOWN");
     t("control: an empty draft on another branch is not STANDING", rowOf(res, 74)?.disposition !== "STANDING");
     t("a PR touched under 3 hours ago and not declared is flagged, not classified IN-FLIGHT", (() => { const r = rowOf(res, 70); return r.disposition !== "IN-FLIGHT"; })());
   }
@@ -1806,6 +2232,149 @@ async function runSelfTest(io) {
     t("control: a tick whose sim-request has no result on mainline is not SUPERSEDED", rowOf(res, 91)?.disposition !== "SUPERSEDED");
     t("control: a tick whose file mainline did not rewrite after the head is not SUPERSEDED", rowOf(res, 92)?.disposition !== "SUPERSEDED");
     t("a tick whose mainline commit date cannot be read is not SUPERSEDED, and the row says why", rowOf(res, 93)?.disposition !== "SUPERSEDED" && rowOf(res, 93).flags.some((x) => /no readable date/.test(x)), JSON.stringify(rowOf(res, 93)));
+  }
+
+  // ── round 2: the second refute's findings, each beside a control ──
+  {
+    // the review-comment count the PR itself reports
+    const two = [{ id: 1, in_reply_to_id: null }, { id: 2, in_reply_to_id: 1 }];
+    const w = worldFx({
+      prs: [
+        prFx(300, { comments: two, reportedComments: 2, shortComments: true }),
+        prFx(301, { comments: two, reportedComments: 2 }),
+        prFx(302, { comments: [], reportedComments: 0 }),
+        prFx(303, { comments: two, reportedComments: 1 }),
+        prFx(304, { comments: [], omitReviewComments: true }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("review comments listed short of the PR's own count (reports 2, page empty): not LAND, the read error is on the row", rowOf(res, 300)?.disposition === "UNKNOWN" && rowOf(res, 300).threads.method === "unreadable" && rowOf(res, 300).readErrors.some((e) => /^comments: read 0 review comment\(s\) but the PR reports 2/.test(e)) && rowOf(res, 300).blockers.some((b) => /review comments unreadable/.test(b)), JSON.stringify(rowOf(res, 300)));
+    t("control: the same two comments read in full are counted (heuristic, one root), with no read error", rowOf(res, 301)?.threads.method === "heuristic" && rowOf(res, 301).threads.roots === 1 && rowOf(res, 301).readErrors.length === 0, JSON.stringify(rowOf(res, 301)));
+    t("control: zero reported and zero listed is LAND", landable(res, 302), JSON.stringify(rowOf(res, 302)));
+    t("more comments listed than the PR reports is also a read error", rowOf(res, 303)?.disposition === "UNKNOWN" && rowOf(res, 303).readErrors.some((e) => /^comments: read 2 review comment\(s\) but the PR reports 1/.test(e)), JSON.stringify(rowOf(res, 303)));
+    t("a PR detail with no review_comments count leaves the list unchecked: a read error, not LAND", rowOf(res, 304)?.disposition === "UNKNOWN" && rowOf(res, 304).readErrors.some((e) => /no review_comments count/.test(e)), JSON.stringify(rowOf(res, 304)));
+  }
+  {
+    // the newest run of each check name is the verdict; and the guards the first refute found unpinned
+    const gate = (id, state) => runFx(id, GATING_CHECK, state);
+    const mac = (id, state) => runFx(id, "PR — Mac-only checks (full-clone provenance, preflight on macOS)", state);
+    const w = worldFx({
+      prs: [
+        prFx(310, { checks: [gate(1000, "failure"), gate(1001, "success"), mac(1002, "success")] }),
+        prFx(311, { checks: [gate(1001, "failure"), gate(1000, "success"), mac(1002, "success")] }),
+        prFx(312, { idle: 20, checks: [runFx(2000, "CodeQL", "failure"), runFx(2001, "CodeQL", "success"), gate(1000, "success"), mac(1002, "success")] }),
+        prFx(313, { idle: 20, checks: [runFx(2001, "CodeQL", "failure"), runFx(2000, "CodeQL", "success"), gate(1000, "success"), mac(1002, "success")] }),
+        prFx(314, { checks: [gate(1000, "success"), gate(1000, "failure"), mac(1002, "success")] }),
+        prFx(315, { checks: [gate(1000, "failure"), gate(1000, "success"), mac(1002, "success")] }),
+        prFx(316, { checksTotal: 9 }),
+        prFx(317, { omitChangedFiles: true }),
+        prFx(318, { checks: checksFx({ mac: "failure" }) }),
+        prFx(319, { checks: checksFx({ mac: null }) }),
+        prFx(320, { checks: checksFx({ mac: "in_progress" }) }),
+        prFx(321, { mergeable_state: "dirty" }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("an older failed gating run is history when a newer run of the same check passed: LAND", landable(res, 310), JSON.stringify(rowOf(res, 310)));
+    t("control: the NEWEST gating run failed (older one passed): not LAND, blocker names the failure", rowOf(res, 311)?.disposition === "UNKNOWN" && rowOf(res, 311).blockers.includes("gating check failure"), JSON.stringify(rowOf(res, 311)));
+    t("a PR idle 20 days whose older CodeQL run failed and newest passed is not STALE", rowOf(res, 312)?.disposition !== "STALE" && landable(res, 312), JSON.stringify(rowOf(res, 312)));
+    t("control: idle 20 days with the NEWEST CodeQL run failed is STALE (idle-over-14d-red)", rowOf(res, 313)?.disposition === "STALE" && rowOf(res, 313).reason === "idle-over-14d-red", JSON.stringify(rowOf(res, 313)));
+    t("two gating runs with the same id keep the worse state, whichever order they arrive in", rowOf(res, 314)?.disposition === "UNKNOWN" && rowOf(res, 315)?.disposition === "UNKNOWN" && rowOf(res, 314).blockers.includes("gating check failure") && rowOf(res, 315).blockers.includes("gating check failure"));
+    t("a check-runs total_count larger than the runs listed is a read error: not LAND, checks unreadable", rowOf(res, 316)?.disposition === "UNKNOWN" && rowOf(res, 316).readErrors.some((e) => /^checks: .*read 2 of total_count 9/.test(e)) && rowOf(res, 316).blockers.some((b) => /checks unreadable/.test(b)), JSON.stringify(rowOf(res, 316)));
+    t("a PR detail without changed_files is not a complete file list: UNKNOWN, never classified", rowOf(res, 317)?.disposition === "UNKNOWN" && /changed-file list could not be read in full/.test(rowOf(res, 317).reason), JSON.stringify(rowOf(res, 317)));
+    t("a failed Mac-only check blocks LAND", rowOf(res, 318)?.disposition === "UNKNOWN" && rowOf(res, 318).blockers.includes("Mac-only check failure"), JSON.stringify(rowOf(res, 318)));
+    t("control: a PR with no Mac-only check at all lands", landable(res, 319), JSON.stringify(rowOf(res, 319)));
+    t("a conflicting (mergeable_state=dirty) fresh PR is not LAND, and the blocker says so (control: a clean one lands, PR 319)", rowOf(res, 321)?.disposition === "UNKNOWN" && rowOf(res, 321).blockers.some((b) => /conflicting with SignalGrid_Alpha/.test(b)), JSON.stringify(rowOf(res, 321)));
+    t("a Mac-only check still running blocks LAND", rowOf(res, 320)?.disposition === "UNKNOWN" && rowOf(res, 320).blockers.includes("Mac-only check in_progress"), JSON.stringify(rowOf(res, 320)));
+  }
+  {
+    // the mailbox PR is STANDING or UNKNOWN, never LAND
+    const emptyDraft = (n, extra = {}) => prFx(n, { ref: "lane/mailbox", draft: true, files: [], changedFiles: 0, title: "Lane mailbox", ...extra });
+    const w = worldFx({
+      prs: [
+        prFx(439, { ref: "lane/mailbox", draft: false, files: [{ filename: "docs/notes.md" }] }),
+        prFx(441, { ref: "lane/cloud-mail-20261022-000000Z" }),
+        emptyDraft(442, { idle: 20, mergeable_state: "dirty" }),
+      ],
+    });
+    const res = await runFx_(w, []);
+    t("the mailbox PR marked ready and carrying a file is UNKNOWN, never LAND", rowOf(res, 439)?.disposition === "UNKNOWN" && /standing mailbox branch/.test(rowOf(res, 439).reason) && /not a draft/.test(rowOf(res, 439).reason), JSON.stringify(rowOf(res, 439)));
+    t("control: a lane/cloud-mail-* PR with the same file lands", landable(res, 441), JSON.stringify(rowOf(res, 441)));
+    t("another PR on the mailbox branch is UNKNOWN even when idle and conflicting, and is never 'revived' as LAND (natural stays unset)", rowOf(res, 442)?.disposition === "UNKNOWN" && rowOf(res, 442).natural === null, JSON.stringify(rowOf(res, 442)));
+    const noFile = await runFx_(worldFx({ prs: [emptyDraft(439)] }), [], { mailbox: null });
+    t("with lane-mailbox.json unreadable, the mailbox-branch PR is UNKNOWN (neither STANDING nor LAND)", rowOf(noFile, 439)?.disposition === "UNKNOWN" && /unreadable/.test(rowOf(noFile, 439).reason), JSON.stringify(rowOf(noFile, 439)));
+    const ok = await runFx_(worldFx({ prs: [emptyDraft(439)] }), []);
+    t("control: the same draft with the file readable is STANDING", rowOf(ok, 439)?.disposition === "STANDING");
+  }
+  {
+    // a short branch page (page 2 of 250 returns 50) is a read error, as the closed-PR read already was
+    const many = (n) => [{ name: BASE_FX, commit: { sha: BASE_SHA_FX }, protected: true }, ...Array.from({ length: n - 1 }, (_, i) => ({ name: `claude/b-${String(i).padStart(3, "0")}`, commit: { sha: shaFx(5000 + i) }, protected: false }))];
+    const cut = await runFx_(worldFx({ prs: [prFx(1)], branches: many(250), branchCut: { page: 2, keep: 50 } }), []);
+    t("a short branch page (page 2 of 250 returns 50) is refused: exit 3, no queue, the counts named", cut.code === 3 && cut.stdout === "" && /read 150 branches but the repository reports 250/.test(cut.stderr), cut.stderr);
+    const whole = await runFx_(worldFx({ prs: [prFx(1)], branches: many(250) }), []);
+    t("control: the same 250 branches read in full are reported as 250", whole.code === 0 && whole.report.counts.branches.total === 250, whole.stderr);
+  }
+  {
+    // O18 and rule 2: a tick PR that removes a file, and an unsuperseded tick PR
+    const later = (sha) => [{ sha, commit: { committer: { date: agoIso(1) }, message: "Merge pull request #1600 from x/y" } }];
+    const w = worldFx({
+      prs: [
+        prFx(120, { ref: "mac/tick-20260930T000000Z", files: [{ filename: "docs/agent/rewritten.json" }, { filename: "docs/agent/gone.json", status: "removed" }], sha: shaFx(120) }),
+        prFx(121, { ref: "mac/tick-20260930T010000Z", files: [{ filename: "docs/agent/rewritten.json" }, { filename: "docs/agent/gone.json" }], sha: shaFx(121) }),
+      ],
+      headDate: { [shaFx(120)]: agoIso(20), [shaFx(121)]: agoIso(20) },
+      commitsByPath: { "docs/agent/rewritten.json": later("a".repeat(40)), "docs/agent/gone.json": later("f".repeat(40)) },
+    });
+    const res = await runFx_(w, []);
+    t("a mac/tick PR that REMOVES a file is not SUPERSEDED: removal is not rewriting", rowOf(res, 120)?.disposition === "MAC-ASK-NEEDED", JSON.stringify(rowOf(res, 120)));
+    t("control: the same tick with that file modified (and rewritten later on mainline) is SUPERSEDED", rowOf(res, 121)?.disposition === "SUPERSEDED", JSON.stringify(rowOf(res, 121)));
+  }
+  {
+    // the report never prints the absolute path of the checkout (it is committed to a public page)
+    const gitSh = (args) => {
+      const a = args.slice(2);
+      if (a[0] === "rev-parse" && a[1] === "--is-inside-work-tree") return { status: 0, stdout: "true\n" };
+      if (a[0] === "rev-parse" && a[1] === "--verify") return { status: 0, stdout: `${BASE_SHA_FX}\n` };
+      if (a[0] === "rev-parse" && a[1] === "--is-shallow-repository") return { status: 0, stdout: "true\n" };
+      return { status: 128, stdout: "" };
+    };
+    const w = worldFx({ prs: [prFx(1)] });
+    const here = await runFx_(w, [], { gitExec: gitSh });
+    const elsewhere = await runFx_(w, ["--repo-dir", "/virtual/other-checkout"], { gitExec: gitSh });
+    const shown = (r) => `${r.report.sources.ancestry}\n${renderSnapshot(r.report)}\n${renderMarkdown(r.report)}`;
+    t("the report says 'this checkout', never the absolute path of the checkout", /this checkout is shallow/.test(here.report.sources.ancestry) && !shown(here).includes(REPO_ROOT) && !/(^|[\s(])\/(tmp|home|Users|var|root)\//.test(shown(here)), here.report.sources.ancestry);
+    t("control: a --repo-dir checkout is named by the flag, and its path is not printed either", /the --repo-dir checkout is shallow/.test(elsewhere.report.sources.ancestry) && !shown(elsewhere).includes("/virtual/other-checkout"), elsewhere.report.sources.ancestry);
+  }
+  {
+    // a read the whole queue depends on that GitHub refuses: a message and an exit code, not "unexpected failure"
+    const forbidden = { match: /\/repos\/acme\/widgets\/pulls$/, status: 403, message: "Resource not accessible by personal access token" };
+    const denied = await runFx_(worldFx({ prs: [prFx(1)], fail: [forbidden] }), []);
+    t("a 403 that is not a rate limit, on the open-PR list: exit 2 with a message, no queue, not 'unexpected failure'", denied.code === 2 && denied.stdout === "" && /refused or failed a read/.test(denied.stderr) && /403/.test(denied.stderr) && !/unexpected failure/.test(denied.stderr), denied.stderr);
+    const flaky = await runFx_(worldFx({ prs: [prFx(1)], fail: [{ match: /\/repos\/acme\/widgets\/pulls$/, status: 502 }] }), []);
+    t("a persistent 502 on the open-PR list: exit 3 with a message, no queue", flaky.code === 3 && flaky.stdout === "" && /502/.test(flaky.stderr), flaky.stderr);
+    const missing = await runFx_(worldFx({ prs: [prFx(1)], fail: [{ match: /\/repos\/acme\/widgets$/, status: 404 }] }), []);
+    t("a 404 on the repository read: exit 2 (the token cannot see the repository), no queue", missing.code === 2 && missing.stdout === "" && /404/.test(missing.stderr), missing.stderr);
+    const oneFile = await runFx_(worldFx({ prs: [prFx(1), prFx(2)], fail: [{ match: /\/pulls\/1\/files$/, status: 403, message: "forbidden" }] }), []);
+    t("control: a 403 on ONE PR's file list is that PR's UNKNOWN row, and the rest of the queue still prints", oneFile.code === 0 && rowOf(oneFile, 1)?.disposition === "UNKNOWN" && landable(oneFile, 2), oneFile.stderr);
+  }
+  {
+    // finding 1: the PR that adds a first-party skill edits the publication boundary, so the tool itself says it is the owner's
+    const thisPr = [".claude/skills/backlog-landing/SKILL.md", "docs/agent/BACKLOG_LANDING.md", "scripts/backlog-triage.mjs", "scripts/publication-boundary.mjs"].map((filename) => ({ filename }));
+    const w = worldFx({ prs: [prFx(130, { files: thisPr }), prFx(131, { files: thisPr.slice(0, 3) })] });
+    const res = await runFx_(w, []);
+    t("a lane PR that edits scripts/publication-boundary.mjs (what a first-party skill needs) is OWNER-MERGE by the tool's rule", rowOf(res, 130)?.disposition === "OWNER-MERGE" && rowOf(res, 130).reason === "owner-named-surface" && rowOf(res, 130).files.ownerNamed.some((o) => o.rule === "publication boundary"), JSON.stringify(rowOf(res, 130)));
+    t("control: the same list without the publication-boundary file is not held back by an owner-named surface", rowOf(res, 131)?.disposition !== "OWNER-MERGE" || rowOf(res, 131).files.ownerNamed.length === 0, JSON.stringify(rowOf(res, 131)));
+  }
+  {
+    // the skill and the page say what the tool does (a doc that drifts from the tool fails here)
+    const skill = readFileSync(SKILL_FILE, "utf8");
+    const page = readFileSync(PAGE_FILE, "utf8");
+    t("the skill's re-classify command keeps previous_filename, so a file moved out of lib/ is judged on its old path", /pulls\/<n>\/files[^\n]*previous_filename/.test(skill));
+    t("control: the classifier does judge that old path (a rename away from lib/ is DECISION_PATH)", classifyFiles([{ filename: "docs/moved.md" }, { filename: "lib/signalgrid-core/src/old.ts" }]).categories.includes("DECISION_PATH") && classifyFiles([{ filename: "docs/moved.md" }]).tier === "autonomous");
+    t("the skill and the page both say this PR is the owner's, by the tool's rule", /this PR is the owner's, by the tool's rule/.test(skill) && /this PR is the owner's, by the tool's rule/.test(page));
+    t("the skill has the step that confirms a Mac ask in mail before anything lands", /artifacts\/lane-messages\/mac-\*\.json/.test(skill) && /body line/.test(skill));
+    t("the skill and the page say which tick-PR rule holds (the stricter one) against LANE_COORDINATION rule 2", /rule 2/.test(skill) && /stricter/.test(skill) && /rule 2/.test(page) && /stricter/.test(page));
+    t("the page documents the 403 behaviour and the comment-count check", /403/.test(page) && /review_comments/.test(page));
   }
 
   // ── issues and branches ──
@@ -1874,7 +2443,7 @@ async function runSelfTest(io) {
     })();
     t("the markdown report totals add up to the PR count and name every disposition present", md.code === 0 && /\| \*\*Total\*\* \| \*\*7\*\* \|/.test(md.text) && /OWNER-MERGE/.test(md.text) && /SUPERSEDED/.test(md.text), md.text.slice(0, 400));
     t("every request the tool sent was a GET", a.log.length > 0 && a.log.every((l) => l.method === "GET"));
-    t("the source holds no write verb to the API", !/method:\s*["'](POST|PUT|PATCH|DELETE)["']/.test(readFileSync(SELF_FILE, "utf8")));
+    t("the source holds no write verb to the API", !/method:\s*["'](POST|PUT|PATCH|DELETE)["']/.test(withoutMutantTable(readFileSync(SELF_FILE, "utf8"))));
   }
 
   // ── the snapshot writer ──
@@ -1903,6 +2472,11 @@ async function runSelfTest(io) {
       writeFileSync(fresh, `${SNAPSHOT_BEGIN}\n\n${SNAPSHOT_END}\n`);
       const denied = await runFx_(worldFx({ fail: [{ match: /rate_limit/, status: 401 }] }), ["--snapshot", fresh], { env: { GITHUB_TOKEN: "proxy-injected" } });
       t("on a 401 an empty snapshot section is filled with 'not generated here: <reason>'", denied.code === 2 && /not generated here: .*401/.test(readFileSync(fresh, "utf8")), readFileSync(fresh, "utf8"));
+      const forbiddenList = { match: /\/repos\/acme\/widgets\/pulls$/, status: 403, message: "Resource not accessible by personal access token" };
+      const forbiddenPage = join(dir, "forbidden.md");
+      writeFileSync(forbiddenPage, `${SNAPSHOT_BEGIN}\n\n${SNAPSHOT_END}\n`);
+      const forbiddenRun = await runFx_(worldFx({ prs: [prFx(1)], fail: [forbiddenList] }), ["--snapshot", forbiddenPage]);
+      t("on a 403 that is not a rate limit an empty snapshot section is filled with 'not generated here: ...403'", forbiddenRun.code === 2 && /not generated here: .*403/.test(readFileSync(forbiddenPage, "utf8")), readFileSync(forbiddenPage, "utf8"));
       const keep = join(dir, "keep.md");
       writeFileSync(keep, after);
       const kept = await runFx_(worldFx({ fail: [{ match: /rate_limit/, status: 401 }] }), ["--snapshot", keep], { env: { GITHUB_TOKEN: "proxy-injected" } });

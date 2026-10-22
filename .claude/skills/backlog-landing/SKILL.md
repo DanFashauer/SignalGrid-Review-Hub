@@ -39,9 +39,11 @@ lists its flags) and writes nothing unless you pass `--snapshot <page>`, which r
 one block between that page's markers. If it ever merges, comments, closes or writes
 anywhere else, that is a defect: raise a hand. It needs `GH_TOKEN` or `GITHUB_TOKEN`
 (it does not call `gh`) and says so, with exit 2, when the token is missing, a
-placeholder, rejected or anonymous; exit 3 when the lists disagree with the repository's
-own open count. In both cases there is no queue, and an empty page is never an empty
-queue. Do not rebuild one from memory. Read the exit code and the first lines of output:
+placeholder, rejected, anonymous or refused (a 403 that is not a rate limit, or a 404 on
+the repository: the token cannot see it); exit 3 when the lists disagree with the
+repository's own open count, a branch or closed-PR page comes back short, or a read the
+whole queue depends on fails after retries. In every case there is no queue, and an
+empty page is never an empty queue. Do not rebuild one from memory. Read the exit code and the first lines of output:
 they say what was read, when, against which mainline sha, and which source answered
 ancestry. If the tool is missing or exits non-zero, stop and raise a hand (DR-054). A
 by-hand fallback is quoted `gh api` output only: `--paginate`, and `pulls/<n>` for each PR,
@@ -60,13 +62,13 @@ elsewhere (below).
 
 | Disposition | What the tool checked | The brain |
 | --- | --- | --- |
-| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`), or a `mac/*` PR whose body asks the cloud lane to land it; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check passed on the current head; nothing failing or still running; not conflicted; no review thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
-| MAC-ASK-NEEDED | a `mac/*` PR DR-037 lets the cloud lane land only on the Mac's ask, and no ask in its body, or an ask but a blocker the row names | cloud: read `pnpm run lane:inbox` for a mail ask, else one mail; lands none until the Mac names them. Mac: sends the ask |
+| LAND-UNDER-DR-037 | a cloud-lane branch (`claude/*`, `lane/cloud-*`) and never a `mac/*` PR or the mailbox PR; no DECISION_PATH, OWNER_RESERVED or owner-named file; not a draft, not stacked; the gating check's newest run passed on the current head; nothing failing or still running; not conflicted; the review comments read in full (their count equals the PR's own) with no thread it cannot show resolved; the body mentions preflight and breadth | lands it, one at a time (section 3), after the checks in section 3 the tool cannot make |
+| MAC-ASK-NEEDED | any `mac/*` PR no earlier rule placed. The tool never prints LAND for one: DR-037 condition 5 wants the Mac's ask in MAIL, which it does not read. A line in the body that reads as an ask prints `ask in body; confirm mail`. A `mac/tick-*` PR that is not SUPERSEDED is here too: a stricter reading than `docs/LANE_COORDINATION.md` rule 2, and section 4 says why it holds | cloud: confirm the ask in mail (section 3, step 6) and land it under section 3 only when the mail names it; otherwise lands none and sends one mail. Mac: sends the ask in mail |
 | OWNER-MERGE | the diff reaches DECISION_PATH or OWNER_RESERVED, or an owner-named surface (AGENTS.md, the decision records, the launch profile, the launch-claims gate, the publication boundary); or it is a Dependabot PR; or its head is in a fork or its branch prefix is not a lane's own | keeps it mergeable, lists it, never merges it |
 | SUPERSEDED | its head is an ancestor of mainline, or a `mac/tick-*` PR whose every file was rewritten on mainline after its head commit (or is a sim-request whose result is on mainline); the row's evidence lines say which | proposes CLOSE with the evidence, never closes |
-| STALE | idle more than 14 days AND (conflicting OR red: the gating check, the Mac-only check or CodeQL failed). Code scanning, `phase-pr-evidence` and the SBOM check never make a PR red. The row keeps what it would be if revived (`natural`) | asks the owner: revive or close |
+| STALE | idle more than 14 days AND (conflicting OR red: the NEWEST run of the gating check, the Mac-only check or CodeQL failed; an older failed run that a re-run replaced is history). Code scanning, `phase-pr-evidence` and the SBOM check never make a PR red. The row keeps what it would be if revived (`natural`) | asks the owner: revive or close |
 | IN-FLIGHT | only when you passed `--declared-live`. The tool cannot see a worker; a PR touched in the last 3 hours and not declared is flagged, not classified | leaves it alone (section 4) |
-| STANDING | the mailbox PR named in `docs/agent/lane-mailbox.json`: a draft with no files | never lands it, never closes it |
+| STANDING | the mailbox PR named in `docs/agent/lane-mailbox.json`: a draft with no files. Any other PR from that branch is UNKNOWN, never LAND | never lands it, never closes it |
 | UNKNOWN | the rules have no row for what was read, or a fact could not be read; the reason is printed. For a cloud PR it usually means "would be LAND-UNDER-DR-037 once the named blockers clear" | treats it as not landable; fixes the read or waits |
 
 The rules are first-match in the order STANDING, IN-FLIGHT, SUPERSEDED, STALE, then the
@@ -76,11 +78,18 @@ it. UNKNOWN is never LAND: unknown tightens (golden rule 2).
 **What the tool cannot know, and what you do about it.**
 - *Review-thread resolution.* GitHub shows it through GraphQL only. The tool reads each
   PR's review comments through REST and prints `~a/b` (b threads, a with no reply), so any
-  PR with a review thread is held back from LAND. Read the exact count the way
+  PR with a review thread is held back from LAND. It checks the list against the PR's own
+  `review_comments` count: a different number (or no count) makes the comments a read
+  error, which also blocks LAND. Read the exact count the way
   `landing-under-dr-037` does, then pass it as `--threads-file` (`{"1321":{"total":79,"unresolved":0}}`)
   if you want that PR to place as LAND.
-- *Mac mail.* A `mac/*` ask is read from the PR body only. Check the inbox before you
-  mail an ask the Mac already sent.
+- *Mac mail.* The tool does not read it. A body line that reads as an ask is flagged,
+  never trusted: a body has no provenance (every lane pushes as one account, and a body
+  can be rewritten). Section 3, step 6 confirms the ask in mail.
+- *Check names.* The tool takes the newest run of each check name. Two workflows that
+  share a job name collapse to the newer; the gating check, the Mac-only check and CodeQL
+  are unique names, and the live commits show duplicates only for `phase-pr-evidence` and
+  `Label & summarize`.
 - *Whether preflight and breadth really passed.* The tool only checks the body mentions
   both. Condition 2 is yours to verify (section 3).
 - *Whether a branch's work reached mainline another way.* Section 2, step 5.
@@ -123,14 +132,16 @@ on Opus. The coordinator runs none of the bulk.
 
 Run `landing-under-dr-037`: its five conditions on the current head, "The merge call"
 (full 40-character `expectedHeadSha`), the native-client suites, and the merge-alone
-rule. Do not retype them here. A sweep adds five checks.
+rule. Do not retype them here. A sweep adds six checks.
 
 1. **Re-classify the head, not the queue's snapshot.** A push can add a file, and the
    tool's row is as old as the queue. This uses the tool's own classifier and owner-named
-   list, so there is no second copy of either to drift:
+   list, so there is no second copy of either to drift. The `-q` keeps `previous_filename`
+   (the old path of a renamed file), because a file moved out of `lib/**` is still a change
+   to it:
 
    ```bash
-   gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate -q '.[].filename' > "$SCRATCH/files-<n>.txt"
+   gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate -q '.[] | .filename, (.previous_filename // empty)' > "$SCRATCH/files-<n>.txt"
    node --input-type=module -e 'import { classifyFiles } from "./scripts/backlog-triage.mjs"; import { readFileSync } from "node:fs"; const r = classifyFiles(readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean).map((filename) => ({ filename }))); console.log(r.tier, "|", r.ownerNamed.map((o) => o.rule).join("; ") || "no owner-named surface");' "$SCRATCH/files-<n>.txt"
    ```
 
@@ -139,15 +150,18 @@ rule. Do not retype them here. A sweep adds five checks.
    DECISION_PATH or OWNER_RESERVED category, or any owner-named surface, is the owner's. The
    owner-named list is deliberately wider than DR-037's words: a false hit costs the owner a
    glance, a miss lands a boundary change. A PR that adds a first-party skill edits
-   `scripts/publication-boundary.mjs`, so it is the owner's too.
+   `scripts/publication-boundary.mjs`, so it is the owner's too. The PR that added this
+   skill (`claude/build-backlog-landing-skill`) is such a PR, and the tool's classifier
+   prints an owner-named publication-boundary surface for its files: this PR is the owner's, by the tool's rule.
+   A lane keeps it mergeable and does not land it under DR-037.
 2. **Read the review threads exactly.** The tool could only count them. DR-037 condition 3
    is every thread resolved and every bot finding verified: read that on the head, then
    re-run the tool with `--threads-file` if you want the row to say so.
 3. **Establish who opened it.** `user.login` cannot tell: every lane pushes as one
    account, and the rest are Dependabot. The queue's lane column is the branch prefix.
    `claude/*` and `lane/cloud-mail-*` are the cloud lane's; `mac/*` is the Mac's, landed
-   only on the Mac's ask; anything else (`codex/*`, `dependabot/*`) is not yours to land,
-   so file it.
+   only on the Mac's ask in mail (step 6); anything else (`codex/*`, `dependabot/*`) is not
+   yours to land, so file it.
 4. **No quoted preflight and breadth for this head means not landable as it stands.**
    The path is: merge Alpha in, regenerate, run both, push, wait for the check on the
    new head. On the cloud lane that is the saved `land-branch` workflow
@@ -156,6 +170,20 @@ rule. Do not retype them here. A sweep adds five checks.
 5. **After the merge, read it back.** `pulls/<n>` must say `merged: true` with the merge
    sha, and mainline's own gating run on that merge commit must pass. A green merge-ref
    run is not proof (lesson L12). Name the merged sha in your PR comment.
+6. **A `mac/*` PR needs the Mac's ask in mail.** DR-037 condition 5 says the Mac asks "in
+   mail (as #653 did)". A line in the PR body is not that ask: it has no provenance (every
+   lane pushes as one account, and a body can be rewritten after the fact; the Mac's
+   `the cloud lane may merge under DR-037 once CI is green` is a line a template writes).
+   Confirm the mail before anything lands:
+
+   ```bash
+   pnpm run lane:inbox
+   git fetch origin SignalGrid_Alpha && git grep -l -E '#<n>\b' origin/SignalGrid_Alpha -- 'artifacts/lane-messages/mac-*.json'
+   ```
+
+   Read the message the grep names. It must be from the Mac (`"from": "mac"`), name this PR
+   number, and ask the cloud lane to land it. No such message: land nothing, send the Mac
+   one mail (section 5), and say the body line was seen and is not the ask.
 
 A stacked PR (base is not `SignalGrid_Alpha`) waits for its base to land, then merges
 `origin/SignalGrid_Alpha`, never the base's tip (lesson L15). The tool lists it as
@@ -181,15 +209,26 @@ or the tool will place it as an ordinary PR. The reviewer is not the author.
 - `lane/cloud-mail-<stamp>` carries the cloud lane's mail, heartbeats and hands. It is
   the cloud lane's own PR: land it under section 3. When a message file was added it
   also moves the coverage page, so it serializes with the rest.
-- `mac/tick-<stamp>` carries the Mac tick's results. The cloud steward lands them under
-  DR-037 (`docs/LANE_COORDINATION.md`, rule 2) after the lesson L12 check: has mainline
-  moved a counted surface since the page was generated? If so, merge Alpha in and
+- `mac/tick-<stamp>` carries the Mac tick's results. **Two sources disagree about who
+  lands one, and this is the one that holds in a sweep.** `docs/LANE_COORDINATION.md`
+  rule 2 has the cloud steward open each tick PR and merge it after the lesson L12 check,
+  and the objective-loop record says the cloud merges tick PRs under DR-037; but DR-037
+  condition 5 lets the lane land only a PR it opened or was asked to drive.
+  `scripts/mac/lane-tick.sh` opens the PR itself whenever `gh` is on the Mac's PATH, and
+  every lane pushes as one account, so the API cannot say who opened a given tick PR. The
+  tool therefore never reads an unsuperseded tick PR as landable: it prints MAC-ASK-NEEDED.
+  That is the stricter reading, chosen because the tool cannot see the fact rule 2 turns
+  on; it is not a claim that rule 2 is wrong. The steward routine keeps landing the tick
+  PRs it opened, under rule 2. A sweep lands a tick PR only when the steward opened it or
+  the Mac's mail names it (section 3, step 6), and only after the lesson L12 check: has
+  mainline moved a counted surface since the page was generated? If so, merge Alpha in and
   regenerate first. A tick PR is SUPERSEDED only on the tool's per-file evidence (the
   rewriting commit, or the fulfilled request): `artifacts/sim-results/*.json` are records
   of an execution, and closing one that is not on mainline loses the record.
 - `lane/mailbox` is the standing wake channel (`docs/agent/lane-mailbox.json`). The tool
-  prints it as STANDING. It is never merged and never closed, and it never appears in a
-  close list.
+  prints the PR it names (number and branch match, a draft, no files) as STANDING, and any
+  other PR from that branch as UNKNOWN, never LAND. It is never merged and never closed,
+  and it never appears in a close list.
 - Only the addressee acks a message. Never ack the other lane's mail.
 
 ## 5 — Report
@@ -256,8 +295,9 @@ this skill need a `gh` on `PATH`.
 
 - **Can:** run the queue (read-only); keep its own `mac/*` PRs mergeable (separate
   worktree, merge Alpha, regenerate, preflight and breadth, normal push); mail the
-  cloud lane ONE ask naming the Mac PRs ready to land (DR-037 condition 5; #653 did),
-  and put the same ask in the PR body so the queue can read it; dry-run branch cleanup
+  cloud lane ONE ask naming the Mac PRs ready to land (DR-037 condition 5; #653 did).
+  The mail is the ask; a line in the PR body helps a reader, but the queue never lands
+  on it. Dry-run branch cleanup
   with `pnpm run branches:stale` and the "Branch prune" workflow with `apply` unchecked.
 - **Deleting prunable branches is a person's action.** `pnpm run branches:clean` and
   Branch prune with `apply` delete remote branches. CLAUDE.md puts branch deletion
@@ -283,9 +323,9 @@ this skill need a `gh` on `PATH`.
   publication boundary. DR-061, which would let lanes merge decision-path PRs under
   conditions, was an open proposal on 2026-10-22: re-check
   `grep -n '^## DR-061' docs/DECISION_RECORDS.md` before you assume it.
-- Never merge a Mac PR without an ask; never merge on CI green alone; never merge
-  on a head you have not re-read; never land two PRs in parallel that both move the
-  manifest.
+- Never merge a Mac PR without the Mac's ask in mail (DR-037 condition 5); a line in the
+  PR body is not that ask. Never merge on CI green alone; never merge on a head you have
+  not re-read; never land two PRs in parallel that both move the manifest.
 - Never close a PR or an issue, delete a branch, or remove a worktree. File the
   proposal with its evidence; a person acts.
 - Never force-push, rebase someone's branch, amend a worker's commit, or use
@@ -325,7 +365,8 @@ will not tolerate.
 | Branch deletion is a person's act; the prune rules | CLAUDE.md "Ask before"; `docs/BRANCHES.md`; `docs/BRANCH_HYGIENE.md`; `scripts/prune-merged-branches.mjs` |
 | New commit not amend; worker never lands itself; `land-branch` | `orchestrator-over-workers` |
 | Hands, bundling, never ack the other lane's mail | `raised-hands`; DR-054 |
-| Mailbox PR never merged or closed; tick PRs; mail asks for judgment | `docs/LANE_COORDINATION.md` |
+| Mailbox PR never merged or closed; tick PRs; mail asks for judgment | `docs/LANE_COORDINATION.md` (rule 2 for tick PRs; section 4 says why a sweep reads them more strictly than rule 2 does) |
+| A Mac PR lands only on the Mac's ask in mail | DR-037, condition 5 ("in mail (as #653 did)") |
 | Stacked PRs, stale coverage page, fabricated ids, worktrees | `docs/agent/LESSONS.md` L15, L12, L16, L22 |
 | Look before you create; secondary limits | `scripts/mac/gh-pr.mjs` |
 

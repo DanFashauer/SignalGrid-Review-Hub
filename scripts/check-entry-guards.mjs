@@ -35,16 +35,19 @@
 //   1. in any tracked `scripts/**/*.mjs`, the SUFFIX form (the first defect above);
 //   2. in the same files, a SHAPE (rawGuards): a statement that compares `process.argv[1]` with the module's
 //      own path unless it goes through `isMainModule` or a realpath call wraps EACH compared operand; a literal
-//      `.endsWith(..)`/`.startsWith(..)`/`.includes(..)` test or a basename compare of `process.argv[1]`; an
-//      `isMainModule` call with swapped arguments. Read from code through a lexer (comments, strings and regex
+//      `.endsWith(..)`/`.startsWith(..)`/`.includes(..)` test or a basename compare of `process.argv[1]`; every
+//      `isMainModule` reference that is not the named import or an exact direct call (swapped, aliased, nested, member, `?.(`,
+//      `.call`, a wrapper function). Judged one comparison at a time. Read from code through a lexer (comments, strings and regex
 //      literals blanked, template expressions kept); `process.argv[1]` is recognised as .argv[1], ?.[1], .at(1),
 //      ["argv"][1] and through `const x = process.argv[1]` / `const [, x] = process.argv`; the self path as
 //      import.meta.url / .filename and through a `const` bound to fileURLToPath(..), resolve(..) of it or
 //      `new URL(import.meta.url).pathname`. NOT detected, each pinned as a miss in the self-test:
 //      a self path built by a function the detector cannot see; a comparison split across two statements by a
 //      boolean; `let x; x = process.argv[1]`; `const args = process.argv; args[1]`; `const { argv: [, x] } =
-//      process`; `import { argv } from "node:process"`; any argv read through a parameter. The lexer is a
-//      heuristic, not a parser;
+//      process`; `import { argv } from "node:process"`; any argv read through a parameter; inversion of an exact
+//      helper call (`!(isMainModule(..))`, `=== false`, `|| run()`); a `/` after `)` read as a division, which can
+//      hide an import later on the same line; a gate started as `node -e "await import('<gate>')" <gate path>`
+//      (argv[1] is then the gate path; the helper has the same property). The lexer is a heuristic, not a parser;
 //   3. scripts that ship ALONE inside a container (scripts/lib/shipped-imports.mjs): one container per compose
 //      service (all tracked compose files merged by service name, YAML merge keys resolved) and per Dockerfile
 //      stage (a compose-built Dockerfile's other stages included); a relative import of a file that container does
@@ -60,7 +63,8 @@
 //      every non-bind mount (named volume, absolute host path, tmpfs) treated as hiding everything the image holds
 //      under its target; bare-specifier, `require`, `createRequire` and `new URL` references; imports read only
 //      from scripts/**/*.{mjs,cjs,js}; a RUN is not modelled, so a copied script that is never run is still
-//      checked.
+//      checked; the container's command and entrypoint (a volume over the directory an entry file lives in hides
+//      it, unreported).
 //
 // THIS GATE DOES NOT DEPEND ON THE HELPER TO RUN. Its own entry guard is written out below and, before anything
 // else, it exercises `isMainModule` (helperCanary): a helper that silently breaks makes every adopter exit 0 with
@@ -71,14 +75,14 @@
 //
 // SCOPE IS DERIVED: `git ls-files scripts/**/*.mjs`, so a new script joins the scan the
 // moment it is tracked; an untracked scratch file cannot widen or narrow it.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { codeOnly } from "./lib/code-only.mjs";
 import { isMainModule } from "./lib/is-main.mjs";
-import { makeTree, shippedImportProblems } from "./lib/shipped-imports.mjs";
+import { importsOf, makeTree, shippedImportProblems } from "./lib/shipped-imports.mjs";
 
 export { codeOnly };
 
@@ -126,7 +130,7 @@ const DECLARED_RAW_GUARD_DEBT = new Map([
     {
       reason:
         "shared surface (CLAUDE.md, Multiple Claude lanes): declared here, converted by the lane that owns it",
-      hits: ["const IS_MAIN = process.argv[1] !== undefined && import.meta.url === new URL(` (resolve(process.argv[1]))`).href"],
+      hits: ["constIS_MAIN=process.argv[1]!==undefined&&import.meta.url===newURL(`(resolve(process.argv[1]))`).href"],
     },
   ],
   [
@@ -134,7 +138,7 @@ const DECLARED_RAW_GUARD_DEBT = new Map([
     {
       reason:
         "its entry guard is converted; the remaining finding is a fail-loud canary (`basename(argv[1]) === basename(self)` with extra args refuses when the guard said 'imported'), which is not an entry guard",
-      hits: ["else if (process.argv[1] && basename(process.argv[1]) === basename(fileURLToPath(import.meta.url)) && process.argv.length > 2)"],
+      hits: ["elseif(process.argv[1]&&basename(process.argv[1])===basename(fileURLToPath(import.meta.url))&&process.argv.length>2)"],
     },
   ],
   [
@@ -142,7 +146,7 @@ const DECLARED_RAW_GUARD_DEBT = new Map([
     {
       reason:
         "build-tick.sh classify_change extracts this ONE file with `git show` into a cache dir and imports it there, where a relative `./lib/is-main.mjs` cannot resolve; its guard stays self-contained until the extraction ships the helper too",
-      hits: ["if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)"],
+      hits: ["if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)"],
     },
   ],
   [
@@ -150,7 +154,7 @@ const DECLARED_RAW_GUARD_DEBT = new Map([
     {
       reason:
         "launch-profile family: the owner merges launch-surface scripts, so the conversion is left to that merge",
-      hits: ["if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)"],
+      hits: ["if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)"],
     },
   ],
 ]);
@@ -177,22 +181,127 @@ const escapeRe = (n) => n.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 const wordOf = (names) => (names.length ? new RegExp(`(?<![\\w$])(?:${names.map(escapeRe).join("|")})(?![\\w$])`) : null);
 const REAL_CALL = /\breal\w*\s*\(/;
 
+const nowhite = (t) => t.replace(/\s+/g, "");
+
+/** Scratch directories this process made; removed on exit and on SIGINT/SIGTERM so an interrupted run leaks none. */
+const SCRATCH = new Set();
+const scratchDir = (prefix) => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  SCRATCH.add(dir);
+  return dir;
+};
+const dropScratch = (dir) => {
+  rmSync(dir, { recursive: true, force: true });
+  SCRATCH.delete(dir);
+};
+const dropAllScratch = () => {
+  for (const d of [...SCRATCH]) dropScratch(d);
+};
+
 /**
- * Pure: the symlink-blind entry guards in one file's text, with line numbers. Not a list of spellings but a
- * SHAPE, read from code (comments, strings and regex literals blanked): a statement that
- *   - compares `process.argv[1]` (spelled .argv[1], ?.[1], .at(1), ["argv"][1], or a name bound to it by
- *     `const x = process.argv[1]` or `const [, x] = process.argv`) with this module's own path (import.meta.url,
- *     import.meta.filename, or a name bound to `fileURLToPath(import.meta.url)` / `resolve(...)` of it /
- *     `new URL(import.meta.url).pathname`), either operand order, however wrapped, unless a realpath call wraps
- *     EACH compared operand;
- *   - tests process.argv[1] with .endsWith/.startsWith/.includes against a literal (the first defect, in a
- *     spelling the suffix detector does not see), or compares its basename;
- *   - calls `isMainModule` with its arguments swapped (the body then never runs).
+ * Pure: the TERMS of an expression in code form: it is split at every depth-0 separator (`&&` `||` `??` `&` `|` `?` `:` `,`),
+ * and each parenthesised/bracketed/braced group is split again from its inside, so every comparison is judged against its
+ * OWN two operands and a realpath pair in one term cannot excuse a raw comparison in another. `?.` is not a separator.
+ * Each term is { text, offset } (offset into `expr`); a term keeps its nested groups' text.
+ */
+export function termsOf(expr, base = 0, out = []) {
+  let depth = 0;
+  let start = 0;
+  let open = 0;
+  const cut = (end, next) => {
+    out.push({ text: expr.slice(start, end), offset: base + start });
+    start = next;
+  };
+  for (let i = 0; i < expr.length; i += 1) {
+    const c = expr[i];
+    const d = expr[i + 1];
+    if (c === "(" || c === "[" || c === "{") {
+      if (depth === 0) open = i;
+      depth += 1;
+    } else if (c === ")" || c === "]" || c === "}") {
+      depth -= 1;
+      if (depth === 0) termsOf(expr.slice(open + 1, i), base + open + 1, out);
+    } else if (depth === 0) {
+      if ((c === "&" && d === "&") || (c === "|" && d === "|") || (c === "?" && d === "?")) {
+        cut(i, i + 2);
+        i += 1;
+      } else if (c === "&" || c === "|" || c === "," || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);
+    }
+  }
+  out.push({ text: expr.slice(start), offset: base + start });
+  return out;
+}
+
+/** Index just past the `)` that closes the `(` at `open`, in code form; -1 when unbalanced. */
+function closeParen(code, open) {
+  let depth = 0;
+  for (let i = open; i < code.length; i += 1) {
+    if (code[i] === "(") depth += 1;
+    else if (code[i] === ")") {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+const EXACT_ARGS = "process.argv[1],import.meta.url";
+
+/**
+ * Pure: every reference to `isMainModule` that is NOT one of the four sanctioned forms - the named import clause, a definition,
+ * a plain `export { isMainModule }`, a direct call written exactly `isMainModule(process.argv[1], import.meta.url)` - with
+ * balanced parentheses. Aliases (`const im = isMainModule`), `?.(`, `.call`, member calls (`ns.isMainModule(`), a `x as
+ * isMainModule` re-export, a dynamic destructure, a default import and a call with any other arguments (swapped, another index,
+ * nested, a wrapper's parameters) each leave the body never running or running on import. NOT judged (named as ceilings):
+ * inversion of an exact call (`!(isMainModule(..))`, `=== false`, `|| run()`).
+ */
+function helperReferences(code) {
+  const found = [];
+  const clauses = [...code.matchAll(/\bimport\s*\{([^}]*)\}\s*from\b/g)].map((m) => [m.index, m.index + m[0].length, m[1]]);
+  for (const m of code.matchAll(/(?<![\w$])isMainModule(?![\w$])/g)) {
+    const i = m.index;
+    const clause = clauses.find(([lo, hi]) => i >= lo && i < hi);
+    if (clause) {
+      if (new RegExp(String.raw`(?<![\w$])isMainModule\s+as\s`).test(clause[2])) found.push([i, "re-binds the imported isMainModule under another name"]);
+      continue; // the specifier is checked by helperImportProblems
+    }
+    const before = code.slice(Math.max(0, i - 40), i);
+    const after = code.slice(i + m[0].length);
+    if (/\b(?:function|const|let|var|class)\s+$/.test(before) || /\basync\s+function\s+$/.test(before)) continue; // a definition (judged by helperImportProblems)
+    if (/\bexport\s*\{[^}]*$/.test(before) && /^\s*[,}]/.test(after) && !/\bas\s+$/.test(before)) continue; // `export { isMainModule }`
+    if (/\bimport\s+$/.test(before)) {
+      found.push([i, "default-imports a binding named isMainModule"]);
+      continue;
+    }
+    if (/(?:\.|\?\.)\s*$/.test(before)) {
+      found.push([i, "calls or reads isMainModule through a member or namespace"]);
+      continue;
+    }
+    const open = after.search(/\S/);
+    if (open < 0 || after[open] !== "(") {
+      found.push([i, "references isMainModule other than as a direct call (an alias, ?.(, .call or a re-export)"]);
+      continue;
+    }
+    const end = closeParen(code, i + m[0].length + open);
+    const args = end < 0 ? "" : nowhite(code.slice(i + m[0].length + open + 1, end - 1));
+    if (args !== EXACT_ARGS) found.push([i, "calls isMainModule with something other than exactly (process.argv[1], import.meta.url) - swapped, aliased, another index, nested, or a wrapper's parameters"]);
+  }
+  return found;
+}
+
+/**
+ * Pure: the symlink-blind entry guards in one file's text, with line numbers. Not a list of spellings but a SHAPE, read from
+ * code (comments, strings and regex literals blanked), judged one COMPARISON at a time (termsOf):
+ *   - `process.argv[1]` (spelled .argv[1], ?.[1], .at(1), ["argv"][1], or a name bound to it by `const x = process.argv[1]` or
+ *     `const [, x] = process.argv`) compared with this module's own path (import.meta.url, import.meta.filename, or a name
+ *     bound to `fileURLToPath(import.meta.url)` / `resolve(...)` of it / `new URL(import.meta.url).pathname`), either operand
+ *     order, however wrapped, unless a realpath call wraps EACH compared operand;
+ *   - `.endsWith(`/`.startsWith(`/`.includes(` with the self path on one side and process.argv[1] on the other, in either
+ *     order and across lines (kind "suffix": the first defect), or with process.argv[1] on one side and a literal on the
+ *     other, or a basename compare of process.argv[1];
+ *   - every `isMainModule` reference that is not a sanctioned form (helperReferences).
  * A raw comparison ORed with a helper call is still a finding: the helper call is removed before the rest is read.
- * KNOWN MISSES, each pinned as a miss in the self-test (so this list is the measured one): a self path built by a
- * function the detector cannot see; a comparison split across two statements by an intermediate boolean;
- * `let entry; entry = process.argv[1]`; `const args = process.argv; args[1]`; `const { argv: [, entry] } = process`;
- * `import { argv } from "node:process"`; any argv read through a parameter.
+ * NOT detected, each pinned as a miss in the self-test: see KNOWN_MISSES.
  */
 export function rawGuards(text, { callsHelperFreely = false } = {}) {
   const code = codeOnly(text);
@@ -200,45 +309,45 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
   const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);
   const selfWord = wordOf(names(SELF_ALIAS));
   const out = [];
-  const add = (reason, at, from, to) => {
-    out.push({ line: code.slice(0, at).split("\n").length, text: code.slice(from, to).replace(/\s+/g, " ").trim().slice(0, 160), reason });
+  const add = (reason, at, from, to, kind = "raw") => {
+    const t = code.slice(from, to).replace(/\s+/g, " ").trim();
+    out.push({ line: code.slice(0, at).split("\n").length, text: t.slice(0, 160), key: nowhite(code.slice(from, to)), reason, kind });
   };
-  // every `isMainModule(` call (not its definition) must be EXACTLY (process.argv[1], import.meta.url): anything else
-  // (swapped, aliased, another index, negated) makes the body run when it should not, or never run at all.
-  if (!callsHelperFreely) {
-    for (const m of code.matchAll(/(?<!\bfunction\s)\bisMainModule\s*\(([^()]*)\)/g)) {
-      const args = m[1].replace(/\s+/g, "");
-      const negated = /!\s*$/.test(code.slice(Math.max(0, m.index - 4), m.index));
-      if (args !== "process.argv[1],import.meta.url" || negated) {
-        const at = m.index;
-        add("calls isMainModule with something other than exactly (process.argv[1], import.meta.url) - swapped, aliased, another index or negated; the body then never runs, or runs on import", at, at, m.index + m[0].length);
-      }
-    }
-  }
+  if (!callsHelperFreely) for (const [at, why] of helperReferences(code)) add(why, at, at, at + "isMainModule".length, "helper");
   let start = 0;
   const flush = (end) => {
     const raw = code.slice(start, end);
     const whole = raw.replace(/\bisMainModule\s*\(\s*process\s*\.\s*argv\s*\[\s*1\s*\]\s*,\s*import\s*\.\s*meta\s*\.\s*url\s*\)/g, " ");
-    // A statement may hold several comparisons joined by && / || / ??: each piece is judged on its own, so a realpath
-    // pair in one comparison cannot excuse a raw comparison in another.
-    let offset = 0;
-    for (const piece of whole.split(/(&&|\|\||\?\?)/)) {
-      const here = offset;
-      offset += piece.length;
-      if (/^(&&|\|\||\?\?)$/.test(piece)) continue;
-      const argvHit = ARGV1.exec(piece) ?? (argvWord ? argvWord.exec(piece) : null);
+    for (const term of termsOf(whole)) {
+      const argvHit = ARGV1.exec(term.text) ?? (argvWord ? argvWord.exec(term.text) : null);
       if (!argvHit) continue;
-      const op = /[!=]==?/.exec(piece);
-      const selfHit = SELF_PATH.test(piece) || (selfWord !== null && selfWord.test(piece));
-      // "realpath on both sides" means a realpath call inside EACH operand of the comparison, not anywhere in the statement.
-      const realBoth = op !== null && REAL_CALL.test(piece.slice(0, op.index)) && REAL_CALL.test(piece.slice(op.index + op[0].length));
+      const selfHit = SELF_PATH.test(term.text) || (selfWord !== null && selfWord.test(term.text));
+      const method = /\.\s*(?:endsWith|startsWith|includes)\s*\(/.test(term.text);
+      // depth-0 comparison operator of THIS term
+      let depth = 0;
+      let op = null;
+      for (let i = 0; i < term.text.length && !op; i += 1) {
+        const c = term.text[i];
+        if ("([{".includes(c)) depth += 1;
+        else if (")]}".includes(c)) depth -= 1;
+        else if (depth === 0) {
+          const m = /^(?:===|!==|==|!=)/.exec(term.text.slice(i));
+          if (m) op = { index: i, length: m[0].length };
+        }
+      }
+      const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));
       let reason = null;
-      if (op && selfHit && !realBoth) reason = "compares process.argv[1] with this module's own path";
-      else if (new RegExp(`(?:${ARGV1_SRC})\\s*\\)?\\s*\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(`).test(piece)) reason = "tests process.argv[1] against a literal (the basename-suffix defect)";
-      else if (op && new RegExp(`\\bbasename\\s*\\(\\s*(?:${ARGV1_SRC})\\s*\\)`).test(piece)) reason = "compares the basename of process.argv[1]";
+      let kind = "raw";
+      if (method && selfHit) {
+        reason = "tests process.argv[1] against this module's own path with endsWith/startsWith/includes (the basename-suffix defect)";
+        kind = "suffix";
+      } else if (op && selfHit && !realBoth) reason = "compares process.argv[1] with this module's own path";
+      else if (new RegExp(`(?:${ARGV1_SRC})\\s*\\)?\\s*\\.\\s*(?:endsWith|startsWith|includes)\\s*\\(`).test(term.text)) {
+        reason = "tests process.argv[1] against a literal (the basename-suffix defect)";
+        kind = "suffix";
+      } else if (op && new RegExp(`\\bbasename\\s*\\(\\s*(?:${ARGV1_SRC})\\s*\\)`).test(term.text)) reason = "compares the basename of process.argv[1]";
       if (reason) {
-        // the finding is reported once per statement, anchored on the first argv read
-        add(reason, start + here + argvHit.index, start, end);
+        add(reason, start + term.offset + argvHit.index, start, end, kind);
         break;
       }
     }
@@ -249,7 +358,21 @@ export function rawGuards(text, { callsHelperFreely = false } = {}) {
   return out;
 }
 
-const HELPER_CALL = /isMainModule\(\s*process\.argv\[1\]\s*,\s*import\.meta\.url\s*\)/;
+/** The detector's pinned misses, in the words every ceiling list uses. */
+export const KNOWN_MISSES = [
+  "a self path built by a function the detector cannot see",
+  "a comparison split across two statements by a boolean",
+  "`let x; x = process.argv[1]`",
+  "`const args = process.argv; args[1]`",
+  "`const { argv: [, x] } = process`",
+  '`import { argv } from "node:process"`',
+  "any argv read through a parameter",
+  "inversion of an exact helper call (`!(isMainModule(..))`, `=== false`, `|| run()`)",
+  "a `/` after `)` read as a division, which can hide an import later on the same line",
+  "a gate started as `node -e \"await import('<gate>')\" <gate path>` (argv[1] is then the gate path; the helper has the same property)",
+];
+
+const HELPER_CALL = /(?<![\w$.])isMainModule\s*\(\s*process\.argv\[1\]\s*,\s*import\.meta\.url\s*\)/;
 
 /**
  * Child process, not a regex: start a helper-guarded scratch module through a SYMLINKED
@@ -257,7 +380,7 @@ const HELPER_CALL = /isMainModule\(\s*process\.argv\[1\]\s*,\s*import\.meta\.url
  * the self-test can feed it a mutant.
  */
 export function probeHelper(helperSource) {
-  const dir = mkdtempSync(join(tmpdir(), "entry-guard-"));
+  const dir = scratchDir("entry-guard-");
   const ran = (args, cwd) => {
     try {
       return execFileSync(process.execPath, args, { encoding: "utf8", cwd }).includes("BODY-RAN");
@@ -291,33 +414,33 @@ export function probeHelper(helperSource) {
       importedFromEvalNoArg: ran(["--input-type=module", "-e", `await import(${spec});`], dir),
     };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    dropScratch(dir);
   }
 }
 
 /** Pure: the suffix-form entry guards in one file's text, with line numbers. */
 export function suffixGuards(text) {
-  const out = [];
-  text.split("\n").forEach((line, i) => {
-    // Comments are not call sites — this file quotes the bad form four times above.
-    const code = line.trimStart();
-    if (code.startsWith("//") || code.startsWith("*")) return;
-    if (/import\.meta\.url\s*\.\s*endsWith\s*\(/.test(line) && /process\.argv\[1\]/.test(line)) {
-      out.push({ line: i + 1, text: line.trim() });
-    }
-  });
-  return out;
+  // A statement, not a line: the guard may be wrapped over several lines and the operands may come in either order.
+  return rawGuards(text, { callsHelperFreely: true }).filter((h) => h.kind === "suffix").map((h) => ({ line: h.line, text: h.text }));
 }
 
 /** Pure: does this text carry an EXACT entry guard: the helper call, or either raw spelling? */
 export function hasExactGuard(text) {
   const code = codeOnly(text);
-  return HELPER_CALL.test(code) || RAW_GUARD_PATTERNS.some((re) => re.test(code));
+  return (HELPER_CALL.test(code) && importsHelperByName(text)) || RAW_GUARD_PATTERNS.some((re) => re.test(code));
+}
+
+/** Pure: does this file import `isMainModule` by NAME from a module named is-main.mjs (the path is judged by helperImportProblems)? */
+function importsHelperByName(text) {
+  for (const m of codeOnly(text).matchAll(/\bimport\s*\{[^}]*(?<![\w$])isMainModule(?![\w$])[^}]*\}\s*from\s*(["'])(\s*)\1/dg)) {
+    if (/(?:^|\/)is-main\.mjs$/.test(text.slice(m.indices[2][0], m.indices[2][1]))) return true;
+  }
+  return false;
 }
 
 /** Pure: does this file import the shared helper AND call it, outside comments and strings? */
 export function adoptsHelper(text) {
-  return /\bimport\b[^;]*["'](?:\.\.?\/)+(?:lib\/)?is-main\.mjs["']/.test(codeOnly(text, true)) && HELPER_CALL.test(codeOnly(text));
+  return importsHelperByName(text) && HELPER_CALL.test(codeOnly(text));
 }
 
 const COMPOSE_NAME = /(?:^|\/)(?:[^/]*compose[^/]*)\.ya?ml$/i;
@@ -362,6 +485,11 @@ function liveShipped({ all: files, read: readFn } = {}) {
   return { ...r, fixtureIdp, problems: [...c.problems, ...d.problems, ...r.problems], composeFiles: c.items.length, dockerFiles: d.items.length };
 }
 
+function trackedDefinitionFiles() {
+  const out = execFileSync("git", ["ls-files", "-z", "--", "scripts/*.js", "scripts/**/*.js", "scripts/*.cjs", "scripts/**/*.cjs"], { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return out.split("\0").filter(Boolean);
+}
+
 function trackedScripts() {
   const out = execFileSync("git", ["ls-files", "--", "scripts/*.mjs", "scripts/**/*.mjs"], {
     cwd: repoRoot,
@@ -371,7 +499,7 @@ function trackedScripts() {
   return out.trim().split("\n").filter(Boolean);
 }
 
-function selfTest() {
+async function selfTest() {
   const checks = [];
   // ASSEMBLED FROM PARTS, deliberately. Spelled out, these fixture lines are themselves
   // matches, and this file would fail its own gate the moment it became tracked — which
@@ -398,7 +526,7 @@ function selfTest() {
   // would be a finding in this very file once it is quoted wrongly.
   const RAW_URL = ["import.meta.url === pathToFileURL(", "process.argv[1]", ").href"].join("");
   const RAW_RES = ["resolve(", "process.argv[1]", ") === fileURLToPath(import.meta.url)"].join("");
-  const helper = "if (isMainModule(process.argv[1], import.meta.url)) {\n  run();\n}\n";
+  const helper = 'import { isMainModule } from "./lib/is-main.mjs";\nif (isMainModule(process.argv[1], import.meta.url)) {\n  run();\n}\n';
   checks.push(["THE RAW URL SPELLING IS A FINDING", rawGuards(`if (process.argv[1] && ${RAW_URL}) {\n}\n`).length === 1]);
   checks.push(["THE RAW RESOLVE SPELLING IS A FINDING", rawGuards(`const isEntry = process.argv[1] && ${RAW_RES};\n`).length === 1]);
   checks.push(["…with its line number", rawGuards(`x();\nif (${RAW_URL}) {\n}\n`)[0]?.line === 2]);
@@ -445,7 +573,7 @@ function selfTest() {
   // H1: the gate that watches the helper must not depend on it. The canary on the real helper is quiet and on every broken copy loud.
   checks.push(["H1 the helper canary is quiet on the real helper", helperCanary(isMainModule).length === 0]);
   const canaryOf = (src) => {
-    const dir = mkdtempSync(join(tmpdir(), "entry-guard-canary-"));
+    const dir = scratchDir("entry-guard-canary-");
     try {
       writeFileSync(join(dir, "is-main.mjs"), src);
       writeFileSync(join(dir, "run.mjs"), `import { helperCanary } from ${JSON.stringify(import.meta.url)};\nimport { isMainModule } from "./is-main.mjs";\nconsole.log(JSON.stringify(helperCanary(isMainModule)));\n`);
@@ -453,14 +581,14 @@ function selfTest() {
     } catch {
       return ["the canary run itself failed"];
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      dropScratch(dir);
     }
   };
 
   // H1, end to end: a COPY of this gate beside a broken helper must exit 1 and say the helper is broken. The copy is
   // started WITHOUT --self-test (that would recurse when the canary is the thing under test); its canary runs first, so it needs no git tree; node_modules is linked for `yaml`.
   const gateWithHelper = (helperSrc) => {
-    const dir = mkdtempSync(join(tmpdir(), "entry-guard-gate-"));
+    const dir = scratchDir("entry-guard-gate-");
     try {
       mkdirSync(join(dir, "scripts", "lib"), { recursive: true });
       for (const f of ["check-entry-guards.mjs", "lib/code-only.mjs", "lib/shipped-imports.mjs"]) writeFileSync(join(dir, "scripts", f), readFileSync(join(repoRoot, "scripts", f)));
@@ -471,7 +599,7 @@ function selfTest() {
     } catch (err) {
       return { status: -1, stderr: String(err && err.message) };
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      dropScratch(dir);
     }
   };
   const brokenGate = gateWithHelper(helperSource.replace('import { fileURLToPath } from "node:url";\n', ""));
@@ -595,13 +723,20 @@ function selfTest() {
   checks.push(["D5 import-looking text inside another string or template is not an import", n(ship([compose(svc("idp", ["./scripts/qs.mjs:/app/qs.mjs"]))], [], treeOf({ "scripts/qs.mjs": "const example = 'import x from \"./missing.mjs\"';\nconst t = `from \"./also-missing.mjs\"`;\nconst u = \"import('./nope.mjs')\";\n" }))) === 0]);
   checks.push(["R5-A parent directories of a destination are directories (COPY x /app after COPY y /app/other/)", n(dock("FROM node\nCOPY scripts/other/ /app/other/\nCOPY scripts/lib/ /lib/\nCOPY scripts/e.mjs /app\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n', "scripts/other/o.mjs": "export const o = 1;\n" }, SLIM))) >= 1 && n(dock("FROM node\nCOPY scripts/lib/ /app/lib/\nCOPY scripts/e.mjs /app\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n' }, SLIM))) === 0]);
   checks.push(["R5-B a realpath pair in ONE comparison does not excuse a raw comparison in another", rg("const SECOND = (realpathSync(a) === realpathSync(b)) || process.argv[1] === import.meta.url;\n") === 1 && rg("if (realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) || realpathSync(process.argv[1]) === realpathSync(other)) {}\n") === 0]);
-  checks.push(["D2 every isMainModule call must be exactly (process.argv[1], import.meta.url): aliased, swapped, another index, missing argument, negated are findings", [
+  checks.push(["D2/R6-A every isMainModule reference must be the named import or an EXACT direct call: swapped, aliased, nested, member, ?.(, .call, another index and a missing argument are findings", [
     "const self = import.meta.url;\nif (isMainModule(self, process.argv[1])) run();\n",
     "if (isMainModule(import.meta.url, process.argv[1])) run();\n",
     "if (isMainModule(process.argv[2], import.meta.url)) run();\n",
     "if (isMainModule(process.argv[1])) run();\n",
-    "if (!isMainModule(process.argv[1], import.meta.url)) run();\n",
-  ].every((t) => rg(t) === 1) && rg("if (isMainModule(process.argv[1], import.meta.url)) run();\n") === 0 && rg("export function isMainModule(argv1, moduleUrl) {\n  return false;\n}\n") === 0]);
+    "if (isMainModule(fileURLToPath(import.meta.url), process.argv[1])) run();\n",
+    "if (isMainModule(String(process.argv[2]), import.meta.url)) run();\n",
+    "if (isMainModule?.(import.meta.url, process.argv[1])) run();\n",
+    "const im = isMainModule;\nif (im(import.meta.url, process.argv[1])) run();\n",
+    "if (isMainModule.call(null, process.argv[1], import.meta.url)) run();\n",
+    "import * as guard from \"./other.mjs\";\nif (guard.isMainModule(process.argv[1], import.meta.url)) run();\n",
+    "const { isMainModule } = await import(\"./other.js\");\nif (isMainModule(process.argv[1], import.meta.url)) run();\n",
+  ].every((t) => rg(t) >= 1) && rg("if (isMainModule(process.argv[1], import.meta.url)) run();\n") === 0 && rg("if (!isMainModule(process.argv[1], import.meta.url)) return;\n") === 0 && rg("export function isMainModule(argv1, moduleUrl) {\n  return false;\n}\n") === 0 && rg("import { isMainModule } from \"./lib/is-main.mjs\";\nexport { isMainModule };\n") === 0]);
+  checks.push(["R6-A re-export aliases and default imports are findings; a plain `export { isMainModule }` is not", rg("function check() { return false; }\nexport { check as isMainModule };\n") >= 1 && rg("import isMainModule from \"./other.mjs\";\n") >= 1]);
   checks.push(["R5-E an adopter must import THE helper (scripts/lib/is-main.mjs); a second definition is a finding", helperImportProblems("scripts/mac/x.mjs", 'import { isMainModule } from "./is-main.mjs";\n').length === 1 && helperImportProblems("scripts/mac/x.mjs", 'import { isMainModule } from "../lib/is-main.mjs";\n').length === 0 && helperImportProblems("scripts/x.mjs", "function isMainModule() { return false; }\n").length === 1 && helperImportProblems("scripts/lib/is-main.mjs", "export function isMainModule() { return false; }\n").length === 0]);
   checks.push(["L2 argv read through a parameter is a KNOWN MISS", rg("function f(argv) { return argv[1] === import.meta.filename; }\n") === 0]);
   // R5-C survivors, each as a case
@@ -633,11 +768,74 @@ function selfTest() {
   checks.push(["SCAN: a \"not modelled\" drop is surfaced as a note, never swallowed", scanOf({ ship: { ...okShip, dropped: ["x: COPY $A ./"] } }).notes.some((x) => x.includes("not modelled"))]);
   checks.push(["SCAN: an unreadable tracked script is a problem, not silence", scanOf({ readText: () => { throw Object.assign(new Error("x"), { code: "ENOENT" }); } }).problems.length === 1]);
   const PLANT = `if (${RAW_URL}) {}\n`;
-  const plantKey = rawGuards(PLANT)[0]?.text;
+  const plantKey = rawGuards(PLANT)[0]?.key;
   const declare = (...hits) => new Map([["scripts/x.mjs", { reason: "r", hits }]]);
   checks.push(["SCAN: a raw guard in an undeclared file is a problem; declared (by its occurrence), it is a note", scanOf({ readText: () => PLANT }).problems.length === 1 && scanOf({ readText: () => PLANT, rawDebt: declare(plantKey) }).problems.length === 0]);
   checks.push(["D3 a declaration excuses only ITS occurrence: a SECOND raw guard in the same file is still a finding", scanOf({ readText: () => PLANT + `export const SECOND = ${RAW_URL};\n`, rawDebt: declare(plantKey) }).problems.length === 1]);
   checks.push(["SCAN: a declared entry whose occurrence is gone or changed is a problem", scanOf({ rawDebt: declare(plantKey) }).problems.length === 1 && scanOf({ readText: () => PLANT, rawDebt: declare("something else") }).problems.length === 2]);
+
+  // ROUND 7. Each case pins a finding from the round-6 refute (or Codex).
+  const sg = (t) => suffixGuards(t).length;
+  checks.push(["CX1 a legacy suffix guard written over several lines, and with the operands in either order, is a finding", sg('if (\n  import.meta.url\n    .endsWith(\n      process.argv[1].split("/").pop())\n) {\n}\n') === 1 && sg('if (fileURLToPath(import.meta.url).endsWith(process.argv[1].split("/").pop())) {}\n') === 1 && sg('if (process.argv[1].endsWith(import.meta.url.split("/").pop())) {}\n') === 1 && sg('if (name.endsWith(".mjs")) run();\n') === 0]);
+  const imp = (t) => importsOf(t);
+  checks.push(["CX2 every non-literal dynamic import is unresolved: concatenation, a template with an expression, an identifier; literals are read", imp('await import("./lib/" + name + ".mjs");\n').unresolved.length === 1 && imp("await import(`./lib/` + n);\n").unresolved.length === 1 && imp("await import(`./lib/${n}.mjs`);\n").unresolved.length === 1 && imp("await import(name);\n").unresolved.length === 1 && imp('await import("./lib/h.mjs");\n').unresolved.length === 0 && imp('await import("./lib/h.mjs");\n').rel[0] === "./lib/h.mjs" && imp("await import(`./lib/h.mjs`);\n").unresolved.length === 0]);
+  const bsvc = (df, extra = "") => `  s3:\n    build:\n      dockerfile: ${df}\n${extra}`;
+  checks.push(["CX3 two compose files that disagree on a service's build key are a NOT-scanned problem (the -f order is unknown), never a union", ship([compose(bsvc("D0")), compose(bsvc("D1"))], ["FROM node\\nWORKDIR /app\\nCOPY scripts/lib/ ./lib/\\n".replace(/\\n/g, "\n"), "FROM node\nWORKDIR /app\nCOPY scripts/a.mjs ./\n"], treeOf({}, SLIM)).problems.some((x) => x.includes("-f order is unknown")) && n(ship([compose(bsvc("D0")), compose(bsvc("D0", "      args:\n        X: 1\n"))], ["FROM node\nWORKDIR /app\nCOPY scripts/a.mjs ./\nCOPY scripts/lib/ ./lib/\n"], treeOf({}, SLIM))) === 0 && n(ship([compose(bsvc("D0")), compose("  s3:\n    build:\n      target: x\n")], ["FROM node AS x\nWORKDIR /app\nCOPY scripts/a.mjs ./\nCOPY scripts/lib/ ./lib/\n"], treeOf({}, SLIM))) === 0]);
+  const hasG = (t) => hasExactGuard(t);
+  checks.push(["CX4 only a NAMED import of is-main.mjs counts as an exact guard: a namespace, default or dynamic import, a re-export alias and a member call do not", hasG('import { isMainModule } from "./lib/is-main.mjs";\nif (isMainModule(process.argv[1], import.meta.url)) run();\n') && !hasG('import * as guard from "./x/other.mjs";\nif (guard.isMainModule(process.argv[1], import.meta.url)) run();\n') && !hasG('const { isMainModule } = await import("./x/other.js");\nif (isMainModule(process.argv[1], import.meta.url)) run();\n') && !hasG('import isMainModule from "./x/other.mjs";\nif (isMainModule(process.argv[1], import.meta.url)) run();\n')]);
+  checks.push(["CX4 a second definition or an `as isMainModule` export in a .js/.cjs copy is found by the scan", scan({ files: [], definitionFiles: ["scripts/x/other.js", "scripts/x/o2.cjs"], readText: (f) => (f.endsWith(".js") ? "export function isMainModule() { return false; }\n" : "function check() {}\nexport { check as isMainModule };\n"), ship: okShip, suffixDebt: new Map(), rawDebt: new Map() }).problems.length === 2]);
+  checks.push(["Y16 a `const isMainModule = ...` definition (also exported) is a definition", helperImportProblems("scripts/x.mjs", "export const isMainModule = () => false;\n").length === 1 && helperImportProblems("scripts/x.mjs", "async function isMainModule() {}\n").length === 1]);
+  // R6-B: the pin counts occurrences and ignores formatting
+  const WRAPPED = "if (\n  import.meta.url ===\n    pathToFileURL(/* argv */ process.argv[1]).href\n) {}\n";
+  checks.push(["R6-B a second IDENTICAL occurrence in a declared file is a finding (the pin counts)", scanOf({ readText: () => PLANT + PLANT, rawDebt: declare(plantKey) }).problems.length >= 1 && scanOf({ readText: () => PLANT + PLANT, rawDebt: declare(plantKey, plantKey) }).problems.length === 0]);
+  checks.push(["R6-B the second occurrence is reported AS a second occurrence, not only through the stale-declaration check", scanOf({ readText: () => PLANT + PLANT, rawDebt: declare(plantKey) }).problems.some((x) => x.includes("only for its declared"))]);
+  checks.push(["Y04 a longer statement sharing a prefix with the declared one is its own finding (and the declared one still counts)", (() => { const r = scanOf({ readText: () => PLANT + `if (${RAW_URL} && more.length > 0) {}\n`, rawDebt: declare(plantKey) }); return r.problems.length === 1 && r.problems[0].includes("only for its declared"); })()]);
+  checks.push(["CX4 a member call is not the exact guard even beside the named import", !hasG('import { isMainModule } from "./lib/is-main.mjs";\nif (obj.isMainModule(process.argv[1], import.meta.url)) run();\n')]);
+  checks.push(["R6-B a Prettier-style wrap, a comment between tokens and extra spaces of the declared statement are the same statement", scanOf({ readText: () => WRAPPED, rawDebt: declare(plantKey) }).problems.length === 0]);
+  checks.push(["Y04/Y18 the pin compares the WHOLE normalised statement (a longer statement sharing a prefix is not it)", scanOf({ readText: () => `if (${RAW_URL} && more.length > 0) {}\n`, rawDebt: declare(plantKey) }).problems.length >= 1]);
+  // R6-C trailing slashes
+  checks.push(["R6-C a trailing-slash destination or WORKDIR is a known directory (fail-open and false-positive plants from the refute)", n(dock("FROM node\nCOPY scripts/other/ /app/\nCOPY scripts/lib/ /lib/\nCOPY scripts/e.mjs /app\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n', "scripts/other/o.mjs": "export const o = 1;\n" }, SLIM))) >= 1 && n(dock("FROM node\nWORKDIR /app/\nCOPY scripts/lib/ /lib/\nCOPY scripts/e.mjs /app\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n' }, SLIM))) >= 1 && n(dock("FROM node\nWORKDIR /app/\nCOPY scripts/e.mjs .\nCOPY scripts/lib/ ./lib/\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n' }, SLIM))) === 0]);
+  checks.push(["Y13 every ancestor of a destination is a directory, not only the immediate parent", n(dock("FROM node\nCOPY scripts/other/ /app/a/b/\nCOPY scripts/lib/ /lib/\nCOPY scripts/e.mjs /app\n", treeOf({ "scripts/e.mjs": 'import { h } from "./lib/h.mjs";\n', "scripts/other/o.mjs": "export const o = 1;\n" }, SLIM))) >= 1]);
+  // R6-D / Y09 / Y19 hides
+  checks.push(["R6-D an anonymous short-form volume hides its target; Y09 tmpfs options are stripped; Y19 a trailing-slash target is normalised", n(ship([compose("  idp:\n    build:\n      dockerfile: D0\n    volumes: [/app/lib]\n")], [IMG])) >= 1 && n(ship([compose("  idp:\n    build:\n      dockerfile: D0\n    tmpfs:\n      - /app/lib:size=1m\n")], [IMG])) >= 1 && n(ship([withVol("      - libvol:/app/lib/\n")], [IMG])) >= 1]);
+  // R6-E: each comparison against its own operands
+  checks.push(["R6-E a realpath pair in one comparison does not excuse a raw one beside it (ternary, array, object literal, ??, &, parentheses)", [
+    "x = realpathSync(a) === realpathSync(b) ? y : process.argv[1] === import.meta.url;\n",
+    "x = [realpathSync(a) === realpathSync(b), process.argv[1] === import.meta.url];\n",
+    "x = { a: realpathSync(a) === realpathSync(b), b: process.argv[1] === import.meta.url };\n",
+    "x = (realpathSync(a) === realpathSync(SELF)) ?? process.argv[1] === import.meta.url;\n",
+    "x = (realpathSync(a) === realpathSync(b)) & (process.argv[1] === import.meta.url);\n",
+  ].every((t) => rg(t) === 1)]);
+  checks.push(["Y01 the builder stage of each build context is its own container (the other-stage id carries the context)", n(ship([twoCtx("scripts/xa", "scripts/xb")], ["FROM node AS b\nCOPY . /src/\nFROM node\nRUN true\n"], ctxTree)) === 1 && n(ship([twoCtx("scripts/xb", "scripts/xa")], ["FROM node AS b\nCOPY . /src/\nFROM node\nRUN true\n"], ctxTree)) === 1]);
+  checks.push(["Y17 the fixture-IdP floor needs fixture-idp.mjs IN the idp container (the helper alone is not it)", liveShipped({ all: liveAll, read: (f) => (f === "scripts/fixture-idp.compose.yml" ? liveRead(f).replace(/^.*fixture-idp\.mjs:\/app.*$/m, "") : liveRead(f)) }).fixtureIdp === false]);
+  // Y24: `from` is not followed by an arbitrary string; Y11: template expressions keep offsets
+  checks.push(["Y24 a variable called `from` followed by a string is not an import", importsOf('const from = 1; const s = "./missing.mjs";\n').rel.length === 0]);
+  checks.push(["Y11 a template expression before an import does not shift the offsets used to read the specifier", importsOf("const t = `${a}${b}`; import x from \"./m.mjs\";\n").rel[0] === "./m.mjs"]);
+  // R6-F / Y20 / Y21: --mutants' own behaviour, through injected dependencies
+  const mutRun = async (deps) => {
+    const log = console.log;
+    const err = console.error;
+    console.log = () => {};
+    console.error = () => {};
+    try {
+      return await runMutants({ root: repoRoot, mutants: [], ...deps });
+    } finally {
+      console.log = log;
+      console.error = err;
+    }
+  };
+  checks.push(["Y20 --mutants refuses a dirty working tree", (await mutRun({ gitStatus: () => " M scripts/x.mjs\n", run: async () => ({ status: 0 }) })) === 2]);
+  checks.push(["Y21 --mutants refuses a failing unmutated baseline", (await mutRun({ gitStatus: () => "", run: async () => ({ status: 1 }) })) === 2 && (await mutRun({ gitStatus: () => "", run: async () => ({ status: 0 }) })) === 0]);
+  const one = [["noop", "scripts/lib/is-main.mjs", "export function isMainModule", "export function isMainModule"]];
+  checks.push(["R6-F a child that dies of a signal, or times out, is never counted as killed", await (async () => {
+    let calls = 0;
+    const r1 = await mutRun({ gitStatus: () => "", mutants: one, run: async () => (++calls === 1 ? { status: 0 } : { status: null, signal: "SIGINT" }) });
+    calls = 0;
+    const r2 = await mutRun({ gitStatus: () => "", mutants: one, run: async () => (++calls === 1 ? { status: 0 } : { status: null, timedOut: true }) });
+    calls = 0;
+    const r3 = await mutRun({ gitStatus: () => "", mutants: one, run: async () => (++calls === 1 ? { status: 0 } : { status: 1 }) });
+    return r1 === 1 && r2 === 1 && r3 === 0;
+  })()]);
 
   // L2: spellings beyond the two literal ones. Detected:
   const raw = (t) => rawGuards(t).length;
@@ -665,6 +863,9 @@ function selfTest() {
     ["const { argv: [, entry] } = process", "const { argv: [, entry] } = process;\nif (entry === import.meta.filename) {}\n"],
     ["import { argv } from \"node:process\"", 'import { argv } from "node:process";\nif (argv[1] === import.meta.filename) {}\n'],
   ]) checks.push([`L2 KNOWN MISS: ${label}`, raw(text) === 0]);
+  checks.push(["KNOWN MISS: inversion of an exact helper call is not judged (`!(isMainModule(..))`, `=== false`, `|| run()`)", ["if (!(isMainModule(process.argv[1], import.meta.url))) run();\n", "const off = isMainModule(process.argv[1], import.meta.url) === false;\n", "isMainModule(process.argv[1], import.meta.url) || run();\n"].every((t) => raw(t) === 0)]);
+  checks.push(["KNOWN MISS: a `/` after `)` is read as a division and can hide an import later on the same line", importsOf('if (x) /"/.test(s); import t from "./m.mjs";\n').rel.length === 0]);
+  checks.push(["KNOWN MISS: the gate imported by `node -e` with its OWN path as argv[1] runs its body (the helper has the same property)", spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(import.meta.url)});`, fileURLToPath(import.meta.url)], { encoding: "utf8", timeout: 120000 }).stdout.includes("entry-guards:")]);
   checks.push(["L2 KNOWN MISS: a self path built by a function the detector cannot see", raw(`const here = getSelf();\nif (resolve(${ARGV}) === here) {}\n`) === 0]);
   checks.push(["L2 KNOWN MISS: a comparison split across two statements by a boolean", raw(`const same = resolve(${ARGV}) === resolve(getSelf());\nif (same) {}\n`) === 0]);
 
@@ -723,7 +924,7 @@ export const MUTANTS = [
   ["unreadable shipped file is silent", SI, "problems.push(`${c.id}: ${host} is shipped to ${cpath} but unreadable (${err && err.code}) - its imports were NOT checked`);", "void err;"],
   ["dotdot segments ignored", SI, "const wantContainer = posix.normalize(posix.join(posix.dirname(cpath), spec));", 'const wantContainer = posix.join(posix.dirname(cpath), spec.replace(/\\.\\.\\//g, ""));'],
   ["paths case-folded", SI, "const got = byContainer.get(wantContainer);", "const got = [...byContainer].find(([k]) => k.toLowerCase() === wantContainer.toLowerCase())?.[1];"],
-  ["literal dynamic import(..) not read", SI, 'take(/\\bimport\\s*\\(\\s*(["\'`])(\\s*)\\1\\s*[,)]/dg); // import("./y"), or an uninterpolated template', ""],
+  ["literal dynamic import(..) not read", SI, "const spec = text.slice(m.indices[2][0], m.indices[2][1]);", 'const spec = "";'],
   ["non-literal dynamic import not reported", SI, "unresolved.push(marked.slice(m.index, m.index + 40)", "void (marked.slice(m.index, m.index + 40)"],
   ["scan drops the shipped-import problems", GATE, "for (const p of ship.problems) problems.push(p);", ""],
   ["COPY --from ignored", SI, "if (e.fromStage !== null) {", "if (false) {"],
@@ -732,8 +933,8 @@ export const MUTANTS = [
   ["codeOnly dropped in importsOf", SI, "const marked = codeOnly(text, false);", "const marked = text;"],
   ["containers pooled", SI, "for (const p of c.pairs) byContainer.set", "for (const p of containers.flatMap((x) => x.pairs)) byContainer.set"],
   ["host-file identity check dropped", SI, "else if (got !== wantHost)", "else if (false)"],
-  ["WORKDIR ignored", SI, 'cur.workdir = posix.normalize(rest.startsWith("/") ? rest : posix.join(cur.workdir, rest));', 'cur.workdir = "/app";'],
-  ["overlay merge by service name dropped", SI, "const cur = services.get(svc) ?? { entries: [], hides: [], builds: [], dropped: [] };", "const cur = { entries: [], hides: [], builds: [], dropped: [] };"],
+  ["WORKDIR ignored", SI, 'cur.workdir = clean(rest.startsWith("/") ? rest : posix.join(cur.workdir, rest));', 'cur.workdir = "/app";'],
+  ["overlay merge by service name dropped", SI, "const cur = services.get(svc) ?? { entries: [], hides: [], build: null, dropped: [] };", "const cur = { entries: [], hides: [], build: null, dropped: [] };"],
   ["compose long syntax ignored", SI, 'bind = v.type === "bind" || v.type === undefined;', "bind = false;"],
   ["directory mounts not expanded", SI, "if (tree.isDir(e.host)) for (const f of tree.under(e.host)) mounts.push", "if (false) for (const f of tree.under(e.host)) mounts.push"],
   ["COPY --from relative source resolved from WORKDIR", SI, 'posix.join("/", s)', "posix.join(src.workdir, s)"],
@@ -746,8 +947,9 @@ export const MUTANTS = [
   ["image files win over bind mounts", SI, "pairs: [...kept, ...mounts]", "pairs: [...mounts, ...kept]"],
   ["a mounted directory does not hide image files", SI, "const covered = [...mountedDirs, ...def.hides];", "const covered = [...def.hides];"],
   ["the specifier is read from the blanked text, not the original", SI, "const spec = text.slice(lo, hi);", "const spec = marked.slice(lo, hi);"],
+  ["a variable named `from` followed by a string is read as an import (targeted D5)", SI, 'take(/\\bfrom\\s*(["\'])(\\s*)\\1/dg);', 'take(/\\bfrom[^"\']*(["\'])(\\s*)\\1/dg);'],
   ["binary detection is NUL-only", SI, "|| (text.length > 0 && (text.match(/[\\x01-\\x08\\x0e-\\x1f]/g) ?? []).length / text.length > 0.02)", ""],
-  ["compose without services is accepted", SI, 'if (!doc || typeof doc !== "object" || Array.isArray(doc) || !doc.services || typeof doc.services !== "object" || Array.isArray(doc.services)) {', 'if (!doc || typeof doc !== "object") {'],
+  ["compose without services is accepted", SI, "out.problems.push(`${name}: a compose file with no \\`services:\\` mapping - NOT scanned`);", "void 0;"],
   ["stage names are case-sensitive", SI, "name: f?.[2] ? f[2].toLowerCase() : null", "name: f?.[2] ?? null"],
   ["external --from is not reported", SI, "res.dropped.push(`COPY --from=${e.fromStage} (not an earlier stage of this Dockerfile)`);", ""],
   ["not-modelled notes swallowed", GATE, "for (const d of ship.dropped ?? []) notes.push(`not modelled: ${d}`);", ""],
@@ -759,7 +961,7 @@ export const MUTANTS = [
   [".yaml compose not discovered", GATE, "compose[^/]*)\\.ya?ml$/i;", "compose[^/]*)\\.yml$/i;"],
   ["unreadable deploy file is silent", GATE, "problems.push(`${name}: tracked deploy file unreadable (${err && err.code}) - NOT scanned`);", ""],
   ["argv aliases not followed", GATE, "const argvWord = wordOf([...names(ARGV_ALIAS), ...names(ARGV_DESTRUCTURE)]);", "const argvWord = null;"],
-  ["realpath anywhere in the statement excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(piece.slice(0, op.index)) && REAL_CALL.test(piece.slice(op.index + op[0].length));", "const realBoth = REAL_CALL.test(piece);"],
+  ["realpath anywhere in the term excuses the comparison", GATE, "const realBoth = op !== null && REAL_CALL.test(term.text.slice(0, op.index)) && REAL_CALL.test(term.text.slice(op.index + op.length));", "const realBoth = REAL_CALL.test(term.text);"],
   ["$-leading alias names not bounded", GATE, "(?<![\\\\w$])(?:", "\\\\b(?:"],
   ["helper canary not run by the gate", GATE, "const canary = helperCanary(isMainModule);", "const canary = [];"],
   ["helper canary skips the symlink probe", GATE, "if (call(link) !== true) bad.push(", "if (false) bad.push("],
@@ -768,15 +970,37 @@ export const MUTANTS = [
   ["helper: undefined argv1 is main", HELPER, "if (!argv1) return false;", "if (!argv1) return true;"],
   ["helper: a throw is main", HELPER, "} catch {\n    return false;", "} catch {\n    return true;"],
   ["helper: fileURLToPath import deleted", HELPER, 'import { fileURLToPath } from "node:url";\n', ""],
+  ["a stage id without its context (Y01)", SI, 'const id = `${df} stage ${other.name ?? other.index}${ctx === "." ? "" : ` (context ${ctx})`}`;', "const id = `${df} stage ${other.name ?? other.index}`;"],
+  ["the pin compares a 20-character prefix (Y04)", GATE, "declared.hits.filter((h) => h === hit.key).length : 0;", "declared.hits.filter((h) => h.slice(0, 20) === hit.key.slice(0, 20)).length : 0;"],
+  ["the pin truncates the statement (Y18)", GATE, "key: nowhite(code.slice(from, to)),", "key: nowhite(code.slice(from, to)).slice(0, 40),"],
+  ["the pin does not count occurrences (R6-B)", GATE, "if (allowed > 0 && (seen.get(hit.key) ?? 0) < allowed) {", "if (allowed > 0) {"],
+  ["tmpfs options are not stripped (Y09)", SI, 'hides.push(cpath(t.split(":")[0]));', "hides.push(cpath(t));"],
+  ["only the immediate parent of a destination is a directory (Y13)", SI, 'for (let d = posix.dirname(absDest); d !== "/" && d !== "."; d = posix.dirname(d)) knownDirs.add(d);', "knownDirs.add(posix.dirname(absDest));"],
+  ["a comma is not a term separator (R6-E)", GATE, 'else if (c === "&" || c === "|" || c === "," || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);', 'else if (c === "&" || c === "|" || c === ":" || (c === "?" && d !== ".")) cut(i, i + 1);'],
+  ["a const definition of isMainModule is not a definition (Y16)", GATE, "(?:\\b(?:function|const|let|var|class)\\s+isMainModule(?![\\w$])", "(?:\\b(?:function|let|var|class)\\s+isMainModule(?![\\w$])"],
+  ["the fixture-IdP floor accepts any file in idp (Y17)", GATE, 'const fixtureIdp = (r.shipped.get("compose service idp") ?? []).includes("scripts/fixture-idp.mjs");', 'const fixtureIdp = (r.shipped.get("compose service idp") ?? []).length > 0;'],
+  ["hidden targets keep their trailing slash (Y19)", SI, 'const cpath = (t) => posix.normalize(t).replace(/\\/$/, "") || "/";', "const cpath = (t) => posix.normalize(t);"],
+  ["a template expression marker loses a character (Y11)", "scripts/lib/code-only.mjs", 'out += keepStrings ? "${" : " (";', 'out += keepStrings ? "${" : "(";'],
+  ["--mutants accepts a dirty tree (Y20)", GATE, "  if (dirty) {\n    console.error(\"✗ --mutants needs a clean working tree", "  if (false) {\n    console.error(\"✗ --mutants needs a clean working tree"],
+  ["--mutants accepts a failing baseline (Y21)", GATE, "  if (baseline.status !== 0) {", "  if (false) {"],
+  ["a child that dies of a signal counts as killed (R6-F)", GATE, 'results.push([name, r.timedOut ? "TIMEOUT" : r.signal ? "INTERRUPTED" : r.status !== 0 ? "killed" : "SURVIVED"]);', 'results.push([name, r.status !== 0 ? "killed" : "SURVIVED"]);'],
+  ["isMainModule call arguments are not compared (R6-A)", GATE, "if (args !== EXACT_ARGS)", "if (false)"],
+  ["a member call of isMainModule is allowed (CX4/R6-A)", GATE, "if (/(?:\\.|\\?\\.)\\s*$/.test(before)) {", "if (false) {"],
+  ["the helper call is not anchored against a member call (CX4)", GATE, "const HELPER_CALL = /(?<![\\w$.])isMainModule", "const HELPER_CALL = /isMainModule"],
+  ["a suffix test between the self path and argv[1] is not flagged (CX1)", GATE, "if (method && selfHit) {", "if (false) {"],
+  ["a concatenated dynamic import is read as resolved (CX2)", SI, "if (!literalAt.has(m.index)) unresolved.push(", "if (false) unresolved.push("],
+  ["conflicting overlay builds are unioned (CX3)", SI, "if (merged[k] !== undefined && merged[k] !== def.build[k])", "if (false)"],
+  ["a trailing slash is kept on a known directory (R6-C)", SI, 'return n.length > 1 ? n.replace(/\\/+$/, "") : n;', "return n;"],
+  ["an anonymous short volume is ignored (R6-D)", SI, "if (/^\\/[^:]*$/.test(v)) {", "if (false) {"],
+  [".js/.cjs definitions are not scanned (CX4)", GATE, "for (const rel of definitionFiles) {", "for (const rel of []) {"],
   ["stage cache ignores the build context (D1)", SI, "const key = `${stage.uid}@${context}`;", "const key = stage.uid;"],
-  ["a declaration excuses every raw guard in the file (D3)", GATE, "if (declared && declared.hits.includes(hit.text)) {", "if (declared) {"],
+  ["a declaration excuses every raw guard in the file (D3)", GATE, "const allowed = declared ? declared.hits.filter((h) => h === hit.key).length : 0;", "const allowed = declared ? 99 : 0;"],
   ["COPY flags beyond --from/--chown/--chmod/--link are applied as if absent (D4)", SI, "if (unmodelled.length) {", "if (false) {"],
   ["non-bind mounts hide nothing (D6)", SI, "const covered = [...mountedDirs, ...def.hides];", "const covered = [...mountedDirs];"],
   ["tmpfs hides nothing (D6)", SI, "for (const t of [].concat(def?.tmpfs ?? []))", "for (const t of [])"],
   ["import text inside other strings is read (D5)", SI, "const marked = codeOnly(text, false);", "const marked = codeOnly(text, true);"],
   ["destination ancestors are not directories (R5-A)", SI, 'for (let d = posix.dirname(absDest); d !== "/" && d !== "."; d = posix.dirname(d)) knownDirs.add(d);', ""],
-  ["a realpath pair excuses every comparison in the statement (R5-B)", GATE, "for (const piece of whole.split(/(&&|\\|\\||\\?\\?)/)) {", "for (const piece of [whole]) {"],
-  ["isMainModule calls are not required to be exact (D2)", GATE, 'if (args !== "process.argv[1],import.meta.url" || negated) {', "if (false) {"],
+  ["a realpath pair excuses every comparison in the statement (R5-B)", GATE, "for (const term of termsOf(whole)) {", "for (const term of [{ text: whole, offset: 0 }]) {"],
   ["an adopter may import any isMainModule (R5-E)", GATE, 'if (resolved !== "scripts/lib/is-main.mjs")', "if (false)"],
   ["a second isMainModule definition is allowed (R5-E)", GATE, 'if (rel !== "scripts/lib/is-main.mjs" && /', "if (false && /"],
   ["the gate's own guard runs the gate when imported from node -e", GATE, "  } catch {\n    return false;\n  }\n})();", "  } catch {\n    return true;\n  }\n})();"],
@@ -787,26 +1011,47 @@ export const MUTANTS = [
   ["helper with a basename shortcut", HELPER, "return realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));", "return realpathSync(argv1).split('/').pop() === fileURLToPath(moduleUrl).split('/').pop() || realpathSync(argv1) === realpathSync(fileURLToPath(moduleUrl));"],
   ["a Dockerfile with no FROM is silent", SI, "if (stages.length === 0) problems.push(", "if (false) problems.push("],
   ["heredoc COPY is silent", SI, "cur.dropped.push(`${ins} heredoc ${rest}`);", ""],
-  ["WORKDIR with a variable is silent", SI, "cur.dropped.push(`WORKDIR ${rest}`);", ""],
-  ["dockerfile_inline is silent", SI, 'dropped.push("build.dockerfile_inline");', ""],
+  ["WORKDIR with a variable is silent", SI, "cur.dropped.push(`WORKDIR ${rest}`);", "void 0;"],
+  ["dockerfile_inline is silent", SI, 'dropped.push("build.dockerfile_inline");', "void 0;"],
   ["FROM <Base> is case-sensitive", SI, "s.name === f?.[1]?.toLowerCase()) ?? null;", "s.name === f?.[1]) ?? null;"],
   ["build target is case-sensitive", SI, "const want = b.target ? b.target.toLowerCase() : null;", "const want = b.target ? b.target : null;"],
   ["COPY --from=<index> is not resolved", SI, "|| String(x.index) === e.fromStage", ""],
 ];
 
 /**
- * Apply each mutant to the working tree, run the self-test, restore. Refuses a tree with uncommitted changes (it restores by
- * rewriting the original text, and a mutant left behind by an interrupted run must never be mistaken for work), and
- * restores on SIGINT/SIGTERM too.
+ * Apply each mutant to the working tree, run the self-test, restore. Refuses a tree with uncommitted changes and a failing
+ * unmutated baseline (a "killed" mutant would prove nothing). Asynchronous so that SIGINT/SIGTERM to this process are actually
+ * handled: the mutant is restored, the child is stopped and the run exits 130/143 without counting anything as killed. A child
+ * that dies of a signal or times out is INTERRUPTED/TIMEOUT, never "killed". `deps` is injectable for the self-test.
  */
-function runMutants() {
-  const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot, encoding: "utf8" }).trim();
+export async function runMutants(deps = {}) {
+  const mutants = deps.mutants ?? MUTANTS;
+  const gitStatus = deps.gitStatus ?? (() => execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot, encoding: "utf8" }));
+  const root = deps.root ?? repoRoot;
+  let child = null;
+  const runSelfTest =
+    deps.run ??
+    (() =>
+      new Promise((resolveRun) => {
+        let timedOut = false;
+        child = spawn(process.execPath, [join(root, GATE), "--self-test"], { cwd: root, stdio: "ignore" });
+        const timer = setTimeout(() => {
+          timedOut = true;
+          child.kill("SIGKILL");
+        }, 300000);
+        child.on("close", (status, signal) => {
+          clearTimeout(timer);
+          child = null;
+          resolveRun({ status, signal, timedOut });
+        });
+      }));
+  const dirty = gitStatus().trim();
   if (dirty) {
     console.error("✗ --mutants needs a clean working tree (it edits tracked files and restores them); commit or discard first:");
     console.error(dirty.split("\n").slice(0, 10).map((l) => `    ${l}`).join("\n"));
     return 2;
   }
-  const baseline = spawnSync(process.execPath, [join(repoRoot, GATE), "--self-test"], { encoding: "utf8", timeout: 300000, cwd: repoRoot });
+  const baseline = await runSelfTest();
   if (baseline.status !== 0) {
     console.error("✗ the unmutated self-test does not pass, so a 'killed' mutant would prove nothing; fix that first.");
     return 2;
@@ -817,37 +1062,53 @@ function runMutants() {
     if (live) writeFileSync(live.path, live.original);
     live = null;
   };
-  const onSignal = (sig) => {
+  let interrupted = 0;
+  const onSignal = (code) => () => {
+    interrupted = code;
     restore();
-    process.exit(sig === "SIGINT" ? 130 : 143);
+    if (child) child.kill("SIGTERM");
   };
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
-  for (const [name, file, from, to] of MUTANTS) {
-    const path = join(repoRoot, file);
-    const original = readFileSync(path, "utf8");
-    // The MUTANTS literal quotes its own targets; only occurrences OUTSIDE it count.
-    const lo = original.indexOf("export const MUTANTS = [");
-    const hi = lo < 0 ? -1 : original.indexOf("\n];\n", lo) + 4;
-    const hits = [];
-    for (let at = original.indexOf(from); at >= 0; at = original.indexOf(from, at + 1)) if (lo < 0 || at < lo || at >= hi) hits.push(at);
-    if (hits.length !== 1) {
-      results.push([name, "NOT APPLIED"]);
-      continue;
+  const sigint = onSignal(130);
+  const sigterm = onSignal(143);
+  process.on("SIGINT", sigint);
+  process.on("SIGTERM", sigterm);
+  try {
+    for (const [name, file, from, to] of mutants) {
+      if (interrupted) break;
+      const path = join(root, file);
+      const original = readFileSync(path, "utf8");
+      // The MUTANTS literal quotes its own targets; only occurrences OUTSIDE it count.
+      const lo = original.indexOf("export const MUTANTS = [");
+      const hi = lo < 0 ? -1 : original.indexOf("\n];\n", lo) + 4;
+      const hits = [];
+      for (let at = original.indexOf(from); at >= 0; at = original.indexOf(from, at + 1)) if (lo < 0 || at < lo || at >= hi) hits.push(at);
+      if (hits.length !== 1) {
+        results.push([name, "NOT APPLIED"]);
+        continue;
+      }
+      try {
+        live = { path, original };
+        writeFileSync(path, original.slice(0, hits[0]) + to + original.slice(hits[0] + from.length));
+        const r = await runSelfTest();
+        if (interrupted) break;
+        results.push([name, r.timedOut ? "TIMEOUT" : r.signal ? "INTERRUPTED" : r.status !== 0 ? "killed" : "SURVIVED"]);
+      } finally {
+        restore();
+      }
     }
-    try {
-      live = { path, original };
-      writeFileSync(path, original.slice(0, hits[0]) + to + original.slice(hits[0] + from.length));
-      const r = spawnSync(process.execPath, [join(repoRoot, GATE), "--self-test"], { encoding: "utf8", timeout: 300000, cwd: repoRoot });
-      results.push([name, r.status !== 0 ? "killed" : "SURVIVED"]);
-    } finally {
-      restore();
-    }
+  } finally {
+    process.off("SIGINT", sigint);
+    process.off("SIGTERM", sigterm);
+    restore();
   }
   for (const [name, verdict] of results) console.log(`  ${verdict === "killed" ? "ok" : "!!"} ${verdict.padEnd(11)} ${name}`);
   const killed = results.filter(([, v]) => v === "killed").length;
+  if (interrupted) {
+    console.log(`\nINTERRUPTED: the tree was restored; ${results.length} of ${mutants.length} mutants had a verdict (${killed} killed). Nothing here is a tally.`);
+    return interrupted;
+  }
   console.log(`\nmutants: ${killed} of ${results.length} killed`);
-  return killed === results.length ? 0 : 1;
+  return killed === results.length && results.every(([, v]) => v === "killed") ? 0 : 1;
 }
 
 /**
@@ -868,7 +1129,7 @@ export function helperCanary(isMain) {
   };
   if (call(self) !== true) bad.push(`isMainModule(this file, this file's url) is ${String(call(self))}, not true - every adopter would skip its body and exit 0`);
   // The symlink case the helper exists for: a link to this very file must still read as this file.
-  const dir = mkdtempSync(join(tmpdir(), "entry-guard-link-"));
+  const dir = scratchDir("entry-guard-link-");
   try {
     const link = join(dir, "self.mjs");
     symlinkSync(self, link);
@@ -876,7 +1137,7 @@ export function helperCanary(isMain) {
   } catch (err) {
     bad.push(`could not build the symlink probe (${err && err.code})`);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    dropScratch(dir);
   }
   for (const arg of [undefined, "", "/nonexistent/entry-guard-canary.mjs"]) {
     if (call(arg) !== false) bad.push(`isMainModule(${JSON.stringify(arg)}, url) is ${String(call(arg))}, not false`);
@@ -899,11 +1160,11 @@ const IS_ENTRY = (() => {
  * the CLI reports comes from here, so a regression in what is REPORTED (not only in what is detected) is
  * visible to the self-test.
  */
-export function scan({ files, readText, ship, suffixDebt = DECLARED_SUFFIX_GUARDS, rawDebt = DECLARED_RAW_GUARD_DEBT }) {
+export function scan({ files, definitionFiles = [], readText, ship, suffixDebt = DECLARED_SUFFIX_GUARDS, rawDebt = DECLARED_RAW_GUARD_DEBT }) {
   const problems = [];
   const notes = [];
   const suffixHits = new Set();
-  const rawHits = new Map(); // file -> Set of declared hit sources actually seen
+  const rawHits = new Map(); // file -> Map(normalised statement -> times seen)
   let exactGuards = 0;
   for (const rel of files) {
     let text;
@@ -927,20 +1188,35 @@ export function scan({ files, readText, ship, suffixDebt = DECLARED_SUFFIX_GUARD
       );
     }
     for (const hit of rawGuards(text, { callsHelperFreely: CALLS_HELPER_FREELY.has(rel) })) {
-      // A declaration excuses the ONE occurrence it names, never the file: a second raw guard is reported.
+      if (hit.kind === "suffix") continue; // reported through suffixGuards above, against the suffix declarations
+      // A declaration pins the occurrence AND how many times it occurs, compared with all whitespace removed (a reformatted
+      // statement is the same statement; a second identical one is not excused).
       const declared = rawDebt.get(rel);
-      if (declared && declared.hits.includes(hit.text)) {
-        if (!rawHits.has(rel)) rawHits.set(rel, new Set());
-        rawHits.get(rel).add(hit.text);
+      const seen = rawHits.get(rel) ?? new Map();
+      const allowed = declared ? declared.hits.filter((h) => h === hit.key).length : 0;
+      if (allowed > 0 && (seen.get(hit.key) ?? 0) < allowed) {
+        seen.set(hit.key, (seen.get(hit.key) ?? 0) + 1);
+        rawHits.set(rel, seen);
         continue;
       }
+      const what =
+        hit.kind === "helper"
+          ? `${hit.reason} - the body may never run, or may run on import`
+          : `${hit.reason} - a symlink-blind entry guard: started through a symlinked path it skips its whole body and exits 0`;
       problems.push(
-        `${rel}:${hit.line} ${hit.reason} — a symlink-blind entry guard: started through a symlinked path it ` +
-          "skips its whole body and exits 0. Use `isMainModule(process.argv[1], import.meta.url)` from scripts/lib/is-main.mjs." +
-          (declared ? " (the file is on DECLARED_RAW_GUARD_DEBT, but only for its declared occurrence; this one is not it)" : ""),
+        `${rel}:${hit.line} ${what}. Use \`isMainModule(process.argv[1], import.meta.url)\` from scripts/lib/is-main.mjs.` +
+          (declared ? " (the file is on DECLARED_RAW_GUARD_DEBT, but only for its declared occurrence(s); this one is not it)" : ""),
       );
     }
     problems.push(...helperImportProblems(rel, text));
+  }
+  // .js/.cjs scripts are not scanned for guards, but a second isMainModule defined in one is as unwatched as one in a .mjs.
+  for (const rel of definitionFiles) {
+    try {
+      problems.push(...helperImportProblems(rel, readText(rel)));
+    } catch (err) {
+      problems.push(`${rel}: tracked but unreadable (${err && err.code}) — it was NOT scanned`);
+    }
   }
   for (const p of ship.problems) problems.push(p);
   if (ship.composeFiles < 3 || ship.dockerFiles < 2 || ship.containers < 4 || ship.shippedScripts < 3 || ship.fixtureIdp !== true) {
@@ -953,10 +1229,12 @@ export function scan({ files, readText, ship, suffixDebt = DECLARED_SUFFIX_GUARD
   // A DECLARATION THAT NO LONGER APPLIES IS A FAILURE, not a silent carry-over — that is
   // how a debt list turns into a permanent carve-out.
   for (const [rel, decl] of rawDebt) {
-    const seen = rawHits.get(rel) ?? new Set();
-    const missing = decl.hits.filter((h) => !seen.has(h));
-    if (missing.length === 0) notes.push(`${rel}: DECLARED raw guard — ${decl.reason}`);
-    else for (const m of missing) problems.push(`${rel} carries a DECLARED_RAW_GUARD_DEBT entry whose occurrence is gone or changed (${JSON.stringify(m)}) — update or delete the entry.`);
+    const seen = rawHits.get(rel) ?? new Map();
+    const wanted = new Map();
+    for (const h of decl.hits) wanted.set(h, (wanted.get(h) ?? 0) + 1);
+    const off = [...wanted].filter(([h, n]) => (seen.get(h) ?? 0) !== n);
+    if (off.length === 0) notes.push(`${rel}: DECLARED raw guard (${decl.hits.length} occurrence${decl.hits.length === 1 ? "" : "s"}) — ${decl.reason}`);
+    else for (const [h, n] of off) problems.push(`${rel} carries a DECLARED_RAW_GUARD_DEBT entry whose occurrence is gone, changed or repeated (declared ${n}, found ${seen.get(h) ?? 0}: ${h.slice(0, 80)}...) — update or delete the entry.`);
   }
   for (const [rel, reason] of suffixDebt) {
     if (suffixHits.has(rel)) notes.push(`${rel}: DECLARED suffix guard — ${reason}`);
@@ -978,7 +1256,10 @@ export function helperImportProblems(rel, text) {
     const resolved = posix.normalize(posix.join(posix.dirname(rel), spec));
     if (resolved !== "scripts/lib/is-main.mjs") out.push(`${rel}: imports isMainModule from ${spec} (${resolved}), not scripts/lib/is-main.mjs - that copy is not watched by the helper canary`);
   }
-  if (rel !== "scripts/lib/is-main.mjs" && /\b(?:function\s+isMainModule\b|(?:const|let|var)\s+isMainModule\s*=)/.test(codeOnly(text))) out.push(`${rel}: defines its own isMainModule - use scripts/lib/is-main.mjs (a second copy is not watched by the helper canary)`);
+  // Any way of DEFINING or EXPORTING a function under this name (function, const/let/var/class, an `x as isMainModule` re-export alias).
+  if (rel !== "scripts/lib/is-main.mjs" && /(?:\b(?:function|const|let|var|class)\s+isMainModule(?![\w$])|\bas\s+isMainModule(?![\w$]))/.test(codeOnly(text))) {
+    out.push(`${rel}: defines or exports its own isMainModule - use scripts/lib/is-main.mjs (a second copy is not watched by the helper canary)`);
+  }
   return out;
 }
 
@@ -989,8 +1270,16 @@ if (IS_ENTRY) {
     for (const c of canary) console.error(`  ✗ ${c}`);
     process.exit(1);
   }
-  if (process.argv.includes("--self-test")) process.exit(selfTest());
-  if (process.argv.includes("--mutants")) process.exit(runMutants());
+  process.once("SIGINT", () => {
+    dropAllScratch();
+    process.exit(130);
+  });
+  process.once("SIGTERM", () => {
+    dropAllScratch();
+    process.exit(143);
+  });
+  if (process.argv.includes("--self-test")) process.exit(await selfTest());
+  if (process.argv.includes("--mutants")) process.exit(await runMutants());
 
   const files = trackedScripts();
   if (files.length < FILE_FLOOR) {
@@ -998,7 +1287,7 @@ if (IS_ENTRY) {
     console.error("  Refusing to report green over a scan this small.");
     process.exit(1);
   }
-  const { problems, notes, exactGuards } = scan({ files, readText: (rel) => readFileSync(join(repoRoot, rel), "utf8"), ship: liveShipped() });
+  const { problems, notes, exactGuards } = scan({ files, definitionFiles: trackedDefinitionFiles(), readText: (rel) => readFileSync(join(repoRoot, rel), "utf8"), ship: liveShipped() });
   for (const n of notes) console.log(`  · ${n}`);
   console.log(
     `\nentry-guards: ${files.length} tracked script(s) scanned, ${exactGuards} carrying an exact entry guard, ` +

@@ -30,14 +30,20 @@
 // heredoc COPY (reported as not modelled); files present only in a base image; every non-bind mount (named volume,
 // absolute host path, tmpfs) treated as hiding everything the image holds under its target; bare-specifier,
 // `require`, `createRequire` and `new URL` references; imports read only from scripts/**/*.{mjs,cjs,js}; a RUN is
-// not modelled, so a copied script that is never run is still checked. A dynamic import whose argument is not a
-// plain string is reported.
+// not modelled, so a copied script that is never run is still checked; the container's command and entrypoint (a
+// volume over the directory an entry file lives in hides it, unreported). A dynamic import whose argument is not a
+// plain string literal is reported.
 import { posix } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { codeOnly } from "./code-only.mjs";
 
 const SCRIPT_EXT = /\.(?:mjs|cjs|js)$/;
 const norm = (p) => posix.normalize(p).replace(/^\.\//, "").replace(/\/$/, "");
+/** An absolute container path with no trailing slash (the root stays "/"). */
+const clean = (p) => {
+  const n = posix.normalize(p);
+  return n.length > 1 ? n.replace(/\/+$/, "") : n;
+};
 // A text file that is mostly control characters is not a compose file or a Dockerfile (NUL alone is too narrow).
 const looksBinary = (text) => text.includes("\0") || (text.length > 0 && (text.match(/[\x01-\x08\x0e-\x1f]/g) ?? []).length / text.length > 0.02);
 
@@ -78,6 +84,10 @@ export function parseCompose(name, text) {
       let target;
       let bind = true;
       if (typeof v === "string") {
+        if (/^\/[^:]*$/.test(v)) {
+          hides.push(cpath(v)); // an anonymous volume at this path: its content is not the image's
+          continue;
+        }
         const m = /^(.*?):(\/[^:]*)(?::[a-zA-Z,]+)?$/.exec(v);
         if (!m) continue;
         [, source, target] = m;
@@ -138,7 +148,7 @@ export function parseDockerfile(name, text) {
     } else if (ins === "WORKDIR") {
       if (rest.includes("$")) cur.dropped.push(`WORKDIR ${rest}`);
       else {
-        cur.workdir = posix.normalize(rest.startsWith("/") ? rest : posix.join(cur.workdir, rest));
+        cur.workdir = clean(rest.startsWith("/") ? rest : posix.join(cur.workdir, rest));
         knownDirs.add(cur.workdir);
       }
     } else if (ins === "COPY" || ins === "ADD") {
@@ -175,7 +185,7 @@ export function parseDockerfile(name, text) {
         continue;
       }
       const fromM = /--from=(\S+)/i.exec(flags);
-      const absDest = posix.normalize(dest.startsWith("/") ? dest : posix.join(cur.workdir, dest));
+      const absDest = clean(dest.startsWith("/") ? dest : posix.join(cur.workdir, dest));
       const destIsDir = dest.endsWith("/") || dest === ".." || srcs.length > 1 || knownDirs.has(absDest);
       // Every ancestor of a destination exists as a directory afterwards (COPY creates the path).
       for (let d = posix.dirname(absDest); d !== "/" && d !== "."; d = posix.dirname(d)) knownDirs.add(d);
@@ -268,8 +278,14 @@ export function importsOf(text) {
   };
   take(/\bfrom\s*(["'])(\s*)\1/dg); // import x from "./y" / export * from "./y"
   take(/\bimport\s*(["'])(\s*)\1/dg); // import "./y"
-  take(/\bimport\s*\(\s*(["'`])(\s*)\1\s*[,)]/dg); // import("./y"), or an uninterpolated template
-  for (const m of marked.matchAll(/\bimport\s*\(\s*(?!["'`]\s*["'`])/g)) unresolved.push(marked.slice(m.index, m.index + 40).replace(/\s+/g, " "));
+  const literalAt = new Set();
+  for (const m of marked.matchAll(/\bimport\s*\(\s*(["'`])(\s*)\1\s*[,)]/dg)) {
+    literalAt.add(m.index); // import("./y"), or an uninterpolated template: exactly quote, blank body, quote, then , or )
+    const spec = text.slice(m.indices[2][0], m.indices[2][1]);
+    if (/^\.{1,2}\//.test(spec)) rel.push(spec);
+  }
+  // EVERY other import( is unresolved: a concatenation ("./lib/" + name), a template with an expression, an identifier.
+  for (const m of marked.matchAll(/\bimport\s*\(/g)) if (!literalAt.has(m.index)) unresolved.push(marked.slice(m.index, m.index + 40).replace(/\s+/g, " "));
   return { rel, unresolved };
 }
 
@@ -285,10 +301,20 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
     const parsed = parseCompose(c.name, c.text);
     problems.push(...parsed.problems);
     for (const [svc, def] of parsed.services) {
-      const cur = services.get(svc) ?? { entries: [], hides: [], builds: [], dropped: [] };
+      const cur = services.get(svc) ?? { entries: [], hides: [], build: null, dropped: [] };
       cur.entries.push(...def.entries);
       cur.hides.push(...def.hides);
-      if (def.build) cur.builds.push({ ...def.build, in: c.name });
+      if (def.build) {
+        // A later file's `build` REPLACES the earlier one key by key (Compose merge rules); the -f order is not known here, so two
+        // overlays that disagree on a key are a problem, never a union of both builds' files.
+        const merged = { ...(cur.build ?? {}) };
+        for (const k of ["context", "dockerfile", "target"]) {
+          if (def.build[k] === undefined) continue;
+          if (merged[k] !== undefined && merged[k] !== def.build[k]) problems.push(`compose service ${svc}: ${c.name} sets build.${k} to ${def.build[k]} but an earlier file set ${merged[k]}; the -f order is unknown - NOT scanned`);
+          else merged[k] = def.build[k];
+        }
+        cur.build = merged;
+      }
       cur.dropped.push(...def.dropped);
       services.set(svc, cur);
     }
@@ -306,7 +332,7 @@ export function shippedImportProblems({ composes, dockerfiles, tree }) {
   for (const [svc, def] of services) {
     const image = [];
     const dropped = [...def.dropped];
-    for (const b of def.builds) {
+    for (const b of def.build ? [def.build] : []) {
       const df = norm(posix.join(b.context ?? ".", b.dockerfile ?? "Dockerfile"));
       if (!parsedDocker.has(df)) {
         let text = null;

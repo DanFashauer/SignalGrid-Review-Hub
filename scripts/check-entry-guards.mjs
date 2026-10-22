@@ -46,7 +46,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isMainModule } from "./lib/is-main.mjs";
 
@@ -299,6 +299,50 @@ export function adoptsHelper(text) {
   return /\bimport\b[^;]*["'](?:\.\.?\/)+(?:lib\/)?is-main\.mjs["']/.test(codeOnly(text, true)) && HELPER_CALL.test(codeOnly(text));
 }
 
+/**
+ * Pure: the relative imports a script that is shipped ON ITS OWN (a compose bind mount, a Dockerfile COPY of
+ * `scripts/*.mjs`) needs and the container does not hold. `sources` maps a repo path to its text; `shipped` is
+ * what the compose/Dockerfile texts put where. A script that runs alone inside a container sees only what was
+ * mounted or copied, so a relative import of an unshipped file is ERR_MODULE_NOT_FOUND at start-up (the fixture
+ * IdP did exactly that when it began importing scripts/lib/is-main.mjs).
+ */
+export function shippedImportProblems(deployTexts, readSource) {
+  const shipped = new Map(); // container path -> repo path
+  for (const text of deployTexts) {
+    for (const m of text.matchAll(/^\s*-\s*["']?\.\/(scripts\/[^:\s"']+\.mjs):(\/[^:\s"']+)/gm)) shipped.set(m[2], m[1]);
+    for (const m of text.matchAll(/^\s*COPY\s+(?!--from)((?:--\S+\s+)*)([^\n]+)$/gm)) {
+      const args = m[2].trim().split(/\s+/);
+      const dest = args.pop();
+      for (const src of args) {
+        if (!/^(?:\.\/)?scripts\/[^*]+\.mjs$/.test(src)) continue;
+        const repoPath = src.replace(/^\.\//, "");
+        const dir = dest.endsWith("/") ? dest : dest + "/";
+        shipped.set(posix.normalize(posix.join(dir.startsWith("/") ? dir : "/app/" + dir, posix.basename(repoPath))), repoPath);
+      }
+    }
+  }
+  const problems = [];
+  for (const [containerPath, repoPath] of shipped) {
+    let text;
+    try {
+      text = readSource(repoPath);
+    } catch {
+      problems.push(`${repoPath}: shipped to ${containerPath} but unreadable`);
+      continue;
+    }
+    for (const m of codeOnly(text, true).matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g)) {
+      const want = posix.normalize(posix.join(posix.dirname(containerPath), m[1]));
+      if (!shipped.has(want)) problems.push(`${repoPath} is shipped alone to ${containerPath} but imports ${m[1]}, which resolves to ${want} and nothing ships there`);
+    }
+  }
+  return { problems, shipped: shipped.size };
+}
+
+function deployFiles() {
+  const out = execFileSync("git", ["ls-files", "-z", "--", "Dockerfile*", "*/Dockerfile*", "docker-compose*.yml", "scripts/*.compose.yml", "scripts/**/*.compose.yml", "*.compose.yml"], { cwd: repoRoot, encoding: "utf8" });
+  return out.split("\0").filter(Boolean);
+}
+
 function trackedScripts() {
   const out = execFileSync("git", ["ls-files", "--", "scripts/*.mjs", "scripts/**/*.mjs"], {
     cwd: repoRoot,
@@ -396,6 +440,23 @@ function selfTest() {
   checks.push(["MUTANT undefined argv1 returns true: the body runs on import from `node -e` (case goes red)", mut["undefined argv1 returns true"].importedFromEvalNoArg]);
   checks.push(["MUTANT catch returns true: the body runs on import (case goes red)", mut["catch returns true"].importedFromEvalWithArg]);
 
+  // SHIPPED ALONE: a script bind-mounted or COPYed into a container holds only what ships beside it.
+  const composeA = "services:\n  idp:\n    volumes:\n      - ./scripts/a.mjs:/app/a.mjs:ro\n";
+  const composeB = composeA + "      - ./scripts/lib/h.mjs:/app/lib/h.mjs:ro\n";
+  const src = (f) => (f === "scripts/a.mjs" ? 'import { h } from "./lib/h.mjs";\n' : "export const h = 1;\n");
+  checks.push(["SHIPPED ALONE: an import the container does not hold is a problem", shippedImportProblems([composeA], src).problems.length === 1]);
+  checks.push(["…and is fine once the import is mounted beside the script", shippedImportProblems([composeB], src).problems.length === 0]);
+  const dockerfile = "COPY scripts/a.mjs scripts/lib/h.mjs ./srv/\n";
+  checks.push(["a Dockerfile COPY of the script without its import is a problem", shippedImportProblems(["COPY scripts/a.mjs ./srv/\n"], src).problems.length === 1 && shippedImportProblems([dockerfile], src).problems.length === 1]);
+  const live = deployFiles().map((f) => readFileSync(join(repoRoot, f), "utf8"));
+  const liveShipped = shippedImportProblems(live, (f) => readFileSync(join(repoRoot, f), "utf8"));
+  checks.push([`LIVE: every script a compose file or Dockerfile ships alone has its relative imports shipped (${liveShipped.shipped} shipped)`, liveShipped.problems.length === 0 && liveShipped.shipped >= 2]);
+  const idp = live.find((t) => t.includes("fixture-idp.mjs:/app/fixture-idp.mjs")) ?? "";
+  checks.push([
+    "MUTANT: the fixture IdP overlay without its is-main mount is a problem (the red the round-2 CI job showed)",
+    shippedImportProblems([idp.replace(/^.*is-main\.mjs.*$/gm, "")], (f) => readFileSync(join(repoRoot, f), "utf8")).problems.length >= 1,
+  ]);
+
   // LIVE: the derivation, and the two gates fixed on 2026-09-06 — a detector that finds
   // nothing in a tree that contains the form is the failure this gate is about.
   const files = trackedScripts();
@@ -462,6 +523,9 @@ if (isMainModule(process.argv[1], import.meta.url)) {
       );
     }
   }
+
+  const shipLive = shippedImportProblems(deployFiles().map((f) => readFileSync(join(repoRoot, f), "utf8")), (f) => readFileSync(join(repoRoot, f), "utf8"));
+  for (const p of shipLive.problems) problems.push(p);
 
   // The raw spellings: a finding unless declared.
   const rawDeclaredHits = new Set();

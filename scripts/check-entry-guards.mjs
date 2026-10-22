@@ -86,7 +86,6 @@ const DECLARED_RAW_GUARD_DEBT = new Map([
     "scripts/check-owner-gated-surfaces.mjs",
     "build-tick.sh classify_change extracts this ONE file with `git show` into a cache dir and imports it there, where a relative `./lib/is-main.mjs` cannot resolve; its guard stays self-contained until the extraction ships the helper too",
   ],
-  ["scripts/mac/gh-pr.mjs", "Mac-lane script: converted in its own commit, which removes this entry"],
   [
     "scripts/check-launch-proof-bindings.mjs",
     "launch-profile family: the owner merges launch-surface scripts, so the conversion is left to that merge",

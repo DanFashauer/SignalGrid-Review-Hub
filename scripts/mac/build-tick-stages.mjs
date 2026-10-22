@@ -885,6 +885,7 @@ function selfTestBody(root, ok) {
       copyFileSync(join(HERE, "../check-backlog-ownership.mjs"), join(repo, "scripts/check-backlog-ownership.mjs"));
       mkdirSync(join(repo, "scripts/lib"));
       copyFileSync(join(HERE, "../lib/scratch-git.mjs"), join(repo, "scripts/lib/scratch-git.mjs"));
+      copyFileSync(join(HERE, "../lib/is-main.mjs"), join(repo, "scripts/lib/is-main.mjs")); // check-backlog-ownership.mjs imports it
     }
     git("add", "-A");
     git("commit", "-q", "-m", "base");

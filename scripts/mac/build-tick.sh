@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # SignalGrid — the Mac lane's BUILD tick (DR-050 placement; DR-060 delegation). Runs WITHOUT a person, from
-# launchd every 3 hours (scripts/mac/install-build-tick.sh, label
+# launchd with a retry every 5 minutes (scripts/mac/install-build-tick.sh, label
 # com.signalgrid.build-tick). The lane tick (lane-tick.sh) is separate and never builds.
 #
 #   bash scripts/mac/build-tick.sh                   # one run, prints a one-line result
@@ -63,7 +63,7 @@
 #   1b. REFRESH, before any row: mainline's PR-refresh script (when mainline has it) brings
 #      ONE dirty mac/* PR up to date, under a wall-clock cap that kills its whole process
 #      group. It needs no model; a failure never stops the build;
-#   2. read tasks[] from the pinned sha's state (four origin failures in a row raise a hand);
+#   2. read tasks[] from the pinned sha's state (144 origin failures in a row raise a hand);
 #   3. take the first row nobody has claimed: no remote head and no open PR names it
 #      ("row 12", "row-12", "rows 12", "row #12" in a head or title; "plan row 12" or
 #      "row-12" in a body; a range like "rows 17-18" names only 17). A false match only
@@ -194,7 +194,7 @@ raise_hand() {
 }
 fail() { say "result: failed: $1"; raise_hand "$1"; exit 1; }
 
-# An asleep Mac is common and says nothing; four failures in a row (12 h) is not. A run that cannot
+# An asleep Mac is common and says nothing; 144 failures at the five-minute cadence (12 h) is not. A run that cannot
 # ask the real remote for mainline's sha does NOTHING (it never runs a previous session's leftover).
 FETCH_FAILS="$CACHE/fetch-failures"
 origin_down() {
@@ -202,7 +202,7 @@ origin_down() {
   if [ "$DRY" = "0" ]; then
     _n=$(( $(cat "$FETCH_FAILS" 2>/dev/null || echo 0) + 1 ))
     printf '%s' "$_n" > "$FETCH_FAILS"
-    [ "$_n" = "4" ] && raise_hand "origin has been unreachable on 4 build ticks in a row ($1; auth expired? repo locked?)"
+    [ "$_n" = "144" ] && raise_hand "origin has been unreachable on 144 build ticks in a row (12 h at the five-minute cadence; $1; auth expired? repo locked?)"
   fi
   say "result: skipped: origin unreachable ($1; $_n in a row)"
   exit 0

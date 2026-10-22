@@ -1,4 +1,4 @@
 {
-  "firedAt": "2026-10-08T10:32:27.283Z",
-  "result": "10:3xZ 2026-10-08 sweep, the first since 2026-10-02T09:47Z; the daily fires 10-03..10-07 did not run (same gap). The container was rebuilt since the last sweep: scratchpad empty, df / shows 30G free (8.1G used), pnpm store prune removed 1 package, no /var/lib/docker on this box. Nothing else to free; quiet."
+  "firedAt": "2026-10-22T10:30:49.406Z",
+  "result": "freed about 637 MB (343 stale reviewer node_modules directories and old logs in the session scratchpad, removed with find -delete; pnpm store prune removed 0 packages) | 4.8 GB free on / (df: 4788 MB); no docker daemon and no /var/lib/docker cache."
 }

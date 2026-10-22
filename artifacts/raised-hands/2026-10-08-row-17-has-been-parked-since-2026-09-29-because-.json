@@ -7,9 +7,12 @@
   "need": "Owner, one of two: (1) grant the lane a lab - an owner-approved NON-PRODUCTION ITSM sandbox and a NON-PRODUCTION shift-context source holding synthetic data with read-only access (AGENTS.md, Repository scope: no real vendor calls, no production integrations, no tenant data; a production workforce or identity system is never acceptable); name them PRIVATELY (an environment secret in the Claude environment settings, or a direct message), never on the raised-hands issue, a PR or anything committed - the lane needs only the secret's name. (2) Decline the lab: then rule explicitly on the decision-path gap row 17 records - missing shift-context evidence reads unverified and the composed fabric still allows (lib/signalgrid-core/src/seed.ts, the day-one-quiet rule) - either accept it with a decision record (DR-020 rule; it is an allow on missing high-risk input, AGENTS.md) or order the repair without the lab. The row stays marked and visible until that ruling and this hand stays open covering it: a marked row is never ranked and re-dating its marker clears nothing (scripts/objective-loop.mjs rank()), and closing the row would hide the gap.",
   "whoCanUnblock": "owner",
   "domain": "",
-  "status": "open",
+  "status": "resolved",
   "routedTo": null,
   "covers": [
     "objective-owner:awaiting-owner-row-17"
-  ]
+  ],
+  "resolvedAt": "2026-10-22T10:54:49.058Z",
+  "resolvedBy": "cloud",
+  "resolution": "Stale cover, cleared so the stale-hand rule stops failing --check: the objective state derived 2026-10-22T00:49:06.737Z (docs/agent/objective-state.json, Mac tick bb6cf4ee6) no longer raises awaiting-owner-row-17, because the row's BLOCKED ON LAB marker dated 2026-10-08 passed the 14-day MEASURE_WINDOW_DAYS (scripts/objective-loop.mjs) and the row now sits in plan-rows-unmeasured, which the cloud lane clears. Nothing was decided: the owner still has to grant or decline the non-production ITSM and shift-context lab, or rule on the gap row 17 records. The ask stays in the row's marker in docs/COMPANY_BUILD_PLAN.md; the cloud lane re-checks the blocker and re-dates the marker, the loop then re-escalates the row, and a hand is raised again if it stands past its limit."
 }

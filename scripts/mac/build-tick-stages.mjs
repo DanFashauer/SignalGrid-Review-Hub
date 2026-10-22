@@ -2602,6 +2602,146 @@ ${snippet}`, env(cache, t, extra));
         && /put the pinned pnpm first on the job's PATH \(SG_BUILD_TICK_PATH_PREFIX/.test(code));
   });
 
+  // ── M5 / L2: the installers, run whole against stub launchctl and plutil on a scratch HOME ──
+  guard2(ok, "M5/L2 installers", () => {
+    const dir = join(root, "fu-m5"), repo = join(dir, "repo"), bin = join(dir, "bin"), host = join(dir, "host"), lclog = join(dir, "launchctl.log");
+    mkdirSync(join(repo, "scripts/mac"), { recursive: true }); mkdirSync(bin, { recursive: true }); mkdirSync(host, { recursive: true });
+    for (const f of ["install-build-tick.sh", "install-launchd.sh"]) copyFileSync(join(HERE, f), join(repo, "scripts/mac", f));
+    G(repo, "init", "-q", "-b", "SignalGrid_Alpha"); G(repo, "add", "-A"); G(repo, "commit", "-q", "-m", "installers");
+    const exe = (name, text) => { writeFileSync(join(bin, name), text); chmodSync(join(bin, name), 0o755); };
+    exe("uname", '#!/bin/sh\ncase "$1" in -s) echo Darwin ;; *) exec /usr/bin/uname "$@" ;; esac\n');
+    exe("launchctl", '#!/bin/sh\necho "$@" >> "$SG_LC_LOG"\ncase "$1" in\n  print) printf "%s" "${SG_STUB_PRINT:-}"; exit "${SG_STUB_PRINT_RC:-1}" ;;\nesac\nexit "${SG_STUB_LC_RC:-0}"\n');
+    // plutil over the template's XML subset: dict, array, string, integer, true; exits 1 on anything else, or on the file named by SG_PLUTIL_FAIL
+    exe("plutil", `#!/usr/bin/env node
+const fs = require("fs");
+const a = process.argv.slice(2), file = a[a.length - 1];
+if (process.env.SG_PLUTIL_FAIL && file === process.env.SG_PLUTIL_FAIL) process.exit(1);
+let text; try { text = fs.readFileSync(file, "utf8"); } catch { process.exit(1); }
+const dec = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+const toks = [...text.matchAll(/<(\\/?)([A-Za-z]+)(?:\\s[^>]*)?(\\/?)>|([^<]+)/g)].map((m) => (m[4] !== undefined ? { text: m[4] } : { close: m[1] === "/", name: m[2], self: m[3] === "/" })).filter((t) => t.name || t.text.trim() !== "" || true);
+let i = 0;
+const next = () => toks[i++];
+function value() {
+  let t = next(); while (t && t.text !== undefined && t.text.trim() === "") t = next();
+  if (!t || t.close) throw new Error("bad");
+  if (t.name === "true") return true; if (t.name === "false") return false;
+  if (t.name === "dict") { const o = {}; for (;;) { let k = next(); while (k && k.text !== undefined && k.text.trim() === "") k = next(); if (k.close && k.name === "dict") return o; const key = next().text; next(); o[key] = value(); } }
+  if (t.name === "array") { const o = []; for (;;) { const p = toks[i]; if (p.text !== undefined && p.text.trim() === "") { i++; continue; } if (p.close && p.name === "array") { i++; return o; } o.push(value()); } }
+  if (t.name === "string") { let s = ""; if (toks[i].text !== undefined) s = next().text; next(); return dec(s); }
+  if (t.name === "integer") { const n = Number(next().text); next(); return n; }
+  throw new Error("unsupported " + t.name);
+}
+let root; try { while (toks[i] && toks[i].name !== "plist") i++; i++; root = value(); } catch { process.exit(1); }
+if (a[0] === "-extract" && a[1] === "StartInterval" && a[2] === "raw") { if (typeof root.StartInterval !== "number") process.exit(1); console.log(String(root.StartInterval)); process.exit(0); }
+if (a[0] === "-convert" && a[1] === "json") { console.log(JSON.stringify(root)); process.exit(0); }
+process.exit(1);\n`);
+    const runner = join(host, "runner"), runner2 = join(host, "runner2");
+    for (const r of [runner, runner2]) { writeFileSync(r, "#!/bin/sh\nexit 0\n"); chmodSync(r, 0o755); }
+    const home = join(dir, "home"), plistPath = join(home, "Library/LaunchAgents/com.signalgrid.build-tick.plist"), envFile = join(home, ".config/signalgrid/build-tick.env");
+    const lanePlist = join(home, "Library/LaunchAgents/com.signalgrid.lane-tick.plist");
+    const reset = () => { rmSync(home, { recursive: true, force: true }); rmSync(lclog, { force: true }); mkdirSync(home, { recursive: true }); };
+    const run = (script, args = [], extra = {}) => spawnSync("/bin/bash", [join(repo, "scripts/mac", script), ...args], {
+      env: { ...gitEnv, HOME: home, PATH: `${bin}:${process.env.PATH}`, SG_LC_LOG: lclog, SG_STAGE_RUNNER: "", ...extra }, encoding: "utf8", timeout: 60000 });
+    const lcLines = () => (existsSync(lclog) ? readFileSync(lclog, "utf8").split("\n").filter(Boolean) : []);
+    const writeEnvFile = (text) => { mkdirSync(dirname(envFile), { recursive: true }); writeFileSync(envFile, text); };
+    const plistText = () => (existsSync(plistPath) ? readFileSync(plistPath, "utf8") : "");
+
+    // (a) a fresh install reproduces the host wiring it is given
+    reset();
+    let r = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: runner });
+    ok("M5 (a) a fresh install with SG_STAGE_RUNNER=<absolute executable> in the environment writes it into the job's EnvironmentVariables and bootstraps (through the STUB launchctl: its log exists)",
+      r.status === 0 && plistText().includes(`<key>SG_STAGE_RUNNER</key><string>${runner}</string>`) && lcLines().some((l) => l.startsWith("bootstrap ")), `${r.status} ${r.stdout} ${r.stderr}`);
+    ok("M5 ...the job's PATH, StartInterval and ProgramArguments are the ones the installer always wrote (300 s; the launcher extracts mainline's copy)", /<key>StartInterval<\/key><integer>300<\/integer>/.test(plistText()) && /git show origin\/SignalGrid_Alpha:scripts\/mac\/build-tick\.sh/.test(plistText()) && /<key>PATH<\/key><string>[^<]*\.local\/bin:\/usr\/local\/bin:\/opt\/homebrew\/bin:\/usr\/bin/.test(plistText()));
+    // (b) the same from the env file; the environment wins over the file
+    reset();
+    writeEnvFile(`# the Mac's host wiring\n\nSG_STAGE_RUNNER=${runner}\nSG_BUILD_TICK_PATH_PREFIX=${host}\n`);
+    r = run("install-build-tick.sh");
+    ok("M5 (b) the same wiring read from ~/.config/signalgrid/build-tick.env (comments and blank lines skipped, never sourced); a PATH prefix goes FIRST on the job's PATH",
+      r.status === 0 && plistText().includes(`<string>${runner}</string>`) && plistText().includes(`<key>PATH</key><string>${host}:`), `${r.status} ${r.stdout} ${r.stderr}`);
+    reset(); writeEnvFile(`SG_STAGE_RUNNER=${runner2}\n`);
+    r = run("install-build-tick.sh", [], { SG_STAGE_RUNNER: runner });
+    ok("M5 ...and the environment wins over the file", r.status === 0 && plistText().includes(`<string>${runner}</string>`) && !plistText().includes(runner2), `${r.status} ${r.stderr}`);
+    // (c) any other key is refused, naming file:line and the key; nothing written, launchctl never reached
+    reset(); writeEnvFile("SG_STAGE_RUNNER=" + runner + "\nSG_NOW=1\n");
+    r = run("install-build-tick.sh");
+    ok("M5 (c) an env file carrying any other key (SG_NOW=1) is refused with exit 2 naming the file, the line and the key; no plist is written and launchctl is not called", r.status === 2 && /build-tick\.env:2: .*SG_NOW/.test(r.stderr) && !existsSync(plistPath) && lcLines().length === 0, `${r.status} ${r.stderr}`);
+    // (d) unusable values
+    const refuses = (label, extra, fileText) => {
+      reset(); if (fileText !== undefined) writeEnvFile(fileText);
+      const x = run("install-build-tick.sh", [], extra);
+      ok(`M5 (d) ${label} is refused with exit 2 and writes nothing`, x.status === 2 && !existsSync(plistPath) && lcLines().length === 0, `${x.status} ${x.stdout} ${x.stderr}`);
+    };
+    refuses("a relative SG_STAGE_RUNNER", { SG_STAGE_RUNNER: "host/runner" });
+    refuses("a missing SG_STAGE_RUNNER file", { SG_STAGE_RUNNER: join(host, "nope") });
+    refuses("an SG_STAGE_RUNNER inside the checkout", { SG_STAGE_RUNNER: join(repo, "scripts/mac/install-build-tick.sh") });
+    mkdirSync(`${repo}.build`, { recursive: true }); writeFileSync(join(`${repo}.build`, "runner"), "#!/bin/sh\n"); chmodSync(join(`${repo}.build`, "runner"), 0o755);
+    refuses("an SG_STAGE_RUNNER inside the checkout's build clone", { SG_STAGE_RUNNER: join(`${repo}.build`, "runner") });
+    refuses("an SG_STAGE_RUNNER holding a quote or an ampersand (it goes into XML)", { SG_STAGE_RUNNER: `${host}/a&b` });
+    refuses("a relative PATH prefix entry", { SG_BUILD_TICK_PATH_PREFIX: "bin" });
+    refuses("a PATH prefix entry that is not an existing directory", { SG_BUILD_TICK_PATH_PREFIX: join(host, "missing") });
+    refuses("a PATH prefix inside the checkout", { SG_BUILD_TICK_PATH_PREFIX: join(repo, "scripts") });
+    refuses("a PATH prefix with a trailing colon (an empty entry puts the current directory on the job's PATH)", { SG_BUILD_TICK_PATH_PREFIX: `${host}:` });
+    // (e) refuse to destroy wiring the installed job carries
+    reset(); run("install-build-tick.sh", [], { SG_STAGE_RUNNER: runner });
+    const installed = plistText(); rmSync(lclog, { force: true });
+    r = run("install-build-tick.sh");
+    ok("M5 (e) reinstalling WITHOUT the runner the installed plist carries is refused (exit 1) naming `EnvironmentVariables.SG_STAGE_RUNNER: dropped`; the plist is byte-identical and launchctl was not asked to bootout",
+      r.status === 1 && /EnvironmentVariables\.SG_STAGE_RUNNER: dropped/.test(r.stderr) && /--force/.test(r.stderr) && plistText() === installed && !lcLines().some((l) => l.startsWith("bootout")), `${r.status} ${r.stderr}`);
+    r = run("install-build-tick.sh", ["--force"]);
+    ok("M5 ...and --force replaces it (the runner is gone, bootstrap ran)", r.status === 0 && !plistText().includes("SG_STAGE_RUNNER") && lcLines().some((l) => l.startsWith("bootstrap ")), `${r.status} ${r.stderr}`);
+    // (f) a wrapper ProgramArguments is never reproduced, only kept or replaced
+    reset(); run("install-build-tick.sh");
+    writeFileSync(plistPath, plistText().replace("<string>/bin/bash</string>", "<string>/usr/local/bin/wrapper</string>"));
+    const wrapped = plistText(); rmSync(lclog, { force: true });
+    r = run("install-build-tick.sh");
+    ok("M5 (f) an installed plist whose ProgramArguments is a wrapper is refused (exit 1, the change named), untouched, no bootout", r.status === 1 && /ProgramArguments/.test(r.stderr) && plistText() === wrapped && !lcLines().some((l) => l.startsWith("bootout")), `${r.status} ${r.stderr}`);
+    r = run("install-build-tick.sh", ["--force"]);
+    ok("M5 ...and --force replaces it", r.status === 0 && plistText().includes("<string>/bin/bash</string>") && !plistText().includes("/usr/local/bin/wrapper"));
+    // (g) the update path: only the interval differs
+    reset(); run("install-build-tick.sh");
+    writeFileSync(plistPath, plistText().replace("<integer>300</integer>", "<integer>10800</integer>"));
+    r = run("install-build-tick.sh");
+    ok("M5 (g) an installed plist that differs only by StartInterval (10800 -> 300) is the UPDATE path and installs without --force", r.status === 0 && /<integer>300<\/integer>/.test(plistText()), `${r.status} ${r.stderr}`);
+    // (h) a plist this installer cannot read is not compared as equal
+    reset(); run("install-build-tick.sh"); rmSync(lclog, { force: true });
+    r = run("install-build-tick.sh", [], { SG_PLUTIL_FAIL: plistPath });
+    ok("M5 (h) plutil failing on the installed plist is a refusal (`could not compare`), not a pass", r.status === 1 && /could not compare/.test(r.stderr) && !lcLines().some((l) => l.startsWith("bootout")), `${r.status} ${r.stderr}`);
+    r = run("install-build-tick.sh", ["--force"], { SG_PLUTIL_FAIL: plistPath });
+    ok("M5 ...and --force goes through", r.status === 0);
+    // (i) loaded from a file this installer cannot read
+    reset(); rmSync(lclog, { force: true });
+    r = run("install-build-tick.sh", [], { SG_STUB_PRINT: "\trun interval = 300 seconds\n", SG_STUB_PRINT_RC: "0" });
+    ok("M5 (i) a job that is loaded while no plist exists where this installer writes is refused (it was loaded from a file this installer cannot read)", r.status === 1 && /cannot read/.test(r.stderr) && !existsSync(plistPath) && !lcLines().some((l) => l.startsWith("bootout") || l.startsWith("bootstrap")), `${r.status} ${r.stderr}`);
+    // (j) --status
+    reset(); run("install-build-tick.sh");
+    const printed = (n) => ({ SG_STUB_PRINT: `\ttype = LaunchAgent\n\trun interval = ${n} seconds\n`, SG_STUB_PRINT_RC: "0" });
+    r = run("install-build-tick.sh", ["--status"], printed(300));
+    ok("M5 (j) --status with 300 s loaded and 300 s installed exits 0", r.status === 0 && /loaded interval: 300 s/.test(r.stdout), `${r.status} ${r.stdout}`);
+    r = run("install-build-tick.sh", ["--status"], printed(10800));
+    ok("M5 ...loaded 10800 s: `UPDATE NEEDED: loaded 10800 s, source says 300 s`, exit 1, and the command it names says --force replaces wiring", r.status === 1 && /UPDATE NEEDED: loaded 10800 s, source says 300 s \(installed plist: 300 s\)/.test(r.stdout) && /--force/.test(r.stdout), `${r.status} ${r.stdout}`);
+    r = run("install-build-tick.sh", ["--status"], { SG_STUB_PRINT_RC: "1" });
+    ok("M5 ...not loaded: `is NOT loaded`, exit 1", r.status === 1 && /is NOT loaded/.test(r.stdout));
+    r = run("install-build-tick.sh", ["--status"], { SG_STUB_PRINT: "\ttype = LaunchAgent\n", SG_STUB_PRINT_RC: "0" });
+    ok("M5 ...no `run interval` line: `loaded unknown s`, exit 1 (unknown is not a pass)", r.status === 1 && /UPDATE NEEDED: loaded unknown s/.test(r.stdout), `${r.status} ${r.stdout}`);
+    r = run("install-build-tick.sh", ["--bogus"]);
+    ok("M5 an unknown flag lists --force among the known ones", r.status === 2 && /known: --uninstall, --status, --force/.test(r.stderr));
+    ok("M5 LABEL= and INTERVAL_SECONDS= stay bare lines (the routines gate's installer parity reads them)", /^LABEL="com\.signalgrid\.build-tick"$/m.test(readFileSync(join(HERE, "install-build-tick.sh"), "utf8")) && /^INTERVAL_SECONDS=300$/m.test(readFileSync(join(HERE, "install-build-tick.sh"), "utf8")));
+
+    // L2: install-launchd.sh --status reads the loaded job, not just whether a job is loaded
+    reset(); run("install-launchd.sh");
+    ok("L2 install-launchd.sh still installs through the stub (a plist is written, bootstrap runs)", existsSync(lanePlist) && lcLines().some((l) => l.startsWith("bootstrap ")));
+    r = run("install-launchd.sh", ["--status"], printed(300));
+    ok("L2 --status with 300 s loaded and 300 s installed: exit 0, both intervals printed", r.status === 0 && /loaded interval: 300 s; installed interval: 300 s; source says: 300 s/.test(r.stdout), `${r.status} ${r.stdout}`);
+    r = run("install-launchd.sh", ["--status"], printed(1800));
+    ok("L2 ...loaded at 1800 s: `UPDATE NEEDED: loaded 1800 s, source says 300 s`, exit 1 (it used to print `is loaded (every 300 s)` from the source)", r.status === 1 && /UPDATE NEEDED: loaded 1800 s, source says 300 s/.test(r.stdout) && !/every 300 s/.test(r.stdout), `${r.status} ${r.stdout}`);
+    rmSync(lanePlist, { force: true });
+    r = run("install-launchd.sh", ["--status"], printed(300));
+    ok("L2 ...loaded but no installed plist to read: exit 1 (installed `unknown`)", r.status === 1 && /installed plist: unknown s/.test(r.stdout), `${r.status} ${r.stdout}`);
+    r = run("install-launchd.sh", ["--status"], { SG_STUB_PRINT_RC: "1" });
+    ok("L2 ...not loaded: exit 1", r.status === 1 && /is NOT loaded/.test(r.stdout));
+    ok("L2 LABEL= and INTERVAL_SECONDS= stay bare lines", /^LABEL="com\.signalgrid\.lane-tick"$/m.test(readFileSync(join(HERE, "install-launchd.sh"), "utf8")) && /^INTERVAL_SECONDS=300$/m.test(readFileSync(join(HERE, "install-launchd.sh"), "utf8")));
+  });
+
   // ── FOLLOWUP-NEXT-CHUNK ──
 }
 const guard2 = (ok, name, fn) => { try { fn(); } catch (e) { ok(`${name} threw: ${e.message}`, false); } };

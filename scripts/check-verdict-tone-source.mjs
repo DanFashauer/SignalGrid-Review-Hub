@@ -1,4 +1,5 @@
-// check-verdict-tone-source.mjs — a verdict may not pick its own colour inline.
+// check-verdict-tone-source.mjs — a verdict may not pick its own colour inline,
+// and may not wear another verdict's.
 //
 //   node scripts/check-verdict-tone-source.mjs              # gate
 //   node scripts/check-verdict-tone-source.mjs --self-test  # prove it can fail
@@ -8,23 +9,27 @@
 // shown in the danger tone, `restrict` wearing the step-up tone, and two verdicts
 // sharing one legend swatch — and that gate exited 0 before the fix and exits 0
 // after it. Every one of those defects used a ratified token. It has no concept
-// of WHICH verdict maps to which token, so a mis-mapping is structurally
-// invisible to it (backlog row 168).
+// of WHICH verdict maps to which token (backlog row 168).
 //
-// This gate answers the other half, and answers it STRUCTURALLY rather than
-// semantically: it does not know which colour a verdict deserves either. It
-// requires that the decision be made in ONE place, a total `Record` over the
-// closed verdict union, so the compiler catches a missing arm and a reviewer has
-// one file to read. Three independent ternaries is how the mappings drifted
-// apart in the first place; a fourth had survived in `Dashboard.tsx` until this
-// gate was written.
+// This gate answers in two steps. First STRUCTURALLY: the decision is made in ONE
+// place, a total `Record` over the closed verdict union, so the compiler catches a
+// missing arm and a reviewer has one file to read. Second, since 2026-10-22, by
+// VALUE: `VERDICT_REGISTRY` says which token each verdict owns (allow →
+// --decision-allow, step-up → --decision-review, restrict and deny →
+// --decision-deny, shared by design, DR-005/006) and the gate checks chart-mark
+// tokens, the tone Records' status classes and every stylesheet's
+// `.text-/.bg-status-*` rule against it. A total Record with the wrong colours in
+// it no longer passes.
 //
-// WHAT IT CANNOT DO, said plainly: a total Record with the wrong colours in it
-// passes. Centralising the decision does not make it correct — it makes it
-// reviewable, and it makes the next drift a typecheck failure instead of a
-// silent fourth opinion.
+// WHAT IT STILL CANNOT DO, said plainly (the run prints the same list): it cannot
+// tell restrict from deny by token (they share one), it does not judge a badge
+// Record outside the tone modules, and it does not decide what a verdict
+// "deserves" beyond the registry — whoever edits the registry decides that, and
+// the edit is one reviewable line. Option (b) of row 168, distinct rendered
+// values, is still open.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -51,11 +56,16 @@ const TREES = [
 // anticipates is legitimate (a helper that branches on a verdict to pick a tone),
 // and it is REPORTED on every run rather than sitting silent, so nobody mistakes
 // an unused allowlist for a used one.
-const TONE_MODULES = new Set([
-  "artifacts/signalgrid-desktop/src/lib/outcome-tone.ts",
-  "artifacts/signalgrid-mobile-pwa/src/lib/outcome-tone.ts",
-  "artifacts/signalgrid-review/src/lib/outcome-tone.ts",
-]);
+/**
+ * ...and the verdict Records each MUST declare (the registry's floor): a module
+ * that loses one fails, rather than being judged over a smaller set.
+ */
+const TONE_EXPECTED = {
+  "artifacts/signalgrid-desktop/src/lib/outcome-tone.ts": ["OUTCOME_TONE"],
+  "artifacts/signalgrid-mobile-pwa/src/lib/outcome-tone.ts": ["OUTCOME_BADGE_TONE"],
+  "artifacts/signalgrid-review/src/lib/outcome-tone.ts": ["VERDICT_BADGE_TONE", "VERDICT_TEXT_TONE"],
+};
+const TONE_MODULES = new Set(Object.keys(TONE_EXPECTED));
 
 // ── The second half, added 2026-09-05 (sixth audit round) ───────────────────
 //
@@ -228,15 +238,17 @@ const SERIES_KEY = { allow: "allow", "step-up": "stepUp", restrict: "restrict", 
 //       registry token for X.
 // Restrict and deny share --decision-deny by design (DR-005/006); they are told
 // apart by class suffix and, in a chart, by pattern, never by token.
+// A verdict's status-class suffix IS its key here (`status-step-up` for "step-up"),
+// so the registry carries only the token each verdict must resolve to.
 export const VERDICT_REGISTRY = {
-  allow: { token: "--decision-allow", suffix: "allow" },
-  "step-up": { token: "--decision-review", suffix: "step-up" },
-  restrict: { token: "--decision-deny", suffix: "restrict" },
-  deny: { token: "--decision-deny", suffix: "deny" },
+  allow: { token: "--decision-allow" },
+  "step-up": { token: "--decision-review" },
+  restrict: { token: "--decision-deny" },
+  deny: { token: "--decision-deny" },
 };
+const VERDICTS = Object.keys(VERDICT_REGISTRY);
 /** Every spelling of a verdict key in a Record literal → the registry's verdict. */
 const KEY_VERDICT = { allow: "allow", "step-up": "step-up", step_up: "step-up", stepUp: "step-up", restrict: "restrict", deny: "deny" };
-const SUFFIX_VERDICT = Object.fromEntries(Object.entries(VERDICT_REGISTRY).map(([v, r]) => [r.suffix, v]));
 
 /**
  * Problems in an imported tone module's chart exports; null when it has none.
@@ -389,21 +401,6 @@ export function chartSiteProblems(src) {
   return out;
 }
 
-function walk(dir, out = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return out; // a tree that does not exist in this checkout is not a pass or a fail
-  }
-  for (const name of entries) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) walk(full, out);
-    else if (/\.tsx?$/.test(full)) out.push(full);
-  }
-  return out;
-}
-
 /** Source text of the `{…}` opening at `open`, quote-aware; null when it never closes. */
 function braceBody(code, open) {
   let depth = 0, q = null;
@@ -412,89 +409,175 @@ function braceBody(code, open) {
     if (q) { if (c === "\\") i++; else if (c === q) q = null; continue; }
     if (c === '"' || c === "'" || c === "`") q = c;
     else if (c === "{") depth++;
-    else if (c === "}" && --depth === 0) return code.slice(open + 1, i);
+    else if (c === "}" && --depth === 0) return { text: code.slice(open + 1, i), start: open + 1 };
   }
   return null;
 }
 
+/** Split an object literal's body at its top-level commas: `{ text, start }` per entry, comments already stripped. */
+function splitTopLevel(body) {
+  const out = [];
+  let depth = 0, q = null, from = 0;
+  const push = (end) => {
+    const raw = body.slice(from, end);
+    const text = raw.trim();
+    if (text) out.push({ text, start: from + raw.indexOf(text) });
+  };
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (q) { if (c === "\\") i++; else if (c === q) q = null; continue; }
+    if (c === '"' || c === "'" || c === "`") q = c;
+    else if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) depth--;
+    else if (c === "," && depth === 0) { push(i); from = i + 1; }
+  }
+  push(body.length);
+  return out;
+}
+
+const STRING_LITERAL = /^(["'`])((?:\\.|(?!\1)[^\\])*)\1$/;
+const ENTRY = /^(?:"([^"]+)"|'([^']+)'|([A-Za-z_$][\w$]*)|\[[^\]]*\])\s*(?::\s*([\s\S]*))?$/;
+
+/** The object literals a tone module declares as verdict Records: expected names, plus any `Record<…Outcome…, string>`. */
+function recordLiterals(code, expected) {
+  const found = new Map();
+  const add = (open, name) => { if (!found.has(open)) found.set(open, name); };
+  for (const m of code.matchAll(/\bRecord<\s*([^,<>]*Outcome[^,<>]*),\s*string\s*>+\s*=\s*(?:Object\.freeze\(\s*)?\{/g)) {
+    add(m.index + m[0].length - 1, (code.slice(0, m.index).match(/(\w+)\s*:\s*(?:Readonly<\s*)?$/) ?? [])[1] ?? "Record");
+  }
+  for (const name of expected) {
+    for (const m of code.matchAll(new RegExp(`\\b(?:const|let|var)\\s+${escapeRegExp(name)}\\b[^=;]*=\\s*(?:Object\\.freeze\\(\\s*)?\\{`, "g"))) add(m.index + m[0].length - 1, name);
+  }
+  return found;
+}
+
 /**
- * Judge every `Record<…Outcome…, string> = { … }` literal in a tone module against
- * the registry. `{ records, problems }` — `records` is how many were found, so a
- * module that lost its Records reads as zero, not as clean.
+ * Judge the verdict Records in a tone module against the registry.
+ *   `expected` — Record names the module MUST declare as judged four-verdict
+ *   literals (a floor: deleting, renaming or re-typing one is a failure, never a
+ *   smaller count);
+ * returns `{ records, entries, problems }` — `entries` counts verdict-keyed
+ * entries actually judged, so a spread-only Record contributes nothing.
+ * An entry under a verdict key whose value is not a plain string literal cannot be
+ * judged and is a problem (golden rule 2: unreadable input never loosens), as is a
+ * spread whose target is not another judged Record of the same module.
  */
-export function toneRecordProblems(src) {
+export function toneRecordProblems(src, expected = []) {
   const code = stripComments(src);
   const problems = [];
-  let records = 0;
-  for (const m of code.matchAll(/\bRecord<\s*([^,<>]*Outcome[^,<>]*),\s*string\s*>\s*=\s*\{/g)) {
-    const body = braceBody(code, m.index + m[0].length - 1);
-    const line = code.slice(0, m.index).split("\n").length;
-    const name = (code.slice(0, m.index).match(/(\w+)\s*:\s*$/) ?? [])[1] ?? "Record";
-    records++;
-    if (body === null) { problems.push(`line ${line}: ${name} is not closed — cannot be judged`); continue; }
+  const lineAt = (i) => code.slice(0, i).split("\n").length;
+  const literals = recordLiterals(code, expected);
+  const judgedNames = new Set(literals.values());
+  const totals = new Set();
+  let entries = 0;
+  for (const [open, name] of literals) {
+    const body = braceBody(code, open);
+    if (body === null) { problems.push(`line ${lineAt(open)}: ${name} is not closed — cannot be judged`); continue; }
     const classes = {};
-    for (const e of body.matchAll(/(?:^|[,{\s])(?:"([^"]+)"|'([^']+)'|([A-Za-z_]\w*))\s*:\s*(["'`])((?:\\.|(?!\4)[^\\])*)\4/g)) {
-      const verdict = KEY_VERDICT[e[1] ?? e[2] ?? e[3]];
+    for (const seg of splitTopLevel(body.text)) {
+      const at = `line ${lineAt(body.start + seg.start)}: ${name}`;
+      if (seg.text.startsWith("...")) {
+        const target = seg.text.slice(3).trim();
+        if (!judgedNames.has(target)) problems.push(`${at} spreads ${target}, which is not a judged Record of this module — its verdict entries cannot be judged`);
+        continue;
+      }
+      const m = ENTRY.exec(seg.text);
+      if (!m) { problems.push(`${at} has an entry that cannot be parsed: ${seg.text.slice(0, 40)}`); continue; }
+      const key = m[1] ?? m[2] ?? m[3];
+      if (key === undefined) { problems.push(`${at} has a computed key — it cannot be judged`); continue; }
+      const verdict = KEY_VERDICT[key];
       if (!verdict) continue;
-      const own = VERDICT_REGISTRY[verdict].suffix;
-      const suffixes = [...e[5].matchAll(/\b(?:text|bg|border)-status-([a-z-]+)/g)].map((x) => x[1]);
+      const lit = m[4] === undefined ? null : STRING_LITERAL.exec(m[4].trim());
+      if (!lit || (lit[1] === "`" && lit[2].includes("${"))) {
+        problems.push(`${at}.${key} is not a string literal and cannot be judged`);
+        continue;
+      }
+      entries++;
+      const suffixes = [...lit[2].matchAll(/\b(?:text|bg|border)-status-([a-z-]+)/g)].map((x) => x[1]);
       for (const sfx of suffixes) {
-        if (sfx !== own) problems.push(`line ${line}: ${name}.${e[1] ?? e[2] ?? e[3]} wears status-${sfx}, its own class is status-${own}`);
+        if (sfx !== verdict) problems.push(`${at}.${key} wears status-${sfx}, its own class is status-${verdict}`);
       }
       classes[verdict] = suffixes.length > 0 ? suffixes.join("+") : null;
     }
-    if (Object.keys(VERDICT_REGISTRY).every((v) => v in classes)) {
-      for (const v of Object.keys(VERDICT_REGISTRY)) {
-        if (classes[v] === null) problems.push(`line ${line}: ${name} is a four-verdict total but ${v} carries no status class`);
+    if (VERDICTS.every((v) => v in classes)) {
+      for (const v of VERDICTS) {
+        if (classes[v] === null) problems.push(`line ${lineAt(open)}: ${name} is a four-verdict total but ${v} carries no status class`);
       }
       const seen = new Map();
-      for (const v of Object.keys(VERDICT_REGISTRY)) {
+      for (const v of VERDICTS) {
         if (classes[v] === null) continue;
-        if (seen.has(classes[v])) problems.push(`line ${line}: ${name} gives ${seen.get(classes[v])} and ${v} the same class (${classes[v]})`);
+        if (seen.has(classes[v])) problems.push(`line ${lineAt(open)}: ${name} gives ${seen.get(classes[v])} and ${v} the same class (${classes[v]})`);
         else seen.set(classes[v], v);
       }
+      if (VERDICTS.every((v) => classes[v] !== null)) totals.add(name);
     }
   }
-  return { records, problems };
+  for (const name of expected) {
+    if (!totals.has(name)) problems.push(`expected ${name} is not declared as a judged four-verdict literal (missing, renamed, partial or unreadable)`);
+  }
+  return { records: literals.size, entries, problems };
 }
 
 /**
- * Judge a tree's CSS: each `.text-status-X` / `.bg-status-X` rule must resolve to
- * the registry token for X. `rules` counts the rules judged (zero is reported, not
- * passed); an unresolvable rule body is a problem, not a skip.
+ * Judge a stylesheet: each `.text-status-X` / `.bg-status-X` rule must resolve to
+ * the registry token for X, reading the LAST declaration of each colour property
+ * (CSS applies the last); a `.bg-status-X` also judges its text colour and its
+ * `border-color`. A selector that names a verdict status class in any shape other
+ * than the single canonical class (a selector list, a pseudo or `:where()`
+ * override, a Tailwind `@utility`) cannot be judged and is a problem, not a skip.
+ * `found` is the set of canonical `kind:verdict` rules, for the caller's floor.
  */
 export function cssToneProblems(src) {
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""));
   const problems = [];
+  const found = new Set();
   let rules = 0;
-  const lineOf = (i) => src.slice(0, i).split("\n").length;
-  for (const m of src.matchAll(/\.(text|bg)-status-([a-z-]+)\s*\{([^}]*)\}/g)) {
-    const [, kind, sfx, body] = m;
-    const verdict = SUFFIX_VERDICT[sfx];
-    if (!verdict) continue; // not a verdict class
+  const lineOf = (i) => code.slice(0, i).split("\n").length;
+  const last = (body, prop) => [...body.matchAll(new RegExp(`(?<![\\w-])${prop}\\s*:\\s*([^;]*)`, "g"))].at(-1)?.[1];
+  const tokenOf = (decl) => decl?.match(/var\(\s*(--decision-(?:allow|review|deny))(?:-on-tint)?\s*[,)]/)?.[1];
+  for (const m of code.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = m[1].trim();
+    if (!/\b(?:text|bg|border)-status-(?:allow|step-up|restrict|deny)\b/.test(selector)) continue;
+    const line = lineOf(m.index + m[0].indexOf(selector));
+    const canon = /^\.(text|bg)-status-(allow|step-up|restrict|deny)$/.exec(selector);
+    if (!canon) { problems.push(`line ${line}: selector "${selector.replace(/\s+/g, " ").slice(0, 60)}" names a verdict status class outside the canonical single-class shape — it cannot be judged`); continue; }
+    const [, kind, verdict] = canon;
     rules++;
+    found.add(`${kind}:${verdict}`);
     const want = VERDICT_REGISTRY[verdict].token;
-    const at = `line ${lineOf(m.index)}: .${kind}-status-${sfx}`;
-    const prop = kind === "text" ? /(?<![\w-])color:\s*([^;]*)/ : /background-color:\s*([^;]*)/;
-    const got = prop.exec(body)?.[1].match(/var\((--decision-[a-z]+)(?:-on-tint)?\)/)?.[1];
-    if (!got) { problems.push(`${at} resolves to no --decision-* token`); continue; }
-    if (got !== want) problems.push(`${at} paints ${got}, its registry token is ${want}`);
-    if (kind === "bg") {
-      const fg = /(?<![\w-])color:\s*([^;]*)/.exec(body)?.[1].match(/var\((--decision-[a-z]+)(?:-on-tint)?\)/)?.[1];
-      if (fg !== want) problems.push(`${at} text colour is ${fg ?? "no --decision-* token"}, its registry token is ${want}`);
+    const at = `line ${line}: .${kind}-status-${verdict}`;
+    const checks = kind === "text"
+      ? [["color", last(m[2], "color"), true]]
+      : [["background-color", last(m[2], "background-color"), true], ["color", last(m[2], "color"), true], ["border-color", last(m[2], "border-color"), false]];
+    for (const [prop, decl, required] of checks) {
+      const got = tokenOf(decl);
+      if (decl === undefined && !required) continue;
+      if (!got) problems.push(`${at} ${prop} resolves to no --decision-* token`);
+      else if (got !== want) problems.push(`${at} ${prop} paints ${got}, its registry token is ${want}`);
     }
   }
-  return { rules, problems };
+  return { rules, found, problems };
 }
 
-function walkCss(dir, out = []) {
+/**
+ * The files under `dir` matching `re`, plus every directory read that failed for a
+ * reason other than ENOENT. A tree absent from this checkout is not a pass or a
+ * fail; a tree that exists but cannot be read is neither, and is reported.
+ */
+function walk(dir, re = /\.tsx?$/, out = [], errs = []) {
   let entries;
-  try { entries = readdirSync(dir); } catch { return out; }
+  try {
+    entries = readdirSync(dir);
+  } catch (e) {
+    if (e.code !== "ENOENT") errs.push(`${dir}: ${e.code ?? e.message}`);
+    return { files: out, errs };
+  }
   for (const name of entries) {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) walkCss(full, out);
-    else if (/\.css$/.test(full)) out.push(full);
+    if (statSync(full).isDirectory()) walk(full, re, out, errs);
+    else if (re.test(full)) out.push(full);
   }
-  return out;
+  return { files: out, errs };
 }
 
 async function selfTest() {
@@ -620,7 +703,8 @@ async function selfTest() {
   checks.push(["MUTANT a total whose verdict lost its status class is caught", rp(goodRecord.replace('deny: "text-status-deny"', 'deny: "text-red-300"')).some((m) => /deny carries no status class/.test(m))]);
   checks.push(["the review tree's step_up spelling is judged too", rp(goodRecord.replace('"step-up"', "step_up").replace("text-status-step-up", "text-status-deny")).some((m) => /step_up wears status-deny/.test(m))]);
   checks.push(["a Record with a class beside other classes is judged by its status suffix", rp(goodRecord.replace('deny: "text-status-deny"', 'deny: "border-x bg-status-allow/5 text-status-allow"')).length >= 1]);
-  checks.push(["a spread-and-extras Record with no literal verdict is not judged (SIMULATOR_OUTCOME_TONE shape)", rp(`const T: Record<SimulatorOutcome, string> = {\n  ...BASE,\n  alert_operator: "text-sky-300",\n};`).length === 0]);
+  checks.push(["a spread of an UNKNOWN base is a problem, not a skip (M1)", rp(`const T: Record<SimulatorOutcome, string> = {\n  ...BASE,\n  alert_operator: "text-sky-300",\n};`).some((m) => /spreads BASE/.test(m))]);
+  checks.push(["a spread of a judged Record in the same module is fine (SIMULATOR_OUTCOME_TONE shape)", rp(`${goodRecord}\nconst T: Record<SimulatorOutcome, string> = {\n  ...OUTCOME_TONE,\n  alert_operator: "text-sky-300",\n};`).length === 0]);
   checks.push(["a Record in a COMMENT is not code", toneRecordProblems(`// const X: Record<Outcome, string> = { deny: "text-status-allow" };`).records === 0]);
   checks.push(["an unclosed Record is a problem, not a pass", rp(`const X: Record<Outcome, string> = { deny: "text-status-deny",`).length === 1]);
   const goodCss = `.text-status-allow { color: hsl(var(--decision-allow)); }\n.bg-status-allow { background-color: hsl(var(--decision-allow) / 0.08); color: hsl(var(--decision-allow-on-tint)); }\n.text-status-step-up { color: hsl(var(--decision-review)); }\n.text-status-restrict { color: hsl(var(--decision-deny)); }\n.text-status-deny { color: hsl(var(--decision-deny)); }\n.bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); color: hsl(var(--decision-deny-on-tint)); }`;
@@ -646,15 +730,15 @@ async function selfTest() {
     let src = null;
     try { src = readFileSync(join(repo, rel), "utf8"); } catch { /* reported by the loop below */ }
     realTone[rel] = src;
-    const r = src === null ? { records: 0, problems: ["unreadable"] } : toneRecordProblems(src);
-    checks.push([`real tone module has Records and they pass the registry (${r.records}): ${rel}`, src !== null && r.records > 0 && r.problems.length === 0]);
+    const r = src === null ? { records: 0, entries: 0, problems: ["unreadable"] } : toneRecordProblems(src, TONE_EXPECTED[rel]);
+    checks.push([`real tone module declares its expected Records and they pass the registry (${r.records} Record(s), ${r.entries} entr(ies)): ${rel}`, src !== null && r.entries >= 4 * TONE_EXPECTED[rel].length && r.problems.length === 0]);
   }
   const desk = realTone["artifacts/signalgrid-desktop/src/lib/outcome-tone.ts"] ?? "";
-  checks.push(["the row-168 reproduce, planted in the real desktop module's text, is RED", rp(desk.replace('deny: "text-status-deny"', 'deny: "text-status-allow"')).some((m) => /deny wears status-allow/.test(m))]);
+  checks.push(["the row-168 reproduce, planted in the real desktop module's text, is RED", toneRecordProblems(desk, TONE_EXPECTED["artifacts/signalgrid-desktop/src/lib/outcome-tone.ts"]).problems.length === 0 && rp(desk.replace('deny: "text-status-deny"', 'deny: "text-status-allow"')).some((m) => /deny wears status-allow/.test(m))]);
   const rev = realTone["artifacts/signalgrid-review/src/lib/outcome-tone.ts"] ?? "";
   checks.push(["allow/deny swapped in the real review module's VERDICT_TEXT_TONE is RED", rp(rev.replace('allow: "text-status-allow"', 'allow: "text-status-deny"')).some((m) => /allow wears status-deny/.test(m))]);
-  for (const tree of TREES) {
-    const css = walkCss(join(repo, tree)).map((f) => readFileSync(f, "utf8"));
+  for (const tree of [...TREES, APP_CSS_ROOT]) {
+    const css = walk(join(repo, tree), /\.css$/).files.map((f) => readFileSync(f, "utf8"));
     const judged = css.map(cssToneProblems);
     const rules = judged.reduce((n, r) => n + r.rules, 0);
     checks.push([`real CSS of ${tree} has verdict rules and they resolve to the registry (${rules})`, rules > 0 && judged.every((r) => r.problems.length === 0)]);
@@ -669,6 +753,74 @@ async function selfTest() {
     checks.push([`swapping allow/deny tokens in the REAL chart marks is RED: ${rel}`, !!swapped && chartModuleProblems(swapped).some((x) => /not its ratified/.test(x))]);
   }
 
+  // M1 — a verdict entry that is not a plain string literal cannot be judged.
+  for (const [label, entry] of [
+    ["an identifier", 'deny: ALLOW_CLASS'],
+    ["a ternary", 'deny: flag ? "text-status-allow" : "text-status-deny"'],
+    ["a cn() call", 'deny: cn("text-status-allow")'],
+    ["a shorthand", 'deny'],
+    ["an interpolated template", 'deny: `text-status-${x}`'],
+    ["a computed key", '["deny"]: "text-status-deny"'],
+  ]) {
+    checks.push([`MUTANT a verdict entry that is ${label} is a problem, never a skip`, rp(goodRecord.replace('deny: "text-status-deny"', entry)).some((m) => /deny|computed key/.test(m))]);
+  }
+  checks.push(["a non-literal entry also fires the expected-Record floor", toneRecordProblems(goodRecord.replace('deny: "text-status-deny"', "deny: ALLOW_CLASS"), ["OUTCOME_TONE"]).problems.some((m) => /expected OUTCOME_TONE/.test(m))]);
+  checks.push(["entries are counted, not Records: a spread-only Record judges 0 entries", toneRecordProblems(`const T: Record<SimulatorOutcome, string> = { ...OUTCOME_TONE };`).entries === 0 && toneRecordProblems(goodRecord).entries === 4]);
+  checks.push(["a finding names the ENTRY's line, not the Record's (L6)", toneRecordProblems(goodRecord.replace('deny: "text-status-deny"', 'deny: "text-status-allow"')).problems.some((m) => /^line 5: OUTCOME_TONE\.deny wears/.test(m))]);
+  // M2 — the expected Records are a floor, in every declaration shape.
+  checks.push(["MUTANT an expected Record renamed away is RED", toneRecordProblems(goodRecord.replace("OUTCOME_TONE", "OTHER_TONE"), ["OUTCOME_TONE"]).problems.some((m) => /expected OUTCOME_TONE/.test(m))]);
+  checks.push(["MUTANT an expected Record that lost an arm is RED", toneRecordProblems(goodRecord.replace('  deny: "text-status-deny",\n', ""), ["OUTCOME_TONE"]).problems.some((m) => /expected OUTCOME_TONE/.test(m))]);
+  for (const [label, text] of [
+    ["`as const satisfies`", goodRecord.replace(": Record<Outcome, string> = {", " = {").replace("};", "} as const satisfies Record<Outcome, string>;")],
+    ["`Readonly<Record<>>`", goodRecord.replace("Record<Outcome, string>", "Readonly<Record<Outcome, string>>")],
+    ["`Object.freeze`", goodRecord.replace("= {", "= Object.freeze({").replace("};", "});")],
+  ]) {
+    const r = toneRecordProblems(text, ["OUTCOME_TONE"]);
+    checks.push([`a Record declared with ${label} is still found and judged`, r.entries === 4 && r.problems.length === 0]);
+    checks.push([`...and a wrong class in it with ${label} is RED`, toneRecordProblems(text.replace('deny: "text-status-deny"', 'deny: "text-status-allow"'), ["OUTCOME_TONE"]).problems.some((m) => /deny wears status-allow/.test(m))]);
+  }
+  // L1 — CSS shapes that used to be neither judged nor counted.
+  checks.push(["MUTANT a selector LIST naming a verdict class is RED", cp(goodCss.replace(".text-status-deny {", ".text-status-deny, .foo {")).some((m) => /canonical single-class shape/.test(m))]);
+  checks.push(["MUTANT a pseudo-class override is RED", cp(goodCss + "\n.text-status-deny:hover { color: hsl(var(--decision-allow)); }").some((m) => /canonical/.test(m))]);
+  checks.push(["MUTANT a :where() override is RED", cp(goodCss + "\n:where(.text-status-deny) { color: hsl(var(--decision-allow)); }").some((m) => /canonical/.test(m))]);
+  checks.push(["MUTANT a Tailwind @utility is RED", cp(goodCss + "\n@utility text-status-deny { color: hsl(var(--decision-allow)); }").some((m) => /canonical/.test(m))]);
+  checks.push(["MUTANT a later colour declaration overriding the first is RED (CSS applies the last)", cp(goodCss.replace(".text-status-deny { color: hsl(var(--decision-deny));", ".text-status-deny { color: hsl(var(--decision-deny)); color: hsl(var(--decision-allow));")).some((m) => /paints --decision-allow/.test(m))]);
+  checks.push(["MUTANT a wrong border-color inside .bg-status-* is RED", cp(goodCss.replace(".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08);", ".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); border-color: hsl(var(--decision-allow) / 0.2);")).some((m) => /border-color paints/.test(m))]);
+  checks.push(["a correct border-color inside .bg-status-* passes", cp(goodCss.replace(".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08);", ".bg-status-deny { background-color: hsl(var(--decision-deny) / 0.08); border-color: hsl(var(--decision-deny) / 0.2);")).length === 0]);
+  checks.push(["a verdict class mentioned only in a CSS comment is not a rule", cp(`/* .text-status-deny, .x { color: red } */\n${goodCss}`).length === 0]);
+  // The floors, and the lane wired end to end (M2, L2): the WHOLE gate against a temp tree with a planted defect.
+  const e2eCss = VERDICTS.map((v) => `.text-status-${v} { color: hsl(var(${VERDICT_REGISTRY[v].token})); }`).join("\n");
+  const e2eBg = VERDICTS.map((v) => `.bg-status-${v} { background-color: hsl(var(${VERDICT_REGISTRY[v].token}) / 0.08); color: hsl(var(${VERDICT_REGISTRY[v].token}-on-tint)); }`).join("\n");
+  const e2eTone = `export type Outcome = "allow" | "step-up" | "restrict" | "deny";\n${goodRecord}\nexport function outcomeTone(o: string): string { return OUTCOME_TONE[o as Outcome] ?? "text-status-restrict"; }\n`;
+  const e2e = async (label, expectCode, expectInErr, plant = {}) => {
+    const dir = mkdtempSync(join(tmpdir(), "tone-gate-"));
+    try {
+      const { cssRoots, ...planted } = plant;
+      const files = { "a/src/lib/outcome-tone.ts": e2eTone, "a/src/index.css": e2eCss, ...planted };
+      for (const [f, text] of Object.entries(files)) {
+        mkdirSync(dirname(join(dir, f)), { recursive: true });
+        writeFileSync(join(dir, f), text);
+      }
+      const r = await runGate({
+        root: dir, trees: ["a/src"], toneModules: { "a/src/lib/outcome-tone.ts": ["OUTCOME_TONE"] },
+        cssRoots: cssRoots ?? ["a/src"], chartMapRequired: new Set(), bgFloorExempt: {},
+      });
+      checks.push([`end to end: ${label}`, r.code === expectCode && r.err.join("\n").includes(expectInErr)]);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+  await e2e("a clean temp tree exits 0 (control — the lane is not red by default)", 0, "");
+  await e2e("allow/deny swapped in the Record exits 1, naming the file", 1, "a/src/lib/outcome-tone.ts", { "a/src/lib/outcome-tone.ts": e2eTone.replace('deny: "text-status-deny"', 'deny: "text-status-allow"') });
+  await e2e("an identifier entry exits 1", 1, "is not a string literal", { "a/src/lib/outcome-tone.ts": e2eTone.replace('deny: "text-status-deny"', "deny: X") });
+  await e2e("an expected Record renamed away exits 1", 1, "expected OUTCOME_TONE", { "a/src/lib/outcome-tone.ts": e2eTone.replace(/OUTCOME_TONE/g, "RENAMED_TONE") });
+  await e2e("a CSS rule pointing at the wrong token exits 1, naming the stylesheet", 1, "a/src/index.css", { "a/src/index.css": e2eCss.replace(".text-status-deny { color: hsl(var(--decision-deny))", ".text-status-deny { color: hsl(var(--decision-allow))") });
+  await e2e("a deleted .text-status-* rule (floor) exits 1", 1, "no canonical .text-status-restrict rule", { "a/src/index.css": e2eCss.split("\n").filter((l) => !l.startsWith(".text-status-restrict")).join("\n") });
+  await e2e("a stylesheet tree with no rules at all exits 1", 1, "no canonical .text-status-allow rule", { "a/src/index.css": "/* nothing */" });
+  await e2e("a tree that uses bg-status-* with no .bg-status-* rules exits 1", 1, "no canonical .bg-status-deny rule", { "a/src/Chip.tsx": 'export const C = () => <i className="bg-status-deny" />;\n' });
+  await e2e("...and with the four .bg-status-* rules present it exits 0", 0, "", { "a/src/Chip.tsx": 'export const C = () => <i className="bg-status-deny" />;\n', "a/src/index.css": `${e2eCss}\n${e2eBg}` });
+  await e2e("a selector list exits 1", 1, "canonical single-class shape", { "a/src/index.css": e2eCss.replace(".text-status-deny {", ".text-status-deny, .x {") });
+  await e2e("an inline verdict ternary in a page exits 1, naming the page", 1, "a/src/Page.tsx", { "a/src/Page.tsx": 'export const P = ({ d }) => <i className={d.outcome === "deny" ? "text-status-deny" : "text-status-allow"} />;\n' });
+  await e2e("a CSS root that is a FILE (readdir ENOTDIR) exits 1, not a quiet skip", 1, "ENOTDIR", { cssRoots: ["a/src", "a/src/index.css"] });
+
   // The direction rule must hold on the REAL tone modules, each of which must exist.
   for (const rel of TONE_MODULES) {
     let src = null;
@@ -679,7 +831,7 @@ async function selfTest() {
   }
 
   // Non-vacuity for the run below: the gate must actually be reading files.
-  const scanned = TREES.flatMap((t) => walk(join(repo, t)));
+  const scanned = TREES.flatMap((t) => walk(join(repo, t)).files);
   checks.push([`the real trees contain files to scan (${scanned.length})`, scanned.length > 0]);
 
   const failed = checks.filter(([, ok]) => !ok);
@@ -688,125 +840,188 @@ async function selfTest() {
   return failed.length === 0 ? 0 : 1;
 }
 
-if (process.argv.includes("--self-test")) process.exit(await selfTest());
+/**
+ * The gate itself, over injectable roots so the self-test can run the WHOLE lane
+ * against a temp tree holding a planted defect (a gate whose wiring is untested
+ * can have its exit condition deleted and still pass its own fixtures).
+ *   root            repo root; every other path is relative to it
+ *   trees           trees whose sources get the inline-decision scan and chart sites
+ *   toneModules     { rel: [expected Record names] }
+ *   cssRoots        trees whose stylesheets are judged against the registry
+ *   chartMapRequired  tone modules that must carry a chart map
+ *   bgFloorExempt   { cssRoot: { since, reason } } — a dated exemption from the .bg-status-* floor
+ */
+export async function runGate(cfg) {
+  const out = [], err = [];
+  const log = (m = "") => out.push(m);
+  const fail = (m = "") => err.push(m);
+  const { root, trees, toneModules, cssRoots, chartMapRequired, bgFloorExempt } = cfg;
+  const rel = (f) => relative(root, f).split("\\").join("/");
 
-const files = TREES.flatMap((t) => walk(join(repo, t)));
-if (files.length === 0) {
-  console.error("✗ no source files found in any decision-bearing tree — refusing to report a pass from a scan that read nothing.");
-  process.exit(1);
-}
-
-const problems = [];
-const directionProblems = [];
-const chartProblems = [];
-let exempted = 0;
-
-/** Trees whose tone module declares a chart map; their chart sites are judged. */
-const chartTrees = [];
-for (const rel of TONE_MODULES) {
-  let mod = null;
-  try {
-    mod = await import(pathToFileURL(join(repo, rel)).href);
-  } catch (e) {
-    // Fail closed: a tone module that cannot be imported cannot be judged, and
-    // a required chart map that cannot be judged is not a pass.
-    if (CHART_MAP_REQUIRED.has(rel)) chartProblems.push(`${rel} — could not be imported to judge its chart map: ${e.message}`);
-    continue;
+  const walkErrs = [];
+  const files = trees.flatMap((t) => {
+    const r = walk(join(root, t));
+    walkErrs.push(...r.errs);
+    return r.files;
+  });
+  if (files.length === 0 && walkErrs.length === 0) {
+    fail("✗ no source files found in any decision-bearing tree — refusing to report a pass from a scan that read nothing.");
+    return { code: 1, out, err };
   }
-  const p = chartModuleProblems(mod);
-  if (p === null) {
-    if (CHART_MAP_REQUIRED.has(rel)) chartProblems.push(`${rel} — required OUTCOME_CHART_MARK is missing`);
-    continue;
-  }
-  for (const msg of p) chartProblems.push(`${rel} — ${msg}`);
-  chartTrees.push(rel.replace(/\/lib\/outcome-tone\.ts$/, "/"));
-}
-const registryProblems = [];
-let recordsJudged = 0;
-for (const rel of TONE_MODULES) {
-  let src;
-  try {
-    src = readFileSync(join(repo, rel), "utf8");
-  } catch (e) {
-    registryProblems.push(`${rel} — unreadable (${e.code ?? e.message}); a tone module that cannot be read cannot be judged`);
-    continue;
-  }
-  const r = toneRecordProblems(src);
-  recordsJudged += r.records;
-  if (r.records === 0) registryProblems.push(`${rel} — no Record<…Outcome…, string> literal found; the registry judged nothing`);
-  for (const msg of r.problems) registryProblems.push(`${rel}:${msg}`);
-}
-let cssRules = 0;
-for (const tree of TREES) {
-  for (const f of walkCss(join(repo, tree))) {
-    const r = cssToneProblems(readFileSync(f, "utf8"));
-    cssRules += r.rules;
-    for (const msg of r.problems) registryProblems.push(`${relative(repo, f).split("\\").join("/")}:${msg}`);
-  }
-}
-for (const file of files) {
-  const rel = relative(repo, file).split("\\").join("/");
-  const src = readFileSync(file, "utf8");
-  const hits = [...offendingLines(src), ...localMapLines(src)];
-  if (TONE_MODULES.has(rel)) {
-    exempted += hits.length;
-    // Inside the one place a map may live, the fallback's DIRECTION is gated.
-    for (const p of fallbackProblems(src)) directionProblems.push(`${rel}:${p.line} — \`?? "${p.fallback}"\` is not a restrictive token`);
-    continue;
-  }
-  for (const line of hits) problems.push(`${rel}:${line}`);
-  if (chartTrees.some((t) => rel.startsWith(t))) {
-    for (const msg of chartSiteProblems(src)) chartProblems.push(`${rel} — ${msg}`);
-  }
-}
 
-console.log(`Verdict tone source — ${files.length} file(s) scanned across ${TREES.length} tree(s).`);
-console.log(
-  exempted > 0
-    ? `  ${exempted} occurrence(s) inside the ${TONE_MODULES.size} named tone module(s), which is where they belong.`
-    : `  ${TONE_MODULES.size} tone module(s) are exempt; none needed the exemption on this run.`,
-);
+  const problems = [];
+  const directionProblems = [];
+  const chartProblems = [];
+  const registryProblems = walkErrs.map((e) => `${e} — unreadable directory; its sources were not judged`);
+  let exempted = 0;
 
-console.log(`  chart marks judged in ${chartTrees.length} tree(s) with a chart map: ${chartTrees.join(", ") || "none"}; trees without one are not judged for charts.`);
+  /** Trees whose tone module declares a chart map; their chart sites are judged. */
+  const chartTrees = [];
+  let recordsJudged = 0, entriesJudged = 0;
+  for (const mod of Object.keys(toneModules)) {
+    let src;
+    try {
+      src = readFileSync(join(root, mod), "utf8");
+    } catch (e) {
+      registryProblems.push(`${mod} — unreadable (${e.code ?? e.message}); a tone module that cannot be read cannot be judged`);
+      continue;
+    }
+    const r = toneRecordProblems(src, toneModules[mod]);
+    recordsJudged += r.records;
+    entriesJudged += r.entries;
+    for (const msg of r.problems) registryProblems.push(`${mod}:${msg}`);
+    const declaresChart = /\bexport\s+const\s+OUTCOME_CHART_MARK\b/.test(src);
+    if (!declaresChart && !chartMapRequired.has(mod)) continue;
+    let ns;
+    try {
+      ns = await import(pathToFileURL(join(root, mod)).href);
+    } catch (e) {
+      // Fail closed: a chart map (or a required one) that cannot be imported cannot be judged.
+      chartProblems.push(`${mod} — could not be imported to judge its chart map: ${e.message}`);
+      continue;
+    }
+    const p = chartModuleProblems(ns);
+    if (p === null) {
+      chartProblems.push(`${mod} — required OUTCOME_CHART_MARK is missing`);
+      continue;
+    }
+    for (const msg of p) chartProblems.push(`${mod} — ${msg}`);
+    chartTrees.push(mod.replace(/\/lib\/outcome-tone\.ts$/, "/"));
+  }
 
-if (chartProblems.length > 0) {
-  console.error(`\n✗ ${chartProblems.length} verdict chart problem(s):`);
-  for (const p of chartProblems) console.error(`    ${p}`);
-  console.error("\n  A verdict chart reads its fills and patterns from OUTCOME_CHART_MARK, renders a Legend");
-  console.error("  and a Tooltip, and never lets two verdicts be the same pixel. Restrict and deny share");
-  console.error("  the deny tone by design, so they MUST differ in pattern (backlog row 107).");
-}
+  let cssRules = 0;
+  const exemptions = [];
+  for (const cssRoot of cssRoots) {
+    const css = walk(join(root, cssRoot), /\.css$/);
+    for (const e of css.errs) registryProblems.push(`${e} — unreadable directory; its stylesheets were not judged`);
+    const found = new Set();
+    for (const f of css.files) {
+      let text;
+      try { text = readFileSync(f, "utf8"); } catch (e) { registryProblems.push(`${rel(f)} — unreadable (${e.code ?? e.message})`); continue; }
+      const r = cssToneProblems(text);
+      cssRules += r.rules;
+      for (const k of r.found) found.add(k);
+      for (const msg of r.problems) registryProblems.push(`${rel(f)}:${msg}`);
+    }
+    // The floor: every verdict's text class in every root; the bg classes wherever the tree's sources use them.
+    const need = VERDICTS.map((v) => `text:${v}`);
+    const srcs = walk(join(root, cssRoot)).files;
+    const usesBg = srcs.some((f) => { try { return /\bbg-status-/.test(stripComments(readFileSync(f, "utf8"))); } catch { return false; } });
+    if (usesBg && bgFloorExempt[cssRoot]) exemptions.push(`${cssRoot} — .bg-status-* floor waived since ${bgFloorExempt[cssRoot].since}: ${bgFloorExempt[cssRoot].reason}`);
+    else if (usesBg) need.push(...VERDICTS.map((v) => `bg:${v}`));
+    for (const k of need) {
+      if (!found.has(k)) registryProblems.push(`${cssRoot} — no canonical .${k.replace(":", "-status-")} rule found; a verdict class with no rule renders no colour`);
+    }
+  }
 
-console.log(`  registry: ${recordsJudged} tone Record(s) and ${cssRules} CSS verdict rule(s) judged against VERDICT_REGISTRY.`);
-if (registryProblems.length > 0) {
-  console.error(`\n✗ ${registryProblems.length} verdict painted with the WRONG ratified token (backlog row 168):`);
-  for (const p of registryProblems) console.error(`    ${p}`);
-  console.error("\n  allow → --decision-allow, step-up → --decision-review, restrict and deny →");
-  console.error("  --decision-deny (shared by design, told apart by class suffix and chart pattern).");
-}
+  for (const file of files) {
+    const r = rel(file);
+    const src = readFileSync(file, "utf8");
+    const hits = [...offendingLines(src), ...localMapLines(src)];
+    if (TONE_MODULES_OF(toneModules).has(r)) {
+      exempted += hits.length;
+      // Inside the one place a map may live, the fallback's DIRECTION is gated.
+      for (const p of fallbackProblems(src)) directionProblems.push(`${r}:${p.line} — \`?? "${p.fallback}"\` is not a restrictive token`);
+      continue;
+    }
+    for (const line of hits) problems.push(`${r}:${line}`);
+    if (chartTrees.some((t) => r.startsWith(t))) {
+      for (const msg of chartSiteProblems(src)) chartProblems.push(`${r} — ${msg}`);
+    }
+  }
 
-if (problems.length > 0 || directionProblems.length > 0 || chartProblems.length > 0 || registryProblems.length > 0) {
+  log(`Verdict tone source — ${files.length} file(s) scanned across ${trees.length} tree(s).`);
+  log(
+    exempted > 0
+      ? `  ${exempted} occurrence(s) inside the ${Object.keys(toneModules).length} named tone module(s), which is where they belong.`
+      : `  ${Object.keys(toneModules).length} tone module(s) are exempt; none needed the exemption on this run.`,
+  );
+  log(`  chart marks judged in ${chartTrees.length} tree(s) with a chart map: ${chartTrees.join(", ") || "none"}; trees without one are not judged for charts.`);
+  log(`  registry: ${recordsJudged} tone Record(s) / ${entriesJudged} verdict entr(ies) and ${cssRules} CSS verdict rule(s) across ${cssRoots.length} stylesheet root(s) judged against VERDICT_REGISTRY.`);
+  for (const e of exemptions) log(`  EXEMPTION (dated): ${e}`);
+
+  if (chartProblems.length > 0) {
+    fail(`\n✗ ${chartProblems.length} verdict chart problem(s):`);
+    for (const p of chartProblems) fail(`    ${p}`);
+    fail("\n  A verdict chart reads its fills and patterns from OUTCOME_CHART_MARK, renders a Legend");
+    fail("  and a Tooltip, and never lets two verdicts be the same pixel. Restrict and deny share");
+    fail("  the deny tone by design, so they MUST differ in pattern (backlog row 107).");
+  }
+  if (registryProblems.length > 0) {
+    fail(`\n✗ ${registryProblems.length} verdict painted with the WRONG ratified token, or not judgeable (backlog row 168):`);
+    for (const p of registryProblems) fail(`    ${p}`);
+    fail("\n  allow → --decision-allow, step-up → --decision-review, restrict and deny →");
+    fail("  --decision-deny (shared by design, told apart by class suffix and chart pattern).");
+  }
   if (problems.length > 0) {
-    console.error(`\n✗ ${problems.length} verdict→colour decision(s) outside a tone module (inline ternary or local map):`);
-    for (const p of problems) console.error(`    ${p}`);
-    console.error("\n  A verdict may not pick its own colour at the point of render. Route it through");
-    console.error("  the tree's tone module — a total Record over the verdict union, see");
-    console.error("  artifacts/signalgrid-desktop/src/lib/outcome-tone.ts — so a missing arm is a");
-    console.error("  typecheck failure instead of a fourth independent opinion about what deny looks like.");
+    fail(`\n✗ ${problems.length} verdict→colour decision(s) outside a tone module (inline ternary or local map):`);
+    for (const p of problems) fail(`    ${p}`);
+    fail("\n  A verdict may not pick its own colour at the point of render. Route it through");
+    fail("  the tree's tone module — a total Record over the verdict union, see");
+    fail("  artifacts/signalgrid-desktop/src/lib/outcome-tone.ts — so a missing arm is a");
+    fail("  typecheck failure instead of a fourth independent opinion about what deny looks like.");
   }
   if (directionProblems.length > 0) {
-    console.error(`\n✗ ${directionProblems.length} tone-module fallback(s) in the WRONG DIRECTION:`);
-    for (const p of directionProblems) console.error(`    ${p}`);
-    console.error("\n  An unrecognised verdict must resolve to the RESTRICTIVE tone (status-restrict or");
-    console.error("  status-deny), never to a neutral one. Unknown must tighten the answer.");
+    fail(`\n✗ ${directionProblems.length} tone-module fallback(s) in the WRONG DIRECTION:`);
+    for (const p of directionProblems) fail(`    ${p}`);
+    fail("\n  An unrecognised verdict must resolve to the RESTRICTIVE tone (status-restrict or");
+    fail("  status-deny), never to a neutral one. Unknown must tighten the answer.");
   }
-  process.exit(1);
-}
+  if (problems.length + directionProblems.length + chartProblems.length + registryProblems.length > 0) return { code: 1, out, err };
 
-console.log("\nVerdict tone source gate passed — every verdict→colour decision is centralised,");
-console.log("and every tone-module fallback is restrictive.");
-console.log("It judges each verdict against VERDICT_REGISTRY: chart-mark tokens, tone Records, and .text-/.bg-status-* CSS. It still does NOT judge:");
-console.log("  - restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only;");
-console.log("  - badge Records outside the three tone modules, or Records not typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE);");
-console.log("  - the desktop tree, which has no chart map and no .bg-status-* rules, so only its tone Record and .text-status-* CSS are judged;");
-console.log("  - the tokens' own values (check-decision-palette.mjs holds contrast and canon).");
+  log("\nVerdict tone source gate passed — every verdict→colour decision is centralised,");
+  log("and every tone-module fallback is restrictive.");
+  log("It judges each verdict against VERDICT_REGISTRY: chart-mark tokens, tone Records, and .text-/.bg-status-* CSS. It still does NOT judge:");
+  log("  - restrict vs deny TOKENS: they share --decision-deny by design (DR-005/006); they differ by class suffix and chart pattern only;");
+  log("  - badge Records outside the three tone modules, or Records not named in TONE_EXPECTED or typed Record<…Outcome…, string> (e.g. CONNECTOR_DECISION_TONE);");
+  log("  - the desktop tree's chart (it has no chart map) or its tinted chips (it declares no .bg-status-* rules; see the dated EXEMPTION above);");
+  log("  - signalgrid-app's TSX: its stylesheet is judged (a CSS root), but its sources are not inline-scanned (its LiveDecisionPanel map would trip the scan);");
+  log("  - CSS inside a nested at-rule other than as a flat rule, and Tailwind theme/config colours;");
+  log("  - the tokens' own values (check-decision-palette.mjs holds contrast and canon).");
+  return { code: 0, out, err };
+}
+const TONE_MODULES_OF = (m) => new Set(Object.keys(m));
+
+const APP_CSS_ROOT = "artifacts/signalgrid-app/src";
+/** Dated exemptions from the `.bg-status-*` floor. Each one is printed on every run. */
+const BG_FLOOR_EXEMPT = {
+  "artifacts/signalgrid-desktop/src": {
+    since: "2026-10-22",
+    reason: "src/lib/outcome-tone.ts failModeTone() returns `bg-status-allow/5` / `bg-status-deny/5` (rendered by pages/Policies.tsx) but index.css declares no .bg-status-* rules (plan row 153) — the chip's tint resolves to nothing, and fail-closed wears the allow class. artifacts/** is out of scope for the gate's author; a hand is raised on the PR.",
+  },
+};
+const REAL_CONFIG = {
+  root: repo,
+  trees: TREES,
+  toneModules: TONE_EXPECTED,
+  cssRoots: [...TREES, APP_CSS_ROOT],
+  chartMapRequired: CHART_MAP_REQUIRED,
+  bgFloorExempt: BG_FLOOR_EXEMPT,
+};
+
+if (process.argv.includes("--self-test")) process.exit(await selfTest());
+
+const result = await runGate(REAL_CONFIG);
+for (const l of result.out) console.log(l);
+for (const l of result.err) console.error(l);
+process.exit(result.code);

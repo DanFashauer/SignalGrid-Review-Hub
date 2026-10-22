@@ -1,0 +1,12 @@
+{
+  "id": "2026-10-22-artifacts-signalgrid-desktop-src-lib-outcome-ton",
+  "raisedAt": "2026-10-22T16:40:27.586Z",
+  "origin": "cloud",
+  "doing": "landing the row-168 tone-pairing gate (PR #1585); it now requires a .bg-status-* rule wherever a tree uses the class",
+  "blockedBy": "artifacts/signalgrid-desktop/src/lib/outcome-tone.ts failModeTone() returns bg-status-allow/5 and bg-status-deny/5 (pages/Policies.tsx renders it) but the desktop index.css declares no .bg-status-* rules (plan row 153), so the chip tint resolves to nothing and fail-closed wears the allow class. artifacts/** is outside this worker's scope",
+  "need": "a desktop-tree change: either declare the four .bg-status-* rules in artifacts/signalgrid-desktop/src/index.css or route failModeTone through the shared tone Record; then delete the dated BG_FLOOR_EXEMPT entry in scripts/check-verdict-tone-source.mjs",
+  "whoCanUnblock": "owner",
+  "domain": "ui",
+  "status": "open",
+  "routedTo": null
+}

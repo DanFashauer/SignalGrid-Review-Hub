@@ -25,6 +25,8 @@ const bad = (m) => { failures.push(m); console.error(`  ✗ ${m}`); };
 const tracked = execFileSync("git", ["ls-files"], { cwd: repo, encoding: "utf8" })
   .split("\n").filter(Boolean);
 const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } catch { return ""; } };
+// The core scan must not treat an unreadable file as an empty (clean) one.
+const readStrict = (f) => { try { return { src: readFileSync(resolve(repo, f), "utf8") }; } catch (e) { return { error: e.code ?? e.message }; } };
 
 
 // 1 — core determinism ────────────────────────────────────────────────────────
@@ -39,7 +41,9 @@ const read = (f) => { try { return readFileSync(resolve(repo, f), "utf8"); } cat
   const hits = [];
   const unscannable = [];
   for (const f of coreFiles) {
-    const src = read(f);
+    const r = readStrict(f);
+    if (r.error) { unscannable.push(`${f} (cannot be read: ${r.error})`); continue; }
+    const src = r.src;
     const { lines, problems } = scanSource(src);
     const found = new Set(lines);
     // The masker can only ADD detections: the legacy raw-line scan stays (shared in

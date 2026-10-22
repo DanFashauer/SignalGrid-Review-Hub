@@ -242,7 +242,14 @@ function stripComments(src) {
 // is recorded here and fails the "scannable" check below, so a misread never
 // reads as a clean scan on any check that uses it (switch, clock, collation).
 const unscannable = new Map();
-function maskedFor(f, src = read(f)) {
+// A file that cannot be read is recorded the same way: it is not an empty (clean) file.
+const readOrRecord = (f) => {
+  try { return readFileSync(resolve(repo, f), "utf8"); } catch (e) {
+    if (!unscannable.has(f)) unscannable.set(f, [{ line: 0, what: `cannot be read: ${e.code ?? e.message}` }]);
+    return "";
+  }
+};
+function maskedFor(f, src = readOrRecord(f)) {
   const m = maskSource(src, true);
   if (m.problems.length && !unscannable.has(f)) unscannable.set(f, m.problems);
   return m.text;
@@ -461,7 +468,7 @@ if (process.argv.includes("--self-test")) {
     // The spellings live in scripts/lib/clock-spellings.mjs, shared with
     // safety-check.mjs check 1: Date.now/Math.random AND their bracket,
     // destructured, argless-Date, crypto, performance and hrtime forms.
-    const scanned = scanSource(read(f));
+    const scanned = scanSource(readOrRecord(f));
     if (scanned.problems.length && !unscannable.has(f)) unscannable.set(f, scanned.problems);
     for (const line of scanned.lines) {
       const pkg = scope.find((p) => f.startsWith(p)) ?? f;

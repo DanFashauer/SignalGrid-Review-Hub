@@ -3,351 +3,74 @@
 // decision core, scripts/review-invariants.mjs check 2 over every lib package).
 //
 // Both used to test only /\b(Date\.now|Math\.random)\s*\(/, which is two of the
-// ways to say it. This module owns the rest, plus the masker that blanks comments
-// and string/template text so prose never counts and code is never hidden.
+// ways to say it. This module owns the rest.
 //
-// WHAT IT COVERS is exactly what LINE_SPELLINGS, DESTRUCTURES and the import
-// aliases below list. It is NOT "every spelling": see CEILING for what it cannot
-// see. A gate that claims more than its table is the over-claim this repo gates.
+// WHAT DECIDES WHAT IS CODE. The TypeScript parser (ts.createSourceFile, a fixed
+// language version, no JSDoc, no clock or environment option) decides what is a
+// comment, a string, a template or a regex literal, so regex-versus-division is
+// settled by the grammar and not guessed. Comments are blanked, and so is the TEXT of
+// every string, template and regex literal (delimiters, newlines and offsets kept).
+// A file the parser reports a syntax error for, or that cannot be read, is a PROBLEM
+// that both gates treat as fatal and name; it is never a clean file.
 //
-// CEILING (declared, not built; one follow-up row in docs/BUILD_BACKLOG.md):
+// WHAT IT COVERS is exactly what LINE_SPELLINGS, the AST rules, DESTRUCTURES and the
+// import/require bindings below list. It is NOT "every spelling": see CEILING.
+//
+// HOW IT MATCHES. The patterns run over the whole masked text (so `Date` newline
+// `.now()` is one match), and a hit is attributed to the line its match STARTS on.
+// Three things are done on the syntax tree first, all in place (a rewrite replaces
+// characters with spaces and never moves a newline, so line numbers are exact):
+//   · `X["name"]`, `X['name']`, X[`name`] and `X?.["name"]` become `X.name`;
+//   · TypeScript wrappers around an expression are blanked: parens, `as T`,
+//     `satisfies T`, `<T>x`, a postfix non-null run, and `(0, x)` / `(void 0, x)`;
+//   · `Date(...)` called without `new`, and `new Date`, `new Date()` and
+//     `new Date(...spread)`, are found as call/new nodes, not by pattern.
+// Destructures, `import` and `require` bindings (renamed, namespace, default, mixed,
+// `import x = require`, destructured `require`) are read from the tree too.
+//
+// CEILING (declared, not built; the syntax-tree rewrite of the textual matcher, which
+// counts reads rather than lines, is its own backlog row, not this one):
 //   · LINES ARE NUMBERED BY LF, as git, grep and the pins count them. A CR-only
-//     (classic Mac) file is one line to a pin and to a problem report, though a `//`
-//     comment and a regex literal in it do end at the CR.
+//     (classic Mac) file is one line to a pin, though its `//` comments end at the CR.
 //   · PINS COUNT LINES, not reads. Two reads on one line are one hit.
-//   · Matching is per line, so `Date` newline `.now()` and `new Date(` newline `)`
-//     are not seen.
-//   · A `}` followed by `/` is read as a regex start (a block end), so division
-//     after an object literal (`{} / x / y`) can blank the text between the two
-//     slashes. No live site; the masker reports the desync it causes only when a
-//     quote or backtick is swallowed.
-//   · FALSE-ALARM direction (a false hit, not a hidden read): import discovery reads string
-//     text, so a fixture string holding `import { randomBytes as seeded } from
-//     "crypto"` makes a later `seeded(` a false hit; and `\bcrypto`, `\bperformance`
-//     and `\bprocess` also match after a dot, so `fixture.performance.now()` is a
-//     false hit. No live site for either.
-//   · Import forms not followed: a unicode-letter alias; a string-named import
+//   · FALSE-ALARM direction (a hit that is not a read, not a hidden read): `\bcrypto`,
+//     `\bperformance` and `\bprocess` also match after a dot, so `fixture.performance.now()`
+//     is a false hit; a bare imported name such as `randomInt(` is flagged anywhere,
+//     including an unrelated local function of that name; a comma expression whose left
+//     operand is not a number or `void 0` is not unwrapped.
+//   · Not followed: a unicode-letter alias; a string-named import specifier
 //     (`import { "randomBytes" as rb }`); an inline `require("crypto").randomBytes(4)`;
 //     `await import("crypto")`; `const { webcrypto } = nc` (a receiver taken from a
-//     namespace); and a webcrypto or crypto function bound by any other route. This
-//     list is not exhaustive: the followed forms are the ones the plants name.
-//   · `break label` / `continue label` followed by a newline and a regex: `label` is
-//     an identifier, so that slash is read as division. (`break`, `continue` and
-//     `debugger` alone before a newline-started regex ARE handled.)
-//   · TypeScript receivers are unwrapped textually, to any nesting depth: `!+`, a cast or
-//     satisfies in parens (`(Date as any).now()`, `(Date as any)()`, `new (Date as any)()`),
-//     an angle cast (`(<any>Date)`, `(<Array<number>>Date)`), plain parens (`(Date).now()`,
-//     `new(Date)()`) and `(0, Date.now)()`. A cast whose TYPE contains parentheses, such
-//     as `(Date as (typeof D)).now()`, is not unwrapped.
-//   · A line-initial `/` right after an operand is AMBIGUOUS (ASI makes it a regex, a
-//     continued division makes it division) and is reported as a problem, fatal and named.
-//     Write the operator at the end of the previous line or put a `;` before the regex.
-//   · FALSE ALARMS from the textual rewrite and per-line matching: `new` newline `Date(0)`,
-//     `new globalThis . Date(0)` (spaces around the dot), and `foo (Date).now()`.
-//   · A destructure default that contains a comma (`{ a = f(1, now), b }`) is split at it.
-//   · FALSE-ALARM direction too: a function or method NAMED Date (`function Date()`,
-//     an interface member `Date()`) is read as a `Date()` call.
-//   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call,
-//     Temporal / Intl, and unicode escapes in an identifier are not seen.
-//
-// THE MASKER FAILS CLOSED. Guessing regex-versus-division wrongly used to blank
-// the REST OF THE FILE, so a later Date.now() vanished. The masker now (a) decides
-// from the previous token it has actually seen, not a character lookback, and
-// (b) reports a file it can no longer follow (a string that crosses a newline, a
-// template or block comment still open at end of file, unbalanced ${ }) as a
-// PROBLEM, which both gates treat as fatal and name. A file the scanner cannot read
-// is never a clean file.
+//     namespace); and a clock or randomness function bound by any other route. This list
+//     is not exhaustive: the followed forms are the ones the plants name.
+//   · An uncalled reference (`const c = Date.now`), Reflect.apply / .call, Temporal /
+//     Intl, and unicode escapes in an identifier are not seen.
+import ts from "typescript";
 
-// Keywords after which a `/` begins a regex. `in` and `of` are NOT in this set
-// because they are decided by context in regexStartsHere. `of` is the for-of
-// OPERATOR only inside a `for (` head, after a finished operand (`for (const x of
-// /x=/.exec(s))`); everywhere else it is a plain identifier and the slash divides
-// (`const of = 4; of / 2`, `if (a) of / 2`, `} of / 2`, `export default of / 2`).
-// `in` is reserved, so after a finished operand it is always the operator. A
-// keyword preceded by `.` (`counts.in / a`) is a property name, never a keyword.
-// A spread `.../re/` begins a regex; `1./2` divides.
-const REGEX_AFTER_KEYWORD = new Set([
-  "return", "typeof", "case", "void", "delete", "throw", "yield", "await", "else", "do",
-  "instanceof", "new", "extends", "default", "debugger", "break", "continue",
-]);
-// Declaration keywords introduce a binding, not an operand: `for (const of of /x=/...)`.
-const DECL_KEYWORD = new Set(["const", "let", "var"]);
-const CONTROL_PAREN_KEYWORD = new Set(["if", "while", "for", "with"]);
-const IS_WORD = /[\w$]/;
-// ECMAScript line terminators: a `//` comment and a regex literal end at any of them,
-// so a comment ending at U+2028 cannot hide the code after it.
+const K = ts.SyntaxKind;
 const EOL = /[\n\r\u2028\u2029]/;
 
-// Operators and punctuation after which a `/` begins a regex. `)` and `}` are
-// handled separately; `]` and a closing quote/backtick are operands.
-const REGEX_AFTER_PUNCT = /[(,=:[&|?{;+\-*%<>~^]/;
-
-// Mask comments and string/template/regex literal TEXT (delimiters and newlines
-// kept, so offsets and line numbers survive). Returns
-//   text      comments and literal text blanked: what the scanners read
-//   visible   only comments blanked, string text kept: what import detection reads
-//   problems  [{ line, what }] — places the masker lost the thread
-export function maskSource(src, blankComments = true) {
-  const n = src.length;
-  const out = src.split("");
-  const vis = src.split("");
-  const problems = [];
-  const lineOf = (k) => src.slice(0, k).split("\n").length;
-  const blank = (k) => { if (!EOL.test(out[k])) out[k] = " "; };
-  const blankBoth = (k) => { if (!EOL.test(out[k])) { out[k] = " "; vis[k] = " "; } };
-  const stack = [{ mode: "code", depth: 0, parens: [], lastClose: null }];
-  let i = 0;
-
-  // The previous significant (non-space) index in `out`, which has comments and
-  // literal text already blanked, so only real code and delimiters are seen.
-  const prevSig = (from) => {
-    let k = from - 1;
-    // `\s` is exactly ECMAScript WhiteSpace plus LineTerminator, so a no-break space,
-    // a form feed or a U+2028 is never mistaken for the previous token.
-    while (k >= 0 && /\s/.test(out[k])) k--;
-    return k;
-  };
-  // Is the word starting at `st` a member or private name (`a.default`, `a. default`,
-  // `this.#new`) rather than a keyword? A spread `...x` is not a member access.
-  const isProp = (st) => {
-    if (st > 0 && out[st - 1] === "#") return true;
-    const b = prevSig(st);
-    if (b < 0 || out[b] !== ".") return false;
-    return !(b >= 2 && out[b - 1] === "." && out[b - 2] === ".");
-  };
-  const wordBefore = (k) => {
-    let s = k;
-    while (s >= 0 && IS_WORD.test(out[s])) s--;
-    return { word: out.slice(s + 1, k + 1).join(""), start: s + 1 };
-  };
-
-  // Would a `/` at index `at` begin a regex? Decided from the previous token.
-  const regexStartsHere = (top, at = i) => {
-    const k = prevSig(at);
-    if (k < 0) return true;
-    const p = out[k];
-    // A `!` is TypeScript's postfix non-null (`m.get(k)! / 2`, an operand-ender) when
-    // a `/` at the `!` itself would divide, and a prefix NOT (`= !/x/.test(s)`, an
-    // operator) when it would start a regex. Ask the question one token back.
-    if (p === "!") return regexStartsHere(top, k);
-    if (p === "+" || p === "-") {
-      // `i++ / 2`: the operator ends an operand, so the slash divides.
-      if (k > 0 && out[k - 1] === p) return false;
-      return true;
-    }
-    if (p === ")") return top.lastClose !== null && top.lastClose.pos === k && top.lastClose.control;
-    if (p === "}") return true;
-    if (p === "]" || p === "'" || p === '"' || p === "`") return false;
-    if (IS_WORD.test(p)) {
-      const { word, start } = wordBefore(k);
-      if (isProp(start)) return false;
-      // `of` is the for-of OPERATOR only inside a `for (` head, after a finished operand.
-      const ofIsOperator = (st) =>
-        top.parens.length > 0 && top.parens[top.parens.length - 1] === "for" && operandEndsBefore(st);
-      // Does a finished operand end just before the word at `st`? (`in` and an operator
-      // `of` introduce an expression, a declaration keyword introduces a binding, an
-      // identifier `of` is an operand.)
-      const operandEndsBefore = (st) => {
-        const b = prevSig(st);
-        if (b < 0) return false;
-        const q = out[b];
-        if (IS_WORD.test(q)) {
-          const { word: w, start: s2 } = wordBefore(b);
-          if (isProp(s2)) return true;
-          if (w === "in") return false;
-          if (w === "of") return !ofIsOperator(s2);
-          if (DECL_KEYWORD.has(w)) return false;
-          return !REGEX_AFTER_KEYWORD.has(w);
-        }
-        return q === ")" || q === "]" || q === "}" || q === "'" || q === '"' || q === "`";
-      };
-      if (word === "of") return ofIsOperator(start);
-      // `k in /re/`: `in` is reserved, so after an operand it is always the operator.
-      if (word === "in") return operandEndsBefore(start);
-      return REGEX_AFTER_KEYWORD.has(word);
-    }
-    // Spread: `.../re/` begins a regex; `1./2` divides.
-    if (p === "." && k >= 2 && out[k - 1] === "." && out[k - 2] === ".") return true;
-    return REGEX_AFTER_PUNCT.test(p);
-  };
-
-  while (i < n) {
-    const top = stack[stack.length - 1];
-    const c = src[i];
-    if (top.mode === "code") {
-      if (c === "\\") { i += 2; continue; }
-      if (blankComments && c === "/" && src[i + 1] === "/") {
-        let e = i;
-        while (e < n && !EOL.test(src[e])) e++;
-        for (let m = i; m < e; m++) blankBoth(m);
-        i = e; continue;
-      }
-      if (blankComments && c === "/" && src[i + 1] === "*") {
-        let e = src.indexOf("*/", i + 2);
-        if (e === -1) {
-          problems.push({ line: lineOf(i), what: "a block comment is never closed" });
-          e = n;
-        } else e += 2;
-        for (let m = i; m < e; m++) blankBoth(m);
-        i = e; continue;
-      }
-      if (c === "/") {
-        let startsRegex = regexStartsHere(top);
-        if (!startsRegex) {
-          // A `/` that begins a line right after an operand is ambiguous: ASI ends the
-          // statement (`let x` newline `/re/.test(s)`, `type T = string` newline `/re/`) or
-          // the division continues onto the next line. Guessing division hides the code
-          // between two slashes, guessing regex hides it the other way, so report it
-          // (fatal, fail closed) and read it as a regex when that reading closes.
-          const k0 = prevSig(i);
-          let crossed = false;
-          for (let q = k0 + 1; k0 >= 0 && q < i; q++) if (EOL.test(out[q])) { crossed = true; break; }
-          if (crossed) {
-            problems.push({ line: lineOf(i), what: "a line-initial slash follows an operand, so it is a regex (ASI) or a continued division and cannot be told apart" });
-            startsRegex = true;
-          }
-        }
-        if (startsRegex) {
-          let j = i + 1;
-          let inClass = false;
-          while (j < n && !EOL.test(src[j])) {
-            if (src[j] === "\\") { j += 2; continue; }
-            if (src[j] === "[") inClass = true;
-            else if (src[j] === "]") inClass = false;
-            else if (src[j] === "/" && !inClass) break;
-            j++;
-          }
-          if (j < n && src[j] === "/") {
-            for (let m = i + 1; m < j; m++) blankBoth(m);
-            i = j + 1;
-            continue;
-          }
-        }
-        i++; continue;
-      }
-      if (c === "'") { stack.push({ mode: "sq", from: i }); i++; continue; }
-      if (c === '"') { stack.push({ mode: "dq", from: i }); i++; continue; }
-      if (c === "`") { stack.push({ mode: "tmpl", from: i }); i++; continue; }
-      if (c === "(") {
-        // Keep the keyword that opened the paren (`for`, `if`, a call's name or none),
-        // so `of` can be told from an identifier and `)` from a control head's end.
-        const k = prevSig(i);
-        let kw = null;
-        if (k >= 0 && IS_WORD.test(out[k])) {
-          const { word, start } = wordBefore(k);
-          if (isProp(start)) kw = null;
-          else if (word === "await") {
-            // `for await (` is a for head.
-            const b = prevSig(start);
-            kw = b >= 0 && IS_WORD.test(out[b]) && wordBefore(b).word === "for" ? "for" : word;
-          } else kw = word;
-        }
-        top.parens.push(kw);
-        i++; continue;
-      }
-      if (c === ")") {
-        const kw = top.parens.length ? top.parens.pop() : null;
-        top.lastClose = { pos: i, control: kw !== null && CONTROL_PAREN_KEYWORD.has(kw) };
-        i++; continue;
-      }
-      if (c === "{") { top.depth++; i++; continue; }
-      if (c === "}") {
-        if (top.depth === 0 && stack.length > 1) { stack.pop(); i++; continue; } // close ${…}
-        top.depth--; i++; continue;
-      }
-      i++; continue;
-    }
-    if (top.mode === "sq" || top.mode === "dq") {
-      const q = top.mode === "sq" ? "'" : '"';
-      if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-      if (c === q) { stack.pop(); i++; continue; }
-      if (c === "\n" || c === "\r") {
-        // A quoted string cannot cross a newline. The masker has lost the thread:
-        // say so, and recover to code so one file does not blank the next lines.
-        problems.push({ line: lineOf(top.from), what: "a quoted string crosses a newline (regex-versus-division or quote desync)" });
-        stack.pop(); i++; continue;
-      }
-      blank(i); i++; continue;
-    }
-    // template literal
-    if (c === "\\") { blank(i); blank(i + 1); i += 2; continue; }
-    if (c === "`") { stack.pop(); i++; continue; }
-    if (c === "$" && src[i + 1] === "{") {
-      stack.push({ mode: "code", depth: 0, parens: [], lastClose: null });
-      i += 2; continue;
-    }
-    blank(i); i++;
-  }
-  const last = stack[stack.length - 1];
-  if (stack.length > 1 || last.mode !== "code") {
-    problems.push({
-      line: lineOf(last.from ?? 0),
-      what: `a ${last.mode === "code" ? "template expression" : last.mode === "tmpl" ? "template literal" : "string"} is still open at end of file`,
-    });
-  }
-  return { text: out.join(""), visible: vis.join(""), problems };
+// ── small helpers ─────────────────────────────────────────────────────────────
+// Offsets of the first character of every LF-numbered line, and a binary search.
+function lineStarts(src) {
+  const out = [0];
+  for (let i = 0; i < src.length; i++) if (src.charCodeAt(i) === 10) out.push(i + 1);
+  return out;
 }
-
-// Rewrites that swallow whitespace must not move later lines up, nor split the rewritten
-// expression across lines. The swallowed newlines are owed and paid back right after the
-// next newline in the text that follows, so `Date[` newline `"now"` newline `]()` becomes
-// `Date.now()` on its own line and the line count is unchanged.
-function rewrite(text, re, fn, boundary = true) {
-  let out = "";
-  let last = 0;
-  let owed = 0;
-  const pay = (seg) => {
-    if (owed > 0) {
-      const at = seg.indexOf("\n");
-      if (at >= 0) { seg = seg.slice(0, at + 1) + "\n".repeat(owed) + seg.slice(at + 1); owed = 0; }
-    }
-    return seg;
-  };
-  for (const m of text.matchAll(re)) {
-    out += pay(text.slice(last, m.index));
-    let r = fn(m);
-    // Keep a word boundary: `return(Date)` must not become `returnDate`.
-    const before = m.index > 0 ? text[m.index - 1] : "";
-    if (boundary && before && /[\w$]/.test(before) && /^[\w$]/.test(r)) r = " " + r;
-    out += r;
-    owed += (m[0].match(/\n/g) || []).length;
-    last = m.index + m[0].length;
+function lineAt(starts, off) {
+  let lo = 0;
+  let hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= off) lo = mid;
+    else hi = mid - 1;
   }
-  out += pay(text.slice(last));
-  return owed > 0 ? out + "\n".repeat(owed) : out;
+  return lo + 1;
 }
-
-// `X["name"]`, `X['name']` and `X?.["name"]` are the same access as `X.name`.
-const normalizeBracketAccess = (src) =>
-  rewrite(
-    rewrite(src, /\?\.\s*\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g, (m) => `?.${m[2]}`),
-    /\[\s*(["'])([A-Za-z_$][\w$]*)\1\s*\]/g,
-    (m) => `.${m[2]}`,
-  );
-
-// TypeScript wrappers around a receiver do not change what runs. Followed, to any nesting
-// depth (each pass peels one layer; a lookahead may be another `)`): a postfix non-null
-// run `!+` (`Date!.now()`, `Date!!.now()`, `Date.now!()`, `new Date!()`), a cast or
-// satisfies in parens (`(Date as any).now()`, `(Date as any)()`, `new (Date as any)()`,
-// `(Date.now as any)()`), an angle cast (`(<any>Date).now()`, `(<Array<number>>Date)`),
-// plain parens (`(Date).now()`, `(Date.now)()`, `new(Date)()`), and the indirect-call idiom
-// `(0, Date.now)()` / `(void 0, Date.now)()`. Applied to the MASKED text, after comments
-// and strings are blanked. NOT followed: a cast whose type contains parentheses.
-const UNWRAP_LOOK = String.raw`(?=\s*(?:\?\.|\.|\(|\)))`;
-const unwrapTs = (text) => {
-  let t = text;
-  for (let pass = 0; pass < 8; pass++) {
-    const before = t;
-    // This rule's match starts with the operand's own last character, so no boundary is added.
-    t = rewrite(t, new RegExp(String.raw`([\w$)\]])\s*!+${UNWRAP_LOOK}`, "g"), (m) => m[1], false);
-    t = rewrite(t, new RegExp(String.raw`\(\s*<[^()]*>\s*([\w$.]+)\s*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
-    t = rewrite(t, new RegExp(String.raw`\(\s*([\w$.]+)\s+(?:as|satisfies)\s+[^()]*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
-    t = rewrite(t, new RegExp(String.raw`\(\s*([A-Za-z_$][\w$.]*)\s*\)${UNWRAP_LOOK}`, "g"), (m) => m[1]);
-    t = rewrite(t, /\(\s*(?:void\s+0|\d+)\s*,\s*([A-Za-z_$][\w$.]*)\s*\)(?=\s*(?:\(|\?\.\())/g, (m) => m[1]);
-    if (t === before) break;
-  }
-  return t;
-};
+// Replace [a, b) with spaces, keeping every line terminator in place.
+function blank(chars, a, b) {
+  for (let k = Math.max(0, a); k < Math.min(chars.length, b); k++) if (!EOL.test(chars[k])) chars[k] = " ";
+}
 
 // Member access and call, each with optional chaining: `Date?.now()`, `Date.now?.()`.
 const DOT = String.raw`\s*\??\.\s*`;
@@ -355,31 +78,32 @@ const CALL = String.raw`\s*(?:\?\.\s*)?\(`;
 const G = String.raw`(?:globalThis${DOT})?`;
 const RANDOM_FNS = ["randomUUID", "getRandomValues", "randomBytes", "randomInt", "randomFillSync", "randomFill", "pseudoRandomBytes"];
 const RANDOM_ALT = RANDOM_FNS.join("|");
+const escId = (s) => s.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 
-// Per-line spellings: WAYS TO READ THE WALL CLOCK OR A NON-DETERMINISTIC SOURCE.
+// Per-pattern spellings: WAYS TO READ THE WALL CLOCK OR A NON-DETERMINISTIC SOURCE.
 // Every entry has a plant of the same label in CLOCK_PLANTS, and the self-test
-// requires the entry itself (not just some other pattern) to match it.
+// requires the entry itself (not just some other rule) to match it.
+const spell = (label, source) => ({ label, re: new RegExp(source), reG: new RegExp(source, "g") });
 export const LINE_SPELLINGS = [
-  { label: "Date.now()", re: new RegExp(String.raw`\bDate${DOT}now${CALL}`) },
-  { label: "Math.random()", re: new RegExp(String.raw`\bMath${DOT}random${CALL}`) },
-  // `new Date()` and a bare `Date()` both read the clock; `new Date(x)` does not.
-  // A bare `Date(...)` call (no `new`) returns the current time whatever it is given.
-  { label: "Date() read", re: new RegExp(String.raw`(?<![\w$.])${G}Date${CALL}\s*\)|(?<![\w$.])(?<!\bnew\s+)${G}Date${CALL}`) },
-  { label: "crypto random call", re: new RegExp(String.raw`\bcrypto${DOT}(?:webcrypto${DOT})?(?:${RANDOM_ALT})${CALL}`) },
+  spell("Date.now()", String.raw`\bDate${DOT}now${CALL}`),
+  spell("Math.random()", String.raw`\bMath${DOT}random${CALL}`),
+  spell("crypto random call", String.raw`\bcrypto${DOT}(?:webcrypto${DOT})?(?:${RANDOM_ALT})${CALL}`),
   // Imported without a rename, the bare name is the call.
-  { label: "imported random call", re: new RegExp(String.raw`(?<![\w$.])(?:${RANDOM_ALT})${CALL}`) },
-  { label: "performance.now()", re: new RegExp(String.raw`\bperformance${DOT}now${CALL}`) },
-  { label: "performance.timeOrigin", re: new RegExp(String.raw`\bperformance${DOT}timeOrigin\b`) },
-  { label: "process.uptime()", re: new RegExp(String.raw`\bprocess${DOT}uptime${CALL}`) },
-  { label: "process.hrtime", re: new RegExp(String.raw`\bprocess${DOT}hrtime\b`) },
-  { label: "hrtime.bigint()", re: new RegExp(String.raw`\bhrtime${DOT}bigint${CALL}`) },
+  spell("imported random call", String.raw`(?<![\w$.])(?:${RANDOM_ALT})${CALL}`),
+  spell("performance.now()", String.raw`\bperformance${DOT}now${CALL}`),
+  spell("performance.timeOrigin", String.raw`\bperformance${DOT}timeOrigin\b`),
+  spell("process.uptime()", String.raw`\bprocess${DOT}uptime${CALL}`),
+  spell("process.hrtime", String.raw`\bprocess${DOT}hrtime\b`),
+  spell("hrtime.bigint()", String.raw`\bhrtime${DOT}bigint${CALL}`),
 ];
+// Found on the syntax tree, not by pattern: a bare `Date(...)` call (no `new`) returns the
+// current time whatever it is given; `new Date`, `new Date()` and `new Date(...spread)` read
+// it; `new Date(x)` with a plain argument is a fixed instant and does not.
+export const AST_RULES = [{ label: "Date() read" }];
 
-// `const { now } = Date` and kin, possibly across lines, so these run over the
-// whole text and map the match back to its line.
-// `const { now } = Date` and kin, possibly across lines. A name counts only on the PROPERTY
-// side of an element (`{ now: n }` and `{ UTC, now }` are reads, `{ parse: now }` and
-// `{ parse = now }` are not), and the source may be wrapped (`= (Date)`, `= <any>Date`).
+// `const { now } = Date` and kin. A name counts only on the PROPERTY side of an element
+// (`{ now: n }`, `{ "now": n }`, `{ ["now"]: n }` and `{ UTC, now }` are reads; `{ parse: now }`
+// and `{ parse = now }` are not), and the source may be wrapped (`= (Date)`, `= <any>Date`).
 export const DESTRUCTURES = [
   { label: "{ now } = Date", names: ["now"], from: "Date" },
   { label: "{ random } = Math", names: ["random"], from: "Math" },
@@ -389,21 +113,6 @@ export const DESTRUCTURES = [
   { label: "{ uptime } = process", names: ["uptime"], from: "process" },
   { label: "{ random } = crypto", names: RANDOM_FNS, from: "crypto" },
 ];
-// 1-based lines holding a destructure of one of `names` from `from` in masked `text`.
-function destructureLines(text, entries) {
-  const lines = new Set();
-  for (const { names, from } of entries) {
-    const re = new RegExp(
-      String.raw`\{([^{}]*)\}\s*=\s*(?:[\s(]|<[^()<>]*(?:<[^<>]*>[^()<>]*)?>)*${G}(?:${from})\b`,
-      "g",
-    );
-    for (const hit of text.matchAll(re)) {
-      const props = hit[1].split(",").map((el) => el.replace(/\s*=[\s\S]*$/, "").split(":")[0].trim());
-      if (props.some((pr) => names.includes(pr))) lines.add(text.slice(0, hit.index).split("\n").length);
-    }
-  }
-  return [...lines];
-}
 
 // Generators imported by NAME from a package, matched by the (possibly renamed)
 // binding. A package's deterministic exports (uuid v3/v5) are not listed.
@@ -414,96 +123,368 @@ const GENERATOR_PACKAGES = {
   "@paralleldrive/cuid2": ["createId"],
 };
 
-// A binding is an identifier, and `$` is legal in one but is a regex end anchor. Escape
-// every regex metacharacter, not just `$`, so nothing a binding holds can change the pattern.
-const escId = (s) => s.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+// ── syntax-tree helpers ───────────────────────────────────────────────────────
+const isWrapper = (n) =>
+  n.kind === K.ParenthesizedExpression || n.kind === K.AsExpression || n.kind === K.SatisfiesExpression ||
+  n.kind === K.TypeAssertionExpression || n.kind === K.NonNullExpression;
+// `(0, x)` and `(void 0, x)`: the indirect-call idiom. Only a trivial left operand is dropped, so a
+// read on the left of a comma is never blanked.
+const isTrivialLeft = (n) =>
+  n.kind === K.NumericLiteral || (n.kind === K.VoidExpression && n.expression.kind === K.NumericLiteral);
+// Peel wrappers (and a trivial comma) down to the expression that actually runs.
+function peel(n) {
+  for (;;) {
+    if (n.kind === K.ParenthesizedExpression) {
+      const e = n.expression;
+      if (e.kind === K.BinaryExpression && e.operatorToken.kind === K.CommaToken && isTrivialLeft(e.left)) n = e.right;
+      else n = e;
+    } else if (isWrapper(n)) n = n.expression;
+    else return n;
+  }
+}
+const isDateRef = (e) => {
+  const p = peel(e);
+  if (p.kind === K.Identifier) return p.text === "Date";
+  if (p.kind === K.PropertyAccessExpression && p.name.text === "Date") {
+    const r = peel(p.expression);
+    return r.kind === K.Identifier && r.text === "globalThis";
+  }
+  return false;
+};
+// The name an object-pattern/literal key spells, if it is static.
+function keyOf(n) {
+  if (!n) return null;
+  if (n.kind === K.Identifier || n.kind === K.StringLiteral || n.kind === K.NoSubstitutionTemplateLiteral || n.kind === K.NumericLiteral) return n.text;
+  if (n.kind === K.ComputedPropertyName) return keyOf(n.expression);
+  return null;
+}
+// The name of the receiver a destructure reads from: `Date`, `globalThis.Date`, or a local.
+function receiverOf(e) {
+  const p = peel(e);
+  if (p.kind === K.Identifier) return p.text;
+  if (p.kind === K.PropertyAccessExpression) {
+    const r = peel(p.expression);
+    if (r.kind === K.Identifier && r.text === "globalThis") return p.name.text;
+  }
+  return null;
+}
+function requireModule(init) {
+  if (!init) return null;
+  const e = peel(init);
+  if (e.kind === K.CallExpression && e.expression.kind === K.Identifier && e.expression.text === "require" &&
+      e.arguments.length === 1 && ts.isStringLiteralLike(e.arguments[0])) return e.arguments[0].text;
+  return null;
+}
 
-// `{ a, b: c }` of a destructuring: the property name and the local it binds.
-const parseDestructured = (list) =>
-  list.split(",").map((x) => x.trim()).filter(Boolean).map((x) => {
-    const y = x.replace(/\s*=[\s\S]*$/, "");
-    const m = /^([\w$]+)\s*:\s*([\w$]+)$/.exec(y);
-    return m ? { name: m[1], local: m[2] } : { name: y, local: y };
-  });
+// What a module binding gives us, by module. `named` is [{ imported, local }].
+function bind(b, mod, { dflt, ns, named }) {
+  const base = mod.replace(/^node:/, "");
+  const whole = [dflt, ns].filter(Boolean);
+  if (base === "crypto") {
+    for (const n of whole) b.cryptoNs.add(n);
+    for (const { imported, local } of named) {
+      if (RANDOM_FNS.includes(imported)) b.randomFns.add(local);
+      if (imported === "webcrypto" || imported === "default") b.cryptoNs.add(local);
+    }
+  } else if (base === "perf_hooks") {
+    for (const n of whole) b.perfNs.add(n);
+    for (const { imported, local } of named) {
+      if (imported === "performance") b.perf.add(local);
+      if (imported === "default") b.perfNs.add(local);
+    }
+  } else if (base === "process") {
+    for (const n of whole) b.procNs.add(n);
+    for (const { imported, local } of named) {
+      if (imported === "uptime") b.upFns.add(local);
+      if (imported === "hrtime") b.hrFns.add(local);
+      if (imported === "default") b.procNs.add(local);
+    }
+  } else if (GENERATOR_PACKAGES[base]) {
+    for (const { imported, local } of named) if (GENERATOR_PACKAGES[base].includes(imported)) b.gen.add(local);
+  }
+}
+const newBindings = () => ({
+  randomFns: new Set(), cryptoNs: new Set(), perf: new Set(), perfNs: new Set(),
+  procNs: new Set(), upFns: new Set(), hrFns: new Set(), gen: new Set(),
+});
 
-const parseNamed = (list) =>
-  list.split(",").map((s) => s.trim().replace(/^type\s+/, "")).filter(Boolean).map((s) => {
-    const m = /^([\w$]+)\s+as\s+([\w$]+)$/.exec(s);
-    return m ? { name: m[1], local: m[2] } : { name: s, local: s };
-  });
+// ── the analysis of one file ──────────────────────────────────────────────────
+function build(src) {
+  const sf = ts.createSourceFile(
+    "scan.ts",
+    src,
+    { languageVersion: ts.ScriptTarget.ES2022, jsDocParsingMode: ts.JSDocParsingMode.ParseNone },
+    false,
+    ts.ScriptKind.TS,
+  );
+  const starts = lineStarts(src);
+  const problems = [];
+  const diags = sf.parseDiagnostics;
+  if (!Array.isArray(diags)) {
+    problems.push({ line: 1, what: "the TypeScript parser did not expose its syntax diagnostics, so the file cannot be verified" });
+  } else {
+    for (const d of diags) {
+      problems.push({
+        line: lineAt(starts, d.start ?? 0),
+        what: `TypeScript cannot parse this file (TS${d.code}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")})`,
+      });
+    }
+  }
+  const startOf = (n) => n.getStart(sf);
+  const prot = []; // [start, end) literal tokens the comment scan must not enter
+  const interiors = []; // [a, b) literal text to blank in the masked text
+  const wrappers = [];
+  const accesses = [];
+  const dateLines = [];
+  const sites = [];
+  const b = newBindings();
 
-// Per-file patterns built from the file's own imports (read from `visible`, where
-// the module name is still text): renamed crypto functions, a crypto namespace,
-// and uuid/nanoid-style generators.
-function importPatterns(visible) {
-  const line = [];
-  const text = [];
-  const fnLocals = new Set();
-  const nsLocals = new Set();
-  const ID = String.raw`[A-Za-z_$][\w$]*`;
-  // A binding list never holds a quote or backtick, so a string that merely
-  // contains an unclosed `import {` cannot swallow a real import after it.
-  const LIST = String.raw`[^}'"\x60]*`;
-  const cryptoMod = String.raw`(?:node:)?crypto`;
-  const named = (mod) => new RegExp(String.raw`\bimport\s*(?:type\s+)?(?:${ID}\s*,\s*)?\{(${LIST})\}\s*from\s*(["'])(${mod})\2`, "g");
-  const note = ({ name, local }) => {
-    if (RANDOM_FNS.includes(name)) fnLocals.add(local);
-    // `webcrypto` is the Web Crypto namespace, and `default` is the whole module:
-    // both are receivers of getRandomValues/randomUUID/randomBytes.
-    if (name === "webcrypto" || name === "default") nsLocals.add(local);
+  const addSite = (pattern, init) => {
+    if (!init) return;
+    let keys = [];
+    if (pattern.kind === K.ObjectBindingPattern) {
+      keys = pattern.elements.map((el) => (el.dotDotDotToken ? null : keyOf(el.propertyName ?? el.name)));
+    } else if (pattern.kind === K.ObjectLiteralExpression) {
+      keys = pattern.properties.map((p) =>
+        p.kind === K.ShorthandPropertyAssignment ? p.name.text : p.kind === K.PropertyAssignment ? keyOf(p.name) : null);
+    }
+    sites.push({ line: lineAt(starts, startOf(pattern)), keys: keys.filter(Boolean), receiver: receiverOf(init) });
   };
-  for (const m of visible.matchAll(named(cryptoMod))) for (const b of parseNamed(m[1])) note(b);
-  // `import * as nc from "crypto"`
-  for (const m of visible.matchAll(new RegExp(String.raw`\bimport\s+\*\s+as\s+(${ID})\s+from\s*(["'])${cryptoMod}\2`, "g"))) nsLocals.add(m[1]);
-  // `import nc from "crypto"`, `import nc, * as ns from "crypto"`, `import nc, { a } from "crypto"`
-  for (const m of visible.matchAll(new RegExp(String.raw`\bimport\s+(${ID})\s*(?:,\s*(?:\{${LIST}\}|\*\s+as\s+(${ID})))?\s*from\s*(["'])${cryptoMod}\3`, "g"))) {
-    nsLocals.add(m[1]);
-    if (m[2]) nsLocals.add(m[2]);
+  const bindRequire = (name, mod) => {
+    if (name.kind === K.Identifier) bind(b, mod, { dflt: name.text, named: [] });
+    else if (name.kind === K.ObjectBindingPattern) {
+      const named = [];
+      for (const el of name.elements) {
+        if (el.dotDotDotToken || el.name.kind !== K.Identifier) continue;
+        const imported = keyOf(el.propertyName ?? el.name);
+        if (imported) named.push({ imported, local: el.name.text });
+      }
+      bind(b, mod, { named });
+    }
+  };
+
+  const visit = (node, inWrapper) => {
+    switch (node.kind) {
+      case K.StringLiteral:
+      case K.NoSubstitutionTemplateLiteral: {
+        const a = startOf(node);
+        prot.push([a, node.end]);
+        interiors.push([a + 1, node.end - 1 > a && src[node.end - 1] === src[a] ? node.end - 1 : node.end]);
+        break;
+      }
+      case K.TemplateHead:
+      case K.TemplateMiddle: {
+        const a = startOf(node);
+        prot.push([a, node.end]);
+        interiors.push([a + 1, Math.max(a + 1, node.end - 2)]);
+        break;
+      }
+      case K.TemplateTail: {
+        const a = startOf(node);
+        prot.push([a, node.end]);
+        interiors.push([a + 1, Math.max(a + 1, node.end - 1)]);
+        break;
+      }
+      case K.RegularExpressionLiteral: {
+        const a = startOf(node);
+        const last = src.lastIndexOf("/", node.end - 1);
+        prot.push([a, node.end]);
+        interiors.push([a + 1, last > a ? last : node.end]);
+        break;
+      }
+      case K.ElementAccessExpression:
+        accesses.push(node);
+        break;
+      case K.CallExpression:
+        if (isDateRef(node.expression)) dateLines.push(lineAt(starts, startOf(node)));
+        break;
+      case K.NewExpression:
+        if (isDateRef(node.expression) && (!node.arguments || node.arguments.length === 0 || node.arguments.some((x) => x.kind === K.SpreadElement))) {
+          dateLines.push(lineAt(starts, startOf(node)));
+        }
+        break;
+      case K.VariableDeclaration: {
+        if (node.name.kind === K.ObjectBindingPattern) addSite(node.name, node.initializer);
+        const mod = requireModule(node.initializer);
+        if (mod) bindRequire(node.name, mod);
+        break;
+      }
+      case K.Parameter:
+        if (node.name.kind === K.ObjectBindingPattern) addSite(node.name, node.initializer);
+        break;
+      case K.BinaryExpression:
+        if (node.operatorToken.kind === K.EqualsToken && node.left.kind === K.ObjectLiteralExpression) addSite(node.left, node.right);
+        break;
+      case K.ImportEqualsDeclaration:
+        if (!node.isTypeOnly && node.moduleReference.kind === K.ExternalModuleReference && ts.isStringLiteralLike(node.moduleReference.expression)) {
+          bind(b, node.moduleReference.expression.text, { dflt: node.name.text, named: [] });
+        }
+        break;
+      case K.ImportDeclaration: {
+        const clause = node.importClause;
+        if (clause && !clause.isTypeOnly && ts.isStringLiteralLike(node.moduleSpecifier)) {
+          const nb = clause.namedBindings;
+          const named = [];
+          if (nb && nb.kind === K.NamedImports) {
+            for (const el of nb.elements) if (!el.isTypeOnly) named.push({ imported: (el.propertyName ?? el.name).text, local: el.name.text });
+          }
+          bind(b, node.moduleSpecifier.text, {
+            dflt: clause.name?.text,
+            ns: nb && nb.kind === K.NamespaceImport ? nb.name.text : undefined,
+            named,
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    const w = isWrapper(node);
+    if (w && !inWrapper) wrappers.push(node);
+    ts.forEachChild(node, (c) => visit(c, w));
+  };
+  visit(sf, false);
+
+  // Comments: the plain scanner, told to step over every literal token the tree found, so a
+  // `//` inside a string, template or regex is never taken for a comment.
+  prot.sort((x, y) => x[0] - y[0]);
+  const comments = [];
+  const scanner = ts.createScanner(ts.ScriptTarget.ES2022, false, ts.LanguageVariant.Standard, src);
+  let pos = 0;
+  let pi = 0;
+  while (pos < src.length) {
+    while (pi < prot.length && prot[pi][1] <= pos) pi++;
+    if (pi < prot.length && prot[pi][0] <= pos && pos < prot[pi][1]) {
+      pos = prot[pi][1];
+      continue;
+    }
+    scanner.resetTokenState(pos);
+    const kind = scanner.scan();
+    if (kind === K.EndOfFileToken) break;
+    const a = scanner.getTokenStart();
+    const e = scanner.getTokenEnd();
+    if (kind === K.SingleLineCommentTrivia || kind === K.MultiLineCommentTrivia || kind === K.ShebangTrivia) comments.push([a, e]);
+    pos = e > pos ? e : pos + 1;
   }
-  // TypeScript `import nc = require("crypto")`
-  for (const m of visible.matchAll(new RegExp(String.raw`\bimport\s+(?:type\s+)?(${ID})\s*=\s*require\(\s*(["'])${cryptoMod}\2\s*\)`, "g"))) nsLocals.add(m[1]);
-  // `const nc = require("crypto")`
-  for (const m of visible.matchAll(new RegExp(String.raw`\b(?:const|let|var)\s+(${ID})\s*=\s*require\(\s*(["'])${cryptoMod}\2\s*\)`, "g"))) nsLocals.add(m[1]);
-  // `const { randomBytes: rb, webcrypto } = require("crypto")`
-  for (const m of visible.matchAll(new RegExp(String.raw`\b(?:const|let|var)\s*\{(${LIST})\}\s*=\s*require\(\s*(["'])${cryptoMod}\2\s*\)`, "g"))) {
-    for (const b of parseDestructured(m[1])) note(b);
+
+  const out = src.split("");
+  const vis = src.split("");
+  for (const [a, e] of comments) {
+    blank(out, a, e);
+    blank(vis, a, e);
   }
-  if (fnLocals.size) line.push(new RegExp(String.raw`(?<![\w$.])(?:${[...fnLocals].map(escId).join("|")})${CALL}`));
-  if (nsLocals.size) {
-    const ns = [...nsLocals].map(escId).join("|");
-    line.push(new RegExp(String.raw`(?<![\w$.])(?:${ns})${DOT}(?:(?:default|webcrypto)${DOT})*(?:${RANDOM_ALT})${CALL}`));
-    // `const { getRandomValues: grv } = wc`: the destructure itself is the read.
-    text.push({ names: RANDOM_FNS, from: ns });
+  for (const [a, e] of interiors) blank(out, a, e);
+  const masked = out.join("");
+
+  // The text the patterns run over: wrappers blanked in place, bracket access made a dot access.
+  const t = out.slice();
+  for (const w of wrappers) {
+    const inner = peel(w);
+    blank(t, startOf(w), startOf(inner));
+    blank(t, inner.end, w.end);
   }
-  const gen = new Set();
-  for (const m of visible.matchAll(named(String.raw`[^"'\s]+`))) {
-    const names = GENERATOR_PACKAGES[m[3]];
-    if (!names) continue;
-    for (const { name, local } of parseNamed(m[1])) if (names.includes(name)) gen.add(local);
+  for (const node of accesses) {
+    const arg = node.argumentExpression;
+    if (!(arg.kind === K.StringLiteral || arg.kind === K.NoSubstitutionTemplateLiteral) || !/^[A-Za-z_$][\w$]*$/.test(arg.text)) continue;
+    const kids = node.getChildren(sf);
+    const open = kids.find((c) => c.kind === K.OpenBracketToken);
+    const close = kids.find((c) => c.kind === K.CloseBracketToken);
+    if (!open || !close) continue;
+    const hasQd = kids.some((c) => c.kind === K.QuestionDotToken);
+    const a = startOf(arg);
+    t[startOf(open)] = hasQd ? " " : ".";
+    t[a] = " ";
+    for (let k = a + 1; k < arg.end - 1; k++) t[k] = src[k];
+    t[arg.end - 1] = " ";
+    t[startOf(close)] = " ";
   }
-  if (gen.size) line.push(new RegExp(String.raw`(?<![\w$.])(?:${[...gen].map(escId).join("|")})${CALL}`));
-  return { line, text };
+
+  // Patterns built from this file's own bindings. Names are regex-escaped.
+  const alt = (set) => [...set].map(escId).join("|");
+  const dyn = [];
+  const dynDestructures = [];
+  const L = String.raw`(?<![\w$.])`;
+  if (b.randomFns.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.randomFns)})${CALL}`, "g"));
+  if (b.upFns.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.upFns)})${CALL}`, "g"));
+  if (b.hrFns.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.hrFns)})(?:${CALL}|${DOT}bigint${CALL})`, "g"));
+  if (b.gen.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.gen)})${CALL}`, "g"));
+  if (b.cryptoNs.size) {
+    dyn.push(new RegExp(String.raw`${L}(?:${alt(b.cryptoNs)})${DOT}(?:(?:default|webcrypto)${DOT})*(?:${RANDOM_ALT})${CALL}`, "g"));
+    dynDestructures.push({ names: RANDOM_FNS, from: [...b.cryptoNs] });
+  }
+  if (b.perf.size) {
+    dyn.push(new RegExp(String.raw`${L}(?:${alt(b.perf)})${DOT}(?:now${CALL}|timeOrigin\b)`, "g"));
+    dynDestructures.push({ names: ["now", "timeOrigin"], from: [...b.perf] });
+  }
+  if (b.perfNs.size) dyn.push(new RegExp(String.raw`${L}(?:${alt(b.perfNs)})${DOT}(?:default${DOT})?performance${DOT}(?:now${CALL}|timeOrigin\b)`, "g"));
+  if (b.procNs.size) {
+    dyn.push(new RegExp(String.raw`${L}(?:${alt(b.procNs)})${DOT}(?:default${DOT})?(?:uptime${CALL}|hrtime\b)`, "g"));
+    dynDestructures.push({ names: ["uptime", "hrtime"], from: [...b.procNs] });
+  }
+
+  return { starts, problems, masked, visible: vis.join(""), scanText: t.join(""), dateLines, sites, dyn, dynDestructures };
 }
 
-// Scan one source file. Returns { lines, problems }: 1-based lines (ascending,
-// unique) holding a read, and the places the masker lost the thread. `problems`
-// non-empty means the file was NOT reliably scanned and the caller must say so.
-export function scanSource(src) {
-  const m = maskSource(normalizeBracketAccess(src), true);
+// One analysis per distinct source: the gates ask for the same file several times (the switch,
+// clock and collation scans). The result is a pure function of the source text.
+const cache = new Map();
+let cacheChars = 0;
+function analyze(src) {
+  let hit = cache.get(src);
+  if (!hit) {
+    hit = build(src);
+    if (cacheChars > 80_000_000) {
+      cache.clear();
+      cacheChars = 0;
+    }
+    cache.set(src, hit);
+    cacheChars += src.length;
+  }
+  return hit;
+}
+
+// Mask comments and string/template/regex literal TEXT (delimiters and newlines kept, so
+// offsets and line numbers survive). Returns
+//   text      comments and literal text blanked: what the switch and collation scans read
+//   visible   only comments blanked, string text kept
+//   problems  [{ line, what }] — a syntax error, or any place the file cannot be verified
+// The second argument is accepted for the old signature and ignored.
+export function maskSource(src) {
+  const a = analyze(src);
+  return { text: a.masked, visible: a.visible, problems: a.problems };
+}
+
+function destructureHits(a, entries) {
   const lines = new Set();
-  const dyn = importPatterns(m.visible);
-  const text = unwrapTs(m.text);
-  text.split("\n").forEach((ln, idx) => {
-    if (LINE_SPELLINGS.some(({ re }) => re.test(ln)) || dyn.line.some((re) => re.test(ln))) lines.add(idx + 1);
-  });
-  for (const ln of destructureLines(text, [...DESTRUCTURES, ...dyn.text])) lines.add(ln);
-  return { lines: [...lines].sort((x, y) => x - y), problems: m.problems };
+  for (const { names, from } of entries) {
+    const froms = Array.isArray(from) ? from : [from];
+    for (const s of a.sites) {
+      if (froms.includes(s.receiver) && s.keys.some((k) => names.includes(k))) lines.add(s.line);
+    }
+  }
+  return [...lines];
 }
 
-// The legacy raw-line scan safety-check keeps beside the masker, so a file the masker
-// misreads still reports the original spellings (with optional chaining). A line is
-// split at every ECMAScript line terminator first, so a `//` comment ending at U+2028
-// cannot hide the code after it. Returns 1-based `\n` line numbers.
+const addMatches = (a, reG, lines) => {
+  for (const m of a.scanText.matchAll(reG)) lines.add(lineAt(a.starts, m.index));
+};
+
+// Scan one source file. Returns { lines, problems }: 1-based lines (ascending, unique) holding a
+// read, and the places the file cannot be verified. `problems` non-empty means the file was NOT
+// reliably scanned and the caller must say so.
+export function scanSource(src) {
+  const a = analyze(src);
+  const lines = new Set(a.dateLines);
+  for (const { reG } of LINE_SPELLINGS) addMatches(a, reG, lines);
+  for (const re of a.dyn) addMatches(a, re, lines);
+  for (const ln of destructureHits(a, [...DESTRUCTURES, ...a.dynDestructures])) lines.add(ln);
+  return { lines: [...lines].sort((x, y) => x - y), problems: a.problems };
+}
+
+// The legacy raw-line scan safety-check keeps beside the parser, so a file the parser misreads
+// still reports the original spellings (with optional chaining). A line is split at every
+// ECMAScript line terminator first, so a `//` comment ending at U+2028 cannot hide the code after
+// it. Returns 1-based `\n` line numbers.
 const LEGACY_RAW = /\b(?:Date\s*\??\.\s*now|Math\s*\??\.\s*random)\s*(?:\?\.\s*)?\(/;
 export function legacyRawLines(src) {
   const hits = [];
@@ -515,6 +496,14 @@ export function legacyRawLines(src) {
     }
   });
   return hits;
+}
+
+// Does the table entry ITSELF (not some other rule) match this source?
+function entryMatches(entry, src) {
+  const a = analyze(src);
+  if (entry.names) return destructureHits(a, [entry]).length > 0;
+  if (entry.re) return [...a.scanText.matchAll(entry.reG)].length > 0;
+  return a.dateLines.length > 0; // the AST rule
 }
 
 // ── self-test material ────────────────────────────────────────────────────────
@@ -640,6 +629,53 @@ export const CLOCK_FORM_PLANTS = [
   ["renamed uuid generator", 'import { v4 as uuidv4 } from "uuid";\nconst id = uuidv4();'],
   ["nanoid generator", 'import { nanoid } from "nanoid";\nconst id = nanoid();'],
 ];
+// Forms the round-9 review named: each hides a read from a text matcher and none from the tree.
+export const CLOCK_TREE_PLANTS = [
+  ["new Date; with no parens", "const t = new Date;"],
+  ["+new Date", "const t = +new Date;"],
+  ["new Date(...[]) spread of nothing", "const t = new Date(...[]);"],
+  ["new Date(...args) spread", "const t = new Date(...args);"],
+  ["new (Date)", "const t = new (Date);"],
+  ["new Date() across lines", "const t = new Date(\n);"],
+  ["Date(...) returns the clock whatever it is given", "const t = Date(...args);"],
+  ["a generic call before a read: f<T>(a) then Date.now()", "const x = f<Array<number>>(a);\nconst t = Date.now();"],
+  ["a type argument closing with >> before a read", "const m: Map<string, Array<number>> = new Map(); const t = Date.now();"],
+  ["an object key named await before a read", "const o = { await: 1 }; const t = o.await / 2 + Date.now();"],
+  ["a variable named await in a script-style division", "const await_ = 4; const t = await_ / 2 + Date.now();"],
+  ["wrappers nested ten deep", "const t = ((((((((((Date)))))))))).now();"],
+  ["wrappers mixed: as, satisfies, non-null, parens", "const t = ((((Date as any)!) satisfies any) as unknown as DateConstructor).now();"],
+  ["a template-literal key: Date[`now`]()", "const t = Date[`now`]();"],
+  ["a template-literal key across lines", "const t = Date[\n`now`\n]();"],
+  ["require( with a space: require (\"crypto\")", 'const { randomBytes: rb } = require ("crypto");\nconst b = rb(4);'],
+  ["require( across lines", 'const nc = require(\n"crypto"\n);\nconst b = nc.randomUUID();'],
+  ["node:perf_hooks named import", 'import { performance } from "node:perf_hooks";\nconst t = performance.now();'],
+  ["node:perf_hooks renamed import", 'import { performance as p } from "node:perf_hooks";\nconst t = p.now();'],
+  ["node:perf_hooks namespace import", 'import * as ph from "node:perf_hooks";\nconst t = ph.performance.now();'],
+  ["perf_hooks require", 'const { performance: p } = require("perf_hooks");\nconst t = p.now();'],
+  ["node:process default import", 'import proc from "node:process";\nconst t = proc.uptime();'],
+  ["node:process namespace import hrtime", 'import * as proc from "node:process";\nconst t = proc.hrtime();'],
+  ["node:process named uptime", 'import { uptime } from "node:process";\nconst t = uptime();'],
+  ["node:process renamed hrtime", 'import { hrtime as hr } from "node:process";\nconst t = hr.bigint();'],
+  ["a quoted-key destructure: { \"now\": n } = Date", 'const { "now": n } = Date;'],
+  ["a computed-key destructure: { [\"now\"]: n } = Date", 'const { ["now"]: n } = Date;'],
+  ["a template computed-key destructure", "const { [`now`]: n } = Date;"],
+  ["a type-annotated destructure", "const { now }: DateConstructor = Date;"],
+  ["a destructure in a parameter default", "function f({ now } = Date) { return now(); }"],
+  ["a destructuring assignment", "let now; ({ now } = Date);"],
+  // Survivors of round 8 (shapes a mutant of the old heuristic could drop), now pinned as plants.
+  ["four parens: ((((Date)))).now()", "const t = ((((Date)))).now();"],
+  ["five parens: (((((Date))))).now()", "const t = (((((Date))))).now();"],
+  ["indirect call with ?.(: (0, Date.now)?.()", "const t = (0, Date.now)?.();"],
+  ["angle cast with an undotted receiver: (<any>Date.now)()", "const t = (<any>Date.now)();"],
+  ["an as-type spanning lines: (Date as Record<string,\n any>).now()", "const t = (Date as Record<string,\n any>).now();"],
+  ["a line-initial regex after `let x` with a lone CR", "let x\r/x=/.test(s);\rconst t = Date.now();"],
+  ["a read after a template then a division", "const z = `a` / 2;\nconst t = Date.now();"],
+  ["a read after a postfix ! then a division at line end", "const z = m.get(k)! / 2;\nconst t = Date.now();"],
+  ["a read after i++ then a division at line end", "i++ / 2;\nconst t = Date.now();"],
+  ["a read after a numeric literal then a division", "const z = 4 / 2;\nconst t = Date.now();"],
+  ["a multi-line destructure", "const {\n  UTC,\n  now,\n} = Date;"],
+  ["a read after a bracket access that spans two physical lines", 'const v = x\n[\n"k"\n];\nconst t = Date.now();'],
+];
 // Each of these CONTAINS a read that a wrong regex-versus-division guess or a
 // wrong template/quote state once hid. The read must still be seen.
 export const CLOCK_BLIND_SPOT_PLANTS = [
@@ -728,20 +764,28 @@ export const CLOCK_NON_PLANTS = [
   ["a destructure of createHash renamed to randomBytes", 'import * as nc from "node:crypto";\nconst { createHash: randomBytes } = nc;'],
   ["new Date(0), a fixed instant", "const d = new Date(0);"],
   ["new globalThis.Date(1), a fixed instant", "const d = new globalThis.Date(1);"],
+  ["a destructure from a local named like a clock source", "const { now } = dateLike;"],
+  ["new Date(+x), a plain argument", "const d = new Date(+x);"],
+  ["Date.parse is not the clock", 'const d = Date.parse("2020-01-01");'],
+  ["Date.UTC is not the clock", "const d = Date.UTC(2020, 0, 1);"],
+  ["a quoted key that is not a clock name", 'const { "parse": n } = Date;'],
+  ["a computed key that is not static", "const { [k]: n } = Date;"],
+  ["node:perf_hooks imported but only the type is used", 'import type { performance } from "node:perf_hooks";\nconst x: typeof performance = y;'],
   ["a regex literal naming Date.now()", "const re = /Date.now()/;"],
   ["a division of two names that match a spelling by prefix", "const r = Mathematics / randomness;"],
 ];
 // Sources the masker must REPORT as unreadable, and one it must not.
 export const CLOCK_DESYNC_PLANTS = [
-
+  // Not ASI: `foo()\n/x=/` is a division to the grammar, so the parser says so instead of guessing.
+  ["a call then a line-initial regex", "foo()\n/x=/.test(s); const t = Date.now() / 2;"],
   ["a quoted string crossing a newline", 'const s = "abc\nconst t = 1;'],
   ["a template literal open at end of file", "const s = `abc\nconst t = 1;"],
   ["a block comment open at end of file", "const t = 1;\n/* never closed\nconst u = 2;"],
   ["a template expression open at end of file", "const s = `a${b\n"],
 ];
-// A file the masker loses the thread on must be REPORTED and also RECOVERED: the
-// read after the desync is still seen, so one bad string does not blank the file.
-export const CLOCK_RECOVERY_PLANTS = [
+// Line-initial `/` after a statement the parser ends by ASI: all of these PARSE, so the read after
+// them is seen and nothing is reported. (Round 8's heuristic masker reported them.)
+export const CLOCK_ASI_PLANTS = [
   ["a type alias then a line-initial regex (ASI)", "type Marker = string\n/x=/.test(s); const t = Date.now() / 2;"],
   ["a union type alias then a line-initial regex", 'type M = "a" | "b"\n/x=/.test(s); const t = Date.now() / 2;'],
   ["an array type alias then a line-initial regex", "type M = string[]\n/x=/.test(s); const t = Date.now() / 2;"],
@@ -751,8 +795,10 @@ export const CLOCK_RECOVERY_PLANTS = [
   ["a plain let then a line-initial regex", "let x\n/x=/.test(s); const t = Date.now() / 2;"],
   ["an import-from then a line-initial regex", 'import { a } from "b"\n/x=/.test(s); const t = Date.now() / 2;'],
   ["an export-from then a line-initial regex", 'export { a } from "b"\n/x=/.test(s); const t = Date.now() / 2;'],
-  ["a call then a line-initial regex", "foo()\n/x=/.test(s); const t = Date.now() / 2;"],
   ["a division continued on the next line", "const r = a\n  / b;\nconst t = Date.now();"],
+];
+// A syntax error is REPORTED and the later read is still seen.
+export const CLOCK_RECOVERY_PLANTS = [
   ["a quoted string crossing a newline", 'const s = "abc\nconst t = Date.now();'],
   ["a quoted string crossing a lone CR", 'const s = "abc\rconst t = Date.now();'],
 ];
@@ -777,24 +823,21 @@ export function clockSelfTestChecks(scan = scanSource) {
   // Table <-> plant: every table entry has a plant, every plant has an entry, and
   // the ENTRY (not some other pattern) matches it. Removing or adding a pattern
   // without its plant turns this red.
-  const entries = [...LINE_SPELLINGS, ...DESTRUCTURES];
+  const entries = [...LINE_SPELLINGS, ...AST_RULES, ...DESTRUCTURES];
   const labels = new Set(entries.map((e) => e.label));
   const plantLabels = new Set(CLOCK_PLANTS.map(([l]) => l));
   for (const e of entries) checks.push([`every pattern has a plant: ${e.label}`, plantLabels.has(e.label)]);
   for (const [label, src] of CLOCK_PLANTS) {
     const e = entries.find((x) => x.label === label);
-    const masked = maskSource(normalizeBracketAccess(src), true).text;
-    const entryHits = e
-      ? e.names
-        ? destructureLines(masked, [e]).length > 0
-        : masked.split("\n").some((l) => new RegExp(e.re.source).test(l))
-      : false;
+    const entryHits = e ? entryMatches(e, src) : false;
     checks.push([`the pattern itself matches its plant: ${label}`, entryHits]);
     checks.push([`a clock/randomness read is flagged: ${label}`, flagged(src)]);
   }
   for (const [name, src] of CLOCK_FORM_PLANTS) checks.push([`a read is flagged in the form: ${name}`, flagged(src)]);
+  for (const [name, src] of CLOCK_TREE_PLANTS) checks.push([`a read is flagged in the form: ${name}`, flagged(src) && scan(src).problems.length === 0]);
   for (const [name, src] of CLOCK_BLIND_SPOT_PLANTS) checks.push([`masking does not hide a read: ${name}`, flagged(src) && scan(src).problems.length === 0]);
   for (const [name, src] of CLOCK_NON_PLANTS) checks.push([`prose is not flagged: ${name}`, scan(src).lines.length === 0]);
+  for (const [name, src] of CLOCK_ASI_PLANTS) checks.push([`a statement ended by ASI parses cleanly and the later read is seen: ${name}`, flagged(src) && scan(src).problems.length === 0]);
   for (const [name, src] of CLOCK_RECOVERY_PLANTS) {
     const r = scan(src);
     checks.push([`an unreadable file is reported AND recovered (the later read is still seen): ${name}`, r.problems.length >= 1 && r.lines.length >= 1]);
@@ -814,6 +857,8 @@ export function clockSelfTestChecks(scan = scanSource) {
   checks.push(["a bracket access spanning lines keeps the line of a later read", at('const v = x[\n"k"\n];\nconst t = Date.now();') === "[4]"]);
   checks.push(["a parenthesised receiver spanning lines keeps the line of a later read", at("const v = (\n  foo\n).bar;\nconst t = Date.now();") === "[4]"]);
   checks.push(["a non-null spanning lines keeps the line of a later read", at("const v = foo\n!\n.bar;\nconst t = Date.now();") === "[4]"]);
+  checks.push(["a read split across lines is attributed to the line it STARTS on", at("const a = 1;\nconst t = Date\n  .now();\nconst u = 2;") === "[2]"]);
+  checks.push(["lines are numbered by LF: a lone CR does not start a new line", at("const a = 1;\rconst b = 2;\nconst t = Date.now();") === "[2]"]);
   checks.push(["a clean file reports no masker problem", scan("const a = 1 / 2;\nconst s = `x${a}`;\n").problems.length === 0]);
   return checks;
 }
